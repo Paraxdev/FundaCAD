@@ -1615,7 +1615,22 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         resolve(null);
       };
       const releaseTree = awaitTreePick(
-        (pick) => treePickRefusal(pick, "a face or an edge, pick it in the view"),
+        (pick) => {
+          let body: string | undefined;
+          let sel: Selector | undefined;
+          if (pick.kind === "face") {
+            body = viewport.faceIdToBodyId(pick.faceId) ?? undefined;
+            sel = viewport.faceSelectorOf(pick.faceId);
+          } else if (pick.kind === "edge") {
+            body = pick.edge.body;
+            sel = edgeSelectorFrom({ points: pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3), body });
+          } else return treePickRefusal(pick, "a face or an edge");
+          if (!body || !sel) return `That ${pick.kind} is on no part, pick a face or an edge on a part`;
+          if (body === exclude) return "That is on the part already picked, pick a face or an edge on the other part";
+          cleanup();
+          requestAnimationFrame(() => resolve({ body, sel: { ...sel, body } as Selector }));
+          return true;
+        },
         () => {
           cleanup();
           resolve(null);

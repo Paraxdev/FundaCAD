@@ -15,6 +15,9 @@ import type { PlaneDef, Vec3 } from "../../src/types";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
 import { axisFromEdge } from "../../src/features/planeMath";
 
+const answers = vi.hoisted(() => ({ queue: [] as unknown[] }));
+vi.mock("../../src/ui/choice", () => ({ choose: async () => answers.queue.shift() ?? null }));
+
 let frames: (() => void)[] = [];
 const flushFrame = () => {
   const run = frames;
@@ -78,6 +81,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  answers.queue = [];
   resetTreePicks();
   vi.unstubAllGlobals();
 });
@@ -371,6 +375,116 @@ describe("a face or an edge row from the Geometry list", () => {
       mate: { body: "b2", face: faceSel(12) },
       to: { body: "b3", face: faceSel(23) },
       mode: "rigid",
+    });
+  });
+
+  describe("a mechanism joint's two sides", () => {
+    const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+    const ownerOf = (id: number) => (id === 99 ? null : id > 20 ? "b3" : "b2");
+    const slantedEdge = (body: string, points: Vec3[]) =>
+      ({ kind: "edge", edge: { id: `${body}:4`, body, points, smooth: false, slot: 4 } as unknown as EdgeRef }) as const;
+    const edgeOnB3: Vec3[] = [
+      [3, -4, 7.5],
+      [9, -1, 12],
+    ];
+
+    async function atSideOne(mode: string = "revolute") {
+      const r = lidRig();
+      Object.assign(r.viewport, { faceIdToBodyId: ownerOf, hoverEntity: () => {} });
+      answers.queue = [mode, "done", ""];
+      const done = r.starters.startMechanism();
+      expect(r.click({ kind: "body", id: "b3" })).toBe("taken");
+      flushFrame();
+      await settle();
+      return { r, done };
+    }
+
+    it("takes side one from a round face row and side two from a slanted edge row", async () => {
+      const { r, done } = await atSideOne();
+      expect(treePickWaiting()).toBe(true);
+      expect(r.click({ kind: "face", faceId: 15 })).toBe("taken");
+      expect(treePickWaiting()).toBe(false);
+      flushFrame();
+      await settle();
+      expect(treePickWaiting()).toBe(true);
+      expect(r.click(slantedEdge("b3", edgeOnB3))).toBe("taken");
+      flushFrame();
+      await done;
+      expect(r.addFeature).toHaveBeenCalledExactlyOnceWith({
+        id: "f9",
+        type: "mechanism",
+        ground: "b3",
+        joints: [
+          {
+            id: "pin1",
+            mode: "revolute",
+            a: { body: "b2", axis: faceSel(15) },
+            b: { body: "b3", axis: { kind: "edge", by: "nearest", point: [6, -2.5, 9.75], body: "b3" } },
+          },
+        ],
+      });
+    });
+
+    it("refuses a face and an edge on the part already picked, and keeps waiting for the other part", async () => {
+      const { r, done } = await atSideOne("slider");
+      r.click({ kind: "face", faceId: 14 });
+      flushFrame();
+      await settle();
+      const onB2 = slantedEdge("b2", [
+        [1, 2, 3],
+        [4, 6, 3],
+      ]);
+      for (const row of [{ kind: "face", faceId: 12 } as const, onB2]) {
+        r.hints.length = 0;
+        expect(r.click(row)).toBe("refused");
+        expect(r.hints).toHaveLength(1);
+        expect(r.hints[0]).toMatch(/already picked/);
+        expect(r.hints[0]).toMatch(/other part/);
+        expect(treePickWaiting()).toBe(true);
+      }
+      flushFrame();
+      expect(r.addFeature).not.toHaveBeenCalled();
+      expect(r.click({ kind: "face", faceId: 23 })).toBe("taken");
+      flushFrame();
+      await done;
+      const joint = (r.addFeature.mock.calls[0]![0] as { joints: { b: unknown }[] }).joints[0]!;
+      expect(joint.b).toEqual({ body: "b3", axis: faceSel(23) });
+    });
+
+    it("refuses a face that belongs to no body and a row that is neither a face nor an edge", async () => {
+      const { r } = await atSideOne();
+      expect(r.click({ kind: "face", faceId: 99 })).toBe("refused");
+      expect(r.hints.at(-1)).toMatch(/no part/);
+      expect(r.click({ kind: "datumPoint", id: "dp", point: [1, 2, 3] })).toBe("refused");
+      expect(r.hints.at(-1)).toMatch(/datum point/);
+      expect(r.hints.at(-1)).toMatch(/face or an edge/);
+      expect(r.hints.at(-1)).not.toMatch(/in the view/);
+      expect(r.click(slantedEdge("", edgeOnB3))).toBe("refused");
+      expect(treePickWaiting()).toBe(true);
+      flushFrame();
+      expect(r.addFeature).not.toHaveBeenCalled();
+    });
+
+    it("takes a row on either body for side one, a second document leaks nothing", async () => {
+      const first = await atSideOne();
+      expect(first.r.click({ kind: "face", faceId: 23 })).toBe("taken");
+      flushFrame();
+      await settle();
+      expect(first.r.click({ kind: "face", faceId: 12 })).toBe("taken");
+      flushFrame();
+      await first.done;
+      const second = await atSideOne("rigid");
+      expect(second.r.click({ kind: "face", faceId: 12 })).toBe("taken");
+      flushFrame();
+      await settle();
+      expect(second.r.click({ kind: "face", faceId: 12 })).toBe("refused");
+      expect(second.r.click({ kind: "face", faceId: 23 })).toBe("taken");
+      flushFrame();
+      await second.done;
+      const joints = (second.r.addFeature.mock.calls[0]![0] as { joints: unknown[] }).joints;
+      expect(joints).toEqual([
+        { id: "weld1", mode: "rigid", a: { body: "b2", axis: faceSel(12) }, b: { body: "b3", axis: faceSel(23) } },
+      ]);
     });
   });
 });
