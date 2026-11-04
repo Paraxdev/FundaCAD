@@ -43,7 +43,7 @@ Click a rule's icon on the sketch to select it. Its shapes light up, and its row
 
 The palette lists every rule under **Relations**, one row each. It shows while **Show Constraints** is on.
 
-1. The line on top says how free the sketch is, such as "2 degrees of freedom" or "Fully defined".
+1. The line on top says how free the sketch is, such as "2 degrees of freedom" or "Fully defined". When it changes, it is spoken too, and conflicting rules are spoken at once. Opening a sketch says nothing.
 2. Each row is a button. Tab to it, or hover it, to light up what it holds. Enter, Space or a click selects those shapes.
 3. A row says its state in words as well as colour: "conflicting" for a rule that cannot hold, "redundant" for one that repeats another, "reference" for a measure that does not drive.
 4. Each rule has its own **Delete** button, named after the rule, such as "Delete Distance 12.5 mm, Line 1 and Line 3". It shows when you hover the row or Tab into it. With a row focused, Delete or Backspace does the same. Focus then moves to the row that took its place, or the one above.

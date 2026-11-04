@@ -74,5 +74,6 @@ Press arrows to move the cursor, then Tab. Each press names a snap near the curs
 2. A finished shape: "Rectangle 1, 40 by 20", "Circle 1, diameter 10" or "Line 4, length 20, loop closed". A typed angle is said too, "Line 1, length 25, angle 30 degrees". A line's chain goes on, so its keys follow, "Type the size, or @dx,dy, arrows move, Enter, Esc".
 3. An arrow: "Cursor at 20, 10". When the grid step changed, "Grid step 5 mm" comes first.
 4. A refused entry: the problem, and the box is marked as any refused box is.
+5. A change in how free the sketch is, such as "1 degree of freedom" or "Fully defined". Conflicting rules are said as an alert. Opening a sketch says nothing.
 
 Values are said in the display unit. See [Shortcuts](../reference/shortcuts.md) for every key.

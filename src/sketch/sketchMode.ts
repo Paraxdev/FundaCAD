@@ -332,6 +332,7 @@ export class SketchMode {
   private patterns: SketchPattern[] = []; // associative pattern definitions
   private evenOdd = false;
   private lastDof = -1;
+  private firstSolveSettled = false;
   private dragFrom: THREE.Vector2 | null = null; // grabbed point's current position
   // A grabbed point that never moves past 4px is a click, which selects its entity.
   private dragEntIdx = -1;
@@ -669,6 +670,7 @@ export class SketchMode {
     this.overlay.clearRegionSelection(); // fresh session: drop any stale area selection
     this.lastDof = -1;
     this.conflict = false;
+    this.firstSolveSettled = false;
     this.evenOdd = false;
     if (editId) {
       const f = store.document.features.find((x) => x.id === editId);
@@ -1028,7 +1030,15 @@ export class SketchMode {
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
     // Here because refreshActive is the choke point every constraint change and finished solve passes through.
-    this.relations.show(this.entities, this.constraints, this.conflictIdx, this.overIdx, this.lastDof, this.conflict);
+    this.relations.show(
+      this.entities,
+      this.constraints,
+      this.conflictIdx,
+      this.overIdx,
+      this.lastDof,
+      this.conflict,
+      this.dofKnown(),
+    );
     this.showLooseEnds();
     // On-demand renderer: a keyboard-driven repaint fires no pointer event, so force a frame.
     this.viewport.requestRender();
@@ -4056,6 +4066,11 @@ export class SketchMode {
     this.onState?.();
   }
 
+  /** Freedom is only spoken once a solve has settled, a sketch with no constraints has nothing to wait for. */
+  private dofKnown(): boolean {
+    return this.firstSolveSettled || this.constraints.length === 0;
+  }
+
   /** Coalesces requests into one in-flight solve so the shared WASM wrapper is never re-entered and stale results
    *  never clobber newer geometry. */
   private requestSolve() {
@@ -4121,6 +4136,7 @@ export class SketchMode {
           this.overIdx = parseConflictIdx(r.overDefined);
           if (!this.conflict) this.entities = r.entities; // keep last good on conflict
           this.lastDof = r.dof;
+          if (!dim) this.firstSolveSettled = true;
           this.refreshActive();
         }
       }

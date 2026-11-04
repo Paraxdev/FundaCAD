@@ -1,6 +1,8 @@
 // The Relations list facade SketchMode talks to: rows from relations.ts, rendered by SketchPalette.vue from a store.
 
 import { markRaw } from "vue";
+import { announce, cancelAnnouncement } from "../ui/announce";
+import { DofSpeech } from "./dofSpeech";
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint } from "../types";
 import { dofSummary, relationRows } from "./relations";
@@ -19,6 +21,8 @@ export class RelationsPanel {
     select: (ids: string[]) => this.onSelect?.(ids),
   });
 
+  private readonly speech = new DofSpeech();
+
   show(
     entities: ResolvedEntity[],
     constraints: SketchConstraint[],
@@ -26,13 +30,19 @@ export class RelationsPanel {
     over: Set<number>,
     dof: number,
     conflict: boolean,
+    ready: boolean,
   ) {
     const store = useSketchRelationsStore();
+    const summary = dofSummary(dof, conflict);
     store.hooks = this.hooks;
-    store.show(relationRows(entities, constraints, conflicts, over), dofSummary(dof, conflict), conflict);
+    store.show(relationRows(entities, constraints, conflicts, over), summary, conflict);
+    const line = this.speech.next(summary, conflict, ready);
+    if (line) announce(line.text, line.priority, { key: "sketch-dof", delay: 400 });
   }
 
   hide() {
+    this.speech.reset();
+    cancelAnnouncement("sketch-dof");
     useSketchRelationsStore().hide();
   }
 
