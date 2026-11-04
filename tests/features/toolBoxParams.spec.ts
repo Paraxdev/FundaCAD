@@ -17,7 +17,7 @@ import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../sr
 vi.mock("../../src/ui/toast", () => ({ toast: () => {} }));
 vi.mock("../../src/sketch/overlay", () => ({
   curveObjects: (ents: unknown[]) => ents,
-  PREVIEW_COLOR: 0,
+  sketchPreviewColor: () => 0,
   sketchSelectColor: () => 0,
   sketchConflictColor: () => 0,
 }));

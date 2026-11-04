@@ -6,6 +6,7 @@ import { disposeObject3D } from "../lib/disposer";
 import { overlayMaterial } from "../viewport/overlayMaterial";
 import { pickColor } from "../viewport/pickColors";
 import { themeColor } from "../viewport/themeColors";
+import { onThemeChange } from "../ui/theme";
 import { asFeature } from "../types";
 import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
 import { planeOf } from "../document/planeOf";
@@ -42,7 +43,6 @@ export interface WorldRegion {
   entityId?: string; // the source text entity, for double-click-to-edit
 }
 
-export const PREVIEW_COLOR = 0xffffff;
 /** A selected sketch entity: the accent, made to read on the scene ground (viewport/pickColors.ts). */
 export function sketchSelectColor(): number {
   return pickColor(themeColor("--accent", 0x9a9ff0), themeColor("--viewport-bg", 0x0b0912), "select", "edge");
@@ -56,8 +56,10 @@ const projectedColor = () => themeColor("--sketch-projected", 0xb07fe8);
 const projectedStaleColor = () => themeColor("--sketch-projected-stale", 0xd9a24d);
 const looseOpenColor = () => themeColor("--sketch-loose-open", 0xe5484d);
 const looseUntiedColor = () => themeColor("--sketch-loose-untied", 0xf5a524);
-export const DIM_COLOR = 0x8fa4bd; // muted blue-gray for dimension annotations
-const FILL_COLOR = 0x3a7bd5;
+export const sketchAidColor = () => themeColor("--sketch-aid", 0x8fa4bd);
+export const sketchSnapColor = () => themeColor("--sketch-snap", 0xffaa33);
+export const sketchPreviewColor = () => themeColor("--sketch-preview", 0xffffff);
+export const sketchFillColor = () => themeColor("--sketch-fill", 0x3a7bd5);
 
 const lineMats = new Map<number, THREE.LineBasicMaterial>();
 function lineMat(color: number): THREE.LineBasicMaterial {
@@ -85,7 +87,7 @@ function dashMat(color: number): THREE.LineDashedMaterial {
 const GUIDE_DASH_PX = 5;
 const GUIDE_GAP_PX = 5;
 const GUIDE_MAT = new THREE.LineDashedMaterial({
-  color: 0xffaa33,
+  color: sketchSnapColor(),
   dashSize: 1.2, // replaced per call with the pixel-sized pair (see setGuides)
   gapSize: 1.2,
   transparent: true,
@@ -93,12 +95,11 @@ const GUIDE_MAT = new THREE.LineDashedMaterial({
   depthTest: true,
 });
 // a control-point spline's polygon: thin, dashed, and quieter than any curve
-export const POLE_COLOR = 0x9fb3cc;
 const POLYGON_DASH_PX = 4;
 const POLYGON_GAP_PX = 3;
 const POLE_HALF_PX = 3.5;
 const POLYGON_MAT = new THREE.LineDashedMaterial({
-  color: POLE_COLOR,
+  color: sketchAidColor(),
   dashSize: 1,
   gapSize: 1,
   transparent: true,
@@ -111,7 +112,7 @@ const POLYGON_MAT = new THREE.LineDashedMaterial({
 // highlight instead of losing the depth test to the opaque face.
 const FILL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
 const FILL_MAT = new THREE.MeshBasicMaterial({
-  color: FILL_COLOR,
+  color: sketchFillColor(),
   transparent: true,
   opacity: 0.18,
   side: THREE.DoubleSide,
@@ -121,7 +122,7 @@ const FILL_MAT = new THREE.MeshBasicMaterial({
 // A hole of an even-odd sketch draws nothing until hovered or selected.
 const FILL_HOLE_MAT = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
 const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
-  color: FILL_COLOR,
+  color: sketchFillColor(),
   transparent: true,
   opacity: 0.34,
   side: THREE.DoubleSide,
@@ -129,12 +130,25 @@ const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
   ...FILL_OFFSET,
 });
 const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
+  color: sketchSelectColor(),
   transparent: true,
   opacity: 0.34,
   side: THREE.DoubleSide,
   depthWrite: false,
   ...FILL_OFFSET,
 });
+const SNAP_MAT = overlayMaterial(new THREE.MeshBasicMaterial({ color: sketchSnapColor(), depthTest: true }));
+
+// The materials above are shared and built once, so a theme change has to write their colours again.
+export function applySketchTheme() {
+  GUIDE_MAT.color.setHex(sketchSnapColor());
+  SNAP_MAT.color.setHex(sketchSnapColor());
+  POLYGON_MAT.color.setHex(sketchAidColor());
+  FILL_MAT.color.setHex(sketchFillColor());
+  FILL_HOVER_MAT.color.setHex(sketchFillColor());
+}
+// Registered after themeColors' own listener, which clears the colour cache these read.
+onThemeChange(applySketchTheme);
 
 export class SketchOverlay {
   readonly group = new THREE.Group();
@@ -168,10 +182,7 @@ export class SketchOverlay {
     );
     this.group.renderOrder = 10;
 
-    this.snapMarker = new THREE.Mesh(
-      new THREE.RingGeometry(0.6, 1.0, 16),
-      overlayMaterial(new THREE.MeshBasicMaterial({ color: 0xffaa33, depthTest: true })),
-    );
+    this.snapMarker = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.0, 16), SNAP_MAT);
     this.snapMarker.renderOrder = 30;
     this.snapMarker.visible = false;
     this.group.add(this.snapMarker);
@@ -616,6 +627,7 @@ export class SketchOverlay {
       this.group.add(this.handleDot);
     }
     this.handleDot.position.copy(world);
+    ((this.handleDot.children[0] as THREE.Points).material as THREE.PointsMaterial).color.setHex(sketchPreviewColor());
     this.handleDot.visible = true;
   }
 
@@ -765,7 +777,7 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
     ];
     for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
   }
-  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
+  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(sketchAidColor()));
   squares.renderOrder = 13;
   return squares;
 }
@@ -882,7 +894,7 @@ export function dimensionLineObjects(
   ents: ReturnType<typeof resolveEntities>,
   plane: SketchPlane,
   extraSegs: [THREE.Vector2, THREE.Vector2][] = [],
-  color: number = DIM_COLOR,
+  color: number = sketchAidColor(),
   skip?: ReadonlySet<string>,
 ): THREE.Object3D[] {
   const segs = [...dimensionSegments(ents, skip), ...extraSegs];

@@ -6,7 +6,13 @@ import type { Viewport } from "../viewport/viewport";
 import type { PlaceOffset, SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, dimensionLineObjects, PREVIEW_COLOR, sketchConflictColor, sketchSelectColor } from "./overlay";
+import {
+  curveObjects,
+  dimensionLineObjects,
+  sketchConflictColor,
+  sketchPreviewColor,
+  sketchSelectColor,
+} from "./overlay";
 import type { DimInput } from "./dimInput";
 import { constraintDims, linearDim } from "./entityDims";
 import {
@@ -483,7 +489,7 @@ export class DimFlow {
       const own = plan.labelAnchor();
       this.dimCursor = own ? { ox: p.x - own.x, oy: p.y - own.y } : undefined;
       const segs = this.dimPreviewSegs(plan, p);
-      if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, PREVIEW_COLOR));
+      if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, sketchPreviewColor()));
       this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
       this.positionDimBox(e);
     }

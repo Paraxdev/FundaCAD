@@ -24,7 +24,7 @@ import {
   poleMarkerObjects,
   dimensionLineObjects,
   mirrorMarkObjects,
-  PREVIEW_COLOR,
+  sketchPreviewColor,
   sketchConflictColor,
   sketchDefinedColor,
   sketchFreeColor,
@@ -542,7 +542,7 @@ export class SketchMode {
         const lineColor = mirrorLineColor();
         const seg = line?.type === "line" ? line : line?.type === "projected" ? line.curve : null;
         this.overlay.setPreview([
-          ...curveObjects(copies, this.plane, PREVIEW_COLOR, true),
+          ...curveObjects(copies, this.plane, sketchPreviewColor(), true),
           ...curveObjects(objects, this.plane, objColor, true),
           ...(line ? curveObjects([line], this.plane, lineColor, true) : []),
           ...(seg && "x1" in seg ? mirrorMarkObjects(seg, this.plane, lineColor, this.planeMmPerPx() * 14) : []),
@@ -980,7 +980,8 @@ export class SketchMode {
     return {
       plane: () => this.plane,
       selection: () => this.entities.filter((e) => this.selected.has(e.id) && e.type !== "projected"),
-      showPreview: (ents) => this.overlay.setPreview(ents ? curveObjects(ents, this.plane, PREVIEW_COLOR, true) : []),
+      showPreview: (ents) =>
+        this.overlay.setPreview(ents ? curveObjects(ents, this.plane, sketchPreviewColor(), true) : []),
       apply: (map, copy) => this.modifyFlow.applyTransform(map, copy),
       outline: (e) => this.overlay.activeTextLoops(e.id).flat(),
     };
@@ -2964,7 +2965,7 @@ export class SketchMode {
               },
             ],
             this.plane,
-            PREVIEW_COLOR,
+            sketchPreviewColor(),
           ),
         );
       }
@@ -3383,7 +3384,7 @@ export class SketchMode {
           },
         ],
         this.plane,
-        PREVIEW_COLOR,
+        sketchPreviewColor(),
       );
       const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
       this.dim.positionCentred(at.x, at.y, !e);
@@ -3546,7 +3547,7 @@ export class SketchMode {
       const hovered = this.entities.filter((e) => lit.has(e.id));
       if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor()));
       if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true));
-      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, PREVIEW_COLOR, true));
+      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, sketchPreviewColor(), true));
     } else {
       objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));
     }
@@ -3599,7 +3600,7 @@ export class SketchMode {
 
   private entityCurve(e: ResolvedEntity): THREE.Object3D {
     // curveObjects yields exactly one object per input entity, so [0] is present
-    const obj = curveObjects([e], this.plane, PREVIEW_COLOR)[0];
+    const obj = curveObjects([e], this.plane, sketchPreviewColor())[0];
     if (!obj) throw new Error("entityCurve: curveObjects returned no object");
     return obj;
   }

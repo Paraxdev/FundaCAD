@@ -74,6 +74,10 @@ export const NOIR_PALETTE: Readonly<Record<string, string>> = {
   "--sketch-projected-stale": "#d9a24d",
   "--sketch-loose-open": "#e5484d",
   "--sketch-loose-untied": "#f5a524",
+  "--sketch-aid": "#8fa4bd",
+  "--sketch-snap": "#ffaa33",
+  "--sketch-preview": "#ffffff",
+  "--sketch-fill": "#3a7bd5",
   "--field-bg": "rgba(0, 0, 0, 0.3)",
   "--check-off": "rgba(0, 0, 0, 0.45)",
 };
@@ -147,6 +151,10 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--sketch-projected-stale": "#7a5a00",
       "--sketch-loose-open": "#c62828",
       "--sketch-loose-untied": "#8a5a00",
+      "--sketch-aid": "#5a6b82",
+      "--sketch-snap": "#9a4d00",
+      "--sketch-preview": "#1d1b26",
+      "--sketch-fill": "#1f62c9",
     },
   },
   {
@@ -223,6 +231,10 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--sketch-projected-stale": "#5e4500",
       "--sketch-loose-open": "#a8151b",
       "--sketch-loose-untied": "#6b4600",
+      "--sketch-aid": "#455468",
+      "--sketch-snap": "#6b3400",
+      "--sketch-preview": "#000000",
+      "--sketch-fill": "#0b4fb0",
     },
   },
   {
@@ -293,6 +305,10 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--sketch-projected-stale": "#7a5a00",
       "--sketch-loose-open": "#c62828",
       "--sketch-loose-untied": "#8a5a00",
+      "--sketch-aid": "#5a6b82",
+      "--sketch-snap": "#9a4d00",
+      "--sketch-preview": "#1d1b26",
+      "--sketch-fill": "#1f62c9",
     },
   },
   {
@@ -337,6 +353,10 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--sketch-projected-stale": "#98a3b0",
       "--sketch-loose-open": "#ff5c5c",
       "--sketch-loose-untied": "#f4c542",
+      "--sketch-aid": "#a6b4c4",
+      "--sketch-snap": "#e69f00",
+      "--sketch-preview": "#f5f7fa",
+      "--sketch-fill": "#3d8fe0",
     },
   },
   noirTint("noir-blue", "Noir Blue", {
@@ -397,6 +417,10 @@ const PALETTE_TOKENS = new Set<string>([
   "--sketch-projected-stale",
   "--sketch-loose-open",
   "--sketch-loose-untied",
+  "--sketch-aid",
+  "--sketch-snap",
+  "--sketch-preview",
+  "--sketch-fill",
 ]);
 
 /** Hex or rgb()/rgba() only: viewport/themeColors.parseCssColor understands

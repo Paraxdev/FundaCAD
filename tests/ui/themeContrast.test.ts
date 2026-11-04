@@ -17,6 +17,7 @@ import {
   over,
   overlaySeparation,
   paletteContrast,
+  SKETCH_AID_TOKENS,
   SKETCH_TOKENS,
   parseColor as parse,
 } from "../../src/ui/contrast";
@@ -199,6 +200,29 @@ describe("theme contrast", () => {
     expect(
       paletteContrast(shipped[0]!.palette, "dark").find((r) => r.what === "--sketch-free on --viewport-bg")?.min,
     ).toBe(3);
+  });
+
+  it("checks the four aid colours on the scene, and fails one that fades into a light ground", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const t of SKETCH_AID_TOKENS) expect(names).toContain(`${t} on --viewport-bg`);
+    const high = paletteContrast(shipped[0]!.palette, "dark", "high");
+    expect(high.find((r) => r.what === "--sketch-snap on --viewport-bg")?.min).toBe(4.5);
+
+    const noirOnPaper = { ...shipped[0]!.palette, "--viewport-bg": "#e8e5ef" };
+    expect(contrastFailures(noirOnPaper, "light").map((r) => r.what)).toEqual(
+      expect.arrayContaining([
+        "--sketch-preview on --viewport-bg",
+        "--sketch-snap on --viewport-bg",
+        "--sketch-aid on --viewport-bg",
+      ]),
+    );
+    const darkened = {
+      ...noirOnPaper,
+      "--sketch-preview": "#1d1b26",
+      "--sketch-snap": "#9a4d00",
+      "--sketch-aid": "#5a6b82",
+    };
+    expect(contrastFailures(darkened, "light").filter((r) => /aid|snap|preview/.test(r.what))).toEqual([]);
   });
 
   it("fails a sketch colour that fades into the scene, as Noir's white does on a light ground", () => {

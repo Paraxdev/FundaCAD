@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, PREVIEW_COLOR, sketchConflictColor, sketchSelectColor } from "./overlay";
+import { curveObjects, sketchConflictColor, sketchPreviewColor, sketchSelectColor } from "./overlay";
 import type { DimInput } from "./dimInput";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
@@ -516,7 +516,7 @@ export class ModifyFlow {
     const added = res ? res.entities.slice(this.host.entities().length) : [];
     // keep the source highlighted so it stays obvious what is being offset
     const preview = [...curveObjects([src], this.host.plane(), sketchSelectColor(), true)];
-    if (added.length) preview.push(...curveObjects(added, this.host.plane(), PREVIEW_COLOR, true));
+    if (added.length) preview.push(...curveObjects(added, this.host.plane(), sketchPreviewColor(), true));
     this.host.overlay().setPreview(preview);
   }
 

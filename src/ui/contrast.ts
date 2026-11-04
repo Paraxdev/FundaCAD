@@ -141,6 +141,7 @@ export const SKETCH_TOKENS = [
   "--sketch-loose-open",
   "--sketch-loose-untied",
 ] as const;
+export const SKETCH_AID_TOKENS = ["--sketch-aid", "--sketch-snap", "--sketch-preview", "--sketch-fill"] as const;
 // Sketch states a viewer must tell apart: each pair is held by colour or by lightness.
 const SKETCH_PAIRS: [string, string][] = [
   ["--sketch-free", "--sketch-projected"],
@@ -237,7 +238,7 @@ export function paletteContrast(
   }
   add("--pick-line on --viewport-bg", c("--pick-line"), c("--viewport-bg"), 3);
   for (const axis of AXES) add(`${axis} on --viewport-bg`, c(axis), c("--viewport-bg"), 3);
-  for (const t of [...SKETCH_TOKENS, "--error"]) add(`${t} on --viewport-bg`, c(t), c("--viewport-bg"), min.line);
+  for (const t of [...SKETCH_TOKENS, ...SKETCH_AID_TOKENS, "--error"]) add(`${t} on --viewport-bg`, c(t), c("--viewport-bg"), min.line);
   // The edge is an inset line painted over the control's own fill, so it has to stand clear of both sides.
   const edge = controlEdge(p, mode);
   for (const on of EDGE_SURFACES) {
