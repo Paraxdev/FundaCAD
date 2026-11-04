@@ -134,10 +134,14 @@ export function recompute(doc: CadDocument): RecomputeResult {
     if (w?.sketch) affectedSketches.add(w.sketch);
   }
 
-  // The derived cache the engine and legacy readers consume.
-  doc.parameters = Object.fromEntries(Object.entries(defs).map(([n, d]) => [n, d.value]));
+  doc.parameters = parameterCache(defs);
 
   return { affectedSketches, issues };
+}
+
+/** The derived `doc.parameters` the engine and legacy readers consume, one value per def in table order. */
+export function parameterCache(defs: Record<string, ParamDef>): CadDocument["parameters"] {
+  return Object.fromEntries(Object.entries(defs).map(([n, d]) => [n, d.value]));
 }
 
 /** Would `expr` under `name` reference `name` back through the table? Returns
