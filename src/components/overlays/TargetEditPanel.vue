@@ -86,6 +86,7 @@ const summary = computed(() => {
       :label="field.label"
       :rows="rows"
       :held="held"
+      pickable
       empty="Click geometry to add"
       @clear="tool.clear()"
       @remove="removeRow"

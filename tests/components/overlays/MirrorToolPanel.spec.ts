@@ -110,6 +110,14 @@ describe("MirrorToolPanel", () => {
     expect(ready.onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps its picked rows as text beside a Remove each, so only Remove takes focus", () => {
+    mountView(viewOf());
+    const rows = $(".tgt-item");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.map((li) => [...li.children].map((c) => c.tagName))).toEqual(rows.map(() => ["SPAN", "BUTTON"]));
+    expect($(".tgt-item .ui-list-row")).toEqual([]);
+  });
+
   it("shows no plane chips in a sketch, and the picked one checked in 3D", () => {
     const w = mountView(viewOf());
     expect($(".mirror-chips")).toEqual([]);

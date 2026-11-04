@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // One titled list of picked items with Clear all and a remove button per row, worn by the target editor and Mirror.
-// A row stays a plain item rather than a ListRow: it holds its own remove button, which may not nest in a button.
+// A pickable row is a ListRow beside its Remove button, never around it: a button may not nest in a button.
 
 import { computed } from "vue";
 import { distinctNames } from "../../ui/pickNames";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
+import ListRow from "../ui/ListRow.vue";
 
 const props = defineProps<{
   label: string;
@@ -14,6 +15,8 @@ const props = defineProps<{
   /** The section taking the next picks. */
   active?: boolean;
   held?: number | null;
+  /** Rows take focus, light their geometry like a hover and pin on click. */
+  pickable?: boolean;
 }>();
 const names = computed(() => distinctNames(props.rows.map((r) => r.label)));
 defineEmits<{
@@ -46,12 +49,20 @@ defineEmits<{
         v-for="(r, i) in rows"
         :key="i"
         class="tgt-item"
-        :class="{ 'tgt-unresolved': r.resolved === false, 'tgt-held': held === i }"
-        @pointerenter="$emit('enter', i)"
-        @pointerleave="$emit('leave')"
-        @click="$emit('pick', i)"
+        :class="{ 'tgt-unresolved': r.resolved === false }"
       >
-        <span class="tgt-label">{{ names[i] }}</span>
+        <ListRow
+          v-if="pickable"
+          class="tgt-label"
+          :label="names[i]!"
+          :selected="held === i"
+          @focus="$emit('enter', i)"
+          @blur="$emit('leave')"
+          @pointerenter="$emit('enter', i)"
+          @pointerleave="$emit('leave')"
+          @click="$emit('pick', i)"
+        />
+        <span v-else class="tgt-label">{{ names[i] }}</span>
         <IconButton
           class="tgt-remove"
           icon="minus"
