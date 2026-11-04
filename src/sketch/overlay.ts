@@ -42,12 +42,20 @@ export interface WorldRegion {
   entityId?: string; // the source text entity, for double-click-to-edit
 }
 
-export const CURVE_COLOR = 0x5b9bff; // under-constrained blue
 export const PREVIEW_COLOR = 0xffffff;
 /** A selected sketch entity: the accent, made to read on the scene ground (viewport/pickColors.ts). */
 export function sketchSelectColor(): number {
   return pickColor(themeColor("--accent", 0x9a9ff0), themeColor("--viewport-bg", 0x0b0912), "select", "edge");
 }
+
+export const sketchFreeColor = () => themeColor("--sketch-free", 0x5b9bff);
+export const sketchDefinedColor = () => themeColor("--sketch-defined", 0xffffff);
+export const sketchConflictColor = () => themeColor("--error", 0xff5c5c);
+const constructionColor = () => themeColor("--sketch-construction", 0xffa64d);
+const projectedColor = () => themeColor("--sketch-projected", 0xb07fe8);
+const projectedStaleColor = () => themeColor("--sketch-projected-stale", 0xd9a24d);
+const looseOpenColor = () => themeColor("--sketch-loose-open", 0xe5484d);
+const looseUntiedColor = () => themeColor("--sketch-loose-untied", 0xf5a524);
 export const DIM_COLOR = 0x8fa4bd; // muted blue-gray for dimension annotations
 const FILL_COLOR = 0x3a7bd5;
 
@@ -62,7 +70,6 @@ function lineMat(color: number): THREE.LineBasicMaterial {
   }
   return m;
 }
-const CONSTRUCTION_COLOR = 0xffa64d;
 const dashMats = new Map<number, THREE.LineDashedMaterial>();
 // Construction geometry is dashed, orange on a plain pass and the pass colour on a highlight pass.
 function dashMat(color: number): THREE.LineDashedMaterial {
@@ -100,8 +107,6 @@ const POLYGON_MAT = new THREE.LineDashedMaterial({
 });
 // projected reference geometry: purple (linked/fixed, Fusion-style); a stale
 // projection (source no longer resolves, last shape kept) tints amber
-const PROJECTED_COLOR = 0xb07fe8;
-const PROJECTED_STALE_COLOR = 0xd9a24d;
 // Pulled toward the camera so a profile lying on a face shows its fill and
 // highlight instead of losing the depth test to the opaque face.
 const FILL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
@@ -220,7 +225,7 @@ export class SketchOverlay {
       const plane = this.planeFor(planeOf(f, resolved.sketchPlanes, resolved.datumPlanes));
       const ents = resolveEntities(f, doc.parameters);
 
-      for (const obj of curveObjects(ents, plane, CURVE_COLOR)) {
+      for (const obj of curveObjects(ents, plane, sketchFreeColor())) {
         obj.userData.sketchId = f.id; // + entityId from curveObjects → Project-tool picking
         this.committed.add(obj);
       }
@@ -527,8 +532,8 @@ export class SketchOverlay {
       dots.renderOrder = 15;
       this.looseEndsGroup.add(dots);
     };
-    add(le.open, LOOSE_OPEN_COLOR);
-    add(le.untied, LOOSE_UNTIED_COLOR);
+    add(le.open, looseOpenColor());
+    add(le.untied, looseUntiedColor());
   }
 
   /** The in-progress rubber-band entity (rebuilt every pointer move). */
@@ -661,7 +666,7 @@ export function curveObjects(
       out.push(o);
     };
     if (e.type === "point") {
-      add(pointMarker(plane, e.x, e.y, e.construction && !highlight ? CONSTRUCTION_COLOR : color));
+      add(pointMarker(plane, e.x, e.y, e.construction && !highlight ? constructionColor() : color));
       continue;
     }
     if (e.type === "text") {
@@ -674,17 +679,17 @@ export function curveObjects(
     // works on projected entities and the selection must show.
     const projected = e.type === "projected" ? e : null;
     const drawColor =
-      projected && !highlight ? (projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR) : color;
+      projected && !highlight ? (projected.stale === true ? projectedStaleColor() : projectedColor()) : color;
     const curve =
       !projected && e.construction
-        ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR)
+        ? constructionLine(pts, highlight ? color : constructionColor())
         : polyline(pts, drawColor);
     // Circles and arcs get a visible centre +: it is a snap target and the dimension tool's handle. Grouped to keep
     // one object per entity; asRound is the one centre rule.
     const center = asRound(e);
     if (center) {
       const g = new THREE.Group();
-      const markerColor = projected ? drawColor : e.construction && !highlight ? CONSTRUCTION_COLOR : color;
+      const markerColor = projected ? drawColor : e.construction && !highlight ? constructionColor() : color;
       g.add(curve, pointMarker(plane, center.x, center.y, markerColor));
       g.renderOrder = 12;
       add(g);
@@ -778,7 +783,7 @@ function textObjects(
   for (const f of faces) {
     for (const loop of [f.outer, ...f.holes]) {
       const pts = loop.map(([x, y]) => plane.to3D(x, y));
-      g.add(construction ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR) : polyline(pts, color));
+      g.add(construction ? constructionLine(pts, highlight ? color : constructionColor()) : polyline(pts, color));
     }
     // The solid glyph fill is drawn by the region layer (fillMesh) so it can show
     // hover/selection state and be picked for extrude, see glyphWorldRegions.
@@ -831,8 +836,6 @@ function dotMat(color: number): THREE.PointsMaterial {
   return m;
 }
 
-export const LOOSE_OPEN_COLOR = 0xe5484d;
-export const LOOSE_UNTIED_COLOR = 0xf5a524;
 const looseMats = new Map<number, THREE.PointsMaterial>();
 // Drawn over the curves, an end hidden under its own line is the one the user hunts for.
 function looseEndMat(color: number): THREE.PointsMaterial {

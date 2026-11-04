@@ -24,8 +24,10 @@ import {
   poleMarkerObjects,
   dimensionLineObjects,
   mirrorMarkObjects,
-  CURVE_COLOR,
   PREVIEW_COLOR,
+  sketchConflictColor,
+  sketchDefinedColor,
+  sketchFreeColor,
   sketchSelectColor,
 } from "./overlay";
 import {
@@ -3513,7 +3515,7 @@ export class SketchMode {
 
   /** Red over-constrained or conflict, white fully defined (dof 0), blue under-constrained. dof < 0 means no solve yet. */
   private activeColor(): number {
-    return this.conflict ? 0xff4444 : this.lastDof === 0 ? 0xffffff : CURVE_COLOR;
+    return this.conflict ? sketchConflictColor() : this.lastDof === 0 ? sketchDefinedColor() : sketchFreeColor();
   }
 
   /** All pattern definitions including the one being placed (for live preview). */

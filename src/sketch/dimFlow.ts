@@ -6,7 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { PlaceOffset, SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, dimensionLineObjects, PREVIEW_COLOR } from "./overlay";
+import { curveObjects, dimensionLineObjects, PREVIEW_COLOR, sketchConflictColor, sketchSelectColor } from "./overlay";
 import type { DimInput } from "./dimInput";
 import { constraintDims, linearDim } from "./entityDims";
 import {
@@ -470,13 +470,13 @@ export class DimFlow {
     if (!p) return;
     this.host.lastCursor().copy(p);
     const preview: THREE.Object3D[] = [];
-    for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, 0x33aaff));
+    for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, sketchSelectColor()));
     const cand =
       this.dimPicks.length < 2
         ? (this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol()))
         : null;
     if (cand && !this.dimPicks.some((t) => targetKey(t) === targetKey(cand))) {
-      preview.push(...this.dimTargetObjects(cand, 0xff5555));
+      preview.push(...this.dimTargetObjects(cand, sketchConflictColor()));
     }
     const plan = this.dimPlan;
     if (plan) {

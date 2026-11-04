@@ -132,6 +132,24 @@ const SIGNAL_DELTA_E = 15;
 const SIGNAL_LIGHTNESS_GAP = 10;
 const RING_SURFACES = ["--panel", "--panel-2", "--raised", "--raised-2", "the panel glass"];
 const AXES = ["--axis-x", "--axis-y", "--axis-z"];
+export const SKETCH_TOKENS = [
+  "--sketch-free",
+  "--sketch-defined",
+  "--sketch-construction",
+  "--sketch-projected",
+  "--sketch-projected-stale",
+  "--sketch-loose-open",
+  "--sketch-loose-untied",
+] as const;
+// Sketch states a viewer must tell apart: each pair is held by colour or by lightness.
+const SKETCH_PAIRS: [string, string][] = [
+  ["--sketch-free", "--sketch-projected"],
+  ["--sketch-free", "--sketch-construction"],
+  ["--sketch-projected", "--sketch-construction"],
+  ["--sketch-free", "--sketch-defined"],
+  ["--sketch-projected", "--sketch-projected-stale"],
+  ["--sketch-loose-open", "--sketch-loose-untied"],
+];
 
 /** "high" is the bar the High Contrast themes keep: AAA text, and every line a viewer must find at text contrast. */
 export type ContrastLevel = "standard" | "high";
@@ -219,6 +237,7 @@ export function paletteContrast(
   }
   add("--pick-line on --viewport-bg", c("--pick-line"), c("--viewport-bg"), 3);
   for (const axis of AXES) add(`${axis} on --viewport-bg`, c(axis), c("--viewport-bg"), 3);
+  for (const t of [...SKETCH_TOKENS, "--error"]) add(`${t} on --viewport-bg`, c(t), c("--viewport-bg"), min.line);
   // The edge is an inset line painted over the control's own fill, so it has to stand clear of both sides.
   const edge = controlEdge(p, mode);
   for (const on of EDGE_SURFACES) {
@@ -238,6 +257,31 @@ export function paletteContrast(
     }),
   );
   return out.sort((a, b) => a.ratio / a.min - b.ratio / b.min);
+}
+
+export interface SeparationResult {
+  what: string;
+  /** The smallest ΔE2000 over the three dichromacies. */
+  deltaE: number;
+  /** The L* gap, which every kind of colour blindness still sees. */
+  gap: number;
+  ok: boolean;
+}
+
+/** Each pair of sketch states passes by colour under every dichromacy, or by an L* gap. */
+export function overlaySeparation(p: Record<string, string>): SeparationResult[] {
+  const c = (name: string) => parseColor(p[name] ?? `missing ${name}`);
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return SKETCH_PAIRS.map(([a, b]) => {
+    const deltaE = Math.min(...DICHROMATS.map((v) => deltaE2000(c(a), c(b), v)));
+    const gap = Math.abs(lightness(c(a)) - lightness(c(b)));
+    return {
+      what: `${a} and ${b}`,
+      deltaE: round(deltaE),
+      gap: round(gap),
+      ok: deltaE >= SIGNAL_DELTA_E || gap >= SIGNAL_LIGHTNESS_GAP,
+    };
+  });
 }
 
 export function contrastFailures(
