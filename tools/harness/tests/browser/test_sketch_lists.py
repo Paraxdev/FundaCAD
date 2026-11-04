@@ -218,6 +218,10 @@ CANVAS = """() => ({
 })"""
 
 
+# The Shapes list's rows share the class, and a busy sketch case before this one leaves it open.
+RELATION = "#palette .rel-row:has(.rel-del)"
+
+
 def click_on_sketch(s, x, y):
     s.page.mouse.click(*s.page.evaluate(SCREEN, [x, y]))
     s.page.wait_for_timeout(300)
@@ -243,10 +247,10 @@ def test_a_canvas_click_after_a_palette_click_gives_delete_back_to_the_canvas_se
         kb.type(value)
         kb.press("Enter")
         s.page.wait_for_function("n => window.sketch.constraints.length === n", arg=n)
-    s.page.wait_for_function("() => document.querySelectorAll('#palette .rel-row').length === 2")
+    s.page.wait_for_function("() => document.querySelectorAll('#palette .rel-del').length === 2")
 
     # A row clicked selects its line and keeps focus, a click on the other line must take Delete back.
-    s.page.locator("#palette .rel-row .ui-list-row").filter(has_text="Line 1").click()
+    s.page.locator(f"{RELATION} .ui-list-row").filter(has_text="Line 1").click()
     s.page.wait_for_function("id => [...window.sketch.selected].join() === id", arg=line1)
     click_on_sketch(s, -25.5, 16)
     got = s.page.evaluate(CANVAS)
@@ -257,7 +261,7 @@ def test_a_canvas_click_after_a_palette_click_gives_delete_back_to_the_canvas_se
     assert s.page.evaluate(CANVAS)["constraints"] == 1
 
     # The X moves focus to the summary, which must not keep Delete from the line clicked next.
-    row = s.page.locator("#palette .rel-row").first
+    row = s.page.locator(RELATION).first
     row.hover()
     row.locator(".rel-del").click()
     s.page.wait_for_function("() => window.sketch.constraints.length === 0")
