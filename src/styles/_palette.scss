@@ -10,11 +10,13 @@
   box-shadow: var(--shadow-3);
   padding: var(--s-4);
   z-index: 20;
-  /* A sketch can carry a hundred relations: the card is capped at the viewport and only
-     the list scrolls, the controls above it never squeeze. */
+  /* Capped at the viewport, the card scrolls as one and no list squeezes below its rows: three lists of a busy
+     sketch under the options are taller than most windows. */
   display: flex;
   flex-direction: column;
   max-height: calc(100% - var(--s-4) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .palette > * {
   flex: none;
@@ -114,10 +116,7 @@
   padding: 0;
   /* Same bleed as .palette-row. */
   margin: 0 calc(-1 * var(--s-3));
-  /* About eight rows, fewer on a short viewport: the only part of the card that shrinks, and
-     min-height 0 is what lets a flex item shrink below its content at all. */
-  flex: 1 1 auto;
-  min-height: 0;
+  /* About eight rows, a longer list scrolls inside. */
   max-height: 216px;
   overflow-y: auto;
 }
