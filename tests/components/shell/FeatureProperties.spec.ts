@@ -388,20 +388,32 @@ describe("FeatureProperties", () => {
     expect(row.findAll("input")).toHaveLength(0);
   });
 
-  it("ties each value label to its own field and shows a refusal only under the feature that got it", async () => {
+  it("ties each value label to its own field and drops a refusal when the panel moves to another feature", async () => {
     const fake = makeEngine({
       parameters: {},
-      features: [FILLET(), { id: "f2", type: "fillet", radius: 4 } as unknown as Feature],
+      features: [FILLET(), { id: "f2", type: "fillet", radius: 4.5 } as unknown as Feature],
     });
-    const first = render(fake, "f1");
-    await commit(first, "Radius", "-2");
-    const second = render(fake, "f2");
-    const row = (w: VueWrapper) => w.findAll(".param-row").find((r) => r.find("label").text() === "Radius")!;
-    for (const w of [first, second]) {
-      expect(row(w).find("label").attributes("for")).toBe(row(w).find("input").attributes("id"));
-    }
-    expect([first.findAll(".param-problem").length, second.findAll(".param-problem").length]).toEqual([1, 0]);
-    expect((row(second).find("input").element as HTMLInputElement).value).toBe("4");
+    const w = render(fake, "f1");
+    const radius = () => w.findAll(".param-row").find((r) => r.find("label").text() === "Radius")!;
+    const state = () => {
+      const input = radius().find("input");
+      return [
+        radius().find("label").attributes("for") === input.attributes("id"),
+        (input.element as HTMLInputElement).value,
+        input.attributes("aria-invalid"),
+        w.findAll(".param-problem").map((p) => p.text()),
+      ];
+    };
+    await commit(w, "Radius", "-2.5");
+    const refusal = problemUnder(w, "Radius").text();
+    expect(refusal).toMatch(/radius/i);
+    expect(state()).toEqual([true, "-2.5", "true", [refusal]]);
+
+    await w.setProps({ featureId: "f2" });
+    expect(state()).toEqual([true, "4.5", undefined, []]);
+    await w.setProps({ featureId: "f1" });
+    expect(state()).toEqual([true, "2", undefined, []]);
+    expect(fake.values).toEqual([]);
   });
 
   it("wants a whole count of at least one", async () => {
