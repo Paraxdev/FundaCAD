@@ -1,6 +1,7 @@
 // The base set for imperative TS code (tool boxes, io): the same controls as the Vue components, built as DOM.
 
 import { iconElement } from "../../ui/icons";
+import { announce } from "../../ui/announce";
 import { a11yPrefs } from "../../ui/a11yPrefs";
 import { spokenUnit, unitById } from "../../ui/measure";
 import { ariaKeys } from "../../input/platform";
@@ -347,12 +348,40 @@ export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
   return { root, input, chip };
 }
 
-/** A number input's refusal, or null once it reads. */
+const errorSpans = new WeakMap<UiNumberInput, HTMLSpanElement>();
+
+/** A number input's refusal, or null once it reads. The reason is described on the input and spoken once when the
+ *  input goes from valid to refused. */
 export function setInvalid(f: UiNumberInput, reason: string | null): void {
+  const was = errorSpans.get(f);
+  const wasInvalid = f.input.hasAttribute("aria-invalid");
   if (reason) f.input.setAttribute("aria-invalid", "true");
   else f.input.removeAttribute("aria-invalid");
   f.root.classList.toggle("is-error", !!reason);
   setTitle(f.input, reason ?? tips.get(f.input));
+
+  let span = was;
+  if (reason && !span) {
+    span = document.createElement("span");
+    span.id = `ui-num-${++numberNo}-error`;
+    span.className = "sr-only";
+    errorSpans.set(f, span);
+    f.root.append(span);
+  }
+  if (reason && span) span.textContent = reason;
+  const ids = (f.input.getAttribute("aria-describedby") ?? "").split(" ").filter((id) => id && id !== was?.id);
+  if (reason && span) ids.push(span.id);
+  if (ids.length) f.input.setAttribute("aria-describedby", ids.join(" "));
+  else f.input.removeAttribute("aria-describedby");
+  if (!reason && was) {
+    was.remove();
+    errorSpans.delete(f);
+  }
+
+  if (reason && !wasInvalid) {
+    const name = document.activeElement === f.input ? "" : (f.input.getAttribute("aria-label") ?? "");
+    announce(name ? `${name}, ${reason}` : reason, "assertive");
+  }
 }
 
 export interface UiSliderOptions extends DisabledOptions {

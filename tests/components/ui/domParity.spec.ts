@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import type { Component } from "vue";
 
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
+
 import Button from "../../../src/components/ui/Button.vue";
 import ChoiceList from "../../../src/components/ui/ChoiceList.vue";
 import IconButton from "../../../src/components/ui/IconButton.vue";
@@ -9,6 +11,7 @@ import NumberField from "../../../src/components/ui/NumberField.vue";
 import Slider from "../../../src/components/ui/Slider.vue";
 import UnitChip from "../../../src/components/ui/UnitChip.vue";
 import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
+import { announce } from "../../../src/ui/announce";
 import {
   onActivate,
   setChipUnit,
@@ -282,6 +285,57 @@ describe("dom.ts control state", () => {
       "Width",
       false,
     ]);
+  });
+
+  it("a refused number input is described by its reason after the tokens it already had, and freed again", () => {
+    const f = uiNumberInput({ tip: "Profile value", unit: "mm" });
+    dom(f.root);
+    const word = document.createElement("span");
+    word.id = "profile-word";
+    word.textContent = "3 of 7";
+    document.body.append(word);
+    f.input.setAttribute("aria-describedby", `${f.input.getAttribute("aria-describedby")} ${word.id}`);
+    const described = () =>
+      f.input
+        .getAttribute("aria-describedby")!
+        .split(" ")
+        .map((id) => document.getElementById(id)?.textContent);
+    setInvalid(f, "Type a profile from 0.5 to 12");
+    expect(described()).toEqual(["millimetres", "3 of 7", "Type a profile from 0.5 to 12"]);
+    expect(f.root.querySelectorAll(".sr-only").length).toBe(2);
+    setInvalid(f, "Type a number");
+    expect(described()).toEqual(["millimetres", "3 of 7", "Type a number"]);
+    setInvalid(f, null);
+    expect(described()).toEqual(["millimetres", "3 of 7"]);
+    expect(f.root.querySelectorAll(".sr-only").length).toBe(1);
+    const bare = uiNumberInput({ tip: "Count" });
+    dom(bare.root);
+    setInvalid(bare, "Whole numbers only");
+    expect(bare.input.getAttribute("aria-describedby")!.split(" ").length).toBe(1);
+    setInvalid(bare, null);
+    expect(bare.input.hasAttribute("aria-describedby")).toBe(false);
+    const other = uiNumberInput({ tip: "Width" });
+    dom(other.root);
+    setInvalid(other, "x");
+    setInvalid(bare, "y");
+    expect(other.input.getAttribute("aria-describedby")).not.toBe(bare.input.getAttribute("aria-describedby"));
+  });
+
+  it("a refused number input speaks its reason once per refusal, assertive, with its name when unfocused", () => {
+    vi.mocked(announce).mockClear();
+    const spoken = () => vi.mocked(announce).mock.calls;
+    const f = uiNumberInput({ tip: "Profile value" });
+    dom(f.root);
+    setInvalid(f, "Type a profile from 0.5 to 12");
+    expect(spoken()).toEqual([["Profile value, Type a profile from 0.5 to 12", "assertive"]]);
+    setInvalid(f, "Type a profile from 0.5 to 12");
+    setInvalid(f, "Type a number");
+    expect(spoken().length).toBe(1);
+    setInvalid(f, null);
+    expect(spoken().length).toBe(1);
+    f.input.focus();
+    setInvalid(f, "Too small");
+    expect(spoken().slice(1)).toEqual([["Too small", "assertive"]]);
   });
 
   it("a press on a number input's frame focuses its input and keeps the press from taking focus", () => {
