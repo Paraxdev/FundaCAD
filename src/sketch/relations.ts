@@ -7,6 +7,7 @@ import { isDriven } from "../types";
 import { coincKey } from "./sketchSolve";
 import { constraintFace, diagnosisOf, type ConstraintDiagnosis } from "./glyphs";
 import { fmtDim } from "./annotationFormat";
+import { rectSideField } from "./directDims";
 import { distinctNames, entityLabel, relationName, stateWord, type StateWord } from "./sketchNames";
 
 export { entityLabel };
@@ -122,13 +123,14 @@ export function constraintRows(
     const labels = face.operands.map((o) => entityLabel(ents, o)).filter((s): s is string => !!s);
     const v = (c as { value?: number }).value;
     const driven = isDriven(c);
+    const side = rectSide(ents, c);
     const row: RelationRow = {
       key: String(i),
       spoken: "",
       index: i,
       icon: face.icon,
-      name: face.name,
-      detail: labels.join(" and "),
+      name: side === "width" ? "Width" : side === "height" ? "Height" : face.name,
+      detail: [...new Set(labels)].join(" and "),
       entities: face.operands.map((o) => o.split("~")[0] ?? o),
       state: diagnosisOf(i, conflicts, over),
     };
@@ -136,6 +138,13 @@ export function constraintRows(
     if (driven) row.driven = true;
     return withWords(row);
   });
+}
+
+/** Reference sides count too, unlike rectSideOf, so a measured width still reads as one. */
+function rectSide(ents: ResolvedEntity[], c: SketchConstraint): "width" | "height" | null {
+  const field = rectSideField(c);
+  if (!field || c.type !== "p2pDistance") return null;
+  return ents.some((e) => e.id === c.e1 && e.type === "rectangle") ? field : null;
 }
 
 /** What was drawn, then what the geometry implies. */

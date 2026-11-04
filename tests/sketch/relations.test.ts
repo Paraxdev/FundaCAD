@@ -146,6 +146,30 @@ describe("relationRows", () => {
     expect(rows[1]!.driven).toBe(true);
   });
 
+  it("names a rectangle side Width or Height and a distance on one shape by that shape once", () => {
+    const ents: ResolvedEntity[] = [
+      { type: "rectangle", id: "r", width: 40, height: 15, x: 7, y: -3, angle: 20 },
+      line("l", 3, 4, 28, 11),
+      { type: "rectangle", id: "q", width: 22, height: 9, x: -11, y: 6 },
+    ];
+    const cs: SketchConstraint[] = [
+      { type: "p2pDistance", e1: "r", p1: 0, e2: "r", p2: 1, value: 40 },
+      { type: "p2pDistance", e1: "r", p1: 3, e2: "r", p2: 0, value: 15, driven: true },
+      { type: "p2pDistance", e1: "q", p1: 2, e2: "q", p2: 3, value: 22 },
+      { type: "p2pDistance", e1: "q", p1: 0, e2: "q", p2: 2, value: 23.8 },
+      { type: "hDistance", e1: "l", p1: 0, e2: "l", p2: 1, value: 25 },
+      { type: "p2pDistance", e1: "l", p1: 0, e2: "r", p2: 2, value: 9 },
+    ];
+    expect(relationRows(ents, cs, NONE, NONE).map((r) => [r.name, r.detail, r.spoken])).toEqual([
+      ["Width", "Rectangle 1", "Width 40 mm, Rectangle 1"],
+      ["Height", "Rectangle 1", "Height 15 mm, Rectangle 1, reference"],
+      ["Width", "Rectangle 2", "Width 22 mm, Rectangle 2"],
+      ["Distance", "Rectangle 2", "Distance 23.8 mm, Rectangle 2"],
+      ["Horizontal distance", "Line 1", "Horizontal distance 25 mm, Line 1"],
+      ["Distance", "Line 1 and Rectangle 1", "Distance 9 mm, Line 1 and Rectangle 1"],
+    ]);
+  });
+
   it("survives a constraint pointing at geometry that is gone", () => {
     const rows = relationRows(TRIANGLE, [{ type: "horizontal", line: "deleted" }], NONE, NONE);
     expect(rows[0]!.detail).toBe("");
