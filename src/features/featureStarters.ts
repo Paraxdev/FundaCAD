@@ -31,7 +31,7 @@ import { featureOwnersOfFaces, patternStart, type PatternCandidates } from "./pa
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
-import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
+import { CURVED_FACE_ROW, pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
 import { confirmEdgeCount, edgeGate } from "./edgeCountGate";
@@ -212,7 +212,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       (pick) => {
         if (pick.kind === "face") {
           const flat = viewport.faceSketchPlane(pick.faceId);
-          if (!flat) return "That face is not flat, pick a round face in the view for its tangent plane";
+          if (!flat) return CURVED_FACE_ROW;
           const { selector, at } = flat.anchor;
           cleanup();
           deferPick(viewport.domElement, () =>

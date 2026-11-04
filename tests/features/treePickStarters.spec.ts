@@ -310,12 +310,14 @@ describe("a face or an edge row from the Geometry list", () => {
     expect(r.showSketchFace).toHaveBeenCalledExactlyOnceWith(14);
   });
 
-  it("Sketch refuses a face that is not flat in words and keeps waiting for a flat one", () => {
+  it("Sketch refuses a curved face in words that name a flat face, not the view, and keeps waiting", () => {
     const r = lidRig();
     r.starters.startSketch();
     expect(r.click({ kind: "face", faceId: 15 })).toBe("refused");
     expect(r.hints).toHaveLength(1);
-    expect(r.hints[0]).toMatch(/not flat/);
+    expect(r.hints[0]).toMatch(/curved/);
+    expect(r.hints[0]).toMatch(/flat face or a plane/);
+    expect(r.hints[0]).not.toMatch(/in the view/);
     expect(treePickWaiting()).toBe(true);
     flushFrame();
     expect(r.deps.sketch.enter).not.toHaveBeenCalled();
