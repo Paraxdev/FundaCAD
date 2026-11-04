@@ -82,7 +82,8 @@ export function stepLabel(before: CadDocument, after: CadDocument): string {
     const at = now.indexOf(edited[0]!);
     const unnamed = (f: Feature) => ({ ...f, name: undefined });
     if (same(unnamed(was[at]!), unnamed(now[at]!))) return `Rename ${numberedName(was[at]!, was)}`;
-    return numberedName(now[at]!, now);
+    // Lower case: it is only ever said after Undo, Redo, Undid or Redid.
+    return `edit of ${numberedName(now[at]!, now)}`;
   }
   return paramLabel(before, after) ?? STEP_LABEL.edit;
 }

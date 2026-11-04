@@ -18,7 +18,7 @@ Right-click a step for Edit, Rename, Suppress, Add condition, Roll back before t
 
 ## Undo and Redo
 
-Ctrl+Z takes back the last step and Ctrl+Shift+Z puts it back. Both name the step, so a screen reader says "Undid Fillet 2" or "Redid Fillet 2", and "Nothing to undo" when there is nothing left. In a sketch, Ctrl+Z takes back a sketch edit instead.
+Ctrl+Z takes back the last step and Ctrl+Shift+Z puts it back. Both name the step, so a screen reader says "Undid Fillet 2" or "Redid Fillet 2", "Undid edit of Fillet 2" when only a change to it was taken back, and "Nothing to undo" when there is nothing left. In a sketch, Ctrl+Z takes back a sketch edit instead.
 
 ## Failed steps
 

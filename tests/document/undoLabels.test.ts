@@ -122,7 +122,8 @@ describe("undo labels on the store", () => {
   it("labels an edit and a rename", () => {
     const s = threeSteps();
     s.updateFeature("c", { radius: 3.25 } as Partial<Feature>);
-    expect(s.undoLabel).toBe("Fillet 1");
+    expect(s.undoLabel).toBe("edit of Fillet 1");
+    expect([s.undo(), s.redo()]).toEqual(["edit of Fillet 1", "edit of Fillet 1"]);
     s.renameFeature("c", "Round");
     expect(s.undoLabel).toBe("Rename Fillet 1");
   });

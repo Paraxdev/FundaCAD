@@ -52,10 +52,10 @@ describe("stepLabel", () => {
     expect(stepLabel(boxes, doc([f("e", "box"), f("g", "box"), box]))).toBe("Move Box 1");
   });
 
-  it("names one edited step, several as a count", () => {
+  it("names one edited step as an edit of it, several as a count", () => {
     const one = copy(base);
     (one.features[3] as unknown as { radius: number }).radius = 3.75;
-    expect(stepLabel(base, one)).toBe("Fillet 2");
+    expect(stepLabel(base, one)).toBe("edit of Fillet 2");
     (one.features[0] as unknown as { w: number }).w = 41;
     expect(stepLabel(base, one)).toBe("Edit 2 steps");
   });
@@ -65,7 +65,7 @@ describe("stepLabel", () => {
     (renamed.features[3] as unknown as { name: string }).name = "Round";
     expect(stepLabel(base, renamed)).toBe("Rename Fillet 2");
     (renamed.features[3] as unknown as { radius: number }).radius = 9;
-    expect(stepLabel(base, renamed)).toBe("Round");
+    expect(stepLabel(base, renamed)).toBe("edit of Round");
   });
 
   it("names the one parameter that changed, several as Parameters", () => {
@@ -96,6 +96,6 @@ describe("stepLabel", () => {
     const b = copy(a);
     b.parameters["width"] = 2;
     (b.features[1] as unknown as { radius: number }).radius = 8;
-    expect(stepLabel(a, b)).toBe("Fillet 1");
+    expect(stepLabel(a, b)).toBe("edit of Fillet 1");
   });
 });
