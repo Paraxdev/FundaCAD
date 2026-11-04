@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import ListRow from "../ui/ListRow.vue";
 import Button from "../ui/Button.vue";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
@@ -39,6 +39,14 @@ function focusOut(id: string) {
   if (focusId.value === id) focusId.value = null;
   light(pointerId.value);
 }
+
+watch(
+  () => rel.hooks,
+  () => {
+    pointerId.value = null;
+    focusId.value = null;
+  },
+);
 </script>
 
 <template>

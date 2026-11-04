@@ -150,4 +150,20 @@ describe("Shapes list", () => {
     expect(names(w)).toEqual(["Circle 1"]);
     expect(rel.freedom).toBeNull();
   });
+
+  it("lights nothing of the first sketch from a row of the next one", async () => {
+    const w = await open([L1, L2]);
+    await w.findAll("li.rel-row")[0]!.trigger("pointerenter");
+    const rel = useSketchRelationsStore();
+    rel.hide();
+    await nextTick();
+    const next = { ...hooks, hover: vi.fn() };
+    rel.hooks = next as unknown as typeof rel.hooks;
+    rel.setShapes([C1]);
+    await nextTick();
+    const row = w.findAll("li.rel-row")[0]!;
+    await row.trigger("focusin");
+    await row.trigger("focusout");
+    expect(next.hover.mock.calls).toEqual([[["c"]], [null]]);
+  });
 });
