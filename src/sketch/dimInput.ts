@@ -15,6 +15,7 @@ import {
 import { iconElement } from "../ui/icons";
 import { isEditableTarget, isHistoryKey, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
+import { regionStep } from "../ui/regions";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -316,6 +317,7 @@ export class DimInput {
     this.root.setAttribute("role", "group");
     // #prompt is the tool's banner line, so entering the box reads what the tool asks for, then the keys.
     this.root.setAttribute("aria-describedby", `prompt ${this.helpId}`);
+    this.root.setAttribute("data-over-region", "viewport");
     document.body.appendChild(this.root);
     // Field inputs stop their own keys, so this hears only the option buttons.
     this.root.addEventListener("keydown", (e) => this.onOptionKey(e));
@@ -970,6 +972,8 @@ export class DimInput {
   }
 
   private onKey(e: KeyboardEvent, field: Field) {
+    // F6 leaves the box as it leaves any field.
+    if (regionStep(e)) return;
     if (isHistoryKey(e)) {
       // Chromium has one undo stack per page, moving focus to the field it acts on, so the browser may act exactly
       // while some field of this box still holds typing.
