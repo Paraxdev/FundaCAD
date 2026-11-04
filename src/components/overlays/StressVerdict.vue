@@ -17,9 +17,9 @@ const bend = computed(() =>
   props.scale === null ? null : deflectionNote(props.maxDeflection, props.unit, props.scale),
 );
 
-// Mounted with the result, so the first verdict is spoken as it appears.
+// Mounted with the result, so the first verdict is spoken as it appears. Every headline ends in a full stop.
 watch(
-  () => [view.value.headline, view.value.detail].filter(Boolean).join(". "),
+  () => [view.value.headline, view.value.detail].filter(Boolean).join(" "),
   (text) => announce(text, "polite", { key: "stress" }),
   { immediate: true },
 );
