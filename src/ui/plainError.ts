@@ -32,3 +32,12 @@ export function plainError(err: unknown, fallback: string): string {
   const text = (first ?? "").trim();
   return text && !looksInternal(text) ? text : fallback;
 }
+
+/** "Fillet failed: <why>", said once when the engine's sentence already starts with the step's name. */
+export function failedText(label: string, raw: unknown): string {
+  const said = plainError(raw, "");
+  if (!said) return `${label} failed: the engine could not build it. ${SEE_CONSOLE}`;
+  const word = label.split(" ")[0]!;
+  const named = said.slice(0, word.length).toLowerCase() === word.toLowerCase() && !/\w/.test(said[word.length] ?? "");
+  return named ? said : `${label} failed: ${said}`;
+}

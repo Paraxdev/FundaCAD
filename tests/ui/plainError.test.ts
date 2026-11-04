@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksInternal, plainError } from "../../src/ui/plainError";
+import { failedText, looksInternal, plainError, SEE_CONSOLE } from "../../src/ui/plainError";
 
 const FALLBACK = "That did not work.";
 
@@ -89,5 +89,29 @@ describe("looksInternal", () => {
     expect(looksInternal("RangeError: Invalid array length")).toBe(true);
     expect(looksInternal("Radius must be above 0")).toBe(false);
     expect(looksInternal("Fillet 2 failed: the edge is too short")).toBe(false);
+  });
+});
+
+describe("failedText names the failed step once", () => {
+  it.each([
+    ["Fillet", "Fillet failed on Box: try a smaller value", "Fillet failed on Box: try a smaller value"],
+    ["Pattern", PATTERN, PATTERN],
+    ["Join", "join failed: the shapes only touch", "join failed: the shapes only touch"],
+    ["Fillet 2", "Fillet failed on Body 3: radius 7.5 too large", "Fillet failed on Body 3: radius 7.5 too large"],
+    ["Fillet", "radius 7.5 is too large for edge 4", "Fillet failed: radius 7.5 is too large for edge 4"],
+    ["Fillet", "Filleted edges meet at a corner", "Fillet failed: Filleted edges meet at a corner"],
+    ["Hole", "The Hole has no face to sit on", "Hole failed: The Hole has no face to sit on"],
+    ["Shell", "Shell", "Shell"],
+  ])("%s with %j", (label, raw, want) => {
+    expect(failedText(label, raw)).toBe(want);
+  });
+
+  it("gives the step and the console for an internal or empty message", () => {
+    const fallback = `Loft failed: the engine could not build it. ${SEE_CONSOLE}`;
+    expect([failedText("Loft", "StdFail_NotDone"), failedText("Loft", ""), failedText("Loft", undefined)]).toEqual([
+      fallback,
+      fallback,
+      fallback,
+    ]);
   });
 });

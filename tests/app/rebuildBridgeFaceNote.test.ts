@@ -21,7 +21,12 @@ vi.mock("../../src/ui/toast", () => ({
 function bridge() {
   const builds = new Set<(s: RebuildState) => void>();
   const store = {
-    document: { features: [{ id: "a" }, { id: "b" }] as unknown[] },
+    document: {
+      features: [
+        { id: "a", type: "box" },
+        { id: "b", type: "fillet" },
+      ] as unknown[],
+    },
     buildState: { result: null },
     hasPreview: false,
     previewError: null,
@@ -105,7 +110,7 @@ describe("the message for a feature that failed to build", () => {
   it("keeps a plain engine sentence and names the feature", () => {
     failures.length = 0;
     bridge()([], { errors: [{ feature_id: "b", message: "Radius 7.25 is larger than the edge" }] });
-    expect(failures.map((f) => f.message.split(" failed: ")[1])).toEqual(["Radius 7.25 is larger than the edge"]);
+    expect(failures.map((f) => f.message)).toEqual(["Fillet failed: Radius 7.25 is larger than the edge"]);
   });
 
   it("says it in plain words when the engine text is internal, with the raw text in the detail", () => {
