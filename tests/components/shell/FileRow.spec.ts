@@ -40,10 +40,20 @@ describe("FileRow", () => {
     expect(w.find("button.file-clear").exists()).toBe(false);
   });
 
-  it("names the pick button by the label and the file name, from a slanted path", () => {
-    const w = mountRow("Heightmap", "C:\maps\v2/relief.png");
-    expect(spoken(w.get("button.file-pick").element)).toBe("Heightmap relief.png");
-    expect(w.get(".param-row").attributes("title")).toBe("C:\maps\v2/relief.png");
+  it("names the pick button by the label and the file name, from a path with either slant last", () => {
+    const back = String.raw`D:/maps\v2\relief.png`;
+    const w = mountRow("Heightmap", back);
+    expect([spoken(w.get("button.file-pick").element), w.get(".param-row").attributes("title")]).toEqual([
+      "Heightmap relief.png",
+      back,
+    ]);
+    w.unmount();
+    const forward = String.raw`D:\maps\v2/bump map.png`;
+    const v = mountRow("Heightmap", forward);
+    expect([spoken(v.get("button.file-pick").element), v.get(".param-row").attributes("title")]).toEqual([
+      "Heightmap bump map.png",
+      forward,
+    ]);
   });
 
   it("names the clear button by the label then its own action", async () => {
