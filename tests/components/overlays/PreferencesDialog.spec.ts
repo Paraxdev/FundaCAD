@@ -805,6 +805,30 @@ describe("Preferences sliders, hints and upload errors", () => {
       for (const t of customThemes()) removeCustomTheme(t.id);
     }
   });
+
+  it("asks before it removes an uploaded theme, and says it went", async () => {
+    const json = new File([JSON.stringify({ label: "Fine", "--accent": "#9a9ff0" })], "fine.json");
+    try {
+      await open();
+      await pickFile("prefs-theme-file", json);
+      await vi.waitFor(() => expect(customThemes().map((t) => t.label)).toEqual(["Fine"]));
+      await flushPromises();
+      const remove = () => [...document.querySelectorAll<HTMLElement>("button")].find((b) => label(b) === "Remove");
+      const said = () => useToastStore().items.map((t) => t.message);
+      confirm.mockResolvedValueOnce(false);
+      remove()!.click();
+      await flushPromises();
+      expect(confirm.mock.calls).toEqual([["Remove the theme Fine?", "Remove", expect.any(String)]]);
+      expect([customThemes().length, said()]).toEqual([1, []]);
+      remove()!.click();
+      await flushPromises();
+      expect([customThemes().length, getTheme(), said()]).toEqual([0, DEFAULT_THEME_ID, ["Removed the theme Fine."]]);
+      expect(remove()).toBeUndefined();
+    } finally {
+      setTheme(DEFAULT_THEME_ID);
+      for (const t of customThemes()) removeCustomTheme(t.id);
+    }
+  });
 });
 
 // axe's name, id and reference rules on all eight panes: the harness's axe run sees only the pane that is open.

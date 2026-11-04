@@ -25,7 +25,6 @@ import A11ySizeRows from "./A11ySizeRows.vue";
 import {
   addCustomTheme,
   asThemeId,
-  customThemes,
   getTheme,
   onThemeChange,
   removeCustomTheme,
@@ -109,7 +108,7 @@ const homeImageInput = ref<HTMLInputElement | null>(null);
 const homeImageError = ref("");
 // Only an uploaded palette is removable; the built-in theme and the shipped
 // ones (Dracula, Solarized Light) sit in the picker the same way but stay put.
-const activeIsCustom = computed(() => customThemes().some((t) => t.id === theme.value));
+const activeIsCustom = computed(() => themeList.value.some((t) => t.custom && t.id === theme.value));
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
@@ -363,11 +362,18 @@ async function onUpload(ev: Event) {
   themeWarning.value = `${res.theme.label} is added, but ${shortfall}`;
 }
 
-function onRemoveTheme() {
+async function onRemoveTheme() {
   themeError.value = "";
   themeWarning.value = "";
+  const gone = themeList.value.find((t) => t.custom && t.id === theme.value);
+  if (!gone) return;
+  if (
+    !(await confirmDanger(`Remove the theme ${gone.label}?`, "Remove", "Its colours are deleted from this computer."))
+  )
+    return;
   // Removing the active palette falls back to the built-in one in the module, whose onThemeChange refreshes both refs.
-  if (activeIsCustom.value) removeCustomTheme(theme.value);
+  removeCustomTheme(gone.id);
+  toast(`Removed the theme ${gone.label}.`);
 }
 function onPack(id: string) {
   const v = asIconPackId(id);
