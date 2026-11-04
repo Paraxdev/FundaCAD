@@ -15,7 +15,7 @@ const clashes = [
   {
     key: "body3 body7",
     label: "Box and Box 2",
-    v: "2.5 mm³",
+    v: "2.5 mm³ overlap",
     spoken: "Box and Box 2, overlap 2.5 mm³",
     a: "body3",
     b: "body7",
@@ -23,7 +23,7 @@ const clashes = [
   {
     key: "body7 body2",
     label: "Box 2 and Lid",
-    v: "0.4 mm³",
+    v: "0.4 mm³ overlap",
     spoken: "Box 2 and Lid, overlap 0.4 mm³",
     a: "body7",
     b: "body2",
@@ -32,7 +32,7 @@ const clashes = [
 const closePair = {
   key: "body2 body9",
   label: "Lid and Pin",
-  v: "0.2 mm",
+  v: "0.2 mm apart",
   spoken: "Lid and Pin, 0.2 mm apart",
   a: "body2",
   b: "body9",
@@ -79,7 +79,10 @@ describe("InterferencePanel", () => {
       "Box and Box 2",
       "Box 2 and Lid",
     ]);
-    expect(r.map((x) => x.querySelector(".ui-list-row-hint")?.textContent)).toEqual(["2.5 mm³", "0.4 mm³"]);
+    expect(r.map((x) => x.querySelector(".ui-list-row-hint")?.textContent)).toEqual([
+      "2.5 mm³ overlap",
+      "0.4 mm³ overlap",
+    ]);
     expect(document.body.textContent).not.toMatch(/[∩↔]/);
     expect(document.body.querySelector("ul.clash-list[aria-label='Clashes']")?.querySelectorAll("li").length).toBe(2);
     expect(document.body.querySelector("ul[aria-label='Close pairs']")).toBeNull();

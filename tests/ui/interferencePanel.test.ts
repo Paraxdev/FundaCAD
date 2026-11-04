@@ -124,8 +124,13 @@ describe("the Interference panel", () => {
     );
     await panels.showInterference(0.5);
     const p = usePanelsStore().interference!;
-    expect(p.clashes.map((c) => c.label)).toEqual(["Box and Box 3", "Box 3 and Box 4"]);
-    expect(p.clearances.map((c) => c.label)).toEqual(["Box and Box 4"]);
+    expect(p.clashes.map((c) => [c.label, c.v, c.spoken])).toEqual([
+      ["Box and Box 3", "2.5 mm³ overlap", "Box and Box 3, overlap 2.5 mm³"],
+      ["Box 3 and Box 4", "0.75 mm³ overlap", "Box 3 and Box 4, overlap 0.75 mm³"],
+    ]);
+    expect(p.clearances.map((c) => [c.label, c.v, c.spoken])).toEqual([
+      ["Box and Box 4", "0.3 mm apart", "Box and Box 4, 0.3 mm apart"],
+    ]);
     expect(p.unchecked).toEqual(["Box 4 is open"]);
   });
 

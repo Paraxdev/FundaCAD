@@ -33,13 +33,21 @@ export function interferenceData(reply: Reply, d: Display): InterferenceData {
   const names = (r: { a: string; b: string; aName: string; bName: string }) =>
     `${d.label(r.a, r.aName)} and ${d.label(r.b, r.bName)}`;
   const f = d.scale;
+  // Without the word in the value, mm³ against mm is all a sighted reader has to tell a clash from a close pair.
   const clashes: ClashRow[] = reply.pairs.map((p) => {
-    const v = `${d.round(p.volume * f * f * f)} ${d.unit}³`;
-    return { key: `${p.a} ${p.b}`, label: names(p), v, spoken: `${names(p)}, overlap ${v}`, a: p.a, b: p.b };
+    const vol = `${d.round(p.volume * f * f * f)} ${d.unit}³`;
+    return {
+      key: `${p.a} ${p.b}`,
+      label: names(p),
+      v: `${vol} overlap`,
+      spoken: `${names(p)}, overlap ${vol}`,
+      a: p.a,
+      b: p.b,
+    };
   });
   const clearances: ClearanceRow[] = reply.clearances.map((c) => {
-    const v = `${d.round(c.distance * f)} ${d.unit}`;
-    return { key: `${c.a} ${c.b}`, label: names(c), v, spoken: `${names(c)}, ${v} apart`, a: c.a, b: c.b };
+    const v = `${d.round(c.distance * f)} ${d.unit} apart`;
+    return { key: `${c.a} ${c.b}`, label: names(c), v, spoken: `${names(c)}, ${v}`, a: c.a, b: c.b };
   });
   return {
     title: interferenceTitle(clashes.length),

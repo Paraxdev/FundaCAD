@@ -12,6 +12,6 @@ Interference finds bodies that overlap, which you want to know before you print 
 
 An overlap inside a part is hidden, so press X to see through the parts.
 
-Turn on Clearance mode to also list pairs that come closer than a gap you type. It starts at 0.2 mm, a common gap for parts printed in place.
+Turn on Clearance mode to also list pairs that come closer than a gap you type. It starts at 0.2 mm, a common gap for parts printed in place. Each of those rows says how far apart the pair is, such as 0.15 mm apart, where a clash row gives the volume of its overlap.
 
 Only closed solids can be checked. A surface, or an import whose faces do not close, is listed as Not checked with the reason, so an empty list never hides it.

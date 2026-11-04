@@ -45,7 +45,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **Interference rows are buttons, and the result is spoken.** Tab lights a
   pair the way hovering does, a press keeps it lit, and a screen reader hears
-  how many clashes and close pairs the check found.
+  how many clashes and close pairs the check found. A clash row's value says
+  overlap and a close pair's says apart.
 
 - **Picked faces and edges are named.** Target editor and Mirror rows read
   like "Face 8 of Bracket", rows of one name are told apart, and each Remove
