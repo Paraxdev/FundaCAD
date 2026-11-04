@@ -46,7 +46,7 @@ function makeSketch(tool: string) {
     arcEnd: null,
     originPin: null,
     dims: { clearSelection() {}, setInteractive() {} },
-    glyphs: { setInteractive() {} },
+    glyphs: { setInteractive() {}, clearSelection() {}, hasSelection: () => false },
     dim: { isActive: false, ownsTarget: () => false, hide() {} },
     keyDraw: noKeyDraw,
     keySurface: noKeySurface,

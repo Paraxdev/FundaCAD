@@ -88,8 +88,8 @@ describe("glyph presentation", () => {
     expect(glyphClass("over")).toBe("sketch-glyph over");
   });
 
-  it("explains what clicking will do, in every state", () => {
-    expect(glyphTitle(null)).toBe("Click to delete this constraint");
+  it("says a click selects and Delete removes, in every state", () => {
+    for (const st of [null, "conflict", "over"] as const) expect(glyphTitle(st)).toMatch(/select.*Delete removes/);
     expect(glyphTitle("conflict")).toContain("Conflicting");
     expect(glyphTitle("over")).toContain("Redundant");
   });

@@ -35,6 +35,10 @@ With shapes already selected, a constraint that fits them applies at once. Right
 | Symmetric | Shift+S | two endpoints, then the axis |
 | Fix | Shift+F | a point or a circle centre, to lock it |
 
+## Remove a rule from the drawing
+
+Click a rule's icon on the sketch to select it. Its shapes light up, and its row in the Relations list is marked as current. Press **Delete** to remove it, and the sketch says "Deleted" and the rule's name. **Ctrl+Z** brings it back, and **Escape** or a click elsewhere drops the selection. An icon on a pattern opens the pattern instead.
+
 ## The Relations list
 
 The palette lists every rule under **Relations**, one row each. It shows while **Show Constraints** is on.
@@ -44,6 +48,7 @@ The palette lists every rule under **Relations**, one row each. It shows while *
 3. A row says its state in words as well as colour: "conflicting" for a rule that cannot hold, "redundant" for one that repeats another, "reference" for a measure that does not drive.
 4. Each rule has its own **Delete** button, named after the rule, such as "Delete Distance 12.5 mm, Line 1 and Line 3". It shows when you hover the row or Tab into it. With a row focused, Delete or Backspace does the same. Focus then moves to the row that took its place, or the one above.
 5. A dashed icon marks ends held only by where they sit, listed as "implied". There is nothing to delete there.
+6. The row of the rule you selected on the sketch is marked as current.
 
 ## Loose ends
 

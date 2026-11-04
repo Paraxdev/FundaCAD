@@ -52,6 +52,7 @@ function sketchWithSelection() {
     dimFlow: { picking: false, plan: null },
     constraintTools: { hasPending: () => false },
     dims: { deleteSelected: () => false },
+    glyphs: { deleteSelected: () => false, hasSelection: () => false },
     deleteSelectedPole: () => false,
     deleteSelected: () => log.push("delete shapes"),
     finishSpline: () => log.push("finish spline"),

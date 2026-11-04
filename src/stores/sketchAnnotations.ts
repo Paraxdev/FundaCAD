@@ -15,7 +15,7 @@ export interface DimHooks {
 
 export interface GlyphHooks {
   overlapPick(e: PointerEvent): boolean;
-  del(cIndex: number): void;
+  select(cIndex: number): void;
   editPattern(patternId: string): void;
 }
 
@@ -50,14 +50,18 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
   const glyphViewport = shallowRef<Viewport | null>(null);
   const glyphHooks = shallowRef<GlyphHooks | null>(null);
   const glyphsPassive = ref(false);
+  /** the constraint index the Delete key acts on, dropped on every rebuild like dimSelected. */
+  const glyphSelected = ref<number | null>(null);
 
   function showGlyphs(items: GlyphItem[], plane: SketchPlane, viewport: Viewport) {
+    glyphSelected.value = null;
     glyphViewport.value = markRaw(viewport);
     glyphPlane.value = markRaw(plane);
     glyphItems.value = markRaw(items);
   }
 
   function hideGlyphs() {
+    glyphSelected.value = null;
     glyphPlane.value = null;
     glyphItems.value = [];
   }
@@ -76,6 +80,7 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
     glyphViewport,
     glyphHooks,
     glyphsPassive,
+    glyphSelected,
     showGlyphs,
     hideGlyphs,
   };

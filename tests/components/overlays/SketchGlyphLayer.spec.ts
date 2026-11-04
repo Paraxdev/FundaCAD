@@ -77,37 +77,90 @@ describe("SketchGlyphLayer", () => {
     expect(badges()[0]!.getAttribute("style")).toBeNull();
   });
 
-  it("deletes the constraint the badge stands for", async () => {
+  it("selects the constraint the badge stands for, and never deletes it", async () => {
     mount(SketchGlyphLayer, { attachTo: document.body });
     const g = new SketchGlyphs(viewport);
+    const onSelect = vi.fn();
     const onDelete = vi.fn();
-    g.onDelete = onDelete; // assigned AFTER construction, as SketchMode does
-    g.show([glyph(3)], plane, new Set(), new Set());
+    g.onSelect = onSelect; // assigned AFTER construction, as SketchMode does
+    g.onDelete = onDelete;
+    g.show([glyph(3), glyph(7)], plane, new Set(), new Set());
+    await nextTick();
+    badges()[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onSelect.mock.calls).toEqual([[7]]);
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it("marks only the selected badge, and a rebuild drops the mark", async () => {
+    mount(SketchGlyphLayer, { attachTo: document.body });
+    const g = new SketchGlyphs(viewport);
+    g.show([glyph(3), glyph(7), glyph(9)], plane, new Set(), new Set());
+    g.markSelected(7);
+    await nextTick();
+    expect([...badges()].map((el) => el.classList.contains("is-selected"))).toEqual([false, true, false]);
+
+    g.show([glyph(3), glyph(7)], plane, new Set(), new Set());
+    await nextTick();
+    expect([...badges()].map((el) => el.classList.contains("is-selected"))).toEqual([false, false]);
+    expect(g.deleteSelected()).toBe(false);
+  });
+
+  it("deletes the selected constraint once, and falls through when none is selected", () => {
+    const g = new SketchGlyphs(viewport);
+    const onDelete = vi.fn();
+    g.onDelete = onDelete;
+    g.show([glyph(3), glyph(7)], plane, new Set(), new Set());
+    expect(g.deleteSelected()).toBe(false);
+    expect(onDelete).not.toHaveBeenCalled();
+
+    g.markSelected(7);
+    expect(g.hasSelection()).toBe(true);
+    expect(g.deleteSelected()).toBe(true);
+    expect(g.deleteSelected()).toBe(false);
+    expect(g.hasSelection()).toBe(false);
+    expect(onDelete.mock.calls).toEqual([[7]]);
+
+    g.markSelected(3);
+    g.clearSelection();
+    expect(g.deleteSelected()).toBe(false);
+    g.markSelected(3);
+    g.hide();
+    expect(g.hasSelection()).toBe(false);
+  });
+
+  it("still edits a pattern glyph instead of selecting it", async () => {
+    mount(SketchGlyphLayer, { attachTo: document.body });
+    const g = new SketchGlyphs(viewport);
+    const onSelect = vi.fn();
+    const onEditPattern = vi.fn();
+    g.onSelect = onSelect;
+    g.onEditPattern = onEditPattern;
+    g.show([{ ...glyph(-1, "pattern"), patternId: "p4" }, glyph(2)], plane, new Set(), new Set());
     await nextTick();
     badges()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(onDelete).toHaveBeenCalledWith(3);
+    expect([onEditPattern.mock.calls, onSelect.mock.calls]).toEqual([[["p4"]], []]);
   });
 
   // Geometry is preferred over glyph: in the dimension tool a badge sitting on the entity it
   // describes would otherwise swallow the click that names an operand.
-  it("skips its delete when the tool underneath claimed the pointerdown", async () => {
+  it("skips its select when the tool underneath claimed the pointerdown", async () => {
     mount(SketchGlyphLayer, { attachTo: document.body });
     const g = new SketchGlyphs(viewport);
-    const onDelete = vi.fn();
-    g.onDelete = onDelete;
+    const onSelect = vi.fn();
+    g.onSelect = onSelect;
     g.onOverlapPick = () => true;
-    g.show([glyph(0)], plane, new Set(), new Set());
+    g.show([glyph(5)], plane, new Set(), new Set());
     await nextTick();
 
     badges()[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     badges()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(onDelete).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
 
     // and only for THAT click, the suppression is consumed, not sticky
     g.onOverlapPick = () => false;
     badges()[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     badges()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(onDelete).toHaveBeenCalledOnce();
+    expect(onSelect.mock.calls).toEqual([[5]]);
   });
 
   it("goes click-through under a drawing tool, and empties on hide", async () => {

@@ -4,6 +4,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import SketchPalette from "../../../src/components/shell/SketchPalette.vue";
 import { useSketchPaletteStore, PALETTE_TOGGLES } from "../../../src/stores/sketchPalette";
+import { useSketchAnnotationStore } from "../../../src/stores/sketchAnnotations";
 import { useSketchRelationsStore } from "../../../src/stores/sketchRelations";
 import type { RelationRow } from "../../../src/sketch/relations";
 
@@ -223,5 +224,23 @@ describe("Relations rows", () => {
     await nextTick();
     await nextTick();
     expect(document.activeElement).toBe(lis(w)[1]!.get(".ui-list-row").element);
+  });
+
+  it("marks the row of the selected glyph as current, and only that one", async () => {
+    const w = await relations([row(0), row(1), row(null), row(2)]);
+    const current = () => lis(w).map((li) => li.get(".ui-list-row").attributes("aria-current") ?? null);
+    expect(current()).toEqual([null, null, null, null]);
+
+    useSketchAnnotationStore().glyphSelected = 2;
+    await nextTick();
+    expect(current()).toEqual([null, null, null, "true"]);
+
+    useSketchAnnotationStore().glyphSelected = 0;
+    await nextTick();
+    expect(current()).toEqual(["true", null, null, null]);
+
+    useSketchAnnotationStore().glyphSelected = null;
+    await nextTick();
+    expect(current()).toEqual([null, null, null, null]);
   });
 });

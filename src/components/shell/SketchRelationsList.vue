@@ -3,10 +3,12 @@ import { nextTick, ref, watch } from "vue";
 import Icon from "./Icon.vue";
 import IconButton from "../ui/IconButton.vue";
 import ListRow from "../ui/ListRow.vue";
+import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import { useSketchRelationsStore } from "../../stores/sketchRelations";
 import type { RelationRow } from "../../sketch/relations";
 
 const rel = useSketchRelationsStore();
+const glyphs = useSketchAnnotationStore();
 const summary = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 
@@ -113,6 +115,7 @@ watch(
         :label="r.value ? `${r.name} ${r.value}` : r.name"
         :hint="[r.detail, r.stateWord].filter(Boolean).join(' · ') || undefined"
         :aria-label="r.spoken"
+        :selected="r.index !== null && r.index === glyphs.glyphSelected"
         :tip="rowTip(r)"
         @click="rel.hooks?.select(r.entities)"
       >

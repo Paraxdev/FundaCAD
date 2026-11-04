@@ -47,7 +47,7 @@ import { inputModality } from "../ui/inputModality";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
-import { constraintGlyphs, diagnosisOf, patternGlyphs } from "./glyphs";
+import { constraintFace, constraintGlyphs, diagnosisOf, patternGlyphs } from "./glyphs";
 import {
   asRound,
   entityDims,
@@ -133,6 +133,8 @@ import { isExactPlaneEdge, meshBodyIds } from "./planeEdgePick";
 import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
+import { announce } from "../ui/announce";
+import { constraintRows } from "./relations";
 import { toast } from "../ui/toast";
 import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
@@ -462,7 +464,12 @@ export class SketchMode {
       ]);
     };
     this.glyphs = new SketchGlyphs(viewport);
-    this.glyphs.onDelete = (i) => this.deleteConstraint(i);
+    this.glyphs.onDelete = (i) => {
+      // The selection came with the constraint's shapes, a second Delete must not take them too.
+      this.selected.clear();
+      this.deleteConstraint(i);
+    };
+    this.glyphs.onSelect = (i) => this.selectConstraint(i);
     this.glyphs.onEditPattern = (id) => this.editPattern(id);
     this.glyphs.onOverlapPick = (e) => this.labelOverlapSelect(e);
     this.relations.onDelete = (i) => this.deleteConstraint(i);
@@ -1288,8 +1295,22 @@ export class SketchMode {
     this.refreshActive();
     this.onState?.();
   }
+  /** Lights the constraint's shapes through the ordinary selection, then marks the glyph and its Relations row. */
+  private selectConstraint(cIndex: number) {
+    const c = this.constraints[cIndex];
+    if (!c) return;
+    if (this.tool !== "select") this.setTool("select");
+    this.dims.clearSelection();
+    const ids = constraintFace(c).operands.map((o) => o.split("~")[0] ?? o);
+    this.selected = new Set(ids.filter((id) => this.entities.some((e) => e.id === id)));
+    this.refreshActive();
+    this.glyphs.markSelected(cIndex);
+    this.onState?.();
+  }
   private deleteConstraint(cIndex: number) {
     if (cIndex < 0 || cIndex >= this.constraints.length) return;
+    const name = constraintRows(this.entities, this.constraints, this.conflictIdx, this.overIdx)[cIndex]?.spoken;
+    if (name) announce(`Deleted ${name}`, "polite", { key: "sketch-constraint" });
     this.constraints.splice(cIndex, 1);
     this.conflictIdx.clear(); // indices shift; the next solve repopulates
     this.overIdx.clear();
@@ -1720,6 +1741,7 @@ export class SketchMode {
   private onPointerDown(e: PointerEvent) {
     // Labels stop propagation on their own pointerdown, so drop the label selection or Delete removes an unpointed dim.
     this.dims.clearSelection();
+    this.glyphs.clearSelection();
     if (e.button === 2) {
       this.rightDownAt = { x: e.clientX, y: e.clientY };
       this.rightDragged = false;
@@ -3015,7 +3037,11 @@ export class SketchMode {
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
-      // A selected dimension is more specific than the entity selection.
+      // Most specific first: a selected constraint, a selected dimension, a pole, then the shapes.
+      if (this.glyphs.deleteSelected()) {
+        e.preventDefault();
+        return;
+      }
       if (this.dims.deleteSelected()) {
         e.preventDefault();
         return;
@@ -3048,7 +3074,7 @@ export class SketchMode {
           !!this.dimFlow.plan ||
           this.constraintTools.hasPending(),
         mirror: this.mirrorFlow.running,
-        selection: this.selected.size > 0,
+        selection: this.selected.size > 0 || this.glyphs.hasSelection(),
         tool: this.tool,
         overlay: escapeClaimed(),
       });
@@ -3080,6 +3106,7 @@ export class SketchMode {
         this.keyDraw.cancelled();
       } else if (action === "clear-selection") {
         this.selected.clear();
+        this.glyphs.clearSelection();
         this.refreshActive();
       } else if (action === "arm-select") {
         this.setTool("select");

@@ -65,21 +65,21 @@ watch(
 onUnmounted(stop);
 
 /** set by the pointerdown hook below; consumed by the click that follows */
-let suppressDelete = false;
+let suppressSelect = false;
 
 function onDown(e: PointerEvent) {
   e.stopPropagation();
-  suppressDelete = s.glyphHooks?.overlapPick(e) ?? false;
+  suppressSelect = s.glyphHooks?.overlapPick(e) ?? false;
 }
 
 function onClick(e: MouseEvent, g: GlyphItem) {
   e.stopPropagation();
-  if (suppressDelete) {
-    suppressDelete = false;
+  if (suppressSelect) {
+    suppressSelect = false;
     return;
   }
   if (g.patternId) s.glyphHooks?.editPattern(g.patternId);
-  else s.glyphHooks?.del(g.cIndex);
+  else s.glyphHooks?.select(g.cIndex);
 }
 
 /** Same as the dimension layer: a constraint badge that has taken the pointer
@@ -98,7 +98,7 @@ function onWheel(e: WheelEvent) {
         v-for="(g, i) in s.glyphItems"
         :key="i"
         :ref="(el) => (els[i] = el as HTMLElement | null)"
-        :class="g.cls"
+        :class="[g.cls, { 'is-selected': s.glyphSelected === g.cIndex }]"
         :title="g.title"
         @pointerdown="onDown"
         @click="onClick($event, g)"
