@@ -44,10 +44,12 @@ describe("stepLabel", () => {
     expect(stepLabel(base, doc([box, fillet1, f("z", "chamfer"), fillet2]))).toBe("Delete Extrude 1");
   });
 
-  it("names a step that only moved, after the step", () => {
-    expect(stepLabel(base, doc([box, fillet2, fillet1, extrude]))).toBe("Move Fillet 1");
+  it("names a step that only moved by its name before the step, as a delete does", () => {
+    expect(stepLabel(base, doc([box, fillet2, fillet1, extrude]))).toBe("Move Fillet 2");
     expect(stepLabel(base, doc([fillet1, box, extrude, fillet2]))).toBe("Move Box 1");
     expect(stepLabel(base, doc([extrude, fillet2, box, fillet1]))).toBe("Move 4 steps");
+    const boxes = doc([box, f("e", "box"), f("g", "box")]);
+    expect(stepLabel(boxes, doc([f("e", "box"), f("g", "box"), box]))).toBe("Move Box 1");
   });
 
   it("names one edited step, several as a count", () => {

@@ -1909,10 +1909,8 @@ export class DocumentStore {
   // Failed by the last preview-free build, so an in-place edit is not blamed for them.
   private committedFailures = new Set<string>();
   moveFeature(id: string, toIndex: number) {
-    // A swap of neighbours reads either way in a diff, so the label names the step that was moved.
+    // A swap of neighbours reads either way in a diff, so the label names the step that was moved, as it was named.
     const moved = this.doc.features.find((f) => f.id === id);
-    const order = this.doc.features.filter((f) => f.id !== id);
-    if (moved) order.splice(Math.max(0, Math.min(order.length, toIndex)), 0, moved);
     this.mutate(
       (d) => {
         const from = d.features.findIndex((f) => f.id === id);
@@ -1922,7 +1920,7 @@ export class DocumentStore {
         d.features.splice(Math.max(0, Math.min(d.features.length, toIndex)), 0, f);
       },
       true,
-      moved && `Move ${numberedName(moved, order)}`,
+      moved && `Move ${numberedName(moved, this.doc.features)}`,
     );
   }
 

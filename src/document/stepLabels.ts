@@ -41,8 +41,8 @@ function movedLabel(before: readonly Feature[], after: readonly Feature[]): stri
   for (const id of [before[at]!.id, after[at]!.id]) {
     if (same(without(before, id), without(after, id))) {
       return `Move ${numberedName(
-        after.find((f) => f.id === id)!,
-        after,
+        before.find((f) => f.id === id)!,
+        before,
       )}`;
     }
   }

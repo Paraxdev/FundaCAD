@@ -69,10 +69,23 @@ describe("undo labels on the store", () => {
     labels.push(s.undoLabel);
     expect({ two: two.undoLabel, labels, order: s.document.features.map((f) => f.id), undone: s.undo() }).toEqual({
       two: "Move Fillet 1",
-      labels: ["Move Fillet 1", "Move Box 2", "Move Box 2"],
+      labels: ["Move Fillet 1", "Move Box 2", "Move Box 1"],
       order: ["b", "a", "c"],
-      undone: "Move Box 2",
+      undone: "Move Box 1",
     });
+  });
+
+  it("names a moved step as it was before the move, as a delete does", () => {
+    const s = freshStore();
+    for (const id of ["a", "b", "c"]) s.addFeature(box(id, 10, 10, 10));
+    s.moveFeature("a", 2);
+    const there = s.undoLabel;
+    s.moveFeature("a", 0);
+    expect([there, s.undoLabel, s.document.features.map((f) => f.id)]).toEqual([
+      "Move Box 1",
+      "Move Box 3",
+      ["a", "b", "c"],
+    ]);
   });
 
   it("a move of an id the document lacks is an unnamed edit", () => {
