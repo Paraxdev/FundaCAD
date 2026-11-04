@@ -33,6 +33,13 @@ describe("toasts are spoken", () => {
     expect(announce.mock.calls).toEqual([["Deleted Box 2. Undo button in Notifications.", "polite", {}]]);
   });
 
+  it("a silent toast says nothing, but one with a button is still spoken so its button is heard", () => {
+    toast("Undid: Add support", { silent: true });
+    expect(announce).not.toHaveBeenCalled();
+    toast("Deleted Box 2", { silent: true, action: { label: "Undo", onClick: () => {} } });
+    expect(announce.mock.calls).toEqual([["Deleted Box 2. Undo button in Notifications.", "polite", {}]]);
+  });
+
   it("a message already ending a sentence gets no second full stop", () => {
     toast("Update 1.7 is ready!", { kind: "warning", action: { label: "Restart", onClick: () => {} } });
     toast("Face moved?", { action: { label: "Re-pick face", onClick: () => {} } });
