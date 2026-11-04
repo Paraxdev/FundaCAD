@@ -6,6 +6,7 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
+import { announce } from "./announce";
 import { getUnit, toDisplay, displayRound } from "./units";
 import { usePanelsStore, type PanelRow, type StressData, type StressProbePin } from "../stores/panels";
 import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
@@ -48,7 +49,7 @@ import { setStressLook as setStoredStressLook, stressLook, type StressLook } fro
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
-import { interferenceData } from "./interferenceRows";
+import { interferenceData, interferenceSummary } from "./interferenceRows";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -152,7 +153,9 @@ export function createPanels(deps: PanelsDeps) {
     resetInterferenceTint();
     const res = await geometry.interference(store.document, clearanceMm);
     if (!res.ok) {
-      setStatus(`Interference check failed: ${res.message ?? "error"}`, "error");
+      const failed = `Interference check failed: ${res.message ?? "error"}`;
+      setStatus(failed, "error");
+      announce(failed, "assertive", { key: "interference" });
       return;
     }
     const pairs = res.pairs ?? [];
@@ -171,6 +174,9 @@ export function createPanels(deps: PanelsDeps) {
         : "No interferences found") + notJudged,
       foundAny || unchecked.length ? "error" : "connected",
     );
+    announce(interferenceSummary(pairs.length, clearanceMm ? clearances.length : null, unchecked.length), "polite", {
+      key: "interference",
+    });
     panels.showInterference({
       ...interferenceData(
         { pairs, clearances, unchecked: res.unchecked ?? [] },

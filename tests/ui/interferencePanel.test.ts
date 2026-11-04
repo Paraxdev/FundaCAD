@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createPanels, type PanelsDeps } from "../../src/ui/panels";
 import { usePanelsStore } from "../../src/stores/panels";
@@ -8,7 +8,13 @@ import type { CadDocument } from "../../src/types";
 // The Interference panel against a hand-made engine: a body the engine could
 // not judge is named with why, and its pairs are never reported as clear.
 
-beforeEach(() => setActivePinia(createPinia()));
+const spoken: unknown[][] = [];
+vi.mock("../../src/ui/announce", () => ({ announce: (...a: unknown[]) => spoken.push(a) }));
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  spoken.length = 0;
+});
 
 type Body = { id: string; name: string; faceStart?: number; faceCount?: number };
 type Marks = { faceIds: number[]; color: number }[] | null;
@@ -216,6 +222,68 @@ describe("the Interference panel", () => {
       panels.highlightInterference("body5", "body2");
       expect(store.interferenceLit).toBe("body5 body2");
       expect(marks.at(-1)).toEqual(tint([3, 4, 5, 6, 7, 8]));
+    });
+  });
+
+  describe("announcements", () => {
+    const clash = (a: string, b: string) => ({
+      a,
+      b,
+      aName: "Box",
+      bName: "Box",
+      volume: 1.5,
+      bbox: { min: [1, 2, 3] as [number, number, number], max: [4, 6, 9] as [number, number, number] },
+    });
+    const near = (a: string, b: string) => ({
+      a,
+      b,
+      aName: "Box",
+      bName: "Box",
+      distance: 0.3,
+      pointA: [5, 1, 2] as [number, number, number],
+      pointB: [5.2, 1.1, 2.2] as [number, number, number],
+    });
+    const three: Body[] = [1, 2, 3].map((n) => ({ id: `body${n}`, name: "Box" }));
+
+    it("says a clean check politely", async () => {
+      const { panels } = rig({ ok: true, pairs: [] });
+      await panels.showInterference();
+      expect(spoken).toEqual([["Interference: no clashes", "polite", { key: "interference" }]]);
+    });
+
+    it("says the clash, close pair and unchecked counts once per check", async () => {
+      const { panels } = rig(
+        {
+          ok: true,
+          pairs: [clash("body1", "body2"), clash("body2", "body3")],
+          clearances: [near("body1", "body3")],
+          unchecked: [{ id: "body3", name: "Box", reason: "is open" }],
+        },
+        three,
+      );
+      await panels.showInterference(0.5);
+      expect(spoken).toEqual([
+        ["Interference: 2 clashes, 1 close pair, 1 body could not be checked", "polite", { key: "interference" }],
+      ]);
+      await panels.showInterference();
+      expect(spoken.at(-1)).toEqual([
+        "Interference: 2 clashes, 1 body could not be checked",
+        "polite",
+        { key: "interference" },
+      ]);
+      expect(spoken).toHaveLength(2);
+    });
+
+    it("says a failed check assertively, and not a summary", async () => {
+      const { panels } = rig({ ok: false, message: "engine stopped" } as InterferenceReply);
+      await panels.showInterference();
+      expect(spoken).toEqual([["Interference check failed: engine stopped", "assertive", { key: "interference" }]]);
+    });
+
+    it("says nothing when the check never ran", async () => {
+      const { panels } = rig({ ok: true, pairs: [] }, [{ id: "body1", name: "Box" }]);
+      await panels.showInterference();
+      expect(spoken).toEqual([]);
     });
   });
 });

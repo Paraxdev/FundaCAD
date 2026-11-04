@@ -18,6 +18,17 @@ export function interferenceTitle(clashes: number): string {
   return clashes ? `Interference, ${clashes} clash${clashes > 1 ? "es" : ""}` : "Interference";
 }
 
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** What a finished check says aloud; `closePairs` is null unless Clearance mode ran. */
+export function interferenceSummary(clashes: number, closePairs: number | null, unchecked: number): string {
+  const parts = [clashes ? count(clashes, "clash", "clashes") : "no clashes"];
+  if (closePairs !== null) parts.push(closePairs ? count(closePairs, "close pair", "close pairs") : "no close pairs");
+  if (unchecked) parts.push(`${count(unchecked, "body", "bodies")} could not be checked`);
+  const text = parts.join(", ");
+  return `Interference: ${text}`;
+}
+
 export function interferenceData(reply: Reply, d: Display): InterferenceData {
   const names = (r: { a: string; b: string; aName: string; bName: string }) =>
     `${d.label(r.a, r.aName)} and ${d.label(r.b, r.bName)}`;

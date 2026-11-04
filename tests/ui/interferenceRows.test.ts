@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { interferenceData, interferenceTitle } from "../../src/ui/interferenceRows";
+import { interferenceData, interferenceSummary, interferenceTitle } from "../../src/ui/interferenceRows";
 
 const pair = (a: string, b: string, aName: string, bName: string, volume: number) => ({
   a,
@@ -113,5 +113,29 @@ describe("interferenceTitle", () => {
       "Interference, 2 clashes",
       "Interference, 11 clashes",
     ]);
+  });
+});
+
+describe("interferenceSummary", () => {
+  it("says no clashes for an empty check, and does not mention close pairs outside Clearance mode", () => {
+    expect(interferenceSummary(0, null, 0)).toBe("Interference: no clashes");
+  });
+
+  it("counts one clash in the singular", () => {
+    expect(interferenceSummary(1, null, 0)).toBe("Interference: 1 clash");
+  });
+
+  it("counts clashes, close pairs and unchecked bodies together", () => {
+    expect(interferenceSummary(3, 2, 1)).toBe("Interference: 3 clashes, 2 close pairs, 1 body could not be checked");
+    expect(interferenceSummary(7, 1, 4)).toBe("Interference: 7 clashes, 1 close pair, 4 bodies could not be checked");
+  });
+
+  it("says no close pairs when Clearance mode found none, which is not the same as not asking", () => {
+    expect(interferenceSummary(0, 0, 0)).toBe("Interference: no clashes, no close pairs");
+    expect(interferenceSummary(2, 0, 0)).not.toBe(interferenceSummary(2, null, 0));
+  });
+
+  it("does not call a check with unchecked bodies clean", () => {
+    expect(interferenceSummary(0, null, 2)).toBe("Interference: no clashes, 2 bodies could not be checked");
   });
 });
