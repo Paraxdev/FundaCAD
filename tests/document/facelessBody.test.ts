@@ -33,12 +33,16 @@ function backend(bodies: Bodies, extra: Partial<RebuildResult> = {}): GeometryBa
   } as unknown as GeometryBackend;
 }
 
-const doc = (): CadDocument => ({
-  parameters: {},
+const FAR = 1e8;
+const NO_FACES = "The body came out with no faces, so there is nothing to show.";
+const HINT = " Move the sketch within 1 km of the origin.";
+
+const doc = (at: number | string = FAR, plane: unknown = "XY"): CadDocument => ({
+  parameters: { far: FAR },
   features: [
-    { id: "sk", type: "sketch", plane: "XY", entities: [] },
-    { id: "ex", type: "extrude", profile: "sk", distance: 8 },
-    { id: "ex2", type: "extrude", profile: "sk", distance: 4 },
+    { id: "sk", type: "sketch", plane, entities: [{ type: "rectangle", x: at, y: 5, width: 40, height: 20 }] },
+    { id: "ex", type: "extrude", sketch: "sk", distance: 8 },
+    { id: "ex2", type: "extrude", sketch: "sk", distance: 4 },
   ] as unknown as Feature[],
 });
 
@@ -53,13 +57,30 @@ describe("a body with no faces", () => {
     await store.rebuildNow();
     const b = store.buildState;
     expect(b.errorFeatureId).toBe("ex");
-    expect(b.errorMessage).toMatch(/no faces/);
-    expect(b.errorMessage).toMatch(/within 1 km of the origin/);
+    expect(b.errorMessage).toBe(NO_FACES + HINT);
     expect([...featureFailures({ ...b, featureErrors: b.result?.featureErrors }).keys()]).toEqual(["ex"]);
     const line = buildLine(b, null, names)!;
     expect(line.priority).toBe("assertive");
     expect(line.text).toMatch(/^Build failed at Extrude 1: /);
     expect(line.text).not.toMatch(/Built/);
+  });
+
+  it("says no 1 km hint when the sketch is near the origin, as the cause is something else", async () => {
+    const store = new DocumentStore(backend([body("body1", 0, 0)]), doc(5));
+    await store.rebuildNow();
+    const b = store.buildState;
+    expect(b.errorFeatureId).toBe("ex");
+    expect(b.errorMessage).toBe(NO_FACES);
+    expect(buildLine(b, null, names)?.text).toBe(`Build failed at Extrude 1: ${NO_FACES}`);
+  });
+
+  it("gives the hint for a sketch placed past 1 km, or drawn there through a parameter", async () => {
+    const placed = { origin: [0, 0, 2e6], normal: [0, 0, 1], xdir: [1, 0, 0] };
+    for (const d of [doc(5, placed), doc("far")]) {
+      const store = new DocumentStore(backend([body("body1", 0, 0)]), d);
+      await store.rebuildNow();
+      expect(store.buildState.errorMessage).toBe(NO_FACES + HINT);
+    }
   });
 
   it("keeps an engine failure the most downstream one and adds its own beside it", async () => {
