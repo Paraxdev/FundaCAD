@@ -2020,6 +2020,12 @@ export class DocumentStore {
   undoIfMark(mark: number): string | null {
     return this.undoMark === mark ? this.undo() : null;
   }
+  markPlace(mark: number): "top" | "under" | "undone" | "held" | null {
+    if (this.st.historyHeld) return "held";
+    const at = this.undoStack.findIndex((s) => s.mark === mark);
+    if (at >= 0) return at === this.undoStack.length - 1 ? "top" : "under";
+    return this.redoStack.some((s) => s.mark === mark) ? "undone" : null;
+  }
   get canUndo() {
     return !this.st.historyHeld && this.undoStack.length > 0;
   }

@@ -123,6 +123,6 @@ describe("Restore in the Versions panel", () => {
     store.addFeature(box("f3", 7.75) as unknown as Feature);
     vi.mocked(toast).mock.calls[0]![1]!.action!.onClick();
     expect(store.document.features).toEqual([box("f1", 10.5), box("f3", 7.75)]);
-    expect(vi.mocked(toast).mock.calls.at(-1)![0]).toMatch(/other changes were made/);
+    expect(vi.mocked(toast).mock.calls.at(-1)![0]).toMatch(/later steps/);
   });
 });

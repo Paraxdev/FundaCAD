@@ -275,6 +275,13 @@ export async function openOnBranch(e: VersionEngine, path: string, name: string)
 
 const speak = (text: string) => announce(text, "polite", { key: "history" });
 
+const UNDO_REFUSED = {
+  under: "Not undone, later steps came after it. Undo step by step from the Edit menu to reach it.",
+  undone: "Already undone, Redo puts it back.",
+  held: "Not undone yet, wait for the import to finish.",
+  gone: "Not undone, that step is no longer in the history.",
+};
+
 export function createDocumentActions(
   e: Engine,
 ): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo" | "undoIfLatest"> {
@@ -324,9 +331,10 @@ export function createDocumentActions(
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {
       if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
-      const latest = !e.tools.move.pending && !usePanelsStore().stress && e.store.undoMark === mark;
-      if (!latest) return void toast("Not undone, other changes were made after that step.");
-      actions.doUndo();
+      if (usePanelsStore().stress) return void toast("Close Stress first, then undo.");
+      const place = e.tools.move.pending ? "under" : e.store.markPlace(mark);
+      if (place === "top") return actions.doUndo();
+      toast(UNDO_REFUSED[place ?? "gone"]);
     },
   };
   return actions;

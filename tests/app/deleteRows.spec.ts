@@ -109,7 +109,7 @@ describe("the Undo button", () => {
     store.addFeature({ id: "c", type: "box", length: 3.5, width: 4.5, height: 5.5 } as unknown as Feature);
     press();
     expect(ids(store)).toEqual(["a", "m", "c"]);
-    expect(toasts().at(-1)!.message).toMatch(/other changes were made/);
+    expect(toasts().at(-1)!.message).toMatch(/later steps.*Edit menu/);
     expect(store.undoLabel).toBe("Box 2");
   });
 
@@ -119,7 +119,7 @@ describe("the Undo button", () => {
     e.doUndo();
     press();
     expect(ids(store)).toEqual(["a", "b", "m"]);
-    expect(toasts().at(-1)!.message).toMatch(/other changes were made/);
+    expect(toasts().at(-1)!.message).toMatch(/Already undone.*Redo/);
     e.doRedo();
     expect(ids(store)).toEqual(["a", "m"]);
     press();
@@ -147,9 +147,43 @@ describe("the Undo button", () => {
     usePanelsStore().showStress("body1");
     press();
     expect(ids(store)).toEqual(["a", "m"]);
+    expect(
+      toasts()
+        .slice(1)
+        .map((t) => t.message),
+    ).toEqual([expect.stringMatching(/later steps.*Edit menu/), expect.stringMatching(/Close Stress/)]);
     usePanelsStore().stress = null;
     press();
     expect(ids(store)).toEqual(["a", "b", "m"]);
+  });
+
+  it("waits while an import holds the history, then works", async () => {
+    const { e, store } = rig();
+    deleteRows(e, ["b"]);
+    let release!: () => void;
+    const importing = store.runBusy("Importing bracket.step", () => new Promise<void>((r) => (release = r)), {
+      holdHistory: true,
+    });
+    press();
+    expect({ ids: ids(store), said: toasts().at(-1)!.message }).toEqual({
+      ids: ["a", "m"],
+      said: expect.stringMatching(/import/),
+    });
+    release();
+    await importing;
+    press();
+    expect(ids(store)).toEqual(["a", "b", "m"]);
+  });
+
+  it("says the step is gone once a new document cleared the history", () => {
+    const { e, store } = rig();
+    deleteRows(e, ["b"]);
+    store.newDocument();
+    press();
+    expect({ ids: ids(store), said: toasts().at(-1)!.message }).toEqual({
+      ids: [],
+      said: expect.stringMatching(/no longer in the history/),
+    });
   });
 
   it("changes nothing in a second document", () => {
