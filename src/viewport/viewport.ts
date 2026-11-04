@@ -2495,6 +2495,11 @@ export class Viewport {
     return this.pressPull.get(this.model, this.highlighter.getSelectedFaces(), this.faceClick);
   }
 
+  /** The same answer as selectedFacesForPressPull for these faces, with no click. */
+  facesForPressPull(faceIds: readonly number[]): PressPullFaces | null {
+    return this.model ? this.pressPull.get(this.model, faceIds, null) : null;
+  }
+
   /** The cylinder a face lies on, or null. Not from faceNormalWorld: a closed
    *  cylinder's facet normals average to zero. */
   roundFaceAt(faceId: number, at: THREE.Vector3): RoundFace | null {

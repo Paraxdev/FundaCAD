@@ -12,7 +12,7 @@ import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, HANDLE_UP, type DragHandle } from "./manipulator";
-import { pickPlaneTarget } from "./facePlanePick";
+import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget } from "./facePlanePick";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { SketchPlane } from "../sketch/plane";
 import {
@@ -269,8 +269,14 @@ export class SectionTool {
     this.pickGesture.attach();
     this.releaseTree = awaitTreePick(
       (pick) => {
-        const def = pick.kind === "datumPlane" ? pick.def : pick.kind === "basePlane" ? baseDef(pick.plane) : null;
-        if (!def) return treePickRefusal(pick, "a plane, or a face picked in the view");
+        let def: PlaneDef | null = null;
+        if (pick.kind === "face") {
+          const face = facePlaneOfRow(this.viewport, pick.faceId);
+          if (face?.kind !== "planar") return CURVED_FACE_ROW;
+          def = face.def;
+        } else if (pick.kind === "datumPlane") def = pick.def;
+        else if (pick.kind === "basePlane") def = baseDef(pick.plane);
+        if (!def) return treePickRefusal(pick, "a plane or a flat face");
         this.endPick();
         this.armOn(def);
         return true;
