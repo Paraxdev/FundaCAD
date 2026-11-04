@@ -2,7 +2,7 @@
 
 A constraint is a rule the sketch keeps true, such as "this line stays horizontal". Change one size and everything tied to it moves with it.
 
-![A dimensioned rectangle and the Relations list in the sketch palette](../img/sketch-constraints.png)
+![A dimensioned rectangle, with the Dimensions and Relations lists in the sketch palette](../img/sketch-constraints.png)
 
 The colour of the curves tells you how free the sketch still is:
 
