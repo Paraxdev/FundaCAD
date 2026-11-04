@@ -688,18 +688,29 @@ export function rampColor(ramp: StressRamp, t: number): Vec3 {
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 }
 
+/** Eight bands put every second edge on the legend's 25, 50 and 75 percent marks. */
+export const STRESS_BANDS = 8;
+
+/** The centre of the band t falls in; 0 bands leaves t alone. */
+export function bandT(t: number, bands: number): number {
+  if (bands <= 0) return t;
+  const c = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  return (Math.min(bands - 1, Math.floor(c * bands)) + 0.5) / bands;
+}
+
 /** One sRGB triple per value, mapped over [min, max]. A flat field (max = min) is all the low colour. */
 export function stressColors(
   values: ArrayLike<number>,
   min: number,
   max: number,
   ramp: StressRamp = "perceptual",
+  bands = 0,
 ): Float32Array {
   const out = new Float32Array(values.length * 3);
   const span = max - min;
   for (let i = 0; i < values.length; i++) {
     const t = span > 0 ? ((values[i] ?? min) - min) / span : 0;
-    const [r, g, b] = rampColor(ramp, t);
+    const [r, g, b] = rampColor(ramp, bandT(t, bands));
     out[i * 3] = r;
     out[i * 3 + 1] = g;
     out[i * 3 + 2] = b;
@@ -707,13 +718,20 @@ export function stressColors(
   return out;
 }
 
-/** The legend's CSS gradient, left (low) to right (high), from the same stops. */
-export function legendGradient(ramp: StressRamp = "perceptual"): string {
-  const stops = RAMPS[ramp];
-  const parts = stops.map((s, i) => {
-    const pct = (i / (stops.length - 1)) * 100;
-    return `rgb(${s.map((v) => Math.round(v * 255)).join(", ")}) ${pct}%`;
-  });
+const css = (c: Vec3) => `rgb(${c.map((v) => Math.round(v * 255)).join(", ")})`;
+
+/** The legend's CSS gradient, left (low) to right (high), from the same colours. Banded, each band is a hard stop pair. */
+export function legendGradient(ramp: StressRamp = "perceptual", bands = 0): string {
+  const parts: string[] = [];
+  if (bands > 0) {
+    for (let i = 0; i < bands; i++) {
+      const colour = css(rampColor(ramp, bandT((i + 0.5) / bands, bands)));
+      parts.push(`${colour} ${(i / bands) * 100}%`, `${colour} ${((i + 1) / bands) * 100}%`);
+    }
+  } else {
+    const stops = RAMPS[ramp];
+    stops.forEach((s, i) => parts.push(`${css(s)} ${(i / (stops.length - 1)) * 100}%`));
+  }
   return `linear-gradient(to right, ${parts.join(", ")})`;
 }
 

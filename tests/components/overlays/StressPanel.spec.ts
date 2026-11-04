@@ -9,10 +9,12 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { usePanelsStore } from "../../../src/stores/panels";
 import type { Selector } from "../../../src/types";
-import type { StressResultView } from "../../../src/ui/stress";
+import { legendGradient, type StressResultView } from "../../../src/ui/stress";
+import { setStressLook, stressLook } from "../../../src/ui/stressLook";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => setStressLook({ ramp: "perceptual", bands: false }));
 
 function makeEngine() {
   const panels = {
@@ -28,6 +30,7 @@ function makeEngine() {
     cancelStress: vi.fn(),
     closeStress: vi.fn(),
     setStressColours: vi.fn(),
+    setStressLook: vi.fn(setStressLook),
     setStressShape: vi.fn(),
     setStressDeformation: vi.fn(),
     setStressAnimate: vi.fn(),
@@ -65,6 +68,14 @@ async function pick(trigger: Element, label: string) {
   if (!row) throw new Error(`no option ${label}`);
   row.click();
   await flushPromises();
+}
+
+async function optionsOf(trigger: Element): Promise<string[]> {
+  (trigger as HTMLElement).click();
+  await flushPromises();
+  const labels = optionLabels();
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  return labels;
 }
 
 function optionLabels(): string[] {
@@ -518,6 +529,38 @@ describe("StressPanel", () => {
     await flushPromises();
     expect(q(".stress-legend")).toBeNull();
     expect(scale()).toBeNull();
+  });
+
+  it("offers the colour map and bands under the bar, and the bar follows them", async () => {
+    const { p, panels } = await withResult({ legend: { min: 0.5, max: 62 } });
+    const bar = () => q(".stress-legend")!.style.background;
+    const map = q("[data-testid='stress-colour-map']")!;
+    const bands = q(".stress-bands")!;
+    expect(map.getAttribute("aria-label")).toContain("Colour map");
+    expect(value(map)).toBe("perceptual");
+    expect(bands.getAttribute("aria-checked")).toBe("false");
+    expect(await optionsOf(map)).toEqual(["Perceptual", "Rainbow", "Greyscale"]);
+    await pick(map, "Greyscale");
+    expect(panels.setStressLook).toHaveBeenLastCalledWith({ ramp: "greyscale" });
+    expect(value(map)).toBe("greyscale");
+    expect(bar()).toBe(legendGradient("greyscale"));
+    bands.click();
+    await flushPromises();
+    expect(panels.setStressLook).toHaveBeenLastCalledWith({ bands: true });
+    expect(bands.getAttribute("aria-checked")).toBe("true");
+    expect(bar()).toBe(legendGradient("greyscale", 8));
+    expect(stressLook()).toEqual({ ramp: "greyscale", bands: true });
+    p.setStressColours("hidden");
+    await flushPromises();
+    expect(q(".stress-bands")).toBeNull();
+  });
+
+  it("starts the controls from the look kept", async () => {
+    setStressLook({ ramp: "rainbow", bands: true });
+    await withResult();
+    expect(value(q("[data-testid='stress-colour-map']"))).toBe("rainbow");
+    expect(q(".stress-bands")!.getAttribute("aria-checked")).toBe("true");
+    expect(q(".stress-legend")!.style.background).toBe(legendGradient("rainbow", 8));
   });
 
   it("has a Deformed shape switch beside Colours, the exaggeration only while the shape is drawn", async () => {

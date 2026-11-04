@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The Stress panel offers Perceptual, Rainbow or Greyscale colours, banded or
+  smooth.** Colour map and Bands sit under the colour bar. The body and the bar
+  change at once, with no new Run, and the choice is kept across studies and
+  restarts.
+
 - **Measure, Properties and Stress readouts read as label and value pairs.** A
   screen reader now hears each label with its value in the Measure panel, the
   Properties panel and the Stress key rows and details, and can list them as

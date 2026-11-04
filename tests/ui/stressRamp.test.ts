@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { deltaE2000, lightness, type Rgba, type Vision } from "../../src/ui/contrast";
-import { legendGradient, rampColor, STRESS_RAMPS, stressColors, type StressRamp } from "../../src/ui/stress";
+import {
+  bandT,
+  legendGradient,
+  rampColor,
+  STRESS_BANDS,
+  STRESS_RAMPS,
+  stressColors,
+  type StressRamp,
+} from "../../src/ui/stress";
 
 const HEX: Record<StressRamp, string[]> = {
   perceptual: ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"],
@@ -88,12 +96,15 @@ describe("stress ramps", () => {
     );
   });
 
-  it.each(["perceptual", "rainbow", "greyscale"] as const)("%s clamps -0.3 and 1.7 and reads NaN as the low end", (ramp) => {
-    expect(rampColor(ramp, -0.3)).toEqual(rampColor(ramp, 0));
-    expect(rampColor(ramp, 1.7)).toEqual(rampColor(ramp, 1));
-    expect(rampColor(ramp, NaN)).toEqual(rampColor(ramp, 0));
-    expect(rampColor(ramp, 0)).not.toEqual(rampColor(ramp, 1));
-  });
+  it.each(["perceptual", "rainbow", "greyscale"] as const)(
+    "%s clamps -0.3 and 1.7 and reads NaN as the low end",
+    (ramp) => {
+      expect(rampColor(ramp, -0.3)).toEqual(rampColor(ramp, 0));
+      expect(rampColor(ramp, 1.7)).toEqual(rampColor(ramp, 1));
+      expect(rampColor(ramp, NaN)).toEqual(rampColor(ramp, 0));
+      expect(rampColor(ramp, 0)).not.toEqual(rampColor(ramp, 1));
+    },
+  );
 });
 
 describe("stressColors", () => {
@@ -133,8 +144,68 @@ describe("legendGradient", () => {
     expect(legendGradient("rainbow")).toBe(
       "linear-gradient(to right, rgb(0, 0, 255) 0%, rgb(0, 255, 255) 25%, rgb(0, 255, 0) 50%, rgb(255, 255, 0) 75%, rgb(255, 0, 0) 100%)",
     );
-    expect(legendGradient("greyscale")).toBe(
-      "linear-gradient(to right, rgb(38, 38, 38) 0%, rgb(242, 242, 242) 100%)",
+    expect(legendGradient("greyscale")).toBe("linear-gradient(to right, rgb(38, 38, 38) 0%, rgb(242, 242, 242) 100%)");
+  });
+});
+
+describe("bands", () => {
+  it("uses eight bands, so every second edge sits on a quarter mark", () => {
+    expect(STRESS_BANDS).toBe(8);
+  });
+
+  it("takes the colour at the centre of the band, the edge itself belonging to the upper band", () => {
+    expect([0, 0.1249, 0.125, 0.3, 0.999, 1].map((t) => bandT(t, 8))).toEqual([
+      0.0625, 0.0625, 0.1875, 0.3125, 0.9375, 0.9375,
+    ]);
+    expect(bandT(0.5, 4)).toBe(0.625);
+  });
+
+  it("clamps outside the scale and reads NaN as the lowest band", () => {
+    expect([-0.3, 1.7, NaN].map((t) => bandT(t, 8))).toEqual([0.0625, 0.9375, 0.0625]);
+  });
+
+  it("leaves t alone with no bands", () => {
+    expect([0, 0.1249, 0.4, 1.7].map((t) => bandT(t, 0))).toEqual([0, 0.1249, 0.4, 1.7]);
+  });
+
+  it("paints banded vertices at their band centre, off the origin", () => {
+    const grey = (t: number) => (38 + 204 * t) / 255;
+    const values = [10, 14.9, 15, 33, 50];
+    const centres = [0.0625, 0.0625, 0.1875, 0.5625, 0.9375];
+    expect([...stressColors(values, 10, 50, "greyscale", 8)]).toEqual(
+      f32(centres.flatMap((t) => [grey(t), grey(t), grey(t)])),
     );
+    expect([...stressColors(values, 10, 50, "greyscale")]).not.toEqual([
+      ...stressColors(values, 10, 50, "greyscale", 8),
+    ]);
+  });
+
+  it("draws a banded legend of hard stops, each band colour at both its edges", () => {
+    expect(legendGradient("greyscale", 2)).toBe(
+      "linear-gradient(to right, rgb(89, 89, 89) 0%, rgb(89, 89, 89) 50%, rgb(191, 191, 191) 50%, rgb(191, 191, 191) 100%)",
+    );
+    const stops = legendGradient("perceptual", 8).match(/rgb\([^)]*\) [\d.]+%/g)!;
+    expect(stops).toHaveLength(16);
+    expect(stops.map((x) => x.split(") ")[1])).toEqual([
+      "0%",
+      "12.5%",
+      "12.5%",
+      "25%",
+      "25%",
+      "37.5%",
+      "37.5%",
+      "50%",
+      "50%",
+      "62.5%",
+      "62.5%",
+      "75%",
+      "75%",
+      "87.5%",
+      "87.5%",
+      "100%",
+    ]);
+    for (let i = 0; i < 16; i += 2)
+      expect(stops[i]!.split(" ").slice(0, 3)).toEqual(stops[i + 1]!.split(" ").slice(0, 3));
+    expect(new Set(stops.map((x) => x.split(")")[0])).size).toBe(8);
   });
 });

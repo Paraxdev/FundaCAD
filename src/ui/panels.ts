@@ -42,6 +42,7 @@ import {
   sameTarget,
   setupFromStudy,
   studyFromSetup,
+  STRESS_BANDS,
   swingScale,
   SWING_PERIOD_MS,
   type ForceDirection,
@@ -50,6 +51,7 @@ import {
   type StressTarget,
   type Tri,
 } from "./stress";
+import { setStressLook as setStoredStressLook, stressLook, type StressLook } from "./stressLook";
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
@@ -923,7 +925,8 @@ export function createPanels(deps: PanelsDeps) {
     const d = panels.stress;
     if (!colours || !d || d.colours === "none") return null;
     const { displacement, ...still } = colours.overlay;
-    const o = { ...still, colours: d.colours === "shown" };
+    const { ramp, bands } = stressLook();
+    const o = { ...still, colours: d.colours === "shown", ramp, bands: bands ? STRESS_BANDS : 0 };
     return displacement && d.deform?.shown ? { ...o, displacement, scale: poseScale() } : o;
   }
 
@@ -951,6 +954,12 @@ export function createPanels(deps: PanelsDeps) {
     drawOverlay();
     refreshStressMarks();
     showWeakSpot();
+  }
+
+  /** Store the colour map and bands, and redraw the colours on show from the kept result without a new Run. */
+  function setStressLook(patch: Partial<StressLook>) {
+    setStoredStressLook(patch);
+    if (panels.stress?.colours === "shown" && colours && colours.epoch === docEpoch) drawOverlay();
   }
 
   /** Draw the deformed shape, or the body as built so its faces can be picked again with the colours off. */
@@ -1273,6 +1282,7 @@ export function createPanels(deps: PanelsDeps) {
     removeStressLoad,
     setStressColours,
     setStressShape,
+    setStressLook,
     refreshStressMarks,
     setStressDeformation,
     setStressAnimate,

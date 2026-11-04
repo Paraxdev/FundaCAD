@@ -303,6 +303,17 @@
   font-size: var(--fs-micro);
   color: var(--text-mute);
 }
+.stress-look {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+.stress-look .stress-field {
+  flex: 1 1 auto;
+}
 .stress-finer {
   margin-top: var(--s-2);
 }
