@@ -64,7 +64,12 @@ export const useToastStore = defineStore("toasts", () => {
     }, EXIT_MS);
   }
 
-  function push(message: string, kind: ToastItem["kind"], action: ToastAction | undefined, hold: number | null): number {
+  function push(
+    message: string,
+    kind: ToastItem["kind"],
+    action: ToastAction | undefined,
+    hold: number | null,
+  ): number {
     // The same line restarts the one showing rather than stacking a copy that could take a click over the canvas.
     // With the same button it takes the newer action, the command that asked last.
     const same = items.value.find(

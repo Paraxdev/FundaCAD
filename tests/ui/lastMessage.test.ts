@@ -27,7 +27,8 @@ beforeEach(async () => {
   setActivePinia(createPinia());
   t = await import("../../src/ui/toast");
   store = (await import("../../src/stores/toasts")).useToastStore();
-  rows = () => store.items.filter((x) => !x.leaving).map((x) => ({ message: x.message, kind: x.kind, action: x.action }));
+  rows = () =>
+    store.items.filter((x) => !x.leaving).map((x) => ({ message: x.message, kind: x.kind, action: x.action }));
 });
 afterEach(() => vi.useRealTimers());
 

@@ -1333,17 +1333,23 @@ export class SketchMode {
   private applyDrivingDimsDirectly() {
     if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
       this.axisDimToast = true;
-      toast("Constraints are not working right now, so horizontal and vertical distances between two shapes wait until they are", {
-        timeout: 12000,
-      });
+      toast(
+        "Constraints are not working right now, so horizontal and vertical distances between two shapes wait until they are",
+        {
+          timeout: 12000,
+        },
+      );
     }
     if (!applyDrivingDimsDirect(this.entities, this.constraints)) return;
     this.entityVersion++; // guards any in-flight solve against this write
     if (!this.directDimToast) {
       this.directDimToast = true;
-      toast("Constraints are not working right now, so this value changes the shape once and is not kept as a live dimension", {
-        timeout: 12000,
-      });
+      toast(
+        "Constraints are not working right now, so this value changes the shape once and is not kept as a live dimension",
+        {
+          timeout: 12000,
+        },
+      );
     }
     this.refreshActive();
     this.onState?.();

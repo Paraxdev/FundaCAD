@@ -146,7 +146,10 @@ describe("the error notice holds while pointed at or focused", () => {
 });
 
 describe("the error notice follows Notification time", () => {
-  const shown = async (time: "normal" | "longer" | "until-dismissed", action?: { label: string; onClick: () => void }) => {
+  const shown = async (
+    time: "normal" | "longer" | "until-dismissed",
+    action?: { label: string; onClick: () => void },
+  ) => {
     vi.useFakeTimers();
     setMotion(false);
     setA11yPref("noticeTime", time);

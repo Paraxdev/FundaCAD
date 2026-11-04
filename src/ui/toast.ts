@@ -57,12 +57,7 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
     kind === "warning" ? "assertive" : "polite",
     opts.announceKey === undefined ? {} : { key: opts.announceKey },
   );
-  const id = useToastStore().push(
-    message,
-    kind,
-    opts.action,
-    noticeHoldMs(kind, !!opts.action, opts.timeout),
-  );
+  const id = useToastStore().push(message, kind, opts.action, noticeHoldMs(kind, !!opts.action, opts.timeout));
   last = { message, kind, id };
   return id;
 }
