@@ -2,6 +2,7 @@
 // MO-3: Offset Plane, "Select a plane or face to offset from", the YZ row clicked.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
 import { createPinia, setActivePinia } from "pinia";
 import { createFeatureStarters, type FeatureStartersDeps } from "../../src/features/featureStarters";
 import { endRewoundPick, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
@@ -13,7 +14,8 @@ import { usePromptStore } from "../../src/stores/prompt";
 import { ZERO_POSE } from "../../src/document/datumPose";
 import type { PlaneDef, Vec3 } from "../../src/types";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
-import { axisFromEdge } from "../../src/features/planeMath";
+import { axisFromEdge, cylinderFromFace } from "../../src/features/planeMath";
+import { asVec, CYL_ANCHOR, faceRowViewport } from "./faceRowRig";
 
 const answers = vi.hoisted(() => ({ queue: [] as unknown[] }));
 vi.mock("../../src/ui/choice", () => ({ choose: async () => answers.queue.shift() ?? null }));
@@ -553,6 +555,73 @@ describe("a face or an edge row from the Geometry list", () => {
       const second = r.addFeature.mock.calls[1]![0] as { axis: unknown; axisEdge: unknown };
       expect(second.axis).toEqual(axisFromEdge(c));
       expect(second.axisEdge).toEqual({ kind: "edge", by: "nearest", point: [-5, 13, 1], body: "b2" });
+    });
+  });
+  describe("Axis from cylinder", () => {
+    const roundRig = () => {
+      const r = lidRig();
+      const parts = faceRowViewport().parts;
+      const cylinderOf = (id: number) => {
+        const tris = parts.faceTriangles(id);
+        const pts: Vec3[] = [];
+        const normals: Vec3[] = [];
+        for (const t of tris) {
+          pts.push(asVec(t.a), asVec(t.b), asVec(t.c));
+          normals.push(asVec(t.getNormal(new THREE.Vector3())));
+        }
+        return cylinderFromFace(pts, normals);
+      };
+      Object.assign(r.viewport, parts, { faceCylinder: cylinderOf });
+      r.starters.createAxisFromCylinder();
+      return { ...r, cylinderOf };
+    };
+
+    it("takes a round face row and adds the axis the click would, through that face", () => {
+      const r = roundRig();
+      expect(r.click({ kind: "face", faceId: 15 })).toBe("taken");
+      expect(treePickWaiting()).toBe(false);
+      expect(r.planePick()).toBe(false);
+      flushFrame();
+      const cyl = r.cylinderOf(15)!;
+      expect(cyl.radius).toBeCloseTo(4, 6);
+      expect(Math.abs(cyl.axis[1])).toBeCloseTo(0.6, 6);
+      expect(r.addFeature).toHaveBeenCalledExactlyOnceWith({
+        id: "f9",
+        type: "datumAxis",
+        origin: cyl.point,
+        dir: cyl.axis,
+        name: "Axis",
+        through: { kind: "cylinder", face: { kind: "face", by: "nearest", point: asVec(CYL_ANCHOR), body: "b2" } },
+      });
+    });
+
+    it("refuses a flat face, a sphere, an unknown face and a plane row, and keeps waiting", () => {
+      const r = roundRig();
+      expect(r.click({ kind: "face", faceId: 14 })).toBe("refused");
+      expect(r.hints[0]).toMatch(/flat/);
+      expect(r.hints[0]).toMatch(/round face/);
+      expect(r.click({ kind: "face", faceId: 16 })).toBe("refused");
+      expect(r.hints[1]).toMatch(/neither/);
+      expect(r.click({ kind: "face", faceId: 99 })).toBe("refused");
+      expect(r.click({ kind: "basePlane", plane: "XZ" })).toBe("refused");
+      expect(r.hints).toHaveLength(4);
+      expect(r.hints[3]).toMatch(/round face/);
+      expect(treePickWaiting()).toBe(true);
+      flushFrame();
+      expect(r.addFeature).not.toHaveBeenCalled();
+      expect(r.click({ kind: "face", faceId: 15 })).toBe("taken");
+    });
+
+    it("a second pick after the first starts clean, and a flat face row still goes to Sketch", () => {
+      const r = roundRig();
+      r.click({ kind: "face", faceId: 15 });
+      flushFrame();
+      expect(treePickWaiting()).toBe(false);
+      r.starters.startSketch();
+      expect(r.click({ kind: "face", faceId: 14 })).toBe("taken");
+      flushFrame();
+      expect(r.deps.sketch.enter).toHaveBeenCalledTimes(1);
+      expect(r.addFeature).toHaveBeenCalledTimes(1);
     });
   });
 });

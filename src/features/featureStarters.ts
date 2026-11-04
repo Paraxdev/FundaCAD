@@ -31,7 +31,7 @@ import { featureOwnersOfFaces, patternStart, type PatternCandidates } from "./pa
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
-import { CURVED_FACE_ROW, pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
+import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
 import { confirmEdgeCount, edgeGate } from "./edgeCountGate";
@@ -164,6 +164,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function pickPlaneInteractive(
     promptText: string,
     onPick: (spec: PlaneSpec, face: FacePlanePick | null, datumId: string | null) => void,
+    opts: { roundFace?: boolean } = {},
   ) {
     if (toolBusy()) return;
     setPlanePick(true);
@@ -210,6 +211,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
+        if (pick.kind === "face" && opts.roundFace) {
+          const round = facePlaneOfRow(viewport, pick.faceId);
+          if (!round) return "That face is neither flat nor round, pick a round face for its axis";
+          if (round.kind !== "tangent") return "That face is flat, pick a round face for its axis";
+          cleanup();
+          deferPick(viewport.domElement, () => onPick(round.def, round, null));
+          return true;
+        }
         if (pick.kind === "face") {
           const flat = viewport.faceSketchPlane(pick.faceId);
           if (!flat) return CURVED_FACE_ROW;
@@ -221,7 +230,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           return true;
         }
         const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
-        if (!spec) return treePickRefusal(pick, "a plane or a face");
+        if (!spec || opts.roundFace) return treePickRefusal(pick, opts.roundFace ? "a round face" : "a plane or a face");
         cleanup();
         deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
         return true;
@@ -577,7 +586,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Axis of a round face: the hole or shaft axis, followed when it moves.
   function createAxisFromCylinder() {
-    pickPlaneInteractive("Select a round face for its axis", (_spec, face) => axisFromRoundFace(face));
+    pickPlaneInteractive("Select a round face for its axis", (_spec, face) => axisFromRoundFace(face), {
+      roundFace: true,
+    });
   }
 
   function axisFromRoundFace(face: FacePlanePick | null) {
