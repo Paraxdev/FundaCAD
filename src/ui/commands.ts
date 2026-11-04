@@ -35,6 +35,7 @@ const GLOBAL: Command[] = [
   { id: "viewmode-pathtraced", label: "Path Traced View Mode", group: "View", context: "global" },
   { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
+  { id: "show-console", label: "Show Console", group: "View", context: "global" },
   { id: "show-last-message", label: "Show Last Message", group: "View", context: "global" },
   { id: "go-menubar", label: "Go to Menu Bar", group: "Go", context: "global" },
   { id: "go-tools", label: "Go to Tools", group: "Go", context: "global" },

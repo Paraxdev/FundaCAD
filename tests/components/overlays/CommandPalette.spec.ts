@@ -128,6 +128,19 @@ describe("CommandPalette", () => {
     expect(ran).toEqual(["show-last-message"]);
   });
 
+  it("finds Show Console in the View group and runs it by its action id", async () => {
+    await openPalette();
+    type("show console");
+    await nextTick();
+    expect(
+      options()
+        .map(nameOf)
+        .filter((n) => n.includes("Show Console")),
+    ).toHaveLength(1);
+    key("Enter");
+    expect(ran).toEqual(["show-console"]);
+  });
+
   it("lists Undo and Redo with the step they take, found by the word Undo, and runs them by id", async () => {
     const steps: Record<string, string | null> = { undo: "Undo Box 2", redo: null };
     useCommandPaletteStore().bindLabels((id) => steps[id] ?? null);

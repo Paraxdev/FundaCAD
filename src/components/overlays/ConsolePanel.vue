@@ -14,6 +14,7 @@ import {
   onLogChange,
   revealedEntry,
   setConsoleOpen,
+  takeConsoleFocus,
   type LogEntry,
   type LogLevel,
 } from "../../ui/logStore";
@@ -55,6 +56,29 @@ function toggleDetail(id: number) {
 }
 
 const body = ref<HTMLElement | null>(null);
+const heading = ref<HTMLElement | null>(null);
+
+const SEVERITY_WORD: Record<LogLevel, string> = { error: "Error:", warning: "Warning:", info: "Info:" };
+
+// Remembered when the panel opens, so closing hands focus back to where the user was.
+let opener: HTMLElement | null = null;
+watch(open, async (isOpen, wasOpen) => {
+  if (isOpen && !wasOpen) {
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  } else if (!isOpen && wasOpen) {
+    const back = opener;
+    opener = null;
+    await nextTick();
+    // Only when focus fell to the page: a user who clicked elsewhere keeps their place.
+    if (back?.isConnected && (!document.activeElement || document.activeElement === document.body)) back.focus();
+  }
+});
+
+watch(tick, async () => {
+  if (!open.value || !takeConsoleFocus()) return;
+  await nextTick();
+  heading.value?.focus();
+});
 const copied = ref<number | null>(null);
 const flashed = ref<number | null>(null);
 
@@ -103,9 +127,9 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
 <template>
   <Teleport to="body">
     <!-- v-if, not hidden: a panel left in the DOM over the viewport steals its picks. -->
-    <div v-if="open" class="logcon" role="dialog" aria-label="Console">
+    <div v-if="open" class="logcon" role="region" aria-labelledby="logcon-heading">
       <div class="logcon-head">
-        <span class="logcon-title">Console</span>
+        <h2 id="logcon-heading" ref="heading" class="logcon-title" tabindex="-1">Console</h2>
         <Button
           v-for="lvl in LEVELS"
           :key="lvl"
@@ -132,7 +156,7 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
         <IconButton icon="close" tip="Close" size="sm" variant="plain" :icon-size="14" @click="setConsoleOpen(false)" />
       </div>
 
-      <div ref="body" class="logcon-body">
+      <div ref="body" class="logcon-body" role="log" aria-live="off" aria-label="Console messages">
         <p v-if="!rows.length" class="logcon-empty">
           Nothing here. Errors and warnings are kept in full, and stay until cleared.
         </p>
@@ -143,6 +167,7 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
           :class="[`is-${e.level}`, { 'is-revealed': flashed === e.id }]"
           :data-log-id="e.id"
         >
+          <span class="sr-only">{{ SEVERITY_WORD[e.level] }}</span>
           <span class="logcon-time">{{ clockOf(e.at) }}</span>
           <span v-if="e.source" class="logcon-src">{{ e.source }}</span>
           <span class="logcon-msg">{{ e.message }}</span>

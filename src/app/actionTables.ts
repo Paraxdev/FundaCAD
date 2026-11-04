@@ -101,6 +101,7 @@ export const NON_REPEATABLE = new Set([
   "viewmode-cycle-back",
   "hide-selected",
   "show-all-bodies",
+  "show-console",
   "show-last-message",
   "clean-view",
   "region-next",

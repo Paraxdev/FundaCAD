@@ -11,7 +11,10 @@ import {
   logEntries,
   logError,
   onLogChange,
+  openConsole,
+  revealEntry,
   setConsoleOpen,
+  takeConsoleFocus,
   toggleConsole,
 } from "../../src/ui/logStore";
 
@@ -126,6 +129,41 @@ describe("the log", () => {
     expect(n).toBe(1);
     expect(consoleOpen()).toBe(true);
     off();
+  });
+});
+
+describe("asking for focus", () => {
+  it("hands out a focus request once, and only when one was made", () => {
+    expect(takeConsoleFocus()).toBe(false);
+    openConsole({ focus: true });
+    expect([consoleOpen(), takeConsoleFocus(), takeConsoleFocus()]).toEqual([true, true, false]);
+    setConsoleOpen(false);
+    openConsole();
+    expect(takeConsoleFocus()).toBe(false);
+  });
+
+  it("notifies again when asked to focus a panel that is already open", () => {
+    openConsole();
+    let n = 0;
+    const off = onLogChange(() => n++);
+    openConsole({ focus: true });
+    off();
+    expect([n, takeConsoleFocus()]).toEqual([1, true]);
+  });
+
+  it("toggles closed without asking for focus, and open with the asked kind", () => {
+    toggleConsole({ focus: true });
+    expect([consoleOpen(), takeConsoleFocus()]).toEqual([true, true]);
+    toggleConsole({ focus: true });
+    expect([consoleOpen(), takeConsoleFocus()]).toEqual([false, false]);
+    toggleConsole({ focus: false });
+    expect([consoleOpen(), takeConsoleFocus()]).toEqual([true, false]);
+  });
+
+  it("wants focus when an entry is revealed from the error notice", () => {
+    const e = log("error", "Boom 7");
+    revealEntry(e.id);
+    expect([consoleOpen(), takeConsoleFocus()]).toEqual([true, true]);
   });
 });
 

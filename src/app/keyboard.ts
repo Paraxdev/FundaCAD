@@ -92,7 +92,7 @@ export function installKeyboard(e: Engine): void {
       ev.preventDefault();
       if (chord === "items") useShellStore().toggleItems();
       else if (chord === "history") useShellStore().toggleHistory();
-      else toggleConsole();
+      else toggleConsole({ focus: !isEditableTarget(ev.target) });
       return;
     }
     if (ev.altKey) return;

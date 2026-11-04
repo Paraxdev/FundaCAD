@@ -23,6 +23,7 @@ import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl } from "../ui/reportText";
 import { MANUAL_URL, openExternal } from "../ui/welcome";
 import { showLastMessage } from "../ui/toast";
+import { openConsole } from "../ui/logStore";
 import { changeInterfaceSize } from "../ui/interfaceSize";
 import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
@@ -479,6 +480,9 @@ export function createActions(e: Engine): (action: string) => void {
       }
       case "show-all-bodies":
         e.store.setBodiesVisibility(new Map((e.store.buildState.result?.bodies ?? []).map((b) => [b.id, true])));
+        break;
+      case "show-console":
+        openConsole({ focus: true });
         break;
       case "show-last-message":
         showLastMessage();

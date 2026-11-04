@@ -1157,6 +1157,11 @@ It returns the toast's id for `dismissToast`, or null for an error.
   button in Notifications."). An error is spoken by the title bar notice. The
   stack is a permanent region named "Notifications", empty when no toast
   shows, and is not live, so nothing is said twice.
+- The console is not a dialog but a `role="region"` named by its `h2` "Console"
+  (`tabindex="-1"`). Show Console, the error notice and its chord (outside a
+  text field) focus that heading, and closing returns focus to the opener. The
+  body is `role="log"` with `aria-live="off"`, since toasts already speak, and
+  each row starts with a `.sr-only` Error:, Warning: or Info:.
 - Every toast is also a console entry and a bug report breadcrumb, so do not
   toast on every keystroke or hover.
 
@@ -1457,8 +1462,7 @@ option groups `role="radiogroup"` with `role="radio"`, tabs `aria-selected`. A
 dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
 visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
 `ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
-(`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
-`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
+(`CommandPalette.vue`, `HomeScreen.vue`, `TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
 is `aria-hidden` unless it has a `label` ([6.4](#64-icons)). Every base control has a name
 ([The base set](#the-base-set)), and a state, an error or a name never lives in a `title` alone
 ([7.11](#711-tooltips)).
