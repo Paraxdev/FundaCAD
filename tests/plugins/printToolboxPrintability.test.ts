@@ -160,32 +160,38 @@ describe("findingPlace", () => {
     ...over,
   });
 
-  it("names the face by its number and the height above the bed", () => {
-    const f = finding({ face: 7, at: [37.5, -12, 19] });
+  it("places an overhang by its lowest point, not its middle", () => {
+    // A slanted underside: its middle is 16 mm above the bed of 3, its low edge 11.25.
+    const f = finding({ face: 7, at: [37.5, -12, 19], low: 11.25 });
     expect(findingPlace(f, [body({})], nameOf)).toEqual({
-      hint: "Face 8, 16 mm above the bed",
-      spoken: "face 8, 16 mm above the bed",
+      hint: "Face 8, from 11.25 mm above the bed",
+      spoken: "face 8, from 11.25 mm above the bed",
     });
   });
 
-  it("measures the height along a slanted up, from the body's own bed", () => {
+  it("places any other finding by its middle, along a slanted up from the body's own bed", () => {
     // dot(at, up) = 7.2 + 15.2 = 22.4 with up (0, -0.6, 0.8), less the bed of 14.9
-    const f = finding({ face: 0, at: [41, -12, 19] });
+    const f = finding({ kind: "bridge", face: 0, at: [41, -12, 19], low: 0 });
     expect(findingPlace(f, [body({ up: [0, -0.6, 0.8], bed: 14.9 })], nameOf).spoken).toBe(
-      "face 1, 7.5 mm above the bed",
+      "face 1, centred 7.5 mm above the bed",
     );
     expect(findingPlace(f, [body({ id: "body9" }), body({ up: [0, -0.6, 0.8], bed: 20 })], nameOf).spoken).toBe(
-      "face 1, 2.4 mm above the bed",
+      "face 1, centred 2.4 mm above the bed",
     );
   });
 
   it("reads on the bed under a thousandth, and the height from there up", () => {
-    const at = (h: number) => finding({ face: 2, at: [5, 6, 3 + h] });
+    const at = (h: number) => finding({ kind: "floor", face: 2, at: [5, 6, 3 + h], low: 0 });
     expect(findingPlace(at(0.0004), [body({})], nameOf).spoken).toBe("face 3, on the bed");
     expect(findingPlace(at(0), [body({})], nameOf).spoken).toBe("face 3, on the bed");
     expect(findingPlace(at(-0.002), [body({})], nameOf).spoken).toBe("face 3, on the bed");
-    expect(findingPlace(at(0.06), [body({})], nameOf).spoken).toBe("face 3, 0.06 mm above the bed");
-    expect(findingPlace(at(0.002), [body({})], nameOf).spoken).toBe("face 3, 0.002 mm above the bed");
+    expect(findingPlace(at(0.06), [body({})], nameOf).spoken).toBe("face 3, centred 0.06 mm above the bed");
+    expect(findingPlace(at(0.002), [body({})], nameOf).spoken).toBe("face 3, centred 0.002 mm above the bed");
+    const low = (h: number) => finding({ face: 2, at: [5, 6, 9.5], low: h });
+    expect(findingPlace(low(0.0004), [body({})], nameOf).spoken).toBe("face 3, from the bed up");
+    expect(findingPlace(low(0), [body({})], nameOf).spoken).toBe("face 3, from the bed up");
+    expect(findingPlace(low(0.06), [body({})], nameOf).spoken).toBe("face 3, from 0.06 mm above the bed");
+    expect(findingPlace(low(0.002), [body({})], nameOf).spoken).toBe("face 3, from 0.002 mm above the bed");
   });
 
   it("gives no height for a body the reply does not list or a zero up", () => {
@@ -193,16 +199,19 @@ describe("findingPlace", () => {
     expect(findingPlace(f, [], nameOf)).toEqual({ hint: "Face 5", spoken: "face 5" });
     expect(findingPlace(f, [body({ id: "body7" })], nameOf).spoken).toBe("face 5");
     expect(findingPlace(f, [body({ up: [0, 0, 0] })], nameOf).spoken).toBe("face 5");
+    const wall = finding({ kind: "wall", face: 4, at: [5, 6, 9], low: 0 });
+    expect(findingPlace(wall, [body({ id: "body7" })], nameOf).spoken).toBe("face 5");
+    expect(findingPlace(wall, [body({ up: [0, 0, 0] })], nameOf).spoken).toBe("face 5");
   });
 
   it("names both faces of a pair, on one body or across two", () => {
     const wall = finding({ kind: "wall", face: 2, other: { body: "body1", face: 4 }, at: [1, 2, 8] });
     expect(findingPlace(wall, [body({})], nameOf)).toEqual({
-      hint: "Faces 3 and 5, 5 mm above the bed",
-      spoken: "faces 3 and 5, 5 mm above the bed",
+      hint: "Faces 3 and 5, centred 5 mm above the bed",
+      spoken: "faces 3 and 5, centred 5 mm above the bed",
     });
     const fused = finding({ kind: "fused", face: 2, other: { body: "body2", face: 8 }, at: [1, 2, 8] });
-    expect(findingPlace(fused, [body({})], nameOf).spoken).toBe("face 3 and face 9 of Lid, 5 mm above the bed");
+    expect(findingPlace(fused, [body({})], nameOf).spoken).toBe("face 3 and face 9 of Lid, centred 5 mm above the bed");
   });
 
   it("uses no dash as a sentence break", () => {
@@ -222,7 +231,7 @@ const reply: PrintabilityReply = {
     { id: "body3", name: "Pin", up: [0, 0, 1], bed: 0, bedFace: 1, openEdges: 0, solids: 1, insideOut: true },
   ],
   findings: [
-    finding({ face: 3 }),
+    finding({ face: 3, low: 2.5 }),
     finding({ kind: "wall", face: 4, value: 0.6, limit: 0.8, other: { body: "body1", face: 5 } }),
     finding({ kind: "fused", face: 6, value: 0, other: { body: "body2", face: 9 } }),
   ],
@@ -256,22 +265,22 @@ describe("formatPrintabilityResult", () => {
         index: 0,
         kind: "overhang",
         text: "Overhang, 132 mm² leaning 90°",
-        hint: "Face 4, 5 mm above the bed",
-        spoken: "Overhang, 132 mm² leaning 90°, face 4, 5 mm above the bed",
+        hint: "Face 4, from 2.5 mm above the bed",
+        spoken: "Overhang, 132 mm² leaning 90°, face 4, from 2.5 mm above the bed",
       },
       {
         index: 1,
         kind: "wall",
         text: "Thin wall 0.6 mm (under 0.8)",
-        hint: "Faces 5 and 6, 5 mm above the bed",
-        spoken: "Thin wall 0.6 mm (under 0.8), faces 5 and 6, 5 mm above the bed",
+        hint: "Faces 5 and 6, centred 5 mm above the bed",
+        spoken: "Thin wall 0.6 mm (under 0.8), faces 5 and 6, centred 5 mm above the bed",
       },
       {
         index: 2,
         kind: "fused",
         text: "Touches Lid, prints fused",
-        hint: "Face 7 and face 10 of Lid, 5 mm above the bed",
-        spoken: "Touches Lid, prints fused, face 7 and face 10 of Lid, 5 mm above the bed",
+        hint: "Face 7 and face 10 of Lid, centred 5 mm above the bed",
+        spoken: "Touches Lid, prints fused, face 7 and face 10 of Lid, centred 5 mm above the bed",
       },
     ]);
   });

@@ -107,7 +107,7 @@ const check = (name, ok, detail) => {
   );
   check(
     "each row names its face and its height above the bed",
-    rows.length > 0 && rows.every((r) => /Faces? \d+.*(above the bed|on the bed)/.test(r)),
+    rows.length > 0 && rows.every((r) => /Faces? \d+.*the bed/.test(r)),
     JSON.stringify(rows),
   );
   const header = await page.textContent(".printability-header");

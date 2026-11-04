@@ -196,12 +196,12 @@ describe("PrintabilityPanel", () => {
       "Bridge 14 mm span (over 10)",
     ]);
     expect(rows.map((e) => e.querySelector(".ui-list-row-hint")!.textContent)).toEqual([
-      "Face 4, 5 mm above the bed",
-      "Face 5, 8 mm above the bed",
+      "Face 4, from 5 mm above the bed",
+      "Face 5, centred 8 mm above the bed",
     ]);
     expect(rows.map((e) => e.getAttribute("aria-label"))).toEqual([
-      "Overhang, 132 mm² leaning 90°, face 4, 5 mm above the bed",
-      "Bridge 14 mm span (over 10), face 5, 8 mm above the bed",
+      "Overhang, 132 mm² leaning 90°, face 4, from 5 mm above the bed",
+      "Bridge 14 mm span (over 10), face 5, centred 8 mm above the bed",
     ]);
     expect(rows.map((e) => e.querySelector("[aria-hidden='true']") !== null)).toEqual([true, true]);
   });
@@ -243,7 +243,7 @@ describe("PrintabilityPanel", () => {
     p.finished({ result: formatPrintabilityResult({ ...reply, findings: [reply.findings[1]!] }) });
     await flushPromises();
     expect(qa(".printability-finding").map((e) => e.getAttribute("aria-label"))).toEqual([
-      "Bridge 14 mm span (over 10), face 5, 8 mm above the bed",
+      "Bridge 14 mm span (over 10), face 5, centred 8 mm above the bed",
     ]);
     expect(qa(".printability-finding").map((e) => e.getAttribute("aria-current"))).toEqual([null]);
   });

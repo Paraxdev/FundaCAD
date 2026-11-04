@@ -199,7 +199,8 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
 }
 
 /** Where a finding sits, by face number (what the Geometry tab shows) and height above its body's bed. `hint` starts
- *  with a capital, `spoken` is lower case to follow other words. A body the reply does not list has no height. */
+ *  with a capital, `spoken` is lower case to follow other words. A body the reply does not list has no height.
+ *  An overhang is placed by its lowest point, as the engine's report does, any other finding by its middle. */
 export function findingPlace(
   f: PrintabilityFinding,
   bodies: PrintabilityReply["bodies"],
@@ -215,9 +216,12 @@ export function findingPlace(
   const b = bodies.find((x) => x.id === f.body);
   const parts = [faces];
   if (b && (b.up[0] !== 0 || b.up[1] !== 0 || b.up[2] !== 0)) {
-    const h = f.at[0] * b.up[0] + f.at[1] * b.up[1] + f.at[2] * b.up[2] - b.bed;
     // Under a thousandth of a millimetre is the bed itself.
-    parts.push(h < 0.001 ? "on the bed" : `${mm(h)} above the bed`);
+    if (f.kind === "overhang") parts.push(f.low < 0.001 ? "from the bed up" : `from ${mm(f.low)} above the bed`);
+    else {
+      const h = f.at[0] * b.up[0] + f.at[1] * b.up[1] + f.at[2] * b.up[2] - b.bed;
+      parts.push(h < 0.001 ? "on the bed" : `centred ${mm(h)} above the bed`);
+    }
   }
   const spoken = parts.join(", ");
   return { hint: spoken.charAt(0).toUpperCase() + spoken.slice(1), spoken };
