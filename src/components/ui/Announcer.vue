@@ -2,11 +2,14 @@
 // Mounted once, in App.vue. A region has to exist before its text changes or no screen reader speaks it, and it sits
 // on body, outside #app, so a modal making the page inert never silences it.
 import { onMounted, onUnmounted, useTemplateRef } from "vue";
-import { attachAnnouncer } from "../../ui/announce";
+import { getVerbosity } from "../../ui/a11yPrefs";
+import { attachAnnouncer, setVerbositySource } from "../../ui/announce";
 
 const polite = useTemplateRef<HTMLDivElement>("polite");
 const assertive = useTemplateRef<HTMLDivElement>("assertive");
 let detach: (() => void) | null = null;
+
+setVerbositySource(getVerbosity);
 
 onMounted(() => {
   if (polite.value && assertive.value) detach = attachAnnouncer({ polite: polite.value, assertive: assertive.value });
