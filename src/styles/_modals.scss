@@ -16,8 +16,8 @@
   /* The flat zero blur elevation of every overlay: a soft blur read as an odd halo against
      the dark backdrop. */
   box-shadow: var(--shadow-3);
-  width: min(720px, 92vw);
-  max-height: 88vh;
+  width: min(720px, 0.92 * var(--win-w));
+  max-height: calc(0.88 * var(--win-h));
   display: flex;
   flex-direction: column;
   color: var(--text, #e6e8ec);
@@ -565,13 +565,13 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 12vh;
+  padding-top: calc(0.12 * var(--win-h));
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(2px);
 }
 .cmdk-card {
-  width: min(560px, 92vw);
-  max-height: 60vh;
+  width: min(560px, 0.92 * var(--win-w));
+  max-height: calc(0.6 * var(--win-h));
   display: flex;
   flex-direction: column;
   background: var(--panel-2, #1b1f24);
@@ -761,8 +761,8 @@
 
 .bug-report-card {
   width: 520px;
-  max-width: calc(100vw - 32px);
-  max-height: 88vh;
+  max-width: calc(var(--win-w) - 32px);
+  max-height: calc(0.88 * var(--win-h));
   overflow: auto;
 }
 .bug-report-card .bug-desc {
@@ -823,14 +823,14 @@
 /* Materials: library and editor side by side, since picking a material and dragging a
    slider is one gesture. */
 .mats-panel {
-  width: min(720px, 92vw);
+  width: min(720px, 0.92 * var(--win-w));
 }
 .mats {
   display: grid;
   grid-template-columns: 240px 1fr;
   gap: var(--s-5);
   /* Bounded, so a library of two hundred scrolls inside the dialog. */
-  max-height: min(56vh, 460px);
+  max-height: min(0.56 * var(--win-h), 460px);
 }
 .mats-list {
   overflow: auto;

@@ -1,13 +1,13 @@
 // Dialog: the modal shell, sm, md and lg, with its title and right aligned footer.
 
 .ui-dialog-sm {
-  width: min(420px, 92vw);
+  width: min(420px, 0.92 * var(--win-w));
 }
 .ui-dialog-md {
-  width: min(560px, 92vw);
+  width: min(560px, 0.92 * var(--win-w));
 }
 .ui-dialog-lg {
-  width: min(720px, 92vw);
+  width: min(720px, 0.92 * var(--win-w));
 }
 // The panel takes focus only as the fallback when it holds no control.
 .ui-dialog:focus:not(:focus-visible) {

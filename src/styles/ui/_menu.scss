@@ -4,7 +4,7 @@
   position: fixed;
   z-index: var(--z-menu);
   min-width: 168px;
-  max-height: calc(100vh - 8px);
+  max-height: calc(var(--win-h) - 8px);
   overflow-y: auto;
   padding: 5px;
   corner-shape: squircle;

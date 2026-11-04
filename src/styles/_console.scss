@@ -2,8 +2,8 @@
   position: fixed;
   right: var(--s-4);
   bottom: var(--s-4);
-  width: min(680px, calc(100vw - var(--s-5) * 2));
-  max-height: min(46vh, 460px);
+  width: min(680px, calc(var(--win-w) - var(--s-5) * 2));
+  max-height: min(0.46 * var(--win-h), 460px);
   display: flex;
   flex-direction: column;
   z-index: 2450; /* under the toast stack, over everything else */

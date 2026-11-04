@@ -370,7 +370,7 @@
   position: fixed;
   z-index: 180;
   width: 248px;
-  max-height: 46vh;
+  max-height: calc(0.46 * var(--win-h));
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--panel-2);

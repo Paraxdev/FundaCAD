@@ -570,9 +570,13 @@ transport `.tl-btn` (`--r-sm`), `.float-toggle` (6px, no squircle), `.pref-seg`
 | `Checkbox` | 18 by 18 |
 | Fields, `Segmented` | `md` 32px, `sm` 24px |
 | Card widths | Items 264px, History 288px, sketch palette 240px, Render dock 300px |
-| Popovers | min width 220px, max height `calc(100vh - 16px)` |
-| Dialog | `min(720px, 92vw)` (`lg`, the default), `sm` 420px, `md` 560px, max height 88vh; Preferences `min(960px, 94vw)` |
+| Popovers | min width 220px, max height `calc(var(--win-h) - 16px)` |
+| Dialog | `min(720px, 0.92 * var(--win-w))` (`lg`, the default), `sm` 420px, `md` 560px, max height `0.88 * var(--win-h)`; Preferences `min(960px, 0.94 * var(--win-w))` |
 | Toast | max width 560px |
+
+A box capped or sized against the window uses `--win-w` and `--win-h` (`_tokens.scss`), never `vw` or `vh`: outside Tauri
+Interface size zooms the root, which scales `vw` and `vh` too, so a `100vh` cap ran past the window from 110 percent.
+A box placed from window pixels (`innerWidth`, a bounding rect) divides them by `pageZoom()` (`ui/interfaceSize.ts`).
 
 ### 6.4 Icons
 
@@ -1007,9 +1011,9 @@ The sketch palette holds three lists under one heading each (`SketchShapesList`,
 | `.float-popover` (`Popover.vue`) | glass solid, `--float-radius`, padding `--s-3`, min width 220px, `z-index: var(--z-popover)`, `glass-in` entrance. Content: `.pop-section` `--fs-body`/600, `.pop-rule` a 10px gap with no line, `.pop-note` `--fs-small` `--text-dim` line height 1.45 |
 | `Menu` (`.ui-menu`) | `--float-bg-solid` through `--float-blur`, `--float-tile-radius`, squircle, padding 5px, `--float-shadow`, `--fs-body`, `pop-in`. `MenuItem` (`.ui-menu-item`): padding `var(--s-3) var(--s-4)`, chip radius; hover and keyboard focus accent 16% and `--accent-hot`, pressed accent 24%, keys `.ui-menu-keys` `--fs-micro` `--text-dim`, a check gutter when any item has `checked`; `MenuSeparator` 1px `--line` |
 | `.context-menu`, `.menu-popup` | the right click and title bar menus that predate `Menu`: glass solid and glass B, `--float-tile-radius`, separators `.ctx-sep` 1px |
-| `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` `--fs-title`/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
+| `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 0.92 * var(--win-w))`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` `--fs-title`/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
 | `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint`, and an option's own `danger` paints just that answer, so Cancel can keep the focus (`confirmDanger` in `ui/choice.ts`: Cancel first, then the red action) |
-| `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
+| `.cmdk-card` | glass B, `--float-radius`, `min(560px, 0.92 * var(--win-w))`, on `.cmdk-backdrop` at `padding-top: calc(0.12 * var(--win-h))`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, `--fs-body`, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
 | `#viewport .prompt` | glass A, pill, padding `var(--s-3) var(--s-5)`, `--fs-small`, a 6px accent dot, `prompt-in` entrance |

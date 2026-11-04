@@ -9,11 +9,14 @@ const setZoom = vi.fn((_: number) => Promise.resolve());
 vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ setZoom }) }));
 
 let stored: Map<string, string>;
-let root: { style: { zoom: string }; dataset: Record<string, string> };
+type Style = { zoom: string; vars: Record<string, string>; setProperty(k: string, v: string): void };
+let root: { style: Style & { removeProperty(k: string): void }; dataset: Record<string, string> };
 
 function boot(entries: Record<string, string> = {}, tauri = false) {
   stored = new Map(Object.entries(entries));
-  root = { style: { zoom: "" }, dataset: {} };
+  const vars: Record<string, string> = {};
+  const setProperty = (k: string, v: string) => void (vars[k] = v);
+  root = { style: { zoom: "", vars, setProperty, removeProperty: (k) => void delete vars[k] }, dataset: {} };
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => stored.get(k) ?? null,
     setItem: (k: string, v: string) => void stored.set(k, v),
@@ -110,6 +113,32 @@ describe("applying it", () => {
     m.setA11yPref("interfaceSize", 100);
     expect(root.style.zoom).toBe("");
     expect(setZoom).not.toHaveBeenCalled();
+  });
+
+  it("hands the root zoom to the window size tokens and to whatever places a box from window pixels", async () => {
+    boot({ [KEY]: "175" });
+    const m = await load();
+    m.installInterfaceSize();
+    expect(root.style.vars).toEqual({ "--page-zoom": "1.75" });
+    expect(m.pageZoom()).toBe(1.75);
+    m.setA11yPref("interfaceSize", 100);
+    expect(root.style.vars).toEqual({});
+    expect(m.pageZoom()).toBe(1);
+  });
+
+  it("leaves vw and vh out of every style, as the root zoom scales them and a cap on them runs past the window", () => {
+    const sources = import.meta.glob(["../../src/styles/**/*.scss", "../../src/components/**/*.vue"], {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>;
+    const tokens = "../../src/styles/_tokens.scss";
+    const found = Object.entries(sources).flatMap(([file, text]) =>
+      file === tokens ? [] : (text.match(/[\d.]+(vw|vh|vmin|vmax|dvh|svh|lvh)/g) ?? []).map((u) => `${file}: ${u}`),
+    );
+    expect(Object.keys(sources).length).toBeGreaterThan(50);
+    expect(sources[tokens]).toContain("--win-h: calc(100vh / var(--page-zoom, 1))");
+    expect(found).toEqual([]);
   });
 
   it("sets the webview zoom under Tauri at boot, 100 included, and on every change", async () => {
