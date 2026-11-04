@@ -131,6 +131,19 @@ describe("the error notice holds while pointed at or focused", () => {
     expect(gone(w)).toBe(true);
   });
 
+  it("the pointer leaving while focus stays on the chip keeps it held", async () => {
+    const w = await shownNotice();
+    const chip = w.get("#error-notice").element as HTMLElement;
+    chip.focus();
+    await w.get(".err-notice-wrap").trigger("mouseenter");
+    await w.get(".err-notice-wrap").trigger("mouseleave");
+    await vi.advanceTimersByTimeAsync(40000);
+    expect(gone(w)).toBe(false);
+    chip.blur();
+    await vi.advanceTimersByTimeAsync(10010);
+    expect(gone(w)).toBe(true);
+  });
+
   it("a notice clicked away while focused does not hold the next one", async () => {
     const w = await shownNotice();
     (w.get("#error-notice").element as HTMLElement).focus();
