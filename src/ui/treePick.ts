@@ -25,20 +25,26 @@ interface PickSession {
   taker: TreePickTaker;
   end: () => void;
   keepsOnRewind: boolean;
+  keepsOnCommand: boolean;
 }
 
 let session: PickSession | null = null;
 
 /** Rows go to `taker` until the returned release runs. `end` is the pick's cleanup, run when anything else ends the
  *  session, so a taker never outlives its tool. `keepsOnRewind` is for a tool that stays open through an undo or a
- *  redo, so its rows go on with it. */
+ *  redo, so its rows go on with it. `keepsOnCommand` is for a tool a menu command or a shortcut does not close. */
 export function awaitTreePick(
   taker: TreePickTaker,
   end: () => void,
-  opts: { keepsOnRewind?: boolean } = {},
+  opts: { keepsOnRewind?: boolean; keepsOnCommand?: boolean } = {},
 ): () => void {
   endPickSession();
-  const mine: PickSession = { taker, end, keepsOnRewind: opts.keepsOnRewind ?? false };
+  const mine: PickSession = {
+    taker,
+    end,
+    keepsOnRewind: opts.keepsOnRewind ?? false,
+    keepsOnCommand: opts.keepsOnCommand ?? false,
+  };
   session = mine;
   return () => {
     if (session === mine) session = null;
@@ -51,6 +57,11 @@ export function endPickSession() {
   if (!s) return;
   session = null;
   s.end();
+}
+
+/** A command or a sketch tool key: ends the live pick unless its tool stays open through commands. */
+export function endCommandedPick() {
+  if (session && !session.keepsOnCommand) endPickSession();
 }
 
 /** Undo, redo or a load: a pick waiting on the old document is stale, unless its tool goes on through the change. */

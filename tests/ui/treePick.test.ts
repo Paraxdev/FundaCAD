@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   awaitTreePick,
+  endCommandedPick,
   endPickSession,
   endRewoundPick,
   resetTreePicks,
@@ -121,5 +122,44 @@ describe("routing a row click", () => {
     expect([ended, routeTreeClick(YZ, deps())]).toEqual([["wait"], "taken"]);
     endPickSession();
     expect(ended).toEqual(["wait", "tool"]);
+  });
+
+  it("a command ends a plain pick but not one that keeps on command", () => {
+    const ended: string[] = [];
+    awaitTreePick(
+      () => true,
+      () => ended.push("plain"),
+    );
+    endCommandedPick();
+    expect([ended, treePickWaiting()]).toEqual([["plain"], false]);
+    awaitTreePick(
+      () => true,
+      () => ended.push("tool"),
+      { keepsOnCommand: true },
+    );
+    endCommandedPick();
+    expect([ended, treePickWaiting()]).toEqual([["plain"], true]);
+  });
+
+  it("a new pick still ends one that keeps on command, and keeping on command is not keeping through a rewind", () => {
+    const ended: string[] = [];
+    awaitTreePick(
+      () => true,
+      () => ended.push("first"),
+      { keepsOnCommand: true },
+    );
+    endRewoundPick();
+    expect([ended, treePickWaiting()]).toEqual([["first"], false]);
+    awaitTreePick(
+      () => true,
+      () => ended.push("second"),
+      { keepsOnCommand: true },
+    );
+    awaitTreePick(
+      () => true,
+      () => ended.push("third"),
+    );
+    expect(ended).toEqual(["first", "second"]);
+    expect(treePickWaiting()).toBe(true);
   });
 });
