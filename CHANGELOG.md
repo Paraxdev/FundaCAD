@@ -39,6 +39,26 @@ This file starts on 2026-08-03. For anything before that, see the
   Properties panel and the Stress key rows and details, and can list them as
   term and definition pairs.
 
+- **Printability findings are a list you can walk.** Each finding is a button
+  that names its face and its height above the bed, an overhang from where it
+  starts. Tab lights the face, Enter turns the view to it.
+
+- **Interference rows are buttons, and the result is spoken.** Tab lights a
+  pair the way hovering does, a press keeps it lit, and a screen reader hears
+  how many clashes and close pairs the check found.
+
+- **Picked faces and edges are named.** Target editor and Mirror rows read
+  like "Face 8 of Bracket", rows of one name are told apart, and each Remove
+  says which row it takes away. Target editor rows take keyboard focus and
+  light their geometry like a hover.
+
+- **Stress results say where the highest values are.** Peak stress and Max
+  deflection are listed with their x, y and z, and a press flies the view to
+  that point.
+
+- **The Stress colour bar labels its quarter marks.** Ticks at 25, 50 and 75
+  percent carry their values, not only the two ends.
+
 - **The manual has a Beta and a Dev version.** fundacad.dev opens the Beta
   manual, and a switch at the top of every page opens the same page in Dev.
   Help, Manual in the app opens the version that matches your build.
@@ -491,6 +511,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Stress colours rise from dark to light.** The new Perceptual colour map is
+  the default, so the colours can be ranked by brightness alone and read with
+  red and green colour blindness. Rainbow is still under Colour map.
+
 - **The Flatpak no longer reaches your whole home folder.** It reaches the
   FundaCAD folder in Documents, which it makes when it starts, and the files you
   pick in its file chooser. An AI assistant works in that folder too. For any
@@ -568,6 +592,10 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **An Interference check no longer shows up in the next document.** A check
+  still running when you opened another document reopened the panel there with
+  the old pairs. Its result is now dropped.
 
 - **Automatic projection stays in perspective inside your model.** Looking along an axis from inside a closed model, such as a room, snapped to a flat orthographic picture of its outside, and a held arrow key flashed that picture several times a second. Automatic now keeps perspective while the eye is inside the model's bounds, in every view mode and in the Classic camera, and still goes orthographic on an axis from outside. Picking a view on an axis, from the view cube or a named view, still shows it orthographic even from inside, and the next step or drag from it goes back to perspective. An orthographic view stays orthographic while you zoom, pan or fit it, and while a rebuild grows the model around it.
 
