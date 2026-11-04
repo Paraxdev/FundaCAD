@@ -184,6 +184,7 @@ describe("each kind of schema field", () => {
         { key: "tilt", type: "number", label: "Tilt", unit: "angle", default: 10, step: 5 },
         { key: "count", type: "number", label: "Count", unit: "in", default: 4, integer: true, min: 1 },
         { key: "free", type: "number", label: "Free", default: 3 },
+        { key: "plies", type: "number", label: "Plies", unit: "layers", default: 6, max: 9 },
         { key: "pitch", type: "number", label: "Pitch", unit: "length", default: 0, min: 0, max: 100, step: 5 },
         { key: "layer", type: "number", label: "Layer", unit: "length", default: 0.2, min: 0.02, max: 1, step: 0.05 },
         { key: "span", type: "number", label: "Span", unit: "length", default: 200, step: 0.005 },
@@ -241,6 +242,34 @@ describe("each kind of schema field", () => {
     await input.setValue("0");
     await input.trigger("keydown", { key: "Enter" });
     expect(row.get("[role=alert]").text()).toMatch(/at least 1/i);
+  });
+
+  const spokenOf = (row: { get: (s: string) => { element: Element } }) =>
+    (row.get("input").element.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent);
+
+  it("draws a caption as the field's one chip and speaks it", async () => {
+    const row = await field("plies");
+    expect(row.findAll(".ui-unit-chip").map((c) => c.text())).toEqual(["layers"]);
+    expect(spokenOf(row)).toEqual(["layers"]);
+    const input = row.get("input");
+    await input.setValue("11");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(k.get("plies")).toBe(6);
+    expect(spokenOf(row)).toEqual(["layers", row.get("[role=alert]").text()]);
+    expect(row.get("[role=alert]").text()).toMatch(/at most 9/i);
+  });
+
+  it("speaks a length and an angle in their measure and a plain number with nothing", async () => {
+    setUnit("in");
+    const gap = await field("gap");
+    expect([gap.findAll(".ui-unit-chip").map((c) => c.text()), spokenOf(gap)]).toEqual([["in"], ["inches"]]);
+    const tilt = await field("tilt");
+    expect([tilt.findAll(".ui-unit-chip").map((c) => c.text()), spokenOf(tilt)]).toEqual([["°"], ["degrees"]]);
+    const free = await field("free");
+    expect([free.findAll(".ui-unit-chip").length, spokenOf(free)]).toEqual([0, []]);
   });
 
   it("lands each inch step of a length exactly on its declared step in mm", async () => {

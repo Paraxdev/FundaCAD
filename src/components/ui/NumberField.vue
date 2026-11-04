@@ -28,6 +28,11 @@ const props = defineProps<
     /** A ui/measure unit id is the shown unit: the field shows the model in it and a bare typed number means it,
      *  while a typed unit wins. Any other text is only a caption. */
     unit?: string | null | undefined;
+    /** Text shown and spoken as the unit but never read as a measure, so "in" or "deg" stays a plain number. A
+     *  `unit` wins. */
+    caption?: string | undefined;
+    /** Says a count or a ratio has no unit, which the UI controls check asks of every field. No runtime effect. */
+    unitless?: boolean;
     /** Unit ids the chip offers; picking one emits `update:unit`. */
     units?: readonly string[] | undefined;
     /** The chip's title. */
@@ -85,10 +90,11 @@ const el = useTemplateRef<HTMLInputElement>("el");
 const d = useDisabled(props);
 const name = useName(props, "NumberField");
 const unitDef = computed(() => unitById(props.unit));
+const shownUnit = computed(() => props.unit || props.caption || null);
 
 const spell = (v: number | null) => (v === null ? "" : String(toUnit(v, unitDef.value)));
 const caption = (v: number) =>
-  unitDef.value ? formatMeasure(v, unitDef.value) : `${roundForDisplay(v)}${props.unit ? ` ${props.unit}` : ""}`;
+  unitDef.value ? formatMeasure(v, unitDef.value) : `${roundForDisplay(v)}${shownUnit.value ? ` ${shownUnit.value}` : ""}`;
 
 /** Null for an expression. */
 function read(raw: string): number | null {
@@ -155,7 +161,7 @@ watch(field.error, (e) => emit("error", e));
 const shownError = computed(() => field.error.value ?? props.problem ?? null);
 const speech = useFieldSpeech({
   el,
-  unit: () => props.unit,
+  unit: () => shownUnit.value,
   error: shownError,
   live: () => props.commit === "live",
   callerDescribedby: () => attrs["aria-describedby"],
@@ -233,9 +239,9 @@ function onKeydown(e: KeyboardEvent) {
       @focus="selectOnFocus && el?.select()"
     />
     <UnitChip
-      v-if="unit"
-      :unit="unit"
-      :options="units"
+      v-if="shownUnit"
+      :unit="shownUnit"
+      :options="unit ? units : undefined"
       :label="label && `${label} unit`"
       :tip="unitTip"
       :disabled="disabled"

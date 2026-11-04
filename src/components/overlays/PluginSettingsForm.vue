@@ -10,7 +10,6 @@ import KeyCapture, { type CapturedKey } from "../ui/KeyCapture.vue";
 import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import TextField from "../ui/TextField.vue";
-import UnitChip from "../ui/UnitChip.vue";
 import { nativeDialog } from "../../io/nativeDialog";
 
 const props = defineProps<{
@@ -153,6 +152,7 @@ const isDefault = (p: SettingProp) => {
               class="plugset-num"
               :model-value="values[p.key] as number"
               :unit="numberOf(p).unit"
+              :caption="numberOf(p).caption ?? undefined"
               :step="numberOf(p).step"
               :min="p.min"
               :max="p.max"
@@ -160,11 +160,7 @@ const isDefault = (p: SettingProp) => {
               :validate="numberOf(p).validate"
               @update:model-value="store(p, $event)"
               @error="setError(p, $event)"
-            >
-              <template v-if="numberOf(p).caption" #trailing>
-                <UnitChip :unit="numberOf(p).caption!" />
-              </template>
-            </NumberField>
+            />
 
             <Select
               v-else-if="p.type === 'enum'"

@@ -152,11 +152,6 @@ label.pref-head {
   align-items: center;
   gap: var(--s-2);
 }
-.pref-card .prefs-readout {
-  font-size: var(--fs-body);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
 .pref-card .btn {
   height: 30px;
   padding: 0 var(--s-4);

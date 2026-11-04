@@ -579,6 +579,49 @@ describe("NumberField unit description", () => {
   });
 });
 
+describe("NumberField caption and unitless", () => {
+  const described = (el: HTMLInputElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+
+  it("shows and speaks a caption without reading it as a measure, even when it spells one", async () => {
+    const { w, el, input } = await render({ caption: "in", modelValue: 25.4 });
+    expect([el.value, w.findAll(".ui-unit-chip").map((c) => c.text()), described(el)]).toEqual([
+      "25.4",
+      ["in"],
+      ["inches"],
+    ]);
+    await commit(input, "2");
+    expect(emitted(w)).toEqual([[2]]);
+  });
+
+  it("names a caption in the reason a limit gives", async () => {
+    const { w, el, input } = await render({ caption: "layers", modelValue: 3.5, max: 7 });
+    expect([w.findAll(".ui-unit-chip").map((c) => c.text()), described(el)]).toEqual([["layers"], ["layers"]]);
+    await commit(input, "9");
+    expect(described(el)).toEqual(["layers", "At most 7 layers"]);
+  });
+
+  it("lets a unit win over a caption", async () => {
+    const { w, el } = await render({ unit: "mm", caption: "layers", modelValue: 12 });
+    expect([w.findAll(".ui-unit-chip").map((c) => c.text()), described(el)]).toEqual([["mm"], ["millimetres"]]);
+  });
+
+  it("changes nothing for unitless, a count or a ratio", async () => {
+    const { w, el, input } = await render({ unitless: true, modelValue: 0.3, step: 0.05 });
+    await input.trigger("keydown", { key: "ArrowUp" });
+    await input.trigger("keydown", { key: "Enter" });
+    expect([w.findAll(".ui-unit-chip").length, el.hasAttribute("aria-describedby"), emitted(w)]).toEqual([
+      0,
+      false,
+      [[0.35]],
+    ]);
+    expect(el.hasAttribute("unitless")).toBe(false);
+  });
+});
+
 describe("NumberField refusal", () => {
   const described = (el: HTMLInputElement) =>
     (el.getAttribute("aria-describedby") ?? "")
