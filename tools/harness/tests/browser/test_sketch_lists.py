@@ -159,3 +159,48 @@ def test_a_length_typed_in_its_row_drives_the_line_and_its_relation_row_deletes_
     assert {k: v for k, v in lists.items() if k != "summary"} == {"dimensions": [], "relations": [], "deletes": []}
     assert s.page.evaluate("() => document.querySelector('#palette .dim-empty')?.textContent.trim()")
     no_pointer(s)
+
+
+LAYOUT = """() => {
+  const p = document.querySelector("#palette");
+  const box = (el) => el && { shown: el.clientHeight, full: el.scrollHeight };
+  const [relations, shapes] = [...p.querySelectorAll(".rel-list")];
+  return {
+    bottom: Math.round(p.getBoundingClientRect().bottom),
+    window: innerHeight,
+    card: box(p),
+    dimensions: box(p.querySelector(".dim-list")),
+    relations: box(relations),
+    shapes: box(shapes ?? null),
+    offset: (() => {
+      const a = p.getBoundingClientRect(),
+        b = p.parentElement.getBoundingClientRect();
+      return [Math.round(a.top - b.top), Math.round(b.right - a.right)];
+    })(),
+  };
+}"""
+
+
+def test_a_busy_sketch_keeps_each_list_to_its_rows_and_the_palette_inside_the_window(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    for i in range(10):
+        tool(s, "r", "rectangle")
+        point(s, round(-47.5 + 11.25 * i, 2), round(31 - 7.5 * i, 2))
+        kb.type(str(14 + 3 * i))
+        kb.press("Tab")
+        kb.type(str(9 + i))
+        kb.press("Enter")
+        s.page.wait_for_function("n => window.sketch.entities.length === n", arg=i + 1)
+    kb.press("Escape")
+    s.page.wait_for_function("() => document.querySelectorAll('#palette .rel-list .rel-row').length === 20")
+    s.page.locator("#palette button").filter(has_text="Shapes").first.focus()
+    kb.press("Enter")
+    s.page.wait_for_function("() => document.querySelectorAll('#palette .rel-list').length === 2")
+    got = s.page.evaluate(LAYOUT)
+    assert got["bottom"] <= got["window"], repr(got)
+    assert got["offset"] == [0, 0], repr(got)
+    assert got["card"]["full"] > got["card"]["shown"], got
+    for name in ("dimensions", "relations", "shapes"):
+        assert got[name]["shown"] == min(got[name]["full"], 216), (name, got)
+    no_pointer(s)
