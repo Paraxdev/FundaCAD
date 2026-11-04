@@ -158,6 +158,7 @@ const isDefault = (p: SettingProp) => {
               :max="p.max"
               :parse="numberOf(p).parse"
               :validate="numberOf(p).validate"
+              :problem="errors[p.key]"
               @update:model-value="store(p, $event)"
               @error="setError(p, $event)"
             />
@@ -233,7 +234,9 @@ const isDefault = (p: SettingProp) => {
             />
           </div>
         </div>
-        <p v-if="errors[p.key]" class="plugset-error" role="alert">{{ errors[p.key] }}</p>
+        <!-- A number field describes and speaks its own refusal, so its copy here is for the eye only. -->
+        <p v-if="errors[p.key] && p.type === 'number'" class="plugset-error" aria-hidden="true">{{ errors[p.key] }}</p>
+        <p v-else-if="errors[p.key]" class="plugset-error" role="alert">{{ errors[p.key] }}</p>
         <p v-if="p.description" class="pref-hint">{{ p.description }}</p>
       </div>
     </template>

@@ -2,7 +2,7 @@
 // a disclosure, read through the app's measure grammar, reset per property and
 // per plugin, and found by a search across every plugin.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -11,6 +11,12 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { definePluginSettings, type PluginSettings } from "../../../src/plugins/settings";
 import { pluginFocus } from "../../../src/plugins/settingsFocus";
 import { setUnit } from "../../../src/ui/units";
+import { announce } from "../../../src/ui/announce";
+
+vi.mock("../../../src/ui/announce", async (actual) => ({
+  ...(await actual<typeof import("../../../src/ui/announce")>()),
+  announce: vi.fn(),
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -19,6 +25,7 @@ let b: PluginSettings;
 
 beforeEach(() => {
   localStorage.clear();
+  vi.mocked(announce).mockClear();
   a = definePluginSettings("Test.Alpha", {
     version: 1,
     props: [
@@ -85,13 +92,13 @@ describe("settings under a plugin's row", () => {
     await input.setValue("abc");
     await input.trigger("keydown", { key: "Enter" });
     expect(a.get("gap")).toBeCloseTo(25.4, 9);
-    expect(panel.get('[data-setting="gap"] [role=alert]').text().length).toBeGreaterThan(0);
+    expect(panel.get('[data-setting="gap"] .plugset-error').text().length).toBeGreaterThan(0);
     expect(input.attributes("aria-invalid")).toBe("true");
 
     await input.setValue("500");
-    expect(panel.find('[data-setting="gap"] [role=alert]').exists()).toBe(false);
+    expect(panel.find('[data-setting="gap"] .plugset-error').exists()).toBe(false);
     await input.trigger("blur");
-    expect(panel.get('[data-setting="gap"] [role=alert]').text()).toMatch(/at most 100/i);
+    expect(panel.get('[data-setting="gap"] .plugset-error').text()).toMatch(/at most 100/i);
     expect(a.get("gap")).toBeCloseTo(25.4, 9);
   });
 
@@ -238,10 +245,10 @@ describe("each kind of schema field", () => {
     await input.setValue("2.5");
     await input.trigger("keydown", { key: "Enter" });
     expect(k.get("count")).toBe(5);
-    expect(row.get("[role=alert]").text()).toMatch(/whole number/);
+    expect(row.get(".plugset-error").text()).toMatch(/whole number/);
     await input.setValue("0");
     await input.trigger("keydown", { key: "Enter" });
-    expect(row.get("[role=alert]").text()).toMatch(/at least 1/i);
+    expect(row.get(".plugset-error").text()).toMatch(/at least 1/i);
   });
 
   const spokenOf = (row: { get: (s: string) => { element: Element } }) =>
@@ -255,11 +262,62 @@ describe("each kind of schema field", () => {
     expect(row.findAll(".ui-unit-chip").map((c) => c.text())).toEqual(["layers"]);
     expect(spokenOf(row)).toEqual(["layers"]);
     const input = row.get("input");
+    (input.element as HTMLInputElement).focus();
     await input.setValue("11");
     await input.trigger("keydown", { key: "Enter" });
+    const shown = row.get(".plugset-error");
     expect(k.get("plies")).toBe(6);
-    expect(spokenOf(row)).toEqual(["layers", row.get("[role=alert]").text()]);
-    expect(row.get("[role=alert]").text()).toMatch(/at most 9/i);
+    expect(shown.text()).toMatch(/at most 9/i);
+    expect(spokenOf(row)).toEqual(["layers", shown.text()]);
+    expect(vi.mocked(announce).mock.calls).toEqual([[shown.text(), "assertive"]]);
+    expect([shown.attributes("aria-hidden"), shown.attributes("role"), row.find("[role=alert]").exists()]).toEqual([
+      "true",
+      undefined,
+      false,
+    ]);
+  });
+
+  it("hands a store refusal of a number to its field, which says it once, and clears it on the next good value", async () => {
+    const row = await field("plies");
+    const input = row.get("input");
+    const set = vi.spyOn(k, "set").mockReturnValueOnce("Plies are locked by the printer");
+    (input.element as HTMLInputElement).focus();
+    await input.setValue("7");
+    await input.trigger("keydown", { key: "Enter" });
+    expect([k.get("plies"), spokenOf(row), input.attributes("aria-invalid")]).toEqual([
+      6,
+      ["layers", "Plies are locked by the printer"],
+      "true",
+    ]);
+    expect(vi.mocked(announce).mock.calls).toEqual([["Plies are locked by the printer", "assertive"]]);
+    expect(row.get(".plugset-error").attributes("aria-hidden")).toBe("true");
+
+    await input.setValue("8");
+    await input.trigger("keydown", { key: "Enter" });
+    expect([
+      k.get("plies"),
+      spokenOf(row),
+      input.attributes("aria-invalid"),
+      row.find(".plugset-error").exists(),
+    ]).toEqual([8, ["layers"], undefined, false]);
+    expect(set.mock.calls).toEqual([
+      ["plies", 7],
+      ["plies", 8],
+    ]);
+    expect(vi.mocked(announce)).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a refusal of a field that does not speak as an alert", async () => {
+    const row = await field("name");
+    const input = row.get("input");
+    await input.setValue("a long bolt name");
+    await input.trigger("keydown", { key: "Enter" });
+    expect([
+      k.get("name"),
+      row.get("[role=alert]").text(),
+      row.find("[aria-hidden=true].plugset-error").exists(),
+    ]).toEqual(["a", "Name has to be at most 8 characters", false]);
+    expect(vi.mocked(announce)).not.toHaveBeenCalled();
   });
 
   it("speaks a length and an angle in their measure and a plain number with nothing", async () => {
@@ -328,7 +386,7 @@ describe("each kind of schema field", () => {
     await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
     await input.trigger("keydown", { key: "Enter" });
     expect(k.get("pitch")).toBe(100);
-    expect(row.find("[role=alert]").exists()).toBe(false);
+    expect(row.find(".plugset-error").exists()).toBe(false);
   });
 
   it("leaves a number that declares no step alone on the arrow keys, as before", async () => {
