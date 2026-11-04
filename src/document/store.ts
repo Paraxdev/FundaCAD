@@ -513,6 +513,15 @@ function versionSnapshot(repo: VersionRepo, id: string): Snapshot {
   return doc;
 }
 
+// The cache as the next recompute writes it, which an opened file may lack until its first edit. A def with no
+// number keeps the cached value, and a name only the cache has stays.
+function derivedParameters({ parameters = {}, paramDefs }: Snapshot): CadDocument["parameters"] {
+  if (!paramDefs) return parameters;
+  const out = params.parameterCache(paramDefs);
+  for (const [name, value] of Object.entries(parameters)) if (typeof out[name] !== "number") out[name] = value;
+  return out;
+}
+
 /** Without the cut, which an older app recorded in a version. */
 function restText({ features: _, sectionView: _cut, ...rest }: Partial<Snapshot>): string {
   return JSON.stringify(rest);
@@ -2891,7 +2900,10 @@ export class DocumentStore {
   // A section cut is a view, not part of the model.
   workingSnapshot(): Snapshot {
     const { sectionView: _, ...doc } = this.toObject(false);
-    return JSON.parse(JSON.stringify(doc)) as Snapshot;
+    const snapshot = JSON.parse(JSON.stringify(doc)) as Snapshot;
+    // Or the first edit after opening an example counts its recomputed d1 as a settings change.
+    snapshot.parameters = derivedParameters(snapshot);
+    return snapshot;
   }
 
   // Versions this build cannot read, replaced by the first version saved here.
