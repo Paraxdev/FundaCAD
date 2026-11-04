@@ -3,12 +3,9 @@
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint } from "../types";
 import { compileAndSolve, type ProbeAxis } from "./sketchSolve";
+import type { Freedom } from "./freedomWords";
 
-export interface Freedom {
-  x: boolean;
-  y: boolean;
-  size: boolean;
-}
+export { freedomWords, type Freedom } from "./freedomWords";
 
 // A slanted 40 shape sketch took 92 probe solves, 91 ms on a desktop in Power saver, and each solve grows with the sketch.
 export const MAX_PROBED = 60;
@@ -18,14 +15,6 @@ const SLICE_MS = 12;
 const SOLVED = new Set<ResolvedEntity["type"]>(["line", "rectangle", "circle", "arc", "spline", "bspline", "point"]);
 
 const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-export function freedomWords(f: Freedom | undefined): string {
-  if (!f) return "";
-  const ways = [f.x && "X", f.y && "Y", f.size && "size"].filter((w): w is string => !!w);
-  const last = ways.pop();
-  if (!last) return "fixed";
-  return `free in ${ways.length ? `${ways.join(", ")} and ${last}` : last}`;
-}
 
 /** null while constraints conflict, when the solver is down, or once `isStale` says a newer sketch is waiting.
  *  Polygons, slots and text never reach the solver and get no entry, nor do shapes past `MAX_PROBED`. */

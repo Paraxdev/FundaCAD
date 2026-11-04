@@ -50,6 +50,14 @@ The palette lists every rule under **Relations**, one row each. It shows while *
 5. A dashed icon marks ends held only by where they sit, listed as "implied". There is nothing to delete there.
 6. The row of the rule you selected on the sketch is marked as current.
 
+## The Shapes list
+
+**Shapes** sits above the dimensions, closed until you open it, and shows while **Show Constraints** is on. Each shape has a row that says which ways it can still move: "free in X", "free in X and Y", "free in size", "free in X, Y and size", or "fixed". A construction shape says so too, as in "Line 3, construction, free in X".
+
+1. Tab to a row, or hover it, to light the shape. Enter, Space or a click selects it.
+2. The words follow your edits after a short pause. While rules conflict, the rows say nothing about freedom and the line on top of the Relations list says why.
+3. X and Y are the sketch's own axes. A rotated rectangle reads "fixed", and polygons, slots and text have no freedom words.
+
 ## Loose ends
 
 A sketch that will not extrude usually has a gap. While you sketch, dots mark the ends that keep it open:

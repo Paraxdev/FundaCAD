@@ -2,6 +2,7 @@
 
 import type { RelationRow } from "./relations";
 import type { ResolvedEntity } from "./snap";
+import { freedomWords, type Freedom } from "./freedomWords";
 
 const KIND_NAME: Record<string, string> = {
   line: "Line",
@@ -78,4 +79,18 @@ export function constraintDimName(face: string, operands: readonly string[]): st
 /** The subject a dimension row is about, so it keeps its place when a rectangle side turns into a constraint. */
 export function dimKey(standsFor: string | null, id: string | undefined, cIndex: number): string {
   return standsFor ?? `c:${id ?? `#${cIndex}`}`;
+}
+
+export interface ShapeRow {
+  id: string;
+  label: string;
+  hint: string;
+  spoken: string;
+}
+
+/** "Line 3, construction, free in X": the label first, then what is worth knowing, with no word for unknown freedom. */
+export function shapeRow(ents: ResolvedEntity[], e: ResolvedEntity, freedom: Freedom | undefined): ShapeRow {
+  const label = entityLabel(ents, e.id) ?? e.id;
+  const facts = [e.type !== "projected" && e.construction ? "construction" : "", freedomWords(freedom)].filter(Boolean);
+  return { id: e.id, label, hint: facts.join(" · "), spoken: [label, ...facts].join(", ") };
 }

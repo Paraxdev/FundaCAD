@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { ResolvedEntity } from "../../src/sketch/snap";
 import {
   constraintDimName,
   dimKey,
   distinctNames,
   entityDimName,
   relationName,
+  shapeRow,
   stateWord,
 } from "../../src/sketch/sketchNames";
 
@@ -82,5 +84,48 @@ describe("dimKey", () => {
     expect(dimKey("r1:width", "k9", 4)).toBe("r1:width");
     expect(dimKey(null, "k9", 4)).toBe("c:k9");
     expect(dimKey(null, undefined, 4)).toBe("c:#4");
+  });
+});
+
+describe("shapeRow", () => {
+  const ents: ResolvedEntity[] = [
+    { type: "line", id: "a", x1: 3.5, y1: -2, x2: 11, y2: 7.25 },
+    { type: "circle", id: "b", x: 41, y: -7, radius: 3.5 },
+    { type: "line", id: "c", x1: 11, y1: 7.25, x2: 14.5, y2: 1, construction: true },
+    { type: "projected", id: "d", construction: true } as unknown as ResolvedEntity,
+  ];
+  const row = (i: number, f?: { x: boolean; y: boolean; size: boolean }) => shapeRow(ents, ents[i]!, f);
+
+  it("names the shape by its place among its kind, with the freedom after it", () => {
+    expect(row(2, { x: true, y: false, size: false })).toEqual({
+      id: "c",
+      label: "Line 2",
+      hint: "construction · free in X",
+      spoken: "Line 2, construction, free in X",
+    });
+    expect(row(1, { x: true, y: true, size: true })).toEqual({
+      id: "b",
+      label: "Circle 1",
+      hint: "free in X, Y and size",
+      spoken: "Circle 1, free in X, Y and size",
+    });
+  });
+
+  it("adds no word for unknown freedom, and says fixed for none", () => {
+    expect(row(0)).toEqual({ id: "a", label: "Line 1", hint: "", spoken: "Line 1" });
+    expect(row(0, { x: false, y: false, size: false })).toEqual({
+      id: "a",
+      label: "Line 1",
+      hint: "fixed",
+      spoken: "Line 1, fixed",
+    });
+  });
+
+  it("does not call projected geometry construction", () => {
+    expect(row(3, { x: false, y: false, size: false }).spoken).toBe("Reference 1, fixed");
+  });
+
+  it("falls back to the id for an entity the list does not hold", () => {
+    expect(shapeRow([], ents[0]!, undefined)).toEqual({ id: "a", label: "a", hint: "", spoken: "a" });
   });
 });

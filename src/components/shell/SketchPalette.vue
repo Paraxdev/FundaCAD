@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SketchDimensionsList from "./SketchDimensionsList.vue";
+import SketchShapesList from "./SketchShapesList.vue";
 import SketchRelationsList from "./SketchRelationsList.vue";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -32,6 +33,8 @@ const rel = useSketchRelationsStore();
       :model-value="palette.state[t.key]"
       @update:model-value="(on: boolean) => palette.set(t.key, on)"
     />
+
+    <SketchShapesList v-if="rel.visible" />
 
     <template v-if="palette.state.dimensions">
       <div class="palette-section palette-section-gap">Dimensions</div>

@@ -6,6 +6,8 @@ import { DofSpeech } from "./dofSpeech";
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint } from "../types";
 import { dofSummary, relationRows } from "./relations";
+import { FreedomWatch } from "./freedomWatch";
+import { useSketchPaletteStore } from "../stores/sketchPalette";
 import { useSketchRelationsStore, type RelationHooks } from "../stores/sketchRelations";
 
 export class RelationsPanel {
@@ -19,7 +21,11 @@ export class RelationsPanel {
     del: (i: number) => this.onDelete?.(i),
     hover: (ids: string[] | null) => this.onHover?.(ids),
     select: (ids: string[]) => this.onSelect?.(ids),
+    shapes: (open: boolean) => this.probeShapes(open),
   });
+
+  private readonly watch = new FreedomWatch((map) => useSketchRelationsStore().setFreedom(map));
+  private latest: { entities: ResolvedEntity[]; constraints: SketchConstraint[] } | null = null;
 
   private readonly speech = new DofSpeech();
 
@@ -36,11 +42,27 @@ export class RelationsPanel {
     const summary = dofSummary(dof, conflict);
     store.hooks = this.hooks;
     store.show(relationRows(entities, constraints, conflicts, over), summary, conflict);
+    store.setShapes(entities);
+    this.latest = { entities, constraints };
+    this.probeShapes(useSketchPaletteStore().shapesOpen);
     const line = this.speech.next(summary, conflict, ready);
     if (line) announce(line.text, line.priority, { key: "sketch-dof", delay: 400 });
   }
 
+  /** Probes only while the list is open and shown, and words never outlive the list. */
+  private probeShapes(open: boolean) {
+    const store = useSketchRelationsStore();
+    if (open && store.visible && this.latest) {
+      this.watch.request(this.latest.entities, this.latest.constraints);
+      return;
+    }
+    this.watch.cancel();
+    store.setFreedom(null);
+  }
+
   hide() {
+    this.watch.cancel();
+    this.latest = null;
     this.speech.reset();
     cancelAnnouncement("sketch-dof");
     useSketchRelationsStore().hide();
@@ -49,5 +71,6 @@ export class RelationsPanel {
   /** Follows the palette's Show Constraints toggle, the list says the same as the canvas glyphs. */
   setVisible(on: boolean) {
     useSketchRelationsStore().visible = on;
+    this.probeShapes(useSketchPaletteStore().shapesOpen);
   }
 }
