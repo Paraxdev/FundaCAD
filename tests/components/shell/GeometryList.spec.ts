@@ -7,7 +7,7 @@ import { nextTick } from "vue";
 import GeometryList from "../../../src/components/shell/GeometryList.vue";
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import { ENGINE } from "../../../src/app/engineKey";
-import { announce } from "../../../src/ui/announce";
+import { announce, cancelAnnouncement } from "../../../src/ui/announce";
 import { setUnit } from "../../../src/ui/units";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { useSelectionStore } from "../../../src/stores/selection";
@@ -24,6 +24,7 @@ vi.mock("../../../src/ui/toast", () => ({
 vi.mock("../../../src/ui/announce", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/announce")>()),
   announce: vi.fn(),
+  cancelAnnouncement: vi.fn(),
 }));
 
 enableAutoUnmount(afterEach);
@@ -643,6 +644,21 @@ describe("picking", () => {
     await land(r.asks[1]!, reply("body1", 2));
     await press(w, 0, "Enter");
     expect(r.viewport.applyPicks).toHaveBeenCalledTimes(1);
+  });
+
+  it("a row a waiting tool takes drops the list's count still to be said, which would trail the tool's prompt", async () => {
+    const { r, w } = await open(2);
+    r.wires.set("body1", [edge("body1", 0, 2), edge("body1", 1, 2), edge("body1", 2, 2)]);
+    await w.getComponent({ name: "Segmented" }).vm.$emit("update:modelValue", "edges");
+    await nextTick();
+    expect(vi.mocked(announce).mock.lastCall?.[0]).toBe("3 edges");
+    const release = awaitTreePick(
+      () => true,
+      () => {},
+    );
+    await press(w, 0, "Enter");
+    release();
+    expect(cancelAnnouncement).toHaveBeenCalledWith("geometry-filter");
   });
 
   it("types ahead on a row's first word", async () => {
