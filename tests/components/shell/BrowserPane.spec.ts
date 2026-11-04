@@ -1211,7 +1211,9 @@ describe("a row click while a tool waits for a pick", () => {
     await rowNamed(w, "Body1").trigger("click");
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
     expect(fake.engine.viewport.getSelectedBodies()).toEqual([]);
-    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "");
+    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "", {
+      silent: true,
+    });
     expect(treePickWaiting()).toBe(true);
   });
 
@@ -1237,7 +1239,9 @@ describe("a row click while a tool waits for a pick", () => {
     );
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(edit).not.toHaveBeenCalled();
-    expect(eng(fake).setStatus).toHaveBeenLastCalledWith("Finish the active tool first, or press Esc", "");
+    expect(eng(fake).setStatus).toHaveBeenLastCalledWith("Finish the active tool first, or press Esc", "", {
+      silent: true,
+    });
   });
 });
 

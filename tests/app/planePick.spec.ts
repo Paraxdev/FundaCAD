@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import {
   BASE_PLANES,
+  SELECTION_SPEECH_DELAY,
   routePlaneRow,
   sketchOnPlane,
   treeClickDeps,
@@ -12,6 +13,12 @@ import {
 import { awaitTreePick, resetTreePicks, routeTreeClick, treePickRefusal } from "../../src/ui/treePick";
 import { useToastStore } from "../../src/stores/toasts";
 import { hintToast, toast } from "../../src/ui/toast";
+
+const said = vi.hoisted(() => [] as unknown[][]);
+vi.mock("../../src/ui/announce", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/ui/announce")>()),
+  announce: (...args: unknown[]) => void said.push(args),
+}));
 
 const SLANTED = {
   origin: [113.5, -41.25, 37] as [number, number, number],
@@ -119,7 +126,7 @@ describe("a refusal toast and the row taken after it", () => {
       .map((t) => t.message);
   const toasting = () => {
     const h = host();
-    h.setStatus.mockImplementation((text: string) => hintToast(text));
+    h.setStatus.mockImplementation((text: string, _cls: string, opts?: { silent?: boolean }) => hintToast(text, opts));
     return h;
   };
   const wantsFace = () =>
@@ -151,6 +158,16 @@ describe("a refusal toast and the row taken after it", () => {
     wantsFace();
     expect(routeTreeClick({ kind: "face", faceId: 3 }, treeClickDeps(e))).toBe("taken");
     expect(showing()).toEqual(["Copied."]);
+  });
+
+  it("a refusal is heard once, under the selection readout's key, and its toast only shows it", () => {
+    const { e } = toasting();
+    wantsFace();
+    said.length = 0;
+    expect(routePlaneRow(e, XZ)).toBe("refused");
+    const text = treePickRefusal(XZ, "a face");
+    expect(showing()).toEqual([text]);
+    expect(said).toEqual([[text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY }]]);
   });
 
   it("a refusal repeated while it is still up shows once", () => {

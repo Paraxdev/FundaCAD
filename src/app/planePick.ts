@@ -15,10 +15,10 @@ export const SELECTION_SPEECH_DELAY = 250;
 
 const refusals = new Set<string>();
 
-// A toast reaches no screen reader. The readout speaks a changed selection under the same key and replaces these words.
+// The toast stays silent: these words are spoken under the readout's key, so a changed selection replaces them.
 export function refuseAloud(e: Pick<Engine, "setStatus">, text: string) {
   refusals.add(text);
-  e.setStatus(text, "");
+  e.setStatus(text, "", { silent: true });
   announce(text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY });
 }
 

@@ -206,7 +206,7 @@ export interface Engine {
   undoIfLatest(mark: number): void;
 
   lastAction: string | null;
-  setStatus(text: string, cls: "" | "connected" | "error"): void;
+  setStatus(text: string, cls: "" | "connected" | "error", opts?: { silent?: boolean }): void;
 }
 
 let recoveryAsked: Promise<void> = Promise.resolve();
@@ -220,7 +220,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   // A reconnect loop repeats its warning every attempt, once a minute is plenty.
   let lastWarning = { text: "", at: -Infinity };
-  e.setStatus = (text, cls) => {
+  e.setStatus = (text, cls, opts) => {
     if (!text || cls === "connected") return;
     const now = performance.now();
     if (cls === "error") {
@@ -229,7 +229,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       logWarning(text, { source: "status" });
       return;
     }
-    hintToast(text);
+    hintToast(text, opts);
   };
 
   e.viewport = new Viewport(canvas);

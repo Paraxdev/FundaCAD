@@ -87,9 +87,9 @@ export function dismissToast(id: number) {
 }
 
 /** A short info toast, not shown again while the same words are still on screen. */
-export function hintToast(message: string) {
+export function hintToast(message: string, opts: Pick<ToastOptions, "silent"> = {}) {
   if (useToastStore().items.some((t) => !t.leaving && t.message === message)) return;
-  toast(message);
+  toast(message, opts);
 }
 
 export function dismissToastsSaying(message: string) {
