@@ -146,11 +146,11 @@ describe("an edge row while Fillet waits", () => {
     tool.cancel();
   });
 
-  it("tells Add edge's user a Geometry row also adds, at the start and mid edit", () => {
+  it("tells Add edge's user a Geometry row also adds mid edit, while the start prompt keeps saying Click", () => {
     const { tool, click } = rig();
     const prompt = () => usePromptStore().text ?? "";
     tool.start("chamfer", () => {});
-    expect(prompt()).toMatch(/Geometry list|row/i);
+    expect([prompt().startsWith("Click an edge"), /Geometry list|row/i.test(prompt())]).toEqual([true, false]);
     click(edgeRow(1));
     tool.promptAddMember();
     expect(prompt()).toMatch(/Geometry list|row/i);
