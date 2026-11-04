@@ -170,6 +170,19 @@ describe("dom.ts controls match their Vue twins", () => {
     expect([spoken("mm"), spoken("deg"), spoken("samples")]).toEqual(["mm", "deg", "samples"]);
   });
 
+  it("a number input follows Units spoken in full when it is switched, on the page or not yet", () => {
+    const shown = uiNumberInput({ tip: "Width", unit: "mm" });
+    dom(shown.root);
+    const held = uiNumberInput({ tip: "Angle", unit: "deg" });
+    const said = () =>
+      [shown, held].map((f) => f.root.querySelector(`#${f.input.getAttribute("aria-describedby")}`)?.textContent);
+    expect(said()).toEqual(["millimetres", "degrees"]);
+    setA11yPref("unitsInFull", false);
+    expect(said()).toEqual(["mm", "deg"]);
+    setA11yPref("unitsInFull", true);
+    expect(said()).toEqual(["millimetres", "degrees"]);
+  });
+
   it("NumberField's inputMode is text for a field that takes expressions", () => {
     expect(uiNumberInput({ tip: "Width", inputMode: "text" }).input.getAttribute("inputmode")).toBe("text");
   });
