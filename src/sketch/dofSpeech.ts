@@ -1,4 +1,4 @@
-// Decides when a change in sketch freedom is worth saying: never on entry, once per change, a conflict at once.
+// Decides when a change in sketch freedom is worth saying: never on entry, once per change, a conflict as an alert.
 
 export interface DofLine {
   text: string;

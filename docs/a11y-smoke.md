@@ -190,7 +190,7 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
 
 17. **Sketch dimensions and relations (3 min).** Open a new sketch, draw one line with the Line tool and press Escape. Tab
     into the sketch palette: you hear "Sketch palette". Tab to the Shapes list and open it: the line is read with its
-    freedom, such as "Line 1, free in X, Y and size". Tab to the Dimensions list: the row is read by its subject,
+    freedom, such as "Line 1, free in X and Y". Tab to the Dimensions list: the row is read by its subject,
     "Length of Line 1", with its value in millimetres. Type `30` and press Enter: you hear the new freedom, such as "3
     degrees of freedom", once. Tab to the Relations list: you hear a row for the length, with its value and the line it
     holds, and a Delete button named by that rule. Press Delete on the row: you hear "Deleted" with the rule, then
