@@ -511,6 +511,9 @@ for the missing-plugin warning to say about a document that uses it.
 `saveTextFile` and `openTextFile` in `fundacad` are the file half such a library needs: a text file
 the person picks, through the native dialog in the app and a download or an upload in a browser.
 
+`announce(text, priority)` in `fundacad` speaks a line through the app's own live regions, polite by default and
+`"assertive"` for a failure. Use it for a result that appears with no focus move, since the status line is not read.
+
 ### Two plugins that need each other
 
 The filament palette is the case that made this concrete. A palette is a list of

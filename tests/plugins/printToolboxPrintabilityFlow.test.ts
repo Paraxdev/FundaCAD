@@ -5,6 +5,8 @@ import {
   type PrintabilityDeps,
 } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import { KIND_COLORS } from "../../plugins/FundaCAD.PrintToolbox/printability";
+import { announce as appAnnounce } from "../../src/ui/announce";
+import { announce as hostAnnounce } from "fundacad";
 import type { CadDocument, PrintabilityOptions, PrintabilityReply, PrintabilityResult } from "fundacad";
 
 // The toolbox's Printability panel controller against a hand-made viewport,
@@ -87,6 +89,7 @@ function rig() {
   const marks: { marks: unknown; layer: string | undefined }[] = [];
   const frames: { at: number[]; size: number }[] = [];
   const statuses: string[] = [];
+  const announced: [string, string][] = [];
   const calls: PrintabilityOptions[] = [];
   const cancels: (string | undefined)[] = [];
   let settle: (r: PrintabilityResult) => void = () => {};
@@ -146,6 +149,7 @@ function rig() {
     geometry,
     hasBody: () => true,
     setStatus: (t: string) => statuses.push(t),
+    announce: (t: string, p?: string) => announced.push([t, p ?? "polite"]),
   } as unknown as PrintabilityDeps;
   const ui = createPrintabilityPanel(deps);
   /** The last marks drawn on the printability layer. */
@@ -156,6 +160,7 @@ function rig() {
     marks,
     frames,
     statuses,
+    announced,
     calls,
     cancels,
     tints,
@@ -197,6 +202,10 @@ async function flush() {
 }
 
 describe("printability panel flow", () => {
+  it("the announce a plugin gets from fundacad is the app's own", () => {
+    expect(hostAnnounce).toBe(appAnnounce);
+  });
+
   it("checks every body when none is selected, and only the selected ones otherwise", async () => {
     const r = rig();
     r.ui.show();
@@ -233,6 +242,43 @@ describe("printability panel flow", () => {
     ]);
     expect(r.marks.every((m) => m.layer === "printability")).toBe(true);
     expect(r.statuses.at(-1)).toBe("Printability: 3 things to look at");
+  });
+
+  it("speaks the count, the largest overhang and its face once a Check is done", async () => {
+    const r = rig();
+    await checked(r);
+    expect(r.announced).toEqual([
+      [
+        "Printability: 3 things to look at. 1 overhang, 1 thin wall, 1 gap. The overhang is 100 mm² on face 4 of Block.",
+        "polite",
+      ],
+    ]);
+  });
+
+  it("speaks nothing while a Check runs, and nothing of a closed Check's late reply", async () => {
+    const r = rig();
+    r.ui.show();
+    const run = r.ui.run();
+    expect(r.announced).toEqual([]);
+    r.ui.close();
+    r.settle({ ok: true, result: reply });
+    await run;
+    expect(r.announced).toEqual([]);
+  });
+
+  it("a second document speaks only its own result", async () => {
+    const r = rig();
+    r.ui.show();
+    const first = r.ui.run();
+    r.open();
+    r.settle({ ok: true, result: reply });
+    await first;
+    expect(r.announced).toEqual([]);
+    r.ui.show();
+    const second = r.ui.run();
+    r.settle({ ok: true, result: { ...reply, findings: [reply.findings[2]!] } });
+    await second;
+    expect(r.announced).toEqual([["Printability: 1 thing to look at. 1 gap.", "polite"]]);
   });
 
   it("puts a hovered row's faces forward, and a clicked one stays forward and is framed", async () => {
@@ -291,6 +337,7 @@ describe("printability panel flow", () => {
     r.settle({ ok: true, result: { ...reply, findings: [] } });
     await run;
     expect(r.statuses.at(-1)).toBe("Printability: nothing found");
+    expect(r.announced).toEqual([["Printability: nothing found.", "polite"]]);
     expect(r.tints()).toEqual([]);
   });
 
@@ -302,6 +349,7 @@ describe("printability panel flow", () => {
     await run;
     expect(r.ui.data.value!.error).toBe("face 7 of body1 is not flat");
     expect(r.ui.data.value!.result).toBeNull();
+    expect(r.announced).toEqual([["Printability check failed: face 7 of body1 is not flat", "assertive"]]);
   });
 
   it("does not send settings that are not ready", async () => {
@@ -311,9 +359,10 @@ describe("printability panel flow", () => {
     await r.ui.run();
     expect(r.calls).toEqual([]);
     expect(r.ui.data.value!.error).toMatch(/nozzle/);
+    expect(r.announced).toEqual([[`Printability: ${r.ui.data.value!.error}`, "assertive"]]);
   });
 
-  it("cancels by its own request id and stays quiet about it", async () => {
+  it("cancels by its own request id and says it was cancelled, not failed", async () => {
     const r = rig();
     r.ui.show();
     const run = r.ui.run();
@@ -324,6 +373,7 @@ describe("printability panel flow", () => {
     await run;
     expect(r.ui.data.value!.error).toBeNull();
     expect(r.statuses.at(-1)).toBe("Printability check cancelled");
+    expect(r.announced).toEqual([["Printability check cancelled", "polite"]]);
   });
 
   it("keeps the list of bodies for the panel's Bodies line in step with the build", () => {

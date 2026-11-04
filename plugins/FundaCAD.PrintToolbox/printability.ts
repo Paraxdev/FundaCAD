@@ -271,6 +271,44 @@ export function problemCount(v: PrintabilityView): number {
   return v.groups.reduce((n, g) => n + g.notes.length + g.rows.length, 0);
 }
 
+const KIND_NOUNS: Record<PrintabilityKind, [string, string]> = {
+  overhang: ["overhang", "overhangs"],
+  bridge: ["bridge", "bridges"],
+  wall: ["thin wall", "thin walls"],
+  floor: ["thin floor", "thin floors"],
+  gap: ["gap", "gaps"],
+  fused: ["fused spot", "fused spots"],
+  meshHole: ["mesh hole", "mesh holes"],
+  flatTriangle: ["flat triangle", "flat triangles"],
+};
+
+/** What a screen reader hears once a Check is done: the count, each kind's share, and the largest overhang with its
+ *  area and face. A tie on the area takes the first in the reply. The body is named only when the reply has several. */
+export function printabilitySummary(v: PrintabilityView): string {
+  const n = problemCount(v);
+  const head = n ? `Printability: ${plural(n, "thing", "things")} to look at` : "Printability: nothing found";
+  const parts: string[] = [];
+  for (const k of KIND_ORDER) {
+    const c = v.findings.filter((f) => f.kind === k).length;
+    if (c) parts.push(plural(c, ...KIND_NOUNS[k]));
+  }
+  const notes = v.groups.reduce((t, g) => t + g.notes.length, 0);
+  if (notes) parts.push(plural(notes, "body note", "body notes"));
+  if (v.errors.length) parts.push(plural(v.errors.length, "error", "errors"));
+  const sentences = [head];
+  if (parts.length) sentences.push(parts.join(", "));
+  const overhangs = v.findings.filter((f) => f.kind === "overhang");
+  let largest: PrintabilityFinding | undefined;
+  for (const f of overhangs) if (!largest || f.area > largest.area) largest = f;
+  if (largest) {
+    const body =
+      v.groups.length > 1 ? ` of ${v.groups.find((g) => g.body === largest!.body)?.name ?? largest.body}` : "";
+    const lead = overhangs.length > 1 ? "Largest overhang" : "The overhang is";
+    sentences.push(`${lead} ${area(largest.area)} on face ${largest.face + 1}${body}`);
+  }
+  return `${sentences.join(". ")}.`;
+}
+
 /** The tints for a result in display face ids: each finding's face in its kind's colour, and the finding put forward
  *  (its face and the one across) in `emphasisColor`. `faceOf` maps a body's own face index to the viewport's id, or
  *  null for a face that cannot be drawn, on a hidden body or past the body's faces. */

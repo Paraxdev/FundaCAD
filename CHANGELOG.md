@@ -25,6 +25,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Printability says what it found.** When a check ends, a screen reader
+  hears the count, each kind, and the largest overhang with its area and face.
+  A failed or cancelled check is spoken too.
+
 - **The Stress panel offers Perceptual, Rainbow or Greyscale colours, banded or
   smooth.** Colour map and Bands sit under the colour bar. The body and the bar
   change at once, with no new Run, and the choice is kept across studies and

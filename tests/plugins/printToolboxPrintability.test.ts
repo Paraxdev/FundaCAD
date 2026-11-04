@@ -8,6 +8,7 @@ import {
   findingView,
   formatPrintabilityResult,
   newPrintabilitySetup,
+  printabilitySummary,
   problemCount,
 } from "../../plugins/FundaCAD.PrintToolbox/printability";
 import type { PrintabilityFinding, PrintabilityReply } from "fundacad";
@@ -170,7 +171,9 @@ describe("findingPlace", () => {
   it("measures the height along a slanted up, from the body's own bed", () => {
     // dot(at, up) = 7.2 + 15.2 = 22.4 with up (0, -0.6, 0.8), less the bed of 14.9
     const f = finding({ face: 0, at: [41, -12, 19] });
-    expect(findingPlace(f, [body({ up: [0, -0.6, 0.8], bed: 14.9 })], nameOf).spoken).toBe("face 1, 7.5 mm above the bed");
+    expect(findingPlace(f, [body({ up: [0, -0.6, 0.8], bed: 14.9 })], nameOf).spoken).toBe(
+      "face 1, 7.5 mm above the bed",
+    );
     expect(findingPlace(f, [body({ id: "body9" }), body({ up: [0, -0.6, 0.8], bed: 20 })], nameOf).spoken).toBe(
       "face 1, 2.4 mm above the bed",
     );
@@ -325,5 +328,66 @@ describe("findingView", () => {
     expect(findingView(finding({ extent: 12 }))).toEqual({ at: [10, 0, 5], size: 24 });
     expect(findingView(finding({ extent: 0.5 }))).toEqual({ at: [10, 0, 5], size: 5 });
     expect(findingView(finding({ extent: NaN })).size).toBe(5);
+  });
+});
+
+describe("printabilitySummary", () => {
+  const one: PrintabilityReply["bodies"][number] = {
+    id: "body1",
+    name: "Bracket",
+    up: [0, 0, 1],
+    bed: 0,
+    bedFace: 2,
+    openEdges: 0,
+    solids: 1,
+    insideOut: false,
+  };
+  const summary = (r: Partial<PrintabilityReply>) => printabilitySummary(formatPrintabilityResult({ ...reply, ...r }));
+
+  it("says nothing was found, and still counts feature failures", () => {
+    expect(summary({ bodies: [one], findings: [], errors: [] })).toBe("Printability: nothing found.");
+    expect(summary({ bodies: [], findings: [], errors: [{ message: "nothing built" }] })).toBe(
+      "Printability: nothing found. 1 error.",
+    );
+  });
+
+  it("names the one overhang's area and face, singular, without a body name on a lone body", () => {
+    expect(summary({ bodies: [one], findings: [finding({ face: 3 })], errors: [] })).toBe(
+      "Printability: 1 thing to look at. 1 overhang. The overhang is 132 mm² on face 4.",
+    );
+  });
+
+  it("counts each kind, the body notes and the errors, and names the largest overhang's body", () => {
+    expect(summary({})).toBe(
+      "Printability: 6 things to look at. 1 overhang, 1 thin wall, 1 fused spot, 3 body notes, 2 errors. " +
+        "The overhang is 132 mm² on face 4 of Bracket.",
+    );
+  });
+
+  it("picks the largest of three overhangs, on a later body, and the first of a tie", () => {
+    const f = [
+      finding({ face: 1, area: 80.2, body: "body1" }),
+      finding({ face: 8, area: 540.6, body: "body2" }),
+      finding({ face: 4, area: 540.6, body: "body1" }),
+      finding({ kind: "wall", face: 2, area: 9000 }),
+    ];
+    expect(summary({ findings: f, errors: [], bodies: reply.bodies.slice(0, 2) })).toBe(
+      "Printability: 6 things to look at. 3 overhangs, 1 thin wall, 2 body notes. Largest overhang 541 mm² on face 9 of Lid.",
+    );
+    const tie = [f[2]!, f[1]!];
+    expect(summary({ findings: tie, errors: [], bodies: reply.bodies.slice(0, 2) })).toContain("on face 5 of Bracket");
+  });
+
+  it("reads a small area to the hundredth, and a wall alone has no overhang sentence", () => {
+    expect(summary({ bodies: [one], findings: [finding({ area: 3.46, face: 0 })], errors: [] })).toContain(
+      "is 3.46 mm² on face 1",
+    );
+    expect(summary({ bodies: [one], findings: [finding({ kind: "gap", face: 0 })], errors: [] })).toBe(
+      "Printability: 1 thing to look at. 1 gap.",
+    );
+  });
+
+  it("uses no dash as a sentence break", () => {
+    expect(summary({})).not.toMatch(/ - |\u2014|\u2013/);
   });
 });
