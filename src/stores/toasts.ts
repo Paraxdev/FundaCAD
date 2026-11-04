@@ -92,5 +92,13 @@ export const useToastStore = defineStore("toasts", () => {
     return id;
   }
 
-  return { items, push, dismiss, pause, resume };
+  /** Starts a showing toast's time over; false when it is gone or leaving. */
+  function restart(id: number): boolean {
+    const t = items.value.find((x) => x.id === id);
+    if (!t || t.leaving) return false;
+    arm(id);
+    return true;
+  }
+
+  return { items, push, dismiss, pause, resume, restart };
 });

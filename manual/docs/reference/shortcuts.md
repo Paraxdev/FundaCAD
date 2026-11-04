@@ -91,6 +91,8 @@ With Line, Rectangle or Circle armed in a sketch, see [Draw with keys](../sketch
 
 Next Face, Previous Face, Next Edge, Previous Edge and Browse Faces and Edges have no key until you give them one. They are in the Edit menu and the command palette. The keys inside the Geometry list are on [the Items card](../model/items.md#keys-in-the-list).
 
+Show Last Message in the command palette says the newest message again and shows it again, for a message that went by too fast. It has no key.
+
 ## Mouse
 
 ![A part turning in the viewport as the right button is dragged](../img/orbit.gif)

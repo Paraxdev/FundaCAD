@@ -115,6 +115,15 @@ describe("CommandPalette", () => {
     expect(useCommandPaletteStore().open).toBe(false);
   });
 
+  it("finds Show Last Message and runs it by its action id", async () => {
+    await openPalette();
+    type("last mess");
+    await nextTick();
+    expect(options().map(nameOf).filter((n) => n.includes("Show Last Message"))).toHaveLength(1);
+    key("Enter");
+    expect(ran).toEqual(["show-last-message"]);
+  });
+
   it("keeps Tab on the field", async () => {
     await openPalette();
     const e = key("Tab");
