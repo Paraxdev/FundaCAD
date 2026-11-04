@@ -69,16 +69,16 @@ A list shows 100 rows at a time. Previous and Next turn the page, and the count 
 
 Delete and Backspace do nothing here, so a key press in the list never removes a face. With a face picked, they say that Delete works in the 3D view and that F6 goes there. A click on a row picks as these keys do, and Ctrl+click and Shift+click add to it. If a tool is waiting for a pick, Enter or a click on a row gives it that plane, face or edge instead. What each takes from a row:
 
-- Sketch: a plane or a flat face.
-- Section and Mirror: a flat face, for the plane.
-- Fillet and Chamfer: edges, added, or taken out again if already in.
-- Press/Pull, Draft, Offset Face, Thicken, Shell and Text: a face. Press/Pull also takes the face to stop at.
-- Hole: a flat face. Thread and Axis from cylinder: a round face.
-- Revolve: a straight edge, for the axis. A circular pattern: a face or an edge, for the axis.
-- Measure and a mechanism joint: faces and edges.
-- Stress, Click faces: faces.
-- Editing a feature's faces, edges or bodies: rows from the lists, a second row of the same takes it out.
-- Points for a datum plane, point or axis: a datum point row.
+1. Sketch: a plane or a flat face.
+2. Section and Mirror: a flat face, for the plane.
+3. Fillet and Chamfer: edges, added, or taken out again if already in.
+4. Press/Pull, Draft, Offset Face, Thicken, Shell and Text: a face. Press/Pull also takes the face to stop at.
+5. Hole: a flat face. Thread and Axis from cylinder: a round face.
+6. Revolve: a straight edge, for the axis. A circular pattern: a face or an edge, for the axis.
+7. Measure and a mechanism joint: faces and edges.
+8. Stress, Click faces: faces.
+9. Editing a feature's faces, edges or bodies: rows from the lists, a second row of the same takes it out.
+10. Points for a datum plane, point or axis: a datum point row.
 
 A row the tool cannot use is refused aloud, and the pick keeps waiting.
 
