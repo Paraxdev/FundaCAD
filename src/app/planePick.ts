@@ -8,6 +8,8 @@ import { routeTreeClick, type TreeClickDeps, type TreeClickRoute, type TreePick 
 
 export const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
 
+export const BUSY_TOOL_HINT = "Finish the active tool first, or press Esc";
+
 /** How long a selection's words wait to be spoken, so a run of Ctrl-clicks says only its last. */
 export const SELECTION_SPEECH_DELAY = 250;
 
@@ -29,7 +31,7 @@ export type PlaneRowHost = Pick<Engine, "store" | "toolOwnsScreen" | "setStatus"
  *  rows keep working inside one. */
 function busyHint(e: PlaneRowHost): string | null {
   if (!e.toolOwnsScreen() || e.sketch.active) return null;
-  return "Finish the active tool first, or press Esc";
+  return BUSY_TOOL_HINT;
 }
 
 // Left up beside the next prompt, a refusal reads as if the row just taken had failed too.

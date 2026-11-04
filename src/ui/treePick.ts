@@ -73,6 +73,11 @@ export function treePickWaiting(): boolean {
   return session !== null;
 }
 
+/** A pick a command would end holds an edit of a step back too; one that keeps on command gives way with its tool. */
+export function pickHoldsEdits(): boolean {
+  return session !== null && !session.keepsOnCommand;
+}
+
 const NOUN: Record<TreePick["kind"], string> = {
   basePlane: "a base plane",
   datumPlane: "a datum plane",

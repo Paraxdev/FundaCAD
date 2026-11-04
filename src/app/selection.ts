@@ -9,6 +9,8 @@ import type { DatumPose } from "../document/datumPose";
 import { startDatumPoseEdit } from "../features/datumPlaneEdit";
 import { cancelActiveTools } from "./toolBusy";
 import { typedDimBox } from "../sketch/dimInput";
+import { endPickSession, pickHoldsEdits } from "../ui/treePick";
+import { BUSY_TOOL_HINT, refuseAloud } from "./planePick";
 
 const VALUES_IN_HISTORY = "Not draggable, edit the value under this feature in the history";
 
@@ -30,7 +32,8 @@ export function closeOpenEdit(e: Engine, except: string): void {
     if (e.sketch.editingSketchId !== except) e.sketch.finish(true);
     return;
   }
-  if (!e.toolAtWork()) return;
+  // A pick with no tool behind it (Stress's Click faces) would go on taking rows of the rolled back model.
+  if (!e.toolAtWork()) return endPickSession();
   if ((e.store.editPreviewId ?? e.selectedFeature) === except) return;
   const typed = typedDimBox();
   if (typed) {
@@ -39,6 +42,14 @@ export function closeOpenEdit(e: Engine, except: string): void {
     return;
   }
   cancelActiveTools(e.tools);
+  endPickSession();
+}
+
+/** True when a waiting pick keeps the edit of a step back, said aloud so the double click or Enter is not lost. */
+export function editHeldByPick(e: Pick<Engine, "setStatus">): boolean {
+  if (!pickHoldsEdits()) return false;
+  refuseAloud(e, BUSY_TOOL_HINT);
+  return true;
 }
 
 export function switchEdit(e: Engine, id: string): void {
