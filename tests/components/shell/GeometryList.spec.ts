@@ -303,8 +303,10 @@ describe("filters", () => {
     await input.setValue("-5");
     await nextTick();
     expect(input.attributes("aria-invalid")).toBe("true");
-    const note = document.getElementById(input.attributes("aria-describedby") ?? "");
-    expect(note?.textContent).toBe("At least 0 mm");
+    const notes = (input.attributes("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent);
+    expect(notes).toEqual(["millimetres", "At least 0 mm"]);
     expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["At least 0 mm"]);
     expect(options(w).length).toBe(4);
     const kind = w.getComponent({ name: "Segmented" });
@@ -318,7 +320,9 @@ describe("filters", () => {
     await again.setValue("12");
     await nextTick();
     expect(again.attributes("aria-invalid")).toBeUndefined();
-    expect(again.attributes("aria-describedby")).toBeUndefined();
+    expect(
+      (again.attributes("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent),
+    ).toEqual(["millimetres"]);
   });
 
   it("says none match, and Clear filters brings every row back", async () => {

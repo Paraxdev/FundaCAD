@@ -3,6 +3,7 @@ import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import UnitChip from "./UnitChip.vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
+import { useFieldSpeech } from "./useFieldSpeech";
 import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 import {
@@ -84,6 +85,7 @@ const el = useTemplateRef<HTMLInputElement>("el");
 const d = useDisabled(props);
 const name = useName(props, "NumberField");
 const unitDef = computed(() => unitById(props.unit));
+const speech = useFieldSpeech({ unit: () => props.unit, callerDescribedby: () => attrs["aria-describedby"] });
 
 const spell = (v: number | null) => (v === null ? "" : String(toUnit(v, unitDef.value)));
 const caption = (v: number) =>
@@ -155,7 +157,7 @@ const shownError = computed(() => field.error.value ?? props.problem ?? null);
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 
 function inputAttrs() {
-  const { class: _c, style: _s, ...rest } = attrs;
+  const { class: _c, style: _s, "aria-describedby": _d, ...rest } = attrs;
   return mergeProps(rest, d.bind.value, name.value);
 }
 
@@ -217,6 +219,7 @@ function onKeydown(e: KeyboardEvent) {
       :placeholder="placeholder"
       :readonly="d.isDisabled.value || undefined"
       :aria-invalid="shownError ? 'true' : undefined"
+      :aria-describedby="speech.describedby.value"
       :title="d.title(shownError ?? tipText ?? (attrs.title as string | undefined))"
       @input="onInput"
       @keydown="onKeydown"
@@ -230,8 +233,10 @@ function onKeydown(e: KeyboardEvent) {
       :label="label && `${label} unit`"
       :tip="unitTip"
       :disabled="disabled"
+      spoken-elsewhere
       @update:unit="emit('update:unit', $event)"
     />
+    <span v-if="speech.spokenUnit.value" :id="speech.unitId" class="sr-only">{{ speech.spokenUnit.value }}</span>
     <slot name="trailing" />
   </span>
 </template>

@@ -1,7 +1,7 @@
 // The base set for imperative TS code (tool boxes, io): the same controls as the Vue components, built as DOM.
 
 import { iconElement } from "../../ui/icons";
-import { unitById } from "../../ui/measure";
+import { spokenUnit, unitById } from "../../ui/measure";
 import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
 import { swallowDisabled } from "./useDisabled";
@@ -181,6 +181,8 @@ export interface UiUnitChipOptions extends DisabledOptions {
   /** The picker's name, and the caption's title. */
   tip?: string | undefined;
   keys?: string | undefined;
+  /** A caption the field's description already says, so browse mode skips it. A picker is never hidden. */
+  spokenElsewhere?: boolean | undefined;
 }
 
 const unitLabel = (id: string) => unitById(id)?.label ?? id;
@@ -194,6 +196,7 @@ export function uiUnitChip(o: UiUnitChipOptions): HTMLElement {
     const caption = document.createElement("span");
     caption.className = "ui-unit-chip";
     setTitle(caption, o.tip);
+    if (o.spokenElsewhere) caption.setAttribute("aria-hidden", "true");
     caption.textContent = unitLabel(o.unit);
     return caption;
   }
@@ -293,6 +296,8 @@ export interface UiNumberInput {
   chip: HTMLElement | null;
 }
 
+let numberNo = 0;
+
 /** NumberField.vue's markup as DOM; the caller reads and commits the text. */
 export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
   const root = document.createElement("span");
@@ -320,9 +325,24 @@ export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
     input.focus();
   });
   const chip = o.unit
-    ? uiUnitChip({ unit: o.unit, options: o.units, tip: o.unitTip, disabled: o.disabled, clickable: o.clickable })
+    ? uiUnitChip({
+        unit: o.unit,
+        options: o.units,
+        tip: o.unitTip,
+        disabled: o.disabled,
+        clickable: o.clickable,
+        spokenElsewhere: true,
+      })
     : null;
   if (chip) root.append(chip);
+  if (o.unit) {
+    const word = document.createElement("span");
+    word.id = `ui-num-${++numberNo}-unit`;
+    word.className = "sr-only";
+    word.textContent = spokenUnit(o.unit, true);
+    input.setAttribute("aria-describedby", word.id);
+    root.append(word);
+  }
   return { root, input, chip };
 }
 

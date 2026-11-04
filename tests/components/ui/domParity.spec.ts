@@ -44,7 +44,12 @@ function shape(el: Element): Shape {
   for (const a of Array.from(el.attributes)) {
     // An input's value is compared as its property: Vue writes the attribute too, the factories only the property.
     if (["class", "id", "style", "value"].includes(a.name) || a.name.startsWith("data-v-")) continue;
-    attrs[a.name] = a.name === "aria-labelledby" ? (document.getElementById(a.value)?.textContent ?? "?") : a.value;
+    attrs[a.name] = ["aria-labelledby", "aria-describedby"].includes(a.name)
+      ? a.value
+          .split(" ")
+          .map((id) => document.getElementById(id)?.textContent ?? "?")
+          .join(" ")
+      : a.value;
   }
   const kids = Array.from(el.children);
   return {
@@ -101,6 +106,9 @@ describe("dom.ts controls match their Vue twins", () => {
     { unit: "mm", options: ["mm", "in", "um"] },
     { unit: "in", options: ["mm", "in"], tip: "Unit, in", keys: "U" },
     { unit: "mm", options: ["mm", "in"], disabled: true, disabledReason: "Fixed" },
+    { unit: "mm", spokenElsewhere: true },
+    { unit: "MPa", tip: "Stress", spokenElsewhere: true },
+    { unit: "mm", options: ["mm", "in"], spokenElsewhere: true },
   ])("UnitChip %o", (p) => {
     expect(shape(dom(uiUnitChip(p)))).toEqual(shape(vue(UnitChip, p)));
   });
@@ -119,6 +127,14 @@ describe("dom.ts controls match their Vue twins", () => {
       { tip: "Count", disabled: true, disabledReason: "Driven" },
       { tip: "Count", disabled: true, disabledReason: "Driven" },
     ],
+    [
+      { tip: "Stress", unit: "MPa" },
+      { tip: "Stress", unit: "MPa" },
+    ],
+    [
+      { tip: "Samples", unit: "samples", size: "sm" },
+      { tip: "Samples", unit: "samples", size: "sm" },
+    ],
   ])("NumberField %o", (factory, props) => {
     const mine = uiNumberInput(factory as Parameters<typeof uiNumberInput>[0]);
     const theirs = vue(NumberField, { modelValue: null, ...props });
@@ -126,6 +142,17 @@ describe("dom.ts controls match their Vue twins", () => {
     expect(mine.root.style.getPropertyValue("--field-ch")).toBe(
       (theirs as HTMLElement).style.getPropertyValue("--field-ch"),
     );
+  });
+
+  it("a number input with a unit describes it, in the words a screen reader says", () => {
+    const f = uiNumberInput({ tip: "Angle", unit: "deg", units: ["deg", "rad"] });
+    dom(f.root);
+    const ids = f.input.getAttribute("aria-describedby")!.split(" ");
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toEqual(["degrees"]);
+    const bare = uiNumberInput({ tip: "Count" });
+    expect([bare.input.hasAttribute("aria-describedby"), bare.root.querySelector(".sr-only")]).toEqual([false, null]);
+    const other = uiNumberInput({ tip: "Width", unit: "mm" });
+    expect(other.input.getAttribute("aria-describedby")).not.toBe(f.input.getAttribute("aria-describedby"));
   });
 
   it("NumberField's inputMode is text for a field that takes expressions", () => {

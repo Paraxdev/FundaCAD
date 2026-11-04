@@ -16,6 +16,8 @@ const props = withDefaults(
     keys?: string | undefined;
     disabled?: boolean | undefined;
     disabledReason?: string | undefined;
+    /** A caption the field's description already says, so browse mode skips it. A picker is never hidden. */
+    spokenElsewhere?: boolean | undefined;
   }>(),
   { label: undefined, tip: undefined, disabled: false },
 );
@@ -39,5 +41,7 @@ const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, l
     :disabled-reason="disabledReason"
     @update:model-value="emit('update:unit', $event)"
   />
-  <span v-else class="ui-unit-chip" :title="tip">{{ unitLabel(unit) }}</span>
+  <span v-else class="ui-unit-chip" :title="tip" :aria-hidden="spokenElsewhere ? 'true' : undefined">{{
+    unitLabel(unit)
+  }}</span>
 </template>

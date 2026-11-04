@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 
 import NumberField from "../../../src/components/ui/NumberField.vue";
@@ -466,5 +467,86 @@ describe("NumberField expressions", () => {
     await commit(input, "w/4 ");
     await w.vm.$nextTick();
     expect([seen, emitted(w), el.value]).toEqual([[], [], "w/4"]);
+  });
+});
+
+describe("NumberField unit description", () => {
+  const described = (el: HTMLInputElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+
+  it.each([
+    ["mm", "millimetres"],
+    ["in", "inches"],
+    ["deg", "degrees"],
+    ["MPa", "megapascals"],
+    ["g/cm³", "grams per cubic centimetre"],
+    ["samples", "samples"],
+  ])("describes unit %s as %s", async (unit, word) => {
+    const { el, w } = await render({ unit, modelValue: 12.5 });
+    expect(described(el)).toEqual([word]);
+    const span = w.get(".sr-only");
+    expect(span.element.parentElement).toBe(w.element);
+  });
+
+  it("describes a unit of 1 or 0 as the plural too, as it names the unit and not an amount", async () => {
+    for (const modelValue of [0, 1, 37.5]) {
+      const { el } = await render({ unit: "mm", modelValue });
+      expect(described(el)).toEqual(["millimetres"]);
+    }
+  });
+
+  it.each([{}, { unit: null }, { unit: undefined }, { unit: "" }])(
+    "has no span and no describedby for %o",
+    async (p) => {
+      const { el, w } = await render(p);
+      expect([el.hasAttribute("aria-describedby"), w.findAll(".sr-only").length]).toEqual([false, 0]);
+    },
+  );
+
+  it("keeps a caller's aria-describedby after the unit", async () => {
+    const hint = document.createElement("div");
+    hint.id = "hint-7";
+    hint.textContent = "Across the flats";
+    document.body.append(hint);
+    try {
+      const { el } = await render({ unit: "mm", "aria-describedby": "hint-7" });
+      expect(described(el)).toEqual(["millimetres", "Across the flats"]);
+      const bare = await render({ "aria-describedby": "hint-7" });
+      expect(described(bare.el)).toEqual(["Across the flats"]);
+    } finally {
+      hint.remove();
+    }
+  });
+
+  it("follows a unit changed from outside, and the span goes with the unit", async () => {
+    const { el, w } = await render({ unit: "mm", units: ["mm", "in"] });
+    await w.setProps({ unit: "in" });
+    expect(described(el)).toEqual(["inches"]);
+    await w.setProps({ unit: null });
+    expect([el.hasAttribute("aria-describedby"), w.findAll(".sr-only").length]).toEqual([false, 0]);
+  });
+
+  it("gives each field its own unit span id", async () => {
+    const Pair = defineComponent({
+      render: () => [
+        h(NumberField, { modelValue: 1, label: "A", unit: "mm" }),
+        h(NumberField, { modelValue: 2, label: "B", unit: "deg" }),
+        h(NumberField, { modelValue: 3, label: "C", unit: "mm" }),
+      ],
+    });
+    const w = mount(Pair, { attachTo: document.body });
+    const inputs = w.findAll("input").map((i) => i.element as HTMLInputElement);
+    const ids = inputs.map((e) => e.getAttribute("aria-describedby"));
+    expect([new Set(ids).size, inputs.map(described)]).toEqual([3, [["millimetres"], ["degrees"], ["millimetres"]]]);
+  });
+
+  it("hides the unit caption from browse mode, but never a unit picker", async () => {
+    const caption = await render({ unit: "mm" });
+    expect(caption.w.get(".ui-unit-chip").attributes("aria-hidden")).toBe("true");
+    const picker = await render({ unit: "mm", units: ["mm", "in"] });
+    expect(picker.w.get(".ui-unit-chip").attributes("aria-hidden")).toBeUndefined();
   });
 });

@@ -66,3 +66,20 @@ describe("UnitChip", () => {
     expect([chip.attributes("aria-disabled"), document.body.querySelector("[role=listbox]")]).toEqual(["true", null]);
   });
 });
+
+describe("UnitChip spokenElsewhere", () => {
+  it("hides a caption from browse mode only when asked", async () => {
+    const hidden = await render({ unit: "deg", spokenElsewhere: true });
+    const shown = await render({ unit: "deg" });
+    const off = await render({ unit: "deg", spokenElsewhere: false });
+    expect([hidden, shown, off].map((w) => w.attributes("aria-hidden"))).toEqual(["true", undefined, undefined]);
+  });
+
+  it("never hides a picker, it is a control", async () => {
+    const w = await render({ options: ["mm", "in"], spokenElsewhere: true });
+    expect([w.get(".ui-unit-chip").attributes("aria-hidden"), w.get(".ui-unit-chip").attributes("role")]).toEqual([
+      undefined,
+      "combobox",
+    ]);
+  });
+});
