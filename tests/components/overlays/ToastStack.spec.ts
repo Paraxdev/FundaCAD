@@ -3,6 +3,7 @@ import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import ToastStack from "../../../src/components/overlays/ToastStack.vue";
+import { inertOthers } from "../../../src/composables/useModalGate";
 import { useToastStore } from "../../../src/stores/toasts";
 
 enableAutoUnmount(afterEach);
@@ -133,6 +134,22 @@ describe("ToastStack pause", () => {
     await nextTick();
     expect(alive()).toHaveLength(2);
     vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+
+  it("a modal holding the page keeps the toast with a button until it closes, the others time out", async () => {
+    await three();
+    const dialog = document.body.appendChild(document.createElement("div"));
+    const release = inertOthers(dialog);
+    await nextTick();
+    expect(document.querySelector(".toast-stack")!.hasAttribute("inert")).toBe(true);
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toEqual(["Saved 3 parts"]);
+    release();
+    await nextTick();
+    vi.advanceTimersByTime(7990);
+    expect(alive()).toEqual(["Saved 3 parts"]);
+    vi.advanceTimersByTime(20);
     expect(alive()).toEqual([]);
   });
 
