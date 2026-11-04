@@ -39,6 +39,20 @@ describe("DofSpeech", () => {
     expect(s.next("Conflicting constraints", true, true)).toBeNull();
   });
 
+  // An empty sketch is ready at once, and its first constraint is often a dimension, whose solve leaves ready false.
+  it("keeps speaking changes once it has a baseline, whatever ready says", () => {
+    const s = new DofSpeech();
+    expect(s.next("Not constrained", false, true)).toBeNull();
+    expect(s.next("Not constrained", false, false)).toBeNull();
+    expect(s.next("3 degrees of freedom", false, false)).toEqual({ text: "3 degrees of freedom", priority: "polite" });
+    expect(s.next("3 degrees of freedom", false, false)).toBeNull();
+    expect(s.next("Conflicting constraints", true, false)).toEqual({
+      text: "Conflicting constraints",
+      priority: "assertive",
+    });
+    expect(s.next("Not constrained", false, true)).toEqual({ text: "Not constrained", priority: "polite" });
+  });
+
   it("starts silent again after reset, for a second sketch", () => {
     const s = new DofSpeech();
     s.next("6 degrees of freedom", false, true);

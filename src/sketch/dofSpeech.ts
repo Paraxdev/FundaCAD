@@ -8,9 +8,9 @@ export interface DofLine {
 export class DofSpeech {
   private last: string | null = null;
 
-  /** `ready` is false until the first solve after entry has settled, that summary becomes the silent baseline. */
+  /** `ready` only gates the silent baseline: an empty sketch is ready at once, then a dimension solve leaves it false. */
   next(summary: string, conflict: boolean, ready: boolean): DofLine | null {
-    if (!ready) return null;
+    if (!ready && this.last === null) return null;
     const was = this.last;
     this.last = summary;
     if (was === null || was === summary) return null;
