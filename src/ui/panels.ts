@@ -7,14 +7,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
 import { getUnit, toDisplay, displayRound } from "./units";
-import {
-  usePanelsStore,
-  type PanelRow,
-  type ClashRow,
-  type ClearanceRow,
-  type StressData,
-  type StressProbePin,
-} from "../stores/panels";
+import { usePanelsStore, type PanelRow, type StressData, type StressProbePin } from "../stores/panels";
 import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
@@ -55,6 +48,7 @@ import { setStressLook as setStoredStressLook, stressLook, type StressLook } fro
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
+import { interferenceData } from "./interferenceRows";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -155,8 +149,7 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     setStatus("Checking interference…", "");
-    tinted = null;
-    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
+    resetInterferenceTint();
     const res = await geometry.interference(store.document, clearanceMm);
     if (!res.ok) {
       setStatus(`Interference check failed: ${res.message ?? "error"}`, "error");
@@ -178,25 +171,11 @@ export function createPanels(deps: PanelsDeps) {
         : "No interferences found") + notJudged,
       foundAny || unchecked.length ? "error" : "connected",
     );
-    const unit = getUnit();
-    const f = toDisplay(1);
-    const clashes: ClashRow[] = pairs.map((p) => ({
-      k: `${label(p.a, p.aName)} ∩ ${label(p.b, p.bName)}`,
-      v: `${displayRound(p.volume * f * f * f)} ${unit}³`,
-      a: p.a,
-      b: p.b,
-    }));
-    const clearanceRows: ClearanceRow[] = clearances.map((c) => ({
-      k: `${label(c.a, c.aName)} ↔ ${label(c.b, c.bName)}`,
-      v: `${displayRound(toDisplay(c.distance))} ${unit}`,
-      a: c.a,
-      b: c.b,
-    }));
     panels.showInterference({
-      title: pairs.length ? `Interference, ${pairs.length} clash${pairs.length > 1 ? "es" : ""}` : "Interference",
-      clashes,
-      clearances: clearanceRows,
-      unchecked,
+      ...interferenceData(
+        { pairs, clearances, unchecked: res.unchecked ?? [] },
+        { unit: getUnit(), scale: toDisplay(1), round: displayRound, label },
+      ),
       ...(res.truncated ? { truncatedMessage: res.message } : {}),
     });
     viewport.setInterferenceOverlay(
@@ -208,25 +187,48 @@ export function createPanels(deps: PanelsDeps) {
   function closeInterference() {
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
-    tinted = null;
-    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
+    resetInterferenceTint();
   }
 
-  let tinted: { build: unknown; key: string } | null = null;
+  // The kept pair is `panels.interferenceLit` (so its row can show it), bound to the build it was lit on.
+  let litBuild: unknown = null;
+  let preview: string | null = null;
+
+  function resetInterferenceTint() {
+    panels.interferenceLit = null;
+    litBuild = null;
+    preview = null;
+    paintInterference();
+  }
 
   // A tint rather than a selection, which would bring up the Move gizmo and the selection toolbar over the pair.
-  // A second click on the same pair clears it.
+  // The previewed pair (hover or focus) shows over the kept one.
+  function paintInterference() {
+    const built = store.buildState.result;
+    const key = preview ?? (litBuild === built ? panels.interferenceLit : null);
+    const faces = key
+      ? (built?.bodies ?? [])
+          .filter((x) => key.split(" ").includes(x.id))
+          .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i))
+      : [];
+    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: INTERFERENCE_TINT }] : null, INTERFERENCE_MARKS);
+  }
+
+  function previewInterference(a: string | null, b?: string) {
+    preview = a === null ? null : `${a} ${b}`;
+    paintInterference();
+  }
+
+  // A press owns the tint, so a second press on the pair under the pointer clears it too.
   function highlightInterference(a: string, b: string) {
     const built = store.buildState.result;
     const key = `${a} ${b}`;
-    const again = tinted?.build === built && tinted.key === key;
-    const faces = again
-      ? []
-      : (built?.bodies ?? [])
-          .filter((x) => x.id === a || x.id === b)
-          .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i));
-    tinted = faces.length ? { build: built, key } : null;
-    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: INTERFERENCE_TINT }] : null, INTERFERENCE_MARKS);
+    const again = litBuild === built && panels.interferenceLit === key;
+    preview = null;
+    const known = (built?.bodies ?? []).some((x) => x.id === a || x.id === b);
+    panels.interferenceLit = !again && known ? key : null;
+    litBuild = panels.interferenceLit ? built : null;
+    paintInterference();
   }
 
   // Stress: a linear static analysis of one body, its setup edited in the panel and saved with the document.
@@ -284,6 +286,7 @@ export function createPanels(deps: PanelsDeps) {
   // Another document took this one's place: the setup's body id and face
   // points mean nothing in it.
   store.onOpen(() => {
+    if (panels.interference) closeInterference();
     if (panels.stress) closeStress();
     kept = null;
   });
@@ -1264,6 +1267,7 @@ export function createPanels(deps: PanelsDeps) {
     closeProperties,
     showInterference,
     closeInterference,
+    previewInterference,
     highlightInterference,
     showOverhangSettings,
     closeOverhangSettings,

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // The overlap solids and clearance lines are drawn by the viewport (ui/panels.ts showInterference).
 
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import Panel from "../ui/Panel.vue";
 import Checkbox from "../ui/Checkbox.vue";
+import ListRow from "../ui/ListRow.vue";
 import NumberField from "../ui/NumberField.vue";
 import type { ClashRow, ClearanceRow } from "../../stores/panels";
 
@@ -16,8 +17,29 @@ const panels = usePanelsStore();
 const clearanceOn = ref(false);
 const threshold = ref(0.2);
 
+// Hover and focus both preview a pair; leaving one falls back to the other, then to the kept pair.
+const hovered = ref<ClashRow | null>(null);
+const focused = ref<ClashRow | null>(null);
+
+// A press owns the tint, so a focused row stops previewing until it is focused again.
 function highlight(c: ClashRow | ClearanceRow) {
+  focused.value = null;
   engine.ui.panels.highlightInterference(c.a, c.b);
+}
+
+watch(
+  () => panels.interference,
+  () => {
+    hovered.value = null;
+    focused.value = null;
+  },
+);
+
+function show(hover: ClashRow | null, focus: ClashRow | null) {
+  hovered.value = hover;
+  focused.value = focus;
+  const r = hover ?? focus;
+  engine.ui.panels.previewInterference(r ? r.a : null, r?.b);
 }
 
 function setThreshold(v: number | null) {
@@ -38,16 +60,22 @@ function close() {
 <template>
   <Panel :open="!!panels.interference" :title="panels.interference?.title" close-on-esc @close="close">
     <template v-if="panels.interference">
-      <div
-        v-for="(c, i) in panels.interference.clashes"
-        :key="'clash' + i"
-        class="measure-row clash-row"
-        style="cursor: pointer"
-        @click="highlight(c)"
-      >
-        <span class="measure-k">{{ c.k }}</span>
-        <span class="measure-v">{{ c.v }}</span>
-      </div>
+      <ul class="clash-list" aria-label="Clashes">
+        <li v-for="c in panels.interference.clashes" :key="c.key">
+          <ListRow
+            class="clash-row"
+            :label="c.label"
+            :hint="c.v"
+            :aria-label="c.spoken"
+            :selected="panels.interferenceLit === c.key"
+            @click="highlight(c)"
+            @focus="show(hovered, c)"
+            @blur="show(hovered, null)"
+            @pointerenter="show(c, focused)"
+            @pointerleave="show(null, focused)"
+          />
+        </li>
+      </ul>
       <div v-if="!panels.interference.clashes.length" class="measure-row">
         <span class="measure-v">{{
           panels.interference.unchecked.length
@@ -84,16 +112,22 @@ function close() {
       </div>
 
       <template v-if="clearanceOn">
-        <div
-          v-for="(c, i) in panels.interference.clearances"
-          :key="'clear' + i"
-          class="measure-row clash-row"
-          style="cursor: pointer"
-          @click="highlight(c)"
-        >
-          <span class="measure-k">{{ c.k }}</span>
-          <span class="measure-v">{{ c.v }}</span>
-        </div>
+        <ul class="clash-list" aria-label="Close pairs">
+          <li v-for="c in panels.interference.clearances" :key="c.key">
+            <ListRow
+              class="clash-row"
+              :label="c.label"
+              :hint="c.v"
+              :aria-label="c.spoken"
+              :selected="panels.interferenceLit === c.key"
+              @click="highlight(c)"
+              @focus="show(hovered, c)"
+              @blur="show(hovered, null)"
+              @pointerenter="show(c, focused)"
+              @pointerleave="show(null, focused)"
+            />
+          </li>
+        </ul>
         <div v-if="!panels.interference.clearances.length" class="measure-row">
           <span class="measure-v">No pairs closer than {{ threshold }} mm</span>
         </div>
@@ -105,7 +139,7 @@ function close() {
       <div class="measure-hint">
         {{
           panels.interference.clashes.length || panels.interference.clearances.length
-            ? "Click a row to highlight the pair · Esc to close"
+            ? "Hover or Tab to a row to light the pair, click keeps it · Esc to close"
             : "Esc to close"
         }}
       </div>

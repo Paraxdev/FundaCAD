@@ -26,13 +26,14 @@ function rig(
   const statuses: { text: string; cls: string }[] = [];
   const marks: { marks: Marks; layer: string | undefined }[] = [];
   const selected: string[][] = [];
+  const opens: (() => void)[] = [];
   const deps = {
     store: {
       document: { features: [] } as unknown as CadDocument,
       buildState: { result: { bodies } },
       bodyName: (id: string) => userNames.get(id),
       onDocChange: () => {},
-      onOpen: () => {},
+      onOpen: (f: () => void) => opens.push(f),
     },
     viewport: {
       setInterferenceOverlay: () => {},
@@ -43,7 +44,8 @@ function rig(
     hasBody: () => true,
     setStatus: (text: string, cls: string) => statuses.push({ text, cls }),
   } as unknown as PanelsDeps;
-  return { panels: createPanels(deps), statuses, marks, selected };
+  const panels = createPanels(deps);
+  return { panels, statuses, marks, selected, build: deps.store.buildState, open: () => opens.forEach((f) => f()) };
 }
 
 describe("the Interference panel", () => {
@@ -102,8 +104,8 @@ describe("the Interference panel", () => {
     );
     await panels.showInterference(0.5);
     const p = usePanelsStore().interference!;
-    expect(p.clashes.map((c) => c.k)).toEqual(["Box ∩ Box 3", "Box 3 ∩ Box 4"]);
-    expect(p.clearances.map((c) => c.k)).toEqual(["Box ↔ Box 4"]);
+    expect(p.clashes.map((c) => c.label)).toEqual(["Box and Box 3", "Box 3 and Box 4"]);
+    expect(p.clearances.map((c) => c.label)).toEqual(["Box and Box 4"]);
     expect(p.unchecked).toEqual(["Box 4 is open"]);
   });
 
@@ -133,5 +135,87 @@ describe("the Interference panel", () => {
     panels.closeInterference();
     expect(marks.at(-1)).toEqual({ marks: null, layer: "interference" });
     expect(selected).toEqual([]);
+  });
+
+  describe("previewing a pair over the kept one", () => {
+    const bodies: Body[] = [
+      { id: "body1", name: "Base", faceStart: 0, faceCount: 3 },
+      { id: "body2", name: "Pin", faceStart: 3, faceCount: 2 },
+      { id: "body5", name: "Cap", faceStart: 5, faceCount: 4 },
+    ];
+    const tint = (faceIds: number[]) => ({ marks: [{ faceIds, color: TINT }], layer: "interference" });
+    const clear = { marks: null, layer: "interference" };
+
+    it("tints the previewed pair, falls back to the kept pair, and records which is kept", async () => {
+      const { panels, marks } = rig({ ok: true, pairs: [] }, bodies);
+      const store = usePanelsStore();
+      await panels.showInterference();
+      panels.highlightInterference("body1", "body2");
+      expect(store.interferenceLit).toBe("body1 body2");
+      marks.length = 0;
+      panels.previewInterference("body2", "body5");
+      expect(marks).toEqual([tint([3, 4, 5, 6, 7, 8])]);
+      expect(store.interferenceLit).toBe("body1 body2");
+      panels.previewInterference(null);
+      expect(marks.at(-1)).toEqual(tint([0, 1, 2, 3, 4]));
+    });
+
+    it("lights nothing on a preview with no kept pair, and a press clears the tint under the pointer too", async () => {
+      const { panels, marks } = rig({ ok: true, pairs: [] }, bodies);
+      const store = usePanelsStore();
+      await panels.showInterference();
+      panels.previewInterference("body5", "body2");
+      expect(marks.at(-1)).toEqual(tint([3, 4, 5, 6, 7, 8]));
+      panels.previewInterference(null);
+      expect(marks.at(-1)).toEqual(clear);
+      panels.previewInterference("body1", "body2");
+      panels.highlightInterference("body1", "body2");
+      expect(store.interferenceLit).toBe("body1 body2");
+      expect(marks.at(-1)).toEqual(tint([0, 1, 2, 3, 4]));
+      panels.highlightInterference("body1", "body2");
+      expect(store.interferenceLit).toBeNull();
+      expect(marks.at(-1)).toEqual(clear);
+    });
+
+    it("does not paint a kept pair onto a different build", async () => {
+      const { panels, marks, build } = rig({ ok: true, pairs: [] }, bodies);
+      await panels.showInterference();
+      panels.highlightInterference("body1", "body2");
+      build.result = {
+        bodies: [{ id: "body1", name: "Base", faceStart: 0, faceCount: 9 }],
+      } as unknown as typeof build.result;
+      panels.previewInterference(null);
+      expect(marks.at(-1)).toEqual(clear);
+    });
+
+    it("drops the kept pair and the preview on a recheck, on close and when another document opens", async () => {
+      const { panels, marks, open } = rig({ ok: true, pairs: [] }, bodies);
+      const store = usePanelsStore();
+      const lit = () => {
+        panels.highlightInterference("body1", "body2");
+        panels.previewInterference("body2", "body5");
+        expect(marks.at(-1)).toEqual(tint([3, 4, 5, 6, 7, 8]));
+      };
+      await panels.showInterference();
+      lit();
+      await panels.showInterference();
+      expect(store.interferenceLit).toBeNull();
+      expect(marks.at(-1)).toEqual(clear);
+      lit();
+      panels.closeInterference();
+      expect(store.interferenceLit).toBeNull();
+      expect(marks.at(-1)).toEqual(clear);
+      await panels.showInterference();
+      lit();
+      open();
+      expect(store.interference).toBeNull();
+      expect(store.interferenceLit).toBeNull();
+      expect(marks.at(-1)).toEqual(clear);
+      // The second document starts clean: a fresh pair lights alone.
+      await panels.showInterference();
+      panels.highlightInterference("body5", "body2");
+      expect(store.interferenceLit).toBe("body5 body2");
+      expect(marks.at(-1)).toEqual(tint([3, 4, 5, 6, 7, 8]));
+    });
   });
 });
