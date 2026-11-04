@@ -124,7 +124,7 @@ export function matchName(label: string): string {
     .toLowerCase();
 }
 
-/** Backdrops that cover the whole app, unlike the Console and selection panels, which are dialogs too. */
+/** Backdrops that cover the whole app, unlike the selection panels, which are dialogs too. The Console is a region. */
 const MODAL = ".home, .modal-overlay, .choice-backdrop, .cmdk-backdrop";
 
 export function regionOf(el: Element): string {
