@@ -1238,7 +1238,7 @@ export class DocumentStore {
   onProjectionsApplied?: (updates: ProjectionUpdate[]) => void;
 
   // In series: recompute a draft, re-solve affected sketches, land it as one undo step and one rebuild.
-  private queueParamCommit(fn: (d: CadDocument) => void) {
+  private queueParamCommit(fn: (d: CadDocument) => void, label?: string) {
     const st = this.st;
     st.paramPending++;
     const owner = this.untitledDoc;
@@ -1246,7 +1246,9 @@ export class DocumentStore {
       // Only the last of a burst rebuilds at once, the rest keep the debounce, so
       // a plugin setting ten parameters does not start and supersede nine builds.
       .then(() =>
-        st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0, owner)) : undefined,
+        st.session.alive
+          ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0, owner, label))
+          : undefined,
       )
       .catch((e) => {
         if (isSessionEnded(e)) return;
@@ -1257,7 +1259,12 @@ export class DocumentStore {
   // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
   // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
   // An assistant's doc_open or doc_new since the edit was queued put another document in place, so the change is dropped.
-  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean, owner: number): Promise<void> {
+  private async commitWithCascade(
+    fn: (d: CadDocument) => void,
+    immediate: boolean,
+    owner: number,
+    label?: string,
+  ): Promise<void> {
     const st = this.st;
     for (let tries = 1; ; tries++) {
       if (this.untitledDoc !== owner) return this.warnParamDropped(owner);
@@ -1278,18 +1285,22 @@ export class DocumentStore {
         }
       if (!st.session.alive) return;
       if (this.docEdits !== seen || this.untitledDoc !== owner) continue;
-      this.mutate((d) => {
-        d.parameters = draft.parameters;
-        if (draft.paramDefs) d.paramDefs = draft.paramDefs;
-        else delete d.paramDefs;
-        if (draft.paramExtras) d.paramExtras = draft.paramExtras;
-        else delete d.paramExtras;
-        // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
-        d.features = draft.features.map((f, i) => {
-          const was = d.features[i];
-          return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
-        });
-      }, immediate);
+      this.mutate(
+        (d) => {
+          d.parameters = draft.parameters;
+          if (draft.paramDefs) d.paramDefs = draft.paramDefs;
+          else delete d.paramDefs;
+          if (draft.paramExtras) d.paramExtras = draft.paramExtras;
+          else delete d.paramExtras;
+          // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
+          d.features = draft.features.map((f, i) => {
+            const was = d.features[i];
+            return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
+          });
+        },
+        immediate,
+        label,
+      );
       this.onParamsApplied?.();
       return;
     }
@@ -1437,7 +1448,8 @@ export class DocumentStore {
   setParamExpr(name: string, expr: string, unit?: "mm" | "deg" | "count"): string | null {
     const v = params.validateExpr(this.doc, name, expr);
     if (!v.ok) return v.error;
-    this.queueParamCommit((d) => params.commitParamExpr(d, name, expr, unit));
+    // Named for the parameter, not the steps it drives, which the cascade edits too.
+    this.queueParamCommit((d) => params.commitParamExpr(d, name, expr, unit), `Parameter ${name}`);
     return null;
   }
 

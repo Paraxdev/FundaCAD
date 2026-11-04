@@ -6,6 +6,13 @@ vi.stubGlobal("window", globalThis);
 
 const fillet = (id: string, radius: number) => ({ id, type: "fillet", radius }) as unknown as Feature;
 
+const settle = () =>
+  new Promise<void>((done) => {
+    let i = 0;
+    const tick = () => (++i > 10 ? done() : void setTimeout(tick, 0));
+    tick();
+  });
+
 function threeSteps() {
   const s = freshStore();
   s.addFeature(box("a", 40.5, 22.25, 7));
@@ -74,6 +81,28 @@ describe("undo labels on the store", () => {
     expect({ label: s.undoLabel, order: s.document.features.map((f) => f.id) }).toEqual({
       label: "Edit",
       order: ["a", "b", "c"],
+    });
+  });
+
+  it("a parameter edit is named for the parameter, also when it drives a step", async () => {
+    const s = opened({
+      parameters: { r: 4.5, w: 3.25 },
+      paramDefs: {
+        r: { expr: "4.5", value: 4.5, unit: "mm", target: { kind: "feature", feature: "b", field: "length" } },
+        w: { expr: "3.25", value: 3.25, unit: "mm" },
+      },
+      features: [box("a", 40.5, 22.25, 7), box("b", 4.5, 9.5, 4.25)],
+    });
+    const lengthOfB = () => (s.document.features[1] as unknown as { length: number }).length;
+    expect(s.setParamExpr("r", "6.25")).toBeNull();
+    await settle();
+    const driven = { label: s.undoLabel, length: lengthOfB() };
+    expect(s.setParamExpr("w", "2.75")).toBeNull();
+    await settle();
+    expect({ driven, plain: s.undoLabel, length: lengthOfB() }).toEqual({
+      driven: { label: "Parameter r", length: 6.25 },
+      plain: "Parameter w",
+      length: 6.25,
     });
   });
 
