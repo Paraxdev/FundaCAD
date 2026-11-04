@@ -44,7 +44,7 @@ describe("interferenceData", () => {
       {
         key: "body3 body7",
         label: "Box 2 and Lid",
-        v: "2.5 mm³",
+        v: "2.5 mm³ overlap",
         spoken: "Box 2 and Lid, overlap 2.5 mm³",
         a: "body3",
         b: "body7",
@@ -54,7 +54,7 @@ describe("interferenceData", () => {
       {
         key: "body7 body9",
         label: "Lid and Pin",
-        v: "0.23 mm",
+        v: "0.23 mm apart",
         spoken: "Lid and Pin, 0.23 mm apart",
         a: "body7",
         b: "body9",
@@ -80,9 +80,9 @@ describe("interferenceData", () => {
     );
     expect(d.title).toBe("Interference, 3 clashes");
     expect(d.clashes.map((r) => [r.key, r.label, r.v])).toEqual([
-      ["body1 body2", "A and B", "7.1 mm³"],
-      ["body2 body3", "B and Box 2", "0.4 mm³"],
-      ["body1 body3", "A and Box 2", "12.75 mm³"],
+      ["body1 body2", "A and B", "7.1 mm³ overlap"],
+      ["body2 body3", "B and Box 2", "0.4 mm³ overlap"],
+      ["body1 body3", "A and Box 2", "12.75 mm³ overlap"],
     ]);
     expect(new Set(d.clashes.map((r) => r.key)).size).toBe(3);
     expect(d.unchecked).toEqual(["Rod is open"]);
@@ -98,9 +98,9 @@ describe("interferenceData", () => {
       },
       inch,
     );
-    expect(d.clashes[0]!.v).toBe("2 in³");
+    expect(d.clashes[0]!.v).toBe("2 in³ overlap");
     expect(d.clashes[0]!.spoken).toBe("A and B, overlap 2 in³");
-    expect(d.clearances[0]!.v).toBe("0.5 in");
+    expect(d.clearances[0]!.v).toBe("0.5 in apart");
     expect(d.clearances[0]!.spoken).toBe("A and B, 0.5 in apart");
   });
 });
