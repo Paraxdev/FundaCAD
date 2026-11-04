@@ -11,7 +11,7 @@ Press ? or use Help, Keyboard Shortcuts to see every key. On a Mac, use Cmd for 
 3. Press the new keys, or Esc to cancel.
 4. If another command has those keys, pick Replace or Cancel.
 
-Reset puts one key back, Reset all a whole page. A key marked fixed cannot be changed. A plugin with its own keys gets its own page.
+Reset puts one key back, Reset all a whole page, after it asks. A key marked fixed cannot be changed. A plugin with its own keys gets its own page.
 
 ## Keys
 

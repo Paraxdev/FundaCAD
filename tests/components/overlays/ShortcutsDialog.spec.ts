@@ -8,6 +8,7 @@ import { choose } from "../../../src/ui/choice";
 import { useModalStore } from "../../../src/stores/modals";
 import { contribute, resetContributions, setGrantLookup } from "../../../src/plugins/contrib";
 import { useDialogStore } from "../../../src/stores/dialogs";
+import { useToastStore } from "../../../src/stores/toasts";
 import { resetUserShortcuts, resolveShortcut } from "../../../src/input/shortcuts";
 import { announce } from "../../../src/ui/announce";
 import { setMacForTest } from "../../../src/input/platform";
@@ -127,9 +128,39 @@ describe("changing a key in the shortcuts dialog", () => {
     await click(rowOf("Fillet").querySelector(".sc-reset"));
     expect(resolveShortcut("f", false, "model")).toBe("fillet");
     expect(resolveShortcut("j", false, "model")).toBe("measure");
+    mount(ModalHost, { attachTo: document.body });
     await click(document.querySelector(".sc-reset-all"));
+    await settle();
+    document.querySelectorAll<HTMLElement>(".ui-confirm-choice")[1]!.click();
+    await settle();
     expect(resolveShortcut("i", false, "model")).toBe("measure");
     expect(document.querySelector(".sc-reset-all")).toBeNull();
+  });
+
+  it("asks before Reset all, Cancel focused, and says the keys are back once it is done", async () => {
+    mount(ModalHost, { attachTo: document.body });
+    useDialogStore().shortcuts = true;
+    await capture("Measure");
+    await type({ key: "j" });
+    const said = () => useToastStore().items.map((t) => t.message);
+    await click(document.querySelector(".sc-reset-all"));
+    await settle();
+    expect(document.querySelector(".ui-confirm")?.textContent).toContain("Reset shortcuts?");
+    expect(document.activeElement?.textContent).toContain("Cancel");
+    expect(
+      [...document.querySelectorAll(".ui-confirm-choice")].map((b) => b.classList.contains("ui-confirm-danger")),
+    ).toEqual([false, true]);
+    await press({ key: "Escape" });
+    expect(document.querySelector(".ui-confirm")).toBeNull();
+    expect(useDialogStore().shortcuts).toBe(true);
+    expect(resolveShortcut("j", false, "model")).toBe("measure");
+    expect(said()).toEqual([]);
+    await click(document.querySelector(".sc-reset-all"));
+    await settle();
+    document.querySelectorAll<HTMLElement>(".ui-confirm-choice")[1]!.click();
+    await settle();
+    expect(resolveShortcut("i", false, "model")).toBe("measure");
+    expect(said()).toEqual(["Shortcuts are back to their defaults."]);
   });
 
   it("says a fixed key is fixed instead of capturing", () => {
@@ -181,6 +212,14 @@ describe("a plugin that contributes keys", () => {
     await capture("Radial menu");
     await type({ key: "y" });
     expect(resolveShortcut("y", false, "model")).toBe("test.radial");
+    mount(ModalHost, { attachTo: document.body });
+    await click(document.querySelector(".sc-reset-all"));
+    await settle();
+    expect(document.querySelector(".ui-confirm")?.textContent).toContain("Reset Test.Keys shortcuts?");
+    document.querySelectorAll<HTMLElement>(".ui-confirm-choice")[1]!.click();
+    await settle();
+    expect(resolveShortcut("w", false, "model")).toBe("test.radial");
+    expect(useToastStore().items.map((t) => t.message)).toEqual(["Test.Keys shortcuts are back to their defaults."]);
     off();
     await nextTick();
     expect(tabs()).toEqual(["General"]);
