@@ -13,7 +13,8 @@ export interface ToastOptions {
   source?: string;
   /** An error's announcer key, see showErrorNotice. */
   announceKey?: string;
-  /** Shown but not spoken, for a line something else already says. */
+  /** Shown but not spoken, for a line something else already says. A toast with an action is spoken anyway, so its
+   *  button is heard. */
   silent?: boolean;
 }
 
@@ -54,7 +55,7 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
     });
     return null;
   }
-  if (!opts.silent) {
+  if (!opts.silent || opts.action) {
     announce(
       spokenLine(message, opts.action),
       kind === "warning" ? "assertive" : "polite",
