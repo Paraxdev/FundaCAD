@@ -1,3 +1,6 @@
+import { numberedName } from "./featureMeta";
+import type { Feature } from "../types";
+
 export const SEE_CONSOLE = "The details are in the console.";
 
 const INTERNAL: readonly RegExp[] = [
@@ -40,4 +43,10 @@ export function failedText(label: string, raw: unknown): string {
   const word = label.split(" ")[0]!;
   const named = said.slice(0, word.length).toLowerCase() === word.toLowerCase() && !/\w/.test(said[word.length] ?? "");
   return named ? said : `${label} failed: ${said}`;
+}
+
+export function sketchConflictText(sketchId: string, features: readonly Feature[]): string {
+  const f = features.find((g) => g.id === sketchId);
+  const name = f ? numberedName(f, features) : "a sketch";
+  return `The dimensions in ${name} conflict, so the sketch was left as it was`;
 }

@@ -18,6 +18,7 @@ import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { installLaunchPaths } from "../io/launchPaths";
 import { toast } from "../ui/toast";
+import { sketchConflictText } from "../ui/plainError";
 import { traceFaultToast } from "../ui/traceFault";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -332,7 +333,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store.onParamsApplied = () => e.sketch.syncParamValues();
   // The open sketch's session owns it, so its projection refreshes patch the live entities.
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
-  e.store.onParamSolveIssue = (id) => toast(`The dimensions in ${id} conflict, so the sketch was left as it was`);
+  e.store.onParamSolveIssue = (id) => toast(sketchConflictText(id, e.store.document.features));
   // Glyph outlines arrive async from the engine, which owns the fonts.
   setTextBackend(e.geometry, () => {
     if (e.sketch.active) e.sketch.redraw();

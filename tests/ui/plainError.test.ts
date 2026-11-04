@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { failedText, looksInternal, plainError, SEE_CONSOLE } from "../../src/ui/plainError";
+import { failedText, looksInternal, plainError, SEE_CONSOLE, sketchConflictText } from "../../src/ui/plainError";
+import type { Feature } from "../../src/types";
 
 const FALLBACK = "That did not work.";
 
@@ -113,5 +114,22 @@ describe("failedText names the failed step once", () => {
       fallback,
       fallback,
     ]);
+  });
+});
+
+describe("sketchConflictText names the sketch as the History does", () => {
+  const sketch = (id: string, name?: string) =>
+    ({ id, type: "sketch", plane: "XZ", entities: [], name }) as unknown as Feature;
+  const box = { id: "f2", type: "box", length: 12.5, width: 7.25, height: 3 } as unknown as Feature;
+
+  it.each([
+    ["f1", [sketch("f1")], "Sketch 1"],
+    ["f3", [sketch("f1"), box, sketch("f3")], "Sketch 2"],
+    ["f3", [sketch("f1"), box, sketch("f3", "Bracket outline")], "Bracket outline"],
+    ["f9", [sketch("f1"), box], "a sketch"],
+    ["f9", [], "a sketch"],
+  ])("%s", (id, features, name) => {
+    const text = sketchConflictText(id, features);
+    expect({ named: text.includes(name), id: /f\d/.test(text) }).toEqual({ named: true, id: false });
   });
 });
