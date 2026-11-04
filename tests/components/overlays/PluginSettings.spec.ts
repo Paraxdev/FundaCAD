@@ -11,6 +11,12 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { definePluginSettings, type PluginSettings } from "../../../src/plugins/settings";
 import { pluginFocus } from "../../../src/plugins/settingsFocus";
 import { setUnit } from "../../../src/ui/units";
+import { announce } from "../../../src/ui/announce";
+
+vi.mock("../../../src/ui/announce", async (actual) => ({
+  ...(await actual<typeof import("../../../src/ui/announce")>()),
+  announce: vi.fn(),
+}));
 
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/ui/toast", async (importOriginal) => ({
@@ -33,6 +39,7 @@ beforeEach(() => {
   confirm.mockResolvedValue(true);
   toast.mockReset();
   localStorage.clear();
+  vi.mocked(announce).mockClear();
   a = definePluginSettings("Test.Alpha", {
     version: 1,
     props: [
@@ -99,13 +106,13 @@ describe("settings under a plugin's row", () => {
     await input.setValue("abc");
     await input.trigger("keydown", { key: "Enter" });
     expect(a.get("gap")).toBeCloseTo(25.4, 9);
-    expect(panel.get('[data-setting="gap"] [role=alert]').text().length).toBeGreaterThan(0);
+    expect(panel.get('[data-setting="gap"] .plugset-error').text().length).toBeGreaterThan(0);
     expect(input.attributes("aria-invalid")).toBe("true");
 
     await input.setValue("500");
-    expect(panel.find('[data-setting="gap"] [role=alert]').exists()).toBe(false);
+    expect(panel.find('[data-setting="gap"] .plugset-error').exists()).toBe(false);
     await input.trigger("blur");
-    expect(panel.get('[data-setting="gap"] [role=alert]').text()).toMatch(/at most 100/i);
+    expect(panel.get('[data-setting="gap"] .plugset-error').text()).toMatch(/at most 100/i);
     expect(a.get("gap")).toBeCloseTo(25.4, 9);
   });
 
@@ -215,6 +222,7 @@ describe("each kind of schema field", () => {
         { key: "tilt", type: "number", label: "Tilt", unit: "angle", default: 10, step: 5 },
         { key: "count", type: "number", label: "Count", unit: "in", default: 4, integer: true, min: 1 },
         { key: "free", type: "number", label: "Free", default: 3 },
+        { key: "plies", type: "number", label: "Plies", unit: "layers", default: 6, max: 9 },
         { key: "pitch", type: "number", label: "Pitch", unit: "length", default: 0, min: 0, max: 100, step: 5 },
         { key: "layer", type: "number", label: "Layer", unit: "length", default: 0.2, min: 0.02, max: 1, step: 0.05 },
         { key: "span", type: "number", label: "Span", unit: "length", default: 200, step: 0.005 },
@@ -268,10 +276,89 @@ describe("each kind of schema field", () => {
     await input.setValue("2.5");
     await input.trigger("keydown", { key: "Enter" });
     expect(k.get("count")).toBe(5);
-    expect(row.get("[role=alert]").text()).toMatch(/whole number/);
+    expect(row.get(".plugset-error").text()).toMatch(/whole number/);
     await input.setValue("0");
     await input.trigger("keydown", { key: "Enter" });
-    expect(row.get("[role=alert]").text()).toMatch(/at least 1/i);
+    expect(row.get(".plugset-error").text()).toMatch(/at least 1/i);
+  });
+
+  const spokenOf = (row: { get: (s: string) => { element: Element } }) =>
+    (row.get("input").element.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent);
+
+  it("draws a caption as the field's one chip and speaks it", async () => {
+    const row = await field("plies");
+    expect(row.findAll(".ui-unit-chip").map((c) => c.text())).toEqual(["layers"]);
+    expect(spokenOf(row)).toEqual(["layers"]);
+    const input = row.get("input");
+    (input.element as HTMLInputElement).focus();
+    await input.setValue("11");
+    await input.trigger("keydown", { key: "Enter" });
+    const shown = row.get(".plugset-error");
+    expect(k.get("plies")).toBe(6);
+    expect(shown.text()).toMatch(/at most 9/i);
+    expect(spokenOf(row)).toEqual(["layers", shown.text()]);
+    expect(vi.mocked(announce).mock.calls).toEqual([[shown.text(), "assertive"]]);
+    expect([shown.attributes("aria-hidden"), shown.attributes("role"), row.find("[role=alert]").exists()]).toEqual([
+      "true",
+      undefined,
+      false,
+    ]);
+  });
+
+  it("hands a store refusal of a number to its field, which says it once, and clears it on the next good value", async () => {
+    const row = await field("plies");
+    const input = row.get("input");
+    const set = vi.spyOn(k, "set").mockReturnValueOnce("Plies are locked by the printer");
+    (input.element as HTMLInputElement).focus();
+    await input.setValue("7");
+    await input.trigger("keydown", { key: "Enter" });
+    expect([k.get("plies"), spokenOf(row), input.attributes("aria-invalid")]).toEqual([
+      6,
+      ["layers", "Plies are locked by the printer"],
+      "true",
+    ]);
+    expect(vi.mocked(announce).mock.calls).toEqual([["Plies are locked by the printer", "assertive"]]);
+    expect(row.get(".plugset-error").attributes("aria-hidden")).toBe("true");
+
+    await input.setValue("8");
+    await input.trigger("keydown", { key: "Enter" });
+    expect([
+      k.get("plies"),
+      spokenOf(row),
+      input.attributes("aria-invalid"),
+      row.find(".plugset-error").exists(),
+    ]).toEqual([8, ["layers"], undefined, false]);
+    expect(set.mock.calls).toEqual([
+      ["plies", 7],
+      ["plies", 8],
+    ]);
+    expect(vi.mocked(announce)).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a refusal of a field that does not speak as an alert", async () => {
+    const row = await field("name");
+    const input = row.get("input");
+    await input.setValue("a long bolt name");
+    await input.trigger("keydown", { key: "Enter" });
+    expect([
+      k.get("name"),
+      row.get("[role=alert]").text(),
+      row.find("[aria-hidden=true].plugset-error").exists(),
+    ]).toEqual(["a", "Name has to be at most 8 characters", false]);
+    expect(vi.mocked(announce)).not.toHaveBeenCalled();
+  });
+
+  it("speaks a length and an angle in their measure and a plain number with nothing", async () => {
+    setUnit("in");
+    const gap = await field("gap");
+    expect([gap.findAll(".ui-unit-chip").map((c) => c.text()), spokenOf(gap)]).toEqual([["in"], ["inches"]]);
+    const tilt = await field("tilt");
+    expect([tilt.findAll(".ui-unit-chip").map((c) => c.text()), spokenOf(tilt)]).toEqual([["°"], ["degrees"]]);
+    const free = await field("free");
+    expect([free.findAll(".ui-unit-chip").length, spokenOf(free)]).toEqual([0, []]);
   });
 
   it("lands each inch step of a length exactly on its declared step in mm", async () => {
@@ -330,7 +417,7 @@ describe("each kind of schema field", () => {
     await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
     await input.trigger("keydown", { key: "Enter" });
     expect(k.get("pitch")).toBe(100);
-    expect(row.find("[role=alert]").exists()).toBe(false);
+    expect(row.find(".plugset-error").exists()).toBe(false);
   });
 
   it("leaves a number that declares no step alone on the arrow keys, as before", async () => {

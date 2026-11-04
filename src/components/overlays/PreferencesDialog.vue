@@ -225,6 +225,7 @@ const a11yChanged = computed(
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
     a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
     a11y.value.targets !== DEFAULT_A11Y.targets ||
+    a11y.value.unitsInFull !== DEFAULT_A11Y.unitsInFull ||
     a11y.value.noticeTime !== DEFAULT_A11Y.noticeTime ||
     a11y.value.interfaceSize !== DEFAULT_A11Y.interfaceSize ||
     a11y.value.comfortableText !== DEFAULT_A11Y.comfortableText ||
@@ -888,6 +889,19 @@ function onClassicCamera(on: boolean) {
                 <p id="prefs-verbosity-hint" class="pref-hint">
                   How much the app tells a screen reader: nothing, errors only, prompts and results, or every change as
                   well.
+                </p>
+              </div>
+              <div class="pref-card">
+                <Checkbox
+                  id="prefs-units-in-full"
+                  v-check-hint="'prefs-units-in-full-hint'"
+                  class="pref-head pref-check"
+                  :model-value="a11y.unitsInFull"
+                  @update:model-value="(on: boolean) => setA11yPref('unitsInFull', on)"
+                  ><span class="pref-title">Units spoken in full</span></Checkbox
+                >
+                <p id="prefs-units-in-full-hint" class="pref-hint">
+                  Fields tell a screen reader their unit as a word, millimetres instead of mm.
                 </p>
               </div>
             </div>

@@ -10,6 +10,8 @@ import {
   fieldNumber,
   fieldError,
   commonUnits,
+  spokenUnit,
+  UNITS,
   formatMeasure,
   roundForDisplay,
   measureError,
@@ -371,5 +373,59 @@ describe("fieldNumber / fieldError", () => {
     expect(fieldError("")).toBeNull();
     expect(fieldError("3*4")).toBeNull();
     expect(fieldError("3*")).toEqual(expect.any(String));
+  });
+});
+
+describe("spokenUnit", () => {
+  it("lists a spoken name for every measure unit", () => {
+    expect(UNITS.map((u) => [u.id, u.spoken.short, u.spoken.one, u.spoken.many])).toEqual([
+      ["mm", "mm", "millimetre", "millimetres"],
+      ["cm", "cm", "centimetre", "centimetres"],
+      ["m", "m", "metre", "metres"],
+      ["in", "in", "inch", "inches"],
+      ["ft", "ft", "foot", "feet"],
+      ["um", "µm", "micrometre", "micrometres"],
+      ["thou", "thou", "thou", "thou"],
+      ["deg", "deg", "degree", "degrees"],
+      ["rad", "rad", "radian", "radians"],
+    ]);
+  });
+
+  it("says the plural, the singular with one, and the short form when not in full", () => {
+    for (const u of UNITS) {
+      expect(spokenUnit(u.id, true)).toBe(u.spoken.many);
+      expect(spokenUnit(u.id, true, true)).toBe(u.spoken.one);
+      expect(spokenUnit(u.id, false)).toBe(u.spoken.short);
+      expect(spokenUnit(u.id, false, true)).toBe(u.spoken.short);
+    }
+  });
+
+  it("never reads the degree sign", () => {
+    expect(spokenUnit("deg", false)).toBe("deg");
+    expect(spokenUnit("deg", true)).toBe("degrees");
+  });
+
+  it("names the caption units both ways", () => {
+    const captions: [string, string, string][] = [
+      ["%", "percent", "percent"],
+      ["ms", "millisecond", "milliseconds"],
+      ["MPa", "megapascal", "megapascals"],
+      ["N", "newton", "newtons"],
+      ["g/cm³", "gram per cubic centimetre", "grams per cubic centimetre"],
+    ];
+    for (const [caption, one, many] of captions) {
+      expect(spokenUnit(caption, true)).toBe(many);
+      expect(spokenUnit(caption, true, true)).toBe(one);
+      expect(spokenUnit(caption, false)).toBe(caption);
+      expect(spokenUnit(caption, false, true)).toBe(caption);
+    }
+  });
+
+  it("returns an unknown caption as written both ways", () => {
+    for (const text of ["samples", "of the screen", ""]) {
+      expect(spokenUnit(text, true)).toBe(text);
+      expect(spokenUnit(text, false)).toBe(text);
+      expect(spokenUnit(text, true, true)).toBe(text);
+    }
   });
 });

@@ -110,7 +110,6 @@ const sizeError = ref<string | null>(null);
 watch(planes, () => (sizeError.value = null));
 function onSizeError(error: string | null) {
   sizeError.value = error;
-  if (error) announce(error, "polite", { key: "geometry-size", delay: 250 });
 }
 
 function setFilter(next: Partial<GeometryFilters>) {

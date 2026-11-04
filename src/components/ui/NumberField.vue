@@ -3,6 +3,7 @@ import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import UnitChip from "./UnitChip.vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
+import { useFieldSpeech } from "./useFieldSpeech";
 import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 import {
@@ -27,6 +28,11 @@ const props = defineProps<
     /** A ui/measure unit id is the shown unit: the field shows the model in it and a bare typed number means it,
      *  while a typed unit wins. Any other text is only a caption. */
     unit?: string | null | undefined;
+    /** Text shown and spoken as the unit but never read as a measure, so "in" or "deg" stays a plain number. A
+     *  `unit` wins. */
+    caption?: string | undefined;
+    /** Says a count or a ratio has no unit, which the UI controls check asks of every field. No runtime effect. */
+    unitless?: boolean;
     /** Unit ids the chip offers; picking one emits `update:unit`. */
     units?: readonly string[] | undefined;
     /** The chip's title. */
@@ -84,10 +90,13 @@ const el = useTemplateRef<HTMLInputElement>("el");
 const d = useDisabled(props);
 const name = useName(props, "NumberField");
 const unitDef = computed(() => unitById(props.unit));
+const shownUnit = computed(() => props.unit || props.caption || null);
 
 const spell = (v: number | null) => (v === null ? "" : String(toUnit(v, unitDef.value)));
 const caption = (v: number) =>
-  unitDef.value ? formatMeasure(v, unitDef.value) : `${roundForDisplay(v)}${props.unit ? ` ${props.unit}` : ""}`;
+  unitDef.value
+    ? formatMeasure(v, unitDef.value)
+    : `${roundForDisplay(v)}${shownUnit.value ? ` ${shownUnit.value}` : ""}`;
 
 /** Null for an expression. */
 function read(raw: string): number | null {
@@ -152,10 +161,17 @@ const { draft } = field;
 watch(field.error, (e) => emit("error", e));
 
 const shownError = computed(() => field.error.value ?? props.problem ?? null);
+const speech = useFieldSpeech({
+  el,
+  unit: () => shownUnit.value,
+  error: shownError,
+  live: () => props.commit === "live",
+  callerDescribedby: () => attrs["aria-describedby"],
+});
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 
 function inputAttrs() {
-  const { class: _c, style: _s, ...rest } = attrs;
+  const { class: _c, style: _s, "aria-describedby": _d, ...rest } = attrs;
   return mergeProps(rest, d.bind.value, name.value);
 }
 
@@ -217,6 +233,7 @@ function onKeydown(e: KeyboardEvent) {
       :placeholder="placeholder"
       :readonly="d.isDisabled.value || undefined"
       :aria-invalid="shownError ? 'true' : undefined"
+      :aria-describedby="speech.describedby.value"
       :title="d.title(shownError ?? tipText ?? (attrs.title as string | undefined))"
       @input="onInput"
       @keydown="onKeydown"
@@ -224,14 +241,17 @@ function onKeydown(e: KeyboardEvent) {
       @focus="selectOnFocus && el?.select()"
     />
     <UnitChip
-      v-if="unit"
-      :unit="unit"
-      :options="units"
+      v-if="shownUnit"
+      :unit="shownUnit"
+      :options="unit ? units : undefined"
       :label="label && `${label} unit`"
       :tip="unitTip"
       :disabled="disabled"
+      spoken-elsewhere
       @update:unit="emit('update:unit', $event)"
     />
+    <span v-if="speech.spokenUnit.value" :id="speech.unitId" class="sr-only">{{ speech.spokenUnit.value }}</span>
+    <span v-if="shownError" :id="speech.errorId" class="sr-only">{{ shownError }}</span>
     <slot name="trailing" />
   </span>
 </template>

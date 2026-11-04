@@ -18,6 +18,8 @@ export interface UnitDef {
   /** everything that may be TYPED for it, lower-cased. Order does not matter;
    *  the scanner sorts by length so "mm" can never be eaten by "m". */
   aliases: string[];
+  /** what a screen reader says, `short` when units are not spoken in full */
+  spoken: { short: string; one: string; many: string };
   /** offered in the unit picker, the rest are input-only, so "thou" parses
    *  without putting a unit nobody asked for in front of everyone. */
   common?: boolean;
@@ -27,6 +29,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "mm",
     label: "mm",
+    spoken: { short: "mm", one: "millimetre", many: "millimetres" },
     dim: "length",
     factor: 1,
     common: true,
@@ -35,6 +38,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "cm",
     label: "cm",
+    spoken: { short: "cm", one: "centimetre", many: "centimetres" },
     dim: "length",
     factor: 10,
     common: true,
@@ -43,26 +47,83 @@ export const UNITS: UnitDef[] = [
   {
     id: "m",
     label: "m",
+    spoken: { short: "m", one: "metre", many: "metres" },
     dim: "length",
     factor: 1000,
     common: true,
     aliases: ["m", "meter", "meters", "metre", "metres"],
   },
-  { id: "in", label: "in", dim: "length", factor: 25.4, common: true, aliases: ["in", "inch", "inches", '"', "″"] },
-  { id: "ft", label: "ft", dim: "length", factor: 304.8, common: true, aliases: ["ft", "foot", "feet", "'", "′"] },
+  {
+    id: "in",
+    label: "in",
+    spoken: { short: "in", one: "inch", many: "inches" },
+    dim: "length",
+    factor: 25.4,
+    common: true,
+    aliases: ["in", "inch", "inches", '"', "″"],
+  },
+  {
+    id: "ft",
+    label: "ft",
+    spoken: { short: "ft", one: "foot", many: "feet" },
+    dim: "length",
+    factor: 304.8,
+    common: true,
+    aliases: ["ft", "foot", "feet", "'", "′"],
+  },
   {
     id: "um",
     label: "µm",
+    spoken: { short: "µm", one: "micrometre", many: "micrometres" },
     dim: "length",
     factor: 0.001,
     aliases: ["um", "µm", "micron", "microns", "micrometer", "micrometers"],
   },
-  { id: "thou", label: "thou", dim: "length", factor: 0.0254, aliases: ["thou", "mil", "mils"] },
-  { id: "deg", label: "°", dim: "angle", factor: 1, common: true, aliases: ["deg", "degree", "degrees", "°"] },
-  { id: "rad", label: "rad", dim: "angle", factor: 180 / Math.PI, common: true, aliases: ["rad", "radian", "radians"] },
+  {
+    id: "thou",
+    label: "thou",
+    spoken: { short: "thou", one: "thou", many: "thou" },
+    dim: "length",
+    factor: 0.0254,
+    aliases: ["thou", "mil", "mils"],
+  },
+  {
+    id: "deg",
+    label: "°",
+    spoken: { short: "deg", one: "degree", many: "degrees" },
+    dim: "angle",
+    factor: 1,
+    common: true,
+    aliases: ["deg", "degree", "degrees", "°"],
+  },
+  {
+    id: "rad",
+    label: "rad",
+    spoken: { short: "rad", one: "radian", many: "radians" },
+    dim: "angle",
+    factor: 180 / Math.PI,
+    common: true,
+    aliases: ["rad", "radian", "radians"],
+  },
 ];
 
 const BY_ID = new Map(UNITS.map((u) => [u.id, u]));
+
+const SPOKEN_CAPTIONS: Record<string, { one: string; many: string }> = {
+  "%": { one: "percent", many: "percent" },
+  ms: { one: "millisecond", many: "milliseconds" },
+  MPa: { one: "megapascal", many: "megapascals" },
+  N: { one: "newton", many: "newtons" },
+  "g/cm³": { one: "gram per cubic centimetre", many: "grams per cubic centimetre" },
+};
+
+/** A measure id or a caption as a screen reader says it, text it does not know comes back as written. */
+export function spokenUnit(unit: string, full: boolean, one = false): string {
+  const measure = BY_ID.get(unit)?.spoken;
+  if (measure) return full ? (one ? measure.one : measure.many) : measure.short;
+  const caption = Object.hasOwn(SPOKEN_CAPTIONS, unit) ? SPOKEN_CAPTIONS[unit] : null;
+  return caption && full ? (one ? caption.one : caption.many) : unit;
+}
 /** Longest alias first, so "mm" is matched before "m" and "inches" before "in". */
 const ALIASES: { text: string; unit: UnitDef }[] = UNITS.flatMap((unit) =>
   unit.aliases.map((text) => ({ text, unit })),

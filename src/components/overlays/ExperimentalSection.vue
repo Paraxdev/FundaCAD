@@ -192,11 +192,11 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
             :step="f.step"
             :nullable="autoAtZero(f)"
             :placeholder="autoAtZero(f) ? 'Auto' : undefined"
+            :caption="f.unit"
             :width-ch="9"
             :data-experimental="f.key"
             @update:model-value="onNumber(f, $event)"
           />
-          <span class="prefs-readout">{{ f.unit }}</span>
         </span>
       </div>
       <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : defaultShown(f) }}. </p>

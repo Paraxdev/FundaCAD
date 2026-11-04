@@ -2,8 +2,9 @@
 // Empty can mean something (a shell with no faces is sealed, a texture with none covers the body), describeTarget owns
 // the wording. Edit hands off to features/targetEditTool, a profile area opens its feature's own tool instead.
 
-import { computed } from "vue";
+import { computed, useId } from "vue";
 import Button from "../ui/Button.vue";
+import FieldRow from "../ui/FieldRow.vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { describeTarget, readTarget, type TargetField } from "../../features/selectionTargets";
@@ -11,6 +12,8 @@ import { describeTarget, readTarget, type TargetField } from "../../features/sel
 const props = defineProps<{ featureId: string; target: TargetField }>();
 
 const engine = useEngine();
+const countId = useId();
+const editId = useId();
 
 // useDocValue, not a computed: store.document keeps its identity across an in-place mutate, so a computed would see an
 // equal value and skip the update (see app/useDoc.ts).
@@ -41,20 +44,19 @@ function edit() {
 </script>
 
 <template>
-  <div class="param-row">
-    <label>{{ target.label }}</label>
-    <div class="param-value target-value">
-      <span class="target-count" :class="{ 'target-empty': count === 0 }">{{ summary }}</span>
-      <Button
-        class="target-edit"
-        size="sm"
-        icon="pen"
-        :tip="`Change which ${target.kind}s this acts on`"
-        :disabled="editing"
-        disabled-reason="Editing this selection"
-        @click="edit"
-        >Edit</Button
-      >
-    </div>
-  </div>
+  <FieldRow v-slot="{ labelId }" layout="param" :label="target.label" :for="null" control-class="target-value">
+    <span :id="countId" class="target-count" :class="{ 'target-empty': count === 0 }">{{ summary }}</span>
+    <Button
+      :id="editId"
+      class="target-edit"
+      size="sm"
+      icon="pen"
+      :tip="`Change which ${target.kind}s this acts on`"
+      :disabled="editing"
+      disabled-reason="Editing this selection"
+      :aria-labelledby="`${labelId} ${countId} ${editId}`"
+      @click="edit"
+      >Edit</Button
+    >
+  </FieldRow>
 </template>

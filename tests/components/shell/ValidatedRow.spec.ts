@@ -8,6 +8,7 @@
 
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { h } from "vue";
 import ValidatedRow from "../../../src/components/shell/ValidatedRow.vue";
 import type { UnitDef } from "../../../src/ui/measure";
 
@@ -197,6 +198,26 @@ describe("ValidatedRow", () => {
     expect(w.get(".ui-field").classes()).toContain("is-error");
   });
 
+  it("hides its problem line from browse mode while the field describes and speaks the same reason", async () => {
+    const w = mountRow({ value: 10, unit: "mm", validate: (v) => (v < 3 ? "Width must be at least 3 mm" : null) });
+    const input = await type(w, "1.5");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(w.get(".param-problem").attributes("aria-hidden")).toBe("true");
+    const notes = (input.attributes("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent);
+    expect(notes).toEqual(["millimetres", "Width must be at least 3 mm"]);
+    await w.setProps({ problem: "The fillet is larger than the edge" });
+    await input.setValue("4");
+    expect(w.get(".param-problem").attributes("aria-hidden")).toBe("true");
+    expect(
+      (input.attributes("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent),
+    ).toEqual(["millimetres", "The fillet is larger than the edge"]);
+    await w.setProps({ problem: null });
+    expect(w.find(".param-problem").exists()).toBe(false);
+    expect(input.attributes("aria-describedby")?.split(" ")).toHaveLength(1);
+  });
+
   // --- the unit chip ---
   // The unit used to be appended to the LABEL, which produced rows reading
   // "Radius mm | 5in": a label is a name, and a unit is part of the value.
@@ -261,5 +282,32 @@ describe("ValidatedRow name", () => {
   it("carries its field key", () => {
     const w = mount(ValidatedRow, { props: { label: "Width", field: "width", value: 5, parse } });
     expect(w.get(".param-row").attributes("data-field")).toBe("width");
+  });
+
+  it("ties its label to its input, so a click on the label focuses the field", () => {
+    const w = mount(ValidatedRow, {
+      props: { label: "Width", field: "width", value: 5, parse, rowClass: "fx-row", rowTitle: "w = 5" },
+      attachTo: document.body,
+    });
+    const label = w.get("label");
+    expect([label.attributes("for"), label.attributes("id") !== undefined]).toEqual([
+      w.get("input").attributes("id"),
+      true,
+    ]);
+    expect(w.get("input").attributes("id")).toBeTruthy();
+    expect([
+      w.get("input").attributes("aria-label"),
+      w.get(".param-row").classes(),
+      w.get(".param-row").attributes("title"),
+    ]).toEqual(["Width", ["param-row", "fx-row"], "w = 5"]);
+    expect(w.get(".param-value input").element).toBe(document.getElementById(label.attributes("for") as string));
+  });
+
+  it("gives two rows of one panel different input ids, each label for its own", () => {
+    const row = (label: string) => h(ValidatedRow, { label, value: 7, parse });
+    const w = mount({ render: () => h("div", [row("Width"), row("Depth")]) });
+    const ids = w.findAll("input").map((i) => i.attributes("id"));
+    expect(new Set(ids).size).toBe(2);
+    expect(w.findAll("label").map((l) => l.attributes("for"))).toEqual(ids);
   });
 });

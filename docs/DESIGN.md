@@ -669,6 +669,9 @@ neither, and in dev a control given neither, nor an `aria-label` or `aria-labell
 given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
 A `Select` trigger's name carries its value ("Theme, Dark", or the `labelledby` text then the value), since VoiceOver
 and Orca read only the name of a combobox named by `aria-label`; its open list is named by the label alone.
+A row button whose own text is not its name ("Choose…", "Edit", a file name) is labelled by the row label, then
+anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ownId}"`, so a file button reads
+"Heightmap, Choose…" and a selection button "Faces, 3 faces, Edit".
 
 | Component | For | Props that matter | States |
 |---|---|---|---|
@@ -677,9 +680,9 @@ and Orca read only the name of a combobox named by `aria-label`; its open list i
 | `Chip` | A tag, a state or a count badge | `variant`: `neutral`, `accent`, `warn`, `error`; `size`: `xs` (a count badge), `sm`, `md` (a chip on the model); `icon`; `label`; `removable` adds a "Remove X" button; `as`: `span` or `button` | a button chip: hover, focus, disabled |
 | `KeyChip` | A shortcut drawn as key caps | `keys`; `inTitle` hides it from a screen reader when the owner's `title` already says it | none, it is a label |
 | `KeyCapture` | A shortcut setting: a button that opens a capture dialog, never armed on focus | `action`, the start of its name; `keys`, in the table's form, empty shows Not set; `problem`, the owner's refusal, spoken in place of the new keys; `clearable` adds Clear; emits `capture` (`key`, `code`, `ctrl`, `shift`, `alt`) and `clear` | as `Button`; the dialog's region shows when it listens |
-| `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots | focus, error, disabled |
-| `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker); `parse`, `ui/measure` by default, so units, fractions and a decimal comma read, or `readAs` from `ui/measure` for a field of one kind, which refuses a written unit of another; `validate`; `problem`, a refusal from the kernel; `min`, `max`, `step`; `stepFrom`, where an arrow starts on a blank field; `limits`: `refuse` (default) or `arrows`, which holds `min` and `max` to the arrow keys and lets typed text past them commit, as a native number input does, only for an owner that judges the value; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
-| `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption | picker: hover, pressed, open, disabled |
+| `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots; a refusal is described on the field and spoken once | focus, error, disabled |
+| `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker, and the unit a screen reader hears as the field's description, millimetres or degrees); `caption`, a unit word that is only text, so "in" or "deg" is not read as a measure; `unitless`, which says a count or a ratio has no unit and changes nothing; `parse`, `ui/measure` by default, so units, fractions and a decimal comma read, or `readAs` from `ui/measure` for a field of one kind, which refuses a written unit of another; `validate`; `problem`, a refusal from the kernel (described on the field and spoken once, at once in `change` mode and after a 700 ms pause in `live` mode); `min`, `max`, `step`; `stepFrom`, where an arrow starts on a blank field; `limits`: `refuse` (default) or `arrows`, which holds `min` and `max` to the arrow keys and lets typed text past them commit, as a native number input does, only for an owner that judges the value; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
+| `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption; `spokenElsewhere` hides a caption from browse mode when the field already says the unit | picker: hover, pressed, open, disabled |
 | `Select` | A choice from a list too long to show at once | `modelValue`; `options` (`value`, `label`, `hint`, `disabled`); `placeholder`; `size`; `variant`: `field` (a well) or `chip` (the `UnitChip` look) | hover, focus, open with an active row, disabled |
 | `Combobox` | A search field over the list of its matches, as the command palette is | `modelValue`, the query; `options` (`value`, `label`, `hint`, `disabled`, `keyshortcuts`); `active` with `v-model:active`, -1 for none; `listClass`, `optionClass`; `pick` emits the chosen value; a `default` slot per option, an `empty` slot | focus, the active row `.is-active`, a disabled option |
 | `Listbox` | A group of picks drawn as the caller's own elements: tiles, swatches, cards | `items` (`value`, `label`, `disabled`); `modelValue`; `multiple` makes it an array, with `v-model:anchor`; the `option` slot hands `attrs` to bind on the caller's element; `apply` on Enter | focus, selected, a disabled option |
@@ -695,7 +698,7 @@ and Orca read only the name of a combobox named by `aria-label`; its open list i
 | `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`, `danger`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
 | `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
-| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot; `hint`; `error`; `layout`: `inline` or `stacked` | error |
+| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
 | `Toolbar` | A row or column of controls that is one Tab stop: the rail, the view controls, a panel's actions | `label` or `labelledby`; `orientation`: `horizontal` (default), `vertical` or `both`; `wrap`; `tag`. Its buttons are found in the slot, the arrows, Home and End move among them, a nested `Segmented` keeps its own stop and keys, a text field keeps its arrows | none of its own, its controls carry theirs |
@@ -762,6 +765,7 @@ counts, per file:
 | `role=button`, `switch`, `tab`, `radio` and the `menuitem` roles on a plain element | the same templates | `Button`, `Switch`, `Tabs`, `Segmented`, `MenuItem` |
 | `createElement:button` and the other control tags, and those tags in a template string or `innerHTML` | `src/**/*.ts` and `plugins/**/*.ts` | the factories of `src/components/ui/dom.ts`, **prescribed, no code does this yet** |
 | `style:inline` | a `:style` or a style object with a colour, a border or `font` | a class in `src/styles/` that reads tokens |
+| `NumberField:no-unit` | a `NumberField` with no `unit`, `caption`, `unitless` or `v-bind` spread, or only a blank, `null` or `false` one | `unit="mm"` (or a bound `:unit`) so the unit is spoken, `unitless` for a count or a ratio |
 | `IconButton:no-tip` | an `IconButton` without `tip` | `tip`, which names it |
 | `class:btn`, `sm-input`, `pref-seg`, `ft-switch`, `param-switch`, `check` | the templates, only under `--legacy-classes`, which goes on once the old classes are gone | `Button`, `TextField` or `NumberField`, `Segmented`, `Switch`, `Checkbox` |
 
@@ -912,8 +916,9 @@ shows in the model as you flip it.
   `.check` markup of `_checkbox.scss` it replaces. Never put `Switch`, `SwitchRow`, `.ft-switch`, `.param-switch`,
   `ToggleRow` or `Toggle` in anything Preferences renders, the guard test fails on it.
 - **Live toggles** use `SwitchRow`: `layout="float"` in the view controls (the old `Toggle.vue`, which now draws it,
-  and its `.float-toggle` row), `layout="param"` in feature properties (the old `ToggleRow.vue` and its
-  `.param-switch`). The Export dialog and the Stress setup and results steps keep their switches too.
+  and its `.float-toggle` row), feature properties use `ToggleRow`, a `FieldRow layout="param"` row holding a
+  `Switch` (the old `.param-switch` is retired; `SwitchRow layout="param"` stays unused there). The Export dialog
+  and the Stress setup and results steps keep their switches too.
 
 | Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|

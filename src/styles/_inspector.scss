@@ -250,3 +250,7 @@
   line-height: 1.35;
   color: var(--error);
 }
+
+.param-row > .ui-field-hint {
+  grid-column: 1 / -1;
+}
