@@ -58,20 +58,18 @@ const rows = computed<readonly Row[]>((prev) => {
   for (const d of s.dimItems) if (!order.has(d.key)) order.set(d.key, order.size);
   const items = [...s.dimItems].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
   const names = distinctNames(items.map((d) => d.name));
-  const next = items.map(
-    (d, i): Row => ({
-      key: d.key,
-      name: names[i]!,
-      valueMm: d.valueMm,
-      ...(d.expr !== undefined ? { expr: d.expr } : {}),
-      ...(d.kind ? { kind: d.kind } : {}),
-      driven: !!d.driven,
-      conflict: !!d.conflict,
-      over: !!d.over,
-      formula: !!d.commitExpr,
-      entities: d.entities,
-    }),
-  );
+  const next = items.map((d, i): Row => ({
+    key: d.key,
+    name: names[i]!,
+    valueMm: d.valueMm,
+    ...(d.expr !== undefined ? { expr: d.expr } : {}),
+    ...(d.kind ? { kind: d.kind } : {}),
+    driven: !!d.driven,
+    conflict: !!d.conflict,
+    over: !!d.over,
+    formula: !!d.commitExpr,
+    entities: d.entities,
+  }));
   return prev && prev.length === next.length && next.every((r, i) => sameRow(r, prev[i]!)) ? prev : next;
 });
 

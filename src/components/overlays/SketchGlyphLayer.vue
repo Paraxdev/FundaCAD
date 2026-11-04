@@ -94,12 +94,7 @@ function onWheel(e: WheelEvent) {
   it would land behind the canvas. Hidden from screen readers, the Relations list is the keyboard route; not inert,
   which would stop the glyph click. -->
   <Teleport to="body">
-    <div
-      class="sketch-glyphs"
-      :class="{ 'glyphs-passive': s.glyphsPassive }"
-      aria-hidden="true"
-      @wheel="onWheel"
-    >
+    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }" aria-hidden="true" @wheel="onWheel">
       <div
         v-for="(g, i) in s.glyphItems"
         :key="i"
