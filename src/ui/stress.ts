@@ -531,13 +531,14 @@ export interface StressPeak {
 }
 
 const PEAK_SIZE_FALLBACK = 20;
+const PEAK_SIZE_MIN = 5;
 
 function fmtPoint(p: Vec3, unit: Unit): string {
   const [x, y, z] = p.map((v) => displayRound(toDisplay(v)));
   return `x ${x}, y ${y}, z ${z} ${unit}`;
 }
 
-// A third of the diagonal of the drawn surface, to the hundredth, so the point sits in a view of the part's own scale.
+// A third of the drawn surface's diagonal, to the hundredth and at least 5 mm, so the point sits in a view of the part.
 function peakSize(positions: ArrayLike<number> | undefined): number {
   if (!positions || positions.length < 3) return PEAK_SIZE_FALLBACK;
   const lo = [Infinity, Infinity, Infinity];
@@ -550,7 +551,7 @@ function peakSize(positions: ArrayLike<number> | undefined): number {
   }
   const diag = Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!);
   const size = Math.round((diag / 3) * 100) / 100;
-  return size > 0 ? size : PEAK_SIZE_FALLBACK;
+  return size > 0 ? Math.max(size, PEAK_SIZE_MIN) : PEAK_SIZE_FALLBACK;
 }
 
 /** Peak and minimum of the per-vertex von Mises field, for the legend. */
@@ -604,8 +605,8 @@ export function formatStressResult(
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
-  // Not the engine's face index: it counts the faces of a copy of the body, a number nothing else in the app shows.
   const size = peakSize(r.surface?.positions);
+  // No face number: the engine's one counts the faces of a copy of the body, which nothing else in the app shows.
   const peak = (label: string, value: string, at: Vec3): StressPeak => {
     const where = fmtPoint(at, unit);
     return { label, where, spoken: `${label}, ${value}, at ${where}`, at, size };

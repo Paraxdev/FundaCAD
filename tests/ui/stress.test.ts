@@ -388,14 +388,14 @@ describe("formatStressResult", () => {
           where: "x 25.4, y 0, z 50.8 mm",
           spoken: "Peak stress, 31.25 MPa, at x 25.4, y 0, z 50.8 mm",
           at: [25.4, 0, 50.8],
-          size: 0.47,
+          size: 5,
         },
         {
           label: "Max deflection",
           where: "x 254, y 0, z 0 mm",
           spoken: "Max deflection, 1.27 mm, at x 254, y 0, z 0 mm",
           at: [254, 0, 0],
-          size: 0.47,
+          size: 5,
         },
       ],
     });
@@ -461,7 +461,7 @@ describe("stress peaks", () => {
     expect(mm).toEqual(["x 25.4, y -7.62, z 50.8 mm", "x 254, y 12.7, z -2.54 mm"]);
   });
 
-  it("frames a third of the part's diagonal, to the hundredth, and 20 mm with no surface", () => {
+  it("frames a third of the part's diagonal, to the hundredth and at least 5 mm, and 20 mm with no surface", () => {
     const { surface: _drop, ...bare } = slanted;
     const sizeOf = (positions: number[] | null) =>
       formatStressResult(positions ? { ...slanted, surface: surfaceOf(positions) } : bare, "mm").peaks.map(
@@ -471,6 +471,12 @@ describe("stress peaks", () => {
     expect(sizeOf([1, -2, 3, 11, -2, 3, 1, 8, 8])).toEqual([5, 5]);
     // Box 10.02 x 10.02 x 5.01, diagonal 15.03.
     expect(sizeOf([-4, 6, 1, 6.02, 6, 1, -4, 16.02, 6.01])).toEqual([5.01, 5.01]);
+    // Box 9.98 x 9.98 x 4.99, diagonal 14.97, a third 4.99 held at 5.
+    expect(sizeOf([-4, 6, 1, 5.98, 6, 1, -4, 15.98, 5.99])).toEqual([5, 5]);
+    // A 2 x 1.5 x 0.6 mm pin, diagonal 2.57.
+    expect(sizeOf([7.3, -1.2, 0.4, 9.3, -1.2, 0.4, 7.3, 0.3, 1])).toEqual([5, 5]);
+    // A 300 x 120 x 45 mm plate, diagonal 326.23.
+    expect(sizeOf([-150, 20, 3, 150, 20, 3, -150, 140, 48])).toEqual([108.74, 108.74]);
     expect(sizeOf(null)).toEqual([20, 20]);
     expect(sizeOf([])).toEqual([20, 20]);
     expect(sizeOf([2, 3, 4, 2, 3, 4, 2, 3, 4])).toEqual([20, 20]);
