@@ -1150,6 +1150,11 @@ It returns the toast's id for `dismissToast`, or null for an error.
   showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice
   (`showErrorNotice`) and the console log, with `detail` kept for the report.
+- Every toast is spoken once by `announce()` from `toast()`: info polite,
+  warning assertive, and the label of a button is added ("Deleted Box 2. Undo
+  button in Notifications."). An error is spoken by the title bar notice. The
+  stack is a permanent region named "Notifications", empty when no toast
+  shows, and is not live, so nothing is said twice.
 - Every toast is also a console entry and a bug report breadcrumb, so do not
   toast on every keystroke or hover.
 

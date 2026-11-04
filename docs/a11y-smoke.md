@@ -187,7 +187,7 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     `8`, Enter: you hear "Built, 1 body". This is one way to draw among others. Fail: a point or shape that is not
     spoken, an arrow that turns the view while a draw tool is armed, or a Tab that skips a profile.
 
-Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
+Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
 

@@ -9,7 +9,8 @@ const toasts = useToastStore();
 <template>
   <!-- Teleported: the stack is position:fixed and must not inherit a stacking context from #app's grid. -->
   <Teleport to="body">
-    <div v-if="toasts.items.length" class="toast-stack">
+    <!-- Not live: toast() speaks each message through the announcer, so a live stack would say it twice. -->
+    <div class="toast-stack" role="region" aria-label="Notifications">
       <div v-for="t in toasts.items" :key="t.id" class="toast" :class="[`toast-${t.kind}`, { 'toast-out': t.leaving }]">
         <!-- Messages carry engine error text and document-sourced names, {{ }} escapes them. -->
         <span class="toast-msg">{{ t.message }}</span>

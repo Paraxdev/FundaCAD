@@ -37,3 +37,39 @@ describe("ToastStack", () => {
     expect(leaving()).toEqual([true]);
   });
 });
+
+describe("ToastStack region", () => {
+  const region = () => document.querySelector<HTMLElement>(".toast-stack");
+
+  it("is in the page with no toast, named Notifications and not live", () => {
+    mount(ToastStack, { attachTo: document.body });
+    const el = region()!;
+    expect([el.getAttribute("role"), el.getAttribute("aria-label"), el.children.length]).toEqual([
+      "region",
+      "Notifications",
+      0,
+    ]);
+    expect(el.closest("[aria-live]")).toBeNull();
+    expect(el.querySelector("[aria-live], [role=status], [role=alert]")).toBeNull();
+  });
+
+  it("holds one row and then three, in the same region", async () => {
+    mount(ToastStack, { attachTo: document.body });
+    const el = region()!;
+    const st = useToastStore();
+    st.push("Saved 3 parts", "info", undefined, 60000);
+    await nextTick();
+    expect(document.querySelectorAll(".toast-stack")).toHaveLength(1);
+    expect(Array.from(el.querySelectorAll(".toast-msg"), (m) => m.textContent)).toEqual(["Saved 3 parts"]);
+    st.push("Pasted 4 faces", "warning", undefined, 60000);
+    st.push("Opened 2 files", "info", undefined, 60000);
+    await nextTick();
+    expect(region()).toBe(el);
+    expect(Array.from(el.querySelectorAll(".toast-msg"), (m) => m.textContent)).toEqual([
+      "Saved 3 parts",
+      "Pasted 4 faces",
+      "Opened 2 files",
+    ]);
+    expect(el.getAttribute("aria-live")).toBeNull();
+  });
+});
