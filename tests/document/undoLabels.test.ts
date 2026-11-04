@@ -47,6 +47,36 @@ describe("undo labels on the store", () => {
     expect(s.redoLabel).toBe("Delete 2 steps");
   });
 
+  it("names the moved step when it swaps with its neighbour, up or down", () => {
+    const two = freshStore();
+    two.addFeature(box("a", 40.5, 22.25, 7));
+    two.addFeature(fillet("c", 1.5));
+    two.moveFeature("c", 0);
+    const s = threeSteps();
+    const labels: (string | null)[] = [];
+    s.moveFeature("c", 1);
+    labels.push(s.undoLabel);
+    s.moveFeature("b", 1);
+    labels.push(s.undoLabel);
+    s.moveFeature("a", 1);
+    labels.push(s.undoLabel);
+    expect({ two: two.undoLabel, labels, order: s.document.features.map((f) => f.id), undone: s.undo() }).toEqual({
+      two: "Move Fillet 1",
+      labels: ["Move Fillet 1", "Move Box 2", "Move Box 2"],
+      order: ["b", "a", "c"],
+      undone: "Move Box 2",
+    });
+  });
+
+  it("a move of an id the document lacks is an unnamed edit", () => {
+    const s = threeSteps();
+    s.moveFeature("zz", 0);
+    expect({ label: s.undoLabel, order: s.document.features.map((f) => f.id) }).toEqual({
+      label: "Edit",
+      order: ["a", "b", "c"],
+    });
+  });
+
   it("labels an edit and a rename", () => {
     const s = threeSteps();
     s.updateFeature("c", { radius: 3.25 } as Partial<Feature>);

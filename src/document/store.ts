@@ -1897,13 +1897,21 @@ export class DocumentStore {
   // Failed by the last preview-free build, so an in-place edit is not blamed for them.
   private committedFailures = new Set<string>();
   moveFeature(id: string, toIndex: number) {
-    this.mutate((d) => {
-      const from = d.features.findIndex((f) => f.id === id);
-      if (from < 0) return;
-      const [f] = d.features.splice(from, 1);
-      if (!f) return;
-      d.features.splice(Math.max(0, Math.min(d.features.length, toIndex)), 0, f);
-    }, true);
+    // A swap of neighbours reads either way in a diff, so the label names the step that was moved.
+    const moved = this.doc.features.find((f) => f.id === id);
+    const order = this.doc.features.filter((f) => f.id !== id);
+    if (moved) order.splice(Math.max(0, Math.min(order.length, toIndex)), 0, moved);
+    this.mutate(
+      (d) => {
+        const from = d.features.findIndex((f) => f.id === id);
+        if (from < 0) return;
+        const [f] = d.features.splice(from, 1);
+        if (!f) return;
+        d.features.splice(Math.max(0, Math.min(d.features.length, toIndex)), 0, f);
+      },
+      true,
+      moved && `Move ${numberedName(moved, order)}`,
+    );
   }
 
   /** The label of the step taken back, null when nothing moved. */
