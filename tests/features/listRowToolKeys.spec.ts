@@ -15,6 +15,7 @@ import { FaceOffsetTool, type FaceOffsetMode } from "../../src/features/faceOffs
 import { MirrorTool } from "../../src/features/mirrorTool";
 import { PatternTool } from "../../src/features/patternTool";
 import { PressPullTool } from "../../src/features/pressPullTool";
+import { TargetEditTool } from "../../src/features/targetEditTool";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { noKeyDraw } from "../sketch/keyDrawStub";
 import type { DocumentStore } from "../../src/document/store";
@@ -204,6 +205,26 @@ describe("a list row's keys while a tool runs", () => {
     expect(calls(heard)).toEqual({ commit: 1, set: 0, cancel: 0 });
     press(row, "Escape");
     expect(calls(heard)).toEqual({ commit: 1, set: 0, cancel: 1 });
+  });
+
+  it("Target edit: Enter on a row, in the command search or on a button commits nothing, on the page it commits", () => {
+    const heard = { commit: vi.fn(), cancel: vi.fn() };
+    const tool = Object.assign(Object.create(TargetEditTool.prototype) as TargetEditTool, { active: true }, heard);
+    const listen = (e: KeyboardEvent) => (tool as unknown as { onKey(e: KeyboardEvent): void }).onKey(e);
+    window.addEventListener("keydown", listen, true);
+    stopAfter.push(() => window.removeEventListener("keydown", listen, true));
+    const row = listRow();
+    const search = document.createElement("input");
+    search.setAttribute("role", "combobox");
+    const button = document.createElement("button");
+    document.body.append(search, button);
+    for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
+    for (const at of [search, button]) expect(press(at, "Enter").defaultPrevented).toBe(false);
+    expect(calls(heard)).toEqual({ commit: 0, cancel: 0 });
+    press(document.body, "Enter");
+    expect(calls(heard)).toEqual({ commit: 1, cancel: 0 });
+    press(row, "Escape");
+    expect(calls(heard)).toEqual({ commit: 1, cancel: 1 });
   });
 
   it("Pattern: a row's keys neither commit nor step the count, the same keys on the page do", () => {

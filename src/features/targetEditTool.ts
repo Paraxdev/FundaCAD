@@ -6,7 +6,7 @@ import type { DocumentStore } from "../document/store";
 import type { Selector } from "../types";
 import { bodyLabels } from "../ui/bodyLabels";
 import { escapeClaimed } from "../ui/escapeClaim";
-import { isMenuKey } from "../ui/focus";
+import { isMenuKey, keyTargetFree } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 import { edgeSelectorFrom, polylineMid } from "../viewport/edgeMatch";
@@ -373,7 +373,7 @@ export class TargetEditTool {
       e.preventDefault();
       e.stopPropagation();
       this.cancel();
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && keyTargetFree(e.target)) {
       e.preventDefault();
       e.stopPropagation();
       this.commit();
