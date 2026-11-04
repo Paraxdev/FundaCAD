@@ -11,9 +11,7 @@ export const STEP_LABEL = {
   colour: "Colour",
   view: "View",
   restoreVersion: "Restore version",
-  rollback: "Rollback",
   parameters: "Parameters",
-  section: "Section view",
 } as const;
 
 const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
