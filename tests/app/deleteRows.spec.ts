@@ -90,6 +90,21 @@ describe("deleteRows", () => {
     expect(selected).toEqual([null]);
   });
 
+  it("still says what went while an import holds the history, without an Undo button", async () => {
+    const { e, store } = rig();
+    let release!: () => void;
+    const importing = store.runBusy("Importing bracket.step", () => new Promise<void>((r) => (release = r)), {
+      holdHistory: true,
+    });
+    deleteRows(e, ["b"]);
+    release();
+    await importing;
+    expect({ ids: ids(store), toasts: toasts() }).toEqual({
+      ids: ["a", "m"],
+      toasts: [{ message: "Deleted Box 2", kind: "info", action: undefined }],
+    });
+  });
+
   it("says nothing for ids the document does not have", () => {
     const { e, store } = rig();
     deleteRows(e, ["zz"]);

@@ -59,8 +59,10 @@ export function deleteRows(e: Pick<Engine, "store" | "selectFeature" | "undoIfLa
   e.store.removeFeatures(ids);
   const sel = useSelectionStore();
   if (ids.some((id) => id === sel.featureId || sel.rows.keys.includes(id))) e.selectFeature(null);
+  if (!had) return;
+  // While an import holds the history there is no mark yet, so the message comes without its Undo button.
   const mark = e.store.undoMark;
-  if (!had || mark === null) return;
+  if (mark === null) return void toast(`Deleted ${what}`);
   toast(`Deleted ${what}`, { action: { label: "Undo", onClick: () => e.undoIfLatest(mark) } });
 }
 
