@@ -114,6 +114,19 @@ describe("announce", () => {
     expect(polite.textContent).toBe("Midpoint");
   });
 
+  it("drops a debounced message whose pause ran out but whose frame has not come, once the next of its key arrives", () => {
+    attach();
+    m.announce("Cursor at 0, 0, snapped to the origin", "polite", { key: "sketch-cursor", delay: 150 });
+    vi.advanceTimersByTime(150);
+    m.announce("No snap, cursor at 10, minus 3", "polite", { key: "sketch-cursor", delay: 150 });
+    frame();
+    expect(polite.textContent).toBe("");
+    vi.advanceTimersByTime(150);
+    frame();
+    expect(polite.textContent).toBe("No snap, cursor at 10, minus 3");
+    expect(m.recentAnnouncements().map((a) => a.text)).toEqual(["No snap, cursor at 10, minus 3"]);
+  });
+
   it("cancelAnnouncement drops a debounced message before it speaks", () => {
     attach();
     m.announce("Face Center", "polite", { key: "snap", delay: 300 });

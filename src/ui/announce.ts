@@ -178,8 +178,8 @@ export function announce(text: string, priority: AnnouncePriority = "polite", op
   if (!line || !heard(priority, opts.verbose === true)) return;
   const { key, delay } = opts;
   if (key !== undefined && delay !== undefined && delay > 0) {
-    const was = waiting.get(key);
-    if (was !== undefined) clearTimeout(was);
+    // Its last sentence may be past its pause yet still waiting for a frame, and would be said after this change.
+    cancelAnnouncement(key);
     waiting.set(
       key,
       setTimeout(() => {
