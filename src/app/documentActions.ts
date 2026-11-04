@@ -275,6 +275,9 @@ export async function openOnBranch(e: VersionEngine, path: string, name: string)
 
 const speak = (text: string) => announce(text, "polite", { key: "history" });
 
+// An open sketch or Stress panel says its own "Nothing left to undo", so the history line stays quiet then.
+const ownHistoryOpen = (e: Engine) => e.sketch.active || usePanelsStore().stress !== null;
+
 const UNDO_REFUSED = {
   under: "Not undone, later steps came after it. Undo step by step from the Edit menu to reach it.",
   undone: "Already undone, Redo puts it back.",
@@ -310,10 +313,10 @@ export function createDocumentActions(
       const pending = e.tools.move.pending;
       e.tools.move.cancel();
       if (pending) return void speak("Undid Move");
-      const inSketch = e.sketch.active;
+      const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "undo");
       if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) stepHistory(e, () => e.store.undo());
-      if (!(inSketch && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
+      if (!(saysOwnEmpty && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
     },
     doRedo() {
       closeHome();
@@ -323,10 +326,10 @@ export function createDocumentActions(
         return void speak("Nothing to redo");
       }
       e.tools.move.cancel();
-      const inSketch = e.sketch.active;
+      const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "redo");
       if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) stepHistory(e, () => e.store.redo());
-      if (!(inSketch && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
+      if (!(saysOwnEmpty && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
     },
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {

@@ -336,6 +336,24 @@ describe("Undo and Redo speak the step", () => {
     expect(said().map((c) => c[0])).toEqual(["Undid Add support", "Redid Load 2 force"]);
   });
 
+  it("leaves an empty Stress history to Stress's own status line, and speaks the model's once Stress closes", () => {
+    usePanelsStore().showStress("body1");
+    const { a } = rig({
+      ui: {
+        panels: {
+          undoStress: () => usePanelsStore().stress !== null,
+          redoStress: () => usePanelsStore().stress !== null,
+        },
+      },
+    });
+    a.doUndo();
+    a.doRedo();
+    expect(said()).toEqual([]);
+    usePanelsStore().stress = null;
+    a.doUndo();
+    expect(said().map((c) => c[0])).toEqual(["Undid Box 2"]);
+  });
+
   it("says Undid Move for a pending drag, and Nothing to redo when redo writes the drag", () => {
     const move = { pending: true, cancel: () => {}, settle: () => {} };
     const { a } = rig({ tools: { move, extrude: { profileSketches: [] } } });
