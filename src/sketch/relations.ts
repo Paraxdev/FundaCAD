@@ -82,10 +82,7 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
         index: null,
         icon: "coincident",
         name: "Coincident",
-        detail: ids
-          .map(labelOf)
-          .filter(Boolean)
-          .join(" and "),
+        detail: ids.map(labelOf).filter(Boolean).join(" and "),
         entities: ids,
         state: null,
         implied: true,
@@ -131,7 +128,8 @@ export function constraintRows(
       spoken: "",
       index: i,
       icon: face.icon,
-      name: side === "width" ? "Width" : side === "height" ? "Height" : face.name,
+      name:
+        side === "width" ? "Width" : side === "height" ? "Height" : c.type === "fix" ? fixedName(ents, c) : face.name,
       detail: [...new Set(labels)].join(" and "),
       entities: face.operands.map((o) => o.split("~")[0] ?? o),
       state: diagnosisOf(i, conflicts, over),
@@ -147,6 +145,16 @@ function rectSide(ents: ResolvedEntity[], c: SketchConstraint): "width" | "heigh
   const field = rectSideField(c);
   if (!field || c.type !== "p2pDistance") return null;
   return ents.some((e) => e.id === c.e1 && e.type === "rectangle") ? field : null;
+}
+
+// The point indices are the solver's, as dimRefPoints lists them.
+function fixedName(ents: ResolvedEntity[], c: Extract<SketchConstraint, { type: "fix" }>): string {
+  const e = ents.find((x) => x.id === c.e);
+  if (e?.type === "point") return "Fixed";
+  if (e?.type === "circle" || (e?.type === "arc" && c.p === 2)) return "Fixed centre";
+  if (e?.type === "rectangle") return "Fixed corner";
+  if (e?.type === "line" || e?.type === "arc" || e?.type === "spline") return c.p === 0 ? "Fixed start" : "Fixed end";
+  return "Fixed point";
 }
 
 /** What was drawn, then what the geometry implies. */

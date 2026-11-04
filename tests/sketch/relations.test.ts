@@ -170,6 +170,34 @@ describe("relationRows", () => {
     ]);
   });
 
+  it("names the point a Fix holds, so it does not read as the whole shape", () => {
+    const ents: ResolvedEntity[] = [
+      { type: "rectangle", id: "r", width: 40, height: 15, x: 7, y: -3 },
+      line("l", 3, 4, 28, 11),
+      { type: "arc", id: "a", x1: 30, y1: 0, x2: 20, y2: 10, mx: 22.9, my: 2.9 },
+      { type: "circle", id: "c", x: -12, y: 5, radius: 3.5 },
+      { type: "point", id: "p", x: 1.5, y: -8 },
+    ];
+    const cs: SketchConstraint[] = [
+      { type: "fix", e: "r", p: 2 },
+      { type: "fix", e: "l", p: 0 },
+      { type: "fix", e: "l", p: 1 },
+      { type: "fix", e: "a", p: 2 },
+      { type: "fix", e: "a", p: 1 },
+      { type: "fix", e: "c", p: 0 },
+      { type: "fix", e: "p", p: 0 },
+    ];
+    expect(relationRows(ents, cs, NONE, NONE).map((r) => r.spoken)).toEqual([
+      "Fixed corner, Rectangle 1",
+      "Fixed start, Line 1",
+      "Fixed end, Line 1",
+      "Fixed centre, Arc 1",
+      "Fixed end, Arc 1",
+      "Fixed centre, Circle 1",
+      "Fixed, Point 1",
+    ]);
+  });
+
   it("survives a constraint pointing at geometry that is gone", () => {
     const rows = relationRows(TRIANGLE, [{ type: "horizontal", line: "deleted" }], NONE, NONE);
     expect(rows[0]!.detail).toBe("");
