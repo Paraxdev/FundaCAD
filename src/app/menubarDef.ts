@@ -15,7 +15,7 @@ import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
 import type { Engine } from "./engine";
-import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
+import { deleteRows, pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
 
@@ -108,10 +108,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           disabled: () => !e.selectedFeature && e.viewport.getSelectedFaceIds().length === 0,
           onClick: () => {
             if (e.deleteSelectedFace()) return;
-            if (e.selectedFeature) {
-              e.store.removeFeatures(pickedFeatureIds(e));
-              e.selectFeature(null);
-            }
+            if (e.selectedFeature) deleteRows(e, pickedFeatureIds(e));
           },
         },
         {

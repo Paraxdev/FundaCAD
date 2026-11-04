@@ -33,6 +33,7 @@ export interface ContextMenusDeps {
   dropBodyGizmo: () => void;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
   selectFeature: (id: string | null) => void;
+  deleteFeatures: (ids: readonly string[]) => void;
   editFeature: (id: string) => void;
   featureForFace: (faceId: number) => string | null;
   deleteSelectedFace: () => boolean;
@@ -58,6 +59,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     dropBodyGizmo,
     setStatus,
     selectFeature,
+    deleteFeatures,
     editFeature,
     featureForFace,
     deleteSelectedFace,
@@ -122,10 +124,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       {
         label: "Delete plane",
         danger: true,
-        onClick: unlessBusy(() => {
-          store.removeFeature(datumId);
-          selectFeature(null);
-        }),
+        onClick: unlessBusy(() => deleteFeatures([datumId])),
       },
     ]);
   }

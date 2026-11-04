@@ -12,7 +12,7 @@ import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import { interfaceSizeKey } from "../ui/interfaceSize";
 import type { Engine } from "./engine";
-import { pickedFeatureIds } from "./featureRows";
+import { deleteRows, pickedFeatureIds } from "./featureRows";
 
 const KEEPS_DELETE = '[role="tab"], [role="radio"], input, [data-keeps-delete]';
 
@@ -59,10 +59,7 @@ export function installKeyboard(e: Engine): void {
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     if (ev.target instanceof Element && ev.target.closest(KEEPS_DELETE)) return;
     if (e.deleteSelectedFace()) return;
-    if (e.selectedFeature && e.selectedFeatureExplicit) {
-      e.store.removeFeatures(pickedFeatureIds(e));
-      e.selectFeature(null);
-    }
+    if (e.selectedFeature && e.selectedFeatureExplicit) deleteRows(e, pickedFeatureIds(e));
   });
 
   window.addEventListener("keydown", (ev) => {

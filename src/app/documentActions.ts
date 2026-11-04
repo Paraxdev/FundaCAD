@@ -10,6 +10,7 @@ import { choose } from "../ui/choice";
 import { toast } from "../ui/toast";
 import { announce } from "../ui/announce";
 import { stepLabelFor } from "../ui/canStep";
+import { usePanelsStore } from "../stores/panels";
 import type { Engine } from "./engine";
 import type { HeldEdit } from "../features/heldEdit";
 import { TEMPLATES, templateText } from "../templates";
@@ -273,8 +274,10 @@ export async function openOnBranch(e: VersionEngine, path: string, name: string)
 
 const speak = (text: string) => announce(text, "polite", { key: "history" });
 
-export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
-  return {
+export function createDocumentActions(
+  e: Engine,
+): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo" | "undoIfLatest"> {
+  const actions = {
     async newDocument() {
       if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
       e.store.newDocument();
@@ -317,5 +320,13 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
       if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) stepHistory(e, () => e.store.redo());
       if (!(inSketch && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
     },
+    // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
+    undoIfLatest(mark: number) {
+      if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
+      const latest = !e.tools.move.pending && !usePanelsStore().stress && e.store.undoMark === mark;
+      if (!latest) return void toast("Not undone, the delete is no longer the last step.");
+      actions.doUndo();
+    },
   };
+  return actions;
 }

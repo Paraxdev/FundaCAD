@@ -13,6 +13,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import { createSelection } from "../../../src/app/selection";
 import { DimInput } from "../../../src/sketch/dimInput";
 import { useTimelineStore } from "../../../src/stores/timeline";
+import { useToastStore } from "../../../src/stores/toasts";
 import { useSelectionStore } from "../../../src/stores/selection";
 import type { Engine } from "../../../src/app/engine";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
@@ -569,6 +570,7 @@ describe("History rows picked together", () => {
     items.find((i) => i.label === "Suppress these 3")!.onClick!();
     items.find((i) => i.label === "Delete these 3")!.onClick!();
     expect(m.log).toEqual(["suppress:true:ex1,rv,jt", "remove:ex1,rv,jt"]);
+    expect(useToastStore().items.map((t) => [t.message, t.action?.label])).toEqual([["Deleted 3 steps", "Undo"]]);
     expect(useSelectionStore().rows.keys).toEqual([]);
   });
 

@@ -14,7 +14,7 @@ Ctrl+Alt+H shows or hides the card.
 4. Ctrl-click or Shift-click to take several steps, then right-click to suppress or delete them together.
 5. With something selected, Related to Selection shows only the steps that made it.
 
-Right-click a step for Edit, Rename, Suppress, Add condition, Roll back before this, Roll to here and Delete. [Reorder and suppress](suppress.md) has more on suppressing and conditions.
+Right-click a step for Edit, Rename, Suppress, Add condition, Roll back before this, Roll to here and Delete. Delete, by menu or by the Delete key, says what went, like "Deleted Extrude 1" or "Deleted 3 steps", and the message has an Undo button that stays for 15 seconds. The button only works while the delete is still the last step, so it never takes back something you did after. Ctrl+Z works as always. [Reorder and suppress](suppress.md) has more on suppressing and conditions.
 
 ## Undo and Redo
 

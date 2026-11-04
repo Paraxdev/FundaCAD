@@ -3,7 +3,7 @@
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
 import { onUnitChange } from "../ui/units";
-import { soleSelectedFeature } from "./featureRows";
+import { deleteRows, soleSelectedFeature } from "./featureRows";
 import type { RowSelection } from "../ui/rowSelection";
 import { asFeature } from "../types";
 import { isSessionEnded } from "../document/session";
@@ -201,6 +201,8 @@ export interface Engine {
   openDoc(): Promise<void>;
   doUndo(): void;
   doRedo(): void;
+  /** Undoes the latest step only while it is still the one stamped `mark`, else says why not. */
+  undoIfLatest(mark: number): void;
 
   lastAction: string | null;
   setStatus(text: string, cls: "" | "connected" | "error"): void;
@@ -520,6 +522,7 @@ export function mountUi(e: Engine): void {
     dropBodyGizmo: () => e.dropBodyGizmo(),
     setStatus: (t, c) => e.setStatus(t, c),
     selectFeature: (id) => e.selectFeature(id),
+    deleteFeatures: (ids) => deleteRows(e, ids),
     editFeature: (id) => e.editFeature(id),
     featureForFace: (id) => e.featureForFace(id),
     deleteSelectedFace: () => e.deleteSelectedFace(),
