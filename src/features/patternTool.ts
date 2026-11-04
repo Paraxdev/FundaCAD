@@ -9,6 +9,8 @@ import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
+import { awaitTreePick, treePickRefusal } from "../ui/treePick";
+import { edgeSelectorFrom } from "../viewport/edgeMatch";
 import { isEditableTarget } from "../ui/focus";
 import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
@@ -63,6 +65,7 @@ export class PatternTool {
   private pickNote = ""; // why the last click did not give an axis
   private pickSeq = 0; // a pick answered after a newer one, or after the tool closed, is dropped
   private pending: Promise<void> | null = null; // the axis pick still waiting on the engine
+  private releaseRows: (() => void) | null = null;
   private axisLineObj: THREE.Line | null = null;
   private count = START_COUNT;
   private value = 0; // mm between copies (linear, and X of a rect) or degrees swept (circular)
@@ -129,6 +132,18 @@ export class PatternTool {
 
     this.viewport.suspendPicking = true;
     this.gesture.attach();
+    if (kind === "circular") {
+      this.releaseRows = awaitTreePick(
+        (pick) => {
+          if (pick.kind === "face") return this.askAxis(this.viewport.faceSelectorOf(pick.faceId));
+          if (pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge for the axis");
+          const ref = edgeSelectorFrom({ points: pick.edge.points as Vec3[], body: pick.edge.body });
+          return ref ? this.askAxis(ref) : "That edge has no length";
+        },
+        () => this.cancel(),
+        { keepsOnRewind: true, keepsOnCommand: true },
+      );
+    }
 
     this.buildGizmo();
     this.dim.show(
@@ -410,25 +425,29 @@ export class PatternTool {
       this.commitSoon();
       return;
     }
-    const p = this.pickAxis(hit, e.clientX, e.clientY).catch((err: unknown) => {
+    let ref: Selector | null = null;
+    if (hit.kind === "edge") {
+      ref = hit.selector;
+    } else {
+      const f = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
+      if (f) ref = f.bodyId ? ({ ...f.selector, body: f.bodyId } as Selector) : f.selector;
+    }
+    if (ref) this.askAxis(ref);
+  }
+
+  private askAxis(ref: Selector): true {
+    const p = this.pickAxis(ref).catch((err: unknown) => {
       logError(err, { source: "pattern" });
     });
     this.pending = p;
     void p.finally(() => {
       if (this.pending === p) this.pending = null;
     });
+    return true;
   }
 
   /** Asked of the engine so the preview turns about exactly the line the rebuild will. */
-  private async pickAxis(hit: import("../viewport/picking").Hit, x: number, y: number) {
-    let ref: Selector | null = null;
-    if (hit.kind === "edge") {
-      ref = hit.selector;
-    } else {
-      const f = this.viewport.pickFaceForPressPull(x, y);
-      if (f) ref = f.bodyId ? ({ ...f.selector, body: f.bodyId } as Selector) : f.selector;
-    }
-    if (!ref) return;
+  private async pickAxis(ref: Selector) {
     const seq = ++this.pickSeq;
     const reply = await this.store.patternAxis(ref);
     if (!this.active || seq !== this.pickSeq) return;
@@ -719,6 +738,8 @@ export class PatternTool {
   }
 
   private cleanup() {
+    this.releaseRows?.();
+    this.releaseRows = null;
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
