@@ -1354,7 +1354,7 @@ pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
 pub fn stress_result_with(req: &Map<String, Value>, watch: &dyn Watch, limits: &StressLimits) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
-    let (_, r) = match crate::inspect::rebuild_request(req, watch) {
+    let (_, r) = match crate::inspect::exact_rebuild_request(req, watch) {
         Ok(x) => x,
         Err(e) => return e,
     };
