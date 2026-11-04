@@ -172,7 +172,7 @@ export function refOf(el: HTMLElement): string {
   if (d.viewMode) return `view-mode:${d.viewMode}`;
   if (d.category) return `category:${d.category}`;
   if (d.tab && el.getAttribute("role") === "tab") return `tab:${d.tab}`;
-  const label = labelOf(el);
+  const label = d.refName ?? labelOf(el);
   if (el.matches(".menu-btn")) return `menu:${label}`;
   if (el.matches(".menu-item")) {
     // The popup is teleported out of the bar, so the open menu names its button.

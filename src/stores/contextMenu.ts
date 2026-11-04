@@ -3,6 +3,8 @@ import { markRaw, ref } from "vue";
 
 export interface CtxItem {
   label: string;
+  /** The stable name the harness refers to the row by when `label` carries a changing detail, as in "Undo Box 2". */
+  refName?: string;
   onClick?: () => void; // omit for separators / pure submenu parents
   disabled?: boolean;
   separator?: boolean; // renders a divider; other fields ignored

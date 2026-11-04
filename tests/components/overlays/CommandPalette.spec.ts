@@ -119,9 +119,48 @@ describe("CommandPalette", () => {
     await openPalette();
     type("last mess");
     await nextTick();
-    expect(options().map(nameOf).filter((n) => n.includes("Show Last Message"))).toHaveLength(1);
+    expect(
+      options()
+        .map(nameOf)
+        .filter((n) => n.includes("Show Last Message")),
+    ).toHaveLength(1);
     key("Enter");
     expect(ran).toEqual(["show-last-message"]);
+  });
+
+  it("lists Undo and Redo with the step they take, found by the word Undo, and runs them by id", async () => {
+    const steps: Record<string, string | null> = { undo: "Undo Box 2", redo: null };
+    useCommandPaletteStore().bindLabels((id) => steps[id] ?? null);
+    await openPalette();
+    type("undo");
+    await nextTick();
+    expect(
+      options()
+        .map(nameOf)
+        .filter((n) => n.includes("Undo")),
+    ).toEqual([expect.stringContaining("Undo Box 2")]);
+    key("Enter");
+    expect(ran).toEqual(["undo"]);
+    await openPalette();
+    type("redo");
+    await nextTick();
+    expect(nameOf(options()[0]!)).toMatch(/^Redo, Edit/);
+  });
+
+  it("reads the label again on each open", async () => {
+    let now = "Undo Box 2";
+    useCommandPaletteStore().bindLabels((id) => (id === "undo" ? now : null));
+    await openPalette();
+    type("undo");
+    await nextTick();
+    expect(options().map(nameOf)[0]).toContain("Undo Box 2");
+    key("Escape");
+    await nextTick();
+    now = "Undo Move Fillet 3";
+    await openPalette();
+    type("undo");
+    await nextTick();
+    expect(options().map(nameOf)[0]).toContain("Undo Move Fillet 3");
   });
 
   it("keeps Tab on the field", async () => {

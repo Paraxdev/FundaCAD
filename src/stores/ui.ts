@@ -11,6 +11,9 @@ export const useUiStore = defineStore("ui", () => {
 
   const canUndo = ref(false);
   const canRedo = ref(false);
+  /** What Undo and Redo would take, for the title bar tooltips; null when there is nothing to step. */
+  const undoLabel = ref<string | null>(null);
+  const redoLabel = ref<string | null>(null);
 
   const sketchActive = ref(false);
 
@@ -38,6 +41,8 @@ export const useUiStore = defineStore("ui", () => {
     dirty,
     canUndo,
     canRedo,
+    undoLabel,
+    redoLabel,
     sketchActive,
     gridStepMm,
     projLabel,

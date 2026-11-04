@@ -6,7 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import type { MeasureTool } from "../features/measureTool";
 import { bodyExtraMenu, elementMoveMenu, materialMenu } from "./browserTree";
-import { canStep } from "./canStep";
+import { canStep, stepLabelFor, stepMenuText } from "./canStep";
 import { ancestryOf } from "../document/elements";
 import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
@@ -394,8 +394,20 @@ export function createContextMenus(deps: ContextMenusDeps) {
         onClick: () => handleAction("show-all-bodies"),
       },
       { separator: true, label: "" },
-      { label: "Undo", shortcut: "Ctrl+Z", disabled: !canStep(deps, "undo"), onClick: () => handleAction("undo") },
-      { label: "Redo", shortcut: "Ctrl+Y", disabled: !canStep(deps, "redo"), onClick: () => handleAction("redo") },
+      {
+        label: stepMenuText("Undo", stepLabelFor(deps, "undo")),
+        refName: "Undo",
+        shortcut: "Ctrl+Z",
+        disabled: !canStep(deps, "undo"),
+        onClick: () => handleAction("undo"),
+      },
+      {
+        label: stepMenuText("Redo", stepLabelFor(deps, "redo")),
+        refName: "Redo",
+        shortcut: "Ctrl+Y",
+        disabled: !canStep(deps, "redo"),
+        onClick: () => handleAction("redo"),
+      },
     ]);
   }
 

@@ -18,3 +18,13 @@ export function stepLabelFor(e: { sketch: SketchMode; store: DocumentStore }, wa
   if (stress) return way === "undo" ? stress.undoLabel : stress.redoLabel;
   return way === "undo" ? e.store.undoLabel : e.store.redoLabel;
 }
+
+const MENU_NAME_MAX = 32;
+
+/** "Undo Fillet 2" for a menu row or tooltip, or the bare verb when there is no step. A long name is clipped so a row
+ *  keeps its width; the spoken line keeps the whole name. */
+export function stepMenuText(verb: "Undo" | "Redo", label: string | null): string {
+  if (!label) return verb;
+  const name = label.length > MENU_NAME_MAX ? `${label.slice(0, MENU_NAME_MAX)}…` : label;
+  return `${verb} ${name}`;
+}

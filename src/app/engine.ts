@@ -49,6 +49,7 @@ import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
+import { stepLabelFor, stepMenuText } from "../ui/canStep";
 import { welcomeOnStartup } from "../ui/welcome";
 import { Home } from "../ui/home";
 import { wireHomeOnOpen } from "./homeWiring";
@@ -448,6 +449,9 @@ export function mountUi(e: Engine): void {
   // Global, so the palette opens from anywhere.
   const cmdk = useCommandPaletteStore();
   cmdk.bind((a) => e.handleAction(a));
+  cmdk.bindLabels((id) =>
+    id === "undo" || id === "redo" ? stepMenuText(id === "undo" ? "Undo" : "Redo", stepLabelFor(e, id)) : null,
+  );
   window.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === "k" || ev.key === "K")) {
       ev.preventDefault();
