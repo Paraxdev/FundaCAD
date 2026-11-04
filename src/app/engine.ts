@@ -61,7 +61,7 @@ import { startWhatsNew } from "../ui/whatsNew";
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
 import { safeMode } from "../ui/safeMode";
-import { createSelection } from "./selection";
+import { closeToolOnLostStep, createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
@@ -420,6 +420,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
   e.store.onRewind(endRewoundPick);
+  closeToolOnLostStep(e);
   wireDocumentSwap(e.store, {
     cancelTools: () => cancelActiveTools(e.tools),
     sketch: e.sketch,

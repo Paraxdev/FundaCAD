@@ -9,8 +9,6 @@ const openDocument = vi.fn();
 vi.mock("../../src/io/files", () => ({ openDocument: (...a: unknown[]) => openDocument(...a) }));
 const closeHome = vi.fn();
 vi.mock("../../src/ui/home", () => ({ closeHome: () => closeHome() }));
-const cancelActiveTools = vi.fn();
-vi.mock("../../src/app/toolBusy", () => ({ cancelActiveTools: () => cancelActiveTools() }));
 
 const announce = vi.fn();
 vi.mock("../../src/ui/announce", () => ({ announce: (...a: unknown[]) => announce(...a) }));
@@ -189,64 +187,6 @@ describe("a Move drag let go of but not yet entered", () => {
     } as unknown as Engine;
     createDocumentActions(e).doRedo();
     expect(calls).toEqual(["write drag"]);
-  });
-});
-
-describe("Undo and Redo under an open tool", () => {
-  function engine(opts: {
-    editing?: string;
-    sketches?: string[];
-    before: string[];
-    undone: string[];
-    redone?: string[];
-  }) {
-    cancelActiveTools.mockReset();
-    const ids = { now: opts.before };
-    return {
-      tools: { move: { cancel: () => {} }, extrude: { profileSketches: opts.sketches ?? [] } },
-      sketch: { undoEdit: () => false, redoEdit: () => false },
-      ui: { panels: { undoStress: () => false, redoStress: () => false } },
-      store: {
-        editPreviewId: opts.editing ?? null,
-        get document() {
-          return { features: ids.now.map((id) => ({ id })) };
-        },
-        undo: () => (ids.now = opts.undone),
-        redo: () => (ids.now = opts.redone ?? ids.now),
-      },
-    } as unknown as Engine;
-  }
-  const standDowns = () => cancelActiveTools.mock.calls.length;
-
-  it("closes a tool re-editing the step the undo removed, not one re-editing a step that stays", () => {
-    createDocumentActions(engine({ editing: "f7", before: ["b3", "f7"], undone: ["b3"] })).doUndo();
-    expect(standDowns()).toBe(1);
-    createDocumentActions(engine({ editing: "f7", before: ["b3", "f7", "f9"], undone: ["b3", "f7"] })).doUndo();
-    expect(standDowns()).toBe(0);
-  });
-
-  it("closes an extrude when one of its sketches goes, with none, one or many picked", () => {
-    createDocumentActions(engine({ sketches: [], before: ["b3", "s4"], undone: ["b3"] })).doUndo();
-    expect(standDowns()).toBe(0);
-    createDocumentActions(engine({ sketches: ["s4"], before: ["s4", "b3"], undone: ["s4"] })).doUndo();
-    expect(standDowns()).toBe(0);
-    createDocumentActions(engine({ sketches: ["s4"], before: ["b3", "s4"], undone: ["b3"] })).doUndo();
-    expect(standDowns()).toBe(1);
-    createDocumentActions(
-      engine({ sketches: ["s4", "s6"], before: ["s4", "b3", "s6"], undone: ["s4", "b3"] }),
-    ).doUndo();
-    expect(standDowns()).toBe(1);
-  });
-
-  it("closes the tool when a redo removes the step it edits", () => {
-    const e = engine({ editing: "f7", before: ["b3", "f7"], undone: [], redone: ["b3"] });
-    createDocumentActions(e).doRedo();
-    expect(standDowns()).toBe(1);
-  });
-
-  it("leaves alone an id that was never in the document, an open sketch's own profile", () => {
-    createDocumentActions(engine({ sketches: ["__active__"], before: ["b3", "s4"], undone: ["b3"] })).doUndo();
-    expect(standDowns()).toBe(0);
   });
 });
 

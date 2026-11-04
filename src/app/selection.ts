@@ -45,6 +45,23 @@ export function closeOpenEdit(e: Engine, except: string): void {
   endPickSession();
 }
 
+// The step a tool opened by editFeature re-edits, until it calls back done. An untouched Revolve, joint or mechanism
+// edit has begun no edit preview to read it from.
+const reEdited = new WeakMap<Engine, string>();
+
+/** A document change, an undo or a redo above all, that takes away the step an open tool re-edits or a sketch it
+ *  extrudes closes the tool: Enter would add a red step or nothing, and either way lose the redo. */
+export function closeToolOnLostStep(e: Engine): () => void {
+  let had = new Set<string>();
+  return e.store.onDocChange((doc) => {
+    const was = had;
+    had = new Set(doc.features.map((f) => f.id));
+    if (!e.toolAtWork()) return void reEdited.delete(e);
+    const under = [reEdited.get(e), e.store.editPreviewId, ...e.tools.extrude.profileSketches];
+    if (under.some((id) => id && was.has(id) && !had.has(id))) cancelActiveTools(e.tools);
+  });
+}
+
 /** True when a waiting pick keeps the edit of a step back, said aloud so the double click or Enter is not lost. */
 export function editHeldByPick(e: Pick<Engine, "setStatus">): boolean {
   if (!pickHoldsEdits()) return false;
@@ -128,6 +145,7 @@ export function createSelection(
       return;
     }
     const done = (cid: string | null) => {
+      if (reEdited.get(e) === id) reEdited.delete(e);
       e.noteCommitted(cid);
       if (cid) selectFeature(cid);
     };
@@ -176,6 +194,8 @@ export function createSelection(
         }
         break;
     }
+    // A sketch keeps its own undo and is not closed as a tool is.
+    if (f.type !== "sketch" && e.toolBusy()) reEdited.set(e, id);
   };
 
   return { selectFeature, selectFeatureRows, editFeature, featureForFace, deleteSelectedFace };

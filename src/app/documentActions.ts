@@ -17,19 +17,8 @@ import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
 import { closeHome, homeIsOpen } from "../ui/home";
 import { displayName } from "../ui/homeList";
-import { cancelActiveTools } from "./toolBusy";
 
 type WorkEngine = Pick<Engine, "store" | "sketch"> & Partial<Pick<Engine, "tools">>;
-
-// A tool cannot outlive the step it re-edits or the sketch it extrudes: Enter would add a red step or nothing, and either
-// way lose the redo.
-function stepHistory(e: Engine, step: () => void) {
-  const has = (id: string) => e.store.document.features.some((f) => f.id === id);
-  const editing = e.store.editPreviewId;
-  const under = [...(editing ? [editing] : []), ...e.tools.extrude.profileSketches].filter(has);
-  step();
-  if (!under.every(has)) cancelActiveTools(e.tools);
-}
 
 /** The tools whose drag, let go of but not entered, is unsaved work. Missing ones are skipped for partial fakes. */
 export function heldEdits(tools: Engine["tools"] | undefined): HeldEdit[] {
@@ -315,7 +304,7 @@ export function createDocumentActions(
       if (pending) return void speak("Undid Move");
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "undo");
-      if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) stepHistory(e, () => e.store.undo());
+      if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) e.store.undo();
       if (!(saysOwnEmpty && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
     },
     doRedo() {
@@ -328,7 +317,7 @@ export function createDocumentActions(
       e.tools.move.cancel();
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "redo");
-      if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) stepHistory(e, () => e.store.redo());
+      if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) e.store.redo();
       if (!(saysOwnEmpty && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
     },
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
