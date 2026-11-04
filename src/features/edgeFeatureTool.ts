@@ -339,7 +339,7 @@ export class EdgeFeatureTool {
       });
       if (began && opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
+      setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face · or take a row from the Geometry list`);
     }
   }
 
@@ -608,10 +608,10 @@ export class EdgeFeatureTool {
     this.afterMembershipChange();
   }
 
-  /** Adding is already a click on an edge in the view, so this only says so. */
+  /** Adding is already a click on an edge or an edge row, so this only says so. */
   promptAddMember() {
     if (this.phase !== "drag") return;
-    setPrompt(`Click an edge in the view to add it to the ${this.kind}`);
+    setPrompt(`Click an edge, or take an edge row from the Geometry list, to add it to the ${this.kind}`);
   }
 
   private disposeGhosts() {

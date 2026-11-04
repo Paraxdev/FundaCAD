@@ -143,6 +143,19 @@ describe("a tool's pick answered from the Items tree", () => {
     expect(r.addFeature.mock.calls[0]![0]).toMatchObject({ type: "datumPoint", point: [4, 5, 6] });
   });
 
+  it("a point pick refuses a face or edge row by naming the datum point row it takes, and keeps the count", () => {
+    const r = rig();
+    r.starters.createPlaneThroughPoints();
+    expect(r.click({ kind: "face", faceId: 9 })).toBe("refused");
+    expect(r.click({ kind: "edge", edge: { id: "b2:3", body: "b2", points: [] } as never })).toBe("refused");
+    expect(r.hints).toHaveLength(2);
+    for (const h of r.hints) expect(h).toContain("datum point");
+    expect(usePromptStore().text).toContain("0 of 3");
+    expect(r.click({ kind: "datumPoint", id: "p2", point: [7, -3, 5] })).toBe("taken");
+    expect(usePromptStore().text).toContain("1 of 3");
+    expect(treePickWaiting()).toBe(true);
+  });
+
   it("a boolean takes body rows, and refuses the body it already has", () => {
     const r = rig([
       { id: "b1", name: "A" },

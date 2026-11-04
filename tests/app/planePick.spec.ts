@@ -96,7 +96,8 @@ describe("routePlaneRow", () => {
   it("refuses when a tool holds the screen and takes no rows", () => {
     const { e, setStatus } = host({ owned: true });
     expect(routePlaneRow(e, XZ)).toBe("refused");
-    expect(setStatus.mock.calls[0]![0]).toContain("active tool");
+    const hint = setStatus.mock.calls[0]![0] as string;
+    expect([hint.includes("active tool"), hint.includes("Esc"), /in the view/.test(hint)]).toEqual([true, true, false]);
   });
 
   it("lets a row through inside a sketch, whose own action then refuses", () => {

@@ -12,6 +12,7 @@ import {
   treePickWaiting,
   type TreePick,
 } from "../../src/ui/treePick";
+import { usePromptStore } from "../../src/stores/prompt";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
@@ -142,6 +143,18 @@ describe("an edge row while Fillet waits", () => {
     expect([tool.active, done.mock.calls.length, treePickWaiting()]).toEqual([true, 0, true]);
     expect(click(edgeRow(0))).toBe("taken");
     expect(tool.memberRows()).toHaveLength(1);
+    tool.cancel();
+  });
+
+  it("tells Add edge's user a Geometry row also adds, at the start and mid edit", () => {
+    const { tool, click } = rig();
+    const prompt = () => usePromptStore().text ?? "";
+    tool.start("chamfer", () => {});
+    expect(prompt()).toMatch(/Geometry list|row/i);
+    click(edgeRow(1));
+    tool.promptAddMember();
+    expect(prompt()).toMatch(/Geometry list|row/i);
+    expect(prompt()).toContain("chamfer");
     tool.cancel();
   });
 

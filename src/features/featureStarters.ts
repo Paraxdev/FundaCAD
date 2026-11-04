@@ -692,7 +692,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a point");
+        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a datum point row, or a point in the view");
         take(pick.point, { datum: pick.id });
         return true;
       },

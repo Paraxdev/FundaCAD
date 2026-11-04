@@ -133,10 +133,9 @@ describe("StressPanel", () => {
       [".stress-place-support", ".stress-spot-support", ".stress-set-support"].map((c) => q(c)?.textContent);
     expect(actions()).toEqual(["Click faces", "Spot", "Use selected faces"]);
     const place = q(".stress-place-support")!;
-    expect([place.title, place.getAttribute("aria-label")]).toEqual([
-      "Click faces of the body to add each whole face",
-      null,
-    ]);
+    expect([place.title.includes("Geometry list"), place.getAttribute("aria-label")]).toEqual([true, null]);
+    expect(q(".stress-place-load")?.getAttribute("title") ?? "").toContain("Geometry list");
+    expect(q(".stress-spot-support")!.title).not.toContain("Geometry list");
     q(".stress-place-support")!.click();
     q(".stress-spot-load")!.click();
     expect(panels.placeStressSpot.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }, "spot"]]);
