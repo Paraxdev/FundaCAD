@@ -40,7 +40,7 @@ const USE_INSTEAD = {
   "IconButton:no-name": "IconButton with tip (and keys), which writes title and aria-label",
   "RailButton:no-name": "RailButton with label, which is its accessible name",
   "Segmented:no-name": "a label or tip on every icon only Segmented option",
-  "NumberField:no-unit": "unit=\"mm\" (a :unit binding too), or unitless for a plain number",
+  "NumberField:no-unit": 'unit="mm" (a :unit binding too), or unitless for a plain number',
   "class:btn": "Button",
   "class:sm-input": "TextField or NumberField",
   "class:pref-seg": "Segmented",
