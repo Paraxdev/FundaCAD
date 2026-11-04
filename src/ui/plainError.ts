@@ -1,5 +1,3 @@
-const MAX_LENGTH = 160;
-
 export const SEE_CONSOLE = "The details are in the console.";
 
 const INTERNAL: readonly RegExp[] = [
@@ -8,7 +6,8 @@ const INTERNAL: readonly RegExp[] = [
   /\[object \w+\]/,
   /\b(?:is|are) (?:undefined|not defined|not a function|not iterable)\b/,
   /\bCannot (?:read|set|destructure) propert/i,
-  /\b[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]+/,
+  /\b(?:Standard|StdFail|TopoDS|TopExp|TopAbs|BRep[A-Za-z]*|Geom(?:2d|API|Abs|Lib)?|BOPAlgo|ShapeFix|ShapeAnalysis|IntTools|gp)_[A-Z]\w*/,
+  /^\s*[[{]\s*"/,
   /\bpanicked\b|RUST_BACKTRACE|\bunwrap\(\)|\b\w+::\w+/,
 ];
 
@@ -21,7 +20,7 @@ function rawText(err: unknown): string {
 }
 
 export function looksInternal(text: string): boolean {
-  return text.length > MAX_LENGTH || INTERNAL.some((re) => re.test(text));
+  return INTERNAL.some((re) => re.test(text));
 }
 
 /** The first line of a rejection when it reads as a sentence, otherwise the fallback. The raw text belongs in the console detail. */

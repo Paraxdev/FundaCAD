@@ -22,6 +22,24 @@ describe("plainError keeps text that already reads plainly", () => {
   });
 });
 
+const JOIN =
+  "Join failed: the result came out smaller than the body it started from. That usually means the two shapes touch along a surface instead of overlapping. Move the profile so it reaches a little way into the body.";
+const PATTERN =
+  "Pattern: the copies overlap and could not be fused into one valid solid. Space them apart, or pattern the feature that made the detail instead of the whole body.";
+
+describe("plainError keeps the engine's long sentences and names with underscores", () => {
+  it.each([
+    ["a 210 character join failure", JOIN],
+    ["a 161 character pattern failure", PATTERN],
+    ["an unknown parameter name", 'unknown parameter "Wall_Thick"'],
+    ["a sketch named with an underscore", "Sketch_Profile is open"],
+    ["a word that only starts like a kernel class", "Geometry_Cut needs a body"],
+    ["a quoted list inside a sentence", 'Pick one of ["Top", "Front"]'],
+  ])("%s reads plainly", (_name, text) => {
+    expect(plainError(new Error(text), FALLBACK)).toBe(text);
+  });
+});
+
 describe("plainError replaces text that looks internal", () => {
   it.each([
     ["a JS exception name", new TypeError("x is undefined")],
@@ -32,6 +50,11 @@ describe("plainError replaces text that looks internal", () => {
     ["an object string", "[object Object]"],
     ["an OCCT name", new Error("Standard_ConstructionError")],
     ["an OCCT name inside a sentence", "Failed: BRepAlgoAPI_Fuse gave nothing"],
+    ["an OCCT failure class", "StdFail_NotDone raised in sweep"],
+    ["an OCCT geometry class", "Geom_BSplineSurface has no poles"],
+    ["an OCCT point class", "gp_Pnt out of range"],
+    ["a JSON dump", '{"code":4,"message":"bad"}'],
+    ["a JSON list", '  ["e1", "e2"]'],
     ["a Rust panic", "thread 'main' panicked at src/lib.rs:9:1"],
     ["a Rust path", "fundacad_engine::kernel::sew failed"],
     ["an object with no message", { code: 4 }],
@@ -45,13 +68,7 @@ describe("plainError replaces text that looks internal", () => {
     expect(plainError(err, FALLBACK)).toBe(FALLBACK);
   });
 
-  it("keeps a first line of 160 characters and replaces 161", () => {
-    const at160 = "a".repeat(160);
-    expect(plainError(at160, FALLBACK)).toBe(at160);
-    expect(plainError("a".repeat(161), FALLBACK)).toBe(FALLBACK);
-  });
-
-  it("measures the first line only, so a long stack under a short message still reads plainly", () => {
+  it("judges the first line, so a long stack under a short message still reads plainly", () => {
     expect(plainError(`Hole is too close to the edge\n${"x".repeat(500)}`, FALLBACK)).toBe(
       "Hole is too close to the edge",
     );
