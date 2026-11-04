@@ -83,6 +83,36 @@ describe("FreedomWatch", () => {
     expect(run).toHaveBeenCalledTimes(3);
   });
 
+  it("an undo back to the shown sketch drops the newer run, in its pause or mid run", async () => {
+    let release: (m: Map<string, Freedom> | null) => void = () => {};
+    const run = vi.fn<Run>((e) => {
+      const x2 = e[0]!.type === "line" ? e[0]!.x2 : 0;
+      if (x2 === 14) return new Promise((resolve) => (release = resolve));
+      return Promise.resolve(map(x2 === 11));
+    });
+    const w = new FreedomWatch((r) => results.push(r), run);
+    w.request(line(11), cons);
+    await vi.advanceTimersByTimeAsync(300);
+    w.request(line(13), [...cons, { type: "vertical", line: "e1" }]);
+    await vi.advanceTimersByTimeAsync(120);
+    w.request(line(11), cons);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(results).toEqual([map(true)]);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    w.request(line(14), cons);
+    await vi.advanceTimersByTimeAsync(300);
+    w.request(line(11), cons);
+    release(map(false));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(results).toEqual([map(true)]);
+    expect(run).toHaveBeenCalledTimes(2);
+
+    w.request(line(13), cons);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(results).toEqual([map(true), map(false)]);
+  });
+
   it("a cancel before the pause ends runs nothing, and a cancel mid run delivers nothing", async () => {
     let release: (m: Map<string, Freedom> | null) => void = () => {};
     const run = vi.fn<Run>(() => new Promise((resolve) => (release = resolve)));

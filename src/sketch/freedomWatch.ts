@@ -24,8 +24,13 @@ export class FreedomWatch {
   /** The fingerprint is the sketch's content, so a selection click that rebuilds the same sketch starts nothing. */
   request(entities: ResolvedEntity[], constraints: SketchConstraint[]) {
     const fingerprint = JSON.stringify([entities, constraints]);
-    if (fingerprint === this.waiting || fingerprint === this.delivered) return;
+    if (fingerprint === this.waiting) return;
     this.stop();
+    // An undo back to the shown sketch inside the pause: its words are already up, the newer run must not land.
+    if (fingerprint === this.delivered) {
+      this.waiting = null;
+      return;
+    }
     this.waiting = fingerprint;
     const generation = this.generation;
     this.timer = setTimeout(() => {
