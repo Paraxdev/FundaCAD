@@ -32,6 +32,7 @@ import {
   setTheme,
   themes,
 } from "../../ui/theme";
+import { confirmDanger } from "../../ui/choice";
 import { describeFailures } from "../../ui/contrast";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
@@ -238,6 +239,15 @@ function pickVerbosity(id: string) {
   const v = asVerbosity(id);
   if (v) setA11yPref("verbosity", v);
 }
+async function onResetA11y() {
+  const ok = await confirmDanger(
+    "Reset accessibility settings?",
+    "Reset",
+    "Every choice on this page goes back to its default, Hover delay too.",
+  );
+  if (ok) resetA11yPrefs();
+}
+
 const presetNote = ref("");
 async function screenReaderPreset() {
   applyScreenReaderPreset();
@@ -819,7 +829,7 @@ function onClassicCamera(on: boolean) {
               :disabled="!a11yChanged"
               data-a11y-reset
               aria-describedby="prefs-a11y-actions-hint"
-              @click="resetA11yPrefs"
+              @click="onResetA11y"
               >Reset to defaults</Button
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>

@@ -26,6 +26,12 @@ const pickBundle = vi.fn();
 const installCandidate = vi.fn();
 const installedPlugins = vi.fn();
 const removePlugin = vi.fn();
+const confirmDanger = vi.fn();
+
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: (...a: unknown[]) => confirmDanger(...a),
+}));
 
 vi.mock("../../../src/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../../src/plugins")>();
@@ -381,6 +387,7 @@ describe("the list of what is installed", () => {
     contribute("widgets", { settings: [{ key: "s", settings }] });
     installedPlugins.mockResolvedValue([record({})]);
     removePlugin.mockResolvedValue(undefined);
+    confirmDanger.mockResolvedValue(true);
     const w = await mounted();
     const row = () => w.get('[data-plugin="widgets"]');
     const remove = () =>
@@ -404,6 +411,61 @@ describe("the list of what is installed", () => {
       version: 0,
       values: {},
       forgotten: true,
+    });
+  });
+
+  describe("Remove asks first", () => {
+    const setup = async () => {
+      const settings = definePluginSettings("widgets", {
+        version: 1,
+        props: [{ key: "gap", type: "number", label: "Gap", default: 2 }],
+      });
+      contribute("widgets", { settings: [{ key: "s", settings }] });
+      installedPlugins.mockResolvedValue([record({}), record({ id: "bolts" })]);
+      removePlugin.mockResolvedValue(undefined);
+      const w = await mounted();
+      settings.set("gap", 7);
+      const remove = (id: string) =>
+        w
+          .get(`[data-plugin="${id}"]`)
+          .findAll("button")
+          .find((b) => b.text() === "Remove")!;
+      return { w, settings, remove };
+    };
+
+    it("Cancel leaves the plugin installed and its settings alone, a second row is asked on its own", async () => {
+      const { w, settings, remove } = await setup();
+      confirmDanger.mockResolvedValueOnce(false);
+      await remove("widgets").trigger("click");
+      await flush();
+      expect(removePlugin).not.toHaveBeenCalled();
+      expect(settings.get("gap")).toBe(7);
+      expect(w.find('[data-plugin="widgets"]').exists()).toBe(true);
+      expect(remove("widgets").attributes("disabled")).toBeUndefined();
+      confirmDanger.mockResolvedValueOnce(true);
+      await remove("bolts").trigger("click");
+      await flush();
+      expect(removePlugin.mock.calls).toEqual([["bolts"]]);
+    });
+
+    it("names the plugin and says its settings stay, then that they are forgotten once ticked", async () => {
+      const { w, remove } = await setup();
+      confirmDanger.mockResolvedValue(false);
+      await remove("widgets").trigger("click");
+      await w.get('[data-plugin="widgets"] .plug-forget input').trigger("change");
+      await remove("widgets").trigger("click");
+      await flush();
+      const [stay, gone] = confirmDanger.mock.calls.map((c) => c as [string, string, string]) as [
+        [string, string, string],
+        [string, string, string],
+      ];
+      expect([stay[0], stay[1]]).toEqual(["Remove widgets?", "Remove"]);
+      expect(stay[2]).toContain("files are deleted from this computer");
+      expect(stay[2]).toContain("settings stay");
+      expect(stay[2]).not.toContain("forgotten");
+      expect(gone[2]).toContain("files are deleted from this computer");
+      expect(gone[2]).toContain("forgotten");
+      expect(gone[2]).not.toContain("stay");
     });
   });
 });

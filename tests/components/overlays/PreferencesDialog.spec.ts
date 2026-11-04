@@ -26,6 +26,12 @@ import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { customThemes, DEFAULT_THEME_ID, getTheme, removeCustomTheme, setTheme, themes } from "../../../src/ui/theme";
 
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: confirm,
+}));
+
 enableAutoUnmount(afterEach);
 
 async function open() {
@@ -81,6 +87,8 @@ beforeEach(() => {
   setHomeBackground("paper");
   useHomeImageStore(memoryImageStore());
   resetExperimentalPrefs();
+  confirm.mockReset();
+  confirm.mockResolvedValue(true);
 });
 
 describe("Preferences choices", () => {
@@ -541,6 +549,29 @@ describe("Preferences Accessibility", () => {
     expect([a11yPrefs().animations, getVerbosity(), getHoverDwellMs()]).toEqual(["system", "normal", 800]);
     expect([a11yPrefs().solidPanels, solidBox().checked]).toEqual([false, false]);
     expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("Reset to defaults asks first, and Cancel leaves every choice and Hover delay as they were", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("animations", "off");
+    setA11yPref("interfaceSize", 125);
+    setHoverDwellMs(1200);
+    await flushPromises();
+    confirm.mockResolvedValueOnce(false);
+    reset.click();
+    await flushPromises();
+    expect(confirm.mock.calls).toHaveLength(1);
+    expect(confirm.mock.calls[0]![0]).toBe("Reset accessibility settings?");
+    expect(confirm.mock.calls[0]![1]).toBe("Reset");
+    expect(confirm.mock.calls[0]![2]).toContain("Hover delay");
+    expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["off", 125, 1200]);
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["system", 100, 800]);
   });
 
   it("holds Interface size in the Vision group, and Reset to defaults puts a changed size back to 100", async () => {

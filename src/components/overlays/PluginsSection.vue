@@ -27,6 +27,7 @@ import {
 } from "../../plugins";
 import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/registry";
 import { updateFor } from "../../plugins/updates";
+import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
 
 const suggested = ref<OfficialPlugin[]>(officialPlugins());
@@ -112,8 +113,14 @@ function matches(id: string): boolean {
 
 const settingsOpen = (id: string) => expanded.value.has(id) || (!!query.value.trim() && matches(id));
 
-function resetAll(id: string) {
-  for (const s of sectionsOf(id)) s.settings?.reset();
+async function resetAll(id: string) {
+  const name = nameOf(id);
+  const ok = await confirmDanger(
+    `Reset ${name} settings?`,
+    "Reset",
+    "Every setting of this plugin goes back to its default.",
+  );
+  if (ok) for (const s of sectionsOf(id)) s.settings?.reset();
 }
 
 const hasDeclared = (id: string) => sectionsOf(id).some((s) => s.settings);
@@ -234,6 +241,12 @@ async function acceptCandidate(c: Candidate) {
 }
 
 async function drop(id: string, name: string) {
+  const fate = !sectionsOf(id).length
+    ? ""
+    : forget.value[id]
+      ? " Its settings are forgotten too."
+      : " Its settings stay, in case you install it again.";
+  if (!(await confirmDanger(`Remove ${name}?`, "Remove", `Its files are deleted from this computer.${fate}`))) return;
   busy.value = id;
   try {
     await removePlugin(id);

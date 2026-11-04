@@ -1,9 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import NoticeTimeRow from "../../../src/components/overlays/NoticeTimeRow.vue";
 import PreferencesDialog from "../../../src/components/overlays/PreferencesDialog.vue";
 import { a11yPrefs, resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
+
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: async () => true,
+}));
 
 enableAutoUnmount(afterEach);
 
