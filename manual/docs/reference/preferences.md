@@ -40,9 +40,7 @@ Viewport labels sizes what is drawn over the model: sketch dimensions, constrain
 
 ## Speech
 
-Announcements, under Accessibility, sets how much FundaCAD tells a screen reader: nothing, errors only, prompts and results, or every change as well.
-
-Units spoken in full makes a field tell a screen reader its unit as a word, so a length reads as millimetres and an angle as degrees. Turn it off to hear the short form, mm and deg. It is on by default, and Reset to defaults turns it back on.
+Units spoken in full, under Accessibility, makes a field tell a screen reader its unit as a word, so a length reads as millimetres and an angle as degrees. Turn it off to hear the short form, mm and deg. It is on by default, and Reset to defaults turns it back on.
 
 ## Good to know
 
