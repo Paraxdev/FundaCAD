@@ -51,8 +51,10 @@ function sketchWithSelection() {
     modifyFlow: { offsetting: false, filletArmed: false },
     dimFlow: { picking: false, plan: null },
     constraintTools: { hasPending: () => false },
-    dims: { deleteSelected: () => false },
-    glyphs: { deleteSelected: () => false, hasSelection: () => false },
+    dims: { deleteSelected: () => false, clearSelection() {} },
+    glyphs: { deleteSelected: () => false, hasSelection: () => false, clearSelection() {} },
+    planeTooEdgeOn: () => false,
+    snapAt: () => null,
     deleteSelectedPole: () => false,
     deleteSelected: () => log.push("delete shapes"),
     finishSpline: () => log.push("finish spline"),
@@ -65,8 +67,14 @@ function sketchWithSelection() {
   return { log, s };
 }
 
-function palette() {
+function palette(log: string[] = []) {
   const rel = useSketchRelationsStore();
+  rel.hooks = {
+    del: (i: number) => log.push(`delete rule ${i}`),
+    hover() {},
+    select() {},
+    shapes() {},
+  };
   const ents = [
     { type: "line", id: "l1", x1: 20, y1: 3, x2: 26, y2: 5 },
     { type: "line", id: "l2", x1: 26, y1: 5, x2: 21, y2: 9 },
@@ -129,5 +137,50 @@ describe("keys on the sketch palette", () => {
     await nextTick();
     press(document.querySelector(".rel-row .ui-list-row")!, "l");
     expect(log).toEqual(["tool line"]);
+  });
+});
+
+// A mouse click focuses a palette control, and the canvas press after it cancels the browser's own focus move.
+describe("keys after a mouse click in the palette and a press on the canvas", () => {
+  const canvasPress = (s: object) =>
+    (s as { onPointerDown(e: PointerEvent): void }).onPointerDown(
+      new MouseEvent("pointerdown", { button: 0, bubbles: true, cancelable: true }) as PointerEvent,
+    );
+  const pressFocused = (k: string) => press(document.activeElement ?? document.body, k);
+
+  it("delete the selected shapes, not the option clicked before", async () => {
+    const { log, s } = sketchWithSelection();
+    (s as unknown as { tool: string }).tool = "select";
+    palette(log);
+    await nextTick();
+    document.querySelector<HTMLElement>("#palette input[type=checkbox]")!.focus();
+    canvasPress(s);
+    expect(pressFocused("Delete")).toBe(true);
+    expect(log).toEqual(["delete shapes"]);
+  });
+
+  it("finish the spline, not press the Relations row clicked before", async () => {
+    const { log, s } = sketchWithSelection();
+    palette(log);
+    await nextTick();
+    document.querySelector<HTMLElement>(".rel-row .ui-list-row")!.focus();
+    canvasPress(s);
+    expect(pressFocused("Enter")).toBe(true);
+    expect(log).toEqual(["finish spline"]);
+  });
+
+  it("delete the shapes selected on the canvas, not the rule of the focused Relations row", async () => {
+    const { log, s } = sketchWithSelection();
+    (s as unknown as { tool: string }).tool = "select";
+    palette(log);
+    await nextTick();
+    const row = document.querySelector<HTMLElement>(".rel-row .ui-list-row")!;
+    row.focus();
+    pressFocused("Delete");
+    expect(log).toEqual(["delete rule 0"]);
+    row.focus();
+    canvasPress(s);
+    pressFocused("Delete");
+    expect(log).toEqual(["delete rule 0", "delete shapes"]);
   });
 });

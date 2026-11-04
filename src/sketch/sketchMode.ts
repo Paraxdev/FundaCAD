@@ -1773,6 +1773,9 @@ export class SketchMode {
     // Labels stop propagation on their own pointerdown, so drop the label selection or Delete removes an unpointed dim.
     this.dims.clearSelection();
     this.glyphs.clearSelection();
+    // The viewport cancels the browser's focus move, so a palette control clicked before would keep the guarded keys.
+    const active = globalThis.document?.activeElement;
+    if (active instanceof HTMLElement && active.closest("#palette")) active.blur();
     if (e.button === 2) {
       this.rightDownAt = { x: e.clientX, y: e.clientY };
       this.rightDragged = false;
@@ -3552,7 +3555,8 @@ export class SketchMode {
       const hovered = this.entities.filter((e) => lit.has(e.id));
       if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor(), false, this.dimScaleSeen));
       if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true, this.dimScaleSeen));
-      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, sketchPreviewColor(), true, this.dimScaleSeen));
+      if (hovered.length)
+        objs.push(...curveObjects(hovered, this.plane, sketchPreviewColor(), true, this.dimScaleSeen));
     } else {
       objs.push(...curveObjects(this.entities, this.plane, this.activeColor(), false, this.dimScaleSeen));
     }

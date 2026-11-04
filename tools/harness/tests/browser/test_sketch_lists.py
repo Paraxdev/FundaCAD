@@ -204,3 +204,65 @@ def test_a_busy_sketch_keeps_each_list_to_its_rows_and_the_palette_inside_the_wi
     for name in ("dimensions", "relations", "shapes"):
         assert got[name]["shown"] == min(got[name]["full"], 216), (name, got)
     no_pointer(s)
+
+
+SCREEN = """([x, y]) => {
+  const p = window.viewport.projectToScreen(window.sketch.plane.to3D(x, y));
+  return [p.x, p.y];
+}"""
+CANVAS = """() => ({
+  inPalette: !!document.activeElement?.closest("#palette"),
+  lines: window.sketch.entities.map((e) => e.id),
+  constraints: window.sketch.constraints.length,
+  selected: [...window.sketch.selected],
+})"""
+
+
+def click_on_sketch(s, x, y):
+    s.page.mouse.click(*s.page.evaluate(SCREEN, [x, y]))
+    s.page.wait_for_timeout(300)
+
+
+def test_a_canvas_click_after_a_palette_click_gives_delete_back_to_the_canvas_selection(s):
+    kb = s.page.keyboard
+    to_items_plane(s)
+    for n, (start, end) in enumerate((((13, -4), "@18,7"), ((-20, 9), "@-11,14")), 1):
+        tool(s, "l", "line")
+        point(s, *start)
+        kb.type(end)
+        kb.press("Enter")
+        s.page.wait_for_function("n => window.sketch.entities.length === n", arg=n)
+        kb.press("Escape")
+    kb.press("Escape")
+    s.page.wait_for_function("() => window.sketch.tool === 'select'")
+    line1, line2 = s.page.evaluate(CANVAS)["lines"]
+    to_palette(s)
+    for n, (name, value) in enumerate((("Length of Line 1", "30"), ("Length of Line 2", "21")), 1):
+        tab_to(s, name)
+        kb.press("Control+A")
+        kb.type(value)
+        kb.press("Enter")
+        s.page.wait_for_function("n => window.sketch.constraints.length === n", arg=n)
+    s.page.wait_for_function("() => document.querySelectorAll('#palette .rel-row').length === 2")
+
+    # A row clicked selects its line and keeps focus, a click on the other line must take Delete back.
+    s.page.locator("#palette .rel-row .ui-list-row").filter(has_text="Line 1").click()
+    s.page.wait_for_function("id => [...window.sketch.selected].join() === id", arg=line1)
+    click_on_sketch(s, -25.5, 16)
+    got = s.page.evaluate(CANVAS)
+    assert got == {"inPalette": False, "lines": [line1, line2], "constraints": 2, "selected": [line2]}, got
+    kb.press("Delete")
+    s.page.wait_for_function("() => window.sketch.entities.length === 1")
+    assert s.page.evaluate(CANVAS)["lines"] == [line1]
+    assert s.page.evaluate(CANVAS)["constraints"] == 1
+
+    # The X moves focus to the summary, which must not keep Delete from the line clicked next.
+    row = s.page.locator("#palette .rel-row").first
+    row.hover()
+    row.locator(".rel-del").click()
+    s.page.wait_for_function("() => window.sketch.constraints.length === 0")
+    s.page.wait_for_timeout(300)
+    click_on_sketch(s, 22, -0.5)
+    assert s.page.evaluate(CANVAS) == {"inPalette": False, "lines": [line1], "constraints": 0, "selected": [line1]}
+    kb.press("Delete")
+    s.page.wait_for_function("() => window.sketch.entities.length === 0")
