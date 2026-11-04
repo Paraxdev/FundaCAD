@@ -330,6 +330,7 @@ async function screenshot() {
         <IconButton
           icon="items"
           tip="Items"
+          data-drawer-switch="items"
           :keys="chordsOf('items')"
           :active="shell.itemsShown"
           @click="shell.toggleItems()"
@@ -337,6 +338,7 @@ async function screenshot() {
         <IconButton
           icon="history"
           :tip="ui.sketchActive ? 'Sketch options' : 'History'"
+          data-drawer-switch="history"
           :keys="chordsOf('history')"
           :active="shell.historyShown"
           :badge="errorCount || null"

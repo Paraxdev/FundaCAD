@@ -637,7 +637,7 @@ The floor is 36px for anything over the model. A hover that moves things
 
 | Where | Trigger | What changes |
 |---|---|---|
-| Narrow stage | `#stage.narrow`, stage under `STAGE_NARROW_PX` 820 (`ui/layoutBreakpoints.ts`, measured on the stage, not the window) | Items and History become drawers over the model, one at a time, still glass |
+| Narrow stage | `#stage.narrow`, stage under `STAGE_NARROW_PX` 820 (`ui/layoutBreakpoints.ts`, measured on the stage, not the window) | Items and History become drawers over the model, one at a time, still glass. Focus in a card that folds goes to its drawer switch, and from a switch that goes away to its card (`app/foldFocus.ts`) |
 | Compact title bar | `@media (max-width: 760px)` | Tighter title bar, segment labels hidden |
 | Phone | `@media (max-width: 560px)` | Brand, context tab and doc name hidden, rail pills hidden, the Render dock stacks below |
 | Preferences | `@media (max-width: 640px)` | One column |
