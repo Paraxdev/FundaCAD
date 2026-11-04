@@ -18,6 +18,11 @@ describe("spoken lengths follow the display unit", () => {
     ["in", 25.4, "1 inch"],
     ["in", 50.8, "2 inches"],
     ["in", 12.7, "0.5 inches"],
+    ["in", 12.5, "0.492 inches"],
+    ["in", -50.8, "minus 2 inches"],
+    ["cm", 0, "0 centimetres"],
+    ["cm", 12.5, "1.25 centimetres"],
+    ["cm", -10, "minus 1 centimetre"],
   ];
   for (const [unit, mm, words] of cases)
     it(`${mm} mm in ${unit}`, () => {

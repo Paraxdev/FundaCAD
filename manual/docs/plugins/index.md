@@ -24,7 +24,7 @@ A plugin adds something not everyone needs, such as screws, textures or a link t
 
 Open Edit, Preferences, Plugins and flip its switch. Off deletes nothing, your work comes back when you switch it on again.
 
-Remove deletes the plugin from your computer. Its settings stay unless you tick Remove forgets its settings.
+Remove asks first, then deletes the plugin from your computer. Its settings stay unless you tick Remove forgets its settings.
 
 ## Change its settings
 
@@ -32,7 +32,7 @@ Click Settings on the plugin's row.
 
 1. The Search plugin settings box finds a setting in any plugin.
 2. The arrow beside a changed setting puts that one back.
-3. Reset to defaults puts back all of that plugin's settings.
+3. Reset to defaults asks first, then puts back all of that plugin's settings.
 
 ## Install one
 

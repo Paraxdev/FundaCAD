@@ -1190,7 +1190,7 @@ export class SketchMode {
     // Announce only when something held the view: with the lock off, turning away is ordinary.
     if (!wasLocked || this.releaseAnnounced) return;
     this.releaseAnnounced = true;
-    toast("View unlocked. Drawing still lands on the sketch plane; Look At re-squares it.");
+    toast("View unlocked. Drawing still lands on the sketch plane. Look At turns the view back to face it.");
   }
 
   /** Called by anything that puts the camera back on the plane, so a released session recovers without
@@ -1370,17 +1370,23 @@ export class SketchMode {
   private applyDrivingDimsDirectly() {
     if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
       this.axisDimToast = true;
-      toast("The solver is not running, so horizontal and vertical distances between two entities wait for it", {
-        timeout: 12000,
-      });
+      toast(
+        "Constraints are not working right now, so horizontal and vertical distances between two shapes wait until they are",
+        {
+          timeout: 12000,
+        },
+      );
     }
     if (!applyDrivingDimsDirect(this.entities, this.constraints)) return;
     this.entityVersion++; // guards any in-flight solve against this write
     if (!this.directDimToast) {
       this.directDimToast = true;
-      toast("The solver is not running, so this value is applied to the shape rather than kept as a live dimension", {
-        timeout: 12000,
-      });
+      toast(
+        "Constraints are not working right now, so this value changes the shape once and is not kept as a live dimension",
+        {
+          timeout: 12000,
+        },
+      );
     }
     this.refreshActive();
     this.onState?.();
@@ -4024,6 +4030,9 @@ export class SketchMode {
     return this.active && this.history.canUndo;
   }
 
+  set onHistory(fn: (() => void) | null) {
+    this.history.onChange = fn;
+  }
   get canUndoSketch(): boolean {
     return this.history.canUndo;
   }
@@ -4163,7 +4172,7 @@ export class SketchMode {
         toast(
           err instanceof SolverUnavailable
             ? err.message
-            : "The 2D constraint solver stopped responding, sketching continues without constraints",
+            : "Sketch constraints stopped working, you can keep drawing without them. Restarting FundaCAD may bring them back.",
           { kind: "error", timeout: 12000 },
         );
       }

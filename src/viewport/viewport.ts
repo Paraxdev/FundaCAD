@@ -53,7 +53,7 @@ import {
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
-import { barycentric, displacedPositions, stressColors } from "../ui/stress";
+import { barycentric, displacedPositions, stressColors, type StressRamp } from "../ui/stress";
 import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods, type PickRef } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
@@ -1634,6 +1634,11 @@ export class Viewport {
   faceIdToBodyId(faceId: number): string | null {
     if (!this.model) return null;
     return bodyOfFace(this.model, faceId)?.id ?? null;
+  }
+
+  localFaceOf(faceId: number): number | null {
+    const b = this.model && bodyOfFace(this.model, faceId);
+    return b ? faceId - b.faceStart : null;
   }
 
   /** A plain mesh raycast like a bodies mode click, so the right click body menu agrees with a left click. */
@@ -3234,7 +3239,7 @@ export class Viewport {
   private clashMeshes: THREE.Mesh[] = [];
   private clearanceLines: THREE.Line[] = [];
 
-  /** The analysed body's surface coloured over `range` (blue low, red high) in its place, the body hidden
+  /** The analysed body's surface coloured over `range` (dark low, light high) in its place, the body hidden
    *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. `colours`
    *  false draws it in the body's own colour, and undeformed as well leaves the body itself on show, the surface
    *  kept only for stressOverlayPoint. Null clears, as does the next setModel. Tells onStressOverlayChange
@@ -3249,6 +3254,8 @@ export class Viewport {
       displacement?: ArrayLike<number>;
       scale?: number;
       colours?: boolean;
+      ramp?: StressRamp;
+      bands?: number;
     } | null,
   ) {
     this.stressRest?.dispose();
@@ -3276,7 +3283,7 @@ export class Viewport {
       const plain = o.colours === false;
       const colors = plain
         ? solidColors(o.positions.length / 3, this.bodyColour(b))
-        : stressColors(o.values, o.range.min, o.range.max);
+        : stressColors(o.values, o.range.min, o.range.max, o.ramp, o.bands);
       this.stressMesh = buildStressMesh(o.positions, o.indices, colors);
       const own = plain ? plainStressMaterial(b?.mesh.material) : null;
       if (own) {

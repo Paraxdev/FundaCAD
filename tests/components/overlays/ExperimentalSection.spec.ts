@@ -1,5 +1,5 @@
 // The Experimental page: its numbers are NumberFields that commit on Enter or blur, the HDR size a Segmented.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import ExperimentalSection from "../../../src/components/overlays/ExperimentalSection.vue";
 import {
@@ -8,6 +8,17 @@ import {
   resetExperimentalPrefs,
   setExperimentalPref,
 } from "../../../src/ui/experimentalPrefs";
+
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/toast")>()),
+  toast,
+}));
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: confirm,
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -29,13 +40,35 @@ async function type(w: W, key: string, text: string, end: "Enter" | "blur" = "En
   await flushPromises();
 }
 
-beforeEach(() => resetExperimentalPrefs());
+beforeEach(() => {
+  resetExperimentalPrefs();
+  confirm.mockReset();
+  confirm.mockResolvedValue(true);
+  toast.mockReset();
+});
 
 describe("Experimental numbers", () => {
   it("keeps the ids, labels and data hooks on the typed field", async () => {
     const w = await open();
     expect(w.get("label[for=prefs-x-bounces]").text()).toBe("Bounces");
     expect([el(w, "bounces").dataset.experimental, el(w, "bounces").value]).toEqual(["bounces", "6"]);
+  });
+
+  it("puts each unit word in the field's chip and says it, with no separate readout", async () => {
+    const w = await open();
+    expect(w.findAll(".prefs-readout").length).toBe(0);
+    const words = (key: string) => {
+      const field = box(w, key).element.closest(".ui-number-field")!;
+      const ids = (el(w, key).getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean);
+      return [
+        [...field.querySelectorAll(".ui-unit-chip")].map((c) => c.textContent),
+        ids.map((id) => document.getElementById(id)?.textContent),
+      ];
+    };
+    expect(words("bounces")).toEqual([["bounces"], ["bounces"]]);
+    expect(words("firefly")).toEqual([["luminance"], ["luminance"]]);
+    await type(w, "bounces", "999");
+    expect(words("bounces")[1]).toEqual(["bounces", "At most 64 bounces"]);
   });
 
   it("commits on Enter or blur, not while typing", async () => {
@@ -55,7 +88,7 @@ describe("Experimental numbers", () => {
     expect([el(w, "bounces").value, el(w, "bounces").getAttribute("aria-invalid"), el(w, "bounces").title]).toEqual([
       "999",
       "true",
-      "At most 64",
+      "At most 64 bounces",
     ]);
   });
 
@@ -109,7 +142,24 @@ describe("Experimental HDR size and reset", () => {
     await flushPromises();
     expect(reset.attributes("aria-disabled")).toBeUndefined();
     await reset.trigger("click");
+    await flushPromises();
+    expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset experimental limits?", "Reset"]]);
     expect(experimentalPrefs().bounces).toBe(DEFAULT_EXPERIMENTAL.bounces);
     expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBe("true");
+    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Experimental.*defaults/)]);
+  });
+
+  it("keeps every changed limit when the confirm is cancelled", async () => {
+    const w = await open();
+    setExperimentalPref("bounces", 12);
+    setExperimentalPref("envWidth", 4096);
+    await flushPromises();
+    confirm.mockResolvedValueOnce(false);
+    await w.get("[data-experimental-reset]").trigger("click");
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect([experimentalPrefs().bounces, experimentalPrefs().envWidth]).toEqual([12, 4096]);
+    expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBeUndefined();
+    expect(toast).not.toHaveBeenCalled();
   });
 });

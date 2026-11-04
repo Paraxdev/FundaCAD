@@ -170,7 +170,7 @@ export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | n
       const { written, refused } = writeDatumPose(deps.store, id, poseAfter(r.matrix));
       if (refused.length)
         toast(
-          `${refused.join(", ")} ${refused.length > 1 ? "are" : "is"} driven by an expression and was left as it is`,
+          `${refused.join(", ")} ${refused.length > 1 ? "are" : "is"} driven by an expression, so ${refused.length > 1 ? "they were" : "it was"} left alone`,
         );
       return { id, rebuild: written };
     },

@@ -121,7 +121,8 @@
   opacity: 1;
 }
 
-.btn.err-action {
+.btn.err-action,
+.icon-btn.err-dismiss {
   flex: none;
   animation: err-pop 200ms var(--ease);
 }

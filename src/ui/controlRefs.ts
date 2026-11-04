@@ -124,7 +124,7 @@ export function matchName(label: string): string {
     .toLowerCase();
 }
 
-/** Backdrops that cover the whole app, unlike the Console and selection panels, which are dialogs too. */
+/** Backdrops that cover the whole app, unlike the selection panels, which are dialogs too. The Console is a region. */
 const MODAL = ".home, .modal-overlay, .choice-backdrop, .cmdk-backdrop";
 
 export function regionOf(el: Element): string {
@@ -172,7 +172,7 @@ export function refOf(el: HTMLElement): string {
   if (d.viewMode) return `view-mode:${d.viewMode}`;
   if (d.category) return `category:${d.category}`;
   if (d.tab && el.getAttribute("role") === "tab") return `tab:${d.tab}`;
-  const label = labelOf(el);
+  const label = d.refName ?? labelOf(el);
   if (el.matches(".menu-btn")) return `menu:${label}`;
   if (el.matches(".menu-item")) {
     // The popup is teleported out of the bar, so the open menu names its button.

@@ -1,8 +1,8 @@
 # Reading the stress result
 
-When a run finishes, the Results tab opens. The part is coloured from low stress in blue to high stress in red, and drawn bent, larger than it really bends. Set up takes you back to the inputs.
+When a run finishes, the Results tab opens. The part is coloured from low stress in dark violet to high stress in bright yellow, and drawn bent, larger than it really bends. Set up takes you back to the inputs.
 
-![The Stress panel listing peak stress, deflection and safety factor beside the bracket coloured blue to red](../img/stress-results.png)
+![The Stress panel listing safety factor, peak stress, deflection and where the highest values are, beside the bracket shaded dark violet, lightest at the gusset's tip](../img/stress-results.png)
 
 ## The verdict
 
@@ -27,7 +27,9 @@ When the weakest spot is a sharp inside corner or the edge of a support, the ver
 | Peak stress | The highest stress in the part, in MPa. |
 | Max deflection | The furthest any point of the part moves. |
 
-The colour bar gives the stress at each end, in MPa. Details opens the rest: the material and its yield, where the peak and the largest bend are, the loads and the reactions at the supports, and the mesh.
+The colour bar is marked at each quarter of the range, with the stress in MPa at each mark. Under it, Colour map picks Perceptual, which runs from dark to light, Rainbow, or Greyscale, and Bands draws the colours in eight steps instead of smoothly. The choice is kept for the next study. Details opens the rest: the material and its yield, the loads and the reactions at the supports, and the mesh.
+
+Under the numbers, Where the highest values are lists Peak stress and Max deflection with their x, y and z. Press one to fly the view to that point.
 
 A printed part is weaker across its layer lines, so do not trust a safety factor barely over 1. The study is linear and approximate, use it to compare designs, not to predict when a part breaks.
 

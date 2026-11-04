@@ -18,6 +18,7 @@ export { default as MenuSeparator } from "../components/ui/MenuSeparator.vue";
 export { default as NumberField } from "../components/ui/NumberField.vue";
 export { default as Panel } from "../components/ui/Panel.vue";
 export { default as Popover } from "../components/ui/Popover.vue";
+export { default as ReadoutList } from "../components/ui/ReadoutList.vue";
 export { default as Segmented } from "../components/ui/Segmented.vue";
 export { default as Select } from "../components/ui/Select.vue";
 export { default as Slider } from "../components/ui/Slider.vue";

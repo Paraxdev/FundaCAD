@@ -46,11 +46,27 @@ describe("Stress verdict speech", () => {
   it("speaks the verdict as it appears and again when a new result changes it", async () => {
     const w = mount(StressVerdict, { props: { ...props, input: { safetyFactor: 4 } } });
     const first = verdictView({ safetyFactor: 4 });
-    expect(said()[0]?.[0]).toBe([first.headline, first.detail].filter(Boolean).join(". "));
+    expect(said()[0]?.[0]).toBe(`${first.headline} ${first.detail}`);
     expect(said()[0]?.slice(1)).toEqual(["polite", { key: "stress" }]);
     await w.setProps({ input: { safetyFactor: 0.5 } });
     const second = verdictView({ safetyFactor: 0.5 });
     expect(second.headline).not.toBe(first.headline);
     expect(said()[1]?.[0]).toContain(second.headline);
+  });
+
+  it("speaks headline and detail as sentences with one full stop between them", () => {
+    const input = { safetyFactor: 15.3, peakPlace: "support" as const };
+    mount(StressVerdict, { props: { ...props, input } });
+    const view = verdictView(input);
+    expect(view.headline.endsWith(".") && view.detail !== null).toBe(true);
+    const spoken = said()[0]?.[0] as string;
+    expect(spoken).toBe(`${view.headline} ${view.detail}`);
+    expect(spoken).not.toContain("..");
+    expect(spoken.match(/\. /g)?.length).toBe(2);
+  });
+
+  it("speaks only the headline when there is no detail", () => {
+    mount(StressVerdict, { props: { ...props, input: { safetyFactor: null } } });
+    expect(said().map((c) => c[0])).toEqual([verdictView({ safetyFactor: null }).headline]);
   });
 });

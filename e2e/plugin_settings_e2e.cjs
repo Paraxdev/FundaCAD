@@ -99,6 +99,7 @@ const check = (label, ok, detail = "") => {
   check("one property resets", (await deadzone()) === 0.15, String(await deadzone()));
 
   await page.click(`${nav} [data-plugin-settings-reset]`);
+  await page.click(".ui-confirm .ui-confirm-danger");
   await page.waitForTimeout(300);
   const back = await table();
   check(

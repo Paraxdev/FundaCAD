@@ -87,7 +87,7 @@ describe("TargetEditPanel", () => {
     expect(tool.removeAt).toHaveBeenCalledWith(1);
     expect(tool.hoverAt).toHaveBeenLastCalledWith(null);
     await nextTick();
-    expect($(".tgt-held")).toEqual([]);
+    expect($(".tgt-item .is-selected")).toEqual([]);
   });
 
   it("pins a clicked row, so leaving another row lights the pinned one again", async () => {
@@ -96,12 +96,116 @@ describe("TargetEditPanel", () => {
       { label: "Face 4", resolved: true },
     ]);
     mountWith(tool);
-    $(".tgt-item")[0]!.click();
+    $(".tgt-item .tgt-label")[0]!.click();
     await nextTick();
-    expect($(".tgt-item")[0]!.classList.contains("tgt-held")).toBe(true);
-    $(".tgt-item")[1]!.dispatchEvent(new PointerEvent("pointerenter"));
-    $(".tgt-item")[1]!.dispatchEvent(new PointerEvent("pointerleave"));
+    expect($(".tgt-item .tgt-label").map((b) => b.getAttribute("aria-current"))).toEqual(["true", null]);
+    $(".tgt-item .tgt-label")[1]!.dispatchEvent(new PointerEvent("pointerenter"));
+    $(".tgt-item .tgt-label")[1]!.dispatchEvent(new PointerEvent("pointerleave"));
     expect(tool.hoverAt.mock.calls).toEqual([[0], [1], [0]]);
+  });
+
+  it("holds each row as a named button beside its Remove, not around it", () => {
+    const tool = fakeTool([
+      { label: "Face 8 of Bracket", resolved: true },
+      { label: "Edge 12 of Bracket", resolved: true },
+      { label: "Face 5 of Lid", resolved: false },
+    ]);
+    mountWith(tool);
+    const items = $(".tgt-item");
+    expect(items.map((li) => [...li.children].map((c) => c.tagName + "." + c.className.split(" ").pop()))).toEqual(
+      items.map(() => ["BUTTON.tgt-label", "BUTTON.tgt-remove"]),
+    );
+    expect($(".tgt-label").map((b) => [b.tagName, b.getAttribute("type"), b.textContent])).toEqual([
+      ["BUTTON", "button", "Face 8 of Bracket"],
+      ["BUTTON", "button", "Edge 12 of Bracket"],
+      ["BUTTON", "button", "Face 5 of Lid"],
+    ]);
+    expect($(".tgt-label button, .tgt-label .tgt-remove")).toEqual([]);
+  });
+
+  it("lights a row's geometry on keyboard focus and returns to the pinned row on blur", async () => {
+    const tool = fakeTool([
+      { label: "Face 3", resolved: true },
+      { label: "Face 7", resolved: true },
+      { label: "Face 9", resolved: true },
+    ]);
+    mountWith(tool);
+    const rows = $(".tgt-item .tgt-label");
+    rows[2]!.focus();
+    expect(tool.hoverAt.mock.calls).toEqual([[2]]);
+    rows[2]!.blur();
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [null]]);
+    rows[1]!.click();
+    await nextTick();
+    rows[0]!.focus();
+    rows[0]!.blur();
+    expect(tool.hoverAt.mock.calls.slice(2)).toEqual([[1], [0], [1]]);
+  });
+
+  it("falls back from a pointer leaving to the focused row, then to the pinned one, then to none", async () => {
+    const tool = fakeTool([
+      { label: "Face 3", resolved: true },
+      { label: "Edge 11 of Lid", resolved: true },
+      { label: "Face 9", resolved: true },
+    ]);
+    mountWith(tool);
+    const rows = $(".tgt-item .tgt-label");
+    rows[2]!.dispatchEvent(new PointerEvent("pointerenter"));
+    rows[2]!.dispatchEvent(new PointerEvent("pointerleave"));
+    rows[0]!.click();
+    await nextTick();
+    rows[1]!.focus();
+    rows[2]!.dispatchEvent(new PointerEvent("pointerenter"));
+    rows[2]!.dispatchEvent(new PointerEvent("pointerleave"));
+    rows[1]!.blur();
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [null], [0], [1], [2], [1], [0]]);
+  });
+
+  it("forgets the focused and pinned rows when a row is removed or the list cleared", async () => {
+    const tool = fakeTool([
+      { label: "Face 3", resolved: true },
+      { label: "Edge 11 of Lid", resolved: true },
+      { label: "Face 9", resolved: true },
+    ]);
+    mountWith(tool);
+    const rows = $(".tgt-item .tgt-label");
+    const hoverOut = (i: number) => {
+      rows[i]!.dispatchEvent(new PointerEvent("pointerenter"));
+      rows[i]!.dispatchEvent(new PointerEvent("pointerleave"));
+    };
+    rows[2]!.click();
+    rows[1]!.focus();
+    $(".tgt-remove")[0]!.click();
+    await nextTick();
+    hoverOut(0);
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [1], [null], [0], [null]]);
+    rows[1]!.blur();
+    tool.hoverAt.mockClear();
+    rows[2]!.click();
+    rows[1]!.focus();
+    $(".tgt-clear")[0]!.click();
+    await nextTick();
+    hoverOut(2);
+    expect(tool.clear).toHaveBeenCalledTimes(1);
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [1], [2], [null]]);
+    expect($(".tgt-item .is-selected")).toEqual([]);
+  });
+
+  it("leaves Enter and Escape to the tool, the row button handling neither itself", async () => {
+    const tool = fakeTool([{ label: "Face 3", resolved: true }]);
+    mountWith(tool);
+    const seen: string[] = [];
+    const onKey = (e: KeyboardEvent) => seen.push(`${e.key}:${e.defaultPrevented}`);
+    window.addEventListener("keydown", onKey);
+    const row = $(".tgt-item .tgt-label")[0]!;
+    for (const key of ["Enter", "Escape"]) {
+      row.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    }
+    window.removeEventListener("keydown", onKey);
+    expect(seen).toEqual(["Enter:false", "Escape:false"]);
+    expect(tool.hoverAt).not.toHaveBeenCalled();
+    expect(tool.commit).not.toHaveBeenCalled();
+    expect(tool.cancel).not.toHaveBeenCalled();
   });
 
   it("goes away when the tool closes", async () => {
@@ -111,5 +215,20 @@ describe("TargetEditPanel", () => {
     tool.emit();
     await nextTick();
     expect($(".tgt-panel")).toEqual([]);
+  });
+
+  it("tells rows of one name apart, in the text and in each Remove, and removes the row clicked", () => {
+    const tool = fakeTool([
+      { label: "Edge 12 of Lid", resolved: true },
+      { label: "Face 3 of Lid", resolved: true },
+      { label: "Edge 12 of Lid", resolved: true },
+      { label: "Edge 12 of Lid", resolved: false },
+    ]);
+    mountWith(tool);
+    const names = ["Edge 12 of Lid, row 1", "Face 3 of Lid", "Edge 12 of Lid, row 3", "Edge 12 of Lid, row 4"];
+    expect($(".tgt-item .tgt-label").map((l) => l.textContent)).toEqual(names);
+    expect($(".tgt-remove").map((b) => b.getAttribute("aria-label"))).toEqual(names.map((n) => `Remove ${n}`));
+    $(".tgt-remove")[2]!.click();
+    expect(tool.removeAt.mock.calls).toEqual([[2]]);
   });
 });

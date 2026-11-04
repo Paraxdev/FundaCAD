@@ -1,0 +1,23 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    {
+      "id": "s",
+      "type": "sketch",
+      "plane": "XZ",
+      "entities": [
+        { "type": "line", "x1": 20, "y1": 0, "x2": 44, "y2": 0 },
+        { "type": "line", "x1": 44, "y1": 0, "x2": 44, "y2": 14 },
+        { "type": "line", "x1": 44, "y1": 14, "x2": 61, "y2": 14 },
+        { "type": "line", "x1": 61, "y1": 14, "x2": 61, "y2": 22 },
+        { "type": "line", "x1": 61, "y1": 22, "x2": 8, "y2": 22 },
+        { "type": "line", "x1": 8, "y1": 22, "x2": 8, "y2": 17 },
+        { "type": "line", "x1": 8, "y1": 17, "x2": 20, "y2": 8 },
+        { "type": "line", "x1": 20, "y1": 8, "x2": 20, "y2": 0 }
+      ]
+    },
+    { "id": "e", "type": "extrude", "sketch": "s", "distance": 18, "operation": "new" },
+    { "id": "m", "type": "move", "dx": -73.5, "dy": 41.25, "dz": 9, "rx": 0, "ry": 0, "rz": 0, "bodies": ["body1"] }
+  ]
+}

@@ -42,10 +42,10 @@ describe("inertOthers", () => {
     expect(inertDepth()).toBe(1);
   });
 
-  it("keeps the toast stack live, since it paints above the overlay", () => {
+  it("puts the toast stack inert and hidden with the page, so no region sits beside the modal", () => {
     hold($("#dlg-a .panel"));
-    expect(inert(".toast-stack")).toBe(false);
-    expect($(".toast-stack").hasAttribute("aria-hidden")).toBe(false);
+    expect(inert(".toast-stack")).toBe(true);
+    expect($(".toast-stack").getAttribute("aria-hidden")).toBe("true");
   });
 
   it("walks into the app for a modal inside it, so only its siblings at each level go inert", () => {

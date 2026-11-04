@@ -9,10 +9,12 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { usePanelsStore } from "../../../src/stores/panels";
 import type { Selector } from "../../../src/types";
-import type { StressResultView } from "../../../src/ui/stress";
+import { legendGradient, type StressResultView } from "../../../src/ui/stress";
+import { setStressLook, stressLook } from "../../../src/ui/stressLook";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => setStressLook({ ramp: "perceptual", bands: false }));
 
 function makeEngine() {
   const panels = {
@@ -28,6 +30,7 @@ function makeEngine() {
     cancelStress: vi.fn(),
     closeStress: vi.fn(),
     setStressColours: vi.fn(),
+    setStressLook: vi.fn(setStressLook),
     setStressShape: vi.fn(),
     setStressDeformation: vi.fn(),
     setStressAnimate: vi.fn(),
@@ -35,6 +38,7 @@ function makeEngine() {
     setStressProbe: vi.fn(),
     removeStressProbe: vi.fn(),
     placeStressSpot: vi.fn(),
+    lookAtStressPoint: vi.fn(),
   };
   const store = {
     onBuild: (fn: () => void) => {
@@ -67,6 +71,14 @@ async function pick(trigger: Element, label: string) {
   await flushPromises();
 }
 
+async function optionsOf(trigger: Element): Promise<string[]> {
+  (trigger as HTMLElement).click();
+  await flushPromises();
+  const labels = optionLabels();
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  return labels;
+}
+
 function optionLabels(): string[] {
   return [...document.body.querySelectorAll(".select-pop .opt-label")].map((e) => e.textContent ?? "");
 }
@@ -88,6 +100,22 @@ function view(over: Partial<StressResultView> = {}): StressResultView {
     verdict: { safetyFactor: 3.32, peakPlace: null },
     peakAt: [13.5, -7.25, 4.1],
     maxDeflection: 0.47,
+    peaks: [
+      {
+        label: "Peak stress",
+        where: "x 13.5, y -7.25, z 4.1 mm",
+        spoken: "Peak stress, 15 MPa, at x 13.5, y -7.25, z 4.1 mm",
+        at: [13.5, -7.25, 4.1],
+        size: 5.01,
+      },
+      {
+        label: "Max deflection",
+        where: "x 60.2, y 3.5, z -8 mm",
+        spoken: "Max deflection, 0.47 mm, at x 60.2, y 3.5, z -8 mm",
+        at: [60.2, 3.5, -8],
+        size: 5.01,
+      },
+    ],
     ...over,
   };
 }
@@ -442,11 +470,21 @@ describe("StressPanel", () => {
       ["Peak stress", "62 MPa"],
       ["Max deflection", "1.25 mm"],
     ]);
-    const text = q(".stress-panel")!.textContent!;
-    expect(text).toContain("0.5 MPa");
-    expect(text).toContain("62 MPa");
+    expect([...document.body.querySelectorAll(".stress-ticks > li")].map((e) => e.textContent?.trim())).toEqual([
+      "0.5",
+      "15.875",
+      "31.25",
+      "46.625",
+      "62",
+    ]);
     expect(q(".stress-warning")?.textContent).toBe("Printed parts are weaker across layers.");
     expect(q(".stress-yields")?.textContent).toBe("0.8");
+    expect(q(".stress-yields")?.tagName).toBe("DD");
+    expect([...document.body.querySelectorAll("dl > .stress-key-row > dt")].map((e) => e.textContent)).toEqual([
+      "Safety factor",
+      "Peak stress",
+      "Max deflection",
+    ]);
     expect(q(".stress-legend")?.getAttribute("style")).toContain("linear-gradient");
     const details = q(".stress-details")!;
     expect(details.getAttribute("aria-expanded")).toBe("false");
@@ -458,6 +496,47 @@ describe("StressPanel", () => {
     details.click();
     await flushPromises();
     expect(shown(q(".stress-details-body"))).toBe(true);
+  });
+
+  it("lists the peak stress and the largest bend as buttons that look at their point", async () => {
+    const { panels } = await withResult();
+    const list = q(".stress-where")!;
+    const head = document.getElementById(list.getAttribute("aria-labelledby")!)!;
+    expect([list.tagName, head.textContent]).toEqual(["UL", "Where the highest values are"]);
+    const rows = [...list.querySelectorAll<HTMLButtonElement>("li > button.ui-list-row")];
+    expect(
+      rows.map((b) => [
+        b.querySelector(".ui-list-row-label")?.textContent,
+        b.querySelector(".ui-list-row-hint")?.textContent,
+        b.getAttribute("aria-label"),
+      ]),
+    ).toEqual([
+      ["Peak stress", "x 13.5, y -7.25, z 4.1 mm", "Peak stress, 15 MPa, at x 13.5, y -7.25, z 4.1 mm"],
+      ["Max deflection", "x 60.2, y 3.5, z -8 mm", "Max deflection, 0.47 mm, at x 60.2, y 3.5, z -8 mm"],
+    ]);
+    expect(rows.map((b) => b.title)).toEqual(["Look at it", "Look at it"]);
+    expect(panels.lookAtStressPoint).not.toHaveBeenCalled();
+    rows[1]!.click();
+    rows[0]!.click();
+    expect(vi.mocked(panels.lookAtStressPoint).mock.calls).toEqual([
+      [[60.2, 3.5, -8], 5.01],
+      [[13.5, -7.25, 4.1], 5.01],
+    ]);
+    expect(list.contains(q(".stress-details"))).toBe(false);
+  });
+
+  it("lists no places when the result has none", async () => {
+    await withResult({ peaks: [] });
+    expect(q(".stress-where")).toBeNull();
+    expect(q(".stress-where-head")).toBeNull();
+  });
+
+  it("lists no places for a model that changed since the Run", async () => {
+    const { p } = await withResult();
+    expect(q(".stress-where")).not.toBeNull();
+    p.setStressColours("none");
+    await flushPromises();
+    expect(q(".stress-where")).toBeNull();
   });
 
   it("says when the model changed since the Run, hides the deformation, and runs again", async () => {
@@ -490,14 +569,56 @@ describe("StressPanel", () => {
     expect(step.firstElementChild?.classList.contains("stress-stale")).toBe(true);
   });
 
-  it("shows the legend only with the colours, titled Stress, with a minimum too small to tell from 0 as 0", async () => {
+  it("shows the legend only with the colours, marked at each quarter, a minimum too small to tell from 0 as 0", async () => {
     const { p } = await withResult({ legend: { min: 0.000656, max: 51.11 } });
-    const ends = () => [...document.body.querySelectorAll(".stress-legend-labels > span")].map((e) => e.textContent);
-    expect(ends()).toEqual(["0 MPa", "Stress", "51.11 MPa"]);
+    const scale = () => q(".stress-ticks");
+    const ticks = () => [...document.body.querySelectorAll(".stress-ticks > li")].map((e) => e.textContent?.trim());
+    expect(scale()?.tagName).toBe("OL");
+    expect(scale()?.getAttribute("aria-label")).toContain("MPa");
+    expect(ticks()).toEqual(["0", "12.78", "25.56", "38.33", "51.11"]);
+    expect([...document.body.querySelectorAll<HTMLElement>(".stress-ticks > li")].map((e) => e.style.left)).toEqual([
+      "0%",
+      "25%",
+      "50%",
+      "75%",
+      "100%",
+    ]);
     p.setStressColours("hidden");
     await flushPromises();
     expect(q(".stress-legend")).toBeNull();
-    expect(ends()).toEqual([]);
+    expect(scale()).toBeNull();
+  });
+
+  it("offers the colour map and bands under the bar, and the bar follows them", async () => {
+    const { p, panels } = await withResult({ legend: { min: 0.5, max: 62 } });
+    const bar = () => q(".stress-legend")!.style.background;
+    const map = q("[data-testid='stress-colour-map']")!;
+    const bands = q(".stress-bands")!;
+    expect(map.getAttribute("aria-label")).toContain("Colour map");
+    expect(value(map)).toBe("perceptual");
+    expect(bands.getAttribute("aria-checked")).toBe("false");
+    expect(await optionsOf(map)).toEqual(["Perceptual", "Rainbow", "Greyscale"]);
+    await pick(map, "Greyscale");
+    expect(panels.setStressLook).toHaveBeenLastCalledWith({ ramp: "greyscale" });
+    expect(value(map)).toBe("greyscale");
+    expect(bar()).toBe(legendGradient("greyscale"));
+    bands.click();
+    await flushPromises();
+    expect(panels.setStressLook).toHaveBeenLastCalledWith({ bands: true });
+    expect(bands.getAttribute("aria-checked")).toBe("true");
+    expect(bar()).toBe(legendGradient("greyscale", 8));
+    expect(stressLook()).toEqual({ ramp: "greyscale", bands: true });
+    p.setStressColours("hidden");
+    await flushPromises();
+    expect(q(".stress-bands")).toBeNull();
+  });
+
+  it("starts the controls from the look kept", async () => {
+    setStressLook({ ramp: "rainbow", bands: true });
+    await withResult();
+    expect(value(q("[data-testid='stress-colour-map']"))).toBe("rainbow");
+    expect(q(".stress-bands")!.getAttribute("aria-checked")).toBe("true");
+    expect(q(".stress-legend")!.style.background).toBe(legendGradient("rainbow", 8));
   });
 
   it("has a Deformed shape switch beside Colours, the exaggeration only while the shape is drawn", async () => {

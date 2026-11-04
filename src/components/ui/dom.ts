@@ -1,7 +1,9 @@
 // The base set for imperative TS code (tool boxes, io): the same controls as the Vue components, built as DOM.
 
 import { iconElement } from "../../ui/icons";
-import { unitById } from "../../ui/measure";
+import { announce } from "../../ui/announce";
+import { a11yPrefs, onA11yPrefsChange } from "../../ui/a11yPrefs";
+import { spokenUnit, unitById } from "../../ui/measure";
 import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
 import { swallowDisabled } from "./useDisabled";
@@ -181,6 +183,8 @@ export interface UiUnitChipOptions extends DisabledOptions {
   /** The picker's name, and the caption's title. */
   tip?: string | undefined;
   keys?: string | undefined;
+  /** A caption the field's description already says, so browse mode skips it. A picker is never hidden. */
+  spokenElsewhere?: boolean | undefined;
 }
 
 const unitLabel = (id: string) => unitById(id)?.label ?? id;
@@ -194,6 +198,7 @@ export function uiUnitChip(o: UiUnitChipOptions): HTMLElement {
     const caption = document.createElement("span");
     caption.className = "ui-unit-chip";
     setTitle(caption, o.tip);
+    if (o.spokenElsewhere) caption.setAttribute("aria-hidden", "true");
     caption.textContent = unitLabel(o.unit);
     return caption;
   }
@@ -293,6 +298,27 @@ export interface UiNumberInput {
   chip: HTMLElement | null;
 }
 
+let numberNo = 0;
+
+// Weakly held, so a box taken off the page is not kept alive by the one listener that keeps every unit word current.
+type UnitWord = { word: WeakRef<HTMLElement>; unit: string };
+const unitWords = new Set<UnitWord>();
+const forgetUnitWord = new FinalizationRegistry<UnitWord>((w) => unitWords.delete(w));
+onA11yPrefsChange(() => {
+  const full = a11yPrefs().unitsInFull;
+  for (const w of unitWords) {
+    const word = w.word.deref();
+    if (word) word.textContent = spokenUnit(w.unit, full);
+  }
+});
+
+function followUnitsInFull(word: HTMLElement, unit: string): void {
+  word.textContent = spokenUnit(unit, a11yPrefs().unitsInFull);
+  const w = { word: new WeakRef(word), unit };
+  unitWords.add(w);
+  forgetUnitWord.register(word, w);
+}
+
 /** NumberField.vue's markup as DOM; the caller reads and commits the text. */
 export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
   const root = document.createElement("span");
@@ -320,18 +346,61 @@ export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
     input.focus();
   });
   const chip = o.unit
-    ? uiUnitChip({ unit: o.unit, options: o.units, tip: o.unitTip, disabled: o.disabled, clickable: o.clickable })
+    ? uiUnitChip({
+        unit: o.unit,
+        options: o.units,
+        tip: o.unitTip,
+        disabled: o.disabled,
+        clickable: o.clickable,
+        spokenElsewhere: true,
+      })
     : null;
   if (chip) root.append(chip);
+  if (o.unit) {
+    const word = document.createElement("span");
+    word.id = `ui-num-${++numberNo}-unit`;
+    word.className = "sr-only";
+    followUnitsInFull(word, o.unit);
+    input.setAttribute("aria-describedby", word.id);
+    root.append(word);
+  }
   return { root, input, chip };
 }
 
-/** A number input's refusal, or null once it reads. */
+const errorSpans = new WeakMap<UiNumberInput, HTMLSpanElement>();
+
+/** A number input's refusal, or null once it reads. The reason is described on the input and spoken once when the
+ *  input goes from valid to refused. */
 export function setInvalid(f: UiNumberInput, reason: string | null): void {
+  const was = errorSpans.get(f);
+  const wasInvalid = f.input.hasAttribute("aria-invalid");
   if (reason) f.input.setAttribute("aria-invalid", "true");
   else f.input.removeAttribute("aria-invalid");
   f.root.classList.toggle("is-error", !!reason);
   setTitle(f.input, reason ?? tips.get(f.input));
+
+  let span = was;
+  if (reason && !span) {
+    span = document.createElement("span");
+    span.id = `ui-num-${++numberNo}-error`;
+    span.className = "sr-only";
+    errorSpans.set(f, span);
+    f.root.append(span);
+  }
+  if (reason && span) span.textContent = reason;
+  const ids = (f.input.getAttribute("aria-describedby") ?? "").split(" ").filter((id) => id && id !== was?.id);
+  if (reason && span) ids.push(span.id);
+  if (ids.length) f.input.setAttribute("aria-describedby", ids.join(" "));
+  else f.input.removeAttribute("aria-describedby");
+  if (!reason && was) {
+    was.remove();
+    errorSpans.delete(f);
+  }
+
+  if (reason && !wasInvalid) {
+    const name = document.activeElement === f.input ? "" : (f.input.getAttribute("aria-label") ?? "");
+    announce(name ? `${name}, ${reason}` : reason, "assertive");
+  }
 }
 
 export interface UiSliderOptions extends DisabledOptions {

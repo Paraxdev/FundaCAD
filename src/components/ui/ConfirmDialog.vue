@@ -8,7 +8,13 @@ const props = withDefaults(
   defineProps<{
     title: string;
     message?: string | undefined;
-    options: readonly { value: T; label: string; hint?: string | undefined; primary?: boolean | undefined }[];
+    options: readonly {
+      value: T;
+      label: string;
+      hint?: string | undefined;
+      primary?: boolean | undefined;
+      danger?: boolean | undefined;
+    }[];
     /** Paints the primary choice, or the multi confirm, as destructive. */
     danger?: boolean;
     /** A checklist with Cancel and a confirm button instead of one button per choice. */
@@ -73,7 +79,10 @@ const confirm = ok.guard(() => emit("confirm", picked.value));
           :key="o.value"
           type="button"
           class="btn ui-confirm-choice"
-          :class="{ 'btn-primary ui-confirm-primary': o.primary, 'ui-confirm-danger': danger && o.primary }"
+          :class="{
+            'btn-primary ui-confirm-primary': o.primary,
+            'ui-confirm-danger': o.danger || (danger && o.primary),
+          }"
           data-roving
           :tabindex="roving.tabindex(i)"
           @focus="roving.onFocus(i)"

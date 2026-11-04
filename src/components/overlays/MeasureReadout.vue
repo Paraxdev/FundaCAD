@@ -5,6 +5,7 @@ import { watch } from "vue";
 import { useToolPanelStore } from "../../stores/toolPanels";
 import { announce } from "../../ui/announce";
 import Panel from "../ui/Panel.vue";
+import ReadoutList from "../ui/ReadoutList.vue";
 
 const panels = useToolPanelStore();
 
@@ -17,9 +18,9 @@ watch(
 <template>
   <!-- No close on Esc: MeasureTool owns Escape while active, it also drops the highlight, marker and picking suspend. -->
   <Panel :open="!!panels.measure" title="Measure" hint="Esc to exit">
-    <div v-for="(r, i) in panels.measure" :key="i" class="measure-row">
-      <span class="measure-k">{{ r.k }}</span>
-      <span class="measure-v">{{ r.v }}</span>
+    <ReadoutList v-if="panels.measure?.every((r) => r.k)" :rows="panels.measure" />
+    <div v-else class="measure-row">
+      <span class="measure-v">{{ panels.measure?.[0]?.v }}</span>
     </div>
   </Panel>
 </template>

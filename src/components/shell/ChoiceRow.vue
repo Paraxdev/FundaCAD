@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The same row chrome as ValidatedRow, the two interleave in one list. No mid-edit guard: a select has no half-typed state.
 
+import FieldRow from "../ui/FieldRow.vue";
 import Select from "../ui/Select.vue";
 import type { ChoiceOption } from "../../document/optionFields";
 
@@ -14,10 +15,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="param-row" :title="rowTitle">
-    <label>{{ label }}</label>
-    <div class="param-value">
-      <Select :model-value="value" :options="options" :label="label" @update:model-value="commit" />
-    </div>
-  </div>
+  <FieldRow v-slot="{ id }" layout="param" :label="label" :title="rowTitle">
+    <Select :id="id" :model-value="value" :options="options" :label="label" @update:model-value="commit" />
+  </FieldRow>
 </template>
