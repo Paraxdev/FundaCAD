@@ -8,9 +8,16 @@ import type { SketchPlane } from "./plane";
 import type { ResolvedEntity } from "./snap";
 import { entityDims, staggeredDefaults, type DimField } from "./entityDims";
 import { dimClass, dimTitle, fmtDim, isFormula, type DimKind } from "./annotationFormat";
+import { entityDimName, entityLabel } from "./sketchNames";
 import { useSketchAnnotationStore, type DimHooks } from "../stores/sketchAnnotations";
 
 export interface DimLabel {
+  /** The subject, stable across rebuilds: `<entityId>:<field>`, or `c:<constraintId>` for any other constraint. */
+  key: string;
+  /** "Width of Rectangle 1", what the list row and the open editor are called. */
+  name: string;
+  /** Entity ids the dimension measures. */
+  entities: string[];
   anchor: THREE.Vector2;
   valueMm: number;
   commit: (mm: number) => void; // writes the value (entity field or constraint)
@@ -58,12 +65,14 @@ export class SketchDimensions {
     ((index: number, field: DimField, ox: number, oy: number, done: boolean) => THREE.Vector2 | null) | null = null;
   /** The owner renders the menu. `del` is null for an entity dim, which has nothing to delete. */
   onLabelMenu: ((e: MouseEvent, del: (() => void) | null) => void) | null = null;
+  onLight: ((ids: string[] | null) => void) | null = null;
 
   /** Read at call time since SketchMode assigns the hooks after construction, markRaw since they close over it. */
   private readonly hooks: DimHooks = markRaw({
     overlapPick: (e: PointerEvent) => this.onOverlapPick?.(e) ?? false,
     planePoint: (cx: number, cy: number) => this.onPlanePoint?.(cx, cy) ?? null,
     labelMenu: (e: MouseEvent, del: (() => void) | null) => this.onLabelMenu?.(e, del),
+    light: (ids: string[] | null) => this.onLight?.(ids),
   });
 
   constructor(
@@ -86,6 +95,9 @@ export class SketchDimensions {
         const field = d.field;
         items.push(
           present({
+            key: `${e.id}:${field}`,
+            name: entityDimName(d.label, entityLabel(entities, e.id)),
+            entities: [e.id],
             anchor: d.labelPos,
             valueMm: d.valueMm,
             commit: (mm) => this.onEdit(i, field, mm),

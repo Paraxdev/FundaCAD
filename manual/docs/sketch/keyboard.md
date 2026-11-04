@@ -52,6 +52,10 @@ After the first point, the box of [exact sizes](exact-sizes.md) takes over: W an
 
 Typing `@` as the first character of a size box turns it back into X and Y for that point. A line chain is then `@40,0` Enter, `@0,20` Enter, and so on. It closes when an end meets the start.
 
+## Change a size by keys
+
+Tab to **Dimensions** in the sketch palette, then to the row of the size, such as "Width of Rectangle 1". Type the new value and press Enter. The sketch updates and focus stays on the row. See [Dimensions](dimensions.md).
+
 ## Snaps
 
 Press arrows to move the cursor, then Tab. Each press names a snap near the cursor and moves the cursor onto it, such as "Cursor at 20, 5, snapped to the midpoint of Line 2". Enter places the point there, with the snap kept, as a click on a snap would. After the last candidate, Tab says "No snap, cursor at 20, minus 20" and the cursor is back where it was. If that spot is itself a snap, Tab says "End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 2". Tab walks the 16 candidates nearest the cursor, to reach a farther one, move the cursor closer with arrows and press Tab again, or type its coordinates. With no candidate, Tab moves focus as usual. See [Snapping](snapping.md).

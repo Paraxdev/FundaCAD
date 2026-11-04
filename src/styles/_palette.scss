@@ -75,6 +75,25 @@
 .palette-section-gap {
   margin-top: var(--s-4);
 }
+.dim-empty {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--text-mute);
+}
+.dim-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 216px;
+  overflow-y: auto;
+}
+.dim-row {
+  padding: var(--s-1) 0;
+}
+.dim-row .ui-field-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .rel-summary {
   font-size: var(--fs-small);
   font-weight: 600;

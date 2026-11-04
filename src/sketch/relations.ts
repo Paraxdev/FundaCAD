@@ -7,7 +7,9 @@ import { isDriven } from "../types";
 import { coincKey } from "./sketchSolve";
 import { constraintFace, diagnosisOf, type ConstraintDiagnosis } from "./glyphs";
 import { fmtDim } from "./annotationFormat";
-import { distinctNames, relationName, stateWord, type StateWord } from "./sketchNames";
+import { distinctNames, entityLabel, relationName, stateWord, type StateWord } from "./sketchNames";
+
+export { entityLabel };
 
 export { constraintFace } from "./glyphs";
 
@@ -38,39 +40,6 @@ export interface RelationRow {
 
 /** Degrees, not millimetres, the one dimensional constraint measured in them. */
 const isAngle = (c: SketchConstraint) => c.type === "angle";
-
-const KIND_NAME: Record<string, string> = {
-  line: "Line",
-  rectangle: "Rectangle",
-  circle: "Circle",
-  arc: "Arc",
-  spline: "Spline",
-  bspline: "Control point spline",
-  point: "Point",
-  polygon: "Polygon",
-  slot: "Slot",
-  text: "Text",
-  projected: "Reference",
-};
-
-/** Kind plus position among its kind, the only handle an entity has (ids, not names). Decodes rect-edge operands,
- *  null for an id nothing answers to, so a stale constraint reads as acting on nothing. */
-export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
-  const t = id.indexOf("~");
-  if (t >= 0) {
-    const base = entityLabel(ents, id.slice(0, t));
-    const k = Number(id.slice(t + 1));
-    return base && Number.isInteger(k) ? `${base} edge ${k + 1}` : base;
-  }
-  const target = ents.find((e) => e.id === id);
-  if (!target) return null;
-  let n = 0;
-  for (const e of ents) {
-    if (e.type === target.type) n++;
-    if (e.id === id) break;
-  }
-  return `${KIND_NAME[target.type] ?? target.type} ${n}`;
-}
 
 /** Endpoints that compile to one solver point. Uses the solver's own merge key on purpose, so the list never shows
  *  joins the solver does not hold. A lone endpoint is not a join. */

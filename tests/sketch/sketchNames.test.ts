@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { distinctNames, relationName, stateWord } from "../../src/sketch/sketchNames";
+import {
+  constraintDimName,
+  dimKey,
+  distinctNames,
+  entityDimName,
+  relationName,
+  stateWord,
+} from "../../src/sketch/sketchNames";
 
 describe("stateWord", () => {
   it("says each state in one word, an implied row first", () => {
@@ -45,5 +52,35 @@ describe("distinctNames", () => {
     expect(distinctNames([])).toEqual([]);
     expect(distinctNames(["a"])).toEqual(["a"]);
     expect(distinctNames(["a", "b"])).toEqual(["a", "b"]);
+  });
+});
+
+describe("entityDimName", () => {
+  it("names the measure and the shape, or the measure alone", () => {
+    expect(entityDimName("Width", "Rectangle 2")).toBe("Width of Rectangle 2");
+    expect(entityDimName("Width", null)).toBe("Width");
+  });
+});
+
+describe("constraintDimName", () => {
+  it("reads one, two and three distinct operands", () => {
+    expect(constraintDimName("Radius", ["Arc 1"])).toBe("Radius of Arc 1");
+    expect(constraintDimName("Distance", ["Line 1", "Line 3"])).toBe("Distance between Line 1 and Line 3");
+    expect(constraintDimName("Rim to rim", ["Circle 1", "Circle 2", "Arc 4"])).toBe(
+      "Rim to rim between Circle 1, Circle 2 and Arc 4",
+    );
+  });
+
+  it("counts an operand once, and has a bare name for none", () => {
+    expect(constraintDimName("Distance", ["Line 2", "Line 2"])).toBe("Distance of Line 2");
+    expect(constraintDimName("Dimension", [])).toBe("Dimension");
+  });
+});
+
+describe("dimKey", () => {
+  it("is the stood in subject, else the constraint id, else its place", () => {
+    expect(dimKey("r1:width", "k9", 4)).toBe("r1:width");
+    expect(dimKey(null, "k9", 4)).toBe("c:k9");
+    expect(dimKey(null, undefined, 4)).toBe("c:#4");
   });
 });

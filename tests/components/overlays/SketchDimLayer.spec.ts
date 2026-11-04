@@ -46,7 +46,15 @@ const viewport = {
 } as unknown as Viewport;
 
 function extra(over: Partial<ExtraDim> = {}): ExtraDim {
-  return { anchor: new THREE.Vector2(1, 2), valueMm: 40, commit: () => {}, ...over };
+  return {
+    key: "c:x",
+    name: "Distance",
+    entities: [],
+    anchor: new THREE.Vector2(1, 2),
+    valueMm: 40,
+    commit: () => {},
+    ...over,
+  };
 }
 
 function dims() {
@@ -143,7 +151,7 @@ describe("SketchDimLayer", () => {
 
     const overlapPick = vi.fn(() => false);
     const store = useSketchAnnotationStore();
-    store.dimHooks = { overlapPick, planePoint: () => null, labelMenu: () => {} };
+    store.dimHooks = { overlapPick, planePoint: () => null, labelMenu: () => {}, light: () => {} };
     store.dimSelected = -1;
 
     const badge = labels()[0]!;
@@ -175,6 +183,7 @@ describe("SketchDimLayer", () => {
       },
       planePoint: () => null,
       labelMenu: () => {},
+      light: () => {},
     };
     labels()[0]!.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true }));
     await nextTick();
@@ -277,6 +286,24 @@ describe("SketchDimLayer", () => {
 
   it("opens the value in display units on click", async () => {
     expect((await openEditor()).value).toBe("40");
+  });
+
+  it("names the open editor after its dimension", async () => {
+    const input = await openEditor({ name: "Width of Rectangle 2" });
+    expect(input.getAttribute("aria-label")).toBe("Width of Rectangle 2");
+  });
+
+  it("outlines only the badge whose Dimensions row is lit, and drops it when the row goes", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    const store = useSketchAnnotationStore();
+    dims().show([], plane, [extra({ key: "c:a" }), extra({ key: "c:b" }), extra({ key: "c:c" })]);
+    await nextTick();
+    store.dimLit = "c:b";
+    await nextTick();
+    expect([...labels()].map((el) => el.classList.contains("is-lit"))).toEqual([false, true, false]);
+    store.dimLit = null;
+    await nextTick();
+    expect([...labels()].map((el) => el.classList.contains("is-lit"))).toEqual([false, false, false]);
   });
 
   it("reopens the EXPRESSION on a parameter-bound dim, not its value", async () => {

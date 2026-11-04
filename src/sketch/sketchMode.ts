@@ -77,6 +77,7 @@ import {
   dimAnchor,
   drivenBadges,
   drivingDimFor,
+  rectSideOf,
   findDrivingDim,
   type DrivingDim,
 } from "./directDims";
@@ -135,6 +136,7 @@ import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { announce } from "../ui/announce";
 import { constraintRows } from "./relations";
+import { constraintDimName, dimKey, entityDimName, entityLabel } from "./sketchNames";
 import { toast } from "../ui/toast";
 import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
@@ -463,6 +465,7 @@ export class SketchMode {
         { label: "Delete dimension", danger: true, disabled: !del, shortcut: "Del", onClick: () => del?.() },
       ]);
     };
+    this.dims.onLight = (ids) => this.setRelationHover(ids);
     this.glyphs = new SketchGlyphs(viewport);
     this.glyphs.onDelete = (i) => {
       // The selection came with the constraint's shapes, a second Delete must not take them too.
@@ -1426,7 +1429,17 @@ export class SketchMode {
       const con = this.constraints[d.cIndex];
       const key = con && isDimConstraint(con) && con.id ? `c:${con.id}` : null;
       const expr = key ? this.exprFor(key) : undefined;
+      const side = con ? rectSideOf(this.entities, con) : null;
+      const face = con ? constraintFace(con) : null;
+      const operands = face?.operands ?? [];
+      const labels = operands.map((o) => entityLabel(this.entities, o)).filter((l): l is string => !!l);
+      const subject = side ? entityLabel(this.entities, side.entity.id) : null;
       return {
+        key: dimKey(side && `${side.entity.id}:${side.field}`, con && "id" in con ? con.id : undefined, d.cIndex),
+        name: side
+          ? entityDimName(side.field === "width" ? "Width" : "Height", subject)
+          : constraintDimName(face?.name ?? "Dimension", labels),
+        entities: [...new Set(operands.map((o) => o.split("~")[0] ?? o))],
         anchor: d.labelPos,
         valueMm: d.valueMm,
         ...(d.kind ? { kind: d.kind } : {}),

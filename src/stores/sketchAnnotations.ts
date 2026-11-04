@@ -11,6 +11,8 @@ export interface DimHooks {
   overlapPick(e: PointerEvent): boolean;
   planePoint(clientX: number, clientY: number): THREE.Vector2 | null;
   labelMenu(e: MouseEvent, del: (() => void) | null): void;
+  /** Light the shapes a Dimensions row measures while it has focus or the pointer, null clears. */
+  light(ids: string[] | null): void;
 }
 
 export interface GlyphHooks {
@@ -32,8 +34,12 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
   /** index into dimItems of the label the Delete key acts on, or null. */
   const dimSelected = ref<number | null>(null);
 
+  /** key of the Dimensions row in focus, the badge it outlines. */
+  const dimLit = ref<string | null>(null);
+
   function showDims(items: DimItem[], plane: SketchPlane, viewport: Viewport) {
     dimSelected.value = null;
+    if (dimLit.value !== null && !items.some((i) => i.key === dimLit.value)) dimLit.value = null;
     dimViewport.value = markRaw(viewport);
     dimPlane.value = markRaw(plane);
     dimItems.value = markRaw(items);
@@ -41,6 +47,7 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
 
   function hideDims() {
     dimSelected.value = null;
+    dimLit.value = null;
     dimPlane.value = null;
     dimItems.value = [];
   }
@@ -73,6 +80,7 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
     dimHooks,
     dimsPassive,
     dimSelected,
+    dimLit,
     showDims,
     hideDims,
     glyphItems,

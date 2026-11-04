@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SketchDimensionsList from "./SketchDimensionsList.vue";
 import SketchRelationsList from "./SketchRelationsList.vue";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -31,6 +32,11 @@ const rel = useSketchRelationsStore();
       :model-value="palette.state[t.key]"
       @update:model-value="(on: boolean) => palette.set(t.key, on)"
     />
+
+    <template v-if="palette.state.dimensions">
+      <div class="palette-section palette-section-gap">Dimensions</div>
+      <SketchDimensionsList />
+    </template>
 
     <!-- Relations answer what holds this sketch, the canvas glyphs what holds this line. It follows Show Constraints. -->
     <template v-if="rel.visible">
