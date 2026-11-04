@@ -45,12 +45,7 @@ defineEmits<{
 
     <!-- Scrolls rather than grows: a face set on an imported mesh can be dozens, and a taller panel loses Done. -->
     <ul class="tgt-list">
-      <li
-        v-for="(r, i) in rows"
-        :key="i"
-        class="tgt-item"
-        :class="{ 'tgt-unresolved': r.resolved === false }"
-      >
+      <li v-for="(r, i) in rows" :key="i" class="tgt-item" :class="{ 'tgt-unresolved': r.resolved === false }">
         <ListRow
           v-if="pickable"
           class="tgt-label"
