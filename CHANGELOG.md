@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Measure, Properties and Stress readouts read as label and value pairs.** A
+  screen reader now hears each label with its value in the Measure panel, the
+  Properties panel and the Stress key rows and details, and can list them as
+  term and definition pairs.
+
 - **The manual has a Beta and a Dev version.** fundacad.dev opens the Beta
   manual, and a switch at the top of every page opens the same page in Dev.
   Help, Manual in the app opens the version that matches your build.

@@ -447,6 +447,12 @@ describe("StressPanel", () => {
     expect(text).toContain("62 MPa");
     expect(q(".stress-warning")?.textContent).toBe("Printed parts are weaker across layers.");
     expect(q(".stress-yields")?.textContent).toBe("0.8");
+    expect(q(".stress-yields")?.tagName).toBe("DD");
+    expect([...document.body.querySelectorAll("dl > .stress-key-row > dt")].map((e) => e.textContent)).toEqual([
+      "Safety factor",
+      "Peak stress",
+      "Max deflection",
+    ]);
     expect(q(".stress-legend")?.getAttribute("style")).toContain("linear-gradient");
     const details = q(".stress-details")!;
     expect(details.getAttribute("aria-expanded")).toBe("false");

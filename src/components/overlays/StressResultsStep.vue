@@ -5,6 +5,7 @@ import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
+import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
 import Switch from "../ui/Switch.vue";
 import StressVerdict from "./StressVerdict.vue";
@@ -167,10 +168,11 @@ const deformStep = computed(() => {
       </div>
     </template>
 
-    <div v-for="r in keyRows" :key="r.k" class="measure-row stress-key-row">
-      <span class="measure-k">{{ r.k }}</span>
-      <span class="measure-v" :class="{ 'stress-yields': r.k === 'Safety factor' && result.yields }">{{ r.v }}</span>
-    </div>
+    <ReadoutList :rows="keyRows" row-class="stress-key-row">
+      <template #value="{ row }">
+        <dd class="measure-v" :class="{ 'stress-yields': row.k === 'Safety factor' && result.yields }">{{ row.v }}</dd>
+      </template>
+    </ReadoutList>
 
     <Button
       variant="ghost"
@@ -182,10 +184,7 @@ const deformStep = computed(() => {
       <template #icon><Icon :name="detailsOpen ? 'caretDown' : 'caretRight'" :size="12" /></template>Details
     </Button>
     <div v-show="detailsOpen" class="stress-fold stress-details-body">
-      <div v-for="(r, i) in result.details" :key="i" class="measure-row stress-detail-row">
-        <span class="measure-k">{{ r.k }}</span>
-        <span class="measure-v">{{ r.v }}</span>
-      </div>
+      <ReadoutList :rows="result.details" row-class="stress-detail-row" />
     </div>
 
     <div v-for="(w, i) in result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{
