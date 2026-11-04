@@ -103,6 +103,7 @@ describe("Preferences choices", () => {
       ["prefs-contrast", "Contrast", "Follow system|Standard|More|Maximum"],
       ["prefs-viewport-labels", "Viewport labels", "Small|Medium|Large|Extra large"],
       ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
+      ["prefs-notice-time", "Notification time", "Normal|Longer|Until dismissed"],
       ["prefs-motion", "Animations", "Follow system|On|Off"],
       ["prefs-env-width", "HDR environment size", expect.stringMatching(/^2048\|4096\|8192\|16384\|GPU maximum/)],
     ]);

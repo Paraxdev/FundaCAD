@@ -16,6 +16,7 @@ import { tabPanelAttrs } from "../ui/tabIds";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import LargerTargetsRow from "./LargerTargetsRow.vue";
+import NoticeTimeRow from "./NoticeTimeRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
@@ -223,6 +224,7 @@ const a11yChanged = computed(
     a11y.value.verbosity !== DEFAULT_A11Y.verbosity ||
     a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
     a11y.value.targets !== DEFAULT_A11Y.targets ||
+    a11y.value.noticeTime !== DEFAULT_A11Y.noticeTime ||
     a11y.value.interfaceSize !== DEFAULT_A11Y.interfaceSize ||
     a11y.value.comfortableText !== DEFAULT_A11Y.comfortableText ||
     a11y.value.viewportLabels !== DEFAULT_A11Y.viewportLabels ||
@@ -893,6 +895,7 @@ function onClassicCamera(on: boolean) {
                   selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
                 </p>
               </div>
+              <NoticeTimeRow />
               <div class="pref-card">
                 <Checkbox
                   id="prefs-single-keys"

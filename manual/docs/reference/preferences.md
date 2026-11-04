@@ -11,7 +11,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 | Appearance | Theme, Icons, Units, Home background |
 | Viewport | Reflections, Background, Environment brightness, Tangent edges, Bloom, Path tracer, Performance mode, Potato mode |
 | Navigation | Smoothing, Orbit pivot, Orbit inertia, Scrolling, Two-finger scroll, Classic camera |
-| Accessibility | Animations, Hover delay, Interface size, Comfortable text, Viewport labels |
+| Accessibility | Animations, Hover delay, Notification time, Interface size, Comfortable text, Viewport labels |
 | Updates | Check for updates automatically, how often, and Channel |
 | AI assistants | See [Connect an AI assistant](../ai/connect.md) |
 | Plugins | See [Plugins](../plugins/index.md) |
@@ -48,8 +48,9 @@ Viewport labels sizes what is drawn over the model: sketch dimensions, constrain
 6. Classic camera brings back the earlier camera, after a restart.
 7. Animations off makes every move instant. It follows the system's reduce motion setting until you change it.
 8. Hover delay is how long the pointer rests on a part before one face lights up instead of the whole part.
-9. Updates checks Daily unless you pick Every launch or Weekly. Turned off, nothing is sent until you use Help, Check for Updates….
-10. Channel picks Stable or Beta for the next check. Development opens the page of FundaCAD Dev, a separate app that installs beside this one.
+9. Notification time is how long messages stay: Normal, Longer, or Until dismissed. Pointing at a message or moving focus into it holds it, and a message with a button stays at least 15 seconds. Until dismissed keeps each one until you close it, and an error in the title bar gets a Dismiss button.
+10. Updates checks Daily unless you pick Every launch or Weekly. Turned off, nothing is sent until you use Help, Check for Updates….
+11. Channel picks Stable or Beta for the next check. Development opens the page of FundaCAD Dev, a separate app that installs beside this one.
 
 ## Experimental
 

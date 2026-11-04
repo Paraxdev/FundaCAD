@@ -31,13 +31,17 @@ describe("toasts that carry an action", () => {
 
   it("stays long enough to read and reach its button", () => {
     toast("That sketch has a 3 mm gap", { action: { label: "Close gap", onClick: () => {} } });
-    vi.advanceTimersByTime(7500);
+    vi.advanceTimersByTime(14990);
     expect(useToastStore().items.filter((t) => !t.leaving)).toHaveLength(1);
+    vi.advanceTimersByTime(20);
+    expect(useToastStore().items.filter((t) => !t.leaving)).toHaveLength(0);
   });
 
   it("a plain info toast keeps its short life", () => {
     toast("Copied.");
-    vi.advanceTimersByTime(3600);
+    vi.advanceTimersByTime(4990);
+    expect(useToastStore().items.filter((t) => !t.leaving)).toHaveLength(1);
+    vi.advanceTimersByTime(20);
     expect(useToastStore().items.filter((t) => !t.leaving)).toHaveLength(0);
   });
 });

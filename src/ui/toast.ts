@@ -4,7 +4,8 @@
 export interface ToastOptions {
   kind?: "error" | "warning" | "info";
   action?: { label: string; onClick: () => void };
-  timeout?: number; // ms; errors and toasts with an action default longer
+  /** ms, never shorter than the kind's own time, see noticeTime.ts. */
+  timeout?: number;
   /** Kept with the console entry, for an error the full report. */
   detail?: unknown;
   source?: string;
@@ -17,6 +18,7 @@ import { log } from "./logStore";
 import { useToastStore } from "../stores/toasts";
 import { showErrorNotice } from "./errorNotice";
 import { announce } from "./announce";
+import { noticeHoldMs } from "./noticeTime";
 
 // A screen reader user cannot see the button, so the line names it and where it is.
 function spokenLine(message: string, action: ToastOptions["action"]): string {
@@ -49,7 +51,7 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
     message,
     kind,
     opts.action,
-    opts.timeout ?? (opts.action ? 9000 : kind === "warning" ? 6000 : 3500),
+    noticeHoldMs(kind, !!opts.action, opts.timeout),
   );
 }
 

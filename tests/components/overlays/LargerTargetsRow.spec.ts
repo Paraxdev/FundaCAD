@@ -65,6 +65,7 @@ describe("Larger click targets in Preferences", () => {
     const cards = [...group.querySelectorAll(".pref-card")];
     expect(cards.map((c) => (c.querySelector("[id]") as HTMLElement).id)).toEqual([
       "prefs-hover-dwell",
+      "prefs-notice-time",
       "prefs-single-keys",
       "prefs-larger-targets",
     ]);

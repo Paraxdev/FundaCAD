@@ -1144,8 +1144,10 @@ A tool that collects more than one selection gives each its own row, as
 `opts: { kind?: "info" | "warning" | "error"; action?: { label, onClick }; timeout?: number; detail?: unknown; source?: string }`.
 It returns the toast's id for `dismissToast`, or null for an error.
 
-- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s,
-  one with an action 9s so it can be read and its button reached).
+- `info` (the default) and `warning` show a `.toast`. `noticeHoldMs` (`src/ui/noticeTime.ts`) gives its time from the
+  Notification time setting: info 5s, warning 8s, error notice 10s, any message with a button at least 15s, and a
+  caller's `timeout` only lengthens that. Longer is three times it, Until dismissed has no timer (`hold: null`), and the
+  error notice then shows a Dismiss button. A fourth toast evicts the oldest one without a button.
 - The same message, kind and action label again restarts the toast already
   showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice

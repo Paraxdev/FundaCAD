@@ -8,6 +8,7 @@ import { revealEntry } from "../../ui/logStore";
 import { motionOn } from "../../ui/motion";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
+import IconButton from "../ui/IconButton.vue";
 
 type Phase = "hidden" | "icon" | "grow" | "text" | "leave";
 
@@ -49,7 +50,7 @@ async function fitWidth(): Promise<number> {
 function hold() {
   clearTimeout(holdTimer);
   const n = shown.value;
-  if (!n || hovered || focused) return;
+  if (!n || n.holdMs === null || hovered || focused) return;
   holdTimer = window.setTimeout(leave, n.holdMs);
 }
 
@@ -181,6 +182,16 @@ onUnmounted(() => {
       <Button v-if="shown.action && phase === 'text'" size="sm" class="err-action" @click="runAction">{{
         shown.action.label
       }}</Button>
+      <IconButton
+        v-if="shown.holdMs === null && phase === 'text'"
+        icon="close"
+        tip="Dismiss"
+        size="sm"
+        variant="plain"
+        :icon-size="12"
+        class="err-dismiss"
+        @click="finish"
+      />
     </div>
     <!-- The chip's width at rest, measured so the grow has a target. -->
     <Chip v-if="shown" ref="measure" variant="error" size="md" class="err-notice err-measure" aria-hidden="true">
