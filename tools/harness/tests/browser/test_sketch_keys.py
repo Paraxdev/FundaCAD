@@ -25,6 +25,10 @@ POSE = "() => window.viewport.rig.poseVersion()"
 SPOKEN = "() => window.__spoken"
 VOLUME = "() => window.viewport.bodyProperties(null).volume"
 PROFILES = "() => window.__spoken.filter((t) => t.startsWith('Profile')).length"
+# Counted at the key's own keydown, as the last Tab's sentence, said 150 ms late, can land between a read and the press.
+MARK_KEY = """() => window.addEventListener("keydown", () => { window.__keySeen = window.__spoken.length; },
+  { capture: true, once: true })"""
+CURSOR_SAID = "() => window.__spoken.slice(window.__keySeen).find((t) => /cursor at/i.test(t))"
 PLACE = """(c) => {
   const v = window.viewport;
   const V = v.camera.position.constructor;
@@ -89,10 +93,9 @@ def walk_to(s, want, limit=6):
 
 def tab_to_snap(s, want, limit=5):
     for _ in range(limit):
-        seen = len(s.page.evaluate(SPOKEN))
+        s.page.evaluate(MARK_KEY)
         s.page.keyboard.press("Tab")
-        s.page.wait_for_function("n => window.__spoken.length > n", arg=seen)
-        if want in s.page.evaluate(SPOKEN)[-1]:
+        if want in s.page.wait_for_function(CURSOR_SAID).json_value():
             return
     raise AssertionError(f"no snap said {want!r}")
 
