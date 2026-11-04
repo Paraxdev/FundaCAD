@@ -28,6 +28,11 @@ export function isMenuKey(e: KeyboardEvent): boolean {
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
 
+/** Focus on a menu or list row, where Enter runs the row and a tool's window listener leaves it. */
+export function focusOnMenuRow(): boolean {
+  return typeof document !== "undefined" && !!document.activeElement?.closest(MENU_ROWS);
+}
+
 const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
 const roles = (names: string[]) => names.map((r) => `[role="${r}"]`);
 const ARROW_WIDGETS = roles([

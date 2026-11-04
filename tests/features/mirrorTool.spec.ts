@@ -51,6 +51,8 @@ const PLANE_AT: Record<number, PlanePickTarget> = {
   180: { kind: "face", spec: ROUND.def, face: ROUND },
 };
 
+const made: MirrorTool[] = [];
+
 function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string> = {}) {
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
@@ -107,6 +109,7 @@ function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string
     bodyName: (id: string) => (id === "body2" ? "Bracket" : undefined),
   } as unknown as DocumentStore;
   const tool = new MirrorTool(viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
+  made.push(tool);
   const done = vi.fn();
   return { tool, viewport, log, addFeatures, done, canvas };
 }
@@ -136,6 +139,7 @@ const row = (pick: TreePick) => {
 
 beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => {
+  for (const t of made.splice(0)) t.cancel();
   resetTreePicks();
   document.body.innerHTML = "";
 });
@@ -424,6 +428,45 @@ describe("Items rows", () => {
     expect(summary()).toEqual({ active: "objects", values: ["1 body", "Flat face"], plane: null, ready: true });
     expect(r.log.faceMarks).toEqual([{ faceIds: [23], color: 0xb48cff }]);
     expect(r.log.selected).toEqual(["body3"]);
+  });
+
+  it("ready with focus on a Geometry row, the prompt says F6 leads to the Enter that mirrors", () => {
+    const r = rig();
+    const list = document.createElement("div");
+    list.setAttribute("role", "listbox");
+    const faceRow = document.createElement("div");
+    faceRow.tabIndex = 0;
+    list.appendChild(faceRow);
+    const tree = document.createElement("div");
+    tree.setAttribute("role", "tree");
+    const bodyRow = document.createElement("div");
+    bodyRow.tabIndex = 0;
+    tree.appendChild(bodyRow);
+    document.body.append(list, tree);
+    r.canvas.tabIndex = 0;
+    const ready = () => prompt()!.split(" · ")[0];
+
+    r.tool.start(["body2"], r.done);
+    faceRow.focus();
+    expect(ready()).toBe("Pick the mirror plane");
+    row({ kind: "face", faceId: 14 });
+    expect(ready()).toBe("F6 to the view, then Enter to mirror, or pick more to mirror");
+    expect(key("Enter", faceRow)).toBe(false);
+    expect(r.addFeatures).not.toHaveBeenCalled();
+
+    r.canvas.focus();
+    expect(ready()).toBe("Enter to mirror, or pick more to mirror");
+    bodyRow.focus();
+    expect(ready()).toBe("Enter to mirror, or pick more to mirror");
+    faceRow.focus();
+    expect(ready()).toBe("F6 to the view, then Enter to mirror, or pick more to mirror");
+    r.canvas.focus();
+    expect(key("Enter", r.canvas)).toBe(true);
+    expect(r.addFeatures).toHaveBeenCalledTimes(1);
+
+    const after = prompt();
+    faceRow.focus();
+    expect([r.tool.active, prompt()]).toEqual([false, after]);
   });
 
   it("a face row commits a datum plane on the face's middle and the mirror across it", () => {
