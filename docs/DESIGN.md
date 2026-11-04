@@ -181,6 +181,7 @@ Status:
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
 | `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0`. Every palette keeps them at 3:1 on `--viewport-bg`, so the light themes set darker ones |
+| `--sketch-free`, `--sketch-defined`, `--sketch-construction`, `--sketch-projected`, `--sketch-projected-stale`, `--sketch-loose-open`, `--sketch-loose-untied` | `#5b9bff`, `#ffffff`, `#ffa64d`, `#b07fe8`, `#d9a24d`, `#e5484d`, `#f5a524` | Sketch curves in the view: free to move, fully defined, construction, projected, a projection whose source is gone, open ends and untied ends. A conflict is drawn in `--error`. Colour-Blind Safe trades them for `#3d8fe0`, `#f5f7fa`, `#e69f00`, `#f0e442`, `#98a3b0`, `#ff5c5c`, `#f4c542`, the light themes and High Contrast Light for darker ones. Each is held at 3:1 on `--viewport-bg` (4.5:1 in High Contrast) |
 
 There is no info, success tint, warn tint or disabled token. Derive them:
 
@@ -1184,6 +1185,16 @@ guard test cannot see them; hold them to these rules by hand.
   blue. A plane takes its normal axis colour: XY blue, XZ green, YZ red in Noir.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
+- Sketch curves take the seven `--sketch-*` tokens through the functions in
+  `src/sketch/overlay.ts` (`sketchFreeColor` and the like), a conflict takes
+  `--error`. The open sketch redraws on a theme change, and
+  `installViewportWiring` redraws the sketches that are not open. Colour-Blind
+  Safe holds six pairs apart (`overlaySeparation` in `src/ui/contrast.ts`): free
+  and projected, free and construction, projected and construction, free and
+  defined, projected and its stale form, open and untied ends. Each pair is
+  ΔE2000 15 or more under every dichromacy, or 10 L* apart. Noir and the other
+  dark themes keep free and projected close in hue, so projected geometry
+  relies on its dashes there.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
 - Each tile spans the positive side of its two axes, set 10px out from both
   arrows (`TILE_GAP_PX`), so its two inner edges run parallel to the arrows and
@@ -1318,7 +1329,8 @@ lead; the full text is kept in the console.
 hex or `rgb()`/`rgba()` values: `--bg --panel --panel-2 --raised --raised-2
 --viewport-bg --line --line-strong --text --text-dim --text-mute --accent
 --accent-hot --accent-tint --accent-tint-2 --on-accent --ok --warn --error
---error-tint --pick-line --accent-blue --axis-x --axis-y --axis-z`. Shape,
+--error-tint --pick-line --accent-blue --axis-x --axis-y --axis-z`, and the seven `--sketch-*`
+curve colours. Shape,
 glass, motion and z tokens never change from a palette. A palette that sets the retired `--accent-glow`
 still loads, the token is dropped.
 
@@ -1425,6 +1437,7 @@ them over every shipped theme:
 | Two signals a protan, deutan or tritan view merges (dE2000 under 15) | 10 L* apart | 10 L* apart |
 | The focus ring (`--accent`) on every surface and the glass | 3:1 | 4.5:1 |
 | `--axis-x`, `--axis-y`, `--axis-z` and `--pick-line` on `--viewport-bg` | 3:1 | 3:1 |
+| The seven `--sketch-*` curve colours and `--error` on `--viewport-bg` | 3:1 | 4.5:1 |
 
 An uploaded palette is checked against the same pairs at the standard bar: it
 still loads, and the Appearance pane lists the pairs it fails in a status line

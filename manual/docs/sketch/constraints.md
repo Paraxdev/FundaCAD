@@ -10,6 +10,8 @@ The colour of the curves tells you how free the sketch still is:
 2. **White**: the sketch is fully defined, nothing can move.
 3. **Red**: two rules disagree.
 
+The names above are the dark default. The light themes use deeper shades so the curves show on a pale ground, and Colour-Blind Safe uses its own blue, yellow and off-white, chosen so the states stay apart for every kind of colour blindness. Switching theme repaints every sketch, open or not.
+
 ## Add a constraint
 
 Some come for free as you draw a line. With both ends on the grid, a line whose ends share a grid row or column is made horizontal or vertical. With an end off the grid, as with Snap off or Ctrl held, a line within about 3 degrees of horizontal or vertical is made exact.
