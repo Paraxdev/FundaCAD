@@ -516,10 +516,41 @@ export interface StressResultView {
   peakAt: Vec3 | null;
   /** The largest deflection, mm. */
   maxDeflection: number | null;
+  /** Where the highest values are, one row each to look at. */
+  peaks: StressPeak[];
 }
 
+/** A place worth looking at: `at` and `size` are mm, the words use the display unit. */
+export interface StressPeak {
+  label: string;
+  where: string;
+  spoken: string;
+  at: Vec3;
+  /** How much of the model to frame around `at`, mm. */
+  size: number;
+}
+
+const PEAK_SIZE_FALLBACK = 20;
+
 function fmtPoint(p: Vec3, unit: Unit): string {
-  return `${displayRound(toDisplay(p[0]))}, ${displayRound(toDisplay(p[1]))}, ${displayRound(toDisplay(p[2]))} ${unit}`;
+  const [x, y, z] = p.map((v) => displayRound(toDisplay(v)));
+  return `x ${x}, y ${y}, z ${z} ${unit}`;
+}
+
+// A third of the diagonal of the drawn surface, to the hundredth, so the point sits in a view of the part's own scale.
+function peakSize(positions: ArrayLike<number> | undefined): number {
+  if (!positions || positions.length < 3) return PEAK_SIZE_FALLBACK;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < positions.length; i++) {
+    const a = i % 3;
+    const v = positions[i]!;
+    if (v < lo[a]!) lo[a] = v;
+    if (v > hi[a]!) hi[a] = v;
+  }
+  const diag = Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!);
+  const size = Math.round((diag / 3) * 100) / 100;
+  return size > 0 ? size : PEAK_SIZE_FALLBACK;
 }
 
 /** Peak and minimum of the per-vertex von Mises field, for the legend. */
@@ -550,10 +581,6 @@ export function formatStressResult(
   ];
   const details: PanelRow[] = [];
   details.push({ k: "Material", v: r.material.name });
-  // Not the engine's face index: it counts the faces of a copy of the body, a
-  // number nothing else in the app shows.
-  details.push({ k: "Peak at", v: fmtPoint(r.maxVonMises.at, unit) });
-  details.push({ k: "Deflection at", v: fmtPoint(r.maxDisplacement.at, unit) });
   details.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
   if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
   details.push({ k: "Applied", v: fmtForce(r.applied) });
@@ -577,11 +604,21 @@ export function formatStressResult(
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
+  // Not the engine's face index: it counts the faces of a copy of the body, a number nothing else in the app shows.
+  const size = peakSize(r.surface?.positions);
+  const peak = (label: string, value: string, at: Vec3): StressPeak => {
+    const where = fmtPoint(at, unit);
+    return { label, where, spoken: `${label}, ${value}, at ${where}`, at, size };
+  };
   return {
     rows,
     details,
     warnings,
     legend,
+    peaks: [
+      peak("Peak stress", `${displayRound(r.maxVonMises.value)} MPa`, r.maxVonMises.at),
+      peak("Max deflection", `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}`, r.maxDisplacement.at),
+    ],
     yields: sf !== null && sf < 1,
     verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
     peakAt: r.maxVonMises.at,
@@ -632,7 +669,8 @@ export function legendTicks(legend: { min: number; max: number }): { pct: number
   const [low, high] = legendEnds(legend);
   return [0, 25, 50, 75, 100].map((pct) => ({
     pct,
-    label: pct === 0 ? low : pct === 100 ? high : String(displayRound(legend.min + ((legend.max - legend.min) * pct) / 100)),
+    label:
+      pct === 0 ? low : pct === 100 ? high : String(displayRound(legend.min + ((legend.max - legend.min) * pct) / 100)),
   }));
 }
 
@@ -661,17 +699,9 @@ const hex = (h: string): Vec3 => [1, 3, 5].map((i) => Number.parseInt(h.slice(i,
 
 // Perceptual is viridis. Rainbow falls in lightness and merges green with orange for colour blind viewers, it stays as a choice.
 const RAMPS: Record<StressRamp, readonly Vec3[]> = {
-  perceptual: [
-    "#440154",
-    "#472d7b",
-    "#3b528b",
-    "#2c728e",
-    "#21918c",
-    "#28ae80",
-    "#5ec962",
-    "#addc30",
-    "#fde725",
-  ].map(hex),
+  perceptual: ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"].map(
+    hex,
+  ),
   rainbow: ["#0000ff", "#00ffff", "#00ff00", "#ffff00", "#ff0000"].map(hex),
   greyscale: ["#262626", "#f2f2f2"].map(hex),
 };

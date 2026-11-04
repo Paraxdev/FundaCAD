@@ -61,6 +61,7 @@ function rig() {
   const openListeners: (() => void)[] = [];
   const marks: unknown[] = [];
   const overlays: unknown[] = [];
+  const frames: { at: [number, number, number]; size: number }[] = [];
   const statuses: string[] = [];
   const calls: { body: string; opts: StressOptions; doc: CadDocument }[] = [];
   const cancels: (string | undefined)[] = [];
@@ -101,6 +102,7 @@ function rig() {
       selected = [];
     },
     setFaceMarks: (m: unknown) => marks.push(m),
+    frameAround: (at: [number, number, number], size: number) => frames.push({ at, size }),
     setStressOverlay: (o: unknown) => {
       overlays.push(o);
       shown = o !== null;
@@ -179,6 +181,7 @@ function rig() {
     built,
     marks,
     overlays,
+    frames,
     statuses,
     calls,
     cancels,
@@ -1755,5 +1758,17 @@ describe("the colour map and bands", () => {
     expect(r.overlays.slice(drawn).filter((o) => o !== null)).toEqual([]);
     expect(usePanelsStore().stress!.result).toBeNull();
     expect(stressLook()).toEqual({ ramp: "rainbow", bands: true });
+  });
+});
+
+describe("looking at a stress point", () => {
+  it("frames the point it is given at the size it is given, once each time, and nothing else", () => {
+    const r = rig();
+    r.ui.lookAtStressPoint([25.4, -7.62, 50.8], 5.01);
+    r.ui.lookAtStressPoint([254, 12.7, -2.54], 20);
+    expect(r.frames).toEqual([
+      { at: [25.4, -7.62, 50.8], size: 5.01 },
+      { at: [254, 12.7, -2.54], size: 20 },
+    ]);
   });
 });

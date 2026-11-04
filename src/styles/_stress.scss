@@ -252,6 +252,14 @@
 .stress-pin {
   align-items: center;
 }
+.stress-where-head {
+  margin-top: var(--s-3);
+}
+.stress-where {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .stress-pin .measure-v {
   flex: 1 1 auto;
   text-align: right;

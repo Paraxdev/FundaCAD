@@ -962,6 +962,10 @@ export function createPanels(deps: PanelsDeps) {
     if (panels.stress?.colours === "shown" && colours && colours.epoch === docEpoch) drawOverlay();
   }
 
+  function lookAtStressPoint(at: Vec3, size: number) {
+    viewport.frameAround(at, size);
+  }
+
   /** Draw the deformed shape, or the body as built so its faces can be picked again with the colours off. */
   function setStressShape(on: boolean) {
     const d = panels.stress;
@@ -1288,6 +1292,7 @@ export function createPanels(deps: PanelsDeps) {
     setStressAnimate,
     pauseStressAnimation: pauseAnimation,
     setStressProbe,
+    lookAtStressPoint,
     removeStressProbe,
   };
 }

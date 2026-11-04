@@ -5,6 +5,7 @@ import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
+import ListRow from "../ui/ListRow.vue";
 import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
 import Switch from "../ui/Switch.vue";
@@ -22,6 +23,7 @@ const panels = usePanelsStore();
 const stress = computed(() => panels.stress!);
 const deform = computed(() => stress.value.deform);
 const exaggerationId = useId();
+const whereId = useId();
 const unit = computed(() => getUnit());
 
 const modelChanged = computed(() => stress.value.colours === "none");
@@ -167,6 +169,21 @@ const deformStep = computed(() => {
         <dd class="measure-v" :class="{ 'stress-yields': row.k === 'Safety factor' && result.yields }">{{ row.v }}</dd>
       </template>
     </ReadoutList>
+
+    <template v-if="result.peaks.length && !modelChanged">
+      <div :id="whereId" class="measure-k stress-where-head">Where the highest values are</div>
+      <ul class="stress-where" :aria-labelledby="whereId">
+        <li v-for="p in result.peaks" :key="p.label">
+          <ListRow
+            :label="p.label"
+            :hint="p.where"
+            :aria-label="p.spoken"
+            tip="Look at it"
+            @click="engine.ui.panels.lookAtStressPoint(p.at, p.size)"
+          />
+        </li>
+      </ul>
+    </template>
 
     <Button
       variant="ghost"

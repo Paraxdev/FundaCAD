@@ -38,6 +38,7 @@ function makeEngine() {
     setStressProbe: vi.fn(),
     removeStressProbe: vi.fn(),
     placeStressSpot: vi.fn(),
+    lookAtStressPoint: vi.fn(),
   };
   const store = {
     onBuild: (fn: () => void) => {
@@ -99,6 +100,22 @@ function view(over: Partial<StressResultView> = {}): StressResultView {
     verdict: { safetyFactor: 3.32, peakPlace: null },
     peakAt: [13.5, -7.25, 4.1],
     maxDeflection: 0.47,
+    peaks: [
+      {
+        label: "Peak stress",
+        where: "x 13.5, y -7.25, z 4.1 mm",
+        spoken: "Peak stress, 15 MPa, at x 13.5, y -7.25, z 4.1 mm",
+        at: [13.5, -7.25, 4.1],
+        size: 5.01,
+      },
+      {
+        label: "Max deflection",
+        where: "x 60.2, y 3.5, z -8 mm",
+        spoken: "Max deflection, 0.47 mm, at x 60.2, y 3.5, z -8 mm",
+        at: [60.2, 3.5, -8],
+        size: 5.01,
+      },
+    ],
     ...over,
   };
 }
@@ -479,6 +496,47 @@ describe("StressPanel", () => {
     details.click();
     await flushPromises();
     expect(shown(q(".stress-details-body"))).toBe(true);
+  });
+
+  it("lists the peak stress and the largest bend as buttons that look at their point", async () => {
+    const { panels } = await withResult();
+    const list = q(".stress-where")!;
+    const head = document.getElementById(list.getAttribute("aria-labelledby")!)!;
+    expect([list.tagName, head.textContent]).toEqual(["UL", "Where the highest values are"]);
+    const rows = [...list.querySelectorAll<HTMLButtonElement>("li > button.ui-list-row")];
+    expect(
+      rows.map((b) => [
+        b.querySelector(".ui-list-row-label")?.textContent,
+        b.querySelector(".ui-list-row-hint")?.textContent,
+        b.getAttribute("aria-label"),
+      ]),
+    ).toEqual([
+      ["Peak stress", "x 13.5, y -7.25, z 4.1 mm", "Peak stress, 15 MPa, at x 13.5, y -7.25, z 4.1 mm"],
+      ["Max deflection", "x 60.2, y 3.5, z -8 mm", "Max deflection, 0.47 mm, at x 60.2, y 3.5, z -8 mm"],
+    ]);
+    expect(rows.map((b) => b.title)).toEqual(["Look at it", "Look at it"]);
+    expect(panels.lookAtStressPoint).not.toHaveBeenCalled();
+    rows[1]!.click();
+    rows[0]!.click();
+    expect(vi.mocked(panels.lookAtStressPoint).mock.calls).toEqual([
+      [[60.2, 3.5, -8], 5.01],
+      [[13.5, -7.25, 4.1], 5.01],
+    ]);
+    expect(list.contains(q(".stress-details"))).toBe(false);
+  });
+
+  it("lists no places when the result has none", async () => {
+    await withResult({ peaks: [] });
+    expect(q(".stress-where")).toBeNull();
+    expect(q(".stress-where-head")).toBeNull();
+  });
+
+  it("lists no places for a model that changed since the Run", async () => {
+    const { p } = await withResult();
+    expect(q(".stress-where")).not.toBeNull();
+    p.setStressColours("none");
+    await flushPromises();
+    expect(q(".stress-where")).toBeNull();
   });
 
   it("says when the model changed since the Run, hides the deformation, and runs again", async () => {

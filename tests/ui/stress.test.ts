@@ -261,8 +261,6 @@ describe("formatStressResult", () => {
       ],
       details: [
         { k: "Material", v: "PLA" },
-        { k: "Peak at", v: "1, 0, 2 in" },
-        { k: "Deflection at", v: "10, 0, 0 in" },
         { k: "Yield", v: "50 MPa" },
         { k: "Applied", v: "0, 0, -20 N" },
         { k: "Reaction", v: "0, 0, 20 N" },
@@ -353,7 +351,7 @@ describe("formatStressResult", () => {
       ["fixed", "pinned", "slider"],
     );
     expect(v.rows.map((r) => r.k)).toEqual(["Safety factor", "Peak stress", "Max deflection"]);
-    expect(v.details.slice(4)).toEqual([
+    expect(v.details.slice(2)).toEqual([
       { k: "Weight", v: "0, 0, -0.35 N" },
       { k: "Applied", v: "0, 0, -20 N" },
       { k: "Reaction", v: "0, 0, 20 N" },
@@ -373,8 +371,6 @@ describe("formatStressResult", () => {
       ],
       details: [
         { k: "Material", v: "PLA" },
-        { k: "Peak at", v: "25.4, 0, 50.8 mm" },
-        { k: "Deflection at", v: "254, 0, 0 mm" },
         { k: "Yield", v: "50 MPa" },
         { k: "Applied", v: "0, 0, -20 N" },
         { k: "Reaction", v: "0, 0, 20 N" },
@@ -386,6 +382,22 @@ describe("formatStressResult", () => {
       verdict: { safetyFactor: 1.6, peakPlace: null },
       peakAt: [25.4, 0, 50.8],
       maxDeflection: 1.27,
+      peaks: [
+        {
+          label: "Peak stress",
+          where: "x 25.4, y 0, z 50.8 mm",
+          spoken: "Peak stress, 31.25 MPa, at x 25.4, y 0, z 50.8 mm",
+          at: [25.4, 0, 50.8],
+          size: 0.47,
+        },
+        {
+          label: "Max deflection",
+          where: "x 254, y 0, z 0 mm",
+          spoken: "Max deflection, 1.27 mm, at x 254, y 0, z 0 mm",
+          at: [254, 0, 0],
+          size: 0.47,
+        },
+      ],
     });
     const corner =
       "the peak stress is at a sharp inside corner, stress at a sharp inside corner or where a support ends grows as the mesh is refined, look at the colour away from it";
@@ -399,7 +411,7 @@ describe("formatStressResult", () => {
 
   it("reads a peak inside the body, with a null face", () => {
     const v = formatStressResult({ ...reply, maxVonMises: { value: 3, at: [0, 0, 0], face: null } }, "mm");
-    expect(v.details.find((r) => r.k === "Peak at")?.v).toBe("0, 0, 0 mm");
+    expect(v.peaks[0]?.where).toBe("x 0, y 0, z 0 mm");
   });
 
   it("collects warnings and feature errors, and takes the legend from the field", () => {
@@ -413,6 +425,61 @@ describe("formatStressResult", () => {
     const none = formatStressResult({ ...reply, safetyFactor: null }, "mm");
     expect(none.yields).toBe(false);
     expect(none.rows.find((r) => r.k === "Safety factor")?.v).toBe("none, no stress");
+  });
+});
+
+describe("stress peaks", () => {
+  const slanted: StressReply = {
+    ...reply,
+    maxVonMises: { value: 31.25, at: [25.4, -7.62, 50.8], face: 4 },
+    maxDisplacement: { value: 1.27, at: [254, 12.7, -2.54], vector: [0, 0, -1.27] },
+  };
+  const surfaceOf = (positions: number[]) => ({
+    positions,
+    indices: [0, 1, 2],
+    vonMises: [1, 2, 3],
+  });
+
+  it("names where the peak stress and the largest bend are, in the display unit", () => {
+    const mm = formatStressResult(slanted, "mm").peaks.map((p) => p.where);
+    setUnit("in");
+    const inches = formatStressResult(slanted, "in").peaks;
+    expect(inches.map((p) => ({ label: p.label, where: p.where, spoken: p.spoken, at: p.at }))).toEqual([
+      {
+        label: "Peak stress",
+        where: "x 1, y -0.3, z 2 in",
+        spoken: "Peak stress, 31.25 MPa, at x 1, y -0.3, z 2 in",
+        at: [25.4, -7.62, 50.8],
+      },
+      {
+        label: "Max deflection",
+        where: "x 10, y 0.5, z -0.1 in",
+        spoken: "Max deflection, 0.05 in, at x 10, y 0.5, z -0.1 in",
+        at: [254, 12.7, -2.54],
+      },
+    ]);
+    expect(mm).toEqual(["x 25.4, y -7.62, z 50.8 mm", "x 254, y 12.7, z -2.54 mm"]);
+  });
+
+  it("frames a third of the part's diagonal, to the hundredth, and 20 mm with no surface", () => {
+    const { surface: _drop, ...bare } = slanted;
+    const sizeOf = (positions: number[] | null) =>
+      formatStressResult(positions ? { ...slanted, surface: surfaceOf(positions) } : bare, "mm").peaks.map(
+        (p) => p.size,
+      );
+    // Box 10 x 10 x 5 off the origin, diagonal 15.
+    expect(sizeOf([1, -2, 3, 11, -2, 3, 1, 8, 8])).toEqual([5, 5]);
+    // Box 10.02 x 10.02 x 5.01, diagonal 15.03.
+    expect(sizeOf([-4, 6, 1, 6.02, 6, 1, -4, 16.02, 6.01])).toEqual([5.01, 5.01]);
+    expect(sizeOf(null)).toEqual([20, 20]);
+    expect(sizeOf([])).toEqual([20, 20]);
+    expect(sizeOf([2, 3, 4, 2, 3, 4, 2, 3, 4])).toEqual([20, 20]);
+  });
+
+  it("keeps no where line in Details", () => {
+    const keys = formatStressResult(slanted, "mm").details.map((d) => d.k);
+    expect(keys).not.toContain("Peak at");
+    expect(keys).not.toContain("Deflection at");
   });
 });
 
@@ -471,9 +538,27 @@ describe("colour map", () => {
 
   it("labels the bar at every quarter, the ends as legendEnds reads them", () => {
     const labels = (l: { min: number; max: number }) => legendTicks(l).map((t) => [t.pct, t.label]);
-    expect(labels({ min: 0.5, max: 62 })).toEqual([[0, "0.5"], [25, "15.875"], [50, "31.25"], [75, "46.625"], [100, "62"]]);
-    expect(labels({ min: 0.000656, max: 51.11 })).toEqual([[0, "0"], [25, "12.78"], [50, "25.56"], [75, "38.33"], [100, "51.11"]]);
-    expect(labels({ min: 7.25, max: 7.25 })).toEqual([[0, "7.25"], [25, "7.25"], [50, "7.25"], [75, "7.25"], [100, "7.25"]]);
+    expect(labels({ min: 0.5, max: 62 })).toEqual([
+      [0, "0.5"],
+      [25, "15.875"],
+      [50, "31.25"],
+      [75, "46.625"],
+      [100, "62"],
+    ]);
+    expect(labels({ min: 0.000656, max: 51.11 })).toEqual([
+      [0, "0"],
+      [25, "12.78"],
+      [50, "25.56"],
+      [75, "38.33"],
+      [100, "51.11"],
+    ]);
+    expect(labels({ min: 7.25, max: 7.25 })).toEqual([
+      [0, "7.25"],
+      [25, "7.25"],
+      [50, "7.25"],
+      [75, "7.25"],
+      [100, "7.25"],
+    ]);
     expect(legendTicks({ min: 0, max: 0 }).map((t) => t.label)).toEqual(["0", "0", "0", "0", "0"]);
   });
 
