@@ -1202,7 +1202,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis");
+        if (pick.kind === "edge") {
+          const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+          const line = axisFromEdge(pts);
+          if (!line) return "An axis has to be a straight edge, pick a line";
+          const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
+          cleanup();
+          requestAnimationFrame(() => onPick(line, sel));
+          return true;
+        }
+        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis or a straight edge");
         cleanup();
         requestAnimationFrame(() => onPick({ origin: pick.origin, dir: pick.dir }));
         return true;

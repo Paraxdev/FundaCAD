@@ -487,4 +487,72 @@ describe("a face or an edge row from the Geometry list", () => {
       ]);
     });
   });
+  describe("Revolve's axis", () => {
+    const a: Vec3 = [2, 3, 4];
+    const b: Vec3 = [32, 3, 44];
+    const revolveRig = () => {
+      const r = lidRig();
+      Object.assign(r.viewport, { scene: { triad: { arms: [], highlight: vi.fn() } } });
+      Object.assign(r.deps.overlay, { regions: [{ sketchId: "s1", interior3D: { x: 1, y: 2, z: 3 } }] });
+      r.starters.startRevolve();
+      return r;
+    };
+    // The middle point is `off` away from the chord, sideways, so only the line's tolerance decides.
+    const bent = (off: number): Vec3[] => [a, [17, 3 + off, 24], b];
+
+    it("takes a slanted straight edge row with its body, as the click would", () => {
+      const r = revolveRig();
+      expect(r.click(edgeRow([a, b]))).toBe("taken");
+      expect(treePickWaiting()).toBe(false);
+      expect(r.planePick()).toBe(false);
+      flushFrame();
+      expect(r.addFeature).toHaveBeenCalledExactlyOnceWith({
+        id: "f9",
+        type: "revolve",
+        sketch: "s1",
+        axis: axisFromEdge([a, b])!,
+        angle: 360,
+        operation: "new",
+        regions: [[1, 2, 3]],
+        axisEdge: { kind: "edge", by: "nearest", point: [17, 3, 24], body: "b2" },
+      });
+    });
+
+    it("refuses a face row and a curved edge row, and keeps waiting for a straight one", () => {
+      const r = revolveRig();
+      expect(r.click({ kind: "face", faceId: 14 })).toBe("refused");
+      expect(r.hints[0]).toMatch(/axis/);
+      expect(r.click(edgeRow(bent(2.5)))).toBe("refused");
+      expect(r.hints).toHaveLength(2);
+      expect(r.hints[1]).toMatch(/straight/);
+      expect(treePickWaiting()).toBe(true);
+      flushFrame();
+      expect(r.addFeature).not.toHaveBeenCalled();
+      expect(r.click(edgeRow([a, b]))).toBe("taken");
+    });
+
+    it("takes a row that bends less than the tolerance and refuses one that bends more", () => {
+      const r = revolveRig();
+      expect(r.click(edgeRow(bent(0.006)))).toBe("refused");
+      expect(r.click(edgeRow(bent(0.004)))).toBe("taken");
+    });
+
+    it("a second revolve after the first starts clean and takes another edge", () => {
+      const r = revolveRig();
+      r.click(edgeRow([a, b]));
+      flushFrame();
+      expect(treePickWaiting()).toBe(false);
+      r.starters.startRevolve();
+      const c: Vec3[] = [
+        [-5, 8, 1],
+        [-5, 18, 1],
+      ];
+      expect(r.click(edgeRow(c))).toBe("taken");
+      flushFrame();
+      expect(r.addFeature).toHaveBeenCalledTimes(2);
+      const second = r.addFeature.mock.calls[1]![0] as { axis: unknown; axisEdge: unknown };
+      expect(second.axis).toEqual(axisFromEdge(c));
+      expect(second.axisEdge).toEqual({ kind: "edge", by: "nearest", point: [-5, 13, 1], body: "b2" });
+    });
+  });
 });
