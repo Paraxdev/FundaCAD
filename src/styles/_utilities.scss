@@ -99,7 +99,7 @@
    last off. */
 .dim-input.fits-window {
   flex-wrap: wrap;
-  max-width: calc(100vw - 2 * var(--s-3));
+  max-width: calc(var(--win-w) - 2 * var(--s-3));
 }
 /* The engine's reason sits by the cursor, not in the far status bar or a tooltip the dragging hand cannot
    hover. Never truncate it, the cut leaves the half that says "cannot". Hung under the row so it wraps. */

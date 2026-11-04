@@ -62,7 +62,7 @@
 .guide-bubble {
   position: fixed;
   width: 280px;
-  max-width: calc(100vw - 2 * var(--s-4));
+  max-width: calc(var(--win-w) - 2 * var(--s-4));
   padding: var(--s-3) var(--s-4);
   color: var(--text);
   pointer-events: auto;

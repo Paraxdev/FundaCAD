@@ -397,7 +397,7 @@ describe("wheel", () => {
       const atWebviewZoom = async (pct: number) => {
         const g = globalThis as unknown as Record<string, unknown>;
         g.window = { __TAURI_INTERNALS__: {} };
-        g.document = { documentElement: { style: {}, dataset: {} } };
+        g.document = { documentElement: { style: { setProperty() {}, removeProperty() {} }, dataset: {} } };
         applyInterfaceSize(pct);
         await vi.dynamicImportSettled();
         await vi.advanceTimersByTimeAsync(0);

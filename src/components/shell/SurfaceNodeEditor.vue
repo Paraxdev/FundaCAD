@@ -905,7 +905,7 @@ const pending = computed(() => {
   position: fixed;
   z-index: 71;
   min-width: 130px;
-  max-height: 70vh;
+  max-height: calc(0.7 * var(--win-h));
   overflow-y: auto;
   background: var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);

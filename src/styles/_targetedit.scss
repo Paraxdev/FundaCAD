@@ -5,7 +5,7 @@
   flex: 0 0 auto;
   margin-top: auto; /* dock to the bottom of the column */
   min-width: 208px; /* usable alone; stretches to the Items width beside it */
-  max-height: min(46vh, 360px);
+  max-height: min(0.46 * var(--win-h), 360px);
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
@@ -135,7 +135,7 @@
   flex: 0 0 auto;
   margin-top: auto;
   min-width: 220px;
-  max-height: min(46vh, 360px);
+  max-height: min(0.46 * var(--win-h), 360px);
 }
 .fm-count {
   color: var(--text-dim);
@@ -197,7 +197,7 @@
   z-index: 50;
   gap: 6px;
   width: 300px;
-  max-width: calc(100vw - 24px);
+  max-width: calc(var(--win-w) - 24px);
   padding: var(--s-2);
   overflow: visible;
   font-size: var(--fs-small);

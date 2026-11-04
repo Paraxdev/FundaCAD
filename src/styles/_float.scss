@@ -565,7 +565,7 @@
   position: fixed;
   z-index: var(--z-popover);
   min-width: 220px;
-  max-height: calc(100vh - 16px);
+  max-height: calc(var(--win-h) - 16px);
   overflow-y: auto;
   padding: var(--s-3);
   background: var(--float-bg-solid);
@@ -579,7 +579,7 @@
 }
 .float-popover.select-pop {
   min-width: 180px;
-  max-height: min(60vh, 360px);
+  max-height: min(0.6 * var(--win-h), 360px);
   padding: 6px;
   /* These fields live in dialogs at --z-modal, so the list must rank just above modals. */
   z-index: calc(var(--z-modal) + 1);
@@ -849,7 +849,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 46vh;
+  max-height: calc(0.46 * var(--win-h));
   margin: 0;
   padding: 0;
   overflow-y: auto;

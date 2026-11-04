@@ -7,6 +7,7 @@ import MenuSeparator from "../ui/MenuSeparator.vue";
 import Toolbar from "../ui/Toolbar.vue";
 import { guardMenuKeys, type MenuDef } from "../../ui/menu";
 import { inertDepth } from "../../composables/useModalGate";
+import { pageZoom } from "../../ui/interfaceSize";
 
 const props = defineProps<{ menus: MenuDef[] }>();
 
@@ -22,8 +23,9 @@ const POPUP_GAP = 6;
 const WINDOW_MARGIN = 16;
 const popupMaxHeight = ref("");
 function capToWindow() {
-  const bottom = root.value?.getBoundingClientRect().bottom ?? 0;
-  popupMaxHeight.value = `${Math.max(120, window.innerHeight - bottom - POPUP_GAP - WINDOW_MARGIN)}px`;
+  const z = pageZoom();
+  const bottom = (root.value?.getBoundingClientRect().bottom ?? 0) / z;
+  popupMaxHeight.value = `${Math.max(120, window.innerHeight / z - bottom - POPUP_GAP - WINDOW_MARGIN)}px`;
 }
 
 function open(i: number) {

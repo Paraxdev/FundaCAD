@@ -11,7 +11,8 @@ import {
   shallowRef,
   useTemplateRef,
 } from "vue";
-import { placeBeside, type Side } from "../../ui/anchor";
+import { placeBeside, underZoom, type Side } from "../../ui/anchor";
+import { pageZoom } from "../../ui/interfaceSize";
 import { claimEscape } from "../../ui/escapeClaim";
 import { escapeLayer } from "./escapeLayer";
 import { focusReturn } from "./focusables";
@@ -215,11 +216,12 @@ function place() {
   const a = props.at;
   const r = a ? { left: a.x, top: a.y, right: a.x, bottom: a.y } : props.anchor?.getBoundingClientRect();
   if (!r) return;
+  const z = pageZoom();
   const p = placeBeside(
-    r,
+    underZoom(r, z),
     { width: box.offsetWidth, height: box.offsetHeight },
     a ? "right" : props.side,
-    { width: window.innerWidth, height: window.innerHeight },
+    { width: window.innerWidth / z, height: window.innerHeight / z },
     { gap: a ? 0 : props.gap, align: a ? "start" : props.align, margin: 4 },
   );
   pos.value = { left: p.left, top: p.top };

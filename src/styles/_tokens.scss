@@ -138,6 +138,11 @@
   --z-modal: 4000;
   --z-guide: 4500;
   --z-toast: 5000;
+
+  /* The window, for a box capped or sized against it. Not vw and vh: the root zoom outside Tauri scales those too
+     (ui/interfaceSize.ts), and the caps ran past the window from 110 percent. */
+  --win-w: calc(100vw / var(--page-zoom, 1));
+  --win-h: calc(100vh / var(--page-zoom, 1));
 }
 
 /* A squircle needs a larger radius than a circular corner to look the same size. */

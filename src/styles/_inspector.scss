@@ -153,7 +153,7 @@
 .params-dialog {
   min-width: 560px;
   max-width: 720px;
-  max-height: 70vh;
+  max-height: calc(0.7 * var(--win-h));
   overflow-y: auto;
 }
 .params-section {

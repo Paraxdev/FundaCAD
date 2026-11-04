@@ -1,8 +1,8 @@
 /* PreferencesDialog.vue. Larger type than the rest of the chrome: a settings screen is
    read, not glanced at. */
 .modal-panel.prefs-panel {
-  width: min(960px, 94vw);
-  height: min(680px, 88vh);
+  width: min(960px, 0.94 * var(--win-w));
+  height: min(680px, 0.88 * var(--win-h));
 }
 .modal-body.prefs {
   display: grid;

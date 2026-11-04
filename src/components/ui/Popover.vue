@@ -3,7 +3,8 @@
 // it and on Escape, and keeps itself inside the window as its content changes.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
-import { placeBeside, type Side } from "../../ui/anchor";
+import { placeBeside, underZoom, type Side } from "../../ui/anchor";
+import { pageZoom } from "../../ui/interfaceSize";
 import { claimEscape } from "../../ui/escapeClaim";
 import { inputModality } from "../../ui/inputModality";
 import { escapeLayer } from "./escapeLayer";
@@ -66,11 +67,15 @@ function place() {
   if (!a || !box) return;
   const r = a.getBoundingClientRect();
   const c = props.clear?.getBoundingClientRect();
+  const z = pageZoom();
   const p = placeBeside(
-    c ? { left: Math.min(r.left, c.left), top: r.top, right: Math.max(r.right, c.right), bottom: r.bottom } : r,
+    underZoom(
+      c ? { left: Math.min(r.left, c.left), top: r.top, right: Math.max(r.right, c.right), bottom: r.bottom } : r,
+      z,
+    ),
     { width: box.offsetWidth, height: box.offsetHeight },
     props.side,
-    { width: window.innerWidth, height: window.innerHeight },
+    { width: window.innerWidth / z, height: window.innerHeight / z },
     { gap: props.gap, align: props.align },
   );
   pos.value = { left: p.left, top: p.top };

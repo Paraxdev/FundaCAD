@@ -16,7 +16,18 @@ let webviewPct = 100;
 /** Zooms the root by what the webview zoom `under` leaves of `pct`. */
 function zoomRoot(pct: number, under = 100) {
   if (typeof document === "undefined") return;
-  document.documentElement.style.zoom = pct === under ? "" : String(pct / under);
+  const root = document.documentElement;
+  const zoom = pct === under ? "" : String(pct / under);
+  root.style.zoom = zoom;
+  if (zoom) root.style.setProperty("--page-zoom", zoom);
+  else root.style.removeProperty("--page-zoom");
+}
+
+/** The root zoom. Window sizes, client coordinates and bounding rects stay in window pixels under it, while a length
+ *  set in CSS or a style is scaled by it, so a box placed from the one in the other divides by this. */
+export function pageZoom(): number {
+  if (typeof document === "undefined") return 1;
+  return Number(document.documentElement.style.zoom) || 1;
 }
 
 // The webview zoom is an IPC round trip that lands after the first paint, so a stored size would paint at 100 and

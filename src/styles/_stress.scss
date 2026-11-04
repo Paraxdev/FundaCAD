@@ -7,8 +7,8 @@
   display: flex;
   flex-direction: column;
   width: 340px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 160px);
+  max-width: calc(var(--win-w) - 32px);
+  max-height: calc(var(--win-h) - 160px);
   overflow-wrap: anywhere;
 }
 .stress-head {

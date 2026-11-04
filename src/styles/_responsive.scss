@@ -9,7 +9,7 @@
     bottom: 0;
     left: 0;
     z-index: 2;
-    max-width: calc(100vw - 3 * var(--float-gap) - 48px);
+    max-width: calc(var(--win-w) - 3 * var(--float-gap) - 48px);
   }
   .float-left-stack > * {
     max-width: 100%;
@@ -22,7 +22,7 @@
     right: calc(100% + var(--float-gap));
     z-index: 2;
     max-height: 100%;
-    max-width: calc(100vw - 3 * var(--float-gap) - 48px);
+    max-width: calc(var(--win-w) - 3 * var(--float-gap) - 48px);
   }
   // The sketch options outgrow a short stage, so the whole card scrolls, not only its list.
   .float-right > #palette {
@@ -75,7 +75,7 @@
   }
   #renderdock {
     width: auto;
-    height: min(45vh, 420px);
+    height: min(0.45 * var(--win-h), 420px);
     margin: 0 var(--s-3) var(--s-3);
   }
 }
