@@ -77,9 +77,6 @@ park = [900, 860]
 # Version times are moved back after each save, so the rows read as an afternoon of work and not all "just now".
 steps = [
   { open = "example:Plate" },
-  # The first edit of an example names the extrude distance d1, which would count as a settings change in the next version.
-  { evaluate = "() => window.store.updateFeature('plate', {})" },
-  "settle",
   { evaluate = "() => { window.store.saveVersion('first plate'); window.store.versionRepo.versions.at(-1).time = Date.now() - 3 * 3600000; }" },
   { evaluate = '''() => {
     const corner = (x, y) => ({ kind: "edge", by: "match", fp: { mid: [x, y, 3], dir: [0, 0, 1], length: 6, curve: "line" }, body: "body1" });
