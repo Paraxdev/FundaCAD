@@ -135,10 +135,10 @@ export class PatternTool {
     if (kind === "circular") {
       this.releaseRows = awaitTreePick(
         (pick) => {
-          if (pick.kind === "face") return this.askAxis(this.viewport.faceSelectorOf(pick.faceId));
+          if (pick.kind === "face") return this.askAxis(this.viewport.faceSelectorOf(pick.faceId), true);
           if (pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge for the axis");
           const ref = edgeSelectorFrom({ points: pick.edge.points as Vec3[], body: pick.edge.body });
-          return ref ? this.askAxis(ref) : "That edge has no length";
+          return ref ? this.askAxis(ref, true) : "That edge has no length";
         },
         () => this.cancel(),
         { keepsOnRewind: true, keepsOnCommand: true },
@@ -435,8 +435,8 @@ export class PatternTool {
     if (ref) this.askAxis(ref);
   }
 
-  private askAxis(ref: Selector): true {
-    const p = this.pickAxis(ref).catch((err: unknown) => {
+  private askAxis(ref: Selector, byRow = false): true {
+    const p = this.pickAxis(ref, byRow ? document.activeElement : null).catch((err: unknown) => {
       logError(err, { source: "pattern" });
     });
     this.pending = p;
@@ -447,7 +447,7 @@ export class PatternTool {
   }
 
   /** Asked of the engine so the preview turns about exactly the line the rebuild will. */
-  private async pickAxis(ref: Selector) {
+  private async pickAxis(ref: Selector, row: Element | null) {
     const seq = ++this.pickSeq;
     const reply = await this.store.patternAxis(ref);
     if (!this.active || seq !== this.pickSeq) return;
@@ -464,6 +464,8 @@ export class PatternTool {
     this.promptKey = "";
     this.refreshPrompt();
     this.updateGhosts();
+    // On the row Enter would take the axis again, in the box it applies, as Section's box after a row.
+    if (row && document.activeElement === row) this.dim.focus();
   }
 
   private onKey(e: KeyboardEvent) {

@@ -185,6 +185,56 @@ describe("a circular pattern takes its axis from a face or edge row", () => {
     ]);
   });
 
+  it("hands focus from the taken row to the box once the axis is found, where Enter applies", async () => {
+    const list = document.createElement("div");
+    list.setAttribute("role", "listbox");
+    const rowEl = (name: string) => {
+      const b = document.createElement("button");
+      b.textContent = name;
+      list.appendChild(b);
+      return b;
+    };
+    const [r1, r2, r3] = [rowEl("Face 7"), rowEl("Face 8"), rowEl("Edge 2")];
+    document.body.appendChild(list);
+    const where = () => {
+      const a = document.activeElement;
+      return a?.closest(".dim-input") ? `box ${a.getAttribute("aria-label") ?? a.tagName}` : a?.textContent;
+    };
+    let slow!: (r: Reply) => void;
+    const o = open("circular", [
+      Promise.resolve({ reason: "That face has no axis" }),
+      new Promise<Reply>((res) => (slow = res)),
+      Promise.resolve(reply([13, -4, 2.5], [0, 0, 1])),
+    ]);
+    const inBox = where();
+    expect(inBox).toMatch(/^box /);
+
+    r1.focus();
+    routeTreeClick(face(7), hintsOf());
+    await flush();
+    expect([where(), o.axis()]).toEqual(["Face 7", null]);
+
+    r2.focus();
+    routeTreeClick(face(8), hintsOf());
+    r3.focus();
+    slow(reply([3, -2, 5], [1, 0, 0]));
+    await flush();
+    expect([where(), o.axis()]).toEqual(["Edge 2", { origin: [3, -2, 5], dir: [1, 0, 0] }]);
+
+    routeTreeClick(
+      edge(
+        edgeOf("body1", [
+          [3, -2, 5],
+          [11, -2, 5],
+        ]),
+      ),
+      hintsOf(),
+    );
+    await flush();
+    expect([where(), o.axis()]).toEqual([inBox, { origin: [13, -4, 2.5], dir: [0, 0, 1] }]);
+    expect(o.done.mock.calls).toEqual([]);
+  });
+
   it("an answer arriving after the pattern closed changes nothing", async () => {
     let late!: (r: Reply) => void;
     const o = open("circular", [new Promise<Reply>((res) => (late = res))]);
