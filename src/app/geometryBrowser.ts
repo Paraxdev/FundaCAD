@@ -6,6 +6,7 @@ import type { RebuildState } from "../document/store";
 import { useSelectionStore } from "../stores/selection";
 import { useGeometryBrowserStore, type GeometryKind } from "../stores/geometryBrowser";
 import type { TopologyReply } from "../types";
+import { announce } from "../ui/announce";
 import { stepName } from "../ui/featureMeta";
 import { bodyLabels } from "../ui/bodyLabels";
 import {
@@ -265,6 +266,15 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     if (wanted()) ensure();
   }
 
+  // A hidden body takes the list to another, which a screen reader would not hear.
+  function sayBodyLeft(was: { id: string; name: string }, next: string | null) {
+    const hidden = e.store.buildState.result?.bodies?.some((b) => b.id === was.id);
+    const left = hidden ? `${was.name} hidden` : `${was.name} is gone`;
+    announce(next ? `${left}, the list shows ${next}` : `${left}, no body left to list`, "polite", {
+      key: "geometry-body",
+    });
+  }
+
   function selectionOwner(among: readonly { id: string }[]): string | null {
     const ids = new Set(among.map((b) => b.id));
     return e.viewport.selectionBodyIds().find((id) => ids.has(id)) ?? null;
@@ -415,8 +425,12 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       }
       const bodies = visibleBodies();
       const labelOf = bodyLabelsOf(e.store);
+      const was = list.bodies.find((b) => b.id === list.bodyId) ?? null;
       list.setBodies(bodies.map((b) => ({ id: b.id, name: labelOf(b.id) ?? b.name })));
-      if (!bodies.some((b) => b.id === list.bodyId)) setBody(selectionOwner(bodies) ?? bodies[0]?.id ?? null);
+      if (!bodies.some((b) => b.id === list.bodyId)) {
+        setBody(selectionOwner(bodies) ?? bodies[0]?.id ?? null);
+        if (was && shown) sayBodyLeft(was, list.bodies.find((b) => b.id === list.bodyId)?.name ?? null);
+      }
       syncSelected();
       if (wanted()) ensure();
     },

@@ -193,7 +193,8 @@ export function createSelectionWords(e: Engine) {
       faceId: facts.kind === "face" ? (e.viewport.getSelectedFaceIds()[0] ?? null) : null,
     };
 
-    const text = describeChange(said, keys, (k) => wordsOf(k, k === only ? facts : null));
+    const bodyOf = (k: string) => (/^[fe]:/.test(k) ? (metaOf(keyPlace(k).bodyId)?.name ?? null) : null);
+    const text = describeChange(said, keys, (k) => wordsOf(k, k === only ? facts : null), bodyOf);
     said = keys;
     spokenAt = null;
     if (text) {

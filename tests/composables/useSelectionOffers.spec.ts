@@ -271,7 +271,7 @@ describe("the readout of edges and bodies", () => {
 });
 
 describe("what a change says", () => {
-  it("says a face added or removed by its plain number when no row holds it", async () => {
+  it("says a face added or removed by its plain number when no row holds it, and its body apart", async () => {
     const r = setup();
     await r.build();
     r.selection.faces = [0];
@@ -280,10 +280,10 @@ describe("what a change says", () => {
     r.planar.mockClear();
     r.selection.faces = [0, 3];
     await r.settled();
-    expect(r.sel.speech.value?.text).toBe("Face 1 added, 2 selected");
+    expect(r.sel.speech.value?.text).toBe("Face 1 of BODY2 added, 2 selected");
     r.selection.faces = [3];
     await r.settled();
-    expect(r.sel.speech.value?.text).toBe("Face 1 removed, 1 selected");
+    expect(r.sel.speech.value?.text).toBe("Face 1 of BODY1 removed, 1 selected");
   });
 
   it("walks no mesh for a face added to others", async () => {

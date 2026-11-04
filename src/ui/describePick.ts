@@ -247,11 +247,13 @@ const COUNT_NOUN: Record<string, [one: string, many: string]> = {
   other: ["item", "items"],
 };
 
-/** What to say for a selection change, by row keys (`f:`, `e:`, `p:`, `b:`, `r:`). Null when nothing changed. */
+/** What to say for a selection change, by row keys (`f:`, `e:`, `p:`, `b:`, `r:`). Null when nothing changed. One
+ *  added or removed on a body none of the rest is on says that body, by `bodyOf`. */
 export function describeChange(
   prev: readonly string[],
   next: readonly string[],
   words: (key: string) => Pick<PickWords, "label" | "spoken">,
+  bodyOf: (key: string) => string | null = () => null,
 ): string | null {
   const before = new Set(prev);
   const after = new Set(next);
@@ -259,9 +261,14 @@ export function describeChange(
   const removed = [...before].filter((k) => !after.has(k));
   if (!added.length && !removed.length) return null;
   if (!after.size) return "Nothing selected";
+  const named = (key: string, rest: Set<string>) => {
+    const body = bodyOf(key);
+    const apart = body !== null && ![...rest].some((k) => bodyOf(k) === body);
+    return apart ? `${words(key).label} of ${body}` : words(key).label;
+  };
   if (added.length === 1 && !removed.length && before.size)
-    return `${words(added[0]!).label} added, ${after.size} selected`;
-  if (removed.length === 1 && !added.length) return `${words(removed[0]!).label} removed, ${after.size} selected`;
+    return `${named(added[0]!, before)} added, ${after.size} selected`;
+  if (removed.length === 1 && !added.length) return `${named(removed[0]!, after)} removed, ${after.size} selected`;
   if (after.size === 1) return words([...after][0]!).spoken;
 
   const counts = new Map<string, number>();

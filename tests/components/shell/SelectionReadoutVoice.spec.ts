@@ -40,8 +40,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function voice() {
-  const r = rig(result([{ id: "body1", etag: "e1", faceCount: 6 }]));
+// `twins` adds a second body, both named Box as two_boxes.json's are.
+async function voice(twins = false) {
+  const box = twins ? { name: "Box" } : {};
+  const r = rig(
+    result([
+      { id: "body1", etag: "e1", faceCount: 6, ...box },
+      ...(twins ? [{ id: "body2", etag: "e2", faceCount: 6, ...box }] : []),
+    ]),
+  );
   const mesh = bodyMesh("body1", 0, [
     {
       id: "e1",
@@ -51,7 +58,10 @@ async function voice() {
       ],
     },
   ]);
-  const model = { bodies: [mesh], edges: [] } as unknown as ModelView;
+  const model = {
+    bodies: [mesh, ...(twins ? [bodyMesh("body2", 6, [])] : [])],
+    edges: [],
+  } as unknown as ModelView;
   const vp = Object.create(Viewport.prototype) as Viewport;
   Object.assign(vp, {
     highlighter: new Highlighter(model),
@@ -150,6 +160,21 @@ describe("one voice for a selection", () => {
     v.click(1, true);
     await frame();
     expect(said().at(-1)).toBe("Face 2 removed, 1 selected");
+  });
+
+  it("names the body of a face added or removed on a body the rest are not on", async () => {
+    const v = await voice(true);
+    v.click(1, false);
+    await frame();
+    v.click(7, true);
+    await frame();
+    expect(said().at(-1)).toBe("Face 2 of Box 2 added, 2 selected");
+    v.click(3, true);
+    await frame();
+    expect(said().at(-1)).toBe("Face 4 added, 3 selected");
+    v.click(7, true);
+    await frame();
+    expect(said().at(-1)).toBe("Face 2 of Box 2 removed, 2 selected");
   });
 
   it("speaks once per settled change, however many frames pass", async () => {

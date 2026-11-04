@@ -520,6 +520,15 @@ describe("describeChange", () => {
   const words = (key: string) => ({ label: names[key] ?? "?", spoken: `${names[key] ?? "?"}, in full` });
   const change = (prev: string[], next: string[]) => describeChange(prev, next, words);
 
+  it("names the body of one added or removed on a body the rest are not on", () => {
+    const bodyOf = (k: string) => (/^[fe]:/.test(k) ? k.split(":")[1]!.toUpperCase() : null);
+    const on = (prev: string[], next: string[]) => describeChange(prev, next, words, bodyOf);
+    expect(on(["f:body1:3"], ["f:body1:3", "f:body2:0"])).toBe("Flat face 1 of BODY2 added, 2 selected");
+    expect(on(["f:body1:3", "f:body2:0"], ["f:body1:3"])).toBe("Flat face 1 of BODY2 removed, 1 selected");
+    expect(on(["f:body1:3"], ["f:body1:3", "e:body1:10"])).toBe("Straight edge 11 added, 2 selected");
+    expect(on(["f:body1:3", "f:body2:0"], ["f:body1:3", "f:body2:0", "f:body1:6"])).toBe("Hole 7 added, 3 selected");
+  });
+
   it("says nothing when the selection did not change", () => {
     expect(change([], [])).toBeNull();
     expect(change(["f:body1:3"], ["f:body1:3"])).toBeNull();
