@@ -2901,7 +2901,7 @@ export class DocumentStore {
   workingSnapshot(): Snapshot {
     const { sectionView: _, ...doc } = this.toObject(false);
     const snapshot = JSON.parse(JSON.stringify(doc)) as Snapshot;
-    // Or the first edit after opening an example counts its recomputed d1 as a settings change.
+    // Without it, the first edit after opening an example counts the recomputed d1 as a settings change.
     snapshot.parameters = derivedParameters(snapshot);
     return snapshot;
   }
