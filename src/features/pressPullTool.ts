@@ -6,6 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
+import { peeksThrough } from "./pressPullPeek";
 import {
   DimInput,
   type DimChoice,
@@ -917,10 +918,9 @@ export class PressPullTool {
     this.previewTimer = null;
   }
 
-  /** A cut with its own tool body previews inside the body it cuts, so that body is seen through. */
   private syncPeek() {
     const f = this.pickingTarget || !this.faceIds.length ? null : this.buildFeature();
-    const cut = f?.type === "press-pull" && f.operation === "cut" && this.mode !== "auto";
+    const cut = peeksThrough(f, this.mode);
     const body = this.bodyId ?? this.viewport.faceIdToBodyId(this.faceIds[0] ?? -1);
     this.viewport.setPeek(cut && body ? () => [body] : null);
   }
