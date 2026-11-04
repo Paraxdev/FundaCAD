@@ -142,9 +142,43 @@ describe("TextToolPanel", () => {
     await nextTick();
     expect(sizeBox().getAttribute("aria-invalid")).toBe("true");
     expect(sizeBox().title).not.toBe("");
-    expect(q('[data-testid="text-field-error"]').textContent).toBe(sizeBox().title);
+    expect(q('[data-testid="text-field-error"]').textContent!.trim()).toBe(sizeBox().title);
     // the preview falls back to the default height rather than a NaN
     expect(handlers.onChange.mock.lastCall![0].height).toBe(10);
+  });
+
+  it("leaves each reason to its field's description and hides the visible copy, for none, one and two", async () => {
+    open();
+    const lines = () =>
+      [...document.querySelectorAll('[data-testid="text-field-error"]')].map((l) => [
+        l.textContent!.trim(),
+        l.getAttribute("aria-hidden"),
+      ]);
+    const described = (el: HTMLInputElement) =>
+      (el.getAttribute("aria-describedby") ?? "")
+        .split(" ")
+        .filter(Boolean)
+        .map((id) => document.getElementById(id)?.textContent);
+    const angleBox = () => document.querySelectorAll<HTMLInputElement>(".text-tool-num input")[1]!;
+    expect([lines(), described(sizeBox()), described(angleBox())]).toEqual([[], [], []]);
+
+    type(sizeBox(), "2.5q");
+    await nextTick();
+    const size = sizeBox().title;
+    expect([lines(), described(sizeBox()), described(angleBox())]).toEqual([[[size, "true"]], [size], []]);
+
+    type(angleBox(), "-7..5");
+    await nextTick();
+    const angle = angleBox().title;
+    expect(angle).not.toBe("");
+    expect([lines(), described(sizeBox()), described(angleBox())]).toEqual([
+      [
+        [size, "true"],
+        [angle, "true"],
+      ],
+      [size],
+      [angle],
+    ]);
   });
 
   it("commits on Ctrl+Enter or Cmd+Enter in the text, and a plain Enter types a new line", async () => {

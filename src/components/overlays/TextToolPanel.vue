@@ -176,7 +176,16 @@ onUnmounted(() => {
         />
       </div>
 
-      <div v-for="(msg, k) in errors" :key="k" class="text-tool-problem" data-testid="text-field-error">{{ msg }}</div>
+      <!-- Each field describes its own reason, so these lines are for the eye only. -->
+      <div
+        v-for="(msg, k) in errors"
+        :key="k"
+        class="text-tool-problem"
+        data-testid="text-field-error"
+        aria-hidden="true"
+      >
+        {{ msg }}
+      </div>
 
       <!-- pointerdown, not click: the buttons have to act before the field next
            to them can blur, or a commit loses the last keystroke. -->
