@@ -1,0 +1,21 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    {
+      "id": "f1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [{ "type": "rectangle", "id": "e0", "width": 111.302, "height": 67.806, "x": 0, "y": 0 }],
+      "constraints": []
+    },
+    { "id": "f2", "type": "extrude", "sketch": "f1", "distance": 52.132, "operation": "new", "regions": [[0, 0, 0]] },
+    {
+      "id": "f3",
+      "type": "fillet",
+      "edges": { "kind": "edge", "by": "nearest", "point": [55.651, 33.903, 26.066], "body": "body1" },
+      "radius": 37.1,
+      "continuity": "G3"
+    }
+  ]
+}

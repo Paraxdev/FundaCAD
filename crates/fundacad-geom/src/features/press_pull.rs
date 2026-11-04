@@ -139,6 +139,9 @@ fn offset_faces(part: &Shape, pairs: &[(Shape, f64)]) -> FResult<Shape> {
 
 const CLOSED_IN: &str = "the faces beside this one meet before it gets that far, try a smaller distance";
 
+/// How far a side may lean off a right angle and still be a straight wall, in degrees.
+const SQUARE_DEG: f64 = 0.01;
+
 /// The first step of a push, short enough not to reach any other part of the body.
 const FIRST_STEP: f64 = 0.05;
 
@@ -187,11 +190,20 @@ fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape
     let grown = offset_faces(&slab, &[(front.clone(), d.abs() - step)])
         .ok()
         .filter(|g| kernel::volume(g) > kernel::volume(&slab));
-    let grown = match grown {
+    let grown = match grown.or_else(|| collapsed(&slab, &front, face, dir, d.abs())) {
         Some(g) => g,
-        None => collapsed(&slab, &front, face, dir, d.abs()).ok_or_else(|| Fail::msg(CLOSED_IN))?,
+        // The kernel cannot carry some sides on, a freeform one say, but sides square to the face never close in.
+        None if square_sides(part, face) => return Ok(None),
+        None => return Err(Fail::msg(CLOSED_IN)),
     };
     Ok(fused(part, &grown, d > 0.0).ok().filter(|out| right_way(part, out, d)))
+}
+
+/// Every neighbour meets the face at a right angle, so a push leaves them as straight walls.
+fn square_sides(part: &Shape, face: &Shape) -> bool {
+    kernel::subshapes(face, Kind::Edge)
+        .iter()
+        .all(|e| blend_ops::dihedral_deg(part, e).is_some_and(|a| (a - 90.0).abs() < SQUARE_DEG))
 }
 
 /// The slab with its front face gone and its sides carried on until they meet in a ridge or a point: a push past
