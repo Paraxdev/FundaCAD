@@ -544,11 +544,12 @@ describe("Preferences Accessibility", () => {
     await category("access");
     const box = $("#prefs-single-keys input[type=checkbox]") as HTMLInputElement;
     expect($("#prefs-a11y-actions-hint").textContent).toContain("turns Single key shortcuts off");
+    expect($("#prefs-a11y-actions-hint").textContent).toContain("Notification time to Until dismissed");
     $("[data-a11y-preset]").click();
     await flushPromises();
     expect([a11yPrefs().singleKeys, box.checked]).toEqual([false, false]);
     expect($("#prefs-a11y-preset-status").textContent).toBe(
-      "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.",
+      "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.",
     );
     $("[data-a11y-reset]").click();
     await flushPromises();
@@ -693,7 +694,7 @@ describe("Preferences Accessibility", () => {
     $("[data-a11y-preset]").click();
     await flushPromises();
     expect(status.textContent).toBe(
-      "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.",
+      "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.",
     );
     const seen: string[] = [];
     const watcher = new MutationObserver(() => seen.push(status.textContent ?? ""));
@@ -701,12 +702,20 @@ describe("Preferences Accessibility", () => {
     $("[data-a11y-preset]").click();
     await flushPromises();
     watcher.disconnect();
-    expect(seen).toEqual(["", "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on."]);
+    expect(seen).toEqual([
+      "",
+      "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.",
+    ]);
     await pick("prefs-verbosity", "Normal");
     expect(status.textContent).toBe("");
     $("[data-a11y-preset]").click();
     await flushPromises();
     solidBox().click();
+    await flushPromises();
+    expect(status.textContent).toBe("");
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    setA11yPref("noticeTime", "longer");
     await flushPromises();
     expect(status.textContent).toBe("");
   });

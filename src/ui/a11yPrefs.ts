@@ -82,11 +82,12 @@ export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   ...SIZE_DEFAULTS,
 };
 
-/** One click for screen reader users. Later settings join it: Notification time Until dismissed. */
+/** One click for screen reader users. */
 export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = {
   verbosity: "verbose",
   singleKeys: false,
   solidPanels: true,
+  noticeTime: "until-dismissed",
 };
 
 // fundacad.animations predates this module and held "on" or "off", absent meaning follow the OS; both still read.
