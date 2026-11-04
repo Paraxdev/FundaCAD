@@ -2,7 +2,7 @@
 
 Printability looks through the model and lists what is likely to go wrong when you print it. It comes with the [3D Printing Toolbox](../plugins/print-toolbox.md) plugin, under Print on the rail.
 
-![The Printability panel with its settings and two findings](../img/printability-panel.png)
+![The Printability panel with its settings and two overhang findings, each naming its face and height above the bed](../img/printability-panel.png)
 
 ## Run a check
 

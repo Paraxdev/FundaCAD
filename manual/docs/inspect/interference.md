@@ -2,7 +2,7 @@
 
 Interference finds bodies that overlap, which you want to know before you print an assembly. It needs at least two bodies.
 
-![Interference panel naming one clash between a box and a cylinder, with the overlap drawn in red](../img/interference-list.png)
+![Interference panel with one clash row, Box and Cylinder with the volume of their overlap, drawn in red in the view](../img/interference-list.png)
 
 1. Under Inspect, open Analyze and pick Interference.
 2. Each row is a button that names a pair of bodies, such as Box and Lid, with the volume of their overlap. The overlap is drawn in red in the view.
