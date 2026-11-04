@@ -99,4 +99,20 @@ describe("ResizeGuides", () => {
     expect(scene).toEqual([]);
     expect(g.axisLine).toBeNull();
   });
+
+  // The 4g6g19j9 fillet: ends a float32 buffer cannot hold exactly redrew every frame after the drag.
+  it("asks for no render on a repeat of ends a float32 cannot hold exactly", () => {
+    const { h, renders } = host();
+    const g = new ResizeGuides();
+    const s = {
+      axis: { origin: [18.551, 0.003, 26.066] as Vec3, dir: [0, 0, 1] as Vec3 },
+      span: [-26.066, 26.066] as [number, number],
+      handle: new THREE.Vector3(43.591, 24.295, 34.755),
+      full: false,
+    };
+    g.update(h, s);
+    const after = renders();
+    for (let i = 0; i < 10; i++) g.update(h, s);
+    expect(renders()).toBe(after);
+  });
 });

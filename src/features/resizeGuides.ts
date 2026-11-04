@@ -72,7 +72,8 @@ function segment(mat: THREE.LineBasicMaterial | THREE.LineDashedMaterial): THREE
 function setEnds(line: THREE.Line, a: Vec3, b: Vec3): boolean {
   const pos = line.geometry.getAttribute("position") as THREE.BufferAttribute;
   const next = [...a, ...b];
-  if (next.every((v, i) => Math.abs(pos.array[i]! - v) < 1e-9)) return false;
+  // Compared as float32, what the buffer keeps: a float64 end never matches it and asked for a frame every tick.
+  if (next.every((v, i) => pos.array[i] === Math.fround(v))) return false;
   (pos.array as Float32Array).set(next);
   pos.needsUpdate = true;
   const dist = line.geometry.getAttribute("lineDistance") as THREE.BufferAttribute;
