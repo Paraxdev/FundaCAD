@@ -9,3 +9,12 @@ export function canStep(e: { sketch: SketchMode; store: DocumentStore }, way: "u
   if (stress) return way === "undo" ? stress.canUndo : stress.canRedo;
   return way === "undo" ? e.store.canUndo : e.store.canRedo;
 }
+
+/** The step Undo or Redo would take, in the order `canStep` asks; null when there is none. A sketch has no names for its
+ *  steps, so it says what kind of step it is. */
+export function stepLabelFor(e: { sketch: SketchMode; store: DocumentStore }, way: "undo" | "redo"): string | null {
+  if (e.sketch.active) return canStep(e, way) ? "sketch edit" : null;
+  const stress = usePanelsStore().stress;
+  if (stress) return way === "undo" ? stress.undoLabel : stress.redoLabel;
+  return way === "undo" ? e.store.undoLabel : e.store.redoLabel;
+}

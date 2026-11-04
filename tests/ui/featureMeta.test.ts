@@ -14,7 +14,7 @@
 // plugins to it too.
 
 import { afterEach, describe, expect, it } from "vitest";
-import { FEATURE_META, featureMeta, labelOf } from "../../src/ui/featureMeta";
+import { FEATURE_META, featureMeta, labelOf, numberedName } from "../../src/ui/featureMeta";
 import { contribute, resetContributions } from "../../src/plugins/contrib";
 import type { Feature, FeatureType } from "../../src/types";
 
@@ -156,5 +156,50 @@ describe("featureMeta", () => {
   it("falls back for a plugin that describes a type without a mark", () => {
     contribute("FundaCAD.Texture", { features: [{ type: "texture" }] });
     expect(featureMeta({ type: "texture" })).toEqual({ icon: "dot", label: "texture" });
+  });
+});
+
+describe("numberedName", () => {
+  const step = (id: string, type: string, extra: object = {}) => ({ id, type, ...extra });
+  const list = [
+    step("a", "box"),
+    step("b", "fillet"),
+    step("c", "extrude"),
+    step("d", "fillet", { name: "Round" }),
+    step("e", "fillet"),
+    step("f", "fillet", { name: "  " }),
+  ];
+
+  it("counts same-labelled steps in timeline order, named ones included", () => {
+    expect(list.map((f) => numberedName(f, list))).toEqual([
+      "Box 1",
+      "Fillet 1",
+      "Extrude 1",
+      "Round",
+      "Fillet 3",
+      "Fillet 4",
+    ]);
+  });
+
+  it("finds the step by id when it is a copy, and keeps the bare label when it is absent", () => {
+    expect(numberedName({ ...list[4]! }, list)).toBe("Fillet 3");
+    expect(numberedName(step("zz", "fillet"), list)).toBe("Fillet");
+  });
+
+  it("uses an import's assembly name while its name is still the file's", () => {
+    const imp = step("i", "import", {
+      name: "bracket",
+      source: "C:/parts/Bracket.step",
+      nodes: [{ name: "Bracket Assembly", parent: null }],
+    });
+    const typed = { ...imp, id: "j", name: "My part" };
+    expect(numberedName(imp, [list[0]!, imp, typed])).toBe("Bracket Assembly");
+    expect(numberedName(typed, [list[0]!, imp, typed])).toBe("My part");
+  });
+
+  it("numbers a plugin feature by its plugin label", () => {
+    contribute("FundaCAD.Texture", { features: [{ type: "texture", meta: { icon: "texture", label: "Texture" } }] });
+    const feats = [step("t1", "texture"), step("x", "box"), step("t2", "texture")];
+    expect(feats.map((f) => numberedName(f, feats))).toEqual(["Texture 1", "Box 1", "Texture 2"]);
   });
 });

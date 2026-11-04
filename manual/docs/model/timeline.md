@@ -16,6 +16,10 @@ Ctrl+Alt+H shows or hides the card.
 
 Right-click a step for Edit, Rename, Suppress, Add condition, Roll back before this, Roll to here and Delete. [Reorder and suppress](suppress.md) has more on suppressing and conditions.
 
+## Undo and Redo
+
+Ctrl+Z takes back the last step and Ctrl+Shift+Z puts it back. Both name the step, so a screen reader says "Undid Fillet 2" or "Redid Fillet 2", and "Nothing to undo" when there is nothing left. In a sketch, Ctrl+Z takes back a sketch edit instead.
+
 ## Failed steps
 
 A failed step is red, and hovering it tells you why. An amber step built, but has a note for you.

@@ -8,6 +8,8 @@ import {
 } from "../io/files";
 import { choose } from "../ui/choice";
 import { toast } from "../ui/toast";
+import { announce } from "../ui/announce";
+import { stepLabelFor } from "../ui/canStep";
 import type { Engine } from "./engine";
 import type { HeldEdit } from "../features/heldEdit";
 import { TEMPLATES, templateText } from "../templates";
@@ -269,6 +271,8 @@ export async function openOnBranch(e: VersionEngine, path: string, name: string)
   return true;
 }
 
+const speak = (text: string) => announce(text, "polite", { key: "history" });
+
 export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
   return {
     async newDocument() {
@@ -294,15 +298,24 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
       // A drag not yet entered is the last step, so undo takes back only that.
       const pending = e.tools.move.pending;
       e.tools.move.cancel();
-      if (pending) return;
+      if (pending) return void speak("Undid Move");
+      const inSketch = e.sketch.active;
+      const label = stepLabelFor(e, "undo");
       if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) stepHistory(e, () => e.store.undo());
+      if (!(inSketch && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
     },
     doRedo() {
       closeHome();
       // A drag not yet entered is a new step, which leaves nothing to redo.
-      if (e.tools.move.pending) return e.tools.move.settle();
+      if (e.tools.move.pending) {
+        e.tools.move.settle();
+        return void speak("Nothing to redo");
+      }
       e.tools.move.cancel();
+      const inSketch = e.sketch.active;
+      const label = stepLabelFor(e, "redo");
       if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) stepHistory(e, () => e.store.redo());
+      if (!(inSketch && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
     },
   };
 }

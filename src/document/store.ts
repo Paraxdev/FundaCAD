@@ -95,7 +95,8 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { logEditTiming } from "../diagnostics/editTiming";
-import { featureMeta } from "../ui/featureMeta";
+import { featureMeta, numberedName } from "../ui/featureMeta";
+import { STEP_LABEL, stepLabel } from "./stepLabels";
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
@@ -206,10 +207,14 @@ const fingerprint = (json: string | undefined) => contentHash(json ?? "");
 const TIMELINE_KEYS: ReadonlySet<string> = new Set(["suppressed", "rollback"]);
 
 // Snapshots and display-only overlay changes share one chronological stack, so Ctrl+Z undoes whichever came last.
-type UndoEntry =
+// `label` names the step for "Undid Fillet 2". `mark` is unique across documents, so a toast's Undo can tell its own step.
+type Stamp = { label: string; mark: number };
+type UndoEntry = (
   | { kind: "doc"; doc: CadDocument; state?: StateSwap }
   | { kind: "overlay"; undo: () => void; redo: () => void }
-  | { kind: "group"; entries: UndoEntry[] };
+  | { kind: "group"; entries: UndoEntry[] }
+) &
+  Stamp;
 
 // Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
@@ -1128,8 +1133,10 @@ export class DocumentStore {
     this.emitMeta();
   }
 
-  private pushUndo(): UndoEntry & { kind: "doc" } {
-    const entry = { kind: "doc" as const, doc: clone(this.doc) };
+  private markSeq = 0;
+
+  private pushUndo(label: string = STEP_LABEL.edit): UndoEntry & { kind: "doc" } {
+    const entry = { kind: "doc" as const, doc: clone(this.doc), label, mark: ++this.markSeq };
     if (this.collecting) this.collecting.push(entry);
     else {
       this.stepped();
@@ -1138,21 +1145,22 @@ export class DocumentStore {
     return entry;
   }
 
-  private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
-    if (this.collecting) return void this.collecting.push({ kind: "overlay", ...entry });
+  private pushOverlayUndo(entry: { undo: () => void; redo: () => void; label: string }) {
+    const stamped = { kind: "overlay" as const, mark: ++this.markSeq, ...entry };
+    if (this.collecting) return void this.collecting.push(stamped);
     this.stepped();
-    this.undoStack.push({ kind: "overlay", ...entry });
+    this.undoStack.push(stamped);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
   }
 
   // setBodiesVisibility has its own, since a visible id is always set, never deleted. False when nothing changed, so
   // the caller can skip its own emit and dirty.
-  private writeOverlayBatch<T>(overlay: Overlay<T>, ids: Iterable<string>, value: T | null): boolean {
-    return this.writeOverlayMap(overlay, new Map([...ids].map((id) => [id, value])));
+  private writeOverlayBatch<T>(overlay: Overlay<T>, ids: Iterable<string>, value: T | null, label: string): boolean {
+    return this.writeOverlayMap(overlay, new Map([...ids].map((id) => [id, value])), label);
   }
 
-  private writeOverlayMap<T>(overlay: Overlay<T>, writes: ReadonlyMap<string, T | null>): boolean {
+  private writeOverlayMap<T>(overlay: Overlay<T>, writes: ReadonlyMap<string, T | null>, label: string): boolean {
     const prior = new Map<string, T | undefined>();
     for (const [id, value] of writes) {
       const was = overlay.get(id);
@@ -1165,6 +1173,7 @@ export class DocumentStore {
     this.markDirty();
     this.emitBuild();
     this.pushOverlayUndo({
+      label,
       undo: () => {
         for (const [id, was] of prior) {
           if (was === undefined) overlay.delete(id);
@@ -1186,11 +1195,12 @@ export class DocumentStore {
     return true;
   }
 
-  mutate(fn: (doc: CadDocument) => void, immediate = false) {
-    this.step(fn, immediate);
+  mutate(fn: (doc: CadDocument) => void, immediate = false, label?: string) {
+    this.step(fn, immediate, undefined, label);
   }
-  /** `move` shifts the rollback marker or the suppress set with the edit, inside its undo step. */
-  private step(fn: (doc: CadDocument) => void, immediate: boolean, move?: () => void) {
+  /** `move` shifts the rollback marker or the suppress set with the edit, inside its undo step. `label` replaces the
+   *  one read off the document before and after. */
+  private step(fn: (doc: CadDocument) => void, immediate: boolean, move?: () => void, label?: string) {
     const before = move && this.timelineSections();
     move?.();
     const entry = this.pushUndo();
@@ -1202,6 +1212,7 @@ export class DocumentStore {
     // A user edit is the "edit the model to retry" the valve toast promises.
     this.rearmProjectionValve();
     this.applyDerived(fn, immediate, true);
+    entry.label = label ?? stepLabel(entry.doc, this.doc);
   }
 
   // name -> why its value is stale (cycle, unknown ref, non-finite, missing target) from the last recompute.
@@ -1751,6 +1762,10 @@ export class DocumentStore {
     this.emitDoc();
     this.scheduleRebuild(true);
   }
+  private stepNameOf(id: string): string {
+    const f = this.doc.features.find((x) => x.id === id);
+    return f ? numberedName(f, this.doc.features) : "step";
+  }
   toggleSuppress(id: string) {
     const was = this.suppressed.has(id);
     const set = (on: boolean) => {
@@ -1761,7 +1776,11 @@ export class DocumentStore {
       this.scheduleRebuild(true);
     };
     set(!was);
-    this.pushOverlayUndo({ undo: () => set(was), redo: () => set(!was) });
+    this.pushOverlayUndo({
+      label: `${was ? "Unsuppress" : "Suppress"} ${this.stepNameOf(id)}`,
+      undo: () => set(was),
+      redo: () => set(!was),
+    });
   }
 
   // One undo step however many; a feature already in the asked state is left out of it, and an id the document does
@@ -1780,7 +1799,12 @@ export class DocumentStore {
       this.scheduleRebuild(true);
     };
     set(on);
-    this.pushOverlayUndo({ undo: () => set(!on), redo: () => set(on) });
+    const what = todo.length === 1 ? this.stepNameOf(todo[0]!) : `${todo.length} steps`;
+    this.pushOverlayUndo({
+      label: `${on ? "Suppress" : "Unsuppress"} ${what}`,
+      undo: () => set(!on),
+      redo: () => set(on),
+    });
   }
 
   // No undo, not dirty. `hold` keeps the last model that built on screen if the kernel refuses (see heldRefusal).
@@ -1882,27 +1906,30 @@ export class DocumentStore {
     }, true);
   }
 
-  undo() {
-    if (!this.st.historyHeld) this.undoStep();
+  /** The label of the step taken back, null when nothing moved. */
+  undo(): string | null {
+    return this.st.historyHeld ? null : this.undoStep();
   }
   // An import's history hold does not stop this.
-  private undoStep() {
+  private undoStep(): string | null {
     const prev = this.undoStack.pop();
-    if (!prev) return;
+    if (!prev) return null;
     this.undoAt--;
     this.emitRewind();
     this.redoStack.push(this.applyUndoEntry(prev, "undo"));
     this.settleDirty();
+    return prev.label;
   }
-  redo() {
-    if (this.st.historyHeld) return;
+  redo(): string | null {
+    if (this.st.historyHeld) return null;
     const next = this.redoStack.pop();
-    if (!next) return;
+    if (!next) return null;
     this.undoAt++;
     this.emitRewind();
     this.undoStack.push(this.applyUndoEntry(next, "redo"));
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.settleDirty();
+    return next.label;
   }
   private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
     if (e.kind === "overlay") {
@@ -1912,9 +1939,9 @@ export class DocumentStore {
     if (e.kind === "group") {
       const order = way === "undo" ? [...e.entries].reverse() : e.entries;
       const back = order.map((x) => this.applyUndoEntry(x, way));
-      return { kind: "group", entries: way === "undo" ? back.reverse() : back };
+      return { kind: "group", entries: way === "undo" ? back.reverse() : back, label: e.label, mark: e.mark };
     }
-    const was: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    const was: UndoEntry = { kind: "doc", doc: clone(this.doc), label: e.label, mark: e.mark };
     this.doc = e.doc;
     if (e.state) was.state = this.swapState(e.state);
     this.rearmProjectionValve();
@@ -1925,7 +1952,11 @@ export class DocumentStore {
   }
   // When the top step is a document change and `onto` holds for the document before it, they join it. With
   // `only: true` nothing runs unless they can.
-  undoAsOne(fn: () => void, onto?: (before: CadDocument) => boolean, opts: { only?: boolean } = {}): boolean {
+  undoAsOne(
+    fn: () => void,
+    onto?: (before: CadDocument) => boolean,
+    opts: { only?: boolean; label?: string } = {},
+  ): boolean {
     const top = this.undoStack.at(-1);
     const join = top?.kind === "doc" && !!onto?.(top.doc);
     if (opts.only && !join) return false;
@@ -1939,14 +1970,35 @@ export class DocumentStore {
     if (!taken.length) return join;
     if (join) {
       this.grewTop();
-      this.undoStack[this.undoStack.length - 1] = { kind: "group", entries: [top!, ...taken] };
+      this.undoStack[this.undoStack.length - 1] = {
+        kind: "group",
+        entries: [top!, ...taken],
+        label: top!.label,
+        mark: top!.mark,
+      };
       return true;
     }
     this.stepped();
-    this.undoStack.push(taken.length > 1 ? { kind: "group", entries: taken } : taken[0]!);
+    const label = opts.label ?? taken[0]!.label;
+    this.undoStack.push(
+      taken.length > 1 ? { kind: "group", entries: taken, label, mark: ++this.markSeq } : { ...taken[0]!, label },
+    );
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
     return false;
+  }
+  get undoLabel(): string | null {
+    return this.canUndo ? this.undoStack.at(-1)!.label : null;
+  }
+  get redoLabel(): string | null {
+    return this.canRedo ? this.redoStack.at(-1)!.label : null;
+  }
+  get undoMark(): number | null {
+    return this.canUndo ? this.undoStack.at(-1)!.mark : null;
+  }
+  /** Undoes the top step only when it is still the one stamped `mark`; its label, or null. */
+  undoIfMark(mark: number): string | null {
+    return this.undoMark === mark ? this.undo() : null;
   }
   get canUndo() {
     return !this.st.historyHeld && this.undoStack.length > 0;
@@ -1961,7 +2013,7 @@ export class DocumentStore {
   }
   // Records undo and emits doc-change; effectiveDoc ignores overrides, so no rebuild.
   setViewOverride(side: ViewCubeSide, override: ViewOverride | null) {
-    this.pushUndo();
+    this.pushUndo(STEP_LABEL.view);
     this.redoStack = [];
     if (override) {
       (this.doc.viewOverrides ??= {})[side] = override;
@@ -1982,6 +2034,7 @@ export class DocumentStore {
     this.markDirty();
     if (was === visible) return;
     this.pushOverlayUndo({
+      label: `${visible ? "Show" : "Hide"} ${this.stepNameOf(id)}`,
       undo: () => {
         if (was === undefined) this.sketchVis.delete(id);
         else this.sketchVis.set(id, was);
@@ -2030,6 +2083,7 @@ export class DocumentStore {
     };
     shown();
     this.pushOverlayUndo({
+      label: STEP_LABEL.bodyVisibility,
       undo: () => {
         isolateAfter = this.isolate;
         this.isolate = wasIsolate;
@@ -2075,6 +2129,7 @@ export class DocumentStore {
     this.markDirty();
     if (was === visible) return;
     this.pushOverlayUndo({
+      label: STEP_LABEL.planeVisibility,
       undo: () => {
         if (was === undefined) this.planeVis.delete(id);
         else this.planeVis.set(id, was);
@@ -2104,7 +2159,11 @@ export class DocumentStore {
       this.markDirty();
     };
     put((id) => changes.get(id));
-    this.pushOverlayUndo({ undo: () => put((id) => prior.get(id)), redo: () => put((id) => changes.get(id)) });
+    this.pushOverlayUndo({
+      label: STEP_LABEL.planeVisibility,
+      undo: () => put((id) => prior.get(id)),
+      redo: () => put((id) => changes.get(id)),
+    });
   }
 
   // Undefined means use the rebuilt name.
@@ -2113,7 +2172,7 @@ export class DocumentStore {
   }
   // Display only, blank clears it. Re-emits the build so the tree updates without a geometry rebuild.
   setBodyName(id: string, name: string) {
-    this.writeOverlayBatch(this.bodyNames, [id], name.trim() || null);
+    this.writeOverlayBatch(this.bodyNames, [id], name.trim() || null, STEP_LABEL.bodyName);
   }
   // Palette slot, material, folder, visibility, name override and the per face materials of the faces each piece took
   // (`faces` runs over the source's face list). One undo step, so a body later reusing a piece's id finds no stale look.
@@ -2181,7 +2240,11 @@ export class DocumentStore {
     };
     this.markDirty();
     this.emitBuild();
-    this.pushOverlayUndo({ undo: () => apply((c) => c.prior), redo: () => apply((c) => c.value) });
+    this.pushOverlayUndo({
+      label: STEP_LABEL.material,
+      undo: () => apply((c) => c.prior),
+      redo: () => apply((c) => c.value),
+    });
   }
   // The stress study is saved but off the undo stack: the panel writes on every keystroke, which would bury model edits.
 
@@ -2353,6 +2416,7 @@ export class DocumentStore {
       const before = this.refImages;
       const box = { v: after };
       this.pushOverlayUndo({
+        label: STEP_LABEL.referenceImage,
         undo: () => {
           this.refCoalesce = null;
           this.setRefImagesQuiet(before);
@@ -2478,13 +2542,13 @@ export class DocumentStore {
         owners.set(key, added);
       }
     }
-    this.writeOverlayMap(overlay, writes);
+    this.writeOverlayMap(overlay, writes, STEP_LABEL.material);
   }
 
   clearFaceMaterials(bodyIds: Iterable<string>) {
     const want = new Set(bodyIds);
     const ids = [...this.faceMaterial.entries()].filter(([, ref]) => want.has(ref.body)).map(([id]) => id);
-    this.writeOverlayBatch(this.faceMaterial, ids, null);
+    this.writeOverlayBatch(this.faceMaterial, ids, null, STEP_LABEL.material);
   }
 
   addMaterial(m?: Partial<MaterialDef>): string {
@@ -2518,6 +2582,7 @@ export class DocumentStore {
     this.materials = [...this.materials, entry];
     emit();
     this.pushOverlayUndo({
+      label: STEP_LABEL.material,
       undo: () => {
         this.materials = this.materials.filter((x) => x.id !== entry.id);
         this.dropMaterialUses(new Set([entry.id]));
@@ -2616,11 +2681,11 @@ export class DocumentStore {
       const known = new Set(this.materials.map((m) => m.id));
       const named = (m: string | null) => m === null || known.has(m);
       const goneBodies = [...this.bodyMaterial.entries()].filter(([, m]) => !known.has(m)).map(([body]) => body);
-      this.writeOverlayBatch(this.bodyMaterial, goneBodies, null);
+      this.writeOverlayBatch(this.bodyMaterial, goneBodies, null, STEP_LABEL.material);
       const goneFaces = [...this.faceMaterial.entries()]
         .filter(([, ref]) => !known.has(ref.material))
         .map(([id]) => id);
-      this.writeOverlayBatch(this.faceMaterial, goneFaces, null);
+      this.writeOverlayBatch(this.faceMaterial, goneFaces, null, STEP_LABEL.material);
       for (const material of new Set(edit.bodies.map((b) => b.material).filter(named))) {
         this.setBodiesMaterial(
           edit.bodies.filter((b) => b.material === material).map((b) => b.body),
@@ -2658,13 +2723,13 @@ export class DocumentStore {
       this.emitBuild();
     };
     write(after);
-    this.pushOverlayUndo({ undo: () => write(before), redo: () => write(after) });
+    this.pushOverlayUndo({ label: STEP_LABEL.material, undo: () => write(before), redo: () => write(after) });
   }
 
   // Batched with one emit, like setBodiesElement: it is applied to a selection.
   setBodiesMaterial(bodyIds: Iterable<string>, material: string | null) {
     const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
-    this.writeOverlayBatch(this.bodyMaterial, bodyIds, target);
+    this.writeOverlayBatch(this.bodyMaterial, bodyIds, target, STEP_LABEL.material);
   }
 
   // Where the file gave both. Display only and off the undo stack, unlike the material assignments it steers.
@@ -2754,7 +2819,7 @@ export class DocumentStore {
     return this.bodyColors.get(id);
   }
   setBodyColorSlot(id: string, slot: number | null) {
-    this.writeOverlayBatch(this.bodyColors, [id], slot);
+    this.writeOverlayBatch(this.bodyColors, [id], slot, STEP_LABEL.colour);
   }
   // For the colored-3MF export, which must thread these side maps explicitly: they never travel inside `document`.
   bodyColorsMap(): Record<string, number> {
@@ -2858,10 +2923,14 @@ export class DocumentStore {
       repo.current = branch;
       this.emitMeta();
     };
-    this.undoAsOne(() => {
-      this.restoreVersion(head.id);
-      this.pushOverlayUndo({ undo: () => onto(was), redo: () => onto(name) });
-    });
+    this.undoAsOne(
+      () => {
+        this.restoreVersion(head.id);
+        this.pushOverlayUndo({ label: `Switch to ${name}`, undo: () => onto(was), redo: () => onto(name) });
+      },
+      undefined,
+      { label: `Switch to ${name}` },
+    );
   }
   toJSON(): string {
     return JSON.stringify(this.toObject(), null, 2);
@@ -2901,7 +2970,11 @@ export class DocumentStore {
       this.emitMeta();
     };
     put(null, null, now);
-    this.pushOverlayUndo({ undo: () => put(was.path, was.name, was.doc), redo: () => put(null, null, now) });
+    this.pushOverlayUndo({
+      label: STEP_LABEL.edit,
+      undo: () => put(was.path, was.name, was.doc),
+      redo: () => put(null, null, now),
+    });
   }
   // A version is always the open document, even one sharing no feature with what is on screen.
   private loadAs(json: string, as: "open" | "edit" | "version") {
@@ -2965,7 +3038,10 @@ export class DocumentStore {
     canonicalMirrorPlanes(this.doc);
     // Before the sections are read, or the old build would seed the new face materials' track.
     this.discardModelForReplacement();
-    if (replaced) replaced.entry.state = stateSwap(replaced.before, this.stateSections());
+    if (replaced) {
+      replaced.entry.state = stateSwap(replaced.before, this.stateSections());
+      replaced.entry.label = as === "version" ? STEP_LABEL.restoreVersion : stepLabel(replaced.entry.doc, this.doc);
+    }
     this.markDirty(); // openDocument clears this via markSaved() once the path is known
     if (!replace) this.dropToolPreview();
     this.emitDoc();

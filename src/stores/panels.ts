@@ -100,6 +100,9 @@ export interface StressData {
   /** Whether the panel's own undo and redo have a setup step to take back or put back. */
   canUndo: boolean;
   canRedo: boolean;
+  /** The label of the step they would take, null with none. */
+  undoLabel: string | null;
+  redoLabel: string | null;
 }
 
 /** The floating measure-panel popups. Independent fields, since Properties and Overhang settings can be open
@@ -147,6 +150,8 @@ export const usePanelsStore = defineStore("panels", () => {
       ranSetup: null,
       canUndo: false,
       canRedo: false,
+      undoLabel: null,
+      redoLabel: null,
     };
   }
 

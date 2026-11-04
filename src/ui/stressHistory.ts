@@ -130,6 +130,14 @@ export class StressHistory {
     return this.undone.length > 0;
   }
 
+  get undoLabel(): string | null {
+    return this.done.at(-1)?.label ?? null;
+  }
+
+  get redoLabel(): string | null {
+    return this.undone.at(-1)?.label ?? null;
+  }
+
   reset(setup: StressSetup | null): void {
     this.done = [];
     this.undone = [];
