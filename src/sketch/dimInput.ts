@@ -16,6 +16,8 @@ import { iconElement } from "../ui/icons";
 import { isEditableTarget, isHistoryKey, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
 import { regionStep } from "../ui/regions";
+import { underZoom } from "../ui/anchor";
+import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -1229,7 +1231,7 @@ export class DimInput {
       menu.appendChild(row);
       return { el: row, pick };
     });
-    const at = anchor.getBoundingClientRect();
+    const at = underZoom(anchor.getBoundingClientRect(), pageZoom());
     menu.style.left = `${at.left}px`;
     menu.style.top = `${at.bottom + 2}px`;
     document.body.appendChild(menu);
@@ -1430,7 +1432,8 @@ export class DimInput {
   }
 
   /** Below right of the point, flipped to its other side where the window ends, never over it; clamped into a
-   *  window too small for either side. The error line hangs on the side away from the point. */
+   *  window too small for either side. The error line hangs on the side away from the point. The point and every
+   *  rect the position methods take are in window pixels, the box is placed in the CSS pixels of the root zoom. */
   position(screenX: number, screenY: number) {
     const { w, h } = this.naturalSize();
     const side = (at: number, size: number, room: number) => {
@@ -1440,8 +1443,9 @@ export class DimInput {
       if (before >= 0) return { pos: before, flipped: true };
       return { pos: Math.max(0, Math.min(after, room - size)), flipped: false };
     };
-    const x = side(screenX, w, window.innerWidth);
-    const y = side(screenY, h, window.innerHeight);
+    const z = pageZoom();
+    const x = side(screenX / z, w, window.innerWidth / z);
+    const y = side(screenY / z, h, window.innerHeight / z);
     this.root.style.left = `${Math.round(x.pos)}px`;
     this.root.style.top = `${Math.round(y.pos)}px`;
     this.root.classList.toggle("dim-above", y.flipped);
@@ -1454,7 +1458,8 @@ export class DimInput {
       w: Math.max(this.root.offsetWidth, p ? p.offsetLeft + p.offsetWidth : 0),
       h: Math.max(this.root.offsetHeight, p ? p.offsetTop + p.offsetHeight : 0),
     };
-    const at = pastTip(tip, dir, size, bounds);
+    const z = pageZoom();
+    const at = pastTip({ x: tip.x / z, y: tip.y / z }, dir, size, underZoom(bounds, z));
     this.root.classList.remove("dim-above");
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
@@ -1471,7 +1476,13 @@ export class DimInput {
   }
 
   positionBeside(model: ScreenRect, anchor: ScreenPoint, bounds: ScreenRect) {
-    const at = placeBeside(model, anchor, this.naturalSize(), bounds);
+    const z = pageZoom();
+    const at = placeBeside(
+      underZoom(model, z),
+      { x: anchor.x / z, y: anchor.y / z },
+      this.naturalSize(),
+      underZoom(bounds, z),
+    );
     this.root.classList.remove("dim-above");
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
@@ -1481,8 +1492,9 @@ export class DimInput {
   // A pointer's box follows the drawing as it always has, `onScreen` keeps one in the window for a cursor moved by keys.
   positionCentred(screenX: number, screenY: number, onScreen = false) {
     this.setClickThrough(true);
+    const z = pageZoom();
     const place = (at: number, size: number, room: number) =>
-      onScreen ? Math.max(0, Math.min(at - size / 2, room - size)) : at - size / 2;
+      onScreen ? Math.max(0, Math.min(at / z - size / 2, room / z - size)) : at / z - size / 2;
     this.root.style.left = `${Math.round(place(screenX, this.root.offsetWidth, window.innerWidth))}px`;
     this.root.style.top = `${Math.round(place(screenY, this.root.offsetHeight, window.innerHeight))}px`;
   }

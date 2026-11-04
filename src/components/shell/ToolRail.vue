@@ -22,6 +22,7 @@ import {
 } from "../../ui/railDefs";
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
 import { contextMenu } from "../../ui/menu";
+import { pageZoom } from "../../ui/interfaceSize";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { useScrollCue } from "../../composables/useScrollCue";
 import { runningTool } from "../../ui/runningTool";
@@ -342,7 +343,7 @@ onUnmounted(() => {
 const FLYOUT_ROW_PX = 46;
 const flyoutRows = computed(() => {
   const n = flyout.value?.items.length ?? 1;
-  return Math.max(1, Math.min(n, Math.floor((window.innerHeight - 64) / FLYOUT_ROW_PX)));
+  return Math.max(1, Math.min(n, Math.floor((window.innerHeight / pageZoom() - 64) / FLYOUT_ROW_PX)));
 });
 
 // A mode swap replaces every button, so a flyout would be hanging off nothing.

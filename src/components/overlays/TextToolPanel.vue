@@ -17,6 +17,7 @@ import {
   type TextValues,
 } from "../../sketch/textForm";
 import { useToolPanelStore, type TextReq } from "../../stores/toolPanels";
+import { pageZoom } from "../../ui/interfaceSize";
 import { claimEscape } from "../../ui/escapeClaim";
 
 const props = defineProps<{ req: TextReq }>();
@@ -24,7 +25,7 @@ const panels = useToolPanelStore();
 
 // App.vue keys this on req.id, so a second show() remounts and rebuilds the form from the new `initial`.
 const form = reactive(initialTextForm(props.req.initial));
-const pos = textPanelPos(props.req.screen, window);
+const pos = textPanelPos(props.req.screen, window, pageZoom());
 const at = { left: `${pos.left}px`, top: `${pos.top}px` };
 
 const errors = computed(() => textFormErrors(form));

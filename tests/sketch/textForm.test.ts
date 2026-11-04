@@ -96,6 +96,11 @@ describe("textPanelPos", () => {
   it("keeps an 8px inset at the top and left", () => {
     expect(textPanelPos({ x: -50, y: -50 }, win)).toEqual({ left: 8, top: 8 });
   });
+
+  it("reads the click and the window in window pixels under a root zoom and places in its CSS pixels", () => {
+    expect(textPanelPos({ x: 300, y: 200 }, win, 2)).toEqual({ left: 150, top: 100 });
+    expect(textPanelPos({ x: 990, y: 790 }, win, 2)).toEqual({ left: 184, top: 160 });
+  });
 });
 
 describe("number boxes read the shared measure grammar", () => {

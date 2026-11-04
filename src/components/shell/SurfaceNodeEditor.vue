@@ -4,6 +4,7 @@
 import Icon from "./Icon.vue";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { pageZoom } from "../../ui/interfaceSize";
 import type { MaterialDef, SurfaceGraph, SurfaceNode } from "../../document/materials";
 
 const props = defineProps<{ materialId: string }>();
@@ -451,7 +452,8 @@ function onUp(e: PointerEvent) {
   }
 }
 
-const panelH = ref(Math.round(Math.min(Math.max(window.innerHeight * 0.5, 260), window.innerHeight * 0.85)));
+const winH = () => window.innerHeight / pageZoom();
+const panelH = ref(Math.round(Math.min(Math.max(winH() * 0.5, 260), winH() * 0.85)));
 const resizing = ref<{ y: number; h: number } | null>(null);
 function startResize(e: PointerEvent) {
   (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -459,7 +461,8 @@ function startResize(e: PointerEvent) {
 }
 function onResizeMove(e: PointerEvent) {
   if (!resizing.value) return;
-  panelH.value = clamp(resizing.value.h + (resizing.value.y - e.clientY), 220, window.innerHeight * 0.9);
+  const dy = (resizing.value.y - e.clientY) / pageZoom();
+  panelH.value = clamp(resizing.value.h + dy, 220, winH() * 0.9);
 }
 function onResizeUp() {
   resizing.value = null;

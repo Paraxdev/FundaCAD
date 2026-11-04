@@ -8,6 +8,7 @@ import { TextPanel, type TextValues } from "../sketch/textPanel";
 import { fetchFonts } from "../sketch/textCache";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
+import { pageZoom } from "../ui/interfaceSize";
 import { CanvasGesture } from "./canvasGesture";
 import { awaitFaceRows } from "./faceRows";
 
@@ -199,7 +200,8 @@ export class TextOnFaceTool {
     // The panel goes on the far side of the canvas from the click, so it covers
     // neither the letters nor the dot that drags them.
     const left = screen.x > window.innerWidth / 2;
-    const at = { x: left ? 16 : window.innerWidth - 332, y: screen.y - 120 };
+    const z = pageZoom();
+    const at = { x: left ? 16 * z : window.innerWidth - 332 * z, y: screen.y - 120 * z };
     this.panel.show(at, this.fonts, this.values, {
       onChange: (v) => {
         this.values = v;
