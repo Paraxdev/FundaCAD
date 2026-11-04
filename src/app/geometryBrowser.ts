@@ -216,7 +216,10 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     );
   }
 
-  // The last rows stay through a preview or a stream, the settled build calls this again.
+  // An edit's roll back settles with previewBuilt [], nothing live sent: the model the editing tool picks on, so the
+  // rows follow it. A tool's own preview or a stream keeps the last rows, the settled build calls ensure again.
+  const heldBuild = (s: RebuildState) => s.building || (s.previewBuilt?.length ?? 0) > 0;
+
   function ensure() {
     if (list.kind === "planes") {
       list.setRows(
@@ -225,8 +228,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       list.setState("ready");
       return;
     }
-    const build = e.store.buildState;
-    if (build.building || build.previewBuilt) return;
+    if (heldBuild(e.store.buildState)) return;
     const body = metaOf(list.bodyId);
     if (!body) {
       stopAsking();
@@ -403,7 +405,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     },
 
     buildChanged(s: RebuildState) {
-      if (s.building || s.previewBuilt) return;
+      if (heldBuild(s)) return;
       if (s.result !== lastResult) {
         lastResult = s.result;
         resultSerial++;
@@ -421,7 +423,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
 
     /** Follows only a selection that changed, so a build cannot undo the Body field. */
     selectionChanged() {
-      if (e.store.buildState.previewBuilt || !syncSelected()) return;
+      if (heldBuild(e.store.buildState) || !syncSelected()) return;
       if (list.bodyId !== null && e.viewport.selectionBodyIds().includes(list.bodyId)) return;
       const owner = selectionOwner(visibleBodies());
       if (owner !== null) setBody(owner);

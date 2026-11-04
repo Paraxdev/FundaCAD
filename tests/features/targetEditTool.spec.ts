@@ -153,6 +153,9 @@ function rowRig(feature: Feature, field: TargetField, drawn: EdgeRef[], bodies: 
     selectFaces: () => {},
     setSelectedBodies: () => {},
     faceIdNear: () => 11,
+    facesForPressPull: (ids: number[]) =>
+      ids[0] === 3 ? { anchor: { x: 12.5, y: -7, z: 4 }, normal: { x: 0.6, y: 0, z: 0.8 }, bodyId: "body2" } : null,
+    faceSelectorOf: (id: number) => ({ kind: "face", by: "nearest", point: [12.5 + id, -7, 4], body: "body2" }),
     edgeLineByMid: (p: P3) => drawn.find((e) => Math.hypot(...(mid(e).map((v, i) => v - p[i]!) as P3)) <= 0.5) ?? null,
   };
   let build: (s: { building: boolean; result: object }) => void = () => {};
@@ -235,12 +238,49 @@ describe("TargetEditTool rows", () => {
     expect(h.entries()).toHaveLength(1);
   });
 
-  it("a face field refuses a face row in words about the finished model, and an edge row as the wrong kind", () => {
+  it("a face row writes what a click writes, its body only where the field asks, a second row takes it out", () => {
+    const h = rowRig(shell([{ ...SAVED, body: "body1" }]), shellField, [E1], ["body1", "body2"]);
+    expect(h.row({ kind: "face", faceId: 3 })).toBe("taken");
+    expect(h.row({ kind: "face", faceId: 5 })).toBe("taken");
+    expect(h.entries()).toEqual([
+      { ...SAVED, body: "body1" },
+      { kind: "face", by: "nearest", point: [15.5, -7, 4], body: "body2" },
+      { kind: "face", by: "nearest", point: [17.5, -7, 4], body: "body2" },
+    ]);
+    expect(h.row({ kind: "face", faceId: 3 })).toBe("taken");
+    h.tool.commit();
+    expect(h.patches).toEqual([
+      {
+        faces: [
+          { ...SAVED, body: "body1" },
+          { kind: "face", by: "nearest", point: [17.5, -7, 4], body: "body2" },
+        ],
+      },
+    ]);
+
+    const offset = { id: "o", type: "offsetFace", faces: [], distance: 2 } as unknown as Feature;
+    const g = rowRig(offset, FEATURE_TARGETS.offsetFace![0]!, [E1], ["body2"]);
+    expect(g.row({ kind: "face", faceId: 3 })).toBe("taken");
+    expect(g.entries()).toEqual([{ kind: "face", by: "nearest", point: [15.5, -7, 4] }]);
+  });
+
+  it("a tracked face field takes the row's face with its normal, one face replaces the other", () => {
+    const upTo = FEATURE_TARGETS.extrude!.find((f) => f.field === "upToFace")!;
+    const h = rowRig({ id: "x", type: "extrude", upToFace: SAVED } as unknown as Feature, upTo, [E1], ["body2"]);
+    expect(h.row({ kind: "face", faceId: 3 })).toBe("taken");
+    expect(h.entries()).toEqual([
+      { kind: "face", by: "tracked", point: [12.5, -7, 4], normal: [0.6, 0, 0.8], body: "body2" },
+    ]);
+    expect(h.row({ kind: "face", faceId: 9 })).toBe("refused");
+    expect(h.hints).toEqual(["The model is still building"]);
+    expect(h.entries()).toHaveLength(1);
+  });
+
+  it("a face field refuses an edge row as the wrong kind and keeps its faces", () => {
     const h = rowRig(shell([{ ...SAVED, body: "body1" }]), shellField, [E1], ["body1"]);
-    expect(h.row({ kind: "face", faceId: 3 })).toBe("refused");
     expect(h.row(edgePick(E1))).toBe("refused");
-    expect(h.hints[0]).toMatch(/finished model/);
-    expect(h.hints[1]).toMatch(/face/);
+    expect(h.hints).toHaveLength(1);
+    expect(h.hints[0]).toMatch(/face/);
     expect(h.entries()).toEqual([{ ...SAVED, body: "body1" }]);
   });
 

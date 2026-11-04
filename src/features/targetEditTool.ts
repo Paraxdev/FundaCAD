@@ -22,9 +22,7 @@ export interface TargetRow {
 }
 
 const STILL_BUILDING = "The model is still building";
-// The Geometry list keeps the finished model through this tool's rollback, and a face row is a number in that model.
-const FACE_ROW = "The list shows the finished model, edit this in the feature's own tool";
-// An edge row comes from the finished model too, so it counts only if the rolled back model has an edge this close.
+// An edge row counts only if the rolled back model has an edge this close, a row listed before the roll back has none.
 const SAME_EDGE = 0.01;
 
 export class TargetEditTool {
@@ -229,7 +227,7 @@ export class TargetEditTool {
     const t = this.target;
     if (!t || this.awaitingRollback) return STILL_BUILDING;
     if (t.kind === "body") return this.takeBodyRow(pick, t);
-    if (t.kind === "face") return pick.kind === "face" ? FACE_ROW : treePickRefusal(pick, "a face");
+    if (t.kind === "face") return this.takeFaceRow(pick, t);
     if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
     const sel = edgeSelectorFrom(pick.edge);
     const mid = polylineMid(pick.edge.points);
@@ -239,6 +237,21 @@ export class TargetEditTool {
       return "That edge is not on the model this feature edits";
     }
     this.toggle(sel, t);
+    return true;
+  }
+
+  // The Geometry list follows the roll back, so a face row numbers a face of the model this feature edits.
+  private takeFaceRow(pick: TreePick, t: TargetField): TreePickAnswer {
+    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    if (t.tracked) {
+      const at = this.viewport.facesForPressPull([pick.faceId]);
+      if (!at) return STILL_BUILDING;
+      const { anchor: a, normal: n } = at;
+      this.toggle(trackedFace([a.x, a.y, a.z], [n.x, n.y, n.z], at.bodyId), t);
+      return true;
+    }
+    const { body, ...plain } = this.viewport.faceSelectorOf(pick.faceId) as Selector & { body?: string };
+    this.toggle(t.ownBody && body ? { ...plain, body } : plain, t);
     return true;
   }
 
