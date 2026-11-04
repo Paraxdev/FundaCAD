@@ -912,8 +912,9 @@ shows in the model as you flip it.
   `.check` markup of `_checkbox.scss` it replaces. Never put `Switch`, `SwitchRow`, `.ft-switch`, `.param-switch`,
   `ToggleRow` or `Toggle` in anything Preferences renders, the guard test fails on it.
 - **Live toggles** use `SwitchRow`: `layout="float"` in the view controls (the old `Toggle.vue`, which now draws it,
-  and its `.float-toggle` row), `layout="param"` in feature properties (the old `ToggleRow.vue` and its
-  `.param-switch`). The Export dialog and the Stress setup and results steps keep their switches too.
+  and its `.float-toggle` row), feature properties use `ToggleRow`, a `FieldRow layout="param"` row holding a
+  `Switch` (the old `.param-switch` is retired; `SwitchRow layout="param"` stays unused there). The Export dialog
+  and the Stress setup and results steps keep their switches too.
 
 | Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|

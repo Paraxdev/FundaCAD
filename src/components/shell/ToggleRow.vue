@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A switch reads as on at a glance down a column. The label names it by id, so a click on the label flips it.
 
+import FieldRow from "../ui/FieldRow.vue";
 import Switch from "../ui/Switch.vue";
 
 defineProps<{
@@ -12,10 +13,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="param-row" :title="rowTitle">
-    <label :for="`tg-${label}`">{{ label }}</label>
-    <div class="param-value">
-      <Switch :id="`tg-${label}`" :model-value="value" :label="label" @update:model-value="commit" />
-    </div>
-  </div>
+  <FieldRow v-slot="{ id }" layout="param" :label="label" :title="rowTitle">
+    <Switch :id="id" :model-value="value" :label="label" @update:model-value="commit" />
+  </FieldRow>
 </template>
