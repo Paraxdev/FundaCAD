@@ -67,6 +67,12 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
     glyphItems.value = markRaw(items);
   }
 
+  // The badge layer is teleported out of the canvas, whose pointerdown would drop the glyph selection, so this does.
+  function selectDim(i: number) {
+    dimSelected.value = i;
+    glyphSelected.value = null;
+  }
+
   function hideGlyphs() {
     glyphSelected.value = null;
     glyphPlane.value = null;
@@ -91,5 +97,6 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
     glyphSelected,
     showGlyphs,
     hideGlyphs,
+    selectDim,
   };
 });

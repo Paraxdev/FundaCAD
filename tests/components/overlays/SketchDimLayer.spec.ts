@@ -245,6 +245,19 @@ describe("SketchDimLayer", () => {
     expect(onDelete).toHaveBeenCalledOnce();
   });
 
+  it("drops a constraint glyph's selection when a badge is pressed or opened by its menu", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    const store = useSketchAnnotationStore();
+    dims().show([], plane, [extra(), extra({ onDelete: vi.fn() })]);
+    await nextTick();
+    store.glyphSelected = 3;
+    labels()[1]!.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true }));
+    expect([store.dimSelected, store.glyphSelected]).toEqual([1, null]);
+    store.glyphSelected = 2;
+    labels()[0]!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    expect([store.dimSelected, store.glyphSelected]).toEqual([0, null]);
+  });
+
   it("falls through when the armed label is an entity dim with nothing to delete", async () => {
     mount(SketchDimLayer, { attachTo: document.body });
     const d = dims();

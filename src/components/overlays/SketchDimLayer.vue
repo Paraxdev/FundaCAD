@@ -139,7 +139,7 @@ onUnmounted(stop);
 
 // Which label the Delete key acts on, dropped on the next rebuild so a stale delete is never armed.
 function select(i: number) {
-  s.dimSelected = i;
+  s.selectDim(i);
 }
 
 // Under DRAG_PX of movement a release still opens the value editor, past it the label follows the cursor (the same

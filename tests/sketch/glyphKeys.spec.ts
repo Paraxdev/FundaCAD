@@ -171,6 +171,20 @@ describe("Delete with a constraint selected", () => {
     expect(log).toEqual(["delete shapes"]);
   });
 
+  // The badge's own editor or menu takes the Escape in between, so it never reaches SketchMode.
+  it("takes the dimension badge selected after the glyph and keeps the constraint", () => {
+    const { s, log, dims } = mode();
+    const store = useSketchAnnotationStore();
+    dims.deleteSelected.mockImplementation(() => store.dimSelected !== null);
+    s.selectConstraint(1);
+    store.selectDim(0);
+    log.length = 0;
+    expect(key(s, "Delete")).toBe(true);
+    expect(s.constraints).toEqual(constraints());
+    expect(dims.deleteSelected).toHaveBeenCalledOnce();
+    expect(log).toEqual([]);
+  });
+
   it("is dropped by Escape, which keeps the constraint and the sketch open", () => {
     const { s, glyphs, log } = mode();
     s.selectConstraint(0);
