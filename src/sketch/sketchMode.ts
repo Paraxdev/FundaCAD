@@ -3965,6 +3965,9 @@ export class SketchMode {
     return this.active && this.history.canUndo;
   }
 
+  set onHistory(fn: (() => void) | null) {
+    this.history.onChange = fn;
+  }
   get canUndoSketch(): boolean {
     return this.history.canUndo;
   }

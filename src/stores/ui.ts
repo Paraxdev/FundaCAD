@@ -16,6 +16,8 @@ export const useUiStore = defineStore("ui", () => {
   const redoLabel = ref<string | null>(null);
 
   const sketchActive = ref(false);
+  const sketchCanUndo = ref(false);
+  const sketchCanRedo = ref(false);
 
   // In mm. The grid rescales with zoom, so its lines need a number to be a ruler. Written by the viewport (ground grid)
   // or sketch mode (sketch lattice, where the cursor snaps); only one of the two is ever drawn.
@@ -44,6 +46,8 @@ export const useUiStore = defineStore("ui", () => {
     undoLabel,
     redoLabel,
     sketchActive,
+    sketchCanUndo,
+    sketchCanRedo,
     gridStepMm,
     projLabel,
     selMode,

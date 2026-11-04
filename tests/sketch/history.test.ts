@@ -135,6 +135,31 @@ describe("SketchHistory", () => {
     expect(h.canRedo).toBe(false);
   });
 
+  it("tells onChange each time a step is banked, undone, redone or the history reset, and not otherwise", () => {
+    const h = new SketchHistory();
+    const seen: [boolean, boolean][] = [];
+    h.onChange = () => seen.push([h.canUndo, h.canRedo]);
+    const s0 = snap([{ type: "line", id: "a", x1: 3.5, y1: -2, x2: 17.25, y2: 6.75 }]);
+    const s1 = snap([...s0.entities, { type: "line", id: "b", x1: 17.25, y1: 6.75, x2: 9.5, y2: 21 }]);
+    h.reset(s0);
+    h.bankIfChanged(cloneSnapshot(s0));
+    h.arm(s0);
+    h.bankIfChanged(s1);
+    h.undo(s1);
+    h.undo(s0);
+    h.redo(s0);
+    h.redo(s1);
+    h.bankBefore(s1, cloneSnapshot(s1));
+    h.bankBefore(s1, s0);
+    expect(seen).toEqual([
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, false],
+      [true, false],
+    ]);
+  });
+
   it("tracks constraints and patterns, not just entities", () => {
     const h = new SketchHistory();
     const s0 = snap([line("a")]);

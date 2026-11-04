@@ -24,9 +24,13 @@ const engine = useEngine();
 const ui = useUiStore();
 const home = useHomeStore();
 const panels = usePanelsStore();
-// An open Stress panel undoes its own setup, not the model.
-const canUndo = computed(() => (panels.stress ? panels.stress.canUndo : ui.canUndo));
-const canRedo = computed(() => (panels.stress ? panels.stress.canRedo : ui.canRedo));
+// Mirrors canStep: an open sketch, then an open Stress panel, step their own history before the model's.
+const canUndo = computed(() =>
+  ui.sketchActive ? ui.sketchCanUndo : panels.stress ? panels.stress.canUndo : ui.canUndo,
+);
+const canRedo = computed(() =>
+  ui.sketchActive ? ui.sketchCanRedo : panels.stress ? panels.stress.canRedo : ui.canRedo,
+);
 // Only the tooltip names the step, the button keeps the name Undo for voice control and the harness.
 const undoTip = computed(() =>
   stepMenuText(
