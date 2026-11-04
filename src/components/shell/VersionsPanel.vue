@@ -8,6 +8,7 @@ import { useDocValue, useMetaValue } from "../../app/useDoc";
 import { diffTrees, log, snapshotOf, versionById, type Version, type VersionDiff } from "../../document/versions";
 import { featureMeta } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
+import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { ago } from "../../ui/timeAgo";
 import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
@@ -72,7 +73,7 @@ function restore(v: Version) {
   try {
     store.restoreVersion(v.id);
   } catch (e) {
-    toast(`Could not go back to "${v.message}": ${e instanceof Error ? e.message : String(e)}`, { kind: "error" });
+    toast(`Could not go back to "${v.message}". ${plainError(e, SEE_CONSOLE)}`, { kind: "error", detail: e });
     return;
   }
   const mark = store.undoMark;
@@ -93,7 +94,7 @@ function makeBranch() {
     toast(`On branch ${name}`);
     branching.value = null;
   } catch (e) {
-    toast(e instanceof Error ? e.message : String(e), { kind: "error" });
+    toast(plainError(e, "Could not start that branch. " + SEE_CONSOLE), { kind: "error", detail: e });
   }
 }
 

@@ -29,6 +29,7 @@ import type { FieldKind } from "../document/numFields";
 import type { ResolvedEntity } from "./snap";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
+import { plainError } from "../ui/plainError";
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface DimHost {
@@ -354,7 +355,7 @@ export class DimFlow {
     if (raw !== "") {
       const r = this.host.evalDimInput(raw, kind, null);
       if ("error" in r) {
-        toast(`Dimension not created, ${r.error}`);
+        toast(`Dimension not created, ${plainError(r.error, "that value is not valid")}`, { detail: r.error });
         this.host.dim().focus(); // leave the box open on the bad value
         return;
       }

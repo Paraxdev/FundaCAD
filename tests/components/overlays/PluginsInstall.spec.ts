@@ -49,6 +49,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
+const { logEntries } = await import("../../../src/ui/logStore");
 const { pluginEnabled, setPluginEnabled } = await import("../../../src/plugins/registry");
 const { definePluginSettings, storageKey } = await import("../../../src/plugins/settings");
 const { contribute, resetContributions } = await import("../../../src/plugins/contrib");
@@ -206,6 +207,19 @@ describe("reading a bundle from a link", () => {
     // its own is a message nobody can tell from a flat network.
     expect(errorNotice()?.message).toContain("gpu.direct");
   });
+
+  it("says it could not read the bundle in plain words when the failure is internal, and keeps the raw text in the console", async () => {
+    const raw = "TypeError: Cannot read properties of undefined (reading 'zip64')";
+    inspectUrl.mockRejectedValue(new Error(raw));
+    const w = await mounted();
+    await readUrl(w, "https://plugins.example.com/odd.zip");
+
+    const message = errorNotice()?.message ?? "";
+    expect(message).toContain("Could not read that plugin");
+    expect(message).not.toMatch(/TypeError|zip64|undefined/);
+    const entry = logEntries().find((e) => e.message === message);
+    expect(String(entry?.detail)).toContain("zip64");
+  });
 });
 
 describe("agreeing to it", () => {
@@ -354,7 +368,7 @@ describe("the list of what is installed", () => {
       expect(pluginEnabled("widgets")).toBe(false);
       await vi.waitFor(() =>
         expect(errorNotice()?.message).toBe(
-          "Could not switch widgets off, the geometry engine could not be told. Error: disk full",
+          "Could not switch widgets off, the geometry engine could not be told. disk full",
         ),
       );
       await flushPromises();

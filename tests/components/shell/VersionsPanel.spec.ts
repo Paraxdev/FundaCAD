@@ -73,9 +73,23 @@ describe("Restore in the Versions panel", () => {
     const before = JSON.stringify(store.document);
     await restoreRow(w, "two");
     expect(JSON.stringify(store.document)).toBe(before);
-    expect(vi.mocked(toast).mock.calls.map((c) => c[1])).toEqual([{ kind: "error" }]);
+    expect(vi.mocked(toast).mock.calls.map((c) => c[1])).toEqual([{ kind: "error", detail: expect.any(Error) }]);
     expect(vi.mocked(toast).mock.calls[0]![0]).toContain("two");
     expect(vi.mocked(toast).mock.calls[0]![0]).toContain("missing a feature");
+  });
+
+  it("says a failed restore in plain words when the cause is internal, and keeps the raw error in the detail", async () => {
+    const { store } = twoVersions();
+    const raw = new TypeError("Cannot read properties of undefined (reading 'tree')");
+    vi.spyOn(store, "restoreVersion").mockImplementation(() => {
+      throw raw;
+    });
+    const w = mountPanel(store);
+    await restoreRow(w, "one");
+    const [text, opts] = vi.mocked(toast).mock.calls[0]!;
+    expect(text).toContain("one");
+    expect(text).not.toMatch(/TypeError|tree|undefined/);
+    expect(opts).toEqual({ kind: "error", detail: raw });
   });
 
   it("restores the readable version next to it and says so", async () => {
@@ -84,7 +98,9 @@ describe("Restore in the Versions panel", () => {
     const w = mountPanel(store);
     await restoreRow(w, "one");
     expect(store.document.features).toEqual([box("f1", 10.5)]);
-    expect(vi.mocked(toast).mock.calls.map((c) => c[1])).toEqual([expect.objectContaining({ action: expect.anything() })]);
+    expect(vi.mocked(toast).mock.calls.map((c) => c[1])).toEqual([
+      expect.objectContaining({ action: expect.anything() }),
+    ]);
     expect(vi.mocked(toast).mock.calls[0]![0]).toContain("one");
   });
 

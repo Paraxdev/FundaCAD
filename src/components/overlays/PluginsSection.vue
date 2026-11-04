@@ -29,6 +29,7 @@ import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/r
 import { updateFor } from "../../plugins/updates";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
+import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 
 const suggested = ref<OfficialPlugin[]>(officialPlugins());
 
@@ -61,9 +62,13 @@ onUnmounted(() => offPlugins?.());
 
 function toggle(id: string, run: boolean, name: string) {
   setPluginEnabled(id, run).catch((err: unknown) =>
-    toast(`Could not switch ${name} ${run ? "on" : "off"}, the geometry engine could not be told. ${String(err)}`, {
-      kind: "error",
-    }),
+    toast(
+      `Could not switch ${name} ${run ? "on" : "off"}, the geometry engine could not be told. ${plainError(err, SEE_CONSOLE)}`,
+      {
+        kind: "error",
+        detail: err,
+      },
+    ),
   );
   readState();
 }
@@ -193,8 +198,8 @@ async function accept(plugin: OfficialPlugin, done: "installed" | "updated" = "i
     await refresh();
     toast(`${plugin.manifest.name} is ${done}.`);
   } catch (err) {
-    // Shown in full: every refusal names itself, and "install failed" cannot be told from a flat network.
-    toast(`Could not install ${plugin.manifest.name}. ${String(err)}`, { kind: "error" });
+    // A refusal names itself, so its own sentence is kept: "install failed" cannot be told from a flat network.
+    toast(`Could not install ${plugin.manifest.name}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
   } finally {
     busy.value = "";
   }
@@ -207,7 +212,7 @@ async function read(from: () => Promise<Candidate | null>) {
   try {
     candidate.value = await from();
   } catch (err) {
-    toast(`Could not read that plugin. ${String(err)}`, { kind: "error" });
+    toast(`Could not read that plugin. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
   } finally {
     reading.value = false;
   }
@@ -234,7 +239,7 @@ async function acceptCandidate(c: Candidate) {
     await refresh();
     toast(`${c.manifest.name} is installed.`);
   } catch (err) {
-    toast(`Could not install ${c.manifest.name}. ${String(err)}`, { kind: "error" });
+    toast(`Could not install ${c.manifest.name}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
   } finally {
     busy.value = "";
   }
@@ -254,7 +259,7 @@ async function drop(id: string, name: string) {
     await refresh();
     toast(`${name} is removed.`);
   } catch (err) {
-    toast(`Could not remove ${name}. ${String(err)}`, { kind: "error" });
+    toast(`Could not remove ${name}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
   } finally {
     busy.value = "";
   }
