@@ -230,7 +230,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           return true;
         }
         const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
-        if (!spec || opts.roundFace) return treePickRefusal(pick, opts.roundFace ? "a round face" : "a plane or a face");
+        if (!spec || opts.roundFace)
+          return treePickRefusal(pick, opts.roundFace ? "a round face" : "a plane or a face");
         cleanup();
         deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
         return true;

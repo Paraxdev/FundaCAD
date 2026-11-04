@@ -104,10 +104,14 @@ export class TargetEditTool {
     // and reselects underneath this tool's set.
     el.addEventListener("pointerdown", this.boundDown, true);
     window.addEventListener("keydown", this.boundKey, true);
-    this.releaseRows = awaitTreePick((pick) => this.takeRow(pick), () => this.cancel(), {
-      keepsOnRewind: true,
-      keepsOnCommand: true,
-    });
+    this.releaseRows = awaitTreePick(
+      (pick) => this.takeRow(pick),
+      () => this.cancel(),
+      {
+        keepsOnRewind: true,
+        keepsOnCommand: true,
+      },
+    );
     setPrompt("Rolling back to edit…");
 
     // A committed fillet has eaten its own edges, so roll back to just before the

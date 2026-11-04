@@ -397,7 +397,10 @@ describe("a face or an edge row from the Geometry list", () => {
     const settle = () => new Promise<void>((r) => setTimeout(r, 0));
     const ownerOf = (id: number) => (id === 99 ? null : id > 20 ? "b3" : "b2");
     const slantedEdge = (body: string, points: Vec3[]) =>
-      ({ kind: "edge", edge: { id: `${body}:4`, body, points, smooth: false, slot: 4 } as unknown as EdgeRef }) as const;
+      ({
+        kind: "edge",
+        edge: { id: `${body}:4`, body, points, smooth: false, slot: 4 } as unknown as EdgeRef,
+      }) as const;
     const edgeOnB3: Vec3[] = [
       [3, -4, 7.5],
       [9, -1, 12],
