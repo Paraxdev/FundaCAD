@@ -8,6 +8,9 @@ import { FEATURE_TARGETS, type TargetField } from "../../src/features/selectionT
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector } from "../../src/types";
+import { awaitTreePick, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import { polylineMid } from "../../src/viewport/edgeMatch";
+import type { EdgeRef } from "../../src/viewport/edgeLines";
 
 const POINT: [number, number, number] = [1, 2, 3];
 const SAVED: Selector = { kind: "face", by: "nearest", point: [0, 0, 15] };
@@ -123,5 +126,163 @@ describe("TargetEditTool", () => {
     h.click();
     h.tool.commit();
     expect(h.patches).toEqual([{ faces: [SAVED, { kind: "face", by: "nearest", point: POINT }] }]);
+  });
+});
+
+type P3 = [number, number, number];
+const edgeOf = (a: P3, b: P3, body = "body1") => ({ points: [a, b], body }) as unknown as EdgeRef;
+const E1 = edgeOf([10, 20, 5], [14, 23, 5]);
+const E2 = edgeOf([-3, 8, 2], [-3, 8, 12], "body2");
+const mid = (e: EdgeRef) => polylineMid(e.points)!;
+const edgeSel = (e: EdgeRef) => ({ kind: "edge", by: "nearest", point: mid(e), body: (e as { body?: string }).body });
+
+// The rolled back model shows `drawn`, the list rows come from a finished model that may differ.
+function rowRig(feature: Feature, field: TargetField, drawn: EdgeRef[], bodies: string[], landed = true) {
+  const patches: Partial<Feature>[] = [];
+  const ended: boolean[] = [];
+  const hints: string[] = [];
+  const vp = {
+    suspendPicking: false,
+    selecting: "faces",
+    domElement: document.createElement("canvas"),
+    emphasizeEdges: () => {},
+    clearSelection: () => {},
+    setSelectionMode: () => {},
+    hoverEntity: () => {},
+    selectEdgeLines: () => {},
+    selectFaces: () => {},
+    setSelectedBodies: () => {},
+    faceIdNear: () => 11,
+    edgeLineByMid: (p: P3) => drawn.find((e) => Math.hypot(...(mid(e).map((v, i) => v - p[i]!) as P3)) <= 0.5) ?? null,
+  };
+  let build: (s: { building: boolean; result: object }) => void = () => {};
+  const store = {
+    document: { features: [feature] },
+    buildState: { result: { bodies: bodies.map((id) => ({ id })) } },
+    bodyName: (id: string) => id,
+    beginEditPreview: () => {},
+    endEditPreview: (restore?: boolean) => ended.push(restore ?? true),
+    updateFeature: (_id: string, p: Partial<Feature>) => patches.push(p),
+    onBuild(fn: typeof build) {
+      build = fn;
+      return () => {};
+    },
+  };
+  const tool = new TargetEditTool(vp as unknown as Viewport, store as unknown as DocumentStore);
+  tool.start(feature.id, field);
+  const land = () => build({ building: false, result: {} });
+  if (landed) land();
+  const row = (pick: TreePick) => routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
+  const entries = () => tool.rows().map((r) => r.entry);
+  return { tool, patches, ended, hints, land, row, entries };
+}
+
+const fillet = (edges: Selector[]) => ({ id: "f", type: "fillet", edges, radius: 1 }) as unknown as Feature;
+const filletField = FEATURE_TARGETS.fillet![0]!;
+const edgePick = (edge: EdgeRef): TreePick => ({ kind: "edge", edge });
+
+describe("TargetEditTool rows", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    resetTreePicks();
+  });
+
+  it("an edge row is added with its body, a row of the same edge again takes it out, many edges stack", () => {
+    const h = rowRig(fillet([]), filletField, [E1, E2], ["body1", "body2"]);
+    expect(h.row(edgePick(E1))).toBe("taken");
+    h.tool.commit();
+    expect(h.patches).toEqual([{ edges: [edgeSel(E1)] }]);
+
+    const g = rowRig(fillet([edgeSel(E1) as Selector]), filletField, [E1, E2], ["body1", "body2"]);
+    expect(g.row(edgePick(E2))).toBe("taken");
+    expect(g.entries()).toEqual([edgeSel(E1), edgeSel(E2)]);
+    expect(g.row(edgePick(E1))).toBe("taken");
+    expect(g.entries()).toEqual([edgeSel(E2)]);
+    g.tool.commit();
+    expect(g.patches).toEqual([{ edges: [edgeSel(E2)] }]);
+  });
+
+  it("a row of a kind the field does not take is refused and the set is unchanged", () => {
+    const h = rowRig(fillet([]), filletField, [E1], ["body1"]);
+    for (const pick of [
+      { kind: "body", id: "body1" },
+      { kind: "sketch", id: "sk" },
+      { kind: "face", faceId: 4 },
+    ] as TreePick[]) {
+      expect(h.row(pick)).toBe("refused");
+    }
+    expect(h.hints).toHaveLength(3);
+    expect(h.hints.every((t) => /edge/.test(t))).toBe(true);
+    expect(h.entries()).toEqual([]);
+  });
+
+  it("an edge the rolled back model does not have is refused, to the exact tolerance", () => {
+    const near = (dz: number) => edgeOf([10, 20, 5 + dz], [14, 23, 5 + dz]);
+    const h = rowRig(fillet([]), filletField, [E1], ["body1"]);
+    expect(h.row(edgePick(near(0.012)))).toBe("refused");
+    expect(h.row(edgePick(edgeOf([40, 1, 1], [41, 2, 3])))).toBe("refused");
+    expect(h.entries()).toEqual([]);
+    expect(h.row(edgePick(near(0.009)))).toBe("taken");
+    expect(h.entries()).toHaveLength(1);
+  });
+
+  it("a row before the roll back lands is refused, the next one after it is taken", () => {
+    const h = rowRig(fillet([]), filletField, [E1], ["body1"], false);
+    expect(h.row(edgePick(E1))).toBe("refused");
+    expect(h.entries()).toEqual([]);
+    h.land();
+    expect(h.row(edgePick(E1))).toBe("taken");
+    expect(h.entries()).toHaveLength(1);
+  });
+
+  it("a face field refuses a face row in words about the finished model, and an edge row as the wrong kind", () => {
+    const h = rowRig(shell([{ ...SAVED, body: "body1" }]), shellField, [E1], ["body1"]);
+    expect(h.row({ kind: "face", faceId: 3 })).toBe("refused");
+    expect(h.row(edgePick(E1))).toBe("refused");
+    expect(h.hints[0]).toMatch(/finished model/);
+    expect(h.hints[1]).toMatch(/face/);
+    expect(h.entries()).toEqual([{ ...SAVED, body: "body1" }]);
+  });
+
+  it("a one body field replaces its body, a many field adds and toggles, a folder adds what is missing", () => {
+    const ground = { id: "m", type: "mechanism", ground: "body1" } as unknown as Feature;
+    const one = rowRig(ground, FEATURE_TARGETS.mechanism![0]!, [], ["body1", "body2", "body3"]);
+    expect(one.row({ kind: "body", id: "body2" })).toBe("taken");
+    expect(one.entries()).toEqual(["body2"]);
+    expect(one.row({ kind: "bodies", ids: ["body1", "body3"] })).toBe("refused");
+    expect(one.entries()).toEqual(["body2"]);
+
+    const many = { id: "r", type: "removeBody", bodies: ["body2"] } as unknown as Feature;
+    const h = rowRig(many, FEATURE_TARGETS.removeBody![0]!, [], ["body1", "body2", "body3"]);
+    expect(h.row({ kind: "body", id: "body3" })).toBe("taken");
+    expect(h.entries()).toEqual(["body2", "body3"]);
+    expect(h.row({ kind: "bodies", ids: ["body1", "body2", "body3"] })).toBe("taken");
+    expect(h.entries()).toEqual(["body2", "body3", "body1"]);
+    expect(h.row({ kind: "bodies", ids: ["body1", "body2", "body3"] })).toBe("taken");
+    expect(h.entries()).toEqual([]);
+    expect(h.row({ kind: "body", id: "body9" })).toBe("refused");
+    expect(h.row({ kind: "bodies", ids: [] })).toBe("refused");
+    expect(h.entries()).toEqual([]);
+  });
+
+  it("the rows go with the tool: none after a cancel, a second edit starts clean, another pick ends it", () => {
+    const h = rowRig(fillet([edgeSel(E1) as Selector]), filletField, [E1, E2], ["body1", "body2"]);
+    expect(treePickWaiting()).toBe(true);
+    h.tool.cancel();
+    expect(treePickWaiting()).toBe(false);
+    expect(h.ended).toEqual([true]);
+
+    const g = rowRig(fillet([]), filletField, [E1, E2], ["body1", "body2"]);
+    expect(g.entries()).toEqual([]);
+    expect(g.row(edgePick(E2))).toBe("taken");
+    expect(g.entries()).toEqual([edgeSel(E2)]);
+    expect(h.entries()).toEqual([]);
+
+    awaitTreePick(
+      () => true,
+      () => {},
+    );
+    expect(g.tool.active).toBe(false);
+    expect(g.ended).toEqual([true]);
   });
 });
