@@ -36,6 +36,7 @@ const glyph = (cIndex: number, icon = "perpendicular"): ConstraintGlyph => ({
 });
 
 const badges = () => document.querySelectorAll<HTMLElement>(".sketch-glyph");
+const FOCUSABLE = "a[href],button,input,select,textarea,[tabindex],[contenteditable]";
 
 describe("SketchGlyphLayer", () => {
   beforeEach(() => {
@@ -188,5 +189,17 @@ describe("SketchGlyphLayer", () => {
     badges()[0]!.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }));
     expect(forwardWheel).toHaveBeenCalledTimes(1);
     expect((forwardWheel.mock.calls[0]![0] as WheelEvent).deltaY).toBe(-120);
+  });
+
+  it.each([0, 1, 4])("hides %i glyphs from screen readers with nothing focusable, yet not inert", async (n) => {
+    mount(SketchGlyphLayer, { attachTo: document.body });
+    const glyphs = Array.from({ length: n }, (_, i) => glyph(i + 3, i % 2 ? "equal" : "perpendicular"));
+    new SketchGlyphs(viewport).show(glyphs, plane, new Set([4]), new Set());
+    await nextTick();
+    const root = document.querySelector<HTMLElement>(".sketch-glyphs")!;
+    expect(root.getAttribute("aria-hidden")).toBe("true");
+    expect(root.hasAttribute("inert")).toBe(false);
+    expect(badges()).toHaveLength(n);
+    expect(root.querySelectorAll(FOCUSABLE)).toHaveLength(0);
   });
 });

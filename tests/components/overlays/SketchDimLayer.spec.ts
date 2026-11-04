@@ -460,4 +460,38 @@ describe("SketchDimLayer", () => {
     labels()[0]!.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true }));
     expect(forwardWheel).toHaveBeenCalledTimes(1);
   });
+
+  // --- screen readers --------------------------------------------------------
+  const root = () => document.querySelector<HTMLElement>(".sketch-dims")!;
+  const FOCUSABLE = "a[href],button,input,select,textarea,[tabindex],[contenteditable]";
+
+  it("hides idle badges from screen readers with nothing focusable, yet not inert", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    dims().show([], plane, [extra({ key: "a" }), extra({ key: "b", valueMm: 17.5 })]);
+    await nextTick();
+    expect(labels()).toHaveLength(2);
+    expect(root().getAttribute("aria-hidden")).toBe("true");
+    expect(root().hasAttribute("inert")).toBe(false);
+    expect(root().querySelectorAll(FOCUSABLE)).toHaveLength(0);
+  });
+
+  it("exposes the layer while a badge editor is open and hides it again on close", async () => {
+    const input = await openEditor({ valueMm: 23.5 });
+    expect(root().hasAttribute("aria-hidden")).toBe(false);
+    expect(root().querySelectorAll(FOCUSABLE)).toHaveLength(1);
+    expect(input.getAttribute("aria-label")).toBeTruthy();
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await nextTick();
+    expect(labels()[0]!.querySelector("input")).toBeNull();
+    expect(root().getAttribute("aria-hidden")).toBe("true");
+
+    labels()[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    labels()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await nextTick();
+    expect(root().hasAttribute("aria-hidden")).toBe(false);
+    labels()[0]!.querySelector("input")!.dispatchEvent(new FocusEvent("blur"));
+    await nextTick();
+    expect(root().getAttribute("aria-hidden")).toBe("true");
+  });
 });

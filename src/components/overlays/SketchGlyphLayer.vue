@@ -91,9 +91,15 @@ function onWheel(e: WheelEvent) {
 
 <template>
   <!-- Teleported: .sketch-glyphs is absolute, inset 0 against the initial containing block, and inside #app's grid
-  it would land behind the canvas. -->
+  it would land behind the canvas. Hidden from screen readers, the Relations list is the keyboard route; not inert,
+  which would stop the glyph click. -->
   <Teleport to="body">
-    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }" @wheel="onWheel">
+    <div
+      class="sketch-glyphs"
+      :class="{ 'glyphs-passive': s.glyphsPassive }"
+      aria-hidden="true"
+      @wheel="onWheel"
+    >
       <div
         v-for="(g, i) in s.glyphItems"
         :key="i"

@@ -327,9 +327,16 @@ function onWheel(e: WheelEvent) {
 </script>
 
 <template>
-  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. -->
+  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. Hidden from screen
+  readers (the Dimensions list is the keyboard route) but not inert, which would stop the pointer edit; the open editor
+  is a focusable field, so it is exposed while it exists. -->
   <Teleport to="body">
-    <div class="sketch-dims" :class="{ 'dims-passive': s.dimsPassive }" @wheel="onWheel">
+    <div
+      class="sketch-dims"
+      :class="{ 'dims-passive': s.dimsPassive }"
+      :aria-hidden="editing === null ? 'true' : undefined"
+      @wheel="onWheel"
+    >
       <div
         v-for="(l, i) in s.dimItems"
         :key="i"
