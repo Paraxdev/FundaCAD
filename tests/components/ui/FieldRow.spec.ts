@@ -6,7 +6,13 @@ import FieldRow from "../../../src/components/ui/FieldRow.vue";
 
 enableAutoUnmount(afterEach);
 
-type Slot = { id: string; labelId: string; describedby: string | undefined; invalid: boolean };
+type Slot = {
+  id: string;
+  labelId: string;
+  describedby: string | undefined;
+  errorId: string | undefined;
+  invalid: boolean;
+};
 
 function render(props: Record<string, unknown>) {
   return mount(FieldRow, {
@@ -50,17 +56,55 @@ describe("FieldRow", () => {
     expect(w.findAll("label").map((l) => l.attributes("for"))).toEqual([a, b]);
   });
 
-  it("describes the control by its hint, and by the error instead while there is one", async () => {
+  it("describes the control by its hint alone, and the error line replaces the hint and hides from browse mode", async () => {
     const w = render({ hint: "From the sketch plane" });
     const hint = w.find(".ui-field-hint");
     expect(w.find("input").attributes("aria-describedby")).toBe(hint.attributes("id"));
     expect(hint.text()).toBe("From the sketch plane");
+    expect(hint.attributes("aria-hidden")).toBeUndefined();
     await w.setProps({ error: "Must be above 0" });
     expect([
       w.find(".ui-field-hint").text(),
+      w.find(".ui-field-hint").attributes("aria-hidden"),
       w.classes("is-error"),
       w.find("input").attributes("aria-invalid"),
-    ]).toEqual(["Must be above 0", true, "true"]);
+      w.find("input").attributes("aria-describedby"),
+    ]).toEqual(["Must be above 0", "true", true, "true", undefined]);
+    await w.setProps({ error: undefined });
+    expect(w.find("input").attributes("aria-describedby")).toBe(w.find(".ui-field-hint").attributes("id"));
+    expect(w.find(".ui-field-hint").attributes("aria-hidden")).toBeUndefined();
+  });
+
+  it("hands the slot errorId only while there is an error, and the id names the error line", async () => {
+    const seen: (string | undefined)[] = [];
+    const w = mount(FieldRow, {
+      props: { label: "Mode", hint: "Pick one" },
+      slots: {
+        default: (s: Slot) => {
+          seen.push(s.errorId);
+          return h("button", { "aria-describedby": s.errorId });
+        },
+      },
+      attachTo: document.body,
+    });
+    expect(w.find("button").attributes("aria-describedby")).toBeUndefined();
+    await w.setProps({ error: "Choose a face" });
+    const id = w.find("button").attributes("aria-describedby");
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id as string)?.textContent?.trim()).toBe("Choose a face");
+    expect(id).not.toBe(w.find("label").attributes("id"));
+    await w.setProps({ error: "" });
+    expect(w.find("button").attributes("aria-describedby")).toBeUndefined();
+    expect(seen.at(-1)).toBeUndefined();
+  });
+
+  it("gives two rows with errors different error ids", () => {
+    const row = () =>
+      h(FieldRow, { label: "R", error: "Bad" }, { default: (s: Slot) => h("input", { "aria-describedby": s.errorId }) });
+    const w = mount({ render: () => h("form", [row(), row()]) });
+    const [a, b] = w.findAll("input").map((i) => i.attributes("aria-describedby"));
+    expect(a).toBeTruthy();
+    expect(a).not.toBe(b);
   });
 
   it("has no description without hint or error, and inline is the default layout", () => {

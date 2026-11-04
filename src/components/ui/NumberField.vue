@@ -85,7 +85,6 @@ const el = useTemplateRef<HTMLInputElement>("el");
 const d = useDisabled(props);
 const name = useName(props, "NumberField");
 const unitDef = computed(() => unitById(props.unit));
-const speech = useFieldSpeech({ unit: () => props.unit, callerDescribedby: () => attrs["aria-describedby"] });
 
 const spell = (v: number | null) => (v === null ? "" : String(toUnit(v, unitDef.value)));
 const caption = (v: number) =>
@@ -154,6 +153,13 @@ const { draft } = field;
 watch(field.error, (e) => emit("error", e));
 
 const shownError = computed(() => field.error.value ?? props.problem ?? null);
+const speech = useFieldSpeech({
+  el,
+  unit: () => props.unit,
+  error: shownError,
+  live: () => props.commit === "live",
+  callerDescribedby: () => attrs["aria-describedby"],
+});
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 
 function inputAttrs() {
@@ -237,6 +243,7 @@ function onKeydown(e: KeyboardEvent) {
       @update:unit="emit('update:unit', $event)"
     />
     <span v-if="speech.spokenUnit.value" :id="speech.unitId" class="sr-only">{{ speech.spokenUnit.value }}</span>
+    <span v-if="shownError" :id="speech.errorId" class="sr-only">{{ shownError }}</span>
     <slot name="trailing" />
   </span>
 </template>

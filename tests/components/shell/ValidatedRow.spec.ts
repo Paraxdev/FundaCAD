@@ -197,6 +197,26 @@ describe("ValidatedRow", () => {
     expect(w.get(".ui-field").classes()).toContain("is-error");
   });
 
+  it("hides its problem line from browse mode while the field describes and speaks the same reason", async () => {
+    const w = mountRow({ value: 10, unit: "mm", validate: (v) => (v < 3 ? "Width must be at least 3 mm" : null) });
+    const input = await type(w, "1.5");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(w.get(".param-problem").attributes("aria-hidden")).toBe("true");
+    const notes = (input.attributes("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent);
+    expect(notes).toEqual(["millimetres", "Width must be at least 3 mm"]);
+    await w.setProps({ problem: "The fillet is larger than the edge" });
+    await input.setValue("4");
+    expect(w.get(".param-problem").attributes("aria-hidden")).toBe("true");
+    expect(
+      (input.attributes("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent),
+    ).toEqual(["millimetres", "The fillet is larger than the edge"]);
+    await w.setProps({ problem: null });
+    expect(w.find(".param-problem").exists()).toBe(false);
+    expect(input.attributes("aria-describedby")?.split(" ")).toHaveLength(1);
+  });
+
   // --- the unit chip ---
   // The unit used to be appended to the LABEL, which produced rows reading
   // "Radius mm | 5in": a label is a name, and a unit is part of the value.

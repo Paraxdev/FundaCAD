@@ -67,6 +67,6 @@ function onValue(v: number | null) {
         @error="refused = $event"
       />
     </div>
-    <p v-if="refused || problem" class="param-problem">{{ refused ?? problem }}</p>
+    <p v-if="refused || problem" class="param-problem" aria-hidden="true">{{ refused ?? problem }}</p>
   </div>
 </template>

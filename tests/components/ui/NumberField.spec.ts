@@ -1,13 +1,17 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, mount, type DOMWrapper } from "@vue/test-utils";
+
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 
 import NumberField from "../../../src/components/ui/NumberField.vue";
+import { announce } from "../../../src/ui/announce";
 import { measureError, unitById } from "../../../src/ui/measure";
 import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 
 enableAutoUnmount(afterEach);
 afterEach(() => vi.useRealTimers());
+beforeEach(() => vi.mocked(announce).mockClear());
 
 type Props = InstanceType<typeof NumberField>["$props"];
 
@@ -572,5 +576,163 @@ describe("NumberField unit description", () => {
     expect(caption.w.get(".ui-unit-chip").attributes("aria-hidden")).toBe("true");
     const picker = await render({ unit: "mm", units: ["mm", "in"] });
     expect(picker.w.get(".ui-unit-chip").attributes("aria-hidden")).toBeUndefined();
+  });
+});
+
+describe("NumberField refusal", () => {
+  const described = (el: HTMLInputElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+  const spoken = () => vi.mocked(announce).mock.calls;
+
+  it("describes a refused value on the field after its unit, and drops it once the text is fixed", async () => {
+    const { el, input } = await render({ unit: "mm", min: 2.5, modelValue: 7 });
+    await commit(input, "1.75");
+    expect(el.getAttribute("aria-invalid")).toBe("true");
+    expect(described(el)).toEqual(["millimetres", "At least 2.5 mm"]);
+    await input.setValue("3.5");
+    expect(el.getAttribute("aria-invalid")).toBeNull();
+    expect(described(el)).toEqual(["millimetres"]);
+    expect(el.getAttribute("aria-describedby")).not.toContain("error");
+  });
+
+  it("describes a reason that came from outside the same way, and a caller's ids come last", async () => {
+    const { w, el } = await render({ unit: "deg", modelValue: 33, "aria-describedby": "hint-a hint-b" });
+    expect(described(el)).toEqual(["degrees", "?", "?"]);
+    await w.setProps({ problem: "Cannot cut that deep" });
+    expect(el.getAttribute("aria-describedby")?.split(" ").slice(2)).toEqual(["hint-a", "hint-b"]);
+    expect(described(el).slice(0, 2)).toEqual(["degrees", "Cannot cut that deep"]);
+    await w.setProps({ problem: null });
+    expect(el.getAttribute("aria-describedby")).toMatch(/^\S+-unit hint-a hint-b$/);
+  });
+
+  it("describes a refusal on a field with no unit as the only description", async () => {
+    const { el, input } = await render({ min: 2, modelValue: 6 });
+    expect(el.getAttribute("aria-describedby")).toBeNull();
+    await commit(input, "1");
+    expect(described(el)).toEqual(["At least 2"]);
+  });
+
+  it("gives each field in one app its own error id", async () => {
+    const Two = defineComponent({
+      render: () => [
+        h(NumberField, { modelValue: 6, label: "A", min: 2, class: "a" }),
+        h(NumberField, { modelValue: 9, label: "B", min: 3, class: "b" }),
+      ],
+    });
+    const w = mount(Two, { attachTo: document.body });
+    await new Promise((r) => setTimeout(r, 2));
+    const [a, b] = w.findAll("input") as [DOMWrapper<HTMLInputElement>, DOMWrapper<HTMLInputElement>];
+    await commit(a, "1");
+    await commit(b, "2");
+    const els = [a.element, b.element] as const;
+    expect(els[0].getAttribute("aria-describedby")).not.toBe(els[1].getAttribute("aria-describedby"));
+    expect(els.map(described)).toEqual([["At least 2"], ["At least 3"]]);
+  });
+
+  it("speaks a refusal once on Enter, without the name while the field has focus", async () => {
+    const { el, input } = await render({ unit: "mm", min: 2.5, modelValue: 7, label: "Width" });
+    el.focus();
+    await commit(input, "1.75");
+    expect(spoken()).toEqual([["At least 2.5 mm", "assertive"]]);
+    await input.trigger("keydown", { key: "Enter" });
+    expect(spoken()).toHaveLength(1);
+  });
+
+  it("speaks again for a new refusal after a valid commit, and each time the text is typed again", async () => {
+    const { el, input } = await render({ min: 2, modelValue: 7, label: "Width" });
+    el.focus();
+    expect(spoken()).toHaveLength(0);
+    await commit(input, "1");
+    expect(spoken()).toHaveLength(1);
+    await commit(input, "5");
+    expect(spoken()).toHaveLength(1);
+    await commit(input, "0.5");
+    expect(spoken()).toHaveLength(2);
+    await commit(input, "0.25");
+    expect(spoken()).toHaveLength(3);
+  });
+
+  it("names the field when a blur commits the refusal with focus elsewhere", async () => {
+    const { input } = await render({ unit: "mm", min: 2.5, modelValue: 7, label: "Width" });
+    await input.setValue("1.75");
+    await input.trigger("blur");
+    expect(spoken()).toEqual([["Width, At least 2.5 mm", "assertive"]]);
+  });
+
+  it("names the field from the text of its labelledby ids", async () => {
+    const lab = document.createElement("span");
+    lab.id = "w-lab";
+    lab.textContent = "Wall thickness";
+    document.body.append(lab);
+    const { input } = await render({ label: undefined, labelledby: "w-lab", min: 2, modelValue: 7 });
+    await input.setValue("1");
+    await input.trigger("blur");
+    lab.remove();
+    expect(spoken()).toEqual([["Wall thickness, At least 2", "assertive"]]);
+  });
+
+  it("speaks a reason from outside once, and again after it was withdrawn", async () => {
+    const { w } = await render({ modelValue: 4 });
+    await w.setProps({ problem: "Cannot cut that deep" });
+    await w.setProps({ problem: "Cannot cut that deep, 2" });
+    expect(spoken()).toEqual([["Depth, Cannot cut that deep", "assertive"]]);
+    await w.setProps({ problem: null });
+    await w.setProps({ problem: "Too thin" });
+    expect(spoken()).toHaveLength(2);
+  });
+
+  describe("in live mode", () => {
+    async function live() {
+      const r = await render({ commit: "live", unit: "mm", min: 2.5, max: 100, modelValue: 7, label: "Width" });
+      r.el.focus();
+      vi.useFakeTimers();
+      return r;
+    }
+
+    it("speaks nothing for text that is fixed inside the pause", async () => {
+      const { input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(699);
+      await input.setValue("12");
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toEqual([]);
+    });
+
+    it("speaks the reason once the pause ends, not a moment before", async () => {
+      const { input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(699);
+      expect(spoken()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(spoken()).toEqual([["At least 2.5 mm", "assertive"]]);
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toHaveLength(1);
+    });
+
+    it("says the reason current when the pause ends and not again for a changed reason", async () => {
+      const { input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(300);
+      await input.setValue("200");
+      vi.advanceTimersByTime(399);
+      expect(spoken()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(spoken()).toEqual([["At most 100 mm", "assertive"]]);
+      await input.setValue("300");
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toHaveLength(1);
+    });
+
+    it("speaks nothing when the field goes away inside the pause", async () => {
+      const { w, input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(400);
+      w.unmount();
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toEqual([]);
+    });
   });
 });

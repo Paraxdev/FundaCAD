@@ -296,18 +296,23 @@ describe("filters", () => {
     expect(options(w).length).toBe(4);
   });
 
-  it("says why a size is refused, as the field's description and aloud", async () => {
+  it("says why a size is refused as the field's description, and only the field says it aloud", async () => {
     const { w } = await open(mixed);
     const input = w.getComponent(NumberField).get("input");
     vi.mocked(announce).mockClear();
+    vi.useFakeTimers();
     await input.setValue("-5");
     await nextTick();
+    expect(vi.mocked(announce).mock.calls).toEqual([]);
+    vi.advanceTimersByTime(700);
+    vi.useRealTimers();
     expect(input.attributes("aria-invalid")).toBe("true");
     const notes = (input.attributes("aria-describedby") ?? "")
       .split(" ")
       .map((id) => document.getElementById(id)?.textContent);
     expect(notes).toEqual(["millimetres", "At least 0 mm"]);
-    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["At least 0 mm"]);
+    expect(vi.mocked(announce).mock.calls).toEqual([["Size at least, At least 0 mm", "assertive"]]);
+    expect(w.get(".ui-field-hint").attributes("aria-hidden")).toBe("true");
     expect(options(w).length).toBe(4);
     const kind = w.getComponent({ name: "Segmented" });
     await kind.vm.$emit("update:modelValue", "planes");
