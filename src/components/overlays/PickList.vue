@@ -22,8 +22,8 @@ const names = computed(() => distinctNames(props.rows.map((r) => r.label)));
 defineEmits<{
   clear: [];
   remove: [i: number];
-  enter: [i: number];
-  leave: [];
+  hover: [i: number | null];
+  focus: [i: number | null];
   pick: [i: number];
 }>();
 </script>
@@ -51,10 +51,10 @@ defineEmits<{
           class="tgt-label"
           :label="names[i]!"
           :selected="held === i"
-          @focus="$emit('enter', i)"
-          @blur="$emit('leave')"
-          @pointerenter="$emit('enter', i)"
-          @pointerleave="$emit('leave')"
+          @focus="$emit('focus', i)"
+          @blur="$emit('focus', null)"
+          @pointerenter="$emit('hover', i)"
+          @pointerleave="$emit('hover', null)"
           @click="$emit('pick', i)"
         />
         <span v-else class="tgt-label">{{ names[i] }}</span>

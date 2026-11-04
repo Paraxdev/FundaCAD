@@ -142,6 +142,55 @@ describe("TargetEditPanel", () => {
     expect(tool.hoverAt.mock.calls.slice(2)).toEqual([[1], [0], [1]]);
   });
 
+  it("falls back from a pointer leaving to the focused row, then to the pinned one, then to none", async () => {
+    const tool = fakeTool([
+      { label: "Face 3", resolved: true },
+      { label: "Edge 11 of Lid", resolved: true },
+      { label: "Face 9", resolved: true },
+    ]);
+    mountWith(tool);
+    const rows = $(".tgt-item .tgt-label");
+    rows[2]!.dispatchEvent(new PointerEvent("pointerenter"));
+    rows[2]!.dispatchEvent(new PointerEvent("pointerleave"));
+    rows[0]!.click();
+    await nextTick();
+    rows[1]!.focus();
+    rows[2]!.dispatchEvent(new PointerEvent("pointerenter"));
+    rows[2]!.dispatchEvent(new PointerEvent("pointerleave"));
+    rows[1]!.blur();
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [null], [0], [1], [2], [1], [0]]);
+  });
+
+  it("forgets the focused and pinned rows when a row is removed or the list cleared", async () => {
+    const tool = fakeTool([
+      { label: "Face 3", resolved: true },
+      { label: "Edge 11 of Lid", resolved: true },
+      { label: "Face 9", resolved: true },
+    ]);
+    mountWith(tool);
+    const rows = $(".tgt-item .tgt-label");
+    const hoverOut = (i: number) => {
+      rows[i]!.dispatchEvent(new PointerEvent("pointerenter"));
+      rows[i]!.dispatchEvent(new PointerEvent("pointerleave"));
+    };
+    rows[2]!.click();
+    rows[1]!.focus();
+    $(".tgt-remove")[0]!.click();
+    await nextTick();
+    hoverOut(0);
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [1], [null], [0], [null]]);
+    rows[1]!.blur();
+    tool.hoverAt.mockClear();
+    rows[2]!.click();
+    rows[1]!.focus();
+    $(".tgt-clear")[0]!.click();
+    await nextTick();
+    hoverOut(2);
+    expect(tool.clear).toHaveBeenCalledTimes(1);
+    expect(tool.hoverAt.mock.calls).toEqual([[2], [1], [2], [null]]);
+    expect($(".tgt-item .is-selected")).toEqual([]);
+  });
+
   it("leaves Enter and Escape to the tool, the row button handling neither itself", async () => {
     const tool = fakeTool([{ label: "Face 3", resolved: true }]);
     mountWith(tool);
