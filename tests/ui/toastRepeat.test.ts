@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useToastStore } from "../../src/stores/toasts";
 import { dismissToastsSaying, hintToast, toast } from "../../src/ui/toast";
+import { noticeHoldMs } from "../../src/ui/noticeTime";
 
 // the toast store times its rows with window.setTimeout
 (globalThis as Record<string, unknown>).window ??= globalThis;
@@ -54,7 +55,7 @@ describe("a hint", () => {
 
   it("is not shown again while the same words are up, and is once they have gone", () => {
     hintToast("Pick a flat face");
-    vi.advanceTimersByTime(3400);
+    vi.advanceTimersByTime(noticeHoldMs("info", false)! - 100);
     hintToast("Pick a flat face");
     hintToast("Finish the active tool first");
     expect(showing()).toEqual(["Pick a flat face", "Finish the active tool first"]);

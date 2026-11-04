@@ -199,6 +199,8 @@ function rowRig(feature: Feature, field: TargetField, drawn: EdgeRef[], bodies: 
     selectFaces: () => {},
     setSelectedBodies: () => {},
     faceIdNear: () => 11,
+    faceIdToBodyId: () => "body2",
+    localFaceOf: (id: number) => id,
     facesForPressPull: (ids: number[]) =>
       ids[0] === 3 ? { anchor: { x: 12.5, y: -7, z: 4 }, normal: { x: 0.6, y: 0, z: 0.8 }, bodyId: "body2" } : null,
     faceSelectorOf: (id: number) => ({ kind: "face", by: "nearest", point: [12.5 + id, -7, 4], body: "body2" }),
