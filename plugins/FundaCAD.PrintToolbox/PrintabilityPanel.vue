@@ -190,6 +190,8 @@ const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
               <ListRow
                 class="printability-finding"
                 :label="r.text"
+                :hint="r.hint"
+                :aria-label="r.spoken"
                 :selected="d.picked === r.index"
                 @click="ctl.pick(r.index)"
                 @focus="light(pointerOn, r.index)"

@@ -22,7 +22,7 @@ Printability looks through the model and lists what is likely to go wrong when y
 
 ## Read the findings
 
-Findings are listed per body, each with a colour that matches its tint in the view. A legend under the list names the colours.
+Findings are listed per body, each with a colour that matches its tint in the view. A legend under the list names the colours. Under each finding is its place: the face number, as the Geometry tab shows it, and how high above the bed it sits. A finding between two faces names both.
 
 1. Hover a finding, or Tab to it, to pick out its face.
 2. Click a finding, or press Enter on it, to turn the view to it. The finding you picked stays marked as current.

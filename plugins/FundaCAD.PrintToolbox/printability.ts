@@ -123,6 +123,10 @@ export interface FindingRow {
   index: number;
   kind: PrintabilityKind;
   text: string;
+  /** Face and height above the bed, shown under the text. */
+  hint: string;
+  /** The text and the place, as the row is named to a screen reader. */
+  spoken: string;
 }
 
 export interface BodyGroup {
@@ -194,6 +198,31 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
   return f.note ? `${text}, ${f.note}` : text;
 }
 
+/** Where a finding sits, by face number (what the Geometry tab shows) and height above its body's bed. `hint` starts
+ *  with a capital, `spoken` is lower case to follow other words. A body the reply does not list has no height. */
+export function findingPlace(
+  f: PrintabilityFinding,
+  bodies: PrintabilityReply["bodies"],
+  nameOf: (id: string) => string,
+): { hint: string; spoken: string } {
+  let faces = `face ${f.face + 1}`;
+  if (f.other) {
+    faces =
+      f.other.body === f.body
+        ? `faces ${f.face + 1} and ${f.other.face + 1}`
+        : `${faces} and face ${f.other.face + 1} of ${nameOf(f.other.body)}`;
+  }
+  const b = bodies.find((x) => x.id === f.body);
+  const parts = [faces];
+  if (b && (b.up[0] !== 0 || b.up[1] !== 0 || b.up[2] !== 0)) {
+    const h = f.at[0] * b.up[0] + f.at[1] * b.up[1] + f.at[2] * b.up[2] - b.bed;
+    // Under a thousandth of a millimetre is the bed itself.
+    parts.push(h < 0.001 ? "on the bed" : `${mm(h)} above the bed`);
+  }
+  const spoken = parts.join(", ");
+  return { hint: spoken.charAt(0).toUpperCase() + spoken.slice(1), spoken };
+}
+
 /** The kinds in the legend's order, which is also the order of KIND_COLORS. */
 export const KIND_ORDER = Object.keys(KIND_COLORS) as PrintabilityKind[];
 
@@ -222,7 +251,9 @@ export function formatPrintabilityResult(
   }
   const kinds = new Set<PrintabilityKind>();
   r.findings.forEach((f, index) => {
-    groupOf(f.body).rows.push({ index, kind: f.kind, text: findingText(f, nameOf) });
+    const text = findingText(f, nameOf);
+    const place = findingPlace(f, r.bodies, nameOf);
+    groupOf(f.body).rows.push({ index, kind: f.kind, text, hint: place.hint, spoken: `${text}, ${place.spoken}` });
     kinds.add(f.kind);
   });
   const errors = (r.errors ?? []).map((e) => (e.feature_id ? `${e.feature_id}: ${e.message}` : e.message));

@@ -170,7 +170,7 @@ describe("PrintabilityPanel", () => {
     await flushPromises();
     expect(q(".printability-header")?.textContent).toBe("+Z up as modelled, bed at z = 0");
     expect(qa(".printability-body").map((e) => e.textContent)).toEqual(["Bracket", "Lid", "Pin"]);
-    expect(qa(".printability-finding").map((e) => e.textContent)).toEqual([
+    expect(qa(".printability-finding").map((e) => e.querySelector(".ui-list-row-label")!.textContent)).toEqual([
       "Overhang, 132 mm² leaning 90°",
       "Bridge 14 mm span (over 10)",
     ]);
@@ -191,7 +191,18 @@ describe("PrintabilityPanel", () => {
     const rows = qa(".printability-finding");
     expect(rows.map((e) => e.tagName)).toEqual(["BUTTON", "BUTTON"]);
     expect(rows.map((e) => e.parentElement!.tagName)).toEqual(["LI", "LI"]);
-    expect(rows.map((e) => e.textContent)).toEqual(["Overhang, 132 mm² leaning 90°", "Bridge 14 mm span (over 10)"]);
+    expect(rows.map((e) => e.querySelector(".ui-list-row-label")!.textContent)).toEqual([
+      "Overhang, 132 mm² leaning 90°",
+      "Bridge 14 mm span (over 10)",
+    ]);
+    expect(rows.map((e) => e.querySelector(".ui-list-row-hint")!.textContent)).toEqual([
+      "Face 4, 5 mm above the bed",
+      "Face 5, 8 mm above the bed",
+    ]);
+    expect(rows.map((e) => e.getAttribute("aria-label"))).toEqual([
+      "Overhang, 132 mm² leaning 90°, face 4, 5 mm above the bed",
+      "Bridge 14 mm span (over 10), face 5, 8 mm above the bed",
+    ]);
     expect(rows.map((e) => e.querySelector("[aria-hidden='true']") !== null)).toEqual([true, true]);
   });
 
@@ -231,7 +242,9 @@ describe("PrintabilityPanel", () => {
     p.setFocus("picked", 1);
     p.finished({ result: formatPrintabilityResult({ ...reply, findings: [reply.findings[1]!] }) });
     await flushPromises();
-    expect(qa(".printability-finding").map((e) => e.textContent)).toEqual(["Bridge 14 mm span (over 10)"]);
+    expect(qa(".printability-finding").map((e) => e.getAttribute("aria-label"))).toEqual([
+      "Bridge 14 mm span (over 10), face 5, 8 mm above the bed",
+    ]);
     expect(qa(".printability-finding").map((e) => e.getAttribute("aria-current"))).toEqual([null]);
   });
 
