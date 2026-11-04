@@ -1,6 +1,6 @@
 # Reading the stress result
 
-When a run finishes, the Results tab opens. The part is coloured from low stress in blue to high stress in red, and drawn bent, larger than it really bends. Set up takes you back to the inputs.
+When a run finishes, the Results tab opens. The part is coloured from low stress in dark violet to high stress in bright yellow, and drawn bent, larger than it really bends. Set up takes you back to the inputs.
 
 ![The Stress panel listing peak stress, deflection and safety factor beside the bracket coloured blue to red](../img/stress-results.png)
 

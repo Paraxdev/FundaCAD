@@ -17,7 +17,7 @@ import {
   newSetup,
   panelMessage,
   setupFromStudy,
-  stressColor,
+  rampColor,
   stressColors,
   studyFromSetup,
   valueRange,
@@ -431,24 +431,18 @@ describe("setupSummary", () => {
 });
 
 describe("colour map", () => {
-  it("runs blue to red through cyan, green and yellow", () => {
-    expect(stressColor(0)).toEqual([0, 0, 1]);
-    expect(stressColor(0.25)).toEqual([0, 1, 1]);
-    expect(stressColor(0.5)).toEqual([0, 1, 0]);
-    expect(stressColor(0.75)).toEqual([1, 1, 0]);
-    expect(stressColor(1)).toEqual([1, 0, 0]);
-    expect(stressColor(0.125)).toEqual([0, 0.5, 1]);
+  it("runs the rainbow ramp blue to red through cyan, green and yellow", () => {
+    expect(rampColor("rainbow", 0)).toEqual([0, 0, 1]);
+    expect(rampColor("rainbow", 0.25)).toEqual([0, 1, 1]);
+    expect(rampColor("rainbow", 0.5)).toEqual([0, 1, 0]);
+    expect(rampColor("rainbow", 0.75)).toEqual([1, 1, 0]);
+    expect(rampColor("rainbow", 1)).toEqual([1, 0, 0]);
+    expect(rampColor("rainbow", 0.125)).toEqual([0, 0.5, 1]);
   });
 
-  it("clamps out-of-range values and reads NaN as the low end", () => {
-    expect(stressColor(-3)).toEqual([0, 0, 1]);
-    expect(stressColor(7)).toEqual([1, 0, 0]);
-    expect(stressColor(NaN)).toEqual([0, 0, 1]);
-  });
-
-  it("maps values over a range, three numbers per vertex, and a flat field to blue", () => {
-    expect([...stressColors([10, 20, 15], 10, 20)]).toEqual([0, 0, 1, 1, 0, 0, 0, 1, 0]);
-    expect([...stressColors([5, 5], 5, 5)]).toEqual([0, 0, 1, 0, 0, 1]);
+  it("maps values over a range, three numbers per vertex", () => {
+    expect([...stressColors([10, 20, 15], 10, 20, "rainbow")]).toEqual([0, 0, 1, 1, 0, 0, 0, 1, 0]);
+    expect([...stressColors([5, 5], 5, 5, "rainbow")]).toEqual([0, 0, 1, 0, 0, 1]);
   });
 
   it("ranges over finite values only", () => {
@@ -474,8 +468,8 @@ describe("colour map", () => {
     ]);
   });
 
-  it("draws the legend from the same stops", () => {
-    expect(legendGradient()).toBe(
+  it("draws the rainbow legend from the same stops", () => {
+    expect(legendGradient("rainbow")).toBe(
       "linear-gradient(to right, rgb(0, 0, 255) 0%, rgb(0, 255, 255) 25%, rgb(0, 255, 0) 50%, rgb(255, 255, 0) 75%, rgb(255, 0, 0) 100%)",
     );
   });

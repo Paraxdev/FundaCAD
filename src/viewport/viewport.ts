@@ -3234,7 +3234,7 @@ export class Viewport {
   private clashMeshes: THREE.Mesh[] = [];
   private clearanceLines: THREE.Line[] = [];
 
-  /** The analysed body's surface coloured over `range` (blue low, red high) in its place, the body hidden
+  /** The analysed body's surface coloured over `range` (dark low, light high) in its place, the body hidden
    *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. `colours`
    *  false draws it in the body's own colour, and undeformed as well leaves the body itself on show, the surface
    *  kept only for stressOverlayPoint. Null clears, as does the next setModel. Tells onStressOverlayChange

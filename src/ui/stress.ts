@@ -640,35 +640,57 @@ function fmtForce(f: Vec3): string {
   return `${displayRound(f[0])}, ${displayRound(f[1])}, ${displayRound(f[2])} N`;
 }
 
-// Blue, cyan, green, yellow, red, in sRGB, evenly spaced: the usual FEA ramp,
-// low stress cold and the peak hot.
-const STOPS: readonly Vec3[] = [
-  [0, 0, 1],
-  [0, 1, 1],
-  [0, 1, 0],
-  [1, 1, 0],
-  [1, 0, 0],
+export type StressRamp = "perceptual" | "rainbow" | "greyscale";
+
+export const STRESS_RAMPS: readonly { value: StressRamp; label: string }[] = [
+  { value: "perceptual", label: "Perceptual" },
+  { value: "rainbow", label: "Rainbow" },
+  { value: "greyscale", label: "Greyscale" },
 ];
 
+const hex = (h: string): Vec3 => [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255) as Vec3;
+
+// Perceptual is viridis. Rainbow falls in lightness and merges green with orange for colour blind viewers, it stays as a choice.
+const RAMPS: Record<StressRamp, readonly Vec3[]> = {
+  perceptual: [
+    "#440154",
+    "#472d7b",
+    "#3b528b",
+    "#2c728e",
+    "#21918c",
+    "#28ae80",
+    "#5ec962",
+    "#addc30",
+    "#fde725",
+  ].map(hex),
+  rainbow: ["#0000ff", "#00ffff", "#00ff00", "#ffff00", "#ff0000"].map(hex),
+  greyscale: ["#262626", "#f2f2f2"].map(hex),
+};
+
 /** sRGB 0..1 for a value 0..1 along the ramp (clamped; NaN reads as 0). */
-export function stressColor(t: number): Vec3 {
+export function rampColor(ramp: StressRamp, t: number): Vec3 {
+  const stops = RAMPS[ramp];
   const c = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
-  const x = c * (STOPS.length - 1);
-  const i = Math.min(STOPS.length - 2, Math.floor(x));
+  const x = c * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(x));
   const f = x - i;
-  const a = STOPS[i]!;
-  const b = STOPS[i + 1]!;
+  const a = stops[i]!;
+  const b = stops[i + 1]!;
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 }
 
-/** One sRGB triple per value, mapped over [min, max]. A flat field (max = min)
- *  is all blue rather than a division by zero. */
-export function stressColors(values: ArrayLike<number>, min: number, max: number): Float32Array {
+/** One sRGB triple per value, mapped over [min, max]. A flat field (max = min) is all the low colour. */
+export function stressColors(
+  values: ArrayLike<number>,
+  min: number,
+  max: number,
+  ramp: StressRamp = "perceptual",
+): Float32Array {
   const out = new Float32Array(values.length * 3);
   const span = max - min;
   for (let i = 0; i < values.length; i++) {
     const t = span > 0 ? ((values[i] ?? min) - min) / span : 0;
-    const [r, g, b] = stressColor(t);
+    const [r, g, b] = rampColor(ramp, t);
     out[i * 3] = r;
     out[i * 3 + 1] = g;
     out[i * 3 + 2] = b;
@@ -677,9 +699,10 @@ export function stressColors(values: ArrayLike<number>, min: number, max: number
 }
 
 /** The legend's CSS gradient, left (low) to right (high), from the same stops. */
-export function legendGradient(): string {
-  const parts = STOPS.map((s, i) => {
-    const pct = (i / (STOPS.length - 1)) * 100;
+export function legendGradient(ramp: StressRamp = "perceptual"): string {
+  const stops = RAMPS[ramp];
+  const parts = stops.map((s, i) => {
+    const pct = (i / (stops.length - 1)) * 100;
     return `rgb(${s.map((v) => Math.round(v * 255)).join(", ")}) ${pct}%`;
   });
   return `linear-gradient(to right, ${parts.join(", ")})`;
