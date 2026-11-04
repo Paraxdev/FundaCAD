@@ -71,7 +71,7 @@ export function needsSave(e: SaveEngine): boolean {
 /** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
 function settleForSave(e: SaveEngine): void {
   settleHeldEdit(e);
-  if (anySavableHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
+  if (anySavableHeld(e)) toast("A drag you were holding could not be applied, so the save left it out", { kind: "warning" });
 }
 
 // Settled once the path is chosen, so a cancelled Save As dialog leaves the drag held and Escape still cancels it.
@@ -324,7 +324,7 @@ export function createDocumentActions(
     undoIfLatest(mark: number) {
       if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
       const latest = !e.tools.move.pending && !usePanelsStore().stress && e.store.undoMark === mark;
-      if (!latest) return void toast("Not undone, it is no longer the last step.");
+      if (!latest) return void toast("Not undone, other changes were made after that step.");
       actions.doUndo();
     },
   };

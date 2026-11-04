@@ -325,7 +325,7 @@ export class ModifyFlow {
    *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
   moveClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select entities first, then Move/Copy");
+      toast("Select something first, then use Move or Copy");
       return;
     }
     if (!this.moveBase) {
@@ -357,7 +357,7 @@ export class ModifyFlow {
   /** Rotate the selection about a clicked center by a typed angle (degrees). */
   rotateClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select entities first, then Rotate");
+      toast("Select something first, then use Rotate");
       return;
     }
     const cx = p.x,
@@ -373,7 +373,7 @@ export class ModifyFlow {
   /** Scale the selection about a clicked base point by a typed factor. */
   scaleClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select entities first, then Scale");
+      toast("Select something first, then use Scale");
       return;
     }
     const cx = p.x,
@@ -413,11 +413,11 @@ export class ModifyFlow {
     // Nothing may end in silence here: the user is mid-gesture, and a tool that
     // does nothing without saying why reads as broken.
     if (e.type === "text") {
-      toast("Offset doesn't apply to sketch text");
+      toast("Offset does not work on sketch text");
       return;
     }
     if (e.type === "point") {
-      toast("Offset needs a curve, not a point");
+      toast("Offset needs a line or curve, not a point");
       return;
     }
     this.beginOffset(idx, []);
@@ -540,7 +540,7 @@ export class ModifyFlow {
     }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     if (!res) {
-      toast("Offset: that distance collapses the geometry");
+      toast("Offset: that distance would collapse the shape");
       this.cancelOffset();
       return;
     }

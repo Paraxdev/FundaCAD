@@ -368,7 +368,7 @@ describe("the list of what is installed", () => {
       expect(pluginEnabled("widgets")).toBe(false);
       await vi.waitFor(() =>
         expect(errorNotice()?.message).toBe(
-          "Could not switch widgets off, the geometry engine could not be told. disk full",
+          "Could not switch widgets off, FundaCAD could not apply the change. disk full",
         ),
       );
       await flushPromises();

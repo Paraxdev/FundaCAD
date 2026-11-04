@@ -332,7 +332,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store.onParamsApplied = () => e.sketch.syncParamValues();
   // The open sketch's session owns it, so its projection refreshes patch the live entities.
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
-  e.store.onParamSolveIssue = (id) => toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
+  e.store.onParamSolveIssue = (id) => toast(`The dimensions in ${id} conflict, so the sketch was left as it was`);
   // Glyph outlines arrive async from the engine, which owns the fonts.
   setTextBackend(e.geometry, () => {
     if (e.sketch.active) e.sketch.redraw();

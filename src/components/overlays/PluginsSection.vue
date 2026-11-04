@@ -63,7 +63,7 @@ onUnmounted(() => offPlugins?.());
 function toggle(id: string, run: boolean, name: string) {
   setPluginEnabled(id, run).catch((err: unknown) =>
     toast(
-      `Could not switch ${name} ${run ? "on" : "off"}, the geometry engine could not be told. ${plainError(err, SEE_CONSOLE)}`,
+      `Could not switch ${name} ${run ? "on" : "off"}, FundaCAD could not apply the change. ${plainError(err, SEE_CONSOLE)}`,
       {
         kind: "error",
         detail: err,

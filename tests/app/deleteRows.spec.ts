@@ -109,7 +109,7 @@ describe("the Undo button", () => {
     store.addFeature({ id: "c", type: "box", length: 3.5, width: 4.5, height: 5.5 } as unknown as Feature);
     press();
     expect(ids(store)).toEqual(["a", "m", "c"]);
-    expect(toasts().at(-1)!.message).toMatch(/no longer the last step/);
+    expect(toasts().at(-1)!.message).toMatch(/other changes were made/);
     expect(store.undoLabel).toBe("Box 2");
   });
 
@@ -119,7 +119,7 @@ describe("the Undo button", () => {
     e.doUndo();
     press();
     expect(ids(store)).toEqual(["a", "b", "m"]);
-    expect(toasts().at(-1)!.message).toMatch(/no longer the last step/);
+    expect(toasts().at(-1)!.message).toMatch(/other changes were made/);
     e.doRedo();
     expect(ids(store)).toEqual(["a", "m"]);
     press();

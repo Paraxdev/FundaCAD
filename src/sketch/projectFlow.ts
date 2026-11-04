@@ -240,7 +240,7 @@ export class ProjectFlow {
     if (!this.host.active() || this.host.tool() !== "project" || this.host.entities() !== session) return; // finished/switched/re-entered mid-flight
     const r = results[0];
     if (!r) {
-      toast("geometry engine unavailable");
+      toast("Projecting is not available right now. Try again in a moment.");
       return;
     }
     if (!r.ok) {

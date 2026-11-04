@@ -206,7 +206,7 @@ export class DimFlow {
     const r = resolveDim(this.dimPicks, this.dimOptions());
     this.dimPlan = isDimError(r) ? null : r;
     if (this.dimPicks.map(targetKey).join("+") !== before) {
-      toast("The geometry this dimension referenced is gone, dimension cancelled");
+      toast("What this dimension pointed at is gone, so the dimension was cancelled");
       this.cancelDim();
       return;
     }
