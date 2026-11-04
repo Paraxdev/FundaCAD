@@ -10,12 +10,22 @@ import type { Engine } from "../../src/app/engine";
 
 beforeEach(() => cancelActiveTools.mockReset());
 
-function watched(opts: { editing?: string; sketches?: string[]; atWork?: boolean; ids: string[] }) {
+function watched(opts: {
+  editing?: string;
+  sketches?: string[];
+  restsOn?: string[];
+  restingActive?: boolean;
+  atWork?: boolean;
+  ids: string[];
+}) {
   const listeners = new Set<(doc: unknown) => void>();
   let ids = opts.ids;
   const doc = () => ({ features: ids.map((id) => ({ id })) });
   const e = {
-    tools: { extrude: { active: !!opts.sketches?.length, profileSketches: opts.sketches ?? [] } },
+    tools: {
+      extrude: { active: !!opts.sketches?.length, profileSketches: opts.sketches ?? [] },
+      faceOffset: { active: opts.restingActive ?? true, dependsOn: () => opts.restsOn ?? [] },
+    },
     toolAtWork: () => opts.atWork ?? true,
     store: {
       editPreviewId: opts.editing ?? null,
@@ -66,6 +76,18 @@ describe("closeToolOnLostStep", () => {
 
   it("leaves alone an id that was never in the document, an open sketch's own profile", () => {
     watched({ sketches: ["__active__"], ids: ["b3", "s4"] })(["b3"]);
+    expect(standDowns()).toBe(0);
+  });
+
+  it("closes a tool when a step it reports resting on goes, as the owner of a Shell's picked face", () => {
+    watched({ restsOn: ["b3"], ids: ["b3", "b5"] })(["b3"]);
+    expect(standDowns()).toBe(0);
+    watched({ restsOn: ["b3", "b5"], ids: ["b3", "b5"] })(["b3"]);
+    expect(standDowns()).toBe(1);
+  });
+
+  it("asks only an open tool what it rests on", () => {
+    watched({ restsOn: ["b3"], restingActive: false, ids: ["b3"] })([]);
     expect(standDowns()).toBe(0);
   });
 

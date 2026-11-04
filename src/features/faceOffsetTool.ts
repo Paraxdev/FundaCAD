@@ -28,6 +28,7 @@ import { toolChar } from "../input/shortcuts";
 import { nearestMeshFace } from "./nearestMeshFace";
 import { awaitFaceRows } from "./faceRows";
 import type { PressPullFaces } from "../viewport/faceAnalysis";
+import { featureOwnersOfFaces } from "./patternSources";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -50,6 +51,8 @@ export class FaceOffsetTool {
   private faceIds: number[] = [];
   /** Read once per face, while its id is live: a built preview renumbers the faces of every body after a shelled one. */
   private faceOwners: (string | null)[] = [];
+  // Read when picked: a face id names another face once the model rebuilds.
+  private ownerSteps: string[] = [];
   /** A press would otherwise scan the whole mesh again for every face already picked. */
   private faceOnModel = new WeakMap<Selector, { model: RebuildResult; faceId: number | undefined }>();
   private bodyId: string | null = null;
@@ -227,6 +230,7 @@ export class FaceOffsetTool {
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
         this.faceOwners.push(hit.bodyId);
+        this.ownerSteps.push(...featureOwnersOfFaces(this.store.buildState.result?.bodies, [hit.faceId]));
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
         // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
@@ -326,6 +330,7 @@ export class FaceOffsetTool {
     this.faces = faces;
     this.faceIds = faceIds;
     this.faceOwners = faceIds.map((id) => this.viewport.faceIdToBodyId(id));
+    this.ownerSteps = featureOwnersOfFaces(this.store.buildState.result?.bodies, faceIds);
     this.bodyId = bodyId;
     this.round = this.mode === "offsetFace" ? round : null;
     this.contact = null;
@@ -796,6 +801,11 @@ export class FaceOffsetTool {
     return this.grabbing;
   }
 
+  /** The steps that own the picked faces: undo one and the tool would write against faces that are gone. */
+  dependsOn(): readonly string[] {
+    return this.ownerSteps;
+  }
+
   /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
   onHeldChange(fn: () => void): () => void {
     return this.heldSignal.on(fn);
@@ -822,6 +832,7 @@ export class FaceOffsetTool {
     this.guideAxis = null;
     this.guideSpan = null;
     this.roundPoints = [];
+    this.ownerSteps = [];
     this.disposeGizmo();
     this.viewport.clearHover();
     this.viewport.suspendPicking = false;
