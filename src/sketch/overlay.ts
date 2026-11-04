@@ -108,8 +108,9 @@ function projectedDashMat(color: number, mmPerPx?: number): THREE.LineDashedMate
 // an aid rather than a drawn line.
 const GUIDE_DASH_PX = 5;
 const GUIDE_GAP_PX = 5;
+// Colours are written by applySketchTheme from the constructor: a read at module load runs before initTheme and
+// fills themeColors' cache with Noir values that no theme change clears.
 const GUIDE_MAT = new THREE.LineDashedMaterial({
-  color: sketchSnapColor(),
   dashSize: 1.2, // replaced per call with the pixel-sized pair (see setGuides)
   gapSize: 1.2,
   transparent: true,
@@ -121,7 +122,6 @@ const POLYGON_DASH_PX = 4;
 const POLYGON_GAP_PX = 3;
 const POLE_HALF_PX = 3.5;
 const POLYGON_MAT = new THREE.LineDashedMaterial({
-  color: sketchAidColor(),
   dashSize: 1,
   gapSize: 1,
   transparent: true,
@@ -134,7 +134,6 @@ const POLYGON_MAT = new THREE.LineDashedMaterial({
 // highlight instead of losing the depth test to the opaque face.
 const FILL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
 const FILL_MAT = new THREE.MeshBasicMaterial({
-  color: sketchFillColor(),
   transparent: true,
   opacity: 0.18,
   side: THREE.DoubleSide,
@@ -144,7 +143,6 @@ const FILL_MAT = new THREE.MeshBasicMaterial({
 // A hole of an even-odd sketch draws nothing until hovered or selected.
 const FILL_HOLE_MAT = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
 const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
-  color: sketchFillColor(),
   transparent: true,
   opacity: 0.34,
   side: THREE.DoubleSide,
@@ -152,16 +150,14 @@ const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
   ...FILL_OFFSET,
 });
 const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
-  color: sketchSelectColor(),
   transparent: true,
   opacity: 0.34,
   side: THREE.DoubleSide,
   depthWrite: false,
   ...FILL_OFFSET,
 });
-const SNAP_MAT = overlayMaterial(new THREE.MeshBasicMaterial({ color: sketchSnapColor(), depthTest: true }));
+const SNAP_MAT = overlayMaterial(new THREE.MeshBasicMaterial({ depthTest: true }));
 
-// The materials above are shared and built once, so a theme change has to write their colours again.
 export function applySketchTheme() {
   GUIDE_MAT.color.setHex(sketchSnapColor());
   SNAP_MAT.color.setHex(sketchSnapColor());
@@ -208,6 +204,7 @@ export class SketchOverlay {
     this.snapMarker.renderOrder = 30;
     this.snapMarker.visible = false;
     this.group.add(this.snapMarker);
+    applySketchTheme();
   }
 
   planeFor(spec: PlaneSpec): SketchPlane {
