@@ -669,6 +669,9 @@ neither, and in dev a control given neither, nor an `aria-label` or `aria-labell
 given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
 A `Select` trigger's name carries its value ("Theme, Dark", or the `labelledby` text then the value), since VoiceOver
 and Orca read only the name of a combobox named by `aria-label`; its open list is named by the label alone.
+A row button whose own text is not its name ("Choose…", "Edit", a file name) is labelled by the row label, then
+anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ownId}"`, so a file button reads
+"Heightmap, Choose…" and a selection button "Faces, 3 faces, Edit".
 
 | Component | For | Props that matter | States |
 |---|---|---|---|

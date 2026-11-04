@@ -111,7 +111,9 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
    moving. Press Escape: the tool ends and focus returns to where it was.
 6. **Hear the error (1 min).** Press Ctrl+K, type `parameters`, press Enter. Tab to the expression of innerWidth,
    type `nope` and press Enter. The field refuses it: you hear it marked invalid and hear the reason. Escape closes
-   Parameters and focus returns.
+   Parameters and focus returns. Then open an Extrude's properties, type `0` in Distance and press Enter: you hear
+   the reason. Press Shift+Tab and Tab back: you hear the name, the value, millimetres, invalid and the reason. A
+   selection row's button reads its label, its count and Edit, a file row's button its label and Choose.
 7. **Settings and a confirm dialog (2 min).** Press Ctrl+, (comma): "Preferences, dialog". You hear the category
    navigation, the Theme combobox with its value and the Units radio group with "mm, checked". Done closes it. Press
    Ctrl+N: the app asks before it drops your unsaved Box. You hear the question and the focused button. Escape keeps

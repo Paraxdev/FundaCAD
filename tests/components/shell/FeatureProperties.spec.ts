@@ -470,8 +470,32 @@ describe("FeatureProperties", () => {
       .find((r) => r.find("label").text() === "Edges")!
       .find(".target-edit");
     expect([busy.attributes("aria-disabled"), busy.attributes("title")]).toEqual(["true", "Editing this selection"]);
+    expect(busy.attributes("aria-labelledby")!.split(" ")).toHaveLength(3);
     await busy.trigger("click");
     expect(started).toEqual(["f1"]);
+  });
+
+  it("names the Edit button by the row label, the count, then Edit", async () => {
+    const edge = (x: number) => ({ kind: "edge", by: "nearest", point: [x, 2 * x + 1, 3] });
+    const spokenEdit = (w: VueWrapper) => {
+      const btn = w
+        .findAll(".param-row")
+        .find((r) => r.find("label").text() === "Edges")!
+        .find(".target-edit").element;
+      const ids = btn.getAttribute("aria-labelledby")!.split(" ");
+      const text = ids.map((id) => w.element.querySelector(`[id="${id}"]`)!.textContent!.trim()).join(" ");
+      return { ids, text };
+    };
+    const names: string[] = [];
+    for (const edges of [[], [edge(1)], [edge(1), edge(2.5), edge(-4)]]) {
+      const fake = makeEngine({ parameters: {}, features: [{ ...FILLET_ROW(), edges } as unknown as Feature] });
+      const w = render(fake, "f1");
+      const { ids, text } = spokenEdit(w);
+      expect(new Set(ids).size).toBe(3);
+      names.push(text);
+      w.unmount();
+    }
+    expect(names).toEqual(["Edges nothing selected Edit", "Edges 1 edge Edit", "Edges 3 edges Edit"]);
   });
 
   it("says what an empty selection MEANS where empty means something", () => {
