@@ -252,6 +252,9 @@ export class PressPullTool {
     this.pickingTarget = true;
     this.dim.hide(); // Enter must not commit a plain distance while picking
     this.clearPreviewTimer();
+    // The face to stop at is resolved on the model before the push, so the view and the Geometry rows show that one.
+    if (this.enginePreviewOn) this.store.setPreview(null);
+    this.enginePreviewOn = false;
     this.viewport.clearPressPullGhost();
     this.viewport.setPeek(null);
     setPrompt("Click the face to stop at · Esc");

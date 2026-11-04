@@ -79,7 +79,7 @@ function rig(selected: number[] = []) {
   const added: Feature[] = [];
   const store = {
     nextId: () => "p1",
-    setPreview: () => {},
+    setPreview: vi.fn(),
     addFeature: (f: Feature) => added.push(f),
     verifyCommit: () => {},
     onBuild: (_fn: (s: RebuildState) => void) => () => {},
@@ -97,6 +97,8 @@ interface Internals {
   pickingTarget: boolean;
   anchor: THREE.Vector3;
   axis: THREE.Vector3;
+  value: number;
+  refreshPreview(now?: boolean): void;
 }
 
 const seen = (t: PressPullTool) => {
@@ -215,6 +217,32 @@ describe("Press/Pull takes a face row", () => {
     expect([added, targeting(tool), treePickWaiting()]).toEqual([[], true, true]);
     expect(routeTreeClick({ kind: "face", faceId: OTHER }, d)).toBe("taken");
     expect(added).toHaveLength(1);
+  });
+
+  it("T drops a preview that built, so the view and the rows show the model the stop face is picked on", () => {
+    const { tool, store } = begin();
+    const sent = vi.mocked(store.setPreview);
+    routeTreeClick({ kind: "face", faceId: SLANT }, hints());
+    const i = tool as unknown as Internals;
+    i.value = 12.5;
+    i.refreshPreview(true);
+    keyOnWindow("t");
+    keyOnWindow("Escape");
+    const kinds = sent.mock.calls.map(([f, o]) => [f && !Array.isArray(f) ? [f.type, f.id] : f, o]);
+    expect(kinds).toEqual([
+      [["press-pull", "p1"], { hold: true }],
+      [null, undefined],
+      [["press-pull", "p1"], { hold: true }],
+    ]);
+    tool.cancel();
+  });
+
+  it("T with nothing previewed yet sends no drop", () => {
+    const { tool, store } = begin();
+    routeTreeClick({ kind: "face", faceId: SLANT }, hints());
+    keyOnWindow("t");
+    expect([vi.mocked(store.setPreview).mock.calls, targeting(tool)]).toEqual([[], true]);
+    tool.cancel();
   });
 
   it("Esc in T ends that session and leaves the tool dragging", () => {
