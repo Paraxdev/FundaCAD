@@ -1,7 +1,9 @@
-"""A long menu, a popover and the narrow drawers at the larger interface sizes in the 1400 by 900 window: each ends
-inside the window, under the browser build's root zoom, which scales vh and vw with everything else."""
+"""A long menu, a popover, the narrow drawers and the boxes a sketch places by the cursor at the larger interface sizes
+in the 1400 by 900 window: each ends inside the window, under the browser build's root zoom, which scales vh and vw
+with everything else and leaves the cursor and the window size in window pixels."""
 
 import pytest
+from test_sketch_keys import to_items_plane
 
 pytestmark = [pytest.mark.browser]
 
@@ -10,7 +12,8 @@ STEPS = (100, 110, 125, 150, 175, 200)
 
 # Boxes in the window's own pixels, which the root zoom leaves alone, so the window is innerWidth by innerHeight.
 BOX = """sel => {
-  const el = document.querySelector(sel);
+  const el = [...document.querySelectorAll(sel)].find((e) => e.getBoundingClientRect().width > 0)
+    ?? document.querySelector(sel);
   if (!el) return null;
   const r = el.getBoundingClientRect();
   const round = (v) => Math.round(v * 10) / 10;
@@ -103,3 +106,64 @@ def test_a_drawer_stretched_past_the_window_stops_inside_it(s, drawer, pct):
     stretched = box(s, sel)
     s.page.locator(sel).evaluate("el => { el.style.width = ''; }")
     assert inside(stretched), f"at {pct} percent the {drawer} drawer stretched past the window runs out: {stretched}"
+
+
+CURSOR = (1000, 600)
+
+
+def gap_to(b, x, y):
+    return max(b["left"] - x, x - b["right"], b["top"] - y, y - b["bottom"], 0)
+
+
+@pytest.fixture
+def sk(s):
+    # By the Items list, as the drawers the tests above leave open can cover the plane in the view.
+    to_items_plane(s)
+    yield s
+    for _ in range(5):
+        if not s.page.evaluate("() => window.sketch.active"):
+            break
+        s.page.keyboard.press("Escape")
+        frames(s)
+
+
+def test_the_constrain_flyout_wraps_into_columns_inside_the_window(sk):
+    size_to(sk, 175)
+    sk.page.locator("[data-family='fam:constrain']").click(button="right")
+    sk.page.locator(".float-popover.rail-flyout").wait_for()
+    frames(sk)
+    fly = box(sk, ".float-popover.rail-flyout")
+    assert inside(fly) and not fly["scrolls"], f"at 175 percent the Constrain flyout runs out of the window: {fly}"
+
+
+def test_the_sketch_value_box_stays_by_the_cursor_inside_the_window(sk):
+    sk.tool("Line")
+    size_to(sk, 175)
+    sk.page.mouse.click(600, 450)
+    sk.page.mouse.move(*CURSOR, steps=8)
+    sk.page.wait_for_function("() => [...document.querySelectorAll('.dim-input')].some((e) => e.offsetWidth)")
+    frames(sk)
+    dim = box(sk, ".dim-input")
+    assert inside(dim), f"at 175 percent the value box runs out of the window: {dim}"
+    assert gap_to(dim, *CURSOR) <= 48, f"at 175 percent the value box is away from the cursor at {CURSOR}: {dim}"
+
+
+def test_the_text_form_opens_inside_the_window(sk):
+    sk.tool("Text")
+    size_to(sk, 175)
+    sk.page.mouse.click(*CURSOR)
+    sk.page.locator(".text-tool-panel").wait_for()
+    frames(sk)
+    form = box(sk, ".text-tool-panel")
+    assert inside(form), f"at 175 percent the text form opened at {CURSOR} runs out of the window: {form}"
+
+
+def test_the_toasts_sit_just_above_the_tool_prompt(sk):
+    sk.tool("Line")
+    size_to(sk, 175)
+    sk.page.locator("#prompt:not(.hidden)").wait_for()
+    frames(sk)
+    frames(sk)
+    prompt, stack = box(sk, "#prompt"), box(sk, ".toast-stack")
+    assert stack["bottom"] <= prompt["top"] + 1, f"at 175 percent the toasts sit over the prompt: {stack}, {prompt}"
+    assert prompt["top"] - stack["bottom"] <= 40 * 1.75, f"at 175 percent the toasts float above it: {stack}, {prompt}"
