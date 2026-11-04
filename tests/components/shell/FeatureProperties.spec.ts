@@ -369,6 +369,53 @@ describe("FeatureProperties", () => {
     expect(problemUnder(w, "Radius").exists()).toBe(false);
   });
 
+  it("lists the repeated features in a row whose label names no control", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [
+        CIRCLE(3),
+        EXTRUDE,
+        { id: "p1", type: "patternLinear", features: ["e1", "s1"], count: 3, spacing: 10 } as unknown as Feature,
+      ],
+    });
+    const w = render(fake, "p1");
+    const row = w.findAll(".param-row").find((r) => r.find("label").text() === "Features")!;
+    expect([row.find("label").attributes("for"), row.find("label").attributes("id") !== undefined]).toEqual([
+      undefined,
+      true,
+    ]);
+    expect(row.find(".param-value").text().split(", ")).toHaveLength(2);
+    expect(row.findAll("input")).toHaveLength(0);
+  });
+
+  it("ties each value label to its own field and drops a refusal when the panel moves to another feature", async () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [FILLET(), { id: "f2", type: "fillet", radius: 4.5 } as unknown as Feature],
+    });
+    const w = render(fake, "f1");
+    const radius = () => w.findAll(".param-row").find((r) => r.find("label").text() === "Radius")!;
+    const state = () => {
+      const input = radius().find("input");
+      return [
+        radius().find("label").attributes("for") === input.attributes("id"),
+        (input.element as HTMLInputElement).value,
+        input.attributes("aria-invalid"),
+        w.findAll(".param-problem").map((p) => p.text()),
+      ];
+    };
+    await commit(w, "Radius", "-2.5");
+    const refusal = problemUnder(w, "Radius").text();
+    expect(refusal).toMatch(/radius/i);
+    expect(state()).toEqual([true, "-2.5", "true", [refusal]]);
+
+    await w.setProps({ featureId: "f2" });
+    expect(state()).toEqual([true, "4.5", undefined, []]);
+    await w.setProps({ featureId: "f1" });
+    expect(state()).toEqual([true, "2", undefined, []]);
+    expect(fake.values).toEqual([]);
+  });
+
   it("wants a whole count of at least one", async () => {
     const fake = makeEngine({
       parameters: {},
@@ -435,8 +482,32 @@ describe("FeatureProperties", () => {
       .find((r) => r.find("label").text() === "Edges")!
       .find(".target-edit");
     expect([busy.attributes("aria-disabled"), busy.attributes("title")]).toEqual(["true", "Editing this selection"]);
+    expect(busy.attributes("aria-labelledby")!.split(" ")).toHaveLength(3);
     await busy.trigger("click");
     expect(started).toEqual(["f1"]);
+  });
+
+  it("names the Edit button by the row label, the count, then Edit", async () => {
+    const edge = (x: number) => ({ kind: "edge", by: "nearest", point: [x, 2 * x + 1, 3] });
+    const spokenEdit = (w: VueWrapper) => {
+      const btn = w
+        .findAll(".param-row")
+        .find((r) => r.find("label").text() === "Edges")!
+        .find(".target-edit").element;
+      const ids = btn.getAttribute("aria-labelledby")!.split(" ");
+      const text = ids.map((id) => w.element.querySelector(`[id="${id}"]`)!.textContent!.trim()).join(" ");
+      return { ids, text };
+    };
+    const names: string[] = [];
+    for (const edges of [[], [edge(1)], [edge(1), edge(2.5), edge(-4)]]) {
+      const fake = makeEngine({ parameters: {}, features: [{ ...FILLET_ROW(), edges } as unknown as Feature] });
+      const w = render(fake, "f1");
+      const { ids, text } = spokenEdit(w);
+      expect(new Set(ids).size).toBe(3);
+      names.push(text);
+      w.unmount();
+    }
+    expect(names).toEqual(["Edges nothing selected Edit", "Edges 1 edge Edit", "Edges 3 edges Edit"]);
   });
 
   it("says what an empty selection MEANS where empty means something", () => {

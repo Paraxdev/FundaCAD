@@ -38,6 +38,23 @@ describe("Experimental numbers", () => {
     expect([el(w, "bounces").dataset.experimental, el(w, "bounces").value]).toEqual(["bounces", "6"]);
   });
 
+  it("puts each unit word in the field's chip and says it, with no separate readout", async () => {
+    const w = await open();
+    expect(w.findAll(".prefs-readout").length).toBe(0);
+    const words = (key: string) => {
+      const field = box(w, key).element.closest(".ui-number-field")!;
+      const ids = (el(w, key).getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean);
+      return [
+        [...field.querySelectorAll(".ui-unit-chip")].map((c) => c.textContent),
+        ids.map((id) => document.getElementById(id)?.textContent),
+      ];
+    };
+    expect(words("bounces")).toEqual([["bounces"], ["bounces"]]);
+    expect(words("firefly")).toEqual([["luminance"], ["luminance"]]);
+    await type(w, "bounces", "999");
+    expect(words("bounces")[1]).toEqual(["bounces", "At most 64 bounces"]);
+  });
+
   it("commits on Enter or blur, not while typing", async () => {
     const w = await open();
     await box(w, "bounces").setValue("12");
@@ -55,7 +72,7 @@ describe("Experimental numbers", () => {
     expect([el(w, "bounces").value, el(w, "bounces").getAttribute("aria-invalid"), el(w, "bounces").title]).toEqual([
       "999",
       "true",
-      "At most 64",
+      "At most 64 bounces",
     ]);
   });
 

@@ -505,6 +505,30 @@ describe("Preferences Accessibility", () => {
     expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
   });
 
+  it("holds Units spoken in full in the Speech group after Announcements, and Reset to defaults ticks it again", async () => {
+    await open();
+    await category("access");
+    const group = $("#prefs-verbosity").closest("[role=group]")!;
+    const cards = [...group.querySelectorAll(".pref-card")];
+    const card = $("#prefs-units-in-full").closest(".pref-card")!;
+    expect([
+      group.getAttribute("aria-labelledby"),
+      cards.indexOf(card),
+      cards.indexOf($("#prefs-verbosity").closest(".pref-card")!),
+    ]).toEqual(["prefs-a11y-speech", 1, 0]);
+    const box = $("#prefs-units-in-full input[type=checkbox]") as HTMLInputElement;
+    expect([box.checked, box.getAttribute("aria-describedby")]).toEqual([true, "prefs-units-in-full-hint"]);
+    expect($("#prefs-units-in-full-hint").textContent).toContain("millimetres");
+    const reset = $("[data-a11y-reset]");
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().unitsInFull, box.checked, reset.getAttribute("aria-disabled")]).toEqual([false, false, null]);
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().unitsInFull, box.checked, reset.getAttribute("aria-disabled")]).toEqual([true, true, "true"]);
+  });
+
   it("the Screen reader preset unticks Single key shortcuts and Reset to defaults ticks it again", async () => {
     await open();
     await category("access");

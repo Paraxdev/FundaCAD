@@ -68,6 +68,7 @@ describe("defaults", () => {
       contrast: "system",
       solidPanels: false,
       targets: "default",
+      unitsInFull: true,
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
@@ -242,6 +243,7 @@ describe("reset and the screen reader preset", () => {
       contrast: "system",
       solidPanels: true,
       targets: "default",
+      unitsInFull: true,
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
@@ -250,6 +252,44 @@ describe("reset and the screen reader preset", () => {
     expect(stored.get("fundacad.a11y.singleKeys")).toBe("off");
     expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
     expect(calls).toBe(1);
+  });
+});
+
+describe("Units spoken in full", () => {
+  it("is on by default and reads a stored true or false", async () => {
+    expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+    boot({ "fundacad.a11y.unitsInFull": "false" });
+    expect((await load()).a11yPrefs().unitsInFull).toBe(false);
+    boot({ "fundacad.a11y.unitsInFull": "true" });
+    expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+  });
+
+  it("falls back to on for a value it does not know", async () => {
+    for (const junk of ["yes", "1", "off", ""]) {
+      boot({ "fundacad.a11y.unitsInFull": junk });
+      expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+    }
+  });
+
+  it("stores false on a change, tells listeners once and is dropped by reset", async () => {
+    const m = await load();
+    let calls = 0;
+    m.onA11yPrefsChange(() => calls++);
+    m.setA11yPref("unitsInFull", false);
+    m.setA11yPref("unitsInFull", false);
+    expect([stored.get("fundacad.a11y.unitsInFull"), m.a11yPrefs().unitsInFull, calls]).toEqual(["false", false, 1]);
+    m.resetA11yPrefs();
+    expect([stored.has("fundacad.a11y.unitsInFull"), m.a11yPrefs().unitsInFull]).toEqual([false, true]);
+    expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+  });
+
+  it("is left as it is by the screen reader preset, on or off", async () => {
+    for (const on of [true, false]) {
+      boot({ "fundacad.a11y.unitsInFull": String(on) });
+      const m = await load();
+      m.applyScreenReaderPreset();
+      expect([m.a11yPrefs().unitsInFull, stored.get("fundacad.a11y.unitsInFull")]).toEqual([on, String(on)]);
+    }
   });
 });
 
