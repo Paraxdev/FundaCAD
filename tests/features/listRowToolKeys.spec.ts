@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { h } from "vue";
 import Listbox from "../../src/components/ui/Listbox.vue";
+import { DraftTool } from "../../src/features/draftTool";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { MirrorTool } from "../../src/features/mirrorTool";
 import { PatternTool } from "../../src/features/patternTool";
@@ -110,7 +111,7 @@ function pattern() {
   return { count: () => (tool as unknown as { count: number }).count, added, done };
 }
 
-function pressPullWaiting() {
+function waitingForFace(make: (viewport: Viewport) => { start(done: () => void): void; cancel(): void }) {
   const viewport = {
     suspendPicking: false,
     domElement: document.createElement("canvas"),
@@ -120,11 +121,15 @@ function pressPullWaiting() {
     setPeek: () => {},
   } as unknown as Viewport;
   const done = vi.fn();
-  const tool = new PressPullTool(viewport, {} as DocumentStore);
+  const tool = make(viewport);
   tool.start(done);
   stopAfter.push(() => tool.cancel());
   return done;
 }
+
+const previewStore = { setPreview: () => {} } as unknown as DocumentStore;
+const pressPullWaiting = () => waitingForFace((vp) => new PressPullTool(vp, previewStore));
+const draftWaiting = () => waitingForFace((vp) => new DraftTool(vp, previewStore));
 
 function sketch() {
   const heard = { enter: vi.fn(), switchField: vi.fn(), cancel: vi.fn(), setTool: vi.fn() };
@@ -216,8 +221,11 @@ describe("a list row's keys while a tool runs", () => {
     expect({ added, calls: done.mock.calls }).toEqual({ added: [], calls: [[null]] });
   });
 
-  it("Press/Pull waiting for a face: Enter on a row commits nothing, Escape on a row cancels", () => {
-    const done = pressPullWaiting();
+  it.each([
+    ["Press/Pull", pressPullWaiting],
+    ["Draft", draftWaiting],
+  ])("%s waiting for a face: Enter on a row commits nothing, Escape on a row cancels", (_name, waiting) => {
+    const done = waiting();
     const row = listRow();
     for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
     expect(done.mock.calls).toEqual([]);
