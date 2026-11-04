@@ -16,6 +16,8 @@ import { MirrorTool } from "../../src/features/mirrorTool";
 import { PatternTool } from "../../src/features/patternTool";
 import { PressPullTool } from "../../src/features/pressPullTool";
 import { TargetEditTool } from "../../src/features/targetEditTool";
+import { MeasureTool } from "../../src/features/measureTool";
+import { TextOnFaceTool } from "../../src/features/textOnFaceTool";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { noKeyDraw } from "../sketch/keyDrawStub";
 import type { DocumentStore } from "../../src/document/store";
@@ -133,6 +135,7 @@ function waitingForFace(make: (viewport: Viewport) => { start(done: () => void):
 
 const previewStore = { setPreview: () => {} } as unknown as DocumentStore;
 const pressPullWaiting = () => waitingForFace((vp) => new PressPullTool(vp, previewStore));
+const textWaiting = () => waitingForFace((vp) => new TextOnFaceTool(vp, previewStore));
 const draftWaiting = () => waitingForFace((vp) => new DraftTool(vp, previewStore));
 const holeWaiting = () => waitingForFace((vp) => new HoleTool(vp, previewStore));
 const threadWaiting = () => waitingForFace((vp) => new ThreadTool(vp, previewStore));
@@ -260,6 +263,7 @@ describe("a list row's keys while a tool runs", () => {
     ["Offset Face", () => offsetWaiting("offsetFace")],
     ["Thicken", () => offsetWaiting("thicken")],
     ["Shell", () => offsetWaiting("shell")],
+    ["Text on a face", textWaiting],
   ])("%s waiting for a face: Enter on a row commits nothing, Escape on a row cancels", (_name, waiting) => {
     const done = waiting();
     const row = listRow();
@@ -267,6 +271,21 @@ describe("a list row's keys while a tool runs", () => {
     expect(done.mock.calls).toEqual([]);
     press(row, "Escape");
     expect(done.mock.calls).toEqual([[null]]);
+  });
+
+  it("Measure: a row's keys leave it measuring, Escape on a row stops it", () => {
+    const viewport = new Proxy({ suspendPicking: false, domElement: document.createElement("canvas") } as object, {
+      get: (t, k) => (k in t ? (t as Record<string | symbol, unknown>)[k] : () => null),
+    }) as unknown as Viewport;
+    const done = vi.fn();
+    const tool = new MeasureTool(viewport);
+    tool.start(done);
+    stopAfter.push(() => tool.stop());
+    const row = listRow();
+    for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
+    expect(tool.active).toBe(true);
+    press(row, "Escape");
+    expect(tool.active).toBe(false);
   });
 
   it("a sketch: a row's Enter, Tab and letters reach no flow or tool, the same keys on the page do", () => {
