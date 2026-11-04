@@ -25,7 +25,7 @@ import {
 } from "./render";
 import { SectionCaps } from "./sectionCaps";
 // The one derivation of "which plane is that face"; pure, so nothing cycles back.
-import { pickFacePlaneAt } from "../features/facePlanePick";
+import { facePlaneOfRow, pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { planeHitMinPx } from "./planeHit";
 import { TILE_ORDER, triadMinScale } from "./originTiles";
@@ -67,7 +67,8 @@ import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
-import { awaitTreePick, treePickRefusal } from "../ui/treePick";
+import { awaitTreePick } from "../ui/treePick";
+import { overrideRowAnswer, viewOverrideOf } from "./viewOverride";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
@@ -124,7 +125,7 @@ import { onThemeChange } from "../ui/theme";
 import { onA11yPrefsChange } from "../ui/a11yPrefs";
 import { viewportLabelScale } from "../ui/viewportLabels";
 import { onContrastChange } from "../ui/contrastSetting";
-import type { ViewCubeSide } from "../types";
+import type { ViewCubeSide, ViewOverride } from "../types";
 
 /** A selection captured before a rebuild replaces the Highlighter (selectionMemo.ts). */
 interface SelectionMemo {
@@ -2500,6 +2501,11 @@ export class Viewport {
     return this.pressPull.get(this.model, this.highlighter.getSelectedFaces(), this.faceClick);
   }
 
+  /** The same answer as selectedFacesForPressPull for these faces, with no click. */
+  facesForPressPull(faceIds: readonly number[]): PressPullFaces | null {
+    return this.model ? this.pressPull.get(this.model, faceIds, null) : null;
+  }
+
   /** The cylinder a face lies on, or null. Not from faceNormalWorld: a closed
    *  cylinder's facet normals average to zero. */
   roundFaceAt(faceId: number, at: THREE.Vector3): RoundFace | null {
@@ -3852,7 +3858,15 @@ export class Viewport {
 
   private beginSetOverride(side: ViewCubeSide) {
     this.releaseTreePick = awaitTreePick(
-      (pick) => treePickRefusal(pick, "a model face, pick it in the view"),
+      (pick) =>
+        overrideRowAnswer(
+          pick,
+          (faceId) => {
+            const face = facePlaneOfRow(this, faceId);
+            return face?.kind === "planar" ? face.def : null;
+          },
+          (override) => this.setOverrideFrom(side, override),
+        ),
       () => this.cancelSetOverride(),
     );
     this.setOverrideSide = side;
@@ -3883,15 +3897,11 @@ export class Viewport {
       setPrompt("No face there, click a model face (Esc to cancel)");
       return;
     }
-    // Up from the face's in-plane x axis: xdir × normal is the in-plane up.
-    const normal = new THREE.Vector3(...plane.normal).normalize();
-    const xdir = new THREE.Vector3(...plane.xdir).normalize();
-    const up = new THREE.Vector3().crossVectors(normal, xdir).normalize();
-    if (up.lengthSq() < 1e-6) up.set(0, 0, 1);
-    this.store?.setViewOverride(side, {
-      normal: [normal.x, normal.y, normal.z],
-      up: [up.x, up.y, up.z],
-    });
+    this.setOverrideFrom(side, viewOverrideOf(plane));
+  }
+
+  private setOverrideFrom(side: ViewCubeSide, override: ViewOverride) {
+    this.store?.setViewOverride(side, override);
     this.cube.refreshOverrideMarks();
     this.cancelSetOverride();
     this.applyCubeSide(side);

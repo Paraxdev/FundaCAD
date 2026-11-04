@@ -9,6 +9,7 @@ import { fetchFonts } from "../sketch/textCache";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 import { CanvasGesture } from "./canvasGesture";
+import { awaitFaceRows } from "./faceRows";
 
 const SETTLE_MS = 350;
 
@@ -38,6 +39,7 @@ export class TextOnFaceTool {
   private previewTimer = 0;
   private previewing = false;
   private fonts: string[] = [];
+  private releaseRows: (() => void) | null = null;
 
   private dim = new DimInput(() => this.store);
   private panel = new TextPanel();
@@ -70,7 +72,23 @@ export class TextOnFaceTool {
       void fetchFonts().then((f) => {
         this.fonts = f;
       });
+    this.releaseRows = awaitFaceRows(
+      this.viewport,
+      "a face",
+      (f) => {
+        const [selector] = f.selectors;
+        if (!selector || f.faceIds.length !== 1) return "Pick one face to put text on";
+        void this.resolve(selector, f.bodyId, f.anchor, this.viewport.projectToScreen(f.anchor));
+        return true;
+      },
+      () => this.cancel(),
+    );
     setPrompt("Click a flat, round or conical face to put text on · Esc");
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -149,6 +167,7 @@ export class TextOnFaceTool {
   }
 
   private beginType(screen: { x: number; y: number }) {
+    this.dropRows();
     this.phase = "type";
     this.viewport.clearHover();
     this.viewport.domElement.style.cursor = "default";
@@ -293,6 +312,7 @@ export class TextOnFaceTool {
   }
 
   private cleanup() {
+    this.dropRows();
     this.gesture.detach();
     this.viewport.domElement.style.cursor = "default";
     if (this.previewTimer) clearTimeout(this.previewTimer);

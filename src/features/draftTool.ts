@@ -16,6 +16,8 @@ import { HeldSignal } from "./heldEdit";
 import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { boxBindings } from "./boxBindings";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 
 type Phase = "pick" | "drag";
 
@@ -31,6 +33,7 @@ export class DraftTool {
   private faces: Selector[] = [];
   private faceIds: number[] = [];
   private bodyId: string | null = null;
+  private releaseRows: (() => void) | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1); // the FACE normal: what the drag runs along
   private pull: Axis3 = "Z";
@@ -79,8 +82,25 @@ export class DraftTool {
     this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
-    if (pre) this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId);
-    else setPrompt("Click a face to draft · Ctrl-click adds more");
+    if (pre) this.takeFaces(pre);
+    else {
+      this.releaseRows = awaitFaceRows(
+        this.viewport,
+        "a face",
+        (faces) => (this.takeFaces(faces), true),
+        () => this.cancel(),
+      );
+      setPrompt("Click a face to draft · Ctrl-click adds more");
+    }
+  }
+
+  private takeFaces(f: PressPullFaces) {
+    this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId);
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -199,6 +219,7 @@ export class DraftTool {
     normal: THREE.Vector3,
     bodyId: string | null = null,
   ) {
+    this.dropRows();
     this.faces = faces;
     this.faceIds = faceIds;
     this.bodyId = bodyId;
@@ -373,6 +394,7 @@ export class DraftTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";

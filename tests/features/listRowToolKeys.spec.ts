@@ -7,9 +7,17 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { h } from "vue";
 import Listbox from "../../src/components/ui/Listbox.vue";
+import { DraftTool } from "../../src/features/draftTool";
+import { HoleTool } from "../../src/features/holeTool";
+import { ThreadTool } from "../../src/features/threadTool";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
+import { FaceOffsetTool, type FaceOffsetMode } from "../../src/features/faceOffsetTool";
 import { MirrorTool } from "../../src/features/mirrorTool";
 import { PatternTool } from "../../src/features/patternTool";
+import { PressPullTool } from "../../src/features/pressPullTool";
+import { TargetEditTool } from "../../src/features/targetEditTool";
+import { MeasureTool } from "../../src/features/measureTool";
+import { TextOnFaceTool } from "../../src/features/textOnFaceTool";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { noKeyDraw } from "../sketch/keyDrawStub";
 import type { DocumentStore } from "../../src/document/store";
@@ -109,6 +117,34 @@ function pattern() {
   return { count: () => (tool as unknown as { count: number }).count, added, done };
 }
 
+function waitingForFace(make: (viewport: Viewport) => { start(done: () => void): void; cancel(): void }) {
+  const viewport = {
+    suspendPicking: false,
+    domElement: document.createElement("canvas"),
+    selectedFacesForPressPull: () => null,
+    clearHover: () => {},
+    clearPressPullGhost: () => {},
+    setPeek: () => {},
+  } as unknown as Viewport;
+  const done = vi.fn();
+  const tool = make(viewport);
+  tool.start(done);
+  stopAfter.push(() => tool.cancel());
+  return done;
+}
+
+const previewStore = { setPreview: () => {} } as unknown as DocumentStore;
+const pressPullWaiting = () => waitingForFace((vp) => new PressPullTool(vp, previewStore));
+const textWaiting = () => waitingForFace((vp) => new TextOnFaceTool(vp, previewStore));
+const draftWaiting = () => waitingForFace((vp) => new DraftTool(vp, previewStore));
+const holeWaiting = () => waitingForFace((vp) => new HoleTool(vp, previewStore));
+const threadWaiting = () => waitingForFace((vp) => new ThreadTool(vp, previewStore));
+const offsetWaiting = (mode: FaceOffsetMode) =>
+  waitingForFace((vp) => {
+    const tool = new FaceOffsetTool(vp, previewStore);
+    return { start: (done) => tool.start(mode, done), cancel: () => tool.cancel() };
+  });
+
 function sketch() {
   const heard = { enter: vi.fn(), switchField: vi.fn(), cancel: vi.fn(), setTool: vi.fn() };
   const s = Object.create(SketchMode.prototype) as { onKey(e: KeyboardEvent): void };
@@ -175,6 +211,26 @@ describe("a list row's keys while a tool runs", () => {
     expect(calls(heard)).toEqual({ commit: 1, set: 0, cancel: 1 });
   });
 
+  it("Target edit: Enter on a row, in the command search or on a button commits nothing, on the page it commits", () => {
+    const heard = { commit: vi.fn(), cancel: vi.fn() };
+    const tool = Object.assign(Object.create(TargetEditTool.prototype) as TargetEditTool, { active: true }, heard);
+    const listen = (e: KeyboardEvent) => (tool as unknown as { onKey(e: KeyboardEvent): void }).onKey(e);
+    window.addEventListener("keydown", listen, true);
+    stopAfter.push(() => window.removeEventListener("keydown", listen, true));
+    const row = listRow();
+    const search = document.createElement("input");
+    search.setAttribute("role", "combobox");
+    const button = document.createElement("button");
+    document.body.append(search, button);
+    for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
+    for (const at of [search, button]) expect(press(at, "Enter").defaultPrevented).toBe(false);
+    expect(calls(heard)).toEqual({ commit: 0, cancel: 0 });
+    press(document.body, "Enter");
+    expect(calls(heard)).toEqual({ commit: 1, cancel: 0 });
+    press(row, "Escape");
+    expect(calls(heard)).toEqual({ commit: 1, cancel: 1 });
+  });
+
   it("Pattern: a row's keys neither commit nor step the count, the same keys on the page do", () => {
     const { count, added } = pattern();
     const row = listRow();
@@ -198,6 +254,39 @@ describe("a list row's keys while a tool runs", () => {
     press(listRow(), "Escape");
     vi.runAllTimers();
     expect({ added, calls: done.mock.calls }).toEqual({ added: [], calls: [[null]] });
+  });
+
+  it.each([
+    ["Press/Pull", pressPullWaiting],
+    ["Draft", draftWaiting],
+    ["Hole", holeWaiting],
+    ["Thread", threadWaiting],
+    ["Offset Face", () => offsetWaiting("offsetFace")],
+    ["Thicken", () => offsetWaiting("thicken")],
+    ["Shell", () => offsetWaiting("shell")],
+    ["Text on a face", textWaiting],
+  ])("%s waiting for a face: Enter on a row commits nothing, Escape on a row cancels", (_name, waiting) => {
+    const done = waiting();
+    const row = listRow();
+    for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
+    expect(done.mock.calls).toEqual([]);
+    press(row, "Escape");
+    expect(done.mock.calls).toEqual([[null]]);
+  });
+
+  it("Measure: a row's keys leave it measuring, Escape on a row stops it", () => {
+    const viewport = new Proxy({ suspendPicking: false, domElement: document.createElement("canvas") } as object, {
+      get: (t, k) => (k in t ? (t as Record<string | symbol, unknown>)[k] : () => null),
+    }) as unknown as Viewport;
+    const done = vi.fn();
+    const tool = new MeasureTool(viewport);
+    tool.start(done);
+    stopAfter.push(() => tool.stop());
+    const row = listRow();
+    for (const key of ROW_KEYS) expect(press(row, key).defaultPrevented).toBe(false);
+    expect(tool.active).toBe(true);
+    press(row, "Escape");
+    expect(tool.active).toBe(false);
   });
 
   it("a sketch: a row's Enter, Tab and letters reach no flow or tool, the same keys on the page do", () => {

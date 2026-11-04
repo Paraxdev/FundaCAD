@@ -59,10 +59,12 @@ To fillet two edges:
 
 To sketch on a face, step to it, press Enter, then S. To sketch on a plane, press Shift+`]` until you hear Planes, step to it and press Enter. With Single key shortcuts off, start the tool from the command palette.
 
+A tool started with nothing picked takes a row too, so you can start it first and then step to the face and press Enter.
+
 ### What still needs a pointer
 
 1. Vertices are not listed and cannot be stepped to.
-2. A tool that is already running takes a face or an edge from the Geometry tab's list, not from the brackets. Mirror's plane from a face, Stress's Click faces, Text on a face and a round face's tangent plane for Sketch still need a click in the view.
+2. A tool that is already running takes a face or an edge from the Geometry tab's list, not from the brackets, see [the list of what each takes](items.md#the-geometry-tab). A click in the view is still needed for a round face's tangent plane, a Stress spot, a Hole's next positions, one profile out of several for Revolve or Sweep, and the view cube's Set from face, which is on its right click menu only.
 3. Stepping follows the list. There is no step to the face next door, and no way to walk by size.
 4. The view does not turn to a stepped face, and a face behind another shows no light. Its name is still spoken and shown on the readout, and [X](#seeing-through) sees through to it.
 

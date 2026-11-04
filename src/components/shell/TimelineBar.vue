@@ -33,7 +33,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
-import { closeOpenEdit } from "../../app/selection";
+import { closeOpenEdit, editHeldByPick } from "../../app/selection";
 import { clickFeatureRow, deleteRows, rowTargets, toggleSuppressRows } from "../../app/featureRows";
 import type { Feature } from "../../types";
 
@@ -282,7 +282,7 @@ function onChipMouseDown(ev: MouseEvent) {
   if (ev.shiftKey && !(ev.target as HTMLElement | null)?.closest?.("input")) ev.preventDefault();
 }
 function onChipDblclick(id: string) {
-  if (treePickWaiting()) return;
+  if (editHeldByPick(engine)) return;
   closeOpenEdit(engine, id);
   if (busyElsewhere()) return;
   timeline.edit(id);

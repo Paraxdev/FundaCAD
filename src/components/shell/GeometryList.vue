@@ -13,7 +13,8 @@ import {
   type GeometryRow,
   type GeometryRowType,
 } from "../../ui/geometryRows";
-import { announce } from "../../ui/announce";
+import { announce, cancelAnnouncement } from "../../ui/announce";
+import { treePickWaiting } from "../../ui/treePick";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
 import { getUnit, onUnitChange } from "../../ui/units";
 import Button from "../ui/Button.vue";
@@ -130,6 +131,10 @@ function sayCountOnceListed() {
   if (list.state === "ready") sayCount();
 }
 watch(() => list.state, sayCountOnceListed);
+function dropCount() {
+  countDue = false;
+  cancelAnnouncement("geometry-filter");
+}
 
 const sayRange = () => announce(range.value, "polite", { key: "geometry-page" });
 
@@ -153,6 +158,8 @@ const chosen = computed(() => {
 });
 
 function pick(rows: readonly GeometryRow[], additive: boolean) {
+  // A count still to be said would be heard after the waiting tool's answer, as if part of its prompt.
+  if (treePickWaiting()) dropCount();
   const refused = ctl.pickRows(rows, { additive });
   if (refused) refuseAloud(engine, refused);
 }

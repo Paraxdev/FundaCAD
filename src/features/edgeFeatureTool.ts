@@ -608,10 +608,10 @@ export class EdgeFeatureTool {
     this.afterMembershipChange();
   }
 
-  /** Adding is already a click on an edge in the view, so this only says so. */
+  /** Adding is already a click on an edge or an edge row, so this only says so. */
   promptAddMember() {
     if (this.phase !== "drag") return;
-    setPrompt(`Click an edge in the view to add it to the ${this.kind}`);
+    setPrompt(`Click an edge, or take an edge row from the Geometry list, to add it to the ${this.kind}`);
   }
 
   private disposeGhosts() {

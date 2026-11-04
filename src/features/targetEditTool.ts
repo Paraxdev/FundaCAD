@@ -6,8 +6,10 @@ import type { DocumentStore } from "../document/store";
 import type { Selector } from "../types";
 import { bodyLabels } from "../ui/bodyLabels";
 import { escapeClaimed } from "../ui/escapeClaim";
-import { isMenuKey } from "../ui/focus";
+import { isMenuKey, keyTargetFree } from "../ui/focus";
 import { setPrompt } from "../ui/prompt";
+import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
+import { edgeSelectorFrom, polylineMid } from "../viewport/edgeMatch";
 import { trackedFace } from "./holeFace";
 import { pointOf, readTarget, sameEntry, writeTarget, type TargetEntry, type TargetField } from "./selectionTargets";
 
@@ -19,6 +21,10 @@ export interface TargetRow {
   resolved: boolean;
 }
 
+const STILL_BUILDING = "The model is still building";
+// An edge row counts only if the rolled back model has an edge this close, a row listed before the roll back has none.
+const SAME_EDGE = 0.01;
+
 export class TargetEditTool {
   active = false;
 
@@ -28,6 +34,7 @@ export class TargetEditTool {
   private onDone: ((committed: boolean) => void) | null = null;
   private unsubBuild: (() => void) | null = null;
   private awaitingRollback = false;
+  private releaseRows: (() => void) | null = null;
   private prevSelectionMode: "faces" | "bodies" = "faces";
 
   private boundDown: (e: PointerEvent) => void;
@@ -91,6 +98,14 @@ export class TargetEditTool {
     // and reselects underneath this tool's set.
     el.addEventListener("pointerdown", this.boundDown, true);
     window.addEventListener("keydown", this.boundKey, true);
+    this.releaseRows = awaitTreePick(
+      (pick) => this.takeRow(pick),
+      () => this.cancel(),
+      {
+        keepsOnRewind: true,
+        keepsOnCommand: true,
+      },
+    );
     setPrompt("Rolling back to edit…");
 
     // A committed fillet has eaten its own edges, so roll back to just before the
@@ -137,6 +152,8 @@ export class TargetEditTool {
     const el = this.viewport.domElement;
     el.removeEventListener("pointerdown", this.boundDown, true);
     window.removeEventListener("keydown", this.boundKey, true);
+    this.releaseRows?.();
+    this.releaseRows = null;
     this.viewport.suspendPicking = false;
     if (this.target?.kind === "edge") this.viewport.emphasizeEdges(false);
     this.viewport.clearSelection();
@@ -200,6 +217,52 @@ export class TargetEditTool {
     e.preventDefault();
     e.stopPropagation();
     this.toggle(entry, t);
+  }
+
+  private takeRow(pick: TreePick): TreePickAnswer {
+    const t = this.target;
+    if (!t || this.awaitingRollback) return STILL_BUILDING;
+    if (t.kind === "body") return this.takeBodyRow(pick, t);
+    if (t.kind === "face") return this.takeFaceRow(pick, t);
+    if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+    const sel = edgeSelectorFrom(pick.edge);
+    const mid = polylineMid(pick.edge.points);
+    const there = mid && this.viewport.edgeLineByMid(mid);
+    const at = there && polylineMid(there.points);
+    if (!sel || !mid || !at || Math.hypot(at[0] - mid[0], at[1] - mid[1], at[2] - mid[2]) > SAME_EDGE) {
+      return "That edge is not on the model this feature edits";
+    }
+    this.toggle(sel, t);
+    return true;
+  }
+
+  // The Geometry list follows the roll back, so a face row numbers a face of the model this feature edits.
+  private takeFaceRow(pick: TreePick, t: TargetField): TreePickAnswer {
+    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    if (t.tracked) {
+      const at = this.viewport.facesForPressPull([pick.faceId]);
+      if (!at) return STILL_BUILDING;
+      const { anchor: a, normal: n } = at;
+      this.toggle(trackedFace([a.x, a.y, a.z], [n.x, n.y, n.z], at.bodyId), t);
+      return true;
+    }
+    const { body, ...plain } = this.viewport.faceSelectorOf(pick.faceId) as Selector & { body?: string };
+    this.toggle(t.ownBody && body ? { ...plain, body } : plain, t);
+    return true;
+  }
+
+  private takeBodyRow(pick: TreePick, t: TargetField): TreePickAnswer {
+    if (pick.kind !== "body" && pick.kind !== "bodies") return treePickRefusal(pick, "a body");
+    const ids = pick.kind === "body" ? [pick.id] : pick.ids;
+    if (t.arity === "one" && ids.length !== 1) return "This takes one body";
+    const built = this.store.buildState.result?.bodies ?? [];
+    if (!ids.length || !ids.every((id) => built.some((b) => b.id === id))) {
+      return "That body is not in the model this feature edits";
+    }
+    const missing = ids.filter((id) => !this.entries.includes(id));
+    // A folder row adds what is missing, and takes them all out only when all are in.
+    for (const id of missing.length ? missing : ids) this.toggle(id, t);
+    return true;
   }
 
   // Null on a hit of the wrong kind. Edges keep the pick's selector, the only path that
@@ -313,7 +376,7 @@ export class TargetEditTool {
       e.preventDefault();
       e.stopPropagation();
       this.cancel();
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && keyTargetFree(e.target)) {
       e.preventDefault();
       e.stopPropagation();
       this.commit();

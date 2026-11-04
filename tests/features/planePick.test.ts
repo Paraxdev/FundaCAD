@@ -16,9 +16,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { pickPlaneTarget } from "../../src/features/facePlanePick";
+import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget } from "../../src/features/facePlanePick";
+import { planeFromPointNormal } from "../../src/features/planeMath";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { PlaneDef } from "../../src/types";
+import { asVec, CYL_ANCHOR, CYL_NORMAL, FLAT_ANCHOR, faceRowViewport, SLANT_NORMAL } from "./faceRowRig";
 
 const DATUM: PlaneDef = { origin: [0, -9, -3], normal: [0, -0.95, -0.31], xdir: [0, -0.31, 0.95] };
 
@@ -95,5 +97,54 @@ describe("what a plane pick takes", () => {
     const over = { face: { faceId: 1 }, construction: { kind: "base", plane: "XY" } as const };
     expect(pickPlaneTarget(stub({ ...over, onTop: true }), 0, 0)).toEqual({ kind: "base", spec: "XY" });
     expect(pickPlaneTarget(stub(over), 0, 0)?.kind).toBe("unusable");
+  });
+});
+
+describe("what a Geometry list face row implies", () => {
+  function rowStub(built = true) {
+    const rig = faceRowViewport(built);
+    return { vp: rig.parts as unknown as Viewport, asked: rig.asked };
+  }
+
+  it("a flat face gives its own plane and a selector that follows the face", () => {
+    const { vp, asked } = rowStub();
+    expect(facePlaneOfRow(vp, 14)).toEqual({
+      def: planeFromPointNormal(asVec(FLAT_ANCHOR), asVec(SLANT_NORMAL)),
+      kind: "planar",
+      selector: { kind: "face", by: "nearest", point: asVec(FLAT_ANCHOR), body: "b2" },
+      faceId: 14,
+      at: asVec(FLAT_ANCHOR),
+    });
+    expect(asked).toEqual([[14]]);
+  });
+
+  it("a flat face on another body keeps that body in its selector", () => {
+    const row = facePlaneOfRow(rowStub().vp, 23);
+    expect(row?.kind).toBe("planar");
+    expect(row?.selector).toMatchObject({ kind: "face", by: "nearest", body: "b3" });
+  });
+
+  it("a round face gives a tangent plane at its middle", () => {
+    const row = facePlaneOfRow(rowStub().vp, 15);
+    expect(row?.kind).toBe("tangent");
+    expect(row?.faceId).toBe(15);
+    expect(row?.at).toEqual(asVec(CYL_ANCHOR));
+    const n = asVec(CYL_NORMAL);
+    expect(row?.def.normal.map((c, i) => Math.abs(c - n[i]!)).every((d) => d < 1e-6)).toBe(true);
+  });
+
+  it("a face that is neither flat nor round gives nothing", () => {
+    expect(facePlaneOfRow(rowStub().vp, 16)).toBeNull();
+  });
+
+  it("a face with no triangles, or no model, gives nothing", () => {
+    expect(facePlaneOfRow(rowStub().vp, 99)).toBeNull();
+    expect(facePlaneOfRow(rowStub(false).vp, 14)).toBeNull();
+  });
+
+  it("the curved hint names a flat face and a plane and does not send the user to the view", () => {
+    expect(CURVED_FACE_ROW).toMatch(/curved/);
+    expect(CURVED_FACE_ROW).toMatch(/flat face or a plane/);
+    expect(CURVED_FACE_ROW).not.toMatch(/in the view/);
   });
 });

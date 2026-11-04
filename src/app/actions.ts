@@ -6,7 +6,7 @@ import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
-import { endPickSession } from "../ui/treePick";
+import { endCommandedPick } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS, GEOMETRY_STEPS } from "./actionTables";
 import { browseGeometry, createGeometryCommands } from "./geometryCommands";
 import { booleanOpOfAction } from "../features/booleanOps";
@@ -100,7 +100,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
       else {
-        endPickSession();
+        endCommandedPick();
         e.starters.startSketch(action as SketchTool);
       }
       return;
@@ -158,7 +158,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "redo") return void e.doRedo();
     if (e.sketch.active) e.sketch.finish(true);
     // Section pressed during its own aiming is its way out.
-    if (!KEEPS_PICK.has(action) && !(action === "section" && e.tools.section.picking)) endPickSession();
+    if (!KEEPS_PICK.has(action) && !(action === "section" && e.tools.section.picking)) endCommandedPick();
 
     const boolOp = booleanOpOfAction(action);
     if (boolOp || BODY_VERBS.has(action)) {

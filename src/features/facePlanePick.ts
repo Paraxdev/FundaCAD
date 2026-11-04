@@ -25,7 +25,21 @@ export function pickFacePlaneAt(viewport: Viewport, clientX: number, clientY: nu
 }
 
 /** Split out so a caller that only needs to know whether a face was hit pays one raycast per pointermove. */
-type FaceHit = NonNullable<ReturnType<Viewport["pickFaceForPressPull"]>>;
+type FaceHit = Pick<
+  NonNullable<ReturnType<Viewport["pickFaceForPressPull"]>>,
+  "faceId" | "anchor" | "normal" | "bodyId"
+>;
+
+export const CURVED_FACE_ROW = "That face is curved, pick a flat face or a plane";
+
+/** A Geometry list row has no click, so the face's middle stands in for it. Null when the face is neither flat nor
+ *  round, or the model is not built. */
+export function facePlaneOfRow(viewport: Viewport, faceId: number): FacePlanePick | null {
+  const faces = viewport.facesForPressPull([faceId]);
+  return (
+    faces && facePlaneFromHit(viewport, { faceId, anchor: faces.anchor, normal: faces.normal, bodyId: faces.bodyId })
+  );
+}
 
 function facePlaneFromHit(viewport: Viewport, hit: FaceHit): FacePlanePick | null {
   const tris = viewport.faceTriangles(hit.faceId);

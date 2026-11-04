@@ -27,7 +27,7 @@ let off: (() => void)[] = [];
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  document.body.innerHTML = `<div class="ui-menu" role="menu"><div class="ui-menu-item" role="menuitem" tabindex="0">Tangent</div></div><canvas></canvas>`;
+  document.body.innerHTML = `<div class="ui-menu" role="menu"><div class="ui-menu-item" role="menuitem" tabindex="0">Tangent</div></div><main id="main"><canvas></canvas></main>`;
   row = document.querySelector(".ui-menu-item")!;
   other = document.querySelector("canvas")!;
 });

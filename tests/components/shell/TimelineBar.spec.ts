@@ -18,6 +18,7 @@ import { useSelectionStore } from "../../../src/stores/selection";
 import type { Engine } from "../../../src/app/engine";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
 import { announce } from "../../../src/ui/announce";
+import { awaitTreePick, resetTreePicks, treePickWaiting } from "../../../src/ui/treePick";
 
 vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
@@ -330,6 +331,71 @@ describe("History row double click while another edit is open", () => {
     await m.chip("rv").trigger("click");
     expect(m.log).toEqual([]);
     expect(useSelectionStore().featureId).toBe("ex1");
+  });
+});
+
+describe("History edit while a tool waits for a row", () => {
+  afterEach(() => resetTreePicks());
+  const keeps = { keepsOnRewind: true, keepsOnCommand: true };
+
+  function pressPullWaiting() {
+    const m = mountBar({ tool: { name: "pressPull", on: "" }, preview: null });
+    const tool = m.tool("pressPull");
+    const cancel = tool.cancel;
+    const release = awaitTreePick(
+      () => "no",
+      () => tool.cancel(),
+      keeps,
+    );
+    tool.cancel = () => {
+      cancel();
+      release();
+    };
+    return m;
+  }
+
+  it("a double click closes a tool that keeps its pick through commands and edits the step", async () => {
+    const m = pressPullWaiting();
+    await m.dbl("rv");
+    expect(m.log).toEqual(["cancel:pressPull", "startEdit:revolvePitch"]);
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("Enter on the step does the same", async () => {
+    const m = pressPullWaiting();
+    await new Promise((r) => setTimeout(r, 2));
+    await m.chip("rv").trigger("keydown", { key: "Enter" });
+    expect(m.log).toEqual(["cancel:pressPull", "startEdit:revolvePitch"]);
+  });
+
+  it("ends a pick with no tool behind it, as Stress's Click faces, then edits the step", async () => {
+    const m = mountBar();
+    awaitTreePick(
+      () => "no",
+      () => m.log.push("stop:placing"),
+      keeps,
+    );
+    await m.dbl("rv");
+    expect(m.log).toEqual(["stop:placing", "startEdit:revolvePitch"]);
+  });
+
+  it("keeps the pick when the typed value is refused, and edits nothing", async () => {
+    const m = pressPullWaiting();
+    typedBox("abc", () => m.log.push("commit"));
+    await m.dbl("rv");
+    expect(m.log).toEqual([]);
+    expect(treePickWaiting()).toBe(true);
+  });
+
+  it("a plain pick, as a sketch's plane, keeps the edit back and says why", async () => {
+    const m = mountBar();
+    awaitTreePick(
+      () => "no",
+      () => m.log.push("end:pick"),
+    );
+    await m.dbl("rv");
+    expect(m.log).toEqual([]);
+    expect(m.status.at(-1)).toBe("Finish the active tool first, or press Esc");
   });
 });
 

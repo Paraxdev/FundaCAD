@@ -1211,7 +1211,9 @@ describe("a row click while a tool waits for a pick", () => {
     await rowNamed(w, "Body1").trigger("click");
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
     expect(fake.engine.viewport.getSelectedBodies()).toEqual([]);
-    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "");
+    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "", {
+      silent: true,
+    });
     expect(treePickWaiting()).toBe(true);
   });
 
@@ -1237,6 +1239,9 @@ describe("a row click while a tool waits for a pick", () => {
     );
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(edit).not.toHaveBeenCalled();
+    expect(eng(fake).setStatus).toHaveBeenLastCalledWith("Finish the active tool first, or press Esc", "", {
+      silent: true,
+    });
   });
 });
 
@@ -1302,6 +1307,47 @@ describe("a row double click while another edit is open", () => {
     await nextTick();
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
+  });
+
+  const revolveDoc = (): CadDocument => ({
+    parameters: {},
+    features: [sketch("s1"), { id: "rv", type: "revolve", sketch: "s1" } as Feature],
+  });
+
+  it("closes a tool waiting for a row through commands and edits the row's feature, as with no pick", async () => {
+    const fake = makeEngine(revolveDoc());
+    const log = withOpenEdit(fake);
+    const tool = (fake.engine as unknown as { tools: { revolvePitch: { cancel: () => void } } }).tools.revolvePitch;
+    const cancel = tool.cancel;
+    const release = awaitTreePick(
+      () => "no",
+      () => tool.cancel(),
+      { keepsOnRewind: true, keepsOnCommand: true },
+    );
+    tool.cancel = () => {
+      cancel();
+      release();
+    };
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "Sketch1").trigger("dblclick");
+    expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("ends a pick with no tool behind it, as Stress's Click faces, and edits the row's feature", async () => {
+    const fake = makeEngine(revolveDoc());
+    const log = withOpenEdit(fake);
+    (fake.engine as unknown as { tools: { revolvePitch: { active: boolean } } }).tools.revolvePitch.active = false;
+    awaitTreePick(
+      () => "no",
+      () => log.push("stop:placing"),
+      { keepsOnRewind: true, keepsOnCommand: true },
+    );
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "Sketch1").trigger("dblclick");
+    expect(log).toEqual(["stop:placing", "edit:s1"]);
   });
 });
 

@@ -50,10 +50,10 @@ import type { CtxItem } from "../../ui/menu";
 import { actOn as actOnSelection, modsOf, selectGroup, selectRow } from "../../ui/rowSelection";
 import { clickFeatureRow, deleteRows, rowTargets } from "../../app/featureRows";
 import { VisibilityPaint } from "../../ui/visibilityPaint";
-import { routeTreeClick, treePickWaiting, type TreePick } from "../../ui/treePick";
+import { routeTreeClick, type TreePick } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
 import { BASE_PLANES, sketchOnPlane, treeClickDeps } from "../../app/planePick";
-import { switchEdit } from "../../app/selection";
+import { editHeldByPick, switchEdit } from "../../app/selection";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
@@ -202,7 +202,7 @@ function viaTool(pick: () => TreePick, own: (e: MouseEvent) => void) {
  *  Any other open edit is closed and the row's feature edited instead. */
 function editRow(id: string) {
   return () => {
-    if (treePickWaiting()) return;
+    if (editHeldByPick(engine)) return;
     switchEdit(engine, id);
   };
 }

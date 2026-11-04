@@ -12,6 +12,9 @@ import type { Viewport } from "../../src/viewport/viewport";
 import type { PlaneDef, SectionView, Vec3 } from "../../src/types";
 import { readSectionView } from "../../src/document/sectionView";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
+import { resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import { asVec, FLAT_ANCHOR, SLANT_NORMAL, faceRowViewport } from "./faceRowRig";
+import { planeFromPointNormal } from "../../src/features/planeMath";
 
 const CENTRE: Vec3 = [37.5, -12, 20];
 
@@ -57,6 +60,7 @@ function fakeViewport() {
     hoverPlane: () => {},
     hoverFaceAt: () => {},
     pickDatumAt: () => null,
+    ...faceRowViewport().parts,
   };
   return { vp: vp as unknown as Viewport, scene, canvas, sent, state };
 }
@@ -659,5 +663,97 @@ describe("the section and its saved cut", () => {
     expect(handles(scene)).toHaveLength(0);
     tool.edit();
     expect(Number(input()!.value)).toBe(4.75);
+  });
+});
+
+describe("Geometry rows", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    for (const t of made.splice(0)) t.stop();
+    resetTreePicks();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  function aiming() {
+    const r = setup();
+    r.tool.start({ kind: "pick" });
+    const hints: string[] = [];
+    const click = (pick: TreePick) => routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
+    return { ...r, hints, click };
+  }
+
+  it("a flat face row arms the cut along that face and ends the pick", () => {
+    const { tool, sent, hints, click } = aiming();
+    const def = planeFromPointNormal(asVec(FLAT_ANCHOR), asVec(SLANT_NORMAL))!;
+    expect(click({ kind: "face", faceId: 14 })).toBe("taken");
+    expect(hints).toEqual([]);
+    expect(tool.phase).toBe("editing");
+    expect(tool.picking).toBe(false);
+    expect(treePickWaiting()).toBe(false);
+    expect(sent.at(-1)).toEqual({
+      ...clipPlaneAt(sectionAnchor(def.origin, def.normal, CENTRE), def.normal, 0, 1),
+      ghost: 0.14,
+    });
+    expect(click({ kind: "face", faceId: 14 })).toBe("row");
+  });
+
+  it("a flat face on another body cuts along its own plane", () => {
+    const { sent, click } = aiming();
+    const def = planeFromPointNormal(asVec(FLAT_ANCHOR), asVec(SLANT_NORMAL))!;
+    expect(click({ kind: "face", faceId: 23 })).toBe("taken");
+    const normal = sent.at(-1)!.normal;
+    expect(normal).toEqual(def.normal);
+  });
+
+  it("a curved face row is refused in words that name a flat face, and the pick keeps waiting", () => {
+    const { tool, sent, hints, click } = aiming();
+    expect(click({ kind: "face", faceId: 15 })).toBe("refused");
+    expect(click({ kind: "face", faceId: 16 })).toBe("refused");
+    expect(hints).toHaveLength(2);
+    for (const h of hints) {
+      expect(h).toMatch(/curved/);
+      expect(h).toMatch(/flat face/);
+      expect(h).not.toMatch(/in the view/);
+    }
+    expect(tool.phase).toBe("aiming");
+    expect(tool.picking).toBe(true);
+    expect(treePickWaiting()).toBe(true);
+    expect(sent).toEqual([]);
+  });
+
+  it("an edge row is refused naming a plane or a flat face", () => {
+    const { tool, hints, click } = aiming();
+    const edge = {
+      id: "b2:3",
+      body: "b2",
+      points: [
+        [3, -4, 7.5],
+        [9, -1, 12],
+      ],
+      smooth: false,
+      slot: 3,
+    };
+    expect(click({ kind: "edge", edge } as unknown as TreePick)).toBe("refused");
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toMatch(/edge/);
+    expect(hints[0]).toMatch(/plane or a flat face/);
+    expect(hints[0]).not.toMatch(/in the view/);
+    expect(tool.phase).toBe("aiming");
+  });
+
+  it("a datum plane row still arms the cut", () => {
+    const { tool, sent, click } = aiming();
+    const def: PlaneDef = { origin: [5, 2.5, -3], normal: [0.6, 0, 0.8], xdir: [0, 1, 0] };
+    expect(click({ kind: "datumPlane", id: "d1", def } as unknown as TreePick)).toBe("taken");
+    expect(tool.phase).toBe("editing");
+    expect(sent.at(-1)).toEqual({
+      ...clipPlaneAt(sectionAnchor(def.origin, def.normal, CENTRE), def.normal, 0, 1),
+      ghost: 0.14,
+    });
   });
 });

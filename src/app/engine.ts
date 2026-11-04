@@ -17,7 +17,7 @@ import { solveSketchFeature } from "../sketch/headlessSolve";
 import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { installLaunchPaths } from "../io/launchPaths";
-import { toast } from "../ui/toast";
+import { hintToast, toast } from "../ui/toast";
 import { sketchConflictText } from "../ui/plainError";
 import { traceFaultToast } from "../ui/traceFault";
 import { logWarning } from "../ui/logStore";
@@ -206,7 +206,7 @@ export interface Engine {
   undoIfLatest(mark: number): void;
 
   lastAction: string | null;
-  setStatus(text: string, cls: "" | "connected" | "error"): void;
+  setStatus(text: string, cls: "" | "connected" | "error", opts?: { silent?: boolean }): void;
 }
 
 let recoveryAsked: Promise<void> = Promise.resolve();
@@ -218,11 +218,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.lastAction = null;
   e.planePick = false;
 
-  // A hint is a short toast, dropped when it repeats the one on screen; errors go to the console.
-  let lastHint = { text: "", at: 0 };
   // A reconnect loop repeats its warning every attempt, once a minute is plenty.
   let lastWarning = { text: "", at: -Infinity };
-  e.setStatus = (text, cls) => {
+  e.setStatus = (text, cls, opts) => {
     if (!text || cls === "connected") return;
     const now = performance.now();
     if (cls === "error") {
@@ -231,9 +229,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       logWarning(text, { source: "status" });
       return;
     }
-    if (text === lastHint.text && now - lastHint.at < 3500) return;
-    lastHint = { text, at: now };
-    toast(text);
+    hintToast(text, opts);
   };
 
   e.viewport = new Viewport(canvas);

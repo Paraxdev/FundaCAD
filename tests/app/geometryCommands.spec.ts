@@ -370,7 +370,7 @@ describe("what a command refuses", () => {
     r.host.sketch.active = true;
     const { run, finish } = commands(r);
     run("next-edge");
-    expect(r.host.setStatus.mock.calls).toEqual([["Finish the sketch first", ""]]);
+    expect(r.host.setStatus.mock.calls).toEqual([["Finish the sketch first", "", { silent: true }]]);
     expect(said()).toEqual(["Finish the sketch first"]);
     expect(finish).not.toHaveBeenCalled();
     expect(r.list.kind).toBe("faces");
@@ -408,7 +408,7 @@ describe("what a command refuses", () => {
     const { r, run } = await opened();
     r.viewport.picksSuspended = true;
     run("next-face");
-    expect(r.host.setStatus.mock.calls).toEqual([["The model is still building", ""]]);
+    expect(r.host.setStatus.mock.calls).toEqual([["The model is still building", "", { silent: true }]]);
     expect(said()).toEqual(["The model is still building"]);
     expect(picks(r)).toEqual([]);
     r.viewport.picksSuspended = false;

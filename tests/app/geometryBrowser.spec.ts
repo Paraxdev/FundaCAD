@@ -7,7 +7,12 @@ import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
 import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
 
-vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../src/ui/toast", () => ({
+  toast: () => {},
+  dismissToast: () => {},
+  hintToast: () => {},
+  dismissToastsSaying: () => {},
+}));
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -243,6 +248,42 @@ describe("previews and streams", () => {
     await settle();
     expect(r.asks).toHaveLength(2);
     expect(r.asks[1]!.doc.features.map((f) => f.id)).toEqual(["f1", "c1"]);
+  });
+
+  it("follows an edit's roll back, holds through its live preview, and leaves it for the finished model", async () => {
+    const r = rig();
+    r.store.addFeature({ id: "c1", type: "box", length: 2, width: 2, height: 2 } as never);
+    await r.build();
+    r.browser.show(true);
+    await land(r.asks[0]!, topology("body1", 3));
+
+    r.state.result = result([{ id: "body1", etag: "rolled" }]);
+    r.store.beginEditPreview("c1");
+    await settle();
+    expect(r.store.buildState.previewBuilt).toEqual([]);
+    expect(r.asks.map((a) => [a.body, a.doc.features.map((f) => f.id)])).toEqual([
+      ["body1", ["f1", "c1"]],
+      ["body1", ["f1"]],
+    ]);
+    await land(r.asks[1]!, topology("body1", 2));
+    expect(keys(r.list.rows)).toEqual(["f:body1:0", "f:body1:1"]);
+    expect(r.list.bodies.map((b) => b.id)).toEqual(["body1"]);
+
+    r.state.result = result([{ id: "body1", etag: "live" }]);
+    r.store.setEditPreview({ id: "c1", type: "box", length: 3, width: 2, height: 2 } as never);
+    await settle();
+    expect(r.store.buildState.previewBuilt).toHaveLength(1);
+    expect(r.asks).toHaveLength(2);
+    expect(keys(r.list.rows)).toEqual(["f:body1:0", "f:body1:1"]);
+
+    r.state.result = result([
+      { id: "body1", etag: "e1" },
+      { id: "body2", etag: "e2" },
+    ]);
+    r.store.endEditPreview();
+    await settle();
+    expect(r.asks).toHaveLength(2);
+    expect(keys(r.list.rows)).toEqual(["f:body1:0", "f:body1:1", "f:body1:2"]);
   });
 
   it("does not ask while a build is running", async () => {
@@ -1127,7 +1168,9 @@ describe("a tool waiting for a pick", () => {
       { kind: "edge", edge: r.wires[0] },
       { kind: "edge", edge: r.wires[1] },
     ]);
-    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "");
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "", {
+      silent: true,
+    });
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
   });
 

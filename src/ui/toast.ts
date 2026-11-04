@@ -85,3 +85,14 @@ export function showLastMessage(): void {
 export function dismissToast(id: number) {
   useToastStore().dismiss(id);
 }
+
+/** A short info toast, not shown again while the same words are still on screen. */
+export function hintToast(message: string, opts: Pick<ToastOptions, "silent"> = {}) {
+  if (useToastStore().items.some((t) => !t.leaving && t.message === message)) return;
+  toast(message, opts);
+}
+
+export function dismissToastsSaying(message: string) {
+  const store = useToastStore();
+  for (const t of store.items) if (t.message === message) store.dismiss(t.id);
+}

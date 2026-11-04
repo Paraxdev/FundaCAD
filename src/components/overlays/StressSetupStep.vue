@@ -140,7 +140,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             size="sm"
             class="stress-place-support"
             :pressed="placing({ support: x.id }, 'face')"
-            tip="Click faces of the body to add each whole face"
+            tip="Click faces of the body, or take face rows from the Geometry list, to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ support: x.id })"
             >{{ placing({ support: x.id }, "face") ? "Picking…" : "Click faces" }}</Button
           >
@@ -225,7 +225,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
             size="sm"
             class="stress-place-load"
             :pressed="placing({ load: l.id }, 'face')"
-            tip="Click faces of the body to add each whole face"
+            tip="Click faces of the body, or take face rows from the Geometry list, to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ load: l.id })"
             >{{ placing({ load: l.id }, "face") ? "Picking…" : "Click faces" }}</Button
           >
