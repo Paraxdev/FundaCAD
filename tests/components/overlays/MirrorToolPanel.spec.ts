@@ -181,4 +181,21 @@ describe("MirrorToolPanel", () => {
     expect(first.onCommit).not.toHaveBeenCalled();
     expect(first.onActivate).not.toHaveBeenCalled();
   });
+
+  it("names two picks of one label apart in their Remove buttons", () => {
+    const v = viewOf({
+      fields: [
+        { key: "objects", label: "Objects", items: ["Line 1", "Arc 2", "Line 1"], value: "3 objects", filled: true },
+        { key: "line", label: "Mirror line", items: [], value: "Nothing picked", filled: false },
+      ],
+    });
+    mountView(v);
+    expect($(".tgt-remove").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Remove Line 1, row 1",
+      "Remove Arc 2",
+      "Remove Line 1, row 3",
+    ]);
+    $(".tgt-remove")[2]!.click();
+    expect(v.onRemove).toHaveBeenCalledWith("objects", 2);
+  });
 });

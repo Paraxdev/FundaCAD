@@ -25,9 +25,13 @@ function harness(feature: Feature, field: TargetField) {
     setSelectionMode: () => {},
     hoverEntity: () => {},
     selectEdgeLines: () => {},
+    setSelectedBodies: () => {},
     selectFaces: (ids: number[]) => painted.push(ids),
     pickEntity: () => ({ kind: "face", faceId: 8, point: POINT }),
-    faceIdToBodyId: (id: number): string | null => (id === 8 ? "body1" : null),
+    // body1 owns faces 6 to 19, body2 starts at 20.
+    faceIdToBodyId: (id: number): string | null => (id < 20 ? "body1" : "body2"),
+    localFaceOf: (id: number): number | null => id - (id < 20 ? 6 : 20),
+    edgeLineByMid: (): unknown => ({ slot: 11, body: "body2" }),
     // Faces 11 and 22 touch: body2's is only found by naming body2, and a gone body has no face.
     faceIdNear: (_p: unknown, _tol?: number, body?: string) => {
       if (body === "gone") return null;
@@ -37,7 +41,15 @@ function harness(feature: Feature, field: TargetField) {
   let build: (s: { building: boolean; result: object }) => void = () => {};
   const store = {
     document: { features: [feature] },
-    buildState: {},
+    buildState: {
+      result: {
+        bodies: [
+          { id: "body1", name: "Bracket" },
+          { id: "body2", name: "Lid" },
+        ],
+      },
+    },
+    bodyName: (): string | undefined => undefined,
     beginEditPreview: () => {},
     endEditPreview: () => {},
     updateFeature: (_id: string, p: Partial<Feature>) => patches.push(p),
@@ -84,7 +96,7 @@ describe("TargetEditTool", () => {
 
   it("an older saved shell with a bare selector and no body keeps that face unbound beside an added one", () => {
     const h = harness(shell(SAVED), shellField);
-    expect(h.tool.rows()).toEqual([{ entry: SAVED, label: "1 face", resolved: true }]);
+    expect(h.tool.rows()).toEqual([{ entry: SAVED, label: "Face 6 of Bracket", resolved: true }]);
     h.click();
     h.tool.commit();
     expect(h.patches).toEqual([{ faces: [SAVED, { kind: "face", by: "nearest", point: POINT, body: "body1" }] }]);
@@ -98,7 +110,7 @@ describe("TargetEditTool", () => {
   it("a saved face on a body this build does not have stays listed, greyed", () => {
     const saved = { ...SAVED, body: "gone" };
     const h = harness(shell([saved]), shellField);
-    expect(h.tool.rows()).toEqual([{ entry: saved, label: "1 face (not on this build)", resolved: false }]);
+    expect(h.tool.rows()).toEqual([{ entry: saved, label: "Face not on this build", resolved: false }]);
   });
 
   it("a face clicked for a draft on a second body is written with that body", () => {
@@ -123,5 +135,39 @@ describe("TargetEditTool", () => {
     h.click();
     h.tool.commit();
     expect(h.patches).toEqual([{ faces: [SAVED, { kind: "face", by: "nearest", point: POINT }] }]);
+  });
+
+  it("rows name a face by its number in its body, an edge by its slot, and tell the unresolved apart", () => {
+    const faces = [{ ...SAVED, body: "body2" }, SAVED, { ...SAVED, body: "gone" }];
+    expect(
+      harness(shell(faces), shellField)
+        .tool.rows()
+        .map((r) => [r.label, r.resolved]),
+    ).toEqual([
+      ["Face 3 of Lid", true],
+      ["Face 6 of Bracket", true],
+      ["Face not on this build", false],
+    ]);
+    const fillet = {
+      id: "f",
+      type: "fillet",
+      edges: [SAVED, { ...SAVED, body: "gone" }],
+      radius: 1,
+    } as unknown as Feature;
+    const h = harness(fillet, FEATURE_TARGETS.fillet![0]!);
+    expect(h.tool.rows().map((r) => [r.label, r.resolved])).toEqual([
+      ["Edge 12 of Lid", true],
+      ["Edge 12 of Lid", true],
+    ]);
+  });
+
+  it("a face the viewport cannot place keeps its number off the row, a body row keeps its body label", () => {
+    const h = harness(shell(SAVED), shellField);
+    h.vp.localFaceOf = () => null;
+    h.vp.faceIdToBodyId = () => null;
+    expect(h.tool.rows().map((r) => r.label)).toEqual(["Face"]);
+    const mirror = { id: "m", type: "mirror", targets: ["body2"] } as unknown as Feature;
+    const bodies = harness(mirror, { field: "targets", label: "Bodies", kind: "body", shape: "bodyId", arity: "many" });
+    expect(bodies.tool.rows().map((r) => r.label)).toEqual(["Lid"]);
   });
 });

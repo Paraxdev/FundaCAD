@@ -112,4 +112,19 @@ describe("TargetEditPanel", () => {
     await nextTick();
     expect($(".tgt-panel")).toEqual([]);
   });
+
+  it("tells rows of one name apart, in the text and in each Remove, and removes the row clicked", () => {
+    const tool = fakeTool([
+      { label: "Edge 12 of Lid", resolved: true },
+      { label: "Face 3 of Lid", resolved: true },
+      { label: "Edge 12 of Lid", resolved: true },
+      { label: "Edge 12 of Lid", resolved: false },
+    ]);
+    mountWith(tool);
+    const names = ["Edge 12 of Lid, row 1", "Face 3 of Lid", "Edge 12 of Lid, row 3", "Edge 12 of Lid, row 4"];
+    expect($(".tgt-item .tgt-label").map((l) => l.textContent)).toEqual(names);
+    expect($(".tgt-remove").map((b) => b.getAttribute("aria-label"))).toEqual(names.map((n) => `Remove ${n}`));
+    $(".tgt-remove")[2]!.click();
+    expect(tool.removeAt.mock.calls).toEqual([[2]]);
+  });
 });

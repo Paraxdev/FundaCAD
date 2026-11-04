@@ -1636,6 +1636,11 @@ export class Viewport {
     return bodyOfFace(this.model, faceId)?.id ?? null;
   }
 
+  localFaceOf(faceId: number): number | null {
+    const b = this.model && bodyOfFace(this.model, faceId);
+    return b ? faceId - b.faceStart : null;
+  }
+
   /** A plain mesh raycast like a bodies mode click, so the right click body menu agrees with a left click. */
   bodyIdAt(clientX: number, clientY: number): string | null {
     if (!this.model) return null;

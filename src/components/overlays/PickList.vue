@@ -2,10 +2,12 @@
 // One titled list of picked items with Clear all and a remove button per row, worn by the target editor and Mirror.
 // A row stays a plain item rather than a ListRow: it holds its own remove button, which may not nest in a button.
 
+import { computed } from "vue";
+import { distinctNames } from "../../ui/pickNames";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
 
-defineProps<{
+const props = defineProps<{
   label: string;
   rows: readonly { label: string; resolved?: boolean }[];
   empty: string;
@@ -13,6 +15,7 @@ defineProps<{
   active?: boolean;
   held?: number | null;
 }>();
+const names = computed(() => distinctNames(props.rows.map((r) => r.label)));
 defineEmits<{
   clear: [];
   remove: [i: number];
@@ -48,11 +51,11 @@ defineEmits<{
         @pointerleave="$emit('leave')"
         @click="$emit('pick', i)"
       >
-        <span class="tgt-label">{{ r.label }}</span>
+        <span class="tgt-label">{{ names[i] }}</span>
         <IconButton
           class="tgt-remove"
           icon="minus"
-          :tip="`Remove ${r.label}`"
+          :tip="`Remove ${names[i]}`"
           size="sm"
           variant="danger"
           @click.stop="$emit('remove', i)"
