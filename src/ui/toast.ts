@@ -44,3 +44,14 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
 export function dismissToast(id: number) {
   useToastStore().dismiss(id);
 }
+
+/** A short info toast, not shown again while the same words are still on screen. */
+export function hintToast(message: string) {
+  if (useToastStore().items.some((t) => !t.leaving && t.message === message)) return;
+  toast(message);
+}
+
+export function dismissToastsSaying(message: string) {
+  const store = useToastStore();
+  for (const t of store.items) if (t.message === message) store.dismiss(t.id);
+}

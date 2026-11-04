@@ -15,7 +15,12 @@ import { awaitTreePick, resetTreePicks, treePickRefusal, treePickWaiting } from 
 import { DOC, edge, land, result, rig, settle, topology, type BodySpec } from "../../app/geometryBrowserRig";
 import type { TopologyFace, TopologyReply } from "../../../src/types";
 
-vi.mock("../../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../../src/ui/toast", () => ({
+  toast: () => {},
+  dismissToast: () => {},
+  hintToast: () => {},
+  dismissToastsSaying: () => {},
+}));
 vi.mock("../../../src/ui/announce", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/announce")>()),
   announce: vi.fn(),

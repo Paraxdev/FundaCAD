@@ -1,5 +1,6 @@
 // The plane row actions both tabs share, on a fake engine and the real treePick session.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import {
   BASE_PLANES,
   routePlaneRow,
@@ -8,7 +9,9 @@ import {
   type PlanePick,
   type PlaneRowHost,
 } from "../../src/app/planePick";
-import { awaitTreePick, resetTreePicks, treePickRefusal } from "../../src/ui/treePick";
+import { awaitTreePick, resetTreePicks, routeTreeClick, treePickRefusal } from "../../src/ui/treePick";
+import { useToastStore } from "../../src/stores/toasts";
+import { hintToast, toast } from "../../src/ui/toast";
 
 const SLANTED = {
   origin: [113.5, -41.25, 37] as [number, number, number],
@@ -31,6 +34,7 @@ function host(o: { sketch?: boolean; owned?: boolean } = {}) {
   return { e, store, enter, setStatus };
 }
 
+beforeEach(() => setActivePinia(createPinia()));
 afterEach(resetTreePicks);
 
 describe("the base planes", () => {
@@ -105,5 +109,55 @@ describe("routePlaneRow", () => {
     expect(routePlaneRow(e, XZ)).toBe("row");
     expect(treeClickDeps(e).busyHint()).toBeNull();
     expect(setStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("a refusal toast and the row taken after it", () => {
+  const showing = () =>
+    useToastStore()
+      .items.filter((t) => !t.leaving)
+      .map((t) => t.message);
+  const toasting = () => {
+    const h = host();
+    h.setStatus.mockImplementation((text: string) => hintToast(text));
+    return h;
+  };
+  const wantsFace = () =>
+    awaitTreePick(
+      (p) => (p.kind === "face" ? true : treePickRefusal(p, "a face")),
+      () => {},
+    );
+
+  it("every refusal goes when a row is taken, other toasts stay, and the same refusal shows again", () => {
+    vi.useFakeTimers();
+    const { e } = toasting();
+    toast("Copied.");
+    wantsFace();
+    expect(routePlaneRow(e, XZ)).toBe("refused");
+    expect(routePlaneRow(e, DATUM)).toBe("refused");
+    const datum = treePickRefusal(DATUM, "a face");
+    expect(showing()).toEqual(["Copied.", treePickRefusal(XZ, "a face"), datum]);
+    expect(routeTreeClick({ kind: "face", faceId: 14 }, treeClickDeps(e))).toBe("taken");
+    expect(showing()).toEqual(["Copied."]);
+    vi.advanceTimersByTime(200);
+    expect(routePlaneRow(e, DATUM)).toBe("refused");
+    expect(showing()).toEqual(["Copied.", datum]);
+    vi.useRealTimers();
+  });
+
+  it("a row taken with no refusal before it takes nothing down", () => {
+    const { e } = toasting();
+    toast("Copied.");
+    wantsFace();
+    expect(routeTreeClick({ kind: "face", faceId: 3 }, treeClickDeps(e))).toBe("taken");
+    expect(showing()).toEqual(["Copied."]);
+  });
+
+  it("a refusal repeated while it is still up shows once", () => {
+    const { e } = toasting();
+    wantsFace();
+    routePlaneRow(e, XZ);
+    routePlaneRow(e, XZ);
+    expect(showing()).toEqual([treePickRefusal(XZ, "a face")]);
   });
 });

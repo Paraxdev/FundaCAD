@@ -3,6 +3,7 @@
 import type { Engine } from "./engine";
 import type { Plane3 } from "../types";
 import { announce } from "../ui/announce";
+import { dismissToastsSaying } from "../ui/toast";
 import { routeTreeClick, type TreeClickDeps, type TreeClickRoute, type TreePick } from "../ui/treePick";
 
 export const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
@@ -10,8 +11,11 @@ export const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
 /** How long a selection's words wait to be spoken, so a run of Ctrl-clicks says only its last. */
 export const SELECTION_SPEECH_DELAY = 250;
 
+const refusals = new Set<string>();
+
 // A toast reaches no screen reader. The readout speaks a changed selection under the same key and replaces these words.
 export function refuseAloud(e: Pick<Engine, "setStatus">, text: string) {
+  refusals.add(text);
   e.setStatus(text, "");
   announce(text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY });
 }
@@ -28,8 +32,14 @@ function busyHint(e: PlaneRowHost): string | null {
   return "Finish the active tool first, or press Esc";
 }
 
+// Left up beside the next prompt, a refusal reads as if the row just taken had failed too.
+function dropRefusals() {
+  for (const text of refusals) dismissToastsSaying(text);
+  refusals.clear();
+}
+
 export function treeClickDeps(e: PlaneRowHost): TreeClickDeps {
-  return { busyHint: () => busyHint(e), hint: (text) => refuseAloud(e, text) };
+  return { busyHint: () => busyHint(e), hint: (text) => refuseAloud(e, text), taken: dropRefusals };
 }
 
 export function sketchOnPlane(e: PlaneRowHost, pick: PlanePick) {

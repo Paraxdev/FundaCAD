@@ -7,7 +7,12 @@ import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
 import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
 
-vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../src/ui/toast", () => ({
+  toast: () => {},
+  dismissToast: () => {},
+  hintToast: () => {},
+  dismissToastsSaying: () => {},
+}));
 
 beforeEach(() => {
   setActivePinia(createPinia());

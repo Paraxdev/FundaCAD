@@ -95,6 +95,7 @@ export interface TreeClickDeps {
   /** A hint when a tool that takes no rows holds the screen, else null. */
   busyHint: () => string | null;
   hint: (text: string) => void;
+  taken?: () => void;
 }
 
 /** "taken" and "refused" both mean the row's own action must not run. */
@@ -103,7 +104,10 @@ export type TreeClickRoute = "row" | "taken" | "refused";
 export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRoute {
   if (session) {
     const answer = session.taker(pick);
-    if (answer === true) return "taken";
+    if (answer === true) {
+      deps.taken?.();
+      return "taken";
+    }
     deps.hint(answer);
     return "refused";
   }
