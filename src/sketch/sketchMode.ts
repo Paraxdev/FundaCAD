@@ -43,6 +43,7 @@ import { bsplineDegree, bsplineMinPoles, poleOfRef } from "./bspline";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
+import { TEXT_PREVIEW_ID } from "./textForm";
 import { fetchFonts } from "./textCache";
 import { isEditableTarget, isBoxButtonKey, isMenuKey } from "../ui/focus";
 import { inputModality } from "../ui/inputModality";
@@ -247,9 +248,7 @@ function parseConflictIdx(ids: string[]): Set<number> {
 // Tools that act on the current selection, so setTool keeps it. The entity patterns replicate the selection too.
 const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale", ...ENTITY_PATTERNS]);
 
-// The text tool's live-preview entity lives on the active list so it repaints normally, but is never committed.
 const PALETTE_OWN_KEYS = new Set(["Enter", " ", "Delete", "Backspace"]);
-const TEXT_PREVIEW_ID = "__textpreview__";
 
 // A dimmed curve blue: snappable, but never mistaken for drawn geometry.
 const FACE_ANCHOR_COLOR = 0x4a6a94;

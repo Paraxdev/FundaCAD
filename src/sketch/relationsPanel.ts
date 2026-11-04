@@ -7,6 +7,7 @@ import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint } from "../types";
 import { dofSummary, relationRows } from "./relations";
 import { FreedomWatch } from "./freedomWatch";
+import { TEXT_PREVIEW_ID } from "./textForm";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import { useSketchRelationsStore, type RelationHooks } from "../stores/sketchRelations";
 
@@ -38,6 +39,7 @@ export class RelationsPanel {
     conflict: boolean,
     ready: boolean,
   ) {
+    entities = entities.filter((e) => e.id !== TEXT_PREVIEW_ID);
     const store = useSketchRelationsStore();
     const summary = dofSummary(dof, conflict);
     store.hooks = this.hooks;

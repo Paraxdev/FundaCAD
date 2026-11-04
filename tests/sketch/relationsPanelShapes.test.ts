@@ -15,6 +15,7 @@ vi.mock("../../src/sketch/freedom", () => ({
 }));
 
 import { RelationsPanel } from "../../src/sketch/relationsPanel";
+import { TEXT_PREVIEW_ID } from "../../src/sketch/textForm";
 import { useSketchPaletteStore } from "../../src/stores/sketchPalette";
 import { useSketchRelationsStore } from "../../src/stores/sketchRelations";
 
@@ -106,5 +107,17 @@ describe("RelationsPanel shapes", () => {
     expect(rel.shapes.map((s) => s.spoken)).toEqual(["Line 1", "Circle 1"]);
     await vi.advanceTimersByTimeAsync(300);
     expect(rel.freedom).toBeNull();
+  });
+
+  it("leaves the Text tool's live preview out of the list and the probe", async () => {
+    const p = new RelationsPanel();
+    const rel = useSketchRelationsStore();
+    useSketchPaletteStore().shapesOpen = true;
+    const text = (id: string, x: number): ResolvedEntity =>
+      ({ type: "text", id, x, y: -4.5, text: "M4", height: 3.5, font: "Arial", angle: 15 }) as ResolvedEntity;
+    p.show([...ents(11), text("t1", 8), text(TEXT_PREVIEW_ID, 9.5)], cons, none, none, 3, false, true);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(rel.shapes.map((s) => s.spoken)).toEqual(["Line 1, free in X", "Circle 1", "Text 1"]);
+    expect(probe.calls).toEqual([[...ents(11), text("t1", 8)]]);
   });
 });
