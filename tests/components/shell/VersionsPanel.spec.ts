@@ -11,6 +11,8 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import type { VersionRepo } from "../../../src/document/versions";
 import { toast } from "../../../src/ui/toast";
+import { createDocumentActions } from "../../../src/app/documentActions";
+import type { Feature } from "../../../src/types";
 import { box, freshStore } from "../../document/storeKit";
 
 vi.mock("../../../src/ui/toast", () => ({ toast: vi.fn() }));
@@ -32,7 +34,14 @@ function twoVersions() {
 
 function mountPanel(store: ReturnType<typeof freshStore>) {
   const bridge = { docVersion: ref(0), metaVersion: ref(0), buildVersion: ref(0) };
-  const engine = { store, bridge } as unknown as Engine;
+  const engine = {
+    store,
+    bridge,
+    sketch: { active: false, undoEdit: () => false, redoEdit: () => false },
+    tools: { move: { pending: false, cancel: () => {} }, extrude: { profileSketches: [] } },
+    ui: { panels: { undoStress: () => false } },
+  } as unknown as Engine;
+  Object.assign(engine, createDocumentActions(engine));
   return mount(VersionsPanel, { attachTo: document.body, global: { provide: { [ENGINE as symbol]: engine } } });
 }
 
@@ -75,7 +84,29 @@ describe("Restore in the Versions panel", () => {
     const w = mountPanel(store);
     await restoreRow(w, "one");
     expect(store.document.features).toEqual([box("f1", 10.5)]);
-    expect(vi.mocked(toast).mock.calls.map((c) => c[1])).toEqual([undefined]);
+    expect(vi.mocked(toast).mock.calls.map((c) => c[1])).toEqual([expect.objectContaining({ action: expect.anything() })]);
     expect(vi.mocked(toast).mock.calls[0]![0]).toContain("one");
+  });
+
+  it("offers Undo on the message, which brings back what the document had", async () => {
+    const { store } = twoVersions();
+    const w = mountPanel(store);
+    await restoreRow(w, "one");
+    const [text, opts] = vi.mocked(toast).mock.calls[0]!;
+    expect(text).toBe('Back at "one"');
+    expect(opts!.action!.label).toBe("Undo");
+    opts!.action!.onClick();
+    expect(store.document.features).toEqual([box("f1", 10.5), box("f2", 4.25)]);
+    expect(store.redoLabel).toBe("Restore version");
+  });
+
+  it("refuses the Undo once another step was made", async () => {
+    const { store } = twoVersions();
+    const w = mountPanel(store);
+    await restoreRow(w, "one");
+    store.addFeature(box("f3", 7.75) as unknown as Feature);
+    vi.mocked(toast).mock.calls[0]![1]!.action!.onClick();
+    expect(store.document.features).toEqual([box("f1", 10.5), box("f3", 7.75)]);
+    expect(vi.mocked(toast).mock.calls.at(-1)![0]).toMatch(/no longer the last step/);
   });
 });

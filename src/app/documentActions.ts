@@ -324,7 +324,7 @@ export function createDocumentActions(
     undoIfLatest(mark: number) {
       if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
       const latest = !e.tools.move.pending && !usePanelsStore().stress && e.store.undoMark === mark;
-      if (!latest) return void toast("Not undone, the delete is no longer the last step.");
+      if (!latest) return void toast("Not undone, it is no longer the last step.");
       actions.doUndo();
     },
   };

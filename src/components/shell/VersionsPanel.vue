@@ -75,7 +75,9 @@ function restore(v: Version) {
     toast(`Could not go back to "${v.message}": ${e instanceof Error ? e.message : String(e)}`, { kind: "error" });
     return;
   }
-  toast(`Back at "${v.message}". Undo brings back what you had.`);
+  const mark = store.undoMark;
+  const undo = mark !== null ? { label: "Undo", onClick: () => engine.undoIfLatest(mark) } : undefined;
+  toast(`Back at "${v.message}"`, undo && { action: undo });
 }
 
 function startBranch(v: Version) {
