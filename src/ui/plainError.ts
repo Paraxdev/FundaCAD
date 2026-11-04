@@ -36,13 +36,18 @@ export function plainError(err: unknown, fallback: string): string {
   return text && !looksInternal(text) ? text : fallback;
 }
 
+/** The length of the step's first word when the engine's sentence starts with it, as "Fillet: ..." does, else 0. */
+export function namesStep(label: string, said: string): number {
+  const word = label.split(" ")[0]!;
+  const named = said.slice(0, word.length).toLowerCase() === word.toLowerCase() && !/\w/.test(said[word.length] ?? "");
+  return named ? word.length : 0;
+}
+
 /** "Fillet failed: <why>", said once when the engine's sentence already starts with the step's name. */
 export function failedText(label: string, raw: unknown): string {
   const said = plainError(raw, "");
   if (!said) return `${label} failed: the engine could not build it. ${SEE_CONSOLE}`;
-  const word = label.split(" ")[0]!;
-  const named = said.slice(0, word.length).toLowerCase() === word.toLowerCase() && !/\w/.test(said[word.length] ?? "");
-  return named ? said : `${label} failed: ${said}`;
+  return namesStep(label, said) ? said : `${label} failed: ${said}`;
 }
 
 export function sketchConflictText(sketchId: string, features: readonly Feature[]): string {
