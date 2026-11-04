@@ -105,6 +105,11 @@ const check = (name, ok, detail) => {
     "the fin is a thin wall of 0.6 mm",
     rows.some((r) => /Thin wall 0\.6 mm/.test(r)),
   );
+  check(
+    "each row names its face and its height above the bed",
+    rows.length > 0 && rows.every((r) => /Faces? \d+.*the bed/.test(r)),
+    JSON.stringify(rows),
+  );
   const header = await page.textContent(".printability-header");
   check("the header says how the parts sit", /\+Z up as modelled/.test(header || ""), header);
   await shot("printability-results");
@@ -114,7 +119,9 @@ const check = (name, ok, detail) => {
   const texts = await Promise.all(rowsEls.map((w) => w.textContent()));
   await rowsEls[texts.findIndex((t) => /Thin wall/.test(t))].click();
   await page.waitForTimeout(1500);
-  const focused = await page.$eval(".printability-finding.is-focus", (e) => e.textContent.trim()).catch(() => "");
+  const focused = await page
+    .$eval('.printability-finding[aria-current="true"]', (e) => e.textContent.trim())
+    .catch(() => "");
   check("the clicked row is the one put forward", /Thin wall/.test(focused), focused);
   await shot("printability-focus");
 

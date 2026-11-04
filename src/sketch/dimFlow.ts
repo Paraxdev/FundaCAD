@@ -6,7 +6,13 @@ import type { Viewport } from "../viewport/viewport";
 import type { PlaceOffset, SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, dimensionLineObjects, PREVIEW_COLOR } from "./overlay";
+import {
+  curveObjects,
+  dimensionLineObjects,
+  sketchConflictColor,
+  sketchPreviewColor,
+  sketchSelectColor,
+} from "./overlay";
 import type { DimInput } from "./dimInput";
 import { constraintDims, linearDim } from "./entityDims";
 import {
@@ -29,6 +35,7 @@ import type { FieldKind } from "../document/numFields";
 import type { ResolvedEntity } from "./snap";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
+import { plainError } from "../ui/plainError";
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface DimHost {
@@ -205,7 +212,7 @@ export class DimFlow {
     const r = resolveDim(this.dimPicks, this.dimOptions());
     this.dimPlan = isDimError(r) ? null : r;
     if (this.dimPicks.map(targetKey).join("+") !== before) {
-      toast("The geometry this dimension referenced is gone, dimension cancelled");
+      toast("What this dimension pointed at is gone, so the dimension was cancelled");
       this.cancelDim();
       return;
     }
@@ -354,7 +361,7 @@ export class DimFlow {
     if (raw !== "") {
       const r = this.host.evalDimInput(raw, kind, null);
       if ("error" in r) {
-        toast(`Dimension not created, ${r.error}`);
+        toast(`Dimension not created, ${plainError(r.error, "that value is not valid")}`, { detail: r.error });
         this.host.dim().focus(); // leave the box open on the bad value
         return;
       }
@@ -470,20 +477,20 @@ export class DimFlow {
     if (!p) return;
     this.host.lastCursor().copy(p);
     const preview: THREE.Object3D[] = [];
-    for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, 0x33aaff));
+    for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, sketchSelectColor()));
     const cand =
       this.dimPicks.length < 2
         ? (this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol()))
         : null;
     if (cand && !this.dimPicks.some((t) => targetKey(t) === targetKey(cand))) {
-      preview.push(...this.dimTargetObjects(cand, 0xff5555));
+      preview.push(...this.dimTargetObjects(cand, sketchConflictColor()));
     }
     const plan = this.dimPlan;
     if (plan) {
       const own = plan.labelAnchor();
       this.dimCursor = own ? { ox: p.x - own.x, oy: p.y - own.y } : undefined;
       const segs = this.dimPreviewSegs(plan, p);
-      if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, PREVIEW_COLOR));
+      if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, sketchPreviewColor()));
       this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
       this.positionDimBox(e);
     }

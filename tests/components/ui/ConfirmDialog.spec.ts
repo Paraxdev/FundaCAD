@@ -85,6 +85,37 @@ describe("ConfirmDialog", () => {
     expect($(".ui-confirm-primary")!.classList.contains("ui-confirm-danger")).toBe(true);
   });
 
+  it("paints only the options that carry danger, and Cancel keeps the focus when none is primary", async () => {
+    const w = await render({
+      options: [
+        { value: "cancel", label: "Cancel" },
+        { value: "go", label: "Remove", danger: true },
+        { value: "other", label: "Keep both" },
+      ],
+    });
+    expect($$(".ui-confirm-choice").map((b) => b.classList.contains("ui-confirm-danger"))).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(active()?.textContent).toContain("Cancel");
+    expect($$(".ui-confirm-choice").map((b) => b.tabIndex)).toEqual([0, -1, -1]);
+    $$(".ui-confirm-choice")[1]!.click();
+    expect(w.emitted("pick")).toEqual([["go"]]);
+  });
+
+  it("an option danger and the dialog danger together paint the danger option and the primary", async () => {
+    await render({
+      danger: true,
+      options: [
+        { value: "a", label: "Keep", primary: true },
+        { value: "b", label: "Drop", danger: true },
+        { value: "c", label: "Later" },
+      ],
+    });
+    expect($$(".ui-confirm-choice").map((b) => b.classList.contains("ui-confirm-danger"))).toEqual([true, true, false]);
+  });
+
   it("multi: confirm stays disabled under min, then emits the ticked values", async () => {
     const w = await render({
       multi: true,

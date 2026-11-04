@@ -5,11 +5,14 @@ import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
+import ListRow from "../ui/ListRow.vue";
+import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
 import Switch from "../ui/Switch.vue";
+import StressLegend from "./StressLegend.vue";
 import StressVerdict from "./StressVerdict.vue";
 import { plainWarningFor } from "../../ui/stressWarnings";
-import { deformLabel, legendEnds, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
+import { deformLabel, setupSummary, type StressResultView } from "../../ui/stress";
 import { getUnit } from "../../ui/units";
 
 const props = defineProps<{ result: StressResultView }>();
@@ -20,7 +23,7 @@ const panels = usePanelsStore();
 const stress = computed(() => panels.stress!);
 const deform = computed(() => stress.value.deform);
 const exaggerationId = useId();
-const gradient = legendGradient();
+const whereId = useId();
 const unit = computed(() => getUnit());
 
 const modelChanged = computed(() => stress.value.colours === "none");
@@ -38,7 +41,6 @@ function ranSetupRefine() {
   return (ran ? JSON.parse(ran) : stress.value.setup).refine;
 }
 const keyRows = computed(() => props.result.rows);
-const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
 
 // A power of ten at most 1, so True size (1) and the two figure automatic scale sit on a step.
@@ -159,18 +161,29 @@ const deformStep = computed(() => {
     </div>
 
     <template v-if="stress.colours === 'shown'">
-      <div class="stress-legend" :style="{ background: gradient }" />
-      <div class="measure-row stress-legend-labels">
-        <span class="measure-v">{{ ends[0] }} MPa</span>
-        <span class="measure-k">Stress</span>
-        <span class="measure-v">{{ ends[1] }} MPa</span>
-      </div>
+      <StressLegend :legend="result.legend" />
     </template>
 
-    <div v-for="r in keyRows" :key="r.k" class="measure-row stress-key-row">
-      <span class="measure-k">{{ r.k }}</span>
-      <span class="measure-v" :class="{ 'stress-yields': r.k === 'Safety factor' && result.yields }">{{ r.v }}</span>
-    </div>
+    <ReadoutList :rows="keyRows" row-class="stress-key-row">
+      <template #value="{ row }">
+        <dd class="measure-v" :class="{ 'stress-yields': row.k === 'Safety factor' && result.yields }">{{ row.v }}</dd>
+      </template>
+    </ReadoutList>
+
+    <template v-if="result.peaks.length && !modelChanged">
+      <div :id="whereId" class="measure-k stress-where-head">Where the highest values are</div>
+      <ul class="stress-where" :aria-labelledby="whereId">
+        <li v-for="p in result.peaks" :key="p.label">
+          <ListRow
+            :label="p.label"
+            :hint="p.where"
+            :aria-label="p.spoken"
+            tip="Look at it"
+            @click="engine.ui.panels.lookAtStressPoint(p.at, p.size)"
+          />
+        </li>
+      </ul>
+    </template>
 
     <Button
       variant="ghost"
@@ -182,10 +195,7 @@ const deformStep = computed(() => {
       <template #icon><Icon :name="detailsOpen ? 'caretDown' : 'caretRight'" :size="12" /></template>Details
     </Button>
     <div v-show="detailsOpen" class="stress-fold stress-details-body">
-      <div v-for="(r, i) in result.details" :key="i" class="measure-row stress-detail-row">
-        <span class="measure-k">{{ r.k }}</span>
-        <span class="measure-v">{{ r.v }}</span>
-      </div>
+      <ReadoutList :rows="result.details" row-class="stress-detail-row" />
     </div>
 
     <div v-for="(w, i) in result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{

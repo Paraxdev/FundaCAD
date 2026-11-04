@@ -49,6 +49,7 @@ function rig() {
     buildState: { result: { bodies: [{ id: "b1", name: "Plate", faceStart: 0, faceCount: 9 }] } },
     onDocChange: () => () => {},
     onOpen: () => () => {},
+    onBuild: () => () => {},
     isBodyVisible: () => true,
     bodyName: () => undefined,
     loadCount: 1,

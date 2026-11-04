@@ -7,10 +7,19 @@ import { isDriven } from "../types";
 import { coincKey } from "./sketchSolve";
 import { constraintFace, diagnosisOf, type ConstraintDiagnosis } from "./glyphs";
 import { fmtDim } from "./annotationFormat";
+import { rectSideField } from "./directDims";
+import { distinctNames, entityLabel, entityLabeller, relationName, stateWord, type StateWord } from "./sketchNames";
+
+export { entityLabel };
 
 export { constraintFace } from "./glyphs";
 
 export interface RelationRow {
+  /** Stable for the row's subject: the constraint index, or the joined ids of an implied relation. */
+  key: string;
+  /** The row's accessible name, with ", row N" when another row reads the same. */
+  spoken: string;
+  stateWord?: StateWord;
   /** Null for an implied relation, which has no record to delete. */
   index: number | null;
   /** The canvas glyph's icon, so the two never disagree. */
@@ -32,39 +41,6 @@ export interface RelationRow {
 
 /** Degrees, not millimetres, the one dimensional constraint measured in them. */
 const isAngle = (c: SketchConstraint) => c.type === "angle";
-
-const KIND_NAME: Record<string, string> = {
-  line: "Line",
-  rectangle: "Rectangle",
-  circle: "Circle",
-  arc: "Arc",
-  spline: "Spline",
-  bspline: "Control point spline",
-  point: "Point",
-  polygon: "Polygon",
-  slot: "Slot",
-  text: "Text",
-  projected: "Reference",
-};
-
-/** Kind plus position among its kind, the only handle an entity has (ids, not names). Decodes rect-edge operands,
- *  null for an id nothing answers to, so a stale constraint reads as acting on nothing. */
-export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
-  const t = id.indexOf("~");
-  if (t >= 0) {
-    const base = entityLabel(ents, id.slice(0, t));
-    const k = Number(id.slice(t + 1));
-    return base && Number.isInteger(k) ? `${base} edge ${k + 1}` : base;
-  }
-  const target = ents.find((e) => e.id === id);
-  if (!target) return null;
-  let n = 0;
-  for (const e of ents) {
-    if (e.type === target.type) n++;
-    if (e.id === id) break;
-  }
-  return `${KIND_NAME[target.type] ?? target.type} ${n}`;
-}
 
 /** Endpoints that compile to one solver point. Uses the solver's own merge key on purpose, so the list never shows
  *  joins the solver does not hold. A lone endpoint is not a join. */
@@ -97,20 +73,21 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
     }
   }
   const out: RelationRow[] = [];
+  const labelOf = entityLabeller(ents);
   for (const ids of at.values()) {
     if (ids.length < 2 || joinedByRecords(ids, recorded)) continue;
-    out.push({
-      index: null,
-      icon: "coincident",
-      name: "Coincident",
-      detail: ids
-        .map((id) => entityLabel(ents, id))
-        .filter(Boolean)
-        .join(" and "),
-      entities: ids,
-      state: null,
-      implied: true,
-    });
+    out.push(
+      withWords({
+        key: `implied:${ids.join(",")}`,
+        index: null,
+        icon: "coincident",
+        name: "Coincident",
+        detail: ids.map(labelOf).filter(Boolean).join(" and "),
+        entities: ids,
+        state: null,
+        implied: true,
+      }),
+    );
   }
   return out;
 }
@@ -139,23 +116,45 @@ export function constraintRows(
   conflicts: Set<number>,
   over: Set<number>,
 ): RelationRow[] {
+  const labelOf = entityLabeller(ents);
   return constraints.map((c, i) => {
     const face = constraintFace(c);
-    const labels = face.operands.map((o) => entityLabel(ents, o)).filter((s): s is string => !!s);
+    const labels = face.operands.map(labelOf).filter((s): s is string => !!s);
     const v = (c as { value?: number }).value;
     const driven = isDriven(c);
+    const side = rectSide(ents, c);
     const row: RelationRow = {
+      key: String(i),
+      spoken: "",
       index: i,
       icon: face.icon,
-      name: face.name,
-      detail: labels.join(" and "),
+      name:
+        side === "width" ? "Width" : side === "height" ? "Height" : c.type === "fix" ? fixedName(ents, c) : face.name,
+      detail: [...new Set(labels)].join(" and "),
       entities: face.operands.map((o) => o.split("~")[0] ?? o),
       state: diagnosisOf(i, conflicts, over),
     };
     if (typeof v === "number") row.value = fmtDim(v, isAngle(c) ? "angle" : "length", driven);
     if (driven) row.driven = true;
-    return row;
+    return withWords(row);
   });
+}
+
+/** Reference sides count too, unlike rectSideOf, so a measured width still reads as one. */
+function rectSide(ents: ResolvedEntity[], c: SketchConstraint): "width" | "height" | null {
+  const field = rectSideField(c);
+  if (!field || c.type !== "p2pDistance") return null;
+  return ents.some((e) => e.id === c.e1 && e.type === "rectangle") ? field : null;
+}
+
+// The point indices are the solver's, as dimRefPoints lists them.
+function fixedName(ents: ResolvedEntity[], c: Extract<SketchConstraint, { type: "fix" }>): string {
+  const e = ents.find((x) => x.id === c.e);
+  if (e?.type === "point") return "Fixed";
+  if (e?.type === "circle" || (e?.type === "arc" && c.p === 2)) return "Fixed centre";
+  if (e?.type === "rectangle") return "Fixed corner";
+  if (e?.type === "line" || e?.type === "arc" || e?.type === "spline") return c.p === 0 ? "Fixed start" : "Fixed end";
+  return "Fixed point";
 }
 
 /** What was drawn, then what the geometry implies. */
@@ -165,7 +164,14 @@ export function relationRows(
   conflicts: Set<number>,
   over: Set<number>,
 ): RelationRow[] {
-  return [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents, constraints)];
+  const rows = [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents, constraints)];
+  const spoken = distinctNames(rows.map((r) => r.spoken));
+  return rows.map((r, i) => ({ ...r, spoken: spoken[i]! }));
+}
+
+function withWords(r: Omit<RelationRow, "spoken" | "stateWord">): RelationRow {
+  const word = stateWord(r);
+  return { ...r, spoken: relationName(r), ...(word ? { stateWord: word } : {}) };
 }
 
 /** `dof < 0` means no solve has run, which a sketch without constraints stays in, and is not "fully defined". */

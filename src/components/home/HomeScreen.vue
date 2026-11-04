@@ -310,8 +310,8 @@ onMounted(() => {
   void refreshStats();
   // With no opener, as at launch, closing Home lands on the workspace rather than the body.
   back = focusReturn(mainLandmark);
-  // The title bar's Home toggle stays live, it is how Home closes again.
-  if (root.value) releaseInert = inertOthers(root.value, ["#home-btn"]);
+  // The title bar's Home toggle stays live, it is how Home closes again, and so do toasts, such as an update's Install.
+  if (root.value) releaseInert = inertOthers(root.value, ["#home-btn", ".toast-stack"]);
   const first = searchInput() ?? root.value?.querySelector<HTMLElement>(".home-main button");
   first?.focus({ preventScroll: true });
 });

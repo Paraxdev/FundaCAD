@@ -44,6 +44,19 @@
   --axis-x: #ff5a5a;
   --axis-y: #46d97a;
   --axis-z: #4d8dff;
+  /* Sketch curves in the viewport: free to move, fully defined, construction, projected and its stale form, open and untied ends. */
+  --sketch-free: #5b9bff;
+  --sketch-defined: #ffffff;
+  --sketch-construction: #ffa64d;
+  --sketch-projected: #b07fe8;
+  --sketch-projected-stale: #d9a24d;
+  --sketch-loose-open: #e5484d;
+  --sketch-loose-untied: #f5a524;
+  /* Sketch aids: dimension lines and control polygons, the snap marker and its guides, the rubber band, region fills. */
+  --sketch-aid: #8fa4bd;
+  --sketch-snap: #ffaa33;
+  --sketch-preview: #ffffff;
+  --sketch-fill: #3a7bd5;
 
   /* legacy alias */
   --accent-blue: var(--accent);

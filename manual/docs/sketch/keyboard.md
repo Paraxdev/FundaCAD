@@ -52,6 +52,10 @@ After the first point, the box of [exact sizes](exact-sizes.md) takes over: W an
 
 Typing `@` as the first character of a size box turns it back into X and Y for that point. A line chain is then `@40,0` Enter, `@0,20` Enter, and so on. It closes when an end meets the start.
 
+## Change a size by keys
+
+Tab to **Dimensions** in the sketch palette, then to the row of the size, such as "Width of Rectangle 1". Type the new value and press Enter. The sketch updates and focus stays on the row. See [Dimensions](dimensions.md).
+
 ## Snaps
 
 Press arrows to move the cursor, then Tab. Each press names a snap near the cursor and moves the cursor onto it, such as "Cursor at 20, 5, snapped to the midpoint of Line 2". Enter places the point there, with the snap kept, as a click on a snap would. After the last candidate, Tab says "No snap, cursor at 20, minus 20" and the cursor is back where it was. If that spot is itself a snap, Tab says "End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 2". Tab walks the 16 candidates nearest the cursor, to reach a farther one, move the cursor closer with arrows and press Tab again, or type its coordinates. With no candidate, Tab moves focus as usual. See [Snapping](snapping.md).
@@ -70,5 +74,6 @@ Press arrows to move the cursor, then Tab. Each press names a snap near the curs
 2. A finished shape: "Rectangle 1, 40 by 20", "Circle 1, diameter 10" or "Line 4, length 20, loop closed". A typed angle is said too, "Line 1, length 25, angle 30 degrees". A line's chain goes on, so its keys follow, "Type the size, or @dx,dy, arrows move, Enter, Esc".
 3. An arrow: "Cursor at 20, 10". When the grid step changed, "Grid step 5 mm" comes first.
 4. A refused entry: the problem, and the box is marked as any refused box is.
+5. A change in how free the sketch is, such as "1 degree of freedom" or "Fully defined". Conflicting rules are said as an alert. Opening a sketch says nothing.
 
 Values are said in the display unit. See [Shortcuts](../reference/shortcuts.md) for every key.

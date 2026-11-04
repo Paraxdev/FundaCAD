@@ -24,6 +24,6 @@ The palette holds the options of the sketch you are in.
 
 ## Construction geometry
 
-Construction geometry is drawn dashed in orange and is never part of an outline. Use it for centre lines and for things to constrain against.
+Construction geometry is drawn in short orange dashes and is never part of an outline. Use it for centre lines and for things to constrain against.
 
 To turn lines you already drew into construction, select them, then click Construction at the foot of the rail or in their right-click menu.

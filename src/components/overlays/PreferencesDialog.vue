@@ -16,6 +16,7 @@ import { tabPanelAttrs } from "../ui/tabIds";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import LargerTargetsRow from "./LargerTargetsRow.vue";
+import NoticeTimeRow from "./NoticeTimeRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import ExperimentalSection from "./ExperimentalSection.vue";
 import UpdatesSection from "./UpdatesSection.vue";
@@ -24,13 +25,14 @@ import A11ySizeRows from "./A11ySizeRows.vue";
 import {
   addCustomTheme,
   asThemeId,
-  customThemes,
   getTheme,
   onThemeChange,
   removeCustomTheme,
   setTheme,
   themes,
 } from "../../ui/theme";
+import { confirmDanger } from "../../ui/choice";
+import { toast } from "../../ui/toast";
 import { describeFailures } from "../../ui/contrast";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
@@ -42,6 +44,7 @@ import {
   DEFAULT_A11Y,
   onA11yPrefsChange,
   resetA11yPrefs,
+  SCREEN_READER_PRESET,
   setA11yPref,
   systemReducesMotion,
 } from "../../ui/a11yPrefs";
@@ -106,7 +109,7 @@ const homeImageInput = ref<HTMLInputElement | null>(null);
 const homeImageError = ref("");
 // Only an uploaded palette is removable; the built-in theme and the shipped
 // ones (Dracula, Solarized Light) sit in the picker the same way but stay put.
-const activeIsCustom = computed(() => customThemes().some((t) => t.id === theme.value));
+const activeIsCustom = computed(() => themeList.value.some((t) => t.custom && t.id === theme.value));
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
@@ -139,7 +142,8 @@ onMounted(() => {
     onA11yPrefsChange(() => {
       a11y.value = a11yPrefs();
       reducesMotion.value = systemReducesMotion();
-      if (a11y.value.verbosity !== "verbose" || a11y.value.singleKeys || !a11y.value.solidPanels) presetNote.value = "";
+      const prefs = a11y.value;
+      if (presetKeys.some((k) => prefs[k] !== SCREEN_READER_PRESET[k])) presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -224,6 +228,7 @@ const a11yChanged = computed(
     a11y.value.singleKeys !== DEFAULT_A11Y.singleKeys ||
     a11y.value.targets !== DEFAULT_A11Y.targets ||
     a11y.value.unitsInFull !== DEFAULT_A11Y.unitsInFull ||
+    a11y.value.noticeTime !== DEFAULT_A11Y.noticeTime ||
     a11y.value.interfaceSize !== DEFAULT_A11Y.interfaceSize ||
     a11y.value.comfortableText !== DEFAULT_A11Y.comfortableText ||
     a11y.value.viewportLabels !== DEFAULT_A11Y.viewportLabels ||
@@ -237,13 +242,26 @@ function pickVerbosity(id: string) {
   const v = asVerbosity(id);
   if (v) setA11yPref("verbosity", v);
 }
+async function onResetA11y() {
+  const ok = await confirmDanger(
+    "Reset accessibility settings?",
+    "Reset",
+    "Every choice on this page goes back to its default, Hover delay too.",
+  );
+  if (!ok) return;
+  resetA11yPrefs();
+  toast("Accessibility settings are back to their defaults.");
+}
+
 const presetNote = ref("");
+const presetKeys = Object.keys(SCREEN_READER_PRESET) as (keyof typeof SCREEN_READER_PRESET)[];
 async function screenReaderPreset() {
   applyScreenReaderPreset();
   // Emptied for a tick first, so a second press changes the live region and is spoken again.
   presetNote.value = "";
   await nextTick();
-  presetNote.value = "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.";
+  presetNote.value =
+    "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.";
 }
 
 // Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
@@ -349,11 +367,18 @@ async function onUpload(ev: Event) {
   themeWarning.value = `${res.theme.label} is added, but ${shortfall}`;
 }
 
-function onRemoveTheme() {
+async function onRemoveTheme() {
   themeError.value = "";
   themeWarning.value = "";
+  const gone = themeList.value.find((t) => t.custom && t.id === theme.value);
+  if (!gone) return;
+  if (
+    !(await confirmDanger(`Remove the theme ${gone.label}?`, "Remove", "Its colours are deleted from this computer."))
+  )
+    return;
   // Removing the active palette falls back to the built-in one in the module, whose onThemeChange refreshes both refs.
-  if (activeIsCustom.value) removeCustomTheme(theme.value);
+  removeCustomTheme(gone.id);
+  toast(`Removed the theme ${gone.label}.`);
 }
 function onPack(id: string) {
   const v = asIconPackId(id);
@@ -818,14 +843,14 @@ function onClassicCamera(on: boolean) {
               :disabled="!a11yChanged"
               data-a11y-reset
               aria-describedby="prefs-a11y-actions-hint"
-              @click="resetA11yPrefs"
+              @click="onResetA11y"
               >Reset to defaults</Button
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
             <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose, turns Single key shortcuts off and Solid panels on,
-              the setup that suits NVDA, VoiceOver and other screen readers. Reset to defaults clears every choice
-              below, so Contrast and Animations follow the system again.
+              Screen reader preset sets Announcements to Verbose and Notification time to Until dismissed, and turns
+              Single key shortcuts off and Solid panels on, the setup that suits NVDA, VoiceOver and other screen
+              readers. Reset to defaults clears every choice below, so Contrast and Animations follow the system again.
             </p>
           </div>
 
@@ -907,6 +932,7 @@ function onClassicCamera(on: boolean) {
                   selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
                 </p>
               </div>
+              <NoticeTimeRow />
               <div class="pref-card">
                 <Checkbox
                   id="prefs-single-keys"

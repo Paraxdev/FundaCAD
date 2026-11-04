@@ -271,7 +271,7 @@ textarea,
   }
   // Sketch palette: the delete cross only appears under a hovering mouse, out of a finger's reach.
   .rel-del {
-    visibility: visible;
+    opacity: 1;
   }
   .timeline-node:hover {
     transform: none;

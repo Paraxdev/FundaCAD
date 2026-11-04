@@ -158,6 +158,16 @@ describe("StressHistory", () => {
     expect(setupKey(redone!.setup)).toBe(setupKey(withFaces));
   });
 
+  it("peeks the labels of the step undo and redo would take", () => {
+    const h = new StressHistory();
+    h.reset(start);
+    expect([h.undoLabel, h.redoLabel]).toEqual([null, null]);
+    h.note(withFaces, 0);
+    expect([h.undoLabel, h.redoLabel]).toEqual(["Support 1 faces", null]);
+    h.undo(withFaces, 10);
+    expect([h.undoLabel, h.redoLabel]).toEqual([null, "Support 1 faces"]);
+  });
+
   it("says nothing is left once every step is undone", () => {
     const h = new StressHistory();
     h.reset(start);

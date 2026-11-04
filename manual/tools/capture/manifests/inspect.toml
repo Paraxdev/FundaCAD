@@ -41,8 +41,8 @@ steps = [
   { evaluate = "() => { setTimeout(() => window.viewport.setXray(false), 4000); }" },
   { wait = 500 },
 ]
-show = "The Interference panel naming one clash between a box and a cylinder, the overlap drawn red inside the see through parts."
-alt = "Interference panel naming one clash between a box and a cylinder, with the overlap drawn in red"
+show = "The Interference panel with one clash row, Box and Cylinder with its overlap volume, the overlap drawn red inside the see through parts."
+alt = "Interference panel with one clash row, Box and Cylinder with the volume of their overlap, drawn in red in the view"
 uses = ["manual/docs/inspect/interference.md"]
 
 [[shot]]
@@ -93,7 +93,7 @@ uses = ["manual/docs/inspect/overhang.md"]
 
 [[shot]]
 file = "manual/docs/img/printability-panel.png"
-size = [426, 575]
+size = [426, 664]
 theme = "fundacad"
 crop = "panel"
 target = ".printability-panel"
@@ -103,14 +103,14 @@ steps = [
   { open = "example:Capsule holder" },
   { tool = "Printability" },
   { click_css = ".printability-run" },
-  { wait = 1500 },
-  { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
+  # Closes the result toast over the panel's foot, which comes after the opening hint toast.
+  { evaluate = "() => new Promise((res) => { const t0 = Date.now(); const t = setInterval(() => { const done = [...document.querySelectorAll('.toast-msg')].some((m) => /to look at|nothing found/.test(m.textContent)); if (done || Date.now() - t0 > 20000) { clearInterval(t); document.querySelectorAll('.toast-close').forEach((x) => x.click()); res(); } }, 250); })" },
   # Number boxes show the PC's decimal comma whatever the browser is told, as text they read 0.4 as in the page.
   { evaluate = "() => document.querySelectorAll('.printability-panel input[type=number]').forEach((i) => { i.type = 'text'; })" },
   { wait = 800 },
 ]
-show = "The Printability panel with its settings and two findings."
-alt = "The Printability panel with its settings and two findings"
+show = "The Printability panel with its settings and two overhang findings, each naming its face and its height above the bed."
+alt = "The Printability panel with its settings and two overhang findings, each naming its face and height above the bed"
 uses = ["manual/docs/inspect/printability.md"]
 
 [[shot]]
@@ -203,8 +203,8 @@ steps = [
   { evaluate = "() => document.querySelectorAll('.toast-close').forEach((b) => b.click())" },
   { wait = 500 },
 ]
-show = "The Stress panel on its Results tab beside the bracket coloured blue to red, the red at the gusset's tip under the pin."
-alt = "The Stress panel listing peak stress, deflection and safety factor beside the bracket coloured blue to red"
+show = "The Stress panel on its Results tab with the Perceptual colour bar marked at each quarter and the Where list, beside the bracket shaded dark violet with the bright spot at the gusset's tip under the pin."
+alt = "The Stress panel listing safety factor, peak stress, deflection and where the highest values are, beside the bracket shaded dark violet, lightest at the gusset's tip"
 uses = ["manual/docs/inspect/stress-results.md"]
 
 [[shot]]

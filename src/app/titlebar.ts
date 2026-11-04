@@ -14,6 +14,8 @@ export function installTitlebar(e: Engine): void {
     queueMicrotask(() => {
       ui.canUndo = e.store.canUndo;
       ui.canRedo = e.store.canRedo;
+      ui.undoLabel = e.store.undoLabel;
+      ui.redoLabel = e.store.redoLabel;
     });
   e.store.onDocChange(syncUndo);
   e.store.onBuild(syncUndo);

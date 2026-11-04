@@ -9,6 +9,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
 import { toast } from "../../ui/toast";
+import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
 import {
   APERTURE_STOPS,
@@ -101,7 +102,8 @@ async function render(): Promise<string | null> {
       });
       if (url) return url;
     } catch (e) {
-      if ((e as Error).name !== "AbortError") toast(`The traced picture failed: ${(e as Error).message}`);
+      if ((e as Error).name !== "AbortError")
+        toast(`The traced picture failed. ${plainError(e, SEE_CONSOLE)}`, { kind: "error", detail: e });
       return null;
     } finally {
       abort = null;

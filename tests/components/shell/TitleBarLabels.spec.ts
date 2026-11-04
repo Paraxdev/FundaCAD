@@ -7,6 +7,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { ENGINE } from "../../../src/app/engineKey";
 import { useUiStore } from "../../../src/stores/ui";
+import { usePanelsStore } from "../../../src/stores/panels";
 import TitleBar from "../../../src/components/shell/TitleBar.vue";
 
 vi.mock("../../../src/app/menubarDef", () => ({ buildMenubar: () => [] }));
@@ -36,6 +37,38 @@ describe("TitleBar undo and redo", () => {
     expect(w.get("#redo-btn").attributes("aria-label")).toBe("Redo");
     expect(w.get("#undo-btn").attributes("title")).toBe("Undo (Ctrl+Z)");
     expect(w.get("#redo-btn").attributes("title")).toBe("Redo (Ctrl+Y)");
+  });
+
+  it("names the step in the tooltip only, the name stays Undo and Redo", async () => {
+    const w = mountBar();
+    const ui = useUiStore();
+    Object.assign(ui, { canUndo: true, canRedo: true, undoLabel: "Box 2", redoLabel: "Move Fillet 3" });
+    await nextTick();
+    expect(
+      ["#undo-btn", "#redo-btn"].map((id) => [w.get(id).attributes("aria-label"), w.get(id).attributes("title")]),
+    ).toEqual([
+      ["Undo", "Undo Box 2 (Ctrl+Z)"],
+      ["Redo", "Redo Move Fillet 3 (Ctrl+Y)"],
+    ]);
+  });
+
+  it("says the bare verb when the button is off, and names a sketch edit or the Stress step first", async () => {
+    const w = mountBar();
+    const ui = useUiStore();
+    ui.undoLabel = "Box 2";
+    await nextTick();
+    expect(w.get("#undo-btn").attributes("title")).toBe("Undo (Ctrl+Z)");
+    ui.canUndo = true;
+    usePanelsStore().showStress("body1");
+    Object.assign(usePanelsStore().stress!, { canUndo: true, undoLabel: "Add support" });
+    await nextTick();
+    expect(w.get("#undo-btn").attributes("title")).toBe("Undo Add support (Ctrl+Z)");
+    ui.sketchActive = true;
+    await nextTick();
+    expect(w.get("#undo-btn").attributes("title")).toBe("Undo (Ctrl+Z)");
+    ui.sketchCanUndo = true;
+    await nextTick();
+    expect(w.get("#undo-btn").attributes("title")).toBe("Undo sketch edit (Ctrl+Z)");
   });
 
   it("keeps the disabled state with the label", async () => {

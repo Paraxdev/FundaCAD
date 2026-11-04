@@ -5,6 +5,7 @@ import { installSketchStateBridge } from "../../src/app/sketchStateBridge";
 import { setPrompt } from "../../src/ui/prompt";
 import { usePromptStore } from "../../src/stores/prompt";
 import { useRibbonStore } from "../../src/stores/ribbon";
+import { useUiStore } from "../../src/stores/ui";
 
 (globalThis as Record<string, unknown>).window ??= globalThis;
 
@@ -16,6 +17,8 @@ function bridge() {
     onState: null,
     keyPrompt: null,
     armedByKeys: vi.fn(),
+    canUndoSketch: false,
+    canRedoSketch: false,
   };
   // every setter the palette calls on sketch entry is a no-op here
   const sketch = new Proxy(state, { get: (t, k) => (k in t ? t[k as string] : () => {}) });
@@ -81,6 +84,20 @@ describe("the prompt a sketch tool starts with", () => {
     state.active = false;
     (state.onState as () => void)();
     expect(usePromptStore().text).toBeNull();
+  });
+
+  it("keeps the title bar's view of the sketch's own undo and redo in step", () => {
+    const { state } = bridge();
+    const ui = useUiStore();
+    const flags = () => [ui.sketchCanUndo, ui.sketchCanRedo];
+    state.canUndoSketch = true;
+    state.canRedoSketch = false;
+    (state.onHistory as () => void)();
+    expect(flags()).toEqual([true, false]);
+    state.canUndoSketch = false;
+    state.canRedoSketch = true;
+    (state.onState as () => void)();
+    expect(flags()).toEqual([false, true]);
   });
 
   it("hands the rail's keyboard arming to the sketch", () => {

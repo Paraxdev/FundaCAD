@@ -88,24 +88,24 @@
   font-size: var(--fs-small);
   color: var(--text);
 }
-/* Lit together with the geometry it names, so the pairing shows from either end. */
-.tgt-item:hover,
-.tgt-item.tgt-held {
-  background: var(--accent-tint);
-}
-.tgt-item {
-  cursor: pointer;
-}
 /* An entry the viewport cannot place but the engine can: marked, not hidden, or a set
    of four shown as three would lose one on the next Done. */
-.tgt-unresolved .tgt-label {
+.tgt-unresolved .tgt-label,
+.tgt-unresolved .ui-list-row-label {
   color: var(--text-mute);
   font-style: italic;
 }
 .tgt-label {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tgt-label.ui-list-row {
+  width: auto;
+  padding: 2px var(--s-2);
+  font-size: var(--fs-small);
 }
 .tgt-none {
   padding: var(--s-2);

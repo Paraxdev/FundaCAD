@@ -51,6 +51,8 @@ import { onHdrRegistered } from "../../viewport/hdrRegistry";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
 import { formatTurn } from "../../viewport/rotateDial";
 import { useEngine } from "../../app/engineKey";
+import { confirmDanger } from "../../ui/choice";
+import { toast } from "../../ui/toast";
 import { highRefusal } from "../../viewport/realtimePipeline";
 
 const engine = useEngine();
@@ -176,8 +178,20 @@ const finishNaming = async () => {
   }
 };
 const saveName = () => (hdrLabel.value ?? "My environment").replace(/\.(hdr|exr)$/i, "");
-const removeSaved = (entry: EnvEntry) => {
-  void deleteSavedEnvironment(entry.id).catch(fail);
+const removeSaved = async (entry: EnvEntry, then?: () => void) => {
+  const ok = await confirmDanger(
+    `Delete ${entry.name}?`,
+    "Delete",
+    "This saved environment is deleted from this computer.",
+  );
+  if (!ok) return;
+  then?.();
+  try {
+    await deleteSavedEnvironment(entry.id);
+    toast(`Deleted the environment ${entry.name}.`);
+  } catch (err) {
+    fail(err);
+  }
 };
 
 type SavedItem = { value: string; label: string; entry: EnvEntry | null };
@@ -201,8 +215,7 @@ const onSavedKey = (e: KeyboardEvent, entry: EnvEntry) => {
   if (e.key === "F2") return startNaming(entry.id, entry.name);
   const tile = e.currentTarget as HTMLElement;
   const next = [tile.nextElementSibling, tile.previousElementSibling].find((el) => el?.matches("[data-roving]"));
-  (next as HTMLElement | undefined)?.focus();
-  removeSaved(entry);
+  void removeSaved(entry, () => (next as HTMLElement | undefined)?.focus());
 };
 const thumbStyle = (thumb: string) =>
   thumb.startsWith("data:") ? { backgroundImage: `url("${thumb}")`, backgroundSize: "cover" } : { background: thumb };
@@ -367,7 +380,7 @@ const qualityChoices = computed(() =>
             size="sm"
             :aria-label="`Delete ${activeEntry.name}`"
             :data-delete="activeEntry.name"
-            @click="removeSaved(activeEntry)"
+            @click="void removeSaved(activeEntry)"
             >Delete</Button
           >
         </template>

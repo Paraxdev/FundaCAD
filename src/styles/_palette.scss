@@ -10,11 +10,13 @@
   box-shadow: var(--shadow-3);
   padding: var(--s-4);
   z-index: 20;
-  /* A sketch can carry a hundred relations: the card is capped at the viewport and only
-     the list scrolls, the controls above it never squeeze. */
+  /* Capped at the viewport, the card scrolls as one and no list squeezes below its rows: three lists of a busy
+     sketch under the options are taller than most windows. */
   display: flex;
   flex-direction: column;
   max-height: calc(100% - var(--s-4) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .palette > * {
   flex: none;
@@ -75,6 +77,25 @@
 .palette-section-gap {
   margin-top: var(--s-4);
 }
+.dim-empty {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--text-mute);
+}
+.dim-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 216px;
+  overflow-y: auto;
+}
+.dim-row {
+  padding: var(--s-1) 0;
+}
+.dim-row .ui-field-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .rel-summary {
   font-size: var(--fs-small);
   font-weight: 600;
@@ -95,24 +116,27 @@
   padding: 0;
   /* Same bleed as .palette-row. */
   margin: 0 calc(-1 * var(--s-3));
-  /* About eight rows, fewer on a short viewport: the only part of the card that shrinks, and
-     min-height 0 is what lets a flex item shrink below its content at all. */
-  flex: 1 1 auto;
-  min-height: 0;
+  /* About eight rows, a longer list scrolls inside. */
   max-height: 216px;
   overflow-y: auto;
 }
 .rel-row {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
+  gap: var(--s-1);
+  padding-inline-end: var(--s-2);
   border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease);
 }
-.rel-row:hover {
+.rel-row:hover,
+.rel-row:focus-within {
   background: var(--raised);
+}
+.rel-row .ui-list-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rel-row .ui-list-row:hover:not(.is-disabled) {
+  background: none;
 }
 /* The same 16px square and accent border as the canvas glyph it names. */
 .rel-sym {
@@ -142,48 +166,18 @@
   border-color: var(--text-mute);
   color: var(--text-mute);
 }
-.rel-text {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-.rel-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  min-width: 0;
-}
-.rel-name {
-  font-size: var(--fs-small);
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.rel-row.implied .rel-name {
+.rel-row.implied .ui-list-row-label {
   color: var(--text-dim);
 }
-.rel-value {
-  flex: none;
-  font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-}
-.rel-detail {
-  font-size: var(--fs-micro);
-  color: var(--text-mute);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Out of the flow until hover: a column of crosses would turn the list into a control
-   panel. */
+/* Shown on hover and focus, never display or visibility none: it must stay a Tab stop. */
 .rel-del {
-  visibility: hidden;
+  flex: none;
+  opacity: 0;
 }
-.rel-row:hover .rel-del {
-  visibility: visible;
+.rel-row:hover .rel-del,
+.rel-row:focus-within .rel-del,
+.rel-del:focus-visible {
+  opacity: 1;
 }
 
 .palette-btn {

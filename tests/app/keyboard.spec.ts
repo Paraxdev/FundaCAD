@@ -7,12 +7,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { installKeyboard } from "../../src/app/keyboard";
+import { useSelectionStore } from "../../src/stores/selection";
+import { useToastStore } from "../../src/stores/toasts";
 import type { Engine } from "../../src/app/engine";
 
 function fakeEngine(opts: { selectedFeature: string | null; explicit: boolean }) {
   const removeFeature = vi.fn();
   const removeFeatures = vi.fn();
   const selectFeature = vi.fn();
+  const undoIfLatest = vi.fn();
   const e = {
     sketch: { active: false },
     tools: {
@@ -30,9 +33,10 @@ function fakeEngine(opts: { selectedFeature: string | null; explicit: boolean })
     selectedFeature: opts.selectedFeature,
     selectedFeatureExplicit: opts.explicit,
     selectFeature,
-    store: { removeFeature, removeFeatures, document: { features: [{ id: "f1" }] } },
+    undoIfLatest,
+    store: { removeFeature, removeFeatures, undoMark: 7, document: { features: [{ id: "f1", type: "box" }] } },
   } as unknown as Engine;
-  return { e, removeFeature: removeFeatures, selectFeature };
+  return { e, removeFeature: removeFeatures, selectFeature, undoIfLatest };
 }
 
 function pressDelete() {
@@ -54,11 +58,16 @@ describe("Delete key", () => {
   });
 
   it("removes the feature when the user explicitly selected it", () => {
-    const { e, removeFeature, selectFeature } = fakeEngine({ selectedFeature: "f1", explicit: true });
+    const { e, removeFeature, selectFeature, undoIfLatest } = fakeEngine({ selectedFeature: "f1", explicit: true });
+    useSelectionStore().featureId = "f1";
     installKeyboard(e);
     pressDelete();
     expect(removeFeature).toHaveBeenCalledWith(["f1"]);
     expect(selectFeature).toHaveBeenCalledWith(null);
+    const shown = useToastStore().items;
+    expect(shown.map((t) => t.message)).toEqual(["Deleted Box 1"]);
+    shown[0]!.action!.onClick();
+    expect(undoIfLatest).toHaveBeenCalledWith(7);
   });
 
   it("removes every picked row in one call", async () => {

@@ -9,7 +9,7 @@ import type { DocumentStore } from "../document/store";
 import type { EdgeFingerprint, Feature, ProjectedSource, Selector } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects } from "./overlay";
+import { curveObjects, sketchSelectColor } from "./overlay";
 import type { ProjectPanel } from "./projectPanel";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
@@ -18,6 +18,7 @@ import { newEntityId } from "./id";
 import { resolveRealEntities } from "./resolve";
 import { edgeProbePoint } from "./planeEdgePick";
 import { toast } from "../ui/toast";
+import { plainError, SEE_CONSOLE } from "../ui/plainError";
 
 // Fingerprints carry engine float noise: same midpoint within 1e-3 mm, same unoriented tangent and matching length
 // when both carry one is the same edge.
@@ -93,7 +94,9 @@ export class ProjectFlow {
     this.host
       .overlay()
       .setPreview(
-        src ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), 0x33aaff, true) : [],
+        src
+          ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), sketchSelectColor(), true)
+          : [],
       );
     this.host.viewport().requestRender();
   }
@@ -139,7 +142,8 @@ export class ProjectFlow {
     if (!this.host.active() || this.host.entities() !== session) return null;
     const failed = sources.findIndex((_s, i) => !results[i]?.ok);
     if (failed >= 0) {
-      toast(results[failed]?.error ?? "geometry engine unavailable");
+      const raw = results[failed]?.error;
+      toast(plainError(raw, "The projection failed. " + SEE_CONSOLE), { detail: raw });
       return null;
     }
     const ids: string[][] = [];
@@ -238,11 +242,11 @@ export class ProjectFlow {
     if (!this.host.active() || this.host.tool() !== "project" || this.host.entities() !== session) return; // finished/switched/re-entered mid-flight
     const r = results[0];
     if (!r) {
-      toast("geometry engine unavailable");
+      toast("Projecting is not available right now. Try again in a moment.");
       return;
     }
     if (!r.ok) {
-      toast(r.error ?? "projection failed"); // engine message verbatim ("created after this sketch"…)
+      toast(plainError(r.error, "The projection failed. " + SEE_CONSOLE), { detail: r.error }); // "created after this sketch" is an engine sentence that reads plainly
       return;
     }
     // Sketch-curve duplicates were pre-checked above, body edges are checked against the returned fingerprints.

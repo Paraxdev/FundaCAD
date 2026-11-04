@@ -15,7 +15,12 @@ import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {} }));
-vi.mock("../../src/sketch/overlay", () => ({ curveObjects: (ents: unknown[]) => ents, PREVIEW_COLOR: 0 }));
+vi.mock("../../src/sketch/overlay", () => ({
+  curveObjects: (ents: unknown[]) => ents,
+  sketchPreviewColor: () => 0,
+  sketchSelectColor: () => 0,
+  sketchConflictColor: () => 0,
+}));
 vi.mock("../../src/sketch/solver", () => ({
   SolverUnavailable: class extends Error {},
   initSolver: async () => false,

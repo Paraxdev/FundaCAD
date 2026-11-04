@@ -2,8 +2,8 @@
 
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
-screen reader. This page is the hand check a person runs before each release: about twenty eight minutes per screen
-reader, the same sixteen steps everywhere, and a results table that keeps what was heard.
+screen reader. This page is the hand check a person runs before each release: about thirty six minutes per screen
+reader, the same nineteen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -14,6 +14,7 @@ reader, the same sixteen steps everywhere, and a results table that keeps what w
 | The Items tree and History by keys alone: Tab reaches one row or step, arrows walk them, Space selects, F2 renames, Shift+F10 opens the menu, Alt and an arrow move a step, the Rollback slider names the step it sits after | the same step, `tools/harness/tests/browser/test_items_tree_keys.py` and `test_history_keys.py` | a key stops working, focus leaves the row or step, or a role, name, level, state or value text the tests read changes |
 | Drawing by keys: a 40 by 20 plate with a 10 mm hole from Items to Extrude with no pointer event, a closed slanted line chain by `@dx,dy` and a second document that starts clean, Tab to a midpoint, arrows moving the cursor in Rectangle and turning the view in Select and when the plane is edge-on, in both camera rigs | the same step, `tools/harness/tests/browser/test_sketch_keys.py` | a pointer event reaches the page, a point or snap is not spoken, a shape comes out different from the keys typed, Tab does not reach a profile with a hole, or an arrow turns the view in a draw tool or stops turning it elsewhere |
 | The Geometry tab by keys alone: Tab reaches one row, arrows walk and turn pages, Enter, Space and the runs pick, `]` and `[` step on the 3D view, two edges take a fillet, a sketch starts on a face and on a plane, Section, Mirror, Press/Pull and a joint take a row while they wait, and axe walks the tab | the same step, `tools/harness/tests/browser/test_geometry_browser.py`, `test_geometry_commands.py`, `test_geometry_planes.py` and `test_geometry_row_pickers.py` | a key stops working, focus leaves the list, the selection differs from a click's, or a role, name or spoken word the tests read changes. None of this listens to a screen reader, see step 10 |
+| The sketch palette's lists by keys alone: a length typed in its row under Dimensions drives the line and says the new freedom, the constraint it made is deleted from its Relations row with Delete and the app says so, entering a second sketch says nothing, no pointer event reaches the page | the same step, `tools/harness/tests/browser/test_sketch_lists.py` | a pointer event reaches the page, a row has no name or a Delete button is not named by its rule, a freedom change is not spoken or entry speaks one, or the palette has an axe violation above the `sketch` baseline |
 | Pointer targets: at least 24 by 24 CSS px, about 32 with Larger click targets, with no layout change | the same step, `tools/harness/tests/browser/test_targets.py`; the token and hit area guard is `tests/ui/hitTargets.test.ts` in the `test` job | a control on a screen above hits under 24 px either way, a grown area takes another control's centre or the edge of its own box, Larger click targets leaves one under 32 px on the shell, Home, an example, Sketch, Settings, the palette or a confirm (bar the spacing exceptions the test names with their reason), or turning it on moves a control or changes a scroll size |
 | Icon only controls have a name, and every number field a unit | `node scripts/check-ui-controls.mjs` in the `test` job, and `tests/ui/designSpec.test.ts` | an `IconButton` with no `tip`, a `RailButton` with no `label`, or an icon only `Segmented` option with no `label` or `tip`, and no `aria-label` or `aria-labelledby` either, or a `NumberField` with no `unit`, `caption` or `unitless` |
 | Size and text: Interface size 150 and 200 percent, Comfortable text, the 11 px floor | `e2e` job, step "Agent harness smoke set", `tools/harness/tests/browser/test_size.py`, `test_reach.py`, `test_text_size.py` and `test_bottom_row.py`; the font size guard `node scripts/check-font-sizes.mjs` in the `test` job | a control is clipped, covered or out of the Tab walk at 150 percent in 1366 by 768, at 200 percent in 1280 by 800 or in 800 by 600, rendered text is under 11 px, Comfortable text cuts a base control's label, the frame rate chip overlaps the hint card or a rail card, or a font size is set outside the `--fs-*` tokens |
@@ -190,7 +191,46 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     `8`, Enter: you hear "Built, 1 body". This is one way to draw among others. Fail: a point or shape that is not
     spoken, an arrow that turns the view while a draw tool is armed, or a Tab that skips a profile.
 
-Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
+17. **Hear undo and a message (2 min).** Open "Box with a lid", select a step in the Items tree and press Delete: you
+    hear "Deleted" and the step's name once, with an Undo button on the message. Press Ctrl+Z: you hear "Undid Delete"
+    and the step's name. Press Ctrl+Y: you hear "Redid Delete" and the name. Press Ctrl+K, type `last message` and press
+    Enter: the newest message is said again. In a new document press Ctrl+Z: you hear "Nothing to undo". Open
+    Preferences, set Notification time to Until dismissed and delete a step again: the message stays past ten seconds
+    until you dismiss it. Fail: a message that is not spoken or is spoken twice, an undo that says only "Undo", or a
+    message that goes while the setting is Until dismissed.
+
+18. **Read results (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here is a heard
+    fact yet. With "Box with a lid" open, press Ctrl+K, type `interference` and press Enter: when the check ends you
+    hear a line like "Interference: no clashes". Then open a part that has an overhang, press Ctrl+K, type
+    `printability`, press Enter, Tab to Check and press Enter. You hear the count and what it is made of, then the
+    largest overhang with its area and face, for example "Printability: 3 things to look at. 2 overhangs, 1 thin wall.
+    Largest overhang 132 mm squared on face 4". Tab to the first finding: you hear its words and its place ("Overhang,
+    132 mm squared leaning 63 degrees, face 4, 16 mm above the bed") and its face lights on the model. Press Enter: the
+    view turns to it. Fail: a check that ends in silence, a count with no area or face, a finding that is not
+    reachable by Tab, or an Enter that does not turn the view.
+
+19. **Sketch dimensions and relations (3 min).** Open a new sketch, draw one line with the Line tool and press Escape. Tab
+    into the sketch palette: you hear "Sketch palette". Tab to the Shapes list and open it: the line is read with its
+    freedom, such as "Line 1, free in X and Y". Tab to the Dimensions list: the row is read by its subject,
+    "Length of Line 1", with its value in millimetres. Type `30` and press Enter: you hear the new freedom, such as "3
+    degrees of freedom", once. Tab to the Relations list: you hear a row for the length, with its value and the line it
+    holds, and a Delete button named by that rule. Press Delete on the row: you hear "Deleted" with the rule, then
+    "Not constrained", and focus lands on the line above the list. Draw a rectangle and give it a width and a height, then
+    constrain it until the line above the list says "Fully defined": it is spoken once, and the Shapes list now reads
+    each shape as "fixed". Tab through the sketch canvas: the badges and glyphs on it are not read. Fail: silence on a
+    change in freedom, a row read without its subject, a Delete button that reads only "Delete", a freedom spoken twice,
+    or a badge or glyph read from the canvas.
+
+    Then the colour check, with no screen reader. Turn on a protanopia simulation (a system colour filter, or in a browser build
+    DevTools, Rendering, Emulate vision deficiencies, Protanopia) and open
+    Preferences, pick the Colour-Blind Safe theme. Draw a line, a construction line (Construction at the foot of the rail) and project an edge
+    from the model (P). Without the tint of any one colour, tell the three apart: the line is a solid stroke, the
+    construction line has short dashes, the projected edge long dashes. Leave one line end touching nothing, and one
+    meeting another curve with no rule: the first shows a ring, the second a dot. Do it again in FundaCAD Noir, where
+    free and projected stay close in hue and the dashes alone have to tell them apart. Fail: two of the three that look the same,
+    or an open end and an untied one that differ only in colour.
+
+Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
 
@@ -206,9 +246,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as fifteen marks in order, like `P P P S S W P P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as nineteen marks in order, like `P P P S S W P P P P P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 16 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 19 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

@@ -16,6 +16,16 @@ import {
 } from "../../src/ui/theme";
 import { oklch } from "../../src/viewport/pickColors";
 import { AXIS_COLOR } from "../../src/viewport/originTriad";
+import {
+  sketchAidColor,
+  sketchConflictColor,
+  sketchDefinedColor,
+  sketchFillColor,
+  sketchFreeColor,
+  sketchPreviewColor,
+  sketchSnapColor,
+} from "../../src/sketch/overlay";
+import { SKETCH_AID_TOKENS, SKETCH_TOKENS } from "../../src/ui/contrast";
 import tokensScss from "../../src/styles/_tokens.scss?raw";
 
 // The module is a singleton with mutable state (the uploaded-theme library and
@@ -149,6 +159,65 @@ describe("the theme roster", () => {
     ] as const) {
       expect(Math.abs(L[a]! - L[b]!)).toBeGreaterThan(0.08);
     }
+  });
+
+  it("keeps Noir's sketch tokens in step with the overlay's fallbacks", () => {
+    const hex = (name: string) => parseInt(new RegExp(`${name}: *#([0-9a-f]{6});`).exec(tokensScss)?.[1] ?? "", 16);
+
+    expect([hex("--sketch-free"), hex("--sketch-defined"), hex("--error")]).toEqual([
+      sketchFreeColor(),
+      sketchDefinedColor(),
+      sketchConflictColor(),
+    ]);
+    expect(SKETCH_TOKENS.map((t) => NOIR_PALETTE[t])).toEqual(
+      SKETCH_TOKENS.map((t) => new RegExp(`${t}: *(#[0-9a-f]{6});`).exec(tokensScss)?.[1]),
+    );
+  });
+
+  it("keeps Noir's aid tokens in step with the overlay's fallbacks", () => {
+    const hex = (name: string) => parseInt(new RegExp(`${name}: *#([0-9a-f]{6});`).exec(tokensScss)?.[1] ?? "", 16);
+
+    expect(SKETCH_AID_TOKENS.map(hex)).toEqual([
+      sketchAidColor(),
+      sketchSnapColor(),
+      sketchPreviewColor(),
+      sketchFillColor(),
+    ]);
+    expect(SKETCH_AID_TOKENS.map((t) => NOIR_PALETTE[t])).toEqual(
+      SKETCH_AID_TOKENS.map((t) => new RegExp(`${t}: *(#[0-9a-f]{6});`).exec(tokensScss)?.[1]),
+    );
+  });
+
+  it("gives the light themes and Colour-Blind Safe their own value for all four aid colours", () => {
+    for (const id of ["fundacad-light", "solarized-light", "high-contrast-light", "colorblind-safe"]) {
+      const palette = (themes().find((t) => t.id === id) as ShippedTheme).palette;
+      for (const t of SKETCH_AID_TOKENS) expect(palette[t], `${id} ${t}`).toMatch(/^#[0-9a-f]{6}$/);
+      for (const t of SKETCH_AID_TOKENS) expect(palette[t], `${id} ${t}`).not.toBe(NOIR_PALETTE[t]);
+    }
+  });
+
+  it("gives the light themes and Colour-Blind Safe their own value for all seven sketch colours", () => {
+    for (const id of ["fundacad-light", "solarized-light", "high-contrast-light", "colorblind-safe"]) {
+      const palette = (themes().find((t) => t.id === id) as ShippedTheme).palette;
+      for (const t of SKETCH_TOKENS) expect(palette[t], `${id} ${t}`).toMatch(/^#[0-9a-f]{6}$/);
+      expect(SKETCH_TOKENS.map((t) => palette[t])).not.toEqual(SKETCH_TOKENS.map((t) => NOIR_PALETTE[t]));
+    }
+  });
+
+  it("keeps the sketch tokens of an uploaded palette", () => {
+    const res = addCustomTheme({
+      label: "Sketchy",
+      "--sketch-free": "#123456",
+      "--sketch-loose-open": "#abcdef",
+      "--sketch-snap": "#fedcba",
+      "--sketch-nonsense": "#000000",
+    });
+    expect(res.ok).toBe(true);
+    const palette = customThemes().find((t) => t.label === "Sketchy")!.palette;
+    expect(palette["--sketch-free"]).toBe("#123456");
+    expect(palette["--sketch-loose-open"]).toBe("#abcdef");
+    expect(palette["--sketch-snap"]).toBe("#fedcba");
+    expect(palette["--sketch-nonsense"]).toBeUndefined();
   });
 
   it("keeps Noir's axis tokens in step with the viewport's fallbacks", () => {

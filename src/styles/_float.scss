@@ -283,6 +283,8 @@
 
 .float-right .palette {
   position: static;
+  /* Glass makes this box relative, so the docked .palette's top and right would push it past the window. */
+  inset: auto;
   pointer-events: auto;
   width: 240px;
   max-height: 100%;

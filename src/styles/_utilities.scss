@@ -516,6 +516,11 @@
   z-index: 2500;
   pointer-events: none;
 }
+/* Inert under a dialog it takes no click, which would fall to the backdrop and close the dialog, so it sits under the
+   backdrop (.modal-overlay is 1000) with the rest of the page. */
+.toast-stack[inert] {
+  z-index: 999;
+}
 .toast {
   display: flex;
   align-items: center;

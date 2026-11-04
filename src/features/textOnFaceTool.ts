@@ -140,7 +140,7 @@ export class TextOnFaceTool {
     const reply = await this.store.faceAnchor(sel, bodyId, p);
     if (!this.active || ticket !== this.ticket) return;
     if (!reply) {
-      toast("The engine could not place text on that face.");
+      toast("Text could not be placed on that face. Try another face.");
       return;
     }
     if ("reason" in reply) {

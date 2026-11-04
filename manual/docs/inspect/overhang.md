@@ -8,6 +8,8 @@ Overhang paints the faces that lean out too far to print without support. Check 
 2. Red faces need support. Blue faces are walls or steep undersides that print as they are, and green faces point up.
 3. Pick Overhang again to switch it off.
 
+For a count of the overhangs with the area of each, its face and its height above the bed, run [Printability](printability.md).
+
 The Overhang analysis panel has two settings.
 
 | Setting | What it does | Starts at |

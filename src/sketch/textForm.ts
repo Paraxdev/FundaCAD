@@ -3,6 +3,9 @@
 
 import { fieldError, fieldNumber } from "../ui/measure";
 
+// The live preview entity sits on the active list so it repaints normally, but is never committed.
+export const TEXT_PREVIEW_ID = "__textpreview__";
+
 export interface TextValues {
   text: string;
   font?: string;

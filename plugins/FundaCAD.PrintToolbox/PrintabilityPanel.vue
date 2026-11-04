@@ -2,9 +2,9 @@
 // No Esc-dismiss: Esc clears the body selection, which widens the check back to every body, and must not close the
 // results with it. Inline styles on host tokens, as a plugin .vue may not carry a <style> block.
 
-import { computed, type CSSProperties } from "vue";
+import { computed, ref, watch, type CSSProperties } from "vue";
 import { readAs, useBrowserStore } from "fundacad";
-import { FloatingPanel, NumberField } from "fundacad/ui";
+import { FloatingPanel, ListRow, NumberField } from "fundacad/ui";
 import type { PrintabilityKind } from "fundacad";
 import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES, cssHex } from "./printability";
 import { printabilityPanel } from "./printabilityPanel";
@@ -62,7 +62,21 @@ const NUMBERS: {
   },
 ];
 
-const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);
+// Pointer and keyboard focus each light a face; leaving one falls back to the other.
+const pointerOn = ref<number | null>(null);
+const focusOn = ref<number | null>(null);
+function light(pointer: number | null, focus: number | null) {
+  pointerOn.value = pointer;
+  focusOn.value = focus;
+  ctl.value?.hover(pointer ?? focus);
+}
+watch(
+  () => d.value?.result,
+  () => {
+    pointerOn.value = null;
+    focusOn.value = null;
+  },
+);
 
 function swatch(k: PrintabilityKind): CSSProperties {
   return {
@@ -95,14 +109,7 @@ const LEGEND: CSSProperties = {
   marginTop: "var(--s-2)",
 };
 const WARN: CSSProperties = { color: "var(--accent-hot, #ff9a5c)" };
-
-function findingStyle(index: number): CSSProperties {
-  return {
-    cursor: "pointer",
-    borderRadius: "2px",
-    ...(focus.value === index ? { background: "var(--accent-tint, rgba(255, 122, 60, 0.14))" } : {}),
-  };
-}
+const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
 </script>
 
 <template>
@@ -178,18 +185,24 @@ function findingStyle(index: number): CSSProperties {
           <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note" :style="WARN">
             <span class="measure-v">{{ n }}</span>
           </div>
-          <div
-            v-for="r in g.rows"
-            :key="r.index"
-            class="measure-row printability-finding"
-            :class="{ 'is-focus': focus === r.index }"
-            :style="findingStyle(r.index)"
-            @mouseenter="ctl.hover(r.index)"
-            @mouseleave="ctl.hover(null)"
-            @click="ctl.pick(r.index)"
-          >
-            <span class="measure-v"><span :style="swatch(r.kind)" />{{ r.text }}</span>
-          </div>
+          <ul v-if="g.rows.length" :style="LIST" :aria-label="g.name + ' findings'">
+            <li v-for="r in g.rows" :key="r.index">
+              <ListRow
+                class="printability-finding"
+                :label="r.text"
+                :hint="r.hint"
+                :aria-label="r.spoken"
+                :selected="d.picked === r.index"
+                @click="ctl.pick(r.index)"
+                @focus="light(pointerOn, r.index)"
+                @blur="light(pointerOn, null)"
+                @pointerenter="light(r.index, focusOn)"
+                @pointerleave="light(null, focusOn)"
+              >
+                <template #leading><span :style="swatch(r.kind)" aria-hidden="true" /></template>
+              </ListRow>
+            </li>
+          </ul>
           <div v-if="!g.notes.length && !g.rows.length" class="measure-row printability-clean">
             <span class="measure-k">Nothing found</span>
           </div>
@@ -211,8 +224,8 @@ function findingStyle(index: number): CSSProperties {
       </template>
 
       <div class="measure-hint">
-        Checks the selected bodies, or every body when none is selected · hover a finding to pick out its face, click to
-        look at it
+        Checks the selected bodies, or every body when none is selected · hover or Tab to a finding to pick out its
+        face, click or press Enter to look at it
       </div>
     </div>
   </FloatingPanel>

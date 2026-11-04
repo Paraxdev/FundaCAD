@@ -35,7 +35,7 @@
   { "path": "plugins/FundaCAD.PrintToolbox/PrintabilityPanel.vue", "kind": "button", "count": 3, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.PrintToolbox/PrintabilityPanel.vue", "kind": "input[type=checkbox]", "count": 2, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.PrintToolbox/PrintabilityPanel.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.PrintToolbox/PrintabilityPanel.vue", "kind": "style:inline", "count": 3, "reason": "before the base set, migrates in lane T (shipped plugins)" },
+  { "path": "plugins/FundaCAD.PrintToolbox/PrintabilityPanel.vue", "kind": "style:inline", "count": 2, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Printing/CameraPanel.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Printing/CameraPanel.vue", "kind": "style:inline", "count": 2, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Printing/FilamentMappingDialog.vue", "kind": "button", "count": 2, "reason": "before the base set, migrates in lane T (shipped plugins)" },

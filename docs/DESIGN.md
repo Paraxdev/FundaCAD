@@ -181,6 +181,8 @@ Status:
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds |
 | `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
 | `--axis-x`, `--axis-y`, `--axis-z` | `#ff5a5a`, `#46d97a`, `#4d8dff` | X, Y and Z in the view: the origin triad and plane tiles, the Move, Pattern and datum gizmos. Colour-Blind Safe trades them for `#e5483a`, `#eedf6b`, `#6aaef0`. Every palette keeps them at 3:1 on `--viewport-bg`, so the light themes set darker ones |
+| `--sketch-free`, `--sketch-defined`, `--sketch-construction`, `--sketch-projected`, `--sketch-projected-stale`, `--sketch-loose-open`, `--sketch-loose-untied` | `#5b9bff`, `#ffffff`, `#ffa64d`, `#b07fe8`, `#d9a24d`, `#e5484d`, `#f5a524` | Sketch curves in the view: free to move, fully defined, construction, projected, a projection whose source is gone, open ends and untied ends. A conflict is drawn in `--error`. Colour-Blind Safe trades them for `#3d8fe0`, `#f5f7fa`, `#e69f00`, `#f0e442`, `#98a3b0`, `#ff5c5c`, `#f4c542`, the light themes and High Contrast Light for darker ones. Each is held at 3:1 on `--viewport-bg` (4.5:1 in High Contrast) |
+| `--sketch-aid`, `--sketch-snap`, `--sketch-preview`, `--sketch-fill` | `#8fa4bd`, `#ffaa33`, `#ffffff`, `#3a7bd5` | Sketch aids: dimension lines and control polygons, the snap marker and its alignment guides, the rubber band, region fills. Colour-Blind Safe uses `#a6b4c4`, `#e69f00`, `#f5f7fa`, `#3d8fe0`, the light themes darker ones. The three line colours are held at 3:1 on `--viewport-bg` (4.5:1 in High Contrast), the fill is a see-through wash and is not |
 
 There is no info, success tint, warn tint or disabled token. Derive them:
 
@@ -695,11 +697,12 @@ anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ow
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
 | `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `label` or `labelledby` makes it a `dialog` that takes focus to its first control when a key opened it (`focus`: `keyboard`) and gives it back to the opener on close (`returnFocus`); `role="none"` for a card that is part of its opener, like the `Select` list, which then needs no name; `focus`: `first`, `keyboard` or `none` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
-| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
+| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`, `danger`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
 | `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
 | `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
+| `ReadoutList` | Label and value pairs in a panel: Measure, Properties, the Stress key rows | `rows` (`k`, `v`); `rowClass`, worn by each row; the `value` slot draws the `dd` for a row (`row`, `index`) | none |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
 | `Toolbar` | A row or column of controls that is one Tab stop: the rail, the view controls, a panel's actions | `label` or `labelledby`; `orientation`: `horizontal` (default), `vertical` or `both`; `wrap`; `tag`. Its buttons are found in the slot, the arrows, Home and End move among them, a nested `Segmented` keeps its own stop and keys, a text field keeps its arrows | none of its own, its controls carry theirs |
 
@@ -984,6 +987,19 @@ A destructive row is red text: `MenuItem` with `danger` is `--error`, hover `--e
 `.ctx-item.danger` (Remove body) still uses hard coded reds. Tree rows (`TreeRow`, `TreeFolder`, `InlineLabel`) keep
 their own keys and drag; new rows of that kind wear the `ListRow` look.
 
+The sketch palette holds three lists under one heading each (`SketchShapesList`, `SketchDimensionsList`,
+`SketchRelationsList`), shown as a list of rows, never as controls on the canvas:
+
+- Shapes and Relations rows are a `ListRow` button with a spoken `aria-label` (the shape with its freedom, the rule
+  with what it holds). A row that can be removed sits in an `li.rel-row` with a sibling `IconButton` (`.rel-del`,
+  `danger`) named `Delete` and the same words. The button is a sibling, never inside the row button, so Tab reaches
+  both. It shows on hover and on `:focus-within`, and stays in the tab order while hidden.
+- A Dimensions row is a `FieldRow` with a `NumberField` (`commit="change"`, the unit of the dimension), named by the
+  dimension's subject. A driven dimension is disabled and says why.
+- The line above Relations (`.rel-summary`) takes focus after a Delete, so the keys do not fall back to the page. A
+  freedom change is spoken through the announcer, not by a live region on the list.
+- Freedom is words, never colour alone: a shape is "free in X", "free in X and Y", "free in size" or "fixed".
+
 ### 7.10 Popovers, menus, dialogs, palette, toasts, prompt
 
 | Surface | Recipe |
@@ -992,7 +1008,7 @@ their own keys and drag; new rows of that kind wear the `ListRow` look.
 | `Menu` (`.ui-menu`) | `--float-bg-solid` through `--float-blur`, `--float-tile-radius`, squircle, padding 5px, `--float-shadow`, `--fs-body`, `pop-in`. `MenuItem` (`.ui-menu-item`): padding `var(--s-3) var(--s-4)`, chip radius; hover and keyboard focus accent 16% and `--accent-hot`, pressed accent 24%, keys `.ui-menu-keys` `--fs-micro` `--text-dim`, a check gutter when any item has `checked`; `MenuSeparator` 1px `--line` |
 | `.context-menu`, `.menu-popup` | the right click and title bar menus that predate `Menu`: glass solid and glass B, `--float-tile-radius`, separators `.ctx-sep` 1px |
 | `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` `--fs-title`/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
-| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint` |
+| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint`, and an option's own `danger` paints just that answer, so Cancel can keep the focus (`confirmDanger` in `ui/choice.ts`: Cancel first, then the red action) |
 | `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, `--fs-body`, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
@@ -1039,8 +1055,8 @@ such as a home card's full path, goes in `aria-describedby` on a `hidden` span, 
 A plugin cannot add selectors to `_glass.scss`, so it draws with what the host gives it. `fundacad/ui`
 (`src/plugins/hostUi.ts`) exports the base set: `Button`, `IconButton`, `Chip`, `KeyChip`, `TextField`,
 `NumberField`, `UnitChip`, `Select`, `Checkbox`, `Switch`, `SwitchRow`, `Segmented`, `Slider`, `Tabs`, `Menu`,
-`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow`, `ListRow` and
-`Toolbar`, with the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own
+`MenuItem`, `MenuSeparator`, `Popover`, `Dialog`, `ConfirmDialog`, `Panel`, `Card`, `FieldRow`, `ListRow`, `ReadoutList`
+and `Toolbar`, with the `SegmentedOption` and `TabItem` types, plus `Icon` and `InlineLabel`. They are the app's own
 components, not copies, so a plugin and the app cannot drift (`tests/components/plugins/hostUi.spec.ts`).
 
 The names it exported before stay: `FloatingPanel` and `ModalFrame` (the old contracts over `Panel` and `Dialog`),
@@ -1105,9 +1121,9 @@ defineEmits<{ close: [] }>();
 | Class | Recipe |
 |---|---|
 | `.measure-title` | 600, `--accent-hot`, `margin-bottom: var(--s-2)`. The panel's name, one per panel |
-| `.measure-row` | flex, `justify-content: space-between`, gap `--s-5`, padding `var(--s-0) 0`. A label and a value |
-| `.measure-k` | the label, `--text-mute` |
-| `.measure-v` | the value, `font-variant-numeric: tabular-nums` |
+| `.measure-row` | flex, `justify-content: space-between`, gap `--s-5`, padding `var(--s-0) 0`. A label and a value; `ReadoutList` draws each pair as one, inside a `dl` |
+| `.measure-k` | the label, `--text-mute`; a `dt` in a `ReadoutList` |
+| `.measure-v` | the value, `font-variant-numeric: tabular-nums`; a `dd` in a `ReadoutList` |
 | `.measure-divider` | 1px `--line`, margin `var(--s-2) 0` |
 | `.measure-select`, `.measure-number` | the old small inline fields; new work uses `Select` and `NumberField` at `sm` |
 | `.measure-hint` | `--fs-micro`, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close"); `hint` writes it |
@@ -1119,10 +1135,7 @@ second padded head doubles it. A minimal readout:
 
 ```vue
 <Panel :open="!!panels.measure" title="Measure" hint="Esc to exit">
-  <div v-for="(r, i) in rows" :key="i" class="measure-row">
-    <span class="measure-k">{{ r.k }}</span>
-    <span class="measure-v">{{ r.v }}</span>
-  </div>
+  <ReadoutList :rows="rows" />
 </Panel>
 ```
 
@@ -1149,12 +1162,28 @@ A tool that collects more than one selection gives each its own row, as
 `opts: { kind?: "info" | "warning" | "error"; action?: { label, onClick }; timeout?: number; detail?: unknown; source?: string }`.
 It returns the toast's id for `dismissToast`, or null for an error.
 
-- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s,
-  one with an action 9s so it can be read and its button reached).
+- `info` (the default) and `warning` show a `.toast`. `noticeHoldMs` (`src/ui/noticeTime.ts`) gives its time from the
+  Notification time setting: info 5s, warning 8s, error notice 10s, any message with a button at least 15s, and a
+  caller's `timeout` only lengthens that. Longer is three times it, Until dismissed has no timer (`hold: null`), and the
+  error notice then shows a Dismiss button. A fourth toast evicts the oldest one without a button.
 - The same message, kind and action label again restarts the toast already
   showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice
   (`showErrorNotice`) and the console log, with `detail` kept for the report.
+- Every toast is spoken once by `announce()` from `toast()`: info polite,
+  warning assertive, and the label of a button is added ("Deleted Box 2. Undo
+  button in Notifications."). An error is spoken by the title bar notice. The
+  stack is a permanent region named "Notifications", empty when no toast
+  shows, and is not live, so nothing is said twice.
+- Under a dialog or the command palette the stack is inert and `aria-hidden`
+  with the page, below the backdrop, so no region sits beside the modal. A
+  toast with a button then waits and gets its full time once the modal closes,
+  one without keeps its time. Home keeps the stack live, as it keeps its toggle.
+- The console is not a dialog but a `role="region"` named by its `h2` "Console"
+  (`tabindex="-1"`). Show Console, the error notice and its chord (outside a
+  text field) focus that heading, and closing returns focus to the opener. The
+  body is `role="log"` with `aria-live="off"`, since toasts already speak, and
+  each row starts with a `.sr-only` Error:, Warning: or Info:.
 - Every toast is also a console entry and a bug report breadcrumb, so do not
   toast on every keystroke or hover.
 
@@ -1189,6 +1218,21 @@ guard test cannot see them; hold them to these rules by hand.
   blue. A plane takes its normal axis colour: XY blue, XZ green, YZ red in Noir.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
+- Sketch curves take the seven `--sketch-*` tokens through the functions in
+  `src/sketch/overlay.ts` (`sketchFreeColor` and the like), a conflict takes
+  `--error`. The open sketch redraws on a theme change, and
+  `installViewportWiring` redraws the sketches that are not open. Colour-Blind
+  Safe holds six pairs apart (`overlaySeparation` in `src/ui/contrast.ts`): free
+  and projected, free and construction, projected and construction, free and
+  defined, projected and its stale form, open and untied ends. Each pair is
+  ΔE2000 15 or more under every dichromacy, or 10 L* apart. Noir and the other
+  dark themes keep free and projected close in hue, so projected geometry
+  relies on its dashes there.
+- Colour never carries a sketch state alone. Construction geometry is drawn in short dashes (gap to dash 0.63),
+  projected geometry in long ones (14px dash, 3px gap, 0.21, sized in screen pixels so the ratio holds at every
+  zoom), a free curve is solid. A loose end that touches nothing is a ring (`LOOSE_RING_PX`), an end that meets a curve
+  with no rule a dot. The badge and glyph layers over the canvas are `aria-hidden` (not `inert`, a pointer still edits
+  them), the palette lists carry what they say.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
 - Each tile spans the positive side of its two axes, set 10px out from both
   arrows (`TILE_GAP_PX`), so its two inner edges run parallel to the arrows and
@@ -1323,7 +1367,8 @@ lead; the full text is kept in the console.
 hex or `rgb()`/`rgba()` values: `--bg --panel --panel-2 --raised --raised-2
 --viewport-bg --line --line-strong --text --text-dim --text-mute --accent
 --accent-hot --accent-tint --accent-tint-2 --on-accent --ok --warn --error
---error-tint --pick-line --accent-blue --axis-x --axis-y --axis-z`. Shape,
+--error-tint --pick-line --accent-blue --axis-x --axis-y --axis-z`, and the seven `--sketch-*`
+curve colours. Shape,
 glass, motion and z tokens never change from a palette. A palette that sets the retired `--accent-glow`
 still loads, the token is dropped.
 
@@ -1430,6 +1475,7 @@ them over every shipped theme:
 | Two signals a protan, deutan or tritan view merges (dE2000 under 15) | 10 L* apart | 10 L* apart |
 | The focus ring (`--accent`) on every surface and the glass | 3:1 | 4.5:1 |
 | `--axis-x`, `--axis-y`, `--axis-z` and `--pick-line` on `--viewport-bg` | 3:1 | 3:1 |
+| The seven `--sketch-*` curve colours, `--sketch-aid`, `--sketch-snap`, `--sketch-preview` and `--error` on `--viewport-bg` | 3:1 | 4.5:1 |
 
 An uploaded palette is checked against the same pairs at the standard bar: it
 still loads, and the Appearance pane lists the pairs it fails in a status line
@@ -1455,8 +1501,7 @@ option groups `role="radiogroup"` with `role="radio"`, tabs `aria-selected`. A
 dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
 visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
 `ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
-(`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
-`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
+(`CommandPalette.vue`, `HomeScreen.vue`, `TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
 is `aria-hidden` unless it has a `label` ([6.4](#64-icons)). Every base control has a name
 ([The base set](#the-base-set)), and a state, an error or a name never lives in a `title` alone
 ([7.11](#711-tooltips)).

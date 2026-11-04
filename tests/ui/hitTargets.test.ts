@@ -152,9 +152,9 @@ describe("Larger click targets", () => {
   it("leaves the finger only rules to touch", () => {
     expect(fingerTwinned).toEqual([]);
     expect(valueOf(css, ':root[data-pointer="touch"] .tree-eye', "opacity")).toBe("0.9");
-    expect(valueOf(css, ':root[data-pointer="touch"] .rel-del', "visibility")).toBe("visible");
+    expect(valueOf(css, ':root[data-pointer="touch"] .rel-del', "opacity")).toBe("1");
     expect(valueOf(css, ':root[data-targets="large"] .tree-eye', "opacity")).toBeUndefined();
-    expect(valueOf(css, ':root[data-targets="large"] .rel-del', "visibility")).toBeUndefined();
+    expect(valueOf(css, ':root[data-targets="large"] .rel-del', "opacity")).toBeUndefined();
   });
 
   it("guard names a touch area with no twin and a finger only rule with one", () => {

@@ -58,6 +58,7 @@ function sketch() {
     patternFlow: { hasPending: () => false },
     mirrorFlow: { running: false },
     dims: { deleteSelected: () => false },
+    glyphs: { deleteSelected: () => false, hasSelection: () => false, clearSelection() {} },
     deleteSelectedPole: () => false,
     deleteSelected: () => calls.push("delete"),
     setTool: (t: string) => calls.push(`tool ${t}`),
