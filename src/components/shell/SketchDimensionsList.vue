@@ -7,7 +7,7 @@ import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import { distinctNames } from "../../sketch/sketchNames";
 import { getUnit, onUnitChange } from "../../ui/units";
 import { tryParseMeasure } from "../../ui/measure";
-import type { DimItem } from "../../sketch/sketchDimensions";
+import type { DimKind } from "../../sketch/annotationFormat";
 
 const s = useSketchAnnotationStore();
 const list = ref<HTMLElement | null>(null);
@@ -28,30 +28,72 @@ watch(
   { flush: "sync" },
 );
 
-const rows = computed(() => {
+interface Row {
+  key: string;
+  name: string;
+  valueMm: number;
+  expr?: string;
+  kind?: DimKind;
+  driven: boolean;
+  conflict: boolean;
+  over: boolean;
+  formula: boolean;
+  entities: readonly string[];
+}
+
+const sameRow = (a: Row, b: Row) =>
+  a.key === b.key &&
+  a.name === b.name &&
+  a.valueMm === b.valueMm &&
+  a.expr === b.expr &&
+  a.kind === b.kind &&
+  a.driven === b.driven &&
+  a.conflict === b.conflict &&
+  a.over === b.over &&
+  a.formula === b.formula &&
+  a.entities.join() === b.entities.join();
+
+// Every 5% zoom step rebuilds the items to move the badges, keeping the old rows skips a full list render.
+const rows = computed<readonly Row[]>((prev) => {
   for (const d of s.dimItems) if (!order.has(d.key)) order.set(d.key, order.size);
   const items = [...s.dimItems].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
   const names = distinctNames(items.map((d) => d.name));
-  return items.map((item, i) => ({ item, name: names[i]! }));
+  const next = items.map(
+    (d, i): Row => ({
+      key: d.key,
+      name: names[i]!,
+      valueMm: d.valueMm,
+      ...(d.expr !== undefined ? { expr: d.expr } : {}),
+      ...(d.kind ? { kind: d.kind } : {}),
+      driven: !!d.driven,
+      conflict: !!d.conflict,
+      over: !!d.over,
+      formula: !!d.commitExpr,
+      entities: d.entities,
+    }),
+  );
+  return prev && prev.length === next.length && next.every((r, i) => sameRow(r, prev[i]!)) ? prev : next;
 });
 
-const unitOf = (d: DimItem) => (d.kind === "angle" ? "deg" : lengthUnit.value);
+const itemOf = (key: string) => s.dimItems.find((d) => d.key === key);
 
-function hint(d: DimItem): string | undefined {
-  if (d.conflict) return "Conflicting";
-  if (d.over) return "Redundant";
+const unitOf = (r: Row) => (r.kind === "angle" ? "deg" : lengthUnit.value);
+
+function hint(r: Row): string | undefined {
+  if (r.conflict) return "Conflicting";
+  if (r.over) return "Redundant";
   return undefined;
 }
 
 // A formula or a bound dimension goes to commitExpr, as the badge editor does.
-function parse(d: DimItem) {
-  if (d.expr !== undefined) return () => null;
-  if (!d.commitExpr) return undefined;
+function parse(r: Row) {
+  if (r.expr !== undefined) return () => null;
+  if (!r.formula) return undefined;
   return (raw: string, unit: Parameters<typeof tryParseMeasure>[1]) => tryParseMeasure(raw, unit)?.value ?? null;
 }
 
-function validate(d: DimItem) {
-  return (v: number) => (d.kind === "angle" ? null : valueProblem("Length", { positive: true }, v));
+function validate(r: Row) {
+  return (v: number) => (r.kind === "angle" ? null : valueProblem("Length", { positive: true }, v));
 }
 
 let refocus: { key: string; at: number } | null = null;
@@ -60,15 +102,15 @@ function committed(key: string) {
   refocus = { key, at: performance.now() };
 }
 
-function commit(d: DimItem, mm: number | null) {
+function commit(r: Row, mm: number | null) {
   if (mm === null) return;
-  committed(d.key);
-  d.commit(mm);
+  committed(r.key);
+  itemOf(r.key)?.commit(mm);
 }
 
-function expression(d: DimItem, raw: string): string | null {
-  committed(d.key);
-  return d.commitExpr?.(raw) ?? "Not editable";
+function expression(r: Row, raw: string): string | null {
+  committed(r.key);
+  return itemOf(r.key)?.commitExpr?.(raw) ?? "Not editable";
 }
 
 // A rebuild redraws the badges and may swap the list's elements, keep focus on the row the user committed.
@@ -85,13 +127,13 @@ watch(
   },
 );
 
-function focusIn(d: DimItem) {
-  s.dimLit = d.key;
-  s.dimHooks?.light(d.entities);
+function focusIn(r: Row) {
+  s.dimLit = r.key;
+  s.dimHooks?.light([...r.entities]);
 }
-function focusOut(d: DimItem, e: FocusEvent) {
+function focusOut(r: Row, e: FocusEvent) {
   if (e.relatedTarget instanceof Node && (e.currentTarget as Node).contains(e.relatedTarget)) return;
-  if (s.dimLit === d.key) s.dimLit = null;
+  if (s.dimLit === r.key) s.dimLit = null;
   s.dimHooks?.light(null);
 }
 </script>
@@ -101,13 +143,13 @@ function focusOut(d: DimItem, e: FocusEvent) {
   <ul v-else ref="list" class="dim-list">
     <li
       v-for="r in rows"
-      :key="r.item.key"
+      :key="r.key"
       class="dim-row"
-      :data-dim-key="r.item.key"
-      @focusin="focusIn(r.item)"
-      @focusout="focusOut(r.item, $event)"
+      :data-dim-key="r.key"
+      @focusin="focusIn(r)"
+      @focusout="focusOut(r, $event)"
     >
-      <FieldRow v-slot="f" :label="r.name" :hint="hint(r.item)" :error="err[r.item.key]">
+      <FieldRow v-slot="f" :label="r.name" :hint="hint(r)" :error="err[r.key]">
         <NumberField
           :id="f.id"
           size="sm"
@@ -115,16 +157,16 @@ function focusOut(d: DimItem, e: FocusEvent) {
           :labelledby="f.labelId"
           :aria-describedby="f.describedby"
           :width-ch="6"
-          :unit="unitOf(r.item)"
-          :model-value="r.item.valueMm"
-          :text="r.item.expr ?? null"
-          :parse="parse(r.item)"
-          :validate="validate(r.item)"
-          :expression="(raw: string) => expression(r.item, raw)"
-          :disabled="r.item.driven"
+          :unit="unitOf(r)"
+          :model-value="r.valueMm"
+          :text="r.expr ?? null"
+          :parse="parse(r)"
+          :validate="validate(r)"
+          :expression="(raw: string) => expression(r, raw)"
+          :disabled="r.driven"
           disabled-reason="A reference dimension measures, it does not drive"
-          @update:model-value="commit(r.item, $event)"
-          @error="err[r.item.key] = $event ?? undefined"
+          @update:model-value="commit(r, $event)"
+          @error="err[r.key] = $event ?? undefined"
         />
       </FieldRow>
     </li>

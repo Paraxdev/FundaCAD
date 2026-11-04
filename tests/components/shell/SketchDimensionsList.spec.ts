@@ -268,6 +268,27 @@ describe("Dimensions list and the badges", () => {
     expect(valueOf(w, 0)).toBe("22");
   });
 
+  it("leaves the list unrendered when a zoom only moves the badges, and commits through the newest closure", async () => {
+    const first = vi.fn(),
+      second = vi.fn();
+    const slanted = extra({ key: "c:d1", name: "Distance between Point 1 and Point 2", valueMm: 37.5, commit: first });
+    const { w, dims } = await open([RECT, CIRCLE], [slanted]);
+    const rendered = () => (w.vm as unknown as { $: { subTree: unknown } }).$.subTree;
+    const before = rendered();
+
+    dims.show([RECT, CIRCLE], plane, [{ ...slanted, anchor: new THREE.Vector2(-4.5, 9.25), commit: second }]);
+    await nextTick();
+    expect(rendered()).toBe(before);
+    await type(w, 3, "41.5");
+    expect(first).not.toHaveBeenCalled();
+    expect(second.mock.calls).toEqual([[41.5]]);
+
+    dims.show([RECT, CIRCLE], plane, [{ ...slanted, valueMm: 41.5, commit: second }]);
+    await nextTick();
+    expect(rendered()).not.toBe(before);
+    expect([0, 1, 2, 3].map((i) => valueOf(w, i))).toEqual(["20", "10", "7", "41.5"]);
+  });
+
   it("replaces a first sketch's rows and its lit key when a second sketch opens", async () => {
     const { w, dims, store } = await open([RECT, CIRCLE]);
     focusIn(w, 0);
