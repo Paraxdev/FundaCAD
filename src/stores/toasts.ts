@@ -15,6 +15,8 @@ export interface ToastItem {
   leaving: boolean;
 }
 
+export type PauseReason = "stack" | "modal";
+
 /** Cap: a fourth toast evicts the oldest one without a button, so a pending Undo is the last to go. */
 const MAX = 3;
 /** Must match the .toast-out transition in styles/_utilities.scss. */
@@ -25,30 +27,39 @@ export const useToastStore = defineStore("toasts", () => {
   let nextId = 1;
   const timers = new Map<number, number>();
   const holds = new Map<number, number | null>();
-  let paused = false;
+  const pausedBy = new Set<PauseReason>();
+
+  function held(id: number): boolean {
+    if (pausedBy.has("stack")) return true;
+    return pausedBy.has("modal") && !!items.value.find((x) => x.id === id)?.action;
+  }
 
   function arm(id: number) {
     window.clearTimeout(timers.get(id));
     timers.delete(id);
     const hold = holds.get(id);
-    if (paused || hold == null) return;
+    if (hold == null || held(id)) return;
     timers.set(
       id,
       window.setTimeout(() => dismiss(id), hold),
     );
   }
 
-  /** While the pointer or focus is on the stack no toast times out, see resume(). */
-  function pause() {
-    paused = true;
-    for (const t of timers.values()) window.clearTimeout(t);
-    timers.clear();
+  /** "stack": the pointer or focus is on the stack, no toast times out. "modal": a modal holds the page inert, so
+   *  only a toast with a button waits, its button out of reach until the modal closes. See resume(). */
+  function pause(by: PauseReason = "stack") {
+    pausedBy.add(by);
+    for (const [id, t] of timers) {
+      if (!held(id)) continue;
+      window.clearTimeout(t);
+      timers.delete(id);
+    }
   }
 
-  /** Every showing toast starts its full time again, the rule the title bar notice already follows. */
-  function resume() {
-    paused = false;
-    for (const t of items.value) if (!t.leaving) arm(t.id);
+  /** Every toast that `by` held starts its full time again, the rule the title bar notice already follows. */
+  function resume(by: PauseReason = "stack") {
+    if (!pausedBy.delete(by)) return;
+    for (const t of items.value) if (!t.leaving && (by === "stack" || t.action)) arm(t.id);
   }
 
   function dismiss(id: number) {

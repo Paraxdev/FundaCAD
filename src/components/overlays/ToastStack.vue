@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
 import { useToastStore } from "../../stores/toasts";
@@ -27,6 +27,21 @@ watch(
   () => hovered.value.size > 0 || focused.value,
   (hold) => (hold ? toasts.pause() : toasts.resume()),
 );
+
+// A modal makes the stack inert, out of reach, so a toast with a button waits until the modal lets it go.
+const inertWatch = new MutationObserver(() => syncInert());
+function syncInert() {
+  if (region.value?.hasAttribute("inert")) toasts.pause("modal");
+  else toasts.resume("modal");
+}
+onMounted(() => {
+  if (region.value) inertWatch.observe(region.value, { attributes: true, attributeFilter: ["inert"] });
+  syncInert();
+});
+onUnmounted(() => {
+  inertWatch.disconnect();
+  toasts.resume("modal");
+});
 
 function enter(id: number) {
   hovered.value = new Set(hovered.value).add(id);
