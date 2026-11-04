@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { confirmDanger } from "../../ui/choice";
+import { toast } from "../../ui/toast";
 import { claimEscape } from "../../ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
@@ -53,8 +54,12 @@ onUnmounted(() => {
 });
 
 async function onReset() {
-  if (await confirmDanger("Reset experimental limits?", "Reset", "Every limit on this page goes back to its default."))
-    resetExperimentalPrefs();
+  if (
+    !(await confirmDanger("Reset experimental limits?", "Reset", "Every limit on this page goes back to its default."))
+  )
+    return;
+  resetExperimentalPrefs();
+  toast("Experimental limits are back to their defaults.");
 }
 
 const changed = computed(() =>

@@ -9,6 +9,11 @@ import {
   setExperimentalPref,
 } from "../../../src/ui/experimentalPrefs";
 
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/toast")>()),
+  toast,
+}));
 const confirm = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/ui/choice", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
@@ -39,6 +44,7 @@ beforeEach(() => {
   resetExperimentalPrefs();
   confirm.mockReset();
   confirm.mockResolvedValue(true);
+  toast.mockReset();
 });
 
 describe("Experimental numbers", () => {
@@ -123,6 +129,7 @@ describe("Experimental HDR size and reset", () => {
     expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset experimental limits?", "Reset"]]);
     expect(experimentalPrefs().bounces).toBe(DEFAULT_EXPERIMENTAL.bounces);
     expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBe("true");
+    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Experimental.*defaults/)]);
   });
 
   it("keeps every changed limit when the confirm is cancelled", async () => {
@@ -136,5 +143,6 @@ describe("Experimental HDR size and reset", () => {
     expect(confirm).toHaveBeenCalledTimes(1);
     expect([experimentalPrefs().bounces, experimentalPrefs().envWidth]).toEqual([12, 4096]);
     expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBeUndefined();
+    expect(toast).not.toHaveBeenCalled();
   });
 });

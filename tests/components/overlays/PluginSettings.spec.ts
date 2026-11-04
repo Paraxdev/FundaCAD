@@ -12,6 +12,11 @@ import { definePluginSettings, type PluginSettings } from "../../../src/plugins/
 import { pluginFocus } from "../../../src/plugins/settingsFocus";
 import { setUnit } from "../../../src/ui/units";
 
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/toast")>()),
+  toast,
+}));
 const confirm = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/ui/choice", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
@@ -26,6 +31,7 @@ let b: PluginSettings;
 beforeEach(() => {
   confirm.mockReset();
   confirm.mockResolvedValue(true);
+  toast.mockReset();
   localStorage.clear();
   a = definePluginSettings("Test.Alpha", {
     version: 1,
@@ -159,6 +165,7 @@ describe("settings under a plugin's row", () => {
     await flushPromises();
     expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset Test.Alpha settings?", "Reset"]]);
     expect(a.isDefault("gap") && a.isDefault("mode")).toBe(true);
+    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Test\.Alpha.*defaults/)]);
   });
 
   it("keeps the plugin's values when the reset is cancelled, and leaves the other plugin alone", async () => {
@@ -172,6 +179,7 @@ describe("settings under a plugin's row", () => {
     await flushPromises();
     expect(confirm).toHaveBeenCalledTimes(1);
     expect([a.get("gap"), a.get("mode"), b.get("speed")]).toEqual([9, "b", 3]);
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it("finds settings across plugins and opens the rows that match", async () => {

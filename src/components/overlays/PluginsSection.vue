@@ -125,7 +125,9 @@ async function resetAll(id: string) {
     "Reset",
     "Every setting of this plugin goes back to its default.",
   );
-  if (ok) for (const s of sectionsOf(id)) s.settings?.reset();
+  if (!ok) return;
+  for (const s of sectionsOf(id)) s.settings?.reset();
+  toast(`${name} settings are back to their defaults.`);
 }
 
 const hasDeclared = (id: string) => sectionsOf(id).some((s) => s.settings);

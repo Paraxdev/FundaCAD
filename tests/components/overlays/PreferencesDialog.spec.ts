@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import PreferencesDialog from "../../../src/components/overlays/PreferencesDialog.vue";
 import { focusables } from "../../../src/components/ui/focusables";
 import { useDialogStore } from "../../../src/stores/dialogs";
+import { useToastStore } from "../../../src/stores/toasts";
 import { getUnit, setUnit } from "../../../src/ui/units";
 import {
   getHoverDwellMs,
@@ -568,10 +569,13 @@ describe("Preferences Accessibility", () => {
     expect(confirm.mock.calls[0]![2]).toContain("Hover delay");
     expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["off", 125, 1200]);
     expect(reset.getAttribute("aria-disabled")).toBeNull();
+    const said = () => useToastStore().items.map((t) => t.message);
+    expect(said()).toEqual([]);
     reset.click();
     await flushPromises();
     expect(confirm).toHaveBeenCalledTimes(2);
     expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["system", 100, 800]);
+    expect(said()).toEqual([expect.stringMatching(/Accessibility.*defaults/)]);
   });
 
   it("holds Interface size in the Vision group, and Reset to defaults puts a changed size back to 100", async () => {

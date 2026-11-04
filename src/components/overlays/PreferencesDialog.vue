@@ -33,6 +33,7 @@ import {
   themes,
 } from "../../ui/theme";
 import { confirmDanger } from "../../ui/choice";
+import { toast } from "../../ui/toast";
 import { describeFailures } from "../../ui/contrast";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
@@ -245,7 +246,9 @@ async function onResetA11y() {
     "Reset",
     "Every choice on this page goes back to its default, Hover delay too.",
   );
-  if (ok) resetA11yPrefs();
+  if (!ok) return;
+  resetA11yPrefs();
+  toast("Accessibility settings are back to their defaults.");
 }
 
 const presetNote = ref("");
