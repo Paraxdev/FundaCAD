@@ -341,6 +341,17 @@ describe("printability panel flow", () => {
     expect(r.tints()).toEqual([]);
   });
 
+  it("says it could not check when nothing built", async () => {
+    const r = rig();
+    r.ui.show();
+    const run = r.ui.run();
+    r.settle({ ok: true, result: { ...reply, bodies: [], findings: [], errors: [{ message: "nothing built" }] } });
+    await run;
+    expect(r.statuses.at(-1)).toBe("Printability: could not check");
+    expect(r.announced).toEqual([["Printability: could not check. 1 error.", "polite"]]);
+    expect(r.tints()).toEqual([]);
+  });
+
   it("shows a refusal's message in the panel", async () => {
     const r = rig();
     r.ui.show();

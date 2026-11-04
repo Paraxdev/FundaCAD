@@ -355,9 +355,18 @@ describe("printabilitySummary", () => {
 
   it("says nothing was found, and still counts feature failures", () => {
     expect(summary({ bodies: [one], findings: [], errors: [] })).toBe("Printability: nothing found.");
-    expect(summary({ bodies: [], findings: [], errors: [{ message: "nothing built" }] })).toBe(
+    expect(summary({ bodies: [one], findings: [], errors: [{ feature_id: "f3", message: "fillet failed" }] })).toBe(
       "Printability: nothing found. 1 error.",
     );
+  });
+
+  it("says it could not check when failures leave no body to check", () => {
+    expect(summary({ bodies: [], findings: [], errors: [{ message: "nothing built" }] })).toBe(
+      "Printability: could not check. 1 error.",
+    );
+    const two = [{ feature_id: "f2", message: "pad failed" }, { message: "nothing built" }];
+    expect(summary({ bodies: [], findings: [], errors: two })).toBe("Printability: could not check. 2 errors.");
+    expect(summary({ bodies: [], findings: [], errors: [] })).toBe("Printability: nothing found.");
   });
 
   it("names the one overhang's area and face, singular, without a body name on a lone body", () => {

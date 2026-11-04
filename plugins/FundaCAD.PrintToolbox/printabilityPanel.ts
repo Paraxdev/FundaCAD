@@ -9,6 +9,7 @@ import {
   findingMarks,
   findingView,
   formatPrintabilityResult,
+  printabilityHead,
   printabilitySummary,
   problemCount,
 } from "./printability";
@@ -162,11 +163,8 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     const view = formatPrintabilityResult(res.result, new Map(builtBodies().map((b) => [b.id, b.name])));
     checkedEpoch = epoch;
     state.finished({ result: view });
-    const n = problemCount(view);
-    setStatus(
-      n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found",
-      n ? "" : "connected",
-    );
+    const head = printabilityHead(view);
+    setStatus(head, problemCount(view) ? "" : head === "Printability: nothing found" ? "connected" : "error");
     announce(printabilitySummary(view));
     refreshMarks();
     if (epoch !== docEpoch) setStatus("Printability: the model changed while it ran, check again to see the faces", "");

@@ -288,9 +288,15 @@ const KIND_NOUNS: Record<PrintabilityKind, [string, string]> = {
 
 /** What a screen reader hears once a Check is done: the count, each kind's share, and the largest overhang with its
  *  area and face. A tie on the area takes the first in the reply. The body is named only when the reply has several. */
-export function printabilitySummary(v: PrintabilityView): string {
+// Failures with no body checked found nothing only because nothing built.
+export function printabilityHead(v: PrintabilityView): string {
   const n = problemCount(v);
-  const head = n ? `Printability: ${plural(n, "thing", "things")} to look at` : "Printability: nothing found";
+  if (n) return `Printability: ${plural(n, "thing", "things")} to look at`;
+  return !v.groups.length && v.errors.length ? "Printability: could not check" : "Printability: nothing found";
+}
+
+export function printabilitySummary(v: PrintabilityView): string {
+  const head = printabilityHead(v);
   const parts: string[] = [];
   for (const k of KIND_ORDER) {
     const c = v.findings.filter((f) => f.kind === k).length;
