@@ -36,6 +36,8 @@ export class TargetEditTool {
   private awaitingRollback = false;
   private releaseRows: (() => void) | null = null;
   private prevSelectionMode: "faces" | "bodies" = "faces";
+  private inRun = false;
+  private ranDirty = false;
 
   private boundDown: (e: PointerEvent) => void;
   private boundKey: (e: KeyboardEvent) => void;
@@ -104,6 +106,7 @@ export class TargetEditTool {
       {
         keepsOnRewind: true,
         keepsOnCommand: true,
+        batch: (run) => this.takeRun(run),
       },
     );
     setPrompt("Rolling back to edit…");
@@ -285,11 +288,28 @@ export class TargetEditTool {
     return { kind: "face", by: "nearest", point: hit.point, ...(body ? { body } : {}) } as Selector;
   }
 
+  // A paint locates every entry again, a scan of the whole body per face, so a run of list rows paints once at its end.
+  private takeRun(run: () => void) {
+    this.inRun = true;
+    try {
+      run();
+    } finally {
+      this.inRun = false;
+      if (this.ranDirty) this.changed();
+    }
+  }
+
   private toggle(entry: TargetEntry, t: TargetField) {
     const i = this.entries.findIndex((e) => sameEntry(e, entry));
     if (i >= 0) this.entries.splice(i, 1);
     else if (t.arity === "one") this.entries = [entry];
     else this.entries.push(entry);
+    if (this.inRun) this.ranDirty = true;
+    else this.changed();
+  }
+
+  private changed() {
+    this.ranDirty = false;
     this.repaint();
     this.setPrompt();
     this.emit();

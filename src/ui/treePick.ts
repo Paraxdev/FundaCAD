@@ -26,17 +26,19 @@ interface PickSession {
   end: () => void;
   keepsOnRewind: boolean;
   keepsOnCommand: boolean;
+  batch: ((run: () => void) => void) | null;
 }
 
 let session: PickSession | null = null;
 
 /** Rows go to `taker` until the returned release runs. `end` is the pick's cleanup, run when anything else ends the
  *  session, so a taker never outlives its tool. `keepsOnRewind` is for a tool that stays open through an undo or a
- *  redo, so its rows go on with it. `keepsOnCommand` is for a tool a menu command or a shortcut does not close. */
+ *  redo, so its rows go on with it. `keepsOnCommand` is for a tool a menu command or a shortcut does not close. `batch`
+ *  wraps a run of rows taken together, so the tool can redraw once at its end rather than once a row. */
 export function awaitTreePick(
   taker: TreePickTaker,
   end: () => void,
-  opts: { keepsOnRewind?: boolean; keepsOnCommand?: boolean } = {},
+  opts: { keepsOnRewind?: boolean; keepsOnCommand?: boolean; batch?: (run: () => void) => void } = {},
 ): () => void {
   endPickSession();
   const mine: PickSession = {
@@ -44,6 +46,7 @@ export function awaitTreePick(
     end,
     keepsOnRewind: opts.keepsOnRewind ?? false,
     keepsOnCommand: opts.keepsOnCommand ?? false,
+    batch: opts.batch ?? null,
   };
   session = mine;
   return () => {
@@ -122,6 +125,15 @@ export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRo
     return "refused";
   }
   return "row";
+}
+
+/** Offers each pick in turn, as clicks would, until one is not taken or the session ends. */
+export function routeTreeRun(picks: readonly TreePick[], deps: TreeClickDeps): void {
+  const run = () => {
+    for (const p of picks) if (!session || routeTreeClick(p, deps) !== "taken") break;
+  };
+  if (session?.batch) session.batch(run);
+  else run();
 }
 
 export function resetTreePicks() {

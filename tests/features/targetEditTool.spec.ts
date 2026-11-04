@@ -8,7 +8,14 @@ import { FEATURE_TARGETS, type TargetField } from "../../src/features/selectionT
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature, Selector } from "../../src/types";
-import { awaitTreePick, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import {
+  awaitTreePick,
+  resetTreePicks,
+  routeTreeClick,
+  routeTreeRun,
+  treePickWaiting,
+  type TreePick,
+} from "../../src/ui/treePick";
 import { polylineMid } from "../../src/viewport/edgeMatch";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
 
@@ -187,12 +194,13 @@ function rowRig(feature: Feature, field: TargetField, drawn: EdgeRef[], bodies: 
   const patches: Partial<Feature>[] = [];
   const ended: boolean[] = [];
   const hints: string[] = [];
+  const paints = { n: 0 };
   const vp = {
     suspendPicking: false,
     selecting: "faces",
     domElement: document.createElement("canvas"),
     emphasizeEdges: () => {},
-    clearSelection: () => {},
+    clearSelection: () => paints.n++,
     setSelectionMode: () => {},
     hoverEntity: () => {},
     selectEdgeLines: () => {},
@@ -223,9 +231,11 @@ function rowRig(feature: Feature, field: TargetField, drawn: EdgeRef[], bodies: 
   tool.start(feature.id, field);
   const land = () => build({ building: false, result: {} });
   if (landed) land();
-  const row = (pick: TreePick) => routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
+  const deps = { busyHint: () => null, hint: (t: string) => hints.push(t) };
+  const row = (pick: TreePick) => routeTreeClick(pick, deps);
+  const run = (picks: TreePick[]) => routeTreeRun(picks, deps);
   const entries = () => tool.rows().map((r) => r.entry);
-  return { tool, patches, ended, hints, land, row, entries };
+  return { tool, patches, ended, hints, paints, land, row, run, entries };
 }
 
 const fillet = (edges: Selector[]) => ({ id: "f", type: "fillet", edges, radius: 1 }) as unknown as Feature;
@@ -310,6 +320,30 @@ describe("TargetEditTool rows", () => {
     const g = rowRig(offset, FEATURE_TARGETS.offsetFace![0]!, [E1], ["body2"]);
     expect(g.row({ kind: "face", faceId: 3 })).toBe("taken");
     expect(g.entries()).toEqual([{ kind: "face", by: "nearest", point: [15.5, -7, 4] }]);
+  });
+
+  // Each paint locates every face again, a scan of the whole body, so a page of rows painted per row froze the page.
+  it("a run of face rows is taken whole and painted once, not once a row", () => {
+    const h = rowRig(shell([]), shellField, [E1], ["body1", "body2"]);
+    const changes = { n: 0 };
+    h.tool.onChange(() => changes.n++);
+    h.paints.n = 0;
+    h.run([5, 6, 7, 8].map((faceId): TreePick => ({ kind: "face", faceId })));
+    expect(h.entries()).toHaveLength(4);
+    expect(h.paints.n).toBe(1);
+    expect(changes.n).toBe(1);
+    h.run([6, 7].map((faceId): TreePick => ({ kind: "face", faceId })));
+    expect(h.entries()).toHaveLength(2);
+    expect(h.paints.n).toBe(2);
+  });
+
+  it("a run stops at the first refused row, keeps what it took and paints once", () => {
+    const h = rowRig(shell([]), shellField, [E1], ["body1", "body2"]);
+    h.paints.n = 0;
+    h.run([{ kind: "face", faceId: 5 }, edgePick(E1), { kind: "face", faceId: 6 }]);
+    expect(h.entries()).toHaveLength(1);
+    expect(h.hints).toEqual(["That row is an edge, this step needs a face"]);
+    expect(h.paints.n).toBe(1);
   });
 
   it("a tracked face field takes the row's face with its normal, one face replaces the other", () => {

@@ -27,7 +27,7 @@ import type { Engine } from "./engine";
 import { featurePick } from "./featurePick";
 import { writeFeatureRows } from "./featureRows";
 import { BASE_PLANES, refuseAloud, routePlaneRow, sketchOnPlane, treeClickDeps, type PlanePick } from "./planePick";
-import { routeTreeClick, treePickWaiting, type TreePick } from "../ui/treePick";
+import { routeTreeRun, treePickWaiting, type TreePick } from "../ui/treePick";
 
 export interface GeometryBrowserHost {
   store: Engine["store"];
@@ -316,8 +316,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   function offerRows(rows: readonly GeometryRow[]): string | null {
     const picks = rows.map(toolPickOf);
     if (picks.some((p) => p === null)) return ROW_CHANGED;
-    const deps = treeClickDeps(e);
-    for (const p of picks as TreePick[]) if (!treePickWaiting() || routeTreeClick(p, deps) !== "taken") break;
+    routeTreeRun(picks as TreePick[], treeClickDeps(e));
     return null;
   }
 
