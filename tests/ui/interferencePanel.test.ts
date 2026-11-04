@@ -22,7 +22,7 @@ type Marks = { faceIds: number[]; color: number }[] | null;
 const TINT = 0xa98bff;
 
 function rig(
-  reply: InterferenceReply,
+  reply: InterferenceReply | (() => Promise<InterferenceReply>),
   bodies: Body[] = [
     { id: "body1", name: "Echo Dot 2" },
     { id: "body2", name: "Shelf" },
@@ -33,6 +33,7 @@ function rig(
   const marks: { marks: Marks; layer: string | undefined }[] = [];
   const selected: string[][] = [];
   const opens: (() => void)[] = [];
+  const builds: ((s: { result: unknown }) => void)[] = [];
   const deps = {
     store: {
       document: { features: [] } as unknown as CadDocument,
@@ -40,18 +41,31 @@ function rig(
       bodyName: (id: string) => userNames.get(id),
       onDocChange: () => {},
       onOpen: (f: () => void) => opens.push(f),
+      onBuild: (f: (s: { result: unknown }) => void) => {
+        builds.push(f);
+        f(deps.store.buildState);
+        return () => {};
+      },
     },
     viewport: {
       setInterferenceOverlay: () => {},
       setFaceMarks: (m: Marks, layer?: string) => marks.push({ marks: m, layer }),
       setSelectedBodies: (ids: string[]) => selected.push(ids),
     },
-    geometry: { interference: async () => reply },
+    geometry: { interference: async () => (typeof reply === "function" ? reply() : reply) },
     hasBody: () => true,
     setStatus: (text: string, cls: string) => statuses.push({ text, cls }),
   } as unknown as PanelsDeps;
   const panels = createPanels(deps);
-  return { panels, statuses, marks, selected, build: deps.store.buildState, open: () => opens.forEach((f) => f()) };
+  return {
+    panels,
+    statuses,
+    marks,
+    selected,
+    build: deps.store.buildState,
+    open: () => opens.forEach((f) => f()),
+    built: () => builds.forEach((f) => f(deps.store.buildState)),
+  };
 }
 
 describe("the Interference panel", () => {
@@ -194,6 +208,36 @@ describe("the Interference panel", () => {
       expect(marks.at(-1)).toEqual(clear);
     });
 
+    it("lets go of the kept pair when a new build lands, and keeps it when the same build is reported again", async () => {
+      const { panels, marks, build, built } = rig({ ok: true, pairs: [] }, bodies);
+      const store = usePanelsStore();
+      await panels.showInterference();
+      panels.highlightInterference("body5", "body2");
+      built();
+      expect(store.interferenceLit).toBe("body5 body2");
+      expect(marks.at(-1)).toEqual(tint([3, 4, 5, 6, 7, 8]));
+      build.result = { bodies: bodies.map((b) => ({ ...b, faceCount: 7 })) } as unknown as typeof build.result;
+      built();
+      expect(store.interferenceLit).toBeNull();
+      panels.previewInterference(null);
+      expect(marks.at(-1)).toEqual(clear);
+    });
+
+    it("drops a preview or a press made while a recheck ran once its reply lands", async () => {
+      let land!: (r: InterferenceReply) => void;
+      const reply = new Promise<InterferenceReply>((r) => (land = r));
+      const { panels, marks } = rig(reply as unknown as InterferenceReply, bodies);
+      const store = usePanelsStore();
+      const pending = panels.showInterference();
+      panels.highlightInterference("body1", "body5");
+      panels.previewInterference("body2", "body5");
+      expect(marks.at(-1)).toEqual(tint([3, 4, 5, 6, 7, 8]));
+      land({ ok: true, pairs: [] });
+      await pending;
+      expect(store.interferenceLit).toBeNull();
+      expect(marks.at(-1)).toEqual(clear);
+    });
+
     it("drops the kept pair and the preview on a recheck, on close and when another document opens", async () => {
       const { panels, marks, open } = rig({ ok: true, pairs: [] }, bodies);
       const store = usePanelsStore();
@@ -278,6 +322,43 @@ describe("the Interference panel", () => {
       const { panels } = rig({ ok: false, message: "engine stopped" } as InterferenceReply);
       await panels.showInterference();
       expect(spoken).toEqual([["Interference check failed: engine stopped", "assertive", { key: "interference" }]]);
+    });
+
+    it("drops a reply that lands after another document opened or the panel closed, and says nothing for it", async () => {
+      for (const leave of ["open", "close"] as const) {
+        spoken.length = 0;
+        setActivePinia(createPinia());
+        let land!: (r: InterferenceReply) => void;
+        const reply = new Promise<InterferenceReply>((r) => (land = r));
+        const { panels, statuses, open } = rig(reply as unknown as InterferenceReply, three);
+        const store = usePanelsStore();
+        const pending = panels.showInterference(0.5);
+        if (leave === "open") open();
+        else panels.closeInterference();
+        land({ ok: true, pairs: [clash("body1", "body3")], clearances: [near("body2", "body3")] });
+        await pending;
+        expect(store.interference).toBeNull();
+        expect(spoken).toEqual([]);
+        expect(statuses.map((x) => x.text)).toEqual(["Checking interference…"]);
+        // The next check on the document now open is shown and said.
+        await panels.showInterference(0.5);
+        expect(store.interference?.clashes.map((c) => c.key)).toEqual(["body1 body3"]);
+        expect(spoken).toEqual([["Interference: 1 clash, 1 close pair", "polite", { key: "interference" }]]);
+      }
+    });
+
+    it("shows only the later of two checks that overlap", async () => {
+      const lands: ((r: InterferenceReply) => void)[] = [];
+      const { panels } = rig(() => new Promise<InterferenceReply>((r) => lands.push(r)), three);
+      const store = usePanelsStore();
+      const first = panels.showInterference();
+      const second = panels.showInterference(0.5);
+      lands[1]!({ ok: true, pairs: [clash("body2", "body3")], clearances: [] });
+      await second;
+      lands[0]!({ ok: true, pairs: [clash("body1", "body2"), clash("body1", "body3")] });
+      await first;
+      expect(store.interference?.clashes.map((c) => c.key)).toEqual(["body2 body3"]);
+      expect(spoken).toEqual([["Interference: 1 clash, no close pairs", "polite", { key: "interference" }]]);
     });
 
     it("says nothing when the check never ran", async () => {

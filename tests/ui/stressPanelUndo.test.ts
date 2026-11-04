@@ -74,6 +74,7 @@ function rig() {
       return () => {};
     },
     onOpen: () => () => {},
+    onBuild: () => () => {},
     isBodyVisible: () => true,
     bodyName: (): string | undefined => undefined,
     loadCount: 1,

@@ -151,7 +151,10 @@ export function createPanels(deps: PanelsDeps) {
     }
     setStatus("Checking interference…", "");
     resetInterferenceTint();
+    const seq = ++interferenceSeq;
     const res = await geometry.interference(store.document, clearanceMm);
+    if (seq !== interferenceSeq) return;
+    resetInterferenceTint();
     if (!res.ok) {
       const failed = `Interference check failed: ${res.message ?? "error"}`;
       setStatus(failed, "error");
@@ -191,11 +194,14 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   function closeInterference() {
+    interferenceSeq++;
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
     resetInterferenceTint();
   }
 
+  // A reply for an earlier check, or one landing after a close or another document opened, is dropped.
+  let interferenceSeq = 0;
   // The kept pair is `panels.interferenceLit` (so its row can show it), bound to the build it was lit on.
   let litBuild: unknown = null;
   let preview: string | null = null;
@@ -293,8 +299,17 @@ export function createPanels(deps: PanelsDeps) {
   // points mean nothing in it.
   store.onOpen(() => {
     if (panels.interference) closeInterference();
+    interferenceSeq++;
     if (panels.stress) closeStress();
     kept = null;
+  });
+
+  // A rebuild clears the face marks, so the kept pair's row stops showing it as kept too.
+  store.onBuild((s) => {
+    if (panels.interferenceLit && litBuild !== s.result) {
+      panels.interferenceLit = null;
+      litBuild = null;
+    }
   });
 
   // Every panel edit lands in the setup and the document saves it synchronously, so a save never trails its edit.

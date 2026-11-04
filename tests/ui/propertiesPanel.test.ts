@@ -21,6 +21,7 @@ function rig(bodies: { id: string; name: string; fault?: string }[], selected: s
       buildState: { result: { bodies } },
       onDocChange: () => {},
       onOpen: () => {},
+      onBuild: () => () => {},
       bodyName: () => undefined,
     },
     viewport: {
