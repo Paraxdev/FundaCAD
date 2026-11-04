@@ -798,6 +798,11 @@ export class SketchMode {
     this.store.addFeature({ id: this.store.nextId(), type: "imprint", sketch: sketch.id });
   }
 
+  /** Focuses this sketch's key surface while a draw tool makes it a Tab stop, true when it took focus. */
+  focusKeys(): boolean {
+    return this.keySurface.focus();
+  }
+
   cancel() {
     if (this.gizmo?.active) this.gizmo.cancel();
     this.cleanup();

@@ -106,10 +106,10 @@ watch(
   { immediate: true },
 );
 
-function menuItems(fromKeys = false): CtxItem[] {
+function menuItems(): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
   if (props.toggleVis) items.push({ label: props.visible === false ? "Show" : "Hide", onClick: props.toggleVis });
-  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start(fromKeys) });
+  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start() });
   if (props.remove) items.push({ label: "Delete", danger: true, onClick: props.remove });
   return items;
 }
@@ -130,10 +130,10 @@ const keys = computed<TreeItemActions>(() => {
     toggle: (open) => {
       if (open === props.collapsed) emit("toggle");
     },
-    rename: rename && (() => keyRename.start(true)),
+    rename: rename && (() => keyRename.start()),
     remove: remove && (() => remove()),
     menu: (r) => {
-      const items = menuItems(true);
+      const items = menuItems();
       if (items.length) contextMenu(r.left + 24, r.bottom, items);
     },
   };

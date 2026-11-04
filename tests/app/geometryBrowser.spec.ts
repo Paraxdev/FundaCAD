@@ -7,6 +7,11 @@ import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
 import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
 
+const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
+vi.mock("../../src/ui/announce", async (actual) => ({
+  ...(await actual<typeof import("../../src/ui/announce")>()),
+  announce,
+}));
 vi.mock("../../src/ui/toast", () => ({
   toast: () => {},
   dismissToast: () => {},
@@ -755,6 +760,37 @@ describe("the active body", () => {
     r.store.setBodyVisibility("body2", true);
     await settle();
     expect(r.list.bodies.map((b) => b.id)).toEqual(["body1", "body2"]);
+  });
+
+  it("says when hiding the listed body moves the list to another, and when none is left", async () => {
+    const r = rig(
+      result([
+        { id: "body1", etag: "e1", name: "Box" },
+        { id: "body2", etag: "e2", name: "Box" },
+      ]),
+    );
+    await r.build();
+    r.browser.show(true);
+    r.browser.setBody("body2");
+    announce.mockClear();
+    r.store.setBodyVisibility("body2", false);
+    await settle();
+    expect(r.list.bodyId).toBe("body1");
+    expect(announce.mock.calls.map((c) => c[0])).toEqual(["Box 2 hidden, the list shows Box"]);
+    r.store.setBodyVisibility("body1", false);
+    await settle();
+    expect(announce.mock.calls.at(-1)?.[0]).toBe("Box hidden, no body left to list");
+  });
+
+  it("says nothing of a body change while the list is closed", async () => {
+    const r = rig(two());
+    await r.build();
+    r.browser.setBody("body2");
+    announce.mockClear();
+    r.store.setBodyVisibility("body2", false);
+    await settle();
+    expect(r.list.bodyId).toBe("body1");
+    expect(announce).not.toHaveBeenCalled();
   });
 
   it("has no body when every body is hidden", async () => {

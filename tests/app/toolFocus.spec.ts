@@ -17,11 +17,13 @@ function setup() {
     </div>
     <div role="tree"><div role="treeitem" id="plane" tabindex="0">XY plane</div></div>
     <button id="rail">Fillet</button>
+    <label>Size at least <input id="size" /></label>
     <div role="dialog" id="palette"><input id="search" /></div>`;
   const $ = (id: string) => document.getElementById(id)!;
+  const keys = new KeySurface();
   const host = {
     tool: false,
-    sketch: { active: false },
+    sketch: { active: false, focusKeys: () => keys.focus() },
     toolAtWork: () => host.tool || host.sketch.active,
     viewport: { domElement: $("view") },
   };
@@ -60,7 +62,6 @@ function setup() {
     $("box").remove();
   };
   // As sketchMode: the surface is a Tab stop while Line, Rectangle or Circle is armed, and goes with the sketch.
-  const keys = new KeySurface();
   const sketch = (on: boolean, armed = true) => {
     if (on) {
       keys.mount(document.body);
@@ -158,7 +159,7 @@ describe("focus after a tool", () => {
     expect(document.activeElement).toBe(t.$("rail"));
   });
 
-  it("gives nothing back after a tool a pointer started", () => {
+  it("goes back to the control a pointer started the tool from when its box leaves focus on the page", () => {
     const t = setup();
     t.$("rail").focus();
     t.frame();
@@ -166,7 +167,28 @@ describe("focus after a tool", () => {
     t.frame();
     t.endTool();
     t.idle();
-    expect(document.activeElement).toBe(document.body);
+    expect(document.activeElement).toBe(t.$("rail"));
+  });
+
+  it("goes to the 3D view after a tool a pointer started from the page", () => {
+    const t = setup();
+    t.startTool("pointer");
+    t.frame();
+    t.endTool();
+    t.idle();
+    expect(document.activeElement).toBe(t.$("view"));
+  });
+
+  it("stays where a pointer took it when the tool ends", () => {
+    const t = setup();
+    t.$("rail").focus();
+    t.frame();
+    t.startTool("pointer");
+    t.frame();
+    t.endTool();
+    t.click("row1");
+    t.idle();
+    expect(document.activeElement).toBe(t.$("row1"));
   });
 
   it("goes back to a row a pointer focused when keys start the tool from the palette", () => {
@@ -238,6 +260,29 @@ describe("focus when a sketch starts", () => {
     t.host.sketch.active = true;
     t.frame();
     expect(document.activeElement).toBe(t.$("view"));
+  });
+
+  it("goes to the sketch's key surface from a text field, which would take the sketch's letters", () => {
+    const t = setup();
+    t.$("size").focus();
+    t.frame();
+    t.key();
+    t.sketch(true);
+    t.frame();
+    expect(document.activeElement).toBe(t.surface());
+  });
+
+  it("goes to its own sketch's key surface, not to another tool's earlier in the page", () => {
+    const t = setup();
+    const other = new KeySurface();
+    other.mount(document.body, "Extrude");
+    other.setStop(true);
+    t.$("row2").focus();
+    t.frame();
+    t.sketch(true);
+    t.frame();
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Sketch");
+    other.dispose();
   });
 
   it("stays on a button, which leaves letters to the shortcuts", () => {

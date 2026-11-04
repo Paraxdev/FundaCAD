@@ -34,7 +34,8 @@ body {
   /* Everything but the title bar and the stage floats over the viewport (_float.scss). */
   grid-template-rows: 36px minmax(0, 1fr);
   grid-template-areas: "title" "main";
-  height: 100vh;
+  /* Not 100vh: the root zoom outside Tauri scales vh too, and the shell ran past the window from 110 percent. */
+  height: 100%;
   width: 100%;
   overflow: hidden;
   /* clip, not hidden: a hidden box still scrolls, and the rail foot's shadow pokes

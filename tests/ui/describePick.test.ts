@@ -183,11 +183,47 @@ const CASES: Case[] = [
   {
     name: "a part arc, even a concave one",
     facts: { ...bore, full: false, radius: 3, owner: "Fillet 1", axis: [0, 1, 0] },
-    label: "Rounded face 7",
+    label: "Round face 7",
     hint: ["radius 3 mm", "Fillet 1"],
-    readout: ["rounded", "R3 mm"],
+    readout: ["round", "R3 mm"],
     spoken: ["radius 3 millimetres", "20 millimetres long", "axis front to back", "from Fillet 1"],
     never: ["diameter"],
+  },
+  {
+    name: "a part arc is the round face the press and pull prompt names",
+    facts: { ...bore, full: false, radius: 3 },
+    label: "Round face 7",
+    never: ["Rounded"],
+  },
+  {
+    name: "a round flat cap says its diameter, not a square's sides",
+    facts: { ...flat, size: [25, 25], area: Math.PI * 12.5 ** 2 },
+    label: "Flat face 4",
+    hint: ["diameter 25 mm"],
+    readout: ["⌀25 mm"],
+    spoken: ["diameter 25 millimetres", "facing up"],
+    never: ["by 25"],
+  },
+  {
+    name: "a square flat face keeps its sides",
+    facts: { ...flat, size: [25, 25], area: 625 },
+    label: "Flat face 4",
+    hint: ["25 by 25 mm"],
+    never: ["diameter"],
+  },
+  {
+    name: "a body named as the feature that made it is said once",
+    facts: { ...flat, body: "Box", owner: "Box" },
+    label: "Flat face 4",
+    hint: ["Box"],
+    spoken: ["facing up, at height 37 millimetres, Box"],
+    never: ["from Box"],
+  },
+  {
+    name: "a body named apart from its feature says both",
+    facts: { ...flat, body: "Box 2", owner: "Box" },
+    label: "Flat face 4",
+    spoken: ["Box 2, from Box"],
   },
   {
     name: "a round face not known to be whole says its radius",
@@ -483,6 +519,15 @@ describe("describeChange", () => {
   };
   const words = (key: string) => ({ label: names[key] ?? "?", spoken: `${names[key] ?? "?"}, in full` });
   const change = (prev: string[], next: string[]) => describeChange(prev, next, words);
+
+  it("names the body of one added or removed on a body the rest are not on", () => {
+    const bodyOf = (k: string) => (/^[fe]:/.test(k) ? k.split(":")[1]!.toUpperCase() : null);
+    const on = (prev: string[], next: string[]) => describeChange(prev, next, words, bodyOf);
+    expect(on(["f:body1:3"], ["f:body1:3", "f:body2:0"])).toBe("Flat face 1 of BODY2 added, 2 selected");
+    expect(on(["f:body1:3", "f:body2:0"], ["f:body1:3"])).toBe("Flat face 1 of BODY2 removed, 1 selected");
+    expect(on(["f:body1:3"], ["f:body1:3", "e:body1:10"])).toBe("Straight edge 11 added, 2 selected");
+    expect(on(["f:body1:3", "f:body2:0"], ["f:body1:3", "f:body2:0", "f:body1:6"])).toBe("Hole 7 added, 3 selected");
+  });
 
   it("says nothing when the selection did not change", () => {
     expect(change([], [])).toBeNull();
