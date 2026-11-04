@@ -37,8 +37,10 @@ LARGE_SHORT = (
         "the Extra Parameters number fields are text inputs, which draw no ::before, and a taller box would show",
     ),
 )
-# The range input grows its own box to --hit-min under a negative margin, so only its centre and width stay put.
+# These grow their own box to --hit-min under a negative margin, so only its centre and width stay put.
 OWN_BOX = ("ui-slider-input",)
+# The same by name, for inputs whose path is only their generated id.
+OWN_BOX_NAMES = ("Size at least",)
 
 _LARGE = "() => { document.documentElement.dataset.targets = 'large' }"
 _DEFAULT = "() => { delete document.documentElement.dataset.targets }"
@@ -111,7 +113,7 @@ def boxes(rep):
     out: dict[tuple, list] = {}
     for t in rep["targets"] + rep["covered"] + rep["occluded"]:
         b = t["box"]
-        if any(p in t["sel"] for p in OWN_BOX):
+        if any(p in t["sel"] for p in OWN_BOX) or t["name"] in OWN_BOX_NAMES:
             b = [b[0], round(b[1] + b[3] / 2, 1), b[2]]
         out.setdefault((t["sel"], t["name"]), []).append(b)
     return {k: sorted(v) for k, v in out.items()}

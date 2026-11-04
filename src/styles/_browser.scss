@@ -193,6 +193,12 @@
 :root[data-targets="large"] .tree-eye.icon-btn.icon-btn-sm::before {
   inset: -13px -6px;
 }
+/* A text input draws no ::before, so the Size at least input grows its own box past its 24px well. The
+   negative margin keeps the well's height, and the 8px gaps round it keep the grown box off its neighbours. */
+:root[data-targets="large"] .geometry-filters .ui-field-sm > input {
+  height: max(24px, var(--hit-min));
+  margin-block: calc((24px - max(24px, var(--hit-min))) / 2);
+}
 /* The Extra Parameters plugin draws its setup button with inline styles, so its hit area is set here. */
 .xp-setup {
   @include hit.area;
