@@ -8,7 +8,7 @@ import type { SketchPlane } from "./plane";
 import type { ResolvedEntity } from "./snap";
 import { entityDims, staggeredDefaults, type DimField } from "./entityDims";
 import { dimClass, dimTitle, fmtDim, isFormula, type DimKind } from "./annotationFormat";
-import { entityDimName, entityLabel } from "./sketchNames";
+import { entityDimName, entityLabeller } from "./sketchNames";
 import { useSketchAnnotationStore, type DimHooks } from "../stores/sketchAnnotations";
 
 export interface DimLabel {
@@ -88,6 +88,7 @@ export class SketchDimensions {
     const items: DimItem[] = [];
     // Concentric circles fan their diameter badges out, the same call dimensionSegments makes so labels and lines agree.
     const defaults = staggeredDefaults(entities);
+    const labelOf = entityLabeller(entities);
     entities.forEach((e, i) => {
       for (const d of entityDims(e, defaults.get(e.id))) {
         if (skip?.has(`${e.id}:${d.field}`)) continue;
@@ -96,7 +97,7 @@ export class SketchDimensions {
         items.push(
           present({
             key: `${e.id}:${field}`,
-            name: entityDimName(d.label, entityLabel(entities, e.id)),
+            name: entityDimName(d.label, labelOf(e.id)),
             entities: [e.id],
             anchor: d.labelPos,
             valueMm: d.valueMm,

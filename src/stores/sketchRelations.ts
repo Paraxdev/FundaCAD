@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { computed, markRaw, ref, shallowRef } from "vue";
 import type { Freedom } from "../sketch/freedomWords";
 import type { RelationRow } from "../sketch/relations";
-import { shapeRow } from "../sketch/sketchNames";
+import { entityLabeller, shapeRow } from "../sketch/sketchNames";
 import type { ResolvedEntity } from "../sketch/snap";
 
 /** Assigned by SketchMode on sketch entry, late bound like the badge layers' hooks. */
@@ -38,8 +38,12 @@ export const useSketchRelationsStore = defineStore("sketchRelations", () => {
   const shapes = computed(() => {
     const ents = shapeEntities.value as ResolvedEntity[];
     const known = conflict.value ? null : freedom.value;
-    return ents.map((e) => shapeRow(ents, e, known?.get(e.id)));
+    const labelOf = entityLabeller(ents);
+    return ents.map((e) => shapeRow(labelOf, e, known?.get(e.id)));
   });
+
+  /** Read off the entity list, so the closed list's count does not name every shape. */
+  const shapeCount = computed(() => shapeEntities.value.length);
 
   function setShapes(ents: readonly ResolvedEntity[]) {
     shapeEntities.value = ents.slice();
@@ -78,6 +82,7 @@ export const useSketchRelationsStore = defineStore("sketchRelations", () => {
     hooks,
     hovered,
     shapes,
+    shapeCount,
     freedom,
     show,
     hide,

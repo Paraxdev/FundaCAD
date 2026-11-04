@@ -9,7 +9,7 @@ const palette = useSketchPaletteStore();
 const rel = useSketchRelationsStore();
 
 const listId = "palette-shapes-list";
-const label = computed(() => `Shapes (${rel.shapes.length})`);
+const label = computed(() => `Shapes (${rel.shapeCount})`);
 
 function toggle() {
   palette.shapesOpen = !palette.shapesOpen;

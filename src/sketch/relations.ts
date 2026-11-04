@@ -8,7 +8,7 @@ import { coincKey } from "./sketchSolve";
 import { constraintFace, diagnosisOf, type ConstraintDiagnosis } from "./glyphs";
 import { fmtDim } from "./annotationFormat";
 import { rectSideField } from "./directDims";
-import { distinctNames, entityLabel, relationName, stateWord, type StateWord } from "./sketchNames";
+import { distinctNames, entityLabel, entityLabeller, relationName, stateWord, type StateWord } from "./sketchNames";
 
 export { entityLabel };
 
@@ -73,6 +73,7 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
     }
   }
   const out: RelationRow[] = [];
+  const labelOf = entityLabeller(ents);
   for (const ids of at.values()) {
     if (ids.length < 2 || joinedByRecords(ids, recorded)) continue;
     out.push(
@@ -82,7 +83,7 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
         icon: "coincident",
         name: "Coincident",
         detail: ids
-          .map((id) => entityLabel(ents, id))
+          .map(labelOf)
           .filter(Boolean)
           .join(" and "),
         entities: ids,
@@ -118,9 +119,10 @@ export function constraintRows(
   conflicts: Set<number>,
   over: Set<number>,
 ): RelationRow[] {
+  const labelOf = entityLabeller(ents);
   return constraints.map((c, i) => {
     const face = constraintFace(c);
-    const labels = face.operands.map((o) => entityLabel(ents, o)).filter((s): s is string => !!s);
+    const labels = face.operands.map(labelOf).filter((s): s is string => !!s);
     const v = (c as { value?: number }).value;
     const driven = isDriven(c);
     const side = rectSide(ents, c);

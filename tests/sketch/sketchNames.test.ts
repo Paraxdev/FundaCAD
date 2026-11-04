@@ -5,6 +5,8 @@ import {
   dimKey,
   distinctNames,
   entityDimName,
+  entityLabel,
+  entityLabeller,
   relationName,
   shapeRow,
   stateWord,
@@ -87,6 +89,42 @@ describe("dimKey", () => {
   });
 });
 
+describe("entityLabeller", () => {
+  const ents: ResolvedEntity[] = [
+    { type: "rectangle", id: "r1", x: 7.5, y: -3, width: 40, height: 15, angle: 20 },
+    { type: "line", id: "l1", x1: 3.5, y1: -2, x2: 11, y2: 7.25 },
+    { type: "circle", id: "c1", x: 41, y: -7, radius: 3.5 },
+    { type: "line", id: "l2", x1: 11, y1: 7.25, x2: 14.5, y2: 1 },
+    { type: "rectangle", id: "r2", x: -9, y: 12, width: 6, height: 4.5 },
+    { type: "line", id: "l3", x1: 14.5, y1: 1, x2: 3.5, y2: -2 },
+  ];
+  const ids = ["r1", "l1", "c1", "l2", "r2", "l3", "r2~3", "r1~0", "r1~x", "gone", "gone~1"];
+
+  it("names every id the way entityLabel does, edges and unknown ids too", () => {
+    const label = entityLabeller(ents);
+    expect(ids.map(label)).toEqual([
+      "Rectangle 1",
+      "Line 1",
+      "Circle 1",
+      "Line 2",
+      "Rectangle 2",
+      "Line 3",
+      "Rectangle 2 edge 4",
+      "Rectangle 1 edge 1",
+      "Rectangle 1",
+      null,
+      null,
+    ]);
+    expect(ids.map(label)).toEqual(ids.map((id) => entityLabel(ents, id)));
+  });
+
+  it("knows nothing in an empty list, one shape in a list of one, and reads a second list afresh", () => {
+    expect(entityLabeller([])("l1")).toBeNull();
+    expect(entityLabeller(ents.slice(3, 4))("l2")).toBe("Line 1");
+    expect(entityLabeller(ents)("l2")).toBe("Line 2");
+  });
+});
+
 describe("shapeRow", () => {
   const ents: ResolvedEntity[] = [
     { type: "line", id: "a", x1: 3.5, y1: -2, x2: 11, y2: 7.25 },
@@ -94,7 +132,7 @@ describe("shapeRow", () => {
     { type: "line", id: "c", x1: 11, y1: 7.25, x2: 14.5, y2: 1, construction: true },
     { type: "projected", id: "d", construction: true } as unknown as ResolvedEntity,
   ];
-  const row = (i: number, f?: { x: boolean; y: boolean; size: boolean }) => shapeRow(ents, ents[i]!, f);
+  const row = (i: number, f?: { x: boolean; y: boolean; size: boolean }) => shapeRow(entityLabeller(ents), ents[i]!, f);
 
   it("names the shape by its place among its kind, with the freedom after it", () => {
     expect(row(2, { x: true, y: false, size: false })).toEqual({
@@ -126,6 +164,6 @@ describe("shapeRow", () => {
   });
 
   it("falls back to the id for an entity the list does not hold", () => {
-    expect(shapeRow([], ents[0]!, undefined)).toEqual({ id: "a", label: "a", hint: "", spoken: "a" });
+    expect(shapeRow(entityLabeller([]), ents[0]!, undefined)).toEqual({ id: "a", label: "a", hint: "", spoken: "a" });
   });
 });

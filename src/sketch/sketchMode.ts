@@ -139,7 +139,7 @@ import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { announce } from "../ui/announce";
 import { constraintRows } from "./relations";
-import { constraintDimName, dimKey, entityDimName, entityLabel } from "./sketchNames";
+import { constraintDimName, dimKey, entityDimName, entityLabeller } from "./sketchNames";
 import { toast } from "../ui/toast";
 import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
@@ -1438,6 +1438,7 @@ export class SketchMode {
   private constraintDimExtras(): ExtraDim[] {
     // A redundant second width on one rectangle falls back to its constraint key, so list keys stay unique.
     const sides = new Set<string>();
+    const labelOf = entityLabeller(this.entities);
     return this.cdims.map((d) => {
       const st = diagnosisOf(d.cIndex, this.conflictIdx, this.overIdx);
       const con = this.constraints[d.cIndex];
@@ -1449,8 +1450,8 @@ export class SketchMode {
       if (sideKey) sides.add(sideKey);
       const face = con ? constraintFace(con) : null;
       const operands = face?.operands ?? [];
-      const labels = operands.map((o) => entityLabel(this.entities, o)).filter((l): l is string => !!l);
-      const subject = side ? entityLabel(this.entities, side.entity.id) : null;
+      const labels = operands.map(labelOf).filter((l): l is string => !!l);
+      const subject = side ? labelOf(side.entity.id) : null;
       return {
         key: dimKey(ownsSide ? sideKey : null, con && "id" in con ? con.id : undefined, d.cIndex),
         name: side

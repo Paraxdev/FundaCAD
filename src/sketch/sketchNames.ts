@@ -20,21 +20,27 @@ const KIND_NAME: Record<string, string> = {
 
 /** Kind plus position among its kind, the only handle an entity has (ids, not names). Decodes rect-edge operands,
  *  null for an id nothing answers to, so a stale constraint reads as acting on nothing. */
-export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
-  const t = id.indexOf("~");
-  if (t >= 0) {
-    const base = entityLabel(ents, id.slice(0, t));
+export function entityLabel(ents: readonly ResolvedEntity[], id: string): string | null {
+  return entityLabeller(ents)(id);
+}
+
+/** One pass over the list, so naming every shape of a big sketch is not quadratic. */
+export function entityLabeller(ents: readonly ResolvedEntity[]): (id: string) => string | null {
+  const names = new Map<string, string>();
+  const counts = new Map<string, number>();
+  for (const e of ents) {
+    const n = (counts.get(e.type) ?? 0) + 1;
+    counts.set(e.type, n);
+    if (!names.has(e.id)) names.set(e.id, `${KIND_NAME[e.type] ?? e.type} ${n}`);
+  }
+  const label = (id: string): string | null => {
+    const t = id.indexOf("~");
+    if (t < 0) return names.get(id) ?? null;
+    const base = label(id.slice(0, t));
     const k = Number(id.slice(t + 1));
     return base && Number.isInteger(k) ? `${base} edge ${k + 1}` : base;
-  }
-  const target = ents.find((e) => e.id === id);
-  if (!target) return null;
-  let n = 0;
-  for (const e of ents) {
-    if (e.type === target.type) n++;
-    if (e.id === id) break;
-  }
-  return `${KIND_NAME[target.type] ?? target.type} ${n}`;
+  };
+  return label;
 }
 
 export type StateWord = "conflicting" | "redundant" | "reference" | "implied";
@@ -89,8 +95,12 @@ export interface ShapeRow {
 }
 
 /** "Line 3, construction, free in X": the label first, then what is worth knowing, with no word for unknown freedom. */
-export function shapeRow(ents: ResolvedEntity[], e: ResolvedEntity, freedom: Freedom | undefined): ShapeRow {
-  const label = entityLabel(ents, e.id) ?? e.id;
+export function shapeRow(
+  labelOf: (id: string) => string | null,
+  e: ResolvedEntity,
+  freedom: Freedom | undefined,
+): ShapeRow {
+  const label = labelOf(e.id) ?? e.id;
   const facts = [e.type !== "projected" && e.construction ? "construction" : "", freedomWords(freedom)].filter(Boolean);
   return { id: e.id, label, hint: facts.join(" · "), spoken: [label, ...facts].join(", ") };
 }
