@@ -261,14 +261,23 @@ export function findDrivingDim(
   return undefined;
 }
 
+/** The rectangle and side a driving corner distance stands in for. */
+export function rectSideOf(
+  entities: ResolvedEntity[],
+  c: SketchConstraint,
+): { entity: ResolvedEntity; field: "width" | "height" } | null {
+  if (c.type !== "p2pDistance" || c.driven) return null;
+  const field = rectSideField(c);
+  const entity = field ? entities.find((e) => e.id === c.e1 && e.type === "rectangle") : undefined;
+  return field && entity ? { entity, field } : null;
+}
+
 /** Sides whose constraint label already shows the value (editable, red on conflict), so no badge draws them twice. */
 export function drivenBadges(entities: ResolvedEntity[], constraints: SketchConstraint[]): Set<string> {
-  const rects = new Set(entities.filter((e) => e.type === "rectangle").map((e) => e.id));
   const out = new Set<string>();
   for (const c of constraints) {
-    if (c.type !== "p2pDistance" || c.driven || !rects.has(c.e1)) continue;
-    const f = rectSideField(c);
-    if (f) out.add(`${c.e1}:${f}`);
+    const side = rectSideOf(entities, c);
+    if (side) out.add(`${side.entity.id}:${side.field}`);
   }
   return out;
 }

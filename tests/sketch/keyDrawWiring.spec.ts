@@ -102,6 +102,7 @@ function makeSketch(tool: string) {
     mirrorFlow: { running: false },
     dimFlow: { picking: false, plan: null, resetDimPicks() {} },
     constraintTools: { hasPending: () => false, resetPending() {} },
+    glyphs: { hasSelection: () => false, clearSelection() {} },
     overlay: {
       setPreview() {},
       setGuides() {},
@@ -766,7 +767,12 @@ describe("Enter on a size box nobody touched", () => {
 
   it("forgets the keys when the canvas takes a left press, and not for a right one", () => {
     const { s } = makeDrawing("line");
-    Object.assign(s, { dims: { clearSelection() {} }, snapAt: () => null, rightDownAt: null, rightDragged: false });
+    Object.assign(s, {
+      dims: { clearSelection() {} },
+      snapAt: () => null,
+      rightDownAt: null,
+      rightDragged: false,
+    });
     startAt(s, "7", "-3");
     s.onPointerDown({ button: 2, clientX: 1, clientY: 1 });
     enter("length");

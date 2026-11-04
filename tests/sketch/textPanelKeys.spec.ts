@@ -53,6 +53,7 @@ function sketchInTextTool() {
     dimFlow: { picking: false, plan: null },
     constraintTools: { hasPending: () => false },
     dims: { deleteSelected: () => (log.push("delete dimension"), true) },
+    glyphs: { deleteSelected: () => false, hasSelection: () => false, clearSelection() {} },
     setTool: (t: string) => log.push(`tool ${t}`),
     setTangentArc: () => log.push("tangent arc"),
     finish: () => log.push("finish"),

@@ -46,7 +46,15 @@ const viewport = {
 } as unknown as Viewport;
 
 function extra(over: Partial<ExtraDim> = {}): ExtraDim {
-  return { anchor: new THREE.Vector2(1, 2), valueMm: 40, commit: () => {}, ...over };
+  return {
+    key: "c:x",
+    name: "Distance",
+    entities: [],
+    anchor: new THREE.Vector2(1, 2),
+    valueMm: 40,
+    commit: () => {},
+    ...over,
+  };
 }
 
 function dims() {
@@ -143,7 +151,7 @@ describe("SketchDimLayer", () => {
 
     const overlapPick = vi.fn(() => false);
     const store = useSketchAnnotationStore();
-    store.dimHooks = { overlapPick, planePoint: () => null, labelMenu: () => {} };
+    store.dimHooks = { overlapPick, planePoint: () => null, labelMenu: () => {}, light: () => {} };
     store.dimSelected = -1;
 
     const badge = labels()[0]!;
@@ -175,6 +183,7 @@ describe("SketchDimLayer", () => {
       },
       planePoint: () => null,
       labelMenu: () => {},
+      light: () => {},
     };
     labels()[0]!.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true }));
     await nextTick();
@@ -236,6 +245,19 @@ describe("SketchDimLayer", () => {
     expect(onDelete).toHaveBeenCalledOnce();
   });
 
+  it("drops a constraint glyph's selection when a badge is pressed or opened by its menu", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    const store = useSketchAnnotationStore();
+    dims().show([], plane, [extra(), extra({ onDelete: vi.fn() })]);
+    await nextTick();
+    store.glyphSelected = 3;
+    labels()[1]!.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true }));
+    expect([store.dimSelected, store.glyphSelected]).toEqual([1, null]);
+    store.glyphSelected = 2;
+    labels()[0]!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    expect([store.dimSelected, store.glyphSelected]).toEqual([0, null]);
+  });
+
   it("falls through when the armed label is an entity dim with nothing to delete", async () => {
     mount(SketchDimLayer, { attachTo: document.body });
     const d = dims();
@@ -277,6 +299,24 @@ describe("SketchDimLayer", () => {
 
   it("opens the value in display units on click", async () => {
     expect((await openEditor()).value).toBe("40");
+  });
+
+  it("names the open editor after its dimension", async () => {
+    const input = await openEditor({ name: "Width of Rectangle 2" });
+    expect(input.getAttribute("aria-label")).toBe("Width of Rectangle 2");
+  });
+
+  it("outlines only the badge whose Dimensions row is lit, and drops it when the row goes", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    const store = useSketchAnnotationStore();
+    dims().show([], plane, [extra({ key: "c:a" }), extra({ key: "c:b" }), extra({ key: "c:c" })]);
+    await nextTick();
+    store.dimLit = "c:b";
+    await nextTick();
+    expect([...labels()].map((el) => el.classList.contains("is-lit"))).toEqual([false, true, false]);
+    store.dimLit = null;
+    await nextTick();
+    expect([...labels()].map((el) => el.classList.contains("is-lit"))).toEqual([false, false, false]);
   });
 
   it("reopens the EXPRESSION on a parameter-bound dim, not its value", async () => {
@@ -432,5 +472,39 @@ describe("SketchDimLayer", () => {
     await nextTick();
     labels()[0]!.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true }));
     expect(forwardWheel).toHaveBeenCalledTimes(1);
+  });
+
+  // --- screen readers --------------------------------------------------------
+  const root = () => document.querySelector<HTMLElement>(".sketch-dims")!;
+  const FOCUSABLE = "a[href],button,input,select,textarea,[tabindex],[contenteditable]";
+
+  it("hides idle badges from screen readers with nothing focusable, yet not inert", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    dims().show([], plane, [extra({ key: "a" }), extra({ key: "b", valueMm: 17.5 })]);
+    await nextTick();
+    expect(labels()).toHaveLength(2);
+    expect(root().getAttribute("aria-hidden")).toBe("true");
+    expect(root().hasAttribute("inert")).toBe(false);
+    expect(root().querySelectorAll(FOCUSABLE)).toHaveLength(0);
+  });
+
+  it("exposes the layer while a badge editor is open and hides it again on close", async () => {
+    const input = await openEditor({ valueMm: 23.5 });
+    expect(root().hasAttribute("aria-hidden")).toBe(false);
+    expect(root().querySelectorAll(FOCUSABLE)).toHaveLength(1);
+    expect(input.getAttribute("aria-label")).toBeTruthy();
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await nextTick();
+    expect(labels()[0]!.querySelector("input")).toBeNull();
+    expect(root().getAttribute("aria-hidden")).toBe("true");
+
+    labels()[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    labels()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await nextTick();
+    expect(root().hasAttribute("aria-hidden")).toBe(false);
+    labels()[0]!.querySelector("input")!.dispatchEvent(new FocusEvent("blur"));
+    await nextTick();
+    expect(root().getAttribute("aria-hidden")).toBe("true");
   });
 });

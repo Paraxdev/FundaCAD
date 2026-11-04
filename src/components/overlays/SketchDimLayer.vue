@@ -139,7 +139,7 @@ onUnmounted(stop);
 
 // Which label the Delete key acts on, dropped on the next rebuild so a stale delete is never armed.
 function select(i: number) {
-  s.dimSelected = i;
+  s.selectDim(i);
 }
 
 // Under DRAG_PX of movement a release still opens the value editor, past it the label follows the cursor (the same
@@ -327,14 +327,21 @@ function onWheel(e: WheelEvent) {
 </script>
 
 <template>
-  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. -->
+  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. Hidden from screen
+  readers (the Dimensions list is the keyboard route) but not inert, which would stop the pointer edit; the open editor
+  is a focusable field, so it is exposed while it exists. -->
   <Teleport to="body">
-    <div class="sketch-dims" :class="{ 'dims-passive': s.dimsPassive }" @wheel="onWheel">
+    <div
+      class="sketch-dims"
+      :class="{ 'dims-passive': s.dimsPassive }"
+      :aria-hidden="editing === null ? 'true' : undefined"
+      @wheel="onWheel"
+    >
       <div
         v-for="(l, i) in s.dimItems"
         :key="i"
         :ref="(el) => (els[i] = el as HTMLElement | null)"
-        :class="[l.cls, { 'is-selected': s.dimSelected === i }]"
+        :class="[l.cls, { 'is-selected': s.dimSelected === i, 'is-lit': s.dimLit === l.key }]"
         :title="l.title"
         @pointerdown="onDown($event, i, l)"
         @pointermove="onDragMove"
@@ -352,7 +359,7 @@ function onWheel(e: WheelEvent) {
           class="sketch-dim-field"
           size="sm"
           :error="editError"
-          label="Dimension value"
+          :label="l.name"
           title=""
           @input="editError = null"
           @keydown="onEditKey($event, l)"

@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, PREVIEW_COLOR } from "./overlay";
+import { curveObjects, sketchConflictColor, sketchPreviewColor, sketchSelectColor } from "./overlay";
 import type { DimInput } from "./dimInput";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
@@ -121,9 +121,9 @@ export class ModifyFlow {
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
     const preview: THREE.Object3D[] = [];
     const first = this.filletFirst != null ? this.host.entities()[this.filletFirst] : undefined;
-    if (first) preview.push(...curveObjects([first], this.host.plane(), 0x33aaff, true));
+    if (first) preview.push(...curveObjects([first], this.host.plane(), sketchSelectColor(), true));
     const hit = idx >= 0 ? this.host.entities()[idx] : undefined;
-    if (hit) preview.push(...curveObjects([hit], this.host.plane(), 0xff5555, true));
+    if (hit) preview.push(...curveObjects([hit], this.host.plane(), sketchConflictColor(), true));
     if (!this.edgePickPending) this.emphasise(!hit && this.host.tool() === "offset" ? this.modelEdgeChainAt(p) : []);
     this.host.overlay().setPreview(preview);
   }
@@ -515,8 +515,8 @@ export class ModifyFlow {
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     const added = res ? res.entities.slice(this.host.entities().length) : [];
     // keep the source highlighted so it stays obvious what is being offset
-    const preview = [...curveObjects([src], this.host.plane(), 0x33aaff, true)];
-    if (added.length) preview.push(...curveObjects(added, this.host.plane(), PREVIEW_COLOR, true));
+    const preview = [...curveObjects([src], this.host.plane(), sketchSelectColor(), true)];
+    if (added.length) preview.push(...curveObjects(added, this.host.plane(), sketchPreviewColor(), true));
     this.host.overlay().setPreview(preview);
   }
 

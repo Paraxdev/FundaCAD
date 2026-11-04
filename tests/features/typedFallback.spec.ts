@@ -23,7 +23,12 @@ const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending,
 
 const toasts = vi.hoisted(() => [] as string[]);
 vi.mock("../../src/ui/toast", () => ({ toast: (m: string) => toasts.push(m) }));
-vi.mock("../../src/sketch/overlay", () => ({ curveObjects: (ents: unknown[]) => ents, PREVIEW_COLOR: 0 }));
+vi.mock("../../src/sketch/overlay", () => ({
+  curveObjects: (ents: unknown[]) => ents,
+  sketchPreviewColor: () => 0,
+  sketchSelectColor: () => 0,
+  sketchConflictColor: () => 0,
+}));
 // The real solver pulls a wasm ?url that the DOM project's transform refuses, and nothing here solves.
 vi.mock("../../src/sketch/solver", () => ({
   SolverUnavailable: class extends Error {},

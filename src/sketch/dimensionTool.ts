@@ -326,6 +326,7 @@ function buildPlan(spec: {
   kind: DimPlan["kind"];
   field: string;
   label: string;
+  tag?: string;
   icon?: string;
   fieldKind: "length" | "angle";
   value: number;
@@ -339,7 +340,13 @@ function buildPlan(spec: {
   hint: string;
 }): DimPlan {
   const fields: DimFieldDef[] = [
-    { name: spec.field, label: spec.label, ...(spec.icon ? { icon: spec.icon } : {}), kind: spec.fieldKind },
+    {
+      name: spec.field,
+      label: spec.label,
+      ...(spec.tag ? { tag: spec.tag } : {}),
+      ...(spec.icon ? { icon: spec.icon } : {}),
+      kind: spec.fieldKind,
+    },
   ];
   const anchors = spec.anchors;
   const labelAnchor = spec.labelAnchor;
@@ -367,7 +374,8 @@ function p2pPlan(a: PointOp, b: PointOp, forceDriven: boolean, hint: string): Di
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "D",
+    label: "Distance",
+    tag: "D",
     fieldKind: "length",
     value: a.pos.distanceTo(b.pos),
     measureAt: (off) => axisMeasure(a.pos, b.pos, modeOf(off)),
@@ -434,7 +442,8 @@ function p2lPlan(
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "D",
+    label: "Distance",
+    tag: "D",
     fieldKind: "length",
     value: perpDist(pt.pos, ln.seg),
     anchors: { a: pt.pos, b: foot },
@@ -520,7 +529,8 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "D",
+    label: "Distance",
+    tag: "D",
     fieldKind: "length",
     value: gap,
     anchors: pts,
@@ -568,7 +578,8 @@ function roundLinePlan(rd: RoundOp, ln: LineOp, forceDriven: boolean, drivenHint
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "D",
+    label: "Distance",
+    tag: "D",
     fieldKind: "length",
     value: gap,
     anchors: pts,
@@ -611,7 +622,8 @@ function pointRoundPlan(pt: PointOp, rd: RoundOp, forceDriven: boolean, drivenHi
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "D",
+    label: "Distance",
+    tag: "D",
     fieldKind: "length",
     value: gap,
     anchors: pts,
@@ -675,7 +687,8 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
     return buildPlan({
       kind: "length",
       field: "length",
-      label: "L",
+      label: "Length",
+      tag: "L",
       fieldKind: "length",
       value: len,
       measureAt: (off) => axisMeasure(a, b, modeOf(off)),
@@ -735,7 +748,8 @@ function roundValuePlan(eid: string, r: number, c: V, what: string): DimPlan {
   return buildPlan({
     kind: "radius",
     field: "radius",
-    label: "R",
+    label: "Radius",
+    tag: "R",
     fieldKind: "length",
     value: r,
     anchors: { a: c, b: v(c.x + r * Math.SQRT1_2, c.y + r * Math.SQRT1_2) },

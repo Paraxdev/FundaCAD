@@ -15,7 +15,10 @@ import {
   lightness,
   mix,
   over,
+  overlaySeparation,
   paletteContrast,
+  SKETCH_AID_TOKENS,
+  SKETCH_TOKENS,
   parseColor as parse,
 } from "../../src/ui/contrast";
 import { themes } from "../../src/ui/theme";
@@ -187,6 +190,83 @@ describe("theme contrast", () => {
     const split = { ...merged, "--ok": "#1c6b65", "--warn": "#7a5d00", "--error": "#8a1f1d" };
     const paper = { ...split, "--panel": "#eee8d5", "--panel-2": "#e3ddc7" };
     expect(contrastFailures(paper, "light").filter(apart)).toEqual([]);
+  });
+
+  it("checks the seven sketch colours and the conflict colour on the scene", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    for (const t of [...SKETCH_TOKENS, "--error"]) expect(names).toContain(`${t} on --viewport-bg`);
+    const high = paletteContrast(shipped[0]!.palette, "dark", "high");
+    expect(high.find((r) => r.what === "--sketch-free on --viewport-bg")?.min).toBe(4.5);
+    expect(
+      paletteContrast(shipped[0]!.palette, "dark").find((r) => r.what === "--sketch-free on --viewport-bg")?.min,
+    ).toBe(3);
+  });
+
+  it("checks the three aid line colours on the scene but not the fill wash, and fails a line that fades", () => {
+    const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
+    expect(SKETCH_AID_TOKENS.filter((t) => names.includes(`${t} on --viewport-bg`))).toEqual([
+      "--sketch-aid",
+      "--sketch-snap",
+      "--sketch-preview",
+    ]);
+    const paleFill = { ...shipped[0]!.palette, "--sketch-fill": "#1a1822" };
+    expect(contrastFailures(paleFill, "dark").filter((r) => r.what.includes("--sketch-fill"))).toEqual([]);
+    const high = paletteContrast(shipped[0]!.palette, "dark", "high");
+    expect(high.find((r) => r.what === "--sketch-snap on --viewport-bg")?.min).toBe(4.5);
+
+    const noirOnPaper = { ...shipped[0]!.palette, "--viewport-bg": "#e8e5ef" };
+    expect(contrastFailures(noirOnPaper, "light").map((r) => r.what)).toEqual(
+      expect.arrayContaining([
+        "--sketch-preview on --viewport-bg",
+        "--sketch-snap on --viewport-bg",
+        "--sketch-aid on --viewport-bg",
+      ]),
+    );
+    const darkened = {
+      ...noirOnPaper,
+      "--sketch-preview": "#1d1b26",
+      "--sketch-snap": "#9a4d00",
+      "--sketch-aid": "#5a6b82",
+    };
+    expect(contrastFailures(darkened, "light").filter((r) => /aid|snap|preview/.test(r.what))).toEqual([]);
+  });
+
+  it("fails a sketch colour that fades into the scene, as Noir's white does on a light ground", () => {
+    const noirOnPaper = { ...shipped[0]!.palette, "--viewport-bg": "#e8e5ef" };
+    const failing = contrastFailures(noirOnPaper, "light").map((r) => r.what);
+    expect(failing).toEqual(
+      expect.arrayContaining(["--sketch-defined on --viewport-bg", "--sketch-construction on --viewport-bg"]),
+    );
+  });
+
+  it("holds Colour-Blind Safe's sketch states apart and flags Noir's free and projected", () => {
+    const cb = shipped.find((t) => t.id === "colorblind-safe")!;
+    const rows = overlaySeparation(cb.palette);
+    expect(rows.map((r) => r.what)).toEqual([
+      "--sketch-free and --sketch-projected",
+      "--sketch-free and --sketch-construction",
+      "--sketch-projected and --sketch-construction",
+      "--sketch-free and --sketch-defined",
+      "--sketch-projected and --sketch-projected-stale",
+      "--sketch-loose-open and --sketch-loose-untied",
+    ]);
+    expect(rows.filter((r) => !r.ok)).toEqual([]);
+    const free = rows[0]!;
+    expect(free.deltaE).toBeGreaterThan(40);
+
+    const noir = overlaySeparation(shipped.find((t) => t.id === "fundacad")!.palette);
+    const bad = noir.find((r) => r.what === "--sketch-free and --sketch-projected")!;
+    expect(bad.ok).toBe(false);
+    expect(bad.deltaE).toBeLessThan(10);
+    expect(bad.gap).toBeLessThan(10);
+  });
+
+  it("passes a pair by lightness alone and by colour alone", () => {
+    const base = shipped.find((t) => t.id === "colorblind-safe")!.palette;
+    const dark = { ...base, "--sketch-free": "#2a4f8a", "--sketch-projected": "#9ec4ff" };
+    expect(overlaySeparation(dark)[0]!.ok).toBe(true);
+    const twin = { ...base, "--sketch-free": "#5b9bff", "--sketch-projected": "#5b9bfa" };
+    expect(overlaySeparation(twin)[0]).toMatchObject({ ok: false, deltaE: expect.any(Number) });
   });
 
   it("measures signal separation as CIE lightness and simulated colour difference", () => {

@@ -276,8 +276,10 @@
   border-color: var(--warn);
   color: color-mix(in srgb, var(--warn) 60%, var(--text));
 }
-/* The dimension the Delete key will remove. */
-.sketch-dim.is-selected {
+/* The dimension or constraint the Delete key will remove, and the badge of the Dimensions row in focus. */
+.sketch-dim.is-selected,
+.sketch-dim.is-lit,
+.sketch-glyph.is-selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

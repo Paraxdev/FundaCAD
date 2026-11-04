@@ -121,6 +121,7 @@ function sketch() {
     arcStart: null,
     dim: { isActive: false, ownsTarget: () => false },
     dims: { deleteSelected: () => false },
+    glyphs: { deleteSelected: () => false, hasSelection: () => false, clearSelection() {} },
     patternFlow: { hasPending: () => false },
     modifyFlow: { offsetting: false, filletArmed: false },
     mirrorFlow: { running: true, enter: heard.enter, switchField: heard.switchField, cancel: heard.cancel },

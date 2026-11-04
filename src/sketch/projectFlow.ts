@@ -9,7 +9,7 @@ import type { DocumentStore } from "../document/store";
 import type { EdgeFingerprint, Feature, ProjectedSource, Selector } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects } from "./overlay";
+import { curveObjects, sketchSelectColor } from "./overlay";
 import type { ProjectPanel } from "./projectPanel";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
@@ -94,7 +94,9 @@ export class ProjectFlow {
     this.host
       .overlay()
       .setPreview(
-        src ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), 0x33aaff, true) : [],
+        src
+          ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), sketchSelectColor(), true)
+          : [],
       );
     this.host.viewport().requestRender();
   }

@@ -19,6 +19,7 @@ import { regionArea } from "../sketch/region";
 import type { WorldRegion } from "../sketch/overlay";
 import type { Engine } from "./engine";
 import type { Selector } from "../types";
+import { onThemeChange } from "../ui/theme";
 import { hitPx } from "../input/pointerKind";
 import { replayedPress } from "../viewport/navigator/input";
 import { exactRound, roundFacePrompt } from "../ui/selectionMeasure";
@@ -248,6 +249,12 @@ export function installViewportWiring(e: Engine): void {
 
   e.store.onDocChange(() => {
     if (!e.sketch.active) e.overlay.update(e.store.document);
+  });
+  // The open sketch redraws itself, the others keep the colours they were built with until this.
+  onThemeChange(() => {
+    if (e.sketch.active) return;
+    e.overlay.update(e.store.document);
+    e.viewport.requestRender();
   });
 
   // One handle for three selections, ranked: edges, then profiles (a region pick keeps the face selection under it),
