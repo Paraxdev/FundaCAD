@@ -5,6 +5,9 @@ Documents the harness tests open through File > Open. They are JSON documents, w
 - `plate.json`: one 40 x 20 x 5 mm box centred on the origin, current document version.
 - `offset_box.json`: a 40 x 30 x 20 mm box named Crate, moved to (113.5, -41.25, 37), so no face or edge sits on an origin plane.
 - `slant_box.json`: a 60 x 25 x 15 mm box named Wedge, turned 20 degrees about X and moved off the origin, for faces that read as tilted.
+- `overhang_ledge.json`: a profile drawn on XZ and extruded 18 mm, moved to (-73.5, 41.25, 9): a 24 mm wide column
+  with a 17 mm ledge whose flat underside is 14 mm up, and on the other side a lip whose underside slants 12 mm out
+  over 9 mm up. Two overhangs of 306 and 270 mm² for the Printability words tests.
 - `plate_width.json`: the plate with a parameter `width` of 20 that nothing uses yet, for typing names into a value box.
 - `block.json`: one 20 x 20 x 30 mm box centred on the origin, tall enough that a steep draft on a
   side face is refused, current document version.

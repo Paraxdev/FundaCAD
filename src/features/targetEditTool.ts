@@ -63,11 +63,7 @@ export class TargetEditTool {
     if (!t) return [];
     return this.entries.map((entry) => {
       const found = this.locate(entry);
-      return {
-        entry,
-        label: this.labelFor(entry, found !== null),
-        resolved: found !== null,
-      };
+      return { entry, label: this.labelFor(entry, found), resolved: found !== null };
     });
   }
 
@@ -262,9 +258,7 @@ export class TargetEditTool {
 
   // Null only means this rolled back build does not render it, never a reason to drop it:
   // the engine's by:"nearest" matches real geometry better and may still place it.
-  private locate(
-    entry: TargetEntry,
-  ): { kind: "edge"; edge: EdgeRef } | { kind: "face"; faceId: number } | { kind: "body"; id: string } | null {
+  private locate(entry: TargetEntry): Found | null {
     const t = this.target;
     if (!t) return null;
     if (t.kind === "body") {
@@ -285,15 +279,24 @@ export class TargetEditTool {
     return faceId === null ? null : { kind: "face", faceId };
   }
 
-  private labelFor(entry: TargetEntry, resolved: boolean): string {
+  private labelFor(entry: TargetEntry, found: Found | null): string {
     const t = this.target;
     if (!t) return "";
-    if (t.kind === "body" && typeof entry === "string") {
-      const built = this.store.buildState.result?.bodies ?? [];
-      return bodyLabels(built, (id) => this.store.bodyName(id)).get(entry) ?? this.store.bodyName(entry) ?? entry;
+    if (t.kind === "body" && typeof entry === "string") return this.bodyLabel(entry) ?? entry;
+    if (found?.kind === "face") {
+      const n = this.viewport.localFaceOf(found.faceId);
+      const body = this.viewport.faceIdToBodyId(found.faceId);
+      return ofBody(n === null ? "Face" : `Face ${n + 1}`, body && this.bodyLabel(body));
     }
-    // Edges and faces have no names, so a row says its kind and whether this build shows it.
-    return resolved ? `1 ${t.kind}` : `1 ${t.kind} (not on this build)`;
+    if (found?.kind === "edge") {
+      return ofBody(`Edge ${found.edge.slot + 1}`, found.edge.body && this.bodyLabel(found.edge.body));
+    }
+    return t.kind === "body" ? "" : `${t.kind === "edge" ? "Edge" : "Face"} not on this build`;
+  }
+
+  private bodyLabel(id: string): string | undefined {
+    const built = this.store.buildState.result?.bodies ?? [];
+    return bodyLabels(built, (b) => this.store.bodyName(b)).get(id) ?? this.store.bodyName(id);
   }
 
   private setPrompt() {
@@ -323,6 +326,10 @@ export function editingTarget(tool: TargetEditTool): { id: string; field: string
   const f = tool.field;
   return id && f ? { id, field: f.field } : null;
 }
+
+type Found = { kind: "edge"; edge: EdgeRef } | { kind: "face"; faceId: number } | { kind: "body"; id: string };
+
+const ofBody = (what: string, body: string | undefined | null) => (body ? `${what} of ${body}` : what);
 
 function selectorOf(entry: TargetEntry): Selector | null {
   if (typeof entry === "string" || Array.isArray(entry)) return null;

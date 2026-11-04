@@ -9,6 +9,7 @@ import type { StressGlyphHandlers, StressGlyphModel } from "../../src/viewport/s
 import { autoDeformScale, probeLabel, probeValues, swingScale } from "../../src/ui/stress";
 import { drawnSurface, readAt, weakSpot, type DisplayMesh } from "../../src/ui/stressDrawn";
 import { locator, type EngineSurface } from "../../src/ui/stressLocate";
+import { setStressLook, stressLook } from "../../src/ui/stressLook";
 
 // Without a display mesh the engine surface is drawn as it came.
 const asSent = (s: EngineSurface) => drawnSurface(null, s, locator(s), { min: 1, max: 4 });
@@ -19,6 +20,7 @@ const asSent = (s: EngineSurface) => drawnSurface(null, s, locator(s), { min: 1,
 // setup is saved with the document, and the view's glyphs follow it.
 
 beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => setStressLook({ ramp: "perceptual", bands: false }));
 
 type FaceMap = Record<number, { body: string; z: number; n: number; tris?: THREE.Triangle[] }>;
 // Face 1 is the bottom of body b1 (normal -Z), face 2 its top (+Z), face 9 on b2.
@@ -59,6 +61,7 @@ function rig() {
   const openListeners: (() => void)[] = [];
   const marks: unknown[] = [];
   const overlays: unknown[] = [];
+  const frames: { at: [number, number, number]; size: number }[] = [];
   const statuses: string[] = [];
   const calls: { body: string; opts: StressOptions; doc: CadDocument }[] = [];
   const cancels: (string | undefined)[] = [];
@@ -99,6 +102,7 @@ function rig() {
       selected = [];
     },
     setFaceMarks: (m: unknown) => marks.push(m),
+    frameAround: (at: [number, number, number], size: number) => frames.push({ at, size }),
     setStressOverlay: (o: unknown) => {
       overlays.push(o);
       shown = o !== null;
@@ -127,6 +131,7 @@ function rig() {
       openListeners.push(fn);
       return () => {};
     },
+    onBuild: () => () => {},
     isBodyVisible: (_id: string) => true,
     bodyName: (_id: string): string | undefined => undefined,
     loadCount: 3,
@@ -177,6 +182,7 @@ function rig() {
     built,
     marks,
     overlays,
+    frames,
     statuses,
     calls,
     cancels,
@@ -421,6 +427,8 @@ describe("stress panel flow", () => {
       values: Float32Array.from([1, 4, 2]),
       range: { min: 1, max: 4 },
       colours: true,
+      ramp: "perceptual",
+      bands: 0,
     });
   });
 
@@ -1554,6 +1562,8 @@ describe("the colours and the deformed shape, each with its own switch", () => {
       indices: drawn.indices,
       values: drawn.values,
       range: { min: 1, max: 4 },
+      ramp: "perceptual",
+      bands: 0,
     };
     const bent = { displacement: drawn.displacement, scale: p.stress!.deform!.auto };
     const pin = r.weakSpots.at(-1)!;
@@ -1691,5 +1701,75 @@ describe("the colours and the deformed shape, each with its own switch", () => {
       colours: "none",
       deform: null,
     });
+  });
+});
+
+describe("the colour map and bands", () => {
+  it("redraws the kept result with them and does not run again", async () => {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    const drawn = r.overlays.length;
+    r.ui.setStressLook({ ramp: "greyscale", bands: true });
+    expect(r.calls).toHaveLength(1);
+    expect(r.overlays.length).toBeGreaterThan(drawn);
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", colours: true, ramp: "greyscale", bands: 8 });
+    expect(Array.from((r.overlays.at(-1) as { values: Float32Array }).values).slice(0, 3)).toEqual([1, 4, 2]);
+    r.ui.setStressLook({ ramp: "rainbow" });
+    expect(r.overlays.at(-1)).toMatchObject({ ramp: "rainbow", bands: 8 });
+    r.ui.setStressLook({ bands: false });
+    expect(r.overlays.at(-1)).toMatchObject({ ramp: "rainbow", bands: 0 });
+    expect(r.calls).toHaveLength(1);
+  });
+
+  it("stores the look but draws nothing coloured while the colours are off", async () => {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    r.ui.setStressColours(false);
+    const drawn = r.overlays.length;
+    r.ui.setStressLook({ ramp: "greyscale" });
+    expect(r.overlays).toHaveLength(drawn);
+    expect(r.overlays.at(-1)).toMatchObject({ colours: false });
+    expect(stressLook()).toEqual({ ramp: "greyscale", bands: false });
+    r.ui.setStressColours(true);
+    expect(r.overlays.at(-1)).toMatchObject({ colours: true, ramp: "greyscale", bands: 0 });
+  });
+
+  it("draws nothing before a Run", () => {
+    const r = rig();
+    r.ui.showStress();
+    const drawn = r.overlays.length;
+    r.ui.setStressLook({ bands: true });
+    expect(r.overlays).toHaveLength(drawn);
+    expect(stressLook().bands).toBe(true);
+  });
+
+  it("keeps the look into a second document and draws none of the first result", async () => {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    r.ui.setStressLook({ ramp: "greyscale", bands: true });
+    r.open();
+    expect(r.overlays.at(-1)).toBeNull();
+    expect(stressLook()).toEqual({ ramp: "greyscale", bands: true });
+    const drawn = r.overlays.length;
+    r.ui.showStress();
+    r.ui.setStressLook({ ramp: "rainbow" });
+    expect(r.overlays.slice(drawn).filter((o) => o !== null)).toEqual([]);
+    expect(usePanelsStore().stress!.result).toBeNull();
+    expect(stressLook()).toEqual({ ramp: "rainbow", bands: true });
+  });
+});
+
+describe("looking at a stress point", () => {
+  it("frames the point it is given at the size it is given, once each time, and nothing else", () => {
+    const r = rig();
+    r.ui.lookAtStressPoint([25.4, -7.62, 50.8], 5.01);
+    r.ui.lookAtStressPoint([254, 12.7, -2.54], 20);
+    expect(r.frames).toEqual([
+      { at: [25.4, -7.62, 50.8], size: 5.01 },
+      { at: [254, 12.7, -2.54], size: 20 },
+    ]);
   });
 });

@@ -30,17 +30,18 @@ export interface PropertiesData {
   faults: string[];
 }
 
-/** Keeps the body ids so a row click can select them. Volume is pre-formatted in display units by the facade. */
-export interface ClashRow extends PanelRow {
+/** `v` is pre-formatted in display units, `key` is the pair as "a b", `spoken` the row's accessible name. */
+export interface ClashRow {
+  key: string;
+  label: string;
+  v: string;
+  spoken: string;
   a: string;
   b: string;
 }
 
 /** One near-miss pair from clearance mode, same shape as a ClashRow. */
-export interface ClearanceRow extends PanelRow {
-  a: string;
-  b: string;
-}
+export type ClearanceRow = ClashRow;
 
 export interface InterferenceData {
   title: string;
@@ -110,6 +111,8 @@ export interface StressData {
 export const usePanelsStore = defineStore("panels", () => {
   const properties = ref<PropertiesData | null>(null);
   const interference = ref<InterferenceData | null>(null);
+  /** The kept pair's key "a b", or null. */
+  const interferenceLit = ref<string | null>(null);
   const overhang = ref(false);
   const params = ref(false);
 
@@ -302,6 +305,7 @@ export const usePanelsStore = defineStore("panels", () => {
   return {
     properties,
     interference,
+    interferenceLit,
     overhang,
     params,
     stress,

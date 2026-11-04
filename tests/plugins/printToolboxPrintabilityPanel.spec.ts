@@ -170,7 +170,7 @@ describe("PrintabilityPanel", () => {
     await flushPromises();
     expect(q(".printability-header")?.textContent).toBe("+Z up as modelled, bed at z = 0");
     expect(qa(".printability-body").map((e) => e.textContent)).toEqual(["Bracket", "Lid", "Pin"]);
-    expect(qa(".printability-finding").map((e) => e.textContent)).toEqual([
+    expect(qa(".printability-finding").map((e) => e.querySelector(".ui-list-row-label")!.textContent)).toEqual([
       "Overhang, 132 mm² leaning 90°",
       "Bridge 14 mm span (over 10)",
     ]);
@@ -181,20 +181,71 @@ describe("PrintabilityPanel", () => {
     expect(q(".printability-panel")!.textContent).not.toMatch(/ - |\u2014/);
   });
 
-  it("hands a row's hover and click to the controller and marks the focused row", async () => {
+  it("lists each body's findings as buttons in a list, named by what they are", async () => {
+    const { p } = await mounted();
+    p.show();
+    p.finished({ result: formatPrintabilityResult(reply) });
+    await flushPromises();
+    const lists = qa(".printability-group ul");
+    expect(lists.map((u) => u.children.length)).toEqual([2]);
+    const rows = qa(".printability-finding");
+    expect(rows.map((e) => e.tagName)).toEqual(["BUTTON", "BUTTON"]);
+    expect(rows.map((e) => e.parentElement!.tagName)).toEqual(["LI", "LI"]);
+    expect(rows.map((e) => e.querySelector(".ui-list-row-label")!.textContent)).toEqual([
+      "Overhang, 132 mm² leaning 90°",
+      "Bridge 14 mm span (over 10)",
+    ]);
+    expect(rows.map((e) => e.querySelector(".ui-list-row-hint")!.textContent)).toEqual([
+      "Face 4, from 5 mm above the bed",
+      "Face 5, centred 8 mm above the bed",
+    ]);
+    expect(rows.map((e) => e.getAttribute("aria-label"))).toEqual([
+      "Overhang, 132 mm² leaning 90°, face 4, from 5 mm above the bed",
+      "Bridge 14 mm span (over 10), face 5, centred 8 mm above the bed",
+    ]);
+    expect(rows.map((e) => e.querySelector("[aria-hidden='true']") !== null)).toEqual([true, true]);
+  });
+
+  it("lights a finding on pointer or keyboard focus and falls back when both leave", async () => {
     const { ctl, p } = await mounted();
     p.show();
     p.finished({ result: formatPrintabilityResult(reply) });
     await flushPromises();
-    const row = qa(".printability-finding")[1]!;
-    row.dispatchEvent(new MouseEvent("mouseenter"));
-    row.click();
-    row.dispatchEvent(new MouseEvent("mouseleave"));
-    expect(ctl.hover.mock.calls).toEqual([[1], [null]]);
-    expect(ctl.pick).toHaveBeenCalledWith(1);
+    const [a, b] = qa(".printability-finding");
+    a!.dispatchEvent(new FocusEvent("focus"));
+    b!.dispatchEvent(new Event("pointerenter"));
+    b!.dispatchEvent(new Event("pointerleave"));
+    a!.dispatchEvent(new FocusEvent("blur"));
+    expect(ctl.hover.mock.calls).toEqual([[0], [1], [0], [null]]);
+  });
+
+  it("hands a click to the controller and marks the picked row as current", async () => {
+    const { ctl, p } = await mounted();
+    p.show();
+    p.finished({ result: formatPrintabilityResult(reply) });
+    await flushPromises();
+    qa(".printability-finding")[1]!.click();
+    expect(ctl.pick.mock.calls).toEqual([[1]]);
+    expect(qa(".printability-finding").map((e) => e.getAttribute("aria-current"))).toEqual([null, null]);
     p.setFocus("picked", 1);
     await flushPromises();
-    expect(qa(".printability-finding").map((e) => e.classList.contains("is-focus"))).toEqual([false, true]);
+    expect(qa(".printability-finding").map((e) => e.getAttribute("aria-current"))).toEqual([null, "true"]);
+    p.setFocus("hovered", 0);
+    await flushPromises();
+    expect(qa(".printability-finding").map((e) => e.getAttribute("aria-current"))).toEqual([null, "true"]);
+  });
+
+  it("a second result replaces the first rows and their current mark", async () => {
+    const { p } = await mounted();
+    p.show();
+    p.finished({ result: formatPrintabilityResult(reply) });
+    p.setFocus("picked", 1);
+    p.finished({ result: formatPrintabilityResult({ ...reply, findings: [reply.findings[1]!] }) });
+    await flushPromises();
+    expect(qa(".printability-finding").map((e) => e.getAttribute("aria-label"))).toEqual([
+      "Bridge 14 mm span (over 10), face 5, centred 8 mm above the bed",
+    ]);
+    expect(qa(".printability-finding").map((e) => e.getAttribute("aria-current"))).toEqual([null]);
   });
 
   it("shows a refusal and a stale result's hint", async () => {

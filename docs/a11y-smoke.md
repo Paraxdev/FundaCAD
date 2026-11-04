@@ -2,8 +2,8 @@
 
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
-screen reader. This page is the hand check a person runs before each release: about twenty eight minutes per screen
-reader, the same seventeen steps everywhere, and a results table that keeps what was heard.
+screen reader. This page is the hand check a person runs before each release: about thirty three minutes per screen
+reader, the same eighteen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -198,6 +198,16 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     until you dismiss it. Fail: a message that is not spoken or is spoken twice, an undo that says only "Undo", or a
     message that goes while the setting is Until dismissed.
 
+18. **Read results (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here is a heard
+    fact yet. With "Box with a lid" open, press Ctrl+K, type `interference` and press Enter: when the check ends you
+    hear a line like "Interference: no clashes". Then open a part that has an overhang, press Ctrl+K, type
+    `printability`, press Enter, Tab to Check and press Enter. You hear the count and what it is made of, then the
+    largest overhang with its area and face, for example "Printability: 3 things to look at. 2 overhangs, 1 thin wall.
+    Largest overhang 132 mm squared on face 4". Tab to the first finding: you hear its words and its place ("Overhang,
+    132 mm squared leaning 63 degrees, face 4, 16 mm above the bed") and its face lights on the model. Press Enter: the
+    view turns to it. Fail: a check that ends in silence, a count with no area or face, a finding that is not
+    reachable by Tab, or an Enter that does not turn the view.
+
 Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
@@ -214,9 +224,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as seventeen marks in order, like `P P P S S W P P P P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as eighteen marks in order, like `P P P S S W P P P P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 17 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 18 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

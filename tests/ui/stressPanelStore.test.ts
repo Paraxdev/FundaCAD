@@ -114,6 +114,7 @@ describe("stress panel store", () => {
         verdict: { safetyFactor: null },
         peakAt: null,
         maxDeflection: null,
+        peaks: [],
       },
     });
     p.setStressColours("shown");
@@ -162,6 +163,7 @@ describe("stress panel store", () => {
       verdict: { safetyFactor: null },
       peakAt: null,
       maxDeflection: null,
+      peaks: [],
     };
     p.stressFinished({ result });
     expect(p.stress?.running).toBe(false);
@@ -192,6 +194,7 @@ describe("stress panel store", () => {
         verdict: { safetyFactor: null },
         peakAt: null,
         maxDeflection: null,
+        peaks: [],
       },
     });
     expect(JSON.parse(p.stress!.ranSetup!).loads[0].force).toBe(42.5);

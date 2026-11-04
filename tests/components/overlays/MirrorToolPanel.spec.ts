@@ -110,6 +110,14 @@ describe("MirrorToolPanel", () => {
     expect(ready.onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps its picked rows as text beside a Remove each, so only Remove takes focus", () => {
+    mountView(viewOf());
+    const rows = $(".tgt-item");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.map((li) => [...li.children].map((c) => c.tagName))).toEqual(rows.map(() => ["SPAN", "BUTTON"]));
+    expect($(".tgt-item .ui-list-row")).toEqual([]);
+  });
+
   it("shows no plane chips in a sketch, and the picked one checked in 3D", () => {
     const w = mountView(viewOf());
     expect($(".mirror-chips")).toEqual([]);
@@ -180,5 +188,22 @@ describe("MirrorToolPanel", () => {
     expect(second.onActivate).toHaveBeenCalledWith("objects");
     expect(first.onCommit).not.toHaveBeenCalled();
     expect(first.onActivate).not.toHaveBeenCalled();
+  });
+
+  it("names two picks of one label apart in their Remove buttons", () => {
+    const v = viewOf({
+      fields: [
+        { key: "objects", label: "Objects", items: ["Line 1", "Arc 2", "Line 1"], value: "3 objects", filled: true },
+        { key: "line", label: "Mirror line", items: [], value: "Nothing picked", filled: false },
+      ],
+    });
+    mountView(v);
+    expect($(".tgt-remove").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Remove Line 1, row 1",
+      "Remove Arc 2",
+      "Remove Line 1, row 3",
+    ]);
+    $(".tgt-remove")[2]!.click();
+    expect(v.onRemove).toHaveBeenCalledWith("objects", 2);
   });
 });

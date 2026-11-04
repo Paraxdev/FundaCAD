@@ -516,10 +516,42 @@ export interface StressResultView {
   peakAt: Vec3 | null;
   /** The largest deflection, mm. */
   maxDeflection: number | null;
+  /** Where the highest values are, one row each to look at. */
+  peaks: StressPeak[];
 }
 
+/** A place worth looking at: `at` and `size` are mm, the words use the display unit. */
+export interface StressPeak {
+  label: string;
+  where: string;
+  spoken: string;
+  at: Vec3;
+  /** How much of the model to frame around `at`, mm. */
+  size: number;
+}
+
+const PEAK_SIZE_FALLBACK = 20;
+const PEAK_SIZE_MIN = 5;
+
 function fmtPoint(p: Vec3, unit: Unit): string {
-  return `${displayRound(toDisplay(p[0]))}, ${displayRound(toDisplay(p[1]))}, ${displayRound(toDisplay(p[2]))} ${unit}`;
+  const [x, y, z] = p.map((v) => displayRound(toDisplay(v)));
+  return `x ${x}, y ${y}, z ${z} ${unit}`;
+}
+
+// A third of the drawn surface's diagonal, to the hundredth and at least 5 mm, so the point sits in a view of the part.
+function peakSize(positions: ArrayLike<number> | undefined): number {
+  if (!positions || positions.length < 3) return PEAK_SIZE_FALLBACK;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < positions.length; i++) {
+    const a = i % 3;
+    const v = positions[i]!;
+    if (v < lo[a]!) lo[a] = v;
+    if (v > hi[a]!) hi[a] = v;
+  }
+  const diag = Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!);
+  const size = Math.round((diag / 3) * 100) / 100;
+  return size > 0 ? Math.max(size, PEAK_SIZE_MIN) : PEAK_SIZE_FALLBACK;
 }
 
 /** Peak and minimum of the per-vertex von Mises field, for the legend. */
@@ -550,10 +582,6 @@ export function formatStressResult(
   ];
   const details: PanelRow[] = [];
   details.push({ k: "Material", v: r.material.name });
-  // Not the engine's face index: it counts the faces of a copy of the body, a
-  // number nothing else in the app shows.
-  details.push({ k: "Peak at", v: fmtPoint(r.maxVonMises.at, unit) });
-  details.push({ k: "Deflection at", v: fmtPoint(r.maxDisplacement.at, unit) });
   details.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
   if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
   details.push({ k: "Applied", v: fmtForce(r.applied) });
@@ -577,11 +605,21 @@ export function formatStressResult(
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
+  const size = peakSize(r.surface?.positions);
+  // No face number: the engine's one counts the faces of a copy of the body, which nothing else in the app shows.
+  const peak = (label: string, value: string, at: Vec3): StressPeak => {
+    const where = fmtPoint(at, unit);
+    return { label, where, spoken: `${label}, ${value}, at ${where}`, at, size };
+  };
   return {
     rows,
     details,
     warnings,
     legend,
+    peaks: [
+      peak("Peak stress", `${displayRound(r.maxVonMises.value)} MPa`, r.maxVonMises.at),
+      peak("Max deflection", `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}`, r.maxDisplacement.at),
+    ],
     yields: sf !== null && sf < 1,
     verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
     peakAt: r.maxVonMises.at,
@@ -627,6 +665,16 @@ export function legendEnds(legend: { min: number; max: number }): [string, strin
   return [String(displayRound(min)), String(displayRound(legend.max))];
 }
 
+/** Labels for the colour bar at each quarter of the range, MPa, the ends as legendEnds reads them. */
+export function legendTicks(legend: { min: number; max: number }): { pct: number; label: string }[] {
+  const [low, high] = legendEnds(legend);
+  return [0, 25, 50, 75, 100].map((pct) => ({
+    pct,
+    label:
+      pct === 0 ? low : pct === 100 ? high : String(displayRound(legend.min + ((legend.max - legend.min) * pct) / 100)),
+  }));
+}
+
 /** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
 export function setupSummary(s: StressSetup): string {
   const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;
@@ -640,35 +688,60 @@ function fmtForce(f: Vec3): string {
   return `${displayRound(f[0])}, ${displayRound(f[1])}, ${displayRound(f[2])} N`;
 }
 
-// Blue, cyan, green, yellow, red, in sRGB, evenly spaced: the usual FEA ramp,
-// low stress cold and the peak hot.
-const STOPS: readonly Vec3[] = [
-  [0, 0, 1],
-  [0, 1, 1],
-  [0, 1, 0],
-  [1, 1, 0],
-  [1, 0, 0],
+export type StressRamp = "perceptual" | "rainbow" | "greyscale";
+
+export const STRESS_RAMPS: readonly { value: StressRamp; label: string }[] = [
+  { value: "perceptual", label: "Perceptual" },
+  { value: "rainbow", label: "Rainbow" },
+  { value: "greyscale", label: "Greyscale" },
 ];
 
+const hex = (h: string): Vec3 => [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255) as Vec3;
+
+// Perceptual is viridis. Rainbow falls in lightness and merges green with orange for colour blind viewers, it stays as a choice.
+const RAMPS: Record<StressRamp, readonly Vec3[]> = {
+  perceptual: ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"].map(
+    hex,
+  ),
+  rainbow: ["#0000ff", "#00ffff", "#00ff00", "#ffff00", "#ff0000"].map(hex),
+  greyscale: ["#262626", "#f2f2f2"].map(hex),
+};
+
 /** sRGB 0..1 for a value 0..1 along the ramp (clamped; NaN reads as 0). */
-export function stressColor(t: number): Vec3 {
+export function rampColor(ramp: StressRamp, t: number): Vec3 {
+  const stops = RAMPS[ramp];
   const c = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
-  const x = c * (STOPS.length - 1);
-  const i = Math.min(STOPS.length - 2, Math.floor(x));
+  const x = c * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(x));
   const f = x - i;
-  const a = STOPS[i]!;
-  const b = STOPS[i + 1]!;
+  const a = stops[i]!;
+  const b = stops[i + 1]!;
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 }
 
-/** One sRGB triple per value, mapped over [min, max]. A flat field (max = min)
- *  is all blue rather than a division by zero. */
-export function stressColors(values: ArrayLike<number>, min: number, max: number): Float32Array {
+/** Eight bands put every second edge on the legend's 25, 50 and 75 percent marks. */
+export const STRESS_BANDS = 8;
+
+/** The centre of the band t falls in; 0 bands leaves t alone. */
+export function bandT(t: number, bands: number): number {
+  if (bands <= 0) return t;
+  const c = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  return (Math.min(bands - 1, Math.floor(c * bands)) + 0.5) / bands;
+}
+
+/** One sRGB triple per value, mapped over [min, max]. A flat field (max = min) is all the low colour. */
+export function stressColors(
+  values: ArrayLike<number>,
+  min: number,
+  max: number,
+  ramp: StressRamp = "perceptual",
+  bands = 0,
+): Float32Array {
   const out = new Float32Array(values.length * 3);
   const span = max - min;
   for (let i = 0; i < values.length; i++) {
     const t = span > 0 ? ((values[i] ?? min) - min) / span : 0;
-    const [r, g, b] = stressColor(t);
+    const [r, g, b] = rampColor(ramp, bandT(t, bands));
     out[i * 3] = r;
     out[i * 3 + 1] = g;
     out[i * 3 + 2] = b;
@@ -676,12 +749,20 @@ export function stressColors(values: ArrayLike<number>, min: number, max: number
   return out;
 }
 
-/** The legend's CSS gradient, left (low) to right (high), from the same stops. */
-export function legendGradient(): string {
-  const parts = STOPS.map((s, i) => {
-    const pct = (i / (STOPS.length - 1)) * 100;
-    return `rgb(${s.map((v) => Math.round(v * 255)).join(", ")}) ${pct}%`;
-  });
+const css = (c: Vec3) => `rgb(${c.map((v) => Math.round(v * 255)).join(", ")})`;
+
+/** The legend's CSS gradient, left (low) to right (high), from the same colours. Banded, each band is a hard stop pair. */
+export function legendGradient(ramp: StressRamp = "perceptual", bands = 0): string {
+  const parts: string[] = [];
+  if (bands > 0) {
+    for (let i = 0; i < bands; i++) {
+      const colour = css(rampColor(ramp, bandT((i + 0.5) / bands, bands)));
+      parts.push(`${colour} ${(i / bands) * 100}%`, `${colour} ${((i + 1) / bands) * 100}%`);
+    }
+  } else {
+    const stops = RAMPS[ramp];
+    stops.forEach((s, i) => parts.push(`${css(s)} ${(i / (stops.length - 1)) * 100}%`));
+  }
   return `linear-gradient(to right, ${parts.join(", ")})`;
 }
 

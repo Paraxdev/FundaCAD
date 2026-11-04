@@ -9,6 +9,9 @@ import {
   findingMarks,
   findingView,
   formatPrintabilityResult,
+  printabilityDetails,
+  printabilityHead,
+  printabilitySummary,
   problemCount,
 } from "./printability";
 import { createPrintabilityState } from "./printabilityState";
@@ -31,11 +34,13 @@ export interface PrintabilityDeps {
   >;
   geometry: Pick<GeometryBackend, "cancel" | "printability">;
   hasBody: () => boolean;
+  /** With no class the text is a toast, which the app speaks. */
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
+  announce: (text: string, priority?: "polite" | "assertive") => void;
 }
 
 export function createPrintabilityPanel(deps: PrintabilityDeps) {
-  const { store, viewport, geometry, hasBody, setStatus } = deps;
+  const { store, viewport, geometry, hasBody, setStatus, announce } = deps;
   const state = createPrintabilityState();
   const { data } = state;
 
@@ -151,20 +156,19 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     if (seq !== checkSeq || !data.value) return;
     if (!res.ok) {
       state.finished(res.cancelled ? {} : { error: res.message });
-      setStatus(
-        res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`,
-        res.cancelled ? "" : "error",
-      );
+      const said = res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`;
+      setStatus(said, res.cancelled ? "" : "error");
+      if (!res.cancelled) announce(said, "assertive");
       return;
     }
     const view = formatPrintabilityResult(res.result, new Map(builtBodies().map((b) => [b.id, b.name])));
     checkedEpoch = epoch;
     state.finished({ result: view });
-    const n = problemCount(view);
-    setStatus(
-      n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found",
-      n ? "" : "connected",
-    );
+    const head = printabilityHead(view);
+    const toasted = problemCount(view) > 0;
+    setStatus(head, toasted ? "" : head === "Printability: nothing found" ? "connected" : "error");
+    // The announcer joins the rest onto the toast's head, so it is still heard as one line.
+    announce(toasted ? printabilityDetails(view) : printabilitySummary(view));
     refreshMarks();
     if (epoch !== docEpoch) setStatus("Printability: the model changed while it ran, check again to see the faces", "");
   }
