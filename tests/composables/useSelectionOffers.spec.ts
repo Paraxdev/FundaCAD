@@ -147,8 +147,8 @@ describe("the readout of one face", () => {
     ],
     [
       { radius: 2.5, full: false, solidInside: true },
-      "1 face · rounded · R2.5 mm",
-      "Rounded face 1, radius 2.5 millimetres, BODY1",
+      "1 face · round · R2.5 mm",
+      "Round face 1, radius 2.5 millimetres, BODY1",
     ],
     [
       { radius: 9, solidInside: true, centre: [3, 4, 5] },
