@@ -73,3 +73,82 @@ describe("ToastStack region", () => {
     expect(el.getAttribute("aria-live")).toBeNull();
   });
 });
+
+describe("ToastStack pause", () => {
+  const alive = () =>
+    useToastStore()
+      .items.filter((t) => !t.leaving)
+      .map((t) => t.message);
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>(".toast"));
+  const three = async () => {
+    mount(ToastStack, { attachTo: document.body });
+    const st = useToastStore();
+    st.push("Saved 3 parts", "info", { label: "Open", onClick: () => {} }, 8000);
+    st.push("Pasted 4 faces", "warning", undefined, 8000);
+    st.push("Opened 2 files", "info", undefined, 8000);
+    await nextTick();
+  };
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("pointerenter on the second of three rows holds all, pointerleave gives each a full time", async () => {
+    await three();
+    rows()[1]!.dispatchEvent(new Event("pointerenter"));
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    rows()[1]!.dispatchEvent(new Event("pointerleave"));
+    await nextTick();
+    vi.advanceTimersByTime(7990);
+    expect(alive()).toHaveLength(3);
+    vi.advanceTimersByTime(20);
+    expect(alive()).toEqual([]);
+  });
+
+  it("focus on a Dismiss button holds, and dismissing that focused toast frees the others", async () => {
+    await three();
+    const close = rows()[0]!.querySelector<HTMLButtonElement>(".toast-close")!;
+    close.focus();
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    close.click();
+    await nextTick();
+    vi.advanceTimersByTime(200);
+    await nextTick();
+    expect(alive()).toEqual(["Pasted 4 faces", "Opened 2 files"]);
+    vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+
+  it("dismissing the row under the pointer frees the others without a pointerleave", async () => {
+    await three();
+    rows()[2]!.dispatchEvent(new Event("pointerenter"));
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    useToastStore().dismiss(useToastStore().items[2]!.id);
+    await nextTick();
+    vi.advanceTimersByTime(200);
+    await nextTick();
+    expect(alive()).toHaveLength(2);
+    vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+
+  it("pointer on one row and focus on another hold until both are gone", async () => {
+    await three();
+    const close = rows()[0]!.querySelector<HTMLButtonElement>(".toast-close")!;
+    rows()[2]!.dispatchEvent(new Event("pointerenter"));
+    close.focus();
+    await nextTick();
+    rows()[2]!.dispatchEvent(new Event("pointerleave"));
+    await nextTick();
+    vi.advanceTimersByTime(30000);
+    expect(alive()).toHaveLength(3);
+    close.blur();
+    await nextTick();
+    vi.advanceTimersByTime(8010);
+    expect(alive()).toEqual([]);
+  });
+});

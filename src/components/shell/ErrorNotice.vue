@@ -28,6 +28,7 @@ const slot = ref<HTMLElement | null>(null);
 let timers: number[] = [];
 let holdTimer = 0;
 let hovered = false;
+let focused = false;
 
 const later = (ms: number, fn: () => void) => {
   timers.push(window.setTimeout(fn, ms));
@@ -48,7 +49,7 @@ async function fitWidth(): Promise<number> {
 function hold() {
   clearTimeout(holdTimer);
   const n = shown.value;
-  if (!n || hovered) return;
+  if (!n || hovered || focused) return;
   holdTimer = window.setTimeout(leave, n.holdMs);
 }
 
@@ -63,6 +64,9 @@ function leave() {
 
 function finish() {
   clearTimers();
+  // The wrap is removed under the pointer or focus, which fires no leave or focusout.
+  hovered = false;
+  focused = false;
   phase.value = "hidden";
   shown.value = null;
   width.value = ICON_W;
@@ -122,6 +126,16 @@ function onLeave() {
   hovered = false;
   if (phase.value === "text") hold();
 }
+function onFocusIn() {
+  focused = true;
+  clearTimeout(holdTimer);
+}
+function onFocusOut(e: FocusEvent) {
+  const to = e.relatedTarget;
+  if (to instanceof Node && (e.currentTarget as HTMLElement).contains(to)) return;
+  focused = false;
+  if (phase.value === "text") hold();
+}
 
 let off: (() => void) | null = null;
 onMounted(() => {
@@ -138,7 +152,14 @@ onUnmounted(() => {
 
 <template>
   <div ref="slot" class="notice-slot">
-    <div v-if="shown && phase !== 'hidden'" class="err-notice-wrap" @mouseenter="onEnter" @mouseleave="onLeave">
+    <div
+      v-if="shown && phase !== 'hidden'"
+      class="err-notice-wrap"
+      @mouseenter="onEnter"
+      @mouseleave="onLeave"
+      @focusin="onFocusIn"
+      @focusout="onFocusOut"
+    >
       <Chip
         id="error-notice"
         as="button"

@@ -83,3 +83,62 @@ describe("the title bar error notice", () => {
     expect(w.find("#error-notice").exists()).toBe(false);
   });
 });
+
+describe("the error notice holds while pointed at or focused", () => {
+  const shownNotice = async (action?: { label: string; onClick: () => void }) => {
+    vi.useFakeTimers();
+    setMotion(false);
+    const w = mount(ErrorNotice, { attachTo: document.body });
+    showErrorNotice("Fillet2 failed: radius 7 too large", { logId: 3, ...(action ? { action } : {}) });
+    await w.vm.$nextTick();
+    await w.vm.$nextTick();
+    return w;
+  };
+  const gone = (w: Awaited<ReturnType<typeof shownNotice>>) => !w.find("#error-notice").exists();
+
+  it("focus on the chip holds it past its time, focusout gives a full time again", async () => {
+    const w = await shownNotice();
+    const chip = w.get("#error-notice").element as HTMLElement;
+    chip.focus();
+    await vi.advanceTimersByTimeAsync(40000);
+    expect(gone(w)).toBe(false);
+    chip.blur();
+    await vi.advanceTimersByTimeAsync(8990);
+    expect(gone(w)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(gone(w)).toBe(true);
+  });
+
+  it("focus moving from the chip to its action stays held", async () => {
+    const w = await shownNotice({ label: "Edit", onClick: () => {} });
+    (w.get("#error-notice").element as HTMLElement).focus();
+    (w.get(".err-action").element as HTMLElement).focus();
+    await vi.advanceTimersByTimeAsync(40000);
+    expect(gone(w)).toBe(false);
+  });
+
+  it("hover still holds, and mouseleave starts a full time", async () => {
+    const w = await shownNotice();
+    await w.get(".err-notice-wrap").trigger("mouseenter");
+    await vi.advanceTimersByTimeAsync(40000);
+    expect(gone(w)).toBe(false);
+    await w.get(".err-notice-wrap").trigger("mouseleave");
+    await vi.advanceTimersByTimeAsync(8990);
+    expect(gone(w)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(gone(w)).toBe(true);
+  });
+
+  it("a notice clicked away while focused does not hold the next one", async () => {
+    const w = await shownNotice();
+    (w.get("#error-notice").element as HTMLElement).focus();
+    await w.get("#error-notice").trigger("click");
+    expect(gone(w)).toBe(true);
+    showErrorNotice("Hole1 failed: depth 12", { logId: 4 });
+    await w.vm.$nextTick();
+    await w.vm.$nextTick();
+    expect(gone(w)).toBe(false);
+    await vi.advanceTimersByTimeAsync(10100);
+    expect(gone(w)).toBe(true);
+  });
+});
