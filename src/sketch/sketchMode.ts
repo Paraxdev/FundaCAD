@@ -242,6 +242,7 @@ function parseConflictIdx(ids: string[]): Set<number> {
 const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale", ...ENTITY_PATTERNS]);
 
 // The text tool's live-preview entity lives on the active list so it repaints normally, but is never committed.
+const PALETTE_OWN_KEYS = new Set(["Enter", " ", "Delete", "Backspace"]);
 const TEXT_PREVIEW_ID = "__textpreview__";
 
 // A dimmed curve blue: snappable, but never mistaken for drawn geometry.
@@ -2990,6 +2991,8 @@ export class SketchMode {
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut
     // The Text panel's list, boxes and buttons are no text fields, yet a letter there must not switch the tool.
     if (e.target instanceof Element && e.target.closest(".text-tool-panel")) return;
+    // The sketch palette's rows and buttons keep the keys that press or delete them.
+    if (PALETTE_OWN_KEYS.has(e.key) && e.target instanceof Element && e.target.closest("#palette")) return;
     // a pattern being placed/edited: Delete removes it, Esc keeps it as-is
     if (this.patternFlow.hasPending()) {
       if (e.key === "Delete" || e.key === "Backspace") {

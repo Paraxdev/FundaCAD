@@ -342,6 +342,9 @@ describe("impliedJoins", () => {
   } as ResolvedEntity;
   const C = { type: "line", id: "C", x1: 110, y1: 56, x2: 104, y2: 66 } as ResolvedEntity;
   const row = (entities: string[]) => ({
+    key: `implied:${entities.join(",")}`,
+    spoken: expect.stringMatching(/^Coincident, .*, implied$/),
+    stateWord: "implied",
     index: null,
     icon: "coincident",
     name: "Coincident",

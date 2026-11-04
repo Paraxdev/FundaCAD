@@ -7,10 +7,16 @@ import { isDriven } from "../types";
 import { coincKey } from "./sketchSolve";
 import { constraintFace, diagnosisOf, type ConstraintDiagnosis } from "./glyphs";
 import { fmtDim } from "./annotationFormat";
+import { distinctNames, relationName, stateWord, type StateWord } from "./sketchNames";
 
 export { constraintFace } from "./glyphs";
 
 export interface RelationRow {
+  /** Stable for the row's subject: the constraint index, or the joined ids of an implied relation. */
+  key: string;
+  /** The row's accessible name, with ", row N" when another row reads the same. */
+  spoken: string;
+  stateWord?: StateWord;
   /** Null for an implied relation, which has no record to delete. */
   index: number | null;
   /** The canvas glyph's icon, so the two never disagree. */
@@ -99,18 +105,21 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
   const out: RelationRow[] = [];
   for (const ids of at.values()) {
     if (ids.length < 2 || joinedByRecords(ids, recorded)) continue;
-    out.push({
-      index: null,
-      icon: "coincident",
-      name: "Coincident",
-      detail: ids
-        .map((id) => entityLabel(ents, id))
-        .filter(Boolean)
-        .join(" and "),
-      entities: ids,
-      state: null,
-      implied: true,
-    });
+    out.push(
+      withWords({
+        key: `implied:${ids.join(",")}`,
+        index: null,
+        icon: "coincident",
+        name: "Coincident",
+        detail: ids
+          .map((id) => entityLabel(ents, id))
+          .filter(Boolean)
+          .join(" and "),
+        entities: ids,
+        state: null,
+        implied: true,
+      }),
+    );
   }
   return out;
 }
@@ -145,6 +154,8 @@ export function constraintRows(
     const v = (c as { value?: number }).value;
     const driven = isDriven(c);
     const row: RelationRow = {
+      key: String(i),
+      spoken: "",
       index: i,
       icon: face.icon,
       name: face.name,
@@ -154,7 +165,7 @@ export function constraintRows(
     };
     if (typeof v === "number") row.value = fmtDim(v, isAngle(c) ? "angle" : "length", driven);
     if (driven) row.driven = true;
-    return row;
+    return withWords(row);
   });
 }
 
@@ -165,7 +176,14 @@ export function relationRows(
   conflicts: Set<number>,
   over: Set<number>,
 ): RelationRow[] {
-  return [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents, constraints)];
+  const rows = [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents, constraints)];
+  const spoken = distinctNames(rows.map((r) => r.spoken));
+  return rows.map((r, i) => ({ ...r, spoken: spoken[i]! }));
+}
+
+function withWords(r: Omit<RelationRow, "spoken" | "stateWord">): RelationRow {
+  const word = stateWord(r);
+  return { ...r, spoken: relationName(r), ...(word ? { stateWord: word } : {}) };
 }
 
 /** `dof < 0` means no solve has run, which a sketch without constraints stays in, and is not "fully defined". */

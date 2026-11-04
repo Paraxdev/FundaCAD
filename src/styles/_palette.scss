@@ -105,14 +105,20 @@
 .rel-row {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
+  gap: var(--s-1);
+  padding-inline-end: var(--s-2);
   border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease);
 }
-.rel-row:hover {
+.rel-row:hover,
+.rel-row:focus-within {
   background: var(--raised);
+}
+.rel-row .ui-list-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rel-row .ui-list-row:hover:not(.is-disabled) {
+  background: none;
 }
 /* The same 16px square and accent border as the canvas glyph it names. */
 .rel-sym {
@@ -142,48 +148,18 @@
   border-color: var(--text-mute);
   color: var(--text-mute);
 }
-.rel-text {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-.rel-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  min-width: 0;
-}
-.rel-name {
-  font-size: var(--fs-small);
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.rel-row.implied .rel-name {
+.rel-row.implied .ui-list-row-label {
   color: var(--text-dim);
 }
-.rel-value {
-  flex: none;
-  font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-}
-.rel-detail {
-  font-size: var(--fs-micro);
-  color: var(--text-mute);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Out of the flow until hover: a column of crosses would turn the list into a control
-   panel. */
+/* Shown on hover and focus, never display or visibility none: it must stay a Tab stop. */
 .rel-del {
-  visibility: hidden;
+  flex: none;
+  opacity: 0;
 }
-.rel-row:hover .rel-del {
-  visibility: visible;
+.rel-row:hover .rel-del,
+.rel-row:focus-within .rel-del,
+.rel-del:focus-visible {
+  opacity: 1;
 }
 
 .palette-btn {

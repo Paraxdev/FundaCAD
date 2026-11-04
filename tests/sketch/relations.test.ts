@@ -171,3 +171,59 @@ describe("dofSummary", () => {
     expect(dofSummary(0, true)).toBe("Conflicting constraints"); // conflict is preferred over a zero count
   });
 });
+
+describe("relation row words", () => {
+  const spoken = (cs: SketchConstraint[], conflicts = NONE, over = NONE) =>
+    relationRows(TRIANGLE, cs, conflicts, over).map((r) => [r.key, r.spoken, r.stateWord]);
+
+  it("keys a constraint by index and an implied join by its shapes", () => {
+    const rows = relationRows(TRIANGLE, [{ type: "vertical", line: "e3" }], NONE, NONE);
+    expect(rows.map((r) => r.key)).toEqual(["0", "implied:e1,e3", "implied:e1,e2", "implied:e2,e3"]);
+  });
+
+  it("reads each state out loud", () => {
+    const cs: SketchConstraint[] = [
+      { type: "horizontal", line: "e1" },
+      { type: "vertical", line: "e3" },
+      { type: "distance", line: "e1", value: 6.32 },
+      { type: "angle", l1: "e1", l2: "e2", value: 90, driven: true },
+    ];
+    const rows = relationRows(TRIANGLE, cs, new Set([0]), new Set([1]));
+    expect(rows.slice(0, 4).map((r) => [r.spoken, r.stateWord])).toEqual([
+      ["Horizontal, Line 1, conflicting", "conflicting"],
+      ["Vertical, Line 3, redundant", "redundant"],
+      ["Length 6.32 mm, Line 1", undefined],
+      ["Angle 90°, Line 1 and Line 2, reference", "reference"],
+    ]);
+    expect(rows.slice(4).map((r) => [r.spoken, r.stateWord])).toEqual([
+      ["Coincident, Line 1 and Line 3, implied", "implied"],
+      ["Coincident, Line 1 and Line 2, implied", "implied"],
+      ["Coincident, Line 2 and Line 3, implied", "implied"],
+    ]);
+  });
+
+  it("numbers a repeated name by its row and only that name", () => {
+    const rows = spoken([
+      { type: "horizontal", line: "e1" },
+      { type: "horizontal", line: "e1" },
+      { type: "vertical", line: "e3" },
+    ]);
+    expect(rows.slice(0, 3)).toEqual([
+      ["0", "Horizontal, Line 1, row 1", undefined],
+      ["1", "Horizontal, Line 1, row 2", undefined],
+      ["2", "Vertical, Line 3", undefined],
+    ]);
+  });
+
+  it("gives none, one and many rows a unique name each", () => {
+    expect(spoken([])).toHaveLength(3);
+    expect(spoken([{ type: "vertical", line: "e3" }])[0]).toEqual(["0", "Vertical, Line 3", undefined]);
+    const many = relationRows(
+      TRIANGLE,
+      [1, 2, 3, 4].map(() => ({ type: "vertical", line: "e3" }) as SketchConstraint),
+      NONE,
+      NONE,
+    ).map((r) => r.spoken);
+    expect(new Set(many).size).toBe(many.length);
+  });
+});
