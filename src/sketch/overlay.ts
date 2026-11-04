@@ -552,21 +552,21 @@ export class SketchOverlay {
     for (const o of objects) this.activeSketch.add(o);
   }
 
-  /** Red dots on open ends, amber on ends on ends that meet another curve only by position.
+  /** Red rings on open ends, amber dots on ends that meet another curve only by position.
    *  Pass null to clear. */
   setLooseEnds(plane: SketchPlane, le: LooseEnds | null) {
     this.clearGroup(this.looseEndsGroup);
     this.looseEndCounts = { open: le?.open.length ?? 0, untied: le?.untied.length ?? 0 };
     if (!le) return;
-    const add = (pts: { x: number; y: number }[], color: number) => {
+    const add = (pts: { x: number; y: number }[], color: number, ring: boolean) => {
       if (!pts.length) return;
       const g = new THREE.BufferGeometry().setFromPoints(pts.map((q) => plane.to3D(q.x, q.y)));
-      const dots = new THREE.Points(g, looseEndMat(color));
+      const dots = new THREE.Points(g, looseEndMat(color, ring));
       dots.renderOrder = 15;
       this.looseEndsGroup.add(dots);
     };
-    add(le.open, looseOpenColor());
-    add(le.untied, looseUntiedColor());
+    add(le.open, looseOpenColor(), true);
+    add(le.untied, looseUntiedColor(), false);
   }
 
   /** The in-progress rubber-band entity (rebuilt every pointer move). */
@@ -872,21 +872,46 @@ function dotMat(color: number): THREE.PointsMaterial {
   return m;
 }
 
-const looseMats = new Map<number, THREE.PointsMaterial>();
+let ringTexture: THREE.DataTexture | null = null;
+// A white ring, tinted by the material colour: an open end differs from a filled dot in greyscale too.
+function looseRingTexture(): THREE.DataTexture {
+  if (ringTexture) return ringTexture;
+  const n = 32;
+  const data = new Uint8Array(n * n * 4);
+  const inner = 1 - LOOSE_RIM_PX / (LOOSE_RING_PX / 2);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const r = Math.hypot(i + 0.5 - n / 2, j + 0.5 - n / 2) / (n / 2);
+      const edge = (a: number) => Math.min(1, Math.max(0, a * n * 0.5));
+      const k = (j * n + i) * 4;
+      data[k] = data[k + 1] = data[k + 2] = 255;
+      data[k + 3] = Math.round(255 * Math.min(edge(1 - r), edge(r - inner)));
+    }
+  }
+  ringTexture = new THREE.DataTexture(data, n, n);
+  ringTexture.magFilter = ringTexture.minFilter = THREE.LinearFilter;
+  ringTexture.needsUpdate = true;
+  return ringTexture;
+}
+
+const LOOSE_RING_PX = POINT_DOT_PX + 4;
+const LOOSE_RIM_PX = 2;
+const looseMats = new Map<string, THREE.PointsMaterial>();
 // Drawn over the curves, an end hidden under its own line is the one the user hunts for.
-function looseEndMat(color: number): THREE.PointsMaterial {
-  let m = looseMats.get(color);
+function looseEndMat(color: number, ring: boolean): THREE.PointsMaterial {
+  const key = `${color}:${ring ? "ring" : "dot"}`;
+  let m = looseMats.get(key);
   if (!m) {
     m = new THREE.PointsMaterial({
       color,
-      size: POINT_DOT_PX + 2,
+      size: ring ? LOOSE_RING_PX : POINT_DOT_PX + 2,
       sizeAttenuation: false,
-      map: pointDotTexture(),
+      map: ring ? looseRingTexture() : pointDotTexture(),
       transparent: true,
       depthTest: false,
       depthWrite: false,
     });
-    looseMats.set(color, m);
+    looseMats.set(key, m);
   }
   return m;
 }

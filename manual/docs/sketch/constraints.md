@@ -62,9 +62,9 @@ The palette lists every rule under **Relations**, one row each. It shows while *
 
 ## Loose ends
 
-A sketch that will not extrude usually has a gap. While you sketch, dots mark the ends that keep it open:
+A sketch that will not extrude usually has a gap. While you sketch, markers show the ends that keep it open:
 
-1. **Red dot**: an end that touches nothing.
+1. **Red ring**: an end that touches nothing.
 2. **Amber dot**: an end that meets another curve, but no rule holds it there.
 
 **Tie Loose Ends**, next to Constrain, ties every amber end in one step you can undo. When red ends sit close together, up to a tenth of the sketch's size and at most 10 mm, it offers **Close gap** to tie them across. Farther apart, draw a line to close them.
