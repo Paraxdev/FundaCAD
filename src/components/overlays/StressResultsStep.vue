@@ -8,9 +8,10 @@ import IconButton from "../ui/IconButton.vue";
 import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
 import Switch from "../ui/Switch.vue";
+import StressLegend from "./StressLegend.vue";
 import StressVerdict from "./StressVerdict.vue";
 import { plainWarningFor } from "../../ui/stressWarnings";
-import { deformLabel, legendEnds, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
+import { deformLabel, setupSummary, type StressResultView } from "../../ui/stress";
 import { getUnit } from "../../ui/units";
 
 const props = defineProps<{ result: StressResultView }>();
@@ -21,7 +22,6 @@ const panels = usePanelsStore();
 const stress = computed(() => panels.stress!);
 const deform = computed(() => stress.value.deform);
 const exaggerationId = useId();
-const gradient = legendGradient();
 const unit = computed(() => getUnit());
 
 const modelChanged = computed(() => stress.value.colours === "none");
@@ -39,7 +39,6 @@ function ranSetupRefine() {
   return (ran ? JSON.parse(ran) : stress.value.setup).refine;
 }
 const keyRows = computed(() => props.result.rows);
-const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
 
 // A power of ten at most 1, so True size (1) and the two figure automatic scale sit on a step.
@@ -160,12 +159,7 @@ const deformStep = computed(() => {
     </div>
 
     <template v-if="stress.colours === 'shown'">
-      <div class="stress-legend" :style="{ background: gradient }" />
-      <div class="measure-row stress-legend-labels">
-        <span class="measure-v">{{ ends[0] }} MPa</span>
-        <span class="measure-k">Stress</span>
-        <span class="measure-v">{{ ends[1] }} MPa</span>
-      </div>
+      <StressLegend :legend="result.legend" />
     </template>
 
     <ReadoutList :rows="keyRows" row-class="stress-key-row">

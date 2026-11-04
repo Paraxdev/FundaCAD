@@ -27,7 +27,7 @@ When the weakest spot is a sharp inside corner or the edge of a support, the ver
 | Peak stress | The highest stress in the part, in MPa. |
 | Max deflection | The furthest any point of the part moves. |
 
-The colour bar gives the stress at each end, in MPa. Details opens the rest: the material and its yield, where the peak and the largest bend are, the loads and the reactions at the supports, and the mesh.
+The colour bar is marked at each quarter of the range, with the stress in MPa at each mark. Details opens the rest: the material and its yield, where the peak and the largest bend are, the loads and the reactions at the supports, and the mesh.
 
 A printed part is weaker across its layer lines, so do not trust a safety factor barely over 1. The study is linear and approximate, use it to compare designs, not to predict when a part breaks.
 

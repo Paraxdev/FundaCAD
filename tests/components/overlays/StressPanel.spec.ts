@@ -442,9 +442,13 @@ describe("StressPanel", () => {
       ["Peak stress", "62 MPa"],
       ["Max deflection", "1.25 mm"],
     ]);
-    const text = q(".stress-panel")!.textContent!;
-    expect(text).toContain("0.5 MPa");
-    expect(text).toContain("62 MPa");
+    expect([...document.body.querySelectorAll(".stress-ticks > li")].map((e) => e.textContent?.trim())).toEqual([
+      "0.5",
+      "15.875",
+      "31.25",
+      "46.625",
+      "62",
+    ]);
     expect(q(".stress-warning")?.textContent).toBe("Printed parts are weaker across layers.");
     expect(q(".stress-yields")?.textContent).toBe("0.8");
     expect(q(".stress-yields")?.tagName).toBe("DD");
@@ -496,14 +500,24 @@ describe("StressPanel", () => {
     expect(step.firstElementChild?.classList.contains("stress-stale")).toBe(true);
   });
 
-  it("shows the legend only with the colours, titled Stress, with a minimum too small to tell from 0 as 0", async () => {
+  it("shows the legend only with the colours, marked at each quarter, a minimum too small to tell from 0 as 0", async () => {
     const { p } = await withResult({ legend: { min: 0.000656, max: 51.11 } });
-    const ends = () => [...document.body.querySelectorAll(".stress-legend-labels > span")].map((e) => e.textContent);
-    expect(ends()).toEqual(["0 MPa", "Stress", "51.11 MPa"]);
+    const scale = () => q(".stress-ticks");
+    const ticks = () => [...document.body.querySelectorAll(".stress-ticks > li")].map((e) => e.textContent?.trim());
+    expect(scale()?.tagName).toBe("OL");
+    expect(scale()?.getAttribute("aria-label")).toContain("MPa");
+    expect(ticks()).toEqual(["0", "12.78", "25.56", "38.33", "51.11"]);
+    expect([...document.body.querySelectorAll<HTMLElement>(".stress-ticks > li")].map((e) => e.style.left)).toEqual([
+      "0%",
+      "25%",
+      "50%",
+      "75%",
+      "100%",
+    ]);
     p.setStressColours("hidden");
     await flushPromises();
     expect(q(".stress-legend")).toBeNull();
-    expect(ends()).toEqual([]);
+    expect(scale()).toBeNull();
   });
 
   it("has a Deformed shape switch beside Colours, the exaggeration only while the shape is drawn", async () => {

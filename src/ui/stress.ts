@@ -627,6 +627,15 @@ export function legendEnds(legend: { min: number; max: number }): [string, strin
   return [String(displayRound(min)), String(displayRound(legend.max))];
 }
 
+/** Labels for the colour bar at each quarter of the range, MPa, the ends as legendEnds reads them. */
+export function legendTicks(legend: { min: number; max: number }): { pct: number; label: string }[] {
+  const [low, high] = legendEnds(legend);
+  return [0, 25, 50, 75, 100].map((pct) => ({
+    pct,
+    label: pct === 0 ? low : pct === 100 ? high : String(displayRound(legend.min + ((legend.max - legend.min) * pct) / 100)),
+  }));
+}
+
 /** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
 export function setupSummary(s: StressSetup): string {
   const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;

@@ -12,6 +12,7 @@ import {
   defaultSpotRadius,
   faceCountLabel,
   legendEnds,
+  legendTicks,
   legendGradient,
   newLoad,
   newSetup,
@@ -466,6 +467,14 @@ describe("colour map", () => {
       ["2", "31.25"],
       ["0", "0"],
     ]);
+  });
+
+  it("labels the bar at every quarter, the ends as legendEnds reads them", () => {
+    const labels = (l: { min: number; max: number }) => legendTicks(l).map((t) => [t.pct, t.label]);
+    expect(labels({ min: 0.5, max: 62 })).toEqual([[0, "0.5"], [25, "15.875"], [50, "31.25"], [75, "46.625"], [100, "62"]]);
+    expect(labels({ min: 0.000656, max: 51.11 })).toEqual([[0, "0"], [25, "12.78"], [50, "25.56"], [75, "38.33"], [100, "51.11"]]);
+    expect(labels({ min: 7.25, max: 7.25 })).toEqual([[0, "7.25"], [25, "7.25"], [50, "7.25"], [75, "7.25"], [100, "7.25"]]);
+    expect(legendTicks({ min: 0, max: 0 }).map((t) => t.label)).toEqual(["0", "0", "0", "0", "0"]);
   });
 
   it("draws the rainbow legend from the same stops", () => {
