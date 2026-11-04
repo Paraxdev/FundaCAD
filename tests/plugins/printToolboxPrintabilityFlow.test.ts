@@ -90,6 +90,7 @@ function rig() {
   const frames: { at: number[]; size: number }[] = [];
   const statuses: string[] = [];
   const announced: [string, string][] = [];
+  const heard: [string, string][] = [];
   const calls: PrintabilityOptions[] = [];
   const cancels: (string | undefined)[] = [];
   let settle: (r: PrintabilityResult) => void = () => {};
@@ -148,8 +149,15 @@ function rig() {
     viewport,
     geometry,
     hasBody: () => true,
-    setStatus: (t: string) => statuses.push(t),
-    announce: (t: string, p?: string) => announced.push([t, p ?? "polite"]),
+    // The app's status with no class is an info toast, and every toast is spoken.
+    setStatus: (t: string, c: string) => {
+      statuses.push(t);
+      if (c === "") heard.push([t, "polite"]);
+    },
+    announce: (t: string, p?: string) => {
+      announced.push([t, p ?? "polite"]);
+      heard.push([t, p ?? "polite"]);
+    },
   } as unknown as PrintabilityDeps;
   const ui = createPrintabilityPanel(deps);
   /** The last marks drawn on the printability layer. */
@@ -161,6 +169,7 @@ function rig() {
     frames,
     statuses,
     announced,
+    heard,
     calls,
     cancels,
     tints,
@@ -192,6 +201,7 @@ function rig() {
 
 async function checked(r: ReturnType<typeof rig>) {
   r.ui.show();
+  r.heard.length = 0;
   const run = r.ui.run();
   r.settle({ ok: true, result: reply });
   await run;
@@ -244,14 +254,13 @@ describe("printability panel flow", () => {
     expect(r.statuses.at(-1)).toBe("Printability: 3 things to look at");
   });
 
-  it("speaks the count, the largest overhang and its face once a Check is done", async () => {
+  it("speaks the count, the largest overhang and its face once a Check is done, the count by its toast", async () => {
     const r = rig();
     await checked(r);
-    expect(r.announced).toEqual([
-      [
-        "Printability: 3 things to look at. 1 overhang, 1 thin wall, 1 gap. The overhang is 100 mm² on face 4 of Block.",
-        "polite",
-      ],
+    expect(r.heard).toEqual([
+      ["Checking printability…", "polite"],
+      ["Printability: 3 things to look at", "polite"],
+      ["1 overhang, 1 thin wall, 1 gap. The overhang is 100 mm² on face 4 of Block.", "polite"],
     ]);
   });
 
@@ -275,10 +284,15 @@ describe("printability panel flow", () => {
     await first;
     expect(r.announced).toEqual([]);
     r.ui.show();
+    r.heard.length = 0;
     const second = r.ui.run();
     r.settle({ ok: true, result: { ...reply, findings: [reply.findings[2]!] } });
     await second;
-    expect(r.announced).toEqual([["Printability: 1 thing to look at. 1 gap.", "polite"]]);
+    expect(r.heard).toEqual([
+      ["Checking printability…", "polite"],
+      ["Printability: 1 thing to look at", "polite"],
+      ["1 gap.", "polite"],
+    ]);
   });
 
   it("puts a hovered row's faces forward, and a clicked one stays forward and is framed", async () => {
@@ -333,11 +347,15 @@ describe("printability panel flow", () => {
   it("says nothing was found on a clean model", async () => {
     const r = rig();
     r.ui.show();
+    r.heard.length = 0;
     const run = r.ui.run();
     r.settle({ ok: true, result: { ...reply, findings: [] } });
     await run;
     expect(r.statuses.at(-1)).toBe("Printability: nothing found");
-    expect(r.announced).toEqual([["Printability: nothing found.", "polite"]]);
+    expect(r.heard).toEqual([
+      ["Checking printability…", "polite"],
+      ["Printability: nothing found.", "polite"],
+    ]);
     expect(r.tints()).toEqual([]);
   });
 
@@ -366,16 +384,18 @@ describe("printability panel flow", () => {
   it("does not send settings that are not ready", async () => {
     const r = rig();
     r.ui.show();
+    r.heard.length = 0;
     r.ui.data.value!.setup.nozzle = 0;
     await r.ui.run();
     expect(r.calls).toEqual([]);
     expect(r.ui.data.value!.error).toMatch(/nozzle/);
-    expect(r.announced).toEqual([[`Printability: ${r.ui.data.value!.error}`, "assertive"]]);
+    expect(r.heard).toEqual([[`Printability: ${r.ui.data.value!.error}`, "polite"]]);
   });
 
   it("cancels by its own request id and says it was cancelled, not failed", async () => {
     const r = rig();
     r.ui.show();
+    r.heard.length = 0;
     const run = r.ui.run();
     expect(r.ui.data.value!.requestId).toBe("req-1");
     await r.ui.cancel();
@@ -384,7 +404,10 @@ describe("printability panel flow", () => {
     await run;
     expect(r.ui.data.value!.error).toBeNull();
     expect(r.statuses.at(-1)).toBe("Printability check cancelled");
-    expect(r.announced).toEqual([["Printability check cancelled", "polite"]]);
+    expect(r.heard).toEqual([
+      ["Checking printability…", "polite"],
+      ["Printability check cancelled", "polite"],
+    ]);
   });
 
   it("keeps the list of bodies for the panel's Bodies line in step with the build", () => {

@@ -296,7 +296,12 @@ export function printabilityHead(v: PrintabilityView): string {
 }
 
 export function printabilitySummary(v: PrintabilityView): string {
-  const head = printabilityHead(v);
+  const rest = printabilityDetails(v);
+  return `${printabilityHead(v)}.${rest ? ` ${rest}` : ""}`;
+}
+
+/** The summary after its head, for when a toast has said the head already. */
+export function printabilityDetails(v: PrintabilityView): string {
   const parts: string[] = [];
   for (const k of KIND_ORDER) {
     const c = v.findings.filter((f) => f.kind === k).length;
@@ -305,7 +310,7 @@ export function printabilitySummary(v: PrintabilityView): string {
   const notes = v.groups.reduce((t, g) => t + g.notes.length, 0);
   if (notes) parts.push(plural(notes, "body note", "body notes"));
   if (v.errors.length) parts.push(plural(v.errors.length, "error", "errors"));
-  const sentences = [head];
+  const sentences: string[] = [];
   if (parts.length) sentences.push(parts.join(", "));
   const overhangs = v.findings.filter((f) => f.kind === "overhang");
   let largest: PrintabilityFinding | undefined;
@@ -316,7 +321,7 @@ export function printabilitySummary(v: PrintabilityView): string {
     const lead = overhangs.length > 1 ? "Largest overhang" : "The overhang is";
     sentences.push(`${lead} ${area(largest.area)} on face ${largest.face + 1}${body}`);
   }
-  return `${sentences.join(". ")}.`;
+  return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
 /** The tints for a result in display face ids: each finding's face in its kind's colour, and the finding put forward

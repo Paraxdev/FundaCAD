@@ -37,9 +37,12 @@ def check(s, path):
     listen(s)
     s.page.evaluate("() => window.__fundacad.handleAction('print-printability')")
     s.page.locator(".printability-panel").wait_for()
+    # Opening the panel has its own spoken toast, so listening starts again once it is said.
+    heard(s, "checks the selected bodies")
+    listen(s)
     s.page.locator(".printability-run").click()
     s.page.locator(".printability-header").wait_for()
-    said = [t for t in heard(s, "Printability:") if t.startswith("Printability:")]
+    said = [t[t.index("Printability:") :] for t in heard(s, "Printability:") if "Printability:" in t]
     assert len(said) == 1, said
     return s.page.evaluate(ROWS), NUMBER.findall(said[0])
 
