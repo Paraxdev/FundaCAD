@@ -4,12 +4,30 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { createPanels, type PanelsDeps } from "../../src/ui/panels";
 import { usePanelsStore } from "../../src/stores/panels";
+import { useToastStore } from "../../src/stores/toasts";
+import { toast } from "../../src/ui/toast";
+import { createDocumentActions } from "../../src/app/documentActions";
+import type { Engine } from "../../src/app/engine";
 import type { CadDocument, StressStudy } from "../../src/types";
+
+// The toast store times its toasts on window.
+vi.stubGlobal("window", globalThis);
+
+const announced = vi.hoisted(() => [] as string[]);
+vi.mock("../../src/ui/announce", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/ui/announce")>()),
+  announce: (text: string) => void announced.push(text),
+}));
 
 // The Stress panel's own undo against a hand-made viewport and store: it takes back setup steps while the panel is
 // open, says what it took back, and never reaches the model's history.
 
-beforeEach(() => setActivePinia(createPinia()));
+beforeEach(() => {
+  setActivePinia(createPinia());
+  announced.length = 0;
+});
+
+const shown = () => useToastStore().items.at(-1)?.message;
 
 // Face 1 is the bottom of body b1, face 2 its top.
 const FACES: Record<number, { body: string; z: number; n: number }> = {
@@ -92,7 +110,10 @@ function rig() {
     viewport,
     geometry,
     hasBody: () => true,
-    setStatus: (t: string) => statuses.push(t),
+    setStatus: (t: string, cls: string) => {
+      statuses.push(t);
+      if (cls === "") toast(t);
+    },
   } as unknown as PanelsDeps;
   const ui = createPanels(deps);
   return {
@@ -133,7 +154,7 @@ describe("Stress panel undo", () => {
     expect([d.undoLabel, d.redoLabel]).toEqual(["Body", "Support 1 faces"]);
     expect(d.setup.supports[0]!.faces.selectors).toEqual([]);
     expect(d.setup.supports[0]!.faces.faceIds).toEqual([]);
-    expect(r.statuses.at(-1)).toBe("Undid: Support 1 faces");
+    expect(shown()).toBe("Undid: Support 1 faces");
     expect(r.study()!.supports[0]!.faces, "the saved study follows").toEqual([]);
     expect(r.marks.at(-1)).toEqual([
       { faceIds: [], color: 0x4ac6ff },
@@ -146,7 +167,7 @@ describe("Stress panel undo", () => {
 
     expect(r.ui.redoStress()).toBe(true);
     expect(d.setup.supports[0]!.faces.faceIds, "the face is found again on the build").toEqual([1]);
-    expect(r.statuses.at(-1)).toBe("Redid: Support 1 faces");
+    expect(shown()).toBe("Redid: Support 1 faces");
     expect(r.store.redo).not.toHaveBeenCalled();
   });
 
@@ -186,7 +207,7 @@ describe("Stress panel undo", () => {
     r.select([2]);
     r.ui.setStressFacesFromSelection({ load: 1 });
     r.ui.undoStress();
-    expect(r.statuses.at(-1)).toBe("Undid: Load 1 faces");
+    expect(shown()).toBe("Undid: Load 1 faces");
     expect(usePanelsStore().stress!.setup.body).toBeNull();
   });
 
@@ -198,7 +219,7 @@ describe("Stress panel undo", () => {
     r.ui.placeStressSpot({ support: 2 }, "face");
     expect(d.placing).toEqual({ support: 2 });
     r.ui.undoStress();
-    expect(r.statuses.at(-1)).toBe("Undid: Add support");
+    expect(shown()).toBe("Undid: Add support");
     expect(d.setup.supports).toHaveLength(1);
     expect(d.placing).toBeNull();
   });
@@ -212,7 +233,7 @@ describe("Stress panel undo", () => {
       await nextTick();
     }
     r.ui.undoStress();
-    expect(r.statuses.at(-1)).toBe("Undid: Load 1 force");
+    expect(shown()).toBe("Undid: Load 1 force");
     expect(d.setup.loads[0]!.force).toBe(was);
   });
 
@@ -229,5 +250,41 @@ describe("Stress panel undo", () => {
     expect(d).toBeDefined();
     r.ui.undoStress();
     expect(r.statuses.at(-1)).toBe("Nothing left to undo in Stress");
+  });
+});
+
+describe("Stress undo from Edit, Undo", () => {
+  function actions(r: ReturnType<typeof rig>) {
+    const e = {
+      tools: { move: { pending: false, cancel: () => {} } },
+      sketch: { active: false, undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: r.ui },
+      store: r.store,
+    };
+    return createDocumentActions(e as unknown as Engine);
+  }
+
+  it("says a step once, as Undid or Redid and its name, and still shows it", async () => {
+    const r = rig();
+    await open(r);
+    r.ui.addStressSupport();
+    await nextTick();
+    const a = actions(r);
+    announced.length = 0;
+    a.doUndo();
+    expect(announced).toEqual(["Undid Add support"]);
+    expect(shown()).toBe("Undid: Add support");
+    announced.length = 0;
+    a.doRedo();
+    expect(announced).toEqual(["Redid Add support"]);
+    expect(shown()).toBe("Redid: Add support");
+  });
+
+  it("says Nothing left once, from the panel", async () => {
+    const r = rig();
+    r.ui.showStress();
+    await nextTick();
+    actions(r).doUndo();
+    expect(announced).toEqual(["Nothing left to undo in Stress"]);
   });
 });

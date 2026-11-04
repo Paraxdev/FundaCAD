@@ -13,6 +13,8 @@ export interface ToastOptions {
   source?: string;
   /** An error's announcer key, see showErrorNotice. */
   announceKey?: string;
+  /** Shown but not spoken, for a line something else already says. */
+  silent?: boolean;
 }
 
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -52,11 +54,13 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
     });
     return null;
   }
-  announce(
-    spokenLine(message, opts.action),
-    kind === "warning" ? "assertive" : "polite",
-    opts.announceKey === undefined ? {} : { key: opts.announceKey },
-  );
+  if (!opts.silent) {
+    announce(
+      spokenLine(message, opts.action),
+      kind === "warning" ? "assertive" : "polite",
+      opts.announceKey === undefined ? {} : { key: opts.announceKey },
+    );
+  }
   const id = useToastStore().push(message, kind, opts.action, noticeHoldMs(kind, !!opts.action, opts.timeout));
   last = { message, kind, id };
   return id;
