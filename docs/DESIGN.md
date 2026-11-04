@@ -765,6 +765,7 @@ counts, per file:
 | `role=button`, `switch`, `tab`, `radio` and the `menuitem` roles on a plain element | the same templates | `Button`, `Switch`, `Tabs`, `Segmented`, `MenuItem` |
 | `createElement:button` and the other control tags, and those tags in a template string or `innerHTML` | `src/**/*.ts` and `plugins/**/*.ts` | the factories of `src/components/ui/dom.ts`, **prescribed, no code does this yet** |
 | `style:inline` | a `:style` or a style object with a colour, a border or `font` | a class in `src/styles/` that reads tokens |
+| `NumberField:no-unit` | a `NumberField` with no `unit`, `caption`, `unitless` or `v-bind` spread, or only a blank, `null` or `false` one | `unit="mm"` (or a bound `:unit`) so the unit is spoken, `unitless` for a count or a ratio |
 | `IconButton:no-tip` | an `IconButton` without `tip` | `tip`, which names it |
 | `class:btn`, `sm-input`, `pref-seg`, `ft-switch`, `param-switch`, `check` | the templates, only under `--legacy-classes`, which goes on once the old classes are gone | `Button`, `TextField` or `NumberField`, `Segmented`, `Switch`, `Checkbox` |
 
