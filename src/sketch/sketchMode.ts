@@ -1436,18 +1436,23 @@ export class SketchMode {
   }
 
   private constraintDimExtras(): ExtraDim[] {
+    // A redundant second width on one rectangle falls back to its constraint key, so list keys stay unique.
+    const sides = new Set<string>();
     return this.cdims.map((d) => {
       const st = diagnosisOf(d.cIndex, this.conflictIdx, this.overIdx);
       const con = this.constraints[d.cIndex];
       const key = con && isDimConstraint(con) && con.id ? `c:${con.id}` : null;
       const expr = key ? this.exprFor(key) : undefined;
       const side = con ? rectSideOf(this.entities, con) : null;
+      const sideKey = side && `${side.entity.id}:${side.field}`;
+      const ownsSide = !!sideKey && !sides.has(sideKey);
+      if (sideKey) sides.add(sideKey);
       const face = con ? constraintFace(con) : null;
       const operands = face?.operands ?? [];
       const labels = operands.map((o) => entityLabel(this.entities, o)).filter((l): l is string => !!l);
       const subject = side ? entityLabel(this.entities, side.entity.id) : null;
       return {
-        key: dimKey(side && `${side.entity.id}:${side.field}`, con && "id" in con ? con.id : undefined, d.cIndex),
+        key: dimKey(ownsSide ? sideKey : null, con && "id" in con ? con.id : undefined, d.cIndex),
         name: side
           ? entityDimName(side.field === "width" ? "Width" : "Height", subject)
           : constraintDimName(face?.name ?? "Dimension", labels),

@@ -108,6 +108,21 @@ describe("constraint dimension keys and names", () => {
     expect(c).toMatchObject({ key: before.key, name: before.name, entities: ["r2"] });
   });
 
+  it("keys a second driving width on one rectangle by its constraint, so no two rows share a key", () => {
+    const cs: SketchConstraint[] = [
+      { type: "p2pDistance", e1: "r1", p1: 0, e2: "r1", p2: 1, value: 20, id: "k3" },
+      { type: "p2pDistance", e1: "r1", p1: 3, e2: "r1", p2: 2, value: 20, id: "k4" },
+      { type: "p2pDistance", e1: "r1", p1: 2, e2: "r1", p2: 1, value: 10 },
+      { type: "p2pDistance", e1: "r2", p1: 1, e2: "r2", p2: 0, value: 8, id: "k5" },
+    ];
+    expect(extras(cs).map((d) => [d.key, d.name])).toEqual([
+      ["r1:width", "Width of Rectangle 1"],
+      ["c:k4", "Width of Rectangle 1"],
+      ["r1:height", "Height of Rectangle 1"],
+      ["r2:width", "Width of Rectangle 2"],
+    ]);
+  });
+
   it("reads a reference side as its own subject, not as the side", () => {
     const side: SketchConstraint = {
       type: "p2pDistance",
