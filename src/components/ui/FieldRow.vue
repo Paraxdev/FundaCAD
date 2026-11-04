@@ -4,14 +4,18 @@ import { computed, useId } from "vue";
 const props = withDefaults(
   defineProps<{
     label: string;
-    /** The control's id, when the caller owns it; else one is made and handed to the slot. */
-    for?: string | undefined;
+    /** The control's id, when the caller owns it; else one is made and handed to the slot. Null draws no `for`, for a
+     *  control named by `aria-labelledby`. */
+    for?: string | null | undefined;
     hint?: string | undefined;
-    layout?: "inline" | "stacked";
+    /** `param` is the inspector's row: it keeps the `.param-row` classes the harness and tests read. */
+    layout?: "inline" | "stacked" | "param";
+    /** Extra classes for the `param` layout's value column. */
+    controlClass?: string | undefined;
     /** Shown in place of the hint, and the control is marked invalid. */
     error?: string | undefined;
   }>(),
-  { for: undefined, hint: undefined, layout: "inline", error: undefined },
+  { for: undefined, hint: undefined, layout: "inline", controlClass: undefined, error: undefined },
 );
 defineSlots<{
   default(props: {
@@ -29,11 +33,26 @@ const hintId = useId();
 const errorId = useId();
 const labelId = useId();
 const controlId = computed(() => props.for ?? ownId);
+const labelFor = computed(() => (props.for === null ? undefined : controlId.value));
 const note = computed(() => props.error || props.hint);
 </script>
 
 <template>
-  <div class="ui-field-row" :class="[`ui-field-row-${layout}`, { 'is-error': !!error }]">
+  <div v-if="layout === 'param'" class="param-row">
+    <label :id="labelId" :for="labelFor">{{ label }}</label>
+    <div class="param-value" :class="controlClass">
+      <slot
+        :id="controlId"
+        :label-id="labelId"
+        :describedby="hint && !error ? hintId : undefined"
+        :error-id="error ? errorId : undefined"
+        :invalid="!!error"
+      />
+    </div>
+    <p v-if="error" :id="errorId" class="param-problem" aria-hidden="true">{{ error }}</p>
+    <div v-else-if="hint" :id="hintId" class="ui-field-hint">{{ hint }}</div>
+  </div>
+  <div v-else class="ui-field-row" :class="[`ui-field-row-${layout}`, { 'is-error': !!error }]">
     <label :id="labelId" class="ui-field-label" :for="controlId">{{ label }}</label>
     <div class="ui-field-control">
       <slot

@@ -8,6 +8,7 @@
 
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { h } from "vue";
 import ValidatedRow from "../../../src/components/shell/ValidatedRow.vue";
 import type { UnitDef } from "../../../src/ui/measure";
 
@@ -281,5 +282,32 @@ describe("ValidatedRow name", () => {
   it("carries its field key", () => {
     const w = mount(ValidatedRow, { props: { label: "Width", field: "width", value: 5, parse } });
     expect(w.get(".param-row").attributes("data-field")).toBe("width");
+  });
+
+  it("ties its label to its input, so a click on the label focuses the field", () => {
+    const w = mount(ValidatedRow, {
+      props: { label: "Width", field: "width", value: 5, parse, rowClass: "fx-row", rowTitle: "w = 5" },
+      attachTo: document.body,
+    });
+    const label = w.get("label");
+    expect([label.attributes("for"), label.attributes("id") !== undefined]).toEqual([
+      w.get("input").attributes("id"),
+      true,
+    ]);
+    expect(w.get("input").attributes("id")).toBeTruthy();
+    expect([
+      w.get("input").attributes("aria-label"),
+      w.get(".param-row").classes(),
+      w.get(".param-row").attributes("title"),
+    ]).toEqual(["Width", ["param-row", "fx-row"], "w = 5"]);
+    expect(w.get(".param-value input").element).toBe(document.getElementById(label.attributes("for") as string));
+  });
+
+  it("gives two rows of one panel different input ids, each label for its own", () => {
+    const row = (label: string) => h(ValidatedRow, { label, value: 7, parse });
+    const w = mount({ render: () => h("div", [row("Width"), row("Depth")]) });
+    const ids = w.findAll("input").map((i) => i.attributes("id"));
+    expect(new Set(ids).size).toBe(2);
+    expect(w.findAll("label").map((l) => l.attributes("for"))).toEqual(ids);
   });
 });

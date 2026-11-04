@@ -369,6 +369,41 @@ describe("FeatureProperties", () => {
     expect(problemUnder(w, "Radius").exists()).toBe(false);
   });
 
+  it("lists the repeated features in a row whose label names no control", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [
+        CIRCLE(3),
+        EXTRUDE,
+        { id: "p1", type: "patternLinear", features: ["e1", "s1"], count: 3, spacing: 10 } as unknown as Feature,
+      ],
+    });
+    const w = render(fake, "p1");
+    const row = w.findAll(".param-row").find((r) => r.find("label").text() === "Features")!;
+    expect([row.find("label").attributes("for"), row.find("label").attributes("id") !== undefined]).toEqual([
+      undefined,
+      true,
+    ]);
+    expect(row.find(".param-value").text().split(", ")).toHaveLength(2);
+    expect(row.findAll("input")).toHaveLength(0);
+  });
+
+  it("ties each value label to its own field and shows a refusal only under the feature that got it", async () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [FILLET(), { id: "f2", type: "fillet", radius: 4 } as unknown as Feature],
+    });
+    const first = render(fake, "f1");
+    await commit(first, "Radius", "-2");
+    const second = render(fake, "f2");
+    const row = (w: VueWrapper) => w.findAll(".param-row").find((r) => r.find("label").text() === "Radius")!;
+    for (const w of [first, second]) {
+      expect(row(w).find("label").attributes("for")).toBe(row(w).find("input").attributes("id"));
+    }
+    expect([first.findAll(".param-problem").length, second.findAll(".param-problem").length]).toEqual([1, 0]);
+    expect((row(second).find("input").element as HTMLInputElement).value).toBe("4");
+  });
+
   it("wants a whole count of at least one", async () => {
     const fake = makeEngine({
       parameters: {},
