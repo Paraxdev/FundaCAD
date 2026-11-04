@@ -68,6 +68,8 @@ describe("defaults", () => {
       contrast: "system",
       solidPanels: false,
       targets: "default",
+      unitsInFull: true,
+      noticeTime: "normal",
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
@@ -242,6 +244,8 @@ describe("reset and the screen reader preset", () => {
       contrast: "system",
       solidPanels: true,
       targets: "default",
+      unitsInFull: true,
+      noticeTime: "normal",
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
@@ -250,6 +254,44 @@ describe("reset and the screen reader preset", () => {
     expect(stored.get("fundacad.a11y.singleKeys")).toBe("off");
     expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
     expect(calls).toBe(1);
+  });
+});
+
+describe("Units spoken in full", () => {
+  it("is on by default and reads a stored true or false", async () => {
+    expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+    boot({ "fundacad.a11y.unitsInFull": "false" });
+    expect((await load()).a11yPrefs().unitsInFull).toBe(false);
+    boot({ "fundacad.a11y.unitsInFull": "true" });
+    expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+  });
+
+  it("falls back to on for a value it does not know", async () => {
+    for (const junk of ["yes", "1", "off", ""]) {
+      boot({ "fundacad.a11y.unitsInFull": junk });
+      expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+    }
+  });
+
+  it("stores false on a change, tells listeners once and is dropped by reset", async () => {
+    const m = await load();
+    let calls = 0;
+    m.onA11yPrefsChange(() => calls++);
+    m.setA11yPref("unitsInFull", false);
+    m.setA11yPref("unitsInFull", false);
+    expect([stored.get("fundacad.a11y.unitsInFull"), m.a11yPrefs().unitsInFull, calls]).toEqual(["false", false, 1]);
+    m.resetA11yPrefs();
+    expect([stored.has("fundacad.a11y.unitsInFull"), m.a11yPrefs().unitsInFull]).toEqual([false, true]);
+    expect((await load()).a11yPrefs().unitsInFull).toBe(true);
+  });
+
+  it("is left as it is by the screen reader preset, on or off", async () => {
+    for (const on of [true, false]) {
+      boot({ "fundacad.a11y.unitsInFull": String(on) });
+      const m = await load();
+      m.applyScreenReaderPreset();
+      expect([m.a11yPrefs().unitsInFull, stored.get("fundacad.a11y.unitsInFull")]).toEqual([on, String(on)]);
+    }
   });
 });
 
@@ -274,5 +316,31 @@ describe("Larger click targets", () => {
     m.resetA11yPrefs();
     expect(m.a11yPrefs().targets).toBe("default");
     expect(stored.has("fundacad.a11y.targets")).toBe(false);
+  });
+});
+
+describe("Notification time", () => {
+  it("reads each stored choice, stores the exact string and refuses one it does not know", async () => {
+    for (const v of ["normal", "longer", "until-dismissed"]) {
+      boot({ "fundacad.a11y.noticeTime": v });
+      expect((await load()).a11yPrefs().noticeTime).toBe(v);
+    }
+    boot({ "fundacad.a11y.noticeTime": "forever" });
+    const m = await load();
+    expect(m.a11yPrefs().noticeTime).toBe("normal");
+    m.setA11yPref("noticeTime", "until-dismissed");
+    expect(stored.get("fundacad.a11y.noticeTime")).toBe("until-dismissed");
+    m.setA11yPref("noticeTime", "forever" as never);
+    expect(m.a11yPrefs().noticeTime).toBe("until-dismissed");
+  });
+
+  it("is dropped by reset and left alone by the screen reader preset", async () => {
+    boot({ "fundacad.a11y.noticeTime": "longer" });
+    const m = await load();
+    m.applyScreenReaderPreset();
+    expect(m.a11yPrefs().noticeTime).toBe("longer");
+    m.resetA11yPrefs();
+    expect(m.a11yPrefs().noticeTime).toBe("normal");
+    expect(stored.has("fundacad.a11y.noticeTime")).toBe(false);
   });
 });

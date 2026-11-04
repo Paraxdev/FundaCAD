@@ -1,6 +1,8 @@
 // Picking several History or Items rows, and acting on them: the one place the three lists share.
 
 import type { DocumentStore } from "../document/store";
+import { deletedWhat } from "../document/stepLabels";
+import { toast } from "../ui/toast";
 import { isOriginKey, pickedFeatureCount, useSelectionStore } from "../stores/selection";
 import { actOn, modsOf, selectRow, type RowSelection } from "../ui/rowSelection";
 import type { Engine } from "./engine";
@@ -49,11 +51,19 @@ export function toggleSuppressRows(
   store.setSuppressed(ids, !ids.every((id) => store.isSuppressed(id)));
 }
 
-/** Deletes them as one undo step and drops the selection when it held any of them. */
-export function deleteRows(e: Pick<Engine, "store" | "selectFeature">, ids: readonly string[]) {
+/** Deletes them as one undo step, drops the selection when it held any of them, and says what went with an Undo button. */
+export function deleteRows(e: Pick<Engine, "store" | "selectFeature" | "undoIfLatest">, ids: readonly string[]) {
+  const before = e.store.document.features;
+  const what = deletedWhat(before, ids);
+  const had = before.some((f) => ids.includes(f.id));
   e.store.removeFeatures(ids);
   const sel = useSelectionStore();
   if (ids.some((id) => id === sel.featureId || sel.rows.keys.includes(id))) e.selectFeature(null);
+  if (!had) return;
+  // While an import holds the history there is no mark yet, so the message comes without its Undo button.
+  const mark = e.store.undoMark;
+  if (mark === null) return void toast(`Deleted ${what}`);
+  toast(`Deleted ${what}`, { action: { label: "Undo", onClick: () => e.undoIfLatest(mark) } });
 }
 
 /** The selected feature for a tool that needs exactly one: none while several rows are picked. */

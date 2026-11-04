@@ -13,6 +13,7 @@ import TitleFold from "./TitleFold.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
 import ErrorNotice from "./ErrorNotice.vue";
+import { stepMenuText } from "../../ui/canStep";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import { TITLEBAR_FOLD_QUERY } from "../../ui/layoutBreakpoints";
 import { useMediaQuery } from "../../composables/useMediaQuery";
@@ -23,9 +24,26 @@ const engine = useEngine();
 const ui = useUiStore();
 const home = useHomeStore();
 const panels = usePanelsStore();
-// An open Stress panel undoes its own setup, not the model.
-const canUndo = computed(() => (panels.stress ? panels.stress.canUndo : ui.canUndo));
-const canRedo = computed(() => (panels.stress ? panels.stress.canRedo : ui.canRedo));
+// Mirrors canStep: an open sketch, then an open Stress panel, step their own history before the model's.
+const canUndo = computed(() =>
+  ui.sketchActive ? ui.sketchCanUndo : panels.stress ? panels.stress.canUndo : ui.canUndo,
+);
+const canRedo = computed(() =>
+  ui.sketchActive ? ui.sketchCanRedo : panels.stress ? panels.stress.canRedo : ui.canRedo,
+);
+// Only the tooltip names the step, the button keeps the name Undo for voice control and the harness.
+const undoTip = computed(() =>
+  stepMenuText(
+    "Undo",
+    !canUndo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.undoLabel : ui.undoLabel,
+  ),
+);
+const redoTip = computed(() =>
+  stepMenuText(
+    "Redo",
+    !canRedo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.redoLabel : ui.redoLabel,
+  ),
+);
 const folded = useMediaQuery(TITLEBAR_FOLD_QUERY);
 
 // The wordmark SVG is light on dark and an <img> cannot be recoloured from CSS, so light themes get a dark-ink asset.
@@ -73,7 +91,7 @@ onUnmounted(() => {
         <IconButton
           id="undo-btn"
           icon="undo"
-          tip="Undo"
+          :tip="undoTip"
           keys="Ctrl+Z"
           aria-label="Undo"
           size="sm"
@@ -85,7 +103,7 @@ onUnmounted(() => {
         <IconButton
           id="redo-btn"
           icon="redo"
-          tip="Redo"
+          :tip="redoTip"
           keys="Ctrl+Y"
           aria-label="Redo"
           size="sm"

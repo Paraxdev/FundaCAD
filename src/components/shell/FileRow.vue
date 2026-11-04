@@ -2,7 +2,9 @@
 // The button, not a text field, is the control: the value column is 120px and typing invites paths that do not exist.
 // Clear matters too, a moved or deleted heightmap fails every rebuild.
 
+import { useId } from "vue";
 import Button from "../ui/Button.vue";
+import FieldRow from "../ui/FieldRow.vue";
 import IconButton from "../ui/IconButton.vue";
 import { openDialog } from "../../plugins/host";
 import { toast } from "../../ui/toast";
@@ -15,11 +17,12 @@ const props = defineProps<{
   rowTitle?: string | undefined;
 }>();
 
-/** The last segment of a path, whichever separator it uses. The whole path is
- *  the row's tooltip, so nothing is hidden, only shortened. */
 function basename(p: string): string {
   return p.split(/[\\/]/).pop() ?? p;
 }
+
+const pickId = useId();
+const clearId = useId();
 
 async function browse() {
   // The native dialog exists only in the desktop app, and a silent no-op in a browser would read as a broken button.
@@ -34,20 +37,28 @@ async function browse() {
 </script>
 
 <template>
-  <div class="param-row" :title="value || rowTitle">
-    <label>{{ label }}</label>
-    <div class="param-value param-file">
-      <Button class="file-pick" @click="browse">{{ value ? basename(value) : "Choose…" }}</Button>
-      <IconButton
-        v-if="value"
-        class="file-clear"
-        icon="close"
-        tip="Clear the file"
-        size="sm"
-        variant="plain"
-        :icon-size="12"
-        @click="commit('')"
-      />
-    </div>
-  </div>
+  <FieldRow
+    v-slot="{ labelId }"
+    layout="param"
+    :label="label"
+    :for="null"
+    control-class="param-file"
+    :title="value || rowTitle"
+  >
+    <Button :id="pickId" class="file-pick" :aria-labelledby="`${labelId} ${pickId}`" @click="browse">{{
+      value ? basename(value) : "Choose…"
+    }}</Button>
+    <IconButton
+      v-if="value"
+      :id="clearId"
+      class="file-clear"
+      icon="close"
+      tip="Clear the file"
+      size="sm"
+      variant="plain"
+      :icon-size="12"
+      :aria-labelledby="`${labelId} ${clearId}`"
+      @click="commit('')"
+    />
+  </FieldRow>
 </template>

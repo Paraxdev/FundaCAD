@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import PreferencesDialog from "../../../src/components/overlays/PreferencesDialog.vue";
 import { focusables } from "../../../src/components/ui/focusables";
 import { useDialogStore } from "../../../src/stores/dialogs";
+import { useToastStore } from "../../../src/stores/toasts";
 import { getUnit, setUnit } from "../../../src/ui/units";
 import {
   getHoverDwellMs,
@@ -25,6 +26,12 @@ import {
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { customThemes, DEFAULT_THEME_ID, getTheme, removeCustomTheme, setTheme, themes } from "../../../src/ui/theme";
+
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: confirm,
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -81,6 +88,8 @@ beforeEach(() => {
   setHomeBackground("paper");
   useHomeImageStore(memoryImageStore());
   resetExperimentalPrefs();
+  confirm.mockReset();
+  confirm.mockResolvedValue(true);
 });
 
 describe("Preferences choices", () => {
@@ -103,6 +112,7 @@ describe("Preferences choices", () => {
       ["prefs-contrast", "Contrast", "Follow system|Standard|More|Maximum"],
       ["prefs-viewport-labels", "Viewport labels", "Small|Medium|Large|Extra large"],
       ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
+      ["prefs-notice-time", "Notification time", "Normal|Longer|Until dismissed"],
       ["prefs-motion", "Animations", "Follow system|On|Off"],
       ["prefs-env-width", "HDR environment size", expect.stringMatching(/^2048\|4096\|8192\|16384\|GPU maximum/)],
     ]);
@@ -505,6 +515,30 @@ describe("Preferences Accessibility", () => {
     expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
   });
 
+  it("holds Units spoken in full in the Speech group after Announcements, and Reset to defaults ticks it again", async () => {
+    await open();
+    await category("access");
+    const group = $("#prefs-verbosity").closest("[role=group]")!;
+    const cards = [...group.querySelectorAll(".pref-card")];
+    const card = $("#prefs-units-in-full").closest(".pref-card")!;
+    expect([
+      group.getAttribute("aria-labelledby"),
+      cards.indexOf(card),
+      cards.indexOf($("#prefs-verbosity").closest(".pref-card")!),
+    ]).toEqual(["prefs-a11y-speech", 1, 0]);
+    const box = $("#prefs-units-in-full input[type=checkbox]") as HTMLInputElement;
+    expect([box.checked, box.getAttribute("aria-describedby")]).toEqual([true, "prefs-units-in-full-hint"]);
+    expect($("#prefs-units-in-full-hint").textContent).toContain("millimetres");
+    const reset = $("[data-a11y-reset]");
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().unitsInFull, box.checked, reset.getAttribute("aria-disabled")]).toEqual([false, false, null]);
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().unitsInFull, box.checked, reset.getAttribute("aria-disabled")]).toEqual([true, true, "true"]);
+  });
+
   it("the Screen reader preset unticks Single key shortcuts and Reset to defaults ticks it again", async () => {
     await open();
     await category("access");
@@ -540,6 +574,32 @@ describe("Preferences Accessibility", () => {
     expect([a11yPrefs().animations, getVerbosity(), getHoverDwellMs()]).toEqual(["system", "normal", 800]);
     expect([a11yPrefs().solidPanels, solidBox().checked]).toEqual([false, false]);
     expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("Reset to defaults asks first, and Cancel leaves every choice and Hover delay as they were", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("animations", "off");
+    setA11yPref("interfaceSize", 125);
+    setHoverDwellMs(1200);
+    await flushPromises();
+    confirm.mockResolvedValueOnce(false);
+    reset.click();
+    await flushPromises();
+    expect(confirm.mock.calls).toHaveLength(1);
+    expect(confirm.mock.calls[0]![0]).toBe("Reset accessibility settings?");
+    expect(confirm.mock.calls[0]![1]).toBe("Reset");
+    expect(confirm.mock.calls[0]![2]).toContain("Hover delay");
+    expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["off", 125, 1200]);
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    const said = () => useToastStore().items.map((t) => t.message);
+    expect(said()).toEqual([]);
+    reset.click();
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["system", 100, 800]);
+    expect(said()).toEqual([expect.stringMatching(/Accessibility.*defaults/)]);
   });
 
   it("holds Interface size in the Vision group, and Reset to defaults puts a changed size back to 100", async () => {
@@ -764,6 +824,30 @@ describe("Preferences sliders, hints and upload errors", () => {
       await vi.waitFor(() => expect(getTheme()).toBe(customThemes().find((t) => t.label === "Fine")?.id));
       await flushPromises();
       expect(warning.textContent).toBe("");
+    } finally {
+      setTheme(DEFAULT_THEME_ID);
+      for (const t of customThemes()) removeCustomTheme(t.id);
+    }
+  });
+
+  it("asks before it removes an uploaded theme, and says it went", async () => {
+    const json = new File([JSON.stringify({ label: "Fine", "--accent": "#9a9ff0" })], "fine.json");
+    try {
+      await open();
+      await pickFile("prefs-theme-file", json);
+      await vi.waitFor(() => expect(customThemes().map((t) => t.label)).toEqual(["Fine"]));
+      await flushPromises();
+      const remove = () => [...document.querySelectorAll<HTMLElement>("button")].find((b) => label(b) === "Remove");
+      const said = () => useToastStore().items.map((t) => t.message);
+      confirm.mockResolvedValueOnce(false);
+      remove()!.click();
+      await flushPromises();
+      expect(confirm.mock.calls).toEqual([["Remove the theme Fine?", "Remove", expect.any(String)]]);
+      expect([customThemes().length, said()]).toEqual([1, []]);
+      remove()!.click();
+      await flushPromises();
+      expect([customThemes().length, getTheme(), said()]).toEqual([0, DEFAULT_THEME_ID, ["Removed the theme Fine."]]);
+      expect(remove()).toBeUndefined();
     } finally {
       setTheme(DEFAULT_THEME_ID);
       for (const t of customThemes()) removeCustomTheme(t.id);

@@ -23,6 +23,7 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import Select from "../../../src/components/ui/Select.vue";
+import { useToastStore } from "../../../src/stores/toasts";
 import { useShellStore } from "../../../src/stores/shell";
 import { ENGINE } from "../../../src/app/engineKey";
 import { createSelection } from "../../../src/app/selection";
@@ -1075,6 +1076,7 @@ describe("BrowserPane", () => {
       expect(items.find((i) => i.label.startsWith("Rename"))).toMatchObject({ disabled: true });
       items.find((i) => i.label === "Delete")!.onClick!();
       expect(fake.removed).toEqual([["p1", "p2"]]);
+      expect(useToastStore().items.map((t) => [t.message, t.action?.label])).toEqual([["Deleted 2 steps", "Undo"]]);
     });
 
     it("a plain right-click on a plane outside the selection acts on that plane alone", async () => {

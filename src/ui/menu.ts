@@ -7,7 +7,10 @@ import { claimEscape } from "./escapeClaim";
 import { isMenuKey } from "./focus";
 
 export interface MenuItem {
-  label: string;
+  /** A thunk reads again on each open, like `disabled`, so Undo can name its step. */
+  label: string | (() => string);
+  /** The name the harness and tests know the row by when `label` changes with the document. */
+  refName?: string;
   shortcut?: string; // display hint, e.g. "Ctrl+S"
   onClick?: () => void;
   separator?: boolean;

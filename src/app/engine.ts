@@ -3,7 +3,7 @@
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
 import { onUnitChange } from "../ui/units";
-import { soleSelectedFeature } from "./featureRows";
+import { deleteRows, soleSelectedFeature } from "./featureRows";
 import type { RowSelection } from "../ui/rowSelection";
 import { asFeature } from "../types";
 import { isSessionEnded } from "../document/session";
@@ -18,6 +18,7 @@ import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { installLaunchPaths } from "../io/launchPaths";
 import { toast } from "../ui/toast";
+import { sketchConflictText } from "../ui/plainError";
 import { traceFaultToast } from "../ui/traceFault";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -49,6 +50,7 @@ import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
+import { stepLabelFor, stepMenuText } from "../ui/canStep";
 import { welcomeOnStartup } from "../ui/welcome";
 import { Home } from "../ui/home";
 import { wireHomeOnOpen } from "./homeWiring";
@@ -200,6 +202,8 @@ export interface Engine {
   openDoc(): Promise<void>;
   doUndo(): void;
   doRedo(): void;
+  /** Undoes the latest step only while it is still the one stamped `mark`, else says why not. */
+  undoIfLatest(mark: number): void;
 
   lastAction: string | null;
   setStatus(text: string, cls: "" | "connected" | "error"): void;
@@ -329,7 +333,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store.onParamsApplied = () => e.sketch.syncParamValues();
   // The open sketch's session owns it, so its projection refreshes patch the live entities.
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
-  e.store.onParamSolveIssue = (id) => toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
+  e.store.onParamSolveIssue = (id) => toast(sketchConflictText(id, e.store.document.features));
   // Glyph outlines arrive async from the engine, which owns the fonts.
   setTextBackend(e.geometry, () => {
     if (e.sketch.active) e.sketch.redraw();
@@ -448,6 +452,9 @@ export function mountUi(e: Engine): void {
   // Global, so the palette opens from anywhere.
   const cmdk = useCommandPaletteStore();
   cmdk.bind((a) => e.handleAction(a));
+  cmdk.bindLabels((id) =>
+    id === "undo" || id === "redo" ? stepMenuText(id === "undo" ? "Undo" : "Redo", stepLabelFor(e, id)) : null,
+  );
   window.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === "k" || ev.key === "K")) {
       ev.preventDefault();
@@ -516,6 +523,7 @@ export function mountUi(e: Engine): void {
     dropBodyGizmo: () => e.dropBodyGizmo(),
     setStatus: (t, c) => e.setStatus(t, c),
     selectFeature: (id) => e.selectFeature(id),
+    deleteFeatures: (ids) => deleteRows(e, ids),
     editFeature: (id) => e.editFeature(id),
     featureForFace: (id) => e.featureForFace(id),
     deleteSelectedFace: () => e.deleteSelectedFace(),

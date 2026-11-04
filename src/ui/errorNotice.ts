@@ -3,6 +3,7 @@
 // saying how many, not a stack. Clicking it opens the console on the entry.
 
 import { announce } from "./announce";
+import { noticeHoldMs } from "./noticeTime";
 
 export interface NoticeAction {
   label: string;
@@ -18,10 +19,9 @@ export interface ErrorNotice {
   /** Errors since the notice last went away, this one included. */
   count: number;
   action?: NoticeAction | undefined;
-  holdMs: number;
+  /** null stays until dismissed. */
+  holdMs: number | null;
 }
-
-export const DEFAULT_HOLD_MS = 9000;
 
 let current: ErrorNotice | null = null;
 let seq = 0;
@@ -47,7 +47,7 @@ export function showErrorNotice(
     logId: opts.logId,
     count: (current?.count ?? 0) + 1,
     action: opts.action,
-    holdMs: opts.holdMs ?? DEFAULT_HOLD_MS,
+    holdMs: noticeHoldMs("error", !!opts.action, opts.holdMs),
   };
   for (const fn of listeners) fn();
   // Spoken here rather than by the notice's own role, which WebKit readers miss when the notice is inserted.

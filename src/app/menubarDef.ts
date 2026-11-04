@@ -13,9 +13,9 @@ import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
 import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
-import { canStep } from "../ui/canStep";
+import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
 import type { Engine } from "./engine";
-import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
+import { deleteRows, pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
 
@@ -87,13 +87,15 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: "Edit",
       items: [
         {
-          label: "Undo",
+          label: () => stepMenuText("Undo", stepLabelFor(e, "undo")),
+          refName: "Undo",
           shortcut: "Ctrl+Z",
           disabled: () => !canStep(e, "undo"),
           onClick: () => e.doUndo(),
         },
         {
-          label: "Redo",
+          label: () => stepMenuText("Redo", stepLabelFor(e, "redo")),
+          refName: "Redo",
           shortcut: "Ctrl+Y",
           disabled: () => !canStep(e, "redo"),
           onClick: () => e.doRedo(),
@@ -106,10 +108,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           disabled: () => !e.selectedFeature && e.viewport.getSelectedFaceIds().length === 0,
           onClick: () => {
             if (e.deleteSelectedFace()) return;
-            if (e.selectedFeature) {
-              e.store.removeFeatures(pickedFeatureIds(e));
-              e.selectFeature(null);
-            }
+            if (e.selectedFeature) deleteRows(e, pickedFeatureIds(e));
           },
         },
         {

@@ -288,6 +288,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
               :key="i"
               v-model="l.custom[i]"
               commit="live"
+              unitless
               :step="0.1"
               :width-ch="6"
               class="stress-xyz"

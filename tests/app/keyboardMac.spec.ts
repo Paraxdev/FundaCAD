@@ -5,7 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { installKeyboard } from "../../src/app/keyboard";
 import { setMacForTest } from "../../src/input/platform";
 import { useShellStore } from "../../src/stores/shell";
-import { consoleOpen, setConsoleOpen } from "../../src/ui/logStore";
+import { consoleOpen, setConsoleOpen, takeConsoleFocus } from "../../src/ui/logStore";
 import type { Engine } from "../../src/app/engine";
 
 describe("platform chords", () => {
@@ -79,6 +79,23 @@ describe("platform chords", () => {
     press({ key: "`", code: "Backquote", ctrlKey: true });
     expect(consoleOpen()).toBe(true);
     setConsoleOpen(false);
+  });
+
+  it("asks the console for focus from the page and not from inside a text field", () => {
+    setMacForTest(false);
+    const input = document.createElement("input");
+    document.body.append(input);
+    const chord = (target: EventTarget) =>
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: "`", code: "Backquote", ctrlKey: true, bubbles: true }));
+    setConsoleOpen(false);
+    takeConsoleFocus();
+    chord(input);
+    expect([consoleOpen(), takeConsoleFocus()]).toEqual([true, false]);
+    setConsoleOpen(false);
+    chord(document.body);
+    expect([consoleOpen(), takeConsoleFocus()]).toEqual([true, true]);
+    setConsoleOpen(false);
+    input.remove();
   });
 
   it("still follows the typed letter on a layout where it sits on another physical key", () => {

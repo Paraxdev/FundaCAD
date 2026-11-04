@@ -6,6 +6,8 @@ import { computed, onMounted, onUnmounted, ref, useId } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalStore } from "../../stores/modals";
 import { escapeClaimed } from "../../ui/escapeClaim";
+import { confirmDanger } from "../../ui/choice";
+import { toast } from "../../ui/toast";
 import { fmtKeys, spokenKeys } from "../../input/platform";
 import {
   SHORTCUTS,
@@ -121,6 +123,19 @@ function reset(ids: string[]) {
   resetUserShortcuts(ids);
 }
 
+async function resetAll() {
+  const page = current.value;
+  const what = page.id === "general" ? "shortcuts" : `${page.label} shortcuts`;
+  const ok = await confirmDanger(
+    `Reset ${what}?`,
+    "Reset",
+    "Every key you changed on this page goes back to its default.",
+  );
+  if (!ok) return;
+  reset(resettable.value);
+  toast(`${what[0]!.toUpperCase()}${what.slice(1)} are back to their defaults.`);
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.key !== "Escape" || modals.current !== null || modals.depth !== ownDepth || escapeClaimed()) return;
   e.preventDefault();
@@ -188,7 +203,7 @@ onUnmounted(() => {
         <section v-for="p in shown" :key="p.id" class="prefs-pane" :data-page="p.id">
           <div class="sc-head">
             <h3 class="prefs-pane-title">{{ p.label }}</h3>
-            <Button v-if="!query.trim() && resettable.length" size="sm" class="sc-reset-all" @click="reset(resettable)"
+            <Button v-if="!query.trim() && resettable.length" size="sm" class="sc-reset-all" @click="resetAll()"
               >Reset all</Button
             >
           </div>

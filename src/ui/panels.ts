@@ -337,6 +337,8 @@ export function createPanels(deps: PanelsDeps) {
     if (!d) return;
     d.canUndo = history.canUndo;
     d.canRedo = history.canRedo;
+    d.undoLabel = history.undoLabel;
+    d.redoLabel = history.redoLabel;
   }
 
   function persist() {

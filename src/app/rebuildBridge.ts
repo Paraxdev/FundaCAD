@@ -1,4 +1,5 @@
 import { toast } from "../ui/toast";
+import { failedText } from "../ui/plainError";
 import { featureFailureReport } from "../ui/errorReport";
 import { failureKey } from "../ui/buildAnnouncement";
 import { featureMeta } from "../ui/featureMeta";
@@ -165,7 +166,7 @@ export function installRebuildBridge(e: Engine): void {
             detail: err.detail,
             diagnostics: (s.result?.diagnostics ?? []).filter((d) => d.feature_id === id),
           });
-          toast(`${label} failed: ${err.message}`, {
+          toast(failedText(label, err.message), {
             kind: "error",
             action,
             detail,

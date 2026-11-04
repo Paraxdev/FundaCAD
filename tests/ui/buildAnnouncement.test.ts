@@ -42,6 +42,22 @@ describe("buildLine", () => {
     );
   });
 
+  it("names the step once when the engine's sentence starts with it, and leaves raw engine text to the console", () => {
+    const line = (errorMessage: string) =>
+      buildLine(settled({ errorFeatureId: "f2", errorMessage }), null, names)?.text;
+    expect([
+      line("Extrude: the target body no longer exists"),
+      line("Extrude failed on Box: try a smaller value"),
+      line("Extruder ran dry"),
+      line("TypeError: x is undefined"),
+    ]).toEqual([
+      "Build failed at Extrude 2: the target body no longer exists",
+      "Build failed: Extrude failed on Box: try a smaller value",
+      "Build failed at Extrude 2: Extruder ran dry",
+      "Build failed at Extrude 2",
+    ]);
+  });
+
   it("says a failure that is still there after the next edit politely", () => {
     const fail = settled({ errorFeatureId: "f2", errorMessage: "Profile is open" });
     expect(buildLine(fail, fail, names)).toEqual({

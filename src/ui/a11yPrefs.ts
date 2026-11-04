@@ -64,6 +64,10 @@ export interface A11yPrefs extends SizePrefs {
   solidPanels: boolean;
   /** Larger click targets: every hit area grows from 24 to about 32 px, see targets.ts. */
   targets: Targets;
+  /** Fields tell a screen reader their unit as a word, millimetres instead of mm. */
+  unitsInFull: boolean;
+  /** How long messages stay, see noticeTime.ts. */
+  noticeTime: NoticeTime;
 }
 
 export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
@@ -73,6 +77,8 @@ export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   contrast: "system",
   solidPanels: false,
   targets: "default",
+  unitsInFull: true,
+  noticeTime: "normal",
   ...SIZE_DEFAULTS,
 };
 
@@ -91,6 +97,8 @@ const KEYS: Record<keyof A11yPrefs, string> = {
   contrast: "fundacad.a11y.contrast",
   solidPanels: "fundacad.a11y.solidPanels",
   targets: "fundacad.a11y.targets",
+  unitsInFull: "fundacad.a11y.unitsInFull",
+  noticeTime: "fundacad.a11y.noticeTime",
   ...SIZE_KEYS,
 };
 
@@ -125,6 +133,12 @@ export function asTargets(v: unknown): Targets | null {
   return TARGETS.includes(v as Targets) ? (v as Targets) : null;
 }
 
+export type NoticeTime = "normal" | "longer" | "until-dismissed";
+const NOTICE_TIMES: readonly NoticeTime[] = ["normal", "longer", "until-dismissed"];
+export function asNoticeTime(v: unknown): NoticeTime | null {
+  return NOTICE_TIMES.includes(v as NoticeTime) ? (v as NoticeTime) : null;
+}
+
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
@@ -132,6 +146,8 @@ const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   contrast: asContrast,
   solidPanels: asFlag,
   targets: asTargets,
+  unitsInFull: asFlag,
+  noticeTime: asNoticeTime,
   ...SIZE_GATES,
 };
 
@@ -179,7 +195,7 @@ export function singleKeysOn(): boolean {
   return current.singleKeys;
 }
 
-// singleKeys is stored as "on" or "off", solidPanels as "true" or "false".
+// singleKeys is stored as "on" or "off", the other flags as "true" or "false".
 function store(k: keyof A11yPrefs, v: A11yPrefs[keyof A11yPrefs] | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);

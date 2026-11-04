@@ -2,6 +2,7 @@
 
 import type { RebuildState } from "../document/store";
 import type { AnnouncePriority } from "./announce";
+import { namesStep, plainError } from "./plainError";
 
 export interface BuildLine {
   text: string;
@@ -34,6 +35,11 @@ export function buildLine(
   if (lastSettled && failureOf(lastSettled) === failure) {
     return { text: `${built}, ${at ?? "a feature"} still fails`, priority: "polite" };
   }
-  const why = now.errorMessage?.trim();
+  const why = plainError(now.errorMessage ?? "", "");
+  const word = at ? namesStep(at, why) : 0;
+  // "Fillet: <why>" drops its label for the step's own name, "Fillet failed on Box" already names the step.
+  if (word && why[word] === ":")
+    return { text: `Build failed at ${at}: ${why.slice(word + 1).trim()}`, priority: "assertive" };
+  if (word) return { text: `Build failed: ${why}`, priority: "assertive" };
   return { text: `Build failed${at ? ` at ${at}` : ""}${why ? `: ${why}` : ""}`, priority: "assertive" };
 }

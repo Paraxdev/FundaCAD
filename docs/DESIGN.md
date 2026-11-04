@@ -669,6 +669,9 @@ neither, and in dev a control given neither, nor an `aria-label` or `aria-labell
 given nothing else (a plain JS plugin skips the type check), without its key chord, so a release build still says it.
 A `Select` trigger's name carries its value ("Theme, Dark", or the `labelledby` text then the value), since VoiceOver
 and Orca read only the name of a combobox named by `aria-label`; its open list is named by the label alone.
+A row button whose own text is not its name ("Choose…", "Edit", a file name) is labelled by the row label, then
+anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ownId}"`, so a file button reads
+"Heightmap, Choose…" and a selection button "Faces, 3 faces, Edit".
 
 | Component | For | Props that matter | States |
 |---|---|---|---|
@@ -677,9 +680,9 @@ and Orca read only the name of a combobox named by `aria-label`; its open list i
 | `Chip` | A tag, a state or a count badge | `variant`: `neutral`, `accent`, `warn`, `error`; `size`: `xs` (a count badge), `sm`, `md` (a chip on the model); `icon`; `label`; `removable` adds a "Remove X" button; `as`: `span` or `button` | a button chip: hover, focus, disabled |
 | `KeyChip` | A shortcut drawn as key caps | `keys`; `inTitle` hides it from a screen reader when the owner's `title` already says it | none, it is a label |
 | `KeyCapture` | A shortcut setting: a button that opens a capture dialog, never armed on focus | `action`, the start of its name; `keys`, in the table's form, empty shows Not set; `problem`, the owner's refusal, spoken in place of the new keys; `clearable` adds Clear; emits `capture` (`key`, `code`, `ctrl`, `shift`, `alt`) and `clear` | as `Button`; the dialog's region shows when it listens |
-| `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots | focus, error, disabled |
-| `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker); `parse`, `ui/measure` by default, so units, fractions and a decimal comma read, or `readAs` from `ui/measure` for a field of one kind, which refuses a written unit of another; `validate`; `problem`, a refusal from the kernel; `min`, `max`, `step`; `stepFrom`, where an arrow starts on a blank field; `limits`: `refuse` (default) or `arrows`, which holds `min` and `max` to the arrow keys and lets typed text past them commit, as a native number input does, only for an owner that judges the value; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
-| `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption | picker: hover, pressed, open, disabled |
+| `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots; a refusal is described on the field and spoken once | focus, error, disabled |
+| `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker, and the unit a screen reader hears as the field's description, millimetres or degrees); `caption`, a unit word that is only text, so "in" or "deg" is not read as a measure; `unitless`, which says a count or a ratio has no unit and changes nothing; `parse`, `ui/measure` by default, so units, fractions and a decimal comma read, or `readAs` from `ui/measure` for a field of one kind, which refuses a written unit of another; `validate`; `problem`, a refusal from the kernel (described on the field and spoken once, at once in `change` mode and after a 700 ms pause in `live` mode); `min`, `max`, `step`; `stepFrom`, where an arrow starts on a blank field; `limits`: `refuse` (default) or `arrows`, which holds `min` and `max` to the arrow keys and lets typed text past them commit, as a native number input does, only for an owner that judges the value; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
+| `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption; `spokenElsewhere` hides a caption from browse mode when the field already says the unit | picker: hover, pressed, open, disabled |
 | `Select` | A choice from a list too long to show at once | `modelValue`; `options` (`value`, `label`, `hint`, `disabled`); `placeholder`; `size`; `variant`: `field` (a well) or `chip` (the `UnitChip` look) | hover, focus, open with an active row, disabled |
 | `Combobox` | A search field over the list of its matches, as the command palette is | `modelValue`, the query; `options` (`value`, `label`, `hint`, `disabled`, `keyshortcuts`); `active` with `v-model:active`, -1 for none; `listClass`, `optionClass`; `pick` emits the chosen value; a `default` slot per option, an `empty` slot | focus, the active row `.is-active`, a disabled option |
 | `Listbox` | A group of picks drawn as the caller's own elements: tiles, swatches, cards | `items` (`value`, `label`, `disabled`); `modelValue`; `multiple` makes it an array, with `v-model:anchor`; the `option` slot hands `attrs` to bind on the caller's element; `apply` on Enter | focus, selected, a disabled option |
@@ -692,10 +695,10 @@ and Orca read only the name of a combobox named by `aria-label`; its open list i
 | `Menu`, `MenuItem`, `MenuSeparator` | Popup and context menus | Menu: `anchor`, or `at` (a point) for a context menu, `side`, `align`, `focus`; MenuItem: `label`, `icon`, `keys`, `checked` (a `menuitemcheckbox`), `danger`, a nested `Menu` for a submenu | hover, keyboard focus, pressed, open, checked, danger, disabled |
 | `Popover` | A card that opens from a button: options, pickers | `anchor`, `side`, `align`; `kind`, a class for the card; `minWidth`; `label` or `labelledby` makes it a `dialog` that takes focus to its first control when a key opened it (`focus`: `keyboard`) and gives it back to the opener on close (`returnFocus`); `role="none"` for a card that is part of its opener, like the `Select` list, which then needs no name; `focus`: `first`, `keyboard` or `none` | open; it closes on Escape and on a press outside |
 | `Dialog` | A modal: a task that holds the rest of the app | `title` or the `title` slot; `size`: `sm`, `md`, `lg`; `closeOnEsc`; `initialFocus`; `returnFocus`; a `footer` slot | focus held inside, focus back on close |
-| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
+| `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`, `danger`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
 | `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
-| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot; `hint`; `error`; `layout`: `inline` or `stacked` | error |
+| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `ReadoutList` | Label and value pairs in a panel: Measure, Properties, the Stress key rows | `rows` (`k`, `v`); `rowClass`, worn by each row; the `value` slot draws the `dd` for a row (`row`, `index`) | none |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
@@ -763,6 +766,7 @@ counts, per file:
 | `role=button`, `switch`, `tab`, `radio` and the `menuitem` roles on a plain element | the same templates | `Button`, `Switch`, `Tabs`, `Segmented`, `MenuItem` |
 | `createElement:button` and the other control tags, and those tags in a template string or `innerHTML` | `src/**/*.ts` and `plugins/**/*.ts` | the factories of `src/components/ui/dom.ts`, **prescribed, no code does this yet** |
 | `style:inline` | a `:style` or a style object with a colour, a border or `font` | a class in `src/styles/` that reads tokens |
+| `NumberField:no-unit` | a `NumberField` with no `unit`, `caption`, `unitless` or `v-bind` spread, or only a blank, `null` or `false` one | `unit="mm"` (or a bound `:unit`) so the unit is spoken, `unitless` for a count or a ratio |
 | `IconButton:no-tip` | an `IconButton` without `tip` | `tip`, which names it |
 | `class:btn`, `sm-input`, `pref-seg`, `ft-switch`, `param-switch`, `check` | the templates, only under `--legacy-classes`, which goes on once the old classes are gone | `Button`, `TextField` or `NumberField`, `Segmented`, `Switch`, `Checkbox` |
 
@@ -913,8 +917,9 @@ shows in the model as you flip it.
   `.check` markup of `_checkbox.scss` it replaces. Never put `Switch`, `SwitchRow`, `.ft-switch`, `.param-switch`,
   `ToggleRow` or `Toggle` in anything Preferences renders, the guard test fails on it.
 - **Live toggles** use `SwitchRow`: `layout="float"` in the view controls (the old `Toggle.vue`, which now draws it,
-  and its `.float-toggle` row), `layout="param"` in feature properties (the old `ToggleRow.vue` and its
-  `.param-switch`). The Export dialog and the Stress setup and results steps keep their switches too.
+  and its `.float-toggle` row), feature properties use `ToggleRow`, a `FieldRow layout="param"` row holding a
+  `Switch` (the old `.param-switch` is retired; `SwitchRow layout="param"` stays unused there). The Export dialog
+  and the Stress setup and results steps keep their switches too.
 
 | Component | Idle | On | Disabled | Focus |
 |---|---|---|---|---|
@@ -988,7 +993,7 @@ their own keys and drag; new rows of that kind wear the `ListRow` look.
 | `Menu` (`.ui-menu`) | `--float-bg-solid` through `--float-blur`, `--float-tile-radius`, squircle, padding 5px, `--float-shadow`, `--fs-body`, `pop-in`. `MenuItem` (`.ui-menu-item`): padding `var(--s-3) var(--s-4)`, chip radius; hover and keyboard focus accent 16% and `--accent-hot`, pressed accent 24%, keys `.ui-menu-keys` `--fs-micro` `--text-dim`, a check gutter when any item has `checked`; `MenuSeparator` 1px `--line` |
 | `.context-menu`, `.menu-popup` | the right click and title bar menus that predate `Menu`: glass solid and glass B, `--float-tile-radius`, separators `.ctx-sep` 1px |
 | `Dialog` (`.modal-panel.ui-dialog`) | glass B with `--shadow-3`, `--float-radius`, on `.modal-overlay`; `sm` `min(420px, 92vw)`, `md` 560px, `lg` 720px, unset is the `.modal-panel` width. `.modal-head`, `.modal-body`, `.modal-foot` share padding `--s-5`; head and foot are layout dividers, `1px solid var(--line)`; `h2` `--fs-title`/600 and the `.modal-close` button in the head; the `footer` slot is right aligned, gap `--s-3`, Cancel present, one primary. `role="dialog"`, `aria-modal`, `aria-labelledby` the `h2` |
-| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint` |
+| `ConfirmDialog` (`.ui-confirm`) | a `sm` `Dialog`: the message in `--text-dim`, then one button per answer in even columns that fill the footer, the `primary` one focused, or with `multi` a checklist with Cancel and a confirm; `danger` paints the primary `--error` on `--error-tint`, and an option's own `danger` paints just that answer, so Cancel can keep the focus (`confirmDanger` in `ui/choice.ts`: Cancel first, then the red action) |
 | `.cmdk-card` | glass B, `--float-radius`, `min(560px, 92vw)`, on `.cmdk-backdrop` at `padding-top: 12vh`, `role="dialog"`, `aria-modal`, `aria-label="Command palette"` |
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, `--fs-body`, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
@@ -1142,12 +1147,24 @@ A tool that collects more than one selection gives each its own row, as
 `opts: { kind?: "info" | "warning" | "error"; action?: { label, onClick }; timeout?: number; detail?: unknown; source?: string }`.
 It returns the toast's id for `dismissToast`, or null for an error.
 
-- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s,
-  one with an action 9s so it can be read and its button reached).
+- `info` (the default) and `warning` show a `.toast`. `noticeHoldMs` (`src/ui/noticeTime.ts`) gives its time from the
+  Notification time setting: info 5s, warning 8s, error notice 10s, any message with a button at least 15s, and a
+  caller's `timeout` only lengthens that. Longer is three times it, Until dismissed has no timer (`hold: null`), and the
+  error notice then shows a Dismiss button. A fourth toast evicts the oldest one without a button.
 - The same message, kind and action label again restarts the toast already
   showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice
   (`showErrorNotice`) and the console log, with `detail` kept for the report.
+- Every toast is spoken once by `announce()` from `toast()`: info polite,
+  warning assertive, and the label of a button is added ("Deleted Box 2. Undo
+  button in Notifications."). An error is spoken by the title bar notice. The
+  stack is a permanent region named "Notifications", empty when no toast
+  shows, and is not live, so nothing is said twice.
+- The console is not a dialog but a `role="region"` named by its `h2` "Console"
+  (`tabindex="-1"`). Show Console, the error notice and its chord (outside a
+  text field) focus that heading, and closing returns focus to the opener. The
+  body is `role="log"` with `aria-live="off"`, since toasts already speak, and
+  each row starts with a `.sr-only` Error:, Warning: or Info:.
 - Every toast is also a console entry and a bug report breadcrumb, so do not
   toast on every keystroke or hover.
 
@@ -1448,8 +1465,7 @@ option groups `role="radiogroup"` with `role="radio"`, tabs `aria-selected`. A
 dialog has `role="dialog"` and a name: `aria-labelledby` pointing at its
 visible title (`Dialog.vue`, `ModalFrame.vue` over it and the chooser in
 `ModalHost.vue`, through `useId()`), or an `aria-label` when it has no title
-(`CommandPalette.vue`, `HomeScreen.vue`, `ConsolePanel.vue`,
-`TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
+(`CommandPalette.vue`, `HomeScreen.vue`, `TargetEditPanel.vue`). A modal one also has `aria-modal="true"`. An `Icon`
 is `aria-hidden` unless it has a `label` ([6.4](#64-icons)). Every base control has a name
 ([The base set](#the-base-set)), and a state, an error or a name never lives in a `title` alone
 ([7.11](#711-tooltips)).

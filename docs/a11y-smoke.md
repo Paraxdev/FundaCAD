@@ -2,8 +2,8 @@
 
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
-screen reader. This page is the hand check a person runs before each release: about thirty one minutes per screen
-reader, the same seventeen steps everywhere, and a results table that keeps what was heard.
+screen reader. This page is the hand check a person runs before each release: about thirty three minutes per screen
+reader, the same eighteen steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -15,7 +15,7 @@ reader, the same seventeen steps everywhere, and a results table that keeps what
 | Drawing by keys: a 40 by 20 plate with a 10 mm hole from Items to Extrude with no pointer event, a closed slanted line chain by `@dx,dy` and a second document that starts clean, Tab to a midpoint, arrows moving the cursor in Rectangle and turning the view in Select and when the plane is edge-on, in both camera rigs | the same step, `tools/harness/tests/browser/test_sketch_keys.py` | a pointer event reaches the page, a point or snap is not spoken, a shape comes out different from the keys typed, Tab does not reach a profile with a hole, or an arrow turns the view in a draw tool or stops turning it elsewhere |
 | The Geometry tab by keys alone: Tab reaches one row, arrows walk and turn pages, Enter, Space and the runs pick, `]` and `[` step on the 3D view, two edges take a fillet, a sketch starts on a face and on a plane, and axe walks the tab | the same step, `tools/harness/tests/browser/test_geometry_browser.py`, `test_geometry_commands.py` and `test_geometry_planes.py` | a key stops working, focus leaves the list, the selection differs from a click's, or a role, name or spoken word the tests read changes. None of this listens to a screen reader, see step 10 |
 | Pointer targets: at least 24 by 24 CSS px, about 32 with Larger click targets, with no layout change | the same step, `tools/harness/tests/browser/test_targets.py`; the token and hit area guard is `tests/ui/hitTargets.test.ts` in the `test` job | a control on a screen above hits under 24 px either way, a grown area takes another control's centre or the edge of its own box, Larger click targets leaves one under 32 px on the shell, Home, an example, Sketch, Settings, the palette or a confirm (bar the spacing exceptions the test names with their reason), or turning it on moves a control or changes a scroll size |
-| Icon only controls have a name | `node scripts/check-ui-controls.mjs` in the `test` job, and `tests/ui/designSpec.test.ts` | an `IconButton` with no `tip`, a `RailButton` with no `label`, or an icon only `Segmented` option with no `label` or `tip`, and no `aria-label` or `aria-labelledby` either |
+| Icon only controls have a name, and every number field a unit | `node scripts/check-ui-controls.mjs` in the `test` job, and `tests/ui/designSpec.test.ts` | an `IconButton` with no `tip`, a `RailButton` with no `label`, or an icon only `Segmented` option with no `label` or `tip`, and no `aria-label` or `aria-labelledby` either, or a `NumberField` with no `unit`, `caption` or `unitless` |
 | Size and text: Interface size 150 and 200 percent, Comfortable text, the 11 px floor | `e2e` job, step "Agent harness smoke set", `tools/harness/tests/browser/test_size.py`, `test_reach.py`, `test_text_size.py` and `test_bottom_row.py`; the font size guard `node scripts/check-font-sizes.mjs` in the `test` job | a control is clipped, covered or out of the Tab walk at 150 percent in 1366 by 768, at 200 percent in 1280 by 800 or in 800 by 600, rendered text is under 11 px, Comfortable text cuts a base control's label, the frame rate chip overlaps the hint card or a rail card, or a font size is set outside the `--fs-*` tokens |
 | Linux: the AppImage's AT-SPI tree, what Orca reads | `bundle` job, ubuntu-22.04 leg, step "Dump the AppImage accessibility tree over AT-SPI", `scripts/a11y/atspi_dump.py` | a showing push button, toggle button, menu button or menu item has no name, or the app has no web document |
 | Windows: the exe's UI Automation tree, what NVDA and Narrator read | `bundle` job, windows-latest leg, step "Walk the exe window over UI Automation", `scripts/a11y/uia_walk.ps1` | an on screen Button, SplitButton or MenuItem has no name, there is no Document, or the Document holds no named Button after 120 s |
@@ -38,8 +38,9 @@ The checks start from what the app does today and may only get stricter.
 - The aria templates are partial: they hold only stable landmarks, roles and names, and any other node may come and
   go. A change that means to rename a role or a landmark (the menu bar becoming a `menubar`, panel titles becoming
   headings) updates the template in the same commit.
-- The UI guard counts every `IconButton:no-name`, `RailButton:no-name` and `Segmented:no-name` against
-  `scripts/ui-controls-allow.json`. Today there are none, so any new one fails. Lower an entry with
+- The UI guard counts every `IconButton:no-name`, `RailButton:no-name`, `Segmented:no-name` and
+  `NumberField:no-unit` against `scripts/ui-controls-allow.json`. Only the last has entries today, the screw,
+  extra parameter and printability plugin fields, so any other new one fails. Lower an entry with
   `node scripts/check-ui-controls.mjs --lower`, never raise one.
 - The AT-SPI and UI Automation walks have no baseline: one nameless button fails them.
 
@@ -111,7 +112,9 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
    moving. Press Escape: the tool ends and focus returns to where it was.
 6. **Hear the error (1 min).** Press Ctrl+K, type `parameters`, press Enter. Tab to the expression of innerWidth,
    type `nope` and press Enter. The field refuses it: you hear it marked invalid and hear the reason. Escape closes
-   Parameters and focus returns.
+   Parameters and focus returns. Then open an Extrude's properties, type `0` in Distance and press Enter: you hear
+   the reason. Press Shift+Tab and Tab back: you hear the name, the value, millimetres, invalid and the reason. A
+   selection row's button reads its label, its count and Edit, a file row's button its label and Choose.
 7. **Settings and a confirm dialog (2 min).** Press Ctrl+, (comma): "Preferences, dialog". You hear the category
    navigation, the Theme combobox with its value and the Units radio group with "mm, checked". Done closes it. Press
    Ctrl+N: the app asks before it drops your unsaved Box. You hear the question and the focused button. Escape keeps
@@ -186,7 +189,16 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     at" and the view does not turn. Press E and Tab: you hear "Profile 1 of 2, area 721.59 mm squared, 1 hole". Enter,
     `8`, Enter: you hear "Built, 1 body". This is one way to draw among others. Fail: a point or shape that is not
     spoken, an arrow that turns the view while a draw tool is armed, or a Tab that skips a profile.
-17. **Read results (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here is a heard
+
+17. **Hear undo and a message (2 min).** Open "Box with a lid", select a step in the Items tree and press Delete: you
+    hear "Deleted" and the step's name once, with an Undo button on the message. Press Ctrl+Z: you hear "Undid Delete"
+    and the step's name. Press Ctrl+Y: you hear "Redid Delete" and the name. Press Ctrl+K, type `last message` and press
+    Enter: the newest message is said again. In a new document press Ctrl+Z: you hear "Nothing to undo". Open
+    Preferences, set Notification time to Until dismissed and delete a step again: the message stays past ten seconds
+    until you dismiss it. Fail: a message that is not spoken or is spoken twice, an undo that says only "Undo", or a
+    message that goes while the setting is Until dismissed.
+
+18. **Read results (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here is a heard
     fact yet. With "Box with a lid" open, press Ctrl+K, type `interference` and press Enter: when the check ends you
     hear a line like "Interference: no clashes". Then open a part that has an overhang, press Ctrl+K, type
     `printability`, press Enter, Tab to Check and press Enter. You hear the count and what it is made of, then the
@@ -196,7 +208,7 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     view turns to it. Fail: a check that ends in silence, a count with no area or face, a finding that is not
     reachable by Tab, or an Enter that does not turn the view.
 
-Some of these are expected to be silent today: tool prompts, the added feature and toasts are spoken once the
+Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
 
@@ -212,9 +224,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as seventeen marks in order, like `P P P S S W P P P P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as eighteen marks in order, like `P P P S S W P P P P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 17 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 18 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

@@ -24,6 +24,7 @@ const results = computed(() => {
   const q = query.value.trim().toLowerCase();
   return allCommands()
     .filter((c) => c.context === "global" || c.context === cmdk.context)
+    .map((c) => ({ ...c, label: cmdk.labelOf(c) }))
     .map((c) => ({ c, s: score(q, c.label.toLowerCase()) }))
     .filter((x) => q === "" || x.s > 0)
     .sort((a, b) => b.s - a.s)
