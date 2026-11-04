@@ -1,5 +1,9 @@
-import { computed, useId, type MaybeRefOrGetter, toValue } from "vue";
+import { computed, shallowRef, useId, type MaybeRefOrGetter, toValue } from "vue";
+import { a11yPrefs, onA11yPrefsChange } from "../../ui/a11yPrefs";
 import { spokenUnit } from "../../ui/measure";
+
+const unitsInFull = shallowRef(a11yPrefs().unitsInFull);
+onA11yPrefsChange(() => (unitsInFull.value = a11yPrefs().unitsInFull));
 
 export interface FieldSpeechOptions {
   unit: MaybeRefOrGetter<string | null | undefined>;
@@ -13,7 +17,7 @@ export function useFieldSpeech(o: FieldSpeechOptions) {
   const unitId = `${uid}-unit`;
   const spoken = computed(() => {
     const u = toValue(o.unit);
-    return u ? spokenUnit(u, true) : null;
+    return u ? spokenUnit(u, unitsInFull.value) : null;
   });
   const describedby = computed(() => {
     const caller = toValue(o.callerDescribedby);

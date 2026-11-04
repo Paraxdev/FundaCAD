@@ -8,6 +8,7 @@ import IconButton from "../../../src/components/ui/IconButton.vue";
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import Slider from "../../../src/components/ui/Slider.vue";
 import UnitChip from "../../../src/components/ui/UnitChip.vue";
+import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 import {
   onActivate,
   setChipUnit,
@@ -25,6 +26,7 @@ import {
 
 enableAutoUnmount(afterEach);
 afterEach(() => {
+  resetA11yPrefs();
   document.body.innerHTML = "";
   vi.useRealTimers();
 });
@@ -153,6 +155,16 @@ describe("dom.ts controls match their Vue twins", () => {
     expect([bare.input.hasAttribute("aria-describedby"), bare.root.querySelector(".sr-only")]).toEqual([false, null]);
     const other = uiNumberInput({ tip: "Width", unit: "mm" });
     expect(other.input.getAttribute("aria-describedby")).not.toBe(f.input.getAttribute("aria-describedby"));
+  });
+
+  it("a number input built with Units spoken in full off says mm and deg", () => {
+    setA11yPref("unitsInFull", false);
+    const spoken = (unit: string) => {
+      const f = uiNumberInput({ tip: "Size", unit });
+      dom(f.root);
+      return document.getElementById(f.input.getAttribute("aria-describedby")!)?.textContent;
+    };
+    expect([spoken("mm"), spoken("deg"), spoken("samples")]).toEqual(["mm", "deg", "samples"]);
   });
 
   it("NumberField's inputMode is text for a field that takes expressions", () => {

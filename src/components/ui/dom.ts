@@ -1,6 +1,7 @@
 // The base set for imperative TS code (tool boxes, io): the same controls as the Vue components, built as DOM.
 
 import { iconElement } from "../../ui/icons";
+import { a11yPrefs } from "../../ui/a11yPrefs";
 import { spokenUnit, unitById } from "../../ui/measure";
 import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
@@ -339,7 +340,7 @@ export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
     const word = document.createElement("span");
     word.id = `ui-num-${++numberNo}-unit`;
     word.className = "sr-only";
-    word.textContent = spokenUnit(o.unit, true);
+    word.textContent = spokenUnit(o.unit, a11yPrefs().unitsInFull);
     input.setAttribute("aria-describedby", word.id);
     root.append(word);
   }

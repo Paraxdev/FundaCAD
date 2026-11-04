@@ -11,7 +11,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 | Appearance | Theme, Icons, Units, Home background |
 | Viewport | Reflections, Background, Environment brightness, Tangent edges, Bloom, Path tracer, Performance mode, Potato mode |
 | Navigation | Smoothing, Orbit pivot, Orbit inertia, Scrolling, Two-finger scroll, Classic camera |
-| Accessibility | Animations, Hover delay, Interface size, Comfortable text, Viewport labels |
+| Accessibility | Animations, Announcements, Units spoken in full, Hover delay, Interface size, Comfortable text, Viewport labels |
 | Updates | Check for updates automatically, how often, and Channel |
 | AI assistants | See [Connect an AI assistant](../ai/connect.md) |
 | Plugins | See [Plugins](../plugins/index.md) |
@@ -37,6 +37,12 @@ At a large size, or in a small window, the tool rail and the view controls on th
 Comfortable text spaces lines, letters and words further apart, which some people with low vision or dyslexia read more easily. Buttons and labels grow to fit the wider text.
 
 Viewport labels sizes what is drawn over the model: sketch dimensions, constraint marks, plane names and the view cube. Pick Small, Medium, Large or Extra large, Medium is the default.
+
+## Speech
+
+Announcements, under Accessibility, sets how much FundaCAD tells a screen reader: nothing, errors only, prompts and results, or every change as well.
+
+Units spoken in full makes a field tell a screen reader its unit as a word, so a length reads as millimetres and an angle as degrees. Turn it off to hear the short form, mm and deg. It is on by default, and Reset to defaults turns it back on.
 
 ## Good to know
 

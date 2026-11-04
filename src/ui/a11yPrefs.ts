@@ -64,6 +64,8 @@ export interface A11yPrefs extends SizePrefs {
   solidPanels: boolean;
   /** Larger click targets: every hit area grows from 24 to about 32 px, see targets.ts. */
   targets: Targets;
+  /** Fields tell a screen reader their unit as a word, millimetres instead of mm. */
+  unitsInFull: boolean;
 }
 
 export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
@@ -73,6 +75,7 @@ export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   contrast: "system",
   solidPanels: false,
   targets: "default",
+  unitsInFull: true,
   ...SIZE_DEFAULTS,
 };
 
@@ -91,6 +94,7 @@ const KEYS: Record<keyof A11yPrefs, string> = {
   contrast: "fundacad.a11y.contrast",
   solidPanels: "fundacad.a11y.solidPanels",
   targets: "fundacad.a11y.targets",
+  unitsInFull: "fundacad.a11y.unitsInFull",
   ...SIZE_KEYS,
 };
 
@@ -132,6 +136,7 @@ const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   contrast: asContrast,
   solidPanels: asFlag,
   targets: asTargets,
+  unitsInFull: asFlag,
   ...SIZE_GATES,
 };
 
@@ -179,7 +184,7 @@ export function singleKeysOn(): boolean {
   return current.singleKeys;
 }
 
-// singleKeys is stored as "on" or "off", solidPanels as "true" or "false".
+// singleKeys is stored as "on" or "off", the other flags as "true" or "false".
 function store(k: keyof A11yPrefs, v: A11yPrefs[keyof A11yPrefs] | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);

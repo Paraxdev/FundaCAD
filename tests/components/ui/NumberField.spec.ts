@@ -4,6 +4,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import { measureError, unitById } from "../../../src/ui/measure";
+import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 
 enableAutoUnmount(afterEach);
 afterEach(() => vi.useRealTimers());
@@ -541,6 +542,29 @@ describe("NumberField unit description", () => {
     const inputs = w.findAll("input").map((i) => i.element as HTMLInputElement);
     const ids = inputs.map((e) => e.getAttribute("aria-describedby"));
     expect([new Set(ids).size, inputs.map(described)]).toEqual([3, [["millimetres"], ["degrees"], ["millimetres"]]]);
+  });
+
+  it("reads mm and deg when Units spoken in full is off, and the words again once it is on", async () => {
+    const Trio = defineComponent({
+      props: { late: Boolean },
+      render: (p: { late: boolean }) => [
+        h(NumberField, { modelValue: 7.5, label: "A", unit: "mm" }),
+        h(NumberField, { modelValue: 33, label: "B", unit: "deg" }),
+        h(NumberField, { modelValue: 3, label: "C", unit: "samples" }),
+        ...(p.late ? [h(NumberField, { modelValue: 9, label: "D", unit: "mm" })] : []),
+      ],
+    });
+    try {
+      setA11yPref("unitsInFull", false);
+      const w = mount(Trio, { attachTo: document.body });
+      const read = () => w.findAll("input").map((i) => described(i.element as HTMLInputElement));
+      expect(read()).toEqual([["mm"], ["deg"], ["samples"]]);
+      setA11yPref("unitsInFull", true);
+      await w.setProps({ late: true });
+      expect(read()).toEqual([["millimetres"], ["degrees"], ["samples"], ["millimetres"]]);
+    } finally {
+      resetA11yPrefs();
+    }
   });
 
   it("hides the unit caption from browse mode, but never a unit picker", async () => {
