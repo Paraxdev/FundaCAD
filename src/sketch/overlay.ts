@@ -82,6 +82,28 @@ function dashMat(color: number): THREE.LineDashedMaterial {
   }
   return m;
 }
+// Projected geometry is dashed in screen pixels, so its dash to gap ratio (0.21) never reads as construction's (0.63).
+// With no scale known (the committed overlay) the world sizes stand in.
+const PROJECTED_DASH_PX = 14;
+const PROJECTED_GAP_PX = 3;
+const PROJECTED_DASH_MM = 2.4;
+const PROJECTED_GAP_MM = 0.5;
+const PROJECTED_MAT_CAP = 48;
+const projectedMats = new Map<string, THREE.LineDashedMaterial>();
+function projectedDashMat(color: number, mmPerPx?: number): THREE.LineDashedMaterial {
+  const px = mmPerPx !== undefined && Number.isFinite(mmPerPx) && mmPerPx > 0 ? mmPerPx : 0;
+  const dashSize = px ? px * PROJECTED_DASH_PX : PROJECTED_DASH_MM;
+  const gapSize = px ? px * PROJECTED_GAP_PX : PROJECTED_GAP_MM;
+  const key = `${color}:${dashSize}`;
+  let m = projectedMats.get(key);
+  if (!m) {
+    // Every 5% zoom step makes new sizes, so the cache is emptied rather than grown without end.
+    if (projectedMats.size >= PROJECTED_MAT_CAP) projectedMats.clear();
+    m = overlayMaterial(new THREE.LineDashedMaterial({ color, dashSize, gapSize, depthTest: true }));
+    projectedMats.set(key, m);
+  }
+  return m;
+}
 // Alignment guides: the snap marker's amber, dashed and dimmed, with a short dash and long gap so a guide reads as
 // an aid rather than a drawn line.
 const GUIDE_DASH_PX = 5;
@@ -530,7 +552,7 @@ export class SketchOverlay {
     for (const o of objects) this.activeSketch.add(o);
   }
 
-  /** Red dots on open ends, amber on ends that meet another curve only by position.
+  /** Red dots on open ends, amber on ends on ends that meet another curve only by position.
    *  Pass null to clear. */
   setLooseEnds(plane: SketchPlane, le: LooseEnds | null) {
     this.clearGroup(this.looseEndsGroup);
@@ -667,6 +689,7 @@ export function curveObjects(
   plane: SketchPlane,
   color: number,
   highlight = false, // emphasis pass (selection / modify hover): color is preferred even on projected
+  mmPerPx?: number, // sizes the projected dashes in pixels, absent they use mm
 ): THREE.Object3D[] {
   warmText(ents); // fetch glyph outlines for any text entities; repaints when they land
   const out: THREE.Object3D[] = [];
@@ -692,8 +715,9 @@ export function curveObjects(
     const projected = e.type === "projected" ? e : null;
     const drawColor =
       projected && !highlight ? (projected.stale === true ? projectedStaleColor() : projectedColor()) : color;
-    const curve =
-      !projected && e.construction
+    const curve = projected
+      ? dashedLine(pts, projectedDashMat(drawColor, mmPerPx))
+      : e.construction
         ? constructionLine(pts, highlight ? color : constructionColor())
         : polyline(pts, drawColor);
     // Circles and arcs get a visible centre +: it is a snap target and the dimension tool's handle. Grouped to keep
@@ -908,8 +932,12 @@ export function dimensionLineObjects(
 }
 
 function constructionLine(points: THREE.Vector3[], color: number): THREE.Line {
+  return dashedLine(points, dashMat(color));
+}
+
+function dashedLine(points: THREE.Vector3[], material: THREE.LineDashedMaterial): THREE.Line {
   const g = new THREE.BufferGeometry().setFromPoints(points);
-  const line = new THREE.Line(g, dashMat(color));
+  const line = new THREE.Line(g, material);
   line.computeLineDistances(); // required for dashing
   line.renderOrder = 12;
   return line;

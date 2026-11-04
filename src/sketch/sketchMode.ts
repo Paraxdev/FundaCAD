@@ -1132,7 +1132,7 @@ export class SketchMode {
   private refreshDragGeometry() {
     this.entityVersion++;
     this.overlay.setActiveSketch([
-      ...curveObjects(this.entities, this.plane, this.activeColor()),
+      ...curveObjects(this.entities, this.plane, this.activeColor(), false, this.dimScaleSeen),
       ...this.polygonObjects(),
     ]);
     // Glyphs are a store push the layer projects anyway, so they ride along with the drag.
@@ -3545,11 +3545,11 @@ export class SketchMode {
       const normal = this.entities.filter((e) => !this.selected.has(e.id) && !lit.has(e.id));
       const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
       const hovered = this.entities.filter((e) => lit.has(e.id));
-      if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor()));
-      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true));
-      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, sketchPreviewColor(), true));
+      if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor(), false, this.dimScaleSeen));
+      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true, this.dimScaleSeen));
+      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, sketchPreviewColor(), true, this.dimScaleSeen));
     } else {
-      objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));
+      objs.push(...curveObjects(this.entities, this.plane, this.activeColor(), false, this.dimScaleSeen));
     }
     objs.push(...this.polygonObjects());
     if (this.dimsVisible) {

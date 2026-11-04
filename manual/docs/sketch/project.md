@@ -12,7 +12,7 @@ A bar of three choices opens with the tool, it sets what a click picks:
 | Sketch curves | a curve of an earlier sketch | a copy of that curve |
 | Body silhouette | any face or edge of a body | the body's outline as seen from the sketch |
 
-Projected curves are purple in the default theme, yellow in Colour-Blind Safe. They follow the model when it changes, so you cannot drag them, but you can constrain and dimension your own curves to them. A curve whose source is gone turns amber, or grey in Colour-Blind Safe, and keeps its last shape.
+Projected curves are purple in the default theme, yellow in Colour-Blind Safe, and always dashed with long dashes and short gaps, so they read apart from your own solid curves and from the shorter dashes of construction geometry. They follow the model when it changes, so you cannot drag them, but you can constrain and dimension your own curves to them. A curve whose source is gone turns amber, or grey in Colour-Blind Safe, and keeps its last shape.
 
 To edit one like an ordinary curve, right-click it and choose Break Link.
 
