@@ -83,6 +83,7 @@ import {
 } from "./faceRefs";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
+import { withFacelessFailures } from "./facelessBodies";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
 import { normalizeStressStudy } from "./stressStudy";
 import { contentHash } from "./contentHash";
@@ -3372,15 +3373,16 @@ export class DocumentStore {
         heldRefusal: null,
       };
     }
-    const fe = reply.result.featureError;
+    const result = withFacelessFailures(reply.result, this.doc);
+    const fe = result.featureError;
     if (sent.features === null) {
       this.committedFailures = new Set(
-        (reply.result.featureErrors ?? []).flatMap((e) => (e.feature_id ? [e.feature_id] : [])),
+        (result.featureErrors ?? []).flatMap((e) => (e.feature_id ? [e.feature_id] : [])),
       );
     }
     return {
       ...done,
-      result: reply.result,
+      result,
       errorFeatureId: fe?.feature_id ?? null,
       errorMessage: fe?.message ?? null,
       heldRefusal: null,

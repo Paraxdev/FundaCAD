@@ -10,7 +10,7 @@ export interface BuildLine {
 }
 
 type Settled = Pick<RebuildState, "building" | "errorFeatureId" | "errorMessage" | "cancelled" | "previewBuilt"> & {
-  result: { bodies?: readonly unknown[] } | null;
+  result: { bodies?: readonly { faceCount?: number }[] } | null;
 };
 
 /** The announcer key of a step's failure, shared by the build line and the step's error notice so it is said once. */
@@ -27,7 +27,8 @@ export function buildLine(
 ): BuildLine | null {
   if (now.building || now.previewBuilt) return null;
   if (now.cancelled) return { text: "Build cancelled", priority: "polite" };
-  const n = now.result?.bodies?.length ?? 0;
+  // A body with no faces is a failure the store reports, not a built body.
+  const n = now.result?.bodies?.filter((b) => b.faceCount !== 0).length ?? 0;
   const built = n ? `Built, ${n} ${n === 1 ? "body" : "bodies"}` : "Built";
   const failure = failureOf(now);
   if (!failure) return { text: built, priority: "polite" };
