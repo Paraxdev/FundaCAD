@@ -82,7 +82,7 @@ function dashMat(color: number): THREE.LineDashedMaterial {
   }
   return m;
 }
-// Projected geometry is dashed in screen pixels, so its dash to gap ratio (0.21) never reads as construction's (0.63).
+// Projected geometry is dashed in screen pixels, so its gap to dash ratio (0.21) never reads as construction's (0.63).
 // With no scale known (the committed overlay) the world sizes stand in.
 const PROJECTED_DASH_PX = 14;
 const PROJECTED_GAP_PX = 3;

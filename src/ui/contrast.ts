@@ -238,7 +238,9 @@ export function paletteContrast(
   }
   add("--pick-line on --viewport-bg", c("--pick-line"), c("--viewport-bg"), 3);
   for (const axis of AXES) add(`${axis} on --viewport-bg`, c(axis), c("--viewport-bg"), 3);
-  for (const t of [...SKETCH_TOKENS, ...SKETCH_AID_TOKENS, "--error"]) add(`${t} on --viewport-bg`, c(t), c("--viewport-bg"), min.line);
+  // The fill is a see-through wash under the curves, not a line, so it has no line minimum.
+  const lines = [...SKETCH_TOKENS, ...SKETCH_AID_TOKENS.filter((t) => t !== "--sketch-fill"), "--error"];
+  for (const t of lines) add(`${t} on --viewport-bg`, c(t), c("--viewport-bg"), min.line);
   // The edge is an inset line painted over the control's own fill, so it has to stand clear of both sides.
   const edge = controlEdge(p, mode);
   for (const on of EDGE_SURFACES) {

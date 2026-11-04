@@ -202,9 +202,15 @@ describe("theme contrast", () => {
     ).toBe(3);
   });
 
-  it("checks the four aid colours on the scene, and fails one that fades into a light ground", () => {
+  it("checks the three aid line colours on the scene but not the fill wash, and fails a line that fades", () => {
     const names = paletteContrast(shipped[0]!.palette, "dark").map((r) => r.what);
-    for (const t of SKETCH_AID_TOKENS) expect(names).toContain(`${t} on --viewport-bg`);
+    expect(SKETCH_AID_TOKENS.filter((t) => names.includes(`${t} on --viewport-bg`))).toEqual([
+      "--sketch-aid",
+      "--sketch-snap",
+      "--sketch-preview",
+    ]);
+    const paleFill = { ...shipped[0]!.palette, "--sketch-fill": "#1a1822" };
+    expect(contrastFailures(paleFill, "dark").filter((r) => r.what.includes("--sketch-fill"))).toEqual([]);
     const high = paletteContrast(shipped[0]!.palette, "dark", "high");
     expect(high.find((r) => r.what === "--sketch-snap on --viewport-bg")?.min).toBe(4.5);
 
