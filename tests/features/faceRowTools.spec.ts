@@ -1,9 +1,10 @@
-// A Geometry list row reaches Draft while it waits for a face, as that face selected first.
+// A Geometry list row reaches Draft, Offset Face, Thicken and Shell while they wait for a face, as that face selected first.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { DraftTool } from "../../src/features/draftTool";
+import { FaceOffsetTool, type FaceOffsetMode } from "../../src/features/faceOffsetTool";
 import { resetTreePicks, routeTreeClick, treePickWaiting } from "../../src/ui/treePick";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
@@ -108,6 +109,18 @@ const drafting: Rows = {
   },
 };
 
+const offsetting = (mode: FaceOffsetMode): Rows => ({
+  name: mode,
+  sign: mode === "shell" ? -1 : 1,
+  start(selected, building) {
+    const { vp, store } = rig(selected, building);
+    const done = vi.fn();
+    const tool = new FaceOffsetTool(vp, store);
+    tool.start(mode, done);
+    return { tool, done };
+  },
+});
+
 const seen = (t: unknown) => {
   const i = t as Internals;
   return {
@@ -149,78 +162,105 @@ function tidy() {
   document.body.innerHTML = "";
 }
 
-describe.each([drafting])("$name takes a face row while it waits", (tool) => {
+describe.each([drafting, offsetting("offsetFace"), offsetting("thicken"), offsetting("shell")])(
+  "$name takes a face row while it waits",
+  (tool) => {
+    beforeEach(stubFrames);
+    afterEach(tidy);
+
+    it("starts the drag as that slanted face selected before the start, and the session ends", () => {
+      const before = tool.start([SLANT]);
+      const want = seen(before.tool);
+      before.tool.cancel();
+      resetTreePicks();
+
+      const waiting = tool.start([]);
+      expect(seen(waiting.tool).phase).toBe("pick");
+      expect(treePickWaiting()).toBe(true);
+      const d = hints();
+      expect(routeTreeClick({ kind: "face", faceId: SLANT }, d)).toBe("taken");
+      expect(seen(waiting.tool)).toEqual(want);
+      expect(want).toMatchObject({
+        phase: "drag",
+        faceIds: [SLANT],
+        anchor: point(SLANT),
+        along: tool.sign === 1 ? [0, 0.6, 0.8] : [-0, -0.6, -0.8],
+      });
+      expect([d.said, treePickWaiting()]).toEqual([[], false]);
+      waiting.tool.cancel();
+    });
+
+    it("takes the body the row's face is on", () => {
+      const { tool: t } = tool.start([]);
+      routeTreeClick({ kind: "face", faceId: OTHER }, hints());
+      expect(seen(t)).toMatchObject({ faceIds: [OTHER], bodyId: "b3", anchor: point(OTHER) });
+      t.cancel();
+    });
+
+    it("refuses an edge row in words and keeps waiting", () => {
+      const { tool: t, done } = tool.start([]);
+      const d = hints();
+      expect(routeTreeClick(edgeRow, d)).toBe("refused");
+      expect([d.said, seen(t).phase, treePickWaiting(), done.mock.calls]).toEqual([
+        ["That row is an edge, this step needs a face"],
+        "pick",
+        true,
+        [],
+      ]);
+      t.cancel();
+    });
+
+    it("says the model is still building and keeps waiting", () => {
+      const building = tool.start([], true);
+      const d = hints();
+      expect(routeTreeClick({ kind: "face", faceId: SLANT }, d)).toBe("refused");
+      expect([d.said, seen(building.tool).phase, treePickWaiting()]).toEqual([
+        ["The model is still building"],
+        "pick",
+        true,
+      ]);
+      building.tool.cancel();
+    });
+
+    it("a cancel from outside leaves no session, and a second document's tool takes its own rows", () => {
+      const first = tool.start([]);
+      first.tool.cancel();
+      expect([treePickWaiting(), first.done.mock.calls]).toEqual([false, [[null]]]);
+
+      const second = tool.start([]);
+      expect(routeTreeClick({ kind: "face", faceId: OTHER }, hints())).toBe("taken");
+      expect([seen(first.tool).phase, seen(second.tool).faceIds]).toEqual(["pick", [OTHER]]);
+      second.tool.cancel();
+    });
+
+    it("a tool started with a face already selected waits for no row", () => {
+      const { tool: t } = tool.start([SLANT]);
+      expect(treePickWaiting()).toBe(false);
+      t.cancel();
+    });
+  },
+);
+
+describe("Offset Face on a round face row", () => {
   beforeEach(stubFrames);
   afterEach(tidy);
 
-  it("starts the drag as that slanted face selected before the start, and the session ends", () => {
-    const before = tool.start([SLANT]);
-    const want = seen(before.tool);
-    before.tool.cancel();
+  it("keeps the round fit that the same face selected first keeps, and Thicken drops it", () => {
+    const pre = offsetting("offsetFace").start([ROUND]);
+    const want = seen(pre.tool);
+    pre.tool.cancel();
     resetTreePicks();
 
-    const waiting = tool.start([]);
-    expect(seen(waiting.tool).phase).toBe("pick");
-    expect(treePickWaiting()).toBe(true);
-    const d = hints();
-    expect(routeTreeClick({ kind: "face", faceId: SLANT }, d)).toBe("taken");
+    const waiting = offsetting("offsetFace").start([]);
+    routeTreeClick({ kind: "face", faceId: ROUND }, hints());
     expect(seen(waiting.tool)).toEqual(want);
-    expect(want).toMatchObject({
-      phase: "drag",
-      faceIds: [SLANT],
-      anchor: point(SLANT),
-      along: tool.sign === 1 ? [0, 0.6, 0.8] : [-0, -0.6, -0.8],
-    });
-    expect([d.said, treePickWaiting()]).toEqual([[], false]);
+    expect(want.round).toEqual(bore);
     waiting.tool.cancel();
-  });
+    resetTreePicks();
 
-  it("takes the body the row's face is on", () => {
-    const { tool: t } = tool.start([]);
-    routeTreeClick({ kind: "face", faceId: OTHER }, hints());
-    expect(seen(t)).toMatchObject({ faceIds: [OTHER], bodyId: "b3", anchor: point(OTHER) });
-    t.cancel();
-  });
-
-  it("refuses an edge row in words and keeps waiting", () => {
-    const { tool: t, done } = tool.start([]);
-    const d = hints();
-    expect(routeTreeClick(edgeRow, d)).toBe("refused");
-    expect([d.said, seen(t).phase, treePickWaiting(), done.mock.calls]).toEqual([
-      ["That row is an edge, this step needs a face"],
-      "pick",
-      true,
-      [],
-    ]);
-    t.cancel();
-  });
-
-  it("says the model is still building and keeps waiting", () => {
-    const building = tool.start([], true);
-    const d = hints();
-    expect(routeTreeClick({ kind: "face", faceId: SLANT }, d)).toBe("refused");
-    expect([d.said, seen(building.tool).phase, treePickWaiting()]).toEqual([
-      ["The model is still building"],
-      "pick",
-      true,
-    ]);
-    building.tool.cancel();
-  });
-
-  it("a cancel from outside leaves no session, and a second document's tool takes its own rows", () => {
-    const first = tool.start([]);
-    first.tool.cancel();
-    expect([treePickWaiting(), first.done.mock.calls]).toEqual([false, [[null]]]);
-
-    const second = tool.start([]);
-    expect(routeTreeClick({ kind: "face", faceId: OTHER }, hints())).toBe("taken");
-    expect([seen(first.tool).phase, seen(second.tool).faceIds]).toEqual(["pick", [OTHER]]);
-    second.tool.cancel();
-  });
-
-  it("a tool started with a face already selected waits for no row", () => {
-    const { tool: t } = tool.start([SLANT]);
-    expect(treePickWaiting()).toBe(false);
-    t.cancel();
+    const thicken = offsetting("thicken").start([]);
+    routeTreeClick({ kind: "face", faceId: ROUND }, hints());
+    expect(seen(thicken.tool).round).toBeNull();
+    thicken.tool.cancel();
   });
 });

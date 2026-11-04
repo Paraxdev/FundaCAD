@@ -26,6 +26,8 @@ import { axialSpan, ResizeGuides } from "./resizeGuides";
 import { boxBindings } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
 import { nearestMeshFace } from "./nearestMeshFace";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -51,6 +53,7 @@ export class FaceOffsetTool {
   /** A press would otherwise scan the whole mesh again for every face already picked. */
   private faceOnModel = new WeakMap<Selector, { model: RebuildResult; faceId: number | undefined }>();
   private bodyId: string | null = null;
+  private releaseRows: (() => void) | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1);
   private faceNormal = new THREE.Vector3(0, 0, 1);
@@ -130,8 +133,25 @@ export class FaceOffsetTool {
     this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
-    if (pre) this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round);
-    else setPrompt(`Click a face to ${LABEL[mode].toLowerCase()} · Ctrl-click adds more`);
+    if (pre) this.takeFaces(pre);
+    else {
+      this.releaseRows = awaitFaceRows(
+        this.viewport,
+        "a face",
+        (faces) => (this.takeFaces(faces), true),
+        () => this.cancel(),
+      );
+      setPrompt(`Click a face to ${LABEL[mode].toLowerCase()} · Ctrl-click adds more`);
+    }
+  }
+
+  private takeFaces(f: PressPullFaces) {
+    this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId, f.round);
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -302,6 +322,7 @@ export class FaceOffsetTool {
     bodyId: string | null = null,
     round: RoundFace | null = null,
   ) {
+    this.dropRows();
     this.faces = faces;
     this.faceIds = faceIds;
     this.faceOwners = faceIds.map((id) => this.viewport.faceIdToBodyId(id));
@@ -787,6 +808,7 @@ export class FaceOffsetTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
