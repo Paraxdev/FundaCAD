@@ -92,6 +92,7 @@ function rig(tool = "rectangle", over: Partial<KeyDrawHost> = {}) {
       dim.hide();
       return state.drawn;
     },
+    shape: () => null,
     positionBox: (p) => state.boxAt.push(p.clone()),
     prompt: (t) => state.prompts.push(t),
     focusSurface: () => {
@@ -956,6 +957,31 @@ describe("arrows move the cursor", () => {
     arrow("ArrowRight");
     arrow("ArrowUp");
     expect(state.cursor).toEqual(v(0.4, 0.5));
+  });
+
+  it("stops at 1 km from the origin, refused in the words a typed point past it gets", () => {
+    const { state } = rig("rectangle");
+    state.cursor = v(1e6, -7.25);
+    expect(arrow("ArrowRight").defaultPrevented).toBe(true);
+    expect(state.cursor).toEqual(v(1e6, -7.25));
+    expect(state.moved).toEqual([]);
+    expect(announce).toHaveBeenCalledWith("X is too far out, a point stays within 1 km of the origin", "assertive");
+    state.cursor = v(0, -1e6);
+    arrow("ArrowDown");
+    expect(state.cursor).toEqual(v(0, -1e6));
+    expect(announce).toHaveBeenCalledWith("Y is too far out, a point stays within 1 km of the origin", "assertive");
+    arrow("ArrowLeft");
+    expect(state.cursor).toEqual(v(-5, -1e6));
+  });
+
+  it("walks back in from past 1 km, and Enter does not place a point out there", () => {
+    const { state } = rig("rectangle");
+    state.cursor = v(2e6, 0);
+    arrow("ArrowLeft");
+    expect(state.cursor).toEqual(v(2e6 - 5, 0));
+    press(free());
+    expect(state.placed).toEqual([]);
+    expect(announce).toHaveBeenLastCalledWith("X is too far out, a point stays within 1 km of the origin", "assertive");
   });
 
   it("moves from the page body and from a plain place of the model area alike", () => {

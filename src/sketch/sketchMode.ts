@@ -3018,6 +3018,7 @@ export class SketchMode {
       moveTo: (hit) => this.moveKeyCursor(hit),
       dim: () => this.dim,
       place: (hit) => this.placeKeyHit(hit),
+      shape: () => (this.base ? this.computeGeometry(this.base, this.lastCursor).entity : null),
       positionBox: (p) => {
         const at = this.viewport.projectToScreen(this.plane.to3D(p.x, p.y));
         this.dim.positionCentred(at.x, at.y, true);
@@ -3247,6 +3248,7 @@ export class SketchMode {
 
   private commitFromBox() {
     if (this.keyDraw.openForNext()) return;
+    if (this.keyDraw.sizeTooFar()) return;
     const end = this.keyDraw.boxEnd();
     if (end) this.noteOriginPin(end.hit);
     // Read now, as a chain's commit shows the box again.

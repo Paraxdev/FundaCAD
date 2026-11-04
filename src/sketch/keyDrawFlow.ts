@@ -8,7 +8,7 @@ import { escapeClaimed } from "../ui/escapeClaim";
 import { isEditableTarget, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
 import { coarseStep, fineStep, hasSnap, hitAt, snapRing, stepCoord } from "./keyCursor";
-import { readPoint } from "./pointEntry";
+import { readPoint, tooFar, within } from "./pointEntry";
 import { cursorSentence, drawnSentence, pointSentence, walkEndSentence } from "./sketchSpeech";
 import type { ResolvedEntity, SnapCandidate, SnapKind, SnapRef } from "./snap";
 
@@ -68,12 +68,24 @@ export interface KeyDrawHost {
   moveTo(hit: KeyHit): void;
   dim(): DimInput;
   place(hit: KeyHit): Drawn | null;
+  /** What the size box's Enter would draw, null with no first point. */
+  shape(): ResolvedEntity | null;
   positionBox(p: THREE.Vector2): void;
   prompt(text: string): void;
   focusSurface(): boolean;
   /** The prompt or the surface's state may have changed. */
   changed(): void;
 }
+
+// How far from the origin the shape reaches along X and along Y.
+function reach(e: ResolvedEntity): [number, number] {
+  if (e.type === "rectangle") return [Math.abs(e.x) + e.width / 2, Math.abs(e.y) + e.height / 2];
+  if (e.type === "circle") return [Math.abs(e.x) + e.radius, Math.abs(e.y) + e.radius];
+  if (e.type === "line") return [Math.max(Math.abs(e.x1), Math.abs(e.x2)), Math.max(Math.abs(e.y1), Math.abs(e.y2))];
+  return [0, 0];
+}
+
+const outAxis = (x: number, y: number) => (!within(x) ? "x" : !within(y) ? "y" : null);
 
 const hitOf = (p: THREE.Vector2, c: SnapCandidate | null): KeyHit => ({
   p,
@@ -295,6 +307,8 @@ export class KeyDrawFlow {
     const at = this.host.cursor();
     const p = new THREE.Vector2(at.x, at.y);
     p[axis] = stepCoord(p[axis], step, dir);
+    // Back in from past the limit is let through, so a cursor a pointer left out there can return.
+    if (!within(p[axis]) && Math.abs(p[axis]) > Math.abs(at[axis])) return this.refuseFar(axis);
     this.keys = true;
     this.engaged = true;
     this.ring = null;
@@ -357,8 +371,29 @@ export class KeyDrawFlow {
 
   private placeByEnter(e: KeyboardEvent): boolean {
     e.preventDefault();
+    const p = this.host.cursor().clone();
+    const far = outAxis(p.x, p.y);
     if (this.host.planeTooEdgeOn()) this.host.prompt(EDGE_ON_PROMPT);
-    else this.placePoint(this.host.cursor().clone());
+    else if (far) this.refuseFar(far);
+    else this.placePoint(p);
+    return true;
+  }
+
+  /** A size that takes the shape past where a typed point may go is refused in the same words, on its field. */
+  sizeTooFar(): boolean {
+    const e = this.host.shape();
+    const axis = e && outAxis(...reach(e));
+    if (!e || !axis) return false;
+    const field =
+      e.type === "rectangle" ? (axis === "x" ? "width" : "height") : e.type === "circle" ? "diameter" : "length";
+    this.host.dim().flag(tooFar(axis));
+    this.host.dim().focusField(field);
+    return this.refuseFar(axis);
+  }
+
+  private refuseFar(axis: "x" | "y"): true {
+    announce(tooFar(axis), "assertive");
+    this.host.changed();
     return true;
   }
 

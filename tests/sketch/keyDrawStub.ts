@@ -16,6 +16,7 @@ export const noKeyDraw = {
   settleFocus() {},
   historyMoved() {},
   refused() {},
+  sizeTooFar: () => false,
 };
 
 export const noKeySurface = { mount() {}, setStop() {}, focus: () => false, dispose() {} };

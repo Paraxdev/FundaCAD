@@ -1058,6 +1058,43 @@ describe("a size the box refuses", () => {
   });
 });
 
+describe("a size that reaches past 1 km", () => {
+  const assertive = () =>
+    vi
+      .mocked(announce)
+      .mock.calls.filter((c) => c[1] === "assertive")
+      .map((c) => c[0]);
+  beforeEach(() => vi.mocked(announce).mockClear());
+
+  it.each([
+    ["line", { length: "2000000" }, "length", "X"],
+    ["line", { length: "2000000", angle: "90" }, "length", "Y"],
+    ["rectangle", { width: "2000000", height: "20" }, "width", "X"],
+    ["rectangle", { width: "40", height: "2000000" }, "height", "Y"],
+    ["circle", { diameter: "3000000" }, "diameter", "X"],
+  ])("is refused for a %s sized %o, on %s, in the words of a typed point", (tool, sizes, name, axis) => {
+    const { s } = makeDrawing(tool);
+    startAt(s, "7", "-3");
+    for (const [f, text] of Object.entries(sizes)) type(f, text);
+    enter(name);
+    expect(s.entities).toEqual([]);
+    expect(s.base).toEqual(v(7, -3));
+    expect(assertive()).toEqual([`${axis} is too far out, a point stays within 1 km of the origin`]);
+    expect(document.activeElement).toBe(fieldEl(name));
+    expect(fieldEl(name).getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("THE CONTROL: a size that stays within 1 km draws", () => {
+    const { s } = makeDrawing("rectangle");
+    startAt(s, "7", "-3");
+    type("width", "999990");
+    type("height", "20");
+    enter("height");
+    expect(s.entities.map(withoutId)).toEqual([{ type: "rectangle", x: 500002, y: 7, width: 999990, height: 20 }]);
+    expect(assertive()).toEqual([]);
+  });
+});
+
 describe("a second point that makes no shape", () => {
   const calls = () => vi.mocked(announce).mock.calls;
   beforeEach(() => vi.mocked(announce).mockClear());
