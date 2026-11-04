@@ -339,7 +339,7 @@ export class EdgeFeatureTool {
       });
       if (began && opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face · or take a row from the Geometry list`);
+      setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
     }
   }
 

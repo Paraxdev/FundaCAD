@@ -617,7 +617,7 @@ describe("a face or an edge row from the Geometry list", () => {
       expect(r.hints[0]).toMatch(/flat/);
       expect(r.hints[0]).toMatch(/round face/);
       expect(r.click({ kind: "face", faceId: 16 })).toBe("refused");
-      expect(r.hints[1]).toMatch(/neither/);
+      expect(r.hints[1]).toMatch(/not round/);
       expect(r.click({ kind: "face", faceId: 99 })).toBe("refused");
       expect(r.click({ kind: "basePlane", plane: "XZ" })).toBe("refused");
       expect(r.hints).toHaveLength(4);

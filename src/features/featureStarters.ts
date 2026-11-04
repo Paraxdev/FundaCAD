@@ -213,7 +213,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       (pick) => {
         if (pick.kind === "face" && opts.roundFace) {
           const round = facePlaneOfRow(viewport, pick.faceId);
-          if (!round) return "That face is neither flat nor round, pick a round face for its axis";
+          if (!round) return "That face is not round, pick a round face for its axis";
           if (round.kind !== "tangent") return "That face is flat, pick a round face for its axis";
           cleanup();
           deferPick(viewport.domElement, () => onPick(round.def, round, null));

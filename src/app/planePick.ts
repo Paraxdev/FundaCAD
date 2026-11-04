@@ -25,7 +25,7 @@ export type PlaneRowHost = Pick<Engine, "store" | "toolOwnsScreen" | "setStatus"
  *  rows keep working inside one. */
 function busyHint(e: PlaneRowHost): string | null {
   if (!e.toolOwnsScreen() || e.sketch.active) return null;
-  return "The active tool takes no rows from the list, finish it or press Esc";
+  return "Finish the active tool first, or press Esc";
 }
 
 export function treeClickDeps(e: PlaneRowHost): TreeClickDeps {
