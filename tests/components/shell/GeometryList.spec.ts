@@ -22,6 +22,7 @@ vi.mock("../../../src/ui/announce", async (importOriginal) => ({
 }));
 
 enableAutoUnmount(afterEach);
+afterEach(() => vi.useRealTimers());
 
 const slanted = (i: number): TopologyFace => ({
   i,
