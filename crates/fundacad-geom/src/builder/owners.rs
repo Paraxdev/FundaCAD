@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 
-use fundacad_core::schema::Feature;
+use fundacad_core::schema::{Feature, Move, Num};
 use opencascade::primitives::Shape;
 
-use super::Ctx;
+use super::{Ctx, RigidMove};
 use crate::kernel::{self, Kind};
 
 /// Fingerprint key to owning feature id.
@@ -54,21 +54,14 @@ fn face_raw(face: &Shape) -> Option<[f64; 4]> {
 }
 
 pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_owners: &[(u64, Owners)]) {
-    let moved: Option<(Vec<String>, [f64; 3], [f64; 3])> = match f {
-        Feature::Move(m) if !ctx.bodies.is_empty() => {
-            let ids = match &m.bodies {
-                Some(ids) if !ids.is_empty() => ids.clone(),
-                _ => ctx.bodies.last().map(|b| vec![b.id.clone()]).unwrap_or_default(),
-            };
-            let v = |n: &Option<fundacad_core::schema::Num>| ctx.val_or(n.as_ref(), 0.0).unwrap_or(0.0);
-            Some((ids, [v(&m.rx), v(&m.ry), v(&m.rz)], [v(&m.dx), v(&m.dy), v(&m.dz)]))
-        }
-        _ => None,
+    // A mechanism says how it moved each body and a Move places its bodies rigidly; joint keeps
+    // re-owning the faces it moves, as the Python engine did.
+    let taken = std::mem::take(&mut ctx.rigid_moves);
+    let rigid: Vec<RigidMove> = match f {
+        Feature::Mechanism(_) => taken,
+        Feature::Move(m) => moved_rigidly(ctx, m),
+        _ => Vec::new(),
     };
-    // A mechanism says how it moved each body; joint keeps re-owning the faces
-    // it moves, as the Python engine did.
-    let rigid = std::mem::take(&mut ctx.rigid_moves);
-    let rigid: &[super::RigidMove] = if matches!(f, Feature::Mechanism(_)) { &rigid } else { &[] };
     let all: Vec<&Owners> = pre_owners.iter().map(|(_, o)| o).collect();
     let changed: Vec<usize> = ctx
         .bodies
@@ -120,15 +113,12 @@ pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_own
         let empty = Owners::new();
         let prior_src = pre_owners.iter().find(|(uid, _)| *uid == b.uid).map_or(&empty, |(_, o)| o);
         let mut prior: Owners = prior_src.clone();
-        if let Some((ids, r, d)) = &moved {
-            if ids.contains(&b.id) && !prior_src.is_empty() {
-                prior = prior_src.iter().filter_map(|(k, v)| moved_key(k, *r, *d).map(|nk| (nk, v.clone()))).collect();
-            }
-        }
         // A rigidly moved body keeps its faces' TShapes, so each face finds its old fingerprint. The rest
         // go by their unrounded centres sent through the move, rounded once where they land.
         let mut carried: HashMap<u64, Option<&String>> = HashMap::new();
-        if let Some(m) = rigid.iter().find(|m| m.body == b.id) {
+        let rigid_move = rigid.iter().find(|m| m.body == b.id);
+        let undo = rigid_move.map(|m| (m.rot.inverse(), m.shift));
+        if let Some(m) = rigid_move {
             let before = ctx.face_fps.0.get(&b.uid).map_or(&[][..], Vec::as_slice);
             prior = Owners::new();
             for (face, raw) in before {
@@ -154,7 +144,13 @@ pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_own
                 continue;
             };
             let fp = key(raw[0], [raw[1], raw[2], raw[3]]);
-            let owner = match same.or_else(|| prior.get(&fp)) {
+            // A body resumed from a checkpoint has no faces measured before the move, so its centre is sent back.
+            let back = || {
+                let (inv, shift) = undo?;
+                let c = inv * (glam::DVec3::new(raw[1], raw[2], raw[3]) - shift);
+                prior_src.get(&key(raw[0], c.to_array()))
+            };
+            let owner = match same.or_else(|| prior.get(&fp)).or_else(back) {
                 Some(o) => o.clone(),
                 None => latest
                     .get_or_insert_with(|| latest_owners(&all))
@@ -193,16 +189,20 @@ pub(crate) fn latest_owners<'a>(all: &[&'a Owners]) -> HashMap<&'a str, &'a Stri
     out
 }
 
-/// `_move_fp`: the rounded centre moved, the area kept as it was.
-fn moved_key(k: &str, r: [f64; 3], d: [f64; 3]) -> Option<String> {
-    let mut parts = k.split('|');
-    let area = parts.next()?.to_owned();
-    let c: Vec<f64> = parts.filter_map(|p| p.parse().ok()).collect();
-    if c.len() != 3 {
-        return None;
-    }
-    let p = kernel::euler_point(r, d, [c[0], c[1], c[2]]);
-    Some(format!("{area}|{}|{}|{}", round_key(p[0], 1), round_key(p[1], 1), round_key(p[2], 1)))
+/// A Move as the rigid move of each body it places. Moving a rounded fingerprint and rounding it again,
+/// as `_move_fp` did, lands a face whose centre sits off the 0.1 grid on a key it does not measure.
+fn moved_rigidly(ctx: &Ctx, m: &Move) -> Vec<RigidMove> {
+    let Some(last) = ctx.bodies.last() else { return Vec::new() };
+    let ids = match &m.bodies {
+        Some(ids) if !ids.is_empty() => ids.clone(),
+        _ => vec![last.id.clone()],
+    };
+    let v = |n: &Option<Num>| ctx.val_or(n.as_ref(), 0.0).unwrap_or(0.0);
+    let (r, d) = ([v(&m.rx), v(&m.ry), v(&m.rz)], [v(&m.dx), v(&m.dy), v(&m.dz)]);
+    let col = |axis: [f64; 3]| glam::DVec3::from(kernel::euler_point(r, [0.0; 3], axis));
+    let rot = glam::DMat3::from_cols(col([1.0, 0.0, 0.0]), col([0.0, 1.0, 0.0]), col([0.0, 0.0, 1.0]));
+    let shift = glam::DVec3::from(d);
+    ids.into_iter().map(|body| RigidMove { body, rot, shift }).collect()
 }
 
 #[cfg(test)]
