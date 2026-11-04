@@ -9,6 +9,7 @@ import { h } from "vue";
 import Listbox from "../../src/components/ui/Listbox.vue";
 import { DraftTool } from "../../src/features/draftTool";
 import { HoleTool } from "../../src/features/holeTool";
+import { ThreadTool } from "../../src/features/threadTool";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { FaceOffsetTool, type FaceOffsetMode } from "../../src/features/faceOffsetTool";
 import { MirrorTool } from "../../src/features/mirrorTool";
@@ -133,6 +134,7 @@ const previewStore = { setPreview: () => {} } as unknown as DocumentStore;
 const pressPullWaiting = () => waitingForFace((vp) => new PressPullTool(vp, previewStore));
 const draftWaiting = () => waitingForFace((vp) => new DraftTool(vp, previewStore));
 const holeWaiting = () => waitingForFace((vp) => new HoleTool(vp, previewStore));
+const threadWaiting = () => waitingForFace((vp) => new ThreadTool(vp, previewStore));
 const offsetWaiting = (mode: FaceOffsetMode) =>
   waitingForFace((vp) => {
     const tool = new FaceOffsetTool(vp, previewStore);
@@ -233,6 +235,7 @@ describe("a list row's keys while a tool runs", () => {
     ["Press/Pull", pressPullWaiting],
     ["Draft", draftWaiting],
     ["Hole", holeWaiting],
+    ["Thread", threadWaiting],
     ["Offset Face", () => offsetWaiting("offsetFace")],
     ["Thicken", () => offsetWaiting("thicken")],
     ["Shell", () => offsetWaiting("shell")],
