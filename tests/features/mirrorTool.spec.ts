@@ -20,6 +20,7 @@ import type { FacePlanePick, PlanePickTarget } from "../../src/features/facePlan
 import type { PlaneDef } from "../../src/types";
 import type { Viewport } from "../../src/viewport/viewport";
 import { DocumentStore } from "../../src/document/store";
+import { asVec, OTHER_FLAT_ANCHOR, SLANT_NORMAL, faceRowViewport } from "./faceRowRig";
 import type { GeometryBackend } from "../../src/geometry/client";
 import type { Feature, RebuildReply } from "../../src/types";
 
@@ -33,7 +34,7 @@ const FLAT: FacePlanePick = {
   at: [12, 3.5, -4],
 };
 const ROUND: FacePlanePick = {
-  def: { origin: [-6, 2, 7.5], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] },
+  def: { origin: [-6, 2, 7.5], normal: [0, 0.6, 0.8], xdir: [0, -0.8000000000000002, 0.6] },
   kind: "tangent",
   selector: { kind: "face", by: "nearest", point: [-6, 2, 7.5], body: "body1" },
   faceId: 12,
@@ -91,6 +92,7 @@ function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string
     setFaceMarks: (marks: { faceIds: number[]; color: number }[] | null, layer: string) => {
       if (layer === "mirror") log.faceMarks = marks;
     },
+    ...faceRowViewport().parts,
     hoverDatum: () => {},
     hoverFaceAt: () => {
       log.hoverFace++;
@@ -400,6 +402,93 @@ describe("Items rows", () => {
     expect(sketch.route).toBe("refused");
     expect(sketch.hints).toHaveLength(1);
     expect(summary()!.plane).toBe("XY");
+  });
+
+  it("a flat face row sets the Line and lights the face with Objects active or with Line active", () => {
+    const r = rig();
+    r.tool.start([], r.done);
+    expect(summary()!.active).toBe("objects");
+    expect(row({ kind: "face", faceId: 14 }).route).toBe("taken");
+    expect(summary()).toEqual({
+      active: "objects",
+      values: ["Nothing picked", "Flat face"],
+      plane: null,
+      ready: false,
+    });
+    expect(r.log.faceMarks).toEqual([{ faceIds: [14], color: 0xb48cff }]);
+    row({ kind: "body", id: "body3" });
+    expect(r.log.selected).toEqual(["body3"]);
+    key("Tab");
+    expect(summary()!.active).toBe("line");
+    expect(row({ kind: "face", faceId: 23 }).route).toBe("taken");
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "Flat face"], plane: null, ready: true });
+    expect(r.log.faceMarks).toEqual([{ faceIds: [23], color: 0xb48cff }]);
+    expect(r.log.selected).toEqual(["body3"]);
+  });
+
+  it("a face row commits a datum plane on the face's middle and the mirror across it", () => {
+    const r = rig();
+    r.tool.start(["body2", "body3"], r.done);
+    row({ kind: "face", faceId: 23 });
+    key("Enter");
+    const n = SLANT_NORMAL;
+    expect(r.addFeatures.mock.calls).toEqual([
+      [
+        [
+          {
+            id: "f2",
+            type: "datumPlane",
+            plane: {
+              origin: [0, 13.7 * n.y, 13.7 * n.z],
+              normal: [n.x, n.y, n.z],
+              xdir: [0, -0.8000000000000002, 0.6],
+            },
+            offset: 0,
+            face: { kind: "face", by: "nearest", point: asVec(OTHER_FLAT_ANCHOR), body: "b3" },
+            name: "Mirror plane",
+          },
+          { id: "f3", type: "mirror", plane: { name: "f2" }, bodies: ["body2", "body3"] },
+        ],
+      ],
+    ]);
+    expect(r.done.mock.calls).toEqual([["f3"]]);
+  });
+
+  it("a curved face row is refused and the Line keeps what it had", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    const empty = row({ kind: "face", faceId: 15 });
+    expect(empty.route).toBe("refused");
+    expect(empty.hints).toEqual([PLANE_REFUSED]);
+    expect(row({ kind: "face", faceId: 16 }).route).toBe("refused");
+    expect(summary()).toEqual({ active: "line", values: ["1 body", "Nothing picked"], plane: null, ready: false });
+    expect(treePickWaiting()).toBe(true);
+    row({ kind: "basePlane", plane: "YZ" });
+    expect(row({ kind: "face", faceId: 15 }).route).toBe("refused");
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "YZ plane"], plane: "YZ", ready: true });
+    expect(r.log.faceMarks).toBeNull();
+  });
+
+  it("an edge row is refused naming a flat face", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    const out = row({
+      kind: "edge",
+      edge: {
+        id: "body1:3",
+        body: "body1",
+        points: [
+          [1.5, 2, 3],
+          [4, -2.5, 8],
+        ],
+        smooth: false,
+        slot: 3,
+      },
+    } as unknown as TreePick);
+    expect(out.route).toBe("refused");
+    expect(out.hints).toHaveLength(1);
+    expect(out.hints[0]).toMatch(/flat face/);
+    expect(summary()!.values[1]).toBe("Nothing picked");
   });
 });
 

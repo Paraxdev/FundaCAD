@@ -22,7 +22,7 @@ export const FLAT_ANCHOR = flatTris[0]!.getMidpoint(new THREE.Vector3());
 
 const O3 = new THREE.Vector3(-30, 14.5, 6.25);
 const otherFlatTris = [new THREE.Triangle(at(0, 0, O3), at(8, 0, O3), at(0, 5, O3))];
-const otherFlatAnchor = otherFlatTris[0]!.getMidpoint(new THREE.Vector3());
+export const OTHER_FLAT_ANCHOR = otherFlatTris[0]!.getMidpoint(new THREE.Vector3());
 
 const AXIS = new THREE.Vector3(0, 0.6, 0.8);
 const BASE = new THREE.Vector3(20, -5, 10);
@@ -65,7 +65,7 @@ const faces: Record<number, { tris: THREE.Triangle[]; faces: PressPullFaces }> =
     tris: sphereTris,
     faces: row(16, sphereTris[0]!.getMidpoint(new THREE.Vector3()), normalOf(sphereTris[0]!), "b2"),
   },
-  23: { tris: otherFlatTris, faces: row(23, otherFlatAnchor, SLANT_NORMAL, "b3") },
+  23: { tris: otherFlatTris, faces: row(23, OTHER_FLAT_ANCHOR, SLANT_NORMAL, "b3") },
 };
 
 function row(id: number, anchor: THREE.Vector3, normal: THREE.Vector3, bodyId: string): PressPullFaces {
