@@ -192,7 +192,8 @@ describe("HomeScreen", () => {
     document.body.insertAdjacentHTML(
       "afterbegin",
       '<header id="titlebar"><button id="home-btn"></button><button id="undo-btn"></button></header>' +
-        '<div id="main"><button id="in-page"></button></div>',
+        '<div id="main"><button id="in-page"></button></div>' +
+        '<div class="toast-stack" role="region" aria-label="Notifications"><button id="toast-btn"></button></div>',
     );
     return (sel: string) => document.querySelector<HTMLElement>(sel)!;
   }
@@ -211,6 +212,12 @@ describe("HomeScreen", () => {
     w.unmount();
     await nextTick();
     expect($$("[inert]")).toEqual([]);
+  });
+
+  it("leaves the toasts live, so an update's Install still takes a click on Home", () => {
+    const at = page();
+    open();
+    expect([inert(at("#toast-btn")), at(".toast-stack").hasAttribute("aria-hidden")]).toEqual([false, false]);
   });
 
   it("gives focus back to its opener once the page is live again", async () => {

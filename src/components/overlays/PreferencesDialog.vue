@@ -44,6 +44,7 @@ import {
   DEFAULT_A11Y,
   onA11yPrefsChange,
   resetA11yPrefs,
+  SCREEN_READER_PRESET,
   setA11yPref,
   systemReducesMotion,
 } from "../../ui/a11yPrefs";
@@ -141,7 +142,8 @@ onMounted(() => {
     onA11yPrefsChange(() => {
       a11y.value = a11yPrefs();
       reducesMotion.value = systemReducesMotion();
-      if (a11y.value.verbosity !== "verbose" || a11y.value.singleKeys || !a11y.value.solidPanels) presetNote.value = "";
+      const prefs = a11y.value;
+      if (presetKeys.some((k) => prefs[k] !== SCREEN_READER_PRESET[k])) presetNote.value = "";
     }),
     onNavPrefsChange(() => {
       nav.value = getNavPrefs();
@@ -252,12 +254,14 @@ async function onResetA11y() {
 }
 
 const presetNote = ref("");
+const presetKeys = Object.keys(SCREEN_READER_PRESET) as (keyof typeof SCREEN_READER_PRESET)[];
 async function screenReaderPreset() {
   applyScreenReaderPreset();
   // Emptied for a tick first, so a second press changes the live region and is spoken again.
   presetNote.value = "";
   await nextTick();
-  presetNote.value = "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.";
+  presetNote.value =
+    "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.";
 }
 
 // Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
@@ -844,9 +848,9 @@ function onClassicCamera(on: boolean) {
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
             <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose, turns Single key shortcuts off and Solid panels on,
-              the setup that suits NVDA, VoiceOver and other screen readers. Reset to defaults clears every choice
-              below, so Contrast and Animations follow the system again.
+              Screen reader preset sets Announcements to Verbose and Notification time to Until dismissed, and turns
+              Single key shortcuts off and Solid panels on, the setup that suits NVDA, VoiceOver and other screen
+              readers. Reset to defaults clears every choice below, so Contrast and Animations follow the system again.
             </p>
           </div>
 

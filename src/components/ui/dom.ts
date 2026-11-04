@@ -2,7 +2,7 @@
 
 import { iconElement } from "../../ui/icons";
 import { announce } from "../../ui/announce";
-import { a11yPrefs } from "../../ui/a11yPrefs";
+import { a11yPrefs, onA11yPrefsChange } from "../../ui/a11yPrefs";
 import { spokenUnit, unitById } from "../../ui/measure";
 import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
@@ -300,6 +300,25 @@ export interface UiNumberInput {
 
 let numberNo = 0;
 
+// Weakly held, so a box taken off the page is not kept alive by the one listener that keeps every unit word current.
+type UnitWord = { word: WeakRef<HTMLElement>; unit: string };
+const unitWords = new Set<UnitWord>();
+const forgetUnitWord = new FinalizationRegistry<UnitWord>((w) => unitWords.delete(w));
+onA11yPrefsChange(() => {
+  const full = a11yPrefs().unitsInFull;
+  for (const w of unitWords) {
+    const word = w.word.deref();
+    if (word) word.textContent = spokenUnit(w.unit, full);
+  }
+});
+
+function followUnitsInFull(word: HTMLElement, unit: string): void {
+  word.textContent = spokenUnit(unit, a11yPrefs().unitsInFull);
+  const w = { word: new WeakRef(word), unit };
+  unitWords.add(w);
+  forgetUnitWord.register(word, w);
+}
+
 /** NumberField.vue's markup as DOM; the caller reads and commits the text. */
 export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
   const root = document.createElement("span");
@@ -341,7 +360,7 @@ export function uiNumberInput(o: UiNumberInputOptions = {}): UiNumberInput {
     const word = document.createElement("span");
     word.id = `ui-num-${++numberNo}-unit`;
     word.className = "sr-only";
-    word.textContent = spokenUnit(o.unit, a11yPrefs().unitsInFull);
+    followUnitsInFull(word, o.unit);
     input.setAttribute("aria-describedby", word.id);
     root.append(word);
   }

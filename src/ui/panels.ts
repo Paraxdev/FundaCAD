@@ -50,6 +50,7 @@ import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } fr
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
 import { interferenceData, interferenceSummary } from "./interferenceRows";
+import { toast } from "./toast";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -1243,7 +1244,8 @@ export function createPanels(deps: PanelsDeps) {
     facesFor = null;
     refreshStressMarks();
     showUndo();
-    setStatus(`${way === "undo" ? "Undid" : "Redid"}: ${step.label}`, "");
+    // doUndo and doRedo say the step on the history key, so the toast only shows it.
+    toast(`${way === "undo" ? "Undid" : "Redid"}: ${step.label}`, { silent: true });
     return true;
   }
 

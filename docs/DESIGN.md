@@ -1160,6 +1160,10 @@ It returns the toast's id for `dismissToast`, or null for an error.
   button in Notifications."). An error is spoken by the title bar notice. The
   stack is a permanent region named "Notifications", empty when no toast
   shows, and is not live, so nothing is said twice.
+- Under a dialog or the command palette the stack is inert and `aria-hidden`
+  with the page, below the backdrop, so no region sits beside the modal. A
+  toast with a button then waits and gets its full time once the modal closes,
+  one without keeps its time. Home keeps the stack live, as it keeps its toggle.
 - The console is not a dialog but a `role="region"` named by its `h2` "Console"
   (`tabindex="-1"`). Show Console, the error notice and its chord (outside a
   text field) focus that heading, and closing returns focus to the opener. The

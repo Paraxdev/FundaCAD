@@ -94,3 +94,60 @@ describe("toast pause and resume", () => {
     expect(showing()).toEqual([]);
   });
 });
+
+describe("toast hold under a modal", () => {
+  const undo = { label: "Undo", onClick: () => {} };
+
+  it("holds only a toast with a button, which gets a full hold after the modal closes", () => {
+    const st = useToastStore();
+    st.push("Deleted Box 2", "info", undo, 15000);
+    st.push("Saved 3 parts", "info", undefined, 5000);
+    vi.advanceTimersByTime(1000);
+    st.pause("modal");
+    vi.advanceTimersByTime(60000);
+    expect(showing()).toEqual(["Deleted Box 2"]);
+    st.resume("modal");
+    vi.advanceTimersByTime(14990);
+    expect(showing()).toEqual(["Deleted Box 2"]);
+    vi.advanceTimersByTime(20);
+    expect(showing()).toEqual([]);
+  });
+
+  it("a toast with a button raised inside the modal waits until it closes", () => {
+    const st = useToastStore();
+    st.pause("modal");
+    st.push("Restored the defaults", "info", undo, 15000);
+    vi.advanceTimersByTime(60000);
+    expect(showing()).toEqual(["Restored the defaults"]);
+    st.resume("modal");
+    vi.advanceTimersByTime(15010);
+    expect(showing()).toEqual([]);
+  });
+
+  it("the stack hold and the modal hold each keep their toasts until their own resume", () => {
+    const st = useToastStore();
+    st.push("Deleted Box 2", "info", undo, 15000);
+    st.push("Saved 3 parts", "info", undefined, 5000);
+    st.pause();
+    st.pause("modal");
+    st.resume();
+    vi.advanceTimersByTime(60000);
+    expect(showing()).toEqual(["Deleted Box 2"]);
+    st.pause();
+    st.resume("modal");
+    vi.advanceTimersByTime(60000);
+    expect(showing()).toEqual(["Deleted Box 2"]);
+    st.resume();
+    vi.advanceTimersByTime(15010);
+    expect(showing()).toEqual([]);
+  });
+
+  it("a modal resume with no modal hold restarts nothing", () => {
+    const st = useToastStore();
+    st.push("Deleted Box 2", "info", undo, 15000);
+    vi.advanceTimersByTime(10000);
+    st.resume("modal");
+    vi.advanceTimersByTime(5010);
+    expect(showing()).toEqual([]);
+  });
+});

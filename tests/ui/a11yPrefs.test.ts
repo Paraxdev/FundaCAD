@@ -231,7 +231,7 @@ describe("reset and the screen reader preset", () => {
     expect(m.motionOn()).toBe(false);
   });
 
-  it("the preset sets Announcements to Verbose, Single key shortcuts off and Solid panels on, stores them and leaves the rest", async () => {
+  it("the preset sets Announcements to Verbose, Single key shortcuts off, Solid panels on and Notification time to Until dismissed, stores them and leaves the rest", async () => {
     boot({ "fundacad.animations": "off" });
     const m = await load();
     let calls = 0;
@@ -245,7 +245,7 @@ describe("reset and the screen reader preset", () => {
       solidPanels: true,
       targets: "default",
       unitsInFull: true,
-      noticeTime: "normal",
+      noticeTime: "until-dismissed",
       interfaceSize: 100,
       comfortableText: false,
       viewportLabels: "m",
@@ -253,6 +253,7 @@ describe("reset and the screen reader preset", () => {
     expect(stored.get("fundacad.a11y.verbosity")).toBe("verbose");
     expect(stored.get("fundacad.a11y.singleKeys")).toBe("off");
     expect(stored.get("fundacad.a11y.solidPanels")).toBe("true");
+    expect(stored.get("fundacad.a11y.noticeTime")).toBe("until-dismissed");
     expect(calls).toBe(1);
   });
 });
@@ -334,11 +335,11 @@ describe("Notification time", () => {
     expect(m.a11yPrefs().noticeTime).toBe("until-dismissed");
   });
 
-  it("is dropped by reset and left alone by the screen reader preset", async () => {
+  it("is set to Until dismissed by the screen reader preset and dropped by reset", async () => {
     boot({ "fundacad.a11y.noticeTime": "longer" });
     const m = await load();
     m.applyScreenReaderPreset();
-    expect(m.a11yPrefs().noticeTime).toBe("longer");
+    expect(m.a11yPrefs().noticeTime).toBe("until-dismissed");
     m.resetA11yPrefs();
     expect(m.a11yPrefs().noticeTime).toBe("normal");
     expect(stored.has("fundacad.a11y.noticeTime")).toBe(false);
