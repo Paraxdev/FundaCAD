@@ -24,7 +24,12 @@ function mounted() {
   const tools = new Proxy({} as Record<string, { active: boolean; picking: boolean }>, {
     get: (t, k: string) => (t[k] ??= { active: false, picking: false }),
   });
-  const e = { sketch: { active: false }, planePick: false, tools, viewport: { domElement: $("view") } };
+  const e = {
+    sketch: { active: false, focusKeys: () => false },
+    planePick: false,
+    tools,
+    viewport: { domElement: $("view") },
+  };
   Object.assign(e, createToolBusy(e as unknown as Engine));
   const frames: (() => void)[] = [];
   const stop = installToolFocus(e as unknown as Engine, {
