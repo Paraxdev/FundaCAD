@@ -111,7 +111,12 @@ describe("ExportDialog", () => {
     await settle();
     $("[data-testid=export-advanced]")!.click();
     await settle();
-    const unitOf = (id: string) => $(`[data-testid=${id}]`)!.closest(".ui-number-field")!.textContent!.trim();
+    // The field also holds its unit spelled out for a screen reader, which is not shown.
+    const unitOf = (id: string) => {
+      const field = $(`[data-testid=${id}]`)!.closest(".ui-number-field")!.cloneNode(true) as HTMLElement;
+      field.querySelectorAll(".sr-only").forEach((e) => e.remove());
+      return field.textContent!.trim();
+    };
     expect([unitOf("export-surface-deviation"), unitOf("export-normal-deviation")]).toEqual(["mm", "°"]);
   });
 });
