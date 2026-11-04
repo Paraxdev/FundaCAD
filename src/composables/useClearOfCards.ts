@@ -1,7 +1,10 @@
 import { onMounted, onUnmounted, type Ref } from "vue";
 import { COLUMNS, LEFT_CARDS, RIGHT_CARDS, clearRow, promptInsets, type Box } from "../ui/promptPlacement";
+import { underZoom } from "../ui/anchor";
+import { pageZoom } from "../ui/interfaceSize";
 
-const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
+const rects = (sel: string, z: number): Box[] =>
+  [...document.querySelectorAll(sel)].map((o) => underZoom(o.getBoundingClientRect(), z));
 
 // Layout sizes, not getBoundingClientRect: a child's entrance animation scales it, and nothing re-measures after.
 const natural = (me: HTMLElement) => ({
@@ -32,9 +35,10 @@ export function useClearOfCards(el: Readonly<Ref<HTMLElement | null>>, minWidth 
     watchAll();
     const root = getComputedStyle(document.documentElement);
     const gap = parseFloat(root.getPropertyValue("--float-gap")) || 12;
-    const box = area.getBoundingClientRect();
+    const z = pageZoom();
+    const box = underZoom(area.getBoundingClientRect(), z);
     const first = box.top + (parseFloat(root.getPropertyValue("--s-4")) || 16);
-    const cards = { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) };
+    const cards = { left: rects(LEFT_CARDS, z), right: rects(RIGHT_CARDS, z) };
     const rowWhen = (narrow: boolean) => {
       me.toggleAttribute("data-narrow", narrow);
       return clearRow(box, natural(me), first, cards, gap);

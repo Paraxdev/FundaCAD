@@ -10,6 +10,7 @@ import type { GuideState, StepState } from "../../ui/guide/guideSession";
 import { placeBubble, ringRect, type Placed } from "../../ui/guide/placement";
 import { modelShape, type ModelShape } from "../../ui/guide/probe";
 import type { Box } from "../../ui/controlRefs";
+import { pageZoom } from "../../ui/interfaceSize";
 import Button from "../ui/Button.vue";
 
 const engine = useEngine();
@@ -112,7 +113,8 @@ function modelBox(s: StepState): Box | null {
       minY = Math.min(minY, p.y);
       maxY = Math.max(maxY, p.y);
     }
-    out.push(pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+    const z = pageZoom();
+    out.push(pts.map((p) => `${(p.x / z).toFixed(1)},${(p.y / z).toFixed(1)}`).join(" "));
   }
   paths.value = out;
   return out.length ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
@@ -123,14 +125,18 @@ function follow(s: StepState): void {
     if (frame % 15 === 0 || !target?.isConnected) locateUi(s);
   }
   frame++;
-  const box = s.target.ui !== undefined ? (target?.isConnected ? target.getBoundingClientRect() : null) : modelBox(s);
-  const r = box ? ringRect({ left: box.left, top: box.top, width: box.width, height: box.height }) : null;
+  // Window pixels in, the CSS pixels of the root zoom out.
+  const z = pageZoom();
+  const css = (b: Box): Box => ({ left: b.left / z, top: b.top / z, width: b.width / z, height: b.height / z });
+  const seen = s.target.ui !== undefined ? (target?.isConnected ? target.getBoundingClientRect() : null) : modelBox(s);
+  const box = seen ? css(seen) : null;
+  const r = box ? ringRect(box) : null;
   if (!sameBox(r, ring.value)) ring.value = r;
   const el = bubble.value;
   if (el) {
     const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
-    const view = { width: window.innerWidth, height: window.innerHeight };
-    const avoid = [...document.querySelectorAll(AVOID)].map((d) => d.getBoundingClientRect());
+    const view = { width: window.innerWidth / z, height: window.innerHeight / z };
+    const avoid = [...document.querySelectorAll(AVOID)].map((d) => css(d.getBoundingClientRect()));
     const at = box
       ? placeBubble(box, view, size, avoid)
       : { side: "below" as const, left: view.width / 2 - size.width / 2, top: 72, ...size };

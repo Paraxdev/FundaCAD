@@ -1,6 +1,8 @@
 // The span of the prompt's row no floating card covers: the viewport runs full bleed, so centring alone slid the
 // prompt under the tool rail once the Render panel narrowed the view.
 
+import { underZoom } from "./anchor";
+
 export interface Box {
   left: number;
   top: number;
@@ -101,7 +103,9 @@ export function seenRect(el: Element): Box {
   return out;
 }
 
-export const cardRects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map(seenRect);
+/** In window pixels, or in the CSS pixels of the root zoom `z` (pageZoom). */
+export const cardRects = (sel: string, z = 1): Box[] =>
+  [...document.querySelectorAll(sel)].map((o) => underZoom(seenRect(o), z));
 
 /** The part of `area` a row spanning `band` can use without sliding under a card. */
 export function clearOfCards(area: Box, band: { top: number; bottom: number }, gap: number, minWidth: number): Box {

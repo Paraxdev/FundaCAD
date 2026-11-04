@@ -1,5 +1,7 @@
 import { onMounted, onUnmounted, type Ref } from "vue";
 import { COLUMNS, LEFT_CARDS, RIGHT_CARDS, cardRects, centreShift, promptInsets } from "../ui/promptPlacement";
+import { underZoom } from "../ui/anchor";
+import { pageZoom } from "../ui/interfaceSize";
 
 /** Sets --span-left, --span-right and --span-shift so `el`, laid out as the prompt is, keeps to the stretch of its own
  *  row no floating card covers and lines up with the prompt on the middle of the view as far as that stretch allows. */
@@ -27,13 +29,15 @@ export function useClearSpan(el: Readonly<Ref<HTMLElement | null>>) {
     if (!me || !area) return;
     watchAll();
     const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--float-gap")) || 12;
-    const box = area.getBoundingClientRect();
-    const mine = me.getBoundingClientRect();
-    const cards = { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) };
-    const insets = promptInsets(box, mine, cards, gap, mine.width);
+    const z = pageZoom();
+    const box = underZoom(area.getBoundingClientRect(), z);
+    const mine = underZoom(me.getBoundingClientRect(), z);
+    const cards = { left: cardRects(LEFT_CARDS, z), right: cardRects(RIGHT_CARDS, z) };
+    const width = mine.right - mine.left;
+    const insets = promptInsets(box, mine, cards, gap, width);
     put(me, "--span-left", insets.left);
     put(me, "--span-right", insets.right);
-    put(me, "--span-shift", centreShift(box.width, insets, mine.width));
+    put(me, "--span-shift", centreShift(box.right - box.left, insets, width));
   };
 
   const schedule = () => {
