@@ -981,6 +981,19 @@ A destructive row is red text: `MenuItem` with `danger` is `--error`, hover `--e
 `.ctx-item.danger` (Remove body) still uses hard coded reds. Tree rows (`TreeRow`, `TreeFolder`, `InlineLabel`) keep
 their own keys and drag; new rows of that kind wear the `ListRow` look.
 
+The sketch palette holds three lists under one heading each (`SketchShapesList`, `SketchDimensionsList`,
+`SketchRelationsList`), shown as a list of rows, never as controls on the canvas:
+
+- Shapes and Relations rows are a `ListRow` button with a spoken `aria-label` (the shape with its freedom, the rule
+  with what it holds). A row that can be removed sits in an `li.rel-row` with a sibling `IconButton` (`.rel-del`,
+  `danger`) named `Delete` and the same words. The button is a sibling, never inside the row button, so Tab reaches
+  both. It shows on hover and on `:focus-within`, and stays in the tab order while hidden.
+- A Dimensions row is a `FieldRow` with a `NumberField` (`commit="change"`, the unit of the dimension), named by the
+  dimension's subject. A driven dimension is disabled and says why.
+- The line above Relations (`.rel-summary`) takes focus after a Delete, so the keys do not fall back to the page. A
+  freedom change is spoken through the announcer, not by a live region on the list.
+- Freedom is words, never colour alone: a shape is "free in X", "free in X and Y", "free in size" or "fixed".
+
 ### 7.10 Popovers, menus, dialogs, palette, toasts, prompt
 
 | Surface | Recipe |
@@ -1196,6 +1209,11 @@ guard test cannot see them; hold them to these rules by hand.
   ΔE2000 15 or more under every dichromacy, or 10 L* apart. Noir and the other
   dark themes keep free and projected close in hue, so projected geometry
   relies on its dashes there.
+- Colour never carries a sketch state alone. Construction geometry is drawn in short dashes (dash to gap 0.63),
+  projected geometry in long ones (14px dash, 3px gap, 0.21, sized in screen pixels so the ratio holds at every
+  zoom), a free curve is solid. A loose end that touches nothing is a ring (`LOOSE_RING_PX`), an end that meets a curve
+  with no rule a dot. The badge and glyph layers over the canvas are `aria-hidden` (not `inert`, a pointer still edits
+  them), the palette lists carry what they say.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
 - Each tile spans the positive side of its two axes, set 10px out from both
   arrows (`TILE_GAP_PX`), so its two inner edges run parallel to the arrows and
