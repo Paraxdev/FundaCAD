@@ -49,15 +49,21 @@ export function closeOpenEdit(e: Engine, except: string): void {
 // edit has begun no edit preview to read it from.
 const reEdited = new WeakMap<Engine, string>();
 
-/** A document change, an undo or a redo above all, that takes away the step an open tool re-edits or a sketch it
- *  extrudes closes the tool: Enter would add a red step or nothing, and either way lose the redo. */
+// Any open tool with a dependsOn() names the steps its input rests on beyond the one it re-edits, a Shell the
+// owners of its picked faces.
+const restedOn = (tools: Engine["tools"]) =>
+  Object.values(tools).flatMap((t) => ("dependsOn" in t && t.active ? t.dependsOn() : []));
+
+/** A document change, an undo or a redo above all, that takes away the step an open tool re-edits, a sketch it
+ *  extrudes or a step it rests on closes the tool: Enter would add a red step or nothing, and either way lose the
+ *  redo. */
 export function closeToolOnLostStep(e: Engine): () => void {
   let had = new Set<string>();
   return e.store.onDocChange((doc) => {
     const was = had;
     had = new Set(doc.features.map((f) => f.id));
     if (!e.toolAtWork()) return void reEdited.delete(e);
-    const under = [reEdited.get(e), e.store.editPreviewId, ...e.tools.extrude.profileSketches];
+    const under = [reEdited.get(e), e.store.editPreviewId, ...e.tools.extrude.profileSketches, ...restedOn(e.tools)];
     if (under.some((id) => id && was.has(id) && !had.has(id))) cancelActiveTools(e.tools);
   });
 }
