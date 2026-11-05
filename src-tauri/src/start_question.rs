@@ -43,6 +43,39 @@ pub fn ask(reason: Reason) -> Result<Answer, String> {
     Answer::from_exit(status.code())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Nav {
+    Page,
+    /// The page's report of its first painted frame.
+    Shown,
+    Choice(Answer),
+    Deny,
+}
+
+/// Only the page itself loads, `/shown` and `/choice` are read and cancelled. Tauri serves a custom scheme from
+/// http://<scheme>.localhost on Windows.
+pub fn navigation(url: &tauri::Url, windows: bool) -> Nav {
+    let own = if windows {
+        url.scheme() == "http" && url.host_str().and_then(|h| h.strip_suffix(".localhost")) == Some(SCHEME)
+    } else {
+        url.scheme() == SCHEME && url.host_str() == Some("localhost")
+    };
+    if !own || url.port().is_some() || !url.username().is_empty() || url.password().is_some() {
+        return Nav::Deny;
+    }
+    match url.path() {
+        "/" if url.query().is_none() => Nav::Page,
+        "/shown" => Nav::Shown,
+        "/choice" => {
+            let pairs: Vec<(String, String)> =
+                url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+            let picked = Answer::from_form(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+            Nav::Choice(picked.unwrap_or(Answer::Normal))
+        }
+        _ => Nav::Deny,
+    }
+}
+
 fn escape(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
@@ -90,8 +123,6 @@ pub fn run(args: &[String]) -> i32 {
         .setup(move |app| {
             let handle = app.handle().clone();
             let url: tauri::Url = format!("{SCHEME}://localhost/").parse()?;
-            // The form submits to /choice, which never loads: on Windows the page's origin is
-            // http://fundacad-ask.localhost, elsewhere fundacad-ask://localhost, so only the path is checked.
             let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::CustomProtocol(url))
                 .title("FundaCAD")
                 .inner_size(420.0, 350.0)
@@ -102,22 +133,19 @@ pub fn run(args: &[String]) -> i32 {
                 .focused(true)
                 .theme(Some(tauri::Theme::Dark))
                 .background_color(tauri::window::Color(27, 24, 38, 255))
-                .on_navigation(move |url| {
-                    // The page's report of its first painted frame.
-                    if url.path() == "/shown" {
+                .on_navigation(move |url| match navigation(url, cfg!(windows)) {
+                    Nav::Page => true,
+                    Nav::Shown => {
                         reported.store(true, Ordering::SeqCst);
-                        return false;
+                        false
                     }
-                    if url.path() != "/choice" {
-                        return true;
+                    Nav::Choice(picked) => {
+                        reported.store(true, Ordering::SeqCst);
+                        *held.lock().unwrap_or_else(|p| p.into_inner()) = Some(picked);
+                        handle.exit(0);
+                        false
                     }
-                    reported.store(true, Ordering::SeqCst);
-                    let pairs: Vec<(String, String)> =
-                        url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
-                    let picked = Answer::from_form(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-                    *held.lock().unwrap_or_else(|p| p.into_inner()) = Some(picked.unwrap_or(Answer::Normal));
-                    handle.exit(0);
-                    false
+                    Nav::Deny => false,
                 });
             // Its own profile, so the app's webview never meets one still closing with other options.
             if let Ok(dir) = app.path().app_local_data_dir() {
