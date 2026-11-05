@@ -141,25 +141,28 @@ fn with_wall(wall: [f64; 3], d: f64, blend_first: bool) -> Value {
     raw
 }
 
-/// The fixture's box made `dx` wider at its x wall and `dz` taller, filleted G3 at its own radius.
-fn direct(dx: f64, dz: f64) -> Value {
+/// The fixture's box made `dx` wider at its x wall, `dy` at its y wall and `dz` taller, filleted G3 at its own
+/// radius.
+fn direct(dx: f64, dy: f64, dz: f64) -> Value {
     let mut raw = filleted();
     let rect = &mut raw["features"][0]["entities"][0];
     rect["width"] = json!(2.0 * X_WALL + dx);
     rect["x"] = json!(dx / 2.0);
+    rect["height"] = json!(2.0 * Y_WALL + dy);
+    rect["y"] = json!(dy / 2.0);
     raw["features"][1]["distance"] = json!(HEIGHT + dz);
-    raw["features"][2]["edges"]["point"] = json!([X_WALL + dx, Y_WALL, (HEIGHT + dz) / 2.0]);
+    raw["features"][2]["edges"]["point"] = json!([X_WALL + dx, Y_WALL + dy, (HEIGHT + dz) / 2.0]);
     raw
 }
 
-fn carries_the_round(wall: [f64; 3], d: f64, dx: f64, dz: f64) {
-    let want = body(&direct(dx, dz));
+fn carries_the_round(wall: [f64; 3], d: f64, [dx, dy, dz]: [f64; 3]) {
+    let want = body(&direct(dx, dy, dz));
     let (v, a) = (kernel::volume(&want), kernel::area(&want));
     for blend_first in [true, false] {
         let out = body(&with_wall(wall, d, blend_first));
         tangent_to_walls(&out);
         let b = kernel::bbox(&out).expect("a box");
-        assert!(b[3] <= X_WALL + dx + 1e-4 && b[4] <= Y_WALL + 1e-4 && b[5] <= HEIGHT + dz + 1e-4, "{b:?}");
+        assert!(b[3] <= X_WALL + dx + 1e-4 && b[4] <= Y_WALL + dy + 1e-4 && b[5] <= HEIGHT + dz + 1e-4, "{b:?}");
         let (got, area) = (kernel::volume(&out), kernel::area(&out));
         eprintln!("{wall:?} {d} blend first {blend_first}: {got} against {v}");
         assert!((got - v).abs() < 1e-5 * v, "{wall:?} {d}: {got} against {v}");
@@ -170,22 +173,27 @@ fn carries_the_round(wall: [f64; 3], d: f64, dx: f64, dz: f64) {
 
 #[test]
 fn the_blend_and_top_pushed_half_a_millimetre_carry_the_round_up() {
-    carries_the_round(TOP, 0.5, 0.0, 0.5);
+    carries_the_round(TOP, 0.5, [0.0, 0.0, 0.5]);
 }
 
 #[test]
 fn the_blend_and_top_pushed_three_millimetres_carry_the_round_up() {
-    carries_the_round(TOP, 3.0, 0.0, 3.0);
+    carries_the_round(TOP, 3.0, [0.0, 0.0, 3.0]);
 }
 
 #[test]
 fn the_blend_and_top_pushed_seven_millimetres_carry_the_round_up() {
-    carries_the_round(TOP, 7.0, 0.0, 7.0);
+    carries_the_round(TOP, 7.0, [0.0, 0.0, 7.0]);
 }
 
 #[test]
 fn the_blend_and_the_side_wall_it_meets_carry_the_round_out() {
-    carries_the_round(X_SIDE, 3.0, 3.0, 0.0);
+    carries_the_round(X_SIDE, 3.0, [3.0, 0.0, 0.0]);
+}
+
+#[test]
+fn the_blend_and_the_other_side_wall_it_meets_carry_the_round_out() {
+    carries_the_round(Y_SIDE, 3.0, [0.0, 3.0, 0.0]);
 }
 
 #[test]
