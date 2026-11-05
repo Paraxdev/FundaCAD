@@ -1,6 +1,7 @@
 //! Press/pull of a G3 fillet blend on a box's vertical corner changes its radius as a refillet would: the blend
 //! stays tangent to both walls and nothing grows past their planes. It used to be swept out as a slab along its
-//! centre normal, which stood proud of both box sides.
+//! centre normal, which stood proud of both box sides. Pushed together with a wall it meets, the round keeps
+//! its radius.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -119,22 +120,80 @@ fn the_blend_is_offered_as_a_round_of_its_fillet_radius() {
     assert_eq!(r["axis"]["origin"][1].as_f64().map(|y| (y - Y_WALL).abs() < 1e-4), Some(true), "{got:?}");
 }
 
-#[test]
-fn the_blend_and_top_pushed_together_give_a_taller_box_with_a_smaller_round() {
-    let d = 7.0;
+const HEIGHT: f64 = 52.132;
+const TOP: [f64; 3] = [0.0, 0.0, HEIGHT];
+const X_SIDE: [f64; 3] = [X_WALL, -30.0, 10.0];
+const Y_SIDE: [f64; 3] = [-30.0, Y_WALL, 10.0];
+
+fn near(p: [f64; 3]) -> Value {
+    json!({"kind": "face", "by": "nearest", "point": p, "body": "body1"})
+}
+
+/// The blend and the wall at `wall` pushed `d` in one Press/Pull, the blend picked first or second.
+fn with_wall(wall: [f64; 3], d: f64, blend_first: bool) -> Value {
+    let mut faces = vec![near(BLEND), near(wall)];
+    if !blend_first {
+        faces.reverse();
+    }
     let mut raw = filleted();
-    raw["features"].as_array_mut().unwrap().push(json!({"id": "push", "type": "press-pull",
-        "face": [{"kind": "face", "by": "nearest", "point": BLEND, "body": "body1"},
-                 {"kind": "face", "by": "nearest", "point": [0.0, 0.0, 52.132], "body": "body1"}],
-        "distance": d, "operation": "join", "body": "body1"}));
-    let out = body(&raw);
-    tangent_to_walls(&out);
-    inside_the_walls(&out);
-    let mut want = filleted_at(RADIUS - d);
-    want["features"][1]["distance"] = json!(52.132 + d);
-    let (got, want) = (kernel::volume(&out), kernel::volume(&body(&want)));
-    eprintln!("blend and top {d}: {got}");
-    assert!((got - want).abs() < 1e-5 * want, "{got} against {want}");
+    raw["features"].as_array_mut().unwrap().push(json!({"id": "push", "type": "press-pull", "face": faces,
+        "distance": d, "operation": if d > 0.0 { "join" } else { "cut" }, "body": "body1"}));
+    raw
+}
+
+/// The fixture's box made `dx` wider at its x wall and `dz` taller, filleted G3 at its own radius.
+fn direct(dx: f64, dz: f64) -> Value {
+    let mut raw = filleted();
+    let rect = &mut raw["features"][0]["entities"][0];
+    rect["width"] = json!(2.0 * X_WALL + dx);
+    rect["x"] = json!(dx / 2.0);
+    raw["features"][1]["distance"] = json!(HEIGHT + dz);
+    raw["features"][2]["edges"]["point"] = json!([X_WALL + dx, Y_WALL, (HEIGHT + dz) / 2.0]);
+    raw
+}
+
+fn carries_the_round(wall: [f64; 3], d: f64, dx: f64, dz: f64) {
+    let want = body(&direct(dx, dz));
+    let (v, a) = (kernel::volume(&want), kernel::area(&want));
+    for blend_first in [true, false] {
+        let out = body(&with_wall(wall, d, blend_first));
+        tangent_to_walls(&out);
+        let b = kernel::bbox(&out).expect("a box");
+        assert!(b[3] <= X_WALL + dx + 1e-4 && b[4] <= Y_WALL + 1e-4 && b[5] <= HEIGHT + dz + 1e-4, "{b:?}");
+        let (got, area) = (kernel::volume(&out), kernel::area(&out));
+        eprintln!("{wall:?} {d} blend first {blend_first}: {got} against {v}");
+        assert!((got - v).abs() < 1e-5 * v, "{wall:?} {d}: {got} against {v}");
+        assert!((area - a).abs() < 1e-5 * a, "{wall:?} {d}: area {area} against {a}");
+        assert_eq!(kernel::count(&out, Kind::Face), kernel::count(&want, Kind::Face), "{wall:?} {d}");
+    }
+}
+
+#[test]
+fn the_blend_and_top_pushed_half_a_millimetre_carry_the_round_up() {
+    carries_the_round(TOP, 0.5, 0.0, 0.5);
+}
+
+#[test]
+fn the_blend_and_top_pushed_three_millimetres_carry_the_round_up() {
+    carries_the_round(TOP, 3.0, 0.0, 3.0);
+}
+
+#[test]
+fn the_blend_and_top_pushed_seven_millimetres_carry_the_round_up() {
+    carries_the_round(TOP, 7.0, 0.0, 7.0);
+}
+
+#[test]
+fn the_blend_and_the_side_wall_it_meets_carry_the_round_out() {
+    carries_the_round(X_SIDE, 3.0, 3.0, 0.0);
+}
+
+#[test]
+fn a_wall_pushed_in_too_far_for_the_carried_round_is_refused_saying_why() {
+    let r = rebuild(&with_wall(Y_SIDE, -20.0, true));
+    let errors: Vec<&str> = r.errors.iter().map(|e| e.message.as_str()).collect();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(errors[0].contains("R37.1") && errors[0].contains("runs off the face"), "{errors:?}");
 }
 
 #[test]

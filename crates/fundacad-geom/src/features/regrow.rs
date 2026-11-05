@@ -214,16 +214,57 @@ impl Blend {
         if r < -1e-6 {
             return Err(Fail::msg("that push runs the round past the sharp corner it rounds, try a smaller distance"));
         }
-        // A kept corner is handed to every tick, and OCCT writes p-curves and tolerances into what it is given.
-        let corner = kernel::copy_topology(&self.corner)?;
+        let corner = self.sharp()?;
         if r.abs() < 1e-6 {
             return Ok(corner);
         }
         let Some(edge) = kernel::subshapes(&corner, Kind::Edge).into_iter().nth(self.edge) else {
             return Err(Fail::msg("the corner's edge is gone"));
         };
-        let edges = std::slice::from_ref(&edge);
-        let built = blend_ops::section(&corner, edges, false, &[r], None, r, self.continuity, false, 0.0);
+        self.round(&corner, &edge, r)
+    }
+
+    /// A copy of the sharp corner, to be changed and rounded again.
+    pub fn sharp(&self) -> FResult<Shape> {
+        // A kept corner is handed to every tick, and OCCT writes p-curves and tolerances into what it is given.
+        Ok(kernel::copy_topology(&self.corner)?)
+    }
+
+    /// The planes of the two walls the blend runs smoothly into, on the sharp corner.
+    pub fn seams(&self) -> Option<[Plane; 2]> {
+        let edge = kernel::subshapes(&self.corner, Kind::Edge).into_iter().nth(self.edge)?;
+        let adj = FaceAdjacency::new(&self.corner);
+        let fs = adj.faces_of_edge(&edge);
+        let [a, b]: [usize; 2] = fs.try_into().ok()?;
+        Some([plane_of(&adj.face(a))?, plane_of(&adj.face(b))?])
+    }
+
+    /// `part`, the sharp corner with some of its walls pushed, rounded again at the blend's own radius along the
+    /// edge where the seam walls, now on `seams`, meet.
+    pub fn carried(&self, part: &Shape, seams: [Plane; 2]) -> FResult<Shape> {
+        let adj = FaceAdjacency::new(part);
+        let edge = kernel::subshapes(part, Kind::Edge)
+            .into_iter()
+            .filter(|e| {
+                let fs = adj.faces_of_edge(e);
+                fs.len() == 2 && {
+                    let (f, g) = (adj.face(fs[0]), adj.face(fs[1]));
+                    (on_plane(&f, seams[0]) && on_plane(&g, seams[1]))
+                        || (on_plane(&f, seams[1]) && on_plane(&g, seams[0]))
+                }
+            })
+            .filter_map(|e| EdgeEnt::new(e.clone()).ok().map(|en| (en.mid.distance(self.axis.0), e)))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, e)| e);
+        let Some(edge) = edge else {
+            return Err(Fail::msg("can't round this corner again, the walls it rounds no longer meet"));
+        };
+        self.round(part, &edge, self.radius)
+    }
+
+    fn round(&self, corner: &Shape, edge: &Shape, r: f64) -> FResult<Shape> {
+        let edges = std::slice::from_ref(edge);
+        let built = blend_ops::section(corner, edges, false, &[r], None, r, self.continuity, false, 0.0);
         if let Some(out) = built.as_ref().ok().and_then(one_solid) {
             return Ok(out);
         }
@@ -234,4 +275,37 @@ impl Blend {
         let head = format!("can't round this corner again at R{}", crate::builder::py_g(r));
         Err(Fail::msg(why.map_or(head.clone(), |m| format!("{head}, {m}"))))
     }
+}
+
+/// A flat face's plane: a point on it and its outward normal.
+pub type Plane = (DVec3, DVec3);
+
+pub fn plane_of(face: &Shape) -> Option<Plane> {
+    if surface_type(face) != Some(SurfaceType::Plane) {
+        return None;
+    }
+    let n = kernel::face_normal_mid(face)?;
+    Some((FaceEnt::new(face.clone()).ok()?.centroid(), DVec3::from_array(n)))
+}
+
+pub fn on_plane(face: &Shape, (p, n): Plane) -> bool {
+    plane_of(face).is_some_and(|(q, m)| m.dot(n) > 1.0 - 1e-9 && (q - p).dot(n).abs() < 1e-6)
+}
+
+/// The flat faces `face`'s blend meets, at its seams or across its ends.
+pub fn walls_met(part: &Shape, face: &Shape) -> Vec<Shape> {
+    let Some((group, _)) = blend_faces(part, face) else {
+        return Vec::new();
+    };
+    let adj = FaceAdjacency::new(part);
+    let inside: Vec<usize> = group.iter().map(|f| adj.index_of(f)).collect();
+    let mut met: Vec<usize> = Vec::new();
+    for &i in &inside {
+        for (j, _) in adj.walk(i) {
+            if !inside.contains(&j) && !met.contains(&j) && surface_type(&adj.face(j)) == Some(SurfaceType::Plane) {
+                met.push(j);
+            }
+        }
+    }
+    met.into_iter().map(|j| adj.face(j)).collect()
 }
