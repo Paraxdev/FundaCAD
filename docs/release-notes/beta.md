@@ -37,7 +37,7 @@
 - Hiding a sketch in Items shows at once.
 - The origin plane tiles have four rounded corners and a small gap again.
 - A mouse wheel keeps zooming at every Interface size, and Ctrl with the wheel pans the view up and down.
-- Path traced waits for the view to rest before it comes back after a zoom, a held arrow key or a view click.
+- In Path traced, the picture settles sooner after a zoom, and no longer comes back in between the repeats of a held arrow key or during a view click from inside a model.
 - Ctrl+Z in a tool first takes back what you typed in its field.
 - Press/Pull moves a fillet's round face together with the face beside it instead of refusing, and gives the same shape whichever you click first.
 - Press/Pull shows the body see-through only in Cut.
