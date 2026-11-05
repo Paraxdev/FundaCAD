@@ -201,9 +201,13 @@ fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape
 
 /// Every neighbour meets the face at a right angle, so a push leaves them as straight walls.
 fn square_sides(part: &Shape, face: &Shape) -> bool {
-    kernel::subshapes(face, Kind::Edge)
-        .iter()
-        .all(|e| blend_ops::dihedral_deg(part, e).is_some_and(|a| (a - 90.0).abs() < SQUARE_DEG))
+    kernel::subshapes(face, Kind::Edge).iter().all(|e| {
+        e.as_edge().is_some_and(|edge| {
+            [0.25, 0.5, 0.75].into_iter().all(|t| {
+                blend_ops::dihedral_at(part, e, edge.position_at(t)).is_some_and(|a| (a - 90.0).abs() < SQUARE_DEG)
+            })
+        })
+    })
 }
 
 /// The slab with its front face gone and its sides carried on until they meet in a ridge or a point: a push past
@@ -502,8 +506,12 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             ctx.set_shape(act, act_shape.clone());
         }
     }
+    let mut order: Vec<usize> = (0..sels.len()).filter(|&i| !skip[i]).collect();
+    if mode == "auto" && order.len() > 1 {
+        order = fixed_order(&f.id, &act_shape, &sels, order);
+    }
     let mut moved = false;
-    for (sel, _) in sels.iter().zip(&skip).filter(|(_, s)| !**s) {
+    for sel in order.iter().map(|&i| &sels[i]) {
         if mode != "auto" {
             if let Some(i) = named.and_then(|id| ctx.find_body(id)) {
                 act = i;
@@ -578,6 +586,27 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         );
     }
     Ok(())
+}
+
+/// The selected faces are pushed one after another and each push changes what the next meets, so the result
+/// would follow the pick order. Flat faces go first, then the rest, each in the body's face order.
+fn fixed_order(id: &str, part: &Shape, sels: &[Selector], order: Vec<usize>) -> Vec<usize> {
+    let mut quiet = Resolver::new(None, Some(id));
+    let faces = part.shape_map(ShapeType::Face);
+    let mut keyed: Vec<((u8, usize), usize)> = order
+        .into_iter()
+        .map(|i| {
+            let one = fundacad_core::schema::OneOrMany::One(sels[i].clone());
+            let face = quiet.face_selectors(part, &one).ok().and_then(|f| f.into_iter().next());
+            let key = match face {
+                Some(fc) => (u8::from(surface_type(&fc) != Some(SurfaceType::Plane)), faces.index_of(&fc)),
+                None => (2, 0),
+            };
+            (key, i)
+        })
+        .collect();
+    keyed.sort();
+    keyed.into_iter().map(|(_, i)| i).collect()
 }
 
 /// A point inside the face's trimmed boundary.
