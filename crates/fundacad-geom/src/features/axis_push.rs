@@ -238,8 +238,27 @@ fn r6(v: DVec3) -> Value {
     json!(v.to_array().map(|x| py_round(x, 6)))
 }
 
-fn resize_info(body: &Shape, face: &Shape) -> Option<Value> {
-    let r = crate::features::resize::describe(body, face)?;
+/// A G2 or G3 fillet blend offered as a round of its fillet radius. Its axis is the sharp edge it rounds and it
+/// reads as concave on an outside corner, since a larger radius takes material off there.
+fn blend_info(body: &Shape, face: &Shape, id: (u64, u64)) -> Option<Value> {
+    let b = crate::features::regrow::blend_of(body, face, Some(id))?;
+    let on = FaceEnt::new(face.clone()).ok()?.centroid();
+    Some(json!({
+        "kind": "cylinder",
+        "size": py_round(b.radius, 6),
+        "full": false,
+        "concave": !b.concave,
+        "contact": null,
+        "tangent": {"faces": 0, "lostWhen": null, "run": [r6(on)], "closed": false, "followable": false},
+        "blend": {"continuity": b.continuity},
+        "axis": {"origin": r6(b.axis.0), "dir": r6(b.axis.1)},
+    }))
+}
+
+fn resize_info(body: &Shape, face: &Shape, id: (u64, u64)) -> Option<Value> {
+    let Some(r) = crate::features::resize::describe(body, face) else {
+        return blend_info(body, face, id);
+    };
     let t = &r.tangent;
     let mut info = json!({
         "kind": r.kind,
@@ -290,7 +309,7 @@ pub fn face_axis_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResul
                 }
                 Err(why) => json!({"reason": why}),
             };
-            if let Some(info) = resize_info(&body.shape, &face) {
+            if let Some(info) = resize_info(&body.shape, &face, body.identity) {
                 reply["resize"] = info;
             }
             reply
