@@ -1,0 +1,16 @@
+{
+  "version": 9,
+  "parameters": {},
+  "features": [
+    {
+      "id": "s",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [{ "type": "line", "id": "l1", "x1": -20, "y1": 0, "x2": 20, "y2": 0 }],
+      "constraints": [
+        { "type": "horizontal", "line": "l1" },
+        { "type": "distance", "line": "l1", "value": 40 }
+      ]
+    }
+  ]
+}
