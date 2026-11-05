@@ -275,6 +275,7 @@ impl Jobs for GeomJobs {
     fn release(&mut self) -> bool {
         crate::kernel::forget_remembered();
         crate::features::resize::memo::forget();
+        crate::features::regrow::forget();
         let rebuilt = match cache::global().try_lock() {
             Ok(mut cache) => {
                 cache.release();

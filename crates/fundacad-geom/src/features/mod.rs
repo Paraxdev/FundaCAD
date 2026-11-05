@@ -18,6 +18,7 @@ mod mechanism;
 pub mod pattern;
 mod press_pull;
 mod primitives;
+pub mod regrow;
 pub mod resize;
 mod revolve;
 pub mod sketch;

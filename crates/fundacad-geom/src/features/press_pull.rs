@@ -18,6 +18,7 @@ use super::blend::ops as blend_ops;
 use super::boolean::combine;
 use super::extent;
 use super::extrude::prisms;
+use super::regrow;
 use super::resize::{self, Bad, Resize};
 use super::solid_ops::{faces_of, guard_offsetable, offsettable_curved, resolve_field, surface_type};
 use crate::builder::{py_g, Ctx, FResult, Fail};
@@ -328,8 +329,22 @@ fn whole_runs(part: &Shape, faces: &[Shape]) -> (Vec<Vec<Shape>>, Vec<bool>) {
     (runs, taken)
 }
 
-/// `_press_pull`.
-fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64, follow: bool) -> FResult<Shape> {
+/// The identity of body `act` while `shape` is still its shape, for what is kept across a drag's rebuilds.
+fn identity_of(ctx: &Ctx, act: usize, shape: &Shape) -> Option<(u64, u64)> {
+    let b = &ctx.bodies[act];
+    b.shape().is_same(shape).then(|| b.identity())
+}
+
+/// `_press_pull`. `body` is the identity of the body whose shape `part` is, when it is one.
+fn press_pull_shape(
+    part: &Shape,
+    face: &Shape,
+    d: f64,
+    clamp: bool,
+    taper: f64,
+    follow: bool,
+    body: Option<(u64, u64)>,
+) -> FResult<Shape> {
     if d.abs() < 1e-9 {
         return Ok(part.clone());
     }
@@ -354,6 +369,9 @@ fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64,
     }
     if offsettable_curved(t) {
         return resize_round(part, face, d, follow);
+    }
+    if let Some(out) = regrow::regrow(part, face, d, body) {
+        return out;
     }
     // A wrapping surface of revolution thickens both ways and a BSpline only
     // outward; the inward BSpline case is where OCCT was measured to crash.
@@ -506,6 +524,22 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             ctx.set_shape(act, act_shape.clone());
         }
     }
+    if mode == "auto" && target.is_none() && !along_axis && taper == 0.0 && sels.len() > 1 {
+        let mut quiet = Resolver::new(None, Some(&f.id));
+        let faces: Vec<Option<Shape>> = sels
+            .iter()
+            .map(|sel| {
+                let one = fundacad_core::schema::OneOrMany::One(sel.clone());
+                quiet.face_selectors(&act_shape, &one).ok()?.into_iter().next()
+            })
+            .collect();
+        let body = identity_of(ctx, act, &act_shape);
+        if let Some((out, done)) = carry_blend(&act_shape, &faces, &skip, dist, follow, body) {
+            act_shape = out?;
+            ctx.set_shape(act, act_shape.clone());
+            done.into_iter().for_each(|i| skip[i] = true);
+        }
+    }
     let mut order: Vec<usize> = (0..sels.len()).filter(|&i| !skip[i]).collect();
     if mode == "auto" && order.len() > 1 {
         order = fixed_order(&f.id, &act_shape, &sels, order);
@@ -564,7 +598,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         let out = if along_axis {
             axis_push::push_along_axis(&act_shape, &src, d)?
         } else {
-            press_pull_shape(&act_shape, &src, d, false, taper, follow)?
+            press_pull_shape(&act_shape, &src, d, false, taper, follow, identity_of(ctx, act, &act_shape))?
         };
         let may_break_out = along_axis || surface_type(&src) != Some(SurfaceType::Plane);
         if !warned && d < 0.0 && may_break_out && broke_through(&act_shape, &out, &src) {
@@ -586,6 +620,66 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         );
     }
     Ok(())
+}
+
+/// Fillet blends picked with flat walls they meet keep their radii: the sharp corners come back, those walls are
+/// pushed once on them, and each corner where its seam walls now meet is rounded again. With it, the picks covered.
+fn carry_blend(
+    part: &Shape,
+    faces: &[Option<Shape>],
+    skip: &[bool],
+    d: f64,
+    follow: bool,
+    body: Option<(u64, u64)>,
+) -> Option<(FResult<Shape>, Vec<usize>)> {
+    let picked = |i: usize| faces[i].as_ref().filter(|_| !skip[i]);
+    let mut blends: Vec<(regrow::Blend, Vec<Shape>)> = Vec::new();
+    let (mut done, mut walls): (Vec<usize>, Vec<usize>) = (Vec::new(), Vec::new());
+    for i in 0..faces.len() {
+        let Some(face) = picked(i) else { continue };
+        if blends.iter().any(|(_, group)| group.iter().any(|g| g.is_same(face))) {
+            done.push(i);
+            continue;
+        }
+        let Some(b) = regrow::blend_of(part, face, body) else { continue };
+        let met = regrow::walls_met(part, face);
+        let mine: Vec<usize> = (0..faces.len())
+            .filter(|&j| j != i && picked(j).is_some_and(|w| met.iter().any(|m| m.is_same(w))))
+            .collect();
+        if mine.is_empty() {
+            continue;
+        }
+        done.push(i);
+        walls.extend(mine.into_iter().filter(|j| !walls.contains(j)).collect::<Vec<_>>());
+        blends.push((b, regrow::group(part, face)));
+    }
+    if blends.is_empty() {
+        return None;
+    }
+    let planes: Vec<regrow::Plane> = walls.iter().map(|&j| regrow::plane_of(picked(j)?)).collect::<Option<_>>()?;
+    let seams: Vec<[regrow::Plane; 2]> = blends.iter().map(|(b, _)| b.seams()).collect::<Option<_>>()?;
+    let pushed = || -> FResult<Shape> {
+        let mut out = match &blends[..] {
+            [(b, _)] => b.sharp()?,
+            _ => regrow::sharp_all(part, &blends.iter().flat_map(|(_, g)| g.iter().cloned()).collect::<Vec<_>>())?,
+        };
+        let mut seams = seams;
+        for &(p, n) in &planes {
+            let wall = faces_of(&out)
+                .into_iter()
+                .filter(|f| regrow::on_plane(f, (p, n)))
+                .min_by(|a, b| centre(a).distance(p).total_cmp(&centre(b).distance(p)))
+                .ok_or_else(|| Fail::msg("can't find the wall again on the sharp corner"))?;
+            out = press_pull_shape(&out, &wall, d, false, 0.0, follow, None)?;
+            for s in seams.iter_mut().flatten().filter(|s| regrow::on_plane(&wall, **s)) {
+                s.0 += n * d;
+            }
+        }
+        let carried: Vec<_> = blends.iter().map(|(b, _)| b).zip(seams).collect();
+        regrow::carry_all(&out, &carried)
+    };
+    done.extend(walls);
+    Some((pushed(), done))
 }
 
 /// The selected faces are pushed one after another and each push changes what the next meets, so the result
@@ -712,7 +806,7 @@ pub fn offset_face(ctx: &mut Ctx, f: &OffsetFace) -> FResult {
     for (sel, _) in sels.iter().zip(&skip).filter(|(_, s)| !**s) {
         let one = fundacad_core::schema::OneOrMany::One(sel.clone());
         for fc in resolve_field(ctx, &f.id, &shape, &one)? {
-            let out = press_pull_shape(&shape, &fc, d, true, 0.0, follow)?;
+            let out = press_pull_shape(&shape, &fc, d, true, 0.0, follow, identity_of(ctx, act, &shape))?;
             let curved = surface_type(&fc) != Some(SurfaceType::Plane);
             if !warned && d < 0.0 && curved && broke_through(&shape, &out, &fc) {
                 warned = true;
