@@ -12,6 +12,20 @@
 **Accessibility**
 - Interface size goes from 80 to 200 percent, with a readable text floor and Comfortable text.
 - After renaming in Items by keyboard, focus goes back to the row.
+- The new Geometry tab beside Items lists faces, edges and planes, so you can find, hear and pick them without a mouse. Every tool that waits for a face, edge or plane takes a row from it.
+- Line, rectangle and circle can be drawn with keys only, and are spoken as you draw.
+- Sketch dimensions and constraints are a list you can move through with keys, and free or fixed sketch lines differ by more than colour.
+- Printability, interference and Stress results are also listed in words.
+- Messages are spoken and stay long enough to read, and Undo says what it undid.
+- Fields say their unit, and why a value was refused.
+- Notices stay out of the way of an open dialog, and a notice with a button waits until you can use it.
+- Comfortable text wraps a long dropdown value onto a second line instead of cutting it off.
+
+**Interface**
+- Panels, menus, sketch labels and placed boxes keep their place and stay inside the window at every Interface size.
+- Preferences stays visible in the Edit menu in a short window or at a large Interface size.
+- Dragging the rollback marker in History shows where it will land.
+- Resizing the window no longer shows an unexpected error.
 
 **Modeling**
 - Moving the camera in Path traced no longer shows black bands or partial pictures.
@@ -23,6 +37,13 @@
 - Hiding a sketch in Items shows at once.
 - The origin plane tiles have four rounded corners and a small gap again.
 - A mouse wheel keeps zooming at every Interface size, and Ctrl with the wheel pans the view up and down.
+- Path traced waits for the view to rest before it comes back after a zoom, a held arrow key or a view click.
+- Ctrl+Z in a tool first takes back what you typed in its field.
+- Press/Pull moves a fillet's round face together with the face beside it instead of refusing, and gives the same shape whichever you click first.
+- Press/Pull shows the body see-through only in Cut.
+- Shell refuses a face picked through its opening, and Shell across several bodies keeps each face on its own body, also when you edit it again.
+- Undo, or any change that removes the step an open tool is editing, closes that tool.
+- A sketch far from the origin that makes an empty body now reports a failure.
 
 **Stress**
 - Stress runs thin walled parts by itself, with no size to set. More options has Mesh detail: Coarse, Standard and Fine.
@@ -36,6 +57,12 @@
 **Files**
 - Big 3MF and SVG files import with less memory.
 - A recovered session is cleared once you save it, discard it or choose Don't save.
+- A version saved right after opening an example holds only your next change.
+
+**Plugins**
+- Plugin number fields take a decimal comma and refuse values past their limits or in the wrong unit.
+- Plugin panels keep their content inside the panel, and Fasteners keeps Save in reach at every window width.
+- The Gamepad plugin no longer picks up a 3D mouse.
 
 **Updates**
 - Settings, Updates has a channel picker.
