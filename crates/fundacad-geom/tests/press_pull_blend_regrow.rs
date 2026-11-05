@@ -136,3 +136,11 @@ fn the_blend_and_top_pushed_together_give_a_taller_box_with_a_smaller_round() {
     eprintln!("blend and top {d}: {got}");
     assert!((got - want).abs() < 1e-5 * want, "{got} against {want}");
 }
+
+#[test]
+fn a_radius_too_large_for_the_walls_is_refused_saying_why() {
+    let r = rebuild(&pushed(-14.0));
+    let errors: Vec<&str> = r.errors.iter().map(|e| e.message.as_str()).collect();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(errors[0].contains("R51.1") && errors[0].contains("runs off the face"), "{errors:?}");
+}

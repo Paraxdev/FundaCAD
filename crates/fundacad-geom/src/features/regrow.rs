@@ -6,6 +6,7 @@ use opencascade::primitives::{Shape, SurfaceType};
 use opencascade::progress::ProgressRange;
 
 use super::blend::ops as blend_ops;
+use super::blend::SectionErr;
 use super::solid_ops::surface_type;
 use crate::builder::{FResult, Fail};
 use crate::kernel::{self, Kind};
@@ -168,7 +169,7 @@ pub fn regrow(part: &Shape, face: &Shape, d: f64) -> Option<FResult<Shape>> {
 }
 
 impl Blend {
-    pub fn radius_after(&self, d: f64) -> f64 {
+    fn radius_after(&self, d: f64) -> f64 {
         self.radius + if self.concave { d } else { -d }
     }
 
@@ -180,7 +181,16 @@ impl Blend {
         if r < 0.0 {
             return Err(Fail::msg("that push runs the round past the sharp corner it rounds, try a smaller distance"));
         }
-        fillet(&self.corner, &self.edge, r, self.continuity)
-            .ok_or_else(|| Fail::msg(format!("can't round this corner again at R{}", crate::builder::py_g(r))))
+        let edges = std::slice::from_ref(&self.edge);
+        let built = blend_ops::section(&self.corner, edges, false, &[r], None, r, self.continuity, false, 0.0);
+        if let Some(out) = built.as_ref().ok().and_then(one_solid) {
+            return Ok(out);
+        }
+        let why = match built {
+            Err(SectionErr::Blend(m)) => Some(m),
+            _ => None,
+        };
+        let head = format!("can't round this corner again at R{}", crate::builder::py_g(r));
+        Err(Fail::msg(why.map_or(head.clone(), |m| format!("{head}, {m}"))))
     }
 }
