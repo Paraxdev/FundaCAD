@@ -39,7 +39,8 @@
 - A mouse wheel keeps zooming at every Interface size, and Ctrl with the wheel pans the view up and down.
 - In Path traced, the picture settles sooner after a zoom, and no longer comes back in between the repeats of a held arrow key or during a view click from inside a model.
 - Ctrl+Z in a tool first takes back what you typed in its field.
-- Press/Pull moves a fillet's round face together with the face beside it instead of refusing, and gives the same shape whichever you click first.
+- Press/Pull on a round picked with the walls it meets carries the round along at its own radius, instead of refusing, whichever you click first.
+- Press/Pull on a round alone changes its radius, so it stays smooth with its walls.
 - Press/Pull shows the body see-through only in Cut.
 - Shell refuses a face picked through its opening, and Shell across several bodies keeps each face on its own body, also when you edit it again.
 - Undo, or any change that removes the step an open tool is editing, closes that tool.
