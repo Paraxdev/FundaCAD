@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-fn unix_secs() -> u64 {
+pub fn unix_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
@@ -42,6 +42,51 @@ pub fn check_settings(app_data: &Path, plugins_root: &Path, record: &str) -> Vec
         files.extend(entries.flatten().map(|e| e.path().join(record)));
     }
     files.iter().filter_map(|f| check_json(f)).collect()
+}
+
+pub const BACKUPS: &str = "settings-backups";
+pub const BACKUPS_KEPT: usize = 10;
+
+/// `settings-<secs>.json` or `settings-<secs>-<n>.json` as `(secs, n)`, so the newest sorts last.
+fn backup_order(name: &str) -> Option<(u64, u32)> {
+    let stem = name.strip_prefix("settings-")?.strip_suffix(".json")?;
+    match stem.split_once('-') {
+        None => Some((stem.parse().ok()?, 0)),
+        Some((secs, n)) => Some((secs.parse().ok()?, n.parse().ok()?)),
+    }
+}
+
+/// Writes the page's settings backup (Reset settings) as `settings-<secs>.json` in `dir`, with `-<n>` added when that
+/// name is taken, and keeps the newest `keep` backups.
+pub fn write_backup(dir: &Path, secs: u64, text: &str, keep: usize) -> std::io::Result<PathBuf> {
+    use std::io::Write;
+    std::fs::create_dir_all(dir)?;
+    let mut n = 0;
+    let (target, mut file) = loop {
+        let name = if n == 0 { format!("settings-{secs}.json") } else { format!("settings-{secs}-{n}.json") };
+        let target = dir.join(name);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+            Ok(file) => break (target, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+            Err(e) => return Err(e),
+        }
+    };
+    if let Err(e) = file.write_all(text.as_bytes()).and_then(|_| file.sync_all()) {
+        drop(file);
+        let _ = std::fs::remove_file(&target);
+        return Err(e);
+    }
+    drop(file);
+    let mut backups: Vec<((u64, u32), PathBuf)> = std::fs::read_dir(dir)?
+        .flatten()
+        .filter_map(|e| Some((backup_order(e.file_name().to_str()?)?, e.path())))
+        .collect();
+    backups.sort_by_key(|(order, _)| *order);
+    let old = backups.len().saturating_sub(keep);
+    for (_, path) in backups.drain(..old) {
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(std::path::absolute(&target).unwrap_or(target))
 }
 
 #[cfg(test)]
