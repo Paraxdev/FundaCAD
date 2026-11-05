@@ -39,6 +39,15 @@ describe("the safe mode banner", () => {
     expect(mount(SafeModeBanner).text()).toMatch(/FUNDACAD_SAFE_MODE is set.*Remove FUNDACAD_SAFE_MODE/s);
   });
 
+  it("says the person chose it from the start question, after unfinished starts or a crash loop", () => {
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "failedStarts", failedStarts: 2, chosen: true };
+    expect(mount(SafeModeBanner).text()).toContain("because you chose it after the last 2 starts did not finish");
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "crashes", failedStarts: 0, crashes: 3, chosen: true };
+    const text = mount(SafeModeBanner).text();
+    expect(text).toContain("because you chose it after FundaCAD closed unexpectedly 3 times soon after starting");
+    expect(text).not.toMatch(/take the switch out|Remove FUNDACAD_SAFE_MODE/);
+  });
+
   it("restarts normally from its button, once", async () => {
     window.__FUNDACAD_SAFE_MODE__ = { reason: "failedStarts", failedStarts: 3 };
     const w = mount(SafeModeBanner);
