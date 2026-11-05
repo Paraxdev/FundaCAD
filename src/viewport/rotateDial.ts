@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import { rotationFrame, type RotationFrame } from "../features/transformGizmo";
+import { pageZoom } from "../ui/interfaceSize";
 
 export const DIAL_RADIUS = 62;
 const TICK = 3;
@@ -88,8 +89,9 @@ export class RotateDial {
   placeLabel(toScreen: (world: THREE.Vector3) => { x: number; y: number }) {
     const out = this.tip.clone().multiplyScalar((DIAL_RADIUS + 16) / DIAL_RADIUS);
     const s = toScreen(this.group.localToWorld(out));
-    this.label.style.left = `${s.x}px`;
-    this.label.style.top = `${s.y}px`;
+    const z = pageZoom();
+    this.label.style.left = `${s.x / z}px`;
+    this.label.style.top = `${s.y / z}px`;
   }
 
   dispose() {
