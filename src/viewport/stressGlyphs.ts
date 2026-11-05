@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { Vec3 } from "../types";
 import type { Viewport } from "./viewport";
 import { escapeClaimed } from "../ui/escapeClaim";
+import { pageZoom } from "../ui/interfaceSize";
 import {
   AXES,
   forceDragLabel,
@@ -589,6 +590,7 @@ export class StressGlyphs {
     }
     for (const o of this.orbs) if (this.layOrb(o)) changed = true;
     if (this.preview && this.layOrb(this.preview)) changed = true;
+    const z = pageZoom();
     for (const p of this.probes) {
       const at = this.host.stressOverlayPoint(p.tri, p.weights);
       p.mesh.visible = !!at;
@@ -602,8 +604,8 @@ export class StressGlyphs {
         changed = true;
       }
       const s = this.host.projectToScreen(v);
-      p.label.style.left = `${s.x + 8}px`;
-      p.label.style.top = `${s.y - 8}px`;
+      p.label.style.left = `${s.x / z + 8}px`;
+      p.label.style.top = `${s.y / z - 8}px`;
     }
     if (changed) this.host.requestRender();
   }
@@ -906,8 +908,9 @@ export class StressGlyphs {
     this.label ??= this.makeLabel("stress-cursor-label");
     this.label.textContent = text;
     this.label.style.display = "";
-    this.label.style.left = `${x + 14}px`;
-    this.label.style.top = `${y + 14}px`;
+    const z = pageZoom();
+    this.label.style.left = `${x / z + 14}px`;
+    this.label.style.top = `${y / z + 14}px`;
   }
 }
 
