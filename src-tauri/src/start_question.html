@@ -118,7 +118,8 @@
   </form>
   <script>
     // Tells Rust the window shows: a frame only runs once the page renders, and the navigation is cancelled.
-    // Input or focus counts too, since an occluded window gets no frames but its person may be using it.
+    // A key or a press counts too, since an occluded window gets no frames but its person may be using it.
+    // Focus does not: the window opens focused whether or not it ever painted.
     let shown = false;
     const report = () => {
       if (shown) return;
@@ -126,7 +127,7 @@
       location.href = "/shown";
     };
     requestAnimationFrame(() => requestAnimationFrame(report));
-    for (const type of ["keydown", "pointerdown", "focus"]) window.addEventListener(type, report, { capture: true, once: true });
+    for (const type of ["keydown", "pointerdown"]) window.addEventListener(type, report, { capture: true, once: true });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") location.href = "/choice?c=normal";
       // Enter on the box would submit the form with its first button, safe mode.
