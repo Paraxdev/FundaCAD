@@ -52,6 +52,9 @@ pub struct RebuildCache {
     env: String,
     ring_keys: Vec<String>,
     ring: Vec<Option<Snapshot>>,
+    /// Where the snapshots read from a disk checkpoint, or built on one, start in the ring: BinTools
+    /// renormalises directions and rotations on read, so those can be an ulp off a cold build.
+    disk_from: Option<usize>,
     /// `FUNDACAD_RAM_SNAP_WINDOW`: snapshots kept, counted back from the tip.
     pub window: usize,
     /// Replay time between two disk checkpoints.
@@ -97,6 +100,7 @@ impl RebuildCache {
             env: keys::env_sig(),
             ring_keys: Vec::new(),
             ring: Vec::new(),
+            disk_from: None,
             window: 300,
             budget_ms: 1000.0,
             tip_after: Duration::from_millis(500),
@@ -146,6 +150,7 @@ impl RebuildCache {
     pub fn reset(&mut self) {
         self.ring_keys.clear();
         reap(std::mem::take(&mut self.ring));
+        self.disk_from = None;
         self.payloads.clear();
         self.brep_sigs.clear();
     }
@@ -172,6 +177,22 @@ impl RebuildCache {
 
     /// `rebuild_cached`.
     pub fn rebuild(&mut self, doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
+        self.rebuild_as(doc, raw, watch, false)
+    }
+
+    /// A rebuild that matches a cold one to the last bit, so never resumed from a disk checkpoint or a snapshot
+    /// built on one: a stress study's mesher turns a last bit difference into a different mesh.
+    pub fn rebuild_exact(&mut self, doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
+        self.rebuild_as(doc, raw, watch, true)
+    }
+
+    fn rebuild_as(
+        &mut self,
+        doc: &CadDocument,
+        raw: &Value,
+        watch: &dyn Watch,
+        exact: bool,
+    ) -> Result<Rebuild, Cancelled> {
         let entered = Instant::now();
         let absent = absent_geometry(raw);
         let keys = self.keys_given(raw, &absent);
@@ -189,6 +210,9 @@ impl RebuildCache {
                 common = common.min(cap);
             }
         }
+        if exact && self.disk_from.is_some_and(|d| common > d) {
+            common = 0;
+        }
         if common > 0 {
             if let Some(Some(snap)) = self.ring.get(common - 1) {
                 if builder::ids_resumable(doc, snap) {
@@ -199,7 +223,7 @@ impl RebuildCache {
                 }
             }
         }
-        if resume.is_none() {
+        if resume.is_none() && !exact {
             if let Some(store) = &self.store {
                 if let Some((start, snap, m)) = checkpoint::restore(store, &keys[..cap.unwrap_or(n)]) {
                     if builder::ids_resumable(doc, &snap) {
@@ -320,6 +344,11 @@ impl RebuildCache {
         }
         let (replayed, slowest) = (tap.replayed, tap.slowest);
         self.proj_quiet = r.projection_updates.is_empty();
+        self.disk_from = match source {
+            Source::Full => None,
+            Source::Ram => self.disk_from.filter(|&d| d < start),
+            Source::Disk => Some(0),
+        };
         self.ring = ring;
         self.ring_keys = keys;
         self.stats = CacheStats {
