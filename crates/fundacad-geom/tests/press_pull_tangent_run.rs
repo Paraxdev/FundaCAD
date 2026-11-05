@@ -1,6 +1,6 @@
 //! Press/pull of a fillet blend on a box's vertical corner together with the top it meets square on. Raising the
-//! top leaves the blend carried up by a freeform face, which was refused as closing in. The blend then rounds the
-//! taller corner again at its new radius, the same in either pick order.
+//! top leaves the blend carried up by a freeform face, which was refused as closing in. The blend is now carried
+//! up at its own radius, as the top pushed alone carries it, the same in either pick order.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -76,12 +76,10 @@ fn push_blend_and_top(d: f64) {
     let blend_first = kernel::volume(&body(&with_push(filleted(), vec![near(BLEND), near(TOP)], d)));
     let top_first = kernel::volume(&body(&with_push(filleted(), vec![near(TOP), near(BLEND)], d)));
     assert!((blend_first - top_first).abs() < 1e-6, "d {d}: {blend_first} blend first, {top_first} top first");
-    // The flat top goes first whatever the pick order, then the blend.
-    let after = body(&with_pushes(filleted(), vec![vec![near(TOP)], vec![near(BLEND)]], d));
-    raised_top(&after, d);
-    let sequential = kernel::volume(&after);
-    assert!(sequential > before);
-    assert!((top_first - sequential).abs() < 1e-6, "d {d}: {top_first} against {sequential} pushed one by one");
+    raised_top(&body(&with_push(filleted(), vec![near(TOP), near(BLEND)], d)), d);
+    let top_alone = kernel::volume(&body(&with_push(filleted(), vec![near(TOP)], d)));
+    assert!(top_alone > before);
+    assert!((top_first - top_alone).abs() < 1e-6 * top_alone, "d {d}: {top_first} against {top_alone} top alone");
 }
 
 /// The top pushed after the blend rises straight, its rounded corner with it.
