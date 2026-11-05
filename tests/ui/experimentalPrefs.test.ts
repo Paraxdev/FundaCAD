@@ -6,9 +6,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   asExperimentalPrefs,
   DEFAULT_EXPERIMENTAL,
+  EXPERIMENTAL_GROUPS,
+  experimentalChanged,
+  experimentalGroupChanged,
   experimentalPrefs,
   lightingEnvWidth,
   onExperimentalPrefsChange,
+  resetExperimentalGroup,
   resetExperimentalPrefs,
   setExperimentalPref,
   storedEnvWidth,
@@ -118,5 +122,50 @@ describe("experimental limits", () => {
     expect(hdrStoredWidth()).toBe(16384);
     expect(storedEnvWidth({ ...DEFAULT_EXPERIMENTAL, envWidth: 16384 }, 8192)).toBe(8192);
     expect(lightingEnvWidth(DEFAULT_EXPERIMENTAL, 16384)).toBe(1024);
+  });
+});
+
+describe("experimental groups", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("hold every limit once, in Path traced, Environment and Model size", () => {
+    expect(EXPERIMENTAL_GROUPS.map((g) => g.title)).toEqual(["Path traced", "Environment", "Model size"]);
+    const keys = EXPERIMENTAL_GROUPS.flatMap((g) => g.keys);
+    expect([...keys].sort()).toEqual(Object.keys(DEFAULT_EXPERIMENTAL).sort());
+  });
+
+  it("reset one group back to its defaults and tell the listeners once", () => {
+    setExperimentalPref("bounces", 12);
+    setExperimentalPref("sampleCap", 1024);
+    setExperimentalPref("triangleBudget", 9_000_000);
+    let heard = 0;
+    const off = onExperimentalPrefsChange(() => heard++);
+    resetExperimentalGroup("pathTraced");
+    const p = experimentalPrefs();
+    expect([p.bounces, p.sampleCap, p.triangleBudget]).toEqual([6, 256, 9_000_000]);
+    expect([experimentalGroupChanged("pathTraced"), experimentalGroupChanged("modelSize")]).toEqual([false, true]);
+    resetExperimentalGroup("pathTraced");
+    expect(heard).toBe(1);
+    off();
+  });
+
+  it("say which limits are changed", () => {
+    expect(experimentalChanged("envWidth")).toBe(false);
+    setExperimentalPref("envWidth", 4096);
+    expect([experimentalChanged("envWidth"), experimentalGroupChanged("environment")]).toEqual([true, true]);
+  });
+
+  it("read as the defaults in safe mode, whatever is stored, and take no change there", () => {
+    setExperimentalPref("bounces", 12);
+    vi.stubGlobal("window", { __FUNDACAD_SAFE_MODE__: { reason: "failedStarts", failedStarts: 2 } });
+    expect(experimentalPrefs()).toEqual(DEFAULT_EXPERIMENTAL);
+    expect(costProfile({ discharging: false }).cap).toBe(256);
+    expect(experimentalChanged("bounces")).toBe(false);
+    setExperimentalPref("bounces", 30);
+    resetExperimentalGroup("pathTraced");
+    vi.unstubAllGlobals();
+    expect(experimentalPrefs().bounces).toBe(12);
   });
 });

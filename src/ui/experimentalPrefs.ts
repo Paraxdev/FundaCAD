@@ -2,6 +2,7 @@
 // always were, so nothing changes for someone who never opens the tab.
 
 import { readSetting } from "./storedSetting";
+import { safeMode } from "./safeMode";
 
 /** The width an imported panorama is kept at, or "gpu" for as large as the graphics card's textures go. */
 export type EnvWidth = 2048 | 4096 | 8192 | 16384 | "gpu";
@@ -46,6 +47,24 @@ export const EXPERIMENTAL_RANGE: Record<Exclude<keyof ExperimentalPrefs, "envWid
   triangleBudget: [1000, 500_000_000],
 };
 
+export type ExperimentalGroupId = "pathTraced" | "environment" | "modelSize";
+
+export interface ExperimentalGroup {
+  id: ExperimentalGroupId;
+  title: string;
+  keys: readonly (keyof ExperimentalPrefs)[];
+}
+
+export const EXPERIMENTAL_GROUPS: readonly ExperimentalGroup[] = [
+  {
+    id: "pathTraced",
+    title: "Path traced",
+    keys: ["sampleCap", "batterySampleCap", "bounces", "firefly", "traceScale", "pictureMegapixels"],
+  },
+  { id: "environment", title: "Environment", keys: ["envWidth"] },
+  { id: "modelSize", title: "Model size", keys: ["triangleBudget"] },
+];
+
 const KEY = "fundacad.experimental";
 
 function asNumber(v: unknown, [lo, hi]: [number, number]): number | null {
@@ -81,8 +100,25 @@ function readStored(): ExperimentalPrefs {
 let current = readStored();
 const listeners = new Set<() => void>();
 
+/** Safe mode runs on the defaults whatever was stored or typed, so a raised limit cannot be what keeps crashing it. */
+export function experimentalLocked(): boolean {
+  return safeMode() !== null;
+}
+
 export function experimentalPrefs(): Readonly<ExperimentalPrefs> {
-  return current;
+  return experimentalLocked() ? DEFAULT_EXPERIMENTAL : current;
+}
+
+export function experimentalChanged(key: keyof ExperimentalPrefs): boolean {
+  return experimentalPrefs()[key] !== DEFAULT_EXPERIMENTAL[key];
+}
+
+export function experimentalGroupChanged(id: ExperimentalGroupId): boolean {
+  return groupKeys(id).some(experimentalChanged);
+}
+
+function groupKeys(id: ExperimentalGroupId): readonly (keyof ExperimentalPrefs)[] {
+  return EXPERIMENTAL_GROUPS.find((g) => g.id === id)?.keys ?? [];
 }
 
 function write(next: ExperimentalPrefs) {
@@ -100,6 +136,7 @@ function write(next: ExperimentalPrefs) {
 }
 
 export function setExperimentalPref<K extends keyof ExperimentalPrefs>(key: K, value: ExperimentalPrefs[K]): void {
+  if (experimentalLocked()) return;
   const next = asExperimentalPrefs({ ...current, [key]: value });
   if (next[key] === current[key]) return;
   write(next);
@@ -107,6 +144,13 @@ export function setExperimentalPref<K extends keyof ExperimentalPrefs>(key: K, v
 
 export function resetExperimentalPrefs(): void {
   write({ ...DEFAULT_EXPERIMENTAL });
+}
+
+export function resetExperimentalGroup(id: ExperimentalGroupId): void {
+  if (experimentalLocked() || !experimentalGroupChanged(id)) return;
+  const next = { ...current };
+  for (const k of groupKeys(id)) Object.assign(next, { [k]: DEFAULT_EXPERIMENTAL[k] });
+  write(next);
 }
 
 export function onExperimentalPrefsChange(fn: () => void): () => void {

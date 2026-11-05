@@ -143,10 +143,10 @@ describe("Experimental HDR size and reset", () => {
     expect(reset.attributes("aria-disabled")).toBeUndefined();
     await reset.trigger("click");
     await flushPromises();
-    expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset experimental limits?", "Reset"]]);
+    expect(confirm.mock.calls.map((c) => [c[0], c[1]])).toEqual([["Reset the Path traced limits?", "Reset"]]);
     expect(experimentalPrefs().bounces).toBe(DEFAULT_EXPERIMENTAL.bounces);
     expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBe("true");
-    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Experimental.*defaults/)]);
+    expect(toast.mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/Path traced.*defaults/)]);
   });
 
   it("keeps every changed limit when the confirm is cancelled", async () => {
@@ -161,5 +161,139 @@ describe("Experimental HDR size and reset", () => {
     expect([experimentalPrefs().bounces, experimentalPrefs().envWidth]).toEqual([12, 4096]);
     expect(w.get("[data-experimental-reset]").attributes("aria-disabled")).toBeUndefined();
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("Experimental groups", () => {
+  const groups = (w: W) => w.findAll("[data-experimental-group]");
+  const fieldsIn = (w: W, id: string) =>
+    w.findAll(`[data-experimental-group=${id}] [data-experimental]`).map((f) => f.attributes("data-experimental"));
+  const resetOf = (w: W, id: string) => w.get(`[data-experimental-reset=${id}]`);
+
+  it("sits in Path traced, Environment and Model size, each named by its heading", async () => {
+    const w = await open();
+    const named = groups(w).map((g) => [
+      g.attributes("role"),
+      document.getElementById(g.attributes("aria-labelledby")!)?.textContent,
+    ]);
+    expect(named).toEqual([
+      ["group", "Path traced"],
+      ["group", "Environment"],
+      ["group", "Model size"],
+    ]);
+    expect(fieldsIn(w, "pathTraced")).toEqual([
+      "sampleCap",
+      "batterySampleCap",
+      "bounces",
+      "firefly",
+      "traceScale",
+      "pictureMegapixels",
+    ]);
+    expect(w.find("[data-experimental-group=environment] #prefs-env-width").exists()).toBe(true);
+    expect(fieldsIn(w, "modelSize")).toEqual(["triangleBudget"]);
+  });
+
+  it("resets one group and leaves the others as they are", async () => {
+    const w = await open();
+    setExperimentalPref("bounces", 12);
+    setExperimentalPref("envWidth", 4096);
+    setExperimentalPref("triangleBudget", 9_000_000);
+    await flushPromises();
+    await resetOf(w, "environment").trigger("click");
+    await flushPromises();
+    expect(confirm.mock.calls.map((c) => c[0])).toEqual(["Reset the Environment limits?"]);
+    const p = experimentalPrefs();
+    expect([p.bounces, p.envWidth, p.triangleBudget]).toEqual([12, 2048, 9_000_000]);
+    expect(resetOf(w, "environment").attributes("aria-disabled")).toBe("true");
+    expect(resetOf(w, "pathTraced").attributes("aria-disabled")).toBeUndefined();
+    expect(toast.mock.calls.map((c) => c[0])).toEqual(["Environment limits are back to their defaults."]);
+  });
+
+  it("holds each group's Reset disabled until a limit in it changed", async () => {
+    const w = await open();
+    setExperimentalPref("triangleBudget", 9_000_000);
+    await flushPromises();
+    const held = ["pathTraced", "environment", "modelSize"].map((g) => resetOf(w, g).attributes("aria-disabled"));
+    expect(held).toEqual(["true", "true", undefined]);
+  });
+
+  it("describes each Reset by its group, so the three are told apart", async () => {
+    const w = await open();
+    const ids = (resetOf(w, "modelSize").attributes("aria-describedby") ?? "").split(" ");
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain("Model size");
+  });
+});
+
+describe("Experimental changed marks", () => {
+  const marks = (w: W) => w.findAll("[data-experimental-changed]");
+  const said = (e: Element) =>
+    (e.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent);
+
+  it("marks only a changed limit, in words beside its title", async () => {
+    const w = await open();
+    expect(marks(w).length).toBe(0);
+    setExperimentalPref("firefly", 0);
+    await flushPromises();
+    const beside = marks(w).map((m) => [
+      m.text(),
+      m.element.closest(".pref-card")!.querySelector("label")?.textContent,
+    ]);
+    expect(beside).toEqual([["Changed", "Firefly clamp"]]);
+  });
+
+  it("is part of the field's description, so a screen reader hears it with the value", async () => {
+    const w = await open();
+    setExperimentalPref("bounces", 12);
+    setExperimentalPref("envWidth", 8192);
+    await flushPromises();
+    expect(said(el(w, "bounces"))).toContain("Changed");
+    expect(said(w.get("#prefs-env-width").element)).toContain("Changed");
+    expect(said(el(w, "firefly"))).not.toContain("Changed");
+  });
+
+  it("goes away once the limit is back at its default", async () => {
+    const w = await open();
+    await type(w, "bounces", "12");
+    expect(marks(w).length).toBe(1);
+    await type(w, "bounces", "6");
+    expect(marks(w).length).toBe(0);
+  });
+});
+
+describe("Experimental in safe mode", () => {
+  afterEach(() => {
+    delete window.__FUNDACAD_SAFE_MODE__;
+  });
+
+  it("shows every limit at its default, unmarked, and takes no change", async () => {
+    setExperimentalPref("bounces", 12);
+    setExperimentalPref("envWidth", 4096);
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "flag", failedStarts: 0 };
+    const w = await open();
+    const width = w.get("#prefs-env-width [aria-checked=true]").attributes("data-env-width");
+    expect([el(w, "bounces").value, width]).toEqual(["6", "2048"]);
+    expect(w.findAll("[data-experimental-changed]").length).toBe(0);
+    expect(w.get("[data-experimental-locked]").text()).toContain("Safe mode runs with every limit at its default");
+    const held = [
+      el(w, "bounces").getAttribute("aria-disabled"),
+      w.get("#prefs-env-width").attributes("aria-disabled"),
+    ];
+    expect(held).toEqual(["true", "true"]);
+    for (const g of ["pathTraced", "environment", "modelSize"]) {
+      expect(w.get(`[data-experimental-reset=${g}]`).attributes("aria-disabled")).toBe("true");
+    }
+    await type(w, "bounces", "20");
+    expect(experimentalPrefs().bounces).toBe(6);
+  });
+
+  it("keeps what was stored for the next normal start", () => {
+    setExperimentalPref("bounces", 12);
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "env", failedStarts: 0 };
+    expect(experimentalPrefs().bounces).toBe(6);
+    delete window.__FUNDACAD_SAFE_MODE__;
+    expect(experimentalPrefs().bounces).toBe(12);
   });
 });

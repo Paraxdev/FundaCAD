@@ -1,21 +1,25 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
 import { claimEscape } from "../../ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
   ENV_WIDTHS,
+  EXPERIMENTAL_GROUPS,
   EXPERIMENTAL_RANGE,
+  experimentalLocked,
   experimentalPrefs,
   onExperimentalPrefsChange,
-  resetExperimentalPrefs,
+  resetExperimentalGroup,
   setExperimentalPref,
   type EnvWidth,
+  type ExperimentalGroup,
   type ExperimentalPrefs,
 } from "../../ui/experimentalPrefs";
 import { hdrTextureMax } from "../../viewport/hdrRegistry";
 import Button from "../ui/Button.vue";
+import Chip from "../ui/Chip.vue";
 import NumberField from "../ui/NumberField.vue";
 import Segmented from "../ui/Segmented.vue";
 
@@ -53,20 +57,23 @@ onUnmounted(() => {
   holdEscape(false);
 });
 
-async function onReset() {
-  if (
-    !(await confirmDanger("Reset experimental limits?", "Reset", "Every limit on this page goes back to its default."))
-  )
-    return;
-  resetExperimentalPrefs();
-  toast("Experimental limits are back to their defaults.");
+const locked = experimentalLocked();
+const LOCKED_REASON = "Safe mode keeps every limit at its default";
+
+async function onReset(g: ExperimentalGroup) {
+  const asked = await confirmDanger(
+    `Reset the ${g.title} limits?`,
+    "Reset",
+    `Every ${g.title} limit goes back to its default.`,
+  );
+  if (!asked) return;
+  resetExperimentalGroup(g.id);
+  toast(`${g.title} limits are back to their defaults.`);
 }
 
-const changed = computed(() =>
-  (Object.keys(DEFAULT_EXPERIMENTAL) as (keyof ExperimentalPrefs)[]).some(
-    (k) => prefs.value[k] !== DEFAULT_EXPERIMENTAL[k],
-  ),
-);
+const changed = (k: keyof ExperimentalPrefs) => prefs.value[k] !== DEFAULT_EXPERIMENTAL[k];
+const groupChanged = (g: ExperimentalGroup) => g.keys.some(changed);
+const changedId = (k: keyof ExperimentalPrefs) => `prefs-x-${k}-changed`;
 const widthLabel = (w: EnvWidth) => (w === "gpu" ? `GPU maximum (${hdrTextureMax()})` : String(w));
 const widthOptions = () =>
   ENV_WIDTHS.map((w) => ({ value: w, label: widthLabel(w), attrs: { "data-env-width": String(w) } }));
@@ -80,7 +87,7 @@ interface Field {
   scale: number;
   hint: string;
 }
-const PATH: Field[] = [
+const FIELDS: Field[] = [
   {
     key: "sampleCap",
     title: "Samples per pixel",
@@ -139,6 +146,8 @@ const PATH: Field[] = [
   },
 ];
 
+const fieldsOf = (g: ExperimentalGroup) => FIELDS.filter((f) => g.keys.includes(f.key));
+
 const shown = (f: Field) => +(prefs.value[f.key] / f.scale).toFixed(f.key === "pictureMegapixels" ? 1 : 3);
 /** Trace resolution's 0 is Auto, shown as an empty box. */
 const autoAtZero = (f: Field) => f.key === "traceScale";
@@ -156,53 +165,88 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
   <p class="pref-warning" role="note" data-experimental-warning>
     These settings can make FundaCAD unstable or crash it. Use them at your own risk.
   </p>
-  <div class="prefs-grid">
-    <div class="pref-card wide">
-      <div class="pref-head">
-        <span class="pref-title">HDR environment size</span>
-        <Segmented
-          id="prefs-env-width"
-          label="HDR environment size"
-          :model-value="prefs.envWidth"
-          :options="widthOptions()"
-          @update:model-value="pickWidth"
-        />
-      </div>
-      <p class="pref-hint">
-        The width an imported HDR is kept at, for lighting and inside saved documents; the lighting reads half of it.
-        Larger needs more memory and makes documents bigger. Applies to the next import. Default 2048.
-      </p>
+  <p v-if="locked" class="pref-hint prefs-x-locked" role="note" data-experimental-locked>
+    Safe mode runs with every limit at its default. Restart normally to change them.
+  </p>
+  <div
+    v-for="g in EXPERIMENTAL_GROUPS"
+    :key="g.id"
+    class="prefs-group"
+    role="group"
+    :aria-labelledby="`prefs-x-group-${g.id}`"
+    :data-experimental-group="g.id"
+  >
+    <div class="prefs-group-head">
+      <h4 :id="`prefs-x-group-${g.id}`" class="prefs-group-title">{{ g.title }}</h4>
+      <Button
+        size="sm"
+        :disabled="locked || !groupChanged(g)"
+        :disabled-reason="locked ? LOCKED_REASON : undefined"
+        :aria-describedby="`prefs-x-group-${g.id}`"
+        :data-experimental-reset="g.id"
+        @click="onReset(g)"
+        >Reset to defaults</Button
+      >
     </div>
-    <div v-for="f in PATH" :key="f.key" class="pref-card">
-      <div class="pref-head">
-        <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
-        <span
-          class="pref-number"
-          @input="drafted(f, $event)"
-          @keydown="onNumberKey(f, $event)"
-          @focusin="holdEscape(refused($event))"
-          @focusout="holdEscape(false)"
-        >
-          <NumberField
-            :id="`prefs-x-${f.key}`"
-            :label="f.title"
-            :model-value="boxValue(f)"
-            :min="min(f)"
-            :max="max(f)"
-            :step="f.step"
-            :nullable="autoAtZero(f)"
-            :placeholder="autoAtZero(f) ? 'Auto' : undefined"
-            :caption="f.unit"
-            :width-ch="9"
-            :data-experimental="f.key"
-            @update:model-value="onNumber(f, $event)"
+    <div class="prefs-grid">
+      <div v-if="g.keys.includes('envWidth')" class="pref-card wide">
+        <div class="pref-head">
+          <span class="pref-title-row">
+            <span class="pref-title">HDR environment size</span>
+            <Chip v-if="changed('envWidth')" :id="changedId('envWidth')" variant="accent" data-experimental-changed
+              >Changed</Chip
+            >
+          </span>
+          <Segmented
+            id="prefs-env-width"
+            label="HDR environment size"
+            :model-value="prefs.envWidth"
+            :options="widthOptions()"
+            :disabled="locked"
+            :disabled-reason="locked ? LOCKED_REASON : undefined"
+            :aria-describedby="changed('envWidth') ? changedId('envWidth') : undefined"
+            @update:model-value="pickWidth"
           />
-        </span>
+        </div>
+        <p class="pref-hint">
+          The width an imported HDR is kept at, for lighting and inside saved documents; the lighting reads half of it.
+          Larger needs more memory and makes documents bigger. Applies to the next import. Default 2048.
+        </p>
       </div>
-      <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : defaultShown(f) }}. </p>
+      <div v-for="f in fieldsOf(g)" :key="f.key" class="pref-card">
+        <div class="pref-head">
+          <span class="pref-title-row">
+            <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
+            <Chip v-if="changed(f.key)" :id="changedId(f.key)" variant="accent" data-experimental-changed>Changed</Chip>
+          </span>
+          <span
+            class="pref-number"
+            @input="drafted(f, $event)"
+            @keydown="onNumberKey(f, $event)"
+            @focusin="holdEscape(refused($event))"
+            @focusout="holdEscape(false)"
+          >
+            <NumberField
+              :id="`prefs-x-${f.key}`"
+              :label="f.title"
+              :model-value="boxValue(f)"
+              :min="min(f)"
+              :max="max(f)"
+              :step="f.step"
+              :nullable="autoAtZero(f)"
+              :placeholder="autoAtZero(f) ? 'Auto' : undefined"
+              :caption="f.unit"
+              :width-ch="9"
+              :disabled="locked"
+              :disabled-reason="locked ? LOCKED_REASON : undefined"
+              :aria-describedby="changed(f.key) ? changedId(f.key) : undefined"
+              :data-experimental="f.key"
+              @update:model-value="onNumber(f, $event)"
+            />
+          </span>
+        </div>
+        <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : defaultShown(f) }}. </p>
+      </div>
     </div>
-  </div>
-  <div class="prefs-actions">
-    <Button :disabled="!changed" data-experimental-reset @click="onReset">Reset to defaults</Button>
   </div>
 </template>
