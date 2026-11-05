@@ -176,10 +176,16 @@ fn a_garbage_crash_marker_counts_as_none_and_is_kept_aside() {
 
 #[test]
 fn the_answer_comes_back_as_an_exit_code_and_anything_else_is_no_answer() {
-    for a in [Answer::Normal, Answer::Safe, Answer::Reset { plugins: false }, Answer::Reset { plugins: true }] {
+    for a in [
+        Answer::Closed,
+        Answer::Normal,
+        Answer::Safe,
+        Answer::Reset { plugins: false },
+        Answer::Reset { plugins: true },
+    ] {
         assert_eq!(Answer::from_exit(Some(a.code())), Ok(a));
     }
-    assert_eq!(Answer::Normal.code(), 0);
+    assert_eq!((Answer::Closed.code(), Answer::Normal.code()), (0, 24));
     assert_eq!(Answer::from_exit(Some(NOT_SHOWN)), Err("its window did not show".to_string()));
     assert_eq!(Answer::from_exit(Some(101)), Err("it ended with exit code 101".to_string()));
     for other in [None, Some(1), Some(-1073741819)] {
@@ -233,12 +239,31 @@ fn a_crash_loop_that_cannot_ask_starts_normally() {
 }
 
 #[test]
+fn closing_the_question_after_unfinished_starts_goes_into_safe_mode() {
+    let a = after_question(Reason::FailedStarts(2), Ok(Answer::Closed));
+    assert_eq!((a.safe, a.reset), (Some(Reason::Unanswered(2)), None));
+    assert_eq!(
+        a.line,
+        "[safe-mode] FundaCAD did not start properly the last 2 times. The question was closed with no choice, so starting in safe mode."
+    );
+    assert!(!clears_count(a.safe));
+}
+
+#[test]
+fn closing_the_question_after_a_crash_loop_starts_normally() {
+    let a = after_question(Reason::Crashes(3), Ok(Answer::Closed));
+    assert_eq!((a.safe, a.reset), (None, None));
+    assert!(a.line.ends_with("The question was closed with no choice, so starting normally."), "{}", a.line);
+}
+
+#[test]
 fn the_question_page_form_reads_as_an_answer() {
     assert_eq!(Answer::from_form([("c", "safe")]), Some(Answer::Safe));
     assert_eq!(Answer::from_form([("c", "safe"), ("plugins", "1")]), Some(Answer::Safe));
     assert_eq!(Answer::from_form([("c", "reset")]), Some(Answer::Reset { plugins: false }));
     assert_eq!(Answer::from_form([("plugins", "1"), ("c", "reset")]), Some(Answer::Reset { plugins: true }));
     assert_eq!(Answer::from_form([("c", "normal")]), Some(Answer::Normal));
+    assert_eq!(Answer::from_form([("c", "close")]), Some(Answer::Closed));
     assert_eq!(Answer::from_form([("c", "other")]), None);
     assert_eq!(Answer::from_form([("plugins", "1")]), None);
 }

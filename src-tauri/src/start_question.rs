@@ -70,7 +70,7 @@ pub fn navigation(url: &tauri::Url, windows: bool) -> Nav {
             let pairs: Vec<(String, String)> =
                 url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
             let picked = Answer::from_form(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-            Nav::Choice(picked.unwrap_or(Answer::Normal))
+            Nav::Choice(picked.unwrap_or(Answer::Closed))
         }
         _ => Nav::Deny,
     }
@@ -81,7 +81,7 @@ fn escape(text: &str) -> String {
 }
 
 /// The question process: shows the window and returns the exit code of the answer. Closing the window once it showed
-/// is Start normally, every failure is `NOT_SHOWN`.
+/// is `Answer::Closed`, every failure is `NOT_SHOWN`.
 pub fn run(args: &[String]) -> i32 {
     let reason = match (args.first(), args.get(1).and_then(|n| n.parse::<u32>().ok())) {
         (Some(key), Some(n)) => Reason::counted(key, n),
@@ -176,7 +176,7 @@ pub fn run(args: &[String]) -> i32 {
 pub fn exit_code(picked: Option<Answer>, shown: bool) -> i32 {
     match picked {
         Some(picked) => picked.code(),
-        None if shown => Answer::Normal.code(),
+        None if shown => Answer::Closed.code(),
         None => NOT_SHOWN,
     }
 }

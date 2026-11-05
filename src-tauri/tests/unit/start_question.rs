@@ -8,13 +8,19 @@ fn a_window_that_never_showed_is_no_answer() {
 }
 
 #[test]
-fn a_window_closed_after_it_showed_is_start_normally() {
-    assert_eq!(Answer::from_exit(Some(exit_code(None, true))), Ok(Answer::Normal));
+fn a_window_closed_after_it_showed_is_closed_not_start_normally() {
+    assert_eq!(Answer::from_exit(Some(exit_code(None, true))), Ok(Answer::Closed));
 }
 
 #[test]
 fn a_choice_is_its_own_code() {
-    for a in [Answer::Normal, Answer::Safe, Answer::Reset { plugins: false }, Answer::Reset { plugins: true }] {
+    for a in [
+        Answer::Closed,
+        Answer::Normal,
+        Answer::Safe,
+        Answer::Reset { plugins: false },
+        Answer::Reset { plugins: true },
+    ] {
         assert_eq!(Answer::from_exit(Some(exit_code(Some(a), true))), Ok(a));
     }
 }
@@ -58,5 +64,7 @@ fn the_page_reports_it_shows_and_its_choice() {
         nav("http://fundacad-ask.localhost/choice?c=reset&plugins=1", true),
         Nav::Choice(Answer::Reset { plugins: true })
     );
-    assert_eq!(nav("fundacad-ask://localhost/choice?c=other", false), Nav::Choice(Answer::Normal));
+    assert_eq!(nav("fundacad-ask://localhost/choice?c=normal", false), Nav::Choice(Answer::Normal));
+    assert_eq!(nav("fundacad-ask://localhost/choice?c=close", false), Nav::Choice(Answer::Closed));
+    assert_eq!(nav("fundacad-ask://localhost/choice?c=other", false), Nav::Choice(Answer::Closed));
 }

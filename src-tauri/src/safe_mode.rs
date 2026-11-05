@@ -108,25 +108,31 @@ pub fn decide(prev_misses: u32, crashes: u32, flag: bool, env: Option<&str>) -> 
 /// What the start question answered. It comes back as the exit code of the question process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Answer {
+    /// The window closed or Escape, with no button.
+    Closed,
     Normal,
     Safe,
-    Reset { plugins: bool },
+    Reset {
+        plugins: bool,
+    },
 }
 
 impl Answer {
     pub fn code(self) -> i32 {
         match self {
-            Answer::Normal => 0,
+            Answer::Closed => 0,
+            Answer::Normal => 24,
             Answer::Safe => 20,
             Answer::Reset { plugins: false } => 21,
             Answer::Reset { plugins: true } => 22,
         }
     }
 
-    /// 0 is a button or a closed window. Any other code is no answer, and says why.
+    /// 0 is a closed window. Any code that is not an answer says why.
     pub fn from_exit(code: Option<i32>) -> Result<Answer, String> {
         match code {
-            Some(0) => Ok(Answer::Normal),
+            Some(0) => Ok(Answer::Closed),
+            Some(24) => Ok(Answer::Normal),
             Some(20) => Ok(Answer::Safe),
             Some(21) => Ok(Answer::Reset { plugins: false }),
             Some(22) => Ok(Answer::Reset { plugins: true }),
@@ -150,12 +156,14 @@ impl Answer {
             "safe" => Some(Answer::Safe),
             "reset" => Some(Answer::Reset { plugins }),
             "normal" => Some(Answer::Normal),
+            "close" => Some(Answer::Closed),
             _ => None,
         }
     }
 
     pub fn describe(self) -> &'static str {
         match self {
+            Answer::Closed => "closed the question",
             Answer::Normal => "start normally",
             Answer::Safe => "start in safe mode",
             Answer::Reset { plugins: false } => "reset settings",
@@ -177,9 +185,22 @@ pub struct Asked {
 
 /// `asked` is the answer or why there is none. Unanswered, unfinished starts go into safe mode as they did before the
 /// question, so a machine whose webview cannot come up never loops. A crash loop never had that, so it starts normally.
+/// Closing the question is no answer too: after unfinished starts the window may have been blank.
 pub fn after_question(reason: Reason, asked: Result<Answer, String>) -> Asked {
     let q = reason.question();
     match asked {
+        Ok(Answer::Closed) => {
+            let safe = match reason {
+                Reason::FailedStarts(n) => Some(Reason::Unanswered(n)),
+                _ => None,
+            };
+            let then = if safe.is_some() { "starting in safe mode" } else { "starting normally" };
+            Asked {
+                safe,
+                reset: None,
+                line: format!("[safe-mode] {q} The question was closed with no choice, so {then}."),
+            }
+        }
         Ok(answer) => Asked {
             safe: (answer == Answer::Safe).then_some(reason),
             reset: match answer {
