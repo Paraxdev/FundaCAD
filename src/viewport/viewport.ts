@@ -178,6 +178,7 @@ import {
 } from "./areaSelect";
 import { collectInBox, PREVIEW_REACH, projectForArea, type AreaProjection } from "./areaProjection";
 import { scheduleAreaIndex } from "./areaIndex";
+import { nearestFaceId } from "./faceNear";
 import {
   faceCentroidOf,
   faceNormalOf,
@@ -2447,37 +2448,8 @@ export class Viewport {
    *  density. `extraTol` covers a known offset such as a texture's depth. */
   faceIdNear(point: [number, number, number], extraTol = 0, onBody?: string): number | null {
     if (!this.model) return null;
-    const target = new THREE.Vector3(point[0], point[1], point[2]);
-    const local = new THREE.Vector3();
-    const inv = new THREE.Matrix4();
-    const tri = new THREE.Triangle();
-    const closest = new THREE.Vector3();
-    let best: number | null = null;
-    let bestDist = Infinity;
-    for (const body of this.model.bodies) {
-      if (onBody !== undefined && body.id !== onBody) continue;
-      // compare in the body's local space: one matrix inverse per body instead
-      // of three vector transforms per triangle.
-      inv.copy(body.mesh.matrixWorld).invert();
-      local.copy(target).applyMatrix4(inv);
-      const pos = body.mesh.geometry.getAttribute("position");
-      const index = body.mesh.geometry.getIndex()!;
-      for (const [faceId, tris] of body.faceTriangles) {
-        for (const t of tris) {
-          tri.a.fromBufferAttribute(pos, index.getX(t * 3));
-          tri.b.fromBufferAttribute(pos, index.getX(t * 3 + 1));
-          tri.c.fromBufferAttribute(pos, index.getX(t * 3 + 2));
-          tri.closestPointToPoint(local, closest);
-          const d = closest.distanceTo(local);
-          if (d < bestDist) {
-            bestDist = d;
-            best = faceId;
-          }
-        }
-      }
-    }
     const tol = midMatchTol(this.model.box.getSize(this.projScratch).length()) + Math.abs(extraTol);
-    return best != null && bestDist <= tol ? best : null;
+    return nearestFaceId(this.model.bodies, point, tol, onBody);
   }
 
   /** Red marks for fillet and chamfer failures, [] clears. setModel wipes paint, so re-apply after each
