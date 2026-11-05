@@ -52,6 +52,7 @@ it("never says the snap a Tab reached once the next Tab has moved the cursor off
     },
     dim: () => dim,
     place: () => null,
+    shape: () => null,
     positionBox: () => {},
     prompt: () => {},
     focusSurface: () => true,
