@@ -1,5 +1,6 @@
-//! Press/pull of a fillet blend on a box's vertical corner together with the top it meets square on. The blend's
-//! slab leaves the top with freeform sides the kernel cannot carry on, and that was refused as closing in.
+//! Press/pull of a fillet blend on a box's vertical corner together with the top it meets square on. Raising the
+//! top leaves the blend carried up by a freeform face, which was refused as closing in. The blend then rounds the
+//! taller corner again at its new radius, the same in either pick order.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -83,13 +84,13 @@ fn push_blend_and_top(d: f64) {
     assert!((top_first - sequential).abs() < 1e-6, "d {d}: {top_first} against {sequential} pushed one by one");
 }
 
-/// The blend pushed first leaves the top with freeform sides, which rise straight with it.
+/// The top pushed after the blend rises straight, its rounded corner with it.
 fn push_top_after_blend(d: f64) {
     let before = kernel::volume(&body(&filleted()));
     let blend_alone = kernel::volume(&body(&with_push(filleted(), vec![near(BLEND)], d)));
     let after = body(&with_pushes(filleted(), vec![vec![near(BLEND)], vec![near(TOP)]], d));
     let raised = raised_top(&after, d);
-    // The blend's slab as it builds alone, then the whole top, slab included, raised straight up.
+    // The blend rounded again alone, then the whole top raised straight up.
     let expected = blend_alone + d * kernel::area(&raised);
     let grown = kernel::volume(&after);
     assert!((grown - expected).abs() < 1e-3 * (expected - before), "d {d}: {grown} against {expected}");
