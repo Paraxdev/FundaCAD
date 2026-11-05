@@ -117,6 +117,8 @@
     <button name="c" value="normal">Start normally</button>
   </form>
   <script>
+    // Tells Rust the window shows: a frame only runs once the page renders, and the navigation is cancelled.
+    requestAnimationFrame(() => requestAnimationFrame(() => { location.href = "/shown"; }));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") location.href = "/choice?c=normal";
       // Enter on the box would submit the form with its first button, safe mode.

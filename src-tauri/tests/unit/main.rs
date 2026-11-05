@@ -10,6 +10,7 @@ mod recovery;
 mod safe_mode;
 mod session_file;
 mod settings_files;
+mod start_question;
 mod thumbs;
 mod webkit;
 mod worker_port;

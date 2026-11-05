@@ -3,7 +3,9 @@
 //! never mounts could not show a dialog in the page. The answer comes back as the exit code.
 
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -14,6 +16,8 @@ const SCHEME: &str = "fundacad-ask";
 const LABEL: &str = "start-question";
 const PAGE: &str = include_str!("start_question.html");
 const CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'";
+/// Until the page reports a painted frame. After that there is no limit, as a person may read slowly.
+const SHOW_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Asks in a child process and waits for the answer, or says why there is none (`safe_mode::after_question`).
 pub fn ask(reason: Reason) -> Result<Answer, String> {
@@ -43,8 +47,8 @@ fn escape(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
-/// The question process: shows the window and returns the exit code of the answer. Closing the window is
-/// Start normally, every failure is `NOT_SHOWN`.
+/// The question process: shows the window and returns the exit code of the answer. Closing the window once it showed
+/// is Start normally, every failure is `NOT_SHOWN`.
 pub fn run(args: &[String]) -> i32 {
     let reason = match (args.first(), args.get(1).and_then(|n| n.parse::<u32>().ok())) {
         (Some(key), Some(n)) => Reason::counted(key, n),
@@ -54,12 +58,23 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("[safe-mode] the start question was not told why it asks");
         return NOT_SHOWN;
     };
+    let shown = Arc::new(AtomicBool::new(false));
+    let seen = shown.clone();
+    // The event loop may be what hangs, so the process ends from here, not through it.
+    std::thread::spawn(move || {
+        std::thread::sleep(SHOW_TIMEOUT);
+        if !seen.load(Ordering::SeqCst) {
+            eprintln!("[safe-mode] the start question did not show within {}s", SHOW_TIMEOUT.as_secs());
+            std::process::exit(NOT_SHOWN);
+        }
+    });
     #[cfg(target_os = "linux")]
     let _ = crate::webkit::apply_gpu_workarounds(&fundacad_mcp::app_session::app_data_dir());
 
     let page = PAGE.replace("{{QUESTION}}", &escape(&reason.question()));
     let answer: Arc<Mutex<Option<Answer>>> = Arc::default();
     let held = answer.clone();
+    let reported = shown.clone();
     let mut context = crate::context();
     context.config_mut().app.windows.clear();
     let app = tauri::Builder::default()
@@ -88,9 +103,15 @@ pub fn run(args: &[String]) -> i32 {
                 .theme(Some(tauri::Theme::Dark))
                 .background_color(tauri::window::Color(27, 24, 38, 255))
                 .on_navigation(move |url| {
+                    // The page's report of its first painted frame.
+                    if url.path() == "/shown" {
+                        reported.store(true, Ordering::SeqCst);
+                        return false;
+                    }
                     if url.path() != "/choice" {
                         return true;
                     }
+                    reported.store(true, Ordering::SeqCst);
                     let pairs: Vec<(String, String)> =
                         url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
                     let picked = Answer::from_form(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
@@ -120,5 +141,14 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
     let picked = answer.lock().unwrap_or_else(|p| p.into_inner()).take();
-    picked.unwrap_or(Answer::Normal).code()
+    exit_code(picked, shown.load(Ordering::SeqCst))
+}
+
+/// A window closed before it showed was most likely blank, so it is no answer.
+pub fn exit_code(picked: Option<Answer>, shown: bool) -> i32 {
+    match picked {
+        Some(picked) => picked.code(),
+        None if shown => Answer::Normal.code(),
+        None => NOT_SHOWN,
+    }
 }

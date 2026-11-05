@@ -22,7 +22,7 @@ pub mod safe_mode;
 pub mod session_file;
 pub mod settings_files;
 mod spacemouse;
-mod start_question;
+pub mod start_question;
 mod system_info;
 pub mod thumbs;
 pub mod update_channel;
