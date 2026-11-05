@@ -19,7 +19,7 @@ use crate::topo::FaceAdjacency;
 /// How far a probe's area and removed volume may stray from the blend's and still be the same round.
 const MATCH: f64 = 0.02;
 
-const KEEP: usize = 4;
+const KEEP: usize = 8;
 
 /// A body's (uid, generation), which `Ctx::set_shape` renews on every change, and a face's index in it. A rebuild
 /// resumed from RAM hands each drag tick a copy of the same body, so the shape itself is new every time.
@@ -221,7 +221,7 @@ impl Blend {
         let Some(edge) = kernel::subshapes(&corner, Kind::Edge).into_iter().nth(self.edge) else {
             return Err(Fail::msg("the corner's edge is gone"));
         };
-        self.round(&corner, &edge, r)
+        self.round(&corner, std::slice::from_ref(&edge), r)
     }
 
     /// A copy of the sharp corner, to be changed and rounded again.
@@ -239,11 +239,10 @@ impl Blend {
         Some([plane_of(&adj.face(a))?, plane_of(&adj.face(b))?])
     }
 
-    /// `part`, the sharp corner with some of its walls pushed, rounded again at the blend's own radius along the
-    /// edge where the seam walls, now on `seams`, meet.
-    pub fn carried(&self, part: &Shape, seams: [Plane; 2]) -> FResult<Shape> {
+    /// The edge of `part` nearest the blend's own where walls on the two `seams` meet.
+    fn edge_on(&self, part: &Shape, seams: [Plane; 2]) -> Option<Shape> {
         let adj = FaceAdjacency::new(part);
-        let edge = kernel::subshapes(part, Kind::Edge)
+        kernel::subshapes(part, Kind::Edge)
             .into_iter()
             .filter(|e| {
                 let fs = adj.faces_of_edge(e);
@@ -255,16 +254,12 @@ impl Blend {
             })
             .filter_map(|e| EdgeEnt::new(e.clone()).ok().map(|en| (en.mid.distance(self.axis.0), e)))
             .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map(|(_, e)| e);
-        let Some(edge) = edge else {
-            return Err(Fail::msg("can't round this corner again, the walls it rounds no longer meet"));
-        };
-        self.round(part, &edge, self.radius)
+            .map(|(_, e)| e)
     }
 
-    fn round(&self, corner: &Shape, edge: &Shape, r: f64) -> FResult<Shape> {
-        let edges = std::slice::from_ref(edge);
-        let built = blend_ops::section(corner, edges, false, &[r], None, r, self.continuity, false, 0.0);
+    fn round(&self, corner: &Shape, edges: &[Shape], r: f64) -> FResult<Shape> {
+        let sizes = vec![r; edges.len()];
+        let built = blend_ops::section(corner, edges, false, &sizes, None, r, self.continuity, false, 0.0);
         if let Some(out) = built.as_ref().ok().and_then(one_solid) {
             return Ok(out);
         }
@@ -275,6 +270,47 @@ impl Blend {
         let head = format!("can't round this corner again at R{}", crate::builder::py_g(r));
         Err(Fail::msg(why.map_or(head.clone(), |m| format!("{head}, {m}"))))
     }
+}
+
+/// `part`, a sharp body with some walls pushed, with each blend's corner rounded again at the blend's own radius and
+/// continuity, where its seam walls now meet on `seams`. Blends alike in both are rounded in one build.
+pub fn carry_all(part: &Shape, blends: &[(&Blend, [Plane; 2])]) -> FResult<Shape> {
+    let mut out = part.clone();
+    let mut left: Vec<(&Blend, [Plane; 2])> = blends.to_vec();
+    while let Some(&(first, _)) = left.first() {
+        let (now, later): (Vec<_>, Vec<_>) =
+            left.into_iter().partition(|(b, _)| b.radius == first.radius && b.continuity == first.continuity);
+        let mut edges: Vec<Shape> = Vec::new();
+        for (b, seams) in now {
+            let Some(edge) = b.edge_on(&out, seams) else {
+                return Err(Fail::msg("can't round this corner again, the walls it rounds no longer meet"));
+            };
+            if !edges.iter().any(|e| e.is_same(&edge)) {
+                edges.push(edge);
+            }
+        }
+        out = first.round(&out, &edges, first.radius)?;
+        left = later;
+    }
+    Ok(out)
+}
+
+/// The faces of `face`'s blend, with any freeform face that carries it on.
+pub fn group(part: &Shape, face: &Shape) -> Vec<Shape> {
+    blend_faces(part, face).map(|(g, _)| g).unwrap_or_default()
+}
+
+/// `part` with every blend in `faces` taken off at once, each corner they round sharp again.
+pub fn sharp_all(part: &Shape, faces: &[Shape]) -> FResult<Shape> {
+    let fs: Vec<_> = faces.iter().filter_map(Shape::as_face).collect();
+    let refs: Vec<_> = fs.iter().collect();
+    part.remove_features(&refs, true, &ProgressRange::detached())
+        .ok()
+        .and_then(|r| one_solid(&r.shape))
+        .filter(|c| kernel::count(c, Kind::Face) < kernel::count(part, Kind::Face))
+        .ok_or_else(|| {
+            Fail::msg("can't take these rounds off together, pick one round at a time with the wall it meets")
+        })
 }
 
 /// A flat face's plane: a point on it and its outward normal.

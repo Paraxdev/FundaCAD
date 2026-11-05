@@ -622,8 +622,8 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
     Ok(())
 }
 
-/// A fillet blend picked with flat walls it meets keeps its radius: the sharp corner comes back, those walls are
-/// pushed on it, and the corner where the seam walls now meet is rounded again. With it, the picks it covered.
+/// Fillet blends picked with flat walls they meet keep their radii: the sharp corners come back, those walls are
+/// pushed once on them, and each corner where its seam walls now meet is rounded again. With it, the picks covered.
 fn carry_blend(
     part: &Shape,
     faces: &[Option<Shape>],
@@ -633,36 +633,53 @@ fn carry_blend(
     body: Option<(u64, u64)>,
 ) -> Option<(FResult<Shape>, Vec<usize>)> {
     let picked = |i: usize| faces[i].as_ref().filter(|_| !skip[i]);
-    (0..faces.len()).find_map(|i| {
-        let blend = picked(i)?;
-        let b = regrow::blend_of(part, blend, body)?;
-        let met = regrow::walls_met(part, blend);
-        let walls: Vec<usize> = (0..faces.len())
+    let mut blends: Vec<(regrow::Blend, Vec<Shape>)> = Vec::new();
+    let (mut done, mut walls): (Vec<usize>, Vec<usize>) = (Vec::new(), Vec::new());
+    for i in 0..faces.len() {
+        let Some(face) = picked(i) else { continue };
+        if blends.iter().any(|(_, group)| group.iter().any(|g| g.is_same(face))) {
+            done.push(i);
+            continue;
+        }
+        let Some(b) = regrow::blend_of(part, face, body) else { continue };
+        let met = regrow::walls_met(part, face);
+        let mine: Vec<usize> = (0..faces.len())
             .filter(|&j| j != i && picked(j).is_some_and(|w| met.iter().any(|m| m.is_same(w))))
             .collect();
-        if walls.is_empty() {
-            return None;
+        if mine.is_empty() {
+            continue;
         }
-        let planes: Vec<regrow::Plane> = walls.iter().map(|&j| regrow::plane_of(picked(j)?)).collect::<Option<_>>()?;
-        let seams = b.seams()?;
-        let pushed = || -> FResult<Shape> {
-            let mut out = b.sharp()?;
-            let mut seams = seams;
-            for &(p, n) in &planes {
-                let wall = faces_of(&out)
-                    .into_iter()
-                    .filter(|f| regrow::on_plane(f, (p, n)))
-                    .min_by(|a, b| centre(a).distance(p).total_cmp(&centre(b).distance(p)))
-                    .ok_or_else(|| Fail::msg("can't find the wall again on the sharp corner"))?;
-                out = press_pull_shape(&out, &wall, d, false, 0.0, follow, None)?;
-                for s in seams.iter_mut().filter(|s| regrow::on_plane(&wall, **s)) {
-                    s.0 += n * d;
-                }
-            }
-            b.carried(&out, seams)
+        done.push(i);
+        walls.extend(mine.into_iter().filter(|j| !walls.contains(j)).collect::<Vec<_>>());
+        blends.push((b, regrow::group(part, face)));
+    }
+    if blends.is_empty() {
+        return None;
+    }
+    let planes: Vec<regrow::Plane> = walls.iter().map(|&j| regrow::plane_of(picked(j)?)).collect::<Option<_>>()?;
+    let seams: Vec<[regrow::Plane; 2]> = blends.iter().map(|(b, _)| b.seams()).collect::<Option<_>>()?;
+    let pushed = || -> FResult<Shape> {
+        let mut out = match &blends[..] {
+            [(b, _)] => b.sharp()?,
+            _ => regrow::sharp_all(part, &blends.iter().flat_map(|(_, g)| g.iter().cloned()).collect::<Vec<_>>())?,
         };
-        Some((pushed(), std::iter::once(i).chain(walls).collect()))
-    })
+        let mut seams = seams;
+        for &(p, n) in &planes {
+            let wall = faces_of(&out)
+                .into_iter()
+                .filter(|f| regrow::on_plane(f, (p, n)))
+                .min_by(|a, b| centre(a).distance(p).total_cmp(&centre(b).distance(p)))
+                .ok_or_else(|| Fail::msg("can't find the wall again on the sharp corner"))?;
+            out = press_pull_shape(&out, &wall, d, false, 0.0, follow, None)?;
+            for s in seams.iter_mut().flatten().filter(|s| regrow::on_plane(&wall, **s)) {
+                s.0 += n * d;
+            }
+        }
+        let carried: Vec<_> = blends.iter().map(|(b, _)| b).zip(seams).collect();
+        regrow::carry_all(&out, &carried)
+    };
+    done.extend(walls);
+    Some((pushed(), done))
 }
 
 /// The selected faces are pushed one after another and each push changes what the next meets, so the result
