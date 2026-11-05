@@ -2,7 +2,7 @@
 // and Home fits it; plain letters on a toolbar or tab button still start their tool.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { installKeymap } from "../../src/input/keymap";
-import { widgetOwnsKey } from "../../src/ui/focus";
+import { isMenuKey, widgetOwnsKey } from "../../src/ui/focus";
 
 const actions: string[] = [];
 
@@ -38,6 +38,9 @@ describe("the widget guard", () => {
     ["a slider", `<div role="slider" tabindex="0" aria-valuenow="2" data-t></div>`],
     ["a tablist", `<div role="tablist"><button role="tab" data-t>One</button></div>`],
     ["a radiogroup", `<div role="radiogroup"><button role="radio" data-t>Shaded</button></div>`],
+    ["a native radio", `<input type="radio" data-t>`],
+    ["a splitter", `<div role="separator" tabindex="0" data-t></div>`],
+    ["a scrollbar", `<div role="scrollbar" tabindex="0" data-t></div>`],
     ["a toolbar", `<div role="toolbar"><button data-t>Extrude</button></div>`],
     ["a tree", `<ul role="tree"><li role="treeitem" tabindex="0" data-t>Body</li></ul>`],
     ["a listbox", `<ul role="listbox"><li role="option" tabindex="0" data-t>Steel</li></ul>`],
@@ -87,6 +90,58 @@ describe("the widget guard", () => {
       ctrlKey: true,
     });
     expect(actions).toEqual(["undo"]);
+  });
+});
+
+describe("isMenuKey", () => {
+  function verdictOn(target: EventTarget, key: string, init: KeyboardEventInit = {}): boolean {
+    let verdict: boolean | null = null;
+    const listen = (e: Event) => {
+      verdict = isMenuKey(e as KeyboardEvent);
+    };
+    window.addEventListener("keydown", listen, true);
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+    window.removeEventListener("keydown", listen, true);
+    return verdict!;
+  }
+  const heardOn = (html: string, key: string, init?: KeyboardEventInit) => {
+    const verdict = verdictOn(inside(html), key, init);
+    document.body.innerHTML = "";
+    return verdict;
+  };
+  const LIST = `<div role="listbox"><div role="option" tabindex="0"><span data-t>Face 3</span></div></div>`;
+  const MENU = `<div class="ui-menu"><button data-t>Copy</button></div>`;
+  const OWN = ["Enter", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Tab", "f", "[", "]"];
+  const NOT_OWN = ["Escape", "Delete", "Backspace", "F2", "PageDown"];
+
+  it.each([
+    ["a listbox row", LIST],
+    ["a menu row", MENU],
+  ])("gives %s its moving, running and typing keys, never Escape, Delete or an F key", (_name, html) => {
+    expect(OWN.map((k) => heardOn(html, k))).toEqual(OWN.map(() => true));
+    expect(NOT_OWN.map((k) => heardOn(html, k))).toEqual(NOT_OWN.map(() => false));
+  });
+
+  it.each([{ ctrlKey: true }, { altKey: true }, { metaKey: true }])("leaves %o chords to the tool", (mod) => {
+    expect(heardOn(LIST, "Enter", mod)).toBe(false);
+    expect(heardOn(LIST, "f", mod)).toBe(false);
+  });
+
+  it("keeps Shift and an arrow in the list, where it extends a selection", () => {
+    expect(heardOn(LIST, "ArrowDown", { shiftKey: true })).toBe(true);
+  });
+
+  it.each([
+    ["a plain button", `<button data-t>Fillet</button>`],
+    ["an option outside a listbox", `<div role="option" tabindex="0" data-t>Face 3</div>`],
+    ["a tree row", `<ul role="tree"><li role="treeitem" tabindex="0" data-t>Body</li></ul>`],
+    ["a tab", `<div role="tablist"><button role="tab" data-t>Items</button></div>`],
+  ])("gives nothing to %s", (_name, html) => {
+    expect(heardOn(html, "Enter")).toBe(false);
+  });
+
+  it("gives nothing to the page, where a tool wants Enter", () => {
+    expect(verdictOn(document.body, "Enter")).toBe(false);
   });
 });
 

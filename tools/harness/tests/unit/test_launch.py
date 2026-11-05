@@ -51,6 +51,12 @@ def test_engine_discovery_order(tmp_path):
         launch.find_engine(repo, engine=tmp_path / "missing.exe", env=env)
 
 
+def test_an_engine_string_that_is_a_file_with_a_space_in_its_path_is_taken_whole(tmp_path):
+    exe = touch(tmp_path / "Program Files" / "e.exe")
+    assert launch.find_engine(tmp_path, engine=str(exe), env={}) == [str(exe)]
+    assert launch.find_engine(tmp_path, engine=f'"{exe}" --engine', env={}) == [str(exe), "--engine"]
+
+
 def test_engine_env_strips_inherited_keys_and_sets_its_own(tmp_path):
     base = {"PATH": "p", "FUNDACAD_MCP_MODE": "attach", "SINDRI_X": "1", "sindricad_y": "2", "HOME": "h"}
     env = launch.engine_env(base, 9001, "tok", 5999, tmp_path, tmp_path / "repo")

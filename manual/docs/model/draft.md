@@ -10,7 +10,7 @@ Draft tilts a face so a wall leans back a little, and Thread adds a real helical
 2. Drag the arrow or type an angle, up to 60 degrees.
 3. Press Enter or click to apply.
 
-The pull direction is guessed from the face, and X cycles it through X, Y and Z. The step's Angle and Pull axis rows change it later.
+The pull direction is guessed from the face, and X cycles it through X, Y and Z. Once you type in the value box, X is a letter there instead. The step's Angle and Pull axis rows change it later.
 
 ## Thread
 

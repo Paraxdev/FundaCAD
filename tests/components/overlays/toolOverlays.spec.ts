@@ -108,6 +108,35 @@ describe("MeasureReadout", () => {
     expect(document.querySelector(".measure-hint")!.textContent).toContain("Esc to exit");
   });
 
+  it("reads the rows as a dl of term and value pairs, and the prompt as a plain row", async () => {
+    mount(MeasureReadout, { attachTo: document.body });
+    const store = useToolPanelStore();
+    store.measure = [
+      { k: "Distance", v: "12.5 mm" },
+      { k: "ΔX ΔY ΔZ", v: "3.2, -7.1, 9.4" },
+      { k: "Angle", v: "73.5°" },
+    ];
+    await nextTick();
+    const pairs = () =>
+      [...document.querySelectorAll("dl > .measure-row")].map((r) => [
+        r.querySelector("dt")?.textContent,
+        r.querySelector("dd")?.textContent,
+      ]);
+    expect(pairs()).toEqual([
+      ["Distance", "12.5 mm"],
+      ["ΔX ΔY ΔZ", "3.2, -7.1, 9.4"],
+      ["Angle", "73.5°"],
+    ]);
+
+    store.measure = [{ k: "", v: "Pick a face or edge" }];
+    await nextTick();
+    expect([
+      pairs(),
+      document.querySelectorAll("dt").length,
+      document.querySelector(".measure-v")?.textContent,
+    ]).toEqual([[], 0, "Pick a face or edge"]);
+  });
+
   it("escapes a value exactly once", async () => {
     mount(MeasureReadout, { attachTo: document.body });
     useToolPanelStore().measure = [{ k: "ΔX ΔY ΔZ", v: "1 & 2" }];

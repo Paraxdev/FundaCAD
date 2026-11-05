@@ -64,6 +64,10 @@ pub fn read_off(text: &str) -> Result<MeshObject, String> {
         }
         let rgb: Vec<f64> = t[1 + n..].iter().take(3).filter_map(|s| s.parse().ok()).collect();
         let color = (rgb.len() == 3).then(|| unit_color([rgb[0], rgb[1], rgb[2]]));
+        let total = (idx.len() / 3 + n.saturating_sub(2)) as u64;
+        if total > MAX_SCAN_TRIANGLES {
+            return Err(too_dense_for_a_scan(total));
+        }
         for k in 1..n.saturating_sub(1) {
             idx.extend([c[0], c[k], c[k + 1]]);
             colors.push(color);

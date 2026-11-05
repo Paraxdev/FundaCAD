@@ -232,7 +232,7 @@ fn file_layer(path: &Path, blob_dir: &Path, repeat: usize, refill: bool) -> Stri
             let _ = std::fs::remove_dir_all(blob_dir);
         }
         let t = Instant::now();
-        let opened = container::open_document_full(path, blob_dir, None, None).expect("the open");
+        let opened = container::open_document_full(path, blob_dir, None).expect("the open");
         (t.elapsed(), opened.document)
     });
     emit(
@@ -258,7 +258,7 @@ fn stage_open(args: &[String], refill: bool) {
     std::env::set_var("FUNDACAD_BLOB_DIR", &blob_dir);
     std::env::set_var("XDG_CACHE_HOME", &cache);
     if !refill {
-        container::open_document_full(&path, &blob_dir, None, None).expect("the first open");
+        container::open_document_full(&path, &blob_dir, None).expect("the first open");
     }
     let doc_text = file_layer(&path, &blob_dir, repeat, refill);
     if args.iter().any(|a| a == "--file-only") {

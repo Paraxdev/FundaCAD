@@ -1,54 +1,49 @@
-name: Disable updater artifacts when they could not be trusted
+name: Leave updater signing to the sign job
 description: >
-  Turn createUpdaterArtifacts off in a bundle config when there is no signing
-  key, or when the key's public half is not the one the app verifies against.
+  Turn createUpdaterArtifacts off in a bundle config, and say whether the sign
+  job signs this run's updater bundles (signing is on and the pubkey is ours).
 
 inputs:
   config:
     description: The bundle config to patch.
     required: true
-  signing-key:
-    description: The minisign private key, empty on a run that gets no secrets.
+  signing:
+    description: Whether the sign job signs this run's updater bundles ("true" from vars.UPDATER_SIGNING).
     required: false
-    default: ""
+    default: "false"
+
+outputs:
+  sign:
+    description: '"true" when the sign job should sign the updater bundles of this run.'
+    value: ${{ steps.decide.outputs.sign }}
 
 runs:
   using: composite
   steps:
-    # Dependabot-triggered runs get NO repository secrets, by GitHub's design, so
-    # TAURI_SIGNING_PRIVATE_KEY arrives empty and `tauri build` aborts with "failed
-    # to decode secret key: Missing comment in secret key". That failed the build leg
-    # on all three OSes for every dependency PR while the `test` gate passed, which
-    # reads as "the bump broke the build" when nothing was wrong with the bump.
-    #
-    # Bundle WITHOUT updater artifacts in that case. The point of building a
-    # dependency PR is to prove the bundle still assembles on all three OSes, not to
-    # ship it. Deliberately NOT solved by giving Dependabot the signing key: that key
-    # authorises pushing an update to every tester's machine, and a Dependabot run
-    # executes the install scripts of the very package it just bumped.
-    #
-    # On a normal push the key is present, this is a no-op, and updater artifacts stay
-    # signed, the in-app updater and the release jobs' latest.json depend on that.
-    - name: Disable updater artifacts when they could not be trusted
+    # The signing key never reaches the bundle job, whose build runs npm and crates.io code: the sign job
+    # signs the finished bundles. Dependabot runs, which get no secrets, bundle the same way.
+    - name: Turn off updater artifacts in the bundle and decide whether they get signed
+      id: decide
       shell: bash
       env:
-        TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.signing-key }}
+        SIGNING: ${{ inputs.signing }}
         CONFIG: ${{ inputs.config }}
       run: |
         # Upstream's minisign public key, as inherited at the fork point. See
         # tests/security/updater.test.ts.
         UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
+        node -e "const fs=require('fs');const f=process.env.CONFIG;const j=JSON.parse(fs.readFileSync(f));j.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
         pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
         why=""
-        [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || why="there is no signing key (expected on Dependabot PRs)"
+        [ "$SIGNING" = true ] || why="update signing is off (the UPDATER_SIGNING variable is not true)"
         # A signature made with a key whose public half is NOT the one baked
-        # into the app is worse than no signature at all: the build looks
-        # shippable, and every installed copy rejects the update with nothing
-        # said here. Same treatment as a missing key.
+        # into the app is worse than no signature at all: every installed copy
+        # rejects the update with nothing said here.
         [ "$pubkey" != "$UPSTREAM_PUBKEY" ] || why="the updater pubkey is still upstream's, so nothing we sign would verify"
         if [ -z "$why" ]; then
-          echo "signing key present and the pubkey is ours, updater artifacts stay enabled"
+          echo "the sign job signs this run's updater bundles"
+          echo "sign=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        echo "::warning::No updater artifacts: $why. The installers still build and are still shippable; they just do not update themselves."
-        node -e "const fs=require('fs');const f=process.env.CONFIG;const j=JSON.parse(fs.readFileSync(f));j.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+        echo "::warning::No updater signatures: $why. The installers still build and are still shippable; they just do not update themselves."
+        echo "sign=false" >> "$GITHUB_OUTPUT"

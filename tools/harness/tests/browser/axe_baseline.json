@@ -1,35 +1,11 @@
 {
-  "confirm": {
-    "meta-viewport": 1
-  },
-  "empty_workspace": {
-    "meta-viewport": 1
-  },
   "example": {
-    "aria-allowed-attr": 1,
-    "meta-viewport": 1
+    "aria-allowed-attr": 1
   },
   "extrude": {
-    "meta-viewport": 1,
     "target-size": 1
   },
-  "home": {
-    "meta-viewport": 1
-  },
-  "palette": {
-    "meta-viewport": 1
-  },
-  "render": {
-    "meta-viewport": 1
-  },
-  "settings": {
-    "meta-viewport": 1
-  },
   "sketch": {
-    "aria-allowed-attr": 1,
-    "meta-viewport": 1
-  },
-  "stress": {
-    "meta-viewport": 1
+    "aria-allowed-attr": 1
   }
 }

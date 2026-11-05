@@ -3,6 +3,7 @@ import {
   setupSummary,
   CUSTOM_MATERIAL,
   FINE_MAX_ELEMENTS,
+  MESH_DETAIL_CHOICES,
   STRESS_MATERIALS,
   buildStressRequest,
   forceVector,
@@ -11,12 +12,13 @@ import {
   defaultSpotRadius,
   faceCountLabel,
   legendEnds,
+  legendTicks,
   legendGradient,
   newLoad,
   newSetup,
   panelMessage,
   setupFromStudy,
-  stressColor,
+  rampColor,
   stressColors,
   studyFromSetup,
   valueRange,
@@ -117,15 +119,13 @@ describe("buildStressRequest", () => {
     expect(r.ok && r.options.loads).toEqual([{ faces: [top], pressure: 0.5 }]);
   });
 
-  it("sends a custom material as numbers and the element size in mm whatever the display unit", () => {
+  it("sends a custom material as numbers whatever the display unit", () => {
     setUnit("in");
     const s = ready();
     s.material = CUSTOM_MATERIAL;
     s.custom = { E: 2300, nu: 0.35, yield: 40, density: 1.1 };
-    s.size = 2;
     const r = buildStressRequest(s);
     expect(r.ok && r.options.material).toEqual({ E: 2300, nu: 0.35, yield: 40, density: 1.1, name: "Custom" });
-    expect(r.ok && r.options.size).toBe(2);
   });
 
   it('refuses a cleared custom field, which a number input reads as ""', () => {
@@ -137,9 +137,6 @@ describe("buildStressRequest", () => {
       const r = buildStressRequest(s);
       expect(r.ok, k).toBe(false);
     }
-    const s = ready();
-    s.size = blank;
-    expect(buildStressRequest(s).ok).toBe(false);
   });
 
   it("says what is missing, in order", () => {
@@ -160,8 +157,6 @@ describe("buildStressRequest", () => {
     s.custom.nu = 0.5;
     expect(msg(s)).toMatch(/Poisson/);
     s.custom.nu = 0.3;
-    s.size = -1;
-    expect(msg(s)).toMatch(/mesh size/);
     s.loads = [];
     expect(msg(s)).toMatch(/^add a load, or turn on Own weight/);
   });
@@ -195,8 +190,25 @@ describe("refinement", () => {
       options: { ...base, refine: "fine", maxElements: FINE_MAX_ELEMENTS },
     });
     s.refine = "off";
-    s.size = 1.7;
-    expect(buildStressRequest(s)).toEqual({ ok: true, body: "b1", options: { ...base, size: 1.7, refine: "off" } });
+    expect(buildStressRequest(s)).toEqual({ ok: true, body: "b1", options: { ...base, refine: "off" } });
+  });
+
+  it("offers Coarse, Standard and Fine, and Coarse is the old Off", () => {
+    expect(MESH_DETAIL_CHOICES.map((c) => [c.value, c.label])).toEqual([
+      ["off", "Coarse"],
+      ["standard", "Standard"],
+      ["fine", "Fine"],
+    ]);
+  });
+
+  it("runs an old study with a size on the automatic size, and reading it back changes nothing in the file", () => {
+    const old = { ...studyFromSetup(ready()), size: 1.7, refine: "off" as const };
+    const s = setupFromStudy(old, asFaces);
+    expect(s.refine).toBe("off");
+    const r = buildStressRequest(s);
+    expect(r.ok && "size" in r.options).toBe(false);
+    expect(studyFromSetup(s, old)).toEqual(old);
+    expect(studyFromSetup(s).size).toBeNull();
   });
 
   it("saves refine only when it is not Standard and reads it back", () => {
@@ -249,8 +261,6 @@ describe("formatStressResult", () => {
       ],
       details: [
         { k: "Material", v: "PLA" },
-        { k: "Peak at", v: "1, 0, 2 in" },
-        { k: "Deflection at", v: "10, 0, 0 in" },
         { k: "Yield", v: "50 MPa" },
         { k: "Applied", v: "0, 0, -20 N" },
         { k: "Reaction", v: "0, 0, 20 N" },
@@ -278,7 +288,7 @@ describe("formatStressResult", () => {
 
   it("says in Details whether refinement ran and why it stopped, and nothing for an older reply", () => {
     const refinement = (m: Partial<StressReply["mesh"]>) =>
-      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Refinement")
+      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Mesh detail")
         ?.v ?? null;
     const one = [{ elements: 4800, maxVonMises: 15.077 }];
     const two = [{ elements: 3100, maxVonMises: 28.46 }, ...one];
@@ -298,7 +308,7 @@ describe("formatStressResult", () => {
       unknownRefined: refinement({ passes: two, stop: "later" }),
     }).toEqual({
       older: null,
-      off: "Off",
+      off: "Coarse",
       settled: "Not needed, a finer mesh would barely move the peak",
       settledLater:
         "Refined once, the peak went from 28.46 to 15.077 MPa, then a finer mesh would barely move the peak",
@@ -312,7 +322,7 @@ describe("formatStressResult", () => {
       unknownRefined: "Refined once, the peak went from 28.46 to 15.077 MPa",
     });
     const rows = formatStressResult({ ...reply, mesh: { ...reply.mesh, passes: one, stop: "settled" } }, "mm").details;
-    expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Refinement"]);
+    expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Mesh detail"]);
   });
 
   it("tells a Fine result in Details that Standard can read a higher peak, and says nothing for Standard or Off", () => {
@@ -323,7 +333,7 @@ describe("formatStressResult", () => {
     expect(rows("off")).toEqual([]);
     expect(rows()).toEqual([]);
     const v = formatStressResult({ ...reply, mesh: { ...reply.mesh, stop: "settled" } }, "mm", ["fixed"], "fine");
-    expect(v.details.slice(-3).map((d) => d.k)).toEqual(["Mesh", "Refinement", "Note"]);
+    expect(v.details.slice(-3).map((d) => d.k)).toEqual(["Mesh", "Mesh detail", "Note"]);
   });
 
   it("lists each of three supports' reactions and the weight in the details, none of them in the key rows", () => {
@@ -341,7 +351,7 @@ describe("formatStressResult", () => {
       ["fixed", "pinned", "slider"],
     );
     expect(v.rows.map((r) => r.k)).toEqual(["Safety factor", "Peak stress", "Max deflection"]);
-    expect(v.details.slice(4)).toEqual([
+    expect(v.details.slice(2)).toEqual([
       { k: "Weight", v: "0, 0, -0.35 N" },
       { k: "Applied", v: "0, 0, -20 N" },
       { k: "Reaction", v: "0, 0, 20 N" },
@@ -361,8 +371,6 @@ describe("formatStressResult", () => {
       ],
       details: [
         { k: "Material", v: "PLA" },
-        { k: "Peak at", v: "25.4, 0, 50.8 mm" },
-        { k: "Deflection at", v: "254, 0, 0 mm" },
         { k: "Yield", v: "50 MPa" },
         { k: "Applied", v: "0, 0, -20 N" },
         { k: "Reaction", v: "0, 0, 20 N" },
@@ -374,6 +382,22 @@ describe("formatStressResult", () => {
       verdict: { safetyFactor: 1.6, peakPlace: null },
       peakAt: [25.4, 0, 50.8],
       maxDeflection: 1.27,
+      peaks: [
+        {
+          label: "Peak stress",
+          where: "x 25.4, y 0, z 50.8 mm",
+          spoken: "Peak stress, 31.25 MPa, at x 25.4, y 0, z 50.8 mm",
+          at: [25.4, 0, 50.8],
+          size: 5,
+        },
+        {
+          label: "Max deflection",
+          where: "x 254, y 0, z 0 mm",
+          spoken: "Max deflection, 1.27 mm, at x 254, y 0, z 0 mm",
+          at: [254, 0, 0],
+          size: 5,
+        },
+      ],
     });
     const corner =
       "the peak stress is at a sharp inside corner, stress at a sharp inside corner or where a support ends grows as the mesh is refined, look at the colour away from it";
@@ -387,7 +411,7 @@ describe("formatStressResult", () => {
 
   it("reads a peak inside the body, with a null face", () => {
     const v = formatStressResult({ ...reply, maxVonMises: { value: 3, at: [0, 0, 0], face: null } }, "mm");
-    expect(v.details.find((r) => r.k === "Peak at")?.v).toBe("0, 0, 0 mm");
+    expect(v.peaks[0]?.where).toBe("x 0, y 0, z 0 mm");
   });
 
   it("collects warnings and feature errors, and takes the legend from the field", () => {
@@ -401,6 +425,67 @@ describe("formatStressResult", () => {
     const none = formatStressResult({ ...reply, safetyFactor: null }, "mm");
     expect(none.yields).toBe(false);
     expect(none.rows.find((r) => r.k === "Safety factor")?.v).toBe("none, no stress");
+  });
+});
+
+describe("stress peaks", () => {
+  const slanted: StressReply = {
+    ...reply,
+    maxVonMises: { value: 31.25, at: [25.4, -7.62, 50.8], face: 4 },
+    maxDisplacement: { value: 1.27, at: [254, 12.7, -2.54], vector: [0, 0, -1.27] },
+  };
+  const surfaceOf = (positions: number[]) => ({
+    positions,
+    indices: [0, 1, 2],
+    vonMises: [1, 2, 3],
+  });
+
+  it("names where the peak stress and the largest bend are, in the display unit", () => {
+    const mm = formatStressResult(slanted, "mm").peaks.map((p) => p.where);
+    setUnit("in");
+    const inches = formatStressResult(slanted, "in").peaks;
+    expect(inches.map((p) => ({ label: p.label, where: p.where, spoken: p.spoken, at: p.at }))).toEqual([
+      {
+        label: "Peak stress",
+        where: "x 1, y -0.3, z 2 in",
+        spoken: "Peak stress, 31.25 MPa, at x 1, y -0.3, z 2 in",
+        at: [25.4, -7.62, 50.8],
+      },
+      {
+        label: "Max deflection",
+        where: "x 10, y 0.5, z -0.1 in",
+        spoken: "Max deflection, 0.05 in, at x 10, y 0.5, z -0.1 in",
+        at: [254, 12.7, -2.54],
+      },
+    ]);
+    expect(mm).toEqual(["x 25.4, y -7.62, z 50.8 mm", "x 254, y 12.7, z -2.54 mm"]);
+  });
+
+  it("frames a third of the part's diagonal, to the hundredth and at least 5 mm, and 20 mm with no surface", () => {
+    const { surface: _drop, ...bare } = slanted;
+    const sizeOf = (positions: number[] | null) =>
+      formatStressResult(positions ? { ...slanted, surface: surfaceOf(positions) } : bare, "mm").peaks.map(
+        (p) => p.size,
+      );
+    // Box 10 x 10 x 5 off the origin, diagonal 15.
+    expect(sizeOf([1, -2, 3, 11, -2, 3, 1, 8, 8])).toEqual([5, 5]);
+    // Box 10.02 x 10.02 x 5.01, diagonal 15.03.
+    expect(sizeOf([-4, 6, 1, 6.02, 6, 1, -4, 16.02, 6.01])).toEqual([5.01, 5.01]);
+    // Box 9.98 x 9.98 x 4.99, diagonal 14.97, a third 4.99 held at 5.
+    expect(sizeOf([-4, 6, 1, 5.98, 6, 1, -4, 15.98, 5.99])).toEqual([5, 5]);
+    // A 2 x 1.5 x 0.6 mm pin, diagonal 2.57.
+    expect(sizeOf([7.3, -1.2, 0.4, 9.3, -1.2, 0.4, 7.3, 0.3, 1])).toEqual([5, 5]);
+    // A 300 x 120 x 45 mm plate, diagonal 326.23.
+    expect(sizeOf([-150, 20, 3, 150, 20, 3, -150, 140, 48])).toEqual([108.74, 108.74]);
+    expect(sizeOf(null)).toEqual([20, 20]);
+    expect(sizeOf([])).toEqual([20, 20]);
+    expect(sizeOf([2, 3, 4, 2, 3, 4, 2, 3, 4])).toEqual([20, 20]);
+  });
+
+  it("keeps no where line in Details", () => {
+    const keys = formatStressResult(slanted, "mm").details.map((d) => d.k);
+    expect(keys).not.toContain("Peak at");
+    expect(keys).not.toContain("Deflection at");
   });
 });
 
@@ -420,24 +505,18 @@ describe("setupSummary", () => {
 });
 
 describe("colour map", () => {
-  it("runs blue to red through cyan, green and yellow", () => {
-    expect(stressColor(0)).toEqual([0, 0, 1]);
-    expect(stressColor(0.25)).toEqual([0, 1, 1]);
-    expect(stressColor(0.5)).toEqual([0, 1, 0]);
-    expect(stressColor(0.75)).toEqual([1, 1, 0]);
-    expect(stressColor(1)).toEqual([1, 0, 0]);
-    expect(stressColor(0.125)).toEqual([0, 0.5, 1]);
+  it("runs the rainbow ramp blue to red through cyan, green and yellow", () => {
+    expect(rampColor("rainbow", 0)).toEqual([0, 0, 1]);
+    expect(rampColor("rainbow", 0.25)).toEqual([0, 1, 1]);
+    expect(rampColor("rainbow", 0.5)).toEqual([0, 1, 0]);
+    expect(rampColor("rainbow", 0.75)).toEqual([1, 1, 0]);
+    expect(rampColor("rainbow", 1)).toEqual([1, 0, 0]);
+    expect(rampColor("rainbow", 0.125)).toEqual([0, 0.5, 1]);
   });
 
-  it("clamps out-of-range values and reads NaN as the low end", () => {
-    expect(stressColor(-3)).toEqual([0, 0, 1]);
-    expect(stressColor(7)).toEqual([1, 0, 0]);
-    expect(stressColor(NaN)).toEqual([0, 0, 1]);
-  });
-
-  it("maps values over a range, three numbers per vertex, and a flat field to blue", () => {
-    expect([...stressColors([10, 20, 15], 10, 20)]).toEqual([0, 0, 1, 1, 0, 0, 0, 1, 0]);
-    expect([...stressColors([5, 5], 5, 5)]).toEqual([0, 0, 1, 0, 0, 1]);
+  it("maps values over a range, three numbers per vertex", () => {
+    expect([...stressColors([10, 20, 15], 10, 20, "rainbow")]).toEqual([0, 0, 1, 1, 0, 0, 0, 1, 0]);
+    expect([...stressColors([5, 5], 5, 5, "rainbow")]).toEqual([0, 0, 1, 0, 0, 1]);
   });
 
   it("ranges over finite values only", () => {
@@ -463,8 +542,34 @@ describe("colour map", () => {
     ]);
   });
 
-  it("draws the legend from the same stops", () => {
-    expect(legendGradient()).toBe(
+  it("labels the bar at every quarter, the ends as legendEnds reads them", () => {
+    const labels = (l: { min: number; max: number }) => legendTicks(l).map((t) => [t.pct, t.label]);
+    expect(labels({ min: 0.5, max: 62 })).toEqual([
+      [0, "0.5"],
+      [25, "15.875"],
+      [50, "31.25"],
+      [75, "46.625"],
+      [100, "62"],
+    ]);
+    expect(labels({ min: 0.000656, max: 51.11 })).toEqual([
+      [0, "0"],
+      [25, "12.78"],
+      [50, "25.56"],
+      [75, "38.33"],
+      [100, "51.11"],
+    ]);
+    expect(labels({ min: 7.25, max: 7.25 })).toEqual([
+      [0, "7.25"],
+      [25, "7.25"],
+      [50, "7.25"],
+      [75, "7.25"],
+      [100, "7.25"],
+    ]);
+    expect(legendTicks({ min: 0, max: 0 }).map((t) => t.label)).toEqual(["0", "0", "0", "0", "0"]);
+  });
+
+  it("draws the rainbow legend from the same stops", () => {
+    expect(legendGradient("rainbow")).toBe(
       "linear-gradient(to right, rgb(0, 0, 255) 0%, rgb(0, 255, 255) 25%, rgb(0, 255, 0) 50%, rgb(255, 255, 0) 75%, rgb(255, 0, 0) 100%)",
     );
   });

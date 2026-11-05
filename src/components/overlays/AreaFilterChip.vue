@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import Icon from "../shell/Icon.vue";
 import { useEngine } from "../../app/engineKey";
+import { pageZoom } from "../../ui/interfaceSize";
 import { areaFilterIcon, type AreaFilter, type AreaMode } from "../../viewport/areaSelect";
 
 const engine = useEngine();
@@ -38,11 +39,14 @@ function refresh(): boolean {
   const h = el.value?.offsetHeight || HEIGHT_PX;
   const right = drag.at.x >= drag.from.x;
   const down = drag.at.y >= drag.from.y;
-  const x = right ? drag.at.x + GAP_PX : drag.at.x - GAP_PX - w;
-  const y = down ? drag.at.y + GAP_PX : drag.at.y - GAP_PX - h;
+  const z = pageZoom();
+  const cx = drag.at.x / z;
+  const cy = drag.at.y / z;
+  const x = right ? cx + GAP_PX : cx - GAP_PX - w;
+  const y = down ? cy + GAP_PX : cy - GAP_PX - h;
   at.value = {
-    x: Math.min(Math.max(x, 4), Math.max(window.innerWidth - w - 4, 4)),
-    y: Math.min(Math.max(y, 4), Math.max(window.innerHeight - h - 4, 4)),
+    x: Math.min(Math.max(x, 4), Math.max(window.innerWidth / z - w - 4, 4)),
+    y: Math.min(Math.max(y, 4), Math.max(window.innerHeight / z - h - 4, 4)),
   };
   return true;
 }

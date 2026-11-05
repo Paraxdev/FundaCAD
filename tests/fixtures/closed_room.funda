@@ -1,0 +1,55 @@
+{
+  "version": 10,
+  "parameters": {},
+  "paramDefs": {},
+  "features": [
+    {
+      "type": "box",
+      "name": "Room shell",
+      "length": 400,
+      "width": 400,
+      "height": 300,
+      "id": "bx1"
+    },
+    {
+      "type": "box",
+      "name": "Room inside",
+      "length": 380,
+      "width": 380,
+      "height": 280,
+      "operation": "cut",
+      "id": "bx2"
+    },
+    {
+      "type": "sphere",
+      "name": "Lamp",
+      "radius": 40,
+      "id": "sp1"
+    }
+  ],
+  "bodyIds": {
+    "bx1:0": "body1",
+    "sp1:0": "body2"
+  },
+  "bodyMaterial": {
+    "body1": "m-wall",
+    "body2": "m-emitter"
+  },
+  "materials": [
+    {
+      "id": "m-wall",
+      "name": "Wall",
+      "color": "#e8ecf0",
+      "metalness": 0,
+      "roughness": 0.8
+    },
+    {
+      "id": "m-emitter",
+      "name": "Lamp",
+      "color": "#42e07a",
+      "metalness": 0,
+      "roughness": 0.4,
+      "emissive": 0.8
+    }
+  ]
+}

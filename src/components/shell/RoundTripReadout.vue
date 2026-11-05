@@ -32,7 +32,7 @@ onUnmounted(() => unsub?.());
   bottom: calc(var(--s-4) + 26px);
   padding: var(--s-0) var(--s-3);
   font:
-    11px/1.4 ui-monospace,
+    var(--fs-micro)/1.4 ui-monospace,
     "SF Mono",
     Menlo,
     Consolas,

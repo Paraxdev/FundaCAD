@@ -128,6 +128,19 @@ fn a_box_measures_its_wall_its_edge_and_its_corner() {
 }
 
 #[test]
+fn a_nearest_selector_measures_the_face_or_edge_it_picks_not_its_point() {
+    let d = box_doc();
+    let face = measure(&d, json!({"kind": "face", "by": "nearest", "point": [0, 0, 5], "body": "body1"}), None, None);
+    assert_eq!(face["a"]["kind"], "face", "{face}");
+    assert!(near(num(&face["a"]["area"]), 600.0), "{face}");
+    assert!(face["a"]["index"].is_u64(), "{face}");
+    let edge = measure(&d, json!({"kind": "edge", "by": "nearest", "point": [0, 10, 5], "body": "body1"}), None, None);
+    assert_eq!(edge["a"]["kind"], "edge", "{edge}");
+    let point = measure(&d, json!({"point": [0, 0, 5]}), None, None);
+    assert_eq!(point["a"]["kind"], "point", "{point}");
+}
+
+#[test]
 fn a_cylinder_gives_its_radius_and_the_axis_through_its_middle() {
     let d = doc(json!([{"id": "cy", "type": "cylinder", "radius": 5, "height": 20}]));
     let ins = inspected(&d);

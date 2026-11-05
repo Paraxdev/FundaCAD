@@ -1,23 +1,50 @@
 <script setup lang="ts">
-import { markRaw, ref, onMounted, onUnmounted } from "vue";
+import { computed, markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
+import { usePanelsStore } from "../../stores/panels";
 import { useHomeStore } from "../../stores/home";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
 import IconButton from "../ui/IconButton.vue";
 import Toolbar from "../ui/Toolbar.vue";
 import WorkspaceToggle from "./WorkspaceToggle.vue";
+import TitleFold from "./TitleFold.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
 import ErrorNotice from "./ErrorNotice.vue";
+import { stepMenuText } from "../../ui/canStep";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
+import { TITLEBAR_FOLD_QUERY } from "../../ui/layoutBreakpoints";
+import { useMediaQuery } from "../../composables/useMediaQuery";
 import brandLockupDark from "../../../assets/brand/fundacad-lockup-app.svg";
 import brandLockupLight from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
 const engine = useEngine();
 const ui = useUiStore();
 const home = useHomeStore();
+const panels = usePanelsStore();
+// Mirrors canStep: an open sketch, then an open Stress panel, step their own history before the model's.
+const canUndo = computed(() =>
+  ui.sketchActive ? ui.sketchCanUndo : panels.stress ? panels.stress.canUndo : ui.canUndo,
+);
+const canRedo = computed(() =>
+  ui.sketchActive ? ui.sketchCanRedo : panels.stress ? panels.stress.canRedo : ui.canRedo,
+);
+// Only the tooltip names the step, the button keeps the name Undo for voice control and the harness.
+const undoTip = computed(() =>
+  stepMenuText(
+    "Undo",
+    !canUndo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.undoLabel : ui.undoLabel,
+  ),
+);
+const redoTip = computed(() =>
+  stepMenuText(
+    "Redo",
+    !canRedo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.redoLabel : ui.redoLabel,
+  ),
+);
+const folded = useMediaQuery(TITLEBAR_FOLD_QUERY);
 
 // The wordmark SVG is light on dark and an <img> cannot be recoloured from CSS, so light themes get a dark-ink asset.
 const brandLockup = ref(themeMode(getTheme()) === "light" ? brandLockupLight : brandLockupDark);
@@ -56,31 +83,33 @@ onUnmounted(() => {
     />
     <!-- display: contents, so the bar's flex row and its narrow window rules see the controls as before. -->
     <div class="tb-rest" :inert="home.shown">
-      <MenuBar :menus="menus" />
+      <MenuBar :menus="menus">
+        <template #head="{ menu }"><TitleFold v-if="folded && menu === 'File'" /></template>
+      </MenuBar>
       <Toolbar class="tb-history" label="Undo and redo">
         <!-- The name leaves the keys out, they are in the tooltip and a screen reader need not say them. -->
         <IconButton
           id="undo-btn"
           icon="undo"
-          tip="Undo"
+          :tip="undoTip"
           keys="Ctrl+Z"
           aria-label="Undo"
           size="sm"
           variant="plain"
           :icon-size="15"
-          :disabled="!ui.canUndo"
+          :disabled="!canUndo"
           @click="engine.doUndo()"
         />
         <IconButton
           id="redo-btn"
           icon="redo"
-          tip="Redo"
+          :tip="redoTip"
           keys="Ctrl+Y"
           aria-label="Redo"
           size="sm"
           variant="plain"
           :icon-size="15"
-          :disabled="!ui.canRedo"
+          :disabled="!canRedo"
           @click="engine.doRedo()"
         />
       </Toolbar>
@@ -89,7 +118,8 @@ onUnmounted(() => {
       </span>
       <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
         <!-- After the name, never before: a prefix moved the filename sideways when the document went dirty. -->
-        {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes" aria-hidden="true">*</span>
+        <span class="docname-text">{{ ui.docName }}</span
+        ><span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes" aria-hidden="true">*</span>
         <span v-if="ui.dirty" class="sr-only"> Unsaved changes</span>
       </span>
       <!-- Beside the name because it is about this document, renders nothing unless an assistant is attached. -->

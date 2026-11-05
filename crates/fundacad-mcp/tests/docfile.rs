@@ -121,9 +121,22 @@ fn write_fundab_with(
     blobs: &[(String, Vec<u8>)],
     extra: &[(u8, &str, Vec<u8>)],
 ) {
+    write_fundab_edited(path, document, blobs, extra, |_| {});
+}
+
+type Row = (u8, String, usize, usize, usize, [u8; 16]);
+
+/// Rows are kind, name, offset, stored length, raw length and hash, editable before the table is written.
+fn write_fundab_edited(
+    path: &Path,
+    document: &Map<String, Value>,
+    blobs: &[(String, Vec<u8>)],
+    extra: &[(u8, &str, Vec<u8>)],
+    edit: impl FnOnce(&mut Vec<Row>),
+) {
     let (shard, k, m) = (4096usize, 8usize, 4usize);
     let mut body = vec![0u8; 64];
-    let mut entries: Vec<(u8, String, usize, usize, usize, [u8; 16])> = Vec::new();
+    let mut entries: Vec<Row> = Vec::new();
     let mut sections: Vec<(u8, String, Vec<u8>)> = vec![(1, "document".into(), cbor(&Value::Object(document.clone())))];
     for (h, b) in blobs {
         sections.push((2, h.clone(), b.clone()));
@@ -148,6 +161,7 @@ fn write_fundab_with(
         h.finalize_variable(&mut d).unwrap();
         entries.push((kind, name, off, stored.len(), raw.len(), d));
     }
+    edit(&mut entries);
     let mut table: Vec<u8> = b"FTBL".to_vec();
     table.extend_from_slice(&(entries.len() as u32).to_le_bytes());
     for (kind, name, off, sl, rl, h) in &entries {
@@ -185,6 +199,26 @@ fn write_fundab_with(
     tail[56..60].copy_from_slice(&tail_crc.to_le_bytes());
     body.extend_from_slice(&tail);
     std::fs::write(path, &body).unwrap();
+}
+
+#[test]
+fn a_funda_longer_than_the_app_opens_is_not_written() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let fetched = std::collections::HashMap::from([(d.clone(), data.clone())]);
+    let empty = tmp.path().join("empty");
+    let path = tmp.path().join("part.funda");
+    assert_eq!(docfile::write_with(&path, &doc(&d), Some(&empty), &fetched).unwrap(), 1);
+    let len = std::fs::metadata(&path).unwrap().len();
+    std::fs::remove_file(&path).unwrap();
+
+    for cap in [len - 1, data.len() as u64] {
+        let refused = docfile::write_within(&path, &doc(&d), Some(&empty), &fetched, cap);
+        assert!(refused.is_err_and(|e| e.0.contains(".fundab")), "cap {cap}");
+        assert!(!path.exists(), "cap {cap}");
+    }
+    assert_eq!(docfile::write_within(&path, &doc(&d), Some(&empty), &fetched, len).unwrap(), 1);
 }
 
 #[test]
@@ -250,6 +284,84 @@ fn damaged_binary_and_wrong_geometry_are_refused() {
     let store = tmp.path().join("b2");
     assert!(docfile::read(&jpath, Some(&store)).is_err(), "geometry that does not match its hash was accepted");
     assert!(!store.join(format!("{d}.bbrep")).exists());
+
+    let zpath = tmp.path().join("bad-zip.funda");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&zpath).unwrap());
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let manifest = json!({"blobs": [{"hash": d, "entry": "blobs/a.bbrep"}]}).to_string();
+    for (name, data) in [
+        ("document.json", Value::Object(doc(&d)).to_string().into_bytes()),
+        ("manifest.json", manifest.into_bytes()),
+        ("blobs/a.bbrep", b"not the geometry".to_vec()),
+    ] {
+        z.start_file(name, options).unwrap();
+        z.write_all(&data).unwrap();
+    }
+    z.finish().unwrap();
+    let store = tmp.path().join("b3");
+    let err = docfile::read(&zpath, Some(&store)).unwrap_err();
+    assert!(err.to_string().contains("does not match its hash"), "{err}");
+    assert!(!store.join(format!("{d}.bbrep")).exists());
+}
+
+fn fundab_error(tag: &str, blobs: &[(String, Vec<u8>)], edit: impl FnOnce(&mut Vec<Row>)) -> String {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = digest(&geometry());
+    let path = tmp.path().join(format!("{tag}.fundab"));
+    write_fundab_edited(&path, &doc(&d), blobs, &[], edit);
+    docfile::read_document(&path).map(|_| ()).unwrap_err().0
+}
+
+#[test]
+fn a_fundab_whose_sections_share_bytes_is_refused() {
+    let data = geometry();
+    let d = digest(&data);
+    for shift in [0, 1] {
+        let err = fundab_error("overlap", &[(d.clone(), data.clone())], |rows| {
+            let mut copy = rows[1].clone();
+            copy.0 = 9;
+            copy.2 += shift;
+            rows.push(copy);
+        });
+        assert!(err.contains("damaged"), "{err}");
+    }
+}
+
+#[test]
+fn a_fundab_holds_one_byte_budget_across_its_sections() {
+    let blobs: Vec<(String, Vec<u8>)> = (0..5u8).map(|i| vec![i; 1000]).map(|b| (digest(&b), b)).collect();
+    let err = fundab_error("budget", &blobs, |rows| {
+        for row in rows.iter_mut().filter(|r| r.0 == 2) {
+            row.4 = 2 << 30;
+        }
+    });
+    assert_eq!(err, "this document expands to more than 8 GiB and was refused");
+}
+
+#[test]
+fn a_fundab_geometry_section_past_2_gib_is_refused_before_it_is_read() {
+    let data = geometry();
+    let err = fundab_error("geomcap", &[(digest(&data), data)], |rows| rows[1].4 = (2 << 30) + 1);
+    assert_eq!(err, "this document has a geometry section larger than 2048 MiB and was refused");
+}
+
+#[test]
+fn a_fundab_document_section_past_1_gib_is_refused_before_it_is_read() {
+    let err = fundab_error("doccap", &[], |rows| rows[0].4 = (1 << 30) + 1);
+    assert_eq!(err, "this document is larger than 1024 MiB and was refused");
+}
+
+#[test]
+fn a_fundab_that_lists_one_geometry_twice_reads_it_once() {
+    let data = geometry();
+    let d = digest(&data);
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("twice.fundab");
+    let twice = [(d.clone(), data.clone()), (d.clone(), data.clone())];
+    // The second copy declares a length its bytes do not have, so reading it would fail the open.
+    write_fundab_edited(&path, &doc(&d), &twice, &[], |rows| rows[2].4 += 1);
+    let (back, blobs) = docfile::read_document(&path).unwrap();
+    assert_eq!((back, blobs), (doc(&d), vec![(d, data)]));
 }
 
 #[test]
@@ -287,6 +399,41 @@ fn a_local_blob_that_no_longer_matches_its_hash_is_not_embedded() {
     assert!(docfile::write(&path, &doc(&d), Some(&store)).is_err());
     let fetched = std::collections::HashMap::from([(d.clone(), data)]);
     assert_eq!(docfile::write_with(&path, &doc(&d), Some(&store), &fetched).unwrap(), 1);
+}
+
+fn with_import_only_in_history(digest: &str) -> Map<String, Value> {
+    let old = json!({"id": "im", "type": "import", "geom": digest}).to_string();
+    json!({"version": 9, "features": [],
+           "versions": {"objects": {"0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f": old, "aa": "not json"}, "versions": []}})
+    .as_object()
+    .unwrap()
+    .clone()
+}
+
+#[test]
+fn geometry_only_an_earlier_version_imports_is_embedded() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let store = tmp.path().join("blobs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(store.join(format!("{d}.bbrep")), &data).unwrap();
+    let path = tmp.path().join("part.funda");
+    assert_eq!(docfile::write(&path, &with_import_only_in_history(&d), Some(&store)).unwrap(), 1);
+    let fresh = tmp.path().join("fresh");
+    assert_eq!(docfile::read(&path, Some(&fresh)).unwrap().1, 1);
+    assert_eq!(std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(), data);
+}
+
+#[test]
+fn saving_is_refused_when_an_earlier_version_imports_geometry_that_is_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = digest(&geometry());
+    let path = tmp.path().join("part.funda");
+    let err = docfile::write(&path, &with_import_only_in_history(&d), Some(&tmp.path().join("empty")))
+        .expect_err("saved a document whose history names geometry that is nowhere");
+    assert!(err.to_string().contains("earlier version"), "{err}");
+    assert!(!path.exists());
 }
 
 #[test]
@@ -405,4 +552,11 @@ fn a_funda_with_two_entries_named_document_json_is_refused() {
     });
     let err = docfile::read_document(&path).map(|_| ()).unwrap_err();
     assert!(err.0.contains("is damaged"), "{err}");
+}
+
+#[test]
+fn the_text_limit_is_the_one_the_app_opens_with() {
+    let format = include_str!("../../fundacad-format/src/json_doc.rs");
+    assert!(format.contains("pub const MAX_DOC_TEXT: u64 = 1 << 30;"), "fundacad-format moved its limit");
+    assert_eq!(docfile::MAX_DOC_TEXT, 1 << 30);
 }

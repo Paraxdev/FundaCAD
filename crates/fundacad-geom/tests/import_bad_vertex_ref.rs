@@ -209,10 +209,26 @@ fn a_vertex_is_not_made_on_a_curve_end_nothing_else_vouches_for() {
 }
 
 #[test]
-fn a_record_that_never_ends_stops_the_scan() {
+fn a_record_that_never_ends_is_read_past_without_holding_it() {
     let file = blob_dir().join("no_semicolon.step");
     std::fs::write(&file, vec![b'x'; (64 << 20) + 1]).unwrap();
+    let scan = step_refs::scan(&file).map(|s| (s.faces, s.bad, s.documents, s.repaired.is_none()));
+    let _ = std::fs::remove_file(&file);
+    assert_eq!(scan, Ok((0, 0, 0, true)));
+}
+
+#[test]
+fn a_record_left_open_at_the_end_of_the_file_is_refused_when_it_names_an_assembly_part() {
+    let file = blob_dir().join("open_quote.step");
+    std::fs::write(&file, "#1 = PRODUCT('a'b,'',(#2));\n#3 = NEXT_ASSEMBLY_USAGE_OCCURRENCE($,$,$,#4,#5,$);\n")
+        .unwrap();
     let err = step_refs::scan(&file).err();
     let _ = std::fs::remove_file(&file);
-    assert_eq!(err.as_deref(), Some("a STEP record runs past 64 MiB"));
+    assert_eq!(
+        err.as_deref(),
+        Some(
+            "FundaCAD could not check this STEP file before reading it: a record FundaCAD cannot read to its end \
+             names one of the entities it checks"
+        )
+    );
 }

@@ -16,8 +16,8 @@
   /* The flat zero blur elevation of every overlay: a soft blur read as an odd halo against
      the dark backdrop. */
   box-shadow: var(--shadow-3);
-  width: min(720px, 92vw);
-  max-height: 88vh;
+  width: min(720px, 0.92 * var(--win-w));
+  max-height: calc(0.88 * var(--win-h));
   display: flex;
   flex-direction: column;
   color: var(--text, #e6e8ec);
@@ -33,7 +33,7 @@
 }
 .modal-head h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-title);
   font-weight: 600;
   letter-spacing: 0.3px;
 }
@@ -41,7 +41,7 @@
   background: transparent;
   border: none;
   color: var(--text-dim, #9aa3af);
-  font-size: 15px;
+  font-size: var(--fs-title);
   cursor: pointer;
   padding: var(--s-1) var(--s-3);
   border-radius: var(--r-sm, 6px);
@@ -76,7 +76,7 @@
   gap: var(--s-3);
 }
 .sm-section {
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--text-mute, #6b7280);
@@ -87,7 +87,7 @@
   margin-top: 0;
 }
 .sm-hint {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-axis-row {
@@ -97,7 +97,7 @@
   gap: var(--s-3);
 }
 .sm-axis-label {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-axis-track {
@@ -150,17 +150,17 @@
   accent-color: var(--accent);
 }
 .sm-slabel {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-sval {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .sm-radio {
-  font-size: 12px;
+  font-size: var(--fs-small);
   margin-right: var(--s-4);
   cursor: pointer;
 }
@@ -171,7 +171,7 @@
   gap: var(--s-3);
 }
 .sm-map-label {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .sm-select {
@@ -183,7 +183,7 @@
   border-radius: var(--r-sm, 6px);
   /* The 26px clears the .select-caret element (ui/_select.scss), placed from the right edge. */
   padding: var(--s-2) 26px var(--s-2) var(--s-3);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   cursor: pointer;
 }
 .sm-select:focus {
@@ -196,14 +196,17 @@
   color: var(--text, #e6e8ec);
 }
 /* A <button> standing in for a <select> (Select.vue): this adds what the UA gives a
-   <select> for free. */
+   <select> for free. Flex: a well of fixed height leaves its padding less than a line, and a
+   button pins that line to the top of its padding, so it would hang low. */
 .select-trigger {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   text-align: left;
 }
 .select-trigger .select-value {
-  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,7 +223,7 @@
   border-radius: var(--r-sm, 6px);
   padding: var(--s-2) var(--s-3);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   min-width: 0;
 }
 .sm-input:focus {
@@ -228,7 +231,7 @@
   outline-offset: 1px;
 }
 .sm-inv {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
   display: flex;
   align-items: center;
@@ -254,7 +257,7 @@
   cursor: pointer;
 }
 .prefs-label {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-dim, #9aa3af);
 }
 .prefs-switch {
@@ -294,12 +297,12 @@
   flex: none;
 }
 .plug-name {
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text, #e6e8ec);
 }
 .plug-summary,
 .plug-state {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim, #9aa3af);
 }
 .plug-link {
@@ -351,7 +354,7 @@
   background: var(--panel-2, #1c1f26);
 }
 .plug-listhead {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -359,7 +362,7 @@
 .plug-consent ul {
   margin: 4px 0 0;
   padding-left: 18px;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e8ec);
 }
 /* The "will not" list is quieter: it is there to judge the first list against. */
@@ -376,7 +379,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 /* Wraps rather than scrolls, so a URL's host is never off screen. */
 .plug-add {
@@ -395,16 +398,16 @@
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 /* Above the two lists: where a bundle came from is what a person can judge, so it is read
    before deciding. */
 .plug-origin {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e8ec);
 }
 .mcp-status {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-dim, #9aa3af);
 }
 .mcp-status.on {
@@ -427,7 +430,7 @@
   background: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
   font-family: var(--mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   white-space: pre;
   user-select: text;
 }
@@ -453,7 +456,7 @@
   min-width: 280px;
 }
 .choice-title {
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text, #e6e8ec);
   margin-bottom: var(--s-4, 12px);
@@ -478,7 +481,7 @@
   border: 1px solid transparent;
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
   transition:
     background var(--t-fast, 120ms) var(--ease),
@@ -489,7 +492,7 @@
 }
 .choice-btn small {
   color: var(--text-mute, #6b7280);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 .choice-btn.choice-primary {
   background: var(--accent);
@@ -523,7 +526,7 @@
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .choice-check:hover {
@@ -531,7 +534,7 @@
 }
 .choice-check small {
   color: var(--text-mute, #6b7280);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   margin-left: auto;
 }
 .choice-list {
@@ -540,7 +543,7 @@
   padding: 0;
   max-height: 280px;
   overflow: auto;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e8ec);
 }
 .choice-list li {
@@ -562,13 +565,13 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 12vh;
+  padding-top: calc(0.12 * var(--win-h));
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(2px);
 }
 .cmdk-card {
-  width: min(560px, 92vw);
-  max-height: 60vh;
+  width: min(560px, 0.92 * var(--win-w));
+  max-height: calc(0.6 * var(--win-h));
   display: flex;
   flex-direction: column;
   background: var(--panel-2, #1b1f24);
@@ -610,13 +613,13 @@
   flex: 1;
 }
 .cmdk-group {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .cmdk-key {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
   font-variant-numeric: tabular-nums;
 }
@@ -638,11 +641,16 @@
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
   /* Same inset as .palette, the other small panel that floats over the model. */
   padding: var(--s-4);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text, #e6e9ee);
 }
 .measure-panel[data-capped] {
   overflow-y: auto;
+}
+/* Hands its cap down to a scroller inside it, so the rows around that scroller stay in view. */
+.measure-panel-column {
+  display: flex;
+  flex-direction: column;
 }
 .measure-panel[data-folded] {
   overflow: hidden;
@@ -671,7 +679,7 @@
   background: var(--panel-2, #1b1f24);
   border: 1px solid transparent;
   color: var(--text, #e6e9ee);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -724,7 +732,7 @@
 }
 .measure-hint {
   margin-top: var(--s-2);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
 }
 .mirror-chips {
@@ -753,8 +761,8 @@
 
 .bug-report-card {
   width: 520px;
-  max-width: calc(100vw - 32px);
-  max-height: 88vh;
+  max-width: calc(var(--win-w) - 32px);
+  max-height: calc(0.88 * var(--win-h));
   overflow: auto;
 }
 .bug-report-card .bug-desc {
@@ -764,11 +772,11 @@
 .bug-report-card .bug-check {
   display: flex;
   margin: var(--s-2) 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .bug-report-card .bug-preview {
   margin: var(--s-3) 0;
-  font-size: 11.5px;
+  font-size: var(--fs-small);
 }
 .bug-report-card .bug-preview pre {
   max-height: 220px;
@@ -785,7 +793,7 @@
   justify-content: space-between;
   gap: var(--s-3);
   margin: var(--s-2) 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .bug-report-card .bug-shot-saved {
   display: flex;
@@ -801,7 +809,7 @@
 .bug-report-card .bug-note,
 .bug-report-card .bug-shot-saved,
 .bug-report-card .bug-again {
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   color: var(--text-dim);
 }
 .bug-report-card .bug-note {
@@ -815,14 +823,14 @@
 /* Materials: library and editor side by side, since picking a material and dragging a
    slider is one gesture. */
 .mats-panel {
-  width: min(720px, 92vw);
+  width: min(720px, 0.92 * var(--win-w));
 }
 .mats {
   display: grid;
   grid-template-columns: 240px 1fr;
   gap: var(--s-5);
   /* Bounded, so a library of two hundred scrolls inside the dialog. */
-  max-height: min(56vh, 460px);
+  max-height: min(0.56 * var(--win-h), 460px);
 }
 .mats-list {
   overflow: auto;
@@ -841,7 +849,7 @@
   padding: var(--s-2);
   color: var(--text, #e6e8ec);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   text-align: left;
   cursor: pointer;
 }
@@ -906,10 +914,9 @@
   flex: 1;
   min-width: 0;
 }
-.prefs-readout {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-  min-width: 3.5em;
-  text-align: right;
+
+.clash-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }

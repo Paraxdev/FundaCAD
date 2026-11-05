@@ -35,14 +35,24 @@ const GLOBAL: Command[] = [
   { id: "viewmode-pathtraced", label: "Path Traced View Mode", group: "View", context: "global" },
   { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
+  { id: "show-console", label: "Show Console", group: "View", context: "global" },
+  { id: "show-last-message", label: "Show Last Message", group: "View", context: "global" },
   { id: "go-menubar", label: "Go to Menu Bar", group: "Go", context: "global" },
   { id: "go-tools", label: "Go to Tools", group: "Go", context: "global" },
   { id: "go-items", label: "Go to Items", group: "Go", context: "global" },
   { id: "go-model", label: "Go to Model", group: "Go", context: "global" },
   { id: "go-panels", label: "Go to Panels", group: "Go", context: "global" },
   { id: "go-history", label: "Go to History", group: "Go", context: "global" },
+  { id: "browse-geometry", label: "Browse Faces and Edges", group: "Go", context: "global" },
+  { id: "next-face", label: "Next Face", group: "Edit", context: "global" },
+  { id: "previous-face", label: "Previous Face", group: "Edit", context: "global" },
+  { id: "next-edge", label: "Next Edge", group: "Edit", context: "global" },
+  { id: "previous-edge", label: "Previous Edge", group: "Edit", context: "global" },
   { id: "preferences", label: "Preferences…", group: "Edit", context: "global", key: "Ctrl+," },
   { id: "accessibility-settings", label: "Accessibility Settings…", group: "Edit", context: "global" },
+  { id: "interface-size-up", label: "Larger Interface", group: "View", context: "global", key: "Ctrl+Plus" },
+  { id: "interface-size-down", label: "Smaller Interface", group: "View", context: "global", key: "Ctrl+Minus" },
+  { id: "interface-size-reset", label: "Reset Interface Size", group: "View", context: "global", key: "Ctrl+0" },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
   { id: "manual", label: "Manual", group: "Help", context: "global" },
   { id: "report-problem", label: "Report a Problem…", group: "Help", context: "global" },
@@ -51,6 +61,15 @@ const GLOBAL: Command[] = [
   { id: "finish", label: "Finish Sketch", group: "SKETCH", context: "sketch" },
   { id: "palette", label: "Sketch Palette", group: "SKETCH", context: "sketch" },
 ];
+
+/** They ship without a key, so a hint is only ever a key the person chose. The Edit menu lists them too. */
+export const GEOMETRY_COMMANDS: ReadonlySet<string> = new Set([
+  "next-face",
+  "previous-face",
+  "next-edge",
+  "previous-edge",
+  "browse-geometry",
+]);
 
 function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
   const out: Command[] = [];
@@ -75,5 +94,13 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
 
 export function allCommands(): Command[] {
   // modelGroups(), not MODEL: an action whose capability is off must not be reachable here either.
-  return [...fromGroups(modelGroups(), "model"), ...fromGroups(SKETCH, "sketch"), ...GLOBAL];
+  return [
+    ...fromGroups(modelGroups(), "model"),
+    ...fromGroups(SKETCH, "sketch"),
+    ...GLOBAL.map((c) => {
+      if (!GEOMETRY_COMMANDS.has(c.id)) return c;
+      const key = keyHint(c.id);
+      return key === undefined ? c : { ...c, key };
+    }),
+  ];
 }

@@ -65,7 +65,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             data-testid="bed-custom-width"
             autofocus
           />
-          <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
+          <span style="width: 22px; font-size: var(--fs-small, 12px); color: var(--text-dim)">mm</span>
         </span>
       </label>
       <label class="prefs-row" style="grid-template-columns: 70px 1fr">
@@ -79,7 +79,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             inputmode="decimal"
             data-testid="bed-custom-depth"
           />
-          <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
+          <span style="width: 22px; font-size: var(--fs-small, 12px); color: var(--text-dim)">mm</span>
         </span>
       </label>
       <label class="prefs-row" style="grid-template-columns: 70px 1fr">
@@ -93,7 +93,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             inputmode="decimal"
             data-testid="bed-custom-height"
           />
-          <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
+          <span style="width: 22px; font-size: var(--fs-small, 12px); color: var(--text-dim)">mm</span>
         </span>
       </label>
       <div v-if="error" class="sm-hint" style="color: var(--error, #f0564a)" data-testid="bed-custom-error">{{

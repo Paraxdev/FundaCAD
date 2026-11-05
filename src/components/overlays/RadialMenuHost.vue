@@ -64,7 +64,7 @@ const slots = computed(() => {
   gap: 6px;
   padding: 5px 10px;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--fs-small);
   border-radius: 999px;
   border: 1px solid transparent;
   background: var(--float-bg-solid);

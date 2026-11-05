@@ -66,6 +66,10 @@ futures-executor = "0.3"
 # .app.tar.gz, which macOS unpacks without it). It is also what pulled zip 4 in.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 tauri-plugin-process = "2"
+# Same major as tauri-plugin-updater, whose version comparator hands out semver::Version.
+semver = "1"
+# Formats a release date the way the updater plugin's own check does.
+time = { version = "0.3", features = ["formatting"] }
 # The document files (.fundab, the ZIP container, the JSON .funda) live in the
 # fundacad-format crate, shared with the engine and the CLI. The app owns them,
 # not the engine worker, so a save never waits on a worker that is restarting.
@@ -102,6 +106,8 @@ windows-core = "0.61"
 
 [dev-dependencies]
 fundacad-core = { path = "../crates/fundacad-core" }
+# The mock runtime, so update_channel_tests.rs runs a real updater check against a localhost feed.
+tauri = { version = "2", features = ["test"] }
 tungstenite = "0.29"
 
 # The shipped engine's own crates compile as one unit, which is what the root

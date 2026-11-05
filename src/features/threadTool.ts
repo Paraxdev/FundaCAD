@@ -6,6 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 import { snap } from "../ui/units";
@@ -13,6 +14,8 @@ import { axisDragDistance } from "./manipulator";
 import { screwPath } from "./screwMath";
 import { MIN_THREAD_TURNS, coarsePitchFor, grooveProfile, threadAngleDeg, threadTurns } from "./threadMath";
 import { CanvasGesture } from "./canvasGesture";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 
 /** Long enough that a drag across a shank is one kernel build rather than fifty, short enough to feel live. */
 const SETTLE_MS = 350;
@@ -35,6 +38,7 @@ export class ThreadTool {
   // The pointerup of the click that picked the face must not commit the default thread,
   // so a commit waits for the next press.
   private armed = false;
+  private releaseRows: (() => void) | null = null;
   private grabLength = 0;
   private grabProj = 0;
   private helix: THREE.Line | null = null;
@@ -42,7 +46,7 @@ export class ThreadTool {
   // Opened lazily: a gesture that commits before the value settles skips a round trip nobody saw.
   private previewing = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -69,19 +73,34 @@ export class ThreadTool {
     this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
-    if (pre && pre.round && pre.faceIds.length === 1 && pre.faceIds[0] != null) {
-      this.beginSize(
-        withBody(pre.selectors[0]!, pre.bodyId),
-        pre.faceIds[0],
-        pre.round.radius,
-        pre.round.solidInside,
-        pre.round.cylinder.axis,
-        pre.round.cylinder.point,
-        pre.round.radial,
-      );
-      return;
-    }
+    if (pre && this.takeFace(pre)) return;
+    this.releaseRows = awaitFaceRows(
+      this.viewport,
+      "a round face",
+      (faces) => this.takeFace(faces) || "That face is not round. A thread needs a cylinder, a shank or a bore",
+      () => this.cancel(),
+    );
     setPrompt("Click a round face, a shank or a bore, to thread · Esc");
+  }
+
+  private takeFace(f: PressPullFaces): boolean {
+    const faceId = f.faceIds.length === 1 ? f.faceIds[0] : undefined;
+    if (!f.round || faceId == null) return false;
+    this.beginSize(
+      withBody(f.selectors[0]!, f.bodyId),
+      faceId,
+      f.round.radius,
+      f.round.solidInside,
+      f.round.cylinder.axis,
+      f.round.cylinder.point,
+      f.round.radial,
+    );
+    return true;
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -165,6 +184,7 @@ export class ThreadTool {
     point: readonly [number, number, number],
     radial: THREE.Vector3,
   ) {
+    this.dropRows();
     const d = new THREE.Vector3(axis[0], axis[1], axis[2]).normalize();
     const p = new THREE.Vector3(point[0], point[1], point[2]);
     // The thread runs the length of the clicked face, not of the body it belongs to.
@@ -204,6 +224,16 @@ export class ThreadTool {
       () => this.commit(),
       () => this.cancel(),
     );
+    for (const name of ["pitch", "length"] as const) {
+      this.dim.restoresOnUndo(
+        name,
+        () => this[name],
+        (held) => {
+          this[name] = held;
+          this.valueChanged();
+        },
+      );
+    }
     const s = this.viewport.projectToScreen(this.origin);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ pitch: this.pitch, length: this.length });
@@ -317,10 +347,15 @@ export class ThreadTool {
       toast("That pitch is too coarse for this diameter, the groove would reach the axis.");
       return;
     }
+    const thread = features[0] as Feature & { pitch: number; length?: number };
+    const bindings = boxBindings(this.dim, this.store, thread.id, [
+      { box: "pitch", field: "pitch", value: thread.pitch },
+      ...(thread.length != null ? [{ box: "length", field: "length", value: thread.length }] : []),
+    ]);
     // Cleanup before the write, so addFeatures' rebuild is the only one; after it the part
     // would build twice and flash the pre-commit state.
     this.cleanup();
-    this.store.addFeatures(features);
+    this.store.addFeatures(features, bindings);
     const last = features[features.length - 1]!;
     this.onDone?.(last.id);
   }
@@ -331,6 +366,7 @@ export class ThreadTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";

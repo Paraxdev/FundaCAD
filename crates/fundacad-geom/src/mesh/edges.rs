@@ -56,28 +56,64 @@ pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     lines.into_iter().flatten().collect()
 }
 
-fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: usize) -> Option<EdgeLine> {
+/// What the outline pass decides on an edge before sampling it, shared so the two walks below cannot drift apart.
+fn drawn(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: usize, faces: &[usize]) -> bool {
     let plane_of = |f: usize| plane.get(f).copied().flatten();
-    let faces = access.edge_faces(e);
     if faces.len() == 2 {
         if let (Some(n0), Some(n1)) = (plane_of(faces[0]), plane_of(faces[1])) {
             if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2]).abs() > cos_tol {
-                return None;
+                return false;
             }
         }
     }
     if access.edge_degenerated(e) {
-        return None;
+        return false;
     }
-    if !faces.is_empty()
-        && faces.iter().all(|&f| f == faces[0])
-        && (0..faces.len()).any(|k| access.edge_closed_on(e, k))
-    {
+    faces.is_empty() || !faces.iter().all(|&f| f == faces[0]) || !(0..faces.len()).any(|k| access.edge_closed_on(e, k))
+}
+
+fn long_enough(points: &[[f64; 3]]) -> bool {
+    let length: f64 = points.windows(2).map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt()).sum();
+    length >= SLIVER_EDGE_MM
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WalkedEdge {
+    /// Its number in `access`.
+    pub edge: usize,
+    pub faces: Vec<usize>,
+    /// Empty for a pole or apex, and where the sampler refuses.
+    pub points: Vec<[f64; 3]>,
+    /// In `edge_polylines`. With every edge taken, the drawn ones in order are the wire list.
+    pub drawn: bool,
+}
+
+/// Every edge whose faces `take` accepts, in edge-to-face map order.
+pub fn edge_walk(access: &MeshAccess, take: impl Fn(&[usize]) -> bool + Sync + Send) -> Vec<WalkedEdge> {
+    let cos_tol = 1.0f64.to_radians().cos();
+    let plane: Vec<Option<[f64; 3]>> = (0..access.face_count()).map(|f| access.face_plane_normal(f)).collect();
+    let work = crate::par::Shared((access, &plane));
+    let walked = crate::par::map_indexed(access.edge_count(), move |e| {
+        let (access, plane) = *work.get();
+        let faces = access.edge_faces(e);
+        if !take(&faces) {
+            return None;
+        }
+        let points = if access.edge_degenerated(e) { None } else { edge_points(access, e) };
+        let drawn = drawn(access, plane, cos_tol, e, &faces) && points.as_deref().is_some_and(long_enough);
+        Some(WalkedEdge { edge: e, faces, points: points.unwrap_or_default(), drawn })
+    });
+    walked.into_iter().flatten().collect()
+}
+
+fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: usize) -> Option<EdgeLine> {
+    let plane_of = |f: usize| plane.get(f).copied().flatten();
+    let faces = access.edge_faces(e);
+    if !drawn(access, plane, cos_tol, e, &faces) {
         return None;
     }
     let points = edge_points(access, e)?;
-    let length: f64 = points.windows(2).map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt()).sum();
-    if length < SLIVER_EDGE_MM {
+    if !long_enough(&points) {
         return None;
     }
     let flat = faces.len() == 2 && plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some();

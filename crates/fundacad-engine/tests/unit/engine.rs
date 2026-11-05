@@ -471,3 +471,40 @@ fn a_request_right_after_another_clients_answer_is_not_queued_behind_it() {
     let statuses = statuses_until(&a_rx, "a1");
     assert!(statuses.iter().all(|s| s == "building"), "{statuses:?}");
 }
+
+/// Panics on `boom`, answers `echo`.
+struct Brittle;
+
+impl Jobs for Brittle {
+    fn rebuild(&mut self, _d: &Value, _t: f64, _k: &Map<String, Value>, _f: bool, _ctx: &JobContext) -> JobResult {
+        panic!("a rebuild went wrong");
+    }
+
+    fn run(&mut self, op: &str, _req: &Map<String, Value>, _ctx: &JobContext) -> JobResult {
+        if op == "boom" {
+            let at: Vec<i32> = vec![];
+            let _ = at[3];
+        }
+        let mut m = Map::new();
+        m.insert("echo".into(), json!(op));
+        JobResult::Json(m)
+    }
+}
+
+#[test]
+fn a_job_that_panics_is_answered_with_its_message_and_the_next_job_still_runs() {
+    let (tx, rx) = channel();
+    let e = Engine::start(Brittle, Arc::new(Collect(Mutex::new(tx))));
+    send(&e, json!({"id": "b", "op": "boom"}));
+    let b = reply_to(&rx, "b");
+    assert_eq!(b["ok"], false);
+    let why = b["error"]["message"].as_str().unwrap().to_string();
+    assert!(why.contains("boom") && why.contains("index out of bounds"), "{why}");
+    send(&e, json!({"id": "r", "op": "rebuild", "document": {"features": []}, "revision": 1}));
+    let r = reply_to(&rx, "r");
+    assert!(r["error"]["message"].as_str().unwrap().contains("a rebuild went wrong"), "{r}");
+    send(&e, json!({"id": "d", "op": "rebuild", "baseRevision": 1, "revision": 2, "ops": {}}));
+    assert_eq!(reply_to(&rx, "d")["result"]["resync"], true);
+    send(&e, json!({"id": "x", "op": "echo"}));
+    assert_eq!(reply_to(&rx, "x")["result"]["echo"], "echo");
+}

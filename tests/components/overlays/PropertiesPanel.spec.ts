@@ -52,6 +52,28 @@ describe("PropertiesPanel", () => {
     expect(text()).not.toContain("Filament,");
   });
 
+  it("lists the measured rows as a dl of term and value pairs", async () => {
+    await mounted();
+    usePanelsStore().showProperties({
+      title: "Casing",
+      rows: [
+        { k: "Volume", v: "1250.5 mm³" },
+        { k: "Surface area", v: "612.25 mm²" },
+      ],
+      raw: null,
+      faults: [],
+    });
+    await flushPromises();
+    const pairs = [...document.body.querySelectorAll(".properties-panel dl > .measure-row")].map((r) => [
+      r.querySelector("dt")?.textContent,
+      r.querySelector("dd")?.textContent,
+    ]);
+    expect(pairs).toEqual([
+      ["Volume", "1250.5 mm³"],
+      ["Surface area", "612.25 mm²"],
+    ]);
+  });
+
   it("takes a wall thickness in any length unit, estimates with it per keystroke and saves it as mm on change", async () => {
     await mounted();
     usePanelsStore().showProperties({

@@ -1,11 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { defineComponent, h } from "vue";
+
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 
 import TextField from "../../../src/components/ui/TextField.vue";
+import { announce } from "../../../src/ui/announce";
 import { setMacForTest } from "../../../src/input/platform";
 
 enableAutoUnmount(afterEach);
-afterEach(() => setMacForTest(null));
+afterEach(() => {
+  setMacForTest(null);
+  vi.useRealTimers();
+});
+beforeEach(() => vi.mocked(announce).mockClear());
 
 async function render(props: Record<string, unknown> = {}, slots: Record<string, string> = {}) {
   const w = mount(TextField, {
@@ -212,5 +220,128 @@ describe("TextField", () => {
     const { w, input } = await render();
     (w.vm as unknown as { focus: () => void }).focus();
     expect(document.activeElement).toBe(input.element);
+  });
+});
+
+describe("TextField refusal", () => {
+  const noSlash = (s: string) => (s.includes("/") ? "No slashes in a name" : null);
+  const described = (el: Element) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+  const spoken = () => vi.mocked(announce).mock.calls;
+
+  it("describes a refused text on the field and drops the description once it is fixed", async () => {
+    const { input } = await render({ commit: "change", validate: noSlash });
+    expect(input.attributes("aria-describedby")).toBeUndefined();
+    await input.setValue("a/b/c");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(described(input.element)).toEqual(["No slashes in a name"]);
+    await input.setValue("abc");
+    expect(input.attributes("aria-describedby")).toBeUndefined();
+    expect(input.element.parentElement?.querySelector(".sr-only")).toBeNull();
+  });
+
+  it("describes a reason from outside, with the caller's ids after it", async () => {
+    const { w, input } = await render({ "aria-describedby": "note-a note-b" });
+    expect(input.attributes("aria-describedby")).toBe("note-a note-b");
+    await w.setProps({ error: "Already taken" });
+    const ids = (input.attributes("aria-describedby") ?? "").split(" ");
+    expect(ids.slice(1)).toEqual(["note-a", "note-b"]);
+    expect(described(input.element)[0]).toBe("Already taken");
+    await w.setProps({ error: null });
+    expect(input.attributes("aria-describedby")).toBe("note-a note-b");
+  });
+
+  it("describes a multiline field the same way", async () => {
+    const w = mount(TextField, {
+      props: { modelValue: "one", label: "Notes", multiline: true, commit: "change", validate: noSlash },
+      attachTo: document.body,
+    });
+    await new Promise((r) => setTimeout(r, 2));
+    const area = w.get("textarea");
+    await area.setValue("a/b");
+    await area.trigger("blur");
+    expect(described(area.element)).toEqual(["No slashes in a name"]);
+  });
+
+  it("gives each field in one app its own error id", async () => {
+    const Two = defineComponent({
+      render: () => [
+        h(TextField, { modelValue: "x", label: "A", error: "Bad A" }),
+        h(TextField, { modelValue: "y", label: "B", error: "Bad B" }),
+      ],
+    });
+    const w = mount(Two, { attachTo: document.body });
+    const [a, b] = w.findAll("input").map((i) => i.element);
+    expect(a!.getAttribute("aria-describedby")).not.toBe(b!.getAttribute("aria-describedby"));
+    expect([a, b].map((e) => described(e!))).toEqual([["Bad A"], ["Bad B"]]);
+  });
+
+  it("speaks a refusal once on Enter without the name while focused, and not again for the same text", async () => {
+    const { input } = await render({ commit: "change", validate: noSlash });
+    (input.element as HTMLInputElement).focus();
+    await input.setValue("a/b");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(spoken()).toEqual([["No slashes in a name", "assertive"]]);
+    await input.trigger("keydown", { key: "Enter" });
+    expect(spoken()).toHaveLength(1);
+    await input.setValue("a/b/c");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(spoken()).toHaveLength(2);
+  });
+
+  it("names the field when a blur commits the refusal with focus elsewhere", async () => {
+    const { input } = await render({ commit: "change", validate: noSlash, label: "Part name" });
+    await input.setValue("a/b");
+    await input.trigger("blur");
+    expect(spoken()).toEqual([["Part name, No slashes in a name", "assertive"]]);
+  });
+
+  it("speaks a reason from outside once", async () => {
+    const { w } = await render({ commit: "change" });
+    await w.setProps({ error: "Already taken" });
+    await w.setProps({ error: "Taken twice" });
+    expect(spoken()).toEqual([["Name, Already taken", "assertive"]]);
+  });
+
+  describe("in live mode", () => {
+    async function live() {
+      const r = await render({ commit: "live", validate: noSlash });
+      (r.input.element as HTMLInputElement).focus();
+      vi.useFakeTimers();
+      return r;
+    }
+
+    it("speaks nothing for text fixed inside the pause", async () => {
+      const { input } = await live();
+      await input.setValue("a/");
+      vi.advanceTimersByTime(699);
+      await input.setValue("a");
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toEqual([]);
+    });
+
+    it("speaks the reason at 700 ms, once, with the reason current then", async () => {
+      const { input } = await live();
+      await input.setValue("a/");
+      vi.advanceTimersByTime(699);
+      expect(spoken()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(spoken()).toEqual([["No slashes in a name", "assertive"]]);
+      await input.setValue("a//");
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toHaveLength(1);
+    });
+
+    it("speaks nothing when the field goes away inside the pause", async () => {
+      const { w, input } = await live();
+      await input.setValue("a/");
+      vi.advanceTimersByTime(300);
+      w.unmount();
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toEqual([]);
+    });
   });
 });

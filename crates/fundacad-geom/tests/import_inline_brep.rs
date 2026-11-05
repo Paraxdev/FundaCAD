@@ -1,5 +1,4 @@
-//! The inline BREP of a stored import goes through a file on its way into the
-//! kernel, and imports read at the same moment each have to get their own.
+//! Inline BREP imports read at the same moment each get their own body.
 
 use std::sync::{Arc, Barrier};
 

@@ -1,0 +1,272 @@
+import { describe, expect, it } from "vitest";
+// @ts-expect-error an e2e helper in plain CommonJS, with no types.
+import flash from "../../e2e/lib/flash.cjs";
+// @ts-expect-error a test helper in plain CommonJS, with no types.
+import flashRun from "./fixtures/flashRun.cjs";
+
+const { analyse, blackEdges, boundedLog, concurrentFlashesPerSecond, flashesPerSecond, isBand, scrubber, toGrid } =
+  flash;
+const { capped } = flashRun;
+
+const COLS = 8;
+const ROWS = 5;
+const plain = (v: number) => new Float32Array(COLS * ROWS).fill(v);
+const steps = (values: number[], ms: number) => values.map((v, i) => ({ t: i * ms, lum: plain(v) }));
+const alternating = (n: number, a: number, b: number) => Array.from({ length: n }, (_, i) => (i % 2 ? b : a));
+
+function withBlackBelow(row: number) {
+  const lum = plain(0.3);
+  lum.fill(0, row * COLS);
+  return lum;
+}
+
+describe("flash analysis of shown frames", () => {
+  it("reads sRGB into relative luminance per cell", () => {
+    const rgba = new Uint8Array(4 * 4).fill(255);
+    rgba.fill(0, 0, 8);
+    const grid = toGrid(rgba, 2, 2, 1, 2);
+    expect(grid[0]).toBeCloseTo(0, 5);
+    expect(grid[1]).toBeCloseTo(1, 5);
+  });
+
+  it("counts a light and dark swing at 8 Hz as eight flashes", () => {
+    expect(flashesPerSecond(steps(alternating(40, 0.1, 0.6), 62.5))).toBe(8);
+  });
+
+  it("passes three flashes a second and fails three and a half", () => {
+    const at = (changes: number) => {
+      const v: number[] = [];
+      for (let i = 0; i <= changes; i++) v.push(i % 2 ? 0.6 : 0.1);
+      return steps(v, 1000 / (changes + 1));
+    };
+    expect(flashesPerSecond(at(6))).toBeLessThanOrEqual(3);
+    expect(flashesPerSecond(at(7))).toBeGreaterThan(3);
+  });
+
+  it("ignores a swing under 10 percent of full luminance", () => {
+    expect(flashesPerSecond(steps(alternating(60, 0.2, 0.28), 16))).toBe(0);
+  });
+
+  it("ignores a swing where the darker image is above 0.80", () => {
+    expect(flashesPerSecond(steps(alternating(60, 0.82, 0.98), 16))).toBe(0);
+  });
+
+  it("ignores a flash over less than a quarter of the frame", () => {
+    const frames = alternating(60, 0, 1).map((v, i) => {
+      const lum = plain(0.3);
+      lum.fill(v, 0, COLS);
+      return { t: i * 16, lum };
+    });
+    expect(flashesPerSecond(frames)).toBe(0);
+  });
+
+  it("counts a slow fade up and down as one flash", () => {
+    const ramp = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1];
+    expect(flashesPerSecond(steps(ramp, 40))).toBe(1);
+  });
+
+  describe("concurrent count", () => {
+    const NOISE_COLS = 40;
+    const NOISE_ROWS = 25;
+    // A fixed generator, so a read near the limit is the same on every run.
+    function noiseFrames(n: number, ms: number, low: number, spread: number) {
+      let seed = 12345;
+      const next = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+      return Array.from({ length: n }, (_, i) => ({
+        t: i * ms,
+        lum: Float32Array.from({ length: NOISE_COLS * NOISE_ROWS }, () => low + spread * next()),
+      }));
+    }
+
+    it("reads noise that differs per frame low, while the cell count reads it high", () => {
+      const noise = noiseFrames(120, 16, 0.1, 0.2);
+      expect(flashesPerSecond(noise)).toBeGreaterThan(3);
+      expect(concurrentFlashesPerSecond(noise)).toBe(0);
+    });
+
+    it("reads a true flash high, as the cell count does", () => {
+      const swing = steps(alternating(40, 0.1, 0.6), 62.5);
+      expect(concurrentFlashesPerSecond(swing)).toBe(8);
+      expect(flashesPerSecond(swing)).toBe(8);
+    });
+
+    it("reads a flash through noise high", () => {
+      const noise = noiseFrames(80, 16, 0.1, 0.05);
+      const frames = noise.map((f, i) => ({ t: f.t, lum: f.lum.map((v) => v + (Math.floor(i / 4) % 2) * 0.4) }));
+      expect(concurrentFlashesPerSecond(frames)).toBeGreaterThan(3);
+    });
+
+    it("passes three flashes a second and fails three and a half", () => {
+      const at = (changes: number) => {
+        const v: number[] = [];
+        for (let i = 0; i <= changes; i++) v.push(i % 2 ? 0.6 : 0.1);
+        return steps(v, 1000 / (changes + 1));
+      };
+      expect(concurrentFlashesPerSecond(at(6))).toBeLessThanOrEqual(3);
+      expect(concurrentFlashesPerSecond(at(7))).toBeGreaterThan(3);
+    });
+
+    it("ignores a swing that is small, too bright or under a quarter of the frame", () => {
+      expect(concurrentFlashesPerSecond(steps(alternating(60, 0.2, 0.28), 16))).toBe(0);
+      expect(concurrentFlashesPerSecond(steps(alternating(60, 0.82, 0.98), 16))).toBe(0);
+      const small = alternating(60, 0, 1).map((v, i) => {
+        const lum = plain(0.3);
+        lum.fill(v, 0, COLS);
+        return { t: i * 16, lum };
+      });
+      expect(concurrentFlashesPerSecond(small)).toBe(0);
+    });
+
+    it("adds up a slow fade, even when its cells cross at different frames", () => {
+      const ramp = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1];
+      expect(concurrentFlashesPerSecond(steps(ramp, 40))).toBe(1);
+      // Cell c starts its fade c frames late, so no one step moves a quarter of the frame.
+      const staggered = Array.from({ length: 60 }, (_, i) => ({
+        t: i * 16,
+        lum: plain(0).map((_v, c) => 0.1 + 0.3 * Math.min(1, Math.max(0, (i - c) / 3))),
+      }));
+      expect(concurrentFlashesPerSecond(staggered)).toBe(0.5);
+    });
+
+    it("says when a run drew so few frames that its tracer looks dead", () => {
+      expect(analyse(steps([0.2, 0.2, 0.2], 2000), COLS).tooFew).toBe(true);
+      expect(analyse(steps([0.2, 0.2, 0.2, 0.2], 2000), COLS).tooFew).toBe(false);
+    });
+
+    it("catches the faintest swing just over the limit, however long its fade", () => {
+      const halfFlash = 156.25;
+      const triangle = Array.from({ length: 200 }, (_, i) => {
+        const up = i % 20 < 10;
+        const along = (i % 10) / 10;
+        return { t: (i * halfFlash) / 10, lum: plain(0.2 + 0.101 * (up ? along : 1 - along)) };
+      });
+      expect(concurrentFlashesPerSecond(triangle)).toBe(3.5);
+    });
+
+    it("counts half of the frame going up as the other half goes down", () => {
+      const frames = alternating(40, 0, 1).map((v, i) => ({
+        t: i * 62.5,
+        lum: plain(0).map((_v, c) => (c % 2 === v ? 0.6 : 0.1)),
+      }));
+      expect(concurrentFlashesPerSecond(frames)).toBe(8);
+    });
+
+    it("is reported beside the cell count by analyse", () => {
+      expect(analyse(steps(alternating(40, 0.1, 0.6), 62.5), COLS)).toMatchObject({
+        flashes: 8,
+        concurrent: 8,
+        overLimit: true,
+        concurrentOverLimit: true,
+      });
+    });
+  });
+
+  it("finds the black rows below a partial frame", () => {
+    expect(blackEdges(withBlackBelow(2), COLS)).toMatchObject({ top: 0, bottom: 3 });
+    expect(isBand(withBlackBelow(2), COLS)).toBe(true);
+    expect(isBand(plain(0.3), COLS)).toBe(false);
+    expect(isBand(plain(0), COLS)).toBe(false);
+  });
+
+  it("flags a lit frame going black and a partial frame, and passes a steady run", () => {
+    const steady = analyse(steps([0.3, 0.3, 0.31, 0.3], 16), COLS);
+    expect(steady).toMatchObject({ bands: 0, blackFrames: 0, overLimit: false });
+    const black = analyse(steps([0.3, 0, 0.3], 16), COLS);
+    expect(black.blackFrames).toBe(1);
+    const band = analyse(
+      [
+        { t: 0, lum: plain(0.3) },
+        { t: 16, lum: withBlackBelow(2) },
+      ],
+      COLS,
+    );
+    expect(band.bands).toBe(1);
+    expect(band.bad[0]).toMatchObject({ i: 1, band: true });
+  });
+});
+
+describe("the bounded page log", () => {
+  const run = (count: number, sizes: { head: number; tail: number; width: number }) => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), sizes);
+    for (let i = 0; i < count; i++) log.line(`m${i}`);
+    log.flush();
+    return out;
+  };
+
+  it("prints every line of a quiet run, in order", () => {
+    expect(run(4, { head: 3, tail: 2, width: 100 })).toEqual(["m0", "m1", "m2", "m3"]);
+  });
+
+  it("keeps the start and the end of a chatty run and says how much it cut", () => {
+    expect(run(10, { head: 2, tail: 3, width: 100 })).toEqual(["m0", "m1", "... lines cut: 5", "m7", "m8", "m9"]);
+  });
+
+  it("cuts a long line and says how long it was", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 1, tail: 1, width: 4 });
+    log.line("abcdefgh");
+    expect(out).toEqual(["abcd... (8 chars)"]);
+  });
+
+  it("with no head prints only the tail, once flushed", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 0, tail: 2, width: 100 });
+    ["a", "b", "c"].forEach(log.line);
+    expect(out).toEqual([]);
+    log.flush();
+    expect(out).toEqual(["... lines cut: 1", "b", "c"]);
+  });
+
+  it("prints each line once over several flushes, and says only what each one cut", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 1, tail: 1, width: 100 });
+    ["a", "b", "c"].forEach((l) => log.line(l));
+    log.flush();
+    log.flush();
+    log.line("d");
+    log.flush();
+    expect(out).toEqual(["a", "... lines cut: 1", "c", "d"]);
+  });
+
+  it("counts a multi-line message by its lines, and cuts each to the width", () => {
+    const out: string[] = [];
+    const log = boundedLog((l: string) => out.push(l), { head: 2, tail: 1, width: 4 });
+    log.line("one\r\ntwo\nabcdefgh\nfour");
+    log.flush();
+    expect(out).toEqual(["one", "two", "... lines cut: 1", "four"]);
+  });
+});
+
+describe("capping a log file", () => {
+  it("leaves a file within the cap as it is", () => {
+    expect(capped("0123456789", { head: 5, tail: 5 })).toBe("0123456789");
+  });
+
+  it("keeps whole lines from the start and end of a larger file and says how many bytes it cut", () => {
+    expect(capped("one\ntwo\nthree\nfour\n", { head: 5, tail: 6 })).toBe("one\n... bytes cut: 10\nfour\n");
+  });
+
+  it("drops a line too long to keep whole", () => {
+    expect(capped("0123456789", { head: 2, tail: 3 })).toBe("... bytes cut: 10\n");
+  });
+
+  it("leaves no piece of a secret that the cut goes through", () => {
+    const text = "one\ntwo secret two\nthree secret\nfour\n";
+    expect(capped(text, { head: 11, tail: 8, scrub: scrubber("secret") })).toBe("one\n... bytes cut: 28\nfour\n");
+  });
+
+  it("scrubs what it keeps", () => {
+    expect(capped("a secret b", { head: 100, tail: 100, scrub: scrubber("secret") })).toBe("a <token> b");
+  });
+});
+
+describe("scrubbing a secret", () => {
+  it("replaces it plain and URL encoded", () => {
+    expect(scrubber("a b")("x a b y a%20b z")).toBe("x <token> y <token> z");
+  });
+
+  it("does nothing with no secret", () => {
+    expect(scrubber("")("x y")).toBe("x y");
+  });
+});

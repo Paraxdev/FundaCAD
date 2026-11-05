@@ -10,7 +10,7 @@
   flex: none;
   max-width: 100%;
   padding: 0 var(--s-2);
-  font: 500 11px/20px var(--ui);
+  font: 500 var(--fs-micro)/20px var(--ui);
   white-space: nowrap;
   color: var(--text-dim);
   background: var(--chip-fill);
@@ -24,14 +24,14 @@
 .chip-md {
   gap: var(--s-2);
   padding: 0 var(--s-3);
-  font: 600 12px/26px var(--ui);
+  font: 600 var(--fs-small)/26px var(--ui);
   color: var(--text);
 }
 .chip-xs {
   justify-content: center;
-  min-width: 14px;
+  min-width: 16px;
   padding: 0 3px;
-  font: 700 9px/14px var(--ui);
+  font: 700 var(--fs-micro)/16px var(--ui);
   font-variant-numeric: tabular-nums;
 }
 

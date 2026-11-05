@@ -11,6 +11,7 @@ import {
   type StressSetup,
   type StressTarget,
 } from "../ui/stress";
+import type { StressFiner } from "../geometry/client";
 import type { StressSpot, StressSupportType, Vec3 } from "../types";
 
 /** A key/value readout line. */
@@ -29,17 +30,18 @@ export interface PropertiesData {
   faults: string[];
 }
 
-/** Keeps the body ids so a row click can select them. Volume is pre-formatted in display units by the facade. */
-export interface ClashRow extends PanelRow {
+/** `v` is pre-formatted in display units, `key` is the pair as "a b", `spoken` the row's accessible name. */
+export interface ClashRow {
+  key: string;
+  label: string;
+  v: string;
+  spoken: string;
   a: string;
   b: string;
 }
 
 /** One near-miss pair from clearance mode, same shape as a ClashRow. */
-export interface ClearanceRow extends PanelRow {
-  a: string;
-  b: string;
-}
+export type ClearanceRow = ClashRow;
 
 export interface InterferenceData {
   title: string;
@@ -81,9 +83,11 @@ export interface StressData {
   result: StressResultView | null;
   /** Why the last Run did not produce a result, cleared by the next. */
   error: string | null;
+  /** What running past the limits would take, when the error offers that. */
+  finer: StressFiner | null;
   /** "hidden" takes the colours off so faces can be picked again while the rows stay; "none" before a Run or after the
-   *  model changed under them. */
-  colours: "shown" | "hidden" | "none";
+   *  model changed under them; "pending" while a fresh result's colours are being drawn. */
+  colours: "shown" | "hidden" | "none" | "pending";
   /** Null until a result with displacements arrives. */
   deform: StressDeform | null;
   /** Probe mode, and the points pinned with it. */
@@ -94,6 +98,12 @@ export interface StressData {
   placeAs: "face" | "spot";
   /** The setup as JSON when the last Run started, to tell when the result no longer matches it. */
   ranSetup: string | null;
+  /** Whether the panel's own undo and redo have a setup step to take back or put back. */
+  canUndo: boolean;
+  canRedo: boolean;
+  /** The label of the step they would take, null with none. */
+  undoLabel: string | null;
+  redoLabel: string | null;
 }
 
 /** The floating measure-panel popups. Independent fields, since Properties and Overhang settings can be open
@@ -101,6 +111,8 @@ export interface StressData {
 export const usePanelsStore = defineStore("panels", () => {
   const properties = ref<PropertiesData | null>(null);
   const interference = ref<InterferenceData | null>(null);
+  /** The kept pair's key "a b", or null. */
+  const interferenceLit = ref<string | null>(null);
   const overhang = ref(false);
   const params = ref(false);
 
@@ -131,6 +143,7 @@ export const usePanelsStore = defineStore("panels", () => {
       requestId: null,
       result: null,
       error: null,
+      finer: null,
       colours: "none",
       deform: null,
       probe: false,
@@ -138,6 +151,10 @@ export const usePanelsStore = defineStore("panels", () => {
       placing: null,
       placeAs: "face",
       ranSetup: null,
+      canUndo: false,
+      canRedo: false,
+      undoLabel: null,
+      redoLabel: null,
     };
   }
 
@@ -186,6 +203,13 @@ export const usePanelsStore = defineStore("panels", () => {
     else delete row.spots;
   }
 
+  function clearStressPlaces(target: StressTarget) {
+    const row = stressRow(target);
+    if (!row) return;
+    row.faces = emptyFaceSet();
+    delete row.spots;
+  }
+
   function setStressPlacing(target: StressTarget | null, as: "face" | "spot" = "face") {
     if (!stress.value) return;
     stress.value.placing = target;
@@ -228,6 +252,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.running = true;
     stress.value.requestId = null;
     stress.value.error = null;
+    stress.value.finer = null;
     stress.value.ranSetup = JSON.stringify(stress.value.setup);
   }
 
@@ -236,12 +261,13 @@ export const usePanelsStore = defineStore("panels", () => {
   }
 
   /** Settle a Run: a result, an error, or neither for a cancel. */
-  function stressFinished(outcome: { result?: StressResultView; error?: string }) {
+  function stressFinished(outcome: { result?: StressResultView; error?: string; finer?: StressFiner }) {
     if (!stress.value) return;
     stress.value.running = false;
     stress.value.requestId = null;
     if (outcome.result) stress.value.result = markRaw(outcome.result);
     stress.value.error = outcome.error ?? null;
+    stress.value.finer = outcome.finer ?? null;
   }
 
   /** Drop the result and everything drawn from it: the deformed shape and the probes. */
@@ -279,6 +305,7 @@ export const usePanelsStore = defineStore("panels", () => {
   return {
     properties,
     interference,
+    interferenceLit,
     overhang,
     params,
     stress,
@@ -296,6 +323,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stressRow,
     addStressSpot,
     removeStressSpot,
+    clearStressPlaces,
     setStressPlacing,
     stressStarted,
     stressSent,

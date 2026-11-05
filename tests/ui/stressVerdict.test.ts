@@ -176,4 +176,15 @@ describe("deflectionNote", () => {
     setUnit("in");
     expect(deflectionNote(2.54, "in", 1)).toContain("0.1 in");
   });
+
+  it("says a scale below 1 draws the bend at that fraction of true size, never larger", () => {
+    expect(deflectionNote(0.47, "mm", 0.59)).toBe("Bends at most 0.47 mm, drawn at 0.59x true size.");
+    expect(deflectionNote(0.47, "mm", 0.25)).toContain("drawn at 0.25x true size");
+    expect(deflectionNote(0.47, "mm", 0.25)).not.toContain("larger");
+  });
+
+  it("calls a scale that rounds to 1x true size", () => {
+    expect(deflectionNote(0.47, "mm", 0.996)).toContain("drawn at true size");
+    expect(deflectionNote(0.47, "mm", 1.004)).toContain("drawn at true size");
+  });
 });

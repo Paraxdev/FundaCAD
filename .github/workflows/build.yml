@@ -52,12 +52,32 @@ jobs:
       - name: Repo hygiene
         run: sh scripts/check-repo-hygiene.sh
 
+      - name: Secret scan (gitleaks)
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/gitleaks.tar.gz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $dir/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/gitleaks.tar.gz" -C "$dir" gitleaks
+          "$dir/gitleaks" dir . --config .gitleaks.toml --redact --no-banner
+
+      # The runner's own node and its preinstalled gh are enough.
+      - name: Action pins match their tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-action-pins.mjs
+
       # No deps, so the runner's own node is enough this early.
       - name: UI controls
         run: node scripts/check-ui-controls.mjs
 
+      - name: Font sizes
+        run: node scripts/check-font-sizes.mjs
+
       - name: Install Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -134,7 +154,7 @@ jobs:
       - name: 3D mouse spacenavd tests
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/spnav-target
-        run: cargo test --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
+        run: cargo test --locked --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
 
       # The app's log file, rotation and redirect, std only like the above.
       - name: Linux log file tests
@@ -144,7 +164,7 @@ jobs:
 
       # The manual's capture tool: its manifests against the pages, its GIF encoder and its retries. It needs
       # tomllib, which the runner's Python 3.10 lacks, so this comes last in the job.
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -240,10 +260,13 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
-          - platform: macos-14 # Apple Silicon (arm64) runner
+          - platform: macos-15 # Apple Silicon (arm64) runner
           - platform: windows-latest
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 150
+    # C++ built by cmake takes its target from the SDK otherwise, and Apple targets are the only readers.
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -261,21 +284,31 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: sudo apt-get install -y cmake
 
-      # appimagetool downloads the AppImage runtime from GitHub on every run,
-      # once, with no retry, and a single 500 from GitHub failed the whole
-      # Linux build. Fetch it here with retries and hand it to both packers:
-      # linuxdeploy's AppImage plugin reads LDAI_RUNTIME_FILE, and
-      # appimage-unbundle passes it to appimagetool as --runtime-file.
-      - name: Fetch the AppImage runtime (Linux)
+      # The bundler skips its own tool downloads for files already in its cache, and
+      # linuxdeploy's AppImage plugin and appimage-unbundle both pack with LDAI_RUNTIME_FILE.
+      - name: Fetch the AppImage tools (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         shell: bash
         run: |
           set -euo pipefail
-          rt="$RUNNER_TEMP/runtime-x86_64"
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$rt" \
-            https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
-          test -s "$rt"
-          echo "LDAI_RUNTIME_FILE=$rt" >> "$GITHUB_ENV"
+          pins="$GITHUB_WORKSPACE/packaging/appimage-tools.sha256"
+          dir="$RUNNER_TEMP/appimage-tools"
+          mkdir -p "$dir"
+          while read -r sha file url; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$dir/$file" "$url"
+          done < <(grep -v -e '^#' -e '^[[:space:]]*$' "$pins")
+          (cd "$dir" && grep -v -e '^#' -e '^[[:space:]]*$' "$pins" | awk '{ print $1 "  " $2 }' | sha256sum -c --strict -)
+          # The bundler patches linuxdeploy in place, so the check runs on the downloads, not the cache.
+          cache="${XDG_CACHE_HOME:-$HOME/.cache}/tauri"
+          mkdir -p "$cache"
+          install -m755 "$dir/AppRun-x86_64" "$cache/AppRun-x86_64"
+          install -m755 "$dir/linuxdeploy-x86_64.AppImage" "$cache/linuxdeploy-x86_64.AppImage"
+          install -m755 "$dir/linuxdeploy-plugin-gtk.sh" "$cache/linuxdeploy-plugin-gtk.sh"
+          install -m755 "$dir/linuxdeploy-plugin-gstreamer.sh" "$cache/linuxdeploy-plugin-gstreamer.sh"
+          install -m755 "$dir/linuxdeploy-plugin-appimage-x86_64.AppImage" "$cache/linuxdeploy-plugin-appimage.AppImage"
+          install -m755 "$dir/appimagetool-x86_64.AppImage" "$dir/appimagetool"
+          echo "LDAI_RUNTIME_FILE=$dir/runtime-x86_64" >> "$GITHUB_ENV"
+          echo "APPIMAGETOOL=$dir/appimagetool" >> "$GITHUB_ENV"
 
       # wasm32-wasip2 for the plugin geometry components packed below.
       - name: Install Rust
@@ -320,15 +353,15 @@ jobs:
       # saves before rust-cache's cleanup, which takes target/OCCT for a profile
       # dir and deletes its lib, include and cmake.
       - name: Cache the static OpenCASCADE build
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             target/OCCT
             !target/OCCT/build
-          key: occt-static-v2-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
+          key: occt-static-v2-${{ runner.os == 'macOS' && matrix.platform || runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
       - name: Install Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -363,11 +396,12 @@ jobs:
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
-      - name: Disable updater artifacts when they could not be trusted
+      - name: Leave updater signing to the sign job
+        id: updater
         uses: ./.github/actions/updater-artifacts
         with:
           config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
-          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          signing: ${{ vars.UPDATER_SIGNING == 'true' }}
 
       # Plugin bundles for this release, built from the same commit as the
       # engine that runs their components. Once, not per platform: a bundle is
@@ -396,7 +430,7 @@ jobs:
 
       - name: Upload plugin bundles
         if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fundacad-bundle-plugins
           retention-days: 7
@@ -429,15 +463,15 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
           # CMake 4 refuses OCCT 7.8.1's declared minimum. Harmless on a runner
           # still shipping CMake 3, and the day one moves this is why it builds.
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
           VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
+          # The 7 GB macOS runner gives Node about 2 GB, and vite build reached that limit.
+          NODE_OPTIONS: ${{ matrix.platform == 'macos-15' && '--max-old-space-size=4096' || '' }}
         with:
-          args: --verbose ${{ env.TAURI_CONFIG_ARGS }}
+          args: --verbose ${{ env.TAURI_CONFIG_ARGS }} -- --locked
 
       # The kernel's bounded char read is a C++20 library behaviour, so it holds
       # only where the platform's standard library implements it. The test job
@@ -447,7 +481,7 @@ jobs:
       - name: Crafted geometry is refused on this platform
         if: matrix.platform != 'ubuntu-22.04'
         shell: bash
-        run: cargo test -p fundacad-geom --test import_crafted_geometry -- --test-threads=4
+        run: cargo test --locked -p fundacad-geom --test import_crafted_geometry -- --test-threads=4
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -481,9 +515,6 @@ jobs:
       - name: Un-bundle the system stack from the AppImage
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/appimage-unbundle
-        with:
-          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          signing-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Depend on the renamed GTK package (deb)
         if: matrix.platform == 'ubuntu-22.04'
@@ -559,6 +590,34 @@ jobs:
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
+      # The AppImage no longer forces X11, so its native Wayland window gets the
+      # Flatpak's headless cage smoke. Not a gate until it has run green on dev.
+      - name: Start the AppImage under headless Wayland
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq cage
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            fuse=(--appimage-extract-and-run)
+          fi
+          XDG_DATA_HOME="$RUNNER_TEMP/wayland-data" sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            dbus-run-session -- "$img" "${fuse[@]}"
+
+      - name: Upload the AppImage Wayland smoke log
+        if: always() && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wayland-smoke-appimage
+          path: ${{ runner.temp }}/wayland-smoke/app.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       # What Orca reads: the AppImage on its own accessibility bus, its AT-SPI
       # tree dumped and red on a nameless button or no web document. Not a gate
       # until wave 1 of the accessibility work has run green here.
@@ -576,7 +635,7 @@ jobs:
 
       - name: Upload the AT-SPI dump
         if: always() && matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: atspi-dump
           path: |
@@ -616,7 +675,7 @@ jobs:
 
       - name: Upload the UI Automation walk
         if: always() && matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: uia-walk
           path: ${{ runner.temp }}/uia/
@@ -655,12 +714,44 @@ jobs:
           if (Test-Path $lnk) { throw 'an update over an install brought back the Start menu entry its user removed' }
           Write-Host 'update over the install: the removed entry stayed removed'
 
+      # There is no Mac to try it on, and a newer build image can raise what the app needs without a word.
+      - name: Check the macOS version the app needs
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked=0
+          while IFS= read -r bin; do
+            file "$bin" | grep -q Mach-O || continue
+            minos=$(vtool -show-build "$bin" | awk '$1 == "minos" {print $2}' | head -1)
+            echo "$bin needs macOS ${minos:-unknown}"
+            if [ -z "$minos" ] || [ "${minos%%.*}" -gt 11 ]; then
+              echo "::error::$bin needs macOS ${minos:-unknown}, the app promises 11.0"; exit 1
+            fi
+            checked=$((checked + 1))
+          done < <(find src-tauri/target/release/bundle/macos -ipath '*.app/Contents/MacOS/*' -type f)
+          [ "$checked" -gt 0 ] || { echo "::error::no app binary to check"; exit 1; }
+
+      # The bundler makes the macOS updater bundle only with updater artifacts on, which the
+      # bundle job keeps off. Same layout as the bundler's: the .app at the top of the archive.
+      - name: Pack the macOS updater bundle for the sign job
+        if: matrix.platform == 'macos-15' && steps.updater.outputs.sign == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri/target/release/bundle/macos
+          app=$(find . -maxdepth 1 -name '*.app' -type d | head -1)
+          [ -n "$app" ] || { echo "::error::no .app was produced"; exit 1; }
+          app=${app#./}
+          COPYFILE_DISABLE=1 tar -czf "$app.tar.gz" "$app"
+          ls -l "$app.tar.gz"
+
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
       # beta release can be republished from them by hand. A leg that failed
       # after tauri-action still uploads, for debugging, but under a name the
       # release and build-flatpak never download, so its files are not shipped.
       - name: Upload artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: ${{ job.status == 'success' && 'fundacad-bundle' || 'failed-bundle' }}-${{ matrix.platform }}
@@ -677,7 +768,6 @@ jobs:
             src-tauri/target/release/bundle/**/*.app.tar.gz
             src-tauri/target/release/fundacad.exe
             src-tauri/target/release/fundacad-dev.exe
-            src-tauri/target/release/bundle/**/*.sig
 
   # The Linux build as a Flatpak, repackaged from the .deb above. The GNOME
   # runtime carries WebKitGTK and GTK, which the AppImage takes from the system
@@ -697,7 +787,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fundacad-bundle-ubuntu-22.04
           path: linux
@@ -712,6 +802,9 @@ jobs:
           [ -n "$v" ] || { echo "::error::no version in $deb"; exit 1; }
           cp "$deb" packaging/flatpak/fundacad.deb
 
+          # The finish-args use --device=input, which needs Flatpak 1.15.6; Ubuntu 24.04 ships 1.14, whose
+          # build-finish refuses it. The upstream Flatpak PPA has a current release.
+          sudo add-apt-repository -y -n ppa:flatpak/stable
           bash scripts/ci-apt-update.sh -qq
           sudo timeout -k 10 900 apt-get install -y -qq flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -739,8 +832,27 @@ jobs:
           python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-flatpak" -- \
             flatpak run --env=FUNDACAD_MCP_MODE=standalone dev.fundacad.app --mcp
 
+      # A new GUI smoke can be flaky, so this becomes gating once it has run green on dev.
+      - name: Start the Flatpak under headless Wayland
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          sudo timeout -k 10 300 apt-get install -y -qq cage
+          sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            dbus-run-session -- flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
+
+      - name: Upload the Wayland smoke log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wayland-smoke-flatpak
+          path: ${{ runner.temp }}/wayland-smoke/app.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload the Flatpak
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fundacad-bundle-flatpak
           retention-days: 7
@@ -779,7 +891,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fundacad-bundle-ubuntu-22.04
           path: linux
@@ -796,6 +908,78 @@ jobs:
           [ -n "$(ls pkg)" ] || { echo "::error::no package in the bundle artifact"; exit 1; }
           docker run --rm -v "$PWD":/w -w /w ${{ matrix.image }} \
             sh scripts/package-install-smoke.sh ${{ matrix.kind }} /w/pkg
+
+  # Signs the updater bundles with the key the updater-signing environment holds. It builds
+  # nothing and runs only the lockfile's tauri CLI, so no npm, crates.io or downloaded tool sees the key.
+  sign:
+    needs: [channel, bundle]
+    if: >-
+      always() && needs.channel.outputs.release != '' && vars.UPDATER_SIGNING == 'true'
+      && (needs.bundle.result == 'success'
+          || (needs.channel.outputs.gated == 'false' && !cancelled()
+              && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    environment: updater-signing
+    permissions:
+      contents: read
+    outputs:
+      signed: ${{ steps.decide.outputs.sign }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Install the locked tauri CLI without running any package scripts
+        run: npm ci --ignore-scripts
+
+      - id: decide
+        uses: ./.github/actions/updater-artifacts
+        with:
+          config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
+          signing: ${{ vars.UPDATER_SIGNING == 'true' }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.decide.outputs.sign == 'true'
+        with:
+          pattern: fundacad-bundle-*
+          path: dist
+
+      # Basenames differ per platform, so the release job finds each signature by its bundle's name.
+      - name: Sign the updater bundles
+        if: steps.decide.outputs.sign == 'true'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || { echo "::error::the updater-signing environment has no TAURI_SIGNING_PRIVATE_KEY"; exit 1; }
+          mkdir sigs
+          find dist -type f \( -name '*.AppImage' -o -name '*setup.exe' -o -name '*.msi' -o -name '*.app.tar.gz' \) > bundles.txt
+          [ -s bundles.txt ] || { echo "::error::no updater bundle to sign"; exit 1; }
+          # The list is read on fd 3, so a signer that prompts gets /dev/null, not the rest of the list.
+          while IFS= read -r f <&3; do
+            sig="sigs/$(basename "$f").sig"
+            [ ! -e "$sig" ] || { echo "::error::two bundles are named $(basename "$f")"; exit 1; }
+            node_modules/.bin/tauri signer sign "$f" < /dev/null
+            mv "$f.sig" "$sig"
+            echo "signed $f"
+          done 3< bundles.txt
+          want=$(wc -l < bundles.txt); got=$(find sigs -name '*.sig' | wc -l)
+          [ "$want" -eq "$got" ] || { echo "::error::signed $got of $want updater bundles"; exit 1; }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.decide.outputs.sign == 'true'
+        with:
+          name: fundacad-signatures
+          retention-days: 7
+          if-no-files-found: error
+          path: sigs/*.sig
 
   # The rolling "beta" pre-release from main, the rolling "development"
   # pre-release from dev, or a stable release from a tag.
@@ -820,7 +1004,7 @@ jobs:
   # plugins from this release (RELEASE_TAG in src/plugins/index.ts).
 
   release:
-    needs: [channel, bundle, build-flatpak]
+    needs: [channel, bundle, build-flatpak, sign]
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
     # either way. On dev a failed bundle leg does the same for its own files,
@@ -831,6 +1015,8 @@ jobs:
       && (needs.bundle.result == 'success'
           || (needs.channel.outputs.gated == 'false' && !cancelled()
               && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
+      && (needs.sign.result == 'success' || needs.sign.result == 'skipped'
+          || (needs.channel.outputs.gated == 'false' && needs.sign.result == 'failure'))
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
@@ -855,16 +1041,22 @@ jobs:
           persist-credentials: false
 
       # By pattern, so only this build's installers and bundles reach dist/.
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fundacad-bundle-*
           path: dist
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.sign.outputs.signed == 'true'
+        with:
+          name: fundacad-signatures
+          path: sigs
 
       # One fixed name per platform and format, with no version in it, so every
       # build replaces the same files on the release. The SourceForge mirror
       # copies whatever the release carries, and versioned names piled up there
       # as a new file per build. The version stays in the title and the notes.
-      # A signature follows its bundle as <name>.sig. Plugin bundles already
+      # A signature from the sign job follows its bundle as <name>.sig. Plugin bundles already
       # have fixed names and are copied as they are.
       - name: Give every asset its fixed name
         shell: bash
@@ -873,11 +1065,12 @@ jobs:
           mkdir -p release
           : > missing.txt
           put() { # $1 = find pattern under dist, $2 = published name
-            local src
+            local src sig
             src=$(find dist -type f -name "$1" | head -1)
             [ -n "$src" ] || { echo "NOTE: no $1 in this build, $2 left out"; echo "$2" >> missing.txt; return 0; }
             cp "$src" "release/$2"
-            [ ! -f "$src.sig" ] || cp "$src.sig" "release/$2.sig"
+            sig="sigs/$(basename "$src").sig"
+            [ ! -f "$sig" ] || cp "$sig" "release/$2.sig"
             echo "$(basename "$src") -> $2"
           }
           put '*.AppImage'    FundaCAD-linux-x86_64.AppImage
@@ -909,7 +1102,7 @@ jobs:
           }
           add linux-x86_64   release/FundaCAD-linux-x86_64.AppImage
           add windows-x86_64 release/FundaCAD-windows-x64-setup.exe
-          add darwin-aarch64 release/FundaCAD-macos-arm64.app.tar.gz  # macos-14 runners are arm64
+          add darwin-aarch64 release/FundaCAD-macos-arm64.app.tar.gz  # macos-15 runners are arm64
           cat latest.json
 
       - name: Publish the release
@@ -1158,8 +1351,9 @@ jobs:
           set -euo pipefail
           R='${{ github.repository }}'
           V="v$VERSION"
-          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md > version-notes.md
-          printf '\nThe [rolling beta](https://github.com/%s/releases/tag/beta) always has the newest build.\n' "$R" >> version-notes.md
+          # GitHub cannot pin a release, so each version links the rolling two first.
+          printf 'The newest builds are always on the [rolling beta](https://github.com/%s/releases/tag/beta) and the [development build](https://github.com/%s/releases/tag/development).\n\n' "$R" "$R" > version-notes.md
+          sed '0,/^Rolling FundaCAD 1\.0 beta (/s//FundaCAD 1.0 beta (/' notes.md >> version-notes.md
           stable=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 \
             --json tagName --jq '.[].tagName' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true)
           latest=true
@@ -1187,6 +1381,13 @@ jobs:
             err=$(tr -s '\r\n' ' ' < publish-error.txt | sed 's/ $//')
             echo "::warning::no $V release, GitHub would not publish it on ${SHA:0:7}, so its draft is deleted: $err. This token may not tag a commit that changes a workflow file, the rolling beta has this build"
           fi
+          # Only the newest 20 betas stay as versions. A stable release or a rolling tag never matches,
+          # and a failed list or delete costs a tidy up, never the release.
+          old=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName' \
+            | grep -E '^v1\.0\.[0-9]+$' | sort -V | head -n -20 || true)
+          for tag in $old; do
+            gh release delete "$tag" --repo "$R" --cleanup-tag --yes || echo "::warning::the old release $tag could not be deleted"
+          done
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
@@ -1209,7 +1410,7 @@ jobs:
   e2e:
     needs: rust-geom
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -1218,7 +1419,7 @@ jobs:
       - name: Install Linux system dependencies
         uses: ./.github/actions/linux-deps
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -1229,7 +1430,7 @@ jobs:
           npm i --no-save playwright-core@1.56.0
 
       - name: Fetch the engine rust-geom built
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fundacad-engine-linux
           path: engine-bin
@@ -1260,6 +1461,11 @@ jobs:
           SC_TOKEN: citoken
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
+
+      - name: A real wheel reads as a mouse at every zoom end-to-end
+        env:
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/wheel_zoom_e2e.cjs
 
       # Starts two engines of its own, so the one above is left alone.
       - name: Browser save keeps imported geometry end-to-end
@@ -1292,7 +1498,7 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
         run: |
-          cargo build --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
+          cargo build --locked --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
           node e2e/frames_ws_e2e.cjs
 
       # lavapipe is Mesa's CPU Vulkan driver, so the image tests trace on the
@@ -1304,7 +1510,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
           FUNDACAD_TRACER_ALLOW_CPU: "1"
-        run: cargo test --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
+        run: cargo test --locked --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
 
       # The traced bloom checks on lavapipe, through tracer_serve outside the
       # app. A smaller page keeps 256 software samples well inside the wait.
@@ -1317,12 +1523,57 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
           FUNDACAD_TRACER_ALLOW_CPU: "1"
         run: |
-          cargo build --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
+          cargo build --locked --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
           node e2e/pathtrace_bloom_e2e.cjs /tmp/pathtrace_bloom_shots
+
+      # A stop and go orbit on lavapipe: no partial or black frame on screen, and
+      # under the WCAG 2.3.1 flash limit in each Realtime while moving mode.
+      - name: Path traced flash end-to-end
+        timeout-minutes: 5
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+          CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+          FUNDACAD_TRACER_ALLOW_CPU: "1"
+        run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_shots
+
+      # WebGPU on SwiftShader in a closed room, where paths outlast one preview round.
+      # A preview that stops early shows dots on black, an open scene never does.
+      # Not a gate until it has run green here, breadcrumb a9pnm1yn: it gathers no
+      # sample on a GitHub runner, and the native flash step above stays a gate.
+      - name: WebGPU tracer preview end-to-end
+        id: webgpu_preview
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+          SC_VIEWPORT: 480x340
+          FLASH_TRACER: webgpu
+          FLASH_MODEL: tests/fixtures/closed_room.funda
+          FLASH_MOST_BLACK: "0.3"
+          FLASH_MOST_CHANGED: "0.5"
+          FLASH_CAMERA: 0,-150,0,0,0,0
+          FLASH_ONLY: realtime_off
+          FLASH_PAUSE_SCALE: "2"
+          FLASH_SETTLE_MS: "2000"
+          FLASH_DEADLINE_S: "280"
+        run: node e2e/pathtrace_flash_e2e.cjs /tmp/pathtrace_flash_webgpu_shots
+
+      - name: Flash test frames on failure
+        if: failure() || steps.webgpu_preview.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flash-frames
+          path: |
+            /tmp/pathtrace_flash_shots
+            /tmp/pathtrace_flash_webgpu_shots
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The agent harness starts its own engine, vite and Chrome on free ports,
       # so the engine and vite above are left alone.
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -1339,22 +1590,19 @@ jobs:
           TMPDIR: ${{ runner.temp }}/harness
         run: |
           mkdir -p "$TMPDIR"
-          python -m pytest tools/harness/tests -m "smoke and not a11y" -q
+          python -m pytest tools/harness/tests -m "smoke and not a11y and not heavy" -q --durations=25
 
       - name: Agent harness logs on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: harness-logs
           path: ${{ runner.temp }}/harness
           if-no-files-found: ignore
           retention-days: 7
 
-      # The axe baseline was seeded on Windows Chrome, so this stays
-      # continue-on-error until wave 1 of the accessibility epic has landed.
       - name: Accessibility smoke (axe and aria snapshots)
-        continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 25
         env:
           FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
           FUNDACAD_CHROME: /usr/bin/google-chrome
@@ -1363,11 +1611,11 @@ jobs:
           TMPDIR: ${{ runner.temp }}/a11y/harness
         run: |
           mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
-          python -m pytest tools/harness/tests -m a11y -q
+          python -m pytest tools/harness/tests -m a11y -q --durations=25
 
       - name: Accessibility smoke report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: a11y-smoke
           path: ${{ runner.temp }}/a11y
@@ -1378,13 +1626,73 @@ jobs:
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
 
+  # Five tests took 61 percent of the smoke set and left e2e minutes from its limit, so they run beside it. Non-gating
+  # like e2e, so read its steps by hand before asking to promote.
+  e2e-heavy:
+    needs: rust-geom
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        uses: ./.github/actions/linux-deps
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm i --no-save playwright-core@1.56.0
+
+      - name: Fetch the engine rust-geom built
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fundacad-engine-linux
+          path: engine-bin
+
+      - name: Install a software Vulkan driver
+        run: sudo timeout -k 10 600 apt-get install -y mesa-vulkan-drivers
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the agent harness
+        run: pip install -e "tools/harness[test]"
+
+      - name: Agent harness heavy set
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          TMPDIR: ${{ runner.temp }}/harness
+        run: |
+          chmod +x engine-bin/fundacad-engine
+          mkdir -p "$TMPDIR"
+          python -m pytest tools/harness/tests -m "smoke and heavy" -q --durations=10
+
+      - name: Agent harness logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: harness-heavy-logs
+          path: ${{ runner.temp }}/harness
+          if-no-files-found: ignore
+          retention-days: 7
+
   # The native tracer on Metal. A macOS app always traces natively, since its
-  # WKWebView has no WebGPU, and the macos-14 runner is an Apple Silicon VM
+  # WKWebView has no WebGPU, and the macos-15 runner is an Apple Silicon VM
   # with the same Apple Paravirtual device a Mac VM user has. Every image test
   # passes by skipping when no adapter fits, so a skip fails the job here.
   # continue-on-error until it has passed once.
   tracer-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 40
     continue-on-error: true
     permissions:
@@ -1434,7 +1742,7 @@ jobs:
 
       - name: Tracer log
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tracer-macos-log
           path: ${{ runner.temp }}/tracer.log
@@ -1503,7 +1811,7 @@ jobs:
       # it after rust-cache, see bundle.
       - name: Cache the static OpenCASCADE build
         if: env.SELF_HOSTED != 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             target/OCCT
@@ -1524,10 +1832,10 @@ jobs:
         run: python3 scripts/build-plugin-wasm.py
 
       - name: Build the workspace binaries
-        run: cargo build --workspace --features fundacad-engine/ws
+        run: cargo build --locked --workspace --features fundacad-engine/ws
 
       - name: Rust workspace tests
-        run: cargo test --workspace --features fundacad-engine/ws
+        run: cargo test --locked --workspace --features fundacad-engine/ws
 
       # Text outlines come from the system's fonts, and the text goldens were
       # frozen with Windows' Arial and Times New Roman. A case whose font is
@@ -1576,10 +1884,10 @@ jobs:
         working-directory: src-tauri
         run: |
           mkdir -p ../dist
-          cargo test --tests --workspace
+          cargo test --locked --tests --workspace
 
       - name: Upload the engine for the e2e job
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fundacad-engine-linux
           retention-days: 1
@@ -1592,7 +1900,7 @@ jobs:
       # that differs or a rebuild that hangs only once optimised fails here. A
       # release build finds plugins only through FUNDACAD_PLUGIN_DIR.
       - name: Build the release engine
-        run: cargo build --release -p fundacad-cli
+        run: cargo build --locked --release -p fundacad-cli
 
       - name: Golden parity checks, release build
         shell: bash

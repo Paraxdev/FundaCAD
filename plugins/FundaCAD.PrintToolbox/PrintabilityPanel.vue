@@ -2,9 +2,9 @@
 // No Esc-dismiss: Esc clears the body selection, which widens the check back to every body, and must not close the
 // results with it. Inline styles on host tokens, as a plugin .vue may not carry a <style> block.
 
-import { computed, type CSSProperties } from "vue";
-import { useBrowserStore } from "fundacad";
-import { FloatingPanel } from "fundacad/ui";
+import { computed, ref, watch, type CSSProperties } from "vue";
+import { readAs, useBrowserStore } from "fundacad";
+import { FloatingPanel, ListRow, NumberField } from "fundacad/ui";
 import type { PrintabilityKind } from "fundacad";
 import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES, cssHex } from "./printability";
 import { printabilityPanel } from "./printabilityPanel";
@@ -26,7 +26,57 @@ const scope = computed(() => {
   return n === 1 ? "The one body" : `All ${n}`;
 });
 
-const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);
+const readLength = readAs("length");
+type NumberKey = "nozzle" | "layer" | "overhang" | "minGap" | "maxBridge";
+const NUMBERS: {
+  key: NumberKey;
+  label: string;
+  cls: string;
+  unit: string;
+  min: number;
+  max?: number;
+  step: number;
+  parse?: (raw: string) => number;
+}[] = [
+  { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05, parse: readLength },
+  { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05, parse: readLength },
+  {
+    key: "overhang",
+    label: "Overhang angle",
+    cls: "printability-overhang",
+    unit: "°",
+    min: 1,
+    max: 89,
+    step: 1,
+    parse: readAs("angle"),
+  },
+  { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05, parse: readLength },
+  {
+    key: "maxBridge",
+    label: "Longest bridge",
+    cls: "printability-bridge",
+    unit: "mm",
+    min: 0,
+    step: 1,
+    parse: readLength,
+  },
+];
+
+// Pointer and keyboard focus each light a face; leaving one falls back to the other.
+const pointerOn = ref<number | null>(null);
+const focusOn = ref<number | null>(null);
+function light(pointer: number | null, focus: number | null) {
+  pointerOn.value = pointer;
+  focusOn.value = focus;
+  ctl.value?.hover(pointer ?? focus);
+}
+watch(
+  () => d.value?.result,
+  () => {
+    pointerOn.value = null;
+    focusOn.value = null;
+  },
+);
 
 function swatch(k: PrintabilityKind): CSSProperties {
   return {
@@ -43,8 +93,8 @@ function swatch(k: PrintabilityKind): CSSProperties {
 // A long check lists a row per finding; it scrolls rather than running off
 // the bottom of the window, as the app's Stress panel does.
 const BODY: CSSProperties = {
-  minWidth: "300px",
-  maxWidth: "380px",
+  width: "380px",
+  maxWidth: "100%",
   maxHeight: "calc(100vh - 180px)",
   overflowY: "auto",
 };
@@ -59,14 +109,7 @@ const LEGEND: CSSProperties = {
   marginTop: "var(--s-2)",
 };
 const WARN: CSSProperties = { color: "var(--accent-hot, #ff9a5c)" };
-
-function findingStyle(index: number): CSSProperties {
-  return {
-    cursor: "pointer",
-    borderRadius: "2px",
-    ...(focus.value === index ? { background: "var(--accent-tint, rgba(255, 122, 60, 0.14))" } : {}),
-  };
-}
+const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
 </script>
 
 <template>
@@ -80,70 +123,26 @@ function findingStyle(index: number): CSSProperties {
       </div>
 
       <div class="measure-divider" />
-      <div class="measure-row">
-        <span class="measure-k">Nozzle</span>
+      <div v-for="n in NUMBERS" :key="n.key" class="measure-row">
+        <span class="measure-k">{{ n.label }}</span>
         <span class="measure-v"
-          ><input
-            v-model.number="setup.nozzle"
-            class="measure-number printability-nozzle"
-            type="number"
-            min="0"
-            step="0.05"
+          ><NumberField
+            :class="n.cls"
+            :label="n.label"
+            size="sm"
+            :width-ch="6"
+            commit="live"
+            limits="arrows"
+            nullable
+            :min="n.min"
+            :max="n.max"
+            :step="n.step"
+            :parse="n.parse"
+            :model-value="setup[n.key]"
+            @update:model-value="setup[n.key] = $event"
+            @error="$event && (setup[n.key] = null)"
           />
-          mm</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Layer</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.layer"
-            class="measure-number printability-layer"
-            type="number"
-            min="0"
-            step="0.05"
-          />
-          mm</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Overhang angle</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.overhang"
-            class="measure-number printability-overhang"
-            type="number"
-            min="1"
-            max="89"
-            step="1"
-          />
-          °</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Smallest gap</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.minGap"
-            class="measure-number printability-gap"
-            type="number"
-            min="0"
-            step="0.05"
-          />
-          mm</span
-        >
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Longest bridge</span>
-        <span class="measure-v"
-          ><input
-            v-model.number="setup.maxBridge"
-            class="measure-number printability-bridge"
-            type="number"
-            min="0"
-            step="1"
-          />
-          mm</span
+          {{ n.unit }}</span
         >
       </div>
       <div class="measure-row">
@@ -186,18 +185,24 @@ function findingStyle(index: number): CSSProperties {
           <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note" :style="WARN">
             <span class="measure-v">{{ n }}</span>
           </div>
-          <div
-            v-for="r in g.rows"
-            :key="r.index"
-            class="measure-row printability-finding"
-            :class="{ 'is-focus': focus === r.index }"
-            :style="findingStyle(r.index)"
-            @mouseenter="ctl.hover(r.index)"
-            @mouseleave="ctl.hover(null)"
-            @click="ctl.pick(r.index)"
-          >
-            <span class="measure-v"><span :style="swatch(r.kind)" />{{ r.text }}</span>
-          </div>
+          <ul v-if="g.rows.length" :style="LIST" :aria-label="g.name + ' findings'">
+            <li v-for="r in g.rows" :key="r.index">
+              <ListRow
+                class="printability-finding"
+                :label="r.text"
+                :hint="r.hint"
+                :aria-label="r.spoken"
+                :selected="d.picked === r.index"
+                @click="ctl.pick(r.index)"
+                @focus="light(pointerOn, r.index)"
+                @blur="light(pointerOn, null)"
+                @pointerenter="light(r.index, focusOn)"
+                @pointerleave="light(null, focusOn)"
+              >
+                <template #leading><span :style="swatch(r.kind)" aria-hidden="true" /></template>
+              </ListRow>
+            </li>
+          </ul>
           <div v-if="!g.notes.length && !g.rows.length" class="measure-row printability-clean">
             <span class="measure-k">Nothing found</span>
           </div>
@@ -219,8 +224,8 @@ function findingStyle(index: number): CSSProperties {
       </template>
 
       <div class="measure-hint">
-        Checks the selected bodies, or every body when none is selected · hover a finding to pick out its face, click to
-        look at it
+        Checks the selected bodies, or every body when none is selected · hover or Tab to a finding to pick out its
+        face, click or press Enter to look at it
       </div>
     </div>
   </FloatingPanel>

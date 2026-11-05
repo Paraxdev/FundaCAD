@@ -32,13 +32,16 @@ function bridge() {
     isBodyVisible: () => true,
     sessions: new SessionHost(),
   };
+  const log: string[] = [];
   const viewport = new Proxy({} as Record<string, unknown>, {
     get: (_t, k) =>
       k === "setModel"
-        ? (_r: unknown, fit: boolean) => fits.push(fit)
+        ? (_r: unknown, fit: boolean) => (fits.push(fit), log.push(k))
         : k === "resetCamera"
           ? (...a: unknown[]) => resets.push(a)
-          : () => {},
+          : k === "forgetZebraFrame"
+            ? () => log.push(k)
+            : () => {},
   });
   const e = {
     store,
@@ -60,7 +63,7 @@ function bridge() {
     store.sessions.begin("open");
     opens.forEach((fn) => fn());
   };
-  return { show, open, fits, resets, e };
+  return { show, open, fits, resets, log, e };
 }
 
 describe("the camera after an import", () => {
@@ -138,5 +141,16 @@ describe("the camera after an import", () => {
     b.show([], false);
     b.show([box], true);
     expect(b.fits).toEqual([true, false]);
+  });
+});
+
+describe("the zebra stripes after an open", () => {
+  it("drop the frame the last document held, so the opened one fits its own", () => {
+    const b = bridge();
+    b.show([box], true);
+    b.show([box], true);
+    b.open();
+    b.show([{ id: "plate", type: "extrude" }], true);
+    expect(b.log).toEqual(["setModel", "setModel", "forgetZebraFrame", "setModel"]);
   });
 });

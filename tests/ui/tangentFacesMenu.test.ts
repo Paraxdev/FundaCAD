@@ -64,6 +64,7 @@ function setup(reply: FaceAxisReply | null, pick: "planar" | "tangent" = "tangen
     },
   };
   const deps = {
+    sketch: { active: false },
     store,
     viewport,
     toolBusy: () => false,

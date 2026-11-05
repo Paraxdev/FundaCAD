@@ -41,6 +41,7 @@ describe("the palette's Go to commands", () => {
       ["go-model", "Go to Model", undefined],
       ["go-panels", "Go to Panels", undefined],
       ["go-history", "Go to History", undefined],
+      ["browse-geometry", "Browse Faces and Edges", undefined],
     ]);
     expect(go.filter((c) => !NON_REPEATABLE.has(c.id))).toEqual([]);
   });

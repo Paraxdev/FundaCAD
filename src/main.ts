@@ -9,17 +9,24 @@ import "./styles/main.scss";
 import { initTheme } from "./ui/theme";
 import { initContrast } from "./ui/contrastSetting";
 import { installGlassBlurSwitch } from "./ui/glassBlur";
+import { installInterfaceSize } from "./ui/interfaceSize";
+import { installComfortableText } from "./ui/comfortableText";
+import { installViewportLabels } from "./ui/viewportLabels";
 
 // Applies a stored non-default theme before anything renders, so the app never paints one palette then swaps.
 initTheme();
 initContrast();
 installGlassBlurSwitch();
+installInterfaceSize();
+installComfortableText();
+installViewportLabels();
 import "./diagnostics/breadcrumbs"; // installs window error listeners (bug-report trail)
 import "./ui/targets"; // sets data-targets on <html> before the first paint
 import { createApp, markRaw } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import App from "./App.vue";
 import { installGlobalErrorHandlers } from "./app/errors";
+import { installCanvasStop } from "./app/canvasPick";
 import { createEngine, mountUi } from "./app/engine";
 import { ENGINE } from "./app/engineKey";
 import { installDevGlobals } from "./app/devGlobals";
@@ -41,6 +48,7 @@ setActivePinia(pinia);
 // components/shell/ViewportPane.vue adopts the canvas in onMounted.
 const canvas = document.createElement("canvas");
 canvas.id = "canvas"; // keeps the #canvas rule in styles/_layout.scss
+installCanvasStop(canvas);
 const engine = createEngine(canvas);
 
 installGuidePressGuard();

@@ -6,11 +6,13 @@ import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
-import { endPickSession } from "../ui/treePick";
-import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS } from "./actionTables";
+import { endCommandedPick } from "../ui/treePick";
+import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS, GEOMETRY_STEPS } from "./actionTables";
+import { browseGeometry, createGeometryCommands } from "./geometryCommands";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
+import { useGeometryBrowserStore } from "../stores/geometryBrowser";
 import { useShellStore } from "../stores/shell";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
@@ -20,6 +22,10 @@ import { isChoiceOpen } from "../ui/choice";
 import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl } from "../ui/reportText";
 import { MANUAL_URL, openExternal } from "../ui/welcome";
+import { showLastMessage } from "../ui/toast";
+import { openConsole } from "../ui/logStore";
+import { changeInterfaceSize } from "../ui/interfaceSize";
+import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
@@ -48,6 +54,11 @@ const KEEPS_PICK = new Set([
   "viewmode-cycle",
   "viewmode-cycle-back",
   "clean-view",
+  "next-face",
+  "previous-face",
+  "next-edge",
+  "previous-edge",
+  "browse-geometry",
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
@@ -57,6 +68,7 @@ const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular", "pat
 export function createActions(e: Engine): (action: string) => void {
   const ui = useUiStore();
   const palette = useSketchPaletteStore();
+  const geometry = createGeometryCommands(e);
 
   function startFaceOffset(mode: FaceOffsetMode) {
     if (e.toolBusy()) return;
@@ -81,12 +93,14 @@ export function createActions(e: Engine): (action: string) => void {
   }
 
   return function handleAction(action: string) {
+    // Out before a tool can start, its own hover shares the light. Turning the view keeps it, that is how to see it.
+    if (!KEEPS_PICK.has(action) && !action.startsWith("view-step-")) useGeometryBrowserStore().setLit(false);
     // A contributed action is never repeated: the core cannot tell whether running it twice is safe.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
       else {
-        endPickSession();
+        endCommandedPick();
         e.starters.startSketch(action as SketchTool);
       }
       return;
@@ -114,6 +128,8 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "suggest-idea") return void openExternal(ideaUrl());
     if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
+    const size = /^interface-size-(up|down|reset)$/.exec(action);
+    if (size) return changeInterfaceSize(size[1] as ZoomChord);
     if (action === "manual") return void openExternal(MANUAL_URL);
     // Moving focus leaves a sketch open and a pick waiting.
     if (action === "region-next" || action === "region-prev")
@@ -125,6 +141,10 @@ export function createActions(e: Engine): (action: string) => void {
       // After the palette has closed and handed focus back, and a pane just shown has mounted.
       return void setTimeout(() => goToRegion(go));
     }
+    // Here, or the finish below ends the sketch they should refuse in words.
+    const geometryStep = GEOMETRY_STEPS[action];
+    if (geometryStep) return geometry.selectStep(geometryStep.kind, geometryStep.delta);
+    if (action === "browse-geometry") return browseGeometry(e);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);
@@ -138,7 +158,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "redo") return void e.doRedo();
     if (e.sketch.active) e.sketch.finish(true);
     // Section pressed during its own aiming is its way out.
-    if (!KEEPS_PICK.has(action) && !(action === "section" && e.tools.section.picking)) endPickSession();
+    if (!KEEPS_PICK.has(action) && !(action === "section" && e.tools.section.picking)) endCommandedPick();
 
     const boolOp = booleanOpOfAction(action);
     if (boolOp || BODY_VERBS.has(action)) {
@@ -460,6 +480,12 @@ export function createActions(e: Engine): (action: string) => void {
       }
       case "show-all-bodies":
         e.store.setBodiesVisibility(new Map((e.store.buildState.result?.bodies ?? []).map((b) => [b.id, true])));
+        break;
+      case "show-console":
+        openConsole({ focus: true });
+        break;
+      case "show-last-message":
+        showLastMessage();
         break;
       case "shortcut-help":
         toggleShortcutHUD();

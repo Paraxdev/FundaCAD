@@ -147,6 +147,11 @@ describe("controls built in TS", () => {
     const src = vue(`<div />`, `const b = document.createElement("button");`);
     expect(kinds({ "src/components/A.vue": src })).toEqual(["src/components/A.vue:2 createElement:button"]);
   });
+
+  it("finds a script block whatever the case or spacing of its tags", () => {
+    const src = `<SCRIPT setup>\nconst b = document.createElement("button");\n</script >\n\n<template>\n<div />\n</template>\n`;
+    expect(kinds({ "src/components/A.vue": src })).toEqual(["src/components/A.vue:2 createElement:button"]);
+  });
 });
 
 describe("inline styles", () => {
@@ -315,6 +320,81 @@ describe("icon only controls without a name", () => {
       ...Array(2).fill("src/components/A.vue:9 Segmented:no-name"),
       ...Array(2).fill("src/components/A.vue:10 Segmented:no-name"),
     ]);
+  });
+});
+
+describe("number fields without a unit", () => {
+  it("is quiet for a unit, a bound unit, a caption, unitless and a v-bind spread", () => {
+    const src = vue(
+      [
+        `<NumberField v-model="a" label="Wall" unit="mm" />`,
+        `<NumberField v-model="a" label="Wall" :unit="u" />`,
+        `<NumberField v-model="a" label="Wall" :unit="r.unit" />`,
+        `<NumberField v-model="a" label="Count" unitless />`,
+        `<NumberField v-model="a" label="Count" :unitless="true" />`,
+        `<NumberField v-model="a" label="Count" :unitless="isCount" />`,
+        `<number-field v-model="a" label="Loops" caption="loops" />`,
+        `<NumberField v-model="a" label="Loops" :caption="f.unit" />`,
+        `<NumberField v-bind="field" />`,
+      ].join("\n"),
+    );
+    expect(kinds({ "src/components/A.vue": src })).toEqual([]);
+  });
+
+  it("reports a field with no unit, a blank or empty one, unitless false and a name alone", () => {
+    const src = vue(
+      [
+        `<NumberField v-model="a" label="Wall" />`,
+        `<NumberField v-model="a" unit="" />`,
+        `<NumberField v-model="a" unit="  " />`,
+        `<NumberField v-model="a" :unit="null" />`,
+        `<NumberField v-model="a" :unit="''" />`,
+        `<NumberField v-model="a" :unit="undefined" caption="" />`,
+        `<NumberField v-model="a" :unitless="false" />`,
+        `<NumberField v-model="a" aria-label="Wall" />`,
+        `<number-field v-model="a" />`,
+        `<NumberField v-model="a" :unit="nullable" />`,
+      ].join("\n"),
+    );
+    expect(kinds({ "src/components/A.vue": src })).toEqual([
+      "src/components/A.vue:6 NumberField:no-unit",
+      "src/components/A.vue:7 NumberField:no-unit",
+      "src/components/A.vue:8 NumberField:no-unit",
+      "src/components/A.vue:9 NumberField:no-unit",
+      "src/components/A.vue:10 NumberField:no-unit",
+      "src/components/A.vue:11 NumberField:no-unit",
+      "src/components/A.vue:12 NumberField:no-unit",
+      "src/components/A.vue:13 NumberField:no-unit",
+      "src/components/A.vue:14 NumberField:no-unit",
+    ]);
+  });
+
+  it("reports a multi line tag on its own line and only the fields without a unit among three", () => {
+    const src = vue(
+      [
+        `<NumberField v-model="a" unit="mm" />`,
+        `<NumberField`,
+        `  v-model="b"`,
+        `  label="Pitch"`,
+        `  :step="0.25"`,
+        `/>`,
+        `<NumberField v-model="c" unitless />`,
+        `<NumberField v-model="d" :min="3" />`,
+      ].join("\n"),
+    );
+    expect(kinds({ "plugins/P/B.vue": src })).toEqual([
+      "plugins/P/B.vue:7 NumberField:no-unit",
+      "plugins/P/B.vue:13 NumberField:no-unit",
+    ]);
+  });
+
+  it("names how to fix it and is counted by the allowlist ratchet", () => {
+    expect(useInstead("NumberField:no-unit")).toContain("unitless");
+    const found = scanControls({ "plugins/P/B.vue": vue(`<NumberField v-model="a" />\n<NumberField v-model="b" />`) });
+    const entry = (count: number) => ({ path: "plugins/P/B.vue", kind: "NumberField:no-unit", count, reason: "x" });
+    expect(checkAllowlist(found, [entry(2)])).toEqual([]);
+    expect(checkAllowlist(found, [entry(1)])).toHaveLength(1);
+    expect(checkAllowlist(found, [entry(3)])).toHaveLength(1);
   });
 });
 

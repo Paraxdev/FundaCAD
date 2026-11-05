@@ -38,6 +38,7 @@ fn each_kind_is_told_by_its_first_bytes() {
     let funda: &[&str] = &["funda"];
     let step: &[&str] = &["step", "stp"];
     let (stl, three, dxf, svg): (&[&str], &[&str], &[&str], &[&str]) = (&["stl"], &["3mf"], &["dxf"], &["svg"]);
+    let py: &[&str] = &["py"];
     let cases: &[(&[&str], &[u8], bool)] = &[
         (funda, b"{\n  \"version\": 3", true),
         (funda, b"\xEF\xBB\xBF \r\n{", true),
@@ -62,6 +63,10 @@ fn each_kind_is_told_by_its_first_bytes() {
         (svg, b"<?xml version=\"1.0\"?>\n<svg xmlns", true),
         (svg, b"<SVG", true),
         (svg, b"<?xml version=\"1.0\"?><html>", false),
+        (py, b"# Recorded by fundacad-harness 0.1.0, driver api 1, app abc\nfrom x import y", true),
+        (py, b"\n\n# Recorded by fundacad-harness 0.2.0", true),
+        (py, b"import os\n# Recorded by fundacad-harness 0.1.0", false),
+        (py, b"#!/usr/bin/env python\nprint(1)", false),
     ];
     for (exts, head, want) in cases {
         let len = head.len() as u64;

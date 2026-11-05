@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { asFeature } from "../types";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore, RebuildState } from "../document/store";
+import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
@@ -55,6 +55,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { HeldSignal } from "./heldEdit";
 import { blendEditCommit } from "./blendEdit";
+import { boxBindings } from "./boxBindings";
 import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
@@ -63,6 +64,7 @@ import { edgeHoverColor, edgeSelectColor } from "../viewport/highlight";
 import { onThemeChange } from "../ui/theme";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
+import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -133,6 +135,7 @@ export class EdgeFeatureTool {
 
   // Every member is a ghost line drawn through the model (depthTest off), so hidden members stay visible and clickable.
   private ghosts: GhostEdge[] = []; // membership display + toggle targets
+  private releaseRows: (() => void) | null = null;
   private ghostLines: GhostLines | null = null;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
@@ -170,7 +173,7 @@ export class EdgeFeatureTool {
   /** pending debounced engine preview, see schedulePreviewDuringDrag */
   private previewTimer: number | null = null;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -309,6 +312,11 @@ export class EdgeFeatureTool {
     // behaviour in step, and opens the face route from every entry point at once.
     const seed = pre.length ? pre : canConsume(kind, "face") ? this.faceEdgeSelectors() : [];
     this.active = true;
+    this.releaseRows = awaitTreePick(
+      (pick) => this.takeRow(pick),
+      () => this.cancel(),
+      { keepsOnRewind: true },
+    );
     this.kind = kind;
     this.phase = "pick";
     this.onDone = onDone;
@@ -333,6 +341,31 @@ export class EdgeFeatureTool {
     } else {
       setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
     }
+  }
+
+  /** An edge row from the Geometry list acts as a plain click on that edge would. */
+  private takeRow(pick: TreePick): TreePickAnswer {
+    if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+    const edge = pick.edge;
+    const scope = pickScope({ shift: false, view: this.viewport.edgeScopeView(edge) }).scope;
+    if (this.phase === "pick") {
+      const sel = edgeSelectorFrom({ points: edge.points, body: edge.body });
+      if (!sel) return treePickRefusal(pick, "an edge");
+      const { mid, tan } = midAndTangent(edge.points);
+      this.beginDrag([sel], mid, tan, edge, { scope });
+      return true;
+    }
+    const mid = polylineMid(edge.points);
+    const here = new MidSet();
+    if (mid) here.add(mid);
+    const member = mid ? this.ghosts.find((g) => here.has(g.mid)) : undefined;
+    if (member) this.removeWithChain(member);
+    else {
+      const over = this.addPicked(edge, scope);
+      if (over) this.refuseOverCap(over);
+    }
+    this.afterMembershipChange();
+    return true;
   }
 
   /** [] when no face is selected. viewport/faceEdges.ts finds the edges by geometry, since the rebuild reply has no
@@ -375,6 +408,11 @@ export class EdgeFeatureTool {
     if (!sels.length || !sels.every((s) => "point" in s)) return false; // structural selectors, can't re-anchor
 
     this.active = true;
+    this.releaseRows = awaitTreePick(
+      (pick) => this.takeRow(pick),
+      () => this.cancel(),
+      { keepsOnRewind: true },
+    );
     this.kind = f.type;
     this.phase = "drag";
     this.onDone = onDone;
@@ -570,10 +608,10 @@ export class EdgeFeatureTool {
     this.afterMembershipChange();
   }
 
-  /** Adding is already a click on an edge in the view, so this only says so. */
+  /** Adding is already a click on an edge or an edge row, so this only says so. */
   promptAddMember() {
     if (this.phase !== "drag") return;
-    setPrompt(`Click an edge in the view to add it to the ${this.kind}`);
+    setPrompt(`Click an edge, or take an edge row from the Geometry list, to add it to the ${this.kind}`);
   }
 
   private disposeGhosts() {
@@ -740,11 +778,20 @@ export class EdgeFeatureTool {
             onChoose: (id) => {
               this.continuity = id as Continuity;
               this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
+              this.refreshGhost();
               this.pushPreview();
             },
           }
         : undefined,
       this.chip?.el,
+    );
+    this.dim.restoresOnUndo(
+      this.field.name,
+      () => ({ value: this.value, touched: this.touched }),
+      (held) => {
+        this.touched = held.touched;
+        this.showValue(held.value);
+      },
     );
     this.dim.showOwnProblem(this.refusalShown);
     if (keepTyped) this.dim.seed(this.field.name, this.value);
@@ -757,6 +804,13 @@ export class EdgeFeatureTool {
   private setValue(v: number) {
     this.value = v;
     this.signed = (this.kind === this.positiveKind ? 1 : -1) * v;
+  }
+
+  private showValue(v: number) {
+    const wasNeutral = this.neutral;
+    this.setValue(v);
+    this.schedulePreviewDuringDrag();
+    if (this.neutral !== wasNeutral) this.promptForPhase();
   }
 
   /** The committed field for `k` is bound and commit writes a plain number; startEdit's refusal, for the field being
@@ -861,6 +915,7 @@ export class EdgeFeatureTool {
     this.continuity = "G1";
     this.dim.setOption("continuity", "G1");
     this.forgetBuildRange();
+    this.refreshGhost();
     setPrompt(`${why}, so the fillet is G1 now`);
   }
 
@@ -902,6 +957,7 @@ export class EdgeFeatureTool {
       size,
       this.kind,
       capped,
+      this.kind === "fillet" ? this.continuity : "G1",
     );
   }
 
@@ -1190,13 +1246,10 @@ export class EdgeFeatureTool {
       if (!this.grabbing && this.dim.isUserDriven(this.field.name)) {
         const v = this.dim.getValue(this.field.name);
         if (v != null && Math.abs(v - this.value) > 1e-6) {
-          const wasNeutral = this.neutral;
           // A typed value is held only to the absolute floor, not the drag's zoom scaled step, and lands on the
           // current treatment's side so a later grab carries on from it.
-          this.setValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
           this.touched = true;
-          this.schedulePreviewDuringDrag();
-          if (this.neutral !== wasNeutral) this.promptForPhase();
+          this.showValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
         }
       }
       this.held.sync(this.pending);
@@ -1308,9 +1361,12 @@ export class EdgeFeatureTool {
         built: feature,
         paramRef: this.paramRef,
       });
+      const bindings = this.paramRef ? [] : this.sizeBindings(feature);
       const refused =
         edit.refused ??
-        (edit.feature || edit.param ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param) : null);
+        (edit.feature || edit.param || bindings.length
+          ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param, bindings)
+          : null);
       // A commit ends the preview itself; anything else puts the committed model back.
       this.store.endEditPreview();
       if (refused) toast(refused, { kind: "warning" });
@@ -1318,13 +1374,18 @@ export class EdgeFeatureTool {
       this.store.endEditPreview();
     } else {
       this.store.setPreview(null);
-      this.store.addFeature(feature);
+      this.store.addFeature(feature, undefined, this.sizeBindings(feature));
     }
     if (decision.unverified) {
       this.store.verifyCommit(feature.id, `${treatmentLabel(this.kind)} ${fmtLength(decision.value)}`);
     }
     this.cleanup();
     this.onDone?.(feature.id);
+  }
+
+  private sizeBindings(f: Feature): SketchBinding[] {
+    const field = f.type === "fillet" ? "radius" : "distance";
+    return boxBindings(this.dim, this.store, f.id, [{ box: this.field.name, field, value: this.size() }]);
   }
 
   cancel() {
@@ -1356,6 +1417,8 @@ export class EdgeFeatureTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
+    this.releaseRows?.();
+    this.releaseRows = null;
     this.gesture.detach();
     el.style.cursor = "default";
     if (this.previewTimer != null) {

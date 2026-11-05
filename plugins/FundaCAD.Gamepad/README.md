@@ -46,4 +46,6 @@ button can run any command, Undo and Save included, and those are edits.
 
 No native code. The pad is read through the webview's Gamepad API. On Linux
 that needs a WebKitGTK built with libmanette; one built without it reports no
-pads and this plugin quietly does nothing.
+pads and this plugin quietly does nothing. WebKit lists a 3D mouse as a pad
+too, this plugin skips those by name or USB id and leaves them to the 3D mouse
+plugin.

@@ -17,6 +17,56 @@ pub const MAX_DOWNLOAD: usize = 32 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 4000;
 
+/// A reply body gathered chunk by chunk and refused the moment it passes `cap`, since a chunked reply carries no
+/// Content-Length to check up front.
+pub struct CappedBody {
+    bytes: Vec<u8>,
+    cap: usize,
+    over: bool,
+}
+
+impl CappedBody {
+    pub fn new(cap: usize) -> Self {
+        CappedBody { bytes: Vec::new(), cap, over: false }
+    }
+
+    /// False once the running total is past the cap, and nothing is kept from then on.
+    pub fn push(&mut self, chunk: &[u8]) -> bool {
+        if self.over || chunk.len() > self.cap - self.bytes.len() {
+            self.over = true;
+            self.bytes = Vec::new();
+            return false;
+        }
+        self.bytes.extend_from_slice(chunk);
+        true
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+/// A reply body as read_capped sees it: the length it declares, then its chunks in order.
+pub trait ChunkSource {
+    type Error;
+    fn declared_len(&self) -> Option<u64>;
+    fn next_chunk(&mut self) -> impl std::future::Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+}
+
+/// The whole body, or None as soon as it passes `cap`, refusing a declared length over the cap before reading any.
+pub async fn read_capped<S: ChunkSource>(src: &mut S, cap: usize) -> Result<Option<Vec<u8>>, S::Error> {
+    if src.declared_len().is_some_and(|n| n > cap as u64) {
+        return Ok(None);
+    }
+    let mut body = CappedBody::new(cap);
+    while let Some(chunk) = src.next_chunk().await? {
+        if !body.push(&chunk) {
+            return Ok(None);
+        }
+    }
+    Ok(Some(body.into_bytes()))
+}
+
 /// The manifest fields that make up the promise, compared as plain string sets.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Consented {
@@ -198,6 +248,14 @@ pub fn safe_entry(name: &str) -> Option<PathBuf> {
     }
 }
 
+/// The component file a manifest's `geometryWasm` names, when it is one inside `dir` by the `safe_entry` rule and
+/// still inside once links are resolved. crates/fundacad-geom/src/plugins `wasm_path` loads by the same rule.
+pub fn component_path(dir: &Path, rel: &str) -> Option<PathBuf> {
+    let path = dir.join(safe_entry(rel)?);
+    let real = path.canonicalize().ok()?;
+    (real.starts_with(dir.canonicalize().ok()?) && real.is_file()).then_some(path)
+}
+
 /// Set equality of what arrived and what was agreed to. Asking for less is still a refusal, since the screen the user
 /// answered did not describe this bundle.
 pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String> {
@@ -265,6 +323,80 @@ pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
         std::fs::write(&target, &buf).map_err(|e| format!("{}: {e}", target.display()))?;
     }
     Ok(())
+}
+
+/// Held through every swap by any FundaCAD process sharing the plugins dir, so a set aside dir found while it is free
+/// is a leftover and never one a swap still needs.
+pub const SWAP_LOCK: &str = ".swap.lock";
+
+/// Puts a staged install at `dest`. The previous install is set aside, not deleted, until the new one is in place,
+/// and is put back if that fails. The staging dir is gone either way.
+pub fn swap_into_place(staging: &Path, dest: &Path) -> Result<(), String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let fail = |e: std::io::Error| {
+        let _ = std::fs::remove_dir_all(staging);
+        format!("could not put the plugin in place: {e}")
+    };
+    let root = dest.parent().ok_or_else(|| fail(std::io::ErrorKind::InvalidInput.into()))?;
+    let _held = open_swap_lock(root).and_then(|f| f.lock().map(|()| f)).map_err(fail)?;
+    let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // A leading dot can never be a plugin id (safe_id), so the aside dir cannot shadow one.
+    let aside = dest.with_file_name(format!(".old-{name}-{}-{n}", std::process::id()));
+    let had_old = match std::fs::rename(dest, &aside) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(fail(e)),
+    };
+    if let Err(e) = std::fs::rename(staging, dest) {
+        if had_old {
+            if let Err(back) = std::fs::rename(&aside, dest) {
+                return Err(format!("{}, and the previous install could not be put back yet: {back}", fail(e)));
+            }
+        }
+        return Err(fail(e));
+    }
+    if had_old {
+        let _ = std::fs::remove_dir_all(&aside);
+    }
+    Ok(())
+}
+
+fn open_swap_lock(root: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(root.join(SWAP_LOCK))
+}
+
+/// What a swap that never finished left set aside: put back when the install is gone, otherwise removed. Skipped
+/// while any swap runs, in this process or another.
+pub fn settle_set_aside(root: &Path) {
+    let Ok(lock) = open_swap_lock(root) else {
+        return;
+    };
+    let Ok(()) = lock.try_lock() else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(rest) = name.strip_prefix(".old-") else {
+            continue;
+        };
+        let mut parts = rest.rsplitn(3, '-');
+        let (Some(_), Some(_), Some(id)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        if safe_id(id).is_err() {
+            continue;
+        }
+        let dest = root.join(id);
+        if !dest.exists() {
+            let _ = std::fs::rename(entry.path(), &dest);
+        } else {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 pub fn now_secs() -> u64 {

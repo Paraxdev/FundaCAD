@@ -16,6 +16,7 @@
 #include <Message_Printer.hxx>
 #include <Message_ProgressRange.hxx>
 #include <Message_ProgressScope.hxx>
+#include <OSD_FileSystem.hxx>
 #include <PCDM_ReaderStatus.hxx>
 #include <Quantity_Color.hxx>
 #include <Quantity_ColorRGBA.hxx>
@@ -268,6 +269,12 @@ struct StepAssemblyWalk {
   // What did not close is said before anything else, a reader of one note
   // gets that one.
   size_t open_notes = 0;
+  // Each instance of a shared product is placed in full, so the work grows with
+  // the instance count, not the file size.
+  static constexpr size_t max_instances = 200000;
+  static constexpr size_t max_depth = 256;
+  // The assemblies being expanded, from the root down to the current instance.
+  std::vector<TDF_Label> path;
 
   static std::string entry(const TDF_Label &label) {
     TCollection_AsciiString e;
@@ -397,6 +404,13 @@ struct StepAssemblyWalk {
   }
 
   void visit(const TDF_Label &label, int32_t parent, const TopLoc_Location &location) {
+    if (sewing != nullptr && sewing->UserBreak()) {
+      throw std::runtime_error("cancelled");
+    }
+    if (tree.nodes.size() >= max_instances || tree.leaves.size() >= max_instances) {
+      throw std::runtime_error("this assembly has too many instances to import (more than " +
+                               std::to_string(max_instances) + ")");
+    }
     TDF_Label referred = label;
     if (XCAFDoc_ShapeTool::IsReference(label)) {
       referred = TDF_Label();
@@ -413,10 +427,21 @@ struct StepAssemblyWalk {
       tree.is_assembly = true;
       TDF_LabelSequence components;
       XCAFDoc_ShapeTool::GetComponents(referred, components);
+      for (const TDF_Label &open : path) {
+        if (open == referred) {
+          throw std::runtime_error("the file's assembly refers to itself");
+        }
+      }
+      if (path.size() >= max_depth) {
+        throw std::runtime_error("this assembly is nested too deep to import (more than " +
+                                 std::to_string(max_depth) + " levels)");
+      }
+      path.push_back(referred);
       for (int i = 1; i <= components.Length(); ++i) {
         const TDF_Label &component = components.Value(i);
         visit(component, index, location * XCAFDoc_ShapeTool::GetLocation(component));
       }
+      path.pop_back();
       return;
     }
 
@@ -624,7 +649,8 @@ inline std::unique_ptr<StepAssembly> iges_assembly_read(rust::Str path, const Me
 }
 
 // A fresh application per read keeps the XCAFApp singleton, which the STEP
-// and IGES readers share, out of it.
+// and IGES readers share, out of it. Opening from a stream skips CDF's
+// LoadReferences, so the header's reference list never opens other files.
 inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Message_ProgressRange &progress) {
   std::string file(path.data(), path.size());
   Handle(TDocStd_Application) app = new TDocStd_Application();
@@ -641,9 +667,14 @@ inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Mes
     }
   } closer{app, doc};
   const std::string unreadable = "could not read the XBF file (it may be truncated or not an OCCT XBF document";
+  std::shared_ptr<std::istream> stream =
+      OSD_FileSystem::DefaultFileSystem()->OpenIStream(TCollection_AsciiString(file.c_str()), std::ios::in | std::ios::binary);
+  if (!stream || !stream->good()) {
+    throw std::runtime_error(unreadable + ")");
+  }
   PCDM_ReaderStatus status = PCDM_RS_OpenError;
   try {
-    status = app->Open(TCollection_ExtendedString(file.c_str(), Standard_True), doc, whole.Next(19));
+    status = app->Open(*stream, doc, whole.Next(19));
   } catch (const Standard_Failure &) {
     throw std::runtime_error(unreadable + ")");
   }

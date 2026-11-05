@@ -430,6 +430,10 @@ folder.
   like `main.js`, and `scripts/build-plugins.py` builds it again when it packs
   the bundle, so the zip carries the component and never the crate.
   `rustup target add wasm32-wasip2` once per machine.
+- The file `geometryWasm` names must really be inside the plugin folder. A
+  link to a file elsewhere, such as a cargo target dir, is refused as outside
+  the installed copy, so copy the build output in instead (the build script
+  already writes a copy).
 - The world exports four hooks: `run-feature` (a rebuild-time handler),
   `resolve-pass` and `displace` (a mesh pass, a tessellation-time hook that runs
   against the FINAL shape, so the effect survives the booleans and fillets
@@ -506,6 +510,9 @@ for the missing-plugin warning to say about a document that uses it.
 
 `saveTextFile` and `openTextFile` in `fundacad` are the file half such a library needs: a text file
 the person picks, through the native dialog in the app and a download or an upload in a browser.
+
+`announce(text, priority)` in `fundacad` speaks a line through the app's own live regions, polite by default and
+`"assertive"` for a failure. Use it for a result that appears with no focus move, since the status line is not read.
 
 ### Two plugins that need each other
 

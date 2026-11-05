@@ -1,11 +1,17 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h } from "vue";
+import { enableAutoUnmount, mount, type DOMWrapper } from "@vue/test-utils";
+
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 
 import NumberField from "../../../src/components/ui/NumberField.vue";
+import { announce } from "../../../src/ui/announce";
 import { measureError, unitById } from "../../../src/ui/measure";
+import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 
 enableAutoUnmount(afterEach);
 afterEach(() => vi.useRealTimers());
+beforeEach(() => vi.mocked(announce).mockClear());
 
 type Props = InstanceType<typeof NumberField>["$props"];
 
@@ -252,6 +258,35 @@ describe("NumberField", () => {
   });
 });
 
+describe("NumberField limits", () => {
+  it("with arrows commits typed text past min and max, unrefused", async () => {
+    const { w, input } = await render({ min: 0, max: 10, limits: "arrows" });
+    await commit(input, "-1");
+    await commit(input, "11");
+    expect(emitted(w)).toEqual([[-1], [11]]);
+    expect(input.attributes("aria-invalid")).toBeUndefined();
+  });
+
+  it("with arrows still holds the arrow keys inside min and max", async () => {
+    const top = await render({ modelValue: 10, min: 0, max: 10, limits: "arrows" });
+    await top.input.trigger("keydown", { key: "ArrowUp" });
+    expect(top.el.value).toBe("10");
+    const bottom = await render({ modelValue: 0, min: 0, max: 10, limits: "arrows" });
+    await bottom.input.trigger("keydown", { key: "ArrowDown" });
+    expect(bottom.el.value).toBe("0");
+  });
+
+  it("refuses by default, and still judges a validate with arrows", async () => {
+    const plain = await render({ min: 0 });
+    await commit(plain.input, "-1");
+    expect(emitted(plain.w)).toEqual([]);
+    const judged = await render({ min: 0, limits: "arrows", validate: () => "No" });
+    await commit(judged.input, "-1");
+    expect(emitted(judged.w)).toEqual([]);
+    expect(judged.input.attributes("title")).toBe("No");
+  });
+});
+
 describe("NumberField expressions", () => {
   // A feature row: a plain number is in the row's unit, anything the grammar leaves to the parameter engine is text.
   const parse = (raw: string, unit: Parameters<NonNullable<Props["parse"]>>[1]) => {
@@ -437,5 +472,310 @@ describe("NumberField expressions", () => {
     await commit(input, "w/4 ");
     await w.vm.$nextTick();
     expect([seen, emitted(w), el.value]).toEqual([[], [], "w/4"]);
+  });
+});
+
+describe("NumberField unit description", () => {
+  const described = (el: HTMLInputElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+
+  it.each([
+    ["mm", "millimetres"],
+    ["in", "inches"],
+    ["deg", "degrees"],
+    ["MPa", "megapascals"],
+    ["g/cm³", "grams per cubic centimetre"],
+    ["samples", "samples"],
+  ])("describes unit %s as %s", async (unit, word) => {
+    const { el, w } = await render({ unit, modelValue: 12.5 });
+    expect(described(el)).toEqual([word]);
+    const span = w.get(".sr-only");
+    expect(span.element.parentElement).toBe(w.element);
+  });
+
+  it("describes a unit of 1 or 0 as the plural too, as it names the unit and not an amount", async () => {
+    for (const modelValue of [0, 1, 37.5]) {
+      const { el } = await render({ unit: "mm", modelValue });
+      expect(described(el)).toEqual(["millimetres"]);
+    }
+  });
+
+  it.each([{}, { unit: null }, { unit: undefined }, { unit: "" }])(
+    "has no span and no describedby for %o",
+    async (p) => {
+      const { el, w } = await render(p);
+      expect([el.hasAttribute("aria-describedby"), w.findAll(".sr-only").length]).toEqual([false, 0]);
+    },
+  );
+
+  it("keeps a caller's aria-describedby after the unit", async () => {
+    const hint = document.createElement("div");
+    hint.id = "hint-7";
+    hint.textContent = "Across the flats";
+    document.body.append(hint);
+    try {
+      const { el } = await render({ unit: "mm", "aria-describedby": "hint-7" });
+      expect(described(el)).toEqual(["millimetres", "Across the flats"]);
+      const bare = await render({ "aria-describedby": "hint-7" });
+      expect(described(bare.el)).toEqual(["Across the flats"]);
+    } finally {
+      hint.remove();
+    }
+  });
+
+  it("follows a unit changed from outside, and the span goes with the unit", async () => {
+    const { el, w } = await render({ unit: "mm", units: ["mm", "in"] });
+    await w.setProps({ unit: "in" });
+    expect(described(el)).toEqual(["inches"]);
+    await w.setProps({ unit: null });
+    expect([el.hasAttribute("aria-describedby"), w.findAll(".sr-only").length]).toEqual([false, 0]);
+  });
+
+  it("gives each field its own unit span id", async () => {
+    const Pair = defineComponent({
+      render: () => [
+        h(NumberField, { modelValue: 1, label: "A", unit: "mm" }),
+        h(NumberField, { modelValue: 2, label: "B", unit: "deg" }),
+        h(NumberField, { modelValue: 3, label: "C", unit: "mm" }),
+      ],
+    });
+    const w = mount(Pair, { attachTo: document.body });
+    const inputs = w.findAll("input").map((i) => i.element as HTMLInputElement);
+    const ids = inputs.map((e) => e.getAttribute("aria-describedby"));
+    expect([new Set(ids).size, inputs.map(described)]).toEqual([3, [["millimetres"], ["degrees"], ["millimetres"]]]);
+  });
+
+  it("reads mm and deg when Units spoken in full is off, and the words again once it is on", async () => {
+    const Trio = defineComponent({
+      props: { late: Boolean },
+      render: (p: { late: boolean }) => [
+        h(NumberField, { modelValue: 7.5, label: "A", unit: "mm" }),
+        h(NumberField, { modelValue: 33, label: "B", unit: "deg" }),
+        h(NumberField, { modelValue: 3, label: "C", unit: "samples" }),
+        ...(p.late ? [h(NumberField, { modelValue: 9, label: "D", unit: "mm" })] : []),
+      ],
+    });
+    try {
+      setA11yPref("unitsInFull", false);
+      const w = mount(Trio, { attachTo: document.body });
+      const read = () => w.findAll("input").map((i) => described(i.element as HTMLInputElement));
+      expect(read()).toEqual([["mm"], ["deg"], ["samples"]]);
+      setA11yPref("unitsInFull", true);
+      await w.setProps({ late: true });
+      expect(read()).toEqual([["millimetres"], ["degrees"], ["samples"], ["millimetres"]]);
+    } finally {
+      resetA11yPrefs();
+    }
+  });
+
+  it("hides the unit caption from browse mode, but never a unit picker", async () => {
+    const caption = await render({ unit: "mm" });
+    expect(caption.w.get(".ui-unit-chip").attributes("aria-hidden")).toBe("true");
+    const picker = await render({ unit: "mm", units: ["mm", "in"] });
+    expect(picker.w.get(".ui-unit-chip").attributes("aria-hidden")).toBeUndefined();
+  });
+});
+
+describe("NumberField caption and unitless", () => {
+  const described = (el: HTMLInputElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+
+  it("shows and speaks a caption without reading it as a measure, even when it spells one", async () => {
+    const { w, el, input } = await render({ caption: "in", modelValue: 25.4 });
+    expect([el.value, w.findAll(".ui-unit-chip").map((c) => c.text()), described(el)]).toEqual([
+      "25.4",
+      ["in"],
+      ["inches"],
+    ]);
+    await commit(input, "2");
+    expect(emitted(w)).toEqual([[2]]);
+  });
+
+  it("names a caption in the reason a limit gives", async () => {
+    const { w, el, input } = await render({ caption: "layers", modelValue: 3.5, max: 7 });
+    expect([w.findAll(".ui-unit-chip").map((c) => c.text()), described(el)]).toEqual([["layers"], ["layers"]]);
+    await commit(input, "9");
+    expect(described(el)).toEqual(["layers", "At most 7 layers"]);
+  });
+
+  it("lets a unit win over a caption", async () => {
+    const { w, el } = await render({ unit: "mm", caption: "layers", modelValue: 12 });
+    expect([w.findAll(".ui-unit-chip").map((c) => c.text()), described(el)]).toEqual([["mm"], ["millimetres"]]);
+  });
+
+  it("changes nothing for unitless, a count or a ratio", async () => {
+    const { w, el, input } = await render({ unitless: true, modelValue: 0.3, step: 0.05 });
+    await input.trigger("keydown", { key: "ArrowUp" });
+    await input.trigger("keydown", { key: "Enter" });
+    expect([w.findAll(".ui-unit-chip").length, el.hasAttribute("aria-describedby"), emitted(w)]).toEqual([
+      0,
+      false,
+      [[0.35]],
+    ]);
+    expect(el.hasAttribute("unitless")).toBe(false);
+  });
+});
+
+describe("NumberField refusal", () => {
+  const described = (el: HTMLInputElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? "?");
+  const spoken = () => vi.mocked(announce).mock.calls;
+
+  it("describes a refused value on the field after its unit, and drops it once the text is fixed", async () => {
+    const { el, input } = await render({ unit: "mm", min: 2.5, modelValue: 7 });
+    await commit(input, "1.75");
+    expect(el.getAttribute("aria-invalid")).toBe("true");
+    expect(described(el)).toEqual(["millimetres", "At least 2.5 mm"]);
+    await input.setValue("3.5");
+    expect(el.getAttribute("aria-invalid")).toBeNull();
+    expect(described(el)).toEqual(["millimetres"]);
+    expect(el.getAttribute("aria-describedby")).not.toContain("error");
+  });
+
+  it("describes a reason that came from outside the same way, and a caller's ids come last", async () => {
+    const { w, el } = await render({ unit: "deg", modelValue: 33, "aria-describedby": "hint-a hint-b" });
+    expect(described(el)).toEqual(["degrees", "?", "?"]);
+    await w.setProps({ problem: "Cannot cut that deep" });
+    expect(el.getAttribute("aria-describedby")?.split(" ").slice(2)).toEqual(["hint-a", "hint-b"]);
+    expect(described(el).slice(0, 2)).toEqual(["degrees", "Cannot cut that deep"]);
+    await w.setProps({ problem: null });
+    expect(el.getAttribute("aria-describedby")).toMatch(/^\S+-unit hint-a hint-b$/);
+  });
+
+  it("describes a refusal on a field with no unit as the only description", async () => {
+    const { el, input } = await render({ min: 2, modelValue: 6 });
+    expect(el.getAttribute("aria-describedby")).toBeNull();
+    await commit(input, "1");
+    expect(described(el)).toEqual(["At least 2"]);
+  });
+
+  it("gives each field in one app its own error id", async () => {
+    const Two = defineComponent({
+      render: () => [
+        h(NumberField, { modelValue: 6, label: "A", min: 2, class: "a" }),
+        h(NumberField, { modelValue: 9, label: "B", min: 3, class: "b" }),
+      ],
+    });
+    const w = mount(Two, { attachTo: document.body });
+    await new Promise((r) => setTimeout(r, 2));
+    const [a, b] = w.findAll("input") as [DOMWrapper<HTMLInputElement>, DOMWrapper<HTMLInputElement>];
+    await commit(a, "1");
+    await commit(b, "2");
+    const els = [a.element, b.element] as const;
+    expect(els[0].getAttribute("aria-describedby")).not.toBe(els[1].getAttribute("aria-describedby"));
+    expect(els.map(described)).toEqual([["At least 2"], ["At least 3"]]);
+  });
+
+  it("speaks a refusal once on Enter, without the name while the field has focus", async () => {
+    const { el, input } = await render({ unit: "mm", min: 2.5, modelValue: 7, label: "Width" });
+    el.focus();
+    await commit(input, "1.75");
+    expect(spoken()).toEqual([["At least 2.5 mm", "assertive"]]);
+    await input.trigger("keydown", { key: "Enter" });
+    expect(spoken()).toHaveLength(1);
+  });
+
+  it("speaks again for a new refusal after a valid commit, and each time the text is typed again", async () => {
+    const { el, input } = await render({ min: 2, modelValue: 7, label: "Width" });
+    el.focus();
+    expect(spoken()).toHaveLength(0);
+    await commit(input, "1");
+    expect(spoken()).toHaveLength(1);
+    await commit(input, "5");
+    expect(spoken()).toHaveLength(1);
+    await commit(input, "0.5");
+    expect(spoken()).toHaveLength(2);
+    await commit(input, "0.25");
+    expect(spoken()).toHaveLength(3);
+  });
+
+  it("names the field when a blur commits the refusal with focus elsewhere", async () => {
+    const { input } = await render({ unit: "mm", min: 2.5, modelValue: 7, label: "Width" });
+    await input.setValue("1.75");
+    await input.trigger("blur");
+    expect(spoken()).toEqual([["Width, At least 2.5 mm", "assertive"]]);
+  });
+
+  it("names the field from the text of its labelledby ids", async () => {
+    const lab = document.createElement("span");
+    lab.id = "w-lab";
+    lab.textContent = "Wall thickness";
+    document.body.append(lab);
+    const { input } = await render({ label: undefined, labelledby: "w-lab", min: 2, modelValue: 7 });
+    await input.setValue("1");
+    await input.trigger("blur");
+    lab.remove();
+    expect(spoken()).toEqual([["Wall thickness, At least 2", "assertive"]]);
+  });
+
+  it("speaks a reason from outside once, and again after it was withdrawn", async () => {
+    const { w } = await render({ modelValue: 4 });
+    await w.setProps({ problem: "Cannot cut that deep" });
+    await w.setProps({ problem: "Cannot cut that deep, 2" });
+    expect(spoken()).toEqual([["Depth, Cannot cut that deep", "assertive"]]);
+    await w.setProps({ problem: null });
+    await w.setProps({ problem: "Too thin" });
+    expect(spoken()).toHaveLength(2);
+  });
+
+  describe("in live mode", () => {
+    async function live() {
+      const r = await render({ commit: "live", unit: "mm", min: 2.5, max: 100, modelValue: 7, label: "Width" });
+      r.el.focus();
+      vi.useFakeTimers();
+      return r;
+    }
+
+    it("speaks nothing for text that is fixed inside the pause", async () => {
+      const { input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(699);
+      await input.setValue("12");
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toEqual([]);
+    });
+
+    it("speaks the reason once the pause ends, not a moment before", async () => {
+      const { input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(699);
+      expect(spoken()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(spoken()).toEqual([["At least 2.5 mm", "assertive"]]);
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toHaveLength(1);
+    });
+
+    it("says the reason current when the pause ends and not again for a changed reason", async () => {
+      const { input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(300);
+      await input.setValue("200");
+      vi.advanceTimersByTime(399);
+      expect(spoken()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(spoken()).toEqual([["At most 100 mm", "assertive"]]);
+      await input.setValue("300");
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toHaveLength(1);
+    });
+
+    it("speaks nothing when the field goes away inside the pause", async () => {
+      const { w, input } = await live();
+      await input.setValue("1");
+      vi.advanceTimersByTime(400);
+      w.unmount();
+      vi.advanceTimersByTime(5000);
+      expect(spoken()).toEqual([]);
+    });
   });
 });

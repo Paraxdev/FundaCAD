@@ -12,13 +12,23 @@ import { HoleTool } from "../../src/features/holeTool";
 import { closeOpenEdit } from "../../src/app/selection";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
+import { classifyExprInput } from "../../src/params/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Engine } from "../../src/app/engine";
 import type { Feature } from "../../src/types";
 
+// The real store reads names in the value box; these fakes hold no parameters.
+const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending, raw, kind) =>
+  classifyExprInput({ parameters: {}, features: [] }, raw, kind, bound, pending);
+
 const toasts = vi.hoisted(() => [] as string[]);
 vi.mock("../../src/ui/toast", () => ({ toast: (m: string) => toasts.push(m) }));
-vi.mock("../../src/sketch/overlay", () => ({ curveObjects: (ents: unknown[]) => ents, PREVIEW_COLOR: 0 }));
+vi.mock("../../src/sketch/overlay", () => ({
+  curveObjects: (ents: unknown[]) => ents,
+  sketchPreviewColor: () => 0,
+  sketchSelectColor: () => 0,
+  sketchConflictColor: () => 0,
+}));
 // The real solver pulls a wasm ?url that the DOM project's transform refuses, and nothing here solves.
 vi.mock("../../src/sketch/solver", () => ({
   SolverUnavailable: class extends Error {},
@@ -125,6 +135,28 @@ describe("sketch offset box", () => {
     t.dim.dispose();
   });
 
+  it("a field undo redraws the ghost at once, and Enter commits that offset", () => {
+    const t = startOffset();
+    t.move();
+    const atCursor = t.last();
+    const input = field("offset");
+    const shown = input.value;
+    const edit = (text: string, inputType: string) => {
+      input.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType }));
+      input.value = text;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType }));
+    };
+    edit("-5.5", "insertText");
+    t.move();
+    expect(t.last()).not.toEqual(atCursor);
+    edit(shown, "historyUndo");
+    expect(t.last()).toEqual(atCursor);
+    enter("offset");
+    const committed = t.setEntities.mock.calls[0]![0].slice(1).map(withoutId);
+    expect(committed).toEqual(atCursor.slice(1));
+    t.dim.dispose();
+  });
+
   it("Enter on an emptied box keeps the offset open with its toast", () => {
     const t = startOffset();
     t.move();
@@ -166,7 +198,9 @@ describe("extrude depth box", () => {
       document: { features: [{ id: "f1", type: "sketch" }] },
       buildState: { result: { mesh: { positions: [0, 0, 0] } } },
       nextId: () => "f9",
+      classifyTargetExpr,
       hiddenBodyIds: () => undefined,
+      boundExpr: () => null,
       addFeature,
     };
     const viewport = {
@@ -241,6 +275,8 @@ describe("hole depth box", () => {
     const added: Feature[] = [];
     const store = {
       nextId: () => "h1",
+      boundExpr: () => null,
+      classifyTargetExpr,
       setPreview: () => {},
       addFeature: (f: Feature) => added.push(f),
       verifyCommit: () => {},
@@ -260,7 +296,7 @@ describe("hole depth box", () => {
     const added = startHole();
     type("depth", "abc");
     enter("depth");
-    expect([added, isBad(), problem()]).toEqual([[], true, 'Depth: "abc" is not a number']);
+    expect([added, isBad(), problem()]).toEqual([[], true, 'Depth: no parameter named "abc"']);
   });
 
   it('a typed 4 then "abc" builds depth 4, marked', () => {

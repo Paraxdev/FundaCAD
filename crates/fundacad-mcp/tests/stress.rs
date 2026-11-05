@@ -134,6 +134,7 @@ async fn malformed_arguments_are_refused_before_the_engine_is_asked() {
             "`material.E`",
         ),
         (json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "size": -2}), "`size`"),
+        (json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "finer": "yes"}), "`finer`"),
         (
             json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "view": "under"}),
             "no view 'under'",
@@ -196,4 +197,26 @@ fn supports_and_gravity_are_taken_and_reported() {
     );
     assert!(r.is_error, "{}", r.text);
     assert!(r.text.contains("the body can still turn about the pin's axis through (90, 0, "), "{}", r.text);
+}
+
+#[test]
+fn a_wall_past_the_limit_offers_a_finer_run_and_finer_true_takes_it() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [{"op": "add", "feature": {"type": "box", "length": 12, "width": 12, "height": 0.5}}],
+               "build": true}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+    let mut args = json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]),
+                          "loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 0, -1]}],
+                          "material": "PLA", "maxElements": 200, "refine": "off", "image": false});
+    let r = mcp.call("stress", args.clone());
+    assert!(r.is_error, "{}", r.text);
+    assert!(r.text.contains("the thinnest wall is about 0.50 mm thick"), "{}", r.text);
+    assert!(r.text.contains("call `stress` again with `finer`: true"), "{}", r.text);
+    args["finer"] = json!(true);
+    let r = mcp.call("stress", args);
+    assert!(!r.is_error, "{}", r.text);
+    assert!(r.text.contains(" quadratic tetrahedra, "), "{}", r.text);
 }

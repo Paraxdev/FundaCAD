@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { onUnmounted, watch } from "vue";
 import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
+import { pageZoom } from "../../ui/interfaceSize";
 import type { GlyphItem } from "../../sketch/sketchGlyphs";
 
 const s = useSketchAnnotationStore();
@@ -15,6 +16,7 @@ const s = useSketchAnnotationStore();
 const els: (HTMLElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
+let lastZoom = 0;
 let raf = 0;
 
 function loop() {
@@ -24,8 +26,10 @@ function loop() {
   if (!plane || !vp) return;
   // skip the per-glyph projection + DOM writes when the camera hasn't moved
   const pose = vp.rig.poseVersion();
-  if (pose === lastPose) return;
+  const z = pageZoom();
+  if (pose === lastPose && z === lastZoom) return;
   lastPose = pose;
+  lastZoom = z;
   const items = s.glyphItems;
   for (let i = 0; i < items.length; i++) {
     const el = els[i];
@@ -33,7 +37,7 @@ function loop() {
     if (!el || !g) continue;
     plane.to3D(g.pos.x, g.pos.y, scratch);
     const p = vp.projectToScreen(scratch);
-    el.style.transform = screenTransform(p.x, p.y);
+    el.style.transform = screenTransform(p.x / z, p.y / z);
   }
 }
 
@@ -65,21 +69,21 @@ watch(
 onUnmounted(stop);
 
 /** set by the pointerdown hook below; consumed by the click that follows */
-let suppressDelete = false;
+let suppressSelect = false;
 
 function onDown(e: PointerEvent) {
   e.stopPropagation();
-  suppressDelete = s.glyphHooks?.overlapPick(e) ?? false;
+  suppressSelect = s.glyphHooks?.overlapPick(e) ?? false;
 }
 
 function onClick(e: MouseEvent, g: GlyphItem) {
   e.stopPropagation();
-  if (suppressDelete) {
-    suppressDelete = false;
+  if (suppressSelect) {
+    suppressSelect = false;
     return;
   }
   if (g.patternId) s.glyphHooks?.editPattern(g.patternId);
-  else s.glyphHooks?.del(g.cIndex);
+  else s.glyphHooks?.select(g.cIndex);
 }
 
 /** Same as the dimension layer: a constraint badge that has taken the pointer
@@ -91,14 +95,15 @@ function onWheel(e: WheelEvent) {
 
 <template>
   <!-- Teleported: .sketch-glyphs is absolute, inset 0 against the initial containing block, and inside #app's grid
-  it would land behind the canvas. -->
+  it would land behind the canvas. Hidden from screen readers, the Relations list is the keyboard route; not inert,
+  which would stop the glyph click. -->
   <Teleport to="body">
-    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }" @wheel="onWheel">
+    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }" aria-hidden="true" @wheel="onWheel">
       <div
         v-for="(g, i) in s.glyphItems"
         :key="i"
         :ref="(el) => (els[i] = el as HTMLElement | null)"
-        :class="g.cls"
+        :class="[g.cls, { 'is-selected': s.glyphSelected === g.cIndex }]"
         :title="g.title"
         @pointerdown="onDown"
         @click="onClick($event, g)"

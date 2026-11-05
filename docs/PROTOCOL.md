@@ -54,7 +54,7 @@ reach the supervisor.
 `op`, so the desktop relay reads it from the request's first bytes). It is optional: a request without it belongs to
 the document `""`. The held document a delta rebuild patches is kept per connection and `doc`, and `doc_end` ends
 every job of one `doc`. App wide ops (`ping`, `cancel`, `listFonts`, `tessellateText`, `session_release`,
-`session_state`, `session_leave`, `session_guide`) carry no `doc`. `doc_end` names the `doc` it ends, and
+`session_state`, `session_leave`, `session_guide`, `session_ask`, `session_answer`) carry no `doc`. `doc_end` names the `doc` it ends, and
 `session_host` and `session_propose` name the live session's document, never a job's.
 
 ## Reply envelope
@@ -336,6 +336,62 @@ optional `info` object the exporter chose to report.
 Plugin geometry runs in WebAssembly components inside each plugin, sandboxed by the
 engine's plugin host (`docs/ENGINE.md` section 2.3).
 
+### `topology`
+
+One body's faces in plain numbers and which faces each wire edge joins, for a list that
+describes them in words. It is `inspect` without selectors, neighbours and whole body
+measures, so it costs much less, and it adds a flat face's size, a round face's length
+and hole or boss. Rebuilds through the same warm cache. It beats the job's heartbeat and
+stops on `cancel` between faces.
+
+```jsonc
+{ "op": "topology", "id": "...", "document": { /* CadDocument */ },
+  "body": "body1",        // required, an id or a name
+  "faces": [3],           // optional, only these faces, and no edgeFaces
+  "maxFaces": 200000 }    // optional
+```
+
+Reply:
+```jsonc
+{ "body": "body1", "faceCount": 9,
+  "faces": [
+    { "i": 0, "surface": "plane", "area": 2400.0, "centroid": [x,y,z],
+      "normal": [0,0,1], "size": [60.0, 40.0] },
+    { "i": 7, "surface": "cylinder", "area": 628.319, "centroid": [x,y,z], "axis": [0,0,1],
+      "radius": 5.0, "length": 20.0, "wraps": true, "concave": true },
+    { "i": 3, "surface": "cone", "area": 90.1, "centroid": [x,y,z], "axis": [0,1,0],
+      "semiAngle": 0.52, "length": 8.0, "wraps": true, "concave": false },
+    { "i": 4, "surface": "sphere", "area": 50.2, "centroid": [x,y,z], "radius": 2.0, "concave": false },
+    { "i": 5, "surface": "torus", "area": 44.0, "centroid": [x,y,z], "axis": [0,0,1],
+      "major": 9.0, "radius": 1.5, "wraps": true, "concave": false },
+    { "i": 8, "surface": "bspline", "area": 412.0, "centroid": [x,y,z] }
+  ],
+  "edgeFaces": [[0, 3], [3, 4], [7]],  // one per wire edge of this body, in wire order
+  "truncated": { "faces": 1234 },      // only when a cap was hit
+  "errors": [ { "message": "...", "feature_id": "..." } ] }
+```
+
+- `i` is the face's number in the mesh's `faceIds`, so `faceStart + i` is its id in the
+  viewport. `faceCount` counts every face of the body, where the mesh's own `faceCount`
+  stops at the last face with triangles, so a row can have no triangles to pick.
+- `surface` is `plane`, `cylinder`, `cone`, `sphere`, `torus`, `bspline` or `other`. A face
+  gives only the facts of its surface, and a reference scan's one face has no more than `i`,
+  `surface` and maybe `area`.
+- `centroid` is the middle of the face's area, which for a whole bore is on its axis. This
+  is not `inspect`'s `centroid`, which is a point on a curved face.
+- `normal` is outward, and only on a plane. `axis` is a line, its sign means nothing.
+- `size` is `[long, short]` of the smallest area rectangle around the boundary in the
+  face's plane, so a rectangle turned in its plane or a slanted face reads its true sides.
+  A curved outline can read up to about 0.0002 mm small.
+- `length` is how far the boundary spreads along `axis`.
+- `concave` is true where the material lies away from the axis or centre, a bore or a
+  pocket. `radius` on a torus is its tube, `major` its ring.
+- `edgeFaces` lists a seam's one face once, and holds every wire edge whatever `maxFaces`
+  says. It can name a face past the cap.
+- `faces` is sorted and a number past the last face is left out, since a number can go
+  stale when the document changes. A `faces` that is not a list of whole numbers, a missing
+  `body` or an unknown one is an `error`, and so is an empty document, which has no body.
+
 ### `interference`
 
 Pairwise interference (clash) check among the document's live bodies. Display
@@ -475,7 +531,8 @@ same request gives the same answer every time.
   "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
   "size": 1.5,           // optional, starting element size in mm
   "maxElements": 30000,  // optional, default 30000, at most 80000, a ceiling for every pass
-  "refine": "standard" } // optional, "off" | "standard" (default) | "fine"
+  "refine": "standard",  // optional, "off" | "standard" (default) | "fine"
+  "finer": true }        // optional, only after an error that offers it, runs past the limits once
 ```
 
 - `fixed` and each load's `faces` take one face selector or a list (the same forms
@@ -547,6 +604,21 @@ same request gives the same answer every time.
   less when the machine has less free, which a compact part usually passes above
   about 50000 elements (a slender or thin walled one goes further). A mesh that would
   not fit is refused with the `maxElements` that would.
+- Without `size`, a mesh that comes apart or loses a face the study needs is meshed again
+  finer by itself, up to about 148000 elements, what 15 s of a release build allows. A
+  `maxElements` in the request is the ceiling of this retry, except with
+  `"refine": "fine"`. Past that the error carries
+  `"finer": { "elements": 180000, "seconds": 20 }`, a rough estimate. The same request
+  with `"finer": true` may then reach 250000 elements and 8 GiB once, the free memory rule
+  still applies. There is no `finer` when that many elements would not fit that memory:
+  8 GiB holds about 220000 of a thin walled part and about 100000 of a part with no thin
+  wall, whose `seconds` are about 4 times as long, so such a part that loses a face past
+  the 148000 gets no `finer`. An error from a wall that gave way names its thickness and
+  place in `message`.
+- A study the solver would run with a warning, only some fixed faces lost, also retries,
+  within `maxElements` (30000 by default). When a retry keeps those faces the answer has a
+  finer mesh and other numbers than the warned run of an earlier build. When none does,
+  it stays on the first mesh with its warning. An explicit `size` never retries.
 - A load only on fixed faces does nothing to the part: it is refused when every load
   is and gravity is off, and otherwise draws a warning.
 
@@ -941,7 +1013,7 @@ section 2.3).
 
 ### `session_*`, the live session
 
-Six ops that share one document between the app window and an outside client
+Eight ops that share one document between the app window and an outside client
 (the MCP server, `crates/fundacad-mcp`). They are answered on the **read path**, never behind
 the heavy-op lock: the window publishes on a loop, and a publish that queued
 behind a rebuild would make the window invisible to an agent for exactly as long
@@ -1007,6 +1079,31 @@ guide. The `state` is opaque to the engine; the window fills `ack` (the newest `
 acted on), `step`, `wait` (with `done` once it is decided) and `stopped` (`n` counts the
 user's Stop presses, so a guest reports each one once). A guest sending `state` is
 refused with `not the host`.
+
+```jsonc
+// a guest asking the user to pick a path in the window's file dialog (the Flatpak MCP
+// server, for a path outside its folder). kind is open, save or folder.
+{ "op": "session_ask", "id": "...", "name": "an assistant",
+  "ask": { "kind": "save", "tool": "doc_save", "path": "/home/me/bracket.funda", "exts": ["funda"] } }
+// -> { "ok": true, "askId": "a3f...-1" }
+// -> { "ok": false, "reason": "no-host" | "busy" | "bad-ask", "message": "..." }
+
+// the guest's poll, also its heartbeat; "cancel": true drops the ask
+{ "op": "session_ask", "id": "...", "askId": "a3f...-1" }
+// -> { "ok": true, "answered": false }
+// -> { "ok": true, "answered": true, "path": "/run/user/1000/doc/ab12/bracket.funda" | null,
+//      "closed": true }
+
+// the window, after the dialog closes: the picked path, or null for Cancel
+{ "op": "session_answer", "id": "...", "askId": "a3f...-1", "path": "..." | null }
+// -> { "ok": true } | { "ok": false, "reason": "not the host" | "unknown" }
+```
+
+A `session_host` reply carries `"asks": [ { "askId", "kind", "tool", "path", "exts", "name" } ]`
+while any are open. Every reply hands each open ask until it is answered, so one in a reply
+that never reached the window is not lost, and the host shows each `askId` once. A guest has
+one ask open at a time. A release or a new host answers open asks with `path: null` and
+`closed: true`, and a guest that leaves or stops polling for `GUEST_TTL` takes its ask with it.
 
 A proposal is refused if `baseRevision` is not the current revision. That is the
 rule that stops an agent's edit landing on a model the user has since changed,

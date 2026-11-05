@@ -7,8 +7,8 @@
   display: flex;
   flex-direction: column;
   width: 340px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 160px);
+  max-width: calc(var(--win-w) - 32px);
+  max-height: calc(var(--win-h) - 160px);
   overflow-wrap: anywhere;
 }
 .stress-head {
@@ -61,7 +61,9 @@
   bottom: 0;
 }
 :root[data-pointer="touch"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
-:root[data-targets="large"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .stress-item-head > .stress-remove-support.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-head > .stress-remove-support.icon-btn.icon-btn-sm::before {
   right: -4px;
 }
 .stress-fold {
@@ -71,7 +73,7 @@
   height: 28px;
   padding-top: 0;
   padding-bottom: 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 
 // A label at the left and its control or controls filling the rest of the line.
@@ -120,6 +122,15 @@
   justify-content: space-between;
   gap: var(--s-1) var(--s-2);
   padding: var(--s-1) 0;
+}
+// The count and the Clear that empties it, always a line of their own, so Clear never wraps away alone.
+.stress-count-line {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-width: 0;
 }
 .stress-count {
   min-width: 0;
@@ -241,6 +252,14 @@
 .stress-pin {
   align-items: center;
 }
+.stress-where-head {
+  margin-top: var(--s-3);
+}
+.stress-where {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .stress-pin .measure-v {
   flex: 1 1 auto;
   text-align: right;
@@ -249,6 +268,62 @@
   height: 10px;
   margin-top: var(--s-2);
   border-radius: var(--r-xs);
+}
+.stress-ticks {
+  position: relative;
+  height: 1.6em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.stress-tick {
+  position: absolute;
+  top: 0;
+  padding-top: var(--s-1);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: var(--s-1);
+    border-left: 1px solid var(--text-mute);
+  }
+  &.is-first {
+    transform: none;
+    &::before {
+      left: 0;
+    }
+  }
+  &.is-last {
+    transform: translateX(-100%);
+    &::before {
+      left: 100%;
+    }
+  }
+}
+.stress-legend-unit {
+  text-align: center;
+  font-size: var(--fs-micro);
+  color: var(--text-mute);
+}
+.stress-look {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+.stress-look .stress-field {
+  flex: 1 1 auto;
+}
+.stress-finer {
+  margin-top: var(--s-2);
 }
 // The app's error and warning inks for small text on glass: the accent is a green, which would read a failing safety
 // factor as a good one, and the bare tokens fall under AA in the light theme.

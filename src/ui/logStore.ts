@@ -113,8 +113,25 @@ export function setConsoleOpen(next: boolean) {
   emit();
 }
 
-export function toggleConsole() {
-  setConsoleOpen(!open);
+let focusWanted = false;
+
+/** Opens the console, and with `focus` asks the panel to move focus to its heading. */
+export function openConsole(opts: { focus?: boolean } = {}) {
+  focusWanted = opts.focus ?? false;
+  if (open) emit();
+  else setConsoleOpen(true);
+}
+
+/** True once per request, so a later render does not pull focus again. */
+export function takeConsoleFocus(): boolean {
+  const wanted = focusWanted;
+  focusWanted = false;
+  return wanted;
+}
+
+export function toggleConsole(opts: { focus?: boolean } = {}) {
+  if (open) setConsoleOpen(false);
+  else openConsole(opts);
 }
 
 let revealed: number | null = null;
@@ -126,6 +143,7 @@ export function revealedEntry(): number | null {
 
 export function revealEntry(id: number) {
   revealed = id;
+  focusWanted = true;
   open = true;
   emit();
 }

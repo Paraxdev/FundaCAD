@@ -4,12 +4,13 @@ import {
   checkResults,
   clampToControl,
   configurationDrift,
+  readAs,
   toast,
   useBrowserStore,
   useDocValue,
   useEngine,
 } from "fundacad";
-import { Icon } from "fundacad/ui";
+import { Icon, NumberField } from "fundacad/ui";
 import { setupOpen } from "./state";
 import { nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
 
@@ -51,6 +52,10 @@ function pick(id: string) {
 }
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value);
+const readAngle = readAs("angle");
+const readLength = readAs("length");
+const readPlain = readAs(null);
+const rowParse = (row: TuneRow) => (row.unit === "mm" ? readLength : row.unit === "°" ? readAngle : readPlain);
 const rowStyle = { display: "flex", alignItems: "center", gap: "6px", paddingRight: "8px" };
 // The name takes its longest name's width up to 62% of the row, but it is the one that gives way: the slider and the
 // number field keep their minimum widths and the name ellipsizes in what is left.
@@ -66,7 +71,7 @@ const nameStyle = computed(() => ({
 }));
 const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit" };
 const sliderStyle = { ...fieldStyle, flex: "1 0 60px", minWidth: "60px" };
-const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
+const numberStyle = { flex: "1 0 76px", minWidth: "76px" };
 </script>
 
 <template>
@@ -101,7 +106,7 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
         </select>
         <span
           v-if="activeId && drift.length"
-          style="opacity: 0.6; font-size: 11px"
+          style="opacity: 0.6; font-size: var(--fs-micro, 11px)"
           :title="`Changed since it was applied: ${drift.join(', ')}`"
           >modified</span
         >
@@ -187,15 +192,17 @@ const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
             </template>
 
             <template v-else>
-              <input
-                type="number"
-                :aria-label="row.name"
+              <NumberField
+                :label="row.name"
+                size="sm"
                 :style="numberStyle"
+                limits="arrows"
+                :parse="rowParse(row)"
                 :min="row.control.min"
                 :max="row.control.max"
-                :step="row.control.step ?? 'any'"
-                :value="row.def.value"
-                @change="commit(row, num($event))"
+                :step="row.control.step ?? 1"
+                :model-value="row.def.value"
+                @update:model-value="$event !== null && commit(row, $event)"
               />
               <span style="flex: 0 0 auto; min-width: 3.5em; text-align: left">{{ row.unit }}</span>
             </template>

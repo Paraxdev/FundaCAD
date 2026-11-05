@@ -28,6 +28,15 @@ pub const MAX_INTERFERENCE_OPS: usize = 400;
 const SLOW_PAIR_BEATS: std::time::Duration = std::time::Duration::from_secs(300);
 
 pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(Value, Rebuild), JobResult> {
+    request_rebuild(req, watch, false)
+}
+
+/// What a cold build gives to the last bit, at the cost of one full replay after a resume from disk.
+pub fn exact_rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(Value, Rebuild), JobResult> {
+    request_rebuild(req, watch, true)
+}
+
+fn request_rebuild(req: &Map<String, Value>, watch: &dyn Watch, exact: bool) -> Result<(Value, Rebuild), JobResult> {
     let Some(doc) = req.get("document") else {
         return Err(error_result("'document'"));
     };
@@ -36,8 +45,8 @@ pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(V
     // The rebuild's own cache: an inspect right after a build replays nothing, where a cold
     // rebuild of an import is most of a minute.
     let mut cache = crate::cache::global().lock().unwrap_or_else(|p| p.into_inner());
-    let r = cache.rebuild(&typed, doc, watch).map_err(|_| error_result("cancelled"))?;
-    Ok((doc.clone(), r))
+    let r = if exact { cache.rebuild_exact(&typed, doc, watch) } else { cache.rebuild(&typed, doc, watch) };
+    Ok((doc.clone(), r.map_err(|_| error_result("cancelled"))?))
 }
 
 fn r6(x: f64) -> Value {
@@ -547,7 +556,7 @@ pub fn inspect_bodies_at(
     Ok(out)
 }
 
-fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
+pub(crate) fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
     match req.get(key) {
         None | Some(Value::Null) => default,
         Some(v) => v.as_f64().map_or(default, |x| if x < 0.0 { 0 } else { x.trunc() as usize }),

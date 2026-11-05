@@ -5,14 +5,14 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { Plane3, PlaneDef, SectionView, Vec3 } from "../types";
 import { SECTION_GHOSTS, sameSectionView } from "../document/sectionView";
-import { DimInput } from "../sketch/dimInput";
+import { DimInput, type DimDocument } from "../sketch/dimInput";
 import { clearPrompt, setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, HANDLE_UP, type DragHandle } from "./manipulator";
-import { pickPlaneTarget } from "./facePlanePick";
+import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget } from "./facePlanePick";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { SketchPlane } from "../sketch/plane";
 import {
@@ -50,6 +50,8 @@ export interface SectionDeps {
   datumDef?: (id: string) => PlaneDef | null;
   /** After an explicit confirm, not one forced by another tool taking the screen. */
   afterEdit?: () => void;
+  /** Where the value box looks up parameter names. */
+  doc?: () => DimDocument | null;
   /** Where the cut is saved. The tool writes every change to it and takes on any change it did not write. */
   saved?: {
     get(): Readonly<SectionView> | null;
@@ -83,7 +85,7 @@ export class SectionTool {
   private savedCut: Readonly<SectionView> | null = null;
   private editPrompt = "";
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.deps.doc?.() ?? null);
   private pointV = new THREE.Vector3();
   private axisV = new THREE.Vector3();
 
@@ -267,8 +269,14 @@ export class SectionTool {
     this.pickGesture.attach();
     this.releaseTree = awaitTreePick(
       (pick) => {
-        const def = pick.kind === "datumPlane" ? pick.def : pick.kind === "basePlane" ? baseDef(pick.plane) : null;
-        if (!def) return treePickRefusal(pick, "a plane, or a face picked in the view");
+        let def: PlaneDef | null = null;
+        if (pick.kind === "face") {
+          const face = facePlaneOfRow(this.viewport, pick.faceId);
+          if (face?.kind !== "planar") return CURVED_FACE_ROW;
+          def = face.def;
+        } else if (pick.kind === "datumPlane") def = pick.def;
+        else if (pick.kind === "basePlane") def = baseDef(pick.plane);
+        if (!def) return treePickRefusal(pick, "a plane or a flat face");
         this.endPick();
         this.armOn(def);
         return true;
@@ -350,6 +358,15 @@ export class SectionTool {
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
     this.dim.show([{ name: "offset", label: "Offset", icon: "offsetPlane", kind: "length" }], () => this.confirm());
+    this.dim.restoresOnUndo(
+      "offset",
+      () => this.offset,
+      (offset) => {
+        this.offset = offset;
+        this.pushPlane();
+        this.save();
+      },
+    );
     this.dim.updateFromCursor({ offset: this.offset });
     this.place();
     this.prompt();

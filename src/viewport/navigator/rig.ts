@@ -11,6 +11,7 @@ import { measureFitInsets } from "../../app/fitInsets";
 import { Navigator, lookQuatUp } from "./navigator";
 import { clonePose, distanceOf, eyeOf, forwardOf, setOrientation } from "./pose";
 import { getNavPrefs, noteDetectedWheel, onNavPrefsChange } from "../../ui/interactionPrefs";
+import { wheelScales } from "../../ui/interfaceSize";
 
 const STANDARD: Record<StandardView, { dir: [number, number, number]; up: [number, number, number] }> = {
   front: { dir: [0, -1, 0], up: [0, 0, 1] },
@@ -52,7 +53,6 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   const eye = new THREE.Vector3();
   const upV = new THREE.Vector3();
   let written = -1;
-  let parts: readonly THREE.Box3[] = [];
   function write() {
     const p = nav.pose;
     if (written === nav.poseVersion()) return;
@@ -69,6 +69,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     }
     // A big assembly's union box reaches the eye plane long before any part does (SV08 from above
     // at 600mm: corner 39mm behind the eye, nearest part 19mm in front), so near goes by the parts.
+    const parts = nav.contentParts();
     const seen = parts.length ? visibleNearDepth(p, a, parts) : NaN;
     const pc = perspClip(distanceOf(p), Number.isFinite(seen) ? seen : zmin, zmax);
     persp.fov = p.fov;
@@ -95,6 +96,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   const input = bindInput(dom, nav, {
     wheelDevice: () => getNavPrefs().wheelDevice,
     touchpadScroll: () => getNavPrefs().touchpadScroll,
+    wheelScales,
     detected: noteDetectedWheel,
   });
 
@@ -117,8 +119,8 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     projectionMode(): ProjectionMode {
       return nav.projectionMode();
     },
-    setProjectionMode(m) {
-      nav.setProjectionMode(m);
+    setProjectionMode(m, keepOrtho) {
+      nav.setProjectionMode(m, keepOrtho);
       write();
     },
     resize(w, h) {
@@ -153,6 +155,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
         scale: p.scale,
         fov: p.fov,
         mode: nav.projectionMode(),
+        ortho: p.ortho,
       };
     },
     setState(st, anim = false) {
@@ -162,14 +165,13 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       setOrientation(p, new THREE.Quaternion(...st.quaternion));
       p.scale = st.scale;
       p.fov = st.fov;
-      nav.flyTo(p, { animate: anim && cameraFlightsOn() });
+      nav.flyTo(p, { animate: anim && cameraFlightsOn(), byEye: !st.ortho });
     },
     setScene(s) {
       nav.setScene(s);
     },
     setContentBox(box, partBoxes) {
-      parts = partBoxes ?? [];
-      nav.setContentBox(box);
+      nav.setContentBox(box, partBoxes);
       nav.touch();
     },
     setAnchorPlane(plane) {
@@ -271,10 +273,14 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     },
     setStandardView(view) {
       const v = STANDARD[view];
-      nav.turnTo(lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)), cameraFlightsOn());
+      nav.turnTo(
+        lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)),
+        cameraFlightsOn(),
+        true,
+      );
     },
-    setViewDir(dir, up) {
-      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn());
+    setViewDir(dir, up, deliberate = false) {
+      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn(), deliberate);
     },
     lookAtPlane(origin, normal, up, opts) {
       nav.lookAtPlane(origin, normal, up, !!opts?.animate && cameraFlightsOn(), opts?.onArrive);

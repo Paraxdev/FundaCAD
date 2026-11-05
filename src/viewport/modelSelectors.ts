@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import type { DocumentStore } from "../document/store";
+import { MATCH_COS } from "../ui/describePick";
 import type { Viewport } from "./viewport";
 
 export class SelectorError extends Error {
@@ -32,7 +33,6 @@ export interface FaceInfo {
 }
 
 const PLANAR_COS = Math.cos((1 * Math.PI) / 180);
-const MATCH_COS = Math.cos((2 * Math.PI) / 180);
 
 export function faceInfo(tris: THREE.Triangle[], body: string, index: number, faceId: number): FaceInfo {
   const normal = new THREE.Vector3();
@@ -59,10 +59,19 @@ function bodyList(h: SelectorHost): Body[] {
   return h.store.buildState.result?.bodies ?? [];
 }
 
+const globalFaceId = (body: Body, local: number) => body.faceStart + local;
+
+/** Null when the body is gone or has no such face. */
+export function faceIdOf(h: SelectorHost, bodyId: string, local: number): number | null {
+  const body = bodyList(h).find((b) => b.id === bodyId);
+  if (!body || !Number.isInteger(local) || local < 0 || local >= body.faceCount) return null;
+  return globalFaceId(body, local);
+}
+
 export function facesOf(h: SelectorHost, body: Body): FaceInfo[] {
   const out: FaceInfo[] = [];
   for (let i = 0; i < body.faceCount; i++) {
-    const fid = body.faceStart + i;
+    const fid = globalFaceId(body, i);
     const tris = h.viewport.faceTriangles(fid);
     if (tris.length) out.push(faceInfo(tris, body.id, i, fid));
   }

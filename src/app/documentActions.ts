@@ -8,6 +8,9 @@ import {
 } from "../io/files";
 import { choose } from "../ui/choice";
 import { toast } from "../ui/toast";
+import { announce } from "../ui/announce";
+import { stepLabelFor } from "../ui/canStep";
+import { usePanelsStore } from "../stores/panels";
 import type { Engine } from "./engine";
 import type { HeldEdit } from "../features/heldEdit";
 import { TEMPLATES, templateText } from "../templates";
@@ -57,7 +60,8 @@ export function needsSave(e: SaveEngine): boolean {
 /** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
 function settleForSave(e: SaveEngine): void {
   settleHeldEdit(e);
-  if (anySavableHeld(e)) toast("The held drag could not be entered, so the save left it out", { kind: "warning" });
+  if (anySavableHeld(e))
+    toast("A drag you were holding could not be applied, so the save left it out", { kind: "warning" });
 }
 
 // Settled once the path is chosen, so a cancelled Save As dialog leaves the drag held and Escape still cancels it.
@@ -258,8 +262,22 @@ export async function openOnBranch(e: VersionEngine, path: string, name: string)
   return true;
 }
 
-export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
-  return {
+const speak = (text: string) => announce(text, "polite", { key: "history" });
+
+// An open sketch or Stress panel says its own "Nothing left to undo", so the history line stays quiet then.
+const ownHistoryOpen = (e: Engine) => e.sketch.active || usePanelsStore().stress !== null;
+
+const UNDO_REFUSED = {
+  under: "Not undone, later steps came after it. Undo step by step from the Edit menu to reach it.",
+  undone: "Already undone, Redo puts it back.",
+  held: "Not undone yet, wait for the import to finish.",
+  gone: "Not undone, that step is no longer in the history.",
+};
+
+export function createDocumentActions(
+  e: Engine,
+): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo" | "undoIfLatest"> {
+  const actions = {
     async newDocument() {
       if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
       e.store.newDocument();
@@ -275,22 +293,41 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
       );
     },
 
-    // An open sketch swallows undo, since store.undo() would remove the whole sketch. Move is put away first, or a
-    // re-open waiting on a drag's rebuild lands on the undone model (FI-2). Home closes so the change is seen.
+    // An open sketch swallows undo, since store.undo() would remove the whole sketch, and so does an open Stress panel,
+    // whose setup is not on the model's stack. Move is put away first, or a re-open waiting on a drag's rebuild lands on
+    // the undone model (FI-2). Home closes so the change is seen.
     doUndo() {
       closeHome();
       // A drag not yet entered is the last step, so undo takes back only that.
       const pending = e.tools.move.pending;
       e.tools.move.cancel();
-      if (pending) return;
-      if (!e.sketch.undoEdit()) e.store.undo();
+      if (pending) return void speak("Undid Move");
+      const saysOwnEmpty = ownHistoryOpen(e);
+      const label = stepLabelFor(e, "undo");
+      if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) e.store.undo();
+      if (!(saysOwnEmpty && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
     },
     doRedo() {
       closeHome();
       // A drag not yet entered is a new step, which leaves nothing to redo.
-      if (e.tools.move.pending) return e.tools.move.settle();
+      if (e.tools.move.pending) {
+        e.tools.move.settle();
+        return void speak("Nothing to redo");
+      }
       e.tools.move.cancel();
-      if (!e.sketch.redoEdit()) e.store.redo();
+      const saysOwnEmpty = ownHistoryOpen(e);
+      const label = stepLabelFor(e, "redo");
+      if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) e.store.redo();
+      if (!(saysOwnEmpty && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
+    },
+    // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
+    undoIfLatest(mark: number) {
+      if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
+      if (usePanelsStore().stress) return void toast("Close Stress first, then undo.");
+      const place = e.tools.move.pending ? "under" : e.store.markPlace(mark);
+      if (place === "top") return actions.doUndo();
+      toast(UNDO_REFUSED[place ?? "gone"]);
     },
   };
+  return actions;
 }

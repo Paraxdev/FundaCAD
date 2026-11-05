@@ -49,7 +49,9 @@ import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
 import { isSessionEnded, type OpenOp } from "../document/session";
-import { nativeDialog } from "./nativeDialog";
+import { dialogExts, nativeDialog } from "./nativeDialog";
+
+export { dialogExts };
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -362,6 +364,7 @@ export async function openDocumentBytes(
       wasContainer: r.wasContainer,
       repaired: r.repairedShards > 0 || r.usedBackupIndex,
       carried: r.carried ?? [],
+      dropped: r.droppedSections ?? 0,
     };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
@@ -502,6 +505,7 @@ export async function openDocumentAtPath(
       wasContainer,
       repaired: r.repairedShards > 0 || r.usedBackupIndex,
       carried: r.carried ?? [],
+      dropped: r.droppedSections ?? 0,
     };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
@@ -518,6 +522,7 @@ interface RustOpened {
   repairedShards: number;
   usedBackupIndex: boolean;
   carried?: CarriedSection[];
+  droppedSections?: number;
 }
 
 interface OpenedDocument {
@@ -525,13 +530,14 @@ interface OpenedDocument {
   wasContainer: boolean;
   repaired: boolean;
   carried: CarriedSection[];
+  dropped: number;
 }
 
 /** Load a document Rust has read. `path` is null for one dropped as bytes. */
 async function finishOpen(
   store: DocumentStore,
   base: string,
-  { text, wasContainer, repaired, carried }: OpenedDocument,
+  { text, wasContainer, repaired, carried, dropped }: OpenedDocument,
   geometry: GeometryBackend | undefined,
   path: string | null,
   ticket: OpenTicket,
@@ -573,6 +579,15 @@ async function finishOpen(
       kind: "warning",
       timeout: 12000,
     });
+  }
+  if (dropped > 0) {
+    const { toast } = await import("../ui/toast");
+    const [sections, them] = dropped === 1 ? ["1 section", "it"] : [`${dropped} sections`, "them"];
+    toast(
+      `${base} holds ${sections} from a newer version of FundaCAD that this version could not keep. ` +
+        `Saving over the file leaves ${them} out, so use Save As to keep the original whole.`,
+      { kind: "warning", timeout: 12000 },
+    );
   }
   return "ok";
 }
@@ -783,21 +798,6 @@ export const IMPORT_EXTS = [
   "3ds",
   "svg",
 ];
-
-// FreeCAD writes .FCStd.
-const MIXED_CASE_EXTS = ["FCStd"];
-
-/** GTK file dialogs on Linux match case, so a list handed to one offers each
- *  extension in lower and upper case. */
-export function dialogExts(exts: readonly string[]): string[] {
-  const out = new Set<string>();
-  for (const e of exts) {
-    out.add(e.toLowerCase());
-    out.add(e.toUpperCase());
-  }
-  for (const m of MIXED_CASE_EXTS) if (out.has(m.toLowerCase())) out.add(m);
-  return [...out];
-}
 
 /** Import an external mesh or B-rep file as a new body. The engine reads it by path, so this needs the native app. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {

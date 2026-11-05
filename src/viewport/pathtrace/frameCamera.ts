@@ -42,6 +42,12 @@ export class FrameCameras {
     return undefined;
   }
 
+  /** The frame was traced with the newest camera sent. True when the native side answers no seq, nothing can tell. */
+  isNewest(seq: number): boolean {
+    const s = this.sent[this.sent.length - 1];
+    return this.unknown || !s || (s.after !== null && ((seq - s.after) | 0) > 0);
+  }
+
   /** Null when the frame is older than every camera kept, or the native side
    *  answers no seq. A camera whose reply is still to come counts as not taken. */
   of(seq: number): FrameView | null {

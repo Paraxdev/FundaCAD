@@ -20,6 +20,18 @@ describe("menubar popup height", () => {
     vi.unstubAllGlobals();
   });
 
+  it("divides the window and the bar by the root zoom, as the cap is in CSS pixels the zoom scales", async () => {
+    vi.stubGlobal("innerHeight", 900);
+    document.documentElement.style.zoom = "1.25";
+    const w = mount(MenuBar, { props: { menus: [{ label: "View", items }] }, attachTo: document.body });
+    vi.spyOn(w.element, "getBoundingClientRect").mockReturnValue({ bottom: 50 } as DOMRect);
+    await w.get(".menu-btn").trigger("click");
+    await nextTick();
+    document.documentElement.style.zoom = "";
+    expect(rows().getAttribute("style")).toContain("max-height: 658px");
+    vi.unstubAllGlobals();
+  });
+
   it("re-measures when the window gets shorter", async () => {
     const w = mount(MenuBar, { props: { menus: [{ label: "View", items }] }, attachTo: document.body });
     vi.spyOn(w.element, "getBoundingClientRect").mockReturnValue({ bottom: 40 } as DOMRect);

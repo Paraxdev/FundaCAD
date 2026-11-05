@@ -15,6 +15,9 @@ import { previewVerdict } from "./previewVerdict";
 import { HeldSignal } from "./heldEdit";
 import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
+import { boxBindings } from "./boxBindings";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 
 type Phase = "pick" | "drag";
 
@@ -30,6 +33,7 @@ export class DraftTool {
   private faces: Selector[] = [];
   private faceIds: number[] = [];
   private bodyId: string | null = null;
+  private releaseRows: (() => void) | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1); // the FACE normal: what the drag runs along
   private pull: Axis3 = "Z";
@@ -51,7 +55,7 @@ export class DraftTool {
   private commitPending = false;
   private readonly held = new HeldSignal();
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -78,8 +82,25 @@ export class DraftTool {
     this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
-    if (pre) this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId);
-    else setPrompt("Click a face to draft · Ctrl-click adds more");
+    if (pre) this.takeFaces(pre);
+    else {
+      this.releaseRows = awaitFaceRows(
+        this.viewport,
+        "a face",
+        (faces) => (this.takeFaces(faces), true),
+        () => this.cancel(),
+      );
+      setPrompt("Click a face to draft · Ctrl-click adds more");
+    }
+  }
+
+  private takeFaces(f: PressPullFaces) {
+    this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId);
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -167,7 +188,7 @@ export class DraftTool {
       return;
     }
     // The pull axis is a guess from the normal, a coin toss on a face at 45 degrees to two axes, so X cycles it.
-    if (toolChar(e) === "x" && this.phase === "drag") {
+    if (toolChar(e) === "x" && !this.dim.typesText(e) && this.phase === "drag") {
       this.pull = this.pull === "X" ? "Y" : this.pull === "Y" ? "Z" : "X";
       this.lever = this.leverFor(this.pull);
       this.pushPreview();
@@ -198,6 +219,7 @@ export class DraftTool {
     normal: THREE.Vector3,
     bodyId: string | null = null,
   ) {
+    this.dropRows();
     this.faces = faces;
     this.faceIds = faceIds;
     this.bodyId = bodyId;
@@ -214,6 +236,14 @@ export class DraftTool {
       [{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }],
       () => this.commit(true),
       () => this.cancel(),
+    );
+    this.dim.restoresOnUndo(
+      "angle",
+      () => this.angle,
+      (angle) => {
+        this.angle = angle;
+        this.pushPreview();
+      },
     );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
@@ -328,8 +358,11 @@ export class DraftTool {
       return;
     }
     const feature = this.buildFeature();
+    const bindings = boxBindings(this.dim, this.store, feature.id, [
+      { box: "angle", field: "angle", value: (feature as { angle: number }).angle, kind: "angle" },
+    ]);
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
-    this.store.addFeature(feature);
+    this.store.addFeature(feature, undefined, bindings);
     if (verdict.kind === "wait") this.store.verifyCommit(feature.id, `Draft ${this.angle}°`);
     this.cleanup();
     this.onDone?.(feature.id);
@@ -361,6 +394,7 @@ export class DraftTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";

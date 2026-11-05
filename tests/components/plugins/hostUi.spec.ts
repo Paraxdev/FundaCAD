@@ -24,6 +24,7 @@ const BASE = [
   "NumberField",
   "Panel",
   "Popover",
+  "ReadoutList",
   "Segmented",
   "Select",
   "Slider",

@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { watch } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { SELECTION_SPEECH_DELAY } from "../../app/planePick";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { announce } from "../../ui/announce";
 
-const sel = useSelectionOffers(useEngine());
+const sel = useSelectionOffers(useEngine(), { words: true });
 
-// Once per settled selection: a Ctrl-click run or a box select changes it many times in a row.
 watch(
-  () => (sel.toolOwns.value ? undefined : sel.readout.value),
-  (text, was) => {
-    if (text) announce(text, "polite", { key: "selection", delay: 250 });
-    else if (text !== undefined && was)
-      announce("Nothing selected", "polite", { key: "selection", delay: 250, verbose: true });
+  () => (sel.toolOwns.value ? null : sel.speech.value),
+  (said) => {
+    if (!said) return;
+    announce(said.text, "polite", {
+      key: "selection",
+      delay: SELECTION_SPEECH_DELAY,
+      ...(said.verbose ? { verbose: true } : {}),
+    });
   },
 );
 </script>
@@ -30,7 +33,7 @@ watch(
   bottom: var(--s-4);
   padding: var(--s-0) var(--s-3);
   font:
-    11px/1.4 ui-monospace,
+    var(--fs-micro)/1.4 ui-monospace,
     "SF Mono",
     Menlo,
     Consolas,
@@ -38,6 +41,9 @@ watch(
   font-variant-numeric: tabular-nums;
   color: var(--text);
   white-space: nowrap;
+  max-width: calc(50% - 64px - var(--s-4));
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   z-index: 15;
 }

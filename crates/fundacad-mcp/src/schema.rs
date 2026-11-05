@@ -62,9 +62,41 @@ pub fn field_text(kind: &str, field: &str, text: &str) -> String {
     format!("{} The rest of `{field}` is under Shared types in `schema` with no type.", kept.join("\n"))
 }
 
+/// What `material_set`'s tool entry leaves out, so every session does not pay for it on each tools/list.
+const MATERIAL: &str = r##"## material
+The finer fields of `material_set` and its surface patterns. Each takes null to go back to its default.
+
+Fields:
+  castsLight: false when a glowing part should not light its neighbours
+  thickness: mm light travels through see-through material, left out is measured from the body
+  attenuationColor: "#rrggbb" that light turns into inside see-through material, for tinted glass
+  attenuationDistance: mm until light has fully taken that colour, 0 is never
+  dispersion: 0 to 10, the rainbow fire of a cut gem, needs some thickness
+  scatterDistance: mm until light inside has scattered, for frosted or milky material, 0 is clear
+  iridescence: 0 to 1, thin film rainbow like an oil slick
+  specularColor: "#rrggbb" tint of a non-metal's highlight, white when left out
+  sheen: 0 to 1, soft rim at grazing angles, velvet or cloth
+  anisotropy: 0 to 1, highlights stretched one way, brushed metal or print layer lines
+  flakes: 0 to 1, glitter or metal flake density, as in metallic car paint
+  flakeSize: mm per flake
+  surface: a simple pattern, {kind: noise, scratches, brushed, voronoi or wave; scale: feature size in mm, above 0; amount: 0 to 1, how much it pushes roughness; angle: radians, the direction of scratches, brushed and wave; bump: 0 to 1, relief; color: "#rrggbb" tint; colorAmount: 0 to 1}
+  surfaceGraph: a node graph as the node editor saves it, wins over `surface`, {nodes: [{id, type, params, in}], output: the output node's id}. `in` maps an input to the id of the node feeding it.
+
+Node types:
+  noise (params scale, detail, roughness, distortion), scratches, brushed, voronoi, wave (params scale, angle), fresnel (param power, rises at grazing angles) give a number.
+  ramp (params colorA, colorB, input t), colorramp (param stops "0:#000000;1:#ffffff", input t) turn a number into a colour.
+  mix (inputs a, b, t), math (inputs a, b, param op: add, subtract, multiply, min, max, pow) combine numbers.
+  output (inputs roughness, bump, color; params roughAmount, bumpAmount, colorAmount, 0 to 1) is the one sink.
+
+Example:
+{"id": "m-worn", "name": "Worn", "color": "#808890", "surfaceGraph": {"nodes": [{"id": "n", "type": "noise", "params": {"scale": 2}}, {"id": "o", "type": "output", "params": {"roughAmount": 0.5}, "in": {"roughness": "n"}}], "output": "o"}}"##;
+
 /// Text rather than JSON: a language model reads it, and the notes are what save it a failed build.
 pub fn schema_text(kind: Option<&str>) -> String {
     if let Some(kind) = kind.filter(|k| !k.is_empty()) {
+        if kind == "material" {
+            return MATERIAL.to_string();
+        }
         if let Some(e) = features().get(kind) {
             let mut out = vec![format!("## {kind}\n{}\n", text_of(e.get("summary"))), "Fields:".to_string()];
             for (k, v) in e.get("fields").and_then(Value::as_object).into_iter().flatten() {

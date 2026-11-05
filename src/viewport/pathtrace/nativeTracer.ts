@@ -8,6 +8,7 @@ import { TracerRefused, type PictureOptions, type TraceLook, type TraceScene, ty
 import type { TraceLens } from "./camera";
 import { FrameCameras, type FrameView } from "./frameCamera";
 import { NativeScene, type Call } from "./nativeScene";
+import { PresentSlot } from "./presentSlot";
 import { runSelfCheck, selfCheckReason } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
@@ -37,7 +38,10 @@ export interface Connected {
 }
 
 export interface Blit {
+  /** Takes the pixels, the frame can be released after. The canvas does not change yet. */
   upload(frame: NativeFrame): void;
+  /** Puts the newest upload on the canvas, at its size. */
+  show(): void;
   readonly maxTextureSize: number;
   dispose(): void;
 }
@@ -50,6 +54,9 @@ export interface NativeTracerOptions {
   canvas?: HTMLCanvasElement;
   /** The pt_* commands; Tauri's invoke unless a test or the dev tracer server stands in. */
   call?: Call;
+  /** The display refresh; the browser's unless a test stands in. */
+  raf?: (cb: () => void) => number;
+  caf?: (handle: number) => void;
 }
 
 const tauriCall: Call = (cmd, args) => invoke(cmd, args as never);
@@ -61,6 +68,22 @@ const RESIZE_SETTLE_MS = 150;
 const LOG_EVERY = 240;
 /** The app refuses larger frames (MAX_SIDE in src-tauri/frames), the canvas scales up. */
 const MAX_SIDE = 8192;
+/** Bands are whole rows, so a coarse grid that takes in the last row and column finds them. */
+const ALPHA_GRID = 8;
+/** The first alpha of a coarse picture, sent ahead of a first sample too slow for the budget. */
+const COARSE_ALPHA = 128;
+
+/** The native side writes alpha 0 where no sample landed, and over all of a fault or picture frame. */
+function everyPixelSampled(f: NativeFrame): boolean {
+  for (let j = 0; j < ALPHA_GRID; j++) {
+    const row = Math.round((j * (f.height - 1)) / (ALPHA_GRID - 1));
+    for (let i = 0; i < ALPHA_GRID; i++) {
+      const col = Math.round((i * (f.width - 1)) / (ALPHA_GRID - 1));
+      if (f.pixels[(row * f.width + col) * 4 + 3] === 0) return false;
+    }
+  }
+  return true;
+}
 
 interface Opened {
   id: number;
@@ -316,12 +339,17 @@ export function glBlit(canvas: HTMLCanvasElement): Blit {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
       if (f.width !== w || f.height !== h) {
-        w = canvas.width = f.width;
-        h = canvas.height = f.height;
+        w = f.width;
+        h = f.height;
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, f.pixels);
       } else {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, f.pixels);
       }
+    },
+    show() {
+      // Resizing blanks the canvas, the draw in this same task fills it before any composite.
+      if (canvas.width !== w) canvas.width = w;
+      if (canvas.height !== h) canvas.height = h;
       gl.viewport(0, 0, w, h);
       gl.useProgram(prog);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -389,10 +417,13 @@ export class NativeTracer implements TracerBackend {
   private bloomSent: Promise<unknown> = Promise.resolve();
   private cameras = new FrameCameras();
   private shownSeq: number | null = null;
+  private shownCoarse = false;
+  private slot: PresentSlot<{ seq: number; coarse: boolean }>;
   readonly scene: NativeScene;
 
   constructor(private o: NativeTracerOptions = {}) {
     this.canvas = o.canvas ?? document.createElement("canvas");
+    this.slot = new PresentSlot(({ seq, coarse }) => this.showFrame(seq, coarse), o.raf, o.caf);
     this.scene = new NativeScene(o.call ?? tauriCall, (e) =>
       this.fault(`The native tracer refused the scene: ${e instanceof Error ? e.message : String(e)}`),
     );
@@ -571,11 +602,11 @@ export class NativeTracer implements TracerBackend {
     }
     try {
       const whole = frame.pixels.byteLength >= frame.width * frame.height * 4 && frame.width > 0;
-      if (frame.generation >= this.generation && whole && !this.disposed) {
+      if (frame.generation >= this.generation && whole && !this.disposed && everyPixelSampled(frame)) {
+        // Uploaded now so the shared buffer goes back at once, an unshown frame holds no slot of the pool.
         this.blit.upload(frame);
-        this.shownSeq = frame.seq;
+        this.slot.put({ seq: frame.seq, coarse: frame.pixels[3] === COARSE_ALPHA });
         this.count++;
-        if (!this.resizeTimer && !this.resizing) this.sized = true;
       }
     } finally {
       frame.release();
@@ -583,6 +614,17 @@ export class NativeTracer implements TracerBackend {
     const ms = performance.now() - t0;
     this.log(ms);
     return ms;
+  }
+
+  private showFrame(seq: number, coarse: boolean) {
+    this.blit?.show();
+    this.shownSeq = seq;
+    this.shownCoarse = coarse;
+    if (!this.resizeTimer && !this.resizing) this.sized = true;
+  }
+
+  flushFrame() {
+    this.slot.flush();
   }
 
   private log(ms: number) {
@@ -656,6 +698,7 @@ export class NativeTracer implements TracerBackend {
       await this.renderSample(0);
       await this.renderSample(0);
       if (this.epoch !== g || this.disposed) return;
+      this.slot.flush();
       this.shownDenoised = true;
       this.settle = "done";
     } else if (!s.denoising && !this.kicked) {
@@ -682,7 +725,9 @@ export class NativeTracer implements TracerBackend {
     }
     if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
     if (epoch !== this.epoch) return 0;
-    return this.sized ? s.samples : 0;
+    // Status runs ahead of the frames: the host must not put the trace up over an older camera's picture.
+    const onCanvas = this.shownSeq !== null && !this.shownCoarse && this.cameras.isNewest(this.shownSeq);
+    return this.sized && onCanvas ? s.samples : 0;
   }
 
   private call(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
@@ -701,6 +746,7 @@ export class NativeTracer implements TracerBackend {
     this.disposed = true;
     if (this.resizeTimer) clearTimeout(this.resizeTimer);
     this.pending = null;
+    this.slot.dispose();
     this.link?.close();
     this.link = null;
     this.blit?.dispose();

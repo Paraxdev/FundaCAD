@@ -33,9 +33,13 @@ IMPORT_SETTLE_S = 300
 PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
 
 
-def out_path(path: str | os.PathLike) -> Path:
-    """Where a file the harness writes goes, refused when its folder is missing so a typo makes nothing."""
+def out_path(path: str | os.PathLike, ext: str | None = None) -> Path:
+    """Where a file the harness writes goes, refused when its folder is missing so a typo makes nothing.
+
+    With `ext`, the path and the file it leads to must both end in it (any case)."""
     out = Path(path).resolve()
+    if ext and not all(p.suffix.lower() == ext for p in (Path(path), out)):
+        raise BadArgs(f"{path} is refused: only {ext} files are written here")
     if not out.parent.is_dir():
         raise BadArgs(f"no folder {out.parent}")
     return out
@@ -531,7 +535,7 @@ class Actions:
     @action
     def save_as(self, path: str | os.PathLike):
         """A browser tab saves by downloading the document, which lands at `path`."""
-        out = out_path(path)
+        out = out_path(path, ".funda")
         with self.page.expect_download(timeout=20_000) as dl:
             self._click_control("menu:File")
             self._click_control(self._menu_ref("File", "Save As..."))

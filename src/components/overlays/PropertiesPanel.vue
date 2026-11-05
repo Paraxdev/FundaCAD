@@ -7,6 +7,7 @@ import { usePanelsStore } from "../../stores/panels";
 import Panel from "../ui/Panel.vue";
 import Select from "../ui/Select.vue";
 import NumberField from "../ui/NumberField.vue";
+import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
 import { displayRound } from "../../ui/units";
 import { printPrefs, setPrintPref } from "../../ui/printPrefs";
@@ -77,10 +78,7 @@ function close() {
     @close="close"
   >
     <template v-if="panels.properties">
-      <div v-for="r in panels.properties.rows" :key="r.k" class="measure-row">
-        <span class="measure-k">{{ r.k }}</span>
-        <span class="measure-v">{{ r.v }}</span>
-      </div>
+      <ReadoutList :rows="panels.properties.rows" />
 
       <template v-if="panels.properties.faults.length">
         <div class="measure-divider" />

@@ -17,14 +17,20 @@ export function isEditableTarget(t: EventTarget | null): boolean {
   );
 }
 
+const MENU_ROWS = '.ui-menu, [role="listbox"]';
 const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
 
-/** A key a focused menu row moves, runs or types ahead with. Window capture listeners hear it before the menu does,
- *  so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
+/** A key a focused menu or list row moves, runs or types ahead with. Window capture listeners hear it before the row
+ *  does, so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
 export function isMenuKey(e: KeyboardEvent): boolean {
-  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(".ui-menu"))) return false;
+  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(MENU_ROWS))) return false;
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
+}
+
+/** Focus on a menu or list row, where Enter runs the row and a tool's window listener leaves it. */
+export function focusOnMenuRow(): boolean {
+  return typeof document !== "undefined" && !!document.activeElement?.closest(MENU_ROWS);
 }
 
 const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
@@ -42,13 +48,20 @@ const ARROW_WIDGETS = roles([
   "slider",
   "spinbutton",
   "combobox",
+  "separator",
+  "scrollbar",
 ])
-  .concat("input[type=range]", ".ui-menu")
+  .concat("input[type=range]", "input[type=radio]", ".ui-menu")
   .join(",");
 // Toolbars, tabs and radios leave out letters, Enter and Space, so E after clicking a rail button still starts Extrude.
 const TYPING_WIDGETS = roles(["menu", "menubar", "listbox", "tree", "treegrid", "grid", "combobox"])
   .concat(".ui-menu")
   .join(",");
+
+/** Whether letters typed at `el` go to a widget's own type ahead rather than to the shortcuts. */
+export function typesAhead(el: Element): boolean {
+  return el.closest(TYPING_WIDGETS) !== null;
+}
 
 /** A key the focused widget moves, runs or types ahead with, or one a handler already took (defaultPrevented), so the
  *  global shortcuts leave it: an arrow in a menu, slider or tab list must not also turn the view (KB-4). Ctrl, Alt and
@@ -59,7 +72,7 @@ export function widgetOwnsKey(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
   if (NAV_KEYS.has(e.key)) return e.target.closest(ARROW_WIDGETS) !== null;
   if (e.key === "Enter" || (typeof e.key === "string" && e.key.length === 1)) {
-    return e.target.closest(TYPING_WIDGETS) !== null;
+    return typesAhead(e.target);
   }
   return false;
 }
@@ -93,4 +106,22 @@ export function isPageSelectAll(e: KeyboardEvent): boolean {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
   if (e.key.toLowerCase() !== "a") return false;
   return !isEditableTarget(e.target) || isSelectTrigger(e.target);
+}
+
+const CONTROLS =
+  'button, a[href], input, select, textarea, summary, [contenteditable]:not([contenteditable="false"]), [tabindex]:not([tabindex="-1"]), [role]:not([role="application"]):not([role="main"]):not([role="presentation"]):not([role="none"])';
+
+/** True when a keydown landed on the page itself (body, the key surface, a plain element of the model area) and no
+ *  control or widget is there to own Enter or Tab. */
+export function keyTargetFree(t: EventTarget | null): boolean {
+  if (typeof Element === "undefined" || !(t instanceof Element)) return true;
+  if (t === document.body || t === document.documentElement) return true;
+  if (t.closest("[data-key-surface]")) return true;
+  if (t.closest(CONTROLS)) return false;
+  return t.closest("#main") !== null;
+}
+
+/** A button of the tool rail. */
+export function isRailButton(t: EventTarget | null): boolean {
+  return typeof Element !== "undefined" && t instanceof Element && t.closest(".tool-rail button") !== null;
 }

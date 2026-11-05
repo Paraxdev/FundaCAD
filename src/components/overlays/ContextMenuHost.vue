@@ -40,6 +40,7 @@ function rowAttrs(it: CtxItem) {
     class: ["ctx-item", { "has-swatch": !!it.swatch }],
     style: it.swatch ? { "--swatch": it.swatch } : undefined,
     label: it.label,
+    "data-ref-name": it.refName,
     icon: it.icon,
     keys: it.shortcut,
     checked: it.checked,

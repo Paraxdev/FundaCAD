@@ -49,6 +49,25 @@ export function choose<T extends string>(
   });
 }
 
+/** Cancel holds the focus, the red action is second, so a stray Enter or Esc never destroys anything. */
+export async function confirmDanger(
+  title: string,
+  action: string,
+  message?: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const answer = await choose(
+    title,
+    [
+      { value: "cancel", label: "Cancel" },
+      { value: "go", label: action, danger: true },
+    ],
+    signal,
+    message,
+  );
+  return answer === "go";
+}
+
 /** Returns the checked values (>= `min`), or null on cancel or Esc. */
 export function chooseMulti<T extends string>(
   title: string,

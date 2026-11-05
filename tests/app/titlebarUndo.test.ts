@@ -54,4 +54,18 @@ describe("the title bar Undo and Redo buttons", () => {
     await Promise.resolve();
     expect([ui.canUndo, ui.canRedo]).toEqual([false, true]);
   });
+
+  it("carry the labels of the steps and clear them with a second document", async () => {
+    const ui = useUiStore();
+    store.addFeature({ id: "b1", type: "box", length: 40.5, width: 22.25, height: 7 } as Feature);
+    store.addFeature({ id: "b2", type: "box", length: 12.75, width: 9.5, height: 4.25 } as Feature);
+    await Promise.resolve();
+    expect([ui.undoLabel, ui.redoLabel]).toEqual(["Box 2", null]);
+    store.undo();
+    await Promise.resolve();
+    expect([ui.undoLabel, ui.redoLabel]).toEqual(["Box 1", "Box 2"]);
+    store.newDocument();
+    await Promise.resolve();
+    expect([ui.undoLabel, ui.redoLabel]).toEqual([null, null]);
+  });
 });

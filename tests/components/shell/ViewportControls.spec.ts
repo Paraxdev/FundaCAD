@@ -19,7 +19,7 @@ beforeEach(() => {
   setInputModalityForTest("pointer");
 });
 
-async function render(renderTier: RenderTier) {
+async function render(renderTier: RenderTier, viewportExtra: Record<string, unknown> = {}) {
   const handleAction = vi.fn();
   const setStandardView = vi.fn();
   const engine = {
@@ -31,6 +31,7 @@ async function render(renderTier: RenderTier) {
       onRenderTierChange: () => () => {},
       setViewCubeInset: () => {},
       setStandardView,
+      ...viewportExtra,
     },
     store: { buildState: {}, fileName: "Untitled", dirty: false, document: {} },
     bridge: { buildVersion: ref(0), metaVersion: ref(0), docVersion: ref(0) },
@@ -41,7 +42,7 @@ async function render(renderTier: RenderTier) {
   });
   // Vue skips a listener for an event stamped in the same millisecond it was attached, once another listener ran.
   await new Promise((r) => setTimeout(r, 2));
-  return { w, handleAction, setStandardView };
+  return { w, handleAction, setStandardView, engine };
 }
 
 const TIER: RenderTier = { lowPower: false, auto: false, webgpu: true };
@@ -163,6 +164,102 @@ describe("ViewportControls popover controls", () => {
   });
 });
 
+describe("a view controls column taller than its room", () => {
+  let fire: () => void = () => {};
+  beforeEach(() => {
+    const seen: (() => void)[] = [];
+    fire = () => seen.forEach((cb) => cb());
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          seen.push(cb);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function sized(w: Awaited<ReturnType<typeof render>>["w"], content: number, room: number) {
+    const rail = w.get("#viewcontrols").element as HTMLElement;
+    const list = w.get(".vc-scroll").element as HTMLElement;
+    let top = 0;
+    Object.defineProperty(rail.parentElement!, "clientHeight", { configurable: true, get: () => room });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => content });
+    Object.defineProperty(list, "clientHeight", { configurable: true, get: () => Math.min(content, room) });
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = Math.max(0, Math.min(content - Math.min(content, room), v));
+      },
+    });
+    return list;
+  }
+  const state = (w: Awaited<ReturnType<typeof render>>["w"]) => ({
+    scrolls: w.get("#viewcontrols").classes("scrolls"),
+    cues: w.findAll(".vc-more").map((c) => [c.attributes("aria-label"), c.attributes("tabindex")]),
+  });
+
+  it("keeps its shadow room and shows no cue while every control fits", async () => {
+    const { w } = await render(TIER);
+    sized(w, 400, 600);
+    fire();
+    await nextTick();
+    await nextTick();
+    expect(state(w)).toEqual({ scrolls: false, cues: [] });
+  });
+
+  it("clips at the column and pages to the controls out of sight from cues outside the Tab walk", async () => {
+    const { w } = await render(TIER);
+    const list = sized(w, 700, 300);
+    fire();
+    await nextTick();
+    await nextTick();
+    const atTop = state(w);
+    await w.get(".vc-more-down").trigger("click");
+    const middle = { top: list.scrollTop, cues: state(w).cues.map((c) => c[0]) };
+    await w.get(".vc-more-down").trigger("click");
+    const atEnd = { top: list.scrollTop, cues: state(w).cues.map((c) => c[0]) };
+    await w.get(".vc-more-up").trigger("click");
+    expect({ atTop, middle, atEnd, back: list.scrollTop }).toEqual({
+      atTop: { scrolls: true, cues: [["More view controls below", "-1"]] },
+      middle: { top: 225, cues: ["More view controls above", "More view controls below"] },
+      atEnd: { top: 400, cues: ["More view controls above"] },
+      back: 175,
+    });
+  });
+
+  it("measures again when a group appears", async () => {
+    const { w } = await render(TIER);
+    sized(w, 400, 600);
+    fire();
+    await nextTick();
+    sized(w, 700, 600);
+    useUiStore().lowPerformance = true;
+    await flushPromises();
+    expect(state(w)).toEqual({ scrolls: true, cues: [["More view controls below", "-1"]] });
+  });
+
+  it("brings a focused control into view past the cues", async () => {
+    const seen: [string | null, unknown][] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement, arg: unknown) {
+      seen.push([this.getAttribute("aria-label"), arg]);
+    });
+    try {
+      const { w } = await render(TIER);
+      (w.get('[aria-label="Snapping"]').element as HTMLElement).focus();
+      expect(seen).toEqual([["Snapping", { block: "nearest" }]]);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+});
+
 describe("ViewportControls popover openers", () => {
   const card = () => document.querySelector<HTMLElement>(".float-popover");
   const settle = async () => {
@@ -258,7 +355,7 @@ describe("ViewportControls View mode and toolbar", () => {
   it("makes the controls column one vertical toolbar whose arrows step over View mode", async () => {
     const { w } = await render(TIER);
     const bar = w.get('[role="toolbar"]');
-    expect([bar.attributes("aria-label"), bar.attributes("aria-orientation"), bar.attributes("id")]).toEqual([
+    expect([bar.attributes("aria-label"), bar.attributes("aria-orientation"), bar.element.parentElement?.id]).toEqual([
       "View controls",
       "vertical",
       "viewcontrols",
@@ -287,5 +384,56 @@ describe("ViewportControls History button", () => {
     const { w } = await render(TIER);
     const btn = w.get('button[aria-label="History"]');
     expect([btn.attributes("title"), btn.attributes("aria-keyshortcuts")]).toEqual([title, keys]);
+  });
+});
+
+describe("ViewportControls zebra options", () => {
+  const zebraControls = () => [
+    document.querySelector('.vc-pop [data-testid="zebra-direction"]'),
+    document.querySelector('.vc-pop [data-testid="zebra-width"]'),
+  ];
+
+  it("shows the stripe direction and width only while Zebra is on", async () => {
+    const { w, handleAction, engine } = await render(TIER, { zebraOn: false });
+    handleAction.mockImplementation((a: string) => {
+      if (a === "zebra") (engine.viewport as { zebraOn: boolean }).zebraOn = true;
+    });
+    await w.get('[aria-label="Display"]').trigger("click");
+    expect(zebraControls()).toEqual([null, null]);
+    document.querySelector<HTMLElement>('.vc-pop [role="switch"][aria-label="Zebra"]')!.click();
+    await nextTick();
+    expect(handleAction).toHaveBeenCalledWith("zebra");
+    expect(zebraControls().every((el) => el !== null)).toBe(true);
+  });
+
+  it("reads and writes the remembered direction and width", async () => {
+    setRenderPref("zebraDirection", "horizontal");
+    setRenderPref("zebraWidth", 3);
+    const { w } = await render(TIER, { zebraOn: true });
+    await w.get('[aria-label="Display"]').trigger("click");
+    const group = document.querySelector<HTMLElement>('.vc-pop [data-testid="zebra-direction"]')!;
+    const radios = [...group.querySelectorAll<HTMLElement>('[role="radio"]')];
+    expect([group.getAttribute("role"), group.getAttribute("aria-label")]).toEqual(["radiogroup", "Stripe direction"]);
+    expect(radios.map((b) => [b.textContent?.trim(), b.getAttribute("aria-checked")])).toEqual([
+      ["Horizontal", "true"],
+      ["Vertical", "false"],
+    ]);
+    radios[1]!.click();
+    expect(renderPrefs().zebraDirection).toBe("vertical");
+
+    const range = document.querySelector<HTMLInputElement>('.vc-pop [data-testid="zebra-width"] input[type=range]')!;
+    const name = document.getElementById(range.getAttribute("aria-labelledby")!)?.textContent;
+    expect([range.min, range.max, range.step, range.value, name]).toEqual(["1", "5", "1", "3", "Stripe width"]);
+    range.value = "5";
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+    range.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(renderPrefs().zebraWidth).toBe(5);
+
+    setRenderPref("zebraWidth", 2);
+    setRenderPref("zebraDirection", "horizontal");
+    await nextTick();
+    expect(range.value).toBe("2");
+    expect(radios.map((b) => b.getAttribute("aria-checked"))).toEqual(["true", "false"]);
+    setRenderPref("zebraWidth", 3);
   });
 });

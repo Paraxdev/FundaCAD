@@ -1,0 +1,14 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "s0", "type": "sketch", "plane": "XY", "entities": [{ "type": "rectangle", "width": 30, "height": 30, "x": -40, "y": 0 }] },
+    { "id": "e0", "type": "extrude", "sketch": "s0", "distance": 25, "operation": "new" },
+    { "id": "s1", "type": "sketch", "plane": "XY", "entities": [{ "type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0 }] },
+    { "id": "e1", "type": "extrude", "sketch": "s1", "distance": 25, "operation": "new" },
+    { "id": "s2", "type": "sketch", "plane": "XY", "entities": [{ "type": "rectangle", "width": 30, "height": 30, "x": 40, "y": 0 }] },
+    { "id": "e2", "type": "extrude", "sketch": "s2", "distance": 25, "operation": "new" },
+    { "id": "g1", "type": "fillet", "radius": 8, "edges": [{ "kind": "edge", "by": "nearest", "point": [0, -15, 25], "body": "body2" }] },
+    { "id": "g2", "type": "fillet", "radius": 8, "continuity": "G2", "edges": [{ "kind": "edge", "by": "nearest", "point": [40, -15, 25], "body": "body3" }] }
+  ]
+}

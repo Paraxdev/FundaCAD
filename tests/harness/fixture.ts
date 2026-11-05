@@ -8,7 +8,7 @@ export const APP_HTML = `
     <button id="undo-btn" class="tb-btn" title="Undo (Ctrl+Z)" aria-label="Undo" tabindex="0"></button>
     <button id="redo-btn" class="tb-btn" title="Redo (Ctrl+Y)" aria-label="Redo" disabled></button>
   </div>
-  <span id="docname" class="docname dirty"><!-- a dev build keeps comments -->Untitled<span class="dirty-mark" aria-hidden="true">*</span> <span class="sr-only">Unsaved changes</span></span>
+  <span id="docname" class="docname dirty"><!-- a dev build keeps comments --><span class="docname-text">Untitled</span><span class="dirty-mark" aria-hidden="true">*</span> <span class="sr-only">Unsaved changes</span></span>
   <nav id="menubar" aria-label="Menu"><div class="menubar-bar" role="menubar" aria-label="Menu">
     <div class="menu" role="none"><button class="btn menu-btn" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="-1">File</button></div>
     <div class="menu" role="none"><button class="btn menu-btn is-open" role="menuitem" aria-haspopup="menu" aria-expanded="true" tabindex="0">Edit</button></div>

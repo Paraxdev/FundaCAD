@@ -408,7 +408,9 @@ Reader rules:
   when the document is saved as `.fundab`. A JSON `.funda` has no sections, so
   saving as `.funda` drops it. A section of such a kind in another codec cannot
   be verified or written back, so it is skipped, and a damaged one never stops
-  the open. A document or geometry section in another codec is damage: the open
+  the open. A damaged one, or one past what is left of the reader's limit, is
+  dropped too, and the app warns on open that a save over the file leaves it
+  out. A document or geometry section in another codec is damage: the open
   fails. So a new codec can never be used for kinds `0` to `3` while released
   readers do not know it. Readers from before minor `1` skip the segment index,
   or carry it as an unknown kind; the index's match rule makes either harmless,

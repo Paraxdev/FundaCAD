@@ -21,6 +21,8 @@ import {
   asRealtimeQuality,
   asRenderPrefs,
   asTangentEdges,
+  asZebraDirection,
+  asZebraWidth,
   onRenderPrefsChange,
   performanceModeOn,
   renderPrefs,
@@ -89,6 +91,8 @@ describe("asRenderPrefs", () => {
       tracer: DEFAULT_RENDER.tracer,
       realtimeQuality: DEFAULT_RENDER.realtimeQuality,
       realtimeWhileMoving: DEFAULT_RENDER.realtimeWhileMoving,
+      zebraDirection: DEFAULT_RENDER.zebraDirection,
+      zebraWidth: DEFAULT_RENDER.zebraWidth,
     });
   });
 
@@ -340,5 +344,42 @@ describe("ground", () => {
     setRenderPref("groundRender", "bogus" as never);
     expect(renderPrefs().groundRender).toBe("shadow");
     setRenderPref("groundRender", DEFAULT_RENDER.groundRender);
+  });
+});
+
+describe("zebra stripes", () => {
+  it("default to horizontal stripes of the middle width", () => {
+    expect(DEFAULT_RENDER.zebraDirection).toBe("horizontal");
+    expect(DEFAULT_RENDER.zebraWidth).toBe(3);
+  });
+
+  it("keep only a known direction and a width on its steps", () => {
+    expect(asZebraDirection("vertical")).toBe("vertical");
+    for (const v of ["Vertical", "diagonal", 1, null]) expect(asZebraDirection(v)).toBeNull();
+    expect(asZebraWidth(4)).toBe(4);
+    expect(asZebraWidth(2.4)).toBe(2);
+    expect(asZebraWidth(0)).toBe(1);
+    expect(asZebraWidth(12)).toBe(5);
+    for (const v of ["3", Number.NaN, true]) expect(asZebraWidth(v)).toBeNull();
+  });
+
+  it("fall back per field for a bad stored value", () => {
+    const bad = asRenderPrefs({ zebraDirection: "up", zebraWidth: "wide", bloom: 0.5 });
+    expect(bad.zebraDirection).toBe("horizontal");
+    expect(bad.zebraWidth).toBe(3);
+    expect(bad.bloom).toBe(0.5);
+    expect(asRenderPrefs({}).zebraWidth).toBe(3);
+  });
+
+  it("are remembered in the stored settings and refuse a bad write", () => {
+    setRenderPref("zebraDirection", "vertical");
+    setRenderPref("zebraWidth", 5);
+    const back = asRenderPrefs(JSON.parse(JSON.stringify(renderPrefs())));
+    expect(back).toMatchObject({ zebraDirection: "vertical", zebraWidth: 5 });
+    setRenderPref("zebraDirection", "slanted" as never);
+    setRenderPref("zebraWidth", "thin" as never);
+    expect(renderPrefs()).toMatchObject({ zebraDirection: "vertical", zebraWidth: 5 });
+    setRenderPref("zebraDirection", DEFAULT_RENDER.zebraDirection);
+    setRenderPref("zebraWidth", DEFAULT_RENDER.zebraWidth);
   });
 });

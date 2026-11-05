@@ -51,6 +51,7 @@ function rig() {
     buildState: { result: { mesh: { positions: [0, 0, 0] } } },
     nextId: () => "f9",
     hiddenBodyIds: () => undefined,
+    boundExpr: () => null,
     addFeature,
   };
   const canvas = document.createElement("canvas");

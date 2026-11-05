@@ -7,12 +7,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { installKeyboard } from "../../src/app/keyboard";
+import { useSelectionStore } from "../../src/stores/selection";
+import { useToastStore } from "../../src/stores/toasts";
 import type { Engine } from "../../src/app/engine";
 
 function fakeEngine(opts: { selectedFeature: string | null; explicit: boolean }) {
   const removeFeature = vi.fn();
   const removeFeatures = vi.fn();
   const selectFeature = vi.fn();
+  const undoIfLatest = vi.fn();
   const e = {
     sketch: { active: false },
     tools: {
@@ -30,9 +33,10 @@ function fakeEngine(opts: { selectedFeature: string | null; explicit: boolean })
     selectedFeature: opts.selectedFeature,
     selectedFeatureExplicit: opts.explicit,
     selectFeature,
-    store: { removeFeature, removeFeatures, document: { features: [{ id: "f1" }] } },
+    undoIfLatest,
+    store: { removeFeature, removeFeatures, undoMark: 7, document: { features: [{ id: "f1", type: "box" }] } },
   } as unknown as Engine;
-  return { e, removeFeature: removeFeatures, selectFeature };
+  return { e, removeFeature: removeFeatures, selectFeature, undoIfLatest };
 }
 
 function pressDelete() {
@@ -54,11 +58,16 @@ describe("Delete key", () => {
   });
 
   it("removes the feature when the user explicitly selected it", () => {
-    const { e, removeFeature, selectFeature } = fakeEngine({ selectedFeature: "f1", explicit: true });
+    const { e, removeFeature, selectFeature, undoIfLatest } = fakeEngine({ selectedFeature: "f1", explicit: true });
+    useSelectionStore().featureId = "f1";
     installKeyboard(e);
     pressDelete();
     expect(removeFeature).toHaveBeenCalledWith(["f1"]);
     expect(selectFeature).toHaveBeenCalledWith(null);
+    const shown = useToastStore().items;
+    expect(shown.map((t) => t.message)).toEqual(["Deleted Box 1"]);
+    shown[0]!.action!.onClick();
+    expect(undoIfLatest).toHaveBeenCalledWith(7);
   });
 
   it("removes every picked row in one call", async () => {
@@ -86,6 +95,38 @@ describe("Delete key", () => {
     document.body.appendChild(row);
     row.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }));
     expect(removeFeature).not.toHaveBeenCalled();
+  });
+});
+
+describe("Delete on a panel control", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = `
+      <canvas id="view" tabindex="0" role="img"></canvas>
+      <div role="list"><div id="chip" role="button" tabindex="0">Fillet 2</div></div>
+      <div role="tablist"><button id="tab" role="tab">Geometry</button></div>
+      <div role="radiogroup"><button id="kind" role="radio">Faces</button></div>
+      <input id="tick" type="checkbox" />
+      <div data-keeps-delete><div><button id="pager">Next</button></div></div>`;
+  });
+
+  function pressOn(id: string, key = "Delete") {
+    const { e, removeFeature } = fakeEngine({ selectedFeature: "f1", explicit: true });
+    const deleteSelectedFace = vi.fn(() => id === "view");
+    Object.assign(e, { deleteSelectedFace });
+    installKeyboard(e);
+    document.getElementById(id)!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    return { faces: deleteSelectedFace.mock.calls.length, features: removeFeature.mock.calls };
+  }
+
+  it.each(["tab", "kind", "tick", "pager"])("removes nothing from %s, Delete or Backspace", (id) => {
+    expect(pressOn(id)).toEqual({ faces: 0, features: [] });
+    expect(pressOn(id, "Backspace")).toEqual({ faces: 0, features: [] });
+  });
+
+  it("still removes the selected face from the 3D view and the picked feature from a timeline chip", () => {
+    expect(pressOn("view")).toEqual({ faces: 1, features: [] });
+    expect(pressOn("chip", "Backspace")).toEqual({ faces: 1, features: [[["f1"]]] });
   });
 });
 

@@ -44,6 +44,19 @@
   --axis-x: #ff5a5a;
   --axis-y: #46d97a;
   --axis-z: #4d8dff;
+  /* Sketch curves in the viewport: free to move, fully defined, construction, projected and its stale form, open and untied ends. */
+  --sketch-free: #5b9bff;
+  --sketch-defined: #ffffff;
+  --sketch-construction: #ffa64d;
+  --sketch-projected: #b07fe8;
+  --sketch-projected-stale: #d9a24d;
+  --sketch-loose-open: #e5484d;
+  --sketch-loose-untied: #f5a524;
+  /* Sketch aids: dimension lines and control polygons, the snap marker and its guides, the rubber band, region fills. */
+  --sketch-aid: #8fa4bd;
+  --sketch-snap: #ffaa33;
+  --sketch-preview: #ffffff;
+  --sketch-fill: #3a7bd5;
 
   /* legacy alias */
   --accent-blue: var(--accent);
@@ -51,6 +64,15 @@
   /* Self-hosted, see main.ts. */
   --ui: "Space Grotesk", "Inter", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Type scale. No text goes under --fs-micro (11px), error text uses --fs-small or larger. */
+  --fs-micro: 0.6875rem;
+  --fs-small: 0.75rem;
+  --fs-body: 0.8125rem;
+  --fs-title: 0.9375rem;
+  --fs-display: 1.125rem;
+  /* Viewport label size, set on the root by viewportLabels.ts: 1 is Medium. */
+  --vp-label-scale: 1;
 
   --r-xs: 2px;
   --r-sm: 3px;
@@ -116,6 +138,11 @@
   --z-modal: 4000;
   --z-guide: 4500;
   --z-toast: 5000;
+
+  /* The window, for a box capped or sized against it. Not vw and vh: the root zoom outside Tauri scales those too
+     (ui/interfaceSize.ts), and the caps ran past the window from 110 percent. */
+  --win-w: calc(100vw / var(--page-zoom, 1));
+  --win-h: calc(100vh / var(--page-zoom, 1));
 }
 
 /* A squircle needs a larger radius than a circular corner to look the same size. */

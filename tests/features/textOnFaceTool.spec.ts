@@ -39,6 +39,7 @@ function setup(reply: (point: Vec3) => FaceAnchorReply) {
   let n = 0;
   const store = {
     nextId: () => `f${++n}`,
+    boundExpr: () => null,
     setPreview: () => {},
     addFeatures: (f: Feature[]) => {
       committed.push(f);

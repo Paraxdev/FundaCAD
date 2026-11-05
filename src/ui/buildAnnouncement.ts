@@ -2,6 +2,7 @@
 
 import type { RebuildState } from "../document/store";
 import type { AnnouncePriority } from "./announce";
+import { namesStep, plainError } from "./plainError";
 
 export interface BuildLine {
   text: string;
@@ -9,7 +10,7 @@ export interface BuildLine {
 }
 
 type Settled = Pick<RebuildState, "building" | "errorFeatureId" | "errorMessage" | "cancelled" | "previewBuilt"> & {
-  result: { bodies?: readonly unknown[] } | null;
+  result: { bodies?: readonly { faceCount?: number }[] } | null;
 };
 
 /** The announcer key of a step's failure, shared by the build line and the step's error notice so it is said once. */
@@ -26,7 +27,8 @@ export function buildLine(
 ): BuildLine | null {
   if (now.building || now.previewBuilt) return null;
   if (now.cancelled) return { text: "Build cancelled", priority: "polite" };
-  const n = now.result?.bodies?.length ?? 0;
+  // A body with no faces is a failure the store reports, not a built body.
+  const n = now.result?.bodies?.filter((b) => b.faceCount !== 0).length ?? 0;
   const built = n ? `Built, ${n} ${n === 1 ? "body" : "bodies"}` : "Built";
   const failure = failureOf(now);
   if (!failure) return { text: built, priority: "polite" };
@@ -34,6 +36,11 @@ export function buildLine(
   if (lastSettled && failureOf(lastSettled) === failure) {
     return { text: `${built}, ${at ?? "a feature"} still fails`, priority: "polite" };
   }
-  const why = now.errorMessage?.trim();
+  const why = plainError(now.errorMessage ?? "", "");
+  const word = at ? namesStep(at, why) : 0;
+  // "Fillet: <why>" drops its label for the step's own name, "Fillet failed on Box" already names the step.
+  if (word && why[word] === ":")
+    return { text: `Build failed at ${at}: ${why.slice(word + 1).trim()}`, priority: "assertive" };
+  if (word) return { text: `Build failed: ${why}`, priority: "assertive" };
   return { text: `Build failed${at ? ` at ${at}` : ""}${why ? `: ${why}` : ""}`, priority: "assertive" };
 }

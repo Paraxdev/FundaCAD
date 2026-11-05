@@ -4,43 +4,84 @@ import * as THREE from "three";
 import type { ModelView } from "./render";
 import { copyPatches } from "./shaderPatches";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
+import { ZEBRA_LAMBDA, type ZebraDirection, type ZebraFrame, zebraFrame } from "./zebraStripes";
 
-/** Bands follow the reflected view vector, so curvature breaks show as broken or bunched stripes.
- *  three's built in `cameraPosition` uniform means no per frame update. */
-export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
+export interface ZebraSettings {
+  direction: ZebraDirection;
+  width: number;
+}
+
+/** Stripes from zebraStripeCoord in view space, so they stay fixed to the view while the model turns
+ *  and bend with curvature. fitZebraMaterial sets the frame from the model box. */
+export function makeZebraMaterial(): THREE.ShaderMaterial {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uFreq: { value: frequency }, ...displayColorUniforms() },
+    uniforms: {
+      uDirection: { value: 0 },
+      uPeriod: { value: 1 },
+      uReach: { value: 1 },
+      uCenter: { value: new THREE.Vector3() },
+      ...displayColorUniforms(),
+    },
     side: THREE.DoubleSide,
     // keep edge lines crisp on top, matching the standard model material
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
     vertexShader: /* glsl */ `
+      uniform vec3 uCenter;
       varying vec3 vN;
-      varying vec3 vP;
+      varying vec3 vD;
       void main() {
-        vN = normalize(mat3(modelMatrix) * normal);
+        vN = normalMatrix * normal;
         vec4 wp = modelMatrix * vec4(position, 1.0);
-        vP = wp.xyz;
+        vD = mat3(viewMatrix) * (wp.xyz - uCenter);
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader:
       DISPLAY_COLOR_GLSL +
       /* glsl */ `
-      uniform float uFreq;
+      uniform float uDirection;
+      uniform float uPeriod;
+      uniform float uReach;
       varying vec3 vN;
-      varying vec3 vP;
+      varying vec3 vD;
+      float bandIntegral(float x) {
+        return floor(x) * 0.5 + max(fract(x) - 0.5, 0.0);
+      }
       void main() {
-        vec3 N = normalize(vN);
-        vec3 V = normalize(cameraPosition - vP);
-        vec3 R = reflect(-V, N);
-        float band = step(0.5, fract(R.z * uFreq));
+        vec3 N = length(vN) > 0.0 ? normalize(vN) : vec3(0.0);
+        vec3 R = reflect(vec3(0.0, 0.0, -1.0), N);
+        vec3 a = uDirection > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        float u = dot(vD, a) + dot(R, a) * (uReach - ${ZEBRA_LAMBDA.toFixed(4)} * dot(vD, R));
+        float s = u / uPeriod;
+        float w = max(fwidth(s), 1e-4);
+        float band = (bandIntegral(s + 0.5 * w) - bandIntegral(s - 0.5 * w)) / w;
+        // under about 2 px a stripe can only alias, so it fades to the mean
+        band = mix(band, 0.5, smoothstep(0.2, 0.45, w));
         vec3 col = mix(vec3(0.06), vec3(0.93), band);
         gl_FragColor = vec4(displayColor(col), 1.0);
       }`,
   });
   followComposer(mat);
   return mat;
+}
+
+const zebraHeld = new WeakMap<THREE.ShaderMaterial, ZebraFrame>();
+
+export function fitZebraMaterial(mat: THREE.ShaderMaterial, box: THREE.Box3, settings: ZebraSettings): void {
+  const u = mat.uniforms as Record<"uDirection" | "uPeriod" | "uReach" | "uCenter", THREE.IUniform>;
+  u.uDirection.value = settings.direction === "vertical" ? 1 : 0;
+  if (box.isEmpty()) return;
+  const f = zebraFrame(box.min.toArray(), box.max.toArray(), settings.width, zebraHeld.get(mat));
+  zebraHeld.set(mat, f);
+  (u.uCenter.value as THREE.Vector3).set(...f.centre);
+  u.uReach.value = f.reach;
+  u.uPeriod.value = f.period;
+}
+
+/** The next fit starts from its own box instead of holding this frame. */
+export function releaseZebraFrame(mat: THREE.ShaderMaterial): void {
+  zebraHeld.delete(mat);
 }
 
 /** At each interior polyline vertex a hair points to the concave side, as long as the Menger

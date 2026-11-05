@@ -7,7 +7,10 @@ import type { DocumentStore } from "../document/store";
 import { featureValueRule } from "../document/numFields";
 import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { setPrompt } from "../ui/prompt";
+import { awaitTreePick, treePickRefusal } from "../ui/treePick";
+import { edgeSelectorFrom } from "../viewport/edgeMatch";
 import { isEditableTarget } from "../ui/focus";
 import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
@@ -62,6 +65,7 @@ export class PatternTool {
   private pickNote = ""; // why the last click did not give an axis
   private pickSeq = 0; // a pick answered after a newer one, or after the tool closed, is dropped
   private pending: Promise<void> | null = null; // the axis pick still waiting on the engine
+  private releaseRows: (() => void) | null = null;
   private axisLineObj: THREE.Line | null = null;
   private count = START_COUNT;
   private value = 0; // mm between copies (linear, and X of a rect) or degrees swept (circular)
@@ -77,7 +81,7 @@ export class PatternTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -128,6 +132,18 @@ export class PatternTool {
 
     this.viewport.suspendPicking = true;
     this.gesture.attach();
+    if (kind === "circular") {
+      this.releaseRows = awaitTreePick(
+        (pick) => {
+          if (pick.kind === "face") return this.askAxis(this.viewport.faceSelectorOf(pick.faceId), true);
+          if (pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge for the axis");
+          const ref = edgeSelectorFrom({ points: pick.edge.points as Vec3[], body: pick.edge.body });
+          return ref ? this.askAxis(ref, true) : "That edge has no length";
+        },
+        () => this.cancel(),
+        { keepsOnRewind: true, keepsOnCommand: true },
+      );
+    }
 
     this.buildGizmo();
     this.dim.show(
@@ -176,6 +192,23 @@ export class PatternTool {
       () => this.commitSoon(),
       () => this.cancel(),
     );
+    const restoring = (name: string, key: "value" | "valueY" | "count" | "countY") =>
+      this.dim.restoresOnUndo(
+        name,
+        () => this[key],
+        (held) => {
+          this[key] = held;
+          this.refreshPrompt();
+          this.updateGhosts();
+        },
+      );
+    restoring("spacingX", "value");
+    restoring("spacingY", "valueY");
+    restoring("countX", "count");
+    restoring("countY", "countY");
+    restoring("spacing", "value");
+    restoring("angle", "value");
+    restoring("count", "count");
     this.pushFields();
     this.refreshPrompt();
     this.updateGhosts();
@@ -392,25 +425,29 @@ export class PatternTool {
       this.commitSoon();
       return;
     }
-    const p = this.pickAxis(hit, e.clientX, e.clientY).catch((err: unknown) => {
+    let ref: Selector | null = null;
+    if (hit.kind === "edge") {
+      ref = hit.selector;
+    } else {
+      const f = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
+      if (f) ref = f.bodyId ? ({ ...f.selector, body: f.bodyId } as Selector) : f.selector;
+    }
+    if (ref) this.askAxis(ref);
+  }
+
+  private askAxis(ref: Selector, byRow = false): true {
+    const p = this.pickAxis(ref, byRow ? document.activeElement : null).catch((err: unknown) => {
       logError(err, { source: "pattern" });
     });
     this.pending = p;
     void p.finally(() => {
       if (this.pending === p) this.pending = null;
     });
+    return true;
   }
 
   /** Asked of the engine so the preview turns about exactly the line the rebuild will. */
-  private async pickAxis(hit: import("../viewport/picking").Hit, x: number, y: number) {
-    let ref: Selector | null = null;
-    if (hit.kind === "edge") {
-      ref = hit.selector;
-    } else {
-      const f = this.viewport.pickFaceForPressPull(x, y);
-      if (f) ref = f.bodyId ? ({ ...f.selector, body: f.bodyId } as Selector) : f.selector;
-    }
-    if (!ref) return;
+  private async pickAxis(ref: Selector, row: Element | null) {
     const seq = ++this.pickSeq;
     const reply = await this.store.patternAxis(ref);
     if (!this.active || seq !== this.pickSeq) return;
@@ -427,6 +464,8 @@ export class PatternTool {
     this.promptKey = "";
     this.refreshPrompt();
     this.updateGhosts();
+    // On the row Enter would take the axis again, in the box it applies, as Section's box after a row.
+    if (row && document.activeElement === row) this.dim.focus();
   }
 
   private onKey(e: KeyboardEvent) {
@@ -442,7 +481,7 @@ export class PatternTool {
       return;
     }
     const char = toolChar(e);
-    if (this.kind === "circular" && char === "c" && !e.ctrlKey && !e.metaKey) {
+    if (this.kind === "circular" && char === "c" && !this.dim.typesText(e) && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       this.place = this.place === "origin" ? "centre" : "origin";
@@ -656,6 +695,25 @@ export class PatternTool {
     const target = this.features.length ? { features: this.features } : { bodies: this.bodies };
     const kind = this.kind;
     const done = this.onDone;
+    const id = this.store.nextId();
+    const bindings = boxBindings(
+      this.dim,
+      this.store,
+      id,
+      kind === "rect"
+        ? [
+            { box: "spacingX", field: "spacingX", value },
+            { box: "spacingY", field: "spacingY", value: valueY },
+            { box: "countX", field: "countX", value: count, kind: "count" },
+            { box: "countY", field: "countY", value: countY, kind: "count" },
+          ]
+        : [
+            kind === "linear"
+              ? { box: "spacing", field: "spacing", value }
+              : { box: "angle", field: "angle", value, kind: "angle" },
+            { box: "count", field: "count", value: count, kind: "count" },
+          ],
+    );
     this.cleanup();
     // A pattern of one copy would be a timeline feature that does nothing, so say so instead.
     if (kind === "rect" ? count * countY < 2 : count < 2) {
@@ -663,13 +721,14 @@ export class PatternTool {
       done?.(null);
       return;
     }
-    const id = this.store.nextId();
     this.store.addFeature(
       kind === "rect"
         ? ({ id, type: "patternRect", countX: count, countY, spacingX: value, spacingY: valueY, ...target } as Feature)
         : kind === "linear"
           ? ({ id, type: "patternLinear", count, spacing: value, axis, ...target } as Feature)
           : ({ id, type: "patternCircular", count, angle: value, ...placed, ...target } as Feature),
+      undefined,
+      bindings,
     );
     done?.(id);
   }
@@ -681,6 +740,8 @@ export class PatternTool {
   }
 
   private cleanup() {
+    this.releaseRows?.();
+    this.releaseRows = null;
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";

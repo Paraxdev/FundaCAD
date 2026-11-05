@@ -151,7 +151,6 @@ describe("the study the document saves", () => {
     const s = ready();
     s.supports.push({ ...newSupport(4, "pinned"), faces: faces(hole, [1, 0, 0], 30, [5]) });
     s.gravity = { on: true, direction: "-Y" };
-    s.size = 1.5;
     const study = studyFromSetup(s);
     expect(study).toEqual({
       body: "b1",
@@ -163,7 +162,7 @@ describe("the study the document saves", () => {
       gravity: { on: true, direction: "-Y" },
       material: "PLA",
       custom: { E: 2000, nu: 0.35, yield: 40, density: 1.2 },
-      size: 1.5,
+      size: null,
     });
     expect(JSON.stringify(study)).not.toContain("faceIds");
   });
@@ -172,11 +171,9 @@ describe("the study the document saves", () => {
     const s = ready();
     s.loads[0]!.force = "" as unknown as number;
     s.custom.E = "" as unknown as number;
-    s.size = "" as unknown as number;
     const study = studyFromSetup(s);
     expect(study.loads[0]!.force).toBe(100);
     expect(study.custom.E).toBe(2000);
-    expect(study.size).toBeNull();
   });
 
   it("keeps the last value the user had in a cleared field, and a Run refuses the blank", () => {

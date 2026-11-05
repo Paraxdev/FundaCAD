@@ -132,10 +132,25 @@ function onWheel(ev: WheelEvent) {
   render();
 }
 
-onMounted(() => {
-  if (!canvas.value) return;
+function fitSize() {
+  if (!renderer) return;
   const w = props.width ?? 300;
   const h = props.height ?? 220;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+watch(
+  () => [props.width, props.height],
+  () => {
+    fitSize();
+    render();
+  },
+);
+
+onMounted(() => {
+  if (!canvas.value) return;
   try {
     renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, alpha: true });
   } catch {
@@ -143,9 +158,7 @@ onMounted(() => {
     return;
   }
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  fitSize();
   pivot.rotation.set(0.35, 0, 0.6);
   void load(props.spec);
 });
@@ -161,7 +174,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div :style="{ position: 'relative', width: `${width ?? 300}px`, height: `${height ?? 220}px` }">
+  <div
+    :style="{
+      position: 'relative',
+      width: `${width ?? 300}px`,
+      maxWidth: '100%',
+      overflow: 'hidden',
+      aspectRatio: `${width ?? 300} / ${height ?? 220}`,
+    }"
+  >
     <canvas
       ref="canvas"
       class="scr-preview"
@@ -187,7 +208,7 @@ onBeforeUnmount(() => {
         left: '8px',
         right: '8px',
         bottom: '6px',
-        fontSize: '11px',
+        fontSize: 'var(--fs-micro, 11px)',
         color: 'var(--text-dim, #aaa1b5)',
       }"
     >

@@ -4,9 +4,11 @@
 // attached. No Vue import: the headless suite reaches this file.
 
 import type { CadDocument } from "../types";
+import { readMaterialEdit } from "../document/materialEdit";
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import type { GuideSession } from "../ui/guide/guideSession";
+import { askUserPath, parseAsk, type AskUser, type PathAsk } from "./pathAsk";
 
 /** Publish rate while nobody is attached: cheap, yet a newly connected assistant sees this window quickly. */
 export const IDLE_INTERVAL_MS = 3000;
@@ -46,6 +48,8 @@ interface Proposal {
   name: string;
   note: string | null;
   document: CadDocument;
+  /** The same change as `document` in a form applied to the open document, for a kind this window knows. */
+  edit?: unknown;
   /** The document session the assistant read, set by an engine that knows sessions. */
   doc?: string;
   /** A whole other document (the assistant's doc_new, doc_open or doc_set), not an edit of the open one. */
@@ -82,6 +86,10 @@ export class LiveSessionHost {
   private guideInFlight: Promise<void> | null = null;
   private guideBusyAt = -Infinity;
   private unsubscribeGuide: (() => void) | null = null;
+  private asks: PathAsk[] = [];
+  /** Ids of the asks the engine hands now, queued or on screen. */
+  private takenAsks = new Set<string>();
+  private asking = false;
 
   constructor(
     private readonly store: DocumentStore,
@@ -91,6 +99,8 @@ export class LiveSessionHost {
     private readonly allowEdits: () => boolean = () => true,
     /** Injected so a test can drive the loop without a real clock. */
     private readonly now: () => number = () => Date.now(),
+    /** Shows an assistant's path ask (the Flatpak MCP server's, for a path outside its folder). */
+    private readonly askUser: AskUser = askUserPath,
   ) {}
 
   /** Current state, and a subscription. Fires immediately, like the store's own
@@ -183,6 +193,9 @@ export class LiveSessionHost {
       this.guideTimer = null;
     }
     this.guide?.reset();
+    // The release answers every open ask as closed, so nothing waiting is shown after it.
+    this.asks = [];
+    this.takenAsks.clear();
     this.emit({ sharing: false, guests: [] });
     await this.geometry.session?.("session_release").catch(() => null);
   }
@@ -209,6 +222,8 @@ export class LiveSessionHost {
         title: this.store.filePath ?? null,
         status: this.buildStatus(),
       });
+      // Asks are handed over once and belong to no document, so they are taken even if this one closed meanwhile.
+      if (res) this.takeAsks(res);
       // Proposals collected for a document closed during the round trip are dropped, the assistant is told by the
       // next publish naming another document.
       if (res && session.alive) await this.collect(res);
@@ -237,6 +252,35 @@ export class LiveSessionHost {
     for (const p of proposals) this.apply(p);
   }
 
+  private takeAsks(res: Record<string, unknown>): void {
+    const handed = (Array.isArray(res["asks"]) ? res["asks"].map(parseAsk) : []).filter((a) => a !== null);
+    // The engine hands an ask in every reply until it is answered, in case a reply never arrived.
+    for (const a of handed) if (!this.takenAsks.has(a.askId)) this.asks.push(a);
+    this.takenAsks = new Set(handed.map((a) => a.askId));
+    if (this.asks.length) void this.showAsks();
+  }
+
+  /** One dialog at a time and never awaited by the tick, so publishing goes on while the user picks. */
+  private async showAsks(): Promise<void> {
+    if (this.asking) return;
+    this.asking = true;
+    try {
+      for (let ask = this.asks.shift(); ask; ask = this.asks.shift()) {
+        let path: string | null = null;
+        try {
+          path = await this.askUser(ask);
+        } catch {
+          path = null;
+        }
+        if (!this.running) return;
+        this.lastGuestSeen = this.now();
+        await this.geometry.session?.("session_answer", { askId: ask.askId, path }).catch(() => null);
+      }
+    } finally {
+      this.asking = false;
+    }
+  }
+
   /** Take one assistant's edit through `loadDocument`, the file open path plus undo, so it is validated like a
    *  person's and one Ctrl+Z away. The doc change it emits bumps the revision in `start`, even for an identical
    *  document, so a no-op edit is acknowledged instead of timing out. */
@@ -263,7 +307,14 @@ export class LiveSessionHost {
       this.refuse(p.id, REFUSED_WHILE_IMPORTING);
       return;
     }
-    this.store.loadDocument(p.document, { replace: true, untitled: !!p.replaces && OTHER_FILE.test(p.note ?? "") });
+    const materials = readMaterialEdit(p.edit);
+    if (materials) {
+      this.store.applyMaterialEdit(materials);
+      // No doc change to bump it in `start`, and the next proposal in this batch was written without this edit.
+      this.revision += 1;
+    } else {
+      this.store.loadDocument(p.document, { replace: true, untitled: !!p.replaces && OTHER_FILE.test(p.note ?? "") });
+    }
     this.applied = [...this.applied, p.id].slice(-APPLIED_MEMORY);
     this.lastGuestSeen = this.now();
     this.emit({ lastEdit: { note: p.note ?? null, by: p.name, at: this.now() } });

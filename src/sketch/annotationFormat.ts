@@ -53,10 +53,10 @@ export function glyphClass(st: ConstraintDiagnosis | null): string {
 
 export function glyphTitle(st: ConstraintDiagnosis | null): string {
   return st === "conflict"
-    ? "Conflicting constraint, click to delete"
+    ? "Conflicting constraint, click to select, Delete removes it"
     : st === "over"
-      ? "Redundant (over-defined) constraint, click to delete"
-      : "Click to delete this constraint";
+      ? "Redundant (over-defined) constraint, click to select, Delete removes it"
+      : "Click to select, Delete removes it";
 }
 
 /** The -50% centring stays in the transform, not the stylesheet: this translate overwrites the whole property. */

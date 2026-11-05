@@ -46,9 +46,14 @@ export function regionsInOrder(root: ParentNode = document): Region[] {
   );
 }
 
+// A box floating over a region, such as the value box over the view, counts as that region but is no stop of its own.
+const OVER = "data-over-region";
+
 /** The innermost region holding `node`, so a tool in the rail counts as tools rather than the Model around it. */
 export function regionOf(node: Node | null, regions: Region[] = regionsInOrder()): Region | null {
   if (!node) return null;
+  const over = (node instanceof Element ? node : node.parentElement)?.closest(`[${OVER}]`)?.getAttribute(OVER);
+  if (over) return regions.find((r) => r.kind === over) ?? null;
   const hits = regions.filter((r) => r.el.contains(node));
   return hits.find((r) => !hits.some((o) => o !== r && r.el.contains(o.el))) ?? null;
 }
@@ -63,8 +68,10 @@ function take(el: HTMLElement | null | undefined): boolean {
   return document.activeElement === el;
 }
 
-// The canvas only counts once it is a Tab stop of its own, until then the Model landmark takes focus.
+// The key surface and the canvas only count while they are Tab stops, until then the Model landmark takes focus.
 function enterViewport(el: HTMLElement): boolean {
+  const surface = el.querySelector<HTMLElement>("[data-key-surface]");
+  if (surface && surface.tabIndex >= 0 && take(surface)) return true;
   const canvas = el.querySelector<HTMLElement>("canvas[tabindex]");
   return (!!canvas && canvas.tabIndex >= 0 && take(canvas)) || take(landOn(el));
 }
@@ -140,18 +147,25 @@ export function trackRegionFocus(): () => void {
   return stopMemory;
 }
 
+/** 1 for the key F6 is bound to, -1 for Shift+F6's, 0 for any other key or a character typed into a field. */
+export function regionStep(e: KeyboardEvent, context: "model" | "sketch" = "model"): 1 | -1 | 0 {
+  if (e.altKey) return 0;
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (!ctrl && e.key.length === 1 && isEditableTarget(e.target)) return 0;
+  const action = resolveShortcut(e.key, e.shiftKey, context, ctrl);
+  return action === "region-next" ? 1 : action === "region-prev" ? -1 : 0;
+}
+
 /** F6 and Shift+F6 (or whatever they are remapped to) step between regions, from text fields too. On document, so it
  *  runs before keymap.ts on window and stops the key there. An F6 a key capture already claimed is left alone. */
 export function installRegionKeys(context: () => "model" | "sketch"): () => void {
   const onKey = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || e.altKey) return;
-    const ctrl = e.ctrlKey || e.metaKey;
-    if (!ctrl && e.key.length === 1 && isEditableTarget(e.target)) return;
-    const action = resolveShortcut(e.key, e.shiftKey, context(), ctrl);
-    if (action !== "region-next" && action !== "region-prev") return;
+    if (e.defaultPrevented) return;
+    const step = regionStep(e, context());
+    if (!step) return;
     e.preventDefault();
     e.stopPropagation();
-    cycleRegion(action === "region-next" ? 1 : -1);
+    cycleRegion(step);
   };
   document.addEventListener("keydown", onKey);
   return () => document.removeEventListener("keydown", onKey);

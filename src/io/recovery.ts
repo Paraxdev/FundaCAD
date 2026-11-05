@@ -33,6 +33,26 @@ interface Envelope {
   doc: unknown; // the full store.toObject() payload
 }
 
+// The slot a recovered snapshot came from. It stays on disk until that work is saved, written as a snapshot of its own,
+// or given up, so a crash in between still finds it.
+let recovered: { slot: string; session: DocumentSession } | null = null;
+
+async function dropRecovered(
+  session: DocumentSession,
+  invoke: (cmd: string, args: { slot: string }) => Promise<unknown>,
+) {
+  if (recovered?.session !== session) return;
+  const was = recovered;
+  recovered = null;
+  try {
+    await invoke("recovery_clear", { slot: was.slot });
+  } catch (e) {
+    // A locked file: keep it so the next snapshot or save tries again.
+    recovered ??= was;
+    throw e;
+  }
+}
+
 interface Snapshot {
   session: DocumentSession;
   slot: string;
@@ -80,6 +100,7 @@ export function installAutosave(store: DocumentStore) {
       const { invoke } = await import("@tauri-apps/api/core");
       if (givenUp.has(snap.session)) return;
       await invoke("recovery_write", { slot: snap.slot, json: snap.json });
+      if (snap.slot !== recovered?.slot) await dropRecovered(snap.session, invoke).catch(() => {});
       // A Discard while the write was in flight cleared the slot before the write landed.
       if (givenUp.has(snap.session)) await invoke("recovery_clear", { slot: snap.slot });
       else if (snap.session === store.session) {
@@ -138,7 +159,7 @@ export function installAutosave(store: DocumentStore) {
       if (s.endedBy === "reload" || !store.dirty) return;
       if (store.givenUp) {
         givenUp.add(s);
-        void clearRecovery(store.filePath);
+        void clearRecovery(store.filePath, s);
         return;
       }
       if (oldestEdit == null) return;
@@ -164,12 +185,16 @@ export function installAutosave(store: DocumentStore) {
 }
 
 /** Drop the recovery snapshots of a document that was just saved. */
-export async function clearRecovery(path: string | null) {
+export async function clearRecovery(
+  path: string | null,
+  session = recovered?.session.alive ? recovered.session : null,
+) {
   if (!isTauri()) return;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("recovery_clear", { slot: slotFor(path) });
     await invoke("recovery_clear", { slot: slotFor(null) });
+    if (session) await dropRecovered(session, invoke);
   } catch {
     /* best-effort */
   }
@@ -197,6 +222,7 @@ export async function checkRecovery(store: DocumentStore) {
     ]);
     if (pick === "recover") {
       store.load(JSON.stringify(env.doc));
+      if (slot !== slotFor(null)) recovered = { slot, session: store.session };
       toast("Recovered unsaved work, use Save As to keep it", { kind: "info", timeout: 8000 });
     } else if (pick === "discard") {
       await invoke("recovery_clear", { slot });

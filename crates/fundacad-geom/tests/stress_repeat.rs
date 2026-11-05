@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 fn run(req: &Value) -> Value {
     let Value::Object(m) = req.clone() else { panic!("a request is an object") };
-    match stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds: f64::INFINITY }) {
+    match stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds: f64::INFINITY, ..Default::default() }) {
         JobResult::Json(m) => Value::Object(m),
         _ => panic!("expected a JSON result"),
     }

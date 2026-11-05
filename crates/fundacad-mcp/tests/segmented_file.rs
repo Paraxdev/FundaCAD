@@ -16,3 +16,11 @@ fn a_segmented_fixture_reads_and_publishes_its_geometry() {
     assert!(fundacad_mcp::docfile::publish_all(dir.path(), &blobs));
     assert_eq!(std::fs::read(dir.path().join(format!("{digest}.bbrep"))).unwrap(), *bytes);
 }
+
+#[test]
+fn the_v10_fixture_reads_with_its_sections_laid_out_by_the_app() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/versions/v10.fundab");
+    let (doc, blobs) = fundacad_mcp::docfile::read_document(&path).unwrap();
+    assert_eq!(doc.get("version").and_then(|v| v.as_u64()), Some(10));
+    assert!(blobs.iter().all(|(digest, bytes)| fundacad_mcp::docfile::hash(bytes) == *digest));
+}

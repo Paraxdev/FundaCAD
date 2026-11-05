@@ -294,12 +294,30 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         }
         Some(v) => return Err(format!("`refine` is off, standard or fine, got {v}")),
     }
+    match args.get("finer") {
+        None | Some(Value::Null) => {}
+        Some(v @ Value::Bool(_)) => {
+            payload.insert("finer".into(), v.clone());
+        }
+        Some(v) => return Err(format!("`finer` is true or false, got {v}")),
+    }
     let image = match args.get("image") {
         None | Some(Value::Null) => true,
         Some(Value::Bool(b)) => *b,
         Some(other) => return Err(format!("`image` is true or false, got {other}")),
     };
     Ok(Request { payload, image, supports: names })
+}
+
+/// The way past a refusal the engine says a longer run can get through, empty when it says nothing.
+pub fn finer_hint(reply: &Value) -> String {
+    let finer = &reply["error"]["finer"];
+    match (finer["elements"].as_u64(), finer["seconds"].as_u64()) {
+        (Some(elements), Some(seconds)) => format!(
+            ". A finer run should get through, about {elements} elements in about {seconds} s: call `stress` again with `finer`: true"
+        ),
+        _ => String::new(),
+    }
 }
 
 /// Four significant figures, enough to compare and short enough to read.

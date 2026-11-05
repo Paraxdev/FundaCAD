@@ -26,5 +26,6 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let i = id.y * r.w + id.x;
   let a = accum[i];
   let c = srgb(clamp(neutral(a.rgb / max(a.w, 1.0) * r.exposure), vec3f(0.0), vec3f(1.0)));
-  outp[i] = pack4x8unorm(vec4f(c, 1.0));
+  // Alpha 0 marks a pixel no sample reached, the page never shows a frame with one.
+  outp[i] = pack4x8unorm(vec4f(c, select(0.0, 1.0, a.w > 0.0)));
 }

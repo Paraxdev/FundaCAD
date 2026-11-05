@@ -1,4 +1,4 @@
-"""The release job's step that keeps every beta as a normal release of its own.
+"""The release job's step that keeps the newest betas as normal releases of their own.
 
     python3 tests/build/test_version_release.py
 
@@ -97,7 +97,12 @@ class VersionRelease(unittest.TestCase):
         )
         self.assertIn("\nFundaCAD 1.0 beta (1.0.412), Rust engine", notes)
         self.assertNotIn("Rolling FundaCAD", notes)
-        self.assertTrue(notes.endswith("The [rolling beta](https://github.com/o/r/releases/tag/beta) always has the newest build.\n"))
+        self.assertTrue(
+            notes.startswith(
+                "The newest builds are always on the [rolling beta](https://github.com/o/r/releases/tag/beta)"
+                " and the [development build](https://github.com/o/r/releases/tag/development).\n\n"
+            )
+        )
         self.assertEqual(
             self.sums,
             [
@@ -109,6 +114,26 @@ class VersionRelease(unittest.TestCase):
     def test_a_stable_release_keeps_the_latest_badge(self):
         calls, _, _ = self.run_step(stable="v1.2.0\nv1.1.3\n")
         self.assertEqual(calls[-1], "release edit v1.0.412 --repo o/r --draft=false --prerelease=false --latest=false")
+
+    def test_only_the_newest_twenty_betas_stay_in_version_order(self):
+        betas = [f"v1.0.{n}\n" for n in (101, 99, 100, *range(102, 120), 412)]
+        calls, _, warnings = self.run_step(stable="v1.2.0\nbeta\ndevelopment\n" + "".join(betas))
+        deleted = [c for c in calls if c.startswith("release delete")]
+        self.assertEqual(
+            deleted,
+            ["release delete v1.0.99 --repo o/r --cleanup-tag --yes", "release delete v1.0.100 --repo o/r --cleanup-tag --yes"],
+        )
+        self.assertEqual(warnings, [])
+
+    def test_twenty_betas_or_fewer_delete_nothing(self):
+        calls, _, _ = self.run_step(stable="".join(f"v1.0.{n}\n" for n in range(393, 413)))
+        self.assertFalse(any(c.startswith("release delete") for c in calls))
+
+    def test_a_failed_tidy_up_warns_and_keeps_the_release(self):
+        betas = "".join(f"v1.0.{n}\n" for n in range(392, 413))
+        calls, _, warnings = self.run_step(stable=betas, delete_fails="yes")
+        self.assertEqual(calls[-1], "release delete v1.0.392 --repo o/r --cleanup-tag --yes")
+        self.assertEqual(warnings, ["::warning::the old release v1.0.392 could not be deleted"])
 
     def test_a_tag_that_is_not_stable_does_not_count_as_one(self):
         calls, _, _ = self.run_step(stable="v1.0.300\nbeta\n")

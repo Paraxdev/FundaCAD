@@ -505,7 +505,7 @@ export function savedFaceRefs(
 
 const isVec3 = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
 
-function isPrint(v: unknown): v is FacePrint {
+export function isPrint(v: unknown): v is FacePrint {
   const p = v as Partial<FacePrint> | null;
   return (
     !!p &&

@@ -33,7 +33,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
-import { closeOpenEdit } from "../../app/selection";
+import { closeOpenEdit, editHeldByPick } from "../../app/selection";
 import { clickFeatureRow, deleteRows, rowTargets, toggleSuppressRows } from "../../app/featureRows";
 import type { Feature } from "../../types";
 
@@ -132,6 +132,9 @@ const rollback = computed(() => {
   }
   return docRollback.value;
 });
+// While the marker is dragged it is drawn in the gap the drop would pick, so the preview and the drop agree.
+const dragGap = ref<number | null>(null);
+const markerAt = computed(() => dragGap.value ?? rollback.value);
 const suppressed = useDocValue(() => new Set(features.value.filter((f) => store.isSuppressed(f.id)).map((f) => f.id)));
 
 /** Every failing feature this build: id -> message. Continue-past-errors can
@@ -282,7 +285,7 @@ function onChipMouseDown(ev: MouseEvent) {
   if (ev.shiftKey && !(ev.target as HTMLElement | null)?.closest?.("input")) ev.preventDefault();
 }
 function onChipDblclick(id: string) {
-  if (treePickWaiting()) return;
+  if (editHeldByPick(engine)) return;
   closeOpenEdit(engine, id);
   if (busyElsewhere()) return;
   timeline.edit(id);
@@ -506,18 +509,20 @@ function onMarkerDown(e: PointerEvent) {
   if (editing.value) return;
   e.preventDefault();
   e.stopPropagation();
-  const m = e.currentTarget as HTMLElement;
-  m.classList.add("dragging");
-  const move = (ev: PointerEvent) => m.style.setProperty("--x", `${ev.clientX}px`);
+  dragGap.value = rollback.value;
+  const move = (ev: PointerEvent) => {
+    dragGap.value = gapIndexAt(ev);
+  };
   const end = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     window.removeEventListener("pointercancel", cancel);
-    m.classList.remove("dragging");
+    dragGap.value = null;
   };
   const up = (ev: PointerEvent) => {
+    const k = gapIndexAt(ev);
     end();
-    store.setRollback(gapIndexAt(ev));
+    store.setRollback(k);
   };
   // A cancelled pointer (a touch taken as a gesture, a pen out of range) gets no pointerup, so listeners would linger.
   // A cancel is not a drop, the marker stays.
@@ -624,9 +629,9 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
 </script>
 
 <template>
-  <section id="timeline" class="timeline-shell float-card" aria-label="History">
+  <section id="timeline" class="timeline-shell float-card" aria-labelledby="history-heading">
     <div class="float-card-head">
-      <span class="float-card-title">History</span>
+      <h2 id="history-heading" class="float-card-title">History</h2>
       <Chip
         v-if="related"
         as="button"
@@ -735,10 +740,13 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         <template v-else>
           <template v-for="(f, i) in features" :key="f.id">
             <div
-              v-if="i === rollback"
+              v-if="i === markerAt"
               class="timeline-marker"
               aria-hidden="true"
-              :class="{ 'is-end': filtering && features.slice(i).every((g) => !related?.has(g.id)) }"
+              :class="{
+                'is-end': filtering && features.slice(i).every((g) => !related?.has(g.id)),
+                dragging: dragGap !== null,
+              }"
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
               ><span class="marker-grip"></span
@@ -819,9 +827,10 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
             </div>
           </template>
           <div
-            v-if="rollback >= features.length"
+            v-if="markerAt >= features.length"
             class="timeline-marker"
             aria-hidden="true"
+            :class="{ dragging: dragGap !== null }"
             title="Drag to roll the model back / forward"
             @pointerdown="onMarkerDown"
             ><span class="marker-grip"></span

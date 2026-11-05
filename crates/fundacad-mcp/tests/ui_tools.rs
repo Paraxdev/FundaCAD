@@ -193,3 +193,116 @@ fn kill(pid: u32) {
         std::process::Command::new("kill").args(["-9", &pid.to_string()]).output()
     };
 }
+
+#[test]
+fn ui_do_save_as_follows_the_doc_save_rules_before_the_harness_is_asked() {
+    let work = tempfile::Builder::new().prefix("ui-save-").tempdir().unwrap();
+    let (home, roam, xdg) = (work.path().join("home"), work.path().join("roam"), work.path().join("xdg"));
+    let data = if cfg!(windows) {
+        roam.clone()
+    } else if cfg!(target_os = "macos") {
+        home.join("Library").join("Application Support")
+    } else {
+        xdg.clone()
+    }
+    .join(fundacad_mcp::app_session::APP_IDENTIFIER);
+    let (parts, recovery) = (work.path().join("parts"), data.join("recovery"));
+    std::fs::create_dir_all(&parts).unwrap();
+    std::fs::create_dir_all(&recovery).unwrap();
+    let notes = parts.join("notes.funda");
+    std::fs::write(&notes, "my notes, not a model").unwrap();
+    let s = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let (h, r, x) = (s(&home), s(&roam), s(&xdg));
+    let mut mcp = standalone(&[("USERPROFILE", &h), ("HOME", &h), ("APPDATA", &r), ("XDG_DATA_HOME", &x)]);
+    let save = |p: &Path, overwrite: bool| json!({"steps": [{"do": "save_as", "path": s(p), "overwrite": overwrite}]});
+    for (path, why) in [
+        (parts.join("a.txt"), "writes only .funda"),
+        (notes.clone(), "already holds a file"),
+        (recovery.join("r.funda"), "recovery folder"),
+        (parts.join("missing").join("a.funda"), "No such directory"),
+    ] {
+        let reply = mcp.call("ui_do", save(&path, false));
+        assert!(reply.is_error && reply.text.contains(why), "{}: {}", path.display(), reply.text);
+    }
+    mcp.call("ui_open", json!({}));
+    let ok = mcp.call("ui_do", save(&notes, true));
+    assert!(!ok.is_error && ok.text.contains("did save_as"), "{}", ok.text);
+    assert!(!ok.text.contains("overwrite"), "overwrite reached the harness: {}", ok.text);
+    let ok = mcp.call("ui_do", save(&parts.join("b.funda"), false));
+    assert!(!ok.is_error && ok.text.contains("did save_as"), "{}", ok.text);
+}
+
+#[test]
+fn ui_open_record_follows_the_save_rules_before_the_harness_is_asked() {
+    let work = tempfile::Builder::new().prefix("ui-record-").tempdir().unwrap();
+    let (home, roam, xdg) = (work.path().join("home"), work.path().join("roam"), work.path().join("xdg"));
+    let data = if cfg!(windows) {
+        roam.clone()
+    } else if cfg!(target_os = "macos") {
+        home.join("Library").join("Application Support")
+    } else {
+        xdg.clone()
+    }
+    .join(fundacad_mcp::app_session::APP_IDENTIFIER);
+    let (scripts, recovery) = (work.path().join("scripts"), data.join("recovery"));
+    std::fs::create_dir_all(&scripts).unwrap();
+    std::fs::create_dir_all(&recovery).unwrap();
+    let mine = scripts.join("mine.py");
+    std::fs::write(&mine, "print('my own script')\n").unwrap();
+    let earlier = scripts.join("earlier.py");
+    std::fs::write(&earlier, "# Recorded by fundacad-harness 0.1.0, driver api 1\n").unwrap();
+    let s = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let (h, r, x) = (s(&home), s(&roam), s(&xdg));
+    let mut mcp = standalone(&[("USERPROFILE", &h), ("HOME", &h), ("APPDATA", &r), ("XDG_DATA_HOME", &x)]);
+    for (path, why) in [
+        (scripts.join("steps.txt"), "writes only .py"),
+        (mine.clone(), "already holds a file"),
+        (recovery.join("r.py"), "recovery folder"),
+        (scripts.join("missing").join("steps.py"), "No such directory"),
+    ] {
+        let reply = mcp.call("ui_open", json!({"record": s(&path)}));
+        assert!(reply.is_error && reply.text.contains(why), "{}: {}", path.display(), reply.text);
+    }
+    let ok = mcp.call("ui_open", json!({"record": s(&earlier)}));
+    assert!(!ok.is_error && ok.text.contains("opened"), "{}", ok.text);
+    mcp.call("ui_close", json!({}));
+    let ok = mcp.call("ui_open", json!({"record": s(&mine), "overwrite": true}));
+    assert!(!ok.is_error && ok.text.contains("opened"), "{}", ok.text);
+    assert!(!ok.text.contains("overwrite"), "overwrite reached the harness: {}", ok.text);
+}
+
+fn said(text: &str, key: &str) -> String {
+    text.lines().find_map(|l| l.strip_prefix(key)).unwrap_or_else(|| panic!("no {key} in {text}")).to_string()
+}
+
+#[test]
+fn the_harness_starts_in_an_empty_folder_of_its_own_and_imports_nothing_from_the_hosts() {
+    let host = tempfile::tempdir().expect("a temp dir");
+    std::fs::write(host.path().join("package.json"), "{}").unwrap();
+    std::fs::create_dir(host.path().join("src-tauri")).unwrap();
+    std::fs::create_dir(host.path().join("fundacad_harness")).unwrap();
+    std::fs::write(host.path().join("fundacad_harness").join("__init__.py"), "").unwrap();
+    std::fs::create_dir(host.path().join("bin")).unwrap();
+    let name = fake().file_name().unwrap().to_owned();
+    std::fs::copy(fake(), host.path().join("bin").join(&name)).unwrap();
+    let relative = format!("bin/{}", name.to_string_lossy());
+    let vars = env(&[
+        ("FUNDACAD_MCP_MODE", "standalone"),
+        ("FUNDACAD_HARNESS_PYTHON", &relative),
+        ("FUNDACAD_ENGINE_CMD", &relative),
+    ]);
+    let mut mcp = Mcp::start(&vars, host.path());
+    let open = mcp.call("ui_open", json!({}));
+    assert!(!open.is_error, "{}", open.text);
+    let cwd = PathBuf::from(said(&open.text, "cwd: "));
+    let same = |a: &Path, b: &Path| a.canonicalize().ok() == b.canonicalize().ok();
+    assert!(!same(&cwd, host.path()), "the harness runs in the host's folder: {}", open.text);
+    assert_eq!(std::fs::read_dir(&cwd).map(|d| d.count()).ok(), Some(0), "{}", cwd.display());
+    assert_eq!(said(&open.text, "safepath: "), "1");
+    assert!(same(Path::new(&said(&open.text, "repo: ")), host.path()), "{}", open.text);
+    let engine = open.text.split("engine ").nth(1).and_then(|r| r.split(", args").next()).unwrap();
+    assert!(Path::new(engine.trim_matches('"')).is_absolute(), "{engine}");
+    let closed = mcp.call("ui_close", json!({}));
+    assert!(!closed.is_error, "{}", closed.text);
+    assert!(!cwd.exists(), "{} outlived ui_close", cwd.display());
+}

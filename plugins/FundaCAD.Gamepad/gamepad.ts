@@ -82,6 +82,28 @@ export const DEFAULTS: GamepadConfig = {
   },
 };
 
+// A Gamepad id has no set format: WebKit gives the device name alone, Chromium appends "(Vendor: 256f Product: c635)",
+// Firefox prefixes "256f-c635-", at times without leading zeros. WebKit is why the two udev-listed Logitech products
+// with no Space or 3Dconnexion in their names, CADman and nuLOOQ, are named here as well.
+const THREE_D_MOUSE_NAME =
+  /3d[\s-]*connexion|\bspace[\s-]*(mouse|navigator|pilot|explorer|travell?er|ball)|\bcad[\s-]*man\b|\bnu[\s-]*looq\b/i;
+const VENDOR_PRODUCT = /(?:vendor:\s*(?:0x)?|^)([0-9a-f]{1,4})(?:\s+product:\s*(?:0x)?|-)([0-9a-f]{1,4})\b/i;
+const CONNEXION_VENDOR = 0x256f;
+// 046d is also Logitech's own gamepads, so only the products packaging/70-spacemouse.rules lists count.
+const LOGITECH_VENDOR = 0x046d;
+const LOGITECH_3D_MICE = [
+  0xc603, 0xc605, 0xc606, 0xc621, 0xc623, 0xc625, 0xc626, 0xc627, 0xc628, 0xc629, 0xc62b, 0xc640,
+];
+
+/** Linux WebKit lists a 3D mouse as a pad, with the standard mapping even, and the FundaCAD.SpaceMouse plugin reads it. */
+export function isThreeDMouse(id: string): boolean {
+  if (THREE_D_MOUSE_NAME.test(id)) return true;
+  const m = VENDOR_PRODUCT.exec(id);
+  if (!m) return false;
+  const vendor = parseInt(m[1]!, 16);
+  return vendor === CONNEXION_VENDOR || (vendor === LOGITECH_VENDOR && LOGITECH_3D_MICE.includes(parseInt(m[2]!, 16)));
+}
+
 const KEY = "fundacad.gamepad.config";
 
 function clamp(v: unknown, lo: number, hi: number, dflt: number): number {

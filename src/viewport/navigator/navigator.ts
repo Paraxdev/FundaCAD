@@ -6,6 +6,8 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
+import { NearestSweep, SWEEP_FROM, nearestBound, partsFloor, zoomSnapLog } from "./zoomSnap";
+import { autoWantsOrtho, onWorldAxis } from "../autoProjection";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
 import { decompose, turntableQuat, wrapAngle } from "./math";
@@ -47,8 +49,6 @@ export const CLICK_SLOP_PX = 5;
 export const ZOOM_PER_DRAG_PX = 3;
 /** Drag distance over which a banked view (3D mouse roll) comes back level. */
 export const RELEVEL_PX = 80;
-/** 'auto' projection is orthographic within this of a world axis. */
-const AXIS_SNAP_COS = Math.cos((0.5 * Math.PI) / 180);
 /** The model ball the target is kept in, in bounding radii. */
 export const CONTAIN_FACTOR = 1.5;
 /** Seconds of drag velocity an inertial orbit carries on after release. */
@@ -82,6 +82,11 @@ export class Navigator {
   private userLimits: Partial<Limits> = {};
   limits: Limits = defaultLimits();
   private box: THREE.Box3 | null = null;
+  private parts: readonly THREE.Box3[] = [];
+  private zoomsTogether = 0;
+  /** Rays a frame the last look over the view managed in this scene, 0 until one has, and whether on this model. */
+  private rayPace = 0;
+  private rayPaceHere = false;
   private plane: THREE.Plane | null = null;
   private scene: NavScene | null = null;
   private locked = false;
@@ -104,6 +109,15 @@ export class Navigator {
   private unsettled = false;
   private good: Pose = makePose();
   private version = 0;
+  // Pose moves, and the count update() last reported: an arrow step or a 3D mouse turn lands between frames, and the
+  // next frame has to count it or the viewport's still timer never starts.
+  private moves = 0;
+  private movesSeen = 0;
+  // An orthographic view's eye is only scale over lens, a zoom, fit or re-seat moves it through the model while the
+  // picture stays outside, so 'auto' asks the content box only of a view set by its eye.
+  private eyeSet = false;
+  // A click on a view until its flight lands, so 'auto' may go orthographic on arrival with the eye inside. Input drops it.
+  private deliberate = false;
   private stamp = makePose();
   private listeners: Record<NavigatorEvent, Set<() => void>> = {
     inputstart: new Set(),
@@ -140,16 +154,22 @@ export class Navigator {
     const h = Math.max(1, height);
     if (w === this.frame.width && h === this.frame.height) return;
     this.frame = { width: w, height: h };
+    this.forgetNearest();
     this.recomputeLimits();
     this.touch();
   }
 
   setScene(scene: NavScene | null) {
     this.scene = scene;
+    this.rayPace = 0;
+    this.forgetNearest();
   }
 
-  setContentBox(box: THREE.Box3 | null) {
+  setContentBox(box: THREE.Box3 | null, parts: readonly THREE.Box3[] = []) {
     this.box = box && !box.isEmpty() ? box.clone() : null;
+    this.parts = parts;
+    this.rayPaceHere = false;
+    this.forgetNearest();
     this.recomputeLimits();
   }
 
@@ -157,7 +177,12 @@ export class Navigator {
     return this.box;
   }
 
+  contentParts(): readonly THREE.Box3[] {
+    return this.parts;
+  }
+
   setAnchorPlane(plane: THREE.Plane | null) {
+    this.forgetNearest();
     this.plane = plane ? plane.clone() : null;
   }
 
@@ -194,9 +219,9 @@ export class Navigator {
   projectionMode(): ProjectionMode {
     return this.mode;
   }
-  setProjectionMode(m: ProjectionMode) {
+  setProjectionMode(m: ProjectionMode, keepOrtho = false) {
+    const want = m === "ortho" || (m === "auto" && this.autoOrtho(this.mode !== "auto" && !keepOrtho));
     this.mode = m;
-    const want = m === "ortho" || (m === "auto" && this.axisAligned());
     if (want !== this.pose.ortho) {
       this.pose.ortho = want;
       this.moved();
@@ -237,7 +262,7 @@ export class Navigator {
    *  not take input at all. False when the input has to be ignored. */
   private takeInput(): boolean {
     if (this.flight?.hard) return false;
-    this.flight = null;
+    this.abandonFlight();
     // An orbit still easing (or coasting) after its release stops where it is
     // shown, or it would carry a new gesture's anchor away from the cursor.
     if (!this.gesture) this.orbit?.freeze();
@@ -407,7 +432,7 @@ export class Navigator {
     const ours = this.orbit !== null && this.orbit === this.scrollChannel && !this.gesture;
     if (ours) {
       if (this.flight?.hard) return;
-      this.flight = null;
+      this.abandonFlight();
     } else if (!this.takeInput()) return;
     const same =
       !fresh &&
@@ -452,9 +477,8 @@ export class Navigator {
     this.unsettled = true;
   }
 
-  /** Advance one frame of `dt` seconds. True when the pose changed. */
+  /** Advance one frame of `dt` seconds. True when the pose moved since the last update, between frames too. */
   update(dt: number): boolean {
-    const before = this.version;
     const tau = this.opts.smoothTime;
     if (this.flight) {
       const done = stepFlight(this.flight, dt, this.pose);
@@ -479,20 +503,30 @@ export class Navigator {
       this.emit("rest");
     }
     if (this.mode === "auto" && this.gesture?.kind !== "orbit" && !this.orbit) {
-      const want = this.axisAligned();
+      const want = this.autoOrtho();
       if (want !== this.pose.ortho) {
         this.pose.ortho = want;
         this.moved();
       }
     }
+    if (!this.flight) {
+      this.eyeSet = false;
+      this.deliberate = false;
+    }
     this.sanitize();
-    return this.version !== before;
+    const moved = this.moves !== this.movesSeen;
+    this.movesSeen = this.moves;
+    return moved;
   }
 
   private stepZooms(tau: number, dt: number) {
-    if (!this.zooms.length) return;
+    if (!this.zooms.length) {
+      this.zoomsTogether = 0;
+      return;
+    }
+    this.zoomsTogether = Math.max(this.zoomsTogether, this.zooms.length);
     for (const ch of this.zooms) {
-      const want = ch.step(tau, dt);
+      const want = ch.step(tau, dt, this.zoomSnap(ch, tau, dt));
       if (want === 0) continue;
       const got = this.limitedLog(ch.anchor, want);
       if (got !== 0) {
@@ -504,6 +538,46 @@ export class Navigator {
     // A pinch's channel stays while the fingers are down, even at rest.
     this.zooms = this.zooms.filter((c) => c === this.pinchZoom || !c.settled());
     this.unsettled = true;
+  }
+
+  /** The log a zoom may drop at once, none while anything else moves the view, as it goes by what is in view now. */
+  private zoomSnap(ch: ZoomChannel, tau: number, dt: number): number {
+    const busy = this.gesture || this.orbit || this.pan || ch === this.pinchZoom;
+    if (!(tau > 0) || busy || this.scene?.raysCostly?.()) {
+      ch.sweep = null;
+      return 0;
+    }
+    const p = this.pose;
+    const most = zoomSnapLog(p, this.frame, ch.anchor, null);
+    // A near surface only ever shrinks this, so no rays are spent until the zoom is close to it, early enough for a look
+    // spread over frames to finish in time.
+    const reach = SWEEP_FROM * most;
+    if (!ch.near(reach, tau)) {
+      ch.sweep = null;
+      return 0;
+    }
+    // Zooms running together each get a share, as what their landings skip adds up on screen.
+    if (p.ortho) return most / this.zoomsTogether;
+    if (ch.sweep && Math.abs(ch.goal - ch.sweep.goal) > reach) ch.sweep = null;
+    ch.sweep ??= new NearestSweep(ch.goal, this.rayPace, this.rayPaceHere);
+    const done = ch.sweep.advance(p, this.ctx(), () => ch.framesLeft(tau, dt));
+    const pace = ch.sweep.pace();
+    if (pace > 0) {
+      this.rayPace = pace;
+      this.rayPaceHere = true;
+    }
+    if (!done) return 0;
+    if (!ch.sweep.boxes) {
+      const parts = this.parts.length || !this.box ? this.parts : [this.box];
+      ch.sweep.boxes = partsFloor(p, this.frame.width / this.frame.height, parts);
+    }
+    const { floor, inside } = ch.sweep.boxes;
+    const nearest = nearestBound(ch.sweep.nearest(), floor, inside, depthOf(p, ch.anchor));
+    return zoomSnapLog(p, this.frame, ch.anchor, nearest) / this.zoomsTogether;
+  }
+
+  private forgetNearest() {
+    for (const ch of this.zooms) ch.sweep = null;
   }
 
   /** How much of a log zoom about A the limits allow. */
@@ -602,13 +676,17 @@ export class Navigator {
     return depth >= this.limits.minDistance && depth * halfTan(p.fov) <= this.limits.maxScale;
   }
 
-  private axisAligned(): boolean {
-    const f = forwardOf(this.pose, new THREE.Vector3());
-    return Math.max(Math.abs(f.x), Math.abs(f.y), Math.abs(f.z)) >= AXIS_SNAP_COS;
+  private autoOrtho(eyeSet = this.eyeSet): boolean {
+    const eye = eyeOf(this.pose, new THREE.Vector3());
+    const dir = this.pose.target.clone().sub(eye);
+    if (this.deliberate && !this.flight && onWorldAxis(dir.x, dir.y, dir.z)) return true;
+    if (this.pose.ortho && !eyeSet) return onWorldAxis(dir.x, dir.y, dir.z);
+    return autoWantsOrtho(dir, eye, this.box, this.pose.ortho);
   }
 
   private moved() {
     this.version++;
+    this.moves++;
     this.emit("change");
   }
 
@@ -622,7 +700,7 @@ export class Navigator {
       this.zooms = [];
       this.orbit = null;
       this.pan = null;
-      this.flight = null;
+      this.abandonFlight();
       this.moved();
       return;
     }
@@ -631,6 +709,11 @@ export class Navigator {
       if (p.elev < lo || p.elev > hi) setTurntable(p, p.yaw, Math.min(hi, Math.max(lo, p.elev)));
     }
     copyPose(this.good, p);
+  }
+
+  private abandonFlight() {
+    this.flight = null;
+    this.deliberate = false;
   }
 
   private stopAll() {
@@ -650,10 +733,14 @@ export class Navigator {
       hard?: boolean;
       onArrive?: (() => void) | undefined;
       duration?: number;
+      byEye?: boolean;
+      deliberate?: boolean;
     } = {},
   ) {
     this.stopAll();
     this.flight = null;
+    this.eyeSet = opts.byEye ?? false;
+    this.deliberate = opts.deliberate ?? false;
     const target = clonePose(to);
     target.ortho = this.pose.ortho;
     target.scale = clampScale(this.limits, target.fov, target.scale);
@@ -686,7 +773,7 @@ export class Navigator {
     const d = eye.distanceTo(target);
     if (!(d > 0) || !Number.isFinite(d)) return;
     const q = lookQuat(eye, target);
-    this.flyTo(this.poseWith(q, target, d * halfTan(this.pose.fov)), { animate });
+    this.flyTo(this.poseWith(q, target, d * halfTan(this.pose.fov)), { animate, byEye: true });
   }
 
   rotateTo(azimuth: number, polar: number, animate = false) {
@@ -722,6 +809,7 @@ export class Navigator {
     const got = this.limitedLog(a, Math.log(factor));
     if (got === 0) return;
     scaleAbout(this.pose, a, Math.exp(got));
+    this.forgetNearest();
     this.moved();
   }
 
@@ -777,7 +865,7 @@ export class Navigator {
   restoreUp(animate = true) {
     // A flight still in the air (sketch entry) is abandoned where it stands:
     // landing it would run its arrival for a sketch that has already closed.
-    this.flight = null;
+    this.abandonFlight();
     if (this.pose.level) return;
     const t = decompose(this.pose.q);
     const p = clonePose(this.pose);
@@ -806,7 +894,7 @@ export class Navigator {
     const p = this.destination();
     p.target.copy(c);
     p.scale = frameScale(p, this.frame, r);
-    this.flyTo(p, { animate: opts.animate });
+    this.flyTo(p, { animate: opts.animate, deliberate: this.deliberate });
   }
 
   /** Frame a box, keeping the view direction, FIT_MARGIN clear on every side. */
@@ -821,7 +909,7 @@ export class Navigator {
       p.target.copy(c);
       p.scale = frameScale(p, this.frame, EMPTY_VIEW_MM);
     }
-    this.flyTo(p, { animate: opts.animate });
+    this.flyTo(p, { animate: opts.animate, deliberate: this.deliberate });
   }
 
   /** The view a fresh window opens on. Given the box, it frames the box itself
@@ -853,14 +941,14 @@ export class Navigator {
 
   /** Turn about the target keeping the scale, so a zoomed detail stays centred and the same size.
    *  When that would leave the model wholly off screen the turn frames it instead. */
-  turnTo(q: THREE.Quaternion, animate = true) {
+  turnTo(q: THREE.Quaternion, animate = true, deliberate = false) {
     if (!this.flight && this.unsettled) {
       this.unsettled = false;
       this.reseatAndContain();
     }
     const p = this.poseWith(q);
     if (this.box && boxOffScreen(p, this.frame, this.box)) frameBox(p, this.frame, this.box);
-    this.flyTo(p, { animate });
+    this.flyTo(p, { animate, deliberate });
   }
 
   lookAtPlane(

@@ -155,7 +155,7 @@ impl Gpu {
 }
 
 impl FrameSource for GpuPattern {
-    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) -> bool {
         let done = match self.0.lock() {
             Ok(mut gpu) => gpu.render(out, width, height, seq),
             Err(_) => Err("an earlier frame panicked".into()),
@@ -166,17 +166,19 @@ impl FrameSource for GpuPattern {
             }
             CpuPattern.render(out, width, height, seq);
         }
+        true
     }
 }
 
 struct CpuPattern;
 
 impl FrameSource for CpuPattern {
-    fn render(&self, out: &mut [u8], width: u32, _height: u32, seq: u32) {
+    fn render(&self, out: &mut [u8], width: u32, _height: u32, seq: u32) -> bool {
         let w = width.max(1) as usize;
         for (i, px) in out.chunks_exact_mut(4).enumerate() {
             let (x, y) = (i % w, i / w);
             px.copy_from_slice(&[(x as u32 + seq) as u8, (y as u32 + seq) as u8, (x ^ y) as u8, 255]);
         }
+        true
     }
 }

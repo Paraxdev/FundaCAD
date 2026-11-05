@@ -18,7 +18,9 @@
 // but the METHODS under test are the real ones, taken off the prototype. What is
 // faked is the viewport/overlay/solver around them, never the round-trip.
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { noKeyDraw, noKeySurface } from "./keyDrawStub";
+import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
+import { setInputModalityForTest } from "../../src/ui/inputModality";
 import * as THREE from "three";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { SketchPlane } from "../../src/sketch/plane";
@@ -52,6 +54,9 @@ function makeSketch(doc: CadDocument) {
     selected: new Set<string>(),
     pendingBindings: new Map(),
     history: { reset() {} },
+    keyDraw: noKeyDraw,
+    keySurface: noKeySurface,
+    lastCursor: new THREE.Vector2(),
     patternFlow: { resetForEnter() {}, flushOnFinish() {} },
     dims: { clearSelection() {} },
     gridFocus: { set() {} },
@@ -115,6 +120,46 @@ describe("a face-anchored sketch round-trips through enter, snapshot and enter",
     expect(f.face).toEqual(SEL);
     expect(f.at).toEqual(ANCHOR.at);
     expect(f.planeId).toBe("dp1");
+  });
+
+  describe("the keys state of a new session", () => {
+    const withKeys = () => {
+      const made = makeSketch(doc);
+      const keyDraw = { ...noKeyDraw, reset: vi.fn(), armedByKeys: vi.fn() };
+      const order: string[] = [];
+      keyDraw.reset.mockImplementation(() => void order.push("reset"));
+      keyDraw.armedByKeys.mockImplementation(() => void order.push("armed"));
+      Object.assign(made.s, { keyDraw });
+      return { ...made, keyDraw, order };
+    };
+    afterEach(() => setInputModalityForTest("pointer"));
+
+    it("forgets the last one's by keys", () => {
+      const { s, store, keyDraw } = withKeys();
+      s.enter(PLANE, store, undefined, "dp1", ANCHOR);
+      expect(keyDraw.reset).toHaveBeenCalledTimes(1);
+    });
+
+    it("arms by keys after the reset when the sketch was opened by keys", () => {
+      setInputModalityForTest("keyboard");
+      const { s, store, order } = withKeys();
+      s.enter(PLANE, store, undefined, "dp1", ANCHOR);
+      expect(order).toEqual(["reset", "armed"]);
+    });
+
+    it("does not when it was opened by pointer", () => {
+      setInputModalityForTest("pointer");
+      const { s, store, keyDraw } = withKeys();
+      s.enter(PLANE, store, undefined, "dp1", ANCHOR);
+      expect(keyDraw.armedByKeys).not.toHaveBeenCalled();
+    });
+  });
+
+  it("starts every sketch with the keyboard cursor on the plane's 0, 0, not where the last one left it", () => {
+    const { s, store } = makeSketch(doc);
+    (s as unknown as { lastCursor: THREE.Vector2 }).lastCursor.set(7.5, -3);
+    s.enter(PLANE, store, undefined, "dp1", ANCHOR);
+    expect((s as unknown as { lastCursor: THREE.Vector2 }).lastCursor).toEqual(new THREE.Vector2(0, 0));
   });
 
   it("keeps them when the SAVED sketch is reopened and closed unchanged", () => {

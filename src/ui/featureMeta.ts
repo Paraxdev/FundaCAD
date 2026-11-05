@@ -82,6 +82,9 @@ export function assemblyName(f: Nameable): string | null {
   return roots.length === 1 ? roots[0]!.name || null : null;
 }
 
+/** A datum plane's name, or its place among the datum planes when it has none. */
+export const datumPlaneName = (f: { name?: string }, place: number) => f.name || `Plane${place + 1}`;
+
 /** The name History and Items agree on. An import takes its assembly name, but only while its
  *  name is still the file's: `source` is a path, and the engine names an import after the file
  *  stem (or the stem of a .gz one), so a name that is not that was typed. */
@@ -98,4 +101,15 @@ export function stepName(f: Nameable): string {
 /** The same answer for a whole feature, when the caller has one. */
 export function labelOf(f: Feature): string {
   return featureMeta(f as { type: string; operation?: unknown; thin?: unknown }).label;
+}
+
+/** stepName, with the 1-based place among same-labelled steps added to an unnamed one. A named
+ *  step counts toward the place so a rename does not renumber the others. */
+export function numberedName(f: Nameable & { id?: string }, features: readonly (Nameable & { id?: string })[]): string {
+  if (f.name?.trim()) return stepName(f);
+  const label = featureMeta(f).label;
+  const at = features.findIndex((g) => g === f || (f.id !== undefined && g.id === f.id));
+  if (at < 0) return label;
+  const place = features.slice(0, at + 1).filter((g) => featureMeta(g).label === label).length;
+  return `${label} ${place}`;
 }

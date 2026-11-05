@@ -3,6 +3,7 @@
 // as a contradiction).
 
 import { ref } from "vue";
+import FieldRow from "../ui/FieldRow.vue";
 import NumberField from "../ui/NumberField.vue";
 import type { UnitDef } from "../../ui/measure";
 
@@ -44,29 +45,34 @@ function onValue(v: number | null) {
 </script>
 
 <template>
-  <div class="param-row" :class="rowClass" :title="rowTitle" :data-field="field">
-    <label>{{ label }}</label>
-    <div class="param-value">
-      <NumberField
-        :label="label"
-        :title="hint"
-        :model-value="value"
-        :text="text"
-        :unit="unit"
-        :units="units"
-        :unit-tip="units?.length ? 'Change unit' : 'Expressions are written in this unit'"
-        adopt-unit
-        :parse="parse"
-        :validate="validate"
-        :expression="expression"
-        :preview="preview"
-        :preview-end="previewEnd"
-        :problem="problem"
-        @update:model-value="onValue"
-        @update:unit="emit('update:unit', $event)"
-        @error="refused = $event"
-      />
-    </div>
-    <p v-if="refused || problem" class="param-problem">{{ refused ?? problem }}</p>
-  </div>
+  <FieldRow
+    v-slot="{ id }"
+    layout="param"
+    :label="label"
+    :error="refused ?? problem ?? undefined"
+    :class="rowClass"
+    :title="rowTitle"
+    :data-field="field"
+  >
+    <NumberField
+      :id="id"
+      :label="label"
+      :title="hint"
+      :model-value="value"
+      :text="text"
+      :unit="unit"
+      :units="units"
+      :unit-tip="units?.length ? 'Change unit' : 'Expressions are written in this unit'"
+      adopt-unit
+      :parse="parse"
+      :validate="validate"
+      :expression="expression"
+      :preview="preview"
+      :preview-end="previewEnd"
+      :problem="problem"
+      @update:model-value="onValue"
+      @update:unit="emit('update:unit', $event)"
+      @error="refused = $event"
+    />
+  </FieldRow>
 </template>

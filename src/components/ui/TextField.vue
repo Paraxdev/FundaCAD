@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
 import { useCommitField } from "./useCommitField";
+import { useFieldSpeech } from "./useFieldSpeech";
 import { useDisabled } from "./useDisabled";
 import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
@@ -58,11 +59,17 @@ watch(
 defineExpose({ focus: () => el.value?.focus() });
 
 const shownError = computed(() => field.error.value ?? props.error ?? null);
+const speech = useFieldSpeech({
+  el,
+  error: shownError,
+  live: () => props.commit !== "change",
+  callerDescribedby: () => attrs["aria-describedby"],
+});
 const tipText = computed(() => (props.tip ? fmtKeys(props.keys ? `${props.tip} (${props.keys})` : props.tip) : null));
 
 /** Everything a caller passes lands on the input, except the layout of the well. */
 function inputAttrs() {
-  const { class: _c, style: _s, ...rest } = attrs;
+  const { class: _c, style: _s, "aria-describedby": _d, ...rest } = attrs;
   return mergeProps(rest, d.bind.value, name.value);
 }
 
@@ -99,12 +106,14 @@ function onKeydown(e: KeyboardEvent) {
       :placeholder="placeholder"
       :readonly="d.isDisabled.value || undefined"
       :aria-invalid="shownError ? 'true' : undefined"
+      :aria-describedby="speech.describedby.value"
       :title="d.title(shownError ?? tipText ?? (attrs.title as string | undefined))"
       @input="onInput"
       @keydown="onKeydown"
       @blur="field.blur()"
       @focus="selectOnFocus && el?.select()"
     />
+    <span v-if="shownError" :id="speech.errorId" class="sr-only">{{ shownError }}</span>
     <slot name="trailing" />
   </span>
 </template>

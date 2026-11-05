@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { pushAll } from "../lib/pushAll";
 import { radialAt } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
+import type { Continuity } from "../features/continuity";
 import {
   TRIM_BUDGET,
   sectionOutline,
@@ -170,7 +171,13 @@ export class GhostLayer {
 
   /** `capped` paints it as a refused size held back to `size`, the largest
    *  one the kernel built. */
-  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind, capped = false) {
+  setBlendGhost(
+    edges: readonly BlendGhostEdge[],
+    size: number,
+    kind: BlendKind,
+    capped = false,
+    continuity: Continuity = "G1",
+  ) {
     this.clearBlendGhost();
     const model = this.host.model();
     if (!model || !edges.length || size < 1e-4) return;
@@ -182,7 +189,7 @@ export class GhostLayer {
     for (const edge of edges) {
       const found = edgeFaceSamples(model, edge, sampling);
       if (!found) continue; // can't tell the two faces apart here, skip THIS edge
-      const geo = sweepBlendGhost(found.samples, size, kind, found.closed, budget);
+      const geo = sweepBlendGhost(found.samples, size, kind, found.closed, budget, continuity);
       if (!geo) continue;
       pushAll(positions, geo.positions);
       unsure ||= geo.unsure;

@@ -19,6 +19,7 @@ import type {
   Selector,
   SketchEntity,
   U32Wire,
+  TopologyReply,
   Vec3,
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
@@ -50,6 +51,7 @@ import type { WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebui
 interface WireError {
   message: string;
   feature_id?: string;
+  finer?: StressFiner;
 }
 type RawReply<T> =
   | { id: string; ok: true; result: T }
@@ -156,6 +158,9 @@ export type FaceAnchorReply =
     }
   | { reason: string };
 
+/** `topology` options: only these faces, and no `edgeFaces`, or a cap on how many (docs/PROTOCOL.md). */
+export type TopologyOptions = { faces?: number[]; maxFaces?: number };
+
 /** How a cylinder, cone, sphere or torus face resizes (docs/PROTOCOL.md, faceAxis). */
 export interface FaceResize {
   kind: "cylinder" | "cone" | "sphere" | "torus";
@@ -216,6 +221,14 @@ export interface StressOptions {
   maxElements?: number;
   /** Absent is "standard". */
   refine?: StressRefine;
+  /** Only after a refusal that offered it, runs past the limits once. */
+  finer?: boolean;
+}
+
+/** What a run past the limits would take, offered by a refusal. `seconds` is a rough estimate of the solve alone. */
+export interface StressFiner {
+  elements: number;
+  seconds: number;
 }
 
 export type StressRefine = "off" | "standard" | "fine";
@@ -260,7 +273,8 @@ export interface StressReply {
   errors?: { feature_id?: string; message: string }[];
 }
 
-export type StressResult = { ok: true; result: StressReply } | { ok: false; message: string; cancelled?: boolean };
+export type StressResult =
+  { ok: true; result: StressReply } | { ok: false; message: string; cancelled?: boolean; finer?: StressFiner };
 
 export type PrintabilityCheck = "overhang" | "wall" | "gap" | "bridge" | "open";
 export type PrintabilityUp = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
@@ -414,6 +428,14 @@ export interface GeometryBackend {
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
   /** Where `point` sits on `face`, as a fingerprint and (u, v) fractions. */
   faceAnchor?(doc: CadDocument, face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null>;
+  /** One body's faces in plain numbers (id or name). Null on an unknown body, a cancel or an engine without the op.
+   *  `onStarted` as for `stress`. */
+  topology?(
+    doc: CadDocument,
+    body: string,
+    opts?: TopologyOptions,
+    onStarted?: (id: string) => void,
+  ): Promise<TopologyReply | null>;
   /** Linear static stress in one body (id or name). `onStarted` hands back the request id for `cancel(id)`. */
   stress?(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult>;
   /** What would go wrong printing the bodies layer by layer: overhangs, thin walls, gaps, bridges and open
@@ -688,6 +710,7 @@ export const ENGINE_OPS = [
   "blobRead",
   "faceAxis",
   "faceAnchor",
+  "topology",
   "profileCuts",
   "patternAxis",
   "projectGeometry",
@@ -1526,7 +1549,8 @@ export class Geometry implements GeometryBackend {
     const msg = await this.call<StressReply>("stress", { document: doc, body, ...opts }, onStarted);
     if (msg.ok) return { ok: true, result: msg.result };
     if (msg.cancelled) return { ok: false, cancelled: true, message: "stress analysis cancelled" };
-    return { ok: false, message: msg.error?.message ?? "stress analysis failed" };
+    const finer = msg.error?.finer;
+    return { ok: false, message: msg.error?.message ?? "stress analysis failed", ...(finer ? { finer } : {}) };
   }
 
   async printability(
@@ -1610,6 +1634,16 @@ export class Geometry implements GeometryBackend {
       point,
       ...(body ? { body } : {}),
     });
+    return msg.ok ? msg.result : null;
+  }
+
+  async topology(
+    doc: CadDocument,
+    body: string,
+    opts: TopologyOptions = {},
+    onStarted?: (id: string) => void,
+  ): Promise<TopologyReply | null> {
+    const msg = await this.call<TopologyReply>("topology", { document: doc, body, ...opts }, onStarted);
     return msg.ok ? msg.result : null;
   }
 

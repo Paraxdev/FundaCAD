@@ -21,7 +21,7 @@
 }
 .ui-field-label {
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -33,9 +33,10 @@
   min-width: 0;
 }
 .ui-field-hint {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-mute);
 }
 .ui-field-row.is-error .ui-field-hint {
+  font-size: var(--fs-small);
   color: var(--error);
 }

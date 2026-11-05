@@ -25,9 +25,66 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Printability says what it found.** When a check ends, a screen reader
+  hears the count, each kind, and the largest overhang with its area and face.
+  A failed or cancelled check is spoken too.
+
+- **The Stress panel offers Perceptual, Rainbow or Greyscale colours, banded or
+  smooth.** Colour map and Bands sit under the colour bar. The body and the bar
+  change at once, with no new Run, and the choice is kept across studies and
+  restarts.
+
+- **Measure, Properties and Stress readouts read as label and value pairs.** A
+  screen reader now hears each label with its value in the Measure panel, the
+  Properties panel and the Stress key rows and details, and can list them as
+  term and definition pairs.
+
+- **Printability findings are a list you can walk.** Each finding is a button
+  that names its face and its height above the bed, an overhang from where it
+  starts. Tab lights the face, Enter turns the view to it.
+
+- **Interference rows are buttons, and the result is spoken.** Tab lights a
+  pair the way hovering does, a press keeps it lit, and a screen reader hears
+  how many clashes and close pairs the check found. A clash row's value says
+  overlap and a close pair's says apart.
+
+- **Picked faces and edges are named.** Target editor and Mirror rows read
+  like "Face 8 of Bracket", rows of one name are told apart, and each Remove
+  says which row it takes away. Target editor rows take keyboard focus and
+  light their geometry like a hover.
+
+- **Stress results say where the highest values are.** Peak stress and Max
+  deflection are listed with their x, y and z, and a press flies the view to
+  that point.
+
+- **The Stress colour bar labels its quarter marks.** Ticks at 25, 50 and 75
+  percent carry their values, not only the two ends.
+
 - **The manual has a Beta and a Dev version.** fundacad.dev opens the Beta
   manual, and a switch at the top of every page opens the same page in Dev.
   Help, Manual in the app opens the version that matches your build.
+
+- **Interface size.** Preferences, Accessibility, Vision has an Interface size
+  from 80 to 200 percent that makes every panel, menu and label larger or
+  smaller. Ctrl+Plus, Ctrl+Minus and Ctrl+0 (Cmd on a Mac) change it from
+  anywhere and say the new size, the command palette has Larger Interface,
+  Smaller Interface and Reset Interface Size, and the size is kept across a
+  restart. The page no longer refuses browser zoom either.
+
+- **Every control fits at a large size or in a small window.** The tool rail
+  and the view controls on the right scroll when they do not fit, an arrow at
+  either end pages through what is out of sight, and Tab scrolls each control
+  into view. A title bar too narrow for the document name and the Model and
+  Render switch moves them to the top of the File menu. At 200 percent in the
+  smallest window every control can still be reached.
+
+- **Comfortable text.** Preferences, Accessibility, Vision has a Comfortable
+  text box that spaces lines, letters and words further apart. Buttons, tabs
+  and labels grow or wrap to fit the wider text instead of cutting it short.
+
+- **Viewport labels.** Beside it, Small, Medium, Large or Extra large sizes the
+  sketch dimensions, constraint marks, plane names and the view cube, on their
+  own or on top of the Interface size. Medium is the default.
 
 - **G3 fillets.** The fillet box has a third continuity icon, G3, on key 3. It
   eases into the faces with no jump in curvature and none in how fast the
@@ -455,6 +512,29 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Stress colours rise from dark to light.** The new Perceptual colour map is
+  the default, so the colours can be ranked by brightness alone and read with
+  red and green colour blindness. Rainbow is still under Colour map.
+
+- **The Flatpak no longer reaches your whole home folder.** It reaches the
+  FundaCAD folder in Documents, which it makes when it starts, and the files you
+  pick in its file chooser. An AI assistant works in that folder too. For any
+  other file FundaCAD opens the file chooser with the assistant's request in its
+  title, and Cancel refuses it. With no window open, or Live document set to Do
+  not share, the assistant can only use the FundaCAD folder.
+
+- **On Linux the AppImage and the Flatpak open as native Wayland windows.** They
+  no longer go through XWayland, and still use X11 where the session has no
+  Wayland. The Flatpak no longer asks for every device, only game controllers
+  and the spacenavd socket for a 3D mouse. If the window opens blank or closes
+  at start on Wayland, safe mode opens the AppImage and the `.deb` through X11.
+  To stay on X11, put `GDK_BACKEND=x11` in front of the AppImage command, or
+  run `flatpak override --user --nosocket=wayland dev.fundacad.app` once.
+
+- **No text is smaller than 11 px.** Labels, counts and badge digits that were
+  9 or 10 px are 11 px now, and the error under a field or a dimension is 12 px.
+  Every text size follows the Interface size.
+
 - **Sketch Mirror applies on Enter, not on the line click.** Pick the line,
   check the preview, then press Enter or the check.
 
@@ -513,6 +593,12 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **An Interference check no longer shows up in the next document.** A check
+  still running when you opened another document reopened the panel there with
+  the old pairs. Its result is now dropped.
+
+- **Automatic projection stays in perspective inside your model.** Looking along an axis from inside a closed model, such as a room, snapped to a flat orthographic picture of its outside, and a held arrow key flashed that picture several times a second. Automatic now keeps perspective while the eye is inside the model's bounds, in every view mode and in the Classic camera, and still goes orthographic on an axis from outside. Picking a view on an axis, from the view cube or a named view, still shows it orthographic even from inside, and the next step or drag from it goes back to perspective. An orthographic view stays orthographic while you zoom, pan or fit it, and while a rebuild grows the model around it.
 
 - **A dropdown's arrow stays put.** Hovering a dropdown, such as the Items
   filter, slid its arrow up and out of sight, and an open list showed none. The

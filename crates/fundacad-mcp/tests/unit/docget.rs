@@ -55,6 +55,17 @@ fn a_range_of_more_than_a_million_bodies_is_refused() {
 }
 
 #[test]
+fn ranges_that_together_stand_for_more_than_a_million_bodies_are_refused() {
+    let ids = obj(json!({
+        "a:0..a:399999": "body1..body400000",
+        "b:0..b:399999": "body400001..body800000",
+        "c:0..c:399999": "body800001..body1200000",
+    }));
+    let why = unfold_body_ids(&ids).unwrap_err();
+    assert!(why.contains(&format!("more than {MOST_IN_RANGE}")), "{why}");
+}
+
+#[test]
 fn a_key_with_dots_and_a_plain_body_is_not_a_range() {
     let ids = obj(json!({"a..b:0": "body1"}));
     assert_eq!(unfold_body_ids(&ids).unwrap(), ids);

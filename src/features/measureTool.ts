@@ -3,8 +3,9 @@
 import * as THREE from "three";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { Viewport } from "../viewport/viewport";
-import type { Hit } from "../viewport/picking";
+import type { PickRef } from "../viewport/picking";
 import { setPrompt } from "../ui/prompt";
+import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { polylineMid } from "../viewport/edgeMatch";
 import { measureRows } from "./measureRows";
 import { useToolPanelStore } from "../stores/toolPanels";
@@ -23,6 +24,7 @@ export class MeasureTool {
   active = false;
   private probes: Probe[] = [];
   private onDone: (() => void) | null = null;
+  private releaseRows: (() => void) | null = null;
   private boundDown: (e: PointerEvent) => void;
   private boundMove: (e: PointerEvent) => void;
   private boundKey: (e: KeyboardEvent) => void;
@@ -44,12 +46,20 @@ export class MeasureTool {
     el.addEventListener("pointerdown", this.boundDown, true);
     el.addEventListener("pointermove", this.boundMove, true);
     window.addEventListener("keydown", this.boundKey, true);
+    this.releaseRows = awaitTreePick(
+      (pick) => {
+        if (pick.kind !== "face" && pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge");
+        return this.addProbe(this.toProbe(pick)) || "Nothing to measure there";
+      },
+      () => this.stop(),
+      { keepsOnRewind: true, keepsOnCommand: true },
+    );
     this.update();
     setPrompt("Click a face or edge, then a second one · Esc");
   }
 
   /** Right-click "Measure from here": start() plus one click on `hit`. */
-  startWith(hit: Hit, onDone?: () => void) {
+  startWith(hit: PickRef, onDone?: () => void) {
     if (this.active) return;
     this.start(onDone);
     const probe = this.toProbe(hit);
@@ -70,8 +80,11 @@ export class MeasureTool {
     if (!hit) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    const probe = this.toProbe(hit);
-    if (!probe) return;
+    this.addProbe(this.toProbe(hit));
+  }
+
+  private addProbe(probe: Probe | null): boolean {
+    if (!probe) return false;
     if (this.probes.length >= 2) {
       this.probes = []; // a 3rd pick starts fresh
       this.viewport.setMeasureMarker(null);
@@ -79,13 +92,14 @@ export class MeasureTool {
     this.probes.push(probe);
     this.highlight();
     this.update();
+    return true;
   }
 
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") this.stop();
   }
 
-  private toProbe(hit: Hit): Probe | null {
+  private toProbe(hit: PickRef): Probe | null {
     if (hit.kind === "face") {
       const m = this.viewport.measureFace(hit.faceId);
       return { kind: "face", faceId: hit.faceId, point: m.centroid, dir: m.normal, area: m.area };
@@ -175,6 +189,8 @@ export class MeasureTool {
 
   stop() {
     if (!this.active) return;
+    this.releaseRows?.();
+    this.releaseRows = null;
     const el = this.viewport.domElement;
     el.removeEventListener("pointerdown", this.boundDown, true);
     el.removeEventListener("pointermove", this.boundMove, true);

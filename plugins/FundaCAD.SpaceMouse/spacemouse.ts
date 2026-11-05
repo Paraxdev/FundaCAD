@@ -102,7 +102,7 @@ export interface DeviceBlocked {
 
 export function blockedText(b: DeviceBlocked): string {
   const fix = b.hint || "run spacenavd or install the udev rule";
-  return `Found "${b.name}" but can't read it, ${fix}, see the 3D mouse page of the manual`;
+  return `Found "${b.name}" but can't read it, ${fix}. See the 3D mouse page of the manual.`;
 }
 
 /** Shared by the viewport loop and the settings preview. The deadzone runs first, which matters only once CROSS_AXIS_MAX

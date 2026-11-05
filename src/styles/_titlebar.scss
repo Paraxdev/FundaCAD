@@ -24,7 +24,7 @@
 }
 
 .context-tab {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.8px;
   color: var(--text-dim);
@@ -61,7 +61,7 @@
   /* The 1px is not a spacing rung but the hairline that keeps adjacent hover fills apart;
      a rung would widen the menu bar at the notice slot's expense. */
   margin: var(--s-2) 1px;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 .menubar .btn.menu-btn.is-open {
   background: var(--btn-hover);
@@ -128,7 +128,7 @@
 }
 .menu-shortcut {
   color: var(--text-mute);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
 .menu-item:hover .menu-shortcut {
@@ -176,18 +176,42 @@
   opacity: 0.38;
   filter: grayscale(1);
 }
+// The one item that shrinks: a long name pushed the workspace toggle off a narrow or zoomed bar. The window title,
+// and the File menu once the bar folds, show it whole.
 .docname {
+  display: inline-flex;
+  min-width: 0;
   color: var(--text-mute);
-  font-size: 12px;
+  font-size: var(--fs-small);
   letter-spacing: 0.2px;
 }
 .docname.dirty {
   color: var(--text);
 }
+.docname-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+// TitleFold.vue: the document name at the top of the File menu once the bar folds. Wraps, a long name stays whole.
+.tb-fold-doc {
+  max-width: 286px;
+  padding: var(--s-2) var(--s-4) var(--s-3);
+  color: var(--text-mute);
+  font-size: var(--fs-small);
+  overflow-wrap: anywhere;
+}
+.tb-fold-doc.dirty {
+  color: var(--text);
+}
+.tb-fold-doc .dirty-mark {
+  color: var(--accent);
+}
 
 // LiveSessionPill.vue, a button Chip beside the document name.
 .chip.live-pill {
-  max-width: 22rem;
+  max-width: 286px;
   overflow: hidden;
 }
 .live-pill.readonly {

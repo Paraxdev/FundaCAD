@@ -16,6 +16,7 @@ export interface GlyphItem extends ConstraintGlyph {
 
 export class SketchGlyphs {
   onDelete: ((cIndex: number) => void) | null = null;
+  onSelect: ((cIndex: number) => void) | null = null;
   onEditPattern: ((patternId: string) => void) | null = null;
   /** In the dimension tool a badge would swallow the click that names an operand. Returning true means the click
    *  belonged to the tool underneath, so the glyph skips its delete. */
@@ -24,7 +25,7 @@ export class SketchGlyphs {
   /** Read at call time, SketchMode assigns the hooks after construction. markRaw: it closes over SketchMode. */
   private readonly hooks: GlyphHooks = markRaw({
     overlapPick: (e: PointerEvent) => this.onOverlapPick?.(e) ?? false,
-    del: (cIndex: number) => this.onDelete?.(cIndex),
+    select: (cIndex: number) => this.onSelect?.(cIndex),
     editPattern: (patternId: string) => this.onEditPattern?.(patternId),
   });
 
@@ -47,6 +48,29 @@ export class SketchGlyphs {
 
   hide() {
     useSketchAnnotationStore().hideGlyphs();
+  }
+
+  hasSelection(): boolean {
+    return useSketchAnnotationStore().glyphSelected !== null;
+  }
+
+  clearSelection() {
+    useSketchAnnotationStore().glyphSelected = null;
+  }
+
+  /** Set after the rebuild a selection triggers, since every rebuild drops it. */
+  markSelected(cIndex: number) {
+    useSketchAnnotationStore().glyphSelected = cIndex;
+  }
+
+  /** False when nothing is selected, so the caller falls through to its own Delete. */
+  deleteSelected(): boolean {
+    const store = useSketchAnnotationStore();
+    const i = store.glyphSelected;
+    if (i === null) return false;
+    store.glyphSelected = null;
+    this.onDelete?.(i);
+    return true;
   }
 
   /** In the dimension tool onOverlapPick arbitrates, so a click naming an operand still reaches the tool. */

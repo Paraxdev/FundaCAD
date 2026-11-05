@@ -6,8 +6,10 @@ import { usePromptStore } from "../../stores/prompt";
 import { keyHint } from "../../input/shortcuts";
 import { sketchToolName } from "../../ui/railDefs";
 import { runningTool } from "../../ui/runningTool";
-import { LEFT_CARDS, RIGHT_CARDS, centreShift, promptInsets, type Box } from "../../ui/promptPlacement";
+import { COLUMNS, LEFT_CARDS, RIGHT_CARDS, cardRects, centreShift, promptInsets } from "../../ui/promptPlacement";
 import { announce } from "../../ui/announce";
+import { underZoom } from "../../ui/anchor";
+import { pageZoom } from "../../ui/interfaceSize";
 
 const prompt = usePromptStore();
 const engine = useEngine();
@@ -46,8 +48,6 @@ watch(
 
 const MIN_WIDTH = 220;
 
-const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
-
 // The toast stack shares this bottom centre spot, so --prompt-clear tells it how far up the banner reaches.
 const root = document.documentElement;
 const clearToasts = () => root.style.removeProperty("--prompt-clear");
@@ -57,15 +57,22 @@ function place() {
   const area = me?.parentElement;
   if (!me || !area || !prompt.text) return clearToasts();
   const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--float-gap")) || 12;
-  const box = area.getBoundingClientRect();
-  const mine = me.getBoundingClientRect();
-  const insets = promptInsets(box, mine, { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) }, gap, MIN_WIDTH);
+  const z = pageZoom();
+  const box = underZoom(area.getBoundingClientRect(), z);
+  const mine = underZoom(me.getBoundingClientRect(), z);
+  const insets = promptInsets(
+    box,
+    mine,
+    { left: cardRects(LEFT_CARDS, z), right: cardRects(RIGHT_CARDS, z) },
+    gap,
+    MIN_WIDTH,
+  );
   me.style.setProperty("--prompt-left", `${insets.left}px`);
   me.style.setProperty("--prompt-right", `${insets.right}px`);
-  me.style.setProperty("--prompt-shift", `${centreShift(box.width, insets, mine.width)}px`);
+  me.style.setProperty("--prompt-shift", `${centreShift(box.right - box.left, insets, mine.right - mine.left)}px`);
   // offsetTop rather than the box: the entry animation slides the banner in.
-  const top = (me.offsetParent ?? area).getBoundingClientRect().top + me.offsetTop;
-  root.style.setProperty("--prompt-clear", `${Math.max(0, Math.round(window.innerHeight - top + gap))}px`);
+  const top = (me.offsetParent ?? area).getBoundingClientRect().top / z + me.offsetTop;
+  root.style.setProperty("--prompt-clear", `${Math.max(0, Math.round(window.innerHeight / z - top + gap))}px`);
 }
 
 let frame = 0;
@@ -77,17 +84,16 @@ const schedule = () => {
     });
 };
 let ro: ResizeObserver | null = null;
+// A rail scrolled by a step shows other labels in the row without resizing anything.
+const onScroll = (e: Event) => {
+  if (e.target instanceof Element && e.target.closest("#float-layer")) schedule();
+};
 onMounted(() => {
   ro = new ResizeObserver(schedule);
+  document.addEventListener("scroll", onScroll, { capture: true, passive: true });
   const watchAll = () => {
     ro!.disconnect();
-    for (const n of [
-      el.value,
-      el.value?.parentElement,
-      ...document.querySelectorAll(
-        "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right",
-      ),
-    ]) {
+    for (const n of [el.value, el.value?.parentElement, ...document.querySelectorAll(COLUMNS)]) {
       if (n) ro!.observe(n);
     }
   };
@@ -107,6 +113,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearToasts();
   ro?.disconnect();
+  document.removeEventListener("scroll", onScroll, { capture: true });
   if (frame) cancelAnimationFrame(frame);
 });
 </script>

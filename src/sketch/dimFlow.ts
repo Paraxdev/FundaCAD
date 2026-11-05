@@ -6,7 +6,13 @@ import type { Viewport } from "../viewport/viewport";
 import type { PlaceOffset, SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, dimensionLineObjects, PREVIEW_COLOR } from "./overlay";
+import {
+  curveObjects,
+  dimensionLineObjects,
+  sketchConflictColor,
+  sketchPreviewColor,
+  sketchSelectColor,
+} from "./overlay";
 import type { DimInput } from "./dimInput";
 import { constraintDims, linearDim } from "./entityDims";
 import {
@@ -27,8 +33,10 @@ import { isDimConstraint, newEntityId } from "./id";
 import { existingFixedPoint, originCandidate, pinOriginPoint } from "./snap";
 import type { FieldKind } from "../document/numFields";
 import type { ResolvedEntity } from "./snap";
+import { pageZoom } from "../ui/interfaceSize";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
+import { plainError } from "../ui/plainError";
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface DimHost {
@@ -205,7 +213,7 @@ export class DimFlow {
     const r = resolveDim(this.dimPicks, this.dimOptions());
     this.dimPlan = isDimError(r) ? null : r;
     if (this.dimPicks.map(targetKey).join("+") !== before) {
-      toast("The geometry this dimension referenced is gone, dimension cancelled");
+      toast("What this dimension pointed at is gone, so the dimension was cancelled");
       this.cancelDim();
       return;
     }
@@ -354,7 +362,7 @@ export class DimFlow {
     if (raw !== "") {
       const r = this.host.evalDimInput(raw, kind, null);
       if ("error" in r) {
-        toast(`Dimension not created, ${r.error}`);
+        toast(`Dimension not created, ${plainError(r.error, "that value is not valid")}`, { detail: r.error });
         this.host.dim().focus(); // leave the box open on the bad value
         return;
       }
@@ -440,18 +448,10 @@ export class DimFlow {
         : null;
     if (!s) return;
     const rect = this.host.viewport().domElement.getBoundingClientRect();
-    const boxW = 170,
-      boxH = 46,
-      m = 12,
-      gap = 28;
-    const cx = ev?.clientX ?? s.x + 1,
-      cy = ev?.clientY ?? s.y + 1;
-    const left = cx >= s.x ? s.x - gap - boxW : s.x + gap;
-    const top = cy >= s.y ? s.y - gap - boxH : s.y + gap;
-    const fx = Math.max(rect.left + m, Math.min(left, rect.right - boxW - m));
-    const fy = Math.max(rect.top + m, Math.min(top, rect.bottom - boxH - m));
-    this.dimBoxAt = { x: fx, y: fy };
-    this.host.dim().position(fx - 16, fy - 16); // dim.position adds a +16 cursor offset
+    const cursor = ev ? { x: ev.clientX, y: ev.clientY } : { x: s.x + 1, y: s.y + 1 };
+    const spot = dimBoxSpot(s, cursor, rect, pageZoom());
+    this.dimBoxAt = spot;
+    this.host.dim().position(spot.x, spot.y);
   }
 
   /** the plane point a plan's label hangs off: its own anchor, else the middle
@@ -470,20 +470,20 @@ export class DimFlow {
     if (!p) return;
     this.host.lastCursor().copy(p);
     const preview: THREE.Object3D[] = [];
-    for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, 0x33aaff));
+    for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, sketchSelectColor()));
     const cand =
       this.dimPicks.length < 2
         ? (this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol()))
         : null;
     if (cand && !this.dimPicks.some((t) => targetKey(t) === targetKey(cand))) {
-      preview.push(...this.dimTargetObjects(cand, 0xff5555));
+      preview.push(...this.dimTargetObjects(cand, sketchConflictColor()));
     }
     const plan = this.dimPlan;
     if (plan) {
       const own = plan.labelAnchor();
       this.dimCursor = own ? { ox: p.x - own.x, oy: p.y - own.y } : undefined;
       const segs = this.dimPreviewSegs(plan, p);
-      if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, PREVIEW_COLOR));
+      if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, sketchPreviewColor()));
       this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
       this.positionDimBox(e);
     }
@@ -557,4 +557,24 @@ export class DimFlow {
     const nrm = new THREE.Vector2(-dir.y, dir.x);
     return linearDim(an.a, an.b, nrm, plan.measure(), off ? off.x * nrm.x + off.y * nrm.y : undefined).lines;
   }
+}
+
+/** Where the value box parks beside the projected point `s`, away from `cursor` and inside `area`, as the window pixels
+ *  DimInput.position takes. Its size and gaps are CSS pixels, so they grow with the root zoom `z`. */
+export function dimBoxSpot(
+  s: { x: number; y: number },
+  cursor: { x: number; y: number },
+  area: { left: number; top: number; right: number; bottom: number },
+  z: number,
+): { x: number; y: number } {
+  const boxW = 170 * z,
+    boxH = 46 * z,
+    m = 12 * z,
+    gap = 28 * z;
+  const left = cursor.x >= s.x ? s.x - gap - boxW : s.x + gap;
+  const top = cursor.y >= s.y ? s.y - gap - boxH : s.y + gap;
+  const fx = Math.max(area.left + m, Math.min(left, area.right - boxW - m));
+  const fy = Math.max(area.top + m, Math.min(top, area.bottom - boxH - m));
+  // DimInput.position adds its 16 px cursor offset after dividing by the zoom.
+  return { x: fx - 16 * z, y: fy - 16 * z };
 }

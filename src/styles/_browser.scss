@@ -14,6 +14,74 @@
   min-width: 0;
 }
 
+#browser .browser-tabs {
+  flex: none;
+  margin: 0 var(--s-3) var(--s-2);
+}
+/* A page has to pass the card's height on, or .float-card-body loses its scroll. */
+.browser-page {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.geometry-filters {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: 0 var(--s-3) var(--s-2);
+}
+.geometry-filters .ui-field-row {
+  margin-bottom: 0;
+}
+/* A label beside its control, the control taking the width that is left. */
+.geometry-filters .ui-field-row-inline {
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--s-3);
+}
+.geometry-filters .ui-field-row-inline .ui-field-control {
+  justify-self: stretch;
+  justify-content: flex-end;
+}
+.geometry-filters .select-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.geometry-filter-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-2);
+}
+.geometry-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-2) var(--s-2);
+}
+.geometry-note .empty-state {
+  margin: 0;
+  padding: 0;
+}
+.geometry-pager {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-3) 0;
+}
+.geometry-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-mute);
+}
+
 .tree-folder {
   display: flex;
   align-items: center;
@@ -24,7 +92,7 @@
   cursor: pointer;
   user-select: none;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--text);
   border-radius: var(--r-sm);
   transition: background var(--t-fast) var(--ease);
@@ -53,7 +121,7 @@
   color: var(--text-dim);
 }
 .tree-count {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-mute);
@@ -125,13 +193,20 @@
 :root[data-targets="large"] .tree-eye.icon-btn.icon-btn-sm::before {
   inset: -13px -6px;
 }
+/* A text input draws no ::before, so the Size at least input grows its own box past its 24px well. The
+   negative margin keeps the well's height, and the 8px gaps round it keep the grown box off its neighbours. */
+:root[data-targets="large"] .geometry-filters .ui-field-sm > input {
+  height: max(24px, var(--hit-min));
+  margin-block: calc((24px - max(24px, var(--hit-min))) / 2);
+}
 /* The Extra Parameters plugin draws its setup button with inline styles, so its hit area is set here. */
 .xp-setup {
   @include hit.area;
 }
 
 /* In-canvas sketch dimensions stay off the spacing scale on purpose: they are projected
-   from Three.js every frame, so their px sizes are a picking budget, not chrome. */
+   from Three.js every frame, so their px sizes are a picking budget, not chrome. They grow
+   with Viewport label size, the text never under --fs-micro. */
 .sketch-dims {
   position: fixed;
   inset: 0;
@@ -169,10 +244,10 @@
   position: absolute;
   transform: translate(-50%, -50%);
   color: var(--text);
-  font-size: 11px;
+  font-size: max(var(--fs-micro), calc(var(--fs-micro) * var(--vp-label-scale)));
   font-weight: 550;
   font-variant-numeric: tabular-nums;
-  padding: 2px 7px;
+  padding: calc(2px * var(--vp-label-scale)) calc(7px * var(--vp-label-scale));
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
@@ -201,8 +276,10 @@
   border-color: var(--warn);
   color: color-mix(in srgb, var(--warn) 60%, var(--text));
 }
-/* The dimension the Delete key will remove. */
-.sketch-dim.is-selected {
+/* The dimension or constraint the Delete key will remove, and the badge of the Dimensions row in focus. */
+.sketch-dim.is-selected,
+.sketch-dim.is-lit,
+.sketch-glyph.is-selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -221,14 +298,14 @@
 .sketch-glyph {
   position: absolute;
   transform: translate(-50%, -50%);
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
+  min-width: calc(16px * var(--vp-label-scale));
+  height: calc(16px * var(--vp-label-scale));
+  padding: 0 calc(3px * var(--vp-label-scale));
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--accent-hot);
-  font-size: 10px;
+  font-size: max(var(--fs-micro), calc(var(--fs-micro) * var(--vp-label-scale)));
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -254,8 +331,8 @@
   cursor: default;
 }
 .sketch-dim .sketch-dim-field {
-  width: 52px;
-  height: 19px;
+  width: calc(52px * var(--vp-label-scale));
+  height: calc(19px * var(--vp-label-scale));
   padding: 0 var(--s-1);
   font-variant-numeric: tabular-nums;
 }

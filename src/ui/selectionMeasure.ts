@@ -1,7 +1,7 @@
-// The one-line readout for what is selected: how many, and for edges and round
-// faces the numbers you would otherwise reach for Measure to get.
+// The one-line readout for several picked things, and the measures it and the prompts share.
 
 import { shallowRef } from "vue";
+import { fmtLength } from "./units";
 
 export type Pt3 = readonly [number, number, number];
 
@@ -26,18 +26,24 @@ export function circleDiameter(points: readonly Pt3[], tol = 0.01): number | nul
   const span = polylineLength(points);
   const gap = Math.hypot(first[0] - last[0], first[1] - last[1], first[2] - last[2]);
   if (gap > span * 1e-3) return null;
-  const ring = points.slice(0, -1);
+  // Chord midpoints weighted by length: the engine sends a rim as two half circles with a half step where they meet,
+  // and that one extra vertex pulls a plain vertex mean r / n off centre, 1.25 % on a 25 mm rim.
   let cx = 0,
     cy = 0,
     cz = 0;
-  for (const p of ring) {
-    cx += p[0];
-    cy += p[1];
-    cz += p[2];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!,
+      b = points[i]!;
+    const w = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 2;
+    cx += (a[0] + b[0]) * w;
+    cy += (a[1] + b[1]) * w;
+    cz += (a[2] + b[2]) * w;
   }
-  cx /= ring.length;
-  cy /= ring.length;
-  cz /= ring.length;
+  if (span <= 0) return null;
+  cx /= span;
+  cy /= span;
+  cz /= span;
+  const ring = points.slice(0, -1);
   const radii = ring.map((p) => Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz));
   const mean = radii.reduce((s, r) => s + r, 0) / radii.length;
   if (mean <= 0) return null;
@@ -69,22 +75,19 @@ export function roundFacePrompt(round: RoundSize): string {
   );
 }
 
-/** "1 edge · 300.74 mm · ⌀95.73 mm", "3 faces", "1 face · ⌀50 mm", "1 face · R2 mm". */
+/** "3 faces", "2 edges · 300.74 mm". One face or edge goes through describePick once its facts are known. */
 export function describeSelection(input: {
   count: number;
   noun: string;
   plural: string;
   edges?: readonly (readonly Pt3[])[];
-  roundFace?: RoundSize | null;
 }): string {
   if (input.count <= 0) return "";
   const parts = [`${input.count} ${input.count === 1 ? input.noun : input.plural}`];
   if (input.edges?.length) {
-    parts.push(mm(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
+    parts.push(fmtLength(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
     const d = input.edges.length === 1 ? circleDiameter(input.edges[0]!) : null;
-    if (d !== null) parts.push(`⌀${mm(d)}`);
-  } else if (input.roundFace) {
-    parts.push(roundSize(input.roundFace));
+    if (d !== null) parts.push(`⌀${fmtLength(d)}`);
   }
   return parts.join(" · ");
 }

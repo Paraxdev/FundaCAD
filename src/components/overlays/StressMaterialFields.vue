@@ -36,6 +36,7 @@ function fmt(v: number): string {
       <NumberField
         v-model="setup.custom.nu"
         commit="live"
+        unitless
         :step="0.01"
         :width-ch="7"
         class="stress-nu"

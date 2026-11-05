@@ -80,12 +80,16 @@ fn the_parity_script_answers_as_the_python_server_did() {
         // The transcript was recorded when the document version was 9; a new
         // document is stamped with the current one, which the app writes too.
         let text = text.replace(&format!("\"version\": {}", fundacad_core::schema::DOCUMENT_VERSION), "\"version\": 9");
-        // The Python server had no ui, guide or measure tools, so its list of tools lacks them.
+        // The Python server had no ui, guide, measure or material tools, so its list of tools lacks them.
         let text = if text.starts_with("No tool '") {
             [
                 "guide_clear",
                 "guide_highlight",
                 "guide_wait",
+                "material_assign",
+                "material_list",
+                "material_remove",
+                "material_set",
                 "measure",
                 "ui_close",
                 "ui_do",

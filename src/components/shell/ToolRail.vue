@@ -22,10 +22,13 @@ import {
 } from "../../ui/railDefs";
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
 import { contextMenu } from "../../ui/menu";
+import { pageZoom } from "../../ui/interfaceSize";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
+import { useScrollCue } from "../../composables/useScrollCue";
 import { runningTool } from "../../ui/runningTool";
 import { railActive, railToggles } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
+import IconButton from "../ui/IconButton.vue";
 import Popover from "../ui/Popover.vue";
 import Toolbar from "../ui/Toolbar.vue";
 
@@ -52,7 +55,17 @@ function measureFit() {
   void nextTick(() => {
     const l = listEl.value;
     if (l) scrolls.value = l.scrollHeight > l.clientHeight + 1;
+    void nextTick(placeCue);
   });
+}
+const cue = useScrollCue(listEl);
+/** Distance from the rail's bottom to the list's, where the More tools below cue sits. */
+const cueBottom = ref(0);
+function placeCue() {
+  const rail = railEl.value;
+  const l = listEl.value;
+  if (rail && l) cueBottom.value = rail.clientHeight - (l.offsetTop + l.offsetHeight);
+  cue.update();
 }
 let fitRo: ResizeObserver | null = null;
 onMounted(() => {
@@ -330,7 +343,7 @@ onUnmounted(() => {
 const FLYOUT_ROW_PX = 46;
 const flyoutRows = computed(() => {
   const n = flyout.value?.items.length ?? 1;
-  return Math.max(1, Math.min(n, Math.floor((window.innerHeight - 64) / FLYOUT_ROW_PX)));
+  return Math.max(1, Math.min(n, Math.floor((window.innerHeight / pageZoom() - 64) / FLYOUT_ROW_PX)));
 });
 
 // A mode swap replaces every button, so a flyout would be hanging off nothing.
@@ -363,6 +376,7 @@ function run(action: string, ev?: MouseEvent) {
     return;
   }
   ribbon.act(action);
+  if (ev?.detail === 0) ribbon.actedByKeys();
 }
 
 function isActive(action: string): boolean {
@@ -397,13 +411,13 @@ function toggleIsolate() {
     id="toolrail"
     ref="railEl"
     class="tool-rail"
-    :class="{ compact, scrolls }"
+    :class="{ compact, scrolls, 'more-above': cue.above.value, 'more-below': cue.below.value }"
     :data-mode="mode"
     :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined"
     aria-label="Tools"
   >
     <Toolbar class="rail-bar" label="Tools" orientation="vertical">
-      <div ref="listEl" class="rail-list">
+      <div ref="listEl" class="rail-list" @scroll.passive="cue.update()" @focusin="cue.reveal">
         <RailButton
           icon="search"
           label="Search"
@@ -540,6 +554,25 @@ function toggleIsolate() {
         </template>
       </div>
     </Toolbar>
+    <IconButton
+      v-if="cue.above.value"
+      class="rail-more rail-more-up"
+      icon="caretDown"
+      tip="More tools above"
+      size="md"
+      tabindex="-1"
+      @click="cue.page(-1)"
+    />
+    <IconButton
+      v-if="cue.below.value"
+      class="rail-more rail-more-down"
+      icon="caretDown"
+      tip="More tools below"
+      size="md"
+      tabindex="-1"
+      :style="{ bottom: `${cueBottom}px` }"
+      @click="cue.page(1)"
+    />
 
     <Popover
       v-if="flyout"

@@ -12,6 +12,13 @@ export const useCommandPaletteStore = defineStore("commandPalette", () => {
     run = fn;
   }
 
+  let labelFor: (id: string) => string | null = () => null;
+  /** A provider for commands whose label names the document's state, as Undo names its step; null keeps the label. */
+  function bindLabels(fn: (id: string) => string | null) {
+    labelFor = fn;
+  }
+  const labelOf = (c: { id: string; label: string }) => labelFor(c.id) ?? c.label;
+
   function show(ctx: "model" | "sketch") {
     context.value = ctx;
     open.value = true;
@@ -30,5 +37,5 @@ export const useCommandPaletteStore = defineStore("commandPalette", () => {
     run?.(id);
   }
 
-  return { open, context, bind, show, close, toggle, runCommand };
+  return { open, context, bind, bindLabels, labelOf, show, close, toggle, runCommand };
 });

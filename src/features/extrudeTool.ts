@@ -10,8 +10,11 @@ import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
 import { escapeClaimed } from "../ui/escapeClaim";
-import { isBoxButtonKey, isMenuKey } from "../ui/focus";
+import { isBoxButtonKey, isMenuKey, isRailButton, keyTargetFree } from "../ui/focus";
+import { announce } from "../ui/announce";
 import { setPrompt } from "../ui/prompt";
+import { KeySurface } from "../sketch/keySurface";
+import { walkStep, walkUnits, walkWords } from "./profileWalk";
 import { snap } from "../ui/units";
 import {
   axisDragDistance,
@@ -27,6 +30,7 @@ import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 import { sweepProbePoints } from "./sweepProbe";
 import { previewVerdict } from "./previewVerdict";
 import { HeldSignal } from "./heldEdit";
+import { boxBindings, type BoxField } from "./boxBindings";
 
 /** Below this the extrude is straight: the frontend prism draws instantly and no kernel preview is asked for. */
 const TAPER_EPS = 0.05;
@@ -49,6 +53,8 @@ export class ExtrudeTool {
   active = false;
   private phase: Phase = "pick";
   private selected: WorldRegion[] = [];
+  private lit: WorldRegion | null = null; // the profile the key walk stands on, only in the pick phase
+  private surface = new KeySurface();
   private distance = 10;
   /** `distance` each way off the plane. Reset on every entry since it belongs to the gesture, not the tool; an edit
    *  seeds it from the saved feature. */
@@ -63,7 +69,7 @@ export class ExtrudeTool {
   private grabbing = false;
   /** The drag is relative to it, so grabbing a 40 mm extrude does not snap it to the cursor's projection. */
   private grabValue = 0;
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private hitScratch = new THREE.Vector3();
   private onDone: ((id: string | null) => void) | null = null;
 
@@ -164,7 +170,7 @@ export class ExtrudeTool {
       this.beginDrag();
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt("Click a profile · Ctrl-click adds areas · Enter");
+      setPrompt("Click a profile · Ctrl-click adds areas · Tab walks them · Enter");
     }
     return true;
   }
@@ -253,6 +259,7 @@ export class ExtrudeTool {
 
   private onMove(e: PointerEvent) {
     if (this.phase === "pick") {
+      this.lit = null;
       const r = this.regionUnder(e.clientX, e.clientY);
       this.overlay.setHoverRegion(r);
       this.viewport.domElement.style.cursor = r ? "pointer" : "default";
@@ -313,7 +320,7 @@ export class ExtrudeTool {
    *  from lagging one word behind until Enter. */
   private onTypedDistance() {
     if (this.phase !== "drag") return;
-    this.touched = true;
+    if (this.dim.hasTyped()) this.touched = true;
     this.held.sync(this.pending);
     if (!this.dim.isUserDriven("distance")) return;
     const v = this.dim.getValue("distance");
@@ -337,6 +344,7 @@ export class ExtrudeTool {
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
+      this.lit = null;
       const r = this.regionUnder(e.clientX, e.clientY);
       if (!r) return;
       e.preventDefault();
@@ -448,7 +456,70 @@ export class ExtrudeTool {
       return;
     }
     if (e.key === "Escape") this.cancel();
+    else if (this.phase === "pick" && this.onPickKey(e)) return;
     else if (e.key === "Enter" && this.phase === "pick" && this.selected.length) this.beginDrag();
+  }
+
+  /** Tab and Shift+Tab light the profiles largest first without picking, Space adds the lit one, Enter takes it when
+   *  nothing is picked yet. Tab with no profile at all is left to the page. */
+  private onPickKey(e: KeyboardEvent): boolean {
+    // Window capture hears a key before the field, button or dialog it belongs to.
+    if (e.ctrlKey || e.altKey || e.metaKey || escapeClaimed()) return false;
+    if (!keyTargetFree(e.target) && !(e.key === "Tab" && isRailButton(e.target))) return false;
+    const take = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    if (e.key === "Tab") {
+      const units = walkUnits(this.overlay.regions);
+      if (!units.length) return false;
+      take();
+      const at = this.lit ? units.findIndex((u) => u.members.includes(this.lit!)) : -1;
+      const i = walkStep(units.length, at, e.shiftKey ? -1 : 1);
+      const unit = units[i]!;
+      this.lit = unit.members[0]!;
+      this.overlay.setHoverRegion(this.lit);
+      this.surface.mount(undefined, "Extrude");
+      this.surface.setStop(true);
+      this.surface.focus();
+      announce(walkWords(unit, i, units.length, this.overlay.isRegionSelected(this.lit)));
+      return true;
+    }
+    if (e.shiftKey) return false;
+    // A rebuild during the pick (a tree toggle, glyphs arriving) leaves the lit region out of the overlay's list.
+    if (this.lit && !this.overlay.regions.includes(this.lit)) {
+      this.lit = null;
+      if (e.key === " ") {
+        take();
+        announce("No profile is lit, Tab lights one.");
+        return true;
+      }
+    }
+    if (e.key === " " && this.lit) {
+      take();
+      this.overlay.toggleRegionSelection(this.lit, true);
+      this.selected = this.overlay.selectedRegions();
+      const units = walkUnits(this.overlay.regions);
+      const i = units.findIndex((u) => u.members.includes(this.lit!));
+      const picked = units.filter((u) => this.overlay.isRegionSelected(u.members[0]!)).length;
+      announce(
+        `${walkWords(units[i]!, i, units.length, this.overlay.isRegionSelected(this.lit))} ${picked} of ${units.length} picked.`,
+      );
+      return true;
+    }
+    if (e.key === "Enter" && !this.selected.length) {
+      take();
+      if (!this.lit) {
+        announce("No profile is lit, Tab lights one.");
+        return true;
+      }
+      this.overlay.toggleRegionSelection(this.lit, false);
+      this.selected = this.overlay.selectedRegions();
+      this.lit = null;
+      if (this.selected.length) this.beginDrag();
+      return true;
+    }
+    return false;
   }
 
   /** The operation is recomputed: symmetric reaches material a one sided extrude pointed away from, and the prompt's
@@ -486,6 +557,22 @@ export class ExtrudeTool {
       },
       undefined,
       () => this.onTypedDistance(),
+    );
+    this.dim.restoresOnUndo(
+      "distance",
+      () => ({ distance: this.distance, touched: this.touched }),
+      (held) => {
+        Object.assign(this, held);
+        this.updatePreview();
+      },
+    );
+    this.dim.restoresOnUndo(
+      "taper",
+      () => this.taper,
+      (taper) => {
+        this.taper = taper;
+        this.updatePreview();
+      },
     );
     this.dim.updateFromCursor({ taper: this.taper });
     if (this.editId) {
@@ -908,9 +995,8 @@ export class ExtrudeTool {
     if (Math.abs(this.distance) < 1e-3) return; // ignore zero
     // A typed ∠ is the truth for the taper, the same rule the depth follows.
     const tv = this.dim.getValue("taper");
-    if (tv != null && this.dim.isUserDriven("taper")) {
-      this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
-    }
+    const taperTyped = tv != null && this.dim.isUserDriven("taper");
+    if (taperTyped) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     const first = this.selected[0];
     if (!first) return;
     // A typed value has not been previewed until the pointer moves, and the
@@ -933,6 +1019,13 @@ export class ExtrudeTool {
     // Shared with the live engine preview, so the commit is exactly what was on screen.
     const feature = this.buildFeature();
     const id = feature.id;
+    const ext = feature as Extract<Feature, { type: "extrude" }>;
+    const boxed: BoxField[] = [{ box: "distance", field: "distance", value: ext.distance as number }];
+    // A typed angle past the limit was clamped, so binding its expression would build a taper the tool refused.
+    if (!taperTyped || tv === this.taper) {
+      boxed.push({ box: "taper", field: "taper", value: typeof ext.taper === "number" ? ext.taper : 0, kind: "angle" });
+    }
+    const bindings = boxBindings(this.dim, this.store, id, boxed);
     const dir = first.plane.n.clone().multiplyScalar(this.distance >= 0 ? 1 : -1);
     this.lastCommit = {
       id,
@@ -948,9 +1041,9 @@ export class ExtrudeTool {
     }
     if (this.editId) {
       this.store.endEditPreview(false); // replaceFeature triggers the rebuild
-      this.store.replaceFeature(this.editId, feature);
+      this.store.replaceFeature(this.editId, feature, bindings);
     } else {
-      this.store.addFeature(feature);
+      this.store.addFeature(feature, undefined, bindings);
     }
     if (unverified) this.store.verifyCommit(id, "Extrude");
     this.overlay.clearRegionSelection();
@@ -963,6 +1056,11 @@ export class ExtrudeTool {
     if (this.editId || this.forcedSketchId) this.overlay.clearRegionSelection();
     this.cleanup();
     this.onDone?.(null);
+  }
+
+  get profileSketches(): string[] {
+    const picked = this.selected.map((r) => r.sketchId);
+    return this.forcedSketchId ? [this.forcedSketchId, ...picked] : picked;
   }
 
   /** An extrude dragged or typed that Enter would write. */
@@ -1025,6 +1123,8 @@ export class ExtrudeTool {
     this.active = false;
     this.symmetric = false;
     this.selected = [];
+    this.lit = null;
+    this.surface.dispose();
     if (this.editId !== null || this.forcedSketchId !== null) {
       this.editId = null;
       this.editOp = null;

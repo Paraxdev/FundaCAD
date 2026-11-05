@@ -5,12 +5,16 @@ import { saveWork, saveWorkAs } from "./documentActions";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
+import { isBrowserNotice } from "../diagnostics/browserNotice";
 import { useDialogStore } from "../stores/dialogs";
 import { latinKey, matchChord } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
+import { interfaceSizeKey } from "../ui/interfaceSize";
 import type { Engine } from "./engine";
-import { pickedFeatureIds } from "./featureRows";
+import { deleteRows, pickedFeatureIds } from "./featureRows";
+
+const KEEPS_DELETE = '[role="tab"], [role="radio"], input, [data-keeps-delete]';
 
 /** The keymap plus window level handlers that bypass it, such as the file shortcuts that must work mid sketch. */
 export function installKeyboard(e: Engine): void {
@@ -48,24 +52,26 @@ export function installKeyboard(e: Engine): void {
   });
 
   // A selected face is removed and healed; otherwise only a feature the user picked is deleted, never the profile
-  // that exiting a sketch auto selects.
+  // that exiting a sketch auto selects. A focused tab, radio or panel control does not stand for the model.
   window.addEventListener("keydown", (ev) => {
     if (isEditableTarget(ev.target) || widgetOwnsKey(ev)) return;
     if (e.toolBusy()) return;
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+    if (ev.target instanceof Element && ev.target.closest(KEEPS_DELETE)) return;
     if (e.deleteSelectedFace()) return;
-    if (e.selectedFeature && e.selectedFeatureExplicit) {
-      e.store.removeFeatures(pickedFeatureIds(e));
-      e.selectFeature(null);
-    }
+    if (e.selectedFeature && e.selectedFeatureExplicit) deleteRows(e, pickedFeatureIds(e));
   });
 
   window.addEventListener("keydown", (ev) => {
     if (isPageSelectAll(ev)) ev.preventDefault();
   });
 
+  // Registered at boot ahead of every tool's own capture listener, so the pattern count never reads Ctrl+Minus.
+  window.addEventListener("keydown", interfaceSizeKey, true);
+
   // Failures with no toast of their own would otherwise exist only in devtools, where a user reporting a bug never looks.
   window.addEventListener("error", (ev) => {
+    if (isBrowserNotice(ev.message, ev.error)) return;
     logError(ev.error ?? ev.message, {
       source: "window",
       detail: ev.filename ? `${ev.filename}:${ev.lineno}:${ev.colno}` : undefined,
@@ -86,7 +92,7 @@ export function installKeyboard(e: Engine): void {
       ev.preventDefault();
       if (chord === "items") useShellStore().toggleItems();
       else if (chord === "history") useShellStore().toggleHistory();
-      else toggleConsole();
+      else toggleConsole({ focus: !isEditableTarget(ev.target) });
       return;
     }
     if (ev.altKey) return;

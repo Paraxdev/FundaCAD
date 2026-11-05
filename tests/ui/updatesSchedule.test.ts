@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ calls: 0, fail: false, supported: true, store: new Map<string, string>() }));
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: async () => h.supported }));
-vi.mock("@tauri-apps/plugin-updater", () => ({
-  check: async () => {
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string) => {
+    if (cmd !== "update_check") return h.supported;
     h.calls++;
     if (h.fail) throw new Error("offline");
-    return null;
+    return { update: null, stable: false };
   },
 }));
 vi.mock("../../src/ui/toast", () => ({ toast: () => {} }));

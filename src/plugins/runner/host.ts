@@ -45,6 +45,8 @@ export interface RunOptions {
   limits?: Partial<RunLimits>;
   /** Called once the run is over, whatever the outcome, so the caller can end the Worker. */
   dispose?: () => void;
+  /** Given a way to end the run at once, for a sandbox that fails outside its port, as a Worker's error event says. */
+  watch?: (fail: (why: string, reason: RunFailure) => void) => void;
   /** Injected so a test can drive the deadline without waiting for one. */
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -157,5 +159,6 @@ export function runInSandbox(opts: RunOptions): Promise<RunOutcome> {
     }, limits.deadlineMs);
 
     opts.port.addEventListener("message", onMessage);
+    opts.watch?.((why, reason) => finish({ ok: false, why, reason, calls, log }));
   });
 }

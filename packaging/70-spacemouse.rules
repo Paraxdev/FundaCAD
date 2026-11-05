@@ -1,0 +1,33 @@
+# FundaCAD SpaceMouse access, the logged-in user may read 3Dconnexion hidraw nodes.
+#
+# FundaCAD reads the SpaceMouse via hidapi, which opens /dev/hidrawN, so the rule
+# targets the hidraw subsystem, not the usb node. Access comes from TAG+="uaccess"
+# alone, which 73-seat-late.rules turns into an ACL for the active seat user, so
+# this file must sort before 73.
+#
+# Install (the packages do this as /usr/lib/udev/rules.d/70-fundacad-spacemouse.rules):
+#   sudo sh packaging/setup-spacemouse.sh
+
+ACTION=="remove", GOTO="fundacad_spacemouse_end"
+SUBSYSTEM!="hidraw", GOTO="fundacad_spacemouse_end"
+
+# Older Logitech-branded 3Dconnexion devices. 046d is Logitech's own vendor id,
+# shared with their mice and keyboards, so only these product ids match.
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c605", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c606", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c621", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c623", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c625", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c626", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c627", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c628", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c629", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c62b", TAG+="uaccess"
+ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c640", TAG+="uaccess"
+
+# Current 3Dconnexion vendor id. It also covers their CadMouse and keyboards,
+# which the Universal Receiver pairs alongside a SpaceMouse.
+ATTRS{idVendor}=="256f", TAG+="uaccess"
+
+LABEL="fundacad_spacemouse_end"

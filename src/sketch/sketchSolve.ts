@@ -62,11 +62,13 @@ export async function solveKeepingAxes(
 
 const AXIS_TOL = 1e-6;
 
+export type ProbeAxis = "x" | "y" | "size";
+
 export async function compileAndSolve(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
   drag?: { fromX: number; fromY: number; toX: number; toY: number },
-  opts?: { holdAxes?: boolean; pin?: { x: number; y: number } },
+  opts?: { holdAxes?: boolean; pin?: { x: number; y: number }; probe?: { entity: string; axis: ProbeAxis } },
 ): Promise<SolvePass> {
   const points: SPoint[] = [];
   const pointByKey = new Map<string, string>();
@@ -430,6 +432,43 @@ export async function compileAndSolve(
       });
     }
   });
+
+  // A freedom probe holds one shape's X, Y or radius where it is. planegcs counts dof by rank, so a hold lowers dof only
+  // when the shape was free that way, an already determined one is redundant.
+  const probe = opts?.probe;
+  if (probe?.axis === "size") {
+    const round = circles.find((c) => c.id === probe.entity) ?? arcs.find((a) => a.id === probe.entity);
+    const pid = `${probe.entity}~probe`;
+    if (round && centers.has(round.id))
+      cons.push({ id: pid, type: "circleRadius", circle: round.id, value: round.radius });
+    else if (round) cons.push({ id: pid, type: "arcRadius", arc: round.id, value: round.radius });
+  } else if (probe) {
+    const arc = arcMap.get(probe.entity);
+    const own = new Set(
+      [
+        ...(ends.get(probe.entity) ?? []),
+        ...(rectMap.get(probe.entity) ?? []),
+        ...(splineMap.get(probe.entity) ?? []),
+        ...(poleMap.get(probe.entity) ?? []),
+        ...(arc ? [arc.ourS, arc.ourE, arc.center] : []),
+        centers.get(probe.entity),
+        pointMap.get(probe.entity),
+      ].filter((p): p is string => p !== undefined),
+    );
+    let n = 0;
+    for (const p of points.filter((q) => own.has(q.id))) {
+      const held = getPoint(p.x, p.y, false);
+      fixedPts.add(held);
+      cons.push({
+        id: `${probe.entity}~probe${n++}`,
+        type: "axisDistance",
+        a: held,
+        b: p.id,
+        axis: probe.axis,
+        value: 0,
+      });
+    }
+  }
 
   const pinned = opts?.pin ? pointByKey.get(key(opts.pin.x, opts.pin.y)) : undefined;
   if (pinned) fixedPts.add(pinned);

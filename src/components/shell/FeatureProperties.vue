@@ -6,6 +6,7 @@ import { onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue, useDocValue } from "../../app/useDoc";
 import { featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
+import FieldRow from "../ui/FieldRow.vue";
 import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
@@ -445,10 +446,9 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
 <template>
   <div v-if="buildNote" class="param-note" role="note">{{ buildNote }}</div>
   <template v-if="placeholder === null">
-    <div v-if="repeatedLabels.length" class="param-row">
-      <label>Features</label>
-      <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
-    </div>
+    <FieldRow v-if="repeatedLabels.length" layout="param" label="Features" :for="null">{{
+      repeatedLabels.join(", ")
+    }}</FieldRow>
     <SelectionTargetRow v-for="t in targetRows" :key="`s:${t.field}`" :feature-id="featureId" :target="t" />
     <ChoiceRow
       v-for="c in choiceRows"

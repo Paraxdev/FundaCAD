@@ -166,7 +166,8 @@ fn resolve<'a>(at: &str, v: &Value, bodies: &'a [BuiltBody]) -> Result<Item<'a>,
     let Some(o) = v.as_object() else {
         return Err(not_a_selector(at));
     };
-    if let Some(p) = o.get("point") {
+    // A `by: "nearest"` selector carries a `point` too, and it names the face or edge nearest to it.
+    if let Some(p) = o.get("point").filter(|_| !o.contains_key("kind")) {
         let xs: Vec<f64> = p.as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
         let [x, y, z] = xs[..] else {
             return Err(format!("{at}: a point is [x, y, z] in mm, got {p}"));

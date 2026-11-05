@@ -300,6 +300,10 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
         case "printability":
         case "sketch_merge":
         case "sketch_tie":
+        case "material_list":
+        case "material_set":
+        case "material_remove":
+        case "material_assign":
         case "edit":
           return geometry(op, args);
       }

@@ -2,12 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import type { Component } from "vue";
 
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
+
 import Button from "../../../src/components/ui/Button.vue";
 import ChoiceList from "../../../src/components/ui/ChoiceList.vue";
 import IconButton from "../../../src/components/ui/IconButton.vue";
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import Slider from "../../../src/components/ui/Slider.vue";
 import UnitChip from "../../../src/components/ui/UnitChip.vue";
+import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
+import { announce } from "../../../src/ui/announce";
 import {
   onActivate,
   setChipUnit,
@@ -25,6 +29,7 @@ import {
 
 enableAutoUnmount(afterEach);
 afterEach(() => {
+  resetA11yPrefs();
   document.body.innerHTML = "";
   vi.useRealTimers();
 });
@@ -44,7 +49,12 @@ function shape(el: Element): Shape {
   for (const a of Array.from(el.attributes)) {
     // An input's value is compared as its property: Vue writes the attribute too, the factories only the property.
     if (["class", "id", "style", "value"].includes(a.name) || a.name.startsWith("data-v-")) continue;
-    attrs[a.name] = a.name === "aria-labelledby" ? (document.getElementById(a.value)?.textContent ?? "?") : a.value;
+    attrs[a.name] = ["aria-labelledby", "aria-describedby"].includes(a.name)
+      ? a.value
+          .split(" ")
+          .map((id) => document.getElementById(id)?.textContent ?? "?")
+          .join(" ")
+      : a.value;
   }
   const kids = Array.from(el.children);
   return {
@@ -101,6 +111,9 @@ describe("dom.ts controls match their Vue twins", () => {
     { unit: "mm", options: ["mm", "in", "um"] },
     { unit: "in", options: ["mm", "in"], tip: "Unit, in", keys: "U" },
     { unit: "mm", options: ["mm", "in"], disabled: true, disabledReason: "Fixed" },
+    { unit: "mm", spokenElsewhere: true },
+    { unit: "MPa", tip: "Stress", spokenElsewhere: true },
+    { unit: "mm", options: ["mm", "in"], spokenElsewhere: true },
   ])("UnitChip %o", (p) => {
     expect(shape(dom(uiUnitChip(p)))).toEqual(shape(vue(UnitChip, p)));
   });
@@ -119,6 +132,14 @@ describe("dom.ts controls match their Vue twins", () => {
       { tip: "Count", disabled: true, disabledReason: "Driven" },
       { tip: "Count", disabled: true, disabledReason: "Driven" },
     ],
+    [
+      { tip: "Stress", unit: "MPa" },
+      { tip: "Stress", unit: "MPa" },
+    ],
+    [
+      { tip: "Samples", unit: "samples", size: "sm" },
+      { tip: "Samples", unit: "samples", size: "sm" },
+    ],
   ])("NumberField %o", (factory, props) => {
     const mine = uiNumberInput(factory as Parameters<typeof uiNumberInput>[0]);
     const theirs = vue(NumberField, { modelValue: null, ...props });
@@ -126,6 +147,40 @@ describe("dom.ts controls match their Vue twins", () => {
     expect(mine.root.style.getPropertyValue("--field-ch")).toBe(
       (theirs as HTMLElement).style.getPropertyValue("--field-ch"),
     );
+  });
+
+  it("a number input with a unit describes it, in the words a screen reader says", () => {
+    const f = uiNumberInput({ tip: "Angle", unit: "deg", units: ["deg", "rad"] });
+    dom(f.root);
+    const ids = f.input.getAttribute("aria-describedby")!.split(" ");
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toEqual(["degrees"]);
+    const bare = uiNumberInput({ tip: "Count" });
+    expect([bare.input.hasAttribute("aria-describedby"), bare.root.querySelector(".sr-only")]).toEqual([false, null]);
+    const other = uiNumberInput({ tip: "Width", unit: "mm" });
+    expect(other.input.getAttribute("aria-describedby")).not.toBe(f.input.getAttribute("aria-describedby"));
+  });
+
+  it("a number input built with Units spoken in full off says mm and deg", () => {
+    setA11yPref("unitsInFull", false);
+    const spoken = (unit: string) => {
+      const f = uiNumberInput({ tip: "Size", unit });
+      dom(f.root);
+      return document.getElementById(f.input.getAttribute("aria-describedby")!)?.textContent;
+    };
+    expect([spoken("mm"), spoken("deg"), spoken("samples")]).toEqual(["mm", "deg", "samples"]);
+  });
+
+  it("a number input follows Units spoken in full when it is switched, on the page or not yet", () => {
+    const shown = uiNumberInput({ tip: "Width", unit: "mm" });
+    dom(shown.root);
+    const held = uiNumberInput({ tip: "Angle", unit: "deg" });
+    const said = () =>
+      [shown, held].map((f) => f.root.querySelector(`#${f.input.getAttribute("aria-describedby")}`)?.textContent);
+    expect(said()).toEqual(["millimetres", "degrees"]);
+    setA11yPref("unitsInFull", false);
+    expect(said()).toEqual(["mm", "deg"]);
+    setA11yPref("unitsInFull", true);
+    expect(said()).toEqual(["millimetres", "degrees"]);
   });
 
   it("NumberField's inputMode is text for a field that takes expressions", () => {
@@ -243,6 +298,57 @@ describe("dom.ts control state", () => {
       "Width",
       false,
     ]);
+  });
+
+  it("a refused number input is described by its reason after the tokens it already had, and freed again", () => {
+    const f = uiNumberInput({ tip: "Profile value", unit: "mm" });
+    dom(f.root);
+    const word = document.createElement("span");
+    word.id = "profile-word";
+    word.textContent = "3 of 7";
+    document.body.append(word);
+    f.input.setAttribute("aria-describedby", `${f.input.getAttribute("aria-describedby")} ${word.id}`);
+    const described = () =>
+      f.input
+        .getAttribute("aria-describedby")!
+        .split(" ")
+        .map((id) => document.getElementById(id)?.textContent);
+    setInvalid(f, "Type a profile from 0.5 to 12");
+    expect(described()).toEqual(["millimetres", "3 of 7", "Type a profile from 0.5 to 12"]);
+    expect(f.root.querySelectorAll(".sr-only").length).toBe(2);
+    setInvalid(f, "Type a number");
+    expect(described()).toEqual(["millimetres", "3 of 7", "Type a number"]);
+    setInvalid(f, null);
+    expect(described()).toEqual(["millimetres", "3 of 7"]);
+    expect(f.root.querySelectorAll(".sr-only").length).toBe(1);
+    const bare = uiNumberInput({ tip: "Count" });
+    dom(bare.root);
+    setInvalid(bare, "Whole numbers only");
+    expect(bare.input.getAttribute("aria-describedby")!.split(" ").length).toBe(1);
+    setInvalid(bare, null);
+    expect(bare.input.hasAttribute("aria-describedby")).toBe(false);
+    const other = uiNumberInput({ tip: "Width" });
+    dom(other.root);
+    setInvalid(other, "x");
+    setInvalid(bare, "y");
+    expect(other.input.getAttribute("aria-describedby")).not.toBe(bare.input.getAttribute("aria-describedby"));
+  });
+
+  it("a refused number input speaks its reason once per refusal, assertive, with its name when unfocused", () => {
+    vi.mocked(announce).mockClear();
+    const spoken = () => vi.mocked(announce).mock.calls;
+    const f = uiNumberInput({ tip: "Profile value" });
+    dom(f.root);
+    setInvalid(f, "Type a profile from 0.5 to 12");
+    expect(spoken()).toEqual([["Profile value, Type a profile from 0.5 to 12", "assertive"]]);
+    setInvalid(f, "Type a profile from 0.5 to 12");
+    setInvalid(f, "Type a number");
+    expect(spoken().length).toBe(1);
+    setInvalid(f, null);
+    expect(spoken().length).toBe(1);
+    f.input.focus();
+    setInvalid(f, "Too small");
+    expect(spoken().slice(1)).toEqual([["Too small", "assertive"]]);
   });
 
   it("a press on a number input's frame focuses its input and keeps the press from taking focus", () => {

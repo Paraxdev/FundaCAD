@@ -15,11 +15,15 @@ fn answer(req: &Value) -> Value {
     let status = "mode model, no tool";
     match req.get("call").and_then(Value::as_str) {
         Some("open") => json!({"id": id, "ok": true, "text": format!(
-            "opened a private copy of the app, not your window, pid {}, argv {}, engine {}, args {}\n{status}",
+            "opened a private copy of the app, not your window, pid {}, argv {}, engine {}, args {}\n{status}\n\
+             cwd: {}\nsafepath: {}\nrepo: {}",
             std::process::id(),
             std::env::args().skip(1).collect::<Vec<_>>().join(" "),
             std::env::var("FUNDACAD_ENGINE_CMD").unwrap_or_else(|_| "unset".into()),
-            args
+            args,
+            std::env::current_dir().map(|d| d.display().to_string()).unwrap_or_default(),
+            std::env::var("PYTHONSAFEPATH").unwrap_or_else(|_| "unset".into()),
+            std::env::var("FUNDACAD_REPO").unwrap_or_else(|_| "unset".into()),
         )}),
         Some("do") => {
             let mut lines = Vec::new();

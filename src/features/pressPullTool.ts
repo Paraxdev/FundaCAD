@@ -3,9 +3,10 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore, RebuildState } from "../document/store";
+import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
+import { peeksThrough } from "./pressPullPeek";
 import {
   DimInput,
   type DimChoice,
@@ -53,7 +54,10 @@ import {
 } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+import { boxBindings, type BoxField } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 
 /** A flat face as a tracked selector so the push follows upstream edits; a curved face keeps its picked point. */
 function upToFace(
@@ -123,6 +127,7 @@ export class PressPullTool {
   private faceIds: number[] = []; // their mesh faceIds (for the instant ghost preview)
   private upTo: Selector | null = null; // "extrude up to this surface" target (else by distance)
   private pickingTarget = false; // waiting for the user to click the up-to target surface
+  private releaseRows: (() => void) | null = null;
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3(); // gizmo origin = the clicked point on the face
   private axis = new THREE.Vector3(0, 0, 1); // drag axis (unit) = face outward normal, or the outward radial on a round face
@@ -188,7 +193,7 @@ export class PressPullTool {
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private readonly held = new HeldSignal();
 
@@ -222,11 +227,60 @@ export class PressPullTool {
     this.gesture.attach();
 
     if (pre) {
-      this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round ?? pre.lead);
+      this.takeFaces(pre);
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
+      this.releaseRows = awaitFaceRows(
+        this.viewport,
+        "a face",
+        (faces) => (this.takeFaces(faces), true),
+        () => this.cancel(),
+      );
       setPrompt("Click a face · Ctrl-click adds more");
     }
+  }
+
+  private takeFaces(f: PressPullFaces) {
+    this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId, f.round ?? f.lead);
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
+  }
+
+  private beginStopPick() {
+    this.pickingTarget = true;
+    this.dim.hide(); // Enter must not commit a plain distance while picking
+    this.clearPreviewTimer();
+    // The face to stop at is resolved on the model before the push, so the view and the Geometry rows show that one.
+    if (this.enginePreviewOn) this.store.setPreview(null);
+    this.enginePreviewOn = false;
+    this.viewport.clearPressPullGhost();
+    this.viewport.setPeek(null);
+    setPrompt("Click the face to stop at · Esc");
+    this.releaseRows = awaitFaceRows(
+      this.viewport,
+      "a face",
+      (faces) => this.takeStop(faces),
+      () => this.endStopPick(),
+    );
+  }
+
+  private endStopPick() {
+    this.dropRows();
+    this.pickingTarget = false;
+    // Restore the distance field T-mode hid; left active it let Enter commit a plain distance mid-pick.
+    this.showBox();
+    this.refreshPreview(true);
+  }
+
+  private takeStop(f: PressPullFaces) {
+    const id = f.faceIds[0]!;
+    if (this.faceIds.includes(id)) return "That is the face being pushed, pick the face to stop at";
+    this.upTo = upToFace({ selector: f.selectors[0]!, bodyId: f.bodyId }, this.viewport.planarFace(id));
+    this.commitUpTo();
+    return true;
   }
 
   /** The press landed on the passive selection handle before this tool existed; from here it is the ordinary drag. */
@@ -401,22 +455,20 @@ export class PressPullTool {
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       if (this.pickingTarget) {
-        this.pickingTarget = false;
-        // Restore the distance field T-mode hid; left active it let Enter commit a plain distance mid-pick.
-        this.showBox();
-        this.refreshPreview(true);
+        this.endStopPick();
         return;
       }
       this.cancel();
       return;
     }
-    if (toolChar(e) === "t" && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
-      this.pickingTarget = true;
-      this.dim.hide(); // Enter must not commit a plain distance while picking
-      this.clearPreviewTimer();
-      this.viewport.clearPressPullGhost();
-      this.viewport.setPeek(null);
-      setPrompt("Click the face to stop at · Esc");
+    if (
+      toolChar(e) === "t" &&
+      !this.dim.typesText(e) &&
+      this.phase === "drag" &&
+      !this.pickingTarget &&
+      !this.resizing
+    ) {
+      this.beginStopPick();
     }
   }
 
@@ -428,6 +480,7 @@ export class PressPullTool {
     bodyId: string | null = null,
     round: RoundFace | null = null,
   ) {
+    this.dropRows();
     this.faces = faces;
     this.faceIds = faceIds;
     this.upTo = null;
@@ -493,6 +546,22 @@ export class PressPullTool {
       options,
       undefined,
       () => this.onTyped(),
+    );
+    this.dim.restoresOnUndo(
+      "distance",
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.refreshPreview();
+      },
+    );
+    this.dim.restoresOnUndo(
+      "taper",
+      () => this.taper,
+      (taper) => {
+        this.taper = taper;
+        this.refreshPreview();
+      },
     );
     this.dim.setOptionHidden("direction", !this.holeAxis);
     this.syncToggle();
@@ -849,10 +918,9 @@ export class PressPullTool {
     this.previewTimer = null;
   }
 
-  /** A cut with its own tool body previews inside the body it cuts, so that body is seen through. */
   private syncPeek() {
     const f = this.pickingTarget || !this.faceIds.length ? null : this.buildFeature();
-    const cut = f?.type === "press-pull" && f.operation === "cut" && this.mode !== "auto";
+    const cut = peeksThrough(f, this.mode);
     const body = this.bodyId ?? this.viewport.faceIdToBodyId(this.faceIds[0] ?? -1);
     this.viewport.setPeek(cut && body ? () => [body] : null);
   }
@@ -1200,11 +1268,19 @@ export class PressPullTool {
       (this.round || this.slant) && feature.type === "press-pull" && this.faces.length === 1
         ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
         : null;
-    this.store.addFeature(feature);
+    this.store.addFeature(feature, undefined, this.bindings(feature));
     if (decision.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
     this.onDone?.(feature.id);
     if (reselect) this.reselectAfterBuild(feature.id, reselect);
+  }
+
+  private bindings(feature: Feature): SketchBinding[] {
+    if (feature.type !== "press-pull") return [];
+    const fields: BoxField[] = [{ box: "distance", field: "distance", value: feature.distance as number }];
+    if (typeof feature.taper === "number")
+      fields.push({ box: "taper", field: "taper", value: feature.taper, kind: "angle" });
+    return boxBindings(this.dim, this.store, feature.id, fields);
   }
 
   /** Selects the resized face where it now stands once the commit builds, since the viewport's own carry over
@@ -1259,6 +1335,7 @@ export class PressPullTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";

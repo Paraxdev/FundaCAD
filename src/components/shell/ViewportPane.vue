@@ -16,6 +16,9 @@ const host = useTemplateRef<HTMLDivElement>("host");
 const top = useTemplateRef<HTMLDivElement>("top");
 useClearOfCards(top);
 
+// Two roots, the pane and the drop chip Teleport, so attributes such as App's inert go on the pane by hand.
+defineOptions({ inheritAttrs: false });
+
 // The canvas is made in main.ts before Vue, since every tool must exist before any setup() runs. Reparenting keeps the
 // WebGL context, and prepend keeps it under the overlays (.palette, #prompt, #viewcontrols, .gridscale, .fps).
 onMounted(() => host.value!.prepend(engine.canvas));
@@ -117,7 +120,15 @@ function onDrop(e: DragEvent) {
 </script>
 
 <template>
-  <div id="viewport" ref="host" @dragenter="onDragOver" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+  <div
+    id="viewport"
+    ref="host"
+    v-bind="$attrs"
+    @dragenter="onDragOver"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
     <PromptBanner />
     <FpsReadout />
     <RoundTripReadout />

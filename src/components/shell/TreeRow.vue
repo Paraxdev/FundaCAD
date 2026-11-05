@@ -114,11 +114,11 @@ function onDblClick(e: MouseEvent) {
   else keyRename.start();
 }
 
-function menuItems(fromKeys = false): CtxItem[] {
+function menuItems(): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
   if (props.toggleVis) items.push({ label: props.visible === false ? "Show" : "Hide", onClick: props.toggleVis });
   if (props.edit) items.push({ label: "Edit", onClick: props.edit });
-  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start(fromKeys) });
+  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start() });
   if (props.remove) items.push({ label: "Delete", onClick: props.remove });
   return items;
 }
@@ -134,10 +134,10 @@ const keys = computed<TreeItemActions>(() => {
   return {
     select: activate && ((e) => activate(keyClick(e))),
     open: edit ? () => edit() : activate && ((e) => activate(keyClick(e))),
-    rename: rename && (() => keyRename.start(true)),
+    rename: rename && (() => keyRename.start()),
     remove: remove && (() => remove()),
     menu: (r) => {
-      const items = menuItems(true);
+      const items = menuItems();
       if (items.length) contextMenu(r.left + 24, r.bottom, items);
     },
   };

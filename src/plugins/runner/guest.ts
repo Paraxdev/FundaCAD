@@ -3,7 +3,7 @@
 
 import type { Grant } from "../manifest";
 import { BrokerRefused, type RefusalCode } from "../broker/broker";
-import { parseFromHost, MAX_LOG, type Port, type ToHost } from "./protocol";
+import { parseFromHost, MAX_LOG, MAX_RESULT, RESULT_TOO_BIG, type Port, type ToHost } from "./protocol";
 
 /** What a plugin sees. */
 export interface PluginApp {
@@ -122,8 +122,10 @@ export function serveGuest(opts: GuestOptions): () => void {
     void run(app).then(
       (value) => {
         // Through JSON rather than structured clone, so a returned function or cyclic object cannot throw inside
-        // postMessage.
-        opts.port.postMessage({ t: "done", value: jsonSafe(value) } satisfies ToHost);
+        // postMessage, and an oversized result is refused before it is cloned at all.
+        const json = jsonText(value);
+        if (json.length > MAX_RESULT) opts.port.postMessage({ t: "failed", why: RESULT_TOO_BIG } satisfies ToHost);
+        else opts.port.postMessage({ t: "done", value: JSON.parse(json) } satisfies ToHost);
       },
       (e) => {
         opts.port.postMessage({
@@ -143,11 +145,11 @@ export function serveGuest(opts: GuestOptions): () => void {
   };
 }
 
-/** Whatever survives a JSON round trip, or null. */
-function jsonSafe(v: unknown): unknown {
+/** The JSON text of a value, or "null" for one JSON cannot carry. */
+function jsonText(v: unknown): string {
   try {
-    return JSON.parse(JSON.stringify(v ?? null));
+    return JSON.stringify(v ?? null) ?? "null";
   } catch {
-    return null;
+    return "null";
   }
 }

@@ -75,6 +75,19 @@ fn one_open_chain_is_one_chain_whatever_order_its_triangles_come_in() {
     assert_eq!(c.open[0].len(), 7, "{:?}", c.open);
 }
 
+#[test]
+fn a_triangle_naming_a_point_the_mesh_lacks_is_left_out() {
+    // One triangle across z = 0, then one whose last corner is past the positions.
+    let positions = vec![0.0, 0.0, -1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0];
+    let indices = vec![0, 1, 2, 0, 1, 7];
+    let body = MeshBody { info: Default::default(), positions, indices, face_ids: vec![], edges: vec![] };
+    let m = |v: Value| v.as_object().cloned().unwrap();
+    let plane = plane_of(&m(serde_json::json!({"axis": "Z", "at": 0}))).unwrap();
+    let c = cut(&body, &plane);
+    assert!(c.loops.is_empty());
+    assert_eq!(c.open.len(), 1, "only the whole triangle is cut: {:?}", c.open);
+}
+
 fn z0() -> Plane {
     plane_of(serde_json::json!({"axis": "Z", "at": 0}).as_object().unwrap()).unwrap()
 }

@@ -8,7 +8,7 @@ struct Light {
 }
 struct U {
   w: u32, h: u32, sample: u32, row0: u32,
-  // flags: bit 0 writes the AOVs, bits 1 and 2 pick the estimator
+  // flags: bit 0 writes the AOVs, bits 1 and 2 pick the estimator, above them the side of a coarse block
   rows: u32, n_inst: u32, bounces: u32, flags: u32,
   // eye.w the lens aperture radius, fwd.w its focus distance; fwd is unit
   eye: vec4f, fwd: vec4f, right: vec4f, up: vec4f,
@@ -399,13 +399,15 @@ fn sample_lights(p: vec3f) -> LightSample {
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-  let y = id.y + u.row0;
-  if (id.x >= u.w || y >= u.h || id.y >= u.rows) { return; }
-  let pix = y * u.w + id.x;
+  let block = u.flags >> 3u;
+  let x = id.x * block;
+  let y = id.y * block + u.row0;
+  if (x >= u.w || y >= u.h || id.y >= u.rows) { return; }
+  let pix = y * u.w + x;
   seed = pix * 9781u + u.sample * 6271u + 1u;
   _ = rnd();
-  let px = (f32(id.x) + rnd()) / f32(u.w) * 2.0 - 1.0;
-  let py = 1.0 - (f32(y) + rnd()) / f32(u.h) * 2.0;
+  let px = (f32(x) + rnd() * f32(block)) / f32(u.w) * 2.0 - 1.0;
+  let py = 1.0 - (f32(y) + rnd() * f32(block)) / f32(u.h) * 2.0;
   var o = u.eye.xyz;
   var d = normalize(u.fwd.xyz + px * u.right.xyz + py * u.up.xyz);
   // The view plane, tone.z behind the eye so bodies behind it still show.
@@ -605,5 +607,13 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     }
   }
   if (any(col != col)) { col = vec3f(0.0); }
-  accum[pix] += vec4f(col, 1.0);
+  if (block == 1u) {
+    accum[pix] += vec4f(col, 1.0);
+    return;
+  }
+  for (var j = y; j < min(y + block, u.h); j++) {
+    for (var i = x; i < min(x + block, u.w); i++) {
+      accum[j * u.w + i] = vec4f(col, 1.0);
+    }
+  }
 }

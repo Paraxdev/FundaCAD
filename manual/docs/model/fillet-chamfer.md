@@ -40,6 +40,8 @@ The three icons in the fillet box pick how the round meets the faces. Keys 1, 2 
 2. G2: eases into the faces with no jump in curvature, so the highlight runs on smoothly.
 3. G3: also has no jump in how fast the curvature changes.
 
+While you drag, the preview shows the picked shape, and it changes as soon as you pick another one.
+
 G2 sets back 1.55 times the radius and G3 1.46 times, so on a narrow face they run off it sooner than G1. Every shape of the chip works with all three.
 
 G2 and G3 need both faces flat across the edge. That holds for:

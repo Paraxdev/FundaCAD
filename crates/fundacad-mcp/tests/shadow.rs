@@ -138,3 +138,30 @@ fn a_shadow_folder_that_is_a_link_is_not_used() {
     assert!(inside.is_empty(), "{inside:?}");
     assert!(mcp.log().contains("running in place"), "{}", mcp.log());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_shadow_folder_others_can_write_to_is_not_used() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let shared = tmp.path().join("fundacad-mcp-shadow");
+    std::fs::create_dir(&shared).expect("a folder");
+    std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o777)).expect("open to all");
+    let mut mcp = shadowed(tmp.path(), &[("FUNDACAD_ENGINE_CMD", engine_binary().to_string_lossy().into_owned())]);
+    let reply = mcp.call("schema", json!({"type": "box"}));
+    assert!(!reply.is_error, "{}", reply.text);
+    assert!(copies(tmp.path(), "fundacad-mcp").is_empty(), "{:?}", copies(tmp.path(), "fundacad-mcp"));
+    assert!(mcp.log().contains("running in place"), "{}", mcp.log());
+}
+
+#[cfg(unix)]
+#[test]
+fn the_shadow_folder_the_server_makes_is_open_to_no_other_account() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let mut mcp = shadowed(tmp.path(), &[("FUNDACAD_ENGINE_CMD", engine_binary().to_string_lossy().into_owned())]);
+    let reply = mcp.call("schema", json!({"type": "box"}));
+    assert!(!reply.is_error, "{}", reply.text);
+    let mode = std::fs::metadata(tmp.path().join("fundacad-mcp-shadow")).expect("the folder").permissions().mode();
+    assert_eq!((mode & 0o777, copies(tmp.path(), "fundacad-mcp").len()), (0o700, 1), "{}", mcp.log());
+}

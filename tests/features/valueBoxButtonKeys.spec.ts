@@ -38,6 +38,7 @@ function openPattern() {
   const added: Feature[] = [];
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
     addFeature: (f: Feature) => added.push(f),
     document: { features: [] },
     buildState: { result: { bodies: [{ id: "body1", name: "Body1", faceStart: 0, faceCount: 2, faceOwners: ["b"] }] } },

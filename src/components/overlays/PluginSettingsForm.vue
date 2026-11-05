@@ -10,7 +10,6 @@ import KeyCapture, { type CapturedKey } from "../ui/KeyCapture.vue";
 import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import TextField from "../ui/TextField.vue";
-import UnitChip from "../ui/UnitChip.vue";
 import { nativeDialog } from "../../io/nativeDialog";
 
 const props = defineProps<{
@@ -153,18 +152,16 @@ const isDefault = (p: SettingProp) => {
               class="plugset-num"
               :model-value="values[p.key] as number"
               :unit="numberOf(p).unit"
+              :caption="numberOf(p).caption ?? undefined"
               :step="numberOf(p).step"
               :min="p.min"
               :max="p.max"
               :parse="numberOf(p).parse"
               :validate="numberOf(p).validate"
+              :problem="errors[p.key]"
               @update:model-value="store(p, $event)"
               @error="setError(p, $event)"
-            >
-              <template v-if="numberOf(p).caption" #trailing>
-                <UnitChip :unit="numberOf(p).caption!" />
-              </template>
-            </NumberField>
+            />
 
             <Select
               v-else-if="p.type === 'enum'"
@@ -237,7 +234,9 @@ const isDefault = (p: SettingProp) => {
             />
           </div>
         </div>
-        <p v-if="errors[p.key]" class="plugset-error" role="alert">{{ errors[p.key] }}</p>
+        <!-- A number field describes and speaks its own refusal, so its copy here is for the eye only. -->
+        <p v-if="errors[p.key] && p.type === 'number'" class="plugset-error" aria-hidden="true">{{ errors[p.key] }}</p>
+        <p v-else-if="errors[p.key]" class="plugset-error" role="alert">{{ errors[p.key] }}</p>
         <p v-if="p.description" class="pref-hint">{{ p.description }}</p>
       </div>
     </template>
@@ -278,6 +277,6 @@ const isDefault = (p: SettingProp) => {
 .plugset-error {
   color: var(--error);
   margin: 2px 0 0;
-  font-size: 0.9em;
+  font-size: var(--fs-small);
 }
 </style>

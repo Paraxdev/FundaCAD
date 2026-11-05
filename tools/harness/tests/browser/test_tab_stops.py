@@ -1,4 +1,4 @@
-"""Tab from the menu bar to the viewport passes each toolbar, the menu bar and each radiogroup as one stop."""
+"""Tab from the menu bar on passes each toolbar, the menu bar, each radiogroup and the 3D view as one stop."""
 
 import pytest
 
@@ -19,6 +19,7 @@ SHELL_STOPS = [
     "menubar Menu",
     "toolbar Undo and redo",
     "radiogroup Workspace",
+    "canvas",
     "toolbar Tools",
     "toolbar View controls",
     "radiogroup View mode",
@@ -38,7 +39,7 @@ def tab_walk(s, presses: int = 60) -> list[str]:
     return stops
 
 
-def test_tab_from_the_menu_bar_to_the_viewport_stops_once_per_shell_widget(session):
+def test_tab_from_the_menu_bar_stops_once_per_shell_widget_and_on_the_view(session):
     session.press("Escape")
     session.settle()
     stops = tab_walk(session)

@@ -1,6 +1,7 @@
 // Ring buffer of recent events for the bug reporter, fed from window errors and every toast.
 
 import { isSessionEnded } from "../document/session";
+import { isBrowserNotice } from "./browserNotice";
 
 const MAX = 20;
 const buf: string[] = [];
@@ -44,6 +45,7 @@ export function breadcrumbs(): string[] {
 // Guarded so the module imports without a DOM: there is no jsdom in the test setup.
 if (typeof window !== "undefined") {
   window.addEventListener("error", (e) => {
+    if (isBrowserNotice(e.message, e.error)) return;
     crumb(`[error] ${e.message} (${e.filename ?? "?"}:${e.lineno ?? "?"})`);
   });
   window.addEventListener("unhandledrejection", (e) => {

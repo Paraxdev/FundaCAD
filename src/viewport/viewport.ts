@@ -25,7 +25,7 @@ import {
 } from "./render";
 import { SectionCaps } from "./sectionCaps";
 // The one derivation of "which plane is that face"; pure, so nothing cycles back.
-import { pickFacePlaneAt } from "../features/facePlanePick";
+import { facePlaneOfRow, pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { planeHitMinPx } from "./planeHit";
 import { TILE_ORDER, triadMinScale } from "./originTiles";
@@ -39,6 +39,9 @@ import { sceneStats } from "../diagnostics/sceneStats";
 import { crumb } from "../diagnostics/breadcrumbs";
 import {
   makeZebraMaterial,
+  fitZebraMaterial,
+  releaseZebraFrame,
+  type ZebraSettings,
   buildCurvatureCombs,
   buildClashMesh,
   buildClearanceLine,
@@ -50,8 +53,8 @@ import {
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
-import { barycentric, displacedPositions, stressColors } from "../ui/stress";
-import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from "./picking";
+import { barycentric, displacedPositions, stressColors, type StressRamp } from "../ui/stress";
+import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods, type PickRef } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
@@ -59,11 +62,13 @@ import { clipSelectionOverlays, selectionGlowWarmup } from "./selectionGlow";
 import { linkProgramsAhead } from "./linkPrograms";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
+import type { Continuity } from "../features/continuity";
 import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
-import { awaitTreePick, treePickRefusal } from "../ui/treePick";
+import { awaitTreePick } from "../ui/treePick";
+import { overrideRowAnswer, viewOverrideOf } from "./viewOverride";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
@@ -117,8 +122,10 @@ import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
+import { onA11yPrefsChange } from "../ui/a11yPrefs";
+import { viewportLabelScale } from "../ui/viewportLabels";
 import { onContrastChange } from "../ui/contrastSetting";
-import type { ViewCubeSide } from "../types";
+import type { ViewCubeSide, ViewOverride } from "../types";
 
 /** A selection captured before a rebuild replaces the Highlighter (selectionMemo.ts). */
 interface SelectionMemo {
@@ -171,6 +178,7 @@ import {
 } from "./areaSelect";
 import { collectInBox, PREVIEW_REACH, projectForArea, type AreaProjection } from "./areaProjection";
 import { scheduleAreaIndex } from "./areaIndex";
+import { nearestFaceId } from "./faceNear";
 import {
   faceCentroidOf,
   faceNormalOf,
@@ -192,6 +200,12 @@ import { buildLightRig, type LightRig } from "./lightRig";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** Each frame of the box preview selects from the selection as it was when the drag began. */
+export interface FaceSketchPlane {
+  plane: PlaneDef;
+  faceId: number;
+  anchor: { selector: Selector; at: [number, number, number] };
+}
+
 export interface AreaDrag {
   x: number;
   y: number;
@@ -340,7 +354,13 @@ export class Viewport {
 
   /** A chunked reply being drawn and a tool's suspension are two independent reasons, deliberately apart. */
   private get pickSuppressed(): boolean {
-    return this.suspendPicking || this.streaming || this.outOfDate;
+    return this.suspendPicking || this.modelUnsettled;
+  }
+  get modelUnsettled(): boolean {
+    return this.streaming || this.outOfDate;
+  }
+  get picksSuspended(): boolean {
+    return this.pickSuppressed;
   }
   // Until the user moves the camera the model stays framed on resize: under remote
   // desktops and fractional scaling the canvas settles a frame after the first fit.
@@ -365,7 +385,7 @@ export class Viewport {
     this.cube = new ViewCube(canvas, this.scene.renderer, {
       applySide: (side) => this.applyCubeSide(side),
       applyDir: (dir, up) => {
-        this.rig.setViewDir(dir, up);
+        this.rig.setViewDir(dir, up, true);
         this.requestRender();
       },
       getOverrides: () => this.store?.viewOverrides ?? {},
@@ -389,6 +409,8 @@ export class Viewport {
     this.rig.setScene({
       raycast: (origin, dir) => this.surfaceDistance(origin, dir),
       groundZ: () => (this.scene.grid.group.visible ? this.targetGridZ : null),
+      // No raycast index is built while a reply streams in, so a ray tests every triangle.
+      raysCostly: () => this.streaming,
     });
     this.rig.setPivotSource(() => {
       const pivot = getNavPrefs().orbitPivot;
@@ -458,8 +480,16 @@ export class Viewport {
         this.edgeRule.reset();
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
+      this.syncZebraPrefs();
       this.syncViewMode();
       this.overlays = savedOverlays();
+      this.requestRender();
+    });
+    let labelScale = viewportLabelScale();
+    onA11yPrefsChange(() => {
+      if (viewportLabelScale() === labelScale) return;
+      labelScale = viewportLabelScale();
+      this.scene.originTiles.applyLabelScale();
       this.requestRender();
     });
     const recolor = () => {
@@ -944,23 +974,59 @@ export class Viewport {
   /** Apply a pick to the selection. The ambiguous-edge menu runs this too, so a
    *  menu pick and a click can never select differently. */
   applyPick(hit: Hit | null, mods: PickMods) {
-    if (this.highlighter) {
-      if (!mods.additive) {
-        this.highlighter.clearSelection();
-        this.edgeScope = { scope: "chain", reason: "tangent" }; // a replaced selection carries nothing over
-      }
-      if (hit?.kind === "edge") {
-        this.highlighter.toggleSelectEdge(hit.edge);
-        this.noteEdgePickScope(hit.edge, mods.exact, mods.additive);
-      } else if (hit?.kind === "face") {
-        // A face the kernel split is picked as the whole run; Shift takes one piece.
-        const want = mods.exact ? [hit.faceId] : expandToBand(hit.faceId, this.faceBands);
-        for (const f of want) this.highlighter.toggleSelectFace(f);
-      }
-      this.requestRender();
-    }
+    this.writePicks(hit ? [hit] : [], mods.additive, mods.exact, mods.exact);
     this.onHit?.(hit, mods.exact);
     this.onSelectionChange?.();
+  }
+
+  /** A pick that names its faces and edges rather than a screen point. A Bodies policy lives in the app's ui state, so
+   *  the caller runs selmode-faces first or the toolbar keeps showing Bodies. */
+  applyPicks(refs: readonly PickRef[], o: { additive: boolean }) {
+    this.setSelectionMode("faces");
+    this.faceClick = null;
+    this.edgeClick = null;
+    this.writePicks(refs, o.additive, false, true);
+    this.onSelectionChange?.();
+  }
+
+  // Two pieces of one run in one call would toggle the run on and off again, so each face and edge is written once.
+  private writePicks(refs: readonly PickRef[], additive: boolean, exactFace: boolean, exactEdge: boolean) {
+    if (!this.highlighter) return;
+    if (!additive) {
+      this.highlighter.clearSelection();
+      this.edgeScope = { scope: "chain", reason: "tangent" }; // a replaced selection carries nothing over
+    }
+    const written = new Set<number | EdgeRef>();
+    for (const ref of refs) {
+      if (ref.kind === "edge") {
+        if (written.has(ref.edge)) continue;
+        written.add(ref.edge);
+        this.highlighter.toggleSelectEdge(ref.edge);
+        this.noteEdgePickScope(ref.edge, exactEdge, additive);
+        continue;
+      }
+      // A face the kernel split is picked as the whole run; Shift takes one piece.
+      for (const f of exactFace ? [ref.faceId] : expandToBand(ref.faceId, this.faceBands)) {
+        if (written.has(f)) continue;
+        written.add(f);
+        this.highlighter.toggleSelectFace(f);
+      }
+    }
+    this.requestRender();
+  }
+
+  /** Lights what a list row names, an edge drawn over the model since the row may be on the far side, a face hatched
+   *  so it never reads as selected. */
+  hoverPick(ref: PickRef | null) {
+    this.highlighter?.clearHover();
+    this.emphasiseEdge(ref?.kind === "edge" ? ref.edge : null);
+    if (ref?.kind === "edge") this.highlighter?.hoverEdge(ref.edge);
+    this.highlighter?.litFaceRun(ref?.kind === "face" ? expandToBand(ref.faceId, this.faceBands) : []);
+    this.requestRender();
+  }
+
+  bodyEdgeRefs(bodyId: string): EdgeRef[] {
+    return this.visibleEdgeLines().filter((e) => e.body === bodyId);
   }
 
   setSelectionMode(m: "faces" | "bodies") {
@@ -1044,7 +1110,8 @@ export class Viewport {
   /** The Realtime frame the trace replaces, drawn once more and copied so it
    *  can fade out over the first traced samples. */
   private freezeRealtime() {
-    if (!motionOn() || this.scene.renderer.getContext().isContextLost()) return;
+    // Runs with Animations off too: it is no motion, and it softens a change over the whole view.
+    if (this.scene.renderer.getContext().isContextLost()) return;
     this.scene.post.render(this.rig.active);
     this.freeze.capture(performance.now());
   }
@@ -1572,6 +1639,11 @@ export class Viewport {
     return bodyOfFace(this.model, faceId)?.id ?? null;
   }
 
+  localFaceOf(faceId: number): number | null {
+    const b = this.model && bodyOfFace(this.model, faceId);
+    return b ? faceId - b.faceStart : null;
+  }
+
   /** A plain mesh raycast like a bodies mode click, so the right click body menu agrees with a left click. */
   bodyIdAt(clientX: number, clientY: number): string | null {
     if (!this.model) return null;
@@ -1645,6 +1717,7 @@ export class Viewport {
   private draftThreshold = 45;
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
+  private zebraSettings: ZebraSettings = { direction: renderPrefs().zebraDirection, width: renderPrefs().zebraWidth };
   // Each body's own material while zebra is on.
   private savedMats = new Map<string, THREE.Material | THREE.Material[]>();
   private combs = false;
@@ -1876,10 +1949,22 @@ export class Viewport {
     this.applyZebra();
     this.onAnalysisChange?.();
   }
+  private syncZebraPrefs() {
+    const { zebraDirection: direction, zebraWidth: width } = renderPrefs();
+    const s = this.zebraSettings;
+    if (s && s.direction === direction && s.width === width) return;
+    this.zebraSettings = { direction, width };
+    if (this.zebra) this.applyZebra();
+  }
+  /** An opened document fits its own stripe frame, not the one held through the last document's edits. */
+  forgetZebraFrame() {
+    if (this.zebraMat) releaseZebraFrame(this.zebraMat);
+  }
   private applyZebra() {
     if (!this.model) return;
     if (this.zebra) {
       if (!this.zebraMat) this.zebraMat = makeZebraMaterial();
+      fitZebraMaterial(this.zebraMat, this.model.box, this.zebraSettings);
       for (const b of this.model.bodies) {
         if (b.mesh.material !== this.zebraMat) {
           this.savedMats.set(b.id, b.mesh.material);
@@ -2362,38 +2447,10 @@ export class Viewport {
   /** The face whose surface is nearest `point`, as the engine's by:"nearest" resolves.
    *  Never compare against faceCentroidWorld: triangle centroids move with tessellation
    *  density. `extraTol` covers a known offset such as a texture's depth. */
-  faceIdNear(point: [number, number, number], extraTol = 0): number | null {
+  faceIdNear(point: [number, number, number], extraTol = 0, onBody?: string): number | null {
     if (!this.model) return null;
-    const target = new THREE.Vector3(point[0], point[1], point[2]);
-    const local = new THREE.Vector3();
-    const inv = new THREE.Matrix4();
-    const tri = new THREE.Triangle();
-    const closest = new THREE.Vector3();
-    let best: number | null = null;
-    let bestDist = Infinity;
-    for (const body of this.model.bodies) {
-      // compare in the body's local space: one matrix inverse per body instead
-      // of three vector transforms per triangle.
-      inv.copy(body.mesh.matrixWorld).invert();
-      local.copy(target).applyMatrix4(inv);
-      const pos = body.mesh.geometry.getAttribute("position");
-      const index = body.mesh.geometry.getIndex()!;
-      for (const [faceId, tris] of body.faceTriangles) {
-        for (const t of tris) {
-          tri.a.fromBufferAttribute(pos, index.getX(t * 3));
-          tri.b.fromBufferAttribute(pos, index.getX(t * 3 + 1));
-          tri.c.fromBufferAttribute(pos, index.getX(t * 3 + 2));
-          tri.closestPointToPoint(local, closest);
-          const d = closest.distanceTo(local);
-          if (d < bestDist) {
-            bestDist = d;
-            best = faceId;
-          }
-        }
-      }
-    }
     const tol = midMatchTol(this.model.box.getSize(this.projScratch).length()) + Math.abs(extraTol);
-    return best != null && bestDist <= tol ? best : null;
+    return nearestFaceId(this.model.bodies, point, tol, onBody);
   }
 
   /** Red marks for fillet and chamfer failures, [] clears. setModel wipes paint, so re-apply after each
@@ -2415,6 +2472,11 @@ export class Viewport {
   selectedFacesForPressPull(): PressPullFaces | null {
     if (!this.highlighter || !this.model) return null;
     return this.pressPull.get(this.model, this.highlighter.getSelectedFaces(), this.faceClick);
+  }
+
+  /** The same answer as selectedFacesForPressPull for these faces, with no click. */
+  facesForPressPull(faceIds: readonly number[]): PressPullFaces | null {
+    return this.model ? this.pressPull.get(this.model, faceIds, null) : null;
   }
 
   /** The cylinder a face lies on, or null. Not from faceNormalWorld: a closed
@@ -2440,14 +2502,13 @@ export class Viewport {
 
   /** So "click a face, press S" skips the plane picker. Null for none or a curved face. The winding already
    *  points out of the material, a body centre test would invert the underside of an overhang. */
-  selectedFaceSketchPlane(): {
-    plane: PlaneDef;
-    faceId: number;
-    anchor: { selector: Selector; at: [number, number, number] };
-  } | null {
-    if (!this.highlighter || !this.model) return null;
-    const faceId = this.highlighter.getSelectedFaces()[0];
-    if (faceId === undefined) return null;
+  selectedFaceSketchPlane(): FaceSketchPlane | null {
+    const faceId = this.highlighter?.getSelectedFaces()[0];
+    return faceId === undefined ? null : this.faceSketchPlane(faceId);
+  }
+
+  faceSketchPlane(faceId: number): FaceSketchPlane | null {
+    if (!this.model) return null;
     // Every vertex on the plane through the centroid, with a model scaled tolerance as selectCoplanarFaces uses.
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
     const flat = planeOfFace(this.model, faceId, tol);
@@ -2469,6 +2530,13 @@ export class Viewport {
         at: [c.x, c.y, c.z] as [number, number, number],
       },
     };
+  }
+
+  /** For a face picked with no click point, a list row. The centroid lies on the face, as faceCentroidWorld says. */
+  faceSelectorOf(faceId: number): Selector {
+    const c = this.faceCentroidWorld(faceId);
+    const body = this.faceIdToBodyId(faceId);
+    return { kind: "face", by: "nearest", point: [c.x, c.y, c.z], ...(body ? { body } : {}) };
   }
 
   /** The plane of a face, or null when the face is curved. */
@@ -3150,7 +3218,7 @@ export class Viewport {
   private clashMeshes: THREE.Mesh[] = [];
   private clearanceLines: THREE.Line[] = [];
 
-  /** The analysed body's surface coloured over `range` (blue low, red high) in its place, the body hidden
+  /** The analysed body's surface coloured over `range` (dark low, light high) in its place, the body hidden
    *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. `colours`
    *  false draws it in the body's own colour, and undeformed as well leaves the body itself on show, the surface
    *  kept only for stressOverlayPoint. Null clears, as does the next setModel. Tells onStressOverlayChange
@@ -3165,6 +3233,8 @@ export class Viewport {
       displacement?: ArrayLike<number>;
       scale?: number;
       colours?: boolean;
+      ramp?: StressRamp;
+      bands?: number;
     } | null,
   ) {
     this.stressRest?.dispose();
@@ -3192,7 +3262,7 @@ export class Viewport {
       const plain = o.colours === false;
       const colors = plain
         ? solidColors(o.positions.length / 3, this.bodyColour(b))
-        : stressColors(o.values, o.range.min, o.range.max);
+        : stressColors(o.values, o.range.min, o.range.max, o.ramp, o.bands);
       this.stressMesh = buildStressMesh(o.positions, o.indices, colors);
       const own = plain ? plainStressMaterial(b?.mesh.material) : null;
       if (own) {
@@ -3755,13 +3825,21 @@ export class Viewport {
     if (!ov) return false;
     const normal = new THREE.Vector3(...ov.normal);
     const up = new THREE.Vector3(...ov.up);
-    this.rig.setViewDir(normal, up);
+    this.rig.setViewDir(normal, up, true);
     return true;
   }
 
   private beginSetOverride(side: ViewCubeSide) {
     this.releaseTreePick = awaitTreePick(
-      (pick) => treePickRefusal(pick, "a model face, pick it in the view"),
+      (pick) =>
+        overrideRowAnswer(
+          pick,
+          (faceId) => {
+            const face = facePlaneOfRow(this, faceId);
+            return face?.kind === "planar" ? face.def : null;
+          },
+          (override) => this.setOverrideFrom(side, override),
+        ),
       () => this.cancelSetOverride(),
     );
     this.setOverrideSide = side;
@@ -3792,15 +3870,11 @@ export class Viewport {
       setPrompt("No face there, click a model face (Esc to cancel)");
       return;
     }
-    // Up from the face's in-plane x axis: xdir × normal is the in-plane up.
-    const normal = new THREE.Vector3(...plane.normal).normalize();
-    const xdir = new THREE.Vector3(...plane.xdir).normalize();
-    const up = new THREE.Vector3().crossVectors(normal, xdir).normalize();
-    if (up.lengthSq() < 1e-6) up.set(0, 0, 1);
-    this.store?.setViewOverride(side, {
-      normal: [normal.x, normal.y, normal.z],
-      up: [up.x, up.y, up.z],
-    });
+    this.setOverrideFrom(side, viewOverrideOf(plane));
+  }
+
+  private setOverrideFrom(side: ViewCubeSide, override: ViewOverride) {
+    this.store?.setViewOverride(side, override);
     this.cube.refreshOverrideMarks();
     this.cancelSetOverride();
     this.applyCubeSide(side);
@@ -3862,8 +3936,14 @@ export class Viewport {
   clearPressPullGhost() {
     this.ghosts.clearPressPullGhost();
   }
-  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind, capped = false) {
-    this.ghosts.setBlendGhost(edges, size, kind, capped);
+  setBlendGhost(
+    edges: readonly BlendGhostEdge[],
+    size: number,
+    kind: BlendKind,
+    capped = false,
+    continuity: Continuity = "G1",
+  ) {
+    this.ghosts.setBlendGhost(edges, size, kind, capped, continuity);
   }
   clearBlendGhost() {
     this.ghosts.clearBlendGhost();
@@ -3926,6 +4006,7 @@ export class Viewport {
   }
 
   enterSketchView(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3) {
+    if (!this.sketchOrtho) this.sketchFromOrtho = this.rig.isOrtho();
     // Stay on the side of the plane the camera is already on (viewFlight.viewSideNormal).
     const eye = this.rig.getPosition();
     const side = viewSideNormal([normal.x, normal.y, normal.z], [eye.x, eye.y, eye.z], [origin.x, origin.y, origin.z]);
@@ -3963,7 +4044,7 @@ export class Viewport {
       this.sketchPrevMode = this.rig.projectionMode();
       this.rig.setProjectionMode("ortho");
     } else {
-      this.rig.setProjectionMode(this.sketchPrevMode);
+      this.rig.setProjectionMode(this.sketchPrevMode, this.sketchFromOrtho);
     }
     this.sketchOrtho = on;
     this.requestRender();
@@ -3981,6 +4062,7 @@ export class Viewport {
   }
   private sketchPrevMode: ProjectionMode = "auto";
   private sketchOrtho = false; // currently in the sketch's forced flat (ortho) view
+  private sketchFromOrtho = false;
   private sketchDimmed = false;
 
   /** Dim the model behind an open sketch. depthWrite stays off so the sketch grid

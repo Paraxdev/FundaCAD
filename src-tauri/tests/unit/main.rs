@@ -1,12 +1,15 @@
 mod container;
 mod doc_paths;
+mod engine_paths;
 mod launch_args;
 mod library;
 mod log_file;
 mod log_redact;
 mod plugins;
+mod recovery;
 mod safe_mode;
 mod session_file;
 mod settings_files;
 mod thumbs;
 mod webkit;
+mod worker_port;

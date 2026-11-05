@@ -23,6 +23,7 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import Select from "../../../src/components/ui/Select.vue";
+import { useToastStore } from "../../../src/stores/toasts";
 import { useShellStore } from "../../../src/stores/shell";
 import { ENGINE } from "../../../src/app/engineKey";
 import { createSelection } from "../../../src/app/selection";
@@ -332,6 +333,85 @@ describe("BrowserPane", () => {
     const h = w.get("h2.float-card-title");
     expect(h.text()).toBe("Items");
     expect(aside.attributes("aria-labelledby")).toBe(h.attributes("id"));
+  });
+
+  describe("tabs", () => {
+    const mounted: VueWrapper[] = [];
+    const withList = (fake: ReturnType<typeof makeEngine>) => {
+      const w = mount(BrowserPane, {
+        global: {
+          provide: { [ENGINE as symbol]: fake.engine },
+          stubs: { GeometryList: { template: '<div class="stub-list"></div>' } },
+        },
+      });
+      mounted.push(w);
+      return w;
+    };
+    // A pane left mounted hears the next test's filter change and draws the real list, the stub lasts one mount.
+    afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
+    const tabs = (w: VueWrapper) => w.findAll("[role=tab]");
+    const tabState = (w: VueWrapper) =>
+      tabs(w).map((t) => [t.text(), t.attributes("aria-selected"), t.attributes("tabindex")]);
+    const empty = (): CadDocument => ({ parameters: {}, features: [] });
+
+    it("sits Items and Geometry under the heading, on Items at first", () => {
+      const w = withList(makeEngine(empty()));
+      expect(w.get("[role=tablist]").attributes("aria-label")).toBe("Items pages");
+      expect(tabState(w)).toEqual([
+        ["Items", "true", "0"],
+        ["Geometry", "false", "-1"],
+      ]);
+      const kids = [...w.get("aside#browser").element.children].map((c) => c.getAttribute("role") ?? c.className);
+      expect(kids).toEqual(["float-card-head", "tablist", "tabpanel", "float-card-foot"]);
+      expect(w.find(".stub-list").exists()).toBe(false);
+    });
+
+    it("keeps the tree alive while Geometry shows, and only then mounts the list", async () => {
+      const w = withList(makeEngine(empty()));
+      const tree = w.get("[role=tree]").element;
+      await tabs(w)[1]!.trigger("click");
+      expect(tabState(w).map((t) => t[1])).toEqual(["false", "true"]);
+      expect(w.get("[role=tree]").element).toBe(tree);
+      expect((w.findAll("[role=tabpanel]")[0]!.element as HTMLElement).style.display).toBe("none");
+      const list = w.get(".stub-list");
+      expect(list.attributes("role")).toBe("tabpanel");
+      expect(list.attributes("aria-labelledby")).toBe(tabs(w)[1]!.attributes("id"));
+      expect(tabs(w)[1]!.attributes("aria-controls")).toBe(list.attributes("id"));
+
+      await tabs(w)[0]!.trigger("click");
+      expect(w.find(".stub-list").exists()).toBe(false);
+      expect((w.get("[role=tabpanel]").element as HTMLElement).style.display).toBe("");
+    });
+
+    it("goes back to Items for a rename asked from elsewhere, and the field takes focus there", async () => {
+      const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+      const w = mount(BrowserPane, {
+        global: {
+          provide: { [ENGINE as symbol]: fake.engine },
+          stubs: { GeometryList: { template: '<div class="stub-list"></div>' } },
+        },
+        attachTo: document.body,
+      });
+      mounted.push(w);
+      await tabs(w)[1]!.trigger("click");
+      useBrowserStore().beginRename("b1");
+      for (let i = 0; i < 4; i++) await nextTick();
+      expect(tabState(w).map((t) => t[1])).toEqual(["true", "false"]);
+      const field = document.activeElement as HTMLInputElement;
+      expect([field.tagName, field.value]).toEqual(["INPUT", "Body1"]);
+      const page = field.closest<HTMLElement>("[role=tabpanel]")!;
+      expect([page.style.display, page.getAttribute("aria-labelledby")]).toEqual(["", tabs(w)[0]!.attributes("id")]);
+    });
+
+    it("stays on Geometry when the pane closes and opens again", async () => {
+      const fake = makeEngine(empty());
+      const first = withList(fake);
+      await tabs(first)[1]!.trigger("click");
+      mounted.pop()!.unmount();
+      const second = withList(fake);
+      expect(tabState(second).map((t) => t[1])).toEqual(["false", "true"]);
+      expect(second.find(".stub-list").exists()).toBe(true);
+    });
   });
 
   // --- elements: the user's own folders over the bodies --------------------
@@ -996,6 +1076,7 @@ describe("BrowserPane", () => {
       expect(items.find((i) => i.label.startsWith("Rename"))).toMatchObject({ disabled: true });
       items.find((i) => i.label === "Delete")!.onClick!();
       expect(fake.removed).toEqual([["p1", "p2"]]);
+      expect(useToastStore().items.map((t) => [t.message, t.action?.label])).toEqual([["Deleted 2 steps", "Undo"]]);
     });
 
     it("a plain right-click on a plane outside the selection acts on that plane alone", async () => {
@@ -1130,7 +1211,9 @@ describe("a row click while a tool waits for a pick", () => {
     await rowNamed(w, "Body1").trigger("click");
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
     expect(fake.engine.viewport.getSelectedBodies()).toEqual([]);
-    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "");
+    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "", {
+      silent: true,
+    });
     expect(treePickWaiting()).toBe(true);
   });
 
@@ -1156,6 +1239,9 @@ describe("a row click while a tool waits for a pick", () => {
     );
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(edit).not.toHaveBeenCalled();
+    expect(eng(fake).setStatus).toHaveBeenLastCalledWith("Finish the active tool first, or press Esc", "", {
+      silent: true,
+    });
   });
 });
 
@@ -1221,6 +1307,47 @@ describe("a row double click while another edit is open", () => {
     await nextTick();
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
+  });
+
+  const revolveDoc = (): CadDocument => ({
+    parameters: {},
+    features: [sketch("s1"), { id: "rv", type: "revolve", sketch: "s1" } as Feature],
+  });
+
+  it("closes a tool waiting for a row through commands and edits the row's feature, as with no pick", async () => {
+    const fake = makeEngine(revolveDoc());
+    const log = withOpenEdit(fake);
+    const tool = (fake.engine as unknown as { tools: { revolvePitch: { cancel: () => void } } }).tools.revolvePitch;
+    const cancel = tool.cancel;
+    const release = awaitTreePick(
+      () => "no",
+      () => tool.cancel(),
+      { keepsOnRewind: true, keepsOnCommand: true },
+    );
+    tool.cancel = () => {
+      cancel();
+      release();
+    };
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "Sketch1").trigger("dblclick");
+    expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("ends a pick with no tool behind it, as Stress's Click faces, and edits the row's feature", async () => {
+    const fake = makeEngine(revolveDoc());
+    const log = withOpenEdit(fake);
+    (fake.engine as unknown as { tools: { revolvePitch: { active: boolean } } }).tools.revolvePitch.active = false;
+    awaitTreePick(
+      () => "no",
+      () => log.push("stop:placing"),
+      { keepsOnRewind: true, keepsOnCommand: true },
+    );
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "Sketch1").trigger("dblclick");
+    expect(log).toEqual(["stop:placing", "edit:s1"]);
   });
 });
 

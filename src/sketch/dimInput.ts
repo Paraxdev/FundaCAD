@@ -1,6 +1,7 @@
 // On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
+import { announce } from "../ui/announce";
 import {
   onActivate,
   setChipUnit,
@@ -12,13 +13,22 @@ import {
   type UiIconButtonOptions,
 } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
-import { isHistoryKey, isMenuKey } from "../ui/focus";
+import { isEditableTarget, isHistoryKey, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
+import { regionStep } from "../ui/regions";
+import { underZoom } from "../ui/anchor";
+import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
-import { valueProblem, type ValueRule } from "../document/numFields";
+import { valueProblem, type FieldKind, type ValueRule } from "../document/numFields";
+import { splitNameValue, type ExprInput } from "../params/engine";
 import { replayedPress } from "../viewport/navigator/input";
+
+/** Where the box reads parameter names from, the document store in the app. */
+export interface DimDocument {
+  classifyTargetExpr(boundName: string | null, pendingName: string | null, raw: string, kind: FieldKind): ExprInput;
+}
 
 export interface DimFieldDef extends ValueRule {
   name: string;
@@ -124,7 +134,26 @@ interface Field {
   /** Set only by a keystroke: an edit tool seeds and locks every field before the user touches any. */
   typed?: boolean;
   hidden?: boolean;
+  /** What the browser's own undo of this field would act on, see `ownsHistoryKey`. */
+  edit?: FieldEdit;
+  /** Reads the tool's value behind this field, returning what puts it back, see `restoresOnUndo`. */
+  capture?: () => () => void;
 }
+
+interface FieldEdit {
+  from: string;
+  to: string;
+  /** The text after the last keystroke, where a redo stops. */
+  end: string;
+  undoable: boolean;
+  redoable: boolean;
+  userDriven: boolean;
+  typed: boolean;
+  lastGood: number | null;
+  restore: (() => void) | null;
+}
+
+const isHistoryInput = (t: string) => t === "historyUndo" || t === "historyRedo";
 
 const shownBoxes = new Set<DimInput>();
 let boxCount = 0;
@@ -275,17 +304,22 @@ export class DimInput {
   /** A tool's own control beside the fields, such as the fillet's profile chip. */
   private extra: HTMLElement | null = null;
   private typedProblem: string | null = null;
+  /** Fields a keystroke changed since show(), which a confirm does not clear the way it clears `typed`. */
+  private typedNames = new Set<string>();
+  // A Tab inside the box since show(), so show()'s late refocus has no business moving focus back.
+  private walked = false;
   private focusName: string | null = null;
   private boxNo = ++boxCount;
   private helpId = `dim-help-${this.boxNo}`;
 
-  constructor() {
+  constructor(private doc: () => DimDocument | null = () => null) {
     this.root = document.createElement("div");
     this.root.className = "dim-input";
     this.root.style.display = "none";
     this.root.setAttribute("role", "group");
     // #prompt is the tool's banner line, so entering the box reads what the tool asks for, then the keys.
     this.root.setAttribute("aria-describedby", `prompt ${this.helpId}`);
+    this.root.setAttribute("data-over-region", "viewport");
     document.body.appendChild(this.root);
     // Field inputs stop their own keys, so this hears only the option buttons.
     this.root.addEventListener("keydown", (e) => this.onOptionKey(e));
@@ -339,8 +373,22 @@ export class DimInput {
     return el instanceof Node && this.root.contains(el);
   }
 
+  /** A tool's letter key is text in a field typed into, since names use letters. The box focuses itself, so its
+   *  untouched field still lends the tool the key. */
+  typesText(e: KeyboardEvent): boolean {
+    if (!isEditableTarget(e.target)) return false;
+    const f = this.fields.find((x) => x.input === e.target);
+    return !f || f.userDriven;
+  }
+
   ownsField(el: EventTarget | null): boolean {
     return this.fields.some((f) => f.input === el);
+  }
+
+  /** A field of this box with nothing typed in it, or its typing wiped out. */
+  isFreshField(el: EventTarget | null): boolean {
+    const f = this.fields.find((x) => x.input === el);
+    return !!f && (!f.userDriven || f.input.value === "");
   }
 
   /** For a tool whose Tab means something else (the fillet flip): Shift+Tab from a field steps back onto Cancel. */
@@ -370,6 +418,8 @@ export class DimInput {
     onInput?: () => void,
   ) {
     this.hide();
+    this.typedNames.clear();
+    this.walked = false;
     this.focusName = null;
     this.onInput = onInput ?? null;
     this.setClickThrough(false); // every other tool wants a clickable box
@@ -436,6 +486,18 @@ export class DimInput {
       this.root.appendChild(wrap);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
+      // Registered ahead of the input listener below, which tells the tool: an undo back to the text before the first
+      // keystroke takes the typing back, so a seed left in the field does not count as typed.
+      let beforeTyping: string | null = null;
+      input.addEventListener("beforeinput", (e) => {
+        const history = e.inputType === "historyUndo" || e.inputType === "historyRedo";
+        if (!history && !this.typedNames.has(field.def.name)) beforeTyping = input.value;
+      });
+      input.addEventListener("input", (e) => {
+        const takenBack = (e as InputEvent).inputType === "historyUndo" && input.value === beforeTyping;
+        if (takenBack) this.typedNames.delete(field.def.name);
+        else this.typedNames.add(field.def.name);
+      });
       // A click into a value the tool wrote selects it, so typing replaces it; the release would drop the selection.
       let keepSelection = false;
       input.addEventListener("pointerdown", () => {
@@ -448,10 +510,40 @@ export class DimInput {
         if (keepSelection) e.preventDefault();
         keepSelection = false;
       });
-      input.addEventListener("input", () => {
-        field.userDriven = true; // typing freezes the field from cursor tracking
-        field.typed = true;
-        wrap.classList.add("typed");
+      input.addEventListener("beforeinput", (e) => {
+        if (isHistoryInput(e.inputType) || this.ownsHistoryKey(field, false)) return;
+        field.edit = {
+          from: input.value,
+          to: input.value,
+          end: input.value,
+          undoable: false,
+          redoable: false,
+          userDriven: field.userDriven,
+          typed: !!field.typed,
+          lastGood: field.lastGood,
+          restore: field.capture?.() ?? null,
+        };
+      });
+      input.addEventListener("input", (e) => {
+        const edit = field.edit;
+        const type = (e as InputEvent).inputType;
+        if (edit) {
+          edit.to = input.value;
+          if (!isHistoryInput(type)) edit.end = input.value;
+          edit.undoable = type !== "historyUndo" || input.value !== edit.from;
+          edit.redoable = type === "historyUndo" || (type === "historyRedo" && input.value !== edit.end);
+        }
+        // Only an undo lets a field go: text typed over with the same text is still typing, and locks it.
+        const takenBack = edit && type === "historyUndo" && input.value === edit.from;
+        if (edit && type === "historyUndo") field.lastGood = takenBack ? edit.lastGood : null;
+        if (takenBack) {
+          field.userDriven = edit.userDriven;
+          field.typed = edit.typed;
+        } else {
+          field.userDriven = true; // typing freezes the field from cursor tracking
+          field.typed = true;
+        }
+        wrap.classList.toggle("typed", !!field.typed);
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
         this.adoptTypedChoice(field);
@@ -460,6 +552,7 @@ export class DimInput {
         this.setTypedProblem(
           this.fieldProblem(field) ?? this.fields.map((x) => this.fieldProblem(x)).find(Boolean) ?? null,
         );
+        if (takenBack) edit.restore?.();
         this.onInput?.();
       });
       this.sizeToContent(field);
@@ -493,9 +586,16 @@ export class DimInput {
     this.root.appendChild(help);
     this.nameGroup();
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
-    // so focus again next frame too or typing and Tab go nowhere.
+    // so focus again next frame too or typing and Tab go nowhere. A field that took focus by then, such as a rename in
+    // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
+    // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
+    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes.
     this.focus();
-    requestAnimationFrame(() => this.focus());
+    requestAnimationFrame(() => {
+      if (this.walked || this.typedNames.size) return;
+      const now = document.activeElement;
+      if (this.ownsField(now) || !isEditableTarget(now)) this.focus();
+    });
     // Subscribed per showing, or a tool would inherit the last tool's refusal. onPreviewError fires at once, so a box
     // opening onto an already failing preview shows it.
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
@@ -683,6 +783,9 @@ export class DimInput {
     if (v === null) {
       const err = measureError(raw, f.unit);
       if (err === null) return `${f.def.label} takes a plain number, no unit`;
+      const expr = this.typedExpr(f);
+      if (expr && !expr.ok)
+        return `${f.def.label}: ${expr.error.replace(/^unknown parameter /, "no parameter named ")}`;
       return `${f.def.label}: ${/unknown parameter/.test(err) ? `"${raw}" is not a number` : err}`;
     }
     return this.rangeProblem(f.def, v);
@@ -704,10 +807,38 @@ export class DimInput {
   }
 
   private parse(f: Field): number | null {
+    const v = this.parseMeasure(f);
+    if (v !== null) return v;
+    const expr = this.typedExpr(f);
+    return expr?.ok ? expr.value : null;
+  }
+
+  private parseMeasure(f: Field): number | null {
     const text = this.numberText(f);
     // Parsed against THIS field's unit: a field the user put into inches reads a bare "2" as two inches.
     if (!f.unit) return parseField(text, f.def.kind);
     return tryParseMeasure(text, f.unit)?.value ?? null;
+  }
+
+  /** Text that names a parameter, judged as the History rows judge it: canonical units, bare numbers in mm. Null when
+   *  there is no document or the field's own parser reads it or fails for another reason ("1,000" stays ambiguous). */
+  private typedExpr(f: Field): ExprInput | null {
+    const doc = this.doc();
+    const text = this.numberText(f).trim();
+    if (!doc || !text || this.parseMeasure(f) !== null) return null;
+    const err = measureError(text, f.unit);
+    if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
+    return doc.classifyTargetExpr(null, null, text, f.def.kind ?? "length");
+  }
+
+  /** The typed parameter expression a tool binds the feature field to, with the new name of a `name = expr`; null for
+   *  a number, plain maths or text that does not read. */
+  exprOf(name: string): { expr: string; name?: string } | null {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f || f.hidden || !f.userDriven) return null;
+    const r = this.typedExpr(f);
+    if (!r?.ok) return null;
+    return r.name ? { expr: r.expr, name: r.name } : { expr: r.expr };
   }
 
   private numberText(f: Field): string {
@@ -819,14 +950,41 @@ export class DimInput {
     }
   }
 
+  /** Writes text into a field as a keystroke would, replacing a value the tool seeded and otherwise appending. */
+  typeInto(name: string, text: string) {
+    const f = this.fields.find((x) => x.def.name === name && !x.hidden);
+    if (!f || !this.active) return;
+    this.focusName = name;
+    this.focus();
+    const input = f.input;
+    input.value = f.userDriven ? input.value + text : text;
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   focusField(name: string) {
     this.focusName = name;
     this.focus();
   }
 
+  private ownsHistoryKey(field: Field, redo: boolean): boolean {
+    const edit = field.edit;
+    if (!edit || field.input.value !== edit.to) return false;
+    return redo ? edit.redoable : edit.undoable;
+  }
+
   private onKey(e: KeyboardEvent, field: Field) {
+    // F6 leaves the box as it leaves any field.
+    if (regionStep(e)) return;
     if (isHistoryKey(e)) {
-      // Undo and redo belong to the document: put the tool away and let the key reach the window keymap.
+      // Chromium has one undo stack per page, moving focus to the field it acts on, so the browser may act exactly
+      // while some field of this box still holds typing.
+      const redo = e.key.toLowerCase() === "y" || e.shiftKey;
+      if (this.fields.some((f) => !f.hidden && this.ownsHistoryKey(f, redo))) {
+        e.stopPropagation();
+        return;
+      }
+      // Otherwise undo and redo belong to the document: put the tool away and let the key reach the window keymap.
       // Stopped here, a box swallowed every Ctrl+Z and Ctrl+Y after it (FI-2).
       this.onCancel?.();
       field.input.blur();
@@ -875,6 +1033,7 @@ export class DimInput {
 
   /** False off either end: there Tab stays the browser's and leaves the box, which never traps the keyboard. */
   private moveFocus(from: HTMLElement, back: boolean): boolean {
+    this.walked = true;
     const stops = this.tabStops(from);
     const next = stops[stops.indexOf(from) + (back ? -1 : 1)];
     if (!next) return false;
@@ -1072,7 +1231,7 @@ export class DimInput {
       menu.appendChild(row);
       return { el: row, pick };
     });
-    const at = anchor.getBoundingClientRect();
+    const at = underZoom(anchor.getBoundingClientRect(), pageZoom());
     menu.style.left = `${at.left}px`;
     menu.style.top = `${at.bottom + 2}px`;
     document.body.appendChild(menu);
@@ -1153,6 +1312,17 @@ export class DimInput {
     this.sizeToContent(f);
   }
 
+  /** For a tool that keeps its own value and reads the field only while it is user driven: Ctrl+Z taking the typing back
+   *  puts back what the tool held before it, which the text cannot say (a drag's sign). A no-op on a field not shown. */
+  restoresOnUndo<T>(name: string, read: () => T, write: (held: T) => void) {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f) return;
+    f.capture = () => {
+      const held = read();
+      return () => write(held);
+    };
+  }
+
   /** `seed` for a value that is not a number, such as a size name. */
   seedText(name: string, text: string) {
     const f = this.fields.find((x) => x.def.name === name);
@@ -1226,6 +1396,15 @@ export class DimInput {
     this.setProblem(message);
   }
 
+  /** Any field that a keystroke or a Tab has frozen. */
+  touched(): boolean {
+    return this.active && this.fields.some((f) => f.userDriven);
+  }
+
+  hasField(name: string): boolean {
+    return this.active && this.fields.some((f) => f.def.name === name);
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;
@@ -1253,7 +1432,8 @@ export class DimInput {
   }
 
   /** Below right of the point, flipped to its other side where the window ends, never over it; clamped into a
-   *  window too small for either side. The error line hangs on the side away from the point. */
+   *  window too small for either side. The error line hangs on the side away from the point. The point and every
+   *  rect the position methods take are in window pixels, the box is placed in the CSS pixels of the root zoom. */
   position(screenX: number, screenY: number) {
     const { w, h } = this.naturalSize();
     const side = (at: number, size: number, room: number) => {
@@ -1263,8 +1443,9 @@ export class DimInput {
       if (before >= 0) return { pos: before, flipped: true };
       return { pos: Math.max(0, Math.min(after, room - size)), flipped: false };
     };
-    const x = side(screenX, w, window.innerWidth);
-    const y = side(screenY, h, window.innerHeight);
+    const z = pageZoom();
+    const x = side(screenX / z, w, window.innerWidth / z);
+    const y = side(screenY / z, h, window.innerHeight / z);
     this.root.style.left = `${Math.round(x.pos)}px`;
     this.root.style.top = `${Math.round(y.pos)}px`;
     this.root.classList.toggle("dim-above", y.flipped);
@@ -1277,7 +1458,8 @@ export class DimInput {
       w: Math.max(this.root.offsetWidth, p ? p.offsetLeft + p.offsetWidth : 0),
       h: Math.max(this.root.offsetHeight, p ? p.offsetTop + p.offsetHeight : 0),
     };
-    const at = pastTip(tip, dir, size, bounds);
+    const z = pageZoom();
+    const at = pastTip({ x: tip.x / z, y: tip.y / z }, dir, size, underZoom(bounds, z));
     this.root.classList.remove("dim-above");
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
@@ -1294,17 +1476,31 @@ export class DimInput {
   }
 
   positionBeside(model: ScreenRect, anchor: ScreenPoint, bounds: ScreenRect) {
-    const at = placeBeside(model, anchor, this.naturalSize(), bounds);
+    const z = pageZoom();
+    const at = placeBeside(
+      underZoom(model, z),
+      { x: anchor.x / z, y: anchor.y / z },
+      this.naturalSize(),
+      underZoom(bounds, z),
+    );
     this.root.classList.remove("dim-above");
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
   }
 
   // Centred on the drawing itself, so the placing click can land under it: it must not take that click.
-  positionCentred(screenX: number, screenY: number) {
+  // A pointer's box follows the drawing as it always has, `onScreen` keeps one in the window for a cursor moved by keys.
+  positionCentred(screenX: number, screenY: number, onScreen = false) {
     this.setClickThrough(true);
-    this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
-    this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
+    const z = pageZoom();
+    const place = (at: number, size: number, room: number) =>
+      onScreen ? Math.max(0, Math.min(at / z - size / 2, room / z - size)) : at / z - size / 2;
+    this.root.style.left = `${Math.round(place(screenX, this.root.offsetWidth, window.innerWidth))}px`;
+    this.root.style.top = `${Math.round(place(screenY, this.root.offsetHeight, window.innerHeight))}px`;
+  }
+
+  wasTyped(name: string): boolean {
+    return this.active && this.typedNames.has(name);
   }
 
   hasTyped(): boolean {
@@ -1326,6 +1522,7 @@ export class DimInput {
       marked ??= problem;
       if (explicit && f.lastGood !== null) continue;
       this.setTypedProblem(problem);
+      announce(problem, "assertive");
       f.input.focus();
       f.input.select();
       return false;

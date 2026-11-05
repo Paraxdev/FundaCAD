@@ -6,19 +6,14 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
+import { announce } from "./announce";
 import { getUnit, toDisplay, displayRound } from "./units";
-import {
-  usePanelsStore,
-  type PanelRow,
-  type ClashRow,
-  type ClearanceRow,
-  type StressData,
-  type StressProbePin,
-} from "../stores/panels";
+import { usePanelsStore, type PanelRow, type StressData, type StressProbePin } from "../stores/panels";
 import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
-import { sentence } from "./stressWarnings";
+import { StressHistory } from "./stressHistory";
+import { plainError, sentence } from "./stressWarnings";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -34,7 +29,6 @@ import {
   formatStressResult,
   intoDirection,
   newSetup,
-  panelMessage,
   pinAxisSegment,
   pressureSites,
   probeLabel,
@@ -42,6 +36,7 @@ import {
   sameTarget,
   setupFromStudy,
   studyFromSetup,
+  STRESS_BANDS,
   swingScale,
   SWING_PERIOD_MS,
   type ForceDirection,
@@ -50,9 +45,13 @@ import {
   type StressTarget,
   type Tri,
 } from "./stress";
+import { setStressLook as setStoredStressLook, stressLook, type StressLook } from "./stressLook";
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
+import { awaitTreePick, treePickRefusal, type TreePickAnswer } from "./treePick";
+import { interferenceData, interferenceSummary } from "./interferenceRows";
+import { toast } from "./toast";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -153,11 +152,15 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     setStatus("Checking interference…", "");
-    tinted = null;
-    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
+    resetInterferenceTint();
+    const seq = ++interferenceSeq;
     const res = await geometry.interference(store.document, clearanceMm);
+    if (seq !== interferenceSeq) return;
+    resetInterferenceTint();
     if (!res.ok) {
-      setStatus(`Interference check failed: ${res.message ?? "error"}`, "error");
+      const failed = `Interference check failed: ${res.message ?? "error"}`;
+      setStatus(failed, "error");
+      announce(failed, "assertive", { key: "interference" });
       return;
     }
     const pairs = res.pairs ?? [];
@@ -176,25 +179,14 @@ export function createPanels(deps: PanelsDeps) {
         : "No interferences found") + notJudged,
       foundAny || unchecked.length ? "error" : "connected",
     );
-    const unit = getUnit();
-    const f = toDisplay(1);
-    const clashes: ClashRow[] = pairs.map((p) => ({
-      k: `${label(p.a, p.aName)} ∩ ${label(p.b, p.bName)}`,
-      v: `${displayRound(p.volume * f * f * f)} ${unit}³`,
-      a: p.a,
-      b: p.b,
-    }));
-    const clearanceRows: ClearanceRow[] = clearances.map((c) => ({
-      k: `${label(c.a, c.aName)} ↔ ${label(c.b, c.bName)}`,
-      v: `${displayRound(toDisplay(c.distance))} ${unit}`,
-      a: c.a,
-      b: c.b,
-    }));
+    announce(interferenceSummary(pairs.length, clearanceMm ? clearances.length : null, unchecked.length), "polite", {
+      key: "interference",
+    });
     panels.showInterference({
-      title: pairs.length ? `Interference, ${pairs.length} clash${pairs.length > 1 ? "es" : ""}` : "Interference",
-      clashes,
-      clearances: clearanceRows,
-      unchecked,
+      ...interferenceData(
+        { pairs, clearances, unchecked: res.unchecked ?? [] },
+        { unit: getUnit(), scale: toDisplay(1), round: displayRound, label },
+      ),
       ...(res.truncated ? { truncatedMessage: res.message } : {}),
     });
     viewport.setInterferenceOverlay(
@@ -204,27 +196,53 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   function closeInterference() {
+    interferenceSeq++;
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
-    tinted = null;
-    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
+    resetInterferenceTint();
   }
 
-  let tinted: { build: unknown; key: string } | null = null;
+  // A reply for an earlier check, or one landing after a close or another document opened, is dropped.
+  let interferenceSeq = 0;
+  // The kept pair is `panels.interferenceLit` (so its row can show it), bound to the build it was lit on.
+  let litBuild: unknown = null;
+  let preview: string | null = null;
+
+  function resetInterferenceTint() {
+    panels.interferenceLit = null;
+    litBuild = null;
+    preview = null;
+    paintInterference();
+  }
 
   // A tint rather than a selection, which would bring up the Move gizmo and the selection toolbar over the pair.
-  // A second click on the same pair clears it.
+  // The previewed pair (hover or focus) shows over the kept one.
+  function paintInterference() {
+    const built = store.buildState.result;
+    const key = preview ?? (litBuild === built ? panels.interferenceLit : null);
+    const faces = key
+      ? (built?.bodies ?? [])
+          .filter((x) => key.split(" ").includes(x.id))
+          .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i))
+      : [];
+    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: INTERFERENCE_TINT }] : null, INTERFERENCE_MARKS);
+  }
+
+  function previewInterference(a: string | null, b?: string) {
+    preview = a === null ? null : `${a} ${b}`;
+    paintInterference();
+  }
+
+  // A press owns the tint, so a second press on the pair under the pointer clears it too.
   function highlightInterference(a: string, b: string) {
     const built = store.buildState.result;
     const key = `${a} ${b}`;
-    const again = tinted?.build === built && tinted.key === key;
-    const faces = again
-      ? []
-      : (built?.bodies ?? [])
-          .filter((x) => x.id === a || x.id === b)
-          .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i));
-    tinted = faces.length ? { build: built, key } : null;
-    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: INTERFERENCE_TINT }] : null, INTERFERENCE_MARKS);
+    const again = litBuild === built && panels.interferenceLit === key;
+    preview = null;
+    const known = (built?.bodies ?? []).some((x) => x.id === a || x.id === b);
+    panels.interferenceLit = !again && known ? key : null;
+    litBuild = panels.interferenceLit ? built : null;
+    paintInterference();
   }
 
   // Stress: a linear static analysis of one body, its setup edited in the panel and saved with the document.
@@ -271,6 +289,8 @@ export function createPanels(deps: PanelsDeps) {
   let animT0 = 0;
   // Where the gravity arrow stands, for the build it was measured on.
   let centre: { build: unknown; body: string; at: Vec3 | null } | null = null;
+  // The setup's own undo while the panel is open, apart from the model's history.
+  const history = new StressHistory();
 
   store.onDocChange(() => {
     docEpoch++;
@@ -280,8 +300,18 @@ export function createPanels(deps: PanelsDeps) {
   // Another document took this one's place: the setup's body id and face
   // points mean nothing in it.
   store.onOpen(() => {
+    if (panels.interference) closeInterference();
+    interferenceSeq++;
     if (panels.stress) closeStress();
     kept = null;
+  });
+
+  // A rebuild clears the face marks, so the kept pair's row stops showing it as kept too.
+  store.onBuild((s) => {
+    if (panels.interferenceLit && litBuild !== s.result) {
+      panels.interferenceLit = null;
+      litBuild = null;
+    }
   });
 
   // Every panel edit lands in the setup and the document saves it synchronously, so a save never trails its edit.
@@ -293,6 +323,25 @@ export function createPanels(deps: PanelsDeps) {
     },
     { deep: true, flush: "sync" },
   );
+
+  // Noted before the next render, not per write, so one panel action that edits several rows is one undo step.
+  watch(
+    () => panels.stress?.setup,
+    (setup) => {
+      history.note(setup ?? null, Date.now());
+      showUndo();
+    },
+    { deep: true },
+  );
+
+  function showUndo() {
+    const d = panels.stress;
+    if (!d) return;
+    d.canUndo = history.canUndo;
+    d.canRedo = history.canRedo;
+    d.undoLabel = history.undoLabel;
+    d.redoLabel = history.redoLabel;
+  }
 
   function persist() {
     const d = panels.stress;
@@ -363,6 +412,8 @@ export function createPanels(deps: PanelsDeps) {
     colours = null;
     viewport.setStressOverlay(null);
     panels.replaceStressSetup(setup);
+    history.reset(panels.stress?.setup ?? null);
+    showUndo();
     glyphs?.setProbePins([]);
     weakSpot = null;
     showWeakSpot();
@@ -749,7 +800,13 @@ export function createPanels(deps: PanelsDeps) {
     if (d.colours === "shown") setStressColours(false);
     if (d.deform?.shown) setStressShape(false);
     const body = bodyOnModel();
+    releaseRows?.();
+    releaseRows = null;
     panels.setStressPlacing(target, as);
+    if (as === "face") {
+      releaseRows = awaitTreePick(takeFaceRow, stopPlacing, { keepsOnRewind: true, keepsOnCommand: true });
+      announce(`Pick a face for the ${"support" in target ? "support" : "load"}, Esc to stop`);
+    }
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = as === "face" ? null : body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
@@ -775,7 +832,35 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
   }
 
+  let releaseRows: (() => void) | null = null;
+
+  // A row names a face and not a spot, so only Click faces waits for rows.
+  function takeFaceRow(pick: Parameters<typeof treePickRefusal>[0]): TreePickAnswer {
+    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    const d = panels.stress;
+    const target = d?.placing;
+    if (!d || !target) return "Stress is not waiting for a face";
+    const body = viewport.faceIdToBodyId(pick.faceId);
+    if (!body) return "That face is on no body";
+    if (d.setup.body && d.setup.body !== body) {
+      return bodyOnModel()
+        ? "That face is on another body, pick a face of the body analysed"
+        : "The body analysed is not on the current model, pick another body first";
+    }
+    const sel = viewport.faceSelectorOf(pick.faceId);
+    if (sel.kind !== "face" || sel.by !== "nearest") return "The model is still building";
+    if (!d.setup.body) panels.setStressBody(body);
+    addStressFace(target, body, pick.faceId, sel.point);
+    stopPlacing();
+    const n = panels.stressRow(target)?.faces.faceIds.length ?? 0;
+    const noun = "support" in target ? "support" : "load";
+    announce(`The ${noun} has ${n} ${n === 1 ? "face" : "faces"}, Click faces again for another`);
+    return true;
+  }
+
   function stopPlacing() {
+    releaseRows?.();
+    releaseRows = null;
     if (!panels.stress?.placing) return;
     panels.setStressPlacing(null);
     glyphs?.setPlacing?.(null);
@@ -783,6 +868,12 @@ export function createPanels(deps: PanelsDeps) {
 
   function removeStressSpot(target: StressTarget, index: number) {
     panels.removeStressSpot(target, index);
+  }
+
+  function clearStressPlaces(target: StressTarget) {
+    if (sameTarget(panels.stress?.placing ?? null, target)) stopPlacing();
+    panels.clearStressPlaces(target);
+    refreshStressMarks();
   }
 
   /** The selected faces as a face set, each selector stamped with its body,
@@ -896,7 +987,8 @@ export function createPanels(deps: PanelsDeps) {
     const d = panels.stress;
     if (!colours || !d || d.colours === "none") return null;
     const { displacement, ...still } = colours.overlay;
-    const o = { ...still, colours: d.colours === "shown" };
+    const { ramp, bands } = stressLook();
+    const o = { ...still, colours: d.colours === "shown", ramp, bands: bands ? STRESS_BANDS : 0 };
     return displacement && d.deform?.shown ? { ...o, displacement, scale: poseScale() } : o;
   }
 
@@ -924,6 +1016,16 @@ export function createPanels(deps: PanelsDeps) {
     drawOverlay();
     refreshStressMarks();
     showWeakSpot();
+  }
+
+  /** Store the colour map and bands, and redraw the colours on show from the kept result without a new Run. */
+  function setStressLook(patch: Partial<StressLook>) {
+    setStoredStressLook(patch);
+    if (panels.stress?.colours === "shown" && colours && colours.epoch === docEpoch) drawOverlay();
+  }
+
+  function lookAtStressPoint(at: Vec3, size: number) {
+    viewport.frameAround(at, size);
   }
 
   /** Draw the deformed shape, or the body as built so its faces can be picked again with the colours off. */
@@ -1042,7 +1144,7 @@ export function createPanels(deps: PanelsDeps) {
     glyphs?.setProbePins(panels.stress?.pins ?? []);
   }
 
-  async function runStress() {
+  async function runStress(finer = false) {
     const d = panels.stress;
     if (!d || d.running) return;
     if (!geometry.stress) {
@@ -1069,13 +1171,14 @@ export function createPanels(deps: PanelsDeps) {
     panels.stressStarted();
     clearResult();
     refreshStressMarks();
-    const res = await geometry.stress(store.builtDocument(), req.body, req.options, (id) => {
+    const options = finer ? { ...req.options, finer: true } : req.options;
+    const res = await geometry.stress(store.builtDocument(), req.body, options, (id) => {
       if (seq === runSeq) panels.stressSent(id);
     });
     if (seq !== runSeq || !panels.stress) return;
     if (!res.ok) {
-      const message = panelMessage(res.message);
-      panels.stressFinished(res.cancelled ? {} : { error: sentence(message) });
+      const message = plainError(res.message, !!res.finer);
+      panels.stressFinished(res.cancelled ? {} : { error: message, ...(res.finer ? { finer: res.finer } : {}) });
       setStatus(
         res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
         res.cancelled ? "" : "error",
@@ -1101,6 +1204,7 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     if (r.surface) {
+      panels.setStressColours("pending");
       const disp = r.surface.displacement;
       const moves = !!disp && disp.length === r.surface.positions.length;
       const locate = locator(r.surface);
@@ -1108,6 +1212,7 @@ export function createPanels(deps: PanelsDeps) {
       const drawn = await drawnSurfaceInFrames(display, r.surface, locate, view.legend);
       if (seq !== runSeq) return;
       if (epoch !== docEpoch) {
+        panels.setStressColours("none");
         setStatus("Stress: the model changed while it ran, run it again to see the colours", "");
         return;
       }
@@ -1143,6 +1248,42 @@ export function createPanels(deps: PanelsDeps) {
     if (id) await geometry.cancel?.(id);
   }
 
+  /** Ctrl+Z while the panel is open takes back a setup step, never the model's. False when the panel is closed. */
+  function undoStress(): boolean {
+    return stepStress("undo");
+  }
+
+  function redoStress(): boolean {
+    return stepStress("redo");
+  }
+
+  function stepStress(way: "undo" | "redo"): boolean {
+    const d = panels.stress;
+    if (!d) return false;
+    const step = history[way](d.setup, Date.now());
+    if (!step) {
+      setStatus(way === "undo" ? "Nothing left to undo in Stress" : "Nothing to redo in Stress", "");
+      showUndo();
+      return true;
+    }
+    if (step.setup.body !== d.setup.body) {
+      if (d.running) {
+        void cancelStress();
+        runSeq++;
+        panels.stressFinished({});
+      }
+      clearResult();
+    }
+    d.setup = step.setup;
+    if (d.placing && !panels.stressRow(d.placing)) stopPlacing();
+    facesFor = null;
+    refreshStressMarks();
+    showUndo();
+    // doUndo and doRedo say the step on the history key, so the toast only shows it.
+    toast(`${way === "undo" ? "Undid" : "Redid"}: ${step.label}`, { silent: true });
+    return true;
+  }
+
   /** Close Stress, stopping a Run in flight, and drop its colours, marks and
    *  glyphs. The study stays in the document for the next time. */
   function closeStress() {
@@ -1162,7 +1303,9 @@ export function createPanels(deps: PanelsDeps) {
           }
         : null;
     runSeq++;
+    stopPlacing();
     panels.stress = null;
+    history.reset(null);
     colours = null;
     facesFor = null;
     persisted = null;
@@ -1185,11 +1328,14 @@ export function createPanels(deps: PanelsDeps) {
     closeProperties,
     showInterference,
     closeInterference,
+    previewInterference,
     highlightInterference,
     showOverhangSettings,
     closeOverhangSettings,
     showStress,
     closeStress,
+    undoStress,
+    redoStress,
     runStress,
     cancelStress,
     stressBodies,
@@ -1197,6 +1343,7 @@ export function createPanels(deps: PanelsDeps) {
     setStressFacesFromSelection,
     placeStressSpot,
     removeStressSpot,
+    clearStressPlaces,
     addStressSupport,
     removeStressSupport,
     setStressSupportType,
@@ -1204,11 +1351,13 @@ export function createPanels(deps: PanelsDeps) {
     removeStressLoad,
     setStressColours,
     setStressShape,
+    setStressLook,
     refreshStressMarks,
     setStressDeformation,
     setStressAnimate,
     pauseStressAnimation: pauseAnimation,
     setStressProbe,
+    lookAtStressPoint,
     removeStressProbe,
   };
 }

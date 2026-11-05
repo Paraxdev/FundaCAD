@@ -25,7 +25,7 @@ mod inner {
         pub fn mesh_access_bnd_box(shape: &TopoDS_Shape, out: &mut Vec<f64>) -> bool;
 
         pub fn mesh_access_face_count(m: &MeshAccess) -> i32;
-        pub fn mesh_access_face_reversed(m: &MeshAccess, face: i32) -> bool;
+        pub fn mesh_access_face_reversed(m: &MeshAccess, face: i32) -> Result<bool>;
         pub fn mesh_access_face_plane_normal(m: &MeshAccess, face: i32, out: &mut Vec<f64>) -> bool;
         pub fn mesh_access_face_triangulation(
             m: &MeshAccess,
@@ -40,7 +40,7 @@ mod inner {
         pub fn mesh_access_unfilled_faces(m: &MeshAccess, out: &mut Vec<f64>) -> bool;
         pub fn mesh_access_has_mesh(m: &MeshAccess) -> bool;
         pub fn mesh_access_edge_count(m: &MeshAccess) -> i32;
-        pub fn mesh_access_edge_faces(m: &MeshAccess, edge: i32, out: &mut Vec<i32>);
+        pub fn mesh_access_edge_faces(m: &MeshAccess, edge: i32, out: &mut Vec<i32>) -> Result<()>;
         pub fn mesh_access_edge_degenerated(m: &MeshAccess, edge: i32) -> bool;
         pub fn mesh_access_edge_closed_on(m: &MeshAccess, edge: i32, ancestor: i32) -> bool;
         pub fn mesh_access_edge_line(m: &MeshAccess, edge: i32, out: &mut Vec<f64>) -> i32;

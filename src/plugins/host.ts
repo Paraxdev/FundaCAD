@@ -82,6 +82,8 @@ export { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME } from "../features/moveTarg
 export type { Frame, MoveCommit, MoveHandleSet, MoveResult, MoveTarget } from "../features/moveTarget";
 
 export { toast } from "../ui/toast";
+/** Speaks a line through the app's live regions for a screen reader, polite unless it is a failure. */
+export { announce } from "../ui/announce";
 /** The line under the viewport that says what a running tool wants next. A plugin tool that takes over the pick needs
  *  it. Passing null clears it, and a tool's teardown must. */
 export { setPrompt } from "../ui/prompt";
@@ -115,7 +117,7 @@ export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from 
 /** The app's display precision rule, so a plugin's readout rounds a length like every other panel. */
 export { roundForDisplay as displayRound } from "../ui/measure";
 /** Number boxes read through the app's measure grammar (units, fractions, arithmetic, decimal comma). */
-export { fieldNumber, fieldError } from "../ui/measure";
+export { fieldNumber, fieldError, readAs } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 

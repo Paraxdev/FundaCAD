@@ -6,7 +6,7 @@ pub mod passes;
 pub mod profile;
 pub mod tessellate;
 
-pub use edges::{edge_polylines, EdgeLine};
+pub use edges::{edge_polylines, edge_walk, EdgeLine, WalkedEdge};
 pub use profile::{effective_tolerance, viewport_profile, ViewportProfile};
 pub use tessellate::{mesh_bbox, tessellate, MeshParams, Tessellation};
 

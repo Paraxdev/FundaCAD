@@ -3,10 +3,25 @@
 Documents the harness tests open through File > Open. They are JSON documents, written by hand.
 
 - `plate.json`: one 40 x 20 x 5 mm box centred on the origin, current document version.
+- `offset_box.json`: a 40 x 30 x 20 mm box named Crate, moved to (113.5, -41.25, 37), so no face or edge sits on an origin plane.
+- `slant_box.json`: a 60 x 25 x 15 mm box named Wedge, turned 20 degrees about X and moved off the origin, for faces that read as tilted.
+- `overhang_ledge.json`: a profile drawn on XZ and extruded 18 mm, moved to (-73.5, 41.25, 9): a 24 mm wide column
+  with a 17 mm ledge whose flat underside is 14 mm up, and on the other side a lip whose underside slants 12 mm out
+  over 9 mm up. Two overhangs of 306 and 270 mm² for the Printability words tests.
+- `plate_width.json`: the plate with a parameter `width` of 20 that nothing uses yet, for typing names into a value box.
 - `block.json`: one 20 x 20 x 30 mm box centred on the origin, tall enough that a steep draft on a
   side face is refused, current document version.
+- `two_boxes.json`: a 20 x 20 x 30 mm box and a 30 x 30 x 40 mm box 60 mm along X, two bodies where the second is the active one, for Shell across bodies.
+- `near_boxes.json`: a 20 x 20 x 30 mm box and a 10 mm box 10 mm from it, close enough that a point on the second reads as one clear face of the first.
 - `steps.json`: three primitives named Base, Post and Ball that do not depend on each other, so the History tests
   can roll back, edit and reorder them by keys without breaking the build.
 - `whole_sketch_extrude.json`: document version 9 on purpose, so opening it also runs the
   migration. Extrude `e` covers its whole 30 x 30 sketch and names no areas, extrude `e2` names an
   area by a point that is nowhere on its sketch, so that area is really gone.
+- `zebra_joins.json`: three 30 x 30 x 25 mm blocks in a row for judging zebra stripes, the front top edge of the
+  left one sharp (G0), of the middle one an 8 mm fillet (G1), of the right one an 8 mm G2 fillet.
+- `zebra_wall.json`: a plain 30 mm extrusion whose front wall is a 32.5 mm radius arc between two flat sides.
+- `standoff_plate_1_3.json`, `standoff_plate_1_2.json`: a 100 x 60 x 2 mm plate with four hollow standoffs (8 mm across, 6 mm
+  above the plate, holes through the plate) whose walls are 1.3 mm and 1.2 mm, for the Stress thin wall tests.
+- `filleted_box.json`: a 111.3 x 67.8 x 52.1 mm box with one vertical corner rounded by a 37.1 mm G3 fillet, the
+  user's file from a Press/Pull report, for pushing the round face together with the top face.

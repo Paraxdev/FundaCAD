@@ -15,9 +15,14 @@
     - radio "Render"
 - main "Model":
   - heading [level=1]
+  - img "3D view"
   - complementary "Items":
     - heading "Items" [level=2]
-    - tree "Items"
+    - tablist "Items pages":
+      - tab "Items" [selected]
+      - tab "Geometry"
+    - tabpanel "Items":
+      - tree "Items"
   - navigation "Tools":
     - toolbar "Tools":
       - button /^Search/

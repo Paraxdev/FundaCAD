@@ -4,6 +4,7 @@ import {
   dimAnchor,
   drivenBadges,
   drivingDimFor,
+  rectSideOf,
   upsertDrivingDim,
 } from "../../src/sketch/directDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
@@ -196,6 +197,24 @@ describe("drivenBadges", () => {
       { type: "p2pDistance", e1: "r2", p1: 1, e2: "r2", p2: 2, value: 5, driven: true },
     ];
     expect([...drivenBadges(ents, cons)]).toEqual(["r1:width"]);
+  });
+});
+
+describe("rectSideOf", () => {
+  const ents = [rect("r1", 20, 10), line("l1", 4, 7)];
+  it("finds the rectangle and side of a driving corner pair", () => {
+    const c: SketchConstraint = { type: "p2pDistance", e1: "r1", p1: 3, e2: "r1", p2: 0, value: 10 };
+    expect(rectSideOf(ents, c)).toEqual({ entity: ents[0], field: "height" });
+  });
+
+  it("refuses a reference, a diagonal, a line and another constraint", () => {
+    const pair = (over: object) =>
+      ({ type: "p2pDistance", e1: "r1", p1: 0, e2: "r1", p2: 1, value: 20, ...over }) as SketchConstraint;
+    expect(rectSideOf(ents, pair({ driven: true }))).toBeNull();
+    expect(rectSideOf(ents, pair({ p2: 2 }))).toBeNull();
+    expect(rectSideOf(ents, pair({ e1: "l1", e2: "l1" }))).toBeNull();
+    expect(rectSideOf(ents, pair({ e1: "gone", e2: "gone" }))).toBeNull();
+    expect(rectSideOf(ents, { type: "distance", line: "l1", value: 4 })).toBeNull();
   });
 });
 

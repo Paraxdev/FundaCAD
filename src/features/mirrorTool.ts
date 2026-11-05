@@ -4,11 +4,11 @@ import type { DocumentStore } from "../document/store";
 import type { Plane3 } from "../types";
 import { bodyLabels } from "../ui/bodyLabels";
 import { setPrompt } from "../ui/prompt";
-import { isEditableTarget } from "../ui/focus";
+import { focusOnMenuRow, isEditableTarget } from "../ui/focus";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 import { CanvasGesture } from "./canvasGesture";
 import { freshIds } from "./moveTarget";
-import { pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
+import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
 import { featureLabel } from "./patternSources";
 import { showMirrorPanel } from "./mirrorPanel";
 import { mirrorLineColor } from "./mirrorColors";
@@ -31,7 +31,7 @@ import {
 } from "./mirrorFields";
 
 const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
-export const PLANE_REFUSED = "That face is curved, pick a flat face or a plane";
+export const PLANE_REFUSED = CURVED_FACE_ROW;
 
 type PlaneAt = (viewport: Viewport, x: number, y: number) => PlanePickTarget;
 
@@ -44,6 +44,7 @@ export class MirrorTool {
   private pre: string[] = [];
   private panelId = 0;
   private datumLit = false;
+  private onListRow = false;
   private onDone: ((id: string | null) => void) | null = null;
   private releaseTree: (() => void) | null = null;
   private readonly gesture: CanvasGesture;
@@ -73,6 +74,7 @@ export class MirrorTool {
     this.panelId = nextPanelId++;
     this.viewport.suspendPicking = true;
     this.gesture.attach();
+    document.addEventListener("focusin", this.onFocus);
     this.releaseTree = awaitTreePick(
       (pick) => this.treePick(pick),
       () => this.cancel(),
@@ -247,7 +249,13 @@ export class MirrorTool {
       this.set(pickLine(this.fields, { kind: "datum", id: pick.id, def: pick.def }, null));
       return true;
     }
-    return treePickRefusal(pick, "a body or a plane");
+    if (pick.kind === "face") {
+      const face = facePlaneOfRow(this.viewport, pick.faceId);
+      if (face?.kind !== "planar") return PLANE_REFUSED;
+      this.set(pickLine(this.fields, { kind: "face", face }, null));
+      return true;
+    }
+    return treePickRefusal(pick, "a body, a plane or a flat face");
   }
 
   private planeLabel(p: MirrorPlanePick | null): string {
@@ -258,10 +266,16 @@ export class MirrorTool {
     return f ? featureLabel(f) : p.id;
   }
 
+  // Enter on a Geometry row takes the row again, so the ready prompt follows focus in and out of the list.
+  private readonly onFocus = () => {
+    if (this.active && focusOnMenuRow() !== this.onListRow) this.update();
+  };
+
   private update(refusal?: string): void {
     const f = this.fields;
     const objects = countLabel(f.objects.length, "body", "bodies");
-    setPrompt(`${refusal ? `${refusal} · ` : ""}${nextPick(f, "plane")} · ${objects} · Esc to cancel`);
+    this.onListRow = focusOnMenuRow();
+    setPrompt(`${refusal ? `${refusal} · ` : ""}${nextPick(f, "plane", this.onListRow)} · ${objects} · Esc to cancel`);
     showMirrorPanel({
       id: this.panelId,
       fields: [
@@ -297,6 +311,7 @@ export class MirrorTool {
     const vp = this.viewport;
     this.active = false;
     this.gesture.detach();
+    document.removeEventListener("focusin", this.onFocus);
     const release = this.releaseTree;
     this.releaseTree = null;
     release?.();

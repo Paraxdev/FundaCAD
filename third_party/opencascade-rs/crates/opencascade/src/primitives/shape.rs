@@ -586,15 +586,15 @@ impl Shape {
         let status = ffi::step_control::read_step(
             reader.pin_mut(),
             path.as_ref().to_string_lossy().to_string(),
-        );
+        )?;
 
         if status != ffi::if_select::IFSelect_ReturnStatus::IFSelect_RetDone {
             return Err(Error::StepReadFailed);
         }
 
-        reader.pin_mut().TransferRoots(&ffi::message::Message_ProgressRange_new());
+        reader.pin_mut().TransferRoots(&ffi::message::Message_ProgressRange_new())?;
 
-        let inner = ffi::step_control::one_shape_step(&reader);
+        let inner = ffi::step_control::one_shape_step(&reader)?;
 
         Ok(Self { inner })
     }
@@ -642,15 +642,15 @@ impl Shape {
         let status = ffi::iges_control::read_iges(
             reader.pin_mut(),
             path.as_ref().to_string_lossy().to_string(),
-        );
-
-        reader.pin_mut().TransferRoots(&ffi::message::Message_ProgressRange_new());
+        )?;
 
         if status != ffi::if_select::IFSelect_ReturnStatus::IFSelect_RetDone {
             return Err(Error::IgesReadFailed);
         }
 
-        let inner = ffi::iges_control::one_shape_iges(&reader);
+        reader.pin_mut().TransferRoots(&ffi::message::Message_ProgressRange_new())?;
+
+        let inner = ffi::iges_control::one_shape_iges(&reader)?;
 
         Ok(Self { inner })
     }
@@ -815,7 +815,7 @@ impl Shape {
             stl_writer.pin_mut(),
             mesher.inner.Shape(),
             path.as_ref().to_string_lossy().to_string(),
-        );
+        )?;
 
         if success {
             Ok(())

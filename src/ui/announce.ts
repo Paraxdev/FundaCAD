@@ -40,7 +40,7 @@ const STALE_MS = 8000;
 
 let readVerbosity: () => Verbosity = () => "normal";
 
-/** Lane a5's Accessibility settings plug the Announcements setting in here; Normal until then. */
+/** Where the Announcements setting is read from; Announcer.vue plugs it in, Normal until then. */
 export function setVerbositySource(read: () => Verbosity): void {
   readVerbosity = read;
 }
@@ -178,8 +178,8 @@ export function announce(text: string, priority: AnnouncePriority = "polite", op
   if (!line || !heard(priority, opts.verbose === true)) return;
   const { key, delay } = opts;
   if (key !== undefined && delay !== undefined && delay > 0) {
-    const was = waiting.get(key);
-    if (was !== undefined) clearTimeout(was);
+    // Its last sentence may be past its pause yet still waiting for a frame, and would be said after this change.
+    cancelAnnouncement(key);
     waiting.set(
       key,
       setTimeout(() => {

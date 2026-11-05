@@ -9,7 +9,8 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
-import { labelLeader, layoutLabels, type Held, type LabelAt } from "../../ui/labelClamp";
+import { pageZoom } from "../../ui/interfaceSize";
+import { labelLeader, layoutUnderZoom, type Held, type LabelAt } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
@@ -18,6 +19,7 @@ const els: (HTMLElement | null)[] = [];
 const leaders: (SVGGElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
+let lastZoom = 0;
 let raf = 0;
 const heldEdges = new Map<number, Held>();
 
@@ -53,8 +55,10 @@ function loop(now: number = performance.now()) {
   refreshCards(now);
   // skip the per-label projection + DOM writes when the camera hasn't moved
   const pose = vp.rig.poseVersion();
-  if (pose === lastPose) return;
+  const z = pageZoom();
+  if (pose === lastPose && z === lastZoom) return;
   lastPose = pose;
+  lastZoom = z;
   const area = vp.domElement.getBoundingClientRect();
   const items = s.dimItems;
   const at: LabelAt[] = [];
@@ -68,14 +72,13 @@ function loop(now: number = performance.now()) {
     at.push({ x: p.x, y: p.y, hw: el.offsetWidth / 2, hh: el.offsetHeight / 2 });
     idx.push(i);
   }
-  const placed = layoutLabels(at, area, cards, LABEL_GAP, heldEdges);
+  const placed = layoutUnderZoom(at, area, cards, LABEL_GAP, heldEdges, z);
   for (let k = 0; k < idx.length; k++) {
     const i = idx[k]!;
-    const a = at[k]!;
     const c = placed[k]!;
-    els[i]!.style.transform = screenTransform(c.x, c.y);
+    els[i]!.style.transform = screenTransform(c.at.x, c.at.y);
     const g = leaders[i];
-    if (g) placeLeader(g, labelLeader(c, a.hw, a.hh, a));
+    if (g) placeLeader(g, c.leader);
   }
 }
 
@@ -139,7 +142,7 @@ onUnmounted(stop);
 
 // Which label the Delete key acts on, dropped on the next rebuild so a stale delete is never armed.
 function select(i: number) {
-  s.dimSelected = i;
+  s.selectDim(i);
 }
 
 // Under DRAG_PX of movement a release still opens the value editor, past it the label follows the cursor (the same
@@ -327,14 +330,21 @@ function onWheel(e: WheelEvent) {
 </script>
 
 <template>
-  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. -->
+  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. Hidden from screen
+  readers (the Dimensions list is the keyboard route) but not inert, which would stop the pointer edit; the open editor
+  is a focusable field, so it is exposed while it exists. -->
   <Teleport to="body">
-    <div class="sketch-dims" :class="{ 'dims-passive': s.dimsPassive }" @wheel="onWheel">
+    <div
+      class="sketch-dims"
+      :class="{ 'dims-passive': s.dimsPassive }"
+      :aria-hidden="editing === null ? 'true' : undefined"
+      @wheel="onWheel"
+    >
       <div
         v-for="(l, i) in s.dimItems"
         :key="i"
         :ref="(el) => (els[i] = el as HTMLElement | null)"
-        :class="[l.cls, { 'is-selected': s.dimSelected === i }]"
+        :class="[l.cls, { 'is-selected': s.dimSelected === i, 'is-lit': s.dimLit === l.key }]"
         :title="l.title"
         @pointerdown="onDown($event, i, l)"
         @pointermove="onDragMove"
@@ -352,7 +362,7 @@ function onWheel(e: WheelEvent) {
           class="sketch-dim-field"
           size="sm"
           :error="editError"
-          label="Dimension value"
+          :label="l.name"
           title=""
           @input="editError = null"
           @keydown="onEditKey($event, l)"

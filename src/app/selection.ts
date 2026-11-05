@@ -9,6 +9,8 @@ import type { DatumPose } from "../document/datumPose";
 import { startDatumPoseEdit } from "../features/datumPlaneEdit";
 import { cancelActiveTools } from "./toolBusy";
 import { typedDimBox } from "../sketch/dimInput";
+import { endPickSession, pickHoldsEdits } from "../ui/treePick";
+import { BUSY_TOOL_HINT, refuseAloud } from "./planePick";
 
 const VALUES_IN_HISTORY = "Not draggable, edit the value under this feature in the history";
 
@@ -30,7 +32,8 @@ export function closeOpenEdit(e: Engine, except: string): void {
     if (e.sketch.editingSketchId !== except) e.sketch.finish(true);
     return;
   }
-  if (!e.toolAtWork()) return;
+  // A pick with no tool behind it (Stress's Click faces) would go on taking rows of the rolled back model.
+  if (!e.toolAtWork()) return endPickSession();
   if ((e.store.editPreviewId ?? e.selectedFeature) === except) return;
   const typed = typedDimBox();
   if (typed) {
@@ -39,6 +42,37 @@ export function closeOpenEdit(e: Engine, except: string): void {
     return;
   }
   cancelActiveTools(e.tools);
+  endPickSession();
+}
+
+// The step a tool opened by editFeature re-edits, until it calls back done. An untouched Revolve, joint or mechanism
+// edit has begun no edit preview to read it from.
+const reEdited = new WeakMap<Engine, string>();
+
+// Any open tool with a dependsOn() names the steps its input rests on beyond the one it re-edits, a Shell the
+// owners of its picked faces.
+const restedOn = (tools: Engine["tools"]) =>
+  Object.values(tools).flatMap((t) => ("dependsOn" in t && t.active ? t.dependsOn() : []));
+
+/** A document change, an undo or a redo above all, that takes away the step an open tool re-edits, a sketch it
+ *  extrudes or a step it rests on closes the tool: Enter would add a red step or nothing, and either way lose the
+ *  redo. */
+export function closeToolOnLostStep(e: Engine): () => void {
+  let had = new Set<string>();
+  return e.store.onDocChange((doc) => {
+    const was = had;
+    had = new Set(doc.features.map((f) => f.id));
+    if (!e.toolAtWork()) return void reEdited.delete(e);
+    const under = [reEdited.get(e), e.store.editPreviewId, ...e.tools.extrude.profileSketches, ...restedOn(e.tools)];
+    if (under.some((id) => id && was.has(id) && !had.has(id))) cancelActiveTools(e.tools);
+  });
+}
+
+/** True when a waiting pick keeps the edit of a step back, said aloud so the double click or Enter is not lost. */
+export function editHeldByPick(e: Pick<Engine, "setStatus">): boolean {
+  if (!pickHoldsEdits()) return false;
+  refuseAloud(e, BUSY_TOOL_HINT);
+  return true;
 }
 
 export function switchEdit(e: Engine, id: string): void {
@@ -117,6 +151,7 @@ export function createSelection(
       return;
     }
     const done = (cid: string | null) => {
+      if (reEdited.get(e) === id) reEdited.delete(e);
       e.noteCommitted(cid);
       if (cid) selectFeature(cid);
     };
@@ -165,6 +200,8 @@ export function createSelection(
         }
         break;
     }
+    // A sketch keeps its own undo and is not closed as a tool is.
+    if (f.type !== "sketch" && e.toolBusy()) reEdited.set(e, id);
   };
 
   return { selectFeature, selectFeatureRows, editFeature, featureForFace, deleteSelectedFace };

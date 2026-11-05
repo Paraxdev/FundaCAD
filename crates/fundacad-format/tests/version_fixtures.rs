@@ -30,7 +30,7 @@ fn write_the_v10_binary_fixture() {
 #[test]
 fn the_v10_binary_fixture_opens_as_its_json_twin() {
     let blobs = scratch("blobs");
-    let (doc, report) = open_document_checked(&versions().join("v10.fundab"), &blobs, None).unwrap();
+    let (doc, report) = open_document_checked(&versions().join("v10.fundab"), &blobs).unwrap();
     assert!(report.repaired_shards == 0 && !report.used_backup_index);
     let json: Value = serde_json::from_str(&std::fs::read_to_string(versions().join("v10.funda")).unwrap()).unwrap();
     assert_eq!(serde_json::from_str::<Value>(&doc).unwrap(), json);
@@ -83,7 +83,7 @@ fn the_segmented_fixture_opens_with_its_geometry() {
     let path = versions().join("segmented.fundab");
     assert!(fnda::read_section_of_kind(&path, fnda::KIND_SEGMENTS).unwrap().is_some());
     let blobs = scratch("segmented");
-    let (doc, report) = open_document_checked(&path, &blobs, None).unwrap();
+    let (doc, report) = open_document_checked(&path, &blobs).unwrap();
     assert!(report.repaired_shards == 0 && !report.used_backup_index);
     assert_eq!(
         serde_json::from_str::<Value>(&doc).unwrap(),

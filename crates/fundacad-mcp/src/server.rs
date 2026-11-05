@@ -22,8 +22,10 @@ use crate::budget::{self, Page};
 use crate::describe;
 use crate::docfile;
 use crate::docget;
+use crate::flatpak_folder::{reach, AskKind, EngineAsker, PathAsk, Sandbox};
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
+use crate::materials_doc;
 use crate::mesh::MeshBody;
 use crate::model::{self, Doc};
 use crate::render::{self, ViewRequest};
@@ -52,6 +54,9 @@ pub const MUTATORS: &[&str] = &[
     "edit",
     "sketch_merge",
     "sketch_tie",
+    "material_set",
+    "material_remove",
+    "material_assign",
 ];
 
 /// They must not wait for a document: `schema` is what an agent reads BEFORE anything exists.
@@ -212,6 +217,7 @@ fn edit_note(name: &str, args: &JsonObject) -> String {
         .get("id")
         .and_then(Value::as_str)
         .or_else(|| args.get("name").and_then(Value::as_str))
+        .or_else(|| args.get("material").and_then(Value::as_str))
         .or_else(|| args.get("feature").and_then(|f| f.get("type")).and_then(Value::as_str));
     match subject {
         Some(s) => format!("{name}: {s}"),
@@ -350,6 +356,8 @@ pub struct FundaCad {
     /// The user's guide Stop presses already reported, so each is said once.
     pub(crate) guide_stops: Arc<std::sync::atomic::AtomicI64>,
     scope: Arc<PathScope>,
+    /// Some in the Flatpak, where an assistant reaches one folder and asks the user for any other path.
+    sandbox: Option<Arc<Sandbox>>,
 }
 
 impl FundaCad {
@@ -375,7 +383,14 @@ impl FundaCad {
             ui: Arc::new(Mutex::new(None)),
             guide_stops: Arc::new(std::sync::atomic::AtomicI64::new(crate::guide::UNSEEN)),
             scope: Arc::new(PathScope::for_server(std::env::args_os()).0),
+            sandbox: Sandbox::detect().map(Arc::new),
         }
+    }
+
+    /// The Flatpak's folder rules as given rather than detected, for a test.
+    pub fn with_sandbox(mut self, sandbox: Option<Sandbox>) -> FundaCad {
+        self.sandbox = sandbox.map(Arc::new);
+        self
     }
 
     /// Every mode's tools. Guide mode is listed everywhere and says why where it cannot work.
@@ -399,6 +414,27 @@ impl FundaCad {
 
     fn scoped_in(&self, st: &State, raw: &str) -> Result<PathBuf, CallToolResult> {
         self.scope.check(raw, doc_file(st).as_deref()).map_err(failure)
+    }
+
+    /// `path` itself, or in the Flatpak, outside its folder, the file the user picks in the app window.
+    async fn reached(
+        &self,
+        kind: AskKind,
+        tool: &str,
+        path: PathBuf,
+        exts: &[&str],
+    ) -> Result<PathBuf, CallToolResult> {
+        let Some(sandbox) = self.sandbox.as_deref() else {
+            return Ok(path);
+        };
+        // A private engine has no window to ask; the app's answers no-host while no window shares.
+        let (link, name, window) = {
+            let st = self.state.lock().await;
+            let name = st.live.as_ref().map_or_else(|| LiveLink::new().name, |l| l.name.clone());
+            (st.link.clone(), name, st.live.is_some() || st.link.attached)
+        };
+        let ask = PathAsk::new(kind, tool, path, exts);
+        reach(ask, Some(sandbox), window, &EngineAsker::new(link, name)).await.map_err(failure)
     }
 
     /// The ui tools as well, which standalone gets and nothing else does.
@@ -428,6 +464,12 @@ impl FundaCad {
             log("[mcp] files are reached in any plain folder except home itself, drive roots and hidden folders; --allow-path keeps to given folders");
         }
         server.scope = Arc::new(scope);
+        if let Some(sandbox) = &server.sandbox {
+            log(&format!(
+                "[mcp] in the Flatpak, files are reached in {}; any other path asks the user in the FundaCAD window",
+                sandbox.folder.display()
+            ));
+        }
         if mode == Mode::Standalone {
             server = server.with_ui();
         }
@@ -535,7 +577,7 @@ impl FundaCad {
             return;
         };
         self.state.lock().await.app_build = app.build.clone();
-        let link = Arc::new(EngineLink::attach(app.port, app.token.clone()));
+        let link = Arc::new(EngineLink::attach(app.port, app.token.clone()).with_export_dir(app.export_dir.clone()));
         let mut live = LiveLink::new();
         let doc = match live.pull(&link).await {
             Ok(doc) => doc,
@@ -648,7 +690,9 @@ impl FundaCad {
             let mut st = self.state.lock().await;
             let live = st.live.as_mut().expect("live checked above");
             let replaces = matches!(name, "doc_new" | "doc_open" | "doc_set");
-            live.push(&link, &document, &edit_note(name, args), replaces).await
+            let edit = matches!(name, "material_set" | "material_remove" | "material_assign")
+                .then(|| materials_doc::live_edit(&before, &document));
+            live.push(&link, &document, &edit_note(name, args), replaces, edit).await
         };
         match pushed {
             Ok(rev) => {
@@ -672,7 +716,7 @@ impl FundaCad {
 }
 
 /// Python's `bool(x)` for a JSON value.
-fn truthy(v: Option<&Value>) -> bool {
+pub(crate) fn truthy(v: Option<&Value>) -> bool {
     match v {
         None | Some(Value::Null) | Some(Value::Bool(false)) => false,
         Some(Value::String(s)) => !s.is_empty(),
@@ -748,6 +792,11 @@ impl FundaCad {
             },
             Err(e) => return Ok(e),
         };
+        let exts = [docfile::TEXT_EXT, docfile::BINARY_EXT];
+        let path = match self.reached(AskKind::Open, "doc_open", path, &exts).await {
+            Ok(p) => p,
+            Err(e) => return Ok(e),
+        };
         let (doc, blobs, unread) = match docfile::read_document_full(&path) {
             Ok(v) => v,
             Err(e) => return Ok(failure(e.to_string())),
@@ -813,15 +862,23 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        let mut st = self.state.lock().await;
-        let given = args.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_string);
-        let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
-            return Ok(failure("No path given and this document has never been saved."));
+        let path = {
+            let st = self.state.lock().await;
+            let given = args.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_string);
+            let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
+                return Ok(failure("No path given and this document has never been saved."));
+            };
+            match self.scoped_in(&st, &given) {
+                Ok(p) => p,
+                Err(e) => return Ok(e),
+            }
         };
-        let path = match self.scoped_in(&st, &given) {
+        let ext = if docfile::is_binary_path(&path) { docfile::BINARY_EXT } else { docfile::TEXT_EXT };
+        let path = match self.reached(AskKind::Save, "doc_save", path, &[ext]).await {
             Ok(p) => p,
             Err(e) => return Ok(e),
         };
+        let mut st = self.state.lock().await;
         if let Some(why) = write_target::recovery_refusal(&path) {
             return Ok(failure(why));
         }
@@ -935,6 +992,9 @@ note: left out of the file, because this build cannot read them and a .funda has
             return Ok(failure("`document` needs a `features` list."));
         }
         let mut next = doc.as_object().cloned().unwrap_or_default();
+        if let Some(why) = model::shape_problem(&next) {
+            return Ok(failure(format!("`document` is not a FundaCAD document: {why}.")));
+        }
         // Shortcuts only: a whole document may carry entity fields from a
         // newer build, and refusing it over them would lose the lot.
         let mut notes = Vec::new();
@@ -1124,6 +1184,86 @@ note: left out of the file, because this build cannot read them and a .funda has
     }
 
     #[tool(
+        name = "material_list",
+        description = "The document's render materials (the Render workspace's look of a part: colour, metal, glass, glow, paint, patterns) with every set field and which bodies and faces wear each, plus the starter materials to copy from. To dress a part: material_list, material_set, material_assign.",
+        input_schema = crate::tools::material_list(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn t_material_list(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
+        let st = self.state.lock().await;
+        let mut out = materials_doc::list(&st.doc);
+        // The mesh of an older build, or of none, says nothing about where the saved faces are now. A live window
+        // keeps its own numbers, and no MCP build moves them.
+        let built = st.built_for.as_deref() == Some(&signature(&st.doc));
+        let note = if built && !st.mesh.is_empty() {
+            materials_doc::lost_faces_note(&st.doc, &st.mesh)
+        } else if !built && st.live.is_none() {
+            materials_doc::unbuilt_faces_note(&st.doc)
+        } else {
+            None
+        };
+        if let Some(note) = note {
+            out.push('\n');
+            out.push_str(&note);
+        }
+        Ok(text(out))
+    }
+
+    #[tool(
+        name = "material_set",
+        description = "Create or edit one render material, for its looks only (stress takes its own material). Name an existing `id` to edit: the fields you leave out stay, a field sent as null goes back to its default. Otherwise it creates one; `from` starts from a copy of another. Glass: low opacity and roughness, ior 1.5. Metal: metalness 1. Glow: emissive. Car paint: clearcoat 1, flakes. Fields without a description and the surface patterns are in schema(\"material\"). Then `material_assign` puts it on bodies or faces.",
+        input_schema = crate::tools::material_set(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false)
+    )]
+    pub async fn t_material_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        let mut st = self.state.lock().await;
+        let done = match materials_doc::set(&mut st.doc, &args) {
+            Ok(done) => done,
+            Err(e) => return Ok(doc_error(e)),
+        };
+        let verb = if done.created { "Created" } else { "Edited" };
+        let mut lines = vec![format!("{verb} {}: {}", done.id, Value::Object(done.material))];
+        lines.extend(done.notes);
+        Ok(text(lines.join("\n")))
+    }
+
+    #[tool(
+        name = "material_remove",
+        description = "Remove render materials from the document. Bodies and faces wearing them go back to their default look.",
+        input_schema = crate::tools::material_remove(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn t_material_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        let ids: Vec<String> = args
+            .get("ids")
+            .and_then(Value::as_array)
+            .map_or(vec![], |a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
+        if ids.is_empty() {
+            return Ok(failure("`ids` must list the materials to remove, material_list shows them."));
+        }
+        let mut st = self.state.lock().await;
+        let gone = match materials_doc::remove(&mut st.doc, &ids) {
+            Ok(gone) => gone,
+            Err(e) => return Ok(doc_error(e)),
+        };
+        let (bodies, faces) = (gone.bodies.len(), gone.faces.len());
+        Ok(text(format!(
+            "Removed {}. {bodies} bodies and {faces} faces went back to their default look.",
+            ids.join(", ")
+        )))
+    }
+
+    #[tool(
+        name = "material_assign",
+        description = "Put a render material on `bodies` and `faces`, or clear them with material null. Take the material id from material_list or material_set, and the faces from `inspect`.",
+        input_schema = crate::tools::material_assign(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn t_material_assign(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.material_assign(&args).await)
+    }
+
+    #[tool(
         name = "interference",
         description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. A long list gives its total first, largest overlap first, folds pairs alike in all but their ids into one row and shows 30 rows: `offset` pages on, `limit` 0 shows every row, `full` lists each pair with where it meets. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. A sweep step with more than 10 clashing pairs gives their total and its 10 largest: `offset` and `limit` page every step's pairs, `full` lists them all. A body that is not a closed solid (a surface, an open or badly joined shell, as some imports are) cannot be judged: it is listed under NOT CHECKED with why, and no pair with it is called clear. Use this, not an intersect feature, to check fits and clearances.",
         input_schema = crate::tools::interference(),
@@ -1219,7 +1359,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "view",
-        description = "Render the built model as a PNG. Orthographic, flat-shaded, with edges drawn. Use it to check what the numbers cannot tell you. `section` cuts it open, which is the only way to see a bore, a pocket or a thread; `bodies` draws one part of an assembly; `focus` zooms in on a point, which is the only way to see a small feature on a large part.",
+        description = "Render the built model as a PNG. Orthographic, flat-shaded, with edges drawn. Use it to check what the numbers cannot tell you. A render material shows as its plain colour. `section` cuts it open, which is the only way to see a bore, a pocket or a thread; `bodies` draws one part of an assembly; `focus` zooms in on a point, which is the only way to see a small feature on a large part.",
         input_schema = crate::tools::view(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -1250,6 +1390,11 @@ note: left out of the file, because this build cannot read them and a .funda has
         if exts.is_empty() {
             return Ok(failure(format!("Cannot export '{format}' files. Formats: {}.", EXPORT_FORMATS.join(", "))));
         }
+        let kind = if truthy(args.get("separate")) { AskKind::Folder } else { AskKind::Save };
+        let path = match self.reached(kind, "export", path, exts).await {
+            Ok(p) => p,
+            Err(e) => return Ok(e),
+        };
         let what = format!("export to {}", format.to_ascii_uppercase());
         let overwrite = truthy(args.get("overwrite"));
         let guard = |to: &Path| {
@@ -1277,8 +1422,8 @@ note: left out of the file, because this build cannot read them and a .funda has
                 return Ok(failure(format!("No such directory: {}", parent.display())));
             }
         }
-        // The engine writes while building, before a failure is known, so it writes to a TEMPORARY sibling that is
-        // moved into place only once the export is accepted; a refusal never touches what is already at `path`.
+        // The engine writes while building, before a failure is known, so it writes to a TEMPORARY folder whose file
+        // is moved into place only once the export is accepted; a refusal never touches what is already at `path`.
         let separate = truthy(args.get("separate"));
         let wanted = args.get("body").and_then(Value::as_str).filter(|b| !b.is_empty()).map(str::to_string);
         if separate && wanted.is_some() {
@@ -1344,12 +1489,22 @@ note: left out of the file, because this build cannot read them and a .funda has
                 }
             }
         }
-        // A temporary folder beside `path` holding a file of the same name, since the STEP's top assembly
-        // is named after the file; a refusal removes only the folder.
-        let tmp_root = temp_sibling(&path);
-        if let Err(e) = std::fs::create_dir(&tmp_root) {
-            return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
-        }
+        // A temporary folder holding a file of the same name, since the STEP's top assembly is named after the
+        // file; a refusal removes only the folder. Beside `path`, unless the app's engine may write only in its own.
+        let copy = link.export_dir.is_some();
+        let tmp_root = match &link.export_dir {
+            Some(root) => match crate::stage::make(root) {
+                Ok(dir) => dir,
+                Err(e) => return Ok(failure(format!("Could not write in the app's folder {}: {e}", root.display()))),
+            },
+            None => {
+                let dir = temp_sibling(&path);
+                if let Err(e) = std::fs::create_dir(&dir) {
+                    return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
+                }
+                dir
+            }
+        };
         // A separate export's folder is the path less its extension, split as the engine splits it. A path whose
         // extension is not the format's is the whole folder name, and the parts take the format's extension.
         let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1421,7 +1576,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             )));
         }
         let mut out = if separate {
-            match place_files(&result, &folder, page, full, guard) {
+            match place_files(&result, &folder, page, full, guard, (&tmp_root, copy)) {
                 Ok(written) => written,
                 Err(e) => {
                     discard();
@@ -1434,7 +1589,7 @@ note: left out of the file, because this build cannot read them and a .funda has
                 discard();
                 return Ok(failure(why));
             }
-            if let Err(e) = std::fs::rename(&tmp_path, &path) {
+            if let Err(e) = crate::stage::put(&tmp_path, &path, copy) {
                 discard();
                 return Ok(failure(format!("Could not write {}: {e}", path.display())));
             }
@@ -1504,12 +1659,19 @@ fn place_files(
     page: Page,
     full: bool,
     guard: impl Fn(&Path) -> Option<String>,
+    (stage, copy): (&Path, bool),
 ) -> Result<String, String> {
     let written: Vec<PathBuf> = result
         .get("paths")
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_str).map(PathBuf::from).collect())
         .unwrap_or_default();
+    if let Some(from) = written.iter().find(|from| !crate::stage::inside(from, stage)) {
+        return Err(format!(
+            "The engine named a file outside its export folder: {}. No part was written.",
+            from.display()
+        ));
+    }
     if folder.exists() && !folder.is_dir() {
         return Err(format!("{} is a file, and a separate export writes a folder of that name.", folder.display()));
     }
@@ -1526,7 +1688,7 @@ fn place_files(
     for from in &written {
         let Some(name) = from.file_name() else { continue };
         let to = folder.join(name);
-        if let Err(e) = std::fs::rename(from, &to) {
+        if let Err(e) = crate::stage::put(from, &to, copy) {
             // The ones already moved replaced what was there: say which, or
             // the folder reads as untouched when it now mixes old and new.
             let placed = if lines.is_empty() {
@@ -1700,6 +1862,10 @@ impl FundaCad {
             }
             if let Some(tracked) = result.get("trackedFaces").and_then(Value::as_object) {
                 model::write_tracked_faces(&mut st.doc, tracked);
+            }
+            // In live mode the window's document already holds the numbers of the window's own build.
+            if st.live.is_none() {
+                materials_doc::rekey_faces(&mut st.doc, &mesh);
             }
             st.mesh = mesh.clone();
             st.built_for = Some(signature(&st.doc));
@@ -2060,9 +2226,9 @@ impl FundaCad {
             lines.extend(skipped_lines(&r.result));
             build_failures = lines.join("\n");
         }
-        let mesh = {
+        let (mesh, paint) = {
             let st = self.state.lock().await;
-            st.mesh.clone()
+            (st.mesh.clone(), materials_doc::paint(&st.doc, &st.mesh))
         };
         if mesh.is_empty() {
             return failure("Nothing to render: the document produced no bodies.");
@@ -2107,6 +2273,7 @@ impl FundaCad {
             azimuth: camera.angles.map(|a| a.0),
             elevation: camera.angles.map(|a| a.1),
             highlight,
+            paint,
             section: section.clone(),
             bodies: bodies.clone(),
             focus: args.get("focus").cloned().unwrap_or(Value::Null),
@@ -2617,6 +2784,135 @@ impl FundaCad {
 }
 
 impl FundaCad {
+    async fn catch_up(&self) -> Result<(), CallToolResult> {
+        let stale = {
+            let st = self.state.lock().await;
+            st.mesh.is_empty() || st.built_for.as_deref() != Some(&signature(&st.doc))
+        };
+        if stale {
+            self.rebuild().await?;
+        }
+        Ok(())
+    }
+
+    /// What keeps each face on its material when a later feature reorders the body's faces.
+    async fn face_prints(&self, faces: &[(String, u64)]) -> Result<Vec<(String, Value)>, CallToolResult> {
+        self.catch_up().await?;
+        let mesh = self.state.lock().await.mesh.clone();
+        let mut by_body: HashMap<&str, Vec<Value>> = HashMap::new();
+        let mut out = vec![];
+        for (id, face) in faces {
+            let Some(body) = mesh.iter().find(|b| b.id() == id) else { continue };
+            let prints = by_body.entry(id).or_insert_with(|| crate::face_prints::body_prints(body));
+            if let Some(print) = prints.get(*face as usize) {
+                out.push((materials_doc::face_key(id, *face), print.clone()));
+            }
+        }
+        Ok(out)
+    }
+
+    async fn material_assign(&self, args: &JsonObject) -> CallToolResult {
+        let material = match args.get("material") {
+            Some(Value::Null) => None,
+            Some(Value::String(id)) => Some(id.as_str()),
+            _ => return failure("`material` is a material id from material_list, or null to clear."),
+        };
+        let list = |key: &str| args.get(key).and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+        let (bodies, faces) = (list("bodies"), list("faces"));
+        if bodies.is_empty() && faces.is_empty() {
+            return failure("Give `bodies` or `faces` to assign to.");
+        }
+        // The saved keys must hold the numbers this build shows before a face is named. A document that does not
+        // build fails below if it has to, a clear by number still works.
+        if !faces.is_empty() && self.state.lock().await.live.is_none() {
+            _ = self.catch_up().await;
+        }
+        let (link, doc) = {
+            let mut st = self.state.lock().await;
+            if let Some(id) = material {
+                if let Err(e) = materials_doc::require_known(&st.doc, id) {
+                    return doc_error(e);
+                }
+            }
+            model::recompute_parameters(&mut st.doc);
+            (st.link.clone(), st.doc.clone())
+        };
+        let mut body_ids = vec![];
+        for wanted in bodies {
+            let Some(wanted) = wanted.as_str() else {
+                return failure(format!("`bodies` lists body ids, got {wanted}"));
+            };
+            body_ids.push(wanted.to_string());
+        }
+        // A stale assignment must stay clearable, so clearing never asks the build.
+        if material.is_some() && !body_ids.is_empty() {
+            let payload = json!({"document": doc, "detail": false, "summary": true});
+            let reply = match link.call("inspect", payload).await {
+                Ok(r) => r,
+                Err(e) => return engine_gone(&e),
+            };
+            if reply.get("ok") != Some(&json!(true)) {
+                return failure(format!("Could not read the bodies: {}", error_message(&reply)));
+            }
+            let built = reply["result"]["bodies"].as_array().map_or(&[][..], Vec::as_slice);
+            for wanted in &mut body_ids {
+                let hit =
+                    built.iter().find(|b| b["id"] == *wanted).or_else(|| built.iter().find(|b| b["name"] == *wanted));
+                match hit.and_then(|b| b["id"].as_str()) {
+                    Some(id) => *wanted = id.to_string(),
+                    None if built.is_empty() => {
+                        return failure(format!("no body '{wanted}', this build made no bodies"))
+                    }
+                    None => return failure(no_such_body(wanted, built)),
+                }
+            }
+        }
+        let mut face_keys = vec![];
+        for (i, face) in faces.iter().enumerate() {
+            let by_number = face.get("body").and_then(Value::as_str).zip(face.get("face").and_then(Value::as_u64));
+            if let (None, Some((body, n))) = (material, by_number) {
+                face_keys.push((body.to_string(), n));
+                continue;
+            }
+            if let Some(why) = materials_doc::faces_unreliable(&doc) {
+                return failure(why);
+            }
+            let payload = json!({"document": doc, "a": face});
+            let reply = match link.call("measure", payload).await {
+                Ok(r) => r,
+                Err(e) => return engine_gone(&e),
+            };
+            if reply.get("ok") != Some(&json!(true)) {
+                let why = error_message(&reply);
+                let why =
+                    why.strip_prefix("a ").unwrap_or(&why).replace("measure takes one", "give each its own selector");
+                return failure(format!("faces[{i}]: {why}"));
+            }
+            let item = &reply["result"]["a"];
+            match (item["kind"].as_str(), item["body"].as_str(), item["index"].as_u64()) {
+                (Some("face"), Some(body), Some(n)) => face_keys.push((body.to_string(), n)),
+                _ => return failure(format!("faces[{i}] is not a face selector, `inspect` lists them: {face}")),
+            }
+        }
+        let prints = match material {
+            Some(_) if !face_keys.is_empty() => match self.face_prints(&face_keys).await {
+                Ok(p) => p,
+                Err(e) => return e,
+            },
+            _ => vec![],
+        };
+        let mut st = self.state.lock().await;
+        if let Err(e) = materials_doc::assign(&mut st.doc, material, &body_ids, &face_keys) {
+            return doc_error(e);
+        }
+        materials_doc::write_prints(&mut st.doc, prints);
+        let (b, f) = (body_ids.len(), face_keys.len());
+        text(match material {
+            Some(id) => format!("{id} is now on {b} bodies and {f} faces."),
+            None => format!("Cleared the material of {b} bodies and {f} faces."),
+        })
+    }
+
     async fn measure(&self, args: &JsonObject) -> CallToolResult {
         let mut payload = match crate::measure::request_of(args) {
             Ok(p) => p,
@@ -2671,7 +2967,7 @@ impl FundaCad {
             if let Some(refusal) = Self::missing_body(&link, &doc, &wanted).await {
                 return refusal;
             }
-            return failure(format!("The analysis was refused: {why}"));
+            return failure(format!("The analysis was refused: {why}{}", crate::stress::finer_hint(&reply)));
         }
         let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let mut out = crate::stress::report(&r, &request.supports);
@@ -2875,6 +3171,12 @@ impl FundaCad {
         let mut upload_id: Option<String> = None;
         let (path, fmt, source) = if has_path {
             let path = match self.scoped(args.get("path").and_then(Value::as_str).unwrap_or_default()).await {
+                Ok(p) => p,
+                Err(e) => return e,
+            };
+            let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+            let exts: Vec<&str> = std::iter::once(ext.as_str()).filter(|e| !e.is_empty()).collect();
+            let path = match self.reached(AskKind::Open, "doc_import", path, &exts).await {
                 Ok(p) => p,
                 Err(e) => return e,
             };

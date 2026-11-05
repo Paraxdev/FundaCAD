@@ -2,11 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- No page zoom: a pinch anywhere outside the model would scale the whole
-         app, chrome and all, with no way back short of a reload. The model
-         has its own pinch zoom, and touch-action in _touch.scss is what stops
-         the pinch in browsers that ignore user-scalable. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <!-- Scaling stays open for low vision users (Interface size and browser
+         zoom). Pinch is stopped by touch-action in _touch.scss, the model has
+         its own pinch zoom. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FundaCAD</title>
     <!-- Without this the browser asks for /favicon.ico on every load and logs a
          404, which is noise that hides real errors in a console anyone is

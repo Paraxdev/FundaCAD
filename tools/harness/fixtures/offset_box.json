@@ -1,0 +1,8 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "bx", "type": "box", "name": "Crate", "length": 40, "width": 30, "height": 20 },
+    { "id": "mv", "type": "move", "dx": 113.5, "dy": -41.25, "dz": 37, "rx": 0, "ry": 0, "rz": 0, "bodies": ["body1"] }
+  ]
+}

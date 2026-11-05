@@ -40,6 +40,11 @@ function fits(p: { left: number; top: number }, box: Size, win: Size, margin: nu
   );
 }
 
+/** `r`, read in window pixels, in the CSS pixels that left and top take under the root zoom `z` (pageZoom). */
+export function underZoom(r: Rect, z: number): Rect {
+  return { left: r.left / z, top: r.top / z, right: r.right / z, bottom: r.bottom / z };
+}
+
 export function placeBeside(
   anchor: Rect,
   box: Size,

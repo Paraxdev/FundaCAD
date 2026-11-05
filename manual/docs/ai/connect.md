@@ -24,6 +24,14 @@ To keep it to some folders only, add `--allow-path` and a folder after `--mcp` i
 
 It then works only in those folders, the folder of your open document and the app's own folders. When it is refused a file, it says why and which folder would let it through.
 
+### In the Flatpak
+
+The Flatpak keeps the assistant's files in the FundaCAD folder inside your Documents folder. FundaCAD makes that folder when it starts.
+
+For any other file, FundaCAD asks you. The file chooser opens with that file filled in and a title such as "An assistant asks to save bracket.funda". Pick a file to let it through, or press Cancel to refuse.
+
+FundaCAD can only ask while its window is open and Live document is set to share. Otherwise the assistant works only in the FundaCAD folder.
+
 ## Long replies on big models
 
 A reply that lists every body, face or clash of a big model would fill the assistant's memory with rows that say the same thing. So once a model has more than 10 bodies:

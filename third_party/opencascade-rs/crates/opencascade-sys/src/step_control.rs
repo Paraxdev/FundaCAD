@@ -15,12 +15,12 @@ mod inner {
         pub fn read_step(
             reader: Pin<&mut STEPControl_Reader>,
             filename: String,
-        ) -> IFSelect_ReturnStatus;
+        ) -> Result<IFSelect_ReturnStatus>;
         pub fn TransferRoots(
             self: Pin<&mut STEPControl_Reader>,
             progress: &Message_ProgressRange,
-        ) -> i32;
-        pub fn one_shape_step(reader: &STEPControl_Reader) -> UniquePtr<TopoDS_Shape>;
+        ) -> Result<i32>;
+        pub fn one_shape_step(reader: &STEPControl_Reader) -> Result<UniquePtr<TopoDS_Shape>>;
 
         type STEPControl_Writer;
         #[cxx_name = "construct_unique"]

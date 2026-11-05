@@ -127,7 +127,7 @@ export class MoveTool {
   private box: THREE.Box3 | null = null;
   private stepLabel = "";
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   /** unsubscribes a settled drag's wait for its rebuild */
   private pendingReopen: (() => void) | null = null;
@@ -233,6 +233,19 @@ export class MoveTool {
           }
         : undefined,
     );
+    for (const name of ["move", "turn", "size"]) {
+      this.dim.restoresOnUndo(
+        name,
+        () => ({ t: this.t.clone(), rot: this.rot.clone(), scl: this.scl.clone(), ringDeg: this.ringDeg }),
+        (held) => {
+          this.t.copy(held.t);
+          this.rot.copy(held.rot);
+          this.scl.copy(held.scl);
+          this.ringDeg = held.ringDeg;
+          this.refreshPreview();
+        },
+      );
+    }
     this.unwatchOverlays = this.viewport.watchOverlays(() => this.syncHidden());
     this.syncHidden();
     const s = this.viewport.projectToScreen(this.anchor);

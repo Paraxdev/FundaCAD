@@ -8,11 +8,19 @@ import { MirrorTool, PLANE_REFUSED } from "../../src/features/mirrorTool";
 import { basePlaneDef, reflectionMatrix } from "../../src/features/mirrorMath";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import { usePromptStore } from "../../src/stores/prompt";
-import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import {
+  endPickSession,
+  endRewoundPick,
+  resetTreePicks,
+  routeTreeClick,
+  treePickWaiting,
+  type TreePick,
+} from "../../src/ui/treePick";
 import type { FacePlanePick, PlanePickTarget } from "../../src/features/facePlanePick";
 import type { PlaneDef } from "../../src/types";
 import type { Viewport } from "../../src/viewport/viewport";
 import { DocumentStore } from "../../src/document/store";
+import { asVec, OTHER_FLAT_ANCHOR, SLANT_NORMAL, faceRowViewport } from "./faceRowRig";
 import type { GeometryBackend } from "../../src/geometry/client";
 import type { Feature, RebuildReply } from "../../src/types";
 
@@ -26,7 +34,7 @@ const FLAT: FacePlanePick = {
   at: [12, 3.5, -4],
 };
 const ROUND: FacePlanePick = {
-  def: { origin: [-6, 2, 7.5], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] },
+  def: { origin: [-6, 2, 7.5], normal: [0, 0.6, 0.8], xdir: [0, -0.8000000000000002, 0.6] },
   kind: "tangent",
   selector: { kind: "face", by: "nearest", point: [-6, 2, 7.5], body: "body1" },
   faceId: 12,
@@ -42,6 +50,8 @@ const PLANE_AT: Record<number, PlanePickTarget> = {
   170: { kind: "face", spec: FLAT.def, face: FLAT },
   180: { kind: "face", spec: ROUND.def, face: ROUND },
 };
+
+const made: MirrorTool[] = [];
 
 function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string> = {}) {
   const canvas = document.createElement("canvas");
@@ -84,6 +94,7 @@ function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string
     setFaceMarks: (marks: { faceIds: number[]; color: number }[] | null, layer: string) => {
       if (layer === "mirror") log.faceMarks = marks;
     },
+    ...faceRowViewport().parts,
     hoverDatum: () => {},
     hoverFaceAt: () => {
       log.hoverFace++;
@@ -98,6 +109,7 @@ function rig(bodyIds = ["body1", "body2", "body3"], names: Record<string, string
     bodyName: (id: string) => (id === "body2" ? "Bracket" : undefined),
   } as unknown as DocumentStore;
   const tool = new MirrorTool(viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
+  made.push(tool);
   const done = vi.fn();
   return { tool, viewport, log, addFeatures, done, canvas };
 }
@@ -127,6 +139,7 @@ const row = (pick: TreePick) => {
 
 beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => {
+  for (const t of made.splice(0)) t.cancel();
   resetTreePicks();
   document.body.innerHTML = "";
 });
@@ -394,6 +407,132 @@ describe("Items rows", () => {
     expect(sketch.hints).toHaveLength(1);
     expect(summary()!.plane).toBe("XY");
   });
+
+  it("a flat face row sets the Line and lights the face with Objects active or with Line active", () => {
+    const r = rig();
+    r.tool.start([], r.done);
+    expect(summary()!.active).toBe("objects");
+    expect(row({ kind: "face", faceId: 14 }).route).toBe("taken");
+    expect(summary()).toEqual({
+      active: "objects",
+      values: ["Nothing picked", "Flat face"],
+      plane: null,
+      ready: false,
+    });
+    expect(r.log.faceMarks).toEqual([{ faceIds: [14], color: 0xb48cff }]);
+    row({ kind: "body", id: "body3" });
+    expect(r.log.selected).toEqual(["body3"]);
+    key("Tab");
+    expect(summary()!.active).toBe("line");
+    expect(row({ kind: "face", faceId: 23 }).route).toBe("taken");
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "Flat face"], plane: null, ready: true });
+    expect(r.log.faceMarks).toEqual([{ faceIds: [23], color: 0xb48cff }]);
+    expect(r.log.selected).toEqual(["body3"]);
+  });
+
+  it("ready with focus on a Geometry row, the prompt says F6 leads to the Enter that mirrors", () => {
+    const r = rig();
+    const list = document.createElement("div");
+    list.setAttribute("role", "listbox");
+    const faceRow = document.createElement("div");
+    faceRow.tabIndex = 0;
+    list.appendChild(faceRow);
+    const tree = document.createElement("div");
+    tree.setAttribute("role", "tree");
+    const bodyRow = document.createElement("div");
+    bodyRow.tabIndex = 0;
+    tree.appendChild(bodyRow);
+    document.body.append(list, tree);
+    r.canvas.tabIndex = 0;
+    const ready = () => prompt()!.split(" · ")[0];
+
+    r.tool.start(["body2"], r.done);
+    faceRow.focus();
+    expect(ready()).toBe("Pick the mirror plane");
+    row({ kind: "face", faceId: 14 });
+    expect(ready()).toBe("F6 to the view, then Enter to mirror, or pick more to mirror");
+    expect(key("Enter", faceRow)).toBe(false);
+    expect(r.addFeatures).not.toHaveBeenCalled();
+
+    r.canvas.focus();
+    expect(ready()).toBe("Enter to mirror, or pick more to mirror");
+    bodyRow.focus();
+    expect(ready()).toBe("Enter to mirror, or pick more to mirror");
+    faceRow.focus();
+    expect(ready()).toBe("F6 to the view, then Enter to mirror, or pick more to mirror");
+    r.canvas.focus();
+    expect(key("Enter", r.canvas)).toBe(true);
+    expect(r.addFeatures).toHaveBeenCalledTimes(1);
+
+    const after = prompt();
+    faceRow.focus();
+    expect([r.tool.active, prompt()]).toEqual([false, after]);
+  });
+
+  it("a face row commits a datum plane on the face's middle and the mirror across it", () => {
+    const r = rig();
+    r.tool.start(["body2", "body3"], r.done);
+    row({ kind: "face", faceId: 23 });
+    key("Enter");
+    const n = SLANT_NORMAL;
+    expect(r.addFeatures.mock.calls).toEqual([
+      [
+        [
+          {
+            id: "f2",
+            type: "datumPlane",
+            plane: {
+              origin: [0, 13.7 * n.y, 13.7 * n.z],
+              normal: [n.x, n.y, n.z],
+              xdir: [0, -0.8000000000000002, 0.6],
+            },
+            offset: 0,
+            face: { kind: "face", by: "nearest", point: asVec(OTHER_FLAT_ANCHOR), body: "b3" },
+            name: "Mirror plane",
+          },
+          { id: "f3", type: "mirror", plane: { name: "f2" }, bodies: ["body2", "body3"] },
+        ],
+      ],
+    ]);
+    expect(r.done.mock.calls).toEqual([["f3"]]);
+  });
+
+  it("a curved face row is refused and the Line keeps what it had", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    const empty = row({ kind: "face", faceId: 15 });
+    expect(empty.route).toBe("refused");
+    expect(empty.hints).toEqual([PLANE_REFUSED]);
+    expect(row({ kind: "face", faceId: 16 }).route).toBe("refused");
+    expect(summary()).toEqual({ active: "line", values: ["1 body", "Nothing picked"], plane: null, ready: false });
+    expect(treePickWaiting()).toBe(true);
+    row({ kind: "basePlane", plane: "YZ" });
+    expect(row({ kind: "face", faceId: 15 }).route).toBe("refused");
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "YZ plane"], plane: "YZ", ready: true });
+    expect(r.log.faceMarks).toBeNull();
+  });
+
+  it("an edge row is refused naming a flat face", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    const out = row({
+      kind: "edge",
+      edge: {
+        id: "body1:3",
+        body: "body1",
+        points: [
+          [1.5, 2, 3],
+          [4, -2.5, 8],
+        ],
+        smooth: false,
+        slot: 3,
+      },
+    } as unknown as TreePick);
+    expect(out.route).toBe("refused");
+    expect(out.hints).toHaveLength(1);
+    expect(out.hints[0]).toMatch(/flat face/);
+    expect(summary()!.values[1]).toBe("Nothing picked");
+  });
 });
 
 describe("keys and the end of a run", () => {
@@ -547,7 +686,7 @@ describe("store undo and redo", () => {
         { id: "f2", type: "datumPlane", plane: DATUM, offset: 3.5 },
       ] as Feature[],
     });
-    store.onRewind(endPickSession);
+    store.onRewind(endRewoundPick);
     const r = rig();
     const tool = new MirrorTool(r.viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
     return { store, tool, r };

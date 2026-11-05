@@ -14,6 +14,8 @@ import { hitPx } from "../input/pointerKind";
 import { previewVerdict } from "./previewVerdict";
 import { featureNumFields } from "../document/numFields";
 import { planeXDir } from "./planeMath";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
 import {
   CLEARANCE,
   HOLE_TYPES,
@@ -25,6 +27,7 @@ import {
   type HoleSize,
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
+import { boxBindings } from "./boxBindings";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
@@ -81,9 +84,10 @@ export class HoleTool {
   private downPos = { x: 0, y: 0 };
   // The release of the click that picked the face must not also toggle a hole there.
   private armed = false;
+  private releaseRows: (() => void) | null = null;
   private markers: THREE.Group | null = null;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
   private readonly gesture: CanvasGesture;
 
@@ -110,16 +114,28 @@ export class HoleTool {
     this.diameter = null;
     this.depth = null;
     const pre = this.viewport.selectedFacesForPressPull();
-    const fid = pre?.faceIds.length === 1 ? pre.faceIds[0] : undefined;
-    const plane = fid !== undefined ? this.viewport.planarFace(fid) : null;
-    if (pre && plane && fid !== undefined) {
-      // No click landed on the face this time (it was already selected), so the
-      // sensible default is its true centre, not pre.anchor's by:"nearest" point.
-      const at = this.viewport.faceAreaCentroidWorld(fid);
-      this.begin(at, plane.normal, plane.origin, pre.bodyId, fid);
-      return;
-    }
+    if (pre && this.takeFace(pre)) return;
+    this.releaseRows = awaitFaceRows(
+      this.viewport,
+      "a flat face",
+      (faces) => this.takeFace(faces) || "That face is curved, a hole needs a flat face",
+      () => this.cancel(),
+    );
     setPrompt("Click a flat face where the hole goes · Esc");
+  }
+
+  private takeFace(f: PressPullFaces): boolean {
+    const fid = f.faceIds.length === 1 ? f.faceIds[0] : undefined;
+    const plane = fid !== undefined ? this.viewport.planarFace(fid) : null;
+    if (!plane || fid === undefined) return false;
+    // No click landed on the face this time, so the sensible default is its true centre, not f.anchor's by:"nearest" point.
+    this.begin(this.viewport.faceAreaCentroidWorld(fid), plane.normal, plane.origin, f.bodyId, fid);
+    return true;
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   /** Reopen a hole to move, add or remove positions. False when a parameter
@@ -269,6 +285,7 @@ export class HoleTool {
     face?: Selector,
     points?: Vec3[],
   ) {
+    this.dropRows();
     this.phase = "place";
     this.armed = false;
     this.normal.copy(normal).normalize();
@@ -579,13 +596,17 @@ export class HoleTool {
     // The preview built this very face, so its extent is the one to keep.
     this.face = withExtent(this.face!, this.store.buildState.result?.trackedFaces?.[this.previewId]);
     const feature = this.buildFeature();
+    const bindings =
+      typeof feature.depth === "number"
+        ? boxBindings(this.dim, this.store, feature.id, [{ box: "depth", field: "depth", value: feature.depth }])
+        : [];
     const editId = this.editId;
     this.cleanup(false);
     if (editId) {
       this.store.endEditPreview(false);
-      this.store.replaceFeature(editId, feature);
+      this.store.replaceFeature(editId, feature, bindings);
     } else {
-      this.store.addFeature(feature);
+      this.store.addFeature(feature, undefined, bindings);
     }
     if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Hole");
     this.onDone?.(feature.id);
@@ -598,6 +619,7 @@ export class HoleTool {
   }
 
   private cleanup(cancelled: boolean) {
+    this.dropRows();
     this.gesture.detach();
     this.viewport.domElement.style.cursor = "default";
     if (this.previewTimer) clearTimeout(this.previewTimer);

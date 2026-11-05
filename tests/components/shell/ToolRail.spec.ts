@@ -123,3 +123,84 @@ describe("a plugin group header in the tool rail", () => {
     });
   });
 });
+
+describe("a tool rail taller than its room", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function overflow(list: HTMLElement, scrollHeight: number, clientHeight: number) {
+    let top = 0;
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => scrollHeight });
+    Object.defineProperty(list, "clientHeight", { configurable: true, get: () => clientHeight });
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = Math.max(0, Math.min(scrollHeight - clientHeight, v));
+      },
+    });
+  }
+  const cues = (w: ReturnType<typeof mountRail>) =>
+    w.findAll(".rail-more").map((c) => ({
+      label: c.attributes("aria-label"),
+      tabindex: c.attributes("tabindex"),
+    }));
+
+  it("shows no cue while every tool fits", async () => {
+    const w = mountRail();
+    const list = w.get(".rail-list").element as HTMLElement;
+    overflow(list, 300, 300);
+    await w.get(".rail-list").trigger("scroll");
+    const rail = w.get("#toolrail");
+    expect({ cues: cues(w), above: rail.classes("more-above"), below: rail.classes("more-below") }).toEqual({
+      cues: [],
+      above: false,
+      below: false,
+    });
+  });
+
+  it("cues the tools scrolled out of sight and pages to them on a click, outside the Tab walk", async () => {
+    const w = mountRail();
+    const list = w.get(".rail-list").element as HTMLElement;
+    overflow(list, 500, 200);
+    await w.get(".rail-list").trigger("scroll");
+    const atTop = { cues: cues(w), rail: w.get("#toolrail").classes("more-below") };
+    await w.get(".rail-more-down").trigger("click");
+    const middle = { top: list.scrollTop, cues: cues(w).map((c) => c.label) };
+    await w.get(".rail-more-down").trigger("click");
+    const atEnd = { top: list.scrollTop, cues: cues(w).map((c) => c.label) };
+    await w.get(".rail-more-up").trigger("click");
+    expect({ atTop, middle, atEnd, back: list.scrollTop }).toEqual({
+      atTop: { cues: [{ label: "More tools below", tabindex: "-1" }], rail: true },
+      middle: { top: 150, cues: ["More tools above", "More tools below"] },
+      atEnd: { top: 300, cues: ["More tools above"] },
+      back: 150,
+    });
+  });
+
+  it("brings a focused tool into view past the cues", () => {
+    const seen: [string | null, unknown][] = [];
+    const scroll = vi.fn(function (this: HTMLElement, arg: unknown) {
+      seen.push([this.getAttribute("data-action"), arg]);
+    });
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      const w = mountRail();
+      (w.get('[data-action="search"]').element as HTMLElement).focus();
+      expect(seen).toEqual([["search", { block: "nearest" }]]);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+});

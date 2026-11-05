@@ -6,6 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import type { MeasureTool } from "../features/measureTool";
 import { bodyExtraMenu, elementMoveMenu, materialMenu } from "./browserTree";
+import { canStep, stepLabelFor, stepMenuText } from "./canStep";
 import { ancestryOf } from "../document/elements";
 import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
@@ -32,6 +33,7 @@ export interface ContextMenusDeps {
   dropBodyGizmo: () => void;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
   selectFeature: (id: string | null) => void;
+  deleteFeatures: (ids: readonly string[]) => void;
   editFeature: (id: string) => void;
   featureForFace: (faceId: number) => string | null;
   deleteSelectedFace: () => boolean;
@@ -57,6 +59,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     dropBodyGizmo,
     setStatus,
     selectFeature,
+    deleteFeatures,
     editFeature,
     featureForFace,
     deleteSelectedFace,
@@ -121,10 +124,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       {
         label: "Delete plane",
         danger: true,
-        onClick: unlessBusy(() => {
-          store.removeFeature(datumId);
-          selectFeature(null);
-        }),
+        onClick: unlessBusy(() => deleteFeatures([datumId])),
       },
     ]);
   }
@@ -393,8 +393,20 @@ export function createContextMenus(deps: ContextMenusDeps) {
         onClick: () => handleAction("show-all-bodies"),
       },
       { separator: true, label: "" },
-      { label: "Undo", shortcut: "Ctrl+Z", disabled: !store.canUndo, onClick: () => store.undo() },
-      { label: "Redo", shortcut: "Ctrl+Y", disabled: !store.canRedo, onClick: () => store.redo() },
+      {
+        label: stepMenuText("Undo", stepLabelFor(deps, "undo")),
+        refName: "Undo",
+        shortcut: "Ctrl+Z",
+        disabled: !canStep(deps, "undo"),
+        onClick: () => handleAction("undo"),
+      },
+      {
+        label: stepMenuText("Redo", stepLabelFor(deps, "redo")),
+        refName: "Redo",
+        shortcut: "Ctrl+Y",
+        disabled: !canStep(deps, "redo"),
+        onClick: () => handleAction("redo"),
+      },
     ]);
   }
 

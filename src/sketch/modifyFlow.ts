@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
-import { curveObjects, PREVIEW_COLOR } from "./overlay";
+import { curveObjects, sketchConflictColor, sketchPreviewColor, sketchSelectColor } from "./overlay";
 import type { DimInput } from "./dimInput";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
@@ -121,9 +121,9 @@ export class ModifyFlow {
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
     const preview: THREE.Object3D[] = [];
     const first = this.filletFirst != null ? this.host.entities()[this.filletFirst] : undefined;
-    if (first) preview.push(...curveObjects([first], this.host.plane(), 0x33aaff, true));
+    if (first) preview.push(...curveObjects([first], this.host.plane(), sketchSelectColor(), true));
     const hit = idx >= 0 ? this.host.entities()[idx] : undefined;
-    if (hit) preview.push(...curveObjects([hit], this.host.plane(), 0xff5555, true));
+    if (hit) preview.push(...curveObjects([hit], this.host.plane(), sketchConflictColor(), true));
     if (!this.edgePickPending) this.emphasise(!hit && this.host.tool() === "offset" ? this.modelEdgeChainAt(p) : []);
     this.host.overlay().setPreview(preview);
   }
@@ -325,7 +325,7 @@ export class ModifyFlow {
    *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
   moveClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select entities first, then Move/Copy");
+      toast("Select something first, then use Move or Copy");
       return;
     }
     if (!this.moveBase) {
@@ -357,7 +357,7 @@ export class ModifyFlow {
   /** Rotate the selection about a clicked center by a typed angle (degrees). */
   rotateClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select entities first, then Rotate");
+      toast("Select something first, then use Rotate");
       return;
     }
     const cx = p.x,
@@ -373,7 +373,7 @@ export class ModifyFlow {
   /** Scale the selection about a clicked base point by a typed factor. */
   scaleClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select entities first, then Scale");
+      toast("Select something first, then use Scale");
       return;
     }
     const cx = p.x,
@@ -413,11 +413,11 @@ export class ModifyFlow {
     // Nothing may end in silence here: the user is mid-gesture, and a tool that
     // does nothing without saying why reads as broken.
     if (e.type === "text") {
-      toast("Offset doesn't apply to sketch text");
+      toast("Offset does not work on sketch text");
       return;
     }
     if (e.type === "point") {
-      toast("Offset needs a curve, not a point");
+      toast("Offset needs a line or curve, not a point");
       return;
     }
     this.beginOffset(idx, []);
@@ -429,6 +429,15 @@ export class ModifyFlow {
       [{ name: "offset", label: "Offset", kind: "length" }],
       () => this.commitOffset(),
       () => this.cancelOffset(),
+    );
+    this.host.dim().restoresOnUndo(
+      "offset",
+      () => ({ side: this.offsetPick?.side ?? 1, mag: this.offsetPick?.mag ?? 0 }),
+      (held) => {
+        if (!this.offsetPick) return;
+        Object.assign(this.offsetPick, held);
+        this.drawOffsetPreview(this.offsetPick);
+      },
     );
     setPrompt("Move to pick the side, or type a distance · Enter · Esc");
   }
@@ -497,11 +506,17 @@ export class ModifyFlow {
       this.host.dim().updateFromCursor({ offset: pick.mag });
     }
     this.host.dim().position(ev.clientX, ev.clientY);
+    this.drawOffsetPreview(pick);
+  }
+
+  private drawOffsetPreview(pick: { idx: number; side: number; mag: number }) {
+    const src = this.host.entities()[pick.idx];
+    if (!src) return;
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     const added = res ? res.entities.slice(this.host.entities().length) : [];
     // keep the source highlighted so it stays obvious what is being offset
-    const preview = [...curveObjects([src], this.host.plane(), 0x33aaff, true)];
-    if (added.length) preview.push(...curveObjects(added, this.host.plane(), PREVIEW_COLOR, true));
+    const preview = [...curveObjects([src], this.host.plane(), sketchSelectColor(), true)];
+    if (added.length) preview.push(...curveObjects(added, this.host.plane(), sketchPreviewColor(), true));
     this.host.overlay().setPreview(preview);
   }
 
@@ -525,7 +540,7 @@ export class ModifyFlow {
     }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     if (!res) {
-      toast("Offset: that distance collapses the geometry");
+      toast("Offset: that distance would collapse the shape");
       this.cancelOffset();
       return;
     }

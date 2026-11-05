@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setShortcutOverrides } from "../../../src/input/shortcuts";
+import { DimInput } from "../../../src/sketch/dimInput";
 import { announce } from "../../../src/ui/announce";
 
 import {
@@ -63,6 +64,21 @@ describe("currentRegion", () => {
     $("#row1").focus();
     expect(currentRegion()?.kind).toBe("items");
     expect(currentRegion()?.el).toBe($("#browser"));
+  });
+
+  it("counts a box floating over a region as that region, no stop of its own, and none over a region not shown", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div data-over-region="viewport"><input id="over" /></div><div data-over-region="palette"><input id="lost" /></div>`,
+    );
+    $("#over").focus();
+    expect([currentRegion()?.kind, currentRegion()?.el, kinds()]).toEqual([
+      "viewport",
+      $("#main"),
+      ["menubar", "tools", "items", "viewport", "panel", "panel", "history"],
+    ]);
+    $("#lost").focus();
+    expect(currentRegion()).toBeNull();
   });
 
   it("is null when focus is in no region", () => {
@@ -155,6 +171,19 @@ describe("focusRegion", () => {
     expect(active()).toBe($("#canvas"));
   });
 
+  it("lands the viewport on the key surface while it is a Tab stop, ahead of the canvas", () => {
+    $("#viewport").innerHTML = `<canvas id="canvas" tabindex="0"></canvas>`;
+    $("#main").insertAdjacentHTML("beforeend", `<div id="surface" data-key-surface tabindex="0"></div>`);
+    focusRegion({ kind: "viewport", el: $("#main") });
+    expect(active()).toBe($("#surface"));
+  });
+
+  it("lands the viewport on the Model landmark when the key surface is no Tab stop", () => {
+    $("#main").insertAdjacentHTML("beforeend", `<div id="surface" data-key-surface tabindex="-1"></div>`);
+    focusRegion({ kind: "viewport", el: $("#main") });
+    expect(active()).toBe($("#main"));
+  });
+
   it("keeps the canvas out while it is no Tab stop", () => {
     $("#viewport").innerHTML = `<canvas id="canvas" tabindex="-1"></canvas>`;
     focusRegion({ kind: "viewport", el: $("#main") });
@@ -224,6 +253,35 @@ describe("installRegionKeys", () => {
     $("#filter").focus();
     press($("#filter"), "F6");
     expect(currentRegion()?.kind).toBe("viewport");
+  });
+
+  it("leaves a tool's value box as it leaves the view, and the window keymap still never hears a key typed there", () => {
+    const dim = new DimInput();
+    dim.show(
+      [
+        { name: "angle", label: "Angle" },
+        { name: "count", label: "Count" },
+      ],
+      () => {},
+    );
+    const field = () => document.querySelector<HTMLInputElement>(".dim-input input")!;
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    try {
+      expect(active()).toBe(field());
+      expect(press(field(), "a").defaultPrevented).toBe(false);
+      expect(press(field(), "F5").defaultPrevented).toBe(false);
+      expect(onWindow).not.toHaveBeenCalled();
+      expect(press(field(), "F6", { shiftKey: true }).defaultPrevented).toBe(true);
+      expect(active()).toBe($("#row1"));
+      field().focus();
+      press(field(), "F6");
+      expect(active()).toBe($("#p1"));
+      expect(onWindow).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", onWindow);
+      dim.dispose();
+    }
   });
 
   it("leaves an F6 another handler already claimed", () => {

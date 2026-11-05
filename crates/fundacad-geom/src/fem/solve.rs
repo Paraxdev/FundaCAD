@@ -477,6 +477,8 @@ fn direction_words(d: V3) -> String {
 /// Time grows faster than memory (about 25 s for 2.3 GB on one core), and a cancel only takes
 /// effect once the factorisation is over, so this also bounds the wait.
 pub const FACTOR_MEMORY_CAP: u64 = 3 << 30;
+/// The cap of a run the person asked for after being told it is long, a wait of a few minutes.
+pub const FINER_MEMORY_CAP: u64 = 8 << 30;
 /// The share of the memory the system reports available (Linux only) the factor may take.
 /// Allocation alone does not fail when memory runs out there, the process is killed later.
 const AVAILABLE_SHARE: f64 = 0.6;
@@ -496,11 +498,26 @@ pub fn solve_with(
     solve_within(p, tick, long, memory_limit())
 }
 
+/// [`solve_with`] with the factorisation capped at `cap` bytes instead of [`FACTOR_MEMORY_CAP`].
+pub fn solve_capped(
+    p: &Problem,
+    tick: &mut dyn FnMut() -> bool,
+    long: &mut dyn FnMut(&mut dyn FnMut()),
+    cap: u64,
+) -> Result<Solution, SolveError> {
+    solve_within(p, tick, long, memory_limit_under(cap))
+}
+
 /// The bytes the factorisation may use here.
 fn memory_limit() -> u64 {
+    memory_limit_under(FACTOR_MEMORY_CAP)
+}
+
+/// The bytes the factorisation may use here under `cap`.
+pub fn memory_limit_under(cap: u64) -> u64 {
     match available_memory() {
-        Some(free) => FACTOR_MEMORY_CAP.min((free as f64 * AVAILABLE_SHARE) as u64),
-        None => FACTOR_MEMORY_CAP,
+        Some(free) => cap.min((free as f64 * AVAILABLE_SHARE) as u64),
+        None => cap,
     }
 }
 

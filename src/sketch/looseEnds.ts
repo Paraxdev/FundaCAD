@@ -94,6 +94,10 @@ function curveDist(c: Curve, x: number, y: number): number {
   return best;
 }
 
+// A curve past this many cells is measured from every end instead. A lone straight line has no area, so its cell is only
+// twice the reach, and 1e6 mm at a reach of 0.1 mm took 3.7 s per refresh and 2e6 mm overran a Map.
+const CELLS_CAP = 4096;
+
 /** A uniform grid over the curves, so an end only measures curves near it. A hashed cell key may collide, which
  *  only adds a candidate the distance test drops. */
 class CurveIndex {
@@ -133,7 +137,9 @@ class CurveIndex {
       bx = Math.floor((x1 + t) / k);
     const ay = Math.floor((y0 - t) / k),
       by = Math.floor((y1 + t) / k);
-    if ((bx - ax + 1) * (by - ay + 1) > 4096) return false;
+    if ((bx - ax + 1) * (by - ay + 1) > CELLS_CAP) return false;
+    // Past 2^53 cx++ no longer advances, and the loop would not end. A size box's length can still reach that far.
+    if (Math.max(Math.abs(ax), Math.abs(bx), Math.abs(ay), Math.abs(by)) > Number.MAX_SAFE_INTEGER) return false;
     for (let cx = ax; cx <= bx; cx++) {
       for (let cy = ay; cy <= by; cy++) {
         const h = this.hash(cx, cy);
@@ -155,6 +161,10 @@ class CurveIndex {
       const a = c.pts[s]!,
         b = c.pts[s + 1]!;
       const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / this.cell));
+      if (n > CELLS_CAP) {
+        this.big.push(i);
+        return;
+      }
       for (let j = 0; j < n; j++) {
         const x0 = a.x + ((b.x - a.x) * j) / n,
           y0 = a.y + ((b.y - a.y) * j) / n;

@@ -44,9 +44,9 @@ export function enterStep<L>(f: MirrorFields<L>): MirrorFields<L> | "commit" {
   return activate(f, f.objects.length ? "line" : "objects");
 }
 
-export function nextPick(f: MirrorFields<unknown>, lineNoun: string): string {
+export function nextPick(f: MirrorFields<unknown>, lineNoun: string, onListRow = false): string {
   if (f.active === "line") return `Pick the mirror ${lineNoun}`;
-  if (isReady(f)) return "Enter to mirror, or pick more to mirror";
+  if (isReady(f)) return `${onListRow ? "F6 to the view, then " : ""}Enter to mirror, or pick more to mirror`;
   return f.objects.length ? "Pick what to mirror, Enter when done" : "Pick what to mirror";
 }
 

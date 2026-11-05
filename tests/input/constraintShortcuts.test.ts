@@ -29,7 +29,7 @@ describe("constraint shortcuts", () => {
 
   it("no two rows of one context, or a context and global, share a key", () => {
     const seen = new Map<string, string>();
-    for (const s of SHORTCUTS) {
+    for (const s of SHORTCUTS.filter((x) => x.key)) {
       const contexts = s.context === "global" ? ["model", "sketch"] : [s.context];
       for (const c of contexts) {
         const k = `${c}:${s.ctrl ? "C" : ""}${s.shift ? "S" : ""}${s.key}`;

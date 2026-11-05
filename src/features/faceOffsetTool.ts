@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
-import type { Feature, Selector, Vec3 } from "../types";
+import type { Feature, RebuildResult, Selector, Vec3 } from "../types";
 import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
@@ -23,7 +23,12 @@ import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./
 import { offeredResize, resizeAxis, type OfferedResize, type ResizeAxis } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+import { boxBindings } from "./boxBindings";
 import { toolChar } from "../input/shortcuts";
+import { nearestMeshFace } from "./nearestMeshFace";
+import { awaitFaceRows } from "./faceRows";
+import type { PressPullFaces } from "../viewport/faceAnalysis";
+import { featureOwnersOfFaces } from "./patternSources";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -44,7 +49,14 @@ export class FaceOffsetTool {
   private phase: Phase = "pick";
   private faces: Selector[] = [];
   private faceIds: number[] = [];
+  /** Read once per face, while its id is live: a built preview renumbers the faces of every body after a shelled one. */
+  private faceOwners: (string | null)[] = [];
+  // Read when picked: a face id names another face once the model rebuilds.
+  private ownerSteps: string[] = [];
+  /** A press would otherwise scan the whole mesh again for every face already picked. */
+  private faceOnModel = new WeakMap<Selector, { model: RebuildResult; faceId: number | undefined }>();
   private bodyId: string | null = null;
+  private releaseRows: (() => void) | null = null;
   private anchor = new THREE.Vector3();
   private axis = new THREE.Vector3(0, 0, 1);
   private faceNormal = new THREE.Vector3(0, 0, 1);
@@ -85,7 +97,7 @@ export class FaceOffsetTool {
   private unsubBuild: (() => void) | null = null;
   private outcomes = new PreviewOutcomes(/^(Offset face|Thicken|Shell)[^:]*:\s*/i);
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private onDone: ((id: string | null) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -124,8 +136,25 @@ export class FaceOffsetTool {
     this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
-    if (pre) this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round);
-    else setPrompt(`Click a face to ${LABEL[mode].toLowerCase()} · Ctrl-click adds more`);
+    if (pre) this.takeFaces(pre);
+    else {
+      this.releaseRows = awaitFaceRows(
+        this.viewport,
+        "a face",
+        (faces) => (this.takeFaces(faces), true),
+        () => this.cancel(),
+      );
+      setPrompt(`Click a face to ${LABEL[mode].toLowerCase()} · Ctrl-click adds more`);
+    }
+  }
+
+  private takeFaces(f: PressPullFaces) {
+    this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId, f.round);
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -150,6 +179,26 @@ export class FaceOffsetTool {
     this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
   }
 
+  // A Shell preview has walls the model lacks, and the engine resolves a pick on the model before it. A hit off that
+  // model, or on a face already picked (the opening's rim), adds nothing.
+  private onPreviewOnlyFace(hit: { selector: Selector; bodyId: string | null }): boolean {
+    const before = this.mode === "shell" ? this.store.modelBeforePreview : null;
+    if (!before || !hit.bodyId || !("point" in hit.selector)) return false;
+    const at = nearestMeshFace(before, hit.bodyId, hit.selector.point);
+    if (!at) return false;
+    if (at.distance > MIN_OFFSET / 2) return true;
+    this.faceOnModel.set(hit.selector, { model: before, faceId: at.faceId });
+    return this.faces.some((f, i) => this.pickedFaceOn(before, f, this.faceOwners[i]) === at.faceId);
+  }
+
+  private pickedFaceOn(model: RebuildResult, face: Selector, owner: string | null | undefined): number | undefined {
+    const known = this.faceOnModel.get(face);
+    if (known?.model === model) return known.faceId;
+    const faceId = owner && "point" in face ? nearestMeshFace(model, owner, face.point)?.faceId : undefined;
+    this.faceOnModel.set(face, { model, faceId });
+    return faceId;
+  }
+
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
@@ -167,14 +216,21 @@ export class FaceOffsetTool {
       );
       return;
     }
-    // Ctrl/Cmd-click adds another face of the same body; all share the one distance, as press/pull and the engine do.
+    // Ctrl/Cmd-click adds another face; all share the one distance, as press/pull and the engine do. Only a shell
+    // binds each face to its own body, the others act on one body.
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (hit && hit.bodyId === this.bodyId) {
+      if (hit && (this.mode === "shell" || hit.bodyId === this.bodyId)) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        if (this.onPreviewOnlyFace(hit)) {
+          setPrompt("That's inside the opening, not a face to add · Esc");
+          return;
+        }
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
+        this.faceOwners.push(hit.bodyId);
+        this.ownerSteps.push(...featureOwnersOfFaces(this.store.buildState.result?.bodies, [hit.faceId]));
         const wasRound = this.round !== null;
         if (this.round && !this.inTangentRun()) this.dropRound();
         // The handle moves to the face just picked; a round run keeps its lead face, which it reads a size from.
@@ -229,7 +285,7 @@ export class FaceOffsetTool {
       return;
     }
     // Thicken's one option worth a key: grow the wall both ways about the surface
-    if (toolChar(e) === "s" && this.mode === "thicken" && this.phase === "drag") {
+    if (toolChar(e) === "s" && !this.dim.typesText(e) && this.mode === "thicken" && this.phase === "drag") {
       this.symmetric = !this.symmetric;
       this.refreshPreview(true);
     }
@@ -270,8 +326,11 @@ export class FaceOffsetTool {
     bodyId: string | null = null,
     round: RoundFace | null = null,
   ) {
+    this.dropRows();
     this.faces = faces;
     this.faceIds = faceIds;
+    this.faceOwners = faceIds.map((id) => this.viewport.faceIdToBodyId(id));
+    this.ownerSteps = featureOwnersOfFaces(this.store.buildState.result?.bodies, faceIds);
     this.bodyId = bodyId;
     this.round = this.mode === "offsetFace" ? round : null;
     this.contact = null;
@@ -316,6 +375,14 @@ export class FaceOffsetTool {
       () => this.onTyped(),
     );
     // The box says only what this tool judged, held refusals included.
+    this.dim.restoresOnUndo(
+      "distance",
+      () => this.value,
+      (value) => {
+        this.value = value;
+        this.refreshPreview();
+      },
+    );
     this.dim.showOwnProblem(this.outcomes.refusal);
     this.syncToggle();
     this.dim.updateFromCursor({ distance: this.readout() });
@@ -636,7 +703,17 @@ export class FaceOffsetTool {
     const faces = this.faces.length === 1 ? (this.faces[0] ?? this.faces) : this.faces;
     const body = this.bodyId != null ? { body: this.bodyId } : {};
     if (this.mode === "shell") {
-      return { id: this.previewId, type: "shell", faces, thickness: Math.abs(v) };
+      // The engine takes an unbound selector for the active body, which is not the body of a selected face.
+      const bound = this.faces.map((s, i) => {
+        const owner = this.faceOwners[i];
+        return owner ? ({ ...s, body: owner } as Selector) : s;
+      });
+      return {
+        id: this.previewId,
+        type: "shell",
+        faces: bound.length === 1 ? bound[0]! : bound,
+        thickness: Math.abs(v),
+      };
     }
     if (this.mode === "thicken") {
       return {
@@ -699,8 +776,12 @@ export class FaceOffsetTool {
     if (decision.action === "cancel") return this.cancel();
     this.value = decision.value;
     const feature = this.buildFeature();
+    const key = feature.type === "offsetFace" ? "distance" : "thickness";
+    const value = (feature as unknown as Record<string, number | undefined>)[key];
+    const bindings =
+      value == null ? [] : boxBindings(this.dim, this.store, feature.id, [{ box: "distance", field: key, value }]);
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
-    this.store.addFeature(feature);
+    this.store.addFeature(feature, undefined, bindings);
     if (decision.unverified) this.store.verifyCommit(feature.id, `${LABEL[this.mode]} ${this.sizeText(this.value)}`);
     this.cleanup();
     this.onDone?.(feature.id);
@@ -720,6 +801,11 @@ export class FaceOffsetTool {
     return this.grabbing;
   }
 
+  /** The steps that own the picked faces: undo one and the tool would write against faces that are gone. */
+  dependsOn(): readonly string[] {
+    return this.ownerSteps;
+  }
+
   /** Told when `pending` turns on or off, for the unsaved mark and the close guard. */
   onHeldChange(fn: () => void): () => void {
     return this.heldSignal.on(fn);
@@ -732,6 +818,7 @@ export class FaceOffsetTool {
   }
 
   private cleanup() {
+    this.dropRows();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
@@ -745,6 +832,7 @@ export class FaceOffsetTool {
     this.guideAxis = null;
     this.guideSpan = null;
     this.roundPoints = [];
+    this.ownerSteps = [];
     this.disposeGizmo();
     this.viewport.clearHover();
     this.viewport.suspendPicking = false;

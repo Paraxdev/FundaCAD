@@ -248,6 +248,7 @@ impl Jobs for GeomJobs {
             "blobHas" | "blobRead" | "blobWrite" => crate::import::blob_result(op, req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "measure" => crate::measure::measure_result(req, &EngineWatch(ctx)),
+            "topology" => crate::topology::topology_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
             "stress" => crate::stress::stress_result(req, &EngineWatch(ctx)),
             "printability" => crate::printcheck::op::printability_result(req, &EngineWatch(ctx)),
@@ -274,6 +275,7 @@ impl Jobs for GeomJobs {
     fn release(&mut self) -> bool {
         crate::kernel::forget_remembered();
         crate::features::resize::memo::forget();
+        crate::features::regrow::forget();
         let rebuilt = match cache::global().try_lock() {
             Ok(mut cache) => {
                 cache.release();

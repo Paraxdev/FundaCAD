@@ -133,6 +133,31 @@ export function previewScale(slots: number, w: number, h: number, most: number):
   return s;
 }
 
+/** The library's preview round is this many wavefront steps at most. */
+const PREVIEW_STEPS = 5;
+
+/** A path that lasts to the bounce limit writes its pixel on step `bounces + 2`, and a pixel stays black until
+ *  then. Paths that escape end sooner, so a closed room of mirrors is what shows dots on black after one round. */
+export function previewRounds(bounces: number): number {
+  const b = Math.max(1, bounces);
+  return Math.ceil((b + 2) / Math.min(b, PREVIEW_STEPS));
+}
+
+export interface PreviewBackend {
+  lowResMode: boolean;
+  maxBounces: number;
+  update(): void;
+}
+
+/** Makes each update in the preview run the rounds it takes to give every pixel a sample. */
+export function coverPreview(t: PreviewBackend) {
+  const round = t.update.bind(t);
+  t.update = () => {
+    const rounds = t.lowResMode ? previewRounds(t.maxBounces) : 1;
+    for (let i = 0; i < rounds; i++) round();
+  };
+}
+
 export interface PreviewTracer {
   _resetTime: number;
   frameBudget: number;

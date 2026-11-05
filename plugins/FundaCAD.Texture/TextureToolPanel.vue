@@ -83,7 +83,7 @@ const root: CSSProperties = {
   border: "1px solid var(--line-strong, #3a4150)",
   borderRadius: "var(--r-md, 6px)",
   boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
-  font: "12px system-ui, sans-serif",
+  font: "var(--fs-small, 12px) system-ui, sans-serif",
   color: "var(--text, #dce3ee)",
   width: "270px",
   maxWidth: "calc(100vw, 24px)",
@@ -141,7 +141,11 @@ const pathLabel: CSSProperties = {
 };
 const summaryStyle: CSSProperties = { cursor: "pointer", marginBottom: "4px" };
 const offsetRow: CSSProperties = { display: "flex", gap: "6px", alignItems: "center" };
-const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "4px" };
+const problem: CSSProperties = {
+  color: "var(--error, #f0564a)",
+  fontSize: "var(--fs-small, 12px)",
+  marginBottom: "4px",
+};
 const note: CSSProperties = { color: "var(--text-mute, #8b93a3)", fontStyle: "italic", margin: "8px 0" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
 const btn: CSSProperties = {

@@ -178,8 +178,8 @@ const BLOCK = JSON.stringify({
     refused.join(" | "),
   );
   await page.fill(".scr-name", "Long M3 cap screw");
-  await page.fill(".scr-len-length", "22");
-  await page.fill(".scr-len-thread-length", "30");
+  await page.fill(".scr-len-length input", "22");
+  await page.fill(".scr-len-thread-length input", "30");
   await page.waitForTimeout(200);
   const impossible = await page.$$eval(".scr-problems li", (li) => li.map((x) => x.textContent));
   check(
@@ -187,7 +187,7 @@ const BLOCK = JSON.stringify({
     impossible.some((t) => t.includes("thread cannot be longer")),
     impossible.join(" | "),
   );
-  await page.fill(".scr-len-thread-length", "18");
+  await page.fill(".scr-len-thread-length input", "18");
   await page.waitForFunction(
     () => !document.querySelector(".scr-problems") && !document.querySelector(".scr-form .scr-preview-status"),
     null,
@@ -287,6 +287,62 @@ const BLOCK = JSON.stringify({
   );
   feats = await fastenerFeatures();
   check("every fastener carries its spec", feats.length >= 3, feats.map((f) => f.name).join(", "));
+
+  // --- a real click reaches Save at each window width ---
+  await page.evaluate(() => window.__fundacad.handleAction("fasteners"));
+  await page.waitForSelector(".scr-library");
+  for (const [width, height] of [
+    [1100, 800],
+    [1280, 800],
+    [1400, 950],
+    [1500, 950],
+    [1920, 1080],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(300);
+    await page.click(".scr-tab-custom");
+    await page.click(".scr-custom-row button:has-text('Edit')");
+    await page.waitForSelector(".scr-form");
+    const renamed = `Long M3 cap screw at ${width}`;
+    await page.fill(".scr-name", renamed);
+    await page.waitForFunction(
+      () => !document.querySelector(".scr-problems") && !document.querySelector(".scr-form .scr-preview-status"),
+      null,
+      { timeout: 60000 },
+    );
+    // A toast from the last Save draws over the panel for a few seconds, on any layout.
+    await page.waitForFunction(() => !document.querySelector(".toast"), null, { timeout: 30000 });
+    const seen = await page.evaluate(() => {
+      const save = document.querySelector(".scr-save");
+      const panel = document.querySelector(".scr-panel").getBoundingClientRect();
+      const r = save.getBoundingClientRect();
+      const covered = [
+        [r.left + r.width / 2, r.top + r.height / 2],
+        [r.left + 3, r.top + 3],
+        [r.right - 3, r.top + 3],
+        [r.left + 3, r.bottom - 3],
+        [r.right - 3, r.bottom - 3],
+      ].filter(([x, y]) => !save.contains(document.elementFromPoint(x, y)));
+      const outside = [...document.querySelectorAll(".scr-library, .scr-library *")].filter((el) => {
+        const b = el.getBoundingClientRect();
+        return b.width && b.height && (b.left < panel.left - 1 || b.right > panel.right + 1);
+      });
+      return { covered: covered.length, outside: outside.length };
+    });
+    check(
+      `at ${width} wide Save is in view with nothing over it`,
+      seen.covered === 0,
+      `${seen.covered} points covered`,
+    );
+    check(`at ${width} wide the form stays inside its panel`, seen.outside === 0, `${seen.outside} elements outside`);
+    await page.screenshot({ path: path.join(OUT, `fasteners_5_form_${width}.png`) });
+    await page.click(".scr-save", { timeout: 5000 });
+    await page.waitForSelector(".scr-custom-row");
+    const names = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("fundacad.screws.library")).items.map((i) => i.spec.name),
+    );
+    check(`at ${width} wide a real click on Save saves`, names.includes(renamed), names.join(", "));
+  }
 
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "ALL PASS");

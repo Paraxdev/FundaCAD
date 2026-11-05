@@ -28,6 +28,10 @@ What will be sent shows the exact text before anything is copied:
 
 User names in file paths are hidden. A document too big for an issue is left out, so put the `.funda` file in a `.zip` and drag it into the issue yourself.
 
+## Reduced rights
+
+On Windows and Linux, the geometry engine runs with reduced rights: it can write only to FundaCAD's own folders, and on Linux it cannot reach the network. If support asks you to, start FundaCAD with the environment variable `FUNDACAD_ENGINE_SANDBOX=0` to turn this off.
+
 ## Ideas
 
 Help > Suggest an Idea opens the Idea form on GitHub. Say what you are trying to make and what would help.

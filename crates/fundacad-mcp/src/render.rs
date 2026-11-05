@@ -1,6 +1,8 @@
 //! A picture of the model drawn without a browser, a z-buffered render of the triangles the rebuild already
 //! returns. Flat shading on purpose, since smooth normals hide facet-sized mistakes.
 
+use std::collections::BTreeMap;
+
 use serde_json::Value;
 
 pub type Vec3 = [f64; 3];
@@ -18,6 +20,13 @@ pub const EDGE_COLOR: Rgb = [16, 18, 22];
 /// Distinct in hue rather than brightness, because brightness is what the shading is already saying.
 pub const BODY_COLORS: &[Rgb] =
     &[[158, 176, 196], [196, 158, 158], [158, 196, 168], [196, 188, 148], [176, 158, 196], [148, 188, 196]];
+
+/// A body's assigned colours: `faces` over `body` over its place in BODY_COLORS.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BodyPaint {
+    pub body: Option<Rgb>,
+    pub faces: BTreeMap<u64, Rgb>,
+}
 
 /// What a highlighted face is painted. Chosen to survive the shading multiply
 /// and to be a hue no body colour uses.
@@ -520,6 +529,8 @@ pub struct ViewRequest {
     pub elevation: Option<f64>,
     /// {body id: face indices} painted in HIGHLIGHT_COLOR, still shaded: how a caller asks "which one is face 7".
     pub highlight: Option<(String, Vec<i64>)>,
+    /// Assigned colours by body id, under a highlight.
+    pub paint: BTreeMap<String, BodyPaint>,
     pub section: Value,
     /// Body ids to draw; everything else is left out.
     pub bodies: Option<Vec<String>>,
@@ -617,7 +628,8 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
         let face_ids = m.face_ids();
         let id = m.body_id().unwrap_or_default();
         let want = req.highlight.as_ref().filter(|(body, _)| body == id).map(|(_, faces)| faces);
-        let base = BODY_COLORS[bi % BODY_COLORS.len()];
+        let paint = req.paint.get(id);
+        let base = paint.and_then(|p| p.body).unwrap_or(BODY_COLORS[bi % BODY_COLORS.len()]);
         let painted = m.vertex_colors().filter(|c| c.len() * 3 >= pos.len());
         let point = |i: usize| -> Vec3 { [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]] };
         for (t, tri) in idx.chunks_exact(3).enumerate() {
@@ -625,6 +637,9 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
                 continue;
             }
             let mut colour = base;
+            if let Some(faces) = paint.map(|p| &p.faces).filter(|f| !f.is_empty() && t < face_ids.len()) {
+                colour = faces.get(&(face_ids[t] as u64)).copied().unwrap_or(base);
+            }
             if let Some(want) = want {
                 if t < face_ids.len() && want.iter().any(|f| *f as f64 == face_ids[t]) {
                     colour = HIGHLIGHT_COLOR;

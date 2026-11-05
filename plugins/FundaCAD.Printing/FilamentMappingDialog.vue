@@ -32,7 +32,7 @@ const S = {
     alignItems: "center",
     gap: "var(--s-2)",
     minWidth: "130px",
-    fontSize: "12px",
+    fontSize: "var(--fs-small, 12px)",
     color: "var(--text, #e6e8ec)",
   },
   swatch: {
@@ -50,7 +50,7 @@ const S = {
     border: "1px solid var(--line, #262a31)",
     borderRadius: "var(--r-md, 8px)",
     color: "var(--text, #e6e8ec)",
-    fontSize: "12px",
+    fontSize: "var(--fs-small, 12px)",
     padding: "var(--s-2) var(--s-3)",
     cursor: "pointer",
   },

@@ -16,11 +16,19 @@ pub fn ok(id: &Value, result: &Value) -> String {
 
 /// An error reply. An empty message is replaced, a blank banner helps nobody.
 pub fn err(id: &Value, message: &str, feature_id: Option<&Value>) -> String {
+    err_offering(id, message, feature_id, None)
+}
+
+/// An error reply with `finer`, the longer run a stress refusal offers.
+fn err_offering(id: &Value, message: &str, feature_id: Option<&Value>, finer: Option<&Value>) -> String {
     let mut error = Map::new();
     let message = if message.is_empty() { "internal error (no message)" } else { message };
     error.insert("message".into(), Value::from(message));
     if let Some(fid) = feature_id {
         error.insert("feature_id".into(), fid.clone());
+    }
+    if let Some(finer) = finer {
+        error.insert("finer".into(), finer.clone());
     }
     pyjson::to_string(&json!({"id": id, "ok": false, "error": error}))
 }
@@ -41,7 +49,7 @@ pub fn reply_for(id: &Value, res: &Map<String, Value>) -> String {
         let message = error.get("message").and_then(Value::as_str).unwrap_or("");
         // `.get("feature_id")` in Python, so an explicit null is omitted too.
         let fid = error.get("feature_id").filter(|v| !v.is_null());
-        return err(id, message, fid);
+        return err_offering(id, message, fid, error.get("finer"));
     }
     let mut out = String::new();
     out.push_str("{\"id\": ");

@@ -2,7 +2,7 @@
 // ./sandbox.ts, so it needs `worker-src 'self' blob:` and no 'unsafe-eval', as e2e/sandbox_csp.cjs measures.
 
 import { runInSandbox, type RunOptions, type RunOutcome } from "./host";
-import { START, type Port } from "./protocol";
+import { MAX_LOG, START, type Port } from "./protocol";
 
 // Vite compiles this to an ES module chunk URL on the app's own origin, the only thing the blob may import.
 import sandboxUrl from "./sandbox?worker&url";
@@ -19,20 +19,22 @@ function workerScript(source: string): string {
   ].join("\n");
 }
 
-export type SpawnOptions = Omit<RunOptions, "port" | "dispose"> & {
+type Spawned = Pick<RunOptions, "port" | "dispose" | "watch">;
+
+export type SpawnOptions = Omit<RunOptions, "port" | "dispose" | "watch"> & {
   /** Overridable so a test can supply a Worker that is not one. */
-  makeWorker?: (script: string) => { port: Port; dispose: () => void };
+  makeWorker?: (script: string) => Spawned;
 };
 
 /** Terminated, not asked to stop: a plugin past its limits is not answering. `runInSandbox` disposes on every
  *  outcome. */
 export async function spawnAndRun(opts: SpawnOptions): Promise<RunOutcome> {
   const make = opts.makeWorker ?? defaultWorker;
-  const { port, dispose } = make(workerScript(opts.source));
-  return await runInSandbox({ ...opts, port, dispose });
+  const spawned = make(workerScript(opts.source));
+  return await runInSandbox({ ...opts, ...spawned });
 }
 
-function defaultWorker(script: string): { port: Port; dispose: () => void } {
+function defaultWorker(script: string): Spawned {
   const blob = new Blob([script], { type: "text/javascript" });
   const url = URL.createObjectURL(blob);
   const worker = new Worker(url, { type: "module" });
@@ -42,6 +44,17 @@ function defaultWorker(script: string): { port: Port; dispose: () => void } {
       worker.terminate();
       // Revoked only once the Worker is gone: revoking early can leave a blank worker that never loaded its script.
       URL.revokeObjectURL(url);
+    },
+    watch: (fail) => {
+      // A script that fails to load or throws at the top level reaches only the Worker, never its port.
+      worker.addEventListener("error", (ev) => {
+        ev.preventDefault();
+        const detail = ev instanceof ErrorEvent && ev.message ? `: ${ev.message.slice(0, MAX_LOG)}` : "";
+        fail(`the plugin's sandbox stopped with an error${detail}`, "plugin-failed");
+      });
+      worker.addEventListener("messageerror", () =>
+        fail("the sandbox sent a message that could not be read", "sandbox-lost"),
+      );
     },
   };
 }

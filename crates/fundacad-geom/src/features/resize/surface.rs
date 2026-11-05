@@ -9,7 +9,7 @@ use opencascade_sys::face_query as fq;
 use crate::kernel;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum Surf {
+pub(crate) enum Surf {
     Plane { n: DVec3, loc: DVec3 },
     Cyl { dir: DVec3, loc: DVec3, r: f64 },
     Cone { dir: DVec3, semi: f64, apex: DVec3 },
@@ -18,7 +18,7 @@ pub(super) enum Surf {
     Other,
 }
 
-pub(super) fn surf(face: &Shape) -> Surf {
+pub(crate) fn surf(face: &Shape) -> Surf {
     let mut o = [0.0; 13];
     let Ok(k) = fq::FQ_surface(face.raw(), &mut o) else {
         return Surf::Other;
@@ -138,7 +138,7 @@ impl Surf {
         }
     }
 
-    pub(super) fn analytic_curved(&self) -> bool {
+    pub(crate) fn analytic_curved(&self) -> bool {
         matches!(self, Surf::Cyl { .. } | Surf::Cone { .. } | Surf::Sphere { .. } | Surf::Torus { .. })
     }
 }
@@ -175,7 +175,7 @@ pub(super) fn inner_points(face: &Shape, n: i32) -> Vec<DVec3> {
 }
 
 /// The outward normal looks at the axis, centre or tube circle: the material lies away from it.
-pub(super) fn concave(face: &Shape, s: &Surf) -> Option<bool> {
+pub(crate) fn concave(face: &Shape, s: &Surf) -> Option<bool> {
     let (p, n) = inner_point(face)?;
     Some(n.dot(s.away(p)) < 0.0)
 }

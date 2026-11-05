@@ -3,7 +3,7 @@
 
 [[shot]]
 file = "manual/docs/img/sketch-constraints.png"
-size = [860, 600]
+size = [860, 730]
 theme = "fundacad"
 crop = "region"
 at = [580, 62]
@@ -14,8 +14,8 @@ steps = [
   { evaluate = "() => window.viewport.frameAround([4, -5, 0], 115)" },
   { wait = 900 },
 ]
-show = "A dimensioned rectangle and the Relations list in the sketch palette."
-alt = "A dimensioned rectangle and the Relations list in the sketch palette"
+show = "A dimensioned rectangle, with the Dimensions and Relations lists in the sketch palette."
+alt = "A dimensioned rectangle, with the Dimensions and Relations lists in the sketch palette"
 uses = ["manual/docs/sketch/constraints.md"]
 
 [[shot]]

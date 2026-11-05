@@ -8,9 +8,9 @@ export function useModalGate(): void {
   onUnmounted(popModal);
 }
 
-// Live under every modal: the Announcer (Teleported to body) keeps speaking, and toasts paint above the overlay
-// (z-index 2500 over 1000), so their action buttons stay clickable.
-const ALWAYS_LIVE = ["#a11y-announcer", ".toast-stack"];
+// Live under every modal: the Announcer (Teleported to body) keeps speaking. The toast stack is not, a region beside a
+// modal is content a screen reader finds but cannot reach; toasts are still spoken through the Announcer.
+const ALWAYS_LIVE = ["#a11y-announcer"];
 
 type Layer = { el: HTMLElement; keep: string[] };
 const layers: Layer[] = [];

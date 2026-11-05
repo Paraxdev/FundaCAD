@@ -19,6 +19,7 @@ import { regionArea } from "../sketch/region";
 import type { WorldRegion } from "../sketch/overlay";
 import type { Engine } from "./engine";
 import type { Selector } from "../types";
+import { onThemeChange } from "../ui/theme";
 import { hitPx } from "../input/pointerKind";
 import { replayedPress } from "../viewport/navigator/input";
 import { exactRound, roundFacePrompt } from "../ui/selectionMeasure";
@@ -222,6 +223,7 @@ export function installViewportWiring(e: Engine): void {
   // Picking a body raises the Move gizmo on it; the tool hands a plain click back, so the next pick moves it on.
   e.viewport.onBodySelectionChange = (cause) => {
     browser.setSelectedBodies(e.viewport.getSelectedBodies());
+    e.geometryBrowser.selectionChanged();
     if (e.toolBusy()) return;
     const ids = e.viewport.getSelectedBodies();
     if (!ids.length) {
@@ -247,6 +249,12 @@ export function installViewportWiring(e: Engine): void {
 
   e.store.onDocChange(() => {
     if (!e.sketch.active) e.overlay.update(e.store.document);
+  });
+  // The open sketch redraws itself, the others keep the colours they were built with until this.
+  onThemeChange(() => {
+    if (e.sketch.active) return;
+    e.overlay.update(e.store.document);
+    e.viewport.requestRender();
   });
 
   // One handle for three selections, ranked: edges, then profiles (a region pick keeps the face selection under it),
@@ -280,7 +288,11 @@ export function installViewportWiring(e: Engine): void {
 
     if (e.toolBusy()) return;
     const plural = (n: number, one: string) => `${n} ${one}${n > 1 ? "s" : ""}`;
-    if (edges.length) {
+    // The list's keys drag no handle and delete nothing there, and the readout says the row's own words.
+    if (listPick && (edges.length || faces?.faceIds.length)) {
+      setPrompt(null);
+      if (faces?.round) askExactRound(faces.selectors[0]!, faces.bodyId, faces.faceIds[0]!);
+    } else if (edges.length) {
       setPrompt(
         `${plural(edges.length, "edge")} selected, drag the handle to round it off ` +
           `(out fillets, back past zero chamfers) · Esc to clear`,
@@ -307,7 +319,12 @@ export function installViewportWiring(e: Engine): void {
       setPrompt(null);
     }
   }
-  e.viewport.onSelectionChange = refreshNudge;
+  let listPick = false;
+  e.viewport.onSelectionChange = () => {
+    listPick = e.geometryBrowser.pickingRows();
+    refreshNudge();
+    e.geometryBrowser.selectionChanged();
+  };
 
   let roundAsk = 0;
   /** The engine's size and wrap replace the mesh's guess in the prompt and the readout. */
@@ -317,7 +334,7 @@ export function installViewportWiring(e: Engine): void {
       const r = offeredResize(reply, ["cylinder"]);
       if (ask !== roundAsk || !r) return;
       exactRound.value = { faceId, radius: r.radius, full: r.full };
-      if (!e.toolBusy()) setPrompt(roundFacePrompt(r));
+      if (!e.toolBusy() && !listPick) setPrompt(roundFacePrompt(r));
     });
   }
 

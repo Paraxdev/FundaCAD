@@ -38,9 +38,10 @@ import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
 import Announcer from "./components/ui/Announcer.vue";
 import SkipLink from "./components/shell/SkipLink.vue";
-import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
+import { foldFocus } from "./app/foldFocus";
 import { useDialogStore } from "./stores/dialogs";
 import { useHomeStore } from "./stores/home";
 import HomeScreen from "./components/home/HomeScreen.vue";
@@ -79,7 +80,12 @@ let stageRo: ResizeObserver | null = null;
 onMounted(() => {
   if (!stage.value || typeof ResizeObserver === "undefined") return;
   stageRo = new ResizeObserver(([entry]) => {
-    if (entry) shell.setNarrow(isNarrowStage(entry.contentRect.width));
+    if (!entry) return;
+    const narrow = isNarrowStage(entry.contentRect.width);
+    if (narrow === shell.narrow) return;
+    const refocus = foldFocus();
+    shell.setNarrow(narrow);
+    void nextTick(refocus);
   });
   stageRo.observe(stage.value);
 });

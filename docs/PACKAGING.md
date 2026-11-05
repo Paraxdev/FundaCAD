@@ -67,7 +67,8 @@ the release keeps one file per download instead of one per build:
 | Windows | `FundaCAD-windows-x64-setup.exe`, `FundaCAD-windows-x64.msi`, `FundaCAD-windows-x64-portable.exe` |
 | macOS | `FundaCAD-macos-arm64.dmg`, `FundaCAD-macos-arm64.app.tar.gz` (updater) |
 
-Signatures are the same name plus `.sig`; `latest.json` and the
+Signatures are the same name plus `.sig`, made by the `sign` job from the
+finished bundles (the bundle job never holds the key); `latest.json` and the
 `plugin-<id>.zip` bundles keep their names. The version is in the release
 title and notes.
 
@@ -142,8 +143,9 @@ finds or builds the kernel like this:
 `build-flatpak` repackages the Linux `.deb` with
 `packaging/flatpak/dev.fundacad.app.yml` on the GNOME runtime (Flathub), which
 carries WebKitGTK 4.1 and GTK 3, and checks that `ldd` resolves every library
-the binary links inside it. It runs on X11 like the AppImage, reads a
-SpaceMouse over hidraw (`--device=all`, the host still needs the udev rule),
+the binary links inside it. It runs on native Wayland with an X11 fallback,
+reads game controllers through `--device=input` and a SpaceMouse through the
+spacenavd socket (`/run/spnav.sock`), since hidraw would need `--device=all`,
 and has no in-app updates, since the updater only replaces AppImages
 (`src-tauri/src/lib.rs`). A failed Flatpak build leaves it out of the
 release without holding the release back.
@@ -229,5 +231,26 @@ AppImage, `.deb` and `.rpm` are not code signed in the Apple or Windows sense.
 ### The updater
 
 Tauri's updater verifies a release with the minisign key in `tauri.conf.json`,
-which is still upstream's, so the release job withholds `latest.json` until a
-key of this project's is generated (tests/security/updater.test.ts).
+this project's own since 1.0.386. The release job withholds `latest.json` if
+that key is upstream's again (tests/security/updater.test.ts).
+
+The `sign` job alone holds the private key. It installs the lockfile with
+`npm ci --ignore-scripts`, so the only code it runs is the tauri CLI, and it
+signs the bundles the `bundle` job built. That job runs npm, crates.io and
+downloaded tools, so a compromised build dependency could still get a
+trojaned bundle signed. The key never reaches that code, the bytes do.
+
+Signing needs a one time setup in the repository settings:
+
+- an environment `updater-signing` holding the secrets
+  `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, with
+  deployment rules for the branches `dev` and `main` and the tags `v1.*`;
+- the repository variable `UPDATER_SIGNING` set to `true`;
+- the old repository level copies of both secrets deleted.
+
+Until then the `sign` job is skipped and every release ships without
+`latest.json`. On `dev` a failed `sign` job does not stop the release, it
+publishes without `latest.json` and deletes the old one, since the asset names
+are fixed and an old signature would pair with new bytes. Development installs
+then stop updating until a signed run succeeds, and only the job's warning
+says so.

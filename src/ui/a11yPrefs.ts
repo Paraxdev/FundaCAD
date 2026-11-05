@@ -9,7 +9,50 @@ export type Verbosity = "off" | "errors" | "normal" | "verbose";
 /** "system" is More when the OS asks for contrast, else Standard; contrastSetting.ts resolves and applies it. */
 export type Contrast = "system" | "standard" | "more" | "maximum";
 
-export interface A11yPrefs {
+// The size settings, one block spread into the shared tables below.
+/** The browser's zoom steps, in percent. */
+export const INTERFACE_SIZES: readonly number[] = [80, 90, 100, 110, 125, 150, 175, 200];
+export const INTERFACE_SIZE_MAX = 200;
+export type ViewportLabels = "s" | "m" | "l" | "xl";
+export const VIEWPORT_LABELS: readonly ViewportLabels[] = ["s", "m", "l", "xl"];
+
+export interface SizePrefs {
+  /** The zoom of the whole interface in percent, one of INTERFACE_SIZES. */
+  interfaceSize: number;
+  /** Line height 1.5, letter spacing 0.12em and word spacing 0.16em on all text, the WCAG text spacing test. */
+  comfortableText: boolean;
+  /** The size of the names drawn over the model: sketch dimensions and glyphs, plane names and the view cube. */
+  viewportLabels: ViewportLabels;
+}
+
+const SIZE_DEFAULTS: SizePrefs = { interfaceSize: 100, comfortableText: false, viewportLabels: "m" };
+const SIZE_KEYS: Record<keyof SizePrefs, string> = {
+  interfaceSize: "fundacad.a11y.interfaceSize",
+  comfortableText: "fundacad.a11y.comfortableText",
+  viewportLabels: "fundacad.a11y.viewportLabels",
+};
+
+export function asInterfaceSize(v: unknown): number | null {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  return typeof n === "number" && INTERFACE_SIZES.includes(n) ? n : null;
+}
+
+export function asComfortableText(v: unknown): boolean | null {
+  if (v === true || v === "true") return true;
+  return v === false || v === "false" ? false : null;
+}
+
+export function asViewportLabels(v: unknown): ViewportLabels | null {
+  return VIEWPORT_LABELS.includes(v as ViewportLabels) ? (v as ViewportLabels) : null;
+}
+
+const SIZE_GATES: { [K in keyof SizePrefs]: (v: unknown) => SizePrefs[K] | null } = {
+  interfaceSize: asInterfaceSize,
+  comfortableText: asComfortableText,
+  viewportLabels: asViewportLabels,
+};
+
+export interface A11yPrefs extends SizePrefs {
   animations: Animations;
   /** How much the announcer speaks: nothing, errors only, prompts and results, or every change too. */
   verbosity: Verbosity;
@@ -21,6 +64,10 @@ export interface A11yPrefs {
   solidPanels: boolean;
   /** Larger click targets: every hit area grows from 24 to about 32 px, see targets.ts. */
   targets: Targets;
+  /** Fields tell a screen reader their unit as a word, millimetres instead of mm. */
+  unitsInFull: boolean;
+  /** How long messages stay, see noticeTime.ts. */
+  noticeTime: NoticeTime;
 }
 
 export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
@@ -30,13 +77,17 @@ export const DEFAULT_A11Y: Readonly<A11yPrefs> = {
   contrast: "system",
   solidPanels: false,
   targets: "default",
+  unitsInFull: true,
+  noticeTime: "normal",
+  ...SIZE_DEFAULTS,
 };
 
-/** One click for screen reader users. Later settings join it: Notification time Until dismissed. */
+/** One click for screen reader users. */
 export const SCREEN_READER_PRESET: Readonly<Partial<A11yPrefs>> = {
   verbosity: "verbose",
   singleKeys: false,
   solidPanels: true,
+  noticeTime: "until-dismissed",
 };
 
 // fundacad.animations predates this module and held "on" or "off", absent meaning follow the OS; both still read.
@@ -47,6 +98,9 @@ const KEYS: Record<keyof A11yPrefs, string> = {
   contrast: "fundacad.a11y.contrast",
   solidPanels: "fundacad.a11y.solidPanels",
   targets: "fundacad.a11y.targets",
+  unitsInFull: "fundacad.a11y.unitsInFull",
+  noticeTime: "fundacad.a11y.noticeTime",
+  ...SIZE_KEYS,
 };
 
 const ANIMATIONS: readonly Animations[] = ["system", "on", "off"];
@@ -80,6 +134,12 @@ export function asTargets(v: unknown): Targets | null {
   return TARGETS.includes(v as Targets) ? (v as Targets) : null;
 }
 
+export type NoticeTime = "normal" | "longer" | "until-dismissed";
+const NOTICE_TIMES: readonly NoticeTime[] = ["normal", "longer", "until-dismissed"];
+export function asNoticeTime(v: unknown): NoticeTime | null {
+  return NOTICE_TIMES.includes(v as NoticeTime) ? (v as NoticeTime) : null;
+}
+
 const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   animations: asAnimations,
   verbosity: asVerbosity,
@@ -87,6 +147,9 @@ const GATES: { [K in keyof A11yPrefs]: (v: unknown) => A11yPrefs[K] | null } = {
   contrast: asContrast,
   solidPanels: asFlag,
   targets: asTargets,
+  unitsInFull: asFlag,
+  noticeTime: asNoticeTime,
+  ...SIZE_GATES,
 };
 
 function readStored(): A11yPrefs {
@@ -133,8 +196,8 @@ export function singleKeysOn(): boolean {
   return current.singleKeys;
 }
 
-// singleKeys is stored as "on" or "off", solidPanels as "true" or "false".
-function store(k: keyof A11yPrefs, v: string | boolean | null) {
+// singleKeys is stored as "on" or "off", the other flags as "true" or "false".
+function store(k: keyof A11yPrefs, v: A11yPrefs[keyof A11yPrefs] | null) {
   try {
     if (v === null) localStorage.removeItem(KEYS[k]);
     else localStorage.setItem(KEYS[k], typeof v === "boolean" && k === "singleKeys" ? (v ? "on" : "off") : String(v));

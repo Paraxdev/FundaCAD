@@ -2,6 +2,7 @@
 // The fields asked for follow the kind and part types, from catalogue/fields.json, the list the geometry checks against.
 
 import { computed, reactive, ref } from "vue";
+import { NumberField } from "fundacad/ui";
 import FastenerPreview from "./FastenerPreview.vue";
 import {
   HANDS,
@@ -15,7 +16,7 @@ import {
   type PartName,
 } from "./spec";
 
-const props = defineProps<{ initial: FastenerSpec | null; editing: boolean }>();
+const props = defineProps<{ initial: FastenerSpec | null; editing: boolean; stacked?: boolean }>();
 const emit = defineEmits<{ save: [spec: FastenerSpec]; cancel: [] }>();
 
 const DEFAULT_TYPES: Record<PartName, string> = {
@@ -70,36 +71,38 @@ function part(p: PartName): Record<string, unknown> {
   return draft[p] as Record<string, unknown>;
 }
 
-function num(v: string): number | undefined {
-  const x = Number(v);
-  return v.trim() === "" || !Number.isFinite(x) ? undefined : x;
+// The form's numbers are in its own units, and a written unit would fold to mm whatever those are, so a plain number
+// is all that reads.
+function plainNumber(raw: string): number {
+  const x = Number(raw.trim().replace(",", "."));
+  if (!Number.isFinite(x)) throw new Error("Not a number");
+  return x;
 }
 
-function readPath(path: string): string {
-  const v = getPath(draft, path);
-  return typeof v === "number" ? String(v) : "";
+const numberOr = (v: unknown) => (typeof v === "number" ? v : null);
+
+function writePath(path: string, v: number | null) {
+  setPath(draft, path, v ?? undefined);
 }
 
-function writePath(path: string, ev: Event) {
-  setPath(draft, path, num((ev.target as HTMLInputElement).value));
+function writeField(p: PartName, field: string, v: number | null) {
+  part(p)[field] = v ?? undefined;
 }
 
-function readField(p: PartName, field: string): string {
-  const v = part(p)[field];
-  return typeof v === "number" ? String(v) : "";
-}
+// A refused optional field leaves nothing in the spec to object to, so its refusal holds Save itself.
+const refused = reactive<Record<string, string | null>>({});
 
-function writeField(p: PartName, field: string, ev: Event) {
-  part(p)[field] = num((ev.target as HTMLInputElement).value);
+function refuse(p: PartName, f: string, label: string, why: string | null) {
+  refused[f] = why && `${label}: ${why}`;
+  if (why) writeField(p, f, null);
 }
 
 const tpi = computed(() => {
   const pitch = part("thread")?.["pitch"];
-  return typeof pitch === "number" && pitch > 0 ? String(+(1 / pitch).toFixed(3)) : "";
+  return typeof pitch === "number" && pitch > 0 ? +(1 / pitch).toFixed(3) : null;
 });
 
-function writeTpi(ev: Event) {
-  const v = num((ev.target as HTMLInputElement).value);
+function writeTpi(v: number | null) {
   part("thread")["pitch"] = v && v > 0 ? +(1 / v).toFixed(8) : undefined;
 }
 
@@ -132,7 +135,10 @@ const spec = computed<FastenerSpec>(() => {
   return s;
 });
 
-const problems = computed(() => specProblems(spec.value));
+const problems = computed(() => [
+  ...specProblems(spec.value),
+  ...Object.values(refused).filter((why): why is string => !!why),
+]);
 const previewProblem = ref<string | null>(null);
 const previewSpec = computed(() => (problems.value.length ? null : spec.value));
 
@@ -141,7 +147,7 @@ const label = { display: "grid", gridTemplateColumns: "150px 1fr", alignItems: "
 const heading = {
   margin: "10px 0 4px",
   fontWeight: 600,
-  fontSize: "11px",
+  fontSize: "var(--fs-micro, 11px)",
   textTransform: "uppercase" as const,
   letterSpacing: "0.05em",
   color: "var(--text-dim, #aaa1b5)",
@@ -149,8 +155,17 @@ const heading = {
 </script>
 
 <template>
-  <div class="scr-form" :style="{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '16px' }">
-    <div :style="{ maxHeight: '62vh', overflow: 'auto', paddingRight: '6px' }">
+  <div
+    class="scr-form"
+    :style="{
+      display: 'grid',
+      gridTemplateColumns: stacked ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 300px',
+      gridTemplateRows: stacked ? 'minmax(140px, 1fr) auto' : 'minmax(0, 1fr)',
+      gap: '16px',
+      minHeight: 0,
+    }"
+  >
+    <div :style="{ minHeight: '140px', overflow: 'auto', paddingRight: '6px' }">
       <label :style="label"
         ><span>Name</span
         ><input
@@ -199,39 +214,56 @@ const heading = {
         <template v-for="[f, text] in PARTS[p][String(part(p)['type'])]?.fields ?? []" :key="f">
           <label v-if="p === 'thread' && f === 'pitch' && inch" :style="label">
             <span>Threads per inch</span>
-            <input
-              class="measure-number scr-tpi"
-              type="number"
-              step="any"
-              min="0"
+            <NumberField
+              class="scr-tpi"
+              label="Threads per inch"
+              size="sm"
+              commit="live"
+              limits="arrows"
+              nullable
+              :parse="plainNumber"
+              :min="0"
               :style="field"
-              :value="tpi"
-              @input="writeTpi"
+              :model-value="tpi"
+              @update:model-value="writeTpi"
+              @error="$event && writeTpi(null)"
             />
           </label>
           <label v-else :style="label">
             <span>{{ text }} ({{ inch ? "in" : "mm" }})</span>
-            <input
-              class="measure-number"
+            <NumberField
               :class="`scr-${p}-${f}`"
-              type="number"
-              step="any"
-              min="0"
+              :label="`${text} (${inch ? 'in' : 'mm'})`"
+              size="sm"
+              commit="live"
+              limits="arrows"
+              nullable
+              :parse="plainNumber"
+              :min="0"
               :style="field"
-              :value="readField(p, f)"
-              @input="writeField(p, f, $event)"
+              :model-value="numberOr(part(p)[f])"
+              @update:model-value="writeField(p, f, $event)"
+              @error="$event && writeField(p, f, null)"
             />
           </label>
         </template>
         <label v-if="p === 'head' && part('head')['type'] === 'countersunk'" :style="label">
           <span>Countersink angle (deg)</span>
-          <input
-            class="measure-number"
-            type="number"
-            step="any"
+          <NumberField
+            label="Countersink angle (deg)"
+            size="sm"
+            commit="live"
+            nullable
+            :parse="plainNumber"
+            :min="1"
+            :max="179"
+            :step-from="90"
+            placeholder="90"
             :style="field"
-            :value="readField('head', 'angle') || '90'"
-            @input="writeField('head', 'angle', $event)"
+            :model-value="numberOr(part('head')['angle'])"
+            @update:model-value="writeField('head', 'angle', $event)"
+            @error="refuse('head', 'angle', 'Countersink angle', $event)"
+            @vue:unmounted="refused['angle'] = null"
           />
         </label>
         <label
@@ -239,14 +271,19 @@ const heading = {
           :style="label"
         >
           <span>Driver number (optional)</span>
-          <input
-            class="measure-number"
-            type="number"
-            step="1"
-            min="0"
+          <NumberField
+            label="Driver number (optional)"
+            size="sm"
+            commit="live"
+            nullable
+            :parse="plainNumber"
+            :min="0"
+            :step="1"
             :style="field"
-            :value="readField('drive', 'number')"
-            @input="writeField('drive', 'number', $event)"
+            :model-value="numberOr(part('drive')['number'])"
+            @update:model-value="writeField('drive', 'number', $event)"
+            @error="refuse('drive', 'number', 'Driver number', $event)"
+            @vue:unmounted="refused['number'] = null"
           />
         </label>
         <template v-if="p === 'thread'">
@@ -279,15 +316,19 @@ const heading = {
       <div v-if="KINDS[kind].fields.length" :style="heading">Lengths</div>
       <label v-for="[path, text] in KINDS[kind].fields" :key="path" :style="label">
         <span>{{ text }} ({{ inch ? "in" : "mm" }})</span>
-        <input
-          class="measure-number"
+        <NumberField
           :class="`scr-len-${path.replace('.', '-')}`"
-          type="number"
-          step="any"
-          min="0"
+          :label="`${text} (${inch ? 'in' : 'mm'})`"
+          size="sm"
+          commit="live"
+          limits="arrows"
+          nullable
+          :parse="plainNumber"
+          :min="0"
           :style="field"
-          :value="readPath(path)"
-          @input="writePath(path, $event)"
+          :model-value="numberOr(getPath(draft, path))"
+          @update:model-value="writePath(path, $event)"
+          @error="$event && writePath(path, null)"
         />
       </label>
 
@@ -300,18 +341,49 @@ const heading = {
       />
     </div>
 
-    <div>
-      <FastenerPreview :spec="previewSpec" :width="300" :height="220" @problem="previewProblem = $event" />
-      <ul
-        v-if="problems.length || previewProblem"
-        class="scr-problems"
-        :style="{ margin: '8px 0', paddingLeft: '16px', color: 'var(--warn, #ffab2e)', fontSize: '11px' }"
+    <div
+      :style="{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignContent: 'flex-start',
+        alignItems: 'flex-start',
+        columnGap: '16px',
+        minWidth: 0,
+        paddingBottom: stacked ? 'var(--prompt-clear, 0px)' : 0,
+      }"
+    >
+      <FastenerPreview
+        :spec="previewSpec"
+        :width="stacked ? 88 : 300"
+        :height="stacked ? 64 : 220"
+        @problem="previewProblem = $event"
+      />
+      <div :style="{ flex: '1 1 100%', minWidth: 0, order: stacked ? -1 : 0, marginBottom: stacked ? '8px' : 0 }">
+        <ul
+          v-if="problems.length || previewProblem"
+          class="scr-problems"
+          :style="{
+            margin: stacked ? 0 : '8px 0 0',
+            paddingLeft: '16px',
+            color: 'var(--warn, #ffab2e)',
+            fontSize: 'var(--fs-small, 12px)',
+          }"
+        >
+          <li v-for="msg in problems" :key="msg">{{ msg }}</li>
+          <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>
+        </ul>
+        <div v-else class="measure-hint">Everything needed to build it is there.</div>
+      </div>
+      <div
+        :style="{
+          display: 'flex',
+          flexWrap: 'wrap',
+          flex: stacked ? '1 1 140px' : '1 1 100%',
+          gap: '8px',
+          marginTop: stacked ? 0 : '10px',
+          minWidth: 0,
+        }"
       >
-        <li v-for="msg in problems" :key="msg">{{ msg }}</li>
-        <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>
-      </ul>
-      <div v-else class="measure-hint">Everything needed to build it is there.</div>
-      <div :style="{ display: 'flex', gap: '8px', marginTop: '10px' }">
         <button
           type="button"
           class="btn scr-save"

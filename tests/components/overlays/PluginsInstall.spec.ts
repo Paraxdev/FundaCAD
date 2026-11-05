@@ -26,6 +26,12 @@ const pickBundle = vi.fn();
 const installCandidate = vi.fn();
 const installedPlugins = vi.fn();
 const removePlugin = vi.fn();
+const confirmDanger = vi.fn();
+
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: (...a: unknown[]) => confirmDanger(...a),
+}));
 
 vi.mock("../../../src/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../../src/plugins")>();
@@ -43,6 +49,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
 const { errorNotice } = await import("../../../src/ui/errorNotice");
+const { logEntries } = await import("../../../src/ui/logStore");
 const { pluginEnabled, setPluginEnabled } = await import("../../../src/plugins/registry");
 const { definePluginSettings, storageKey } = await import("../../../src/plugins/settings");
 const { contribute, resetContributions } = await import("../../../src/plugins/contrib");
@@ -200,6 +207,19 @@ describe("reading a bundle from a link", () => {
     // its own is a message nobody can tell from a flat network.
     expect(errorNotice()?.message).toContain("gpu.direct");
   });
+
+  it("says it could not read the bundle in plain words when the failure is internal, and keeps the raw text in the console", async () => {
+    const raw = "TypeError: Cannot read properties of undefined (reading 'zip64')";
+    inspectUrl.mockRejectedValue(new Error(raw));
+    const w = await mounted();
+    await readUrl(w, "https://plugins.example.com/odd.zip");
+
+    const message = errorNotice()?.message ?? "";
+    expect(message).toContain("Could not read that plugin");
+    expect(message).not.toMatch(/TypeError|zip64|undefined/);
+    const entry = logEntries().find((e) => e.message === message);
+    expect(String(entry?.detail)).toContain("zip64");
+  });
 });
 
 describe("agreeing to it", () => {
@@ -348,7 +368,7 @@ describe("the list of what is installed", () => {
       expect(pluginEnabled("widgets")).toBe(false);
       await vi.waitFor(() =>
         expect(errorNotice()?.message).toBe(
-          "Could not switch widgets off, the geometry engine could not be told. Error: disk full",
+          "Could not switch widgets off, FundaCAD could not apply the change. disk full",
         ),
       );
       await flushPromises();
@@ -381,6 +401,7 @@ describe("the list of what is installed", () => {
     contribute("widgets", { settings: [{ key: "s", settings }] });
     installedPlugins.mockResolvedValue([record({})]);
     removePlugin.mockResolvedValue(undefined);
+    confirmDanger.mockResolvedValue(true);
     const w = await mounted();
     const row = () => w.get('[data-plugin="widgets"]');
     const remove = () =>
@@ -404,6 +425,61 @@ describe("the list of what is installed", () => {
       version: 0,
       values: {},
       forgotten: true,
+    });
+  });
+
+  describe("Remove asks first", () => {
+    const setup = async () => {
+      const settings = definePluginSettings("widgets", {
+        version: 1,
+        props: [{ key: "gap", type: "number", label: "Gap", default: 2 }],
+      });
+      contribute("widgets", { settings: [{ key: "s", settings }] });
+      installedPlugins.mockResolvedValue([record({}), record({ id: "bolts" })]);
+      removePlugin.mockResolvedValue(undefined);
+      const w = await mounted();
+      settings.set("gap", 7);
+      const remove = (id: string) =>
+        w
+          .get(`[data-plugin="${id}"]`)
+          .findAll("button")
+          .find((b) => b.text() === "Remove")!;
+      return { w, settings, remove };
+    };
+
+    it("Cancel leaves the plugin installed and its settings alone, a second row is asked on its own", async () => {
+      const { w, settings, remove } = await setup();
+      confirmDanger.mockResolvedValueOnce(false);
+      await remove("widgets").trigger("click");
+      await flush();
+      expect(removePlugin).not.toHaveBeenCalled();
+      expect(settings.get("gap")).toBe(7);
+      expect(w.find('[data-plugin="widgets"]').exists()).toBe(true);
+      expect(remove("widgets").attributes("disabled")).toBeUndefined();
+      confirmDanger.mockResolvedValueOnce(true);
+      await remove("bolts").trigger("click");
+      await flush();
+      expect(removePlugin.mock.calls).toEqual([["bolts"]]);
+    });
+
+    it("names the plugin and says its settings stay, then that they are forgotten once ticked", async () => {
+      const { w, remove } = await setup();
+      confirmDanger.mockResolvedValue(false);
+      await remove("widgets").trigger("click");
+      await w.get('[data-plugin="widgets"] .plug-forget input').trigger("change");
+      await remove("widgets").trigger("click");
+      await flush();
+      const [stay, gone] = confirmDanger.mock.calls.map((c) => c as [string, string, string]) as [
+        [string, string, string],
+        [string, string, string],
+      ];
+      expect([stay[0], stay[1]]).toEqual(["Remove widgets?", "Remove"]);
+      expect(stay[2]).toContain("files are deleted from this computer");
+      expect(stay[2]).toContain("settings stay");
+      expect(stay[2]).not.toContain("forgotten");
+      expect(gone[2]).toContain("files are deleted from this computer");
+      expect(gone[2]).toContain("forgotten");
+      expect(gone[2]).not.toContain("stay");
     });
   });
 });

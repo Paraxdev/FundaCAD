@@ -302,6 +302,13 @@ inline std::unique_ptr<PlanarRebuild> planar_rebuild_new() {
 // face. False when the face cannot be made.
 inline bool planar_rebuild_add(PlanarRebuild &r, rust::Slice<const double> plane,
                                rust::Slice<const double> points, rust::Slice<const uint32_t> loop_lens) {
+  size_t total = 0;
+  for (uint32_t n : loop_lens) {
+    total += n;
+  }
+  if (plane.size() < 6 || total > points.size() / 3) {
+    throw std::invalid_argument("the planar region's plane or loops do not match its points");
+  }
   std::vector<TopoDS_Wire> wires;
   size_t at = 0;
   for (uint32_t n : loop_lens) {

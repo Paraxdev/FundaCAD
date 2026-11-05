@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { FaceOffsetTool } from "../../src/features/faceOffsetTool";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
-import type { Feature, Selector } from "../../src/types";
+import type { Feature, Selector, Vec3 } from "../../src/types";
 import type { RoundFace } from "../../src/features/radialDrag";
 import type { FaceAxisReply } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
@@ -64,6 +64,7 @@ function fakeViewport(opts: { round?: RoundFace | null; thickness?: number | nul
     thicknessBehind: () => opts.thickness ?? null,
     faceTriangles: () => [],
     faceIdNear: () => 7,
+    faceIdToBodyId: (id: number) => (id === 7 ? "b1" : "b2"),
   };
   return { vp: vp as unknown as Viewport, scene, canvas };
 }
@@ -80,6 +81,7 @@ function fakeStore(axisReply: FaceAxisReply | null = null) {
   };
   const store = {
     nextId: () => "p1",
+    boundExpr: () => null,
     setPreview(feature: Feature | null, o?: { hold?: boolean }) {
       previews.push({ feature, hold: !!o?.hold });
       state.hasPreview = feature !== null;
@@ -288,6 +290,309 @@ describe("FaceOffsetTool", () => {
       anchor: [20, 0, -5],
       axis: [-1, 0, 0],
     });
+  });
+
+  it("Shell names the body of each selected face, so faces of another body than the active one are found", () => {
+    const { vp, canvas } = fakeViewport();
+    const far: Selector = { kind: "face", by: "nearest", point: [20, 0, -5] };
+    Object.assign(vp, {
+      selectedFacesForPressPull: () => ({
+        selectors: [FACE, far],
+        faceIds: [7, 8],
+        normal: new THREE.Vector3(0, 0, 1),
+        anchor: new THREE.Vector3(0, 0, 0),
+        bodyId: "b1",
+        round: null,
+      }),
+    });
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "shell" }>;
+    expect(sent.faces).toEqual([
+      { ...FACE, body: "b1" },
+      { ...far, body: "b2" },
+    ]);
+  });
+
+  it("Shell keeps each face on its body when a built preview renumbers the faces", () => {
+    const { vp, canvas } = fakeViewport();
+    const far: Selector = { kind: "face", by: "nearest", point: [20, 0, -5] };
+    Object.assign(vp, {
+      selectedFacesForPressPull: () => ({
+        selectors: [FACE, far],
+        faceIds: [7, 8],
+        normal: new THREE.Vector3(0, 0, 1),
+        anchor: new THREE.Vector3(0, 0, 0),
+        bodyId: "b1",
+        round: null,
+      }),
+    });
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    Object.assign(vp, { faceIdToBodyId: () => "b1" });
+    dragTo(t, canvas, 2, { release: false });
+    const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "shell" }>;
+    expect(sent.faces).toEqual([
+      { ...FACE, body: "b1" },
+      { ...far, body: "b2" },
+    ]);
+  });
+
+  const shellFaces = (s: ReturnType<typeof fakeStore>) =>
+    (s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "shell" }>).faces;
+  const ctrlClick = (canvas: HTMLCanvasElement) =>
+    canvas.dispatchEvent(
+      new PointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0, ctrlKey: true, bubbles: true }),
+    );
+  const FAR: Selector = { kind: "face", by: "nearest", point: [20, 0, -5] };
+  const pickFar = (bodyId: string | null) => () => ({
+    selector: FAR,
+    faceId: 8,
+    anchor: new THREE.Vector3(0, 0, 0),
+    normal: new THREE.Vector3(0, 0, 1),
+    bodyId,
+  });
+
+  it("a one-face Shell sends a bare selector with its body, in a one-body document too", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual({ ...FACE, body: "b1" });
+  });
+
+  it("a face whose owner is not known stays unbound, the engine then takes the active body", () => {
+    const { vp, canvas } = fakeViewport();
+    Object.assign(vp, { faceIdToBodyId: () => null });
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual(FACE);
+  });
+
+  it("Shell keeps a ctrl-clicked face on the body it was picked on, whatever the ids read later", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    Object.assign(vp, { pickFaceForPressPull: pickFar("b1"), faceIdToBodyId: () => "b9" });
+    ctrlClick(canvas);
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual([
+      { ...FACE, body: "b1" },
+      { ...FAR, body: "b1" },
+    ]);
+  });
+
+  it("Shell takes a ctrl-clicked face of another body, on that body", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("shell", () => {});
+    Object.assign(vp, { pickFaceForPressPull: pickFar("b2") });
+    ctrlClick(canvas);
+    dragTo(t, canvas, 2, { release: false });
+    expect(shellFaces(s)).toEqual([
+      { ...FACE, body: "b1" },
+      { ...FAR, body: "b2" },
+    ]);
+  });
+
+  describe("a Shell preview with its opening, over the model before it", () => {
+    // Body b1 owns face 7 (z = 0, x and y within 10, the picked face) and face 8 (x = 20, y within 5, z -10 to 0).
+    const BEFORE = {
+      mesh: {
+        positions: [-10, -10, 0, 10, -10, 0, 10, 10, 0, -10, 10, 0, 20, -5, -10, 20, 5, -10, 20, 5, 0, 20, -5, 0],
+        indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
+        faceIds: [7, 7, 8, 8],
+      },
+      bodies: [{ id: "b1", name: "b1", faceStart: 7, faceCount: 2 }],
+    };
+    const pickAt = (point: Vec3, faceId: number, bodyId: string | null) => () => ({
+      selector: { kind: "face", by: "nearest", point } as Selector,
+      faceId,
+      anchor: new THREE.Vector3(...point),
+      normal: new THREE.Vector3(0, 0, 1),
+      bodyId,
+    });
+    const shellAfterClick = (pick: ReturnType<typeof pickAt>, before: unknown = BEFORE) => {
+      const { vp, canvas } = fakeViewport();
+      const s = fakeStore();
+      Object.assign(s.store, { modelBeforePreview: before });
+      const t = new FaceOffsetTool(vp, s.store);
+      t.start("shell", () => {});
+      Object.assign(vp, { pickFaceForPressPull: pick });
+      ctrlClick(canvas);
+      dragTo(t, canvas, 2, { release: false });
+      return [shellFaces(s)].flat();
+    };
+    const FACE_B1 = { ...FACE, body: "b1" };
+
+    it("refuses a hit on a wall the model lacks", () => {
+      expect(shellAfterClick(pickAt([5, 3, -4], 11, "b1"))).toEqual([FACE_B1]);
+    });
+
+    // The viewport blurs a field on any press that reaches it, and the typed thickness must keep Enter.
+    const pressReachesViewport = (mode: "shell" | "offsetFace", pick: () => unknown) => {
+      const { vp, canvas } = fakeViewport();
+      const s = fakeStore();
+      Object.assign(s.store, { modelBeforePreview: BEFORE });
+      const t = new FaceOffsetTool(vp, s.store);
+      t.start(mode, () => {});
+      Object.assign(vp, { pickFaceForPressPull: pick });
+      dragTo(t, canvas, 2, { release: false });
+      const viewport = vi.fn();
+      canvas.addEventListener("pointerdown", viewport);
+      const press = new PointerEvent("pointerdown", {
+        clientX: 0,
+        clientY: 0,
+        button: 0,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      canvas.dispatchEvent(press);
+      return { reached: viewport.mock.calls.length, prevented: press.defaultPrevented };
+    };
+
+    it("consumes a refused press, off the model and on the picked face", () => {
+      const consumed = { reached: 0, prevented: true };
+      expect(pressReachesViewport("shell", pickAt([5, 3, -4], 11, "b1"))).toEqual(consumed);
+      expect(pressReachesViewport("shell", pickAt([2, 3, 0], 11, "b1"))).toEqual(consumed);
+    });
+
+    it("says why it refused a press", () => {
+      pressReachesViewport("shell", pickAt([5, 3, -4], 11, "b1"));
+      expect(usePromptStore().text).toBe("That's inside the opening, not a face to add · Esc");
+      pressReachesViewport("shell", pickAt([2, 3, 0], 11, "b1"));
+      expect(usePromptStore().text).toBe("That's inside the opening, not a face to add · Esc");
+    });
+
+    it("consumes an accepted press and leaves a miss to the viewport", () => {
+      expect(pressReachesViewport("shell", pickAt([20, 2, -6], 8, "b1"))).toEqual({ reached: 0, prevented: true });
+      expect(pressReachesViewport("shell", () => null)).toEqual({ reached: 1, prevented: false });
+    });
+
+    it("Offset Face still leaves a press on another body to the viewport", () => {
+      expect(pressReachesViewport("offsetFace", pickAt([5, 3, -4], 11, "b9"))).toEqual({
+        reached: 1,
+        prevented: false,
+      });
+    });
+
+    it("takes a hit on another face of the model", () => {
+      const point: Vec3 = [20, 2, -6];
+      expect(shellAfterClick(pickAt(point, 8, "b1"))).toEqual([
+        FACE_B1,
+        { kind: "face", by: "nearest", point, body: "b1" },
+      ]);
+    });
+
+    it("refuses a hit on the face already picked, the opening's rim", () => {
+      expect(shellAfterClick(pickAt([2, 3, 0], 11, "b1"))).toEqual([FACE_B1]);
+    });
+
+    it("holds the line at half the smallest thickness from the model", () => {
+      expect(shellAfterClick(pickAt([20.00049, 0, -5], 8, "b1"))).toHaveLength(2);
+      expect(shellAfterClick(pickAt([20.00051, 0, -5], 8, "b1"))).toEqual([FACE_B1]);
+    });
+
+    describe("over a model that can change under the open tool", () => {
+      // Face 7 is z = 0, face 8 is x = 20, face 9 is y = 30, the same walls whatever ids the model gives them.
+      const threeFaces = (ids: [number, number, number], faceStart = 7) => {
+        const passes = { count: 0 };
+        const faceIds = ids.flatMap((id) => [id, id]);
+        const mesh = {
+          positions: [
+            ...[-10, -10, 0, 10, -10, 0, 10, 10, 0, -10, 10, 0],
+            ...[20, -5, -10, 20, 5, -10, 20, 5, 0, 20, -5, 0],
+            ...[-5, 30, -10, 5, 30, -10, 5, 30, 0, -5, 30, 0],
+          ],
+          indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11],
+          get faceIds() {
+            passes.count++;
+            return faceIds;
+          },
+        };
+        return { model: { mesh, bodies: [{ id: "b1", name: "b1", faceStart, faceCount: 3 }] }, passes };
+      };
+      const openShell = (model: unknown) => {
+        const { vp, canvas } = fakeViewport();
+        const s = fakeStore();
+        Object.assign(s.store, { modelBeforePreview: model });
+        const t = new FaceOffsetTool(vp, s.store);
+        t.start("shell", () => {});
+        const press = (point: Vec3) => {
+          Object.assign(vp, { pickFaceForPressPull: pickAt(point, 11, "b1") });
+          ctrlClick(canvas);
+        };
+        return { press, s, faces: () => (dragTo(t, canvas, 2, { release: false }), [shellFaces(s)].flat().length) };
+      };
+
+      it("scans the model once for each press, however many faces are picked", () => {
+        const { model, passes } = threeFaces([7, 8, 9]);
+        const { press } = openShell(model);
+        const perPress = [[20, 0, -5] as Vec3, [0, 30, -5] as Vec3, [2, 3, 0] as Vec3, [20, 1, -5] as Vec3].map((p) => {
+          const from = passes.count;
+          press(p);
+          return passes.count - from;
+        });
+        // The first press also reads where the face the tool opened with lies.
+        expect(perPress).toEqual([2, 1, 1, 1]);
+      });
+
+      it("reads the picked faces again on the model that replaced it", () => {
+        const { press, s, faces } = openShell(threeFaces([7, 8, 9]).model);
+        press([20, 0, -5]);
+        Object.assign(s.store, { modelBeforePreview: threeFaces([14, 12, 13], 12).model });
+        press([20, 1, -5]);
+        press([2, 3, 0]);
+        expect(faces()).toBe(2);
+        press([0, 30, -5]);
+        expect(faces()).toBe(3);
+      });
+    });
+
+    it("adds as before when the model before is not known, or the body is not in it", () => {
+      const far = pickAt([5, 3, -4], 11, "b1");
+      expect(shellAfterClick(far, null)).toHaveLength(2);
+      expect(shellAfterClick(pickAt([5, 3, -4], 11, "b9"))).toHaveLength(2);
+      expect(shellAfterClick(pickAt([5, 3, -4], 11, null))).toHaveLength(2);
+    });
+
+    it.each(["offsetFace", "thicken"] as const)("%s never reads the model before the preview", (mode) => {
+      const { vp, canvas } = fakeViewport();
+      const s = fakeStore();
+      let reads = 0;
+      Object.defineProperty(s.store, "modelBeforePreview", {
+        get: () => (reads++, BEFORE),
+      });
+      const t = new FaceOffsetTool(vp, s.store);
+      t.start(mode, () => {});
+      Object.assign(vp, { pickFaceForPressPull: pickAt([5, 3, -4], 11, "b1") });
+      ctrlClick(canvas);
+      dragTo(t, canvas, 2, { release: false });
+      const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "thicken" }>;
+      expect(sent.faces).toHaveLength(2);
+      expect(reads).toBe(0);
+    });
+  });
+
+  it("Offset Face still ignores a ctrl-clicked face of another body, it moves one body's faces", () => {
+    const { vp, canvas } = fakeViewport();
+    const s = fakeStore();
+    const t = new FaceOffsetTool(vp, s.store);
+    t.start("offsetFace", () => {});
+    Object.assign(vp, { pickFaceForPressPull: pickFar("b2") });
+    ctrlClick(canvas);
+    dragTo(t, canvas, 2, { release: false });
+    const sent = s.previews.filter((p) => p.feature).at(-1)?.feature as Extract<Feature, { type: "offsetFace" }>;
+    expect(sent.faces).toEqual(FACE);
   });
 
   it("the handle rides on the face as it moves", () => {

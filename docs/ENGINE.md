@@ -329,7 +329,7 @@ the bundle:
   then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
-- Every beta also stays on as a normal release of its own, `v1.0.<run
+- The newest 20 betas also stay on as normal releases of their own, `v1.0.<run
   number>`, titled `FundaCAD 1.0.<run number> beta`, with the same installers
   and plugin bundles plus a `SHA256SUMS.txt`, but no `latest.json`, so a version can be linked and
   packaged after the rolling beta moves on while installed betas keep their
@@ -341,7 +341,8 @@ the bundle:
   HTTP 422, or an error that names `tag_name` or a workflow) is deleted with a
   warning that quotes GitHub's error, and the build has only the rolling beta.
   Any other failure, such as a failed create or a 5xx on publish, fails the
-  step, and a rerun of the job publishes the draft it keeps.
+  step, and a rerun of the job publishes the draft it keeps. Publishing a beta
+  deletes older versions with their tags, and a failed delete only warns.
   `tests/build/test_version_release.py` runs the step against a stub `gh`.
 
 ### 6.1 The updater endpoint
@@ -405,8 +406,10 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
 - The updater is on for every channel. Since run 386 `tauri.conf.json` carries
-  this project's own minisign pubkey (`57D9422..`), and `release` signs each
-  installer with `TAURI_SIGNING_PRIVATE_KEY` and writes a signed `latest.json`.
+  this project's own minisign pubkey (`57D9422..`). The `sign` job, which builds
+  nothing, signs each updater bundle with `TAURI_SIGNING_PRIVATE_KEY` from the
+  `updater-signing` environment when the `UPDATER_SIGNING` variable is `true`,
+  and `release` writes a signed `latest.json` from those signatures.
   It still withholds the feed, with a warning, if the pubkey is upstream's
   again or nothing was signed. Installs from before 1.0.386 carry upstream's
   key, so they cannot verify an update and need a new installer.
@@ -464,7 +467,9 @@ name the missing WebKitGTK, then start once that is installed), each ending
 in the same smoke. It is not in the release job's `needs`, so for now a
 broken `Depends` shows red without holding the beta. A second Linux step opens the AppImage window
 under Xvfb and builds the box through a server attached to it, which proves
-the page loaded; it does not gate anything yet.
+the page loaded; it does not gate anything yet. A third starts the AppImage in cage on a headless
+Wayland output and checks that it maps a native Wayland window, as the Flatpak job does, and does not gate
+anything either.
 
 The two never touch each other's release. Each has its own tag, its own
 concurrency group (`release-development`, `release-beta`) and its own feed,

@@ -246,6 +246,59 @@ pub(super) fn node_faces(
     Ok(out)
 }
 
+/// A wall of a body: how far a point of the surface is from the surface across the material behind it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThinWall {
+    pub thickness: f64,
+    /// The centre of a surface triangle on the wall and the face index it belongs to.
+    pub at: [f64; 3],
+    pub face: u32,
+}
+
+/// Two triangles face each other across a wall when the cosine of their normals is below minus this.
+const FACING: f64 = 0.7;
+/// The thinnest share of the surface area that does not set the wall, so a sliver or a sharp edge does not.
+const IGNORED_SHARE: f64 = 0.01;
+
+/// The thinnest wall of `surface` thinner than `reach`, or None when walls that thin cover too little of it.
+/// Each triangle measures from its centre to the nearest triangle behind it that faces the other way.
+pub fn thinnest_wall(
+    surface: &SurfaceMesh,
+    reach: f64,
+    tick: &mut dyn FnMut() -> bool,
+) -> Result<Option<ThinWall>, MeshError> {
+    let surf = Surface::new(surface)?;
+    let centre = |t: &Tri| scale(add(add(t.v[0], t.v[1]), t.v[2]), 1.0 / 3.0);
+    let mut total = 0.0;
+    let mut walls: Vec<(f64, f64, usize)> = Vec::new();
+    for (slot, tri) in surf.tris.iter().enumerate() {
+        if slot % TICK_EVERY == 0 && !tick() {
+            return Err(MeshError::Cancelled);
+        }
+        let area = 0.5 * norm(cross(sub(tri.v[1], tri.v[0]), sub(tri.v[2], tri.v[0])));
+        total += area;
+        let (c, n) = (centre(tri), tri.face);
+        let behind = |s: usize| {
+            let o = &surf.tris[s];
+            let oc = centre(o);
+            dot(o.face, n) < -FACING && dot(sub(oc, c), n) < 0.0 && dot(sub(c, oc), o.face) < 0.0
+        };
+        if let Some((_, q, _)) = surf.closest_where(c, reach * reach, &behind) {
+            walls.push((norm(sub(q, c)), area, slot));
+        }
+    }
+    walls.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.2.cmp(&b.2)));
+    let mut thin = 0.0;
+    for (thickness, area, slot) in walls {
+        thin += area;
+        if thin > IGNORED_SHARE * total {
+            let t = &surf.tris[slot];
+            return Ok(Some(ThinWall { thickness, at: centre(t), face: surface.face_ids[t.id as usize] }));
+        }
+    }
+    Ok(None)
+}
+
 /// The element size to stuff with: the one asked for, grown when the mesh would exceed
 /// `max_tets` or the lattice would not fit in memory.
 fn choose_size(surf: &Surface, opts: &MeshOptions) -> (f64, Coarsening) {

@@ -6,7 +6,7 @@ Materials change how a part looks on screen, not how it prints. Use them to tell
 
 ## Open the Render workspace
 
-Pick Render on the Model and Render switch in the title bar, or Materials under Inspect. Its panel has three tabs: Material, Environment and Camera. Materials can only be changed here.
+Pick Render on the Model and Render switch in the title bar, or Materials under Inspect. Its panel has three tabs: Material, Environment and Camera. Materials can only be changed here, or by [an AI assistant](../ai/sharing.md#ask-for-a-material).
 
 ## Put a material on a part
 

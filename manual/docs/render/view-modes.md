@@ -51,5 +51,5 @@ A model over 3 million triangles is not traced, and a note says so. Raise the li
 ## When Path traced pauses
 
 1. Section View, X-Ray, Wireframe or an open sketch pauses it, and it carries on when they close. The button's tooltip names the pause.
-2. While you orbit, move a body or edit, it shows the Realtime look and traces again once the view rests. Turn off Realtime while moving under Display to keep the traced picture up, noisy and restarting with every move.
+2. While you orbit, move a body or edit, it shows the Realtime look and traces again once the view rests. Turn off Realtime while moving under Display to keep the traced picture up, noisy and restarting with every move. On a slow graphics card the first picture after a move can look blocky. The screen only ever shows whole pictures, so the last one stays until the next is ready.
 3. After a minute in another mode it lets go of the graphics memory it used.

@@ -12,6 +12,10 @@ Most shapes already show their own sizes, such as a rectangle's width and height
 
 Double-click a number to change it later, right-click it to delete it. A dimension also takes a parameter name or an expression such as `width / 2`, which the [parameters page](../model/parameters.md) explains.
 
+## The Dimensions list
+
+The palette lists every dimension under **Dimensions**, one row each, such as "Width of Rectangle 1". It shows while **Show Dimensions** is on. Tab to a row, type a new value and press Enter, or Escape to put the old one back. A row takes the same units, parameter names and expressions as the number on the sketch. While a row has focus, its number is outlined on the sketch. A reference dimension is listed too, but read only.
+
 ## The Dimension menu
 
 Right-click while the Dimension tool runs for the choices a click cannot make.

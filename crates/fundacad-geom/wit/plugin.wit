@@ -120,7 +120,8 @@ interface kernel {
     // The angle between the normals of the two faces at an edge, none on a
     // seam or a free edge.
     dihedral-deg: func(edge: borrow<shape>) -> option<f64>;
-    // A face's triangulation at a linear deflection.
+    // A face's triangulation at a linear deflection, never finer than 1e-5 of
+    // the face's diagonal.
     triangulate: func(deflection: f64) -> result<mesh, string>;
     // A face's stored triangulation, none when it has not been meshed.
     triangulation: func() -> option<face-triangulation>;
@@ -170,7 +171,7 @@ interface kernel {
   // A planar face swept along a helix about the axis, `pitch` of climb per
   // turn over `degrees` of turning, its plane always containing the axis: a
   // revolve that climbs. A negative pitch climbs the other way. The face
-  // must sit off the axis.
+  // must sit off the axis. At most 1000 turns.
   helical-sweep: func(profile: borrow<shape>, origin: vec3, axis: vec3, degrees: f64, pitch: f64) -> result<shape, string>;
 
   // One boolean with its options, the base against every tool at once.
@@ -179,7 +180,8 @@ interface kernel {
   // The Delaunay triangulation of 2D points (x, y pairs) exactly as
   // scipy.spatial.Delaunay makes it: Qhull 2020.2 with "Qbb Qc Qz Q12 Qt",
   // three point indices per triangle, each counter-clockwise, in Qhull's facet
-  // order. A point Qhull finds coplanar is in no triangle.
+  // order. A point Qhull finds coplanar is in no triangle. At most 10000000
+  // points.
   delaunay-planar: func(points: list<f64>) -> result<list<u32>, string>;
 
   // The faces of a shape a face selector (JSON, one selector or a list, as a
@@ -218,6 +220,7 @@ interface kernel {
   gtransform: func(shape: borrow<shape>, matrix: list<f64>) -> result<shape, string>;
 
   // The content-addressed blob store: a shape by its id, and a shape stored.
+  // One call of the plugin stores at most 256 MiB per shape, 1 GiB in all.
   read-blob: func(id: string) -> result<shape, string>;
   write-blob: func(shape: borrow<shape>) -> result<string, string>;
 }

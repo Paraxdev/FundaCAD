@@ -29,3 +29,15 @@ Without it, FundaCAD reads the device itself and needs permission. If it finds t
 2. Install the device rule with `sudo sh packaging/setup-spacemouse.sh` from the source folder, then replug the mouse.
 
 The deb and rpm packages install the rule for you.
+
+### Flatpak
+
+The Flatpak reaches the mouse only through `spacenavd`, so start it as in step 1. When FundaCAD runs as a Flatpak, View, 3D Mouse Settings says so too.
+
+To read the device without `spacenavd`, give the Flatpak every device with this command, then restart FundaCAD. It needs the device rule from step 2 as well.
+
+```bash
+flatpak override --user --device=all dev.fundacad.app
+```
+
+To take that right back, run `flatpak override --user --reset dev.fundacad.app`.

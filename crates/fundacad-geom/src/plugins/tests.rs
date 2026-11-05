@@ -273,3 +273,271 @@ fn os_errors_read_as_python_prints_them() {
     assert_eq!(host::py_repr("C:\\x\\it's"), "\"C:\\\\x\\\\it's\"");
     assert_eq!(host::py_repr("a'b\"c"), "'a\\'b\"c'");
 }
+
+fn dir_names(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> =
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    v.sort();
+    v
+}
+
+fn append(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).map_err(|e| e.to_string())?;
+    f.write_all(bytes).map_err(|e| e.to_string())
+}
+
+#[test]
+fn a_failed_export_keeps_the_old_file_byte_for_byte() {
+    let root = temp_root("export-fail");
+    let target = root.join("project.3mf");
+    std::fs::write(&target, b"the old project").unwrap();
+
+    let r: Result<(), String> = k::replace_after(&target, |part| {
+        append(part, b"half of a new")?;
+        Err("cancelled".into())
+    });
+    assert_eq!(r, Err("cancelled".into()));
+    assert_eq!(std::fs::read(&target).unwrap(), b"the old project");
+    assert_eq!(dir_names(&root), ["project.3mf"]);
+
+    let r: Result<(), String> = k::replace_after(&target, |_| Ok(()));
+    assert!(r.unwrap_err().contains("wrote nothing"));
+    assert_eq!(std::fs::read(&target).unwrap(), b"the old project");
+    assert_eq!(dir_names(&root), ["project.3mf"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_finished_export_replaces_the_old_file_with_only_its_own_bytes() {
+    let root = temp_root("export-ok");
+    let target = root.join("project.3mf");
+    std::fs::write(&target, b"the old project").unwrap();
+    let r = k::replace_after(&target, |part| {
+        append(part, b"new ")?;
+        append(part, b"bytes")?;
+        Ok(7)
+    });
+    assert_eq!(r, Ok(7));
+    assert_eq!(std::fs::read(&target).unwrap(), b"new bytes");
+    assert_eq!(dir_names(&root), ["project.3mf"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_plugin_store_caps_its_linear_memories_in_total() {
+    use wasmtime::ResourceLimiter;
+    let over_half = MEMORY_LIMIT / 2 + (64 << 10);
+    let mut limits = host::store_limits();
+    assert!(limits.memory_growing(0, over_half, None).unwrap());
+    assert!(!matches!(limits.memory_growing(0, over_half, None), Ok(true)));
+}
+
+#[test]
+fn one_plugin_memory_still_grows_to_the_whole_cap() {
+    use wasmtime::ResourceLimiter;
+    let mut limits = host::store_limits();
+    assert!(limits.memory_growing(0, MEMORY_LIMIT / 2, None).unwrap());
+    assert!(limits.memory_growing(MEMORY_LIMIT / 2, MEMORY_LIMIT, None).unwrap());
+    assert!(!matches!(limits.memory_growing(MEMORY_LIMIT, MEMORY_LIMIT + (64 << 10), None), Ok(true)));
+}
+
+#[test]
+fn a_refused_memory_growth_gives_nothing_back_to_the_total() {
+    use wasmtime::ResourceLimiter;
+    let half = MEMORY_LIMIT / 2;
+    let mut limits = host::store_limits();
+    assert!(limits.memory_growing(0, half, None).unwrap());
+    assert!(!matches!(limits.memory_growing(half, MEMORY_LIMIT + (64 << 10), None), Ok(true)));
+    let _ = limits.memory_grow_failed(wasmtime::Error::msg("refused"));
+    assert!(!matches!(limits.memory_growing(0, half + (64 << 10), None), Ok(true)));
+}
+
+#[test]
+fn a_triangulation_finer_than_its_floor_meshes_at_the_floor() {
+    let triangles = |times_floor: f64| {
+        let ball = k::make_sphere((0.0, 0.0, 0.0), 10.0).unwrap();
+        let face = k::items(&ball, k::Items::Faces).remove(0);
+        let floor = k::MIN_RELATIVE_DEFLECTION * kernel::bbox_diagonal(&face);
+        k::triangulate(&face, times_floor * floor).unwrap().indices.len()
+    };
+    assert_eq!(triangles(0.25), triangles(1.0));
+    assert!(triangles(4.0) < triangles(1.0));
+}
+
+#[test]
+fn a_helical_sweep_past_its_turn_cap_is_refused() {
+    let tri = k::polygon_face(&[(5.0, 0.0, 0.0), (6.0, 0.0, 0.0), (5.0, 0.0, 1.0)]).unwrap();
+    for degrees in [360.0 * 1000.5, -360.0 * 1000.5] {
+        let r = kx::helical_sweep(&tri, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), degrees, 2.0);
+        assert!(r.as_ref().err().is_some_and(|e| e.contains("1000 turns")), "{:?}", r.err());
+    }
+}
+
+#[test]
+fn a_planar_delaunay_past_its_point_cap_is_refused() {
+    let points = vec![0.0; 2 * (kx::MAX_DELAUNAY_POINTS + 1)];
+    let e = kx::delaunay_2d(&points).unwrap_err();
+    assert!(e.contains("10000000 points"), "{e}");
+}
+
+#[test]
+fn a_plugin_store_refuses_shapes_past_its_live_cap_and_counts_drops() {
+    use host::kernel::HostShape as _;
+    let cube = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let mut st = host::State::bare();
+    st.shape_cap = 2;
+    let a = st.own(cube.clone()).unwrap();
+    let b = st.own(cube.clone()).unwrap();
+    let e = st.own(cube.clone()).unwrap_err().to_string();
+    assert!(e.contains("more than 2 shapes"), "{e}");
+    st.drop(a).unwrap();
+    host::take(&mut st, b).unwrap();
+    st.own(cube.clone()).unwrap();
+    st.own(cube).unwrap();
+}
+
+#[test]
+fn a_plugin_file_read_past_its_cap_is_refused() {
+    let root = temp_root("read-cap");
+    let path = root.join("big.bin");
+    std::fs::write(&path, [7u8; 10]).unwrap();
+    let path = path.to_string_lossy().into_owned();
+    assert_eq!(host::read_file(&path, 10).unwrap(), vec![7u8; 10]);
+    let e = host::read_file(&path, 9).unwrap_err();
+    assert!(e.contains("larger than"), "{e}");
+}
+
+#[test]
+fn a_plugin_call_stores_shapes_only_within_its_blob_budget() {
+    let root = temp_root("blob-budget");
+    let small = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let other = k::make_box((0.0, 0.0, 0.0), (2.0, 1.0, 1.0)).unwrap();
+    let len = opencascade::xcaf::to_bin_v3(&small).unwrap().len();
+    let stored = || std::fs::read_dir(&root).unwrap().count();
+
+    let mut b = k::BlobBudget::default();
+    b.total = len + len / 2;
+    k::write_blob_capped(&small, &root, &mut b).unwrap();
+    let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
+    assert!(e.contains("in total"), "{e}");
+    assert_eq!(stored(), 1);
+
+    let mut b = k::BlobBudget::default();
+    b.per_blob = len - 1;
+    let e = k::write_blob_capped(&other, &root, &mut b).unwrap_err();
+    assert!(e.contains("for one stored shape"), "{e}");
+
+    assert_eq!(stored(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_plugin_call_may_store_any_number_of_shapes_within_its_bytes() {
+    let root = temp_root("blob-many");
+    let small = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let mut b = k::BlobBudget::default();
+    let stored: Result<Vec<String>, String> = (0..1100).map(|_| k::write_blob_capped(&small, &root, &mut b)).collect();
+    assert_eq!(stored.map(|d| d.len()), Ok(1100));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_failed_blob_store_leaves_the_budget_unspent() {
+    let root = temp_root("blob-unspent");
+    let not_a_dir = root.join("file");
+    std::fs::write(&not_a_dir, b"x").unwrap();
+    let small = k::make_box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)).unwrap();
+    let len = opencascade::xcaf::to_bin_v3(&small).unwrap().len();
+
+    let mut b = k::BlobBudget::default();
+    b.total = len + len / 2;
+    assert!(k::write_blob_capped(&small, &not_a_dir, &mut b).is_err());
+    assert!(k::write_blob_capped(&small, &root.join("store"), &mut b).is_ok());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn broken_reason(root: &Path, rel: &str) -> String {
+    put_manifest(root, "P", json!({"id": "P", "version": "1.0.0", MANIFEST_WASM: rel, "featureTypes": ["t"]}));
+    let mut reg = Registry::default();
+    reg.replace(discover_in(&checkout(root)));
+    match compile(&reg.entries[0].declared) {
+        Loaded::Broken(why) => why,
+        _ => panic!("{rel:?} loaded"),
+    }
+}
+
+#[test]
+fn a_component_named_outside_its_bundle_is_not_loaded_or_hashed() {
+    let root = temp_root("wasm-outside");
+    std::fs::write(root.join("outside.wasm"), b"not in the bundle").unwrap();
+    let abs = root.join("outside.wasm").to_string_lossy().replace('\\', "/");
+    for rel in ["../outside.wasm", "./../outside.wasm", abs.as_str()] {
+        let why = broken_reason(&root, rel);
+        assert!(why.contains("outside the installed copy"), "{rel:?}: {why}");
+        let mut reg = Registry::default();
+        reg.replace(discover_in(&checkout(&root)));
+        let with = identity(&mut reg.entries[0]);
+        std::fs::write(root.join("outside.wasm"), b"other bytes").unwrap();
+        let mut reg = Registry::default();
+        reg.replace(discover_in(&checkout(&root)));
+        assert_eq!(with, identity(&mut reg.entries[0]), "{rel:?}");
+    }
+    std::fs::write(root.join("P").join("p.wasm"), b"in the bundle").unwrap();
+    let why = broken_reason(&root, "p.wasm");
+    assert!(!why.contains("outside the installed copy"), "{why}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn put_installed(root: &Path, id: &str, official: bool, man: Value) {
+    put_manifest(root, id, man);
+    let record = json!({"id": id, "official": official, "consented": {"grants": []}});
+    std::fs::write(root.join(id).join(RECORD), record.to_string()).unwrap();
+}
+
+#[test]
+fn a_name_belongs_to_one_plugin_and_an_official_one_owns_it_first() {
+    let root = temp_root("owners");
+    std::fs::write(root.join(DISABLED), "[]").unwrap();
+    put_installed(&root, "Acme.Tools", false, json!({"id": "Acme.Tools", "featureTypes": ["ribbon", "acme"]}));
+    put_installed(&root, "Zed.Official", true, json!({"id": "Zed.Official", "featureTypes": ["ribbon"]}));
+    let roots = [PluginRoot { dir: root.clone(), records: true }];
+    assert_eq!(discovered_ids(&roots), ["Zed.Official", "Acme.Tools"], "mesh passes look in this order too");
+    let mut reg = Registry::default();
+    reg.replace(discover_in(&roots));
+    assert!(
+        matches!(component_for(&mut reg, Claim::Feature, "ribbon"), Err(Missing::Broken(id, _)) if id == "Zed.Official")
+    );
+    let m = component_for(&mut reg, Claim::Feature, "acme").err().expect("not loaded");
+    assert_eq!(
+        missing(Claim::Feature, "acme", m),
+        "this needs the \"Acme.Tools\" plugin, which is installed but would not load: its feature type \"ribbon\" is already provided by the \"Zed.Official\" plugin"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_second_plugin_naming_an_owned_exporter_or_shape_is_not_loaded() {
+    let root = temp_root("owners-checkout");
+    put_manifest(&root, "A.One", json!({"id": "A.One", "exporters": ["x"], "shapeGenerators": ["g"]}));
+    put_manifest(&root, "B.Two", json!({"id": "B.Two", "exporters": ["y"]}));
+    put_manifest(&root, "C.Three", json!({"id": "C.Three", "exporters": ["z"], "shapeGenerators": ["g"]}));
+    put_manifest(&root, "D.Four", json!({"id": "D.Four", "exporters": ["w", "x"]}));
+    let mut reg = Registry::default();
+    reg.replace(discover_in(&checkout(&root)));
+    let why = |reg: &mut Registry, claim, name: &str| match component_for(reg, claim, name) {
+        Err(Missing::Broken(id, why)) => format!("{id}: {why}"),
+        _ => panic!("{name} resolved"),
+    };
+    assert_eq!(why(&mut reg, Claim::Exporter, "x"), format!("A.One: {NO_COMPONENT}"));
+    assert_eq!(why(&mut reg, Claim::Exporter, "y"), format!("B.Two: {NO_COMPONENT}"));
+    assert_eq!(
+        why(&mut reg, Claim::Exporter, "z"),
+        "C.Three: its shape generator \"g\" is already provided by the \"A.One\" plugin"
+    );
+    assert_eq!(
+        why(&mut reg, Claim::Exporter, "w"),
+        "D.Four: its exporter \"x\" is already provided by the \"A.One\" plugin"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

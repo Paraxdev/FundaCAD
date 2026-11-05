@@ -56,8 +56,38 @@ fn count_stream(r: impl Read, needle: &[u8], limit: u64, max_bytes: Option<u64>)
     count
 }
 
-/// The count the file itself states, read before any geometry is built.
-pub fn peek_triangle_count(path: &Path, fmt: &str) -> Option<u64> {
+/// A 3MF at the scan triangle cap writes about 80 bytes of XML a triangle, vertices included.
+const MAX_3MF_UNPACKED_BYTES: u64 = 1 << 30;
+
+fn threemf_unpacks_too_far() -> String {
+    format!("could not read the 3MF file: it unpacks past {} MiB", MAX_3MF_UNPACKED_BYTES / (1024 * 1024))
+}
+
+/// The unpacked bytes each `.model` part of a 3MF declares.
+fn threemf_part_sizes(z: &mut zip::ZipArchive<std::fs::File>, parts: &[String]) -> Option<Vec<u64>> {
+    parts.iter().map(|n| z.by_name(n).ok().map(|f| f.size())).collect()
+}
+
+/// The count the file itself states, read before any geometry is built, or a
+/// refusal when the parts of a 3MF declare more than an import unpacks.
+pub fn peek_triangle_count(path: &Path, fmt: &str) -> Result<Option<u64>, String> {
+    if fmt == "3mf" {
+        let declared = std::fs::File::open(path)
+            .ok()
+            .and_then(|f| zip::ZipArchive::new(f).ok())
+            .and_then(|mut z| {
+                let parts = model_parts(&z).ok()?;
+                threemf_part_sizes(&mut z, &parts)
+            })
+            .map_or(0, |s| s.iter().fold(0u64, |a, &b| a.saturating_add(b)));
+        if declared > MAX_3MF_UNPACKED_BYTES {
+            return Err(threemf_unpacks_too_far());
+        }
+    }
+    Ok(declared_triangles(path, fmt))
+}
+
+fn declared_triangles(path: &Path, fmt: &str) -> Option<u64> {
     let cap = MAX_IMPORT_TRIANGLES;
     match fmt {
         "stl" => {
@@ -76,11 +106,8 @@ pub fn peek_triangle_count(path: &Path, fmt: &str) -> Option<u64> {
             if parts.is_empty() {
                 return None;
             }
-            let mut sizes = Vec::new();
-            for n in &parts {
-                sizes.push(z.by_name(n).ok()?.size());
-            }
-            if sizes.iter().sum::<u64>() > MAX_IMPORT_SCAN_BYTES {
+            let sizes = threemf_part_sizes(&mut z, &parts)?;
+            if sizes.iter().fold(0u64, |a, &b| a.saturating_add(b)) > MAX_IMPORT_SCAN_BYTES {
                 return Some(cap + 1);
             }
             let mut total = 0;
@@ -206,6 +233,31 @@ fn model_parts<R: std::io::Read + std::io::Seek>(z: &zip::ZipArchive<R>) -> zip:
         .collect()
 }
 
+const MAX_3MF_TEXT_RUN: usize = 16 << 20;
+
+/// A part read as it unpacks, counting its bytes and refusing a text or tag run
+/// longer than `MAX_3MF_TEXT_RUN`, the most the XML reader ever buffers at once.
+struct ModelPart<R> {
+    inner: R,
+    read: u64,
+    run: usize,
+}
+
+impl<R: Read> Read for ModelPart<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.read += n as u64;
+        for &b in &buf[..n] {
+            self.run = if b == b'<' || b == b'>' { 0 } else { self.run + 1 };
+        }
+        if self.run > MAX_3MF_TEXT_RUN {
+            let why = format!("it holds a run of text longer than {} MiB", MAX_3MF_TEXT_RUN >> 20);
+            return Err(std::io::Error::other(why));
+        }
+        Ok(n)
+    }
+}
+
 /// Every mesh object of every model part, root part first.
 fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     use quick_xml::events::Event;
@@ -214,13 +266,24 @@ fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     let mut parts = model_parts(&z).map_err(|e| bad(&e))?;
     parts.sort_by_key(|n| n != "3D/3dmodel.model");
     let mut out = Vec::new();
+    let mut budget = MAX_3MF_UNPACKED_BYTES;
     for name in parts {
-        let mut xml = String::new();
-        z.by_name(&name).map_err(|e| bad(&e))?.read_to_string(&mut xml).map_err(|e| bad(&e))?;
-        let mut reader = quick_xml::Reader::from_str(&xml);
+        let part = z.by_name(&name).map_err(|e| bad(&e))?;
+        let part = ModelPart { inner: part.take(budget + 1), read: 0, run: 0 };
+        let mut reader = quick_xml::Reader::from_reader(std::io::BufReader::new(part));
+        let mut buf = Vec::new();
         let mut current: Option<Triangles> = None;
         loop {
-            match reader.read_event().map_err(|e| bad(&e))? {
+            buf.clear();
+            let event = reader.read_event_into(&mut buf);
+            if reader.get_ref().get_ref().read > budget {
+                return Err(threemf_unpacks_too_far());
+            }
+            let event = event.map_err(|e| match e {
+                quick_xml::Error::Io(io) => bad(&io),
+                e => bad(&e),
+            })?;
+            match event {
                 Event::Start(e) | Event::Empty(e) => {
                     let local = e.local_name();
                     let attr = |key: &[u8]| {
@@ -259,6 +322,7 @@ fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
                 _ => {}
             }
         }
+        budget -= reader.get_ref().get_ref().read;
     }
     Ok(out)
 }
@@ -282,6 +346,10 @@ pub fn obj_triangles(text: &str) -> Result<Triangles, String> {
                 }
                 let i: i64 = s.parse().map_err(|_| format!("invalid literal for int() with base 10: '{s}'"))?;
                 idx.push(if i > 0 { i - 1 } else { verts.len() as i64 + i });
+            }
+            let fan = idx.len().saturating_sub(2) as u64;
+            if (tris.len() / 3) as u64 + fan > super::scan::MAX_SCAN_TRIANGLES {
+                return Err(super::scan::too_dense_for_a_scan((tris.len() / 3) as u64 + fan));
             }
             for k in 1..idx.len().saturating_sub(1) {
                 tris.extend([idx[0], idx[k], idx[k + 1]]);

@@ -80,7 +80,7 @@ impl Tracer {
         }
         self.env = EnvMap::new(&self.device, &self.queue, e);
         self.write_emitters();
-        self.reset();
+        self.reset_untimed();
     }
 
     /// The key of the environment held, for a page to tell whether to send it.

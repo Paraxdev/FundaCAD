@@ -31,7 +31,7 @@ import { featureOwnersOfFaces, patternStart, type PatternCandidates } from "./pa
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
-import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
+import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
 import { confirmEdgeCount, edgeGate } from "./edgeCountGate";
@@ -55,7 +55,7 @@ import { asFeature } from "../types";
 import { dismissToast, toast } from "../ui/toast";
 import { resolveRealEntities } from "../sketch/resolve";
 import { defaultReach, gapReport, type GapReport } from "../sketch/looseEnds";
-import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
+import { edgeMatchSelectorFrom, edgeSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
 import { upgradeFace } from "./holeFace";
@@ -164,6 +164,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function pickPlaneInteractive(
     promptText: string,
     onPick: (spec: PlaneSpec, face: FacePlanePick | null, datumId: string | null) => void,
+    opts: { roundFace?: boolean } = {},
   ) {
     if (toolBusy()) return;
     setPlanePick(true);
@@ -210,8 +211,27 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
+        if (pick.kind === "face" && opts.roundFace) {
+          const round = facePlaneOfRow(viewport, pick.faceId);
+          if (!round) return "That face is not round, pick a round face for its axis";
+          if (round.kind !== "tangent") return "That face is flat, pick a round face for its axis";
+          cleanup();
+          deferPick(viewport.domElement, () => onPick(round.def, round, null));
+          return true;
+        }
+        if (pick.kind === "face") {
+          const flat = viewport.faceSketchPlane(pick.faceId);
+          if (!flat) return CURVED_FACE_ROW;
+          const { selector, at } = flat.anchor;
+          cleanup();
+          deferPick(viewport.domElement, () =>
+            onPick(flat.plane, { def: flat.plane, kind: "planar", selector, faceId: flat.faceId, at }, null),
+          );
+          return true;
+        }
         const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
-        if (!spec) return treePickRefusal(pick, "a plane, or a face picked in the view");
+        if (!spec || opts.roundFace)
+          return treePickRefusal(pick, opts.roundFace ? "a round face" : "a plane or a face");
         cleanup();
         deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
         return true;
@@ -567,7 +587,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Axis of a round face: the hole or shaft axis, followed when it moves.
   function createAxisFromCylinder() {
-    pickPlaneInteractive("Select a round face for its axis", (_spec, face) => axisFromRoundFace(face));
+    pickPlaneInteractive("Select a round face for its axis", (_spec, face) => axisFromRoundFace(face), {
+      roundFace: true,
+    });
   }
 
   function axisFromRoundFace(face: FacePlanePick | null) {
@@ -671,7 +693,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a point");
+        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a datum point row, or a point in the view");
         take(pick.point, { datum: pick.id });
         return true;
       },
@@ -1192,7 +1214,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis");
+        if (pick.kind === "edge") {
+          const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+          const line = axisFromEdge(pts);
+          if (!line) return "An axis has to be a straight edge, pick a line";
+          const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
+          cleanup();
+          requestAnimationFrame(() => onPick(line, sel));
+          return true;
+        }
+        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis or a straight edge");
         cleanup();
         requestAnimationFrame(() => onPick({ origin: pick.origin, dir: pick.dir }));
         return true;
@@ -1341,7 +1372,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"), cancel);
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+      cleanup();
+      const n = viewport.planarFace(pick.faceId)?.normal;
+      const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
+      const sel = viewport.faceSelectorOf(pick.faceId);
+      requestAnimationFrame(() => onPick(sel, normal));
+      return true;
+    }, cancel);
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -1391,7 +1430,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"), cancel);
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+      const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+      const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
+      if (!sel) return treePickRefusal(pick, "an edge");
+      cleanup();
+      requestAnimationFrame(() => onPick(sel, pts));
+      return true;
+    }, cancel);
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -1589,7 +1636,22 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         resolve(null);
       };
       const releaseTree = awaitTreePick(
-        (pick) => treePickRefusal(pick, "a face or an edge, pick it in the view"),
+        (pick) => {
+          let body: string | undefined;
+          let sel: Selector | undefined;
+          if (pick.kind === "face") {
+            body = viewport.faceIdToBodyId(pick.faceId) ?? undefined;
+            sel = viewport.faceSelectorOf(pick.faceId);
+          } else if (pick.kind === "edge") {
+            body = pick.edge.body;
+            sel = edgeSelectorFrom({ points: pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3), body });
+          } else return treePickRefusal(pick, "a face or an edge");
+          if (!body || !sel) return `That ${pick.kind} is on no part, pick a face or an edge on a part`;
+          if (body === exclude) return "That is on the part already picked, pick a face or an edge on the other part";
+          cleanup();
+          requestAnimationFrame(() => resolve({ body, sel: { ...sel, body } as Selector }));
+          return true;
+        },
         () => {
           cleanup();
           resolve(null);

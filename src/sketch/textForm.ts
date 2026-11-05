@@ -3,6 +3,9 @@
 
 import { fieldError, fieldNumber } from "../ui/measure";
 
+// The live preview entity sits on the active list so it repaints normally, but is never committed.
+export const TEXT_PREVIEW_ID = "__textpreview__";
+
 export interface TextValues {
   text: string;
   font?: string;
@@ -68,13 +71,15 @@ export function toTextValues(f: TextForm): TextValues {
 }
 
 /** The 300px by ~240px panel is anchored to the click, so near the right or bottom edge it is pulled back inside the
- *  window, with an 8px minimum inset on the other two edges. */
+ *  window, with an 8px minimum inset on the other two edges. `screen` and `win` are in window pixels, the result in
+ *  the CSS pixels of the root zoom `z` (pageZoom). */
 export function textPanelPos(
   screen: { x: number; y: number },
   win: { innerWidth: number; innerHeight: number },
+  z = 1,
 ): { left: number; top: number } {
   return {
-    left: Math.max(8, Math.min(screen.x, win.innerWidth - 316)),
-    top: Math.max(8, Math.min(screen.y, win.innerHeight - 240)),
+    left: Math.max(8, Math.min(screen.x / z, win.innerWidth / z - 316)),
+    top: Math.max(8, Math.min(screen.y / z, win.innerHeight / z - 240)),
   };
 }

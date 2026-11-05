@@ -6,18 +6,25 @@ use std::path::{Path, PathBuf};
 /// Also read by `crates/fundacad-mcp/src/app_session.rs`, which resolves the same directory from the bundle identifier.
 pub const FILE_NAME: &str = "session.json";
 
-/// Serialised by hand, four fields are not worth a serde_json dependency. `pid` is for a human telling two windows
+/// Serialised by hand, a few fields are not worth a serde_json dependency. `pid` is for a human telling two windows
 /// apart; no liveness is stored, as a pid can be recycled and the reader's handshake answers that anyway.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SessionInfo {
     pub port: u16,
     pub token: String,
     pub pid: u32,
+    /// Where the engine may write an export, so an assistant attached to it stages its exports there. Left out when
+    /// the path is not UTF-8, as JSON cannot carry it; that assistant then writes beside its path as before.
+    pub export_dir: Option<PathBuf>,
 }
 
 /// Always escaped, though the token is hex today: a quote in a token would silently parse into a different token.
 pub fn to_json(info: &SessionInfo) -> String {
-    format!("{{\"port\":{},\"token\":{},\"pid\":{}}}\n", info.port, json_string(&info.token), info.pid)
+    let export_dir = match info.export_dir.as_deref().and_then(Path::to_str) {
+        Some(dir) => format!(",\"exportDir\":{}", json_string(dir)),
+        None => String::new(),
+    };
+    format!("{{\"port\":{},\"token\":{},\"pid\":{}{export_dir}}}\n", info.port, json_string(&info.token), info.pid)
 }
 
 /// A JSON string literal. Minimal and complete for what goes in this file:
@@ -42,28 +49,35 @@ fn json_string(s: &str) -> String {
 
 /// Written to a temporary name and renamed, so a reader never sees a half written file.
 pub fn write_into(dir: &Path, info: &SessionInfo) -> std::io::Result<PathBuf> {
+    use std::io::Write;
     std::fs::create_dir_all(dir)?;
     let path = dir.join(FILE_NAME);
     let tmp = dir.join(format!("{FILE_NAME}.{}.tmp", info.pid));
-    std::fs::write(&tmp, to_json(info))?;
-    restrict(&tmp)?;
+    // A leftover temporary may be open elsewhere or carry a wider mode, so the token always goes into a fresh file.
+    match std::fs::remove_file(&tmp) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    let mut file = create_private(&tmp)?;
+    file.write_all(to_json(info).as_bytes())?;
+    drop(file);
     std::fs::rename(&tmp, &path)?;
     Ok(path)
 }
 
-/// Owner only, so a reader runs as this user and could read the documents anyway. Unix has no default worth relying
-/// on, a permissive umask would otherwise publish the token to every account on the machine.
+/// Owner only from the moment it exists, so a reader runs as this user and could read the documents anyway. Unix has
+/// no default worth relying on, a permissive umask would otherwise publish the token to every account on the machine.
 #[cfg(unix)]
-fn restrict(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)
 }
 
 /// Windows: the file inherits the per user AppData ACL, which already excludes other accounts, and an explicit ACL edit
 /// would only be a way to get it wrong.
 #[cfg(not(unix))]
-fn restrict(_path: &Path) -> std::io::Result<()> {
-    Ok(())
+fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::OpenOptions::new().write(true).create_new(true).open(path)
 }
 
 /// Best effort, and a kill skips it, so a leftover is ordinary: a reader dials and treats a refusal as no app.

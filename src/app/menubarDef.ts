@@ -11,10 +11,11 @@ import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
-import { allCommands } from "../ui/commands";
+import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
+import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
 import type { Engine } from "./engine";
-import { pickedFeatureIds, toggleSuppressRows } from "./featureRows";
+import { deleteRows, pickedFeatureIds, toggleSuppressRows } from "./featureRows";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
 
@@ -55,6 +56,14 @@ function viewItems(e: Engine): MenuDef["items"] {
   return [...view, { separator: true, label: "" }, ...analysis];
 }
 
+// Left enabled in a sketch: refusing in words says why, a greyed item says nothing.
+function geometryItems(e: Engine): MenuDef["items"] {
+  const all = allCommands();
+  return [...GEOMETRY_COMMANDS]
+    .map((id) => all.find((c) => c.id === id)!)
+    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+}
+
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
 export function buildMenubar(e: Engine): MenuDef[] {
   return withContributions([
@@ -78,15 +87,17 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: "Edit",
       items: [
         {
-          label: "Undo",
+          label: () => stepMenuText("Undo", stepLabelFor(e, "undo")),
+          refName: "Undo",
           shortcut: "Ctrl+Z",
-          disabled: () => !(e.sketch.active ? e.sketch.canUndoSketch : e.store.canUndo),
+          disabled: () => !canStep(e, "undo"),
           onClick: () => e.doUndo(),
         },
         {
-          label: "Redo",
+          label: () => stepMenuText("Redo", stepLabelFor(e, "redo")),
+          refName: "Redo",
           shortcut: "Ctrl+Y",
-          disabled: () => !(e.sketch.active ? e.sketch.canRedoSketch : e.store.canRedo),
+          disabled: () => !canStep(e, "redo"),
           onClick: () => e.doRedo(),
         },
         { separator: true, label: "" },
@@ -97,10 +108,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           disabled: () => !e.selectedFeature && e.viewport.getSelectedFaceIds().length === 0,
           onClick: () => {
             if (e.deleteSelectedFace()) return;
-            if (e.selectedFeature) {
-              e.store.removeFeatures(pickedFeatureIds(e));
-              e.selectFeature(null);
-            }
+            if (e.selectedFeature) deleteRows(e, pickedFeatureIds(e));
           },
         },
         {
@@ -111,6 +119,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.
         { label: "Materials", onClick: () => setWorkspace("render") },
+        // Before the geometry rows, so it stays in view when a short window scrolls the menu: it holds Accessibility.
         {
           label: "Preferences…",
           shortcut: "Ctrl+,",
@@ -118,6 +127,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
             useDialogStore().openPreferences();
           },
         },
+        { separator: true, label: "" },
+        ...geometryItems(e),
       ],
     },
     { label: "View", items: viewItems(e) },

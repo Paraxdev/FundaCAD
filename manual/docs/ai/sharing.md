@@ -17,3 +17,9 @@ The Status row below it says whether an assistant is connected. While one is, th
 Give the assistant real dimensions, or a STEP file of what the part must fit. Ask it to use named parameters and to save a `.funda` file.
 
 It saves and reads files in your folders, with the limits on [Connect an AI assistant](connect.md#where-it-may-open-and-save-files).
+
+## Ask for a material
+
+An assistant can list, make, change and delete the [materials](../render/materials.md) of your document, from a description such as blue glass or red car paint.
+
+It can put a material on bodies and faces or take it off again, and you see the result in the Render workspace, in your open document or in a file it saved.

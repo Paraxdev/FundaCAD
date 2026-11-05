@@ -907,3 +907,22 @@ describe("resolveDim, roundPref override", () => {
     expect(p.make(20)).toEqual({ type: "p2pDistance", e1: "a", p1: 0, e2: "b", p2: 0, value: 20 });
   });
 });
+
+describe("value field names", () => {
+  it("names each field by a word for a screen reader and keeps its letter on screen", () => {
+    const slanted = line("l", 12, -7, 31, 4);
+    const fieldsOf = (r: ReturnType<typeof resolveDim>) => plan(r).fields;
+    expect(fieldsOf(resolveDim([T.entity(slanted)]))).toEqual([
+      { name: "length", label: "Length", tag: "L", kind: "length" },
+    ]);
+    expect(fieldsOf(resolveDim([T.entity(circle("c1", 14, 9, 5)), T.entity(circle("c2", 41, -6, 3))]))).toEqual([
+      { name: "distance", label: "Distance", tag: "D", kind: "length" },
+    ]);
+    expect(fieldsOf(resolveDim([T.entity(arc("a"))]))).toEqual([
+      { name: "radius", label: "Radius", tag: "R", kind: "length" },
+    ]);
+    expect(fieldsOf(resolveDim([T.entity(circle("c", 17, -3, 6))]))).toEqual([
+      { name: "diameter", label: "Diameter", icon: "diameter", kind: "length" },
+    ]);
+  });
+});

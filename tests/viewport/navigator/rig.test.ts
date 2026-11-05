@@ -133,20 +133,22 @@ describe("navigator rig input", () => {
     expect(rig.viewScale()).toBeLessThan(s0);
   });
 
-  it("ctrl+wheel in small steps is a trackpad pinch; a Ctrl held mouse notch zooms like a notch", () => {
+  it("ctrl+wheel in small steps is a trackpad pinch and zooms; a Ctrl held mouse notch pans without zooming", () => {
     const wheel = (deltaY: number, ctrlKey: boolean) => {
       const { rig } = rigWithBox();
       // At the centre, with the target already on the model there, so the scale
       // change is the zoom alone.
       const e = { clientX: W / 2, clientY: H / 2, deltaY, deltaX: 0, deltaMode: 0, ctrlKey, preventDefault() {} };
+      rig.setProjectionMode("ortho");
       rig.navigator.reseatAndContain();
-      const s1 = rig.viewScale();
+      const s1 = rig.navigator.pose.scale;
       rig.wheel(e as unknown as WheelEvent);
       steady(rig);
-      return rig.viewScale() / s1;
+      return rig.navigator.pose.scale / s1;
     };
-    expect(wheel(-100, true)).toBeCloseTo(wheel(-100, false), 9);
-    expect(wheel(-5, true)).toBeCloseTo(Math.exp(-0.05), 9);
+    expect(wheel(-100, true)).toBeCloseTo(1, 9);
+    expect(wheel(-100, false)).toBeLessThan(0.9);
+    expect(wheel(-5.5, true)).toBeCloseTo(Math.exp(-0.055), 9);
   });
 
   it("the three.js camera carries the pose on screen right after a change", () => {

@@ -31,6 +31,16 @@ export const FIRST_SAMPLE_TIMEOUT_MS = 10_000;
 
 /** Out of Path traced this long frees the WebGPU device and the mirrored scene. */
 export const IDLE_DISPOSE_MS = 60_000;
+/** Realtime and the trace can differ over the whole view, so each swap is half a flash (WCAG 2.3.1 counts them a
+ *  second). The trace comes back no sooner than this after it gave way, over a second, so however a move stops and
+ *  goes, the swap away and the swap back never fall in the same second. */
+export const TRACE_RETURN_MS = 1100;
+/** A return that the next move drops within this long is a flash pair of its own: a move rhythm is under way. */
+const RHYTHM_PAIR_MS = 1000;
+/** In a move rhythm the trace waits for the view to rest this long, so a person zooming notch by notch sees it pop
+ *  in once, not once a pause. It does not grow past this: whoever pauses longer to look gets the trace they paused
+ *  for. A return that stays up ends the rhythm. */
+const RHYTHM_STILL_MS = 2 * TRACE_RETURN_MS;
 
 export interface CrashGuard {
   arm(): Promise<void>;
@@ -105,6 +115,11 @@ export interface PictureRequest {
 export class PathTraceHost {
   state: TraceState = "off";
   shown = false;
+  private now = 0;
+  private leftAt = -Infinity;
+  private upAt = -Infinity;
+  /** The rest a return waits for in a move rhythm, 0 outside one. */
+  private rhythmStill = 0;
   samples = 0;
   /** A traced picture holds the tracer. */
   picturing = false;
@@ -196,6 +211,8 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
+    this.now = f.now;
+    this.backend?.flushFrame?.();
     // A projection change can also swap the rig's camera object.
     if (this.cameraMoved(f.camera) || f.cameraChanged || f.camera !== this.cameraSeen) this.cameraDirty = true;
     this.cameraSeen = f.camera;
@@ -220,7 +237,7 @@ export class PathTraceHost {
     if (s !== "trace" && s !== "done") {
       this.traceSince = 0;
       if (!this.sawSample) this.disarm();
-      return this.show(false);
+      return this.show(false, s === "moving");
     }
     const b = this.backend;
     if (!b) {
@@ -266,7 +283,10 @@ export class PathTraceHost {
       if (!this.inFlight) this.traceFrame(b);
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
-    this.show(this.samples > 0 || (hold && this.shown));
+    const up = this.samples > 0 || (hold && this.shown);
+    // A held trace swaps with nothing while moving, so no rhythm holds it back.
+    const back = f.now - this.leftAt >= TRACE_RETURN_MS && (hold || f.inputs.stillMs >= this.rhythmStill);
+    this.show(up && (this.shown || back));
   }
 
   private cameraMoved(c: THREE.Camera): boolean {
@@ -359,9 +379,16 @@ export class PathTraceHost {
     }
   }
 
-  private show(on: boolean) {
+  private show(on: boolean, moved = false) {
     if (on === this.shown) return;
     this.shown = on;
+    if (on) this.upAt = this.now;
+    else {
+      if (this.now - this.upAt >= RHYTHM_PAIR_MS) this.rhythmStill = 0;
+      // The first show is no return, leftAt is still -Infinity then.
+      else if (moved && this.leftAt > -Infinity) this.rhythmStill = RHYTHM_STILL_MS;
+      this.leftAt = this.now;
+    }
     this.onShownChange?.(on);
   }
 

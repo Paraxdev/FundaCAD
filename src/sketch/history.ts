@@ -22,6 +22,8 @@ export class SketchHistory {
   private redoStack: SketchSnapshot[] = [];
   /** The last SETTLED state: always the pre-mutation snapshot an undo restores. */
   private preEdit: SketchSnapshot | null = null;
+  /** Called whenever canUndo or canRedo may have changed. */
+  onChange: (() => void) | null = null;
 
   constructor(private readonly cap = 100) {}
 
@@ -29,6 +31,7 @@ export class SketchHistory {
     this.undoStack = [];
     this.redoStack = [];
     this.preEdit = now ? cloneSnapshot(now) : null;
+    this.onChange?.();
   }
 
   /** Re-arm the baseline without banking. Used when the state settles after a
@@ -56,6 +59,7 @@ export class SketchHistory {
     this.undoStack.push(s);
     if (this.undoStack.length > this.cap) this.undoStack.shift();
     this.redoStack.length = 0;
+    this.onChange?.();
   }
 
   /** Re-arms the baseline to the restored state so the undo itself is never banked. */
@@ -64,6 +68,7 @@ export class SketchHistory {
     if (!prev) return null;
     this.redoStack.push(cloneSnapshot(now));
     this.preEdit = cloneSnapshot(prev);
+    this.onChange?.();
     return cloneSnapshot(prev); // never hand out a reference into the history
   }
 
@@ -72,6 +77,7 @@ export class SketchHistory {
     if (!next) return null;
     this.undoStack.push(cloneSnapshot(now));
     this.preEdit = cloneSnapshot(next);
+    this.onChange?.();
     return cloneSnapshot(next);
   }
 

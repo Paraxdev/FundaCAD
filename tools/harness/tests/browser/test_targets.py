@@ -31,14 +31,16 @@ LARGE_SHORT = (
         "the History strip scrolls, so it clips a grown hit area to the step's own height",
     ),
     (
-        "div.feature-row.tree-child > input",
+        "div.feature-row.tree-child > span.ui-field.ui-number-field > input",
         1,
         24,
-        "the Extra Parameters fields are text inputs, which draw no ::before, and a taller box would show",
+        "the Extra Parameters number fields are text inputs, which draw no ::before, and a taller box would show",
     ),
 )
-# The range input grows its own box to --hit-min under a negative margin, so only its centre and width stay put.
+# These grow their own box to --hit-min under a negative margin, so only its centre and width stay put.
 OWN_BOX = ("ui-slider-input",)
+# The same by name, for inputs whose path is only their generated id.
+OWN_BOX_NAMES = ("Size at least",)
 
 _LARGE = "() => { document.documentElement.dataset.targets = 'large' }"
 _DEFAULT = "() => { delete document.documentElement.dataset.targets }"
@@ -57,6 +59,17 @@ _SCROLLERS = """() => [...document.querySelectorAll('*')]
     el.scrollWidth, el.scrollHeight,
   ])
   .concat([['document', document.scrollingElement.scrollWidth, document.scrollingElement.scrollHeight]])"""
+
+# A button a scroller cuts in half, above it one too small whole: the probe measures the first scrolled into view.
+_CUT_BAIT = """() => {
+  const box = document.createElement('div');
+  box.id = 'cut-bait';
+  box.style.cssText = 'position:fixed;z-index:2147483647;left:20px;top:200px;width:200px;height:60px;overflow:auto';
+  const b = 'all:unset;display:block;box-sizing:border-box;width:120px;background:#888;';
+  box.innerHTML = `<div style="height:4px"></div><button style="${b}height:16px">Small</button>`
+    + `<div style="height:24px"></div><button style="${b}height:28px">Cut</button><div style="height:80px"></div>`;
+  document.body.append(box);
+}"""
 
 
 @pytest.fixture(scope="module")
@@ -80,7 +93,11 @@ def reports():
 
     s = Session(viewport=(1400, 900))
     try:
-        return walk(s, FLOWS, scan, fresh_page, reset_budget=RESET_BUDGET)
+        s.page.evaluate(_CUT_BAIT)
+        bait = probe(s.page)
+        bait["scrollTop"] = s.page.evaluate("() => document.getElementById('cut-bait').scrollTop")
+        s.page.evaluate("() => document.getElementById('cut-bait').remove()")
+        return {**walk(s, FLOWS, scan, fresh_page, reset_budget=RESET_BUDGET), "_bait": bait}
     finally:
         s.close()
 
@@ -96,7 +113,7 @@ def boxes(rep):
     out: dict[tuple, list] = {}
     for t in rep["targets"] + rep["covered"] + rep["occluded"]:
         b = t["box"]
-        if any(p in t["sel"] for p in OWN_BOX):
+        if any(p in t["sel"] for p in OWN_BOX) or t["name"] in OWN_BOX_NAMES:
             b = [b[0], round(b[1] + b[3] / 2, 1), b[2]]
         out.setdefault((t["sel"], t["name"]), []).append(b)
     return {k: sorted(v) for k, v in out.items()}
@@ -114,6 +131,13 @@ def under_large(rep):
         if lacking != allowed:
             out.append(t)
     return out
+
+
+def test_a_control_a_scroller_cuts_is_measured_scrolled_into_view_and_a_small_one_still_fails(reports):
+    bait = reports["_bait"]
+    got = {t["name"]: t["hit"][1] for t in bait["targets"] if t["name"] in ("Cut", "Small")}
+    assert got.get("Cut", 0) >= MIN and 0 < got.get("Small", 0) < MIN, got
+    assert bait["scrollTop"] == 0
 
 
 @pytest.mark.parametrize("screen", SCREENS)

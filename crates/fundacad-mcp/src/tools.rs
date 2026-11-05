@@ -389,16 +389,18 @@ pub fn stress() -> JsonObject {
                                          g/cm3. Without yield there is no safety factor, \
                                          without density no gravity"},
             "size": {"type": "number",
-                     "description": "element size in mm (default: chosen from the part's \
+                     "description": "element size in mm (default: from the part's \
                                      volume and thickness). Smaller is finer and slower"},
             "maxElements": {"type": "integer",
-                            "description": "the most tetrahedra the mesh may have (default \
+                            "description": "the most tetrahedra (default \
                                             30000, at most 80000). A size too fine for it is \
                                             grown, with a warning"},
             "refine": {"type": "string", "enum": ["off", "standard", "fine"],
-                       "description": "standard (default) solves, then refines the mesh where \
+                       "description": "standard (default) solves, refines where \
                                        the stress error is high and solves again; fine refines \
                                        further and takes longer; off solves one even mesh"},
+            "finer": {"type": "boolean",
+                      "description": "run past the limits once when a refusal offers it"},
             "image": {"type": "boolean",
                       "description": "return a PNG of the body coloured by stress, blue low \
                                       to red high, with a colour bar (default true)"},
@@ -416,6 +418,68 @@ pub fn stress() -> JsonObject {
             "height": {"type": "integer"}
         }),
         &["body"],
+    )
+}
+
+pub fn material_list() -> JsonObject {
+    object(json!({}), &[])
+}
+
+pub fn material_set() -> JsonObject {
+    let number = |what: &str| json!({"type": ["number", "null"], "description": what});
+    let bare_number = json!({"type": ["number", "null"]});
+    let bare_colour = json!({"type": ["string", "null"]});
+    object(
+        json!({
+            "id": {"type": "string",
+                   "description": "edits this material when the document has it, other fields stay. A new id creates it; left out, one is made from the name"},
+            "from": {"type": "string", "description": "start from a copy of this document or starter material's look"},
+            "name": {"type": "string", "description": "the name shown in the Render workspace"},
+            "color": {"type": "string", "description": "base colour, \"#rrggbb\""},
+            "metalness": number("0 to 1, 0 is plastic or paint, 1 is bare metal"),
+            "roughness": number("0 to 1, 0 is a mirror, 1 is chalk"),
+            "opacity": number("0 to 1, 1 is solid. Glass is low, about 0.25, with a low roughness"),
+            "emissive": number("0 to 1, glow in the material's own colour"),
+            "castsLight": {"type": ["boolean", "null"]},
+            "clearcoat": number("0 to 1, glossy coat over the base, like car paint or a glaze"),
+            "ior": number("1 to 2.5, how much see-through material bends light: water 1.33, glass 1.5"),
+            "thickness": bare_number,
+            "attenuationColor": bare_colour,
+            "attenuationDistance": bare_number,
+            "dispersion": bare_number,
+            "scatterDistance": bare_number,
+            "iridescence": bare_number,
+            "specularColor": bare_colour,
+            "sheen": bare_number,
+            "anisotropy": bare_number,
+            "flakes": bare_number,
+            "flakeSize": bare_number,
+            "surface": {"type": ["object", "null"]},
+            "surfaceGraph": {"type": ["object", "null"]}
+        }),
+        &[],
+    )
+}
+
+pub fn material_remove() -> JsonObject {
+    object(
+        json!({"ids": {"type": "array", "items": {"type": "string"},
+                       "description": "the ids to remove; what wears them goes back to its default look"}}),
+        &["ids"],
+    )
+}
+
+pub fn material_assign() -> JsonObject {
+    object(
+        json!({
+            "material": {"type": ["string", "null"], "description": "a material id, or null to clear the assignment"},
+            "bodies": {"type": "array", "items": {"type": "string"}, "description": "body ids or names"},
+            "faces": {"type": "array", "items": {"anyOf": [{"type": "object"}, {"type": "string"}]},
+                      "description": "face selectors copied from `inspect` (detail:true, selectors:true), body \
+                                      included, or {body, face: n} with its F number. A face's material wins over \
+                                      its body's"}
+        }),
+        &["material"],
     )
 }
 
@@ -529,7 +593,9 @@ pub fn ui_open() -> JsonObject {
             "headed": {"type": "boolean",
                        "description": "show the browser window, hidden by default"},
             "record": {"type": "string",
-                       "description": "write every step to this Python file, which replays with `python <file>`"},
+                       "description": "write every step to this .py file, which replays with `python <file>`"},
+            "overwrite": {"type": "boolean",
+                          "description": "replace a file there that is not a recording"},
             "viewport": {"type": "string", "description": "WIDTHxHEIGHT, 1400x900 by default"},
             "gpu": {"type": "boolean",
                     "description": "use the GPU, software rendering by default"},
@@ -557,7 +623,7 @@ pub fn ui_do() -> JsonObject {
                     click_at {sketch: [x, y] | world: [x, y, z] | screen: [x, y]}; \
                     drag {from, to, space?}; drag_handle {name, by? px | mm?}; \
                     view {name} (iso, top, front, right, fit); undo; redo; \
-                    open_file {path, discard?}; import_file {path}; save_as {path}; new_document {discard?}; \
+                    open_file {path, discard?}; import_file {path}; save_as {path, overwrite?} (.funda, as doc_save); new_document {discard?}; \
                     wait_for {text, timeout? up to 60 s}. \
                     Face selectors: [body:]top|bottom|front|back|left|right|+x..-z|largest|smallest|near=x,y,z|index=n. \
                     Edge selectors: near=x,y,z|between <face> <face>|longest|shortest. \

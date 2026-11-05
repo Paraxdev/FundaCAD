@@ -36,7 +36,7 @@ fn run(req: Value) -> Value {
 
 fn run_within(req: Value, refine_seconds: f64) -> Value {
     let Value::Object(m) = req else { panic!("a request is an object") };
-    json_of(stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds }))
+    json_of(stress_result_with(&m, &NoWatch, &StressLimits { refine_seconds, ..Default::default() }))
 }
 
 fn cantilever(material: Value, size: f64) -> Value {

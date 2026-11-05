@@ -3,11 +3,14 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { boxBindings } from "./boxBindings";
 import { TextPanel, type TextValues } from "../sketch/textPanel";
 import { fetchFonts } from "../sketch/textCache";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
+import { pageZoom } from "../ui/interfaceSize";
 import { CanvasGesture } from "./canvasGesture";
+import { awaitFaceRows } from "./faceRows";
 
 const SETTLE_MS = 350;
 
@@ -37,8 +40,9 @@ export class TextOnFaceTool {
   private previewTimer = 0;
   private previewing = false;
   private fonts: string[] = [];
+  private releaseRows: (() => void) | null = null;
 
-  private dim = new DimInput();
+  private dim = new DimInput(() => this.store);
   private panel = new TextPanel();
   private onDone: ((id: string | null) => void) | null = null;
   private readonly gesture: CanvasGesture;
@@ -69,7 +73,23 @@ export class TextOnFaceTool {
       void fetchFonts().then((f) => {
         this.fonts = f;
       });
+    this.releaseRows = awaitFaceRows(
+      this.viewport,
+      "a face",
+      (f) => {
+        const [selector] = f.selectors;
+        if (!selector || f.faceIds.length !== 1) return "Pick one face to put text on";
+        void this.resolve(selector, f.bodyId, f.anchor, this.viewport.projectToScreen(f.anchor));
+        return true;
+      },
+      () => this.cancel(),
+    );
     setPrompt("Click a flat, round or conical face to put text on · Esc");
+  }
+
+  private dropRows() {
+    this.releaseRows?.();
+    this.releaseRows = null;
   }
 
   private onMove(e: PointerEvent) {
@@ -121,7 +141,7 @@ export class TextOnFaceTool {
     const reply = await this.store.faceAnchor(sel, bodyId, p);
     if (!this.active || ticket !== this.ticket) return;
     if (!reply) {
-      toast("The engine could not place text on that face.");
+      toast("Text could not be placed on that face. Try another face.");
       return;
     }
     if ("reason" in reply) {
@@ -148,6 +168,7 @@ export class TextOnFaceTool {
   }
 
   private beginType(screen: { x: number; y: number }) {
+    this.dropRows();
     this.phase = "type";
     this.viewport.clearHover();
     this.viewport.domElement.style.cursor = "default";
@@ -167,11 +188,20 @@ export class TextOnFaceTool {
       undefined,
       () => this.readDepth(),
     );
+    this.dim.restoresOnUndo(
+      "depth",
+      () => this.depth,
+      (depth) => {
+        this.depth = depth;
+        this.valueChanged();
+      },
+    );
     this.dim.updateFromCursor({ depth: this.depth });
     // The panel goes on the far side of the canvas from the click, so it covers
     // neither the letters nor the dot that drags them.
     const left = screen.x > window.innerWidth / 2;
-    const at = { x: left ? 16 : window.innerWidth - 332, y: screen.y - 120 };
+    const z = pageZoom();
+    const at = { x: left ? 16 * z : window.innerWidth - 332 * z, y: screen.y - 120 * z };
     this.panel.show(at, this.fonts, this.values, {
       onChange: (v) => {
         this.values = v;
@@ -270,9 +300,11 @@ export class TextOnFaceTool {
       toast("Type some text to put on the face.");
       return;
     }
+    const text = features[0]! as Feature & { depth: number };
+    const bindings = boxBindings(this.dim, this.store, text.id, [{ box: "depth", field: "depth", value: text.depth }]);
     this.cleanup();
-    this.store.addFeatures(features);
-    this.onDone?.(features[0]!.id);
+    this.store.addFeatures(features, bindings);
+    this.onDone?.(text.id);
   }
 
   cancel() {
@@ -282,6 +314,7 @@ export class TextOnFaceTool {
   }
 
   private cleanup() {
+    this.dropRows();
     this.gesture.detach();
     this.viewport.domElement.style.cursor = "default";
     if (this.previewTimer) clearTimeout(this.previewTimer);

@@ -24,8 +24,10 @@ import {
   poleMarkerObjects,
   dimensionLineObjects,
   mirrorMarkObjects,
-  CURVE_COLOR,
-  PREVIEW_COLOR,
+  sketchPreviewColor,
+  sketchConflictColor,
+  sketchDefinedColor,
+  sketchFreeColor,
   sketchSelectColor,
 } from "./overlay";
 import {
@@ -41,12 +43,14 @@ import { bsplineDegree, bsplineMinPoles, poleOfRef } from "./bspline";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
+import { TEXT_PREVIEW_ID } from "./textForm";
 import { fetchFonts } from "./textCache";
 import { isEditableTarget, isBoxButtonKey, isMenuKey } from "../ui/focus";
+import { inputModality } from "../ui/inputModality";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
-import { constraintGlyphs, diagnosisOf, patternGlyphs } from "./glyphs";
+import { constraintFace, constraintGlyphs, diagnosisOf, patternGlyphs } from "./glyphs";
 import {
   asRound,
   entityDims,
@@ -76,11 +80,15 @@ import {
   dimAnchor,
   drivenBadges,
   drivingDimFor,
+  rectSideOf,
   findDrivingDim,
   type DrivingDim,
 } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
+import { KeySurface } from "./keySurface";
+import { coordLabel } from "./sketchSpeech";
+import { KeyDrawFlow, KEY_DRAW_TOOLS, TOO_SMALL, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -92,6 +100,7 @@ import {
   settleOriginPin,
   showsSnapMarker,
   snap,
+  snapLabel,
   type OriginPinRequest,
   type SnapGuide,
   type SnapKind,
@@ -128,6 +137,9 @@ import { isExactPlaneEdge, meshBodyIds } from "./planeEdgePick";
 import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
+import { announce } from "../ui/announce";
+import { constraintRows } from "./relations";
+import { constraintDimName, dimKey, entityDimName, entityLabeller } from "./sketchNames";
 import { toast } from "../ui/toast";
 import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
@@ -236,8 +248,7 @@ function parseConflictIdx(ids: string[]): Set<number> {
 // Tools that act on the current selection, so setTool keeps it. The entity patterns replicate the selection too.
 const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale", ...ENTITY_PATTERNS]);
 
-// The text tool's live-preview entity lives on the active list so it repaints normally, but is never committed.
-const TEXT_PREVIEW_ID = "__textpreview__";
+const PALETTE_OWN_KEYS = new Set(["Enter", " ", "Delete", "Backspace"]);
 
 // A dimmed curve blue: snappable, but never mistaken for drawn geometry.
 const FACE_ANCHOR_COLOR = 0x4a6a94;
@@ -285,6 +296,8 @@ export class SketchMode {
     kind: SnapKind;
     ref?: SnapRef | undefined;
     noSnap?: boolean;
+    /** Placed by typed numbers, so it is exact and no near-axis guess applies. */
+    typed?: boolean;
   } | null = null;
   private baseRef: SnapRef | null = null;
   private arcStartRef: SnapRef | null = null;
@@ -320,6 +333,7 @@ export class SketchMode {
   private patterns: SketchPattern[] = []; // associative pattern definitions
   private evenOdd = false;
   private lastDof = -1;
+  private firstSolveSettled = false;
   private dragFrom: THREE.Vector2 | null = null; // grabbed point's current position
   // A grabbed point that never moves past 4px is a click, which selects its entity.
   private dragEntIdx = -1;
@@ -428,6 +442,8 @@ export class SketchMode {
   private patternFlow: PatternFlow;
   private mirrorFlow: MirrorFlow;
   private dimFlow: DimFlow;
+  private keyDraw: KeyDrawFlow;
+  private keySurface = new KeySurface();
   private projectFlow: ProjectFlow;
   private modifyFlow: ModifyFlow;
 
@@ -451,8 +467,14 @@ export class SketchMode {
         { label: "Delete dimension", danger: true, disabled: !del, shortcut: "Del", onClick: () => del?.() },
       ]);
     };
+    this.dims.onLight = (ids) => this.setRelationHover(ids);
     this.glyphs = new SketchGlyphs(viewport);
-    this.glyphs.onDelete = (i) => this.deleteConstraint(i);
+    this.glyphs.onDelete = (i) => {
+      // The selection came with the constraint's shapes, a second Delete must not take them too.
+      this.selected.clear();
+      this.deleteConstraint(i);
+    };
+    this.glyphs.onSelect = (i) => this.selectConstraint(i);
     this.glyphs.onEditPattern = (id) => this.editPattern(id);
     this.glyphs.onOverlapPick = (e) => this.labelOverlapSelect(e);
     this.relations.onDelete = (i) => this.deleteConstraint(i);
@@ -464,7 +486,7 @@ export class SketchMode {
     this.boundKey = (e) => this.onKey(e);
     this.boundContext = (e) => this.onContextMenu(e);
     // A snap marker left where the pointer exited the canvas reads as a mark on the drawing.
-    this.boundLeave = () => this.showSnap(null);
+    this.boundLeave = () => this.onPointerLeave();
     this.boundTick = () => this.tick();
     const constraintHost: ConstraintHost = {
       tool: () => this.tool,
@@ -519,7 +541,7 @@ export class SketchMode {
         const lineColor = mirrorLineColor();
         const seg = line?.type === "line" ? line : line?.type === "projected" ? line.curve : null;
         this.overlay.setPreview([
-          ...curveObjects(copies, this.plane, PREVIEW_COLOR, true),
+          ...curveObjects(copies, this.plane, sketchPreviewColor(), true),
           ...curveObjects(objects, this.plane, objColor, true),
           ...(line ? curveObjects([line], this.plane, lineColor, true) : []),
           ...(seg && "x1" in seg ? mirrorMarkObjects(seg, this.plane, lineColor, this.planeMmPerPx() * 14) : []),
@@ -555,6 +577,7 @@ export class SketchMode {
       onState: () => this.onState?.(),
     };
     this.dimFlow = new DimFlow(dimHost);
+    this.keyDraw = new KeyDrawFlow(this.keyDrawHost());
     const projectHost: ProjectHost = {
       entities: () => this.entities,
       store: () => this.store,
@@ -633,6 +656,7 @@ export class SketchMode {
       edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : [],
     );
     this.history.reset(); // fresh history per session (armed once entities load)
+    this.resetKeyDraw();
     this.pickedAt = new Map();
     if (!this.fonts.length)
       void fetchFonts().then((f) => {
@@ -647,6 +671,7 @@ export class SketchMode {
     this.overlay.clearRegionSelection(); // fresh session: drop any stale area selection
     this.lastDof = -1;
     this.conflict = false;
+    this.firstSolveSettled = false;
     this.evenOdd = false;
     if (editId) {
       const f = store.document.features.find((x) => x.id === editId);
@@ -709,6 +734,7 @@ export class SketchMode {
     this.refreshActive();
     this.armPreEdit(); // the session's baseline: the first edit undoes back to here
     this.setTool("rectangle");
+    this.armIfOpenedByKeys();
     this.setViewLocked(this.viewLocked); // apply lock-to-plane preference
     if (this.constraints.length > 0) this.requestSolve(); // restore DOF state
     this.onState?.();
@@ -772,6 +798,11 @@ export class SketchMode {
     this.store.addFeature({ id: this.store.nextId(), type: "imprint", sketch: sketch.id });
   }
 
+  /** Focuses this sketch's key surface while a draw tool makes it a Tab stop, true when it took focus. */
+  focusKeys(): boolean {
+    return this.keySurface.focus();
+  }
+
   cancel() {
     if (this.gizmo?.active) this.gizmo.cancel();
     this.cleanup();
@@ -812,6 +843,7 @@ export class SketchMode {
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.keySurface.dispose();
     if (!this.viewSquare) {
       this.viewSquare = true;
       this.onViewSquare?.(true);
@@ -853,6 +885,8 @@ export class SketchMode {
     const preselected = t === "dimension" ? [...this.selected] : [];
     if (t !== this.tool && this.tangentArc) this.setTangentArc(false);
     this.tool = t;
+    this.keyDraw.disarm();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(t));
     this.base = null;
     this.inferTag.hide();
     this.chainStart = null;
@@ -950,7 +984,8 @@ export class SketchMode {
     return {
       plane: () => this.plane,
       selection: () => this.entities.filter((e) => this.selected.has(e.id) && e.type !== "projected"),
-      showPreview: (ents) => this.overlay.setPreview(ents ? curveObjects(ents, this.plane, PREVIEW_COLOR, true) : []),
+      showPreview: (ents) =>
+        this.overlay.setPreview(ents ? curveObjects(ents, this.plane, sketchPreviewColor(), true) : []),
       apply: (map, copy) => this.modifyFlow.applyTransform(map, copy),
       outline: (e) => this.overlay.activeTextLoops(e.id).flat(),
     };
@@ -1002,7 +1037,15 @@ export class SketchMode {
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
     // Here because refreshActive is the choke point every constraint change and finished solve passes through.
-    this.relations.show(this.entities, this.constraints, this.conflictIdx, this.overIdx, this.lastDof, this.conflict);
+    this.relations.show(
+      this.entities,
+      this.constraints,
+      this.conflictIdx,
+      this.overIdx,
+      this.lastDof,
+      this.conflict,
+      this.dofKnown(),
+    );
     this.showLooseEnds();
     // On-demand renderer: a keyboard-driven repaint fires no pointer event, so force a frame.
     this.viewport.requestRender();
@@ -1093,7 +1136,7 @@ export class SketchMode {
   private refreshDragGeometry() {
     this.entityVersion++;
     this.overlay.setActiveSketch([
-      ...curveObjects(this.entities, this.plane, this.activeColor()),
+      ...curveObjects(this.entities, this.plane, this.activeColor(), false, this.dimScaleSeen),
       ...this.polygonObjects(),
     ]);
     // Glyphs are a store push the layer projects anyway, so they ride along with the drag.
@@ -1152,7 +1195,7 @@ export class SketchMode {
     // Announce only when something held the view: with the lock off, turning away is ordinary.
     if (!wasLocked || this.releaseAnnounced) return;
     this.releaseAnnounced = true;
-    toast("View unlocked. Drawing still lands on the sketch plane; Look At re-squares it.");
+    toast("View unlocked. Drawing still lands on the sketch plane. Look At turns the view back to face it.");
   }
 
   /** Called by anything that puts the camera back on the plane, so a released session recovers without
@@ -1272,8 +1315,22 @@ export class SketchMode {
     this.refreshActive();
     this.onState?.();
   }
+  /** Lights the constraint's shapes through the ordinary selection, then marks the glyph and its Relations row. */
+  private selectConstraint(cIndex: number) {
+    const c = this.constraints[cIndex];
+    if (!c) return;
+    if (this.tool !== "select") this.setTool("select");
+    this.dims.clearSelection();
+    const ids = constraintFace(c).operands.map((o) => o.split("~")[0] ?? o);
+    this.selected = new Set(ids.filter((id) => this.entities.some((e) => e.id === id)));
+    this.refreshActive();
+    this.glyphs.markSelected(cIndex);
+    this.onState?.();
+  }
   private deleteConstraint(cIndex: number) {
     if (cIndex < 0 || cIndex >= this.constraints.length) return;
+    const name = constraintRows(this.entities, this.constraints, this.conflictIdx, this.overIdx)[cIndex]?.spoken;
+    if (name) announce(`Deleted ${name}`, "polite", { key: "sketch-constraint" });
     this.constraints.splice(cIndex, 1);
     this.conflictIdx.clear(); // indices shift; the next solve repopulates
     this.overIdx.clear();
@@ -1318,17 +1375,23 @@ export class SketchMode {
   private applyDrivingDimsDirectly() {
     if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
       this.axisDimToast = true;
-      toast("The solver is not running, so horizontal and vertical distances between two entities wait for it", {
-        timeout: 12000,
-      });
+      toast(
+        "Constraints are not working right now, so horizontal and vertical distances between two shapes wait until they are",
+        {
+          timeout: 12000,
+        },
+      );
     }
     if (!applyDrivingDimsDirect(this.entities, this.constraints)) return;
     this.entityVersion++; // guards any in-flight solve against this write
     if (!this.directDimToast) {
       this.directDimToast = true;
-      toast("The solver is not running, so this value is applied to the shape rather than kept as a live dimension", {
-        timeout: 12000,
-      });
+      toast(
+        "Constraints are not working right now, so this value changes the shape once and is not kept as a live dimension",
+        {
+          timeout: 12000,
+        },
+      );
     }
     this.refreshActive();
     this.onState?.();
@@ -1384,12 +1447,28 @@ export class SketchMode {
   }
 
   private constraintDimExtras(): ExtraDim[] {
+    // A redundant second width on one rectangle falls back to its constraint key, so list keys stay unique.
+    const sides = new Set<string>();
+    const labelOf = entityLabeller(this.entities);
     return this.cdims.map((d) => {
       const st = diagnosisOf(d.cIndex, this.conflictIdx, this.overIdx);
       const con = this.constraints[d.cIndex];
       const key = con && isDimConstraint(con) && con.id ? `c:${con.id}` : null;
       const expr = key ? this.exprFor(key) : undefined;
+      const side = con ? rectSideOf(this.entities, con) : null;
+      const sideKey = side && `${side.entity.id}:${side.field}`;
+      const ownsSide = !!sideKey && !sides.has(sideKey);
+      if (sideKey) sides.add(sideKey);
+      const face = con ? constraintFace(con) : null;
+      const operands = face?.operands ?? [];
+      const labels = operands.map(labelOf).filter((l): l is string => !!l);
+      const subject = side ? labelOf(side.entity.id) : null;
       return {
+        key: dimKey(ownsSide ? sideKey : null, con && "id" in con ? con.id : undefined, d.cIndex),
+        name: side
+          ? entityDimName(side.field === "width" ? "Width" : "Height", subject)
+          : constraintDimName(face?.name ?? "Dimension", labels),
+        entities: [...new Set(operands.map((o) => o.split("~")[0] ?? o))],
         anchor: d.labelPos,
         valueMm: d.valueMm,
         ...(d.kind ? { kind: d.kind } : {}),
@@ -1704,11 +1783,16 @@ export class SketchMode {
   private onPointerDown(e: PointerEvent) {
     // Labels stop propagation on their own pointerdown, so drop the label selection or Delete removes an unpointed dim.
     this.dims.clearSelection();
+    this.glyphs.clearSelection();
+    // The viewport cancels the browser's focus move, so a palette control clicked before would keep the guarded keys.
+    const active = globalThis.document?.activeElement;
+    if (active instanceof HTMLElement && active.closest("#palette")) active.blur();
     if (e.button === 2) {
       this.rightDownAt = { x: e.clientX, y: e.clientY };
       this.rightDragged = false;
     }
     if (e.button !== 0) return; // left only; middle/right still navigate
+    this.keyDraw.pointerPressed();
     // Project picks 3D geometry with raw client coords, so it branches before the plane-point conversion.
     if (this.tool === "project") {
       e.preventDefault();
@@ -1734,17 +1818,7 @@ export class SketchMode {
     e.preventDefault();
     const p = hit.p;
 
-    // SK-6: a click that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
-    // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
-    if (
-      hit.kind === "center" &&
-      hit.label === "Origin" &&
-      this.tool !== "select" &&
-      !MODIFY_TOOLS.has(this.tool) &&
-      !PATTERN_TOOLS.has(this.tool)
-    ) {
-      this.originPin ??= { at: p.clone(), count: this.entities.length };
-    }
+    this.noteOriginPin(hit);
 
     if (this.tool === "select") {
       // Note: Chromium reports detail 0 on pointerdown, so a double press is timed here
@@ -1904,15 +1978,59 @@ export class SketchMode {
     if (this.tool === "break") return this.modifyFlow.breakClick(p);
     if (CONSTRAINT_TOOLS.has(this.tool)) return this.constraintClick(p);
 
+    this.placeTwoPoint(hit);
+  }
+
+  // SK-6: a point that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
+  // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
+  private noteOriginPin(hit: KeyHit) {
+    if (
+      hit.kind === "center" &&
+      hit.label === "Origin" &&
+      this.tool !== "select" &&
+      !MODIFY_TOOLS.has(this.tool) &&
+      !PATTERN_TOOLS.has(this.tool)
+    ) {
+      this.originPin ??= { at: hit.p.clone(), count: this.entities.length };
+    }
+  }
+
+  private placeTwoPoint(hit: KeyHit): Drawn | null {
+    const p = hit.p;
+    this.keyDraw.placed(p);
     if (!this.base) {
       this.base = p.clone();
       this.baseRef = hit.ref ?? null;
       if (this.tool === "line") this.chainStart = p.clone(); // remember loop start
       this.showDimFields();
-      return;
+      return null;
     }
-    // second click → commit the entity using current dims
-    this.commitFromCursor(p);
+    return this.commitFromCursor(p);
+  }
+
+  private moveKeyCursor(hit: KeyHit) {
+    const p = hit.p.clone();
+    this.lastCursor.copy(p);
+    this.lastHit = { p: p.clone(), raw: p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
+    this.showSnap(
+      {
+        kind: hit.kind === "free" ? "grid" : hit.kind,
+        world: this.plane.to3D(p.x, p.y),
+        p,
+        label: snapLabel(hit) ?? coordLabel(p.x, p.y),
+      },
+      true,
+    );
+    if (this.base) this.basePreview(p.clone());
+    else this.overlay.setPreview([]);
+    this.viewport.requestRender();
+  }
+
+  private placeKeyHit(hit: KeyHit): Drawn | null {
+    this.lastCursor.copy(hit.p);
+    this.lastHit = { p: hit.p.clone(), raw: hit.p.clone(), kind: hit.kind, ref: hit.ref, typed: true };
+    this.noteOriginPin(hit);
+    return this.placeTwoPoint(hit);
   }
 
   // 3-point arc: click start, click end, then click the point it passes through
@@ -2815,6 +2933,7 @@ export class SketchMode {
     const hit = this.snapAt(e.clientX, e.clientY, e.ctrlKey);
     if (!hit) return;
     this.lastCursor.copy(hit.p);
+    this.keyDraw.pointerMoved();
     this.showSnap(hit);
 
     if (this.tool === "arc") {
@@ -2865,7 +2984,7 @@ export class SketchMode {
               },
             ],
             this.plane,
-            PREVIEW_COLOR,
+            sketchPreviewColor(),
           ),
         );
       }
@@ -2876,13 +2995,72 @@ export class SketchMode {
     else this.overlay.setPreview([]);
   }
 
+  private armIfOpenedByKeys() {
+    if (inputModality() === "keyboard") this.keyDraw.armedByKeys();
+  }
+
+  private onPointerLeave() {
+    this.keyDraw.pointerMoved();
+    this.showSnap(null);
+  }
+
+  private resetKeyDraw() {
+    this.keyDraw.reset();
+    this.lastCursor.set(0, 0);
+    this.keySurface.mount();
+    this.keySurface.setStop(KEY_DRAW_TOOLS.has(this.tool));
+  }
+
+  private keyDrawHost(): KeyDrawHost {
+    return {
+      tool: () => this.tool,
+      base: () => this.base,
+      cursor: () => this.lastCursor,
+      candidates: () => this.candidates,
+      entities: () => this.entities,
+      planeTooEdgeOn: () => this.planeTooEdgeOn(),
+      step: () => (this.gridSnap ? this.snapStep() : gridStep(this.planeMmPerPx(), 0)),
+      moveTo: (hit) => this.moveKeyCursor(hit),
+      dim: () => this.dim,
+      place: (hit) => this.placeKeyHit(hit),
+      shape: () => (this.base ? this.computeGeometry(this.base, this.lastCursor).entity : null),
+      positionBox: (p) => {
+        const at = this.viewport.projectToScreen(this.plane.to3D(p.x, p.y));
+        this.dim.positionCentred(at.x, at.y, true);
+      },
+      prompt: (text) => setPrompt(text),
+      focusSurface: () => this.keySurface.focus(),
+      changed: () => this.onState?.(),
+    };
+  }
+
+  private cancelGeometry() {
+    this.base = null;
+    this.inferTag.hide();
+    this.chainStart = null;
+    this.originPin = null;
+    this.arcStart = null;
+    this.arcEnd = null;
+    this.modifyFlow.setFilletFirst(null);
+    this.splinePts = [];
+    this.clickPts = [];
+    // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
+    this.dimFlow.resetDimPicks();
+    this.constraintTools.resetPending();
+    this.dim.hide();
+    this.overlay.setPreview([]);
+  }
+
   private onKey(e: KeyboardEvent) {
     if (isMenuKey(e) || isBoxButtonKey(e)) return;
+    if (this.keyDraw.onKey(e)) return;
     // The dim box auto-focuses while drawing, so Esc in it must still cancel.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return; // typing in a dim/text field, not a shortcut
     // The Text panel's list, boxes and buttons are no text fields, yet a letter there must not switch the tool.
     if (e.target instanceof Element && e.target.closest(".text-tool-panel")) return;
+    // The sketch palette's rows and buttons keep the keys that press or delete them.
+    if (PALETTE_OWN_KEYS.has(e.key) && e.target instanceof Element && e.target.closest("#palette")) return;
     // a pattern being placed/edited: Delete removes it, Esc keeps it as-is
     if (this.patternFlow.hasPending()) {
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -2905,7 +3083,11 @@ export class SketchMode {
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
-      // A selected dimension is more specific than the entity selection.
+      // Most specific first: a selected constraint, a selected dimension, a pole, then the shapes.
+      if (this.glyphs.deleteSelected()) {
+        e.preventDefault();
+        return;
+      }
       if (this.dims.deleteSelected()) {
         e.preventDefault();
         return;
@@ -2928,6 +3110,7 @@ export class SketchMode {
         offsetPick: this.modifyFlow.offsetting,
         dragging: !!(this.dragFrom || this.moveDrag),
         pendingGeometry:
+          this.keyDraw.pending() ||
           !!this.base ||
           !!this.arcStart ||
           this.modifyFlow.filletArmed ||
@@ -2937,7 +3120,7 @@ export class SketchMode {
           !!this.dimFlow.plan ||
           this.constraintTools.hasPending(),
         mirror: this.mirrorFlow.running,
-        selection: this.selected.size > 0,
+        selection: this.selected.size > 0 || this.glyphs.hasSelection(),
         tool: this.tool,
         overlay: escapeClaimed(),
       });
@@ -2965,22 +3148,11 @@ export class SketchMode {
         return;
       }
       if (action === "cancel-geometry") {
-        this.base = null;
-        this.inferTag.hide();
-        this.chainStart = null;
-        this.originPin = null;
-        this.arcStart = null;
-        this.arcEnd = null;
-        this.modifyFlow.setFilletFirst(null);
-        this.splinePts = [];
-        this.clickPts = [];
-        // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
-        this.dimFlow.resetDimPicks();
-        this.constraintTools.resetPending();
-        this.dim.hide();
-        this.overlay.setPreview([]);
+        this.cancelGeometry();
+        this.keyDraw.cancelled();
       } else if (action === "clear-selection") {
         this.selected.clear();
+        this.glyphs.clearSelection();
         this.refreshActive();
       } else if (action === "arm-select") {
         this.setTool("select");
@@ -3010,14 +3182,27 @@ export class SketchMode {
       }
       if (this.base) {
         e.preventDefault();
-        this.commitFromCursor(this.lastCursor);
+        this.commitFromBox();
         return;
       }
     }
     // Q and E fall through to the global keymap (Press/Pull, Extrude).
     const t = sketchToolKey(e, this.tool);
     if (t === "tangent-arc") this.setTangentArc(!this.tangentArc);
-    else if (t) this.setTool(t);
+    else if (t) {
+      this.setTool(t);
+      this.keyDraw.armedByKeys();
+    }
+  }
+
+  /** The tool was armed from the keyboard, by a rail button's click that no pointer made. */
+  armedByKeys() {
+    this.keyDraw.armedByKeys();
+  }
+
+  /** The prompt of a keys session, null when a pointer is drawing. */
+  get keyPrompt(): string | null {
+    return this.active ? this.keyDraw.keyPrompt() : null;
   }
 
   private computeGeometry(a: THREE.Vector2, cursor: THREE.Vector2) {
@@ -3066,15 +3251,27 @@ export class SketchMode {
     return false;
   }
 
-  private commitFromCursor(cursor: THREE.Vector2) {
-    if (!this.base) return;
+  private commitFromBox() {
+    if (this.keyDraw.openForNext()) return;
+    if (this.keyDraw.sizeTooFar()) return;
+    const end = this.keyDraw.boxEnd();
+    if (end) this.noteOriginPin(end.hit);
+    // Read now, as a chain's commit shows the box again.
+    const angle = this.tool === "line" && this.dim.wasTyped("angle") ? this.dim.getValue("angle") : null;
+    const done = this.commitFromCursor(this.lastCursor);
+    if (done) this.keyDraw.drawn({ ...done, angle }, end);
+    else if (this.base) this.keyDraw.refused();
+  }
+
+  private commitFromCursor(cursor: THREE.Vector2): Drawn | null {
+    if (!this.base) return null;
     const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
     if (inferred) cursor = inferred.end;
     this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
-      toast("Too small to draw, click somewhere else to set its size");
-      return;
+      toast(TOO_SMALL);
+      return null;
     }
     if (this.constructionMode) entity.construction = true;
     entity.id = newEntityId(); // stamp a stable id (computeGeometry left it "")
@@ -3084,12 +3281,13 @@ export class SketchMode {
     } else if (entity.type === "circle") {
       this.lockTypedDims(entity, { diameter: this.dim.isUserDriven("diameter") });
     }
+    let closed = false;
     if (this.tool === "line" && entity.type === "line") {
       const end = new THREE.Vector2(entity.x2, entity.y2);
       // clicked back on the start point → close the loop and end the chain
-      const closing = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
+      closed = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
       if (inferred) this.constraints.push(...bindNew(inferred.relations, entity.id));
-      if (closing) {
+      if (closed) {
         this.base = null;
         this.chainStart = null;
         this.dim.hide();
@@ -3107,6 +3305,7 @@ export class SketchMode {
     this.overlay.setPreview([]);
     this.requestSolve(); // re-solve if any constraints exist (updates DOF colour)
     this.onState?.();
+    return { entity, closed };
   }
 
   /** Judged from what the cursor snapped to, for preview and commit. A chain's closing segment was not aimed, so it
@@ -3125,7 +3324,7 @@ export class SketchMode {
       endRef: h?.ref,
       entities: this.entities,
       step: this.gridSnap ? this.snapStep() : 0,
-      tolDeg: closing ? 0 : INFER_TOL_DEG,
+      tolDeg: closing || h?.typed ? 0 : INFER_TOL_DEG,
       nearMm: this.planeMmPerPx() * hitPx(120),
       smart: this.gridSnap && !h?.noSnap,
       typedAngle: this.dim.isUserDriven("angle"),
@@ -3206,10 +3405,10 @@ export class SketchMode {
           },
         ],
         this.plane,
-        PREVIEW_COLOR,
+        sketchPreviewColor(),
       );
       const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
-      this.dim.positionCentred(at.x, at.y);
+      this.dim.positionCentred(at.x, at.y, !e);
       this.overlay.setPreview([geom.preview, ...diameter]);
     } else {
       if (e) this.dim.position(e.clientX, e.clientY);
@@ -3239,7 +3438,7 @@ export class SketchMode {
             ];
     this.dim.show(
       defs,
-      () => this.commitFromCursor(this.lastCursor),
+      () => this.commitFromBox(),
       undefined,
       undefined,
       undefined,
@@ -3298,6 +3497,7 @@ export class SketchMode {
       guides?: SnapGuide[];
       label?: string | undefined;
     } | null,
+    silent = false,
   ) {
     // The guides go with the snap: one left standing after the cursor left its row would misstate the next click.
     this.overlay.setGuides(
@@ -3312,7 +3512,7 @@ export class SketchMode {
       return;
     }
     this.overlay.setSnap(hit.world, hit.kind, this.viewport.camera);
-    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world));
+    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world), { silent });
     else this.snapTag.hide();
     this.snapWorld = hit.world.clone();
     this.snapScaleSeen = 0; // a new point: size it now rather than next frame
@@ -3337,7 +3537,7 @@ export class SketchMode {
 
   /** Red over-constrained or conflict, white fully defined (dof 0), blue under-constrained. dof < 0 means no solve yet. */
   private activeColor(): number {
-    return this.conflict ? 0xff4444 : this.lastDof === 0 ? 0xffffff : CURVE_COLOR;
+    return this.conflict ? sketchConflictColor() : this.lastDof === 0 ? sketchDefinedColor() : sketchFreeColor();
   }
 
   /** All pattern definitions including the one being placed (for live preview). */
@@ -3366,11 +3566,12 @@ export class SketchMode {
       const normal = this.entities.filter((e) => !this.selected.has(e.id) && !lit.has(e.id));
       const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
       const hovered = this.entities.filter((e) => lit.has(e.id));
-      if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor()));
-      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true));
-      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, PREVIEW_COLOR, true));
+      if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor(), false, this.dimScaleSeen));
+      if (chosen.length) objs.push(...curveObjects(chosen, this.plane, sketchSelectColor(), true, this.dimScaleSeen));
+      if (hovered.length)
+        objs.push(...curveObjects(hovered, this.plane, sketchPreviewColor(), true, this.dimScaleSeen));
     } else {
-      objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));
+      objs.push(...curveObjects(this.entities, this.plane, this.activeColor(), false, this.dimScaleSeen));
     }
     objs.push(...this.polygonObjects());
     if (this.dimsVisible) {
@@ -3421,7 +3622,7 @@ export class SketchMode {
 
   private entityCurve(e: ResolvedEntity): THREE.Object3D {
     // curveObjects yields exactly one object per input entity, so [0] is present
-    const obj = curveObjects([e], this.plane, PREVIEW_COLOR)[0];
+    const obj = curveObjects([e], this.plane, sketchPreviewColor())[0];
     if (!obj) throw new Error("entityCurve: curveObjects returned no object");
     return obj;
   }
@@ -3836,6 +4037,9 @@ export class SketchMode {
     return this.active && this.history.canUndo;
   }
 
+  set onHistory(fn: (() => void) | null) {
+    this.history.onChange = fn;
+  }
   get canUndoSketch(): boolean {
     return this.history.canUndo;
   }
@@ -3849,6 +4053,7 @@ export class SketchMode {
     const prev = this.history.undo(this.snapshot());
     if (!prev) {
       setPrompt("Nothing left to undo in this sketch");
+      this.keyDraw.historyMoved();
       return true;
     }
     this.applyHistory(prev);
@@ -3860,6 +4065,7 @@ export class SketchMode {
     const next = this.history.redo(this.snapshot());
     if (!next) {
       setPrompt("Nothing to redo in this sketch");
+      this.keyDraw.historyMoved();
       return true;
     }
     this.applyHistory(next);
@@ -3883,8 +4089,14 @@ export class SketchMode {
     this.dim.hide();
     this.overlay.setPreview([]);
     this.refreshActive();
+    this.keyDraw.historyMoved();
     this.requestSolve();
     this.onState?.();
+  }
+
+  /** Freedom is only spoken once a solve has settled, a sketch with no constraints has nothing to wait for. */
+  private dofKnown(): boolean {
+    return this.firstSolveSettled || this.constraints.length === 0;
   }
 
   /** Coalesces requests into one in-flight solve so the shared WASM wrapper is never re-entered and stale results
@@ -3952,6 +4164,7 @@ export class SketchMode {
           this.overIdx = parseConflictIdx(r.overDefined);
           if (!this.conflict) this.entities = r.entities; // keep last good on conflict
           this.lastDof = r.dof;
+          if (!dim) this.firstSolveSettled = true;
           this.refreshActive();
         }
       }
@@ -3966,7 +4179,7 @@ export class SketchMode {
         toast(
           err instanceof SolverUnavailable
             ? err.message
-            : "The 2D constraint solver stopped responding, sketching continues without constraints",
+            : "Sketch constraints stopped working, you can keep drawing without them. Restarting FundaCAD may bring them back.",
           { kind: "error", timeout: 12000 },
         );
       }

@@ -337,3 +337,30 @@ describe("Tie Loose Ends with nothing in reach", () => {
     expect(nothingToTiePrompt(looseEnds(square(0), cs, 0.7), report(square(0), cs))).toBe("No loose ends to tie");
   });
 });
+
+describe("a very long or very far curve in the index", () => {
+  const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+    type: "line",
+    id,
+    x1,
+    y1,
+    x2,
+    y2,
+  });
+
+  // A horizontal or vertical line has no area, so its cell is twice the reach and this length overran a Map.
+  it.each([
+    ["horizontal", line("a", -1e6, 0, 1e6, 0), line("b", 500, 0, 900, 0)],
+    ["vertical", line("a", 0, -1e6, 0, 1e6), line("b", 0, 500, 0, 900)],
+  ])("a %s line of 2e6 mm at a reach of 0.001 mm is indexed, with an end near it still found", (_, long, onIt) => {
+    const le = looseEnds([long, onIt], [], 0.001);
+    expect(le.capped).toBeFalsy();
+    expect(le.untied.some((u) => u.entity === "b")).toBe(true);
+    expect(le.open.map((e) => e.entity)).toContain("a");
+  });
+
+  it("a line out past 2^53 cells ends, as a size box's length can put one there", () => {
+    const le = looseEnds([line("a", 1e18, 0, 1e18, 1)], [], 0.1);
+    expect(le.open.map((e) => e.entity)).toEqual(["a", "a"]);
+  });
+});

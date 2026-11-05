@@ -2,8 +2,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use fundacad_lib::plugins::bundle::{
-    allowed_bundle_url, bundle_target, extract_into, grants_match, is_official_url, now_secs, official_label,
-    official_url, safe_entry, safe_id, sha256_hex, Consented, BUNDLE_PREFIX,
+    allowed_bundle_url, bundle_target, component_path, extract_into, grants_match, is_official_url, now_secs,
+    official_label, official_url, read_capped, safe_entry, safe_id, settle_set_aside, sha256_hex, swap_into_place,
+    CappedBody, ChunkSource, Consented, BUNDLE_PREFIX, SWAP_LOCK,
 };
 
 /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
@@ -382,4 +383,285 @@ fn what_arrived_must_be_what_was_shown() {
         ..shown.clone()
     };
     assert!(grants_match(&shown, &extra_host).is_err(), "an added host slipped through");
+}
+
+fn entries(dir: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> =
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_swap_that_cannot_place_the_new_install_keeps_the_old_one() {
+    let root = tmpdir("swap-fail");
+    let dest = root.join("Acme.Tool");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dest.join("main.js"), b"old").unwrap();
+    let missing = root.join(".staging-Acme.Tool");
+
+    assert!(swap_into_place(&missing, &dest).is_err(), "a missing staging dir was put in place");
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"old", "the old install was lost");
+    assert_eq!(
+        entries(&root),
+        vec![SWAP_LOCK.to_string(), "Acme.Tool".into()],
+        "the swap left something beside the install"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_finished_swap_replaces_the_whole_old_install_and_leaves_nothing_beside_it() {
+    let root = tmpdir("swap-ok");
+    let dest = root.join("Acme.Tool");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dest.join("main.js"), b"old").unwrap();
+    std::fs::write(dest.join("stale.js"), b"old").unwrap();
+    let staging = root.join(".staging-Acme.Tool");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("main.js"), b"new").unwrap();
+
+    swap_into_place(&staging, &dest).unwrap();
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
+    assert!(!dest.join("stale.js").exists(), "a file of the old install survived the update");
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Tool".into()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_first_install_needs_no_old_one_to_set_aside() {
+    let root = tmpdir("swap-first");
+    let dest = root.join("Acme.Tool");
+    let staging = root.join(".staging-Acme.Tool");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("main.js"), b"new").unwrap();
+
+    swap_into_place(&staging, &dest).unwrap();
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Tool".into()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn an_install_set_aside_by_a_swap_that_never_finished_is_put_back_or_removed() {
+    let root = tmpdir("swap-settle");
+    let put = |dir: &str, text: &str| {
+        std::fs::create_dir_all(root.join(dir)).unwrap();
+        std::fs::write(root.join(dir).join("main.js"), text).unwrap();
+    };
+    let gone = format!(".old-Acme.Gone-{}-0", u32::MAX);
+    let beside = format!(".old-Acme.Kept-{}-1", u32::MAX);
+    let reused_pid = format!(".old-Acme.Mine-{}-2", std::process::id());
+    put(&gone, "old gone");
+    put(&beside, "old kept");
+    put("Acme.Kept", "new kept");
+    put(&reused_pid, "old mine");
+    put(".staging-Acme.Tool", "staged");
+
+    settle_set_aside(&root);
+    let want: Vec<String> =
+        [".staging-Acme.Tool", SWAP_LOCK, "Acme.Gone", "Acme.Kept", "Acme.Mine"].map(String::from).into();
+    assert_eq!(entries(&root), want);
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Gone/main.js")).unwrap(), "old gone");
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Kept/main.js")).unwrap(), "new kept");
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Mine/main.js")).unwrap(), "old mine");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The lock stands in for a second FundaCAD process between the two renames of its swap.
+#[test]
+fn a_set_aside_install_is_left_alone_while_any_swap_holds_the_lock() {
+    let root = tmpdir("swap-held");
+    let aside = format!(".old-Acme.Busy-{}-0", u32::MAX);
+    std::fs::create_dir_all(root.join(&aside)).unwrap();
+    std::fs::write(root.join(&aside).join("main.js"), "old").unwrap();
+    let held = std::fs::File::create(root.join(SWAP_LOCK)).unwrap();
+    held.lock().unwrap();
+
+    settle_set_aside(&root);
+    assert_eq!(entries(&root), vec![aside.clone(), SWAP_LOCK.to_string()]);
+    drop(held);
+    settle_set_aside(&root);
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Busy".into()]);
+    assert_eq!(std::fs::read_to_string(root.join("Acme.Busy/main.js")).unwrap(), "old");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_swap_waits_while_another_swap_holds_the_lock() {
+    let root = tmpdir("swap-wait");
+    let dest = root.join("Acme.Tool");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dest.join("main.js"), b"old").unwrap();
+    let staging = root.join(".staging-Acme.Tool");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("main.js"), b"new").unwrap();
+    let held = std::fs::File::create(root.join(SWAP_LOCK)).unwrap();
+    held.lock().unwrap();
+
+    let swap = {
+        let (staging, dest) = (staging.clone(), dest.clone());
+        std::thread::spawn(move || swap_into_place(&staging, &dest))
+    };
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let want: Vec<String> = [".staging-Acme.Tool", SWAP_LOCK, "Acme.Tool"].map(String::from).into();
+    assert_eq!(entries(&root), want, "the swap ran while another one held the lock");
+    drop(held);
+    swap.join().unwrap().unwrap();
+    assert_eq!(std::fs::read(dest.join("main.js")).unwrap(), b"new");
+    assert_eq!(entries(&root), vec![SWAP_LOCK.to_string(), "Acme.Tool".into()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_body_is_refused_as_soon_as_its_running_total_passes_the_cap() {
+    let mut body = CappedBody::new(10);
+    assert!(body.push(b"12345"));
+    assert!(body.push(b"67890"));
+    assert!(!body.push(b"x"));
+    assert!(!body.push(b""), "once over, it stays over");
+
+    let mut big = CappedBody::new(4);
+    assert!(!big.push(b"12345"), "one chunk larger than the cap is refused on its own");
+}
+
+#[test]
+fn a_body_within_the_cap_comes_back_whole_and_in_order() {
+    let mut body = CappedBody::new(10);
+    for chunk in [&b"ab"[..], b"", b"cde", b"fghij"] {
+        assert!(body.push(chunk));
+    }
+    assert_eq!(body.into_bytes(), b"abcdefghij");
+}
+
+#[test]
+fn a_refused_body_does_not_keep_growing() {
+    let mut body = CappedBody::new(3);
+    assert!(!body.push(&[0u8; 1024]));
+    assert!(!body.push(&[0u8; 1024]));
+    assert!(body.into_bytes().len() <= 3);
+}
+
+struct Reply {
+    declared: Option<u64>,
+    chunks: std::collections::VecDeque<Result<Vec<u8>, String>>,
+    pulled: usize,
+}
+
+impl ChunkSource for Reply {
+    type Error = String;
+    fn declared_len(&self) -> Option<u64> {
+        self.declared
+    }
+    fn next_chunk(&mut self) -> impl std::future::Future<Output = Result<Option<Vec<u8>>, String>> + Send {
+        self.pulled += 1;
+        std::future::ready(self.chunks.pop_front().transpose())
+    }
+}
+
+fn reply(declared: Option<u64>, chunks: &[&[u8]]) -> Reply {
+    Reply { declared, chunks: chunks.iter().map(|c| Ok(c.to_vec())).collect(), pulled: 0 }
+}
+
+fn block_on<F: std::future::Future>(f: F) -> F::Output {
+    let mut f = std::pin::pin!(f);
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        if let std::task::Poll::Ready(v) = f.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+#[test]
+fn a_reply_declaring_more_than_the_cap_is_refused_before_any_read() {
+    let mut r = reply(Some(11), &[b"12345"]);
+    assert_eq!(block_on(read_capped(&mut r, 10)), Ok(None));
+    assert_eq!(r.pulled, 0);
+}
+
+#[test]
+fn a_reply_stops_being_read_at_the_chunk_that_passes_the_cap() {
+    let mut r = reply(None, &[b"12345", b"67890", b"x", b"never read"]);
+    assert_eq!(block_on(read_capped(&mut r, 10)), Ok(None));
+    assert_eq!(r.pulled, 3);
+
+    let mut lying = reply(Some(4), &[b"1234", b"5"]);
+    assert_eq!(block_on(read_capped(&mut lying, 4)), Ok(None), "a short declared length is not trusted");
+}
+
+#[test]
+fn a_reply_within_the_cap_comes_back_whole_and_a_read_error_comes_back_as_is() {
+    let mut r = reply(Some(10), &[b"abcde", b"", b"fghij"]);
+    assert_eq!(block_on(read_capped(&mut r, 10)), Ok(Some(b"abcdefghij".to_vec())));
+
+    let mut broken = reply(None, &[b"ab"]);
+    broken.chunks.push_back(Err("reset".into()));
+    assert_eq!(block_on(read_capped(&mut broken, 10)), Err("reset".to_string()));
+}
+
+/// The three plugin request paths read their bodies only through read_capped.
+#[test]
+fn no_plugin_request_reads_a_whole_body_unchecked() {
+    let sources = [
+        ("mod.rs", include_str!("../../../src/plugins/mod.rs")),
+        ("web.rs", include_str!("../../../src/plugins/web.rs")),
+        ("localnet.rs", include_str!("../../../src/plugins/localnet.rs")),
+    ];
+    let unchecked: Vec<String> = sources
+        .iter()
+        .flat_map(|(name, text)| {
+            [".bytes().await", ".text().await", ".json().await", ".json::<", "bytes_stream("]
+                .into_iter()
+                .filter(|call| text.contains(*call))
+                .map(move |call| format!("{name} {call}"))
+        })
+        .collect();
+    assert_eq!(unchecked, Vec::<String>::new());
+}
+
+/// The unpack budget sums declared sizes, which holds only while no entry can inflate past the size its headers give.
+#[test]
+fn an_entry_that_inflates_past_its_declared_size_is_refused_and_not_written() {
+    let body = vec![0u8; 2 * 1024 * 1024];
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut w = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        w.start_file("big.bin", opts).unwrap();
+        w.write_all(&body).unwrap();
+        w.finish().unwrap();
+    }
+    let mut bytes = buf.into_inner();
+    assert!(bytes.len() < body.len() / 100, "the entry must be stored compressed");
+    let declared = 1000u32.to_le_bytes();
+    for (signature, name_at, size_at) in [(LOCAL, LOCAL_NAME_AT, 22), (CENTRAL, CENTRAL_NAME_AT, 24)] {
+        let at = (0..bytes.len() - name_at - 7)
+            .find(|&p| &bytes[p..p + 4] == signature && &bytes[p + name_at..p + name_at + 7] == b"big.bin")
+            .expect("record for big.bin");
+        assert_eq!(bytes[at + size_at..at + size_at + 4], (body.len() as u32).to_le_bytes());
+        bytes[at + size_at..at + size_at + 4].copy_from_slice(&declared);
+    }
+    let dir = tmpdir("inflate");
+    assert!(extract_into(&bytes, &dir).is_err(), "an entry larger than declared must be refused");
+    assert!(!dir.join("big.bin").exists(), "nothing of the oversized entry may be written");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_component_path_stays_inside_the_plugin_directory() {
+    let root = tmpdir("component-path");
+    let dir = root.join("P");
+    std::fs::create_dir_all(dir.join("geometry")).unwrap();
+    std::fs::write(root.join("outside.wasm"), b"x").unwrap();
+    std::fs::write(dir.join("p.wasm"), b"x").unwrap();
+    std::fs::write(dir.join("geometry").join("g.wasm"), b"x").unwrap();
+    let abs = root.join("outside.wasm").to_string_lossy().replace('\\', "/");
+    for rel in ["../outside.wasm", "geometry/../../outside.wasm", abs.as_str(), "", "/p.wasm"] {
+        assert_eq!(component_path(&dir, rel), None, "{rel:?}");
+    }
+    assert_eq!(component_path(&dir, "p.wasm"), Some(dir.join("p.wasm")));
+    assert_eq!(component_path(&dir, "geometry/g.wasm"), Some(dir.join("geometry").join("g.wasm")));
+    assert_eq!(component_path(&dir, "missing.wasm"), None);
+    let _ = std::fs::remove_dir_all(&root);
 }

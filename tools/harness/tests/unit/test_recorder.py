@@ -194,3 +194,14 @@ def test_an_action_that_timed_out_is_recorded_and_so_is_the_settle_that_waited_i
         "    s.settle(timeout=60)",
         "    s.settle(timeout=5)",
     ]
+
+
+def test_a_recording_goes_only_to_a_py_file_in_a_folder_that_is_there(tmp_path):
+    from fundacad_harness.errors import BadArgs
+    with pytest.raises(BadArgs, match="no folder"):
+        Recorder(tmp_path / "a" / "b" / "walk.py", REPO, "0.1.0", 1)
+    with pytest.raises(BadArgs, match="no folder"):
+        stub_session(tmp_path / "a" / "walk.py")
+    with pytest.raises(BadArgs, match=r"only \.py"):
+        stub_session(tmp_path / "walk.txt")
+    assert list(tmp_path.iterdir()) == []

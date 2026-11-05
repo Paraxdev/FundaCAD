@@ -4,25 +4,27 @@
 #   sudo sh packaging/setup-spacemouse.sh
 set -e
 
-# Resolve the rule next to THIS script rather than hardcoding a path. It used to
-# point at one developer's home directory (and at the project's former name), so
-# the script failed for everyone who ran it as documented.
-RULE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/99-spacemouse.rules"
-[ -f "$RULE" ] || { echo "can't find 99-spacemouse.rules next to $0" >&2; exit 1; }
+# The same 046d product ids as 70-spacemouse.rules.
+LOGITECH_3DX="C603 C605 C606 C621 C623 C625 C626 C627 C628 C629 C62B C640"
+
+RULE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/70-spacemouse.rules"
+[ -f "$RULE" ] || { echo "can't find 70-spacemouse.rules next to $0" >&2; exit 1; }
+# The older 99- rule sorted after 73-seat-late, so its uaccess tag never applied.
+rm -f /etc/udev/rules.d/99-spacemouse.rules
 install -m644 "$RULE" /etc/udev/rules.d/
 udevadm control --reload
 udevadm trigger --subsystem-match=hidraw
 
-# Apply immediately to any plugged 3Dconnexion device (vendor 046d or 256f),
-# located by walking hidraw nodes rather than assuming a fixed hidrawN number.
+pattern="v0000256F"
+for p in $LOGITECH_3DX; do pattern="$pattern|v0000046Dp0000$p"; done
+
 found=0
 for ue in /sys/class/hidraw/*/device/uevent; do
-  if grep -qiE "v0000046D|v0000256F" "$ue" 2>/dev/null; then
+  if grep -qiE "$pattern" "$ue" 2>/dev/null; then
     node="/dev/$(basename "$(dirname "$(dirname "$ue")")")"
-    chgrp input "$node"
-    chmod 660 "$node"
-    echo "applied to $node:"
+    echo "rule applies to $node:"
     ls -l "$node"
+    command -v getfacl >/dev/null 2>&1 && getfacl -p "$node" 2>/dev/null | grep '^user:' || true
     found=1
   fi
 done

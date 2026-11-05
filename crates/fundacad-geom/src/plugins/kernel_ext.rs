@@ -98,11 +98,17 @@ pub fn wire_from_edges(edges: &[&Shape]) -> Result<Shape, String> {
     nonnull(ffi::po_wire(c.raw()), "a wire from these edges")
 }
 
+pub const MAX_SWEEP_TURNS: f64 = 1000.0;
+pub const MAX_DELAUNAY_POINTS: usize = 10_000_000;
+
 pub fn helical_sweep(profile: &Shape, o: Vec3, a: Vec3, degrees: f64, pitch: f64) -> Result<Shape, String> {
     finite(&[o.0, o.1, o.2, degrees, pitch])?;
     let a = unit(a)?;
     if pitch == 0.0 || degrees == 0.0 {
         return Err("a helical sweep needs a pitch and an angle".into());
+    }
+    if degrees.abs() > 360.0 * MAX_SWEEP_TURNS {
+        return Err(format!("a helical sweep makes at most {MAX_SWEEP_TURNS} turns"));
     }
     nonnull(
         ffi::po_helical_sweep(profile.raw(), o.0, o.1, o.2, a.0, a.1, a.2, degrees, pitch),
@@ -167,6 +173,9 @@ extern "C" {
 pub fn delaunay_2d(points: &[f64]) -> Result<Vec<u32>, String> {
     if points.len() % 2 != 0 {
         return Err("points come as x, y pairs".into());
+    }
+    if points.len() / 2 > MAX_DELAUNAY_POINTS {
+        return Err(format!("a planar Delaunay takes at most {MAX_DELAUNAY_POINTS} points"));
     }
     if points.iter().any(|v| v.is_nan()) {
         return Err("Points cannot contain NaN".into());

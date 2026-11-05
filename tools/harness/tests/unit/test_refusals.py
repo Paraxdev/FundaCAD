@@ -179,3 +179,12 @@ def test_a_tool_that_opens_a_choice_names_the_choices():
     s.bridge.on_click = lambda: rows.extend([[1, "choice:Box", "button", "Box", [], "dialog"], [1, "choice:Cylinder", "button", "Cylinder", [], "dialog"]])
     assert str(s.tool("Primitive")).startswith('clicked pick:primitive "Primitive", it asks for a choice: Box, Cylinder')
     s.close()
+
+
+def test_save_as_writes_only_a_funda_file(tmp_path):
+    from fundacad_harness.errors import BadArgs
+    s = session([])
+    for name in ("box.txt", "box.funda.py", "box"):
+        with pytest.raises(BadArgs, match=r"only \.funda"):
+            s.save_as(tmp_path / name)
+    s.close()

@@ -19,6 +19,12 @@ const KIND_GEOMETRY: u8 = 2;
 /// The last kind this build knows, the app carries every section above it.
 const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
+// serde_json refuses 128 containers nested in each other, so an item here sits inside at most 126 of them.
+const MAX_CBOR_DEPTH: usize = 126;
+/// The app refuses to open a .funda longer than this (fundacad_format::json_doc::MAX_DOC_TEXT).
+pub const MAX_DOC_TEXT: u64 = 1 << 30;
+/// Below the app's budget: this reader holds each geometry body in memory, the app streams it to disk.
+const MAX_GEOMETRY: u64 = 2 << 30;
 
 #[derive(Debug, Clone)]
 pub struct DocumentFileError(pub String);
@@ -49,19 +55,44 @@ pub fn is_binary_path(path: &Path) -> bool {
 pub fn hash(data: &[u8]) -> String {
     let mut h = blake2::Blake2bVar::new(16).expect("16 is a legal blake2b length");
     h.update(data);
+    hex_digest(h)
+}
+
+fn hex_digest(h: blake2::Blake2bVar) -> String {
     let mut out = [0u8; 16];
     h.finalize_variable(&mut out).expect("16 byte digest");
     out.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The digest and length of what `r` yields, read in chunks so it is never held whole.
+fn hash_stream(mut r: impl Read) -> Option<(String, u64)> {
+    let mut h = blake2::Blake2bVar::new(16).expect("16 is a legal blake2b length");
+    let mut buf = vec![0u8; 1 << 16];
+    let mut len = 0u64;
+    loop {
+        match r.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                h.update(&buf[..n]);
+                len += n as u64;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+    Some((hex_digest(h), len))
 }
 
 fn is_hash(s: &str) -> bool {
     s.len() == 32 && s.bytes().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
+fn wrong_geometry<T>() -> Result<T, DocumentFileError> {
+    fail("this document's geometry does not match its hash, the file is damaged or was modified")
+}
+
+// Every reader below has already checked each blob against its hash.
 fn publish(root: &Path, digest: &str, data: &[u8]) -> Result<(), DocumentFileError> {
-    if hash(data) != digest {
-        return fail("this document's geometry does not match its hash, the file is damaged or was modified");
-    }
     if std::fs::create_dir_all(root).is_err() {
         return fail(format!("cannot write the blob store at {}", root.display()));
     }
@@ -115,14 +146,14 @@ pub fn read_document_full(
     if !doc.contains_key("features") {
         return fail(format!("{} is not a FundaCAD document (no `features`).", path.display()));
     }
-    if blobs.iter().any(|(digest, data)| hash(data) != *digest) {
-        return fail("this document's geometry does not match its hash, the file is damaged or was modified");
+    if let Some(why) = crate::model::shape_problem(&doc) {
+        return fail(format!("{} is not a FundaCAD document ({why}).", path.display()));
     }
     Ok((doc, blobs, unread))
 }
 
 /// Best effort: a store this process cannot write is no reason to refuse a
-/// file whose geometry the engine took directly.
+/// file whose geometry the engine took directly. Takes blobs as `read_document_full` returns them, already checked.
 pub fn publish_all(root: &Path, blobs: &[(String, Vec<u8>)]) -> bool {
     blobs.iter().all(|(digest, data)| publish(root, digest, data).is_ok())
 }
@@ -153,7 +184,8 @@ fn read_json(path: &Path, raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>),
                 return fail("this document expands to more than 8 GiB and was refused");
             }
             match base64::engine::general_purpose::STANDARD.decode(b64) {
-                Ok(data) => blobs.push((digest.clone(), data)),
+                Ok(data) if hash(&data) == *digest => blobs.push((digest.clone(), data)),
+                Ok(_) => return wrong_geometry(),
                 Err(_) => return fail("this document's embedded geometry is damaged"),
             }
         }
@@ -172,6 +204,33 @@ pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
         };
         if !out.iter().any(|g| g == geom) {
             out.push(geom.to_string());
+        }
+    }
+    for g in history_geometry(doc) {
+        if !out.contains(&g) {
+            out.push(g);
+        }
+    }
+    out
+}
+
+// The version history keeps each feature as JSON text, and the app requires every import it names
+// (src/document/versions.ts referencedGeometry).
+fn history_geometry(doc: &Map<String, Value>) -> Vec<String> {
+    let objects = doc.get("versions").and_then(|v| v.get("objects")).and_then(Value::as_object);
+    let mut out: Vec<String> = Vec::new();
+    for text in objects.into_iter().flat_map(|o| o.values()).filter_map(Value::as_str) {
+        if !text.contains("\"geom\"") {
+            continue;
+        }
+        let Ok(f) = serde_json::from_str::<Value>(text) else { continue };
+        if f.get("type").and_then(Value::as_str) != Some("import") {
+            continue;
+        }
+        if let Some(g) = f.get("geom").and_then(Value::as_str).filter(|g| is_hash(g)) {
+            if !out.iter().any(|o| o == g) {
+                out.push(g.to_string());
+            }
         }
     }
     out
@@ -228,6 +287,17 @@ pub fn write_with(
     root: Option<&Path>,
     fetched: &std::collections::HashMap<String, Vec<u8>>,
 ) -> Result<usize, DocumentFileError> {
+    write_within(path, doc, root, fetched, MAX_DOC_TEXT)
+}
+
+/// [`write_with`] refusing a file longer than `max_text` bytes.
+pub fn write_within(
+    path: &Path,
+    doc: &Map<String, Value>,
+    root: Option<&Path>,
+    fetched: &std::collections::HashMap<String, Vec<u8>>,
+    max_text: u64,
+) -> Result<usize, DocumentFileError> {
     if is_binary_path(path) {
         return fail(
             "a .fundab file carries error correction only the FundaCAD app writes. Save as \
@@ -237,19 +307,19 @@ pub fn write_with(
     let root = root.map_or_else(blob_dir, Path::to_path_buf);
     let mut body: Map<String, Value> =
         doc.iter().filter(|(k, _)| k.as_str() != GEOMETRY_KEY).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let mut geometry = Map::new();
+    let mut blobs = Vec::new();
     let mut missing = Vec::new();
     for digest in referenced_geometry(&body) {
-        let data = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest));
-        match data {
-            Some(data) => {
-                geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
-            }
+        match fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest)) {
+            Some(data) => blobs.push((digest, data)),
             None => missing.push(digest),
         }
     }
     if !missing.is_empty() {
-        let names = importing_features(&body, &missing);
+        let mut names = importing_features(&body, &missing);
+        if names.is_empty() {
+            names = "used by an earlier version".into();
+        }
         return fail(format!(
             "{} imported {} ({names}) {} no geometry left, neither in the engine nor in {}, so \
              nothing was written. doc_import the original file again (or doc_open the .funda \
@@ -262,8 +332,16 @@ pub fn write_with(
     }
     for digest in optional_geometry(&body) {
         if let Some(data) = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest)) {
-            geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
+            blobs.push((digest, data));
         }
+    }
+    let encoded: u64 = blobs.iter().map(|(_, d)| (d.len() as u64).div_ceil(3) * 4 + 80).sum();
+    if encoded > max_text {
+        return too_long(encoded, max_text);
+    }
+    let mut geometry = Map::new();
+    for (digest, data) in blobs {
+        geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
     }
     let embedded = geometry.len();
     if embedded > 0 {
@@ -274,6 +352,9 @@ pub fn write_with(
         Err(e) => return fail(format!("the document could not be written: {e}")),
     };
     text.push('\n');
+    if text.len() as u64 > max_text {
+        return too_long(text.len() as u64, max_text);
+    }
     let tmp = path.with_extension(format!(
         "{}.tmp-{}",
         path.extension().map_or(String::new(), |e| e.to_string_lossy().into_owned()),
@@ -287,6 +368,16 @@ pub fn write_with(
         return fail(format!("cannot write {}", path.display()));
     }
     Ok(embedded)
+}
+
+fn too_long<T>(len: u64, max_text: u64) -> Result<T, DocumentFileError> {
+    fail(format!(
+        "the document with its imported geometry comes to {} MiB, more than the {} MiB a .funda file \
+         can hold, so nothing was written. Remove the largest imports, or save it from the FundaCAD \
+         app as .fundab.",
+        len.div_ceil(1 << 20),
+        max_text >> 20
+    ))
 }
 
 // Format 2, read without repair: the data shards are the stored bytes, so joining them and checking
@@ -341,7 +432,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         let (ta, tb, tl) = (u64_at(head, 16) as usize, u64_at(head, 24) as usize, u64_at(head, 32) as usize);
         let crc = u32_at(head, 40);
         for off in [ta, tb] {
-            if off + tl > raw.len() {
+            if off.checked_add(tl).is_none_or(|end| end > raw.len()) {
                 continue;
             }
             let t = &raw[off..off + tl];
@@ -358,17 +449,106 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         return damaged();
     };
 
+    let rows = table_rows(table)?;
+    let mut spans: Vec<(usize, usize)> =
+        rows.iter().map(|r| (r.off, r.end)).filter(|(start, end)| end > start).collect();
+    spans.sort_unstable();
+    if spans.windows(2).any(|w| w[0].1 > w[1].0) {
+        return damaged();
+    }
+    let mut read: Vec<&Row> = Vec::new();
+    for r in &rows {
+        if r.kind == KIND_DOCUMENT && r.rawlen as u64 > MAX_DOC_TEXT {
+            return fail(format!("this document is larger than {} MiB and was refused", MAX_DOC_TEXT >> 20));
+        }
+        let repeat = r.kind == KIND_GEOMETRY && read.iter().any(|o| o.kind == KIND_GEOMETRY && o.name == r.name);
+        if (r.kind == KIND_DOCUMENT || r.kind == KIND_GEOMETRY) && !repeat {
+            if r.kind == KIND_GEOMETRY && r.rawlen as u64 > MAX_GEOMETRY {
+                return fail(format!(
+                    "this document has a geometry section larger than {} MiB and was refused",
+                    MAX_GEOMETRY >> 20
+                ));
+            }
+            read.push(r);
+        }
+    }
+    if read.iter().try_fold(0u64, |sum, r| sum.checked_add(r.rawlen as u64)).is_none_or(|sum| sum > MAX_TOTAL) {
+        return fail("this document expands to more than 8 GiB and was refused");
+    }
+
     let mut doc: Option<Value> = None;
-    let mut blobs = Vec::new();
-    let mut unread = Vec::new();
+    let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+    let unread = rows
+        .iter()
+        .filter(|r| r.kind > KIND_SEGMENTS)
+        .map(|r| if r.name.is_empty() { format!("kind {}", r.kind) } else { r.name.clone() })
+        .collect();
+    for r in read {
+        let (Some(step), Some(stride)) = (r.shard.checked_mul(r.k), (r.k + r.m).checked_mul(r.shard)) else {
+            return damaged();
+        };
+        if r.stored > raw.len() || r.off > raw.len() {
+            return damaged();
+        }
+        let mut data = Vec::with_capacity(r.stored);
+        let mut q = r.off;
+        while q < r.end && q < raw.len() && data.len() < r.stored {
+            data.extend_from_slice(&raw[q..q.saturating_add(step).min(raw.len())]);
+            q = q.saturating_add(stride);
+        }
+        data.truncate(r.stored);
+        // A deflated section is hashed as it streams before it is kept, so one that fails its digest is never held.
+        let body = if r.codec == 1 {
+            let streamed = hash_stream(flate2::read::DeflateDecoder::new(&data[..]).take(r.rawlen as u64 + 1));
+            if streamed != Some((r.digest.clone(), r.rawlen as u64)) {
+                return damaged();
+            }
+            inflate_raw(&data, r.rawlen).unwrap_or_default()
+        } else {
+            if hash(&data) != r.digest {
+                return damaged();
+            }
+            data
+        };
+        if body.len() != r.rawlen {
+            return damaged();
+        }
+        if r.kind == KIND_DOCUMENT {
+            doc = Some(cbor(&body)?);
+        } else if r.name == r.digest {
+            blobs.push((r.digest.clone(), body));
+        }
+    }
+    match doc {
+        Some(doc) => Ok((doc, blobs, unread)),
+        None => fail("this .fundab file has no document in it"),
+    }
+}
+
+struct Row {
+    kind: u8,
+    codec: u8,
+    name: String,
+    off: usize,
+    /// Where the section's shards and CRC table end.
+    end: usize,
+    stored: usize,
+    rawlen: usize,
+    digest: String,
+    shard: usize,
+    k: usize,
+    m: usize,
+}
+
+fn table_rows(table: &[u8]) -> Result<Vec<Row>, DocumentFileError> {
     let count = u32_at(table, 4) as usize;
+    let mut rows = Vec::new();
     let mut p = 8usize;
     for _ in 0..count {
         if p + 4 > table.len() {
             return damaged();
         }
-        let kind = table[p];
-        let codec = table[p + 1];
+        let (kind, codec) = (table[p], table[p + 1]);
         let nl = u16_at(table, p + 2) as usize;
         p += 4;
         if p + nl + 24 + 16 + 8 > table.len() {
@@ -386,49 +566,22 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>),
         let k = u16_at(table, p + 4) as usize;
         let m = u16_at(table, p + 6) as usize;
         p += 8;
-        if kind > KIND_SEGMENTS {
-            unread.push(if name.is_empty() { format!("kind {kind}") } else { name.clone() });
-        }
-        if kind != KIND_DOCUMENT && kind != KIND_GEOMETRY {
-            continue;
-        }
-        if rawlen as u64 > MAX_TOTAL {
-            return fail("this document expands to more than 8 GiB and was refused");
-        }
         if shard == 0 || k == 0 {
             return damaged();
         }
-        let groups = stored.div_ceil(shard * k);
-        let mut data = Vec::with_capacity(stored);
-        let mut q = off;
-        for _ in 0..groups {
-            let end = (q + shard * k).min(raw.len());
-            if q < raw.len() {
-                data.extend_from_slice(&raw[q..end]);
-            }
-            q += (k + m) * shard;
-        }
-        data.truncate(stored);
-        let body = if codec == 1 { inflate_raw(&data).unwrap_or_default() } else { data };
-        if body.len() != rawlen || hash(&body) != digest {
+        let len = stored.div_ceil(shard * k).checked_mul((k + m) * (shard + 4));
+        let Some(end) = len.and_then(|len| off.checked_add(len)) else {
             return damaged();
-        }
-        if kind == KIND_DOCUMENT {
-            doc = Some(cbor(&body)?);
-        } else if name == digest {
-            blobs.push((digest, body));
-        }
+        };
+        rows.push(Row { kind, codec, name, off, end, stored, rawlen, digest, shard, k, m });
     }
-    match doc {
-        Some(doc) => Ok((doc, blobs, unread)),
-        None => fail("this .fundab file has no document in it"),
-    }
+    Ok(rows)
 }
 
-fn inflate_raw(data: &[u8]) -> Option<Vec<u8>> {
+fn inflate_raw(data: &[u8], rawlen: usize) -> Option<Vec<u8>> {
     let mut out = Vec::new();
-    flate2::read::DeflateDecoder::new(data).read_to_end(&mut out).ok()?;
-    Some(out)
+    flate2::read::DeflateDecoder::new(data).take(rawlen as u64 + 1).read_to_end(&mut out).ok()?;
+    (out.len() == rawlen).then_some(out)
 }
 
 fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFileError> {
@@ -462,6 +615,12 @@ fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         if !is_hash(h) {
             continue;
         }
+        let Some((streamed, _)) = z.by_name(entry).ok().and_then(hash_stream) else {
+            continue;
+        };
+        if streamed != h {
+            return wrong_geometry();
+        }
         if let Some(data) = read_entry(&mut z, entry) {
             blobs.push((h.to_string(), data));
         }
@@ -479,7 +638,7 @@ fn read_entry<R: Read + Seek>(z: &mut zip::ZipArchive<R>, name: &str) -> Option<
 // Just enough CBOR to read a document.
 
 fn cbor(b: &[u8]) -> Result<Value, DocumentFileError> {
-    let (value, _) = cbor_item(b, 0)?;
+    let (value, _) = cbor_item(b, 0, 0)?;
     Ok(value)
 }
 
@@ -503,8 +662,8 @@ fn cbor_len(b: &[u8], p: usize, ai: u8) -> Result<(Option<u64>, usize), Document
     })
 }
 
-fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError> {
-    if p >= b.len() {
+fn cbor_item(b: &[u8], mut p: usize, depth: usize) -> Result<(Value, usize), DocumentFileError> {
+    if p >= b.len() || depth > MAX_CBOR_DEPTH {
         return bad_cbor();
     }
     let ib = b[p];
@@ -536,7 +695,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
             match n {
                 None => {
                     while p < b.len() && b[p] != 0xFF {
-                        let (part, next) = cbor_item(b, p)?;
+                        let (part, next) = cbor_item(b, p, depth + 1)?;
                         p = next;
                         match part {
                             Value::String(s) => parts.extend_from_slice(s.as_bytes()),
@@ -546,10 +705,10 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     p += 1;
                 }
                 Some(n) => {
-                    let end = p + n as usize;
-                    if end > b.len() {
+                    let Some(end) = usize::try_from(n).ok().and_then(|n| p.checked_add(n)).filter(|&e| e <= b.len())
+                    else {
                         return bad_cbor();
-                    }
+                    };
                     parts.extend_from_slice(&b[p..end]);
                     p = end;
                 }
@@ -565,7 +724,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     None if p >= b.len() => return bad_cbor(),
                     _ => {}
                 }
-                let (item, next) = cbor_item(b, p)?;
+                let (item, next) = cbor_item(b, p, depth + 1)?;
                 out.push(item);
                 p = next;
             }
@@ -581,8 +740,8 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     None if p >= b.len() => return bad_cbor(),
                     _ => {}
                 }
-                let (key, next) = cbor_item(b, p)?;
-                let (value, next) = cbor_item(b, next)?;
+                let (key, next) = cbor_item(b, p, depth + 1)?;
+                let (value, next) = cbor_item(b, next, depth + 1)?;
                 let key = match key {
                     Value::String(s) => s,
                     other => other.to_string(),
@@ -594,7 +753,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
             Ok((Value::Object(out), if n.is_some() { p } else { p + 1 }))
         }
         // A tag: the tagged value is what matters here.
-        _ => cbor_item(b, p),
+        _ => cbor_item(b, p, depth + 1),
     }
 }
 

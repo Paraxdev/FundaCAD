@@ -12,13 +12,13 @@ import type {
 
 export interface PrintabilitySetup {
   /** mm whatever the display unit: these are nozzle-sized numbers, and the
-   *  engine's report quotes them in mm. */
-  nozzle: number;
-  layer: number;
+   *  engine's report quotes them in mm. Null while a field holds no number. */
+  nozzle: number | null;
+  layer: number | null;
   /** Degrees past vertical a face may lean before it needs support. */
-  overhang: number;
-  minGap: number;
-  maxBridge: number;
+  overhang: number | null;
+  minGap: number | null;
+  maxBridge: number | null;
   up: PrintabilityUp;
   /** Lay each body on its largest flat face instead of turning it by `up`. */
   layFlat: boolean;
@@ -89,7 +89,7 @@ export type PrintabilityRequest = { ok: true; options: PrintabilityOptions } | {
 /** The panel's settings as the op's options for `bodies` (empty checks every body), or the first thing in the way,
  *  phrased for the status line. Every setting is sent, so the engine checks against what the panel shows. */
 export function buildPrintabilityRequest(s: PrintabilitySetup, bodies: string[]): PrintabilityRequest {
-  // A cleared number input reads as "", which compares as 0, so check the type first.
+  // A cleared field is null, which compares as 0, so check the type first.
   if (!isNum(s.nozzle) || !(s.nozzle > 0)) return { ok: false, message: "the nozzle width must be above 0" };
   if (!isNum(s.layer) || !(s.layer > 0)) return { ok: false, message: "the layer height must be above 0" };
   if (!isNum(s.overhang) || !(s.overhang > 0 && s.overhang < 90)) {
@@ -123,6 +123,10 @@ export interface FindingRow {
   index: number;
   kind: PrintabilityKind;
   text: string;
+  /** Face and height above the bed, shown under the text. */
+  hint: string;
+  /** The text and the place, as the row is named to a screen reader. */
+  spoken: string;
 }
 
 export interface BodyGroup {
@@ -194,6 +198,35 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
   return f.note ? `${text}, ${f.note}` : text;
 }
 
+/** Where a finding sits, by face number (what the Geometry tab shows) and height above its body's bed. `hint` starts
+ *  with a capital, `spoken` is lower case to follow other words. A body the reply does not list has no height.
+ *  An overhang is placed by its lowest point, as the engine's report does, any other finding by its middle. */
+export function findingPlace(
+  f: PrintabilityFinding,
+  bodies: PrintabilityReply["bodies"],
+  nameOf: (id: string) => string,
+): { hint: string; spoken: string } {
+  let faces = `face ${f.face + 1}`;
+  if (f.other) {
+    faces =
+      f.other.body === f.body
+        ? `faces ${f.face + 1} and ${f.other.face + 1}`
+        : `${faces} and face ${f.other.face + 1} of ${nameOf(f.other.body)}`;
+  }
+  const b = bodies.find((x) => x.id === f.body);
+  const parts = [faces];
+  if (b && (b.up[0] !== 0 || b.up[1] !== 0 || b.up[2] !== 0)) {
+    // Under a thousandth of a millimetre is the bed itself.
+    if (f.kind === "overhang") parts.push(f.low < 0.001 ? "from the bed up" : `from ${mm(f.low)} above the bed`);
+    else {
+      const h = f.at[0] * b.up[0] + f.at[1] * b.up[1] + f.at[2] * b.up[2] - b.bed;
+      parts.push(h < 0.001 ? "on the bed" : `centred ${mm(h)} above the bed`);
+    }
+  }
+  const spoken = parts.join(", ");
+  return { hint: spoken.charAt(0).toUpperCase() + spoken.slice(1), spoken };
+}
+
 /** The kinds in the legend's order, which is also the order of KIND_COLORS. */
 export const KIND_ORDER = Object.keys(KIND_COLORS) as PrintabilityKind[];
 
@@ -222,7 +255,9 @@ export function formatPrintabilityResult(
   }
   const kinds = new Set<PrintabilityKind>();
   r.findings.forEach((f, index) => {
-    groupOf(f.body).rows.push({ index, kind: f.kind, text: findingText(f, nameOf) });
+    const text = findingText(f, nameOf);
+    const place = findingPlace(f, r.bodies, nameOf);
+    groupOf(f.body).rows.push({ index, kind: f.kind, text, hint: place.hint, spoken: `${text}, ${place.spoken}` });
     kinds.add(f.kind);
   });
   const errors = (r.errors ?? []).map((e) => (e.feature_id ? `${e.feature_id}: ${e.message}` : e.message));
@@ -238,6 +273,55 @@ export function formatPrintabilityResult(
 /** How many things the check found, body-level problems included. */
 export function problemCount(v: PrintabilityView): number {
   return v.groups.reduce((n, g) => n + g.notes.length + g.rows.length, 0);
+}
+
+const KIND_NOUNS: Record<PrintabilityKind, [string, string]> = {
+  overhang: ["overhang", "overhangs"],
+  bridge: ["bridge", "bridges"],
+  wall: ["thin wall", "thin walls"],
+  floor: ["thin floor", "thin floors"],
+  gap: ["gap", "gaps"],
+  fused: ["fused spot", "fused spots"],
+  meshHole: ["mesh hole", "mesh holes"],
+  flatTriangle: ["flat triangle", "flat triangles"],
+};
+
+/** What a screen reader hears once a Check is done: the count, each kind's share, and the largest overhang with its
+ *  area and face. A tie on the area takes the first in the reply. The body is named only when the reply has several. */
+// Failures with no body checked found nothing only because nothing built.
+export function printabilityHead(v: PrintabilityView): string {
+  const n = problemCount(v);
+  if (n) return `Printability: ${plural(n, "thing", "things")} to look at`;
+  return !v.groups.length && v.errors.length ? "Printability: could not check" : "Printability: nothing found";
+}
+
+export function printabilitySummary(v: PrintabilityView): string {
+  const rest = printabilityDetails(v);
+  return `${printabilityHead(v)}.${rest ? ` ${rest}` : ""}`;
+}
+
+/** The summary after its head, for when a toast has said the head already. */
+export function printabilityDetails(v: PrintabilityView): string {
+  const parts: string[] = [];
+  for (const k of KIND_ORDER) {
+    const c = v.findings.filter((f) => f.kind === k).length;
+    if (c) parts.push(plural(c, ...KIND_NOUNS[k]));
+  }
+  const notes = v.groups.reduce((t, g) => t + g.notes.length, 0);
+  if (notes) parts.push(plural(notes, "body note", "body notes"));
+  if (v.errors.length) parts.push(plural(v.errors.length, "error", "errors"));
+  const sentences: string[] = [];
+  if (parts.length) sentences.push(parts.join(", "));
+  const overhangs = v.findings.filter((f) => f.kind === "overhang");
+  let largest: PrintabilityFinding | undefined;
+  for (const f of overhangs) if (!largest || f.area > largest.area) largest = f;
+  if (largest) {
+    const body =
+      v.groups.length > 1 ? ` of ${v.groups.find((g) => g.body === largest!.body)?.name ?? largest.body}` : "";
+    const lead = overhangs.length > 1 ? "Largest overhang" : "The overhang is";
+    sentences.push(`${lead} ${area(largest.area)} on face ${largest.face + 1}${body}`);
+  }
+  return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
 /** The tints for a result in display face ids: each finding's face in its kind's colour, and the finding put forward

@@ -122,9 +122,17 @@ export class TraceBloom {
   /** Tone mapping and the output encoding come after the bloom, from the renderer's output transform,
    *  exactly as for the plain blit. */
   draw(from: THREE.Texture, to: THREE.Texture, mix: number) {
+    this.blit(this.settings && this.quad ? this.quad : this.deps.blitQuad, from, to, mix);
+  }
+
+  /** Without bloom, as the tracer draws its preview, so a mix of previews does not change their brightness. */
+  drawPlain(from: THREE.Texture, to: THREE.Texture, mix: number) {
+    this.blit(this.deps.blitQuad, from, to, mix);
+  }
+
+  private blit(q: FadeQuad, from: THREE.Texture, to: THREE.Texture, mix: number) {
     this.last = { from, to, mix };
     const r = this.deps.renderer;
-    const q = this.settings && this.quad ? this.quad : this.deps.blitQuad;
     if (q === this.quad && this.node) {
       const d = r.getDrawingBufferSize(this.deps.size);
       const long = Math.max(d.x, d.y, 1);

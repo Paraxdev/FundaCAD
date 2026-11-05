@@ -12,6 +12,9 @@ use super::mesh::{MeshObject, MAX_IMPORT_TRIANGLES};
 pub const MAX_SKETCH_ENTITIES: usize = 20_000;
 const BINARY_SENTINEL: &[u8] = b"AutoCAD Binary DXF\r\n\x1a\0";
 const MAX_INSERT_DEPTH: usize = 16;
+/// Group codes walked plus INSERT array cells, so nested arrays of skipped, empty or heavy blocks still cost.
+/// A drawing walked once costs about its own group codes, which a text DXF under the import cap holds fewer of.
+const MAX_DXF_WORK: u64 = super::MAX_IMPORT_FILE_BYTES / 4;
 
 pub struct DxfRead {
     pub sketches: Vec<(String, Vec<Value>)>,
@@ -150,6 +153,11 @@ struct Ent {
 }
 
 impl Ent {
+    /// Each walk scans the group codes of the entity and of its vertices.
+    fn cost(&self) -> u64 {
+        let own = self.pairs.len() as u64 + 1;
+        self.subs.iter().fold(own, |a, s| a.saturating_add(s.pairs.len() as u64 + 1))
+    }
     fn get(&self, code: i32) -> Option<&V> {
         self.pairs.iter().find(|(c, _)| *c == code).map(|(_, v)| v)
     }
@@ -394,6 +402,7 @@ struct Out {
     loops: usize,
     count: usize,
     tris: usize,
+    work: u64,
 }
 
 const FLAT: f64 = 1e-9;
@@ -404,7 +413,7 @@ fn xy(p: [f64; 3]) -> P2 {
 
 impl Out {
     fn full(&self) -> bool {
-        self.count > MAX_SKETCH_ENTITIES || self.tris as u64 > MAX_IMPORT_TRIANGLES
+        self.count > MAX_SKETCH_ENTITIES || self.tris as u64 > MAX_IMPORT_TRIANGLES || self.work > MAX_DXF_WORK
     }
 
     fn push(&mut self, layer: &str, e: E) {
@@ -553,6 +562,7 @@ struct Walker<'a> {
 impl Walker<'_> {
     fn walk(&mut self, ents: &[Ent], m: &Mat, inherit: Option<&str>) {
         for e in ents {
+            self.out.work += e.cost();
             if self.out.full() {
                 return;
             }
@@ -657,10 +667,9 @@ impl Walker<'_> {
             }
             out.triangles(layer, &pts, &faces);
         } else if flags & 16 != 0 {
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            let (rows, cols) = (e.i(71, 0).max(0) as usize, e.i(72, 0).max(0) as usize);
+            let (rows, cols) = (count(e.i(71, 0)), count(e.i(72, 0)));
             let pts: Vec<[f64; 3]> = e.subs.iter().map(|v| apply(m, v.p(10))).collect();
-            if rows * cols == 0 || pts.len() < rows * cols {
+            if rows.checked_mul(cols).is_none_or(|n| n == 0 || pts.len() < n) {
                 return;
             }
             let (wrap_r, wrap_c) = (flags & 1 != 0, flags & 32 != 0);
@@ -712,11 +721,16 @@ impl Walker<'_> {
         let s = [e.f(41, 1.0), e.f(42, 1.0), e.f(43, 1.0)];
         let head = mul(&mul(&mul(m, &translate(e.p(10))), &ocs(e.normal())), &rot_z(e.f(50, 0.0).to_radians()));
         let tail = mul(&scale(s), &translate(block.base.map(|x| -x)));
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        let (cols, rows) = (e.i(70, 1).max(1) as usize, e.i(71, 1).max(1) as usize);
+        let (cols, rows) = (count(e.i(70, 1)).max(1), count(e.i(71, 1)).max(1));
+        let cells = rows.checked_mul(cols).map_or(u64::MAX, |n| u64::try_from(n).unwrap_or(u64::MAX));
+        if cells > MAX_DXF_WORK - self.out.work.min(MAX_DXF_WORK) {
+            self.out.work = MAX_DXF_WORK + 1;
+            return;
+        }
         self.stack.push(name);
         'array: for r in 0..rows {
             for c in 0..cols {
+                self.out.work += 1;
                 if self.out.full() {
                     break 'array;
                 }
@@ -727,6 +741,10 @@ impl Walker<'_> {
         }
         self.stack.pop();
     }
+}
+
+fn count(n: i64) -> usize {
+    usize::try_from(n.max(0)).unwrap_or(usize::MAX)
 }
 
 fn polyline(out: &mut Out, layer: &str, m: &Mat, verts: &[([f64; 3], f64)], closed: bool) {
@@ -1095,6 +1113,11 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
     let mut walker = Walker { blocks: &d.blocks, out: Out::default(), stack: Vec::new(), layer_names: HashMap::new() };
     walker.walk(&d.entities, &scale([mm; 3]), None);
     let o = walker.out;
+    if o.work > MAX_DXF_WORK {
+        return Err(format!(
+            "this DXF repeats its blocks into more than {MAX_DXF_WORK} values and array cells, too much to import. Explode or split the drawing in the source app and import the part you need"
+        ));
+    }
     if o.count > MAX_SKETCH_ENTITIES {
         return Err(format!(
             "this DXF has more than {MAX_SKETCH_ENTITIES} lines and curves, too many for a usable sketch. Split the drawing in the source app and import the part you need"

@@ -13,10 +13,12 @@ import { ENGINE } from "../../../src/app/engineKey";
 import { createSelection } from "../../../src/app/selection";
 import { DimInput } from "../../../src/sketch/dimInput";
 import { useTimelineStore } from "../../../src/stores/timeline";
+import { useToastStore } from "../../../src/stores/toasts";
 import { useSelectionStore } from "../../../src/stores/selection";
 import type { Engine } from "../../../src/app/engine";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
 import { announce } from "../../../src/ui/announce";
+import { awaitTreePick, resetTreePicks, treePickWaiting } from "../../../src/ui/treePick";
 
 vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
@@ -332,6 +334,71 @@ describe("History row double click while another edit is open", () => {
   });
 });
 
+describe("History edit while a tool waits for a row", () => {
+  afterEach(() => resetTreePicks());
+  const keeps = { keepsOnRewind: true, keepsOnCommand: true };
+
+  function pressPullWaiting() {
+    const m = mountBar({ tool: { name: "pressPull", on: "" }, preview: null });
+    const tool = m.tool("pressPull");
+    const cancel = tool.cancel;
+    const release = awaitTreePick(
+      () => "no",
+      () => tool.cancel(),
+      keeps,
+    );
+    tool.cancel = () => {
+      cancel();
+      release();
+    };
+    return m;
+  }
+
+  it("a double click closes a tool that keeps its pick through commands and edits the step", async () => {
+    const m = pressPullWaiting();
+    await m.dbl("rv");
+    expect(m.log).toEqual(["cancel:pressPull", "startEdit:revolvePitch"]);
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("Enter on the step does the same", async () => {
+    const m = pressPullWaiting();
+    await new Promise((r) => setTimeout(r, 2));
+    await m.chip("rv").trigger("keydown", { key: "Enter" });
+    expect(m.log).toEqual(["cancel:pressPull", "startEdit:revolvePitch"]);
+  });
+
+  it("ends a pick with no tool behind it, as Stress's Click faces, then edits the step", async () => {
+    const m = mountBar();
+    awaitTreePick(
+      () => "no",
+      () => m.log.push("stop:placing"),
+      keeps,
+    );
+    await m.dbl("rv");
+    expect(m.log).toEqual(["stop:placing", "startEdit:revolvePitch"]);
+  });
+
+  it("keeps the pick when the typed value is refused, and edits nothing", async () => {
+    const m = pressPullWaiting();
+    typedBox("abc", () => m.log.push("commit"));
+    await m.dbl("rv");
+    expect(m.log).toEqual([]);
+    expect(treePickWaiting()).toBe(true);
+  });
+
+  it("a plain pick, as a sketch's plane, keeps the edit back and says why", async () => {
+    const m = mountBar();
+    awaitTreePick(
+      () => "no",
+      () => m.log.push("end:pick"),
+    );
+    await m.dbl("rv");
+    expect(m.log).toEqual([]);
+    expect(m.status.at(-1)).toBe("Finish the active tool first, or press Esc");
+  });
+});
+
 describe("an import's chip", () => {
   const nodes = [
     { name: "Gearbox", parent: null },
@@ -569,6 +636,7 @@ describe("History rows picked together", () => {
     items.find((i) => i.label === "Suppress these 3")!.onClick!();
     items.find((i) => i.label === "Delete these 3")!.onClick!();
     expect(m.log).toEqual(["suppress:true:ex1,rv,jt", "remove:ex1,rv,jt"]);
+    expect(useToastStore().items.map((t) => [t.message, t.action?.label])).toEqual([["Deleted 3 steps", "Undo"]]);
     expect(useSelectionStore().rows.keys).toEqual([]);
   });
 
@@ -1085,5 +1153,98 @@ describe("the rollback marker over filtered out rows", () => {
     const m = mountBar({ regions: ["sk"], rollback: 3 });
     await m.w.get('[data-testid="history-related"]').trigger("click");
     expect(isEnd(m)).toBe(false);
+  });
+});
+
+describe("History heading", () => {
+  it("is an h2 that names the History region", () => {
+    const { w } = mountBar({});
+    const heads = w.findAll("h2.float-card-title");
+    const id = heads[0]?.attributes("id");
+    expect([heads.length, heads[0]?.text(), Boolean(id)]).toEqual([1, "History", true]);
+    expect([w.attributes("aria-labelledby"), w.attributes("aria-label")]).toEqual([id, undefined]);
+    expect(w.find("span.float-card-title").exists()).toBe(false);
+  });
+});
+
+describe("Rollback marker drag", () => {
+  const IDS = ["sk", "ex1", "rv", "jt", "mc", "dp"];
+  // A stacked column of 24px chips 30px apart, in window px under the root zoom, as getBoundingClientRect reports them.
+  function layout(zoom: number) {
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const i = IDS.indexOf(this.dataset.id ?? "");
+      const top = (10 + Math.max(i, 0) * 30) * zoom;
+      return {
+        left: 0,
+        top,
+        width: 200 * zoom,
+        height: 24 * zoom,
+        right: 200 * zoom,
+        bottom: top + 24 * zoom,
+      } as DOMRect;
+    });
+    onTestFinished(() => spy.mockRestore());
+  }
+  /** The gap the drawn marker sits in: the index of the step after it, or the step count at the end. */
+  function markerGap(w: ReturnType<typeof mountBar>["w"]) {
+    const m = w.get(".timeline-marker").element;
+    const next = (m.nextElementSibling as HTMLElement | null)?.dataset.feature;
+    return next ? IDS.indexOf(next) : IDS.length;
+  }
+  const at = (type: string, zoom: number, cssY: number) =>
+    window.dispatchEvent(new PointerEvent(type, { clientX: 50 * zoom, clientY: cssY * zoom }));
+
+  for (const zoom of [1, 1.25]) {
+    it(`draws the marker live in the gap the drop takes, at zoom ${zoom}`, async () => {
+      layout(zoom);
+      const { w, log } = mountBar({ attach: true });
+      onTestFinished(() => w.unmount());
+      await w.get(".timeline-marker").trigger("pointerdown");
+      // The middle of chip rv is at 82, so 85 is past it and 75 short of it.
+      for (const [y, gap] of [
+        [85, 3],
+        [75, 2],
+        [5, 0],
+        [500, 6],
+        [60, 2],
+      ] as const) {
+        at("pointermove", zoom, y);
+        await nextTick();
+        expect([y, markerGap(w), w.get(".timeline-marker").classes()]).toEqual([
+          y,
+          gap,
+          ["timeline-marker", "dragging"],
+        ]);
+      }
+      at("pointerup", zoom, 60);
+      await nextTick();
+      expect(log).toEqual(["rollback:2"]);
+      expect(w.get(".timeline-marker").classes()).not.toContain("dragging");
+    });
+  }
+
+  it("springs back to the saved gap on a cancelled pointer, with no roll", async () => {
+    layout(1);
+    const { w, log } = mountBar({ attach: true, rollback: 4 });
+    onTestFinished(() => w.unmount());
+    await w.get(".timeline-marker").trigger("pointerdown");
+    at("pointermove", 1, 40);
+    await nextTick();
+    expect(markerGap(w)).toBe(1);
+    at("pointercancel", 1, 40);
+    await nextTick();
+    expect([markerGap(w), log]).toEqual([4, []]);
+  });
+
+  it("writes no --x on the marker while it is dragged", async () => {
+    layout(1);
+    const { w } = mountBar({ attach: true });
+    onTestFinished(() => w.unmount());
+    await w.get(".timeline-marker").trigger("pointerdown");
+    at("pointermove", 1, 85);
+    await nextTick();
+    expect((w.get(".timeline-marker").element as HTMLElement).style.getPropertyValue("--x")).toBe("");
   });
 });

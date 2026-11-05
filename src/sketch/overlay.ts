@@ -6,6 +6,7 @@ import { disposeObject3D } from "../lib/disposer";
 import { overlayMaterial } from "../viewport/overlayMaterial";
 import { pickColor } from "../viewport/pickColors";
 import { themeColor } from "../viewport/themeColors";
+import { onThemeChange } from "../ui/theme";
 import { asFeature } from "../types";
 import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
 import { planeOf } from "../document/planeOf";
@@ -42,14 +43,23 @@ export interface WorldRegion {
   entityId?: string; // the source text entity, for double-click-to-edit
 }
 
-export const CURVE_COLOR = 0x5b9bff; // under-constrained blue
-export const PREVIEW_COLOR = 0xffffff;
 /** A selected sketch entity: the accent, made to read on the scene ground (viewport/pickColors.ts). */
 export function sketchSelectColor(): number {
   return pickColor(themeColor("--accent", 0x9a9ff0), themeColor("--viewport-bg", 0x0b0912), "select", "edge");
 }
-export const DIM_COLOR = 0x8fa4bd; // muted blue-gray for dimension annotations
-const FILL_COLOR = 0x3a7bd5;
+
+export const sketchFreeColor = () => themeColor("--sketch-free", 0x5b9bff);
+export const sketchDefinedColor = () => themeColor("--sketch-defined", 0xffffff);
+export const sketchConflictColor = () => themeColor("--error", 0xff5c5c);
+const constructionColor = () => themeColor("--sketch-construction", 0xffa64d);
+const projectedColor = () => themeColor("--sketch-projected", 0xb07fe8);
+const projectedStaleColor = () => themeColor("--sketch-projected-stale", 0xd9a24d);
+const looseOpenColor = () => themeColor("--sketch-loose-open", 0xe5484d);
+const looseUntiedColor = () => themeColor("--sketch-loose-untied", 0xf5a524);
+export const sketchAidColor = () => themeColor("--sketch-aid", 0x8fa4bd);
+export const sketchSnapColor = () => themeColor("--sketch-snap", 0xffaa33);
+export const sketchPreviewColor = () => themeColor("--sketch-preview", 0xffffff);
+export const sketchFillColor = () => themeColor("--sketch-fill", 0x3a7bd5);
 
 const lineMats = new Map<number, THREE.LineBasicMaterial>();
 function lineMat(color: number): THREE.LineBasicMaterial {
@@ -62,7 +72,6 @@ function lineMat(color: number): THREE.LineBasicMaterial {
   }
   return m;
 }
-const CONSTRUCTION_COLOR = 0xffa64d;
 const dashMats = new Map<number, THREE.LineDashedMaterial>();
 // Construction geometry is dashed, orange on a plain pass and the pass colour on a highlight pass.
 function dashMat(color: number): THREE.LineDashedMaterial {
@@ -73,12 +82,35 @@ function dashMat(color: number): THREE.LineDashedMaterial {
   }
   return m;
 }
+// Projected geometry is dashed in screen pixels, so its gap to dash ratio (0.21) never reads as construction's (0.63).
+// With no scale known (the committed overlay) the world sizes stand in.
+const PROJECTED_DASH_PX = 14;
+const PROJECTED_GAP_PX = 3;
+const PROJECTED_DASH_MM = 2.4;
+const PROJECTED_GAP_MM = 0.5;
+const PROJECTED_MAT_CAP = 48;
+const projectedMats = new Map<string, THREE.LineDashedMaterial>();
+function projectedDashMat(color: number, mmPerPx?: number): THREE.LineDashedMaterial {
+  const px = mmPerPx !== undefined && Number.isFinite(mmPerPx) && mmPerPx > 0 ? mmPerPx : 0;
+  const dashSize = px ? px * PROJECTED_DASH_PX : PROJECTED_DASH_MM;
+  const gapSize = px ? px * PROJECTED_GAP_PX : PROJECTED_GAP_MM;
+  const key = `${color}:${dashSize}`;
+  let m = projectedMats.get(key);
+  if (!m) {
+    // Every 5% zoom step makes new sizes, so the cache is emptied rather than grown without end.
+    if (projectedMats.size >= PROJECTED_MAT_CAP) projectedMats.clear();
+    m = overlayMaterial(new THREE.LineDashedMaterial({ color, dashSize, gapSize, depthTest: true }));
+    projectedMats.set(key, m);
+  }
+  return m;
+}
 // Alignment guides: the snap marker's amber, dashed and dimmed, with a short dash and long gap so a guide reads as
 // an aid rather than a drawn line.
 const GUIDE_DASH_PX = 5;
 const GUIDE_GAP_PX = 5;
+// Colours are written by applySketchTheme from the constructor: a read at module load runs before initTheme and
+// fills themeColors' cache with Noir values that no theme change clears.
 const GUIDE_MAT = new THREE.LineDashedMaterial({
-  color: 0xffaa33,
   dashSize: 1.2, // replaced per call with the pixel-sized pair (see setGuides)
   gapSize: 1.2,
   transparent: true,
@@ -86,12 +118,10 @@ const GUIDE_MAT = new THREE.LineDashedMaterial({
   depthTest: true,
 });
 // a control-point spline's polygon: thin, dashed, and quieter than any curve
-export const POLE_COLOR = 0x9fb3cc;
 const POLYGON_DASH_PX = 4;
 const POLYGON_GAP_PX = 3;
 const POLE_HALF_PX = 3.5;
 const POLYGON_MAT = new THREE.LineDashedMaterial({
-  color: POLE_COLOR,
   dashSize: 1,
   gapSize: 1,
   transparent: true,
@@ -100,13 +130,10 @@ const POLYGON_MAT = new THREE.LineDashedMaterial({
 });
 // projected reference geometry: purple (linked/fixed, Fusion-style); a stale
 // projection (source no longer resolves, last shape kept) tints amber
-const PROJECTED_COLOR = 0xb07fe8;
-const PROJECTED_STALE_COLOR = 0xd9a24d;
 // Pulled toward the camera so a profile lying on a face shows its fill and
 // highlight instead of losing the depth test to the opaque face.
 const FILL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
 const FILL_MAT = new THREE.MeshBasicMaterial({
-  color: FILL_COLOR,
   transparent: true,
   opacity: 0.18,
   side: THREE.DoubleSide,
@@ -116,7 +143,6 @@ const FILL_MAT = new THREE.MeshBasicMaterial({
 // A hole of an even-odd sketch draws nothing until hovered or selected.
 const FILL_HOLE_MAT = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
 const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
-  color: FILL_COLOR,
   transparent: true,
   opacity: 0.34,
   side: THREE.DoubleSide,
@@ -130,6 +156,17 @@ const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
   depthWrite: false,
   ...FILL_OFFSET,
 });
+const SNAP_MAT = overlayMaterial(new THREE.MeshBasicMaterial({ depthTest: true }));
+
+export function applySketchTheme() {
+  GUIDE_MAT.color.setHex(sketchSnapColor());
+  SNAP_MAT.color.setHex(sketchSnapColor());
+  POLYGON_MAT.color.setHex(sketchAidColor());
+  FILL_MAT.color.setHex(sketchFillColor());
+  FILL_HOVER_MAT.color.setHex(sketchFillColor());
+}
+// Registered after themeColors' own listener, which clears the colour cache these read.
+onThemeChange(applySketchTheme);
 
 export class SketchOverlay {
   readonly group = new THREE.Group();
@@ -163,13 +200,11 @@ export class SketchOverlay {
     );
     this.group.renderOrder = 10;
 
-    this.snapMarker = new THREE.Mesh(
-      new THREE.RingGeometry(0.6, 1.0, 16),
-      overlayMaterial(new THREE.MeshBasicMaterial({ color: 0xffaa33, depthTest: true })),
-    );
+    this.snapMarker = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.0, 16), SNAP_MAT);
     this.snapMarker.renderOrder = 30;
     this.snapMarker.visible = false;
     this.group.add(this.snapMarker);
+    applySketchTheme();
   }
 
   planeFor(spec: PlaneSpec): SketchPlane {
@@ -200,6 +235,9 @@ export class SketchOverlay {
    *  areas shown are split against an older model until the next update(). */
   splitStale = false;
 
+  /** Set by the app to ask the on demand viewport for a frame, or a redrawn overlay waits for the next pointer move. */
+  changed: () => void = () => {};
+
   /** Rebuild committed sketch curves + region fills from the document. */
   update(doc: CadDocument, hiddenSketchId: string | null = null) {
     this.splitStale = false;
@@ -217,7 +255,7 @@ export class SketchOverlay {
       const plane = this.planeFor(planeOf(f, resolved.sketchPlanes, resolved.datumPlanes));
       const ents = resolveEntities(f, doc.parameters);
 
-      for (const obj of curveObjects(ents, plane, CURVE_COLOR)) {
+      for (const obj of curveObjects(ents, plane, sketchFreeColor())) {
         obj.userData.sketchId = f.id; // + entityId from curveObjects → Project-tool picking
         this.committed.add(obj);
       }
@@ -245,6 +283,7 @@ export class SketchOverlay {
         this.regions.push(wr);
       }
     }
+    this.changed();
   }
 
   /** From the client-side glyph tessellation cache, empty until it warms; the fill repaints a frame later. */
@@ -510,21 +549,21 @@ export class SketchOverlay {
     for (const o of objects) this.activeSketch.add(o);
   }
 
-  /** Red dots on open ends, amber on ends that meet another curve only by position.
+  /** Red rings on open ends, amber dots on ends that meet another curve only by position.
    *  Pass null to clear. */
   setLooseEnds(plane: SketchPlane, le: LooseEnds | null) {
     this.clearGroup(this.looseEndsGroup);
     this.looseEndCounts = { open: le?.open.length ?? 0, untied: le?.untied.length ?? 0 };
     if (!le) return;
-    const add = (pts: { x: number; y: number }[], color: number) => {
+    const add = (pts: { x: number; y: number }[], color: number, ring: boolean) => {
       if (!pts.length) return;
       const g = new THREE.BufferGeometry().setFromPoints(pts.map((q) => plane.to3D(q.x, q.y)));
-      const dots = new THREE.Points(g, looseEndMat(color));
+      const dots = new THREE.Points(g, looseEndMat(color, ring));
       dots.renderOrder = 15;
       this.looseEndsGroup.add(dots);
     };
-    add(le.open, LOOSE_OPEN_COLOR);
-    add(le.untied, LOOSE_UNTIED_COLOR);
+    add(le.open, looseOpenColor(), true);
+    add(le.untied, looseUntiedColor(), false);
   }
 
   /** The in-progress rubber-band entity (rebuilt every pointer move). */
@@ -607,6 +646,7 @@ export class SketchOverlay {
       this.group.add(this.handleDot);
     }
     this.handleDot.position.copy(world);
+    ((this.handleDot.children[0] as THREE.Points).material as THREE.PointsMaterial).color.setHex(sketchPreviewColor());
     this.handleDot.visible = true;
   }
 
@@ -646,6 +686,7 @@ export function curveObjects(
   plane: SketchPlane,
   color: number,
   highlight = false, // emphasis pass (selection / modify hover): color is preferred even on projected
+  mmPerPx?: number, // sizes the projected dashes in pixels, absent they use mm
 ): THREE.Object3D[] {
   warmText(ents); // fetch glyph outlines for any text entities; repaints when they land
   const out: THREE.Object3D[] = [];
@@ -657,7 +698,7 @@ export function curveObjects(
       out.push(o);
     };
     if (e.type === "point") {
-      add(pointMarker(plane, e.x, e.y, e.construction && !highlight ? CONSTRUCTION_COLOR : color));
+      add(pointMarker(plane, e.x, e.y, e.construction && !highlight ? constructionColor() : color));
       continue;
     }
     if (e.type === "text") {
@@ -670,17 +711,18 @@ export function curveObjects(
     // works on projected entities and the selection must show.
     const projected = e.type === "projected" ? e : null;
     const drawColor =
-      projected && !highlight ? (projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR) : color;
-    const curve =
-      !projected && e.construction
-        ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR)
+      projected && !highlight ? (projected.stale === true ? projectedStaleColor() : projectedColor()) : color;
+    const curve = projected
+      ? dashedLine(pts, projectedDashMat(drawColor, mmPerPx))
+      : e.construction
+        ? constructionLine(pts, highlight ? color : constructionColor())
         : polyline(pts, drawColor);
     // Circles and arcs get a visible centre +: it is a snap target and the dimension tool's handle. Grouped to keep
     // one object per entity; asRound is the one centre rule.
     const center = asRound(e);
     if (center) {
       const g = new THREE.Group();
-      const markerColor = projected ? drawColor : e.construction && !highlight ? CONSTRUCTION_COLOR : color;
+      const markerColor = projected ? drawColor : e.construction && !highlight ? constructionColor() : color;
       g.add(curve, pointMarker(plane, center.x, center.y, markerColor));
       g.renderOrder = 12;
       add(g);
@@ -756,7 +798,7 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
     ];
     for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
   }
-  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
+  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(sketchAidColor()));
   squares.renderOrder = 13;
   return squares;
 }
@@ -774,7 +816,7 @@ function textObjects(
   for (const f of faces) {
     for (const loop of [f.outer, ...f.holes]) {
       const pts = loop.map(([x, y]) => plane.to3D(x, y));
-      g.add(construction ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR) : polyline(pts, color));
+      g.add(construction ? constructionLine(pts, highlight ? color : constructionColor()) : polyline(pts, color));
     }
     // The solid glyph fill is drawn by the region layer (fillMesh) so it can show
     // hover/selection state and be picked for extrude, see glyphWorldRegions.
@@ -827,23 +869,46 @@ function dotMat(color: number): THREE.PointsMaterial {
   return m;
 }
 
-export const LOOSE_OPEN_COLOR = 0xe5484d;
-export const LOOSE_UNTIED_COLOR = 0xf5a524;
-const looseMats = new Map<number, THREE.PointsMaterial>();
+let ringTexture: THREE.DataTexture | null = null;
+// A white ring, tinted by the material colour: an open end differs from a filled dot in greyscale too.
+function looseRingTexture(): THREE.DataTexture {
+  if (ringTexture) return ringTexture;
+  const n = 32;
+  const data = new Uint8Array(n * n * 4);
+  const inner = 1 - LOOSE_RIM_PX / (LOOSE_RING_PX / 2);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const r = Math.hypot(i + 0.5 - n / 2, j + 0.5 - n / 2) / (n / 2);
+      const edge = (a: number) => Math.min(1, Math.max(0, a * n * 0.5));
+      const k = (j * n + i) * 4;
+      data[k] = data[k + 1] = data[k + 2] = 255;
+      data[k + 3] = Math.round(255 * Math.min(edge(1 - r), edge(r - inner)));
+    }
+  }
+  ringTexture = new THREE.DataTexture(data, n, n);
+  ringTexture.magFilter = ringTexture.minFilter = THREE.LinearFilter;
+  ringTexture.needsUpdate = true;
+  return ringTexture;
+}
+
+const LOOSE_RING_PX = POINT_DOT_PX + 4;
+const LOOSE_RIM_PX = 2;
+const looseMats = new Map<string, THREE.PointsMaterial>();
 // Drawn over the curves, an end hidden under its own line is the one the user hunts for.
-function looseEndMat(color: number): THREE.PointsMaterial {
-  let m = looseMats.get(color);
+function looseEndMat(color: number, ring: boolean): THREE.PointsMaterial {
+  const key = `${color}:${ring ? "ring" : "dot"}`;
+  let m = looseMats.get(key);
   if (!m) {
     m = new THREE.PointsMaterial({
       color,
-      size: POINT_DOT_PX + 2,
+      size: ring ? LOOSE_RING_PX : POINT_DOT_PX + 2,
       sizeAttenuation: false,
-      map: pointDotTexture(),
+      map: ring ? looseRingTexture() : pointDotTexture(),
       transparent: true,
       depthTest: false,
       depthWrite: false,
     });
-    looseMats.set(color, m);
+    looseMats.set(key, m);
   }
   return m;
 }
@@ -875,7 +940,7 @@ export function dimensionLineObjects(
   ents: ReturnType<typeof resolveEntities>,
   plane: SketchPlane,
   extraSegs: [THREE.Vector2, THREE.Vector2][] = [],
-  color: number = DIM_COLOR,
+  color: number = sketchAidColor(),
   skip?: ReadonlySet<string>,
 ): THREE.Object3D[] {
   const segs = [...dimensionSegments(ents, skip), ...extraSegs];
@@ -889,8 +954,12 @@ export function dimensionLineObjects(
 }
 
 function constructionLine(points: THREE.Vector3[], color: number): THREE.Line {
+  return dashedLine(points, dashMat(color));
+}
+
+function dashedLine(points: THREE.Vector3[], material: THREE.LineDashedMaterial): THREE.Line {
   const g = new THREE.BufferGeometry().setFromPoints(points);
-  const line = new THREE.Line(g, dashMat(color));
+  const line = new THREE.Line(g, material);
   line.computeLineDistances(); // required for dashing
   line.renderOrder = 12;
   return line;

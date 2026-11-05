@@ -24,3 +24,6 @@ serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 fundacad-core = { path = "../fundacad-core" }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libc = "0.2"

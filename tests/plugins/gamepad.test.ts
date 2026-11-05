@@ -2,10 +2,12 @@
 // edges, stored settings repaired rather than trusted. main.ts is the polling
 // and the DOM around this; everything worth getting right is in here.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import udevRules from "../../packaging/70-spacemouse.rules?raw";
 import { MemoryStorage } from "./memoryStorage";
 import {
   BINDABLE,
   DEFAULTS,
+  isThreeDMouse,
   motionOf,
   parseConfig,
   parseKey,
@@ -117,6 +119,68 @@ describe("parseConfig", () => {
     for (const i of BINDABLE) expect(DEFAULTS.buttons[i]).toBeTruthy();
     expect(BINDABLE).not.toContain(6);
     expect(BINDABLE).not.toContain(7);
+  });
+});
+
+describe("isThreeDMouse", () => {
+  it.each([
+    "3DCONNEXION SpaceMouse Compact",
+    "3Dconnexion Universal Receiver",
+    "SpaceMouse Pro Wireless",
+    "SpaceNavigator",
+    "Space Navigator for Notebooks",
+    "SpacePilot Pro",
+    "SpaceExplorer",
+    "3Dconnexion SpaceMouse Compact (Vendor: 256f Product: c635)",
+    "Unknown device (Vendor: 256f Product: c635)",
+    "Unknown device (Vendor: 046d Product: c626)",
+    "256f-c635-Unknown device",
+    "046d-c626-Unknown device",
+    "46d-c626-Unknown device",
+    "Unknown (STANDARD GAMEPAD Vendor: 256F Product: C635)",
+    "Spaceball 5000",
+    "SpaceTraveler",
+    "Space Traveller 3D Mouse",
+    "Logitech CADman",
+    "3Dconnexion CADMan",
+    "LOGITECH CAD Man",
+    "Logitech NuLOOQ Navigator",
+    "nuLOOQ",
+    "Space-Mouse Compact",
+    "3D-connexion Receiver",
+    "Unknown device (Vendor: 0x256f Product: 0xc635)",
+    "Unknown device (Vendor: 0x046d Product: 0xc626)",
+  ])("knows %s", (id) => {
+    expect(isThreeDMouse(id)).toBe(true);
+  });
+
+  it.each([
+    "Microsoft X-Box 360 pad",
+    "Xbox 360 Controller (XInput STANDARD GAMEPAD)",
+    "Logitech Gamepad F310",
+    "Logitech Gamepad F310 (STANDARD GAMEPAD Vendor: 046d Product: c21d)",
+    "046d-c21d-Logitech Gamepad F310",
+    "Logitech Dual Action (STANDARD GAMEPAD Vendor: 046d Product: c216)",
+    "046d-c216-Logitech Dual Action",
+    "Logitech Extreme 3D Pro (Vendor: 046d Product: c215)",
+    "Valve Software Steam Deck Controller",
+    "Logitech Extreme 3D",
+    "046d-c215-Logitech Extreme 3D Pro",
+    "VKBsim Space Gunfighter",
+    "Hyperspace Pilot Joystick",
+    "Backspace Mouse Pad",
+    "Cadmania Pad",
+    "Madcadman Controller",
+    "Pad (Vendor: 0x256e Product: 0xc635)",
+    "Logitech Cordless RumblePad 2 (Vendor: 0x046d Product: 0xc219)",
+  ])("leaves %s alone", (id) => {
+    expect(isThreeDMouse(id)).toBe(false);
+  });
+
+  it("knows every Logitech product the udev rule grants", () => {
+    const products = [...udevRules.matchAll(/idVendor}=="046d", ATTRS{idProduct}=="([0-9a-f]{4})"/g)].map((m) => m[1]);
+    expect(products.length).toBeGreaterThan(0);
+    for (const p of products) expect(isThreeDMouse(`Unknown (Vendor: 046d Product: ${p})`), p).toBe(true);
   });
 });
 

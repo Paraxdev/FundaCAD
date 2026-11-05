@@ -177,6 +177,15 @@ export class PatternFlow {
       undefined,
       () => this.onTyped(),
     );
+    if (pat.type === "patternCircular") {
+      this.host.dim().restoresOnUndo(
+        "angle",
+        () => pat.angle,
+        (angle) => {
+          pat.angle = angle;
+        },
+      );
+    }
     this.host.dim().updateFromCursor(cur);
   }
 

@@ -6,6 +6,8 @@ export interface ChoiceOption<T extends string = string> {
   label: string;
   hint?: string;
   primary?: boolean;
+  /** Paints this option as destructive, whatever holds the focus. */
+  danger?: boolean;
 }
 
 export interface ChooseReq {

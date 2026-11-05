@@ -1,14 +1,15 @@
-// The origin planes as small tiles, each in the positive quadrant of its two axes with its corner on
-// the origin, so its edges lie on the triad's arrows and the tiles meet without crossing. A press is matched
+// The origin planes as small tiles, each in the positive quadrant of its two axes a small gap off both
+// arrows, so its edges run parallel to the triad's arrows and the three tiles stand apart. A press is matched
 // on screen by planeHit.ts, so a tile seen edge on is still found by its pad or its name box.
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
 import { MIN_TRIAD_SCALE, TRIAD_LENGTH_PX, axisColor, type AxisKey } from "./originTriad";
-import { SQUIRCLE_EXPONENT, roundedSquareCorners, type Vec2 } from "./cornerProfile";
+import { SQUIRCLE_EXPONENT, roundedSquare, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
 import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
 import type { Plane3 } from "../types";
+import { viewportLabelScale } from "../ui/viewportLabels";
 
 type Sign = 1 | -1;
 type Axis = "x" | "y" | "z";
@@ -36,11 +37,9 @@ export interface TilePose {
 
 // As long as an axis arrow, rounded like a 40 px rail tile with its 17 px corner.
 export const TILE_SIZE_PX = TRIAD_LENGTH_PX;
-export const TILE_GAP_PX = 0;
-/** Only the corner away from the origin is rounded, the other three sit on the arrows. */
+export const TILE_GAP_PX = 10;
 export const TILE_CORNER_RADIUS_PX = 27;
 export const TILE_OCTANT: Octant = { x: 1, y: 1, z: 1 };
-export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
 /** The tiles are click targets, so they stop shrinking at about 41 px, a rail tile. */
 export const MIN_TILE_SCALE = 0.65;
 
@@ -155,26 +154,17 @@ function shapeOf(pts: Vec2[]): THREE.Shape {
 }
 
 /** A tile's outline in its own frame, local x and y along the plane's two axes as `tilePose` turns it. */
-export function tileOutline(plane: Plane3, shape: TileShape, segments = CORNER_SEGMENTS, inset = 0): Vec2[] {
-  const [a, b] = SPAN[plane];
-  const corners: Vec2[] = [
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-    [-1, -1],
-  ];
-  const far = ([x, y]: Vec2) => x === shape.octant[a] && y === shape.octant[b];
-  const legs = corners.map((c) => (far(c) ? shape.radiusPx - inset : 0)) as [number, number, number, number];
-  return roundedSquareCorners(shape.sizePx - 2 * inset, legs, shape.exponent, segments);
+export function tileOutline(shape: TileShape, segments = CORNER_SEGMENTS, inset = 0): Vec2[] {
+  return roundedSquare(shape.sizePx - 2 * inset, shape.radiusPx - inset, shape.exponent, segments);
 }
 
-function fillGeometry(plane: Plane3, shape: TileShape): THREE.BufferGeometry {
-  return new THREE.ShapeGeometry(shapeOf(tileOutline(plane, shape)));
+function fillGeometry(shape: TileShape): THREE.BufferGeometry {
+  return new THREE.ShapeGeometry(shapeOf(tileOutline(shape)));
 }
 
-function rimGeometry(plane: Plane3, shape: TileShape): THREE.BufferGeometry {
-  const ring = shapeOf(tileOutline(plane, shape));
-  const hole = tileOutline(plane, shape, CORNER_SEGMENTS, RIM_PX);
+function rimGeometry(shape: TileShape): THREE.BufferGeometry {
+  const ring = shapeOf(tileOutline(shape));
+  const hole = tileOutline(shape, CORNER_SEGMENTS, RIM_PX);
   ring.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
   return new THREE.ShapeGeometry(ring);
 }
@@ -210,7 +200,7 @@ export class OriginTiles {
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
     const make = (k: Plane3): Tile => {
-      const fill = new THREE.Mesh(fillGeometry(k, this.shape), tileMaterial(true));
+      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(true));
       fill.userData.plane = k;
       fill.renderOrder = TILE_ORDER.fill;
       fill.visible = false;
@@ -218,7 +208,7 @@ export class OriginTiles {
       const ghost = new THREE.Mesh(fill.geometry, tileMaterial(false));
       ghost.userData.role = "ghost";
       ghost.renderOrder = TILE_ORDER.ghost;
-      const rim = new THREE.Mesh(rimGeometry(k, this.shape), tileMaterial(true));
+      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(true));
       rim.userData.role = "rim";
       rim.renderOrder = TILE_ORDER.rim;
       const label = new THREE.Sprite(
@@ -231,7 +221,8 @@ export class OriginTiles {
       );
       label.userData.role = "label";
       label.renderOrder = TILE_ORDER.label;
-      label.scale.set(LABEL_BOX_PX.w, LABEL_BOX_PX.h, 1);
+      const box = this.labelBox();
+      label.scale.set(box.w, box.h, 1);
       fill.add(ghost, rim, label);
       this.group.add(fill);
       return { fill, ghost, rim, label };
@@ -250,9 +241,9 @@ export class OriginTiles {
       const t = this.tiles[k];
       t.fill.geometry.dispose();
       t.rim.geometry.dispose();
-      t.fill.geometry = fillGeometry(k, this.shape);
+      t.fill.geometry = fillGeometry(this.shape);
       t.ghost.geometry = t.fill.geometry;
-      t.rim.geometry = rimGeometry(k, this.shape);
+      t.rim.geometry = rimGeometry(this.shape);
     }
     this.pose();
   }
@@ -277,9 +268,10 @@ export class OriginTiles {
     camera: THREE.Camera,
     rect?: ScreenFrame["rect"],
   ) {
-    const extent = this.shape.gapPx + this.shape.sizePx;
-    this.k = glyphScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
-    this.group.scale.setScalar(glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE));
+    // Scaled by the size, not size plus gap, so a tile edge keeps the triad's scale and an arrow's length.
+    const size = this.shape.sizePx;
+    this.k = glyphScale(size, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
+    this.group.scale.setScalar(glyphWorldScale(size, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE));
     if (rect && rect.width > 0 && rect.height > 0 && this.group.scale.x > 0) this.placeNames({ camera, rect });
     this.paintLook();
   }
@@ -303,12 +295,12 @@ export class OriginTiles {
       const normal = new THREE.Vector3(...tilePose(plane, this.shape).normal);
       const toEye = ortho ? eyeDir : eye.clone().sub(centreW).normalize();
       const n = "xyz".indexOf(NORMAL_AXIS[plane]);
-      // Every tile shares the origin corner and spans the octant, so the eye on the far side of one sees it on top.
+      // Every tile lies in the octant's quadrant of its plane, so the eye on the far side of one sees it on top.
       const side = (ortho ? eyeDir : eye).getComponent(n) * this.shape.octant[NORMAL_AXIS[plane]];
       return {
         plane,
         centre,
-        outline: tileOutline(plane, this.shape, PICK_SEGMENTS).map(([x, y]) => at(x, y)),
+        outline: tileOutline(this.shape, PICK_SEGMENTS).map(([x, y]) => at(x, y)),
         su: { x: u.x - centre.x, y: u.y - centre.y },
         sv: { x: v.x - centre.x, y: v.y - centre.y },
         facing: Math.abs(toEye.dot(normal)),
@@ -326,7 +318,7 @@ export class OriginTiles {
   pick(x: number, y: number, frame: ScreenFrame, minPx: number): PlaneHit | null {
     if (!this.tiles.XY.fill.visible || this.group.scale.x <= 0) return null;
     const tiles = this.onScreen(frame);
-    return pickPlaneOnScreen(tiles, this.labelsOnScreen(frame, tiles), { x, y }, minPx, LABEL_BOX_PX);
+    return pickPlaneOnScreen(tiles, this.labelsOnScreen(frame, tiles), { x, y }, minPx, this.labelBox());
   }
 
   private placeNames(frame: ScreenFrame) {
@@ -384,7 +376,19 @@ export class OriginTiles {
     }
   }
 
+  /** A plane name's box in screen px at Viewport label size, the painted name and its press target. */
+  labelBox(): { w: number; h: number } {
+    const s = viewportLabelScale();
+    return { w: LABEL_BOX_PX.w * s, h: LABEL_BOX_PX.h * s };
+  }
+
+  /** Call after Viewport label size changes. */
+  applyLabelScale() {
+    this.paintLook();
+  }
+
   private paintLook() {
+    const box = this.labelBox();
     for (const k of PLANES) {
       const look = TILE_LOOK[this.states[k]];
       const t = this.tiles[k];
@@ -396,7 +400,7 @@ export class OriginTiles {
       // The hovered name takes its rim's colour, the only colour left of a tile seen edge on.
       t.label.material.color.setHex(hot ? t.rim.material.color.getHex() : this.ink);
       const grow = hot ? LABEL_HOT_SCALE : 1;
-      t.label.scale.set((LABEL_BOX_PX.w * grow) / this.k, (LABEL_BOX_PX.h * grow) / this.k, 1);
+      t.label.scale.set((box.w * grow) / this.k, (box.h * grow) / this.k, 1);
     }
   }
 

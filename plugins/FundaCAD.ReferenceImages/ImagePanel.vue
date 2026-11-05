@@ -75,7 +75,7 @@ const root: CSSProperties = {
   border: "1px solid var(--line-strong, #3a4150)",
   borderRadius: "var(--r-md, 6px)",
   boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
-  font: "12px system-ui, sans-serif",
+  font: "var(--fs-small, 12px) system-ui, sans-serif",
   color: "var(--text, #dce3ee)",
   width: "260px",
   maxWidth: "calc(100vw - 24px)",

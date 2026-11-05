@@ -1,0 +1,58 @@
+import type { ClashRow, ClearanceRow, InterferenceData } from "../stores/panels";
+
+interface Reply {
+  pairs: { a: string; b: string; aName: string; bName: string; volume: number }[];
+  clearances: { a: string; b: string; aName: string; bName: string; distance: number }[];
+  unchecked: { id: string; name: string; reason: string }[];
+}
+
+interface Display {
+  unit: string;
+  /** Display units per mm. */
+  scale: number;
+  round: (n: number) => number | string;
+  label: (id: string, raw: string) => string;
+}
+
+export function interferenceTitle(clashes: number): string {
+  return clashes ? `Interference, ${clashes} clash${clashes > 1 ? "es" : ""}` : "Interference";
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** What a finished check says aloud; `closePairs` is null unless Clearance mode ran. */
+export function interferenceSummary(clashes: number, closePairs: number | null, unchecked: number): string {
+  const parts = [clashes ? count(clashes, "clash", "clashes") : "no clashes"];
+  if (closePairs !== null) parts.push(closePairs ? count(closePairs, "close pair", "close pairs") : "no close pairs");
+  if (unchecked) parts.push(`${count(unchecked, "body", "bodies")} could not be checked`);
+  const text = parts.join(", ");
+  return `Interference: ${text}`;
+}
+
+export function interferenceData(reply: Reply, d: Display): InterferenceData {
+  const names = (r: { a: string; b: string; aName: string; bName: string }) =>
+    `${d.label(r.a, r.aName)} and ${d.label(r.b, r.bName)}`;
+  const f = d.scale;
+  // Without the word in the value, mm³ against mm is all a sighted reader has to tell a clash from a close pair.
+  const clashes: ClashRow[] = reply.pairs.map((p) => {
+    const vol = `${d.round(p.volume * f * f * f)} ${d.unit}³`;
+    return {
+      key: `${p.a} ${p.b}`,
+      label: names(p),
+      v: `${vol} overlap`,
+      spoken: `${names(p)}, overlap ${vol}`,
+      a: p.a,
+      b: p.b,
+    };
+  });
+  const clearances: ClearanceRow[] = reply.clearances.map((c) => {
+    const v = `${d.round(c.distance * f)} ${d.unit} apart`;
+    return { key: `${c.a} ${c.b}`, label: names(c), v, spoken: `${names(c)}, ${v}`, a: c.a, b: c.b };
+  });
+  return {
+    title: interferenceTitle(clashes.length),
+    clashes,
+    clearances,
+    unchecked: reply.unchecked.map((u) => `${d.label(u.id, u.name)} ${u.reason}`),
+  };
+}

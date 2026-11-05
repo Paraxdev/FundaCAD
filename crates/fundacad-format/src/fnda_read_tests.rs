@@ -170,7 +170,7 @@ fn as_many_damaged_shards_as_parity_are_repaired_and_one_more_is_refused() {
     let err = read_geometry(&path, &e).unwrap_err();
     assert!(err.contains("damaged"), "{err}");
     let blobs = dir.join("blobs");
-    assert!(read_file(&path, &blobs, None, None).is_err());
+    assert!(read_file(&path, &blobs, None).is_err());
     assert!(nothing_published(&blobs));
 }
 
@@ -205,7 +205,7 @@ fn a_truncated_file_is_an_error_and_publishes_nothing() {
         let short = dir.join(format!("short{i}.fundab"));
         std::fs::write(&short, &bytes[..cut]).unwrap();
         let blobs = dir.join(format!("blobs{i}"));
-        let err = read_file(&short, &blobs, None, None).err().unwrap();
+        let err = read_file(&short, &blobs, None).err().unwrap();
         assert!(err.contains("damaged"), "{err}");
         assert!(nothing_published(&blobs));
         assert!(verify(&short).is_err());
@@ -219,7 +219,7 @@ fn a_file_cut_inside_its_trailer_still_opens_from_its_header() {
     let bytes = std::fs::read(&path).unwrap();
     std::fs::write(&path, &bytes[..bytes.len() - 20]).unwrap();
     let blobs = dir.join("blobs");
-    read_file(&path, &blobs, None, None).unwrap();
+    read_file(&path, &blobs, None).unwrap();
     assert_eq!(std::fs::read(blobs.join(format!("{}.bbrep", hash_hex(&geometry)))).unwrap(), geometry);
 }
 
@@ -230,10 +230,10 @@ fn a_damaged_first_table_falls_back_to_the_second() {
     let bytes = std::fs::read(&path).unwrap();
     let h = parse_header(&bytes[..HEADER_LEN as usize], MAGIC).unwrap();
     flip(&path, &[h.table_a as usize + 9]);
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(opened.report.used_backup_index);
     flip(&path, &[3]);
-    let opened = read_file(&path, &dir.join("blobs2"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs2"), None).unwrap();
     assert!(opened.report.used_backup_index);
 }
 
@@ -247,7 +247,7 @@ fn a_section_declared_bigger_than_the_cap_is_refused_before_decoding() {
         }
     });
     let blobs = dir.join("blobs");
-    let err = read_file(&path, &blobs, None, None).err().unwrap();
+    let err = read_file(&path, &blobs, None).err().unwrap();
     assert!(err.contains("GiB"), "{err}");
     assert!(nothing_published(&blobs));
 }
@@ -262,7 +262,7 @@ fn a_section_declared_bigger_than_the_file_is_refused() {
             e.layout.shard_size = u32::MAX;
         }
     });
-    assert!(read_file(&path, &dir.join("blobs"), None, None).err().unwrap().contains("damaged"));
+    assert!(read_file(&path, &dir.join("blobs"), None).err().unwrap().contains("damaged"));
 }
 
 /// Rewrite both tables and headers, with `edit` applied to every entry.

@@ -2,7 +2,7 @@
 
 The cursor snaps to what you have drawn and names the spot it caught, such as Endpoint, Midpoint or Center. Near no point, it lines up with one, then falls back to the sketch grid.
 
-Hold Ctrl while you click to place a point exactly under the cursor.
+Hold Ctrl while you click to place a point exactly under the cursor. Without a pointer, arrows move a cursor and Tab steps through the snaps near it, see [Draw with keys](keyboard.md).
 
 ![The sketch palette with Snap, Construction and the other options](../img/sketch-palette.png)
 
@@ -24,6 +24,6 @@ The palette holds the options of the sketch you are in.
 
 ## Construction geometry
 
-Construction geometry is drawn dashed in orange and is never part of an outline. Use it for centre lines and for things to constrain against.
+Construction geometry is drawn in short orange dashes and is never part of an outline. Use it for centre lines and for things to constrain against.
 
 To turn lines you already drew into construction, select them, then click Construction at the foot of the rail or in their right-click menu.

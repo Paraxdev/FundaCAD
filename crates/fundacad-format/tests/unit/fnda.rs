@@ -46,7 +46,7 @@ fn round_trips_the_document_and_its_geometry() {
     let (path, doc, geometry) = sample(&dir);
     assert!(looks_like_fnda(&path));
     let blobs = dir.join("blobs");
-    let opened = read_file(&path, &blobs, None, None).unwrap();
+    let opened = read_file(&path, &blobs, None).unwrap();
     assert!(same_json(&opened.document_json, &doc));
     assert_eq!(opened.report, RepairReport::default());
     let blob = std::fs::read_dir(&blobs).unwrap().next().unwrap().unwrap().path();
@@ -88,7 +88,7 @@ fn repairs_damaged_shards_from_parity() {
     }
     std::fs::write(&path, &bytes).unwrap();
     let blobs = dir.join("blobs");
-    let opened = read_file(&path, &blobs, None, None).unwrap();
+    let opened = read_file(&path, &blobs, None).unwrap();
     assert!(same_json(&opened.document_json, &doc));
     assert!(opened.report.repaired_shards >= 3, "{:?}", opened.report);
     let blob = std::fs::read_dir(&blobs).unwrap().next().unwrap().unwrap().path();
@@ -104,11 +104,11 @@ fn survives_a_destroyed_header_through_the_trailer_and_backup_table() {
         *b = 0;
     }
     std::fs::write(&path, &bytes).unwrap();
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(same_json(&opened.document_json, &doc));
     assert!(opened.report.used_backup_index);
     assert!(looks_like_fnda(&path), "known by its trailer");
-    let app = fundacad_format::container::open_document_full(&path, &dir.join("blobs_app"), None, None).unwrap();
+    let app = fundacad_format::container::open_document_full(&path, &dir.join("blobs_app"), None).unwrap();
     assert!(same_json(&app.document, &doc) && app.report.used_backup_index);
 }
 
@@ -140,7 +140,7 @@ fn refuses_damage_beyond_the_parity() {
         bytes[at] ^= 0xFF;
     }
     std::fs::write(&path, &bytes).unwrap();
-    let err = read_file(&path, &dir.join("blobs"), None, None).err().unwrap();
+    let err = read_file(&path, &dir.join("blobs"), None).err().unwrap();
     assert!(err.contains("damaged"), "{err}");
 }
 
@@ -194,7 +194,7 @@ fn a_section_of_an_unknown_kind_is_carried_and_written_back() {
     let dir = tmpdir("carry");
     let (path, payload) = future_file(&dir);
     let carry = dir.join("sections");
-    let opened = read_file(&path, &dir.join("blobs"), None, Some(&carry)).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
     let original = index_of(&path).into_iter().find(|e| e.kind == 9).unwrap();
     assert_eq!(opened.carried, vec![Carried { kind: 9, name: "futureIndex".into(), hash: hex(&original.raw_hash) }]);
     let kept = carry.join(format!("{}.bin", opened.carried[0].hash));
@@ -215,7 +215,7 @@ fn a_section_of_an_unknown_kind_is_carried_and_written_back() {
 fn nothing_is_carried_without_a_carry_folder() {
     let dir = tmpdir("nocarry");
     let (path, _) = future_file(&dir);
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(opened.carried.is_empty());
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
 }
@@ -266,7 +266,7 @@ fn a_big_section_round_trips_in_segments() {
     let geometry = big_blob(3 << 20);
     let (path, hash) = write_blob(&dir, "seg", &geometry, &opts(4));
     let blobs = dir.join("blobs");
-    read_file(&path, &blobs, None, None).unwrap();
+    read_file(&path, &blobs, None).unwrap();
     assert_eq!(std::fs::read(blobs.join(format!("{hash}.bbrep"))).unwrap(), geometry);
     assert_eq!(verify(&path).unwrap(), RepairReport::default());
 }
@@ -282,7 +282,7 @@ fn the_info_and_the_document_stay_one_stream_however_big() {
     write_with(&mut File::create(&path).unwrap(), &document_sections(&info, &cbor, &none, &none, &[]), &opts(4))
         .unwrap();
     assert!(index_of(&path).iter().all(|e| e.kind != KIND_SEGMENTS));
-    let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+    let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
     assert!(opened.document_json.contains(&long));
 }
 
@@ -320,6 +320,200 @@ fn a_carried_index_is_never_written_twice() {
     let again = dir.join("again.fundab");
     write_with(&mut File::create(&again).unwrap(), &sections, &opts(2)).unwrap();
     assert_eq!(index_of(&again).iter().filter(|e| e.kind == KIND_SEGMENTS).count(), 1);
-    let opened = read_file(&again, &dir.join("blobs"), None, Some(&dir.join("carry"))).unwrap();
+    let opened = read_file(&again, &dir.join("blobs"), Some(&dir.join("carry"))).unwrap();
     assert!(opened.carried.is_empty());
+}
+
+#[test]
+fn an_open_writes_no_mesh_section_to_disk() {
+    let dir = tmpdir("nomesh");
+    let blob = dir.join("blob.bin");
+    std::fs::write(&blob, b"geometry").unwrap();
+    let hash = {
+        let mut h = Blake2b128::new();
+        h.update(b"geometry");
+        hex(&h.finalize())
+    };
+    let blobs = BTreeMap::from([(hash, blob)]);
+    let mesh = dir.join("mesh.bin");
+    std::fs::write(&mesh, b"MESH".repeat(100)).unwrap();
+    let meshes = BTreeMap::from([("abcd-t0".to_string(), mesh)]);
+    let info = json_to_cbor(r#"{"app":"test"}"#).unwrap();
+    let cbor = json_to_cbor(r#"{"version":9,"features":[]}"#).unwrap();
+    let path = dir.join("part.fundab");
+    write(&mut File::create(&path).unwrap(), &document_sections(&info, &cbor, &blobs, &meshes, &[])).unwrap();
+    assert!(index_of(&path).iter().any(|e| e.kind == KIND_MESH));
+    let store = dir.join("store");
+    let opened = read_file(&path, &store.join("blobs"), Some(&store.join("carry"))).unwrap();
+    assert!(opened.carried.is_empty());
+    let mut written: Vec<_> =
+        std::fs::read_dir(&store).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+    written.sort();
+    assert_eq!(written, ["blobs", "carry"]);
+    assert_eq!(std::fs::read_dir(store.join("carry")).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn encode_table(entries: &[Entry]) -> Vec<u8> {
+    let mut t = TABLE_MAGIC.to_vec();
+    t.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+    for e in entries {
+        t.extend_from_slice(&[e.kind, e.codec]);
+        t.extend_from_slice(&(e.name.len() as u16).to_le_bytes());
+        t.extend_from_slice(e.name.as_bytes());
+        for v in [e.offset, e.stored_len, e.raw_len] {
+            t.extend_from_slice(&v.to_le_bytes());
+        }
+        t.extend_from_slice(&e.raw_hash);
+        t.extend_from_slice(&e.layout.shard_size.to_le_bytes());
+        t.extend_from_slice(&e.layout.data_shards.to_le_bytes());
+        t.extend_from_slice(&e.layout.parity_shards.to_le_bytes());
+    }
+    t
+}
+
+/// Rewrite a file's section table through `edit`, both copies, with headers that point at the new table.
+fn retable(path: &Path, edit: impl FnOnce(&mut Vec<Entry>)) {
+    let mut entries = index_of(path);
+    edit(&mut entries);
+    let table = encode_table(&entries);
+    let mut bytes = std::fs::read(path).unwrap();
+    let h = HEADER_LEN as usize;
+    let mut tail = bytes.split_off(bytes.len() - h);
+    let (a, b) = (bytes.len() as u64, (bytes.len() + table.len()) as u64);
+    bytes.extend_from_slice(&table);
+    bytes.extend_from_slice(&table);
+    for header in [&mut bytes[..h], &mut tail[..]] {
+        header[16..24].copy_from_slice(&a.to_le_bytes());
+        header[24..32].copy_from_slice(&b.to_le_bytes());
+        header[32..40].copy_from_slice(&(table.len() as u64).to_le_bytes());
+        header[40..44].copy_from_slice(&crc32fast::hash(&table).to_le_bytes());
+        let crc = crc32fast::hash(&header[0..56]);
+        header[56..60].copy_from_slice(&crc.to_le_bytes());
+    }
+    bytes.extend_from_slice(&tail);
+    std::fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn a_table_whose_sections_share_bytes_is_refused() {
+    for shift in [0, 1] {
+        let dir = tmpdir("overlap");
+        let (path, _, _) = sample(&dir);
+        retable(&path, |entries| {
+            let mut copy = entries.iter().find(|e| e.kind == KIND_GEOMETRY).unwrap().clone();
+            copy.kind = 9;
+            copy.offset += shift;
+            entries.push(copy);
+        });
+        let err = read_file(&path, &dir.join("blobs"), Some(&dir.join("carry"))).map(|_| ()).unwrap_err();
+        assert!(err.contains("damaged"), "{err}");
+        assert!(!dir.join("carry").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn one_geometry_hash_is_extracted_once_however_often_the_table_lists_it() {
+    let dir = tmpdir("dedupe");
+    let geometry = big_blob(50_000);
+    let hash = {
+        let mut h = Blake2b128::new();
+        h.update(&geometry);
+        hex(&h.finalize())
+    };
+    let blob = dir.join("blob.bin");
+    std::fs::write(&blob, &geometry).unwrap();
+    let blobs = BTreeMap::from([(hash.clone(), blob)]);
+    let (info, cbor) = (json_to_cbor("{}").unwrap(), json_to_cbor(r#"{"features":[]}"#).unwrap());
+    let meshes = BTreeMap::new();
+    let mut specs = document_sections(&info, &cbor, &blobs, &meshes, &[]);
+    specs.push(SectionSpec {
+        kind: KIND_GEOMETRY,
+        name: hash.clone(),
+        source: Source::Bytes(&geometry),
+        layout: LARGE_LAYOUT,
+    });
+    let path = dir.join("twice.fundab");
+    write(&mut File::create(&path).unwrap(), &specs).unwrap();
+    // The second copy declares a length its bytes do not have, so reading it would fail the open.
+    retable(&path, |entries| entries.iter_mut().filter(|e| e.kind == KIND_GEOMETRY).nth(1).unwrap().raw_len += 1);
+    read_file(&path, &dir.join("blobs"), None).unwrap();
+    assert_eq!(std::fs::read(dir.join("blobs").join(format!("{hash}.bbrep"))).unwrap(), geometry);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_open_refuses_sections_that_together_expand_past_its_budget() {
+    let dir = tmpdir("budget");
+    let parts: Vec<Vec<u8>> = (0..2u8).map(|i| vec![i; 1000]).collect();
+    let cbor = json_to_cbor("{}").unwrap();
+    let doc = SectionSpec {
+        kind: KIND_DOCUMENT,
+        name: "document".into(),
+        source: Source::Bytes(&cbor),
+        layout: SMALL_LAYOUT,
+    };
+    let specs: Vec<SectionSpec> = std::iter::once(doc)
+        .chain(parts.iter().map(|p| {
+            let mut h = Blake2b128::new();
+            h.update(p);
+            SectionSpec {
+                kind: KIND_GEOMETRY,
+                name: hex(&h.finalize()),
+                source: Source::Bytes(p),
+                layout: SMALL_LAYOUT,
+            }
+        }))
+        .collect();
+    let path = dir.join("big.fundab");
+    write(&mut File::create(&path).unwrap(), &specs).unwrap();
+    retable(&path, |entries| {
+        for e in entries.iter_mut().filter(|e| e.kind == KIND_GEOMETRY) {
+            e.raw_len = 5 << 30;
+        }
+    });
+    let err = read_file(&path, &dir.join("blobs"), None).map(|_| ()).unwrap_err();
+    assert!(err.contains("8 GiB"), "{err}");
+    assert_eq!(std::fs::read_dir(dir.join("blobs")).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unread_section_past_the_budget_is_dropped_and_the_open_goes_on() {
+    let dir = tmpdir("carrybudget");
+    let (path, _) = future_file(&dir);
+    retable(&path, |entries| entries.iter_mut().find(|e| e.kind == 9).unwrap().raw_len = 9 << 30);
+    let carry = dir.join("sections");
+    let opened = read_file(&path, &dir.join("blobs"), Some(&carry)).unwrap();
+    assert!(same_json(&opened.document_json, r#"{"version":11,"features":[]}"#));
+    assert!(opened.carried.is_empty());
+    assert_eq!(opened.report, RepairReport { dropped_sections: 1, ..Default::default() });
+    assert_eq!(std::fs::read_dir(&carry).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unread_section_that_fails_its_check_is_counted_as_dropped() {
+    let dir = tmpdir("carrydamaged");
+    let (path, payload) = future_file(&dir);
+    retable(&path, |entries| entries.iter_mut().find(|e| e.kind == 9).unwrap().raw_len = payload.len() as u64 + 1);
+    let opened = read_file(&path, &dir.join("blobs"), Some(&dir.join("sections"))).unwrap();
+    assert!(opened.carried.is_empty());
+    assert_eq!(opened.report, RepairReport { dropped_sections: 1, ..Default::default() });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_document_section_past_the_json_cap_is_refused_before_it_is_read() {
+    let dir = tmpdir("doccap");
+    let (path, _, _) = sample(&dir);
+    retable(&path, |entries| {
+        entries.iter_mut().find(|e| e.kind == KIND_DOCUMENT).unwrap().raw_len = (1 << 30) + 1;
+    });
+    let err = read_file(&path, &dir.join("blobs"), None).map(|_| ()).unwrap_err();
+    assert!(err.contains("1024 MiB"), "{err}");
+    let err = read_section_of_kind(&path, KIND_DOCUMENT).unwrap_err();
+    assert!(err.contains("1024 MiB"), "{err}");
+    std::fs::remove_dir_all(&dir).ok();
 }

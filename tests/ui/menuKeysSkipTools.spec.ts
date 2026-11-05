@@ -1,5 +1,6 @@
 // A focused menu row takes arrows, Enter and type ahead letters. The tools listen on window in capture, so they hear
 // the key before the menu does and must leave it alone, or a letter switches the sketch tool and Enter commits twice.
+import { noKeyDraw } from "../sketch/keyDrawStub";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { SketchMode } from "../../src/sketch/sketchMode";
@@ -26,7 +27,7 @@ let off: (() => void)[] = [];
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  document.body.innerHTML = `<div class="ui-menu" role="menu"><div class="ui-menu-item" role="menuitem" tabindex="0">Tangent</div></div><canvas></canvas>`;
+  document.body.innerHTML = `<div class="ui-menu" role="menu"><div class="ui-menu-item" role="menuitem" tabindex="0">Tangent</div></div><main id="main"><canvas></canvas></main>`;
   row = document.querySelector(".ui-menu-item")!;
   other = document.querySelector("canvas")!;
 });
@@ -53,9 +54,11 @@ function sketch() {
     selected: new Set(["l1"]),
     base: {},
     dim: { isActive: false, ownsTarget: () => false },
+    keyDraw: noKeyDraw,
     patternFlow: { hasPending: () => false },
     mirrorFlow: { running: false },
     dims: { deleteSelected: () => false },
+    glyphs: { deleteSelected: () => false, hasSelection: () => false, clearSelection() {} },
     deleteSelectedPole: () => false,
     deleteSelected: () => calls.push("delete"),
     setTool: (t: string) => calls.push(`tool ${t}`),

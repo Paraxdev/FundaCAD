@@ -1,6 +1,8 @@
 """A modal makes the page behind it inert, so WebKit screen readers, which ignore aria-modal, cannot
 browse it, and closing the modal hands focus back to a live control."""
 
+import re
+
 import pytest
 
 pytestmark = [pytest.mark.browser, pytest.mark.smoke]
@@ -20,6 +22,11 @@ APP = """() => {
   return { inert: app.inert, hidden: app.getAttribute("aria-hidden") };
 }"""
 
+NOTIFICATIONS = """() => {
+  const n = document.querySelector(".toast-stack[role=region][aria-label=Notifications]");
+  return { inert: n.inert, hidden: n.getAttribute("aria-hidden") };
+}"""
+
 MARKS = """() => [...document.querySelectorAll("[inert], [aria-hidden=true]")].length"""
 
 FOCUS = """() => {
@@ -32,11 +39,13 @@ FOCUS = """() => {
   };
 }"""
 
-LIVE_ROLES = ("- status", "- alert", "- log")
+# The announcer's live regions stay outside the inert page, or nothing said while a modal is open is heard.
+ANNOUNCER = ["- status", "- alert"]
 
 
 def top_level(snapshot: str) -> list[str]:
-    return [l for l in snapshot.splitlines() if l.startswith("- ") and not l.startswith(LIVE_ROLES)]
+    """Top level nodes, a live region's text cut since it is whatever was said last."""
+    return [re.sub(r"^- (status|alert)\b.*", r"- \1", l) for l in snapshot.splitlines() if l.startswith("- ")]
 
 
 def inside_dialog_after_tabs(s, layer: str, presses: int = 25) -> bool:
@@ -57,6 +66,7 @@ def s(session):
 def test_the_page_is_reachable_with_no_modal_open(s):
     assert "undo-btn" in s.page.evaluate(REACHABLE, "[role=dialog]")
     assert s.page.evaluate(APP) == {"inert": False, "hidden": None}
+    assert s.page.evaluate(NOTIFICATIONS) == {"inert": False, "hidden": None}
     assert 'button "Undo"' in s.page.locator("body").aria_snapshot()
 
 
@@ -66,15 +76,17 @@ def test_settings_makes_the_app_root_inert_and_hands_focus_back(s):
     layer = ".modal-overlay [role=dialog]"
     s.page.wait_for_selector(layer)
     assert s.page.evaluate(APP) == {"inert": True, "hidden": "true"}
+    assert s.page.evaluate(NOTIFICATIONS) == {"inert": True, "hidden": "true"}
     assert s.page.evaluate(REACHABLE, layer) == []
     snap = s.page.locator("body").aria_snapshot()
-    assert top_level(snap) == ['- dialog "Preferences":'], snap
+    assert top_level(snap) == [*ANNOUNCER, '- dialog "Preferences":'], snap
     assert 'button "Undo"' not in snap and "menubar" not in snap
     assert inside_dialog_after_tabs(s, layer)
 
     s.panel("settings", open=False)
     s.page.wait_for_selector(layer, state="detached")
     assert s.page.evaluate(APP) == {"inert": False, "hidden": None}
+    assert s.page.evaluate(NOTIFICATIONS) == {"inert": False, "hidden": None}
     assert s.page.evaluate(MARKS) == before
     focus = s.page.evaluate(FOCUS)
     assert not focus["body"] and not focus["inert"], focus
@@ -88,13 +100,15 @@ def test_the_command_palette_makes_the_page_inert_until_escape(s):
     layer = ".cmdk-card"
     s.page.wait_for_selector(layer)
     assert s.page.evaluate(APP) == {"inert": True, "hidden": "true"}
+    assert s.page.evaluate(NOTIFICATIONS) == {"inert": True, "hidden": "true"}
     assert s.page.evaluate(REACHABLE, layer) == []
     snap = s.page.locator("body").aria_snapshot()
-    assert top_level(snap) == ['- dialog "Command palette":'], snap
+    assert top_level(snap) == [*ANNOUNCER, '- dialog "Command palette":'], snap
 
     s.page.keyboard.press("Escape")
     s.page.wait_for_selector(layer, state="detached")
     assert s.page.evaluate(APP) == {"inert": False, "hidden": None}
+    assert s.page.evaluate(NOTIFICATIONS) == {"inert": False, "hidden": None}
     assert s.page.evaluate(MARKS) == before
     assert s.page.evaluate(FOCUS)["id"] == "home-btn"
 

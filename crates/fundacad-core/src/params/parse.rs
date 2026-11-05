@@ -123,8 +123,17 @@ fn is_ident_part(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
+/// Longest expression text, in characters. It also bounds the depth of a flat chain like `a+a+a`, which the
+/// evaluator walks recursively.
+pub const MAX_EXPR_LEN: usize = 1024;
+/// Deepest nesting of parentheses, calls, unary operators and powers the parser follows.
+pub const MAX_EXPR_DEPTH: usize = 100;
+
 pub fn tokenize(src: &str) -> Result<Vec<Token>, ExprError> {
     let chars: Vec<char> = src.chars().collect();
+    if chars.len() > MAX_EXPR_LEN {
+        return Err(ExprError::new(format!("expression is longer than {MAX_EXPR_LEN} characters"), None));
+    }
     let at = |i: usize| chars.get(i).copied();
     let digit = |i: usize| at(i).is_some_and(|c| c.is_ascii_digit());
     let mut out = Vec::new();
@@ -237,6 +246,7 @@ const CMP_OPS: &[(&str, BinOp)] =
 struct Parser {
     toks: Vec<Token>,
     i: usize,
+    depth: usize,
 }
 
 impl Parser {
@@ -323,7 +333,19 @@ impl Parser {
         }
     }
 
+    // Every recursive path (parentheses, call arguments, `- !`, `^`) passes through here, so one counter bounds them all.
     fn unary(&mut self) -> Result<Expr, ExprError> {
+        if self.depth >= MAX_EXPR_DEPTH {
+            let pos = self.peek().map(Token::start);
+            return Err(ExprError::new(format!("expression nests deeper than {MAX_EXPR_DEPTH} levels"), pos));
+        }
+        self.depth += 1;
+        let node = self.unary_inner();
+        self.depth -= 1;
+        node
+    }
+
+    fn unary_inner(&mut self) -> Result<Expr, ExprError> {
         if self.take_op("-") {
             return Ok(Expr::Neg(Box::new(self.unary()?)));
         }
@@ -386,7 +408,7 @@ impl Parser {
 }
 
 pub fn parse_expr(src: &str) -> Result<Expr, ExprError> {
-    Parser { toks: tokenize(src)?, i: 0 }.parse()
+    Parser { toks: tokenize(src)?, i: 0, depth: 0 }.parse()
 }
 
 /// Parameter names a parsed expression references, first use first, constants excluded.

@@ -10,6 +10,8 @@ type Stat = { size: number; mtimeMs: number } | null | "refuse";
 const host = vi.hoisted(() => ({
   invoked: [] as { cmd: string; path?: unknown }[],
   stat: (_path: string): unknown => null,
+  bakes: 0,
+  exportFails: false,
   toasts: [] as { message: string; kind?: string; action?: { label: string; onClick: () => void } }[],
 }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -21,12 +23,9 @@ vi.mock("@tauri-apps/api/core", () => ({
       return r;
     }
     if (cmd === "container_open") return SOURCE;
+    if (cmd === "bake_temp_path") return `C:/cache/bakes/insert-${++host.bakes}.step`;
     return undefined;
   },
-}));
-vi.mock("@tauri-apps/api/path", () => ({
-  tempDir: async () => "C:/tmp",
-  join: async (...parts: string[]) => parts.join("/"),
 }));
 vi.mock("../../src/ui/toast", () => ({
   toast: (message: string, opts: { kind?: string; action?: { label: string; onClick: () => void } } = {}) => {
@@ -63,6 +62,7 @@ function backend(): GeometryBackend {
       return true;
     },
     async export(_doc: CadDocument, _fmt: string, path: string) {
+      if (host.exportFails) return { ok: false, message: "the engine stopped" };
       return { ok: true, path };
     },
     async importGeometry() {
@@ -94,6 +94,7 @@ function stubTauriWindow() {
 }
 
 const cmds = () => host.invoked.map((c) => c.cmd);
+const bakeCalls = () => host.invoked.filter((c) => c.cmd.startsWith("bake_temp"));
 
 describe("checkLinks", () => {
   beforeEach(() => {
@@ -145,7 +146,7 @@ describe("checkLinks", () => {
     await vi.waitFor(() =>
       expect((store.document.features[0] as Feature & { link: { size?: number } }).link.size).toBe(42),
     );
-    expect(cmds()).toEqual(["container_stat", "container_open"]);
+    expect(cmds()).toEqual(["container_stat", "container_open", "bake_temp_path", "bake_temp_remove"]);
     expect((store.document.features[0] as Feature & { link: unknown }).link).toMatchObject({ size: 42, mtime: 7000 });
   });
 });
@@ -155,17 +156,44 @@ describe("insertDocumentFromDialog", () => {
     stubTauriWindow();
     host.invoked = [];
     host.toasts = [];
+    host.exportFails = false;
   });
 
   it("stores the linked file's size and time, taken before it is read", async () => {
     host.stat = (): Stat => ({ size: 120, mtimeMs: 9000 });
     const { be, store } = storeWith();
     await insertDocumentFromDialog(store, be);
-    expect(cmds()).toEqual(["container_stat", "container_open"]);
+    expect(cmds()).toEqual(["container_stat", "container_open", "bake_temp_path", "bake_temp_remove"]);
     expect((store.document.features[0] as Feature & { link: unknown }).link).toMatchObject({
       path: "C:/parts/Bracket.funda",
       size: 120,
       mtime: 9000,
     });
+  });
+
+  it("bakes into a fresh private path and removes it once read back", async () => {
+    host.stat = (): Stat => ({ size: 1, mtimeMs: 1 });
+    const { be, store } = storeWith();
+    const exported: string[] = [];
+    const exportOk = be.export.bind(be);
+    be.export = (async (doc: CadDocument, fmt: string, path: string) => {
+      exported.push(path);
+      return exportOk(doc, fmt as never, path);
+    }) as GeometryBackend["export"];
+    await insertDocumentFromDialog(store, be);
+    const baked = bakeCalls();
+    expect(baked.map((c) => c.cmd)).toEqual(["bake_temp_path", "bake_temp_remove"]);
+    expect(exported).toEqual([baked[1]!.path]);
+    expect(String(baked[1]!.path)).toMatch(/^C:\/cache\/bakes\//);
+  });
+
+  it("removes the bake when the build fails too", async () => {
+    host.stat = (): Stat => ({ size: 1, mtimeMs: 1 });
+    host.exportFails = true;
+    const { be, store } = storeWith();
+    await insertDocumentFromDialog(store, be);
+    expect(store.document.features).toHaveLength(0);
+    expect(bakeCalls().map((c) => c.cmd)).toEqual(["bake_temp_path", "bake_temp_remove"]);
+    expect(host.toasts.map((t) => t.message)).toEqual(["Couldn't insert Bracket: the engine stopped"]);
   });
 });

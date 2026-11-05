@@ -269,15 +269,15 @@ fn assembly_from(raw: UniquePtr<ffi::StepAssembly>) -> Result<StepAssembly, Erro
 
 /// How many edges of `shape` lie more than `limit` from a face they bound, and
 /// the widest such gap.
-pub fn edges_away(shape: &Shape, limit: f64) -> (usize, f64) {
+pub fn edges_away(shape: &Shape, limit: f64) -> Result<(usize, f64), Error> {
     let mut widest = [0.0];
-    let n = ffi::step_edges_away(&shape.inner, limit, &mut widest);
-    (usize::try_from(n).unwrap_or(0), widest[0])
+    let n = ffi::step_edges_away(&shape.inner, limit, &mut widest)?;
+    Ok((usize::try_from(n).unwrap_or(0), widest[0]))
 }
 
 /// The widest tolerance of an edge or corner of `shape`.
-pub fn widest_tolerance(shape: &Shape) -> f64 {
-    ffi::step_widest_tolerance(&shape.inner)
+pub fn widest_tolerance(shape: &Shape) -> Result<f64, Error> {
+    Ok(ffi::step_widest_tolerance(&shape.inner)?)
 }
 
 /// How many seconds one solid of a STEP or IGES read may spend being healed,
@@ -303,6 +303,20 @@ pub fn from_bin(data: &[u8]) -> Result<Shape, Error> {
     // Every caller reads bytes a .funda chose, so the reader runs only on the
     // one header the writer emits, never on another version's layout.
     if !data.starts_with(BIN_V3_HEADER) {
+        return Err(Error::BrepBadHeader);
+    }
+    Shape::from_brep_bytes(data, &ProgressRange::detached())
+}
+
+/// The V4 header, `THE_ASCII_VERSIONS[4]`: FreeCAD writes it since OCCT 7.6, V3 before.
+const BIN_V4_HEADER: &[u8] = b"
+Open CASCADE Topology V4, (c) Open Cascade
+";
+
+/// A binary shape from a FreeCAD file, read only under the V3 or V4 header,
+/// so the V1 and V2 readers never see bytes a file chose.
+pub fn from_freecad_bin(data: &[u8]) -> Result<Shape, Error> {
+    if !data.starts_with(BIN_V3_HEADER) && !data.starts_with(BIN_V4_HEADER) {
         return Err(Error::BrepBadHeader);
     }
     Shape::from_brep_bytes(data, &ProgressRange::detached())

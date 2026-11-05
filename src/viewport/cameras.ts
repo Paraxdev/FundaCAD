@@ -12,6 +12,8 @@ export interface NavScene {
   raycast(origin: THREE.Vector3, dir: THREE.Vector3): number | null;
   /** Height of the ground plane while it is drawn, else null. */
   groundZ(): number | null;
+  /** True while a ray is far dearer than usual, so a nicety should not cast any. */
+  raysCostly?(): boolean;
 }
 
 /** A saved view, plain data so it survives JSON. */
@@ -22,6 +24,8 @@ export interface CameraState {
   scale: number;
   fov: number;
   mode: ProjectionMode;
+  /** Taken in an orthographic view, whose scale says nothing about where an eye stands. */
+  ortho?: boolean;
 }
 
 export interface FitOptions {
@@ -46,9 +50,10 @@ export interface CameraRig {
   get active(): THREE.Camera;
   isOrtho(): boolean;
   /** 'auto' = perspective while orbiting, orthographic whenever the view axis is world axis aligned, so straight on views
-   *  have no parallax skew between bodies. */
+   *  have no parallax skew between bodies, unless the eye is inside the content box. */
   projectionMode(): ProjectionMode;
-  setProjectionMode(mode: ProjectionMode): void;
+  /** `keepOrtho`: an orthographic view handed back to 'auto' stays while on an axis, its eye was never set. */
+  setProjectionMode(mode: ProjectionMode, keepOrtho?: boolean): void;
   resize(w: number, h: number): void;
   /** Advance one frame. True when the pose on screen changed. */
   update(dt: number): boolean;
@@ -135,10 +140,12 @@ export interface CameraRig {
   /** Back to the view a fresh window opens on: no roll, Z up, looking in from
    *  the front right corner, framed on `box`, or on the origin when there is none. */
   resetView(box: THREE.Box3 | null): void;
+  /** A named view is a deliberate choice, so 'auto' shows it orthographic on an axis even with the eye inside the content box. */
   setStandardView(view: StandardView): void;
   /** Orient to an arbitrary view direction (eye = target + dir·d) with a chosen
-   *  world up. Used by the ViewCube for corners, edges and redefined sides. */
-  setViewDir(dir: THREE.Vector3, up: THREE.Vector3): void;
+   *  world up. Used by the ViewCube for corners, edges and redefined sides. `deliberate`: a click, which 'auto' shows
+   *  orthographic on an axis even with the eye inside the content box. */
+  setViewDir(dir: THREE.Vector3, up: THREE.Vector3, deliberate?: boolean): void;
   /** Square the camera to a plane: up = `up`, looking down -`normal`. `onArrive` runs when a flight lands (at once when it
    *  snaps), the place for anything that must not happen mid flight. */
   lookAtPlane(

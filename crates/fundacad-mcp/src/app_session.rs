@@ -37,6 +37,8 @@ pub struct AppSession {
     pub pid: Option<i64>,
     /// The `build` of its engine's `ping` reply (docs/PROTOCOL.md), None before the probe.
     pub build: Option<Value>,
+    /// Where its engine may write an export, None from an app that keeps its engine's rights whole.
+    pub export_dir: Option<PathBuf>,
 }
 
 /// The directory Tauri's `app_data_dir()` resolves to, without Tauri. Getting a
@@ -89,6 +91,7 @@ pub fn read_session_file(path: Option<&Path>) -> Option<AppSession> {
         token: token.to_string(),
         pid: data.get("pid").and_then(Value::as_i64),
         build: None,
+        export_dir: data.get("exportDir").and_then(Value::as_str).filter(|d| !d.is_empty()).map(PathBuf::from),
     })
 }
 

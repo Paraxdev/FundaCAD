@@ -3,7 +3,7 @@
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
 import { onUnitChange } from "../ui/units";
-import { soleSelectedFeature } from "./featureRows";
+import { deleteRows, soleSelectedFeature } from "./featureRows";
 import type { RowSelection } from "../ui/rowSelection";
 import { asFeature } from "../types";
 import { isSessionEnded } from "../document/session";
@@ -17,7 +17,8 @@ import { solveSketchFeature } from "../sketch/headlessSolve";
 import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { installLaunchPaths } from "../io/launchPaths";
-import { toast } from "../ui/toast";
+import { hintToast, toast } from "../ui/toast";
+import { sketchConflictText } from "../ui/plainError";
 import { traceFaultToast } from "../ui/traceFault";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -49,6 +50,7 @@ import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
+import { stepLabelFor, stepMenuText } from "../ui/canStep";
 import { welcomeOnStartup } from "../ui/welcome";
 import { Home } from "../ui/home";
 import { wireHomeOnOpen } from "./homeWiring";
@@ -59,7 +61,7 @@ import { startWhatsNew } from "../ui/whatsNew";
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
 import { safeMode } from "../ui/safeMode";
-import { createSelection } from "./selection";
+import { closeToolOnLostStep, createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
@@ -72,7 +74,7 @@ import {
   openOnBranch,
   openPathGuarded,
 } from "./documentActions";
-import { endPickSession } from "../ui/treePick";
+import { endRewoundPick } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
 import { installRebuildBridge } from "./rebuildBridge";
@@ -80,7 +82,9 @@ import { installViewportWiring } from "./viewportWiring";
 import { installIsolateCamera } from "./isolateCamera";
 import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
+import { installCanvasPick } from "./canvasPick";
 import { installKeyboard } from "./keyboard";
+import { installToolFocus } from "./toolFocus";
 import { installTitlebar } from "./titlebar";
 import { installAnnouncements } from "./announcements";
 import { beforeUpdate, installUnsavedGuard } from "./unsavedGuard";
@@ -91,6 +95,7 @@ import { useUiStore } from "../stores/ui";
 import { useBrowserStore } from "../stores/browser";
 import { createDocBridge, type DocBridge } from "./docBridge";
 import { wireDocumentSwap } from "./documentSwap";
+import { createGeometryBrowser, type GeometryBrowser } from "./geometryBrowser";
 import { watchOutOfDate } from "./staleModel";
 import { LiveSessionHost } from "../live/liveSession";
 import { GuideSession } from "../ui/guide/guideSession";
@@ -144,6 +149,7 @@ export interface Engine {
   /** The arrow on an edge or face selection. Not in `tools`: counted by toolBusy(), any selection would disable every
    *  command. */
   nudge: SelectionNudge;
+  geometryBrowser: GeometryBrowser;
   ui: EngineUi;
 
   starters: ReturnType<typeof createFeatureStarters>;
@@ -196,9 +202,11 @@ export interface Engine {
   openDoc(): Promise<void>;
   doUndo(): void;
   doRedo(): void;
+  /** Undoes the latest step only while it is still the one stamped `mark`, else says why not. */
+  undoIfLatest(mark: number): void;
 
   lastAction: string | null;
-  setStatus(text: string, cls: "" | "connected" | "error"): void;
+  setStatus(text: string, cls: "" | "connected" | "error", opts?: { silent?: boolean }): void;
 }
 
 let recoveryAsked: Promise<void> = Promise.resolve();
@@ -210,11 +218,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.lastAction = null;
   e.planePick = false;
 
-  // A hint is a short toast, dropped when it repeats the one on screen; errors go to the console.
-  let lastHint = { text: "", at: 0 };
   // A reconnect loop repeats its warning every attempt, once a minute is plenty.
   let lastWarning = { text: "", at: -Infinity };
-  e.setStatus = (text, cls) => {
+  e.setStatus = (text, cls, opts) => {
     if (!text || cls === "connected") return;
     const now = performance.now();
     if (cls === "error") {
@@ -223,9 +229,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       logWarning(text, { source: "status" });
       return;
     }
-    if (text === lastHint.text && now - lastHint.at < 3500) return;
-    lastHint = { text, at: now };
-    toast(text);
+    hintToast(text, opts);
   };
 
   e.viewport = new Viewport(canvas);
@@ -283,6 +287,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group, "sketches");
+  e.overlay.changed = () => e.viewport.requestRender();
   e.sketch = new SketchMode(e.viewport, e.overlay);
   // Areas split where the engine cuts a consuming feature's profile, so a highlighted area is what builds. The build
   // result is the epoch, since a visibility toggle re-emits the same one.
@@ -324,7 +329,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store.onParamsApplied = () => e.sketch.syncParamValues();
   // The open sketch's session owns it, so its projection refreshes patch the live entities.
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
-  e.store.onParamSolveIssue = (id) => toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
+  e.store.onParamSolveIssue = (id) => toast(sketchConflictText(id, e.store.document.features));
   // Glyph outlines arrive async from the engine, which owns the fonts.
   setTextBackend(e.geometry, () => {
     if (e.sketch.active) e.sketch.redraw();
@@ -349,6 +354,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     // Without `toolBusy` the handle and its F and G keys stay live under every other tool, without `datumDef` a
     // click on a construction plane while aiming falls through to the body behind it.
     section: new SectionTool(e.viewport, {
+      doc: () => e.store,
       toolBusy: () => e.toolBusy(),
       afterEdit: () => e.restoreBodyGizmo(),
       saved: {
@@ -364,9 +370,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
         return f ? e.datumPlaneDef(f) : null;
       },
     }),
-    planeOffset: new PlaneOffsetTool(e.viewport),
-    datumPose: new DatumPoseTool(e.viewport),
-    lightAim: new LightAimTool(e.viewport),
+    planeOffset: new PlaneOffsetTool(e.viewport, () => e.store),
+    datumPose: new DatumPoseTool(e.viewport, () => e.store),
+    lightAim: new LightAimTool(e.viewport, () => e.store),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
     joint: new JointTool(e.viewport, e.store),
     mechanism: new MechanismTool(e.viewport, e.store),
@@ -413,7 +419,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createDatumPlanes(e));
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
-  e.store.onRewind(endPickSession);
+  e.store.onRewind(endRewoundPick);
+  closeToolOnLostStep(e);
   wireDocumentSwap(e.store, {
     cancelTools: () => cancelActiveTools(e.tools),
     sketch: e.sketch,
@@ -426,6 +433,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     browser: useBrowserStore(),
     selectFeature: (id) => e.selectFeature(id),
   });
+  e.geometryBrowser = createGeometryBrowser(e);
   watchOutOfDate(e.store, (on) => e.viewport.setModelOutOfDate(on));
   installEnvironmentSync(e.store);
 
@@ -441,6 +449,9 @@ export function mountUi(e: Engine): void {
   // Global, so the palette opens from anywhere.
   const cmdk = useCommandPaletteStore();
   cmdk.bind((a) => e.handleAction(a));
+  cmdk.bindLabels((id) =>
+    id === "undo" || id === "redo" ? stepMenuText(id === "undo" ? "Undo" : "Redo", stepLabelFor(e, id)) : null,
+  );
   window.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === "k" || ev.key === "K")) {
       ev.preventDefault();
@@ -509,6 +520,7 @@ export function mountUi(e: Engine): void {
     dropBodyGizmo: () => e.dropBodyGizmo(),
     setStatus: (t, c) => e.setStatus(t, c),
     selectFeature: (id) => e.selectFeature(id),
+    deleteFeatures: (ids) => deleteRows(e, ids),
     editFeature: (id) => e.editFeature(id),
     featureForFace: (id) => e.featureForFace(id),
     deleteSelectedFace: () => e.deleteSelectedFace(),
@@ -552,7 +564,11 @@ export function mountUi(e: Engine): void {
   installViewportWiring(e);
   installIsolateCamera(e.store, e.viewport);
   installRebuildBridge(e);
+  // After the bridge, edge rows read the model it draws.
+  e.store.onBuild((s) => e.geometryBrowser.buildChanged(s));
   installSketchStateBridge(e);
+  installCanvasPick(e);
+  installToolFocus(e);
   installKeyboard(e);
 
   createBugReporter({

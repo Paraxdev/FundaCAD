@@ -4,7 +4,7 @@
   position: fixed;
   z-index: var(--z-menu);
   min-width: 168px;
-  max-height: calc(100vh - 8px);
+  max-height: calc(var(--win-h) - 8px);
   overflow-y: auto;
   padding: 5px;
   corner-shape: squircle;
@@ -15,7 +15,7 @@
   backdrop-filter: var(--float-blur);
   box-shadow: var(--float-shadow);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   animation: pop-in var(--t-fast) var(--ease);
 }
 
@@ -79,7 +79,7 @@
 .ui-menu-keys {
   flex: none;
   padding-left: var(--s-4);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
 }
 

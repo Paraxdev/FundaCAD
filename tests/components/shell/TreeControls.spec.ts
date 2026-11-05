@@ -312,10 +312,23 @@ describe("tree rows and heads as tree items", () => {
     const input = w.get<HTMLInputElement>(".tree-label.renaming input");
     await input.setValue("Lid");
     await input.trigger("keydown", { key: "Enter" });
-    await nextTick();
-    await nextTick();
+    await new Promise((done) => setTimeout(done));
     expect(rename).toHaveBeenCalledWith("Lid");
     expect(document.activeElement).toBe(r);
+  });
+
+  it("Escape in a field the 3D view's menu opened hands focus back to the row, not the page", async () => {
+    useBrowserStore().pendingRenameId = "n1";
+    const rename = vi.fn();
+    const w = await inTree(TreeRow, { ...plate, id: "n1", rename });
+    await nextTick();
+    await nextTick();
+    const input = w.get<HTMLInputElement>(".tree-label.renaming input");
+    input.element.focus();
+    await input.trigger("keydown", { key: "Escape" });
+    await new Promise((done) => setTimeout(done));
+    expect(rename).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(w.get(".feature-row").element);
   });
 
   it("a row with no rename leaves F2 to the Tree", async () => {

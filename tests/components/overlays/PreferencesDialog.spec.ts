@@ -5,8 +5,15 @@ import { createPinia, setActivePinia } from "pinia";
 import PreferencesDialog from "../../../src/components/overlays/PreferencesDialog.vue";
 import { focusables } from "../../../src/components/ui/focusables";
 import { useDialogStore } from "../../../src/stores/dialogs";
+import { useToastStore } from "../../../src/stores/toasts";
 import { getUnit, setUnit } from "../../../src/ui/units";
-import { getHoverDwellMs, getNavPrefs, setHoverDwellMs, setNavPrefs } from "../../../src/ui/interactionPrefs";
+import {
+  getHoverDwellMs,
+  getNavPrefs,
+  noteDetectedWheel,
+  setHoverDwellMs,
+  setNavPrefs,
+} from "../../../src/ui/interactionPrefs";
 import { a11yPrefs, getVerbosity, resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 import { contrastSetting } from "../../../src/ui/contrastSetting";
 import { motionOn, setMotion } from "../../../src/ui/motion";
@@ -19,6 +26,12 @@ import {
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { customThemes, DEFAULT_THEME_ID, getTheme, removeCustomTheme, setTheme, themes } from "../../../src/ui/theme";
+
+const confirm = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/choice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
+  confirmDanger: confirm,
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -75,6 +88,8 @@ beforeEach(() => {
   setHomeBackground("paper");
   useHomeImageStore(memoryImageStore());
   resetExperimentalPrefs();
+  confirm.mockReset();
+  confirm.mockResolvedValue(true);
 });
 
 describe("Preferences choices", () => {
@@ -95,7 +110,9 @@ describe("Preferences choices", () => {
       ["prefs-wheel-device", "Scrolling", "Automatic|Touchpad|Mouse"],
       ["prefs-touchpad-scroll", "Two-finger scroll", "Orbits|Pans"],
       ["prefs-contrast", "Contrast", "Follow system|Standard|More|Maximum"],
+      ["prefs-viewport-labels", "Viewport labels", "Small|Medium|Large|Extra large"],
       ["prefs-verbosity", "Announcements", "Off|Errors|Normal|Verbose"],
+      ["prefs-notice-time", "Notification time", "Normal|Longer|Until dismissed"],
       ["prefs-motion", "Animations", "Follow system|On|Off"],
       ["prefs-env-width", "HDR environment size", expect.stringMatching(/^2048\|4096\|8192\|16384\|GPU maximum/)],
     ]);
@@ -118,6 +135,25 @@ describe("Preferences choices", () => {
       expect(radios(g).map((r) => [r.tabIndex, r.getAttribute("aria-checked")])).toEqual(
         radios(g).map((r) => (r.getAttribute("aria-checked") === "true" ? [0, "true"] : [-1, "false"])),
       );
+  });
+
+  it("the Scrolling hint says what Automatic took the last scroll for, and updates while open", async () => {
+    await open();
+    await category("navigation");
+    const hint = () => $("#prefs-wheel-device-hint").textContent!.replace(/\s+/g, " ");
+    expect(hint()).not.toContain("took the last one");
+    expect(hint()).toContain("has not seen a scroll over the model yet");
+    expect(hint()).toContain("On Mouse a pinch pans too, as Ctrl with a wheel does.");
+    noteDetectedWheel("touchpad");
+    await flushPromises();
+    expect(hint()).toContain("and took the last one for a touchpad");
+    noteDetectedWheel("mouse");
+    await flushPromises();
+    expect(hint()).toContain("and took the last one for a mouse");
+    setNavPrefs({ wheelDevice: "touchpad" });
+    await flushPromises();
+    expect(hint()).not.toContain("took the last one");
+    expect(hint()).not.toContain("not seen a scroll");
   });
 
   it("steps Tab and Shift+Tab once per group through the dialog, wrapping at both ends", async () => {
@@ -479,16 +515,41 @@ describe("Preferences Accessibility", () => {
     expect([a11yPrefs().singleKeys, box.checked]).toEqual([true, true]);
   });
 
+  it("holds Units spoken in full in the Speech group after Announcements, and Reset to defaults ticks it again", async () => {
+    await open();
+    await category("access");
+    const group = $("#prefs-verbosity").closest("[role=group]")!;
+    const cards = [...group.querySelectorAll(".pref-card")];
+    const card = $("#prefs-units-in-full").closest(".pref-card")!;
+    expect([
+      group.getAttribute("aria-labelledby"),
+      cards.indexOf(card),
+      cards.indexOf($("#prefs-verbosity").closest(".pref-card")!),
+    ]).toEqual(["prefs-a11y-speech", 1, 0]);
+    const box = $("#prefs-units-in-full input[type=checkbox]") as HTMLInputElement;
+    expect([box.checked, box.getAttribute("aria-describedby")]).toEqual([true, "prefs-units-in-full-hint"]);
+    expect($("#prefs-units-in-full-hint").textContent).toContain("millimetres");
+    const reset = $("[data-a11y-reset]");
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+    box.click();
+    await flushPromises();
+    expect([a11yPrefs().unitsInFull, box.checked, reset.getAttribute("aria-disabled")]).toEqual([false, false, null]);
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().unitsInFull, box.checked, reset.getAttribute("aria-disabled")]).toEqual([true, true, "true"]);
+  });
+
   it("the Screen reader preset unticks Single key shortcuts and Reset to defaults ticks it again", async () => {
     await open();
     await category("access");
     const box = $("#prefs-single-keys input[type=checkbox]") as HTMLInputElement;
     expect($("#prefs-a11y-actions-hint").textContent).toContain("turns Single key shortcuts off");
+    expect($("#prefs-a11y-actions-hint").textContent).toContain("Notification time to Until dismissed");
     $("[data-a11y-preset]").click();
     await flushPromises();
     expect([a11yPrefs().singleKeys, box.checked]).toEqual([false, false]);
     expect($("#prefs-a11y-preset-status").textContent).toBe(
-      "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.",
+      "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.",
     );
     $("[data-a11y-reset]").click();
     await flushPromises();
@@ -513,6 +574,61 @@ describe("Preferences Accessibility", () => {
     await flushPromises();
     expect([a11yPrefs().animations, getVerbosity(), getHoverDwellMs()]).toEqual(["system", "normal", 800]);
     expect([a11yPrefs().solidPanels, solidBox().checked]).toEqual([false, false]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("Reset to defaults asks first, and Cancel leaves every choice and Hover delay as they were", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("animations", "off");
+    setA11yPref("interfaceSize", 125);
+    setHoverDwellMs(1200);
+    await flushPromises();
+    confirm.mockResolvedValueOnce(false);
+    reset.click();
+    await flushPromises();
+    expect(confirm.mock.calls).toHaveLength(1);
+    expect(confirm.mock.calls[0]![0]).toBe("Reset accessibility settings?");
+    expect(confirm.mock.calls[0]![1]).toBe("Reset");
+    expect(confirm.mock.calls[0]![2]).toContain("Hover delay");
+    expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["off", 125, 1200]);
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    const said = () => useToastStore().items.map((t) => t.message);
+    expect(said()).toEqual([]);
+    reset.click();
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect([a11yPrefs().animations, a11yPrefs().interfaceSize, getHoverDwellMs()]).toEqual(["system", 100, 800]);
+    expect(said()).toEqual([expect.stringMatching(/Accessibility.*defaults/)]);
+  });
+
+  it("holds Interface size in the Vision group, and Reset to defaults puts a changed size back to 100", async () => {
+    await open();
+    await category("access");
+    expect($("#prefs-interface-size").closest("[role=group]")!.getAttribute("aria-labelledby")).toBe(
+      "prefs-a11y-vision",
+    );
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("interfaceSize", 125);
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect([a11yPrefs().interfaceSize, label($("#prefs-interface-size"))]).toEqual([100, "100%"]);
+    expect(reset.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("lets Reset to defaults put a changed Viewport labels size back to Medium", async () => {
+    await open();
+    await category("access");
+    const reset = $("[data-a11y-reset]");
+    setA11yPref("viewportLabels", "l");
+    await flushPromises();
+    expect(reset.getAttribute("aria-disabled")).toBeNull();
+    reset.click();
+    await flushPromises();
+    expect(a11yPrefs().viewportLabels).toBe("m");
     expect(reset.getAttribute("aria-disabled")).toBe("true");
   });
 
@@ -578,7 +694,7 @@ describe("Preferences Accessibility", () => {
     $("[data-a11y-preset]").click();
     await flushPromises();
     expect(status.textContent).toBe(
-      "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on.",
+      "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.",
     );
     const seen: string[] = [];
     const watcher = new MutationObserver(() => seen.push(status.textContent ?? ""));
@@ -586,12 +702,20 @@ describe("Preferences Accessibility", () => {
     $("[data-a11y-preset]").click();
     await flushPromises();
     watcher.disconnect();
-    expect(seen).toEqual(["", "Announcements set to Verbose, Single key shortcuts turned off and Solid panels on."]);
+    expect(seen).toEqual([
+      "",
+      "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.",
+    ]);
     await pick("prefs-verbosity", "Normal");
     expect(status.textContent).toBe("");
     $("[data-a11y-preset]").click();
     await flushPromises();
     solidBox().click();
+    await flushPromises();
+    expect(status.textContent).toBe("");
+    $("[data-a11y-preset]").click();
+    await flushPromises();
+    setA11yPref("noticeTime", "longer");
     await flushPromises();
     expect(status.textContent).toBe("");
   });
@@ -665,11 +789,18 @@ describe("Preferences sliders, hints and upload errors", () => {
     for (const ref of refs) expect(document.getElementById(ref)?.textContent?.trim(), ref).toBeTruthy();
   });
 
-  it("names every theme FundaCAD ships in the theme hint, and the vision themes in the Accessibility one", async () => {
+  it("offers every shipped theme in the picker, keeps its hint short, and names the vision themes in Accessibility", async () => {
     await open();
-    const text = (id: string) => $(`#${id}`).textContent!.replace(/\s+/g, " ");
-    const shipped = themes().filter((t) => !t.custom);
-    expect(shipped.filter((t) => !text("prefs-theme-hint").includes(t.label)).map((t) => t.label)).toEqual([]);
+    const text = (id: string) => $(`#${id}`).textContent!.replace(/\s+/g, " ").trim();
+    ($("#prefs-theme") as HTMLElement).click();
+    await flushPromises();
+    const offered = [...document.querySelectorAll('[role="option"]')].map((o) => o.textContent!.trim());
+    expect(
+      themes()
+        .filter((t) => !t.custom && !offered.includes(t.label))
+        .map((t) => t.label),
+    ).toEqual([]);
+    expect(text("prefs-theme-hint")).toBe("System follows your computer's light, dark and contrast settings.");
     for (const label of ["High Contrast Dark", "High Contrast Light", "Colour-Blind Safe", "FundaCAD Light"]) {
       expect(text("prefs-a11y-theme-hint")).toContain(label);
     }
@@ -702,6 +833,30 @@ describe("Preferences sliders, hints and upload errors", () => {
       await vi.waitFor(() => expect(getTheme()).toBe(customThemes().find((t) => t.label === "Fine")?.id));
       await flushPromises();
       expect(warning.textContent).toBe("");
+    } finally {
+      setTheme(DEFAULT_THEME_ID);
+      for (const t of customThemes()) removeCustomTheme(t.id);
+    }
+  });
+
+  it("asks before it removes an uploaded theme, and says it went", async () => {
+    const json = new File([JSON.stringify({ label: "Fine", "--accent": "#9a9ff0" })], "fine.json");
+    try {
+      await open();
+      await pickFile("prefs-theme-file", json);
+      await vi.waitFor(() => expect(customThemes().map((t) => t.label)).toEqual(["Fine"]));
+      await flushPromises();
+      const remove = () => [...document.querySelectorAll<HTMLElement>("button")].find((b) => label(b) === "Remove");
+      const said = () => useToastStore().items.map((t) => t.message);
+      confirm.mockResolvedValueOnce(false);
+      remove()!.click();
+      await flushPromises();
+      expect(confirm.mock.calls).toEqual([["Remove the theme Fine?", "Remove", expect.any(String)]]);
+      expect([customThemes().length, said()]).toEqual([1, []]);
+      remove()!.click();
+      await flushPromises();
+      expect([customThemes().length, getTheme(), said()]).toEqual([0, DEFAULT_THEME_ID, ["Removed the theme Fine."]]);
+      expect(remove()).toBeUndefined();
     } finally {
       setTheme(DEFAULT_THEME_ID);
       for (const t of customThemes()) removeCustomTheme(t.id);

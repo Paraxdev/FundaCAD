@@ -1,0 +1,315 @@
+{
+  "version": 10,
+  "parameters": {},
+  "paramDefs": {},
+  "features": [
+    {
+      "id": "bx",
+      "type": "box",
+      "length": 30,
+      "width": 20,
+      "height": 10
+    }
+  ],
+  "bodyIds": {
+    "bx:0": "body1"
+  },
+  "materials": [
+    {
+      "id": "m-aluminium",
+      "name": "Aluminium",
+      "color": "#b8bcc0",
+      "metalness": 0.9,
+      "roughness": 0.35
+    },
+    {
+      "id": "m-steel",
+      "name": "Steel",
+      "color": "#8f959b",
+      "metalness": 0.95,
+      "roughness": 0.28
+    },
+    {
+      "id": "m-brass",
+      "name": "Brass",
+      "color": "#c9a227",
+      "metalness": 0.9,
+      "roughness": 0.3
+    },
+    {
+      "id": "m-copper",
+      "name": "Copper",
+      "color": "#b06a3b",
+      "metalness": 0.95,
+      "roughness": 0.25
+    },
+    {
+      "id": "m-gold",
+      "name": "Gold",
+      "color": "#d4af37",
+      "metalness": 1,
+      "roughness": 0.22
+    },
+    {
+      "id": "m-chrome",
+      "name": "Chrome",
+      "color": "#e8ecf0",
+      "metalness": 1,
+      "roughness": 0.03
+    },
+    {
+      "id": "m-titanium",
+      "name": "Titanium",
+      "color": "#9a9ea3",
+      "metalness": 0.9,
+      "roughness": 0.42
+    },
+    {
+      "id": "m-carpaint",
+      "name": "Car paint, red",
+      "color": "#a51321",
+      "metalness": 0.55,
+      "roughness": 0.38,
+      "clearcoat": 1
+    },
+    {
+      "id": "m-ceramic",
+      "name": "Ceramic, glazed",
+      "color": "#eceae4",
+      "metalness": 0,
+      "roughness": 0.32,
+      "clearcoat": 1
+    },
+    {
+      "id": "m-plastic-white",
+      "name": "Plastic, white",
+      "color": "#e8e8e8",
+      "metalness": 0.02,
+      "roughness": 0.6
+    },
+    {
+      "id": "m-plastic-black",
+      "name": "Plastic, black",
+      "color": "#232323",
+      "metalness": 0.02,
+      "roughness": 0.5
+    },
+    {
+      "id": "m-rubber",
+      "name": "Rubber",
+      "color": "#1d1f22",
+      "metalness": 0,
+      "roughness": 0.95
+    },
+    {
+      "id": "m-wood",
+      "name": "Wood",
+      "color": "#9a6b3f",
+      "metalness": 0,
+      "roughness": 0.8
+    },
+    {
+      "id": "m-glass",
+      "name": "Glass",
+      "color": "#cfe4ee",
+      "metalness": 0,
+      "roughness": 0.05,
+      "opacity": 0.25
+    },
+    {
+      "id": "m-glass-frosted",
+      "name": "Glass, frosted",
+      "color": "#e6eef2",
+      "metalness": 0,
+      "roughness": 0.5,
+      "opacity": 0.3
+    },
+    {
+      "id": "m-glass-tinted",
+      "name": "Glass, tinted",
+      "color": "#d8efe6",
+      "metalness": 0,
+      "roughness": 0.05,
+      "opacity": 0.2,
+      "attenuationColor": "#2a8f6a",
+      "attenuationDistance": 20
+    },
+    {
+      "id": "m-diamond",
+      "name": "Diamond",
+      "color": "#f4f8fb",
+      "metalness": 0,
+      "roughness": 0,
+      "opacity": 0.1,
+      "ior": 2.42,
+      "dispersion": 5
+    },
+    {
+      "id": "m-acrylic",
+      "name": "Acrylic, clear",
+      "color": "#dfeaf0",
+      "metalness": 0,
+      "roughness": 0.15,
+      "opacity": 0.45
+    },
+    {
+      "id": "m-emitter",
+      "name": "Indicator, lit",
+      "color": "#42e07a",
+      "metalness": 0,
+      "roughness": 0.4,
+      "emissive": 0.8
+    },
+    {
+      "id": "m-teal-paint",
+      "name": "Teal paint",
+      "color": "#1a7f7a",
+      "metalness": 0.4,
+      "roughness": 0.35,
+      "clearcoat": 1,
+      "flakes": 0.5,
+      "flakeSize": 0.2,
+      "surface": {
+        "kind": "brushed",
+        "scale": 2,
+        "amount": 0.6,
+        "angle": 45
+      },
+      "surfaceGraph": {
+        "nodes": [
+          {
+            "id": "n",
+            "type": "noise",
+            "params": {
+              "scale": 3
+            },
+            "x": 40,
+            "y": 60
+          },
+          {
+            "id": "r",
+            "type": "colorramp",
+            "params": {
+              "stops": "0:#102030;1:#a0b0c0"
+            },
+            "in": {
+              "t": "n"
+            }
+          },
+          {
+            "id": "o",
+            "type": "output",
+            "params": {
+              "colorAmount": 0.5
+            },
+            "in": {
+              "roughness": "n",
+              "color": "r"
+            }
+          }
+        ],
+        "output": "o"
+      }
+    },
+    {
+      "id": "m-green-glass",
+      "name": "Green glass",
+      "color": "#cfe4ee",
+      "metalness": 0,
+      "roughness": 0.05,
+      "opacity": 0.25,
+      "attenuationColor": "#2a8f6a"
+    }
+  ],
+  "bodyMaterial": {
+    "body1": "m-teal-paint"
+  },
+  "faceMaterials": {
+    "body1#5": "m-green-glass",
+    "body1#4": "m-steel"
+  },
+  "facePrints": {
+    "body1#5": {
+      "centroid": [
+        0,
+        0,
+        5
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ],
+      "area": 600,
+      "surface": "plane",
+      "points": [
+        -10,
+        6.6667,
+        5,
+        10,
+        -6.6667,
+        5,
+        5,
+        6.6667,
+        5,
+        -5,
+        -6.6667,
+        5,
+        -5,
+        3.3333,
+        5,
+        -10,
+        -3.3333,
+        5,
+        5,
+        -3.3333,
+        5,
+        10,
+        3.3333,
+        5
+      ],
+      "faces": 6
+    },
+    "body1#4": {
+      "centroid": [
+        0,
+        0,
+        -5
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ],
+      "area": 600,
+      "surface": "plane",
+      "points": [
+        -10,
+        6.6667,
+        -5,
+        10,
+        -6.6667,
+        -5,
+        5,
+        6.6667,
+        -5,
+        -5,
+        -6.6667,
+        -5,
+        -5,
+        3.3333,
+        -5,
+        -10,
+        -3.3333,
+        -5,
+        5,
+        -3.3333,
+        -5,
+        10,
+        3.3333,
+        -5
+      ],
+      "faces": 6
+    }
+  }
+}

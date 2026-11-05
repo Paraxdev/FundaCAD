@@ -10,6 +10,11 @@ vi.mock("../../src/io/files", () => ({ openDocument: (...a: unknown[]) => openDo
 const closeHome = vi.fn();
 vi.mock("../../src/ui/home", () => ({ closeHome: () => closeHome() }));
 
+const announce = vi.fn();
+vi.mock("../../src/ui/announce", () => ({ announce: (...a: unknown[]) => announce(...a) }));
+
+import { createPinia, setActivePinia } from "pinia";
+import { usePanelsStore } from "../../src/stores/panels";
 import { createDocumentActions, hasUnsavedWork } from "../../src/app/documentActions";
 import type { Engine } from "../../src/app/engine";
 
@@ -25,6 +30,8 @@ function fakeEngine(dirty: boolean, sketchEdits: boolean) {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia());
+  announce.mockReset();
   choose.mockReset();
   openDocument.mockReset();
 });
@@ -95,9 +102,10 @@ describe("Undo and Redo", () => {
     closeHome.mockReset();
     closeHome.mockImplementation(() => calls.push("close"));
     const e = {
-      tools: { move: { cancel: () => {} } },
+      tools: { move: { cancel: () => {} }, extrude: { profileSketches: [] } },
       sketch: { undoEdit: () => false, redoEdit: () => false },
-      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo"), document: { features: [] } },
     } as unknown as Engine;
     const a = createDocumentActions(e);
     a.doUndo();
@@ -111,10 +119,45 @@ describe("Undo and Redo", () => {
     const e = {
       tools: { move: { pending: true, cancel: () => calls.push("drop drag") } },
       sketch: { undoEdit: () => false, redoEdit: () => false },
-      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo"), document: { features: [] } },
     } as unknown as Engine;
     createDocumentActions(e).doUndo();
     expect(calls).toEqual(["drop drag"]);
+  });
+
+  it("while Stress is open take back and put back its setup steps, never the model's", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    const e = {
+      tools: { move: { cancel: () => {} }, extrude: { profileSketches: [] } },
+      sketch: { undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress: () => !!calls.push("stress undo"), redoStress: () => !!calls.push("stress redo") } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo"), document: { features: [] } },
+    } as unknown as Engine;
+    const a = createDocumentActions(e);
+    a.doUndo();
+    a.doRedo();
+    expect(calls).toEqual(["stress undo", "stress redo"]);
+  });
+
+  it("go to the model once Stress is closed, and to an open sketch before Stress", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    const undoStress = () => {
+      calls.push("stress undo");
+      return false;
+    };
+    const closed = {
+      tools: { move: { cancel: () => {} }, extrude: { profileSketches: [] } },
+      sketch: { undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo"), document: { features: [] } },
+    } as unknown as Engine;
+    createDocumentActions(closed).doUndo();
+    const sketching = { ...closed, sketch: { undoEdit: () => !!calls.push("sketch undo") } } as unknown as Engine;
+    createDocumentActions(sketching).doUndo();
+    expect(calls).toEqual(["stress undo", "undo", "sketch undo"]);
   });
 });
 
@@ -139,9 +182,123 @@ describe("a Move drag let go of but not yet entered", () => {
         move: { pending: true, cancel: () => calls.push("drop drag"), settle: () => calls.push("write drag") },
       },
       sketch: { undoEdit: () => false, redoEdit: () => calls.push("sketch redo") },
-      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo"), document: { features: [] } },
     } as unknown as Engine;
     createDocumentActions(e).doRedo();
     expect(calls).toEqual(["write drag"]);
+  });
+});
+
+describe("Undo and Redo speak the step", () => {
+  const history = (undo: string[], redo: string[] = []) => {
+    const store = {
+      undoLabel: null as string | null,
+      redoLabel: null as string | null,
+      undo: () => {
+        if (undo.length) redo.push(undo.pop()!);
+      },
+      redo: () => {
+        if (redo.length) undo.push(redo.pop()!);
+      },
+      document: { features: [] },
+    };
+    Object.defineProperty(store, "undoLabel", { get: () => undo.at(-1) ?? null });
+    Object.defineProperty(store, "redoLabel", { get: () => redo.at(-1) ?? null });
+    return store;
+  };
+  const rig = (extra: Record<string, unknown> = {}) => {
+    const store = history(["Box 1", "Box 2"]);
+    const e = {
+      tools: { move: { cancel: () => {}, settle: () => {} }, extrude: { profileSketches: [] } },
+      sketch: { active: false, undoEdit: () => false, redoEdit: () => false },
+      ui: { panels: { undoStress: () => false, redoStress: () => false } },
+      store,
+      ...extra,
+    } as unknown as Engine;
+    return { e, a: createDocumentActions(e) };
+  };
+  const said = () => announce.mock.calls;
+
+  it("says the step taken back and the step put back, on key history", () => {
+    const { a } = rig();
+    a.doUndo();
+    a.doUndo();
+    a.doRedo();
+    expect(said()).toEqual([
+      ["Undid Box 2", "polite", { key: "history" }],
+      ["Undid Box 1", "polite", { key: "history" }],
+      ["Redid Box 1", "polite", { key: "history" }],
+    ]);
+  });
+
+  it("says there is nothing to take back or put back", () => {
+    const { a } = rig();
+    a.doRedo();
+    a.doUndo();
+    a.doUndo();
+    a.doUndo();
+    expect(said().map((c) => c[0])).toEqual(["Nothing to redo", "Undid Box 2", "Undid Box 1", "Nothing to undo"]);
+  });
+
+  it("names a sketch's step as a sketch edit, and says nothing when the sketch has none", () => {
+    const { a } = rig({
+      sketch: {
+        active: true,
+        canUndoSketch: true,
+        canRedoSketch: false,
+        undoEdit: () => true,
+        redoEdit: () => true,
+      },
+    });
+    a.doUndo();
+    a.doRedo();
+    expect(said().map((c) => c[0])).toEqual(["Undid sketch edit"]);
+    announce.mockReset();
+    const empty = rig({
+      sketch: { active: true, canUndoSketch: false, canRedoSketch: false, undoEdit: () => true, redoEdit: () => true },
+    });
+    empty.a.doUndo();
+    empty.a.doRedo();
+    expect(said()).toEqual([]);
+  });
+
+  it("says Stress's own step label while its panel is open", () => {
+    usePanelsStore().showStress("body1");
+    const d = usePanelsStore().stress!;
+    d.undoLabel = "Add support";
+    d.canUndo = true;
+    d.redoLabel = "Load 2 force";
+    d.canRedo = true;
+    const { a } = rig({ ui: { panels: { undoStress: () => true, redoStress: () => true } } });
+    a.doUndo();
+    a.doRedo();
+    expect(said().map((c) => c[0])).toEqual(["Undid Add support", "Redid Load 2 force"]);
+  });
+
+  it("leaves an empty Stress history to Stress's own status line, and speaks the model's once Stress closes", () => {
+    usePanelsStore().showStress("body1");
+    const { a } = rig({
+      ui: {
+        panels: {
+          undoStress: () => usePanelsStore().stress !== null,
+          redoStress: () => usePanelsStore().stress !== null,
+        },
+      },
+    });
+    a.doUndo();
+    a.doRedo();
+    expect(said()).toEqual([]);
+    usePanelsStore().stress = null;
+    a.doUndo();
+    expect(said().map((c) => c[0])).toEqual(["Undid Box 2"]);
+  });
+
+  it("says Undid Move for a pending drag, and Nothing to redo when redo writes the drag", () => {
+    const move = { pending: true, cancel: () => {}, settle: () => {} };
+    const { a } = rig({ tools: { move, extrude: { profileSketches: [] } } });
+    a.doUndo();
+    a.doRedo();
+    expect(said().map((c) => c[0])).toEqual(["Undid Move", "Nothing to redo"]);
   });
 });

@@ -7,7 +7,7 @@ mod ws;
 
 pub use ring::{FrameRing, Slot, SLOTS};
 pub use swap::{Buffers, Current, Reopen};
-pub use ws::{Authorize, Notes, WebSocketTransport, MAX_CONNECTIONS};
+pub use ws::{Authorize, Notes, WebSocketTransport, MAX_CONNECTIONS, MAX_PENDING_HANDSHAKES};
 
 /// RGBA8.
 pub const BYTES_PER_PIXEL: usize = 4;
@@ -18,8 +18,9 @@ pub const HEADER_BYTES: usize = 16;
 
 pub trait FrameSource: Send + Sync {
     /// `out` is exactly `width * height * BYTES_PER_PIXEL` bytes, rows top
-    /// first with no padding.
-    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32);
+    /// first with no padding. False when this seq has no picture to give: the transport sends nothing and goes
+    /// straight on to the next seq, so the page spends no round trip on it.
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) -> bool;
 }
 
 pub trait Transport: Send + Sync {

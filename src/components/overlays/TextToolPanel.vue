@@ -17,6 +17,7 @@ import {
   type TextValues,
 } from "../../sketch/textForm";
 import { useToolPanelStore, type TextReq } from "../../stores/toolPanels";
+import { pageZoom } from "../../ui/interfaceSize";
 import { claimEscape } from "../../ui/escapeClaim";
 
 const props = defineProps<{ req: TextReq }>();
@@ -24,7 +25,7 @@ const panels = useToolPanelStore();
 
 // App.vue keys this on req.id, so a second show() remounts and rebuilds the form from the new `initial`.
 const form = reactive(initialTextForm(props.req.initial));
-const pos = textPanelPos(props.req.screen, window);
+const pos = textPanelPos(props.req.screen, window, pageZoom());
 const at = { left: `${pos.left}px`, top: `${pos.top}px` };
 
 const errors = computed(() => textFormErrors(form));
@@ -176,7 +177,16 @@ onUnmounted(() => {
         />
       </div>
 
-      <div v-for="(msg, k) in errors" :key="k" class="text-tool-problem" data-testid="text-field-error">{{ msg }}</div>
+      <!-- Each field describes its own reason, so these lines are for the eye only. -->
+      <div
+        v-for="(msg, k) in errors"
+        :key="k"
+        class="text-tool-problem"
+        data-testid="text-field-error"
+        aria-hidden="true"
+      >
+        {{ msg }}
+      </div>
 
       <!-- pointerdown, not click: the buttons have to act before the field next
            to them can blur, or a commit loses the last keystroke. -->

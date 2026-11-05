@@ -1,4 +1,3 @@
-import { nextTick } from "vue";
 import { isMac } from "../../input/platform";
 
 /** The click a key press on a row stands for: Space is the platform's toggle click (Ctrl, Cmd on macOS), Shift+Space a
@@ -12,27 +11,21 @@ export function keyClick(e: KeyboardEvent): MouseEvent {
   });
 }
 
-/** A rename begun from the keys hands focus back to its row when Enter or Escape closes the field, where the page
- *  would otherwise leave it on the body. One that a pointer began leaves focus alone, as it always did. */
+/** Enter or Escape that closes the rename field hands focus back to its row, where the page would otherwise leave it
+ *  on the body, however the rename began: from the row's keys, its menu or the 3D view's. */
 export function useKeyRename(start: () => void, row: () => HTMLElement | null | undefined) {
-  let byKeys = false;
   return {
-    start(fromKeys = false) {
-      byKeys = fromKeys;
-      start();
-    },
+    start,
     onKeydownCapture(e: KeyboardEvent) {
-      if (!byKeys || (e.key !== "Enter" && e.key !== "Escape")) return;
+      if (e.key !== "Enter" && e.key !== "Escape") return;
       if (!(e.target as HTMLElement | null)?.closest?.(".tree-label.renaming")) return;
-      byKeys = false;
       const el = row();
-      // The field closes after this capture handler, so the first tick still finds it open: wait for its redraw.
-      void nextTick(() =>
-        nextTick(() => {
-          const now = document.activeElement;
-          if (el?.isConnected && (!now || now === document.body)) el.focus();
-        }),
-      );
+      // Microtasks run between the listeners of a real key press, so any nextTick here still finds the field open, which
+      // a synthetic event does not show. A task runs after the whole dispatch and the field's redraw.
+      setTimeout(() => {
+        const now = document.activeElement;
+        if (el?.isConnected && (!now || now === document.body)) el.focus();
+      });
     },
   };
 }

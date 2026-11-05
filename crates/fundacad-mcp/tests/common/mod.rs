@@ -398,6 +398,10 @@ pub struct Host {
     pub opens_after_apply: Option<String>,
     /// What the window shares as its title, the open file's path.
     pub title: String,
+    /// File requests the engine handed over, which the app shows in its file chooser.
+    pub asks: Vec<Value>,
+    /// Every proposal it collected, whole, as the engine handed it over.
+    pub proposals: Vec<Value>,
     next: u64,
 }
 
@@ -414,6 +418,8 @@ impl Host {
             refused: Vec::new(),
             session: None,
             opens_after_apply: None,
+            asks: Vec::new(),
+            proposals: Vec::new(),
             next: 0,
         }
     }
@@ -435,7 +441,9 @@ impl Host {
         }
         let reply = self.call("session_host", publish).await;
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        self.asks.extend(res.get("asks").and_then(Value::as_array).cloned().unwrap_or_default());
         for p in res.get("proposals").and_then(Value::as_array).cloned().unwrap_or_default() {
+            self.proposals.push(p.clone());
             if !self.can_edit {
                 continue;
             }

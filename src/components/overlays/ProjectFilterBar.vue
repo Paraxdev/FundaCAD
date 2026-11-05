@@ -5,6 +5,7 @@ import { computed, onMounted, useTemplateRef, watch } from "vue";
 import Segmented from "../ui/Segmented.vue";
 import { PROJECT_CHIPS, type ProjectFilter } from "../../sketch/projectPanel";
 import { useToolPanelStore } from "../../stores/toolPanels";
+import { pageZoom } from "../../ui/interfaceSize";
 
 const panels = useToolPanelStore();
 const bar = useTemplateRef<HTMLDivElement>("bar");
@@ -20,8 +21,9 @@ function place() {
   const r = panels.projectAnchor;
   const el = bar.value;
   if (!r || !el) return;
-  el.style.top = `${r.top + 10}px`;
-  el.style.left = `${r.left + r.width / 2 - el.offsetWidth / 2}px`;
+  const z = pageZoom();
+  el.style.top = `${r.top / z + 10}px`;
+  el.style.left = `${(r.left + r.width / 2) / z - el.offsetWidth / 2}px`;
 }
 
 onMounted(place);

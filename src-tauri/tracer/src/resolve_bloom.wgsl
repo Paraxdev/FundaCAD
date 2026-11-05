@@ -19,5 +19,6 @@ fn main_bloom(@builtin(global_invocation_id) id: vec3u) {
   let f = t - floor(t);
   let g = mix(mix(glow_at(k), glow_at(k + vec2i(1, 0)), f.x), mix(glow_at(k + vec2i(0, 1)), glow_at(k + vec2i(1, 1)), f.x), f.y);
   let c = srgb(clamp(neutral((a.rgb / max(a.w, 1.0) + g) * r.exposure), vec3f(0.0), vec3f(1.0)));
-  outp[i] = pack4x8unorm(vec4f(c, 1.0));
+  // Alpha 0 marks a pixel no sample reached, the page never shows a frame with one.
+  outp[i] = pack4x8unorm(vec4f(c, select(0.0, 1.0, a.w > 0.0)));
 }

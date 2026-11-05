@@ -13,18 +13,39 @@ const engine = useEngine();
 const tool = engine.tools.targetEdit;
 
 // A clicked row pins its highlight so it stays lit after the pointer leaves, kept by index, cleared by remove or close.
+// Hover and focus both preview a row, leaving one falls back to the other, then to the pinned row.
 const held = ref<number | null>(null);
-function focus(i: number) {
+const hovered = ref<number | null>(null);
+const focused = ref<number | null>(null);
+function light() {
+  tool.hoverAt(hovered.value ?? focused.value ?? held.value);
+}
+function hover(i: number | null) {
+  hovered.value = i;
+  light();
+}
+function focusRow(i: number | null) {
+  focused.value = i;
+  light();
+}
+function pin(i: number) {
   held.value = i;
   tool.hoverAt(i);
 }
-function leave() {
-  tool.hoverAt(held.value);
+// The indices shift or vanish, and a removed button gets no blur.
+function forget() {
+  held.value = null;
+  hovered.value = null;
+  focused.value = null;
 }
 function removeRow(i: number) {
   tool.removeAt(i);
-  held.value = null;
+  forget();
   tool.hoverAt(null);
+}
+function clearAll() {
+  tool.clear();
+  forget();
 }
 
 // One counter, bumped by the tool. The rows are recomputed from it rather than
@@ -46,7 +67,7 @@ const open = computed(() => {
 
 // A closed editor holds no pinned row into the next one it opens.
 watch(open, (o) => {
-  if (!o) held.value = null;
+  if (!o) forget();
 });
 
 const rows = computed(() => {
@@ -86,12 +107,13 @@ const summary = computed(() => {
       :label="field.label"
       :rows="rows"
       :held="held"
+      pickable
       empty="Click geometry to add"
-      @clear="tool.clear()"
+      @clear="clearAll"
       @remove="removeRow"
-      @enter="tool.hoverAt($event)"
-      @leave="leave()"
-      @pick="focus"
+      @hover="hover"
+      @focus="focusRow"
+      @pick="pin"
     />
 
     <div class="tgt-actions">

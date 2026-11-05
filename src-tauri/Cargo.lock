@@ -1921,6 +1921,7 @@ dependencies = [
  "hidapi",
  "keyring",
  "reqwest 0.12.28",
+ "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -1932,6 +1933,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "time",
  "tungstenite",
  "url",
  "webview2-com",
@@ -1956,6 +1958,7 @@ version = "0.2.0"
 dependencies = [
  "fundacad-protocol",
  "getrandom 0.3.4",
+ "landlock",
  "libc",
  "serde_json",
  "sysinfo",
@@ -2015,6 +2018,7 @@ dependencies = [
  "serde",
  "serde_json",
  "svgtypes",
+ "tempfile",
  "thiserror 1.0.69",
  "ttf-parser",
  "ufbx",
@@ -2035,6 +2039,7 @@ dependencies = [
  "fundacad-protocol",
  "futures-util",
  "getrandom 0.3.4",
+ "libc",
  "png 0.17.16",
  "rmcp",
  "schemars 1.2.1",
@@ -3456,6 +3461,17 @@ dependencies = [
  "arrayvec",
  "euclid",
  "smallvec",
+]
+
+[[package]]
+name = "landlock"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cca98e95f35b29d469dade6724c6f96cec9236640f745a0e99b0334ec320ab1"
+dependencies = [
+ "enumflags2",
+ "libc",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

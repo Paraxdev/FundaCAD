@@ -3,7 +3,7 @@
 
 import { readSetting } from "./storedSetting";
 // The display precision rule lives in ui/measure beside the parser; re-exported here so there is one import path.
-import { roundForDisplay as displayRound } from "./measure";
+import { roundForDisplay as displayRound, spokenUnit } from "./measure";
 export { displayRound };
 
 export type Unit = "mm" | "cm" | "in";
@@ -59,6 +59,24 @@ export function fromDisplay(v: number): number {
 /** mm -> rounded display string with the unit suffix (e.g. "40 mm") */
 export function fmtLength(mm: number): string {
   return `${displayRound(toDisplay(mm))} ${current}`;
+}
+
+export function fmtArea(mm2: number): string {
+  return `${displayRound(mm2 / FACTOR[current] ** 2)} ${current}²`;
+}
+
+// Voices can drop a hyphen before a number, so a negative says minus.
+function spokenAmount(displayed: number, prefix: string): string {
+  const n = displayRound(displayed);
+  return `${n < 0 ? "minus " : ""}${Math.abs(n)} ${prefix}${spokenUnit(current, true, Math.abs(n) === 1)}`;
+}
+
+export function spokenLength(mm: number): string {
+  return spokenAmount(toDisplay(mm), "");
+}
+
+export function spokenArea(mm2: number): string {
+  return spokenAmount(mm2 / FACTOR[current] ** 2, "square ");
 }
 
 const FRACTION_DENOMINATORS = [2, 4, 8, 16, 32, 64];

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from . import selectors
+from .actions import out_path
 
 REF_ARGS = {"click": 0, "type": 0, "expand": 0}
 PATH_ARGS = {"open_file", "import_file", "save_as"}
@@ -33,7 +34,7 @@ def literal(v: Any) -> str:
 class Recorder:
     def __init__(self, path: str | os.PathLike, repo: str | os.PathLike, version: str, api: int,
                  session_args: dict | None = None):
-        self.path = Path(path)
+        self.path = out_path(path, ".py")
         self.repo = Path(repo).resolve()
         self.header = (f"# Recorded by fundacad-harness {version}, driver api {api}, "
                        f"{datetime.date.today().isoformat()}.")
@@ -87,7 +88,6 @@ class Recorder:
                           f"with Session({opts}) as s:", *body, ""])
 
     def write(self) -> Path:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_name(self.path.name + ".part")
         tmp.write_text(self.source(), encoding="utf-8")
         os.replace(tmp, self.path)

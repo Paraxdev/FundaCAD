@@ -15,5 +15,5 @@ use std::path::Path;
 /// Open any document and return its JSON, publishing embedded geometry into
 /// `blob_dir` on the way, the same path the app's open takes.
 pub fn read_document(path: &Path, blob_dir: &Path) -> Result<String, String> {
-    container::open_document_checked(path, blob_dir, None).map(|(doc, _)| doc)
+    container::open_document_checked(path, blob_dir).map(|(doc, _)| doc)
 }

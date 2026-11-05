@@ -1,7 +1,8 @@
-// Offers an Items row click to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
+// Offers an Items or Geometry row to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
 // would start a sketch, abandoning Offset Plane, Split and the rest. The row's own action runs only when nothing waits.
 
 import type { Plane3, PlaneDef, Vec3 } from "../types";
+import type { EdgeRef } from "../viewport/edgeLines";
 
 /** What a row stands for, resolved at click time so a taker needs nothing else. */
 export type TreePick =
@@ -12,7 +13,9 @@ export type TreePick =
   | { kind: "body"; id: string }
   | { kind: "bodies"; ids: readonly string[] }
   | { kind: "sketch"; id: string }
-  | { kind: "feature"; id: string };
+  | { kind: "feature"; id: string }
+  | { kind: "face"; faceId: number }
+  | { kind: "edge"; edge: EdgeRef };
 
 /** `true` when the pick was taken, otherwise the short hint saying why not. */
 export type TreePickAnswer = true | string;
@@ -21,15 +24,30 @@ export type TreePickTaker = (pick: TreePick) => TreePickAnswer;
 interface PickSession {
   taker: TreePickTaker;
   end: () => void;
+  keepsOnRewind: boolean;
+  keepsOnCommand: boolean;
+  batch: ((run: () => void) => void) | null;
 }
 
 let session: PickSession | null = null;
 
 /** Rows go to `taker` until the returned release runs. `end` is the pick's cleanup, run when anything else ends the
- *  session, so a taker never outlives its tool. */
-export function awaitTreePick(taker: TreePickTaker, end: () => void): () => void {
+ *  session, so a taker never outlives its tool. `keepsOnRewind` is for a tool that stays open through an undo or a
+ *  redo, so its rows go on with it. `keepsOnCommand` is for a tool a menu command or a shortcut does not close. `batch`
+ *  wraps a run of rows taken together, so the tool can redraw once at its end rather than once a row. */
+export function awaitTreePick(
+  taker: TreePickTaker,
+  end: () => void,
+  opts: { keepsOnRewind?: boolean; keepsOnCommand?: boolean; batch?: (run: () => void) => void } = {},
+): () => void {
   endPickSession();
-  const mine: PickSession = { taker, end };
+  const mine: PickSession = {
+    taker,
+    end,
+    keepsOnRewind: opts.keepsOnRewind ?? false,
+    keepsOnCommand: opts.keepsOnCommand ?? false,
+    batch: opts.batch ?? null,
+  };
   session = mine;
   return () => {
     if (session === mine) session = null;
@@ -44,8 +62,23 @@ export function endPickSession() {
   s.end();
 }
 
+/** A command or a sketch tool key: ends the live pick unless its tool stays open through commands. */
+export function endCommandedPick() {
+  if (session && !session.keepsOnCommand) endPickSession();
+}
+
+/** Undo, redo or a load: a pick waiting on the old document is stale, unless its tool goes on through the change. */
+export function endRewoundPick() {
+  if (session && !session.keepsOnRewind) endPickSession();
+}
+
 export function treePickWaiting(): boolean {
   return session !== null;
+}
+
+/** A pick a command would end holds an edit of a step back too; one that keeps on command gives way with its tool. */
+export function pickHoldsEdits(): boolean {
+  return session !== null && !session.keepsOnCommand;
 }
 
 const NOUN: Record<TreePick["kind"], string> = {
@@ -57,6 +90,8 @@ const NOUN: Record<TreePick["kind"], string> = {
   bodies: "a folder of bodies",
   sketch: "a sketch",
   feature: "a feature",
+  face: "a face",
+  edge: "an edge",
 };
 
 /** The hint for a row a step cannot take: what the row is and what the step wants. */
@@ -68,6 +103,7 @@ export interface TreeClickDeps {
   /** A hint when a tool that takes no rows holds the screen, else null. */
   busyHint: () => string | null;
   hint: (text: string) => void;
+  taken?: () => void;
 }
 
 /** "taken" and "refused" both mean the row's own action must not run. */
@@ -76,7 +112,10 @@ export type TreeClickRoute = "row" | "taken" | "refused";
 export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRoute {
   if (session) {
     const answer = session.taker(pick);
-    if (answer === true) return "taken";
+    if (answer === true) {
+      deps.taken?.();
+      return "taken";
+    }
     deps.hint(answer);
     return "refused";
   }
@@ -86,6 +125,15 @@ export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRo
     return "refused";
   }
   return "row";
+}
+
+/** Offers each pick in turn, as clicks would, until one is not taken or the session ends. */
+export function routeTreeRun(picks: readonly TreePick[], deps: TreeClickDeps): void {
+  const run = () => {
+    for (const p of picks) if (!session || routeTreeClick(p, deps) !== "taken") break;
+  };
+  if (session?.batch) session.batch(run);
+  else run();
 }
 
 export function resetTreePicks() {

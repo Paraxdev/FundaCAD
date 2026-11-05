@@ -65,14 +65,8 @@ fn source() -> Result<(Arc<dyn FrameSource>, String), String> {
     }
 }
 
-fn token() -> Result<String, String> {
-    let mut b = [0u8; 16];
-    getrandom::getrandom(&mut b).map_err(|e| e.to_string())?;
-    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
-}
-
 fn open_ws(src: Arc<dyn FrameSource>, width: u32, height: u32) -> Result<(Open, Opened), String> {
-    let token = token()?;
+    let token = fundacad_engine::ws::mint_token().map_err(|e| e.to_string())?;
     let extra = fundacad_engine::ws::appenv("EXTRA_ORIGINS").unwrap_or_default();
     let gate = fundacad_engine::ws::Gate::new(token.clone(), &extra);
     let authorize: fundacad_frames::Authorize = Arc::new(move |q: Option<&str>, o: Option<&str>| gate.authorized(q, o));
@@ -281,12 +275,16 @@ mod shared {
             }
             let slot = self.buffers.ring.begin(SLOT_WAIT).ok_or("the page holds every frame buffer")?;
             let s = self.buffers.mem();
-            let seq = self.seq.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
             let bytes = frame_bytes(s.width, s.height);
             // SAFETY: the section is `bytes` long, alive until retire, and the
             // page does not hold this slot, so nothing reads it while it is written.
             let out = unsafe { std::slice::from_raw_parts_mut(s.ptrs[slot.index] as *mut u8, bytes) };
-            self.source.render(out, s.width, s.height, seq);
+            let seq = loop {
+                let seq = self.seq.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
+                if self.source.render(out, s.width, s.height, seq) {
+                    break seq;
+                }
+            };
             self.buffers.ring.publish(slot);
             Ok(Next { index: slot.index, generation: slot.generation, seq, width: s.width, height: s.height })
         }
@@ -379,8 +377,9 @@ mod tests {
 
     struct Flat;
     impl FrameSource for Flat {
-        fn render(&self, out: &mut [u8], _w: u32, _h: u32, _seq: u32) {
+        fn render(&self, out: &mut [u8], _w: u32, _h: u32, _seq: u32) -> bool {
             out.fill(7);
+            true
         }
     }
 

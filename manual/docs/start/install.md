@@ -28,6 +28,10 @@ flatpak install --user ./FundaCAD-linux-x86_64.flatpak
 flatpak run dev.fundacad.app
 ```
 
+The Flatpak runs on Wayland, or on X11 where there is no Wayland. Besides the network and the graphics card, it reaches only game controllers and the `spacenavd` service for a [3D mouse](../plugins/spacemouse.md#flatpak).
+
+Of your files, the Flatpak reaches only the FundaCAD folder in Documents and the files you pick in its file chooser. An AI assistant works in that folder too, and FundaCAD asks you before it opens or saves anything else, see [Connect an AI assistant](../ai/connect.md#in-the-flatpak).
+
 The other files:
 
 1. Ubuntu 22.04, Debian 12 and newer: `sudo apt install ./FundaCAD-linux-x86_64.deb`
@@ -40,24 +44,33 @@ To remove FundaCAD, run `flatpak uninstall dev.fundacad.app`, `sudo apt remove f
 
 The beta suits most people, a change only reaches it once it has passed every test. The [development build](https://github.com/Paraxdev/fundacad/releases/tag/development) has every change the day it lands, and is sometimes broken.
 
-To switch, install the file from the other page. If its version number is lower, uninstall first.
+The development build is a separate app called FundaCAD Dev. It installs beside FundaCAD, so you can keep both.
+
+To move between Beta and Stable, see [Updates](#updates).
 
 ## Updates
 
 When a new build is out, a message at the bottom of the window says so. Restart & update installs it, after asking you to save your changes.
 
-Preferences > Updates sets when FundaCAD looks:
+Preferences > Updates sets when and where FundaCAD looks:
 
 1. **Check for updates automatically** is on to start with. Off, nothing is sent until you choose Help > Check for Updates….
 2. **Check** picks Every launch, Daily or Weekly. Daily is the default.
+3. **Channel** picks where updates come from: Stable or Beta. Until the first stable release is out, Stable shows No stable release yet and cannot be picked.
 
-On Linux only the AppImage updates itself. For the other files, install the newer one over the old one.
+The next check looks in the channel you pick. If the build there is older than yours, FundaCAD asks before it installs it. Your files and settings stay.
+
+Picking Development opens the release page of FundaCAD Dev, which installs beside this app.
+
+On Linux only the AppImage updates itself. For the other files, install the newer one over the old one. Their Updates page shows the Channel but cannot change it.
 
 ## If FundaCAD opens blank
 
-When two starts in a row fail to show the window, the next one is in safe mode. Plugins, saved preferences and work recovery are off, and on Linux so is WebKit compositing, the most common cause of a blank window. Nothing saved is changed.
+When two starts in a row fail to show the window, the next one is in safe mode. Plugins, saved preferences and work recovery are off, and on Linux so is WebKit compositing, the most common cause of a blank window. On a Wayland desktop the AppImage and the `.deb` also open the window through X11. Nothing saved is changed.
 
 Click Restart normally on the banner to leave it. To start in safe mode yourself, add `--safe-mode` to the command that starts FundaCAD.
+
+On Linux FundaCAD opens as a Wayland window when the session has Wayland. If it opens blank or closes at start there, safe mode runs it on X11. To keep it on X11 outside safe mode, for the AppImage put `GDK_BACKEND=x11` in front of the command, as in `GDK_BACKEND=x11 ./FundaCAD-linux-x86_64.AppImage`, and for the `.deb` start it with `GDK_BACKEND=x11 fundacad`. For the Flatpak run `flatpak override --user --nosocket=wayland dev.fundacad.app` once, and `flatpak override --user --socket=wayland dev.fundacad.app` to go back.
 
 ## Where FundaCAD keeps its files
 

@@ -7,9 +7,15 @@ import type { ViewCubeSide, ViewOverride } from "../types";
 import { contextMenu } from "../ui/menu";
 import { themeColor } from "./themeColors";
 import { hitScale } from "../input/pointerKind";
+import { viewportLabelScale } from "../ui/viewportLabels";
 
-export const SIZE = 120; // corner viewport, CSS px
+export const SIZE = 120; // corner viewport at Medium Viewport labels, CSS px
 export const MARGIN = 14; // gap from the top-right edge
+
+/** The corner viewport's side in CSS px, following Viewport label size. */
+export function cubeSize(): number {
+  return Math.round(SIZE * viewportLabelScale());
+}
 /** Pixel radii of the extra samples a finger's pick tries around the touch. */
 const CUBE_PROBE_RINGS_PX = [6, 12];
 const HALF = 0.5; // half-extent of the unit cube
@@ -243,13 +249,14 @@ export class ViewCube {
     const rect = this.canvas.getBoundingClientRect();
     // setViewport and setScissor take CSS px and apply pixelRatio themselves, pre-multiplying left
     // the next main render offset and oversized on HiDPI.
-    const x = rect.width - SIZE - MARGIN - this.rightInset;
-    const y = rect.height - SIZE - MARGIN; // WebGL viewport origin is bottom-left
+    const size = cubeSize();
+    const x = rect.width - size - MARGIN - this.rightInset;
+    const y = rect.height - size - MARGIN; // WebGL viewport origin is bottom-left
 
     const prevAutoClear = this.renderer.autoClear;
     this.renderer.autoClear = false;
-    this.renderer.setViewport(x, y, SIZE, SIZE);
-    this.renderer.setScissor(x, y, SIZE, SIZE);
+    this.renderer.setViewport(x, y, size, size);
+    this.renderer.setScissor(x, y, size, size);
     this.renderer.setScissorTest(true);
     this.renderer.clearDepth(); // draw the cube over the main scene
     this.renderer.render(this.scene, this.camera);
@@ -261,9 +268,10 @@ export class ViewCube {
 
   hitsRegion(clientX: number, clientY: number): boolean {
     const rect = this.canvas.getBoundingClientRect();
-    const left = rect.right - SIZE - MARGIN - this.rightInset;
+    const size = cubeSize();
+    const left = rect.right - size - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;
-    return clientX >= left && clientX <= left + SIZE && clientY >= top && clientY <= top + SIZE;
+    return clientX >= left && clientX <= left + size && clientY >= top && clientY <= top + size;
   }
 
   private installPointer() {
@@ -313,10 +321,11 @@ export class ViewCube {
 
   private pickExact(clientX: number, clientY: number): Part | null {
     const rect = this.canvas.getBoundingClientRect();
-    const left = rect.right - SIZE - MARGIN - this.rightInset;
+    const size = cubeSize();
+    const left = rect.right - size - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;
     // NDC within the corner box
-    this.ndc.set(((clientX - left) / SIZE) * 2 - 1, -((clientY - top) / SIZE) * 2 + 1);
+    this.ndc.set(((clientX - left) / size) * 2 - 1, -((clientY - top) / size) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, this.camera);
     const meshes = this.parts.map((p) => p.mesh);
     const hits = this.raycaster.intersectObjects(meshes, false);

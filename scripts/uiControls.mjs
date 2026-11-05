@@ -40,6 +40,7 @@ const USE_INSTEAD = {
   "IconButton:no-name": "IconButton with tip (and keys), which writes title and aria-label",
   "RailButton:no-name": "RailButton with label, which is its accessible name",
   "Segmented:no-name": "a label or tip on every icon only Segmented option",
+  "NumberField:no-unit": 'unit="mm" (a :unit binding too), or unitless for a plain number',
   "class:btn": "Button",
   "class:sm-input": "TextField or NumberField",
   "class:pref-seg": "Segmented",
@@ -73,7 +74,7 @@ function keepOnly(src, ranges) {
 
 function vueRegions(src) {
   const scripts = [];
-  for (const m of src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) {
+  for (const m of src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     const start = m.index + m[0].indexOf(">") + 1;
     scripts.push([start, start + m[1].length]);
   }
@@ -237,17 +238,28 @@ function lineIndex(src) {
   };
 }
 
-// A name a screen reader can read: one of `props` or aria-label/aria-labelledby, static and not blank, or bound to
-// anything but an empty literal, null, undefined or false. A v-bind spread may carry one, so it counts.
+// Whether `prop` is given a value: static and not blank, or bound to anything but an empty literal, null, undefined
+// or false (a binding may be null at run time, which the rule cannot see).
+function given(attrs, prop) {
+  const plain = attrs.get(prop);
+  if (typeof plain === "string" && plain.trim() !== "") return true;
+  const bound = attrs.get(`:${prop}`) ?? attrs.get(`v-bind:${prop}`);
+  return typeof bound === "string" && !/^\s*(?:(["'`])\s*\1|null|undefined|false)?\s*$/.test(bound);
+}
+
+// A name a screen reader can read: one of `props` or aria-label/aria-labelledby. A v-bind spread may carry one.
 function hasName(attrs, props) {
-  if (attrs.has("v-bind")) return true;
-  for (const p of [...props, "aria-label", "aria-labelledby"]) {
-    const plain = attrs.get(p);
-    if (typeof plain === "string" && plain.trim() !== "") return true;
-    const bound = attrs.get(`:${p}`) ?? attrs.get(`v-bind:${p}`);
-    if (typeof bound === "string" && !/^\s*(?:(["'`])\s*\1|null|undefined|false)?\s*$/.test(bound)) return true;
+  return attrs.has("v-bind") || [...props, "aria-label", "aria-labelledby"].some((p) => given(attrs, p));
+}
+
+// A unit a screen reader can be told: unit or caption, or unitless (bare or bound to anything but false). A v-bind
+// spread may carry any of them.
+function hasUnit(attrs) {
+  if (attrs.has("v-bind") || given(attrs, "unit") || given(attrs, "caption") || attrs.get("unitless") === true) {
+    return true;
   }
-  return false;
+  const unitless = attrs.get(":unitless") ?? attrs.get("v-bind:unitless");
+  return typeof unitless === "string" && !/^\s*(?:false)?\s*$/.test(unitless);
 }
 
 // Tag to [kind, the props that name it]. RailButton's tip is only its title, so its label has to be there.
@@ -264,8 +276,9 @@ function scanTemplate(text, hit, legacyClasses, options) {
     const isControl = CONTROL_TAGS.includes(name);
     const icon = ICON_CONTROLS[name];
     const isSegmented = name === "Segmented" || name === "ui-segmented";
+    const isNumber = name === "NumberField" || name === "number-field";
     const isPlain = /^[a-z][a-z0-9]*$/.test(name);
-    if (!isControl && !icon && !isSegmented && !isPlain) continue;
+    if (!isControl && !icon && !isSegmented && !isNumber && !isPlain) continue;
     const attrs = readAttrs(text, m.index + m[0].length);
     if (isControl && name === "input") {
       const type = attrs.get("type");
@@ -275,6 +288,8 @@ function scanTemplate(text, hit, legacyClasses, options) {
       hit(m.index, name);
     } else if (icon) {
       if (!hasName(attrs, icon[1])) hit(m.index, icon[0]);
+    } else if (isNumber) {
+      if (!hasUnit(attrs)) hit(m.index, "NumberField:no-unit");
     } else if (isSegmented) {
       for (let k = namelessSegments(attrs, options); k > 0; k--) hit(m.index, "Segmented:no-name");
     } else {
