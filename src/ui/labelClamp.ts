@@ -1,6 +1,7 @@
 // Keeps sketch dimension labels readable: the viewport runs full bleed under the floating columns, so a label near
 // the left edge landed under the Items card (PH-3).
 
+import { underZoom } from "./anchor";
 import type { Box } from "./promptPlacement";
 
 /** Where a label of half size `hw` x `hh` projected to (`x`, `y`) is drawn: inside `area`, `gap` clear of the cards
@@ -235,4 +236,22 @@ export function labelLeader(
   const y1 = c.y + dy * t;
   if (Math.hypot(p.x - x1, p.y - y1) < minPx) return null;
   return { x1, y1, x2: p.x, y2: p.y };
+}
+
+/** layoutLabels for a layer under the root zoom `z` (pageZoom): points, area and cards come in window pixels, half
+ *  sizes in CSS pixels, and the labels and their leaders go out in the CSS pixels the layer draws in. */
+export function layoutUnderZoom(
+  ls: readonly LabelAt[],
+  area: Box,
+  cards: Cards,
+  gap: number,
+  held: Map<number, Held>,
+  z: number,
+): { at: { x: number; y: number }; leader: ReturnType<typeof labelLeader> }[] {
+  const css = ls.map((l) => ({ ...l, x: l.x / z, y: l.y / z }));
+  const under = { left: cards.left.map((c) => underZoom(c, z)), right: cards.right.map((c) => underZoom(c, z)) };
+  return layoutLabels(css, underZoom(area, z), under, gap, held).map((at, k) => {
+    const l = css[k]!;
+    return { at, leader: labelLeader(at, l.hw, l.hh, l) };
+  });
 }

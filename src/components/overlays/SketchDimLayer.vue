@@ -9,7 +9,8 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
-import { labelLeader, layoutLabels, type Held, type LabelAt } from "../../ui/labelClamp";
+import { pageZoom } from "../../ui/interfaceSize";
+import { labelLeader, layoutUnderZoom, type Held, type LabelAt } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
@@ -18,6 +19,7 @@ const els: (HTMLElement | null)[] = [];
 const leaders: (SVGGElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
+let lastZoom = 0;
 let raf = 0;
 const heldEdges = new Map<number, Held>();
 
@@ -53,8 +55,10 @@ function loop(now: number = performance.now()) {
   refreshCards(now);
   // skip the per-label projection + DOM writes when the camera hasn't moved
   const pose = vp.rig.poseVersion();
-  if (pose === lastPose) return;
+  const z = pageZoom();
+  if (pose === lastPose && z === lastZoom) return;
   lastPose = pose;
+  lastZoom = z;
   const area = vp.domElement.getBoundingClientRect();
   const items = s.dimItems;
   const at: LabelAt[] = [];
@@ -68,14 +72,13 @@ function loop(now: number = performance.now()) {
     at.push({ x: p.x, y: p.y, hw: el.offsetWidth / 2, hh: el.offsetHeight / 2 });
     idx.push(i);
   }
-  const placed = layoutLabels(at, area, cards, LABEL_GAP, heldEdges);
+  const placed = layoutUnderZoom(at, area, cards, LABEL_GAP, heldEdges, z);
   for (let k = 0; k < idx.length; k++) {
     const i = idx[k]!;
-    const a = at[k]!;
     const c = placed[k]!;
-    els[i]!.style.transform = screenTransform(c.x, c.y);
+    els[i]!.style.transform = screenTransform(c.at.x, c.at.y);
     const g = leaders[i];
-    if (g) placeLeader(g, labelLeader(c, a.hw, a.hh, a));
+    if (g) placeLeader(g, c.leader);
   }
 }
 

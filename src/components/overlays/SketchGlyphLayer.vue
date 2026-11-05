@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { onUnmounted, watch } from "vue";
 import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
+import { pageZoom } from "../../ui/interfaceSize";
 import type { GlyphItem } from "../../sketch/sketchGlyphs";
 
 const s = useSketchAnnotationStore();
@@ -15,6 +16,7 @@ const s = useSketchAnnotationStore();
 const els: (HTMLElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
+let lastZoom = 0;
 let raf = 0;
 
 function loop() {
@@ -24,8 +26,10 @@ function loop() {
   if (!plane || !vp) return;
   // skip the per-glyph projection + DOM writes when the camera hasn't moved
   const pose = vp.rig.poseVersion();
-  if (pose === lastPose) return;
+  const z = pageZoom();
+  if (pose === lastPose && z === lastZoom) return;
   lastPose = pose;
+  lastZoom = z;
   const items = s.glyphItems;
   for (let i = 0; i < items.length; i++) {
     const el = els[i];
@@ -33,7 +37,7 @@ function loop() {
     if (!el || !g) continue;
     plane.to3D(g.pos.x, g.pos.y, scratch);
     const p = vp.projectToScreen(scratch);
-    el.style.transform = screenTransform(p.x, p.y);
+    el.style.transform = screenTransform(p.x / z, p.y / z);
   }
 }
 
