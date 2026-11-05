@@ -355,6 +355,9 @@ fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64,
     if offsettable_curved(t) {
         return resize_round(part, face, d, follow);
     }
+    if let Some(out) = super::regrow::regrow(part, face, d) {
+        return out;
+    }
     // A wrapping surface of revolution thickens both ways and a BSpline only
     // outward; the inward BSpline case is where OCCT was measured to crash.
     let thickenable = match t {

@@ -238,8 +238,27 @@ fn r6(v: DVec3) -> Value {
     json!(v.to_array().map(|x| py_round(x, 6)))
 }
 
+/// A G2 or G3 fillet blend offered as a round of its fillet radius. Its axis is the sharp edge it rounds and it
+/// reads as concave on an outside corner, since a larger radius takes material off there.
+fn blend_info(body: &Shape, face: &Shape) -> Option<Value> {
+    let b = crate::features::regrow::blend_of(body, face)?;
+    let on = FaceEnt::new(face.clone()).ok()?.centroid();
+    Some(json!({
+        "kind": "cylinder",
+        "size": py_round(b.radius, 6),
+        "full": false,
+        "concave": !b.concave,
+        "contact": null,
+        "tangent": {"faces": 0, "lostWhen": null, "run": [r6(on)], "closed": false, "followable": false},
+        "blend": {"continuity": b.continuity},
+        "axis": {"origin": r6(b.axis.0), "dir": r6(b.axis.1)},
+    }))
+}
+
 fn resize_info(body: &Shape, face: &Shape) -> Option<Value> {
-    let r = crate::features::resize::describe(body, face)?;
+    let Some(r) = crate::features::resize::describe(body, face) else {
+        return blend_info(body, face);
+    };
     let t = &r.tangent;
     let mut info = json!({
         "kind": r.kind,
