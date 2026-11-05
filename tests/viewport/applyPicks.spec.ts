@@ -280,17 +280,18 @@ describe("hoverPick", () => {
     return { ...r, emphasised };
   }
 
-  it("lights a split face's whole run and no edge", () => {
+  it("hatches a split face's whole run, lights no edge and leaves canvas hover empty", () => {
     const r = hovered();
     r.vp.hoverPick(face(7));
-    expect(r.highlighter.hoverState()).toEqual({ body: null, edge: null, faces: [5, 7] });
+    expect(r.highlighter.litFaceIds()).toEqual([5, 7]);
+    expect(r.highlighter.hoverState()).toEqual({ body: null, edge: null, faces: [] });
     expect(r.emphasised.mock.calls).toEqual([[[]]]);
   });
 
   it("lights one plain face", () => {
     const r = hovered();
     r.vp.hoverPick(face(9));
-    expect(r.highlighter.hoverState().faces).toEqual([9]);
+    expect(r.highlighter.litFaceIds()).toEqual([9]);
   });
 
   it("lights an edge and draws it over the model, replacing a lit face", () => {
@@ -300,6 +301,7 @@ describe("hoverPick", () => {
     const e = r.edge("e3");
     r.vp.hoverPick({ kind: "edge", edge: e });
     expect(r.highlighter.hoverState()).toEqual({ body: null, edge: e, faces: [] });
+    expect(r.highlighter.litFaceIds()).toEqual([]);
     expect(r.emphasised.mock.calls).toEqual([[[e]]]);
   });
 

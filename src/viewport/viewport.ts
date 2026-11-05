@@ -1014,12 +1014,13 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** Lights what a list row names, an edge drawn over the model since the row may be on the far side. */
+  /** Lights what a list row names, an edge drawn over the model since the row may be on the far side, a face hatched
+   *  so it never reads as selected. */
   hoverPick(ref: PickRef | null) {
     this.highlighter?.clearHover();
     this.emphasiseEdge(ref?.kind === "edge" ? ref.edge : null);
     if (ref?.kind === "edge") this.highlighter?.hoverEdge(ref.edge);
-    else if (ref) this.highlighter?.hoverFaceRun(expandToBand(ref.faceId, this.faceBands));
+    this.highlighter?.litFaceRun(ref?.kind === "face" ? expandToBand(ref.faceId, this.faceBands) : []);
     this.requestRender();
   }
 

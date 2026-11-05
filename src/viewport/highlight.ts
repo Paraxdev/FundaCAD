@@ -21,6 +21,7 @@ import { themeColor } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import { PICK_ALPHA, composite, pickColor, type PickKind } from "./pickColors";
 import { uploadSpan, uploadWhole } from "./gpuUpload";
+import { makeLitHatchOverlay } from "./litHatch";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 /** Triangles and edge points a box preview frame repaints, counted over each body it changes, so a sweep over many
@@ -181,6 +182,8 @@ function paintIdle(e: EdgeRef, base: THREE.Color) {
   e.draw.setIdleColor(e.slot, base);
 }
 
+type OverlayKind = PickKind | "lit";
+
 interface PickOverlay {
   key: string;
   meshes: THREE.Mesh[];
@@ -219,6 +222,7 @@ export class Highlighter {
   /** More than one when the face under the cursor is a piece of a split run (faceBands), so the hover shows what the
    *  click will take. */
   private hoveredFaces: readonly number[] = [];
+  private litFaces: readonly number[] = [];
   private hoveredBody: string | null = null;
   private selectedEdges = new Set<EdgeRef>();
   private selectedFaces = new Set<number>();
@@ -410,6 +414,13 @@ export class Highlighter {
     return new THREE.Color(b[v * 3]!, b[v * 3 + 1]!, b[v * 3 + 2]!).getHex();
   }
 
+  /** A stripe is the select pick measured against what it lies on, the face or its selected tint. */
+  private litColour(faceId: number): THREE.Color {
+    if (this.selectedFaces.has(faceId))
+      return this.pickColour(this.faceColour(faceId, "select").getHex(), "select", "face");
+    return this.faceColour(faceId, "select");
+  }
+
   private faceColour(faceId: number, kind: PickKind): THREE.Color {
     const body = bodyOfFace(this.view, faceId);
     return this.pickColour(body ? this.faceUnder(body, faceId) : DEFAULT_BODY, kind, "face");
@@ -466,7 +477,7 @@ export class Highlighter {
    *  goes with the model. */
   private bodyGlows = new Map<string, THREE.Mesh>();
   /** Kept by key once taken down, since every pointer move clears the hover and sets it again. */
-  private overlays: Record<PickKind, PickOverlay | null> = { hover: null, select: null };
+  private overlays: Record<OverlayKind, PickOverlay | null> = { hover: null, select: null, lit: null };
   private selectOverlayQueued = false;
   /** Bodies whose selected faces changed since the shown select overlay was built, null when any may have. */
   private overlayMoved: Set<string> | null = null;
@@ -545,6 +556,19 @@ export class Highlighter {
     this.syncOverlay("hover");
   }
 
+  /** Hatches the faces a Geometry row names. Unlike hover it leaves a face's own paint alone, so a selected face
+   *  shows its tint and the hatch together. */
+  litFaceRun(faceIds: readonly number[]) {
+    const was = this.litFaces;
+    if (was.length === faceIds.length && was.every((f, i) => f === faceIds[i])) return;
+    this.litFaces = faceIds;
+    this.buildOverlay("lit");
+  }
+
+  litFaceIds(): readonly number[] {
+    return this.litFaces;
+  }
+
   private syncOverlays() {
     this.syncOverlay("hover");
     this.syncOverlay("select");
@@ -577,6 +601,8 @@ export class Highlighter {
     if (moved && cur?.shown && this.selectedFaces.size && this.paintShown) this.patchSelectOverlay(cur, moved);
     else this.buildOverlay("select");
     this.overlayMoved = this.overlays.select?.shown ? new Set() : null;
+    // The stripes are measured against the tint under them, so a selection change recolours them.
+    this.buildOverlay("lit");
   }
 
   /** A box frame moves a few bodies' faces, so only their meshes are built again, in the order a full build keeps. */
@@ -603,17 +629,19 @@ export class Highlighter {
     this.showOverlay(next, true);
   }
 
-  private buildOverlay(kind: PickKind) {
+  private buildOverlay(kind: OverlayKind) {
     const faces =
       kind === "hover"
         ? this.hoveredFaces.filter((f) => !this.selectedFaces.has(f))
-        : [...this.selectedFaces].sort((a, b) => a - b);
+        : kind === "lit"
+          ? this.litFaces
+          : [...this.selectedFaces].sort((a, b) => a - b);
     const cur = this.overlays[kind];
     if (!faces.length || !this.paintShown) {
       if (cur?.shown) this.showOverlay(cur, false);
       return;
     }
-    const key = faces.join(",");
+    const key = this.overlayKey(faces, kind);
     if (cur && cur.key === key) {
       if (!cur.shown) this.showOverlay(cur, true);
       return;
@@ -631,7 +659,7 @@ export class Highlighter {
       byBody.set(body, list);
     }
     for (const [body, fids] of byBody) {
-      const bodyKey = fids.join(",");
+      const bodyKey = this.overlayKey(fids, kind);
       const kept = old.get(body.id);
       if (kept?.userData.key === bodyKey) {
         next.meshes.push(kept);
@@ -646,7 +674,11 @@ export class Highlighter {
     this.showOverlay(next, true);
   }
 
-  private overlayMesh(body: BodyMesh, fids: number[], kind: PickKind): THREE.Mesh | null {
+  private overlayKey(faces: readonly number[], kind: OverlayKind): string {
+    return kind === "lit" ? faces.map((f) => (this.selectedFaces.has(f) ? `${f}s` : f)).join(",") : faces.join(",");
+  }
+
+  private overlayMesh(body: BodyMesh, fids: number[], kind: OverlayKind): THREE.Mesh | null {
     const pos = body.mesh.geometry.getAttribute("position");
     const index = body.mesh.geometry.getIndex();
     if (!pos || !index) return null;
@@ -656,7 +688,7 @@ export class Highlighter {
     const col = new Float32Array(n * 9);
     let o = 0;
     for (const f of fids) {
-      const c = this.faceColour(f, kind);
+      const c = kind === "lit" ? this.litColour(f) : this.faceColour(f, kind);
       for (const t of body.faceTriangles.get(f)!) {
         for (let k = 0; k < 3; k++) {
           const v = index.getX(t * 3 + k);
@@ -669,13 +701,13 @@ export class Highlighter {
         }
       }
     }
-    const mesh = makeFaceHoverOverlay(out, col, kind);
+    const mesh = kind === "lit" ? makeLitHatchOverlay(out, col) : makeFaceHoverOverlay(out, col, kind);
     mesh.userData.body = body.id;
-    mesh.userData.key = fids.join(",");
+    mesh.userData.key = this.overlayKey(fids, kind);
     return mesh;
   }
 
-  private dropOverlay(kind: PickKind) {
+  private dropOverlay(kind: OverlayKind) {
     for (const m of this.overlays[kind]?.meshes ?? []) disposeFaceHoverOverlay(m);
     this.overlays[kind] = null;
   }
@@ -683,6 +715,7 @@ export class Highlighter {
   private dropOverlays() {
     this.dropOverlay("hover");
     this.dropOverlay("select");
+    this.dropOverlay("lit");
   }
 
   /** Called before the viewport replaces the highlighter on a rebuild. The cached overlays are off every mesh while
