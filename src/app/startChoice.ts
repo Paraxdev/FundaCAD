@@ -74,7 +74,7 @@ function offIds(storage: Storage): string[] {
   }
 }
 
-/** Never rejects: a start with a failed reset still opens, and says why. */
+/** A failed backup leaves every setting as it was. */
 export async function runStartChoice(deps: StartChoiceDeps | null = tauriDeps()): Promise<StartChoiceOutcome | null> {
   if (!deps || !startChoicePending()) return null;
   const choice = await deps.take().catch(() => null);
