@@ -342,16 +342,9 @@ fn safe_mode_decide() -> SafeMode {
         safe_mode::Start::Normal => (None, None, None),
         safe_mode::Start::Safe(r) => (Some(r), None, None),
         safe_mode::Start::Ask(r) => {
-            let (answer, line) = start_question::ask(r);
-            println!("{line}");
-            let asked = Some(line);
-            match answer {
-                safe_mode::Answer::Normal => (None, None, asked),
-                safe_mode::Answer::Safe => (Some(r), None, asked),
-                safe_mode::Answer::Reset { plugins } => {
-                    (None, Some(safe_mode::StartChoice { reset: true, plugins }), asked)
-                }
-            }
+            let asked = safe_mode::after_question(r, start_question::ask(r));
+            println!("{}", asked.line);
+            (asked.safe, asked.reset, Some(asked.line))
         }
     };
     let set_compositing =

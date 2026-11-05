@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-use crate::safe_mode::{self, Answer, Reason};
+use crate::safe_mode::{self, Answer, Reason, NOT_SHOWN};
 
 pub const ARG: &str = "--start-question";
 const SCHEME: &str = "fundacad-ask";
@@ -15,24 +15,14 @@ const LABEL: &str = "start-question";
 const PAGE: &str = include_str!("start_question.html");
 const CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'";
 
-/// Asks in a child process and waits for the answer, which comes with its log line. When the question cannot be shown
-/// this start is normal.
-pub fn ask(reason: Reason) -> (Answer, String) {
-    let q = reason.question();
+/// Asks in a child process and waits for the answer, or says why there is none (`safe_mode::after_question`).
+pub fn ask(reason: Reason) -> Result<Answer, String> {
     let wayland = std::env::var_os("WAYLAND_DISPLAY");
     let display = std::env::var_os("DISPLAY");
     if let Some(why) = safe_mode::cannot_ask(cfg!(target_os = "linux"), wayland.as_deref(), display.as_deref()) {
-        return (Answer::Normal, format!("[safe-mode] {q} Not asking how to start, as {why}, so starting normally."));
+        return Err(why.into());
     }
-    let exe = match std::env::current_exe() {
-        Ok(exe) => exe,
-        Err(e) => {
-            return (
-                Answer::Normal,
-                format!("[safe-mode] {q} Could not ask how to start ({e}), so starting normally."),
-            );
-        }
-    };
+    let exe = std::env::current_exe().map_err(|e| format!("its executable was not found ({e})"))?;
     let mut cmd = Command::new(exe);
     cmd.arg(ARG).arg(reason.key()).arg(reason.count().to_string()).stdin(Stdio::null());
     // The safe session's WebKit settings, so the question shows on the machines whose starts are failing.
@@ -45,16 +35,8 @@ pub fn ask(reason: Reason) -> (Answer, String) {
             cmd.env(safe_mode::GDK_BACKEND, "x11");
         }
     }
-    match cmd.status() {
-        Ok(status) => {
-            let answer = Answer::from_code(status.code());
-            if answer == Answer::Normal && !status.success() {
-                eprintln!("[safe-mode] the start question ended with {status}");
-            }
-            (answer, format!("[safe-mode] {q} Asked how to start: {}.", answer.describe()))
-        }
-        Err(e) => (Answer::Normal, format!("[safe-mode] {q} Could not ask how to start ({e}), so starting normally.")),
-    }
+    let status = cmd.status().map_err(|e| format!("it would not start ({e})"))?;
+    Answer::from_exit(status.code())
 }
 
 fn escape(text: &str) -> String {
@@ -62,7 +44,7 @@ fn escape(text: &str) -> String {
 }
 
 /// The question process: shows the window and returns the exit code of the answer. Closing the window is
-/// Start normally.
+/// Start normally, every failure is `NOT_SHOWN`.
 pub fn run(args: &[String]) -> i32 {
     let reason = match (args.first(), args.get(1).and_then(|n| n.parse::<u32>().ok())) {
         (Some(key), Some(n)) => Reason::counted(key, n),
@@ -70,7 +52,7 @@ pub fn run(args: &[String]) -> i32 {
     };
     let Some(reason) = reason else {
         eprintln!("[safe-mode] the start question was not told why it asks");
-        return Answer::Normal.code();
+        return NOT_SHOWN;
     };
     #[cfg(target_os = "linux")]
     let _ = crate::webkit::apply_gpu_workarounds(&fundacad_mcp::app_session::app_data_dir());
@@ -123,7 +105,7 @@ pub fn run(args: &[String]) -> i32 {
             if let Err(e) = builder.build() {
                 // With no window the event loop would never end, and the app would wait on it forever.
                 eprintln!("[safe-mode] the start question window would not open: {e}");
-                std::process::exit(Answer::Normal.code());
+                std::process::exit(NOT_SHOWN);
             }
             Ok(())
         })
@@ -134,7 +116,7 @@ pub fn run(args: &[String]) -> i32 {
         }
         Err(e) => {
             eprintln!("[safe-mode] the start question could not start: {e}");
-            return Answer::Normal.code();
+            return NOT_SHOWN;
         }
     }
     let picked = answer.lock().unwrap_or_else(|p| p.into_inner()).take();

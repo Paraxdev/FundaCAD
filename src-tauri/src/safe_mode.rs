@@ -23,6 +23,8 @@ pub enum Reason {
     /// Only ever chosen from the start question, as is `Crashes`.
     FailedStarts(u32),
     Crashes(u32),
+    /// Unfinished starts whose question was not answered: safe mode on its own, as before the question.
+    Unanswered(u32),
     Flag,
     Env,
 }
@@ -30,7 +32,7 @@ pub enum Reason {
 impl Reason {
     pub fn key(self) -> &'static str {
         match self {
-            Reason::FailedStarts(_) => "failedStarts",
+            Reason::FailedStarts(_) | Reason::Unanswered(_) => "failedStarts",
             Reason::Crashes(_) => "crashes",
             Reason::Flag => "flag",
             Reason::Env => "env",
@@ -48,7 +50,7 @@ impl Reason {
 
     pub fn count(self) -> u32 {
         match self {
-            Reason::FailedStarts(n) | Reason::Crashes(n) => n,
+            Reason::FailedStarts(n) | Reason::Crashes(n) | Reason::Unanswered(n) => n,
             Reason::Flag | Reason::Env => 0,
         }
     }
@@ -60,6 +62,7 @@ impl Reason {
             Reason::Crashes(n) => {
                 format!("you chose it after FundaCAD closed unexpectedly {n} times soon after starting")
             }
+            Reason::Unanswered(n) => format!("the last {n} starts did not finish"),
             Reason::Flag => format!("it was started with {FLAG}"),
             Reason::Env => format!("{ENV} is set"),
         }
@@ -102,8 +105,7 @@ pub fn decide(prev_misses: u32, crashes: u32, flag: bool, env: Option<&str>) -> 
     }
 }
 
-/// What the start question answered. It comes back as the exit code of the question process, where any other code,
-/// a crash or a closed window, is `Normal`.
+/// What the start question answered. It comes back as the exit code of the question process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Answer {
     Normal,
@@ -121,12 +123,16 @@ impl Answer {
         }
     }
 
-    pub fn from_code(code: Option<i32>) -> Answer {
+    /// 0 is a button or a closed window. Any other code is no answer, and says why.
+    pub fn from_exit(code: Option<i32>) -> Result<Answer, String> {
         match code {
-            Some(20) => Answer::Safe,
-            Some(21) => Answer::Reset { plugins: false },
-            Some(22) => Answer::Reset { plugins: true },
-            _ => Answer::Normal,
+            Some(0) => Ok(Answer::Normal),
+            Some(20) => Ok(Answer::Safe),
+            Some(21) => Ok(Answer::Reset { plugins: false }),
+            Some(22) => Ok(Answer::Reset { plugins: true }),
+            Some(NOT_SHOWN) => Err("its window did not show".into()),
+            Some(c) => Err(format!("it ended with exit code {c}")),
+            None => Err("it was stopped by a signal".into()),
         }
     }
 
@@ -154,6 +160,45 @@ impl Answer {
             Answer::Safe => "start in safe mode",
             Answer::Reset { plugins: false } => "reset settings",
             Answer::Reset { plugins: true } => "reset settings and turn off plugins",
+        }
+    }
+}
+
+/// The exit code of a question process whose window did not open or show.
+pub const NOT_SHOWN: i32 = 23;
+
+/// How an asked start goes on, and its log line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Asked {
+    pub safe: Option<Reason>,
+    pub reset: Option<StartChoice>,
+    pub line: String,
+}
+
+/// `asked` is the answer or why there is none. Unanswered, unfinished starts go into safe mode as they did before the
+/// question, so a machine whose webview cannot come up never loops. A crash loop never had that, so it starts normally.
+pub fn after_question(reason: Reason, asked: Result<Answer, String>) -> Asked {
+    let q = reason.question();
+    match asked {
+        Ok(answer) => Asked {
+            safe: (answer == Answer::Safe).then_some(reason),
+            reset: match answer {
+                Answer::Reset { plugins } => Some(StartChoice { reset: true, plugins }),
+                _ => None,
+            },
+            line: format!("[safe-mode] {q} Asked how to start: {}.", answer.describe()),
+        },
+        Err(why) => {
+            let safe = match reason {
+                Reason::FailedStarts(n) => Some(Reason::Unanswered(n)),
+                _ => None,
+            };
+            let then = if safe.is_some() { "starting in safe mode" } else { "starting normally" };
+            Asked {
+                safe,
+                reset: None,
+                line: format!("[safe-mode] {q} Could not ask how to start, as {why}, so {then}."),
+            }
         }
     }
 }
@@ -249,6 +294,7 @@ pub fn restart_args(args: Vec<OsString>) -> Vec<OsString> {
 pub fn init_script(reason: Reason) -> String {
     let info = match reason {
         Reason::FailedStarts(n) => format!("failedStarts: {n}, chosen: true"),
+        Reason::Unanswered(n) => format!("failedStarts: {n}"),
         Reason::Crashes(n) => format!("failedStarts: 0, crashes: {n}, chosen: true"),
         Reason::Flag | Reason::Env => "failedStarts: 0".to_string(),
     };
