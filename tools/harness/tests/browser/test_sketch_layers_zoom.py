@@ -96,12 +96,18 @@ HIT = """([x, y]) => {
 }"""
 
 
-def test_a_press_on_the_dimensions_point_lands_on_its_label(sk):
+def test_a_press_on_the_dimensions_point_lands_on_its_label_and_a_double_click_edits_it(sk):
     size_to(sk, 175)
-    x, y = layers(sk)["dims"][0]["at"]
-    assert sk.page.evaluate(HIT, [x, y]), f"at 175 percent the label is not under its dimension's point {x, y}"
+    d = layers(sk)["dims"][0]
+    # A label the grown Items card pushed aside is pressed where it went, its leader test is below.
+    x, y = d["at"] if not d["leader"] else (d["box"]["cx"], d["box"]["cy"])
+    assert sk.page.evaluate(HIT, [x, y]), f"at 175 percent the label is not under its dimension's point {x, y}: {d}"
     sk.page.mouse.click(x, y)
     assert sk.page.evaluate("() => window.__dimHit") == "label"
+    sk.page.mouse.dblclick(x, y)
+    sk.page.wait_for_selector(".sketch-dims input", timeout=5_000)
+    assert sk.page.evaluate("() => !!document.activeElement?.closest('.sketch-dims input, .sketch-dims')")
+    sk.page.keyboard.press("Escape")
 
 
 def test_a_label_pushed_off_its_point_has_a_leader_from_its_border_to_the_point(sk):
