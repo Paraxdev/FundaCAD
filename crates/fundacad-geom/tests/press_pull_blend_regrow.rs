@@ -144,3 +144,31 @@ fn a_radius_too_large_for_the_walls_is_refused_saying_why() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].contains("R51.1") && errors[0].contains("runs off the face"), "{errors:?}");
 }
+
+#[test]
+fn a_kept_blend_is_the_one_a_fresh_search_finds() {
+    use fundacad_geom::features::regrow::{blend_of, forget, regrow};
+    let r = rebuild(&filleted());
+    let (part, id) = (r.bodies[0].shape.clone(), Some(r.bodies[0].identity));
+    let face = blend(&part);
+    forget();
+    let fresh = blend_of(&part, &face, id).expect("the blend");
+    // A rebuild resumed from RAM hands the next tick a copy of the same body.
+    let copy = kernel::copy_topology(&part).expect("a copy");
+    let kept = blend_of(&copy, &blend(&copy), id).expect("the blend");
+    assert!(kept.corner.is_same(&fresh.corner), "the copy is answered from what was kept");
+    let again = blend_of(&part, &face, None).expect("the blend");
+    assert!(!again.corner.is_same(&fresh.corner), "no identity, no keeping");
+    for b in [&kept, &again] {
+        assert_eq!((b.radius, b.continuity, b.concave), (fresh.radius, fresh.continuity, fresh.concave));
+        assert_eq!(b.axis, fresh.axis);
+        assert_eq!(kernel::volume(&b.corner), kernel::volume(&fresh.corner));
+    }
+    for d in [3.0, -5.0, 3.0] {
+        let cached = regrow(&copy, &blend(&copy), d, id).expect("a blend").expect("a refillet");
+        let uncached = regrow(&part, &face, d, None).expect("a blend").expect("a refillet");
+        assert_eq!(kernel::volume(&cached), kernel::volume(&uncached), "d {d}");
+        assert_eq!(kernel::area(&cached), kernel::area(&uncached), "d {d}");
+        assert_eq!(kernel::count(&cached, Kind::Face), kernel::count(&uncached, Kind::Face));
+    }
+}

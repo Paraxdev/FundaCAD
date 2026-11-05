@@ -1,6 +1,8 @@
 //! A G2 or G3 fillet blend, a freeform round rather than a circle, resized as the fillet it came from: the corner
 //! it rounds is restored and filleted again at the new radius, so the blend stays tangent to both walls.
 
+use std::cell::RefCell;
+
 use glam::DVec3;
 use opencascade::primitives::{Shape, SurfaceType};
 use opencascade::progress::ProgressRange;
@@ -17,10 +19,27 @@ use crate::topo::FaceAdjacency;
 /// How far a probe's area and removed volume may stray from the blend's and still be the same round.
 const MATCH: f64 = 0.02;
 
+const KEEP: usize = 4;
+
+/// A body's (uid, generation), which `Ctx::set_shape` renews on every change, and a face's index in it. A rebuild
+/// resumed from RAM hands each drag tick a copy of the same body, so the shape itself is new every time.
+type Key = ((u64, u64), usize);
+
+thread_local! {
+    static FOUND: RefCell<Vec<(Key, Option<Blend>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Drops the blends this thread has kept.
+pub fn forget() {
+    FOUND.with(|m| m.borrow_mut().clear());
+}
+
+#[derive(Clone)]
 pub struct Blend {
     /// The body with the blend taken off and its corner sharp again.
-    corner: Shape,
-    edge: Shape,
+    pub corner: Shape,
+    /// The sharp edge's index among the corner's edges, so a copy of the corner finds it.
+    edge: usize,
     pub radius: f64,
     pub continuity: i32,
     /// The blend fills an inside corner, so a larger radius adds material.
@@ -111,14 +130,30 @@ fn corner_edge(corner: &Shape, seams: [DVec3; 2], face: &Shape) -> Option<Shape>
 
 /// `face` as the G2 or G3 fillet of one sharp edge, with the radius and continuity it was built at. None for any
 /// other face: one that is analytic, does not run smoothly into exactly two walls, or no probe fillet matches.
-pub fn blend_of(part: &Shape, face: &Shape) -> Option<Blend> {
-    crate::bench::phase("blend_of", || find(part, face))
-}
-
-fn find(part: &Shape, face: &Shape) -> Option<Blend> {
+/// Kept by `body`, the identity of the body whose shape `part` is, since a drag asks again at every tick.
+pub fn blend_of(part: &Shape, face: &Shape, body: Option<(u64, u64)>) -> Option<Blend> {
     if !freeform(face) {
         return None;
     }
+    let key = body.zip(kernel::subshapes(part, Kind::Face).iter().position(|f| f.is_same(face)));
+    let Some(key) = key else {
+        return crate::bench::phase("blend_of", || find(part, face));
+    };
+    if let Some(b) = FOUND.with(|m| m.borrow().iter().find(|(k, _)| *k == key).map(|e| e.1.clone())) {
+        return b;
+    }
+    let b = crate::bench::phase("blend_of", || find(part, face));
+    FOUND.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() >= KEEP {
+            m.remove(0);
+        }
+        m.push((key, b.clone()));
+    });
+    b
+}
+
+fn find(part: &Shape, face: &Shape) -> Option<Blend> {
     let (group, seams) = blend_faces(part, face)?;
     let faces: Vec<_> = group.iter().filter_map(Shape::as_face).collect();
     let refs: Vec<_> = faces.iter().collect();
@@ -158,13 +193,14 @@ fn find(part: &Shape, face: &Shape) -> Option<Blend> {
         .filter(|(_, _, miss)| *miss < MATCH)
         .min_by(|a, b| a.2.total_cmp(&b.2))?;
     let radius = (radius * 1e3).round() / 1e3;
+    let edge = kernel::subshapes(&corner, Kind::Edge).iter().position(|e| e.is_same(&edge))?;
     Some(Blend { corner, edge, radius, continuity, concave, axis })
 }
 
 /// `face` pushed `d` along its normal, positive adding material, as its fillet rebuilt at the radius that takes:
 /// smaller on an outside corner, larger on an inside one. None when `face` is not such a blend.
-pub fn regrow(part: &Shape, face: &Shape, d: f64) -> Option<FResult<Shape>> {
-    let b = blend_of(part, face)?;
+pub fn regrow(part: &Shape, face: &Shape, d: f64, body: Option<(u64, u64)>) -> Option<FResult<Shape>> {
+    let b = blend_of(part, face, body)?;
     Some(b.rebuilt(d))
 }
 
@@ -175,14 +211,19 @@ impl Blend {
 
     fn rebuilt(&self, d: f64) -> FResult<Shape> {
         let r = self.radius_after(d);
-        if r.abs() < 1e-6 {
-            return Ok(self.corner.clone());
-        }
-        if r < 0.0 {
+        if r < -1e-6 {
             return Err(Fail::msg("that push runs the round past the sharp corner it rounds, try a smaller distance"));
         }
-        let edges = std::slice::from_ref(&self.edge);
-        let built = blend_ops::section(&self.corner, edges, false, &[r], None, r, self.continuity, false, 0.0);
+        // A kept corner is handed to every tick, and OCCT writes p-curves and tolerances into what it is given.
+        let corner = kernel::copy_topology(&self.corner)?;
+        if r.abs() < 1e-6 {
+            return Ok(corner);
+        }
+        let Some(edge) = kernel::subshapes(&corner, Kind::Edge).into_iter().nth(self.edge) else {
+            return Err(Fail::msg("the corner's edge is gone"));
+        };
+        let edges = std::slice::from_ref(&edge);
+        let built = blend_ops::section(&corner, edges, false, &[r], None, r, self.continuity, false, 0.0);
         if let Some(out) = built.as_ref().ok().and_then(one_solid) {
             return Ok(out);
         }

@@ -328,8 +328,22 @@ fn whole_runs(part: &Shape, faces: &[Shape]) -> (Vec<Vec<Shape>>, Vec<bool>) {
     (runs, taken)
 }
 
-/// `_press_pull`.
-fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64, follow: bool) -> FResult<Shape> {
+/// The identity of body `act` while `shape` is still its shape, for what is kept across a drag's rebuilds.
+fn identity_of(ctx: &Ctx, act: usize, shape: &Shape) -> Option<(u64, u64)> {
+    let b = &ctx.bodies[act];
+    b.shape().is_same(shape).then(|| b.identity())
+}
+
+/// `_press_pull`. `body` is the identity of the body whose shape `part` is, when it is one.
+fn press_pull_shape(
+    part: &Shape,
+    face: &Shape,
+    d: f64,
+    clamp: bool,
+    taper: f64,
+    follow: bool,
+    body: Option<(u64, u64)>,
+) -> FResult<Shape> {
     if d.abs() < 1e-9 {
         return Ok(part.clone());
     }
@@ -355,7 +369,7 @@ fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64,
     if offsettable_curved(t) {
         return resize_round(part, face, d, follow);
     }
-    if let Some(out) = super::regrow::regrow(part, face, d) {
+    if let Some(out) = super::regrow::regrow(part, face, d, body) {
         return out;
     }
     // A wrapping surface of revolution thickens both ways and a BSpline only
@@ -567,7 +581,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         let out = if along_axis {
             axis_push::push_along_axis(&act_shape, &src, d)?
         } else {
-            press_pull_shape(&act_shape, &src, d, false, taper, follow)?
+            press_pull_shape(&act_shape, &src, d, false, taper, follow, identity_of(ctx, act, &act_shape))?
         };
         let may_break_out = along_axis || surface_type(&src) != Some(SurfaceType::Plane);
         if !warned && d < 0.0 && may_break_out && broke_through(&act_shape, &out, &src) {
@@ -715,7 +729,7 @@ pub fn offset_face(ctx: &mut Ctx, f: &OffsetFace) -> FResult {
     for (sel, _) in sels.iter().zip(&skip).filter(|(_, s)| !**s) {
         let one = fundacad_core::schema::OneOrMany::One(sel.clone());
         for fc in resolve_field(ctx, &f.id, &shape, &one)? {
-            let out = press_pull_shape(&shape, &fc, d, true, 0.0, follow)?;
+            let out = press_pull_shape(&shape, &fc, d, true, 0.0, follow, identity_of(ctx, act, &shape))?;
             let curved = surface_type(&fc) != Some(SurfaceType::Plane);
             if !warned && d < 0.0 && curved && broke_through(&shape, &out, &fc) {
                 warned = true;
