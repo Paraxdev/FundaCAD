@@ -6,6 +6,7 @@ import { themeColor } from "./themeColors";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 import { markOverlay } from "./overlayKinds";
 import { PICK_ALPHA, type PickKind } from "./pickColors";
+import { LIT_HATCH_NAME, clipLitHatch } from "./litHatch";
 
 // ShaderMaterial prepends cameraPosition, modelMatrix, normal and position. The view vector is per fragment: per
 // vertex it bent toward a large plate's far corners, so the plate read as grazing and the rim washed the screen.
@@ -63,6 +64,7 @@ export function clipSelectionOverlays(planes: THREE.Plane[] | null) {
   clipPlanes = planes;
   for (const mat of materials.values()) mat.clippingPlanes = planes;
   for (const mat of faceMaterials.values()) mat.clippingPlanes = planes;
+  clipLitHatch(planes);
 }
 
 function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
@@ -97,7 +99,7 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
 }
 
 const FACE_OVERLAY_NAME: Record<PickKind, string> = { hover: "face-hover-overlay", select: "face-select-overlay" };
-const FACE_OVERLAY_NAMES = new Set(Object.values(FACE_OVERLAY_NAME));
+const FACE_OVERLAY_NAMES = new Set([...Object.values(FACE_OVERLAY_NAME), LIT_HATCH_NAME]);
 
 let warmup: THREE.Group | null = null;
 

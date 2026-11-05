@@ -1217,6 +1217,15 @@ guard test cannot see them; hold them to these rules by hand.
   `--viewport-bg`. A picked edge is drawn again wide, 3px selected and 2.4px
   hovered over the 1.6px idle edge. No glow and no outline is added. A theme
   change repaints every pick live (`Highlighter.refreshTheme`).
+- A face a Geometry row lights, by hover or keyboard focus, is hatched: thin
+  diagonal stripes in the pick colour, 12 across the face, each 0.3 of its
+  period, at the select overlay's 0.7 and depth tested like it
+  (`src/viewport/litHatch.ts`). The stripes lie on the surface, so an orbit
+  carries them with the face, and they fade to an even wash where a period
+  nears 5px. A selected face keeps its tint, and a lit selected face shows both,
+  its stripes measured against the tint. The hatch tells looking at apart from
+  picked without colour, in every theme, where a lighter tint could not in High
+  Contrast Light. Canvas hover keeps its wash.
 - Axis colours are the `--axis-x/y/z` tokens, read through `axisColor`
   (`src/viewport/originTriad.ts`), whose `AXIS_COLOR` holds Noir's red, green and
   blue. A plane takes its normal axis colour: XY blue, XZ green, YZ red in Noir.
