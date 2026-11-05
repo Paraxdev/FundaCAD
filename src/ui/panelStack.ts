@@ -1,6 +1,8 @@
 import { cubeSize, MARGIN as CUBE_MARGIN } from "../viewport/viewCube";
 import { onA11yPrefsChange } from "./a11yPrefs";
-import { RIGHT_CARDS, clearOfCards, type Box } from "./promptPlacement";
+import { underZoom } from "./anchor";
+import { pageZoom } from "./interfaceSize";
+import { LEFT_CARDS, RIGHT_CARDS, cardRects, promptInsets, type Box } from "./promptPlacement";
 
 const GAP = 12;
 const MIN_HEIGHT = 120;
@@ -122,39 +124,56 @@ function scrollerFloor(el: HTMLElement): number | undefined {
   return Math.max(MIN_HEIGHT, el.offsetHeight - inner.offsetHeight + Math.min(inner.scrollHeight, SCROLLER_MIN));
 }
 
-function header(el: HTMLElement): number | undefined {
+function header(el: HTMLElement, z: number): number | undefined {
   const first = el.firstElementChild;
   if (!first) return undefined;
   const cs = getComputedStyle(el);
-  const bottom = first.getBoundingClientRect().bottom - el.getBoundingClientRect().top;
+  const bottom = (first.getBoundingClientRect().bottom - el.getBoundingClientRect().top) / z;
   return Math.ceil(bottom + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0));
 }
 
-interface Column {
+export interface Column {
   top: number;
   bottom: number;
   free: Box;
 }
 
+export interface Cards {
+  left: readonly Box[];
+  right: readonly Box[];
+}
+
 const span = (c: Column) => c.free.right - c.free.left;
 
+/** The part of `box` a column from `top` down can use without sliding under a card. */
+function clear(box: Box, cards: Cards, top: number): Box {
+  const { left, right } = promptInsets(box, { top, bottom: box.bottom }, cards, CUBE_MARGIN, 0);
+  return { ...box, left: box.left + left, right: box.right - right };
+}
+
 /** The columns a panel can take: left of the right cards, then each shelf at least MIN_HEIGHT tall right of the cards
- *  beside it, highest first. */
-function columns(box: Box): Column[] {
+ *  beside it, highest first. `box`, `cards` and the columns share one pixel space. */
+export function stackColumns(box: Box, cards: Cards): Column[] {
   const top = stackTop(box);
   const bottom = box.bottom - CUBE_MARGIN;
-  const list = [{ top, bottom, free: clearOfCards(box, { top, bottom: box.bottom }, CUBE_MARGIN, 0) }];
-  const cards = [...document.querySelectorAll(RIGHT_CARDS)].map((c) => c.getBoundingClientRect());
-  const tops = [top, ...cards.map((c) => c.bottom + CUBE_MARGIN)];
+  const list = [{ top, bottom, free: clear(box, cards, top) }];
+  const tops = [top, ...cards.right.map((c) => c.bottom + CUBE_MARGIN)];
   for (const t of [...new Set(tops)].sort((a, b) => a - b)) {
     if (t < top || bottom - t < MIN_HEIGHT) continue;
-    const rail = clearOfCards(box, { top: t, bottom: box.bottom }, CUBE_MARGIN, 0).left;
-    const left = cards
+    const rail = clear(box, cards, t).left;
+    const left = cards.right
       .filter((c) => c.right > c.left && c.bottom > t)
       .reduce((l, c) => Math.max(l, Math.round(c.right + CUBE_MARGIN)), rail);
     list.push({ top: t, bottom, free: { ...box, left, right: box.right - CUBE_MARGIN } });
   }
   return list;
+}
+
+/** stackColumns under the root zoom `z` (pageZoom): the layer and the cards come in window pixels, the columns go out
+ *  in the CSS pixels that the panels' top, right and max-height take. */
+export function columnsUnderZoom(area: Box, cards: Cards, z: number): Column[] {
+  const under = (bs: readonly Box[]) => bs.map((b) => underZoom(b, z));
+  return stackColumns(underZoom(area, z), { left: under(cards.left), right: under(cards.right) });
 }
 
 /** Each panel's column: the first its min-width fits, else the widest. A lower shelf in use reaches across the columns
@@ -187,10 +206,11 @@ function place() {
     p.el.style.maxWidth = "";
     uncap(p);
   }
-  const layer = document.getElementById("float-layer");
-  const area = (layer ?? document.body).getBoundingClientRect();
-  const box: Box = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
-  const cols = columns(box);
+  const z = pageZoom();
+  const area = (document.getElementById("float-layer") ?? document.body).getBoundingClientRect();
+  const cols = columnsUnderZoom(area, { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) }, z);
+  // The root's clientWidth stays in window pixels under its own zoom, like the rects.
+  const viewWidth = document.documentElement.clientWidth / z;
   const mins = open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0);
   const at = assign(cols, mins);
   for (const c of cols.filter((c) => at.includes(c))) {
@@ -212,7 +232,7 @@ function place() {
         id: p.id,
         height: natural(p.el),
         floor: scrollerFloor(p.el),
-        head: header(p.el),
+        head: header(p.el, z),
         rank: p.used,
       })),
       c.top,
@@ -223,7 +243,7 @@ function place() {
       const { style } = el;
       style.top = `${s.top}px`;
       // Fixed, so right counts from the viewport edge, not the layer, which ends at the Render dock.
-      style.right = `${Math.round(document.documentElement.clientWidth - c.free.right)}px`;
+      style.right = `${Math.round(viewWidth - c.free.right)}px`;
       style.maxHeight = s.maxHeight === null ? "" : `${s.maxHeight}px`;
       el.toggleAttribute("data-capped", s.maxHeight !== null && !s.folded);
       el.toggleAttribute("data-folded", !!s.folded);
