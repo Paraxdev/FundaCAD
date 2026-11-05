@@ -240,3 +240,25 @@ describe("StressGlyphs", () => {
     expect(scene.children).toHaveLength(0);
   });
 });
+
+describe("StressGlyphs under the root zoom", () => {
+  const Z = 1.75;
+  afterEach(() => {
+    document.documentElement.style.zoom = "";
+  });
+
+  it("puts the probe readout and a pinned probe's label on their window points", () => {
+    document.documentElement.style.zoom = String(Z);
+    const { glyphs, canvas, pick } = rig();
+    pick.mockReturnValue({ tri: 4, weights: [0.2, 0.3, 0.5], point: [0, 0, 0] });
+    glyphs.setProbe(true);
+    pointer(canvas, "pointermove", 70, 35);
+    const label = document.body.querySelector(".stress-cursor-label") as HTMLElement;
+    expect((parseFloat(label.style.left) - 14) * Z).toBeCloseTo(70);
+    expect((parseFloat(label.style.top) - 14) * Z).toBeCloseTo(35);
+    glyphs.setProbePins([{ tri: 0, weights: [1, 0, 0], label: "3 MPa" }]);
+    const pin = document.body.querySelector(".stress-probe-pin") as HTMLElement;
+    expect((parseFloat(pin.style.left) - 8) * Z).toBeCloseTo(51);
+    expect((parseFloat(pin.style.top) + 8) * Z).toBeCloseTo(48);
+  });
+});

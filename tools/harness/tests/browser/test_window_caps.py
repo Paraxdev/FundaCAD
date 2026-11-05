@@ -167,3 +167,52 @@ def test_the_toasts_sit_just_above_the_tool_prompt(sk):
     prompt, stack = box(sk, "#prompt"), box(sk, ".toast-stack")
     assert stack["bottom"] <= prompt["top"] + 1, f"at 175 percent the toasts sit over the prompt: {stack}, {prompt}"
     assert prompt["top"] - stack["bottom"] <= 40 * 1.75, f"at 175 percent the toasts float above it: {stack}, {prompt}"
+
+
+ORIGIN = """() => {
+  const p = window.viewport.projectToScreen(window.sketch.plane.to3D(0, 0));
+  return [p.x, p.y];
+}"""
+
+
+def test_the_snap_tag_sits_by_the_point_it_caught(sk):
+    sk.tool("Line")
+    size_to(sk, 175)
+    x, y = sk.page.evaluate(ORIGIN)
+    sk.page.mouse.move(x + 40, y + 40, steps=4)
+    sk.page.mouse.move(x, y, steps=8)
+    sk.page.wait_for_function("() => document.querySelector('[data-testid=snap-tag]')?.hidden === false")
+    frames(sk)
+    tag = box(sk, "[data-testid=snap-tag]")
+    want = (x + 12 * 1.75, y - 26 * 1.75)
+    assert abs(tag["left"] - want[0]) <= 3 and abs(tag["top"] - want[1]) <= 3, (
+        f"at 175 percent the snap tag at the origin {x, y} is not by it: {tag}"
+    )
+
+
+# A press and a drag end both on bare canvas, clear of the rail and panels the zoom has grown over it.
+BARE_SPAN = """() => {
+  const c = window.viewport.canvas;
+  const r = c.getBoundingClientRect();
+  const bare = (x, y) => document.elementFromPoint(x, y) === c;
+  for (let y = r.top + 40; y < r.bottom - 160; y += 20)
+    for (let x = r.left + 40; x < r.right - 200; x += 20)
+      if (bare(x, y) && bare(x + 160, y + 120) && bare(x + 80, y + 60)) return [x, y, x + 160, y + 120];
+  return null;
+}"""
+
+
+def test_the_area_box_spans_from_the_press_to_the_cursor(s):
+    size_to(s, 175)
+    x0, y0, x1, y1 = s.page.evaluate(BARE_SPAN)
+    s.page.mouse.move(x0, y0)
+    s.page.mouse.down()
+    s.page.mouse.move(x1, y1, steps=8)
+    s.page.wait_for_selector(".areabox", state="attached")
+    frames(s)
+    band = box(s, ".areabox")
+    s.page.mouse.up()
+    got = (band["left"], band["top"], band["right"], band["bottom"])
+    assert all(abs(g - w) <= 2 for g, w in zip(got, (x0, y0, x1, y1))), (
+        f"at 175 percent the area box dragged from {x0, y0} to {x1, y1} is not under the cursor: {band}"
+    )
