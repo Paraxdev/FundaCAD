@@ -1166,3 +1166,85 @@ describe("History heading", () => {
     expect(w.find("span.float-card-title").exists()).toBe(false);
   });
 });
+
+describe("Rollback marker drag", () => {
+  const IDS = ["sk", "ex1", "rv", "jt", "mc", "dp"];
+  // A stacked column of 24px chips 30px apart, in window px under the root zoom, as getBoundingClientRect reports them.
+  function layout(zoom: number) {
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const i = IDS.indexOf(this.dataset.id ?? "");
+      const top = (10 + Math.max(i, 0) * 30) * zoom;
+      return {
+        left: 0,
+        top,
+        width: 200 * zoom,
+        height: 24 * zoom,
+        right: 200 * zoom,
+        bottom: top + 24 * zoom,
+      } as DOMRect;
+    });
+    onTestFinished(() => spy.mockRestore());
+  }
+  /** The gap the drawn marker sits in: the index of the step after it, or the step count at the end. */
+  function markerGap(w: ReturnType<typeof mountBar>["w"]) {
+    const m = w.get(".timeline-marker").element;
+    const next = (m.nextElementSibling as HTMLElement | null)?.dataset.feature;
+    return next ? IDS.indexOf(next) : IDS.length;
+  }
+  const at = (type: string, zoom: number, cssY: number) =>
+    window.dispatchEvent(new PointerEvent(type, { clientX: 50 * zoom, clientY: cssY * zoom }));
+
+  for (const zoom of [1, 1.25]) {
+    it(`draws the marker live in the gap the drop takes, at zoom ${zoom}`, async () => {
+      layout(zoom);
+      const { w, log } = mountBar({ attach: true });
+      onTestFinished(() => w.unmount());
+      await w.get(".timeline-marker").trigger("pointerdown");
+      // The middle of chip rv is at 82, so 85 is past it and 75 short of it.
+      for (const [y, gap] of [
+        [85, 3],
+        [75, 2],
+        [5, 0],
+        [500, 6],
+        [60, 2],
+      ] as const) {
+        at("pointermove", zoom, y);
+        await nextTick();
+        expect([y, markerGap(w), w.get(".timeline-marker").classes()]).toEqual([
+          y,
+          gap,
+          ["timeline-marker", "dragging"],
+        ]);
+      }
+      at("pointerup", zoom, 60);
+      await nextTick();
+      expect(log).toEqual(["rollback:2"]);
+      expect(w.get(".timeline-marker").classes()).not.toContain("dragging");
+    });
+  }
+
+  it("springs back to the saved gap on a cancelled pointer, with no roll", async () => {
+    layout(1);
+    const { w, log } = mountBar({ attach: true, rollback: 4 });
+    onTestFinished(() => w.unmount());
+    await w.get(".timeline-marker").trigger("pointerdown");
+    at("pointermove", 1, 40);
+    await nextTick();
+    expect(markerGap(w)).toBe(1);
+    at("pointercancel", 1, 40);
+    await nextTick();
+    expect([markerGap(w), log]).toEqual([4, []]);
+  });
+
+  it("writes no --x on the marker while it is dragged", async () => {
+    layout(1);
+    const { w } = mountBar({ attach: true });
+    onTestFinished(() => w.unmount());
+    await w.get(".timeline-marker").trigger("pointerdown");
+    at("pointermove", 1, 85);
+    await nextTick();
+    expect((w.get(".timeline-marker").element as HTMLElement).style.getPropertyValue("--x")).toBe("");
+  });
+});
