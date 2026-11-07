@@ -433,19 +433,16 @@ watch(
         @problem="previewProblem = $event"
       />
       <div :style="{ flex: '1 1 100%', minWidth: 0, order: stacked ? -1 : 0, marginBottom: stacked ? '8px' : 0 }">
-        <ul
+        <div
           v-if="allProblems.length"
           class="scr-problems"
           role="alert"
-          :style="{
-            margin: stacked ? 0 : '8px 0 0',
-            paddingLeft: '16px',
-            color: 'var(--warn)',
-            fontSize: 'var(--fs-small)',
-          }"
+          :style="{ margin: stacked ? 0 : '8px 0 0', color: 'var(--warn)', fontSize: 'var(--fs-small)' }"
         >
-          <li v-for="msg in allProblems" :key="msg">{{ msg }}</li>
-        </ul>
+          <ul :style="{ margin: 0, paddingLeft: '16px' }">
+            <li v-for="msg in allProblems" :key="msg">{{ msg }}</li>
+          </ul>
+        </div>
         <div v-else class="measure-hint">Everything needed to build it is there.</div>
       </div>
       <div
