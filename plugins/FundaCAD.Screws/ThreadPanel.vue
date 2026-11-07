@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { readAs } from "fundacad";
-import { FloatingPanel, NumberField } from "fundacad/ui";
+import { Button, FieldRow, FloatingPanel, NumberField, Select, Switch } from "fundacad/ui";
 import { choicesFor, choiceOf, nearestIn, offByText, threadDraft, threadTool, type ThreadDraft } from "./threadTool";
 import type { ThreadSystem } from "./threadSpec";
 
@@ -36,91 +36,113 @@ function setSystem(system: ThreadSystem) {
   set({ system, designation, ...(n && !cur.external ? { faceIs: n.faceIs } : {}) });
 }
 
+const sizeOptions = computed(() => choices.value.map((c) => ({ value: c.designation, label: c.designation })));
+const faceOptions = computed(() => [
+  { value: "tap", label: `Tap drill${choice.value ? `, ${choice.value.tap} mm` : ""}` },
+  { value: "nominal", label: `Nominal${choice.value ? `, ${+choice.value.d.toFixed(3)} mm` : ""}` },
+]);
+const HANDS = [
+  { value: "right", label: "Right" },
+  { value: "left", label: "Left" },
+];
+const STARTS = [1, 2, 3, 4].map((n) => ({ value: String(n), label: String(n) }));
+
 // Inline because a downloaded plugin cannot ship a stylesheet (scripts/build-plugin-code.mjs).
 const PANEL = { display: "flex", flexDirection: "column", gap: "6px", minWidth: "240px" } as const;
-const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" } as const;
 const FIELD = { minWidth: "120px" } as const;
 const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "4px" } as const;
-
-function num(ev: Event): number {
-  return Number((ev.target as HTMLInputElement).value);
-}
 </script>
 
 <template>
   <FloatingPanel :open="!!d" :title="threadTitle" close-on-esc @close="threadTool?.cancel()">
     <div v-if="d" :style="PANEL" data-testid="thread-panel">
       <div class="measure-title" aria-hidden="true">{{ threadTitle }}</div>
-      <label :style="ROW"
-        >System
-        <select
+      <FieldRow v-slot="{ id }" label="System">
+        <Select
+          :id="id"
+          label="System"
+          size="sm"
+          testid="thread-system"
           :style="FIELD"
-          data-testid="thread-system"
-          :value="d.system"
-          @change="setSystem(($event.target as HTMLSelectElement).value as ThreadSystem)"
-        >
-          <option v-for="s in SYSTEMS" :key="s.value" :value="s.value">{{ s.label }}</option>
-        </select>
-      </label>
-      <label :style="ROW"
-        >Size
-        <select
-          :style="FIELD"
-          data-testid="thread-size"
-          :value="d.designation"
-          @change="set({ designation: ($event.target as HTMLSelectElement).value })"
-        >
-          <option v-for="c in choices" :key="c.designation" :value="c.designation">{{ c.designation }}</option>
-        </select>
-      </label>
-      <div v-if="offBy" class="measure-hint" data-testid="thread-offby">{{ offBy }}</div>
-      <label
-        v-if="!d.external"
-        :style="ROW"
-        title="A bore drawn at tap drill size is cut, one drawn at the nominal size gets the thread joined into it"
-        >Bore drawn at
-        <select
-          :style="FIELD"
-          data-testid="thread-faceis"
-          :value="d.faceIs"
-          @change="set({ faceIs: ($event.target as HTMLSelectElement).value as 'tap' | 'nominal' })"
-        >
-          <option value="tap">Tap drill{{ choice ? `, ${choice.tap} mm` : "" }}</option>
-          <option value="nominal">Nominal{{ choice ? `, ${+choice.d.toFixed(3)} mm` : "" }}</option>
-        </select>
-      </label>
-      <label :style="ROW"
-        >Hand
-        <select
-          :style="FIELD"
-          data-testid="thread-hand"
-          :value="d.hand"
-          @change="set({ hand: ($event.target as HTMLSelectElement).value as 'right' | 'left' })"
-        >
-          <option value="right">Right</option>
-          <option value="left">Left</option>
-        </select>
-      </label>
-      <label :style="ROW"
-        >Starts
-        <select :style="FIELD" data-testid="thread-starts" :value="d.starts" @change="set({ starts: num($event) })">
-          <option v-for="n in 4" :key="n" :value="n">{{ n }}</option>
-        </select>
-      </label>
-      <div v-if="choice" class="measure-hint">Pitch {{ +choice.pitch.toFixed(4) }} mm, lead {{ lead }} mm</div>
-      <label :style="ROW"
-        >Print fit
-        <input
-          type="checkbox"
-          data-testid="thread-printfit"
-          :checked="d.printFit"
-          @change="set({ printFit: ($event.target as HTMLInputElement).checked })"
+          :options="SYSTEMS"
+          :model-value="d.system"
+          @update:model-value="setSystem"
         />
-      </label>
-      <label v-if="d.printFit" :style="ROW" title="Radial clearance, so a printed thread turns into its mate"
-        >Clearance, mm
+      </FieldRow>
+      <FieldRow v-slot="{ id }" label="Size">
+        <Select
+          :id="id"
+          label="Size"
+          size="sm"
+          testid="thread-size"
+          :style="FIELD"
+          :options="sizeOptions"
+          :model-value="d.designation"
+          @update:model-value="set({ designation: $event })"
+        />
+      </FieldRow>
+      <div v-if="offBy" class="measure-hint" data-testid="thread-offby">{{ offBy }}</div>
+      <FieldRow
+        v-if="!d.external"
+        v-slot="{ id }"
+        label="Bore drawn at"
+        title="A bore drawn at tap drill size is cut, one drawn at the nominal size gets the thread joined into it"
+      >
+        <Select
+          :id="id"
+          label="Bore drawn at"
+          size="sm"
+          testid="thread-faceis"
+          :style="FIELD"
+          :options="faceOptions"
+          :model-value="d.faceIs"
+          @update:model-value="set({ faceIs: $event as 'tap' | 'nominal' })"
+        />
+      </FieldRow>
+      <FieldRow v-slot="{ id }" label="Hand">
+        <Select
+          :id="id"
+          label="Hand"
+          size="sm"
+          testid="thread-hand"
+          :style="FIELD"
+          :options="HANDS"
+          :model-value="d.hand"
+          @update:model-value="set({ hand: $event as 'right' | 'left' })"
+        />
+      </FieldRow>
+      <FieldRow v-slot="{ id }" label="Starts">
+        <Select
+          :id="id"
+          label="Starts"
+          size="sm"
+          testid="thread-starts"
+          :style="FIELD"
+          :options="STARTS"
+          :model-value="String(d.starts)"
+          @update:model-value="set({ starts: Number($event) })"
+        />
+      </FieldRow>
+      <div v-if="choice" class="measure-hint">Pitch {{ +choice.pitch.toFixed(4) }} mm, lead {{ lead }} mm</div>
+      <FieldRow v-slot="{ id }" label="Print fit">
+        <Switch
+          :id="id"
+          label="Print fit"
+          data-testid="thread-printfit"
+          :model-value="d.printFit"
+          @update:model-value="set({ printFit: $event })"
+        />
+      </FieldRow>
+      <FieldRow
+        v-if="d.printFit"
+        v-slot="{ id }"
+        label="Clearance"
+        title="Radial clearance, so a printed thread turns into its mate"
+      >
         <NumberField
-          label="Clearance, mm"
+          :id="id"
+          label="Clearance"
+          unit="mm"
           size="sm"
           :style="FIELD"
           limits="arrows"
@@ -132,12 +154,12 @@ function num(ev: Event): number {
           :model-value="d.clearance"
           @update:model-value="set({ clearance: Math.max(0, $event ?? 0) })"
         />
-      </label>
+      </FieldRow>
       <div :style="ACTIONS">
-        <button data-testid="thread-cancel" @click="threadTool?.cancel()">Cancel</button>
-        <button data-testid="thread-apply" :disabled="!choice" @click="threadTool?.apply()">{{
+        <Button data-testid="thread-cancel" @click="threadTool?.cancel()">Cancel</Button>
+        <Button variant="primary" data-testid="thread-apply" :disabled="!choice" @click="threadTool?.apply()">{{
           d.editing ? "Update" : "Add"
-        }}</button>
+        }}</Button>
       </div>
     </div>
   </FloatingPanel>

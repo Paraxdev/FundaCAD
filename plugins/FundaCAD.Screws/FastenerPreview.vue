@@ -191,8 +191,8 @@ onBeforeUnmount(() => {
         height: '100%',
         display: 'block',
         cursor: 'grab',
-        borderRadius: 'var(--r-md, 4px)',
-        background: 'var(--viewport-bg, #0b0912)',
+        borderRadius: 'var(--r-md)',
+        background: 'var(--viewport-bg)',
       }"
       @pointerdown="onDown"
       @pointermove="onMove"
@@ -208,8 +208,8 @@ onBeforeUnmount(() => {
         left: '8px',
         right: '8px',
         bottom: '6px',
-        fontSize: 'var(--fs-micro, 11px)',
-        color: 'var(--text-dim, #aaa1b5)',
+        fontSize: 'var(--fs-micro)',
+        color: 'var(--text-dim)',
       }"
     >
       {{ status }}

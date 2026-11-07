@@ -350,9 +350,9 @@ describe("the Standard Thread clearance", () => {
     const { input } = await panel();
     expect(input.matches("input")).toBe(true);
     expect(input.value).toBe("0.2");
-    const label = input.closest("label")!;
-    expect(label.textContent).toContain("Clearance, mm");
-    expect(label.getAttribute("title")).toMatch(/Radial clearance/);
+    const row = input.closest(".ui-field-row")!;
+    expect(row.textContent).toContain("Clearance");
+    expect(row.getAttribute("title")).toMatch(/Radial clearance/);
   });
 
   it("reads a decimal comma and tells the tool once", async () => {
@@ -663,7 +663,7 @@ describe("the custom fastener form", () => {
     const field = (sel: string) => inputOf(w.element.querySelector(sel));
     const byLabel = (text: string) => {
       const label = [...w.element.querySelectorAll("label")].find((l) => l.textContent!.includes(text));
-      return inputOf(label);
+      return inputOf(label && w.element.querySelector(`#${CSS.escape(label.htmlFor)}`));
     };
     const problems = () => [...w.element.querySelectorAll(".scr-problems li")].map((li) => li.textContent);
     const saved = async () => {
@@ -681,10 +681,10 @@ describe("the custom fastener form", () => {
     length: 1,
   };
 
-  it("keeps a field's label wrapping it and shows the spec's values", async () => {
+  it("keeps a field's label beside it and shows the spec's values", async () => {
     const { field, byLabel } = await form();
     expect(field(".scr-thread-diameter").value).toBe("3");
-    expect(field(".scr-len-length").closest("label")!.textContent).toContain("Length");
+    expect(field(".scr-len-length").closest(".param-row")!.textContent).toContain("Length");
     expect(byLabel("Countersink angle").value).toBe("");
     expect(byLabel("Countersink angle").placeholder).toBe("90");
     expect(byLabel("Driver number").value).toBe("");
@@ -846,11 +846,16 @@ describe("the custom fastener form", () => {
     type(byLabel("Driver number"), "-1");
     await flushPromises();
     expect(problems()).toHaveLength(2);
-    const select = (option: string) =>
-      w.findAll("select").find((s) => s.findAll("option").some((o) => o.element.value === option))!;
-    await select("countersunk").setValue("socketCap");
-    await select("phillips").setValue("hex");
-    await flushPromises();
+    const choose = async (sel: string, label: string) => {
+      w.get(sel).element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await flushPromises();
+      [...document.body.querySelectorAll<HTMLElement>("[role=option]")]
+        .find((o) => o.textContent!.includes(label))!
+        .click();
+      await flushPromises();
+    };
+    await choose(".scr-head-type", PARTS.head!["socketCap"]!.label);
+    await choose(".scr-drive-type", PARTS.drive!["hex"]!.label);
     expect(problems().join(" ")).not.toMatch(/Countersink angle|Driver number/);
   });
 
