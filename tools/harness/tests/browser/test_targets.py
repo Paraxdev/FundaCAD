@@ -30,8 +30,9 @@ LARGE_SHORT = (
         29,
         "the History strip scrolls, so it clips a grown hit area to the step's own height",
     ),
+    # Only the Extra Parameters rows, by their own class: any other number field still has to reach 32.
     (
-        "div.param-value > span.ui-field.ui-number-field > input",
+        "div.param-value.xp-value > span.ui-field.ui-number-field > input",
         1,
         24,
         "the Extra Parameters number fields are text inputs, which draw no ::before, and a taller box would show",
