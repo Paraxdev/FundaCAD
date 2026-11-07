@@ -118,6 +118,7 @@ export function parseManifest(raw: unknown): ParseResult {
   if (!ID.test(id)) return { ok: false, why: `not a plugin id: ${JSON.stringify(r.id)}` };
   const name = str(r.name);
   if (!name) return { ok: false, why: "no name" };
+  if (!name.trim()) return { ok: false, why: "the name is empty, a screen reader would read the plugin as nothing" };
   const version = str(r.version);
   if (!version) return { ok: false, why: "no version" };
   if (!isKind(r.kind)) return { ok: false, why: `not a plugin kind: ${JSON.stringify(r.kind)}` };

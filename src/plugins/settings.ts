@@ -112,7 +112,7 @@ export function validateSchema(schema: SettingsSchema): string[] {
       out.push(`${at} has an unknown type "${(p as { type: string }).type}"`);
       continue;
     }
-    if (p.type !== "data" && !p.label) out.push(`${at} has no label`);
+    if (p.type !== "data" && !p.label?.trim()) out.push(`${at} has no label`);
     if (p.type === "number") {
       if (typeof p.default !== "number" || !Number.isFinite(p.default)) out.push(`${at} needs a finite default`);
       else if (numberProblem(p, p.default)) out.push(`${at} default ${p.default}: ${numberProblem(p, p.default)}`);
