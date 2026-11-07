@@ -7,6 +7,7 @@ import { useEngine } from "../../app/engineKey";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import Card from "../ui/Card.vue";
+import Checkbox from "../ui/Checkbox.vue";
 import IconButton from "../ui/IconButton.vue";
 import type { EdgeMemberRow } from "../../features/edgeFeatureTool";
 
@@ -16,6 +17,7 @@ const tool = () => engine.tools.edgeFeature;
 const active = shallowRef(false);
 const kind = shallowRef<"fillet" | "chamfer">("fillet");
 const rows = shallowRef<EdgeMemberRow[]>([]);
+const tangent = shallowRef(true);
 
 function refresh(): boolean {
   const t = tool();
@@ -24,6 +26,7 @@ function refresh(): boolean {
   if (on) {
     rows.value = t.memberRows();
     kind.value = t.blendKind();
+    tangent.value = t.includesTangentEdges();
   } else {
     rows.value = [];
   }
@@ -61,6 +64,11 @@ function remove(key: string) {
   refresh();
   wake();
 }
+function setTangent(on: boolean) {
+  tool().setIncludeTangentEdges(on);
+  refresh();
+  wake();
+}
 function add() {
   tool().promptAddMember();
 }
@@ -91,6 +99,9 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
       </li>
     </ul>
     <template #foot>
+      <Checkbox class="fm-tangent" :model-value="tangent" @update:model-value="setTangent"
+        >Include tangent edges</Checkbox
+      >
       <Button class="fm-add" icon="plus" size="sm" block @pointerdown.prevent.stop="add()">Add edge</Button>
     </template>
   </Card>

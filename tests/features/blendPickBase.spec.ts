@@ -42,7 +42,7 @@ const midOnScreen = (l: EdgeRef) => {
 };
 const sel = (l: EdgeRef) => edgeSelectorFrom({ points: l.points as P[], body: "b1" }) as Selector & { point: P };
 
-function rig(features: Feature[] = []) {
+function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
   const camera = new THREE.PerspectiveCamera();
   camera.position.set(0, 0, 500);
   camera.lookAt(0, 0, 0);
@@ -69,17 +69,17 @@ function rig(features: Feature[] = []) {
     selectedEdgeSeeds: () => [{ sel: sel(A), line: A }],
     selectedEdgeScope: () => ({ scope: "single" }),
     selectedEdgeCount: () => 1,
-    edgeScopeView: () => ({ edgePx: 60, viewportPx: 800, pixelWorldSize: 0.1, modelDiagonal: 500 }),
+    edgeScopeView: () => ({ edgePx: 20, viewportPx: 800, pixelWorldSize: 0.1, modelDiagonal: 30 }),
     pixelWorldSize: () => 0.1,
     projectToScreen: (v: THREE.Vector3) => screen([v.x, v.y]),
     modelDiagonal: () => 30,
     snapStep: () => 0.5,
     holdModel: () => BASE,
     releaseModel: (v: unknown) => released.push(v),
-    pickEdgeAt: (x: number, y: number, view?: unknown) => pickIn(view === BASE ? BASE_LINES : RESULT_LINES, x, y),
-    visibleEdgeLines: (view?: unknown) => (view === BASE ? BASE_LINES : RESULT_LINES),
-    edgeLineByMid: (mid: P, view?: unknown) => byMid(view === BASE ? BASE_LINES : RESULT_LINES, mid),
-    edgeLineForSelector: (point: P) => byMid(BASE_LINES, point),
+    pickEdgeAt: (x: number, y: number, view?: unknown) => pickIn(view === BASE ? baseLines : RESULT_LINES, x, y),
+    visibleEdgeLines: (view?: unknown) => (view === BASE ? baseLines : RESULT_LINES),
+    edgeLineByMid: (mid: P, view?: unknown) => byMid(view === BASE ? baseLines : RESULT_LINES, mid),
+    edgeLineForSelector: (point: P) => byMid(baseLines, point),
     rayFrom: () => new THREE.Raycaster(new THREE.Vector3(0, 0, 500), new THREE.Vector3(0, 0, -1)),
   });
   const added: Feature[] = [];
@@ -244,5 +244,55 @@ describe("a fillet edited from History", () => {
     t.enter();
     const written = t.edits.map((e) => edgesOf(e.feature)).filter((e) => e !== undefined);
     expect(written.every((e) => !Array.isArray(e))).toBe(true);
+  });
+});
+
+// C runs on, tangent, into a quarter of a rounded corner: one click on C takes both while the switch is on.
+const CORNER = line("corner", [-10, 10, 10], [-12, 9, 10], 4);
+const C_RUN = line("c", [10, 10, 10], [-10, 10, 10], 2);
+const TANGENT_LINES = [A, B, C_RUN, line("c2", [-10, 10, 10], [-30, 10, 10], 5), CORNER];
+
+describe("Include tangent edges", () => {
+  it("is on by default, a click takes the tangent run, and the written feature leaves the field out", () => {
+    const t = rig([], TANGENT_LINES);
+    open = t.tool;
+    t.openFromHandle();
+    expect(t.tool.includesTangentEdges()).toBe(true);
+    t.click(midOnScreen(C_RUN));
+    expect(t.tool.memberRows()).toHaveLength(3);
+    expect(prompt()).toContain("Fillet, 3 edges");
+    t.enter();
+    expect(t.added[0]).not.toHaveProperty("tangentEdges");
+    expect(edgesOf(t.added[0])).toHaveLength(3);
+  });
+
+  it("off, keeps only the edges clicked and writes tangentEdges false", () => {
+    const t = rig([], TANGENT_LINES);
+    open = t.tool;
+    t.openFromHandle();
+    t.click(midOnScreen(C_RUN));
+    t.tool.setIncludeTangentEdges(false);
+    expect(t.tool.memberRows()).toHaveLength(2);
+    t.enter();
+    expect(t.added[0]).toMatchObject({ tangentEdges: false, edges: [sel(A), sel(C_RUN)] });
+  });
+
+  it("back on, walks the runs of the edges clicked again", () => {
+    const t = rig([], TANGENT_LINES);
+    open = t.tool;
+    t.openFromHandle();
+    t.tool.setIncludeTangentEdges(false);
+    t.click(midOnScreen(C_RUN));
+    expect(t.tool.memberRows()).toHaveLength(2);
+    t.tool.setIncludeTangentEdges(true);
+    expect(t.tool.memberRows()).toHaveLength(3);
+  });
+
+  it("opens off for a saved feature that had it off, and keeps it off", () => {
+    const t = rig([{ id: "f9", type: "fillet", radius: 2, edges: sel(A), tangentEdges: false } as unknown as Feature]);
+    open = t.tool;
+    t.tool.startEdit("f9", () => {});
+    t.rollback();
+    expect(t.tool.includesTangentEdges()).toBe(false);
   });
 });

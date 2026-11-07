@@ -107,6 +107,8 @@ interface GhostEdge {
   curvature?: readonly [number, number];
   /** drawn in the error red when not hovered */
   failed: boolean;
+  /** clicked or seeded, not taken along its tangent chain, so it stays when the chain switch goes off */
+  picked: boolean;
 }
 
 /** An unresolved row is a saved selector the current geometry no longer shows: still part of the feature and
@@ -145,6 +147,8 @@ export class EdgeFeatureTool {
   private hoverSlot: GhostSlot | null = null;
   /** The model before the feature, picked instead of the preview so a click means an edge the blend is applied to. */
   private base: ModelView | null = null;
+  /** The tangentEdges field: off, a click takes only the edge under it and the engine rounds only the edges given. */
+  private tangentOn = true;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
   private editId: string | null = null; // committed feature id being edited
@@ -328,6 +332,7 @@ export class EdgeFeatureTool {
     );
     this.kind = kind;
     this.phase = "pick";
+    this.tangentOn = true;
     this.onDone = onDone;
     this.tangent = null;
     this.lastPickMid = null;
@@ -441,6 +446,7 @@ export class EdgeFeatureTool {
         ? { sizeType: f.sizeType, tangentEdges: f.tangentEdges }
         : { chamferType: f.chamferType, distance2: f.distance2, tangentEdges: f.tangentEdges };
     this.optionsKind = f.type;
+    this.tangentOn = f.tangentEdges !== false;
     this.unmatchedSels = [];
     this.awaitingRollback = true;
 
@@ -557,6 +563,7 @@ export class EdgeFeatureTool {
     chain?: number,
     curvature?: readonly [number, number],
     color = edgeSelectColor(),
+    picked = true,
   ) {
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
@@ -571,6 +578,7 @@ export class EdgeFeatureTool {
       chain: chain ?? ++this.chainCounter,
       ...(curvature ? { curvature } : {}),
       failed: false,
+      picked,
     });
   }
 
@@ -725,7 +733,8 @@ export class EdgeFeatureTool {
   ): number {
     this.lastPickMid = polylineMid(line.points as Vec3[]) ?? null;
     const fresh: { sel: Selector & { point: Vec3 }; l: EdgeRef }[] = [];
-    for (const l of scope === "single" ? [line] : (ctx.chains ?? this.chains()).chain(line)) {
+    const taken = scope === "single" || !this.tangentOn ? [line] : (ctx.chains ?? this.chains()).chain(line);
+    for (const l of taken) {
       const sel = edgeSelectorFrom({ points: l.points as Vec3[], body: l.body });
       if (!sel) continue;
       ctx.chained?.add(sel.point);
@@ -740,9 +749,43 @@ export class EdgeFeatureTool {
     }
     const chainId = ++this.chainCounter;
     const color = edgeSelectColor();
-    for (const { sel, l } of fresh) this.addGhost(sel, l.points as Vec3[], chainId, l.curvature, color);
+    for (const { sel, l } of fresh) {
+      this.addGhost(sel, l.points as Vec3[], chainId, l.curvature, color, l.points === line.points);
+    }
     this.ghostLines?.sync();
     return 0;
+  }
+
+  /** A member on a chain already walked adds nothing, so each chain is walked once. Returns as addPicked does. */
+  private expandChains(): number {
+    if (!this.tangentOn) return 0;
+    const ctx = { chains: this.chains(), mids: this.memberMids(), chained: new MidSet(), pending: 0 };
+    let over = 0;
+    for (const g of [...this.ghosts]) {
+      if (ctx.chained.has(g.mid)) continue;
+      const line = this.viewport.edgeLineByMid(g.mid, this.base ?? undefined);
+      if (line) over = this.addPicked(line, "chain", ctx) || over;
+    }
+    return over;
+  }
+
+  /** The member card's "Include tangent edges". */
+  includesTangentEdges(): boolean {
+    return this.tangentOn;
+  }
+
+  setIncludeTangentEdges(on: boolean) {
+    if (this.phase !== "drag" || on === this.tangentOn) return;
+    this.tangentOn = on;
+    if (on) {
+      const over = this.expandChains();
+      if (over) this.refuseOverCap(over);
+    } else {
+      this.hoverGhost(null);
+      this.ghosts = this.ghosts.filter((g) => g.picked || void this.ghostLines?.remove(g.slot));
+      this.ghostLines?.sync();
+    }
+    this.afterMembershipChange();
   }
 
   private refuseOverCap(count: number) {
@@ -1205,15 +1248,7 @@ export class EdgeFeatureTool {
       over = this.addPicked(chainSource, scope);
     } else {
       this.seedGhosts(edges, opts?.lines);
-      if (scope === "chain") {
-        // A member on a chain already walked adds nothing, so each chain is walked once.
-        const ctx = { chains: this.chains(), mids: this.memberMids(), chained: new MidSet(), pending: 0 };
-        for (const g of [...this.ghosts]) {
-          if (ctx.chained.has(g.mid)) continue;
-          const line = this.viewport.edgeLineByMid(g.mid, this.base ?? undefined);
-          if (line) over = this.addPicked(line, "chain", ctx) || over;
-        }
-      }
+      if (scope === "chain") over = this.expandChains();
     }
     if (over) {
       this.cancel();
@@ -1338,10 +1373,13 @@ export class EdgeFeatureTool {
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
-    const kept =
+    const kept: Record<string, unknown> =
       this.optionsKind === this.kind
         ? Object.fromEntries(Object.entries(this.options).filter(([, x]) => x !== undefined))
         : {};
+    // On is the engine's default, so a feature that never named it stays without it.
+    if (!this.tangentOn) kept.tangentEdges = false;
+    else if (kept.tangentEdges === false) delete kept.tangentEdges;
     if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v, ...kept };
     const g2 = this.continuity !== "G1" ? { continuity: this.continuity } : {};
     // Omitted at 0 so a plain fillet stays plain in the document and keeps routing to the kernel's own filleter

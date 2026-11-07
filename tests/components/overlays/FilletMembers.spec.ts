@@ -17,6 +17,8 @@ function setup(rows: EdgeMemberRow[], kind: "fillet" | "chamfer" = "fillet") {
     blendKind: () => kind,
     removeMemberByKey: vi.fn(),
     promptAddMember: vi.fn(),
+    includesTangentEdges: vi.fn(() => true),
+    setIncludeTangentEdges: vi.fn(),
   };
   const engine = {
     tools: { edgeFeature: tool },
@@ -74,6 +76,16 @@ describe("FilletMembers", () => {
     expect(add.textContent!.trim()).toBe("Add edge");
     expect(down(add).defaultPrevented).toBe(true);
     expect(tool.promptAddMember).toHaveBeenCalledOnce();
+  });
+
+  it("holds Include tangent edges, on by default, and hands a flip to the tool", async () => {
+    const tool = setup(ROWS);
+    await frame();
+    const box = $(".fm-tangent input")[0] as HTMLInputElement;
+    expect($(".fm-tangent")[0]!.textContent!.trim()).toBe("Include tangent edges");
+    expect(box.checked).toBe(true);
+    box.click();
+    expect(tool.setIncludeTangentEdges).toHaveBeenCalledWith(false);
   });
 
   it("stays out of the DOM while no blend is edited", async () => {
