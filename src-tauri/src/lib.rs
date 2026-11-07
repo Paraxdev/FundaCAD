@@ -22,6 +22,7 @@ pub mod safe_mode;
 pub mod session_file;
 pub mod settings_files;
 mod spacemouse;
+pub mod start_question;
 mod system_info;
 pub mod thumbs;
 pub mod update_channel;
@@ -40,6 +41,15 @@ pub fn run_engine_worker() -> ! {
     engine::run_worker()
 }
 
+/// `fundacad --start-question <key> <n>`: this process is the start question (start_question.rs), not the app.
+pub fn run_start_question() -> ! {
+    share_app_identifier();
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    std::process::exit(start_question::run(&args))
+}
+
+pub const START_QUESTION_ARG: &str = start_question::ARG;
+
 /// Restart after an update, stopping the engine and releasing the single instance lock first so the new process comes
 /// up clean. Neither can be left to a destructor.
 #[tauri::command]
@@ -52,6 +62,7 @@ fn restart_for_update(app: tauri::AppHandle) {
     // The replacement can start before this process ends and find the lock still held, leaving no app after an update.
     // `destroy` is synchronous on every platform, so it completes before the spawn.
     tauri_plugin_single_instance::destroy(&app);
+    crash_disarm(&app);
     app.restart();
 }
 
@@ -129,8 +140,62 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
         return;
     }
     state.mounted.store(true, Relaxed);
-    if safe_mode::clears_count(safe.reason) {
-        safe_mode::cleared(&safe.dir);
+    if !safe_mode::clears_count(safe.reason) {
+        return;
+    }
+    safe_mode::cleared(&safe.dir);
+    // A reload mounts again, but the crash window runs from the first mount.
+    if safe.crash_armed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    if let Err(e) = safe_mode::crash_arm(&safe.dir, safe.crashes) {
+        eprintln!("[safe-mode] could not mark this run in {}: {e}", safe.dir.display());
+        return;
+    }
+    let dir = safe.dir.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(safe_mode::CRASH_WINDOW);
+        safe_mode::crash_disarm(&dir);
+    });
+}
+
+/// A run that ends on purpose before `CRASH_WINDOW` passed is no crash. Only the run that armed the marker clears it,
+/// so a start that never mounted leaves the count of the run before it.
+fn crash_disarm(app: &tauri::AppHandle) {
+    if let Some(safe) = app.try_state::<SafeMode>() {
+        if safe.crash_armed.load(std::sync::atomic::Ordering::SeqCst) {
+            safe_mode::crash_disarm(&safe.dir);
+        }
+    }
+}
+
+#[tauri::command]
+fn start_choice_take(pending: tauri::State<'_, safe_mode::PendingChoice>) -> Option<safe_mode::StartChoice> {
+    pending.take()
+}
+
+/// The settings backup the page writes before Reset settings clears them, see `PendingChoice::claim_backup`.
+#[tauri::command]
+async fn settings_backup_write(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, safe_mode::PendingChoice>,
+    text: String,
+) -> Result<String, String> {
+    pending.claim_backup(text.len())?;
+    let written = app.path().app_data_dir().map_err(|e| e.to_string()).and_then(|data| {
+        let dir = data.join(settings_files::BACKUPS);
+        settings_files::write_backup(&dir, settings_files::unix_secs(), &text, settings_files::BACKUPS_KEPT)
+            .map_err(|e| format!("{}: {e}", dir.display()))
+    });
+    match written {
+        Ok(path) => {
+            println!("[settings] backed up the settings to {} before resetting them", path.display());
+            Ok(path.to_string_lossy().into_owned())
+        }
+        Err(e) => {
+            pending.release_backup();
+            Err(e)
+        }
     }
 }
 
@@ -200,6 +265,13 @@ struct SafeMode {
     /// The count `safe_mode::begin` found before this start, once it counted it.
     counted: std::sync::OnceLock<u32>,
     set_x11: bool,
+    /// Runs in a row that closed soon after mounting, this one's marker holds it from its mount.
+    crashes: u32,
+    crash_armed: std::sync::atomic::AtomicBool,
+    /// Reset settings, picked in the start question.
+    reset: Option<safe_mode::StartChoice>,
+    /// The start question's log line, printed again once the log file took over.
+    asked: Option<String>,
 }
 
 pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
@@ -207,7 +279,7 @@ pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
 }
 
 /// The banner's "Restart normally": a new process without this session's safe mode switch, variable, compositing or
-/// X11 setting, and a cleared count.
+/// X11 setting, and both counts cleared.
 #[tauri::command]
 fn safe_mode_exit(app: tauri::AppHandle) {
     let (dir, set_compositing, set_x11) = {
@@ -215,6 +287,7 @@ fn safe_mode_exit(app: tauri::AppHandle) {
         (safe.dir.clone(), safe.set_compositing, safe.set_x11)
     };
     safe_mode::cleared(&dir);
+    safe_mode::crash_disarm(&dir);
     let args = safe_mode::restart_args(app.env().args_os);
     respawn(&app, args, |cmd| {
         cmd.env_remove(safe_mode::ENV);
@@ -238,6 +311,7 @@ fn respawn(
         engine.stop();
     }
     tauri_plugin_single_instance::destroy(app);
+    crash_disarm(app);
     match tauri::process::current_binary(&app.env()) {
         Ok(exe) => {
             let mut cmd = std::process::Command::new(exe);
@@ -253,15 +327,26 @@ fn respawn(
     std::process::exit(0);
 }
 
-/// Reads the count and the switches before any webview exists. The count is only written in `.setup`, after the single
-/// instance check, or every second launch would count as a failure.
+/// Reads the counts and the switches, and asks when a count says so, before any webview exists. The start count is only
+/// written in `.setup`, after the single instance check, or every second launch would count as a failure.
 fn safe_mode_decide() -> SafeMode {
     let dir = fundacad_mcp::app_session::app_data_dir();
-    let reason = safe_mode::decide(
+    let crashes = safe_mode::crashes(&dir);
+    let start = safe_mode::decide(
         safe_mode::misses(&dir),
+        crashes,
         safe_mode::has_flag(std::env::args_os()),
         std::env::var(safe_mode::ENV).ok().as_deref(),
     );
+    let (reason, reset, asked) = match start {
+        safe_mode::Start::Normal => (None, None, None),
+        safe_mode::Start::Safe(r) => (Some(r), None, None),
+        safe_mode::Start::Ask(r) => {
+            let asked = safe_mode::after_question(r, start_question::ask(r));
+            println!("{}", asked.line);
+            (asked.safe, asked.reset, Some(asked.line))
+        }
+    };
     let set_compositing =
         cfg!(target_os = "linux") && reason.is_some() && std::env::var_os(safe_mode::COMPOSITING).is_none();
     if set_compositing {
@@ -287,7 +372,17 @@ fn safe_mode_decide() -> SafeMode {
             if set_x11 { ", X11 instead of Wayland" } else { "" },
         );
     }
-    SafeMode { reason, dir, set_compositing, set_x11, counted: std::sync::OnceLock::new() }
+    SafeMode {
+        reason,
+        dir,
+        set_compositing,
+        set_x11,
+        counted: std::sync::OnceLock::new(),
+        crashes,
+        crash_armed: std::sync::atomic::AtomicBool::new(false),
+        reset,
+        asked,
+    }
 }
 
 /// The dialog plugin allows each picked or saved path on the fs scope, which tells its listeners, so Rust learns the
@@ -376,8 +471,14 @@ pub fn run() {
                 .js_init_script(safe_mode::init_script(reason))
                 .build(),
         ),
+        None if safe.reset.is_some() => builder.plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("fundacad-start-choice")
+                .js_init_script(safe_mode::START_CHOICE_SCRIPT)
+                .build(),
+        ),
         None => builder,
     };
+    let pending = safe_mode::PendingChoice::new(safe.reset);
 
     let builder = builder.invoke_handler(tauri::generate_handler![
         engine::mcp_server,
@@ -394,6 +495,8 @@ pub fn run() {
         system_info::system_info,
         os_a11y_prefs,
         safe_mode_exit,
+        start_choice_take,
+        settings_backup_write,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
         recovery_write,
@@ -475,6 +578,7 @@ pub fn run() {
         // Files a person handed to a plugin this session, never on disk, so a plugin cannot come back tomorrow holding
         // a token for a file somebody forgot they offered.
         .manage(plugins::files::Handles::default())
+        .manage(pending)
         .manage(safe)
         .setup(|app| {
             // A Windows or Linux debug build runs in a dev's terminal, which `tauri dev` may pipe.
@@ -485,6 +589,9 @@ pub fn run() {
                     Ok(Some(path)) => {
                         println!("[log] FundaCAD {} started, logs to {}", env!("CARGO_PKG_VERSION"), path.display());
                         // Printed before the log took over, so repeated where a report will find it.
+                        if let Some(line) = &app.state::<SafeMode>().asked {
+                            println!("{line}");
+                        }
                         if let Some(r) = app.state::<SafeMode>().reason {
                             println!("[safe-mode] starting in safe mode because {}", r.describe());
                         }
@@ -516,6 +623,12 @@ pub fn run() {
             if let Ok(dir) = app.path().app_data_dir() {
                 app.state::<doc_paths::Provenance>().keep_in(dir.join("vouched-paths.json"));
             }
+            if safe.reset.is_some_and(|c| c.plugins) {
+                match plugins::plugins_root(app.handle()).and_then(|root| plugins::disable_all(&root)) {
+                    Ok(n) => println!("[settings] reset settings: all {n} installed plugins turned off"),
+                    Err(e) => eprintln!("[settings] reset settings: could not turn the plugins off: {e}"),
+                }
+            }
             launch::queue_first_launch(app);
             vouch_dialog_paths(app.handle());
             app.manage(engine::Engine::start(app.handle()));
@@ -544,6 +657,9 @@ pub fn run() {
             if let Some(e) = app_handle.try_state::<engine::Engine>() {
                 e.stop();
             }
+        }
+        if let RunEvent::Exit = event {
+            crash_disarm(app_handle);
         }
     });
 }

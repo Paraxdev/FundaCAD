@@ -24,7 +24,7 @@ export interface WhatsNewHome {
   open(): void;
 }
 
-const SEEN_KEY = "fundacad.whatsNewSeen";
+export const SEEN_KEY = "fundacad.whatsNewSeen";
 const NOTES_DIR = "../../docs/release-notes/";
 const notesFiles = import.meta.glob<string>("../../docs/release-notes/*.md", { query: "?raw", import: "default" });
 

@@ -2,11 +2,15 @@
 // exists and says so through an init script that runs before any of ours, the
 // same script that swaps localStorage for an in memory one.
 
-export type SafeModeReason = "failedStarts" | "flag" | "env";
+export type SafeModeReason = "failedStarts" | "crashes" | "flag" | "env";
 
 export interface SafeModeInfo {
   reason: SafeModeReason;
   failedStarts: number;
+  /** For "crashes": how many times it closed unexpectedly soon after the interface came up. */
+  crashes?: number;
+  /** The person picked Start in safe mode from Rust's start question. */
+  chosen?: boolean;
 }
 
 declare global {
@@ -25,8 +29,12 @@ export function safeModeWhy(info: SafeModeInfo): string {
       return "it was started with --safe-mode";
     case "env":
       return "FUNDACAD_SAFE_MODE is set";
+    case "crashes":
+      return `you chose it after FundaCAD closed unexpectedly ${info.crashes ?? 0} times soon after starting`;
     default:
-      return `the last ${info.failedStarts} starts did not finish`;
+      return info.chosen
+        ? `you chose it after the last ${info.failedStarts} starts did not finish`
+        : `the last ${info.failedStarts} starts did not finish`;
   }
 }
 

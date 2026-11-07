@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FundaCAD</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --panel: #1b1826;
+    --text: #f6f0e4;
+    --text-dim: #c4bcd0;
+    --text-mute: #a9a2ba;
+    --accent: #9a9ff0;
+    --accent-hot: #bcc0f7;
+    --on-accent: #0c0d26;
+    --chip: color-mix(in srgb, #fff 10%, var(--panel));
+    --tile: color-mix(in srgb, #fff 5%, var(--panel));
+    --hover-wash: rgba(255, 255, 255, 0.07);
+    --check-off: rgba(0, 0, 0, 0.45);
+    --control-edge: color-mix(in srgb, var(--text) 50%, transparent);
+    --shadow: 0 2px 5px rgba(0, 0, 0, 0.32), 0 16px 34px -14px rgba(0, 0, 0, 0.62);
+    --chip-radius: 8px;
+    --tile-radius: 11px;
+  }
+  @supports (corner-shape: squircle) {
+    :root { --chip-radius: 12px; --tile-radius: 17px; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--panel);
+    color: var(--text);
+    font: 13px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  p { margin: 0; color: var(--text-dim); }
+  form { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+  button {
+    corner-shape: squircle;
+    border-radius: var(--chip-radius);
+    border: 1px solid transparent;
+    background: var(--chip);
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    min-height: 34px;
+    padding: 6px 16px;
+    text-align: left;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  button:hover { background: linear-gradient(var(--hover-wash), var(--hover-wash)), var(--chip); }
+  button.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  button.primary:hover { background: var(--accent-hot); }
+  button:focus { outline: none; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .reset {
+    corner-shape: squircle;
+    border-radius: var(--tile-radius);
+    background: var(--tile);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .reset button { box-shadow: none; }
+  label { display: flex; align-items: center; gap: 8px; padding: 0 8px 2px; color: var(--text-dim); cursor: pointer; }
+  input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    corner-shape: squircle;
+    border-radius: 5px;
+    background: var(--check-off);
+    box-shadow: inset 0 0 0 1px var(--control-edge);
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+  }
+  input[type="checkbox"]::before {
+    content: "";
+    width: 9px;
+    height: 5px;
+    margin-top: -2px;
+    border-left: 2px solid var(--on-accent);
+    border-bottom: 2px solid var(--on-accent);
+    transform: rotate(-45deg);
+    visibility: hidden;
+  }
+  input[type="checkbox"]:checked { background: var(--accent); box-shadow: none; }
+  input[type="checkbox"]:checked::before { visibility: visible; }
+  input[type="checkbox"]:focus { outline: none; }
+  input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { font-size: 12px; color: var(--text-mute); padding: 0 8px; }
+</style>
+</head>
+<body>
+  <h1>{{QUESTION}}</h1>
+  <p>Safe mode starts it once with default settings and no plugins, and changes nothing.</p>
+  <form action="/choice" method="get">
+    <button class="primary" name="c" value="safe" autofocus>Start in safe mode</button>
+    <div class="reset">
+      <button name="c" value="reset">Reset settings</button>
+      <label><input type="checkbox" name="plugins" value="1"> Also turn off plugins</label>
+      <div class="hint">Your settings are saved to a file first. Recent files are kept.</div>
+    </div>
+    <button name="c" value="normal">Start normally</button>
+  </form>
+  <script>
+    // Tells Rust the window shows: a frame only runs once the page renders, and the navigation is cancelled.
+    // A key or a press counts too, since an occluded window gets no frames but its person may be using it.
+    // Focus does not: the window opens focused whether or not it ever painted.
+    let shown = false;
+    const report = () => {
+      if (shown) return;
+      shown = true;
+      location.href = "/shown";
+    };
+    requestAnimationFrame(() => requestAnimationFrame(report));
+    for (const type of ["keydown", "pointerdown"]) window.addEventListener(type, report, { capture: true, once: true });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") location.href = "/choice?c=close";
+      // Enter on the box would submit the form with its first button, safe mode.
+      if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+        e.preventDefault();
+        e.target.click();
+      }
+    });
+  </script>
+</body>
+</html>

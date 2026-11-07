@@ -144,8 +144,16 @@ label.pref-head {
   line-height: 1.5;
   color: var(--text);
 }
-[data-prefs-experimental] .prefs-actions {
-  margin-top: var(--s-4);
+.prefs-x-locked {
+  margin-bottom: var(--s-4);
+}
+/* A changed mark sits beside its title and wraps under it before it pushes the control out of the card. */
+.pref-title-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  min-width: 0;
 }
 .pref-number {
   display: inline-flex;
@@ -216,6 +224,16 @@ label.pref-head {
   font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text-dim);
+}
+.prefs-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.prefs-group-head .prefs-group-title {
+  margin: 0;
 }
 
 /* Sections with their own rows (assistants, plugins), sized like the cards around them. */
