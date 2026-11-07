@@ -14,7 +14,15 @@ import {
   type ShortcutOverride,
 } from "fundacad";
 import { Button, FieldRow, Select, announce } from "fundacad/ui";
-import { RADIAL_ACTION, RADIAL_CONTEXTS, RING_SLOTS, keymapFor, tableFor, type RadialContext } from "./navigation";
+import {
+  DEFAULT_CONFIG,
+  RADIAL_ACTION,
+  RADIAL_CONTEXTS,
+  RING_SLOTS,
+  keymapFor,
+  tableFor,
+  type RadialContext,
+} from "./navigation";
 import { navState, updateConfig } from "./state";
 
 const cfg = computed(() => navState.cfg);
@@ -25,9 +33,18 @@ const commands = computed(() => {
   return allCommands().filter((c) => !seen.has(c.id) && seen.add(c.id));
 });
 
+// Two shipped slots, wireframe and hide selected, are key actions with no palette command. The ring runs them and
+// names them by their keys (main.ts), so they are offered here under the same names.
+const keyOnlyDefaults = computed(() => {
+  const known = new Set(commands.value.map((c) => c.id));
+  const ids = new Set(Object.values(DEFAULT_CONFIG.items).flat());
+  return SHORTCUTS.filter((s) => ids.has(s.action) && !known.has(s.action) && known.add(s.action));
+});
+
 const commandOptions = computed(() => [
   { value: "", label: "Nothing" },
   ...commands.value.map((c) => ({ value: c.id, label: c.label, hint: c.group })),
+  ...keyOnlyDefaults.value.map((s) => ({ value: s.action, label: s.label, hint: "Keys" })),
 ]);
 
 function setItem(ctx: RadialContext, slot: number, id: string) {
@@ -159,6 +176,7 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
               size="sm"
               :label="slot <= RING_SLOTS ? `Slot ${slot}` : `More ${slot - RING_SLOTS}`"
               :options="commandOptions"
+              placeholder="Not available"
               :model-value="cfg.items[c.id][slot - 1] ?? ''"
               @update:model-value="setItem(c.id, slot - 1, $event)"
             />
