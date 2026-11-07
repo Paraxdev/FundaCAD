@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
 import { invoke } from "fundacad";
+import { Checkbox, Select } from "fundacad/ui";
 import {
   AXIS_LABELS,
   AXIS_NAMES,
@@ -22,6 +23,7 @@ import {
 } from "./spacemouse";
 
 const ACTIONS = Object.keys(ACTION_LABELS) as ActionName[];
+const axisOptions = AXIS_NAMES.map((a) => ({ value: a, label: AXIS_LABELS[a] }));
 
 // shallowRef replaced wholesale: setSpaceMouseConfig merges the bindings into its module CONFIG, and a deep ref would
 // put reactive proxies there.
@@ -61,14 +63,8 @@ function updateBars(m: Motion) {
     const suppressed = !dead && f[a] === 0;
     bar.style.background = dead ? "var(--text-mute, #6b7280)" : "var(--accent, #ff7a3c)";
     bar.style.opacity = suppressed ? "0.35" : "1";
-    const note = suppressed ? `${AXIS_LABELS[a]}: suppressed by the cross-axis filter` : "";
-    if (note) {
-      bar.setAttribute("title", note);
-      bar.setAttribute("aria-label", note);
-    } else {
-      bar.removeAttribute("title");
-      bar.removeAttribute("aria-label");
-    }
+    if (suppressed) bar.setAttribute("title", `${AXIS_LABELS[a]}: suppressed by the cross-axis filter`);
+    else bar.removeAttribute("title");
   }
 }
 
@@ -234,35 +230,41 @@ onUnmounted(() => {
       <div v-if="flatpakHint" class="sm-hint" data-testid="spacemouse-flatpak-hint">
         To reach a 3D mouse from the Flatpak, {{ flatpakHint }}
       </div>
-      <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row">
+      <!-- The bars move at device report rate, which no screen reader could follow, so only sight gets them. -->
+      <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row" aria-hidden="true">
         <span class="sm-axis-label">{{ AXIS_LABELS[a] }}</span>
         <div class="sm-axis-track">
           <div class="sm-axis-bar" :ref="(el) => setBar(a, el)"></div>
         </div>
       </div>
       <div class="sm-section">Test, rotate the cube</div>
-      <canvas ref="testCanvas" class="sm-test" width="240" height="170"></canvas>
+      <canvas
+        ref="testCanvas"
+        class="sm-test"
+        role="img"
+        aria-label="Test cube, it turns and moves as the puck does"
+        width="240"
+        height="170"
+      ></canvas>
     </div>
 
-    <div class="sm-col">
-      <div class="sm-section">Axis mapping</div>
+    <div class="sm-col" role="group" aria-labelledby="sm-map-title">
+      <div id="sm-map-title" class="sm-section">Axis mapping</div>
       <div v-for="action in ACTIONS" :key="action" class="sm-map-row">
-        <span class="sm-map-label">{{ ACTION_LABELS[action] }}</span>
-        <select
-          class="sm-select"
-          :value="binds[action].src"
-          @change="applyBind(action, { src: ($event.target as HTMLSelectElement).value as AxisName })"
+        <label :id="`sm-map-${action}`" class="sm-map-label" :for="`sm-src-${action}`">{{
+          ACTION_LABELS[action]
+        }}</label>
+        <Select
+          :id="`sm-src-${action}`"
+          size="sm"
+          :label="ACTION_LABELS[action]"
+          :options="axisOptions"
+          :model-value="binds[action].src"
+          @update:model-value="applyBind(action, { src: $event })"
+        />
+        <Checkbox :model-value="binds[action].invert" @update:model-value="applyBind(action, { invert: $event })"
+          >flip <span class="sr-only">{{ ACTION_LABELS[action] }}</span></Checkbox
         >
-          <option v-for="ax in AXIS_NAMES" :key="ax" :value="ax">{{ AXIS_LABELS[ax] }}</option>
-        </select>
-        <label class="sm-inv">
-          <input
-            type="checkbox"
-            :checked="binds[action].invert"
-            @change="applyBind(action, { invert: ($event.target as HTMLInputElement).checked })"
-          />
-          flip
-        </label>
       </div>
     </div>
   </div>

@@ -97,6 +97,16 @@
   border-radius: var(--r-sm);
   transition: background var(--t-fast) var(--ease);
 }
+/* The MultiColor palette's native colour picker, one swatch per filament slot. */
+.pal-swatch {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  vertical-align: middle;
+}
 .tree-folder:hover {
   background: var(--raised);
 }
@@ -198,6 +208,12 @@
 :root[data-targets="large"] .geometry-filters .ui-field-sm > input {
   height: max(24px, var(--hit-min));
   margin-block: calc((24px - max(24px, var(--hit-min))) / 2);
+}
+/* The Reference images rows carry four small buttons, the same height as the eye so the row does not grow. */
+.ref-row-btn.icon-btn.icon-btn-sm {
+  width: calc(13px + 2 * var(--s-2));
+  height: 16px;
+  @include hit.area;
 }
 /* The Extra Parameters plugin draws its setup button with inline styles, so its hit area is set here. */
 .xp-setup {

@@ -2,14 +2,16 @@
 // No Esc-dismiss: Esc clears the body selection, which widens the check back to every body, and must not close the
 // results with it. Inline styles on host tokens, as a plugin .vue may not carry a <style> block.
 
-import { computed, ref, watch, type CSSProperties } from "vue";
+import { computed, ref, useId, watch, type CSSProperties } from "vue";
 import { readAs, useBrowserStore } from "fundacad";
-import { FloatingPanel, ListRow, NumberField } from "fundacad/ui";
+import { Button, Checkbox, FloatingPanel, ListRow, NumberField, Select } from "fundacad/ui";
 import type { PrintabilityKind } from "fundacad";
 import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES, cssHex } from "./printability";
 import { printabilityPanel } from "./printabilityPanel";
 
 const browser = useBrowserStore();
+const uid = useId();
+const fieldId = (key: string) => `${uid}-${key}`;
 
 const ctl = printabilityPanel;
 const d = computed(() => ctl.value?.data.value ?? null);
@@ -32,7 +34,7 @@ const NUMBERS: {
   key: NumberKey;
   label: string;
   cls: string;
-  unit: string;
+  unit: "mm" | "deg";
   min: number;
   max?: number;
   step: number;
@@ -44,7 +46,7 @@ const NUMBERS: {
     key: "overhang",
     label: "Overhang angle",
     cls: "printability-overhang",
-    unit: "°",
+    unit: "deg",
     min: 1,
     max: 89,
     step: 1,
@@ -78,17 +80,7 @@ watch(
   },
 );
 
-function swatch(k: PrintabilityKind): CSSProperties {
-  return {
-    display: "inline-block",
-    width: "8px",
-    height: "8px",
-    marginRight: "6px",
-    borderRadius: "2px",
-    verticalAlign: "middle",
-    background: cssHex(KIND_COLORS[k] ?? 0x888888),
-  };
-}
+const swatch = (k: PrintabilityKind) => ({ "--key": cssHex(KIND_COLORS[k] ?? 0x888888) });
 
 // A long check lists a row per finding; it scrolls rather than running off
 // the bottom of the window, as the app's Stress panel does.
@@ -98,7 +90,6 @@ const BODY: CSSProperties = {
   maxHeight: "calc(100vh - 180px)",
   overflowY: "auto",
 };
-const TOGGLE: CSSProperties = { display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" };
 const CHECK_ROW: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "var(--s-1) var(--s-4)" };
 const ACTIONS: CSSProperties = { justifyContent: "flex-start", gap: "var(--s-2)", marginTop: "var(--s-2)" };
 const BODY_NAME: CSSProperties = { marginTop: "var(--s-2)", fontWeight: 600 };
@@ -108,8 +99,10 @@ const LEGEND: CSSProperties = {
   gap: "var(--s-1) var(--s-3)",
   marginTop: "var(--s-2)",
 };
-const WARN: CSSProperties = { color: "var(--accent-hot, #ff9a5c)" };
+const WARN: CSSProperties = { color: "var(--warn)" };
+const ERROR: CSSProperties = { color: "var(--error)" };
 const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
+const checksId = `${uid}-checks`;
 </script>
 
 <template>
@@ -124,11 +117,13 @@ const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
 
       <div class="measure-divider" />
       <div v-for="n in NUMBERS" :key="n.key" class="measure-row">
-        <span class="measure-k">{{ n.label }}</span>
+        <label class="measure-k" :for="fieldId(n.key)">{{ n.label }}</label>
         <span class="measure-v"
           ><NumberField
+            :id="fieldId(n.key)"
             :class="n.cls"
             :label="n.label"
+            :unit="n.unit"
             size="sm"
             :width-ch="6"
             commit="live"
@@ -141,49 +136,66 @@ const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
             :model-value="setup[n.key]"
             @update:model-value="setup[n.key] = $event"
             @error="$event && (setup[n.key] = null)"
-          />
-          {{ n.unit }}</span
-        >
+        /></span>
       </div>
       <div class="measure-row">
-        <span class="measure-k">Up</span>
-        <select v-model="setup.up" class="measure-select printability-up" :disabled="setup.layFlat">
-          <option v-for="u in UP_CHOICES" :key="u.value" :value="u.value">{{ u.label }}</option>
-        </select>
+        <label class="measure-k" :for="fieldId('up')">Up</label>
+        <Select
+          :id="fieldId('up')"
+          v-model="setup.up"
+          class="printability-up"
+          label="Up"
+          size="sm"
+          :options="UP_CHOICES"
+          :disabled="setup.layFlat"
+          disabled-reason="Lay flat chooses the way up"
+        />
       </div>
       <div class="measure-row">
-        <label class="measure-k" :style="TOGGLE">
-          <input v-model="setup.layFlat" class="printability-layflat" type="checkbox" />
-          Lay flat on the largest flat face
-        </label>
+        <Checkbox v-model="setup.layFlat" class="printability-layflat">Lay flat on the largest flat face</Checkbox>
       </div>
 
       <div class="measure-divider" />
-      <div :style="CHECK_ROW">
-        <label v-for="c in CHECKS" :key="c.value" class="measure-k" :style="TOGGLE">
-          <input v-model="setup.checks[c.value]" :class="'printability-check-' + c.value" type="checkbox" />
-          {{ c.label }}
-        </label>
+      <div role="group" :aria-labelledby="checksId" :style="CHECK_ROW">
+        <span :id="checksId" class="sr-only">Checks to run</span>
+        <Checkbox
+          v-for="c in CHECKS"
+          :key="c.value"
+          v-model="setup.checks[c.value]"
+          :class="'printability-check-' + c.value"
+          >{{ c.label }}</Checkbox
+        >
       </div>
 
       <div class="measure-row" :style="ACTIONS">
-        <button type="button" class="btn btn-primary printability-run" :disabled="d.running" @click="ctl.run()">{{
-          d.running ? "Checking…" : "Check"
-        }}</button>
-        <button v-if="d.running" type="button" class="btn printability-cancel" @click="ctl.cancel()">Cancel</button>
-        <button v-else type="button" class="btn printability-close" @click="ctl.close()">Close</button>
+        <Button
+          variant="primary"
+          class="printability-run"
+          :disabled="d.running"
+          disabled-reason="A check is running"
+          @click="ctl.run()"
+          >{{ d.running ? "Checking…" : "Check" }}</Button
+        >
+        <Button v-if="d.running" class="printability-cancel" @click="ctl.cancel()">Cancel</Button>
+        <Button v-else class="printability-close" @click="ctl.close()">Close</Button>
       </div>
-      <div v-if="d.error" class="measure-hint printability-error" :style="WARN">{{ d.error }}</div>
+      <div v-if="d.error" class="measure-hint printability-error" :style="ERROR">Error: {{ d.error }}</div>
 
       <template v-if="d.result">
         <div class="measure-divider" />
         <div v-if="d.result.header" class="measure-hint printability-header">{{ d.result.header }}</div>
-        <div v-for="g in d.result.groups" :key="g.body" class="printability-group">
+        <div
+          v-for="g in d.result.groups"
+          :key="g.body"
+          class="printability-group"
+          role="group"
+          :aria-labelledby="fieldId('body-' + g.body)"
+        >
           <div class="measure-row printability-body" :style="BODY_NAME"
-            ><span class="measure-v">{{ g.name }}</span></div
+            ><span :id="fieldId('body-' + g.body)" class="measure-v">{{ g.name }}</span></div
           >
           <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note" :style="WARN">
-            <span class="measure-v">{{ n }}</span>
+            <span class="measure-v">Warning: {{ n }}</span>
           </div>
           <ul v-if="g.rows.length" :style="LIST" :aria-label="g.name + ' findings'">
             <li v-for="r in g.rows" :key="r.index">
@@ -199,7 +211,7 @@ const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
                 @pointerenter="light(r.index, focusOn)"
                 @pointerleave="light(null, focusOn)"
               >
-                <template #leading><span :style="swatch(r.kind)" aria-hidden="true" /></template>
+                <template #leading><span class="print-swatch" :style="swatch(r.kind)" aria-hidden="true" /></template>
               </ListRow>
             </li>
           </ul>
@@ -210,15 +222,15 @@ const LIST: CSSProperties = { margin: 0, padding: 0, listStyle: "none" };
         <div v-if="!d.result.groups.length && !d.result.errors.length" class="measure-row printability-clean">
           <span class="measure-k">Nothing found</span>
         </div>
-        <div v-if="d.result.kinds.length" :style="LEGEND">
-          <span v-for="k in d.result.kinds" :key="k" class="measure-k printability-legend-item">
-            <span :style="swatch(k)" />{{ KIND_LABELS[k] }}
+        <div v-if="d.result.kinds.length" role="list" aria-label="Legend" :style="LEGEND">
+          <span v-for="k in d.result.kinds" :key="k" role="listitem" class="measure-k printability-legend-item">
+            <span class="print-swatch" :style="swatch(k)" aria-hidden="true" />{{ KIND_LABELS[k] }}
           </span>
         </div>
-        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN">{{
-          w
-        }}</div>
-        <div v-if="d.stale" class="measure-hint printability-stale"
+        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN"
+          >Warning: {{ w }}</div
+        >
+        <div v-if="d.stale" class="measure-hint printability-stale" role="status"
           >The model changed since this check, check again to see the faces</div
         >
       </template>

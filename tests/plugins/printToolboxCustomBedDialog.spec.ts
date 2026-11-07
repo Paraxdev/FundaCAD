@@ -92,6 +92,7 @@ describe("CustomBedDialog", () => {
     const h = $('[data-testid="bed-custom-height"]')!;
     h.value = "3*";
     h.dispatchEvent(new Event("input"));
+    await nextTick();
     $('[data-testid="bed-custom-confirm"]')!.dispatchEvent(new Event("click", { bubbles: true }));
     await nextTick();
     expect(resolve).not.toHaveBeenCalled();

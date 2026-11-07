@@ -1,30 +1,38 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
-import { fieldError, fieldNumber } from "fundacad";
-import { ModalFrame } from "fundacad/ui";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { readAs } from "fundacad";
+import { Button, FieldRow, ModalFrame, NumberField } from "fundacad/ui";
 import { parseCustomBedSize } from "./bedFit";
 import type { CustomBedRequest } from "./customBedDialog";
 
 const props = defineProps<{ req: CustomBedRequest }>();
 
-const width = ref(String(props.req.initial[0]));
-const depth = ref(String(props.req.initial[1]));
-const height = ref(String(props.req.initial[2]));
+const FIELDS = [
+  { label: "Width", testid: "bed-custom-width" },
+  { label: "Depth", testid: "bed-custom-depth" },
+  { label: "Height", testid: "bed-custom-height" },
+] as const;
+const readLength = readAs("length");
+
+const sizes = reactive<(number | null)[]>([...props.req.initial]);
+// A field holding text that is no number keeps its last value, so its refusal is what Confirm judges it by.
+const refused = reactive<(string | null)[]>(FIELDS.map(() => null));
 const error = ref("");
 
+// Inline, because a plugin has nowhere to ship a stylesheet.
+const S = {
+  form: { minWidth: "340px", display: "flex", flexDirection: "column", gap: "var(--s-3)" },
+  error: { color: "var(--error)" },
+} as const;
+
 function confirm() {
-  const bad = [
-    ["Width", width.value],
-    ["Depth", depth.value],
-    ["Height", height.value],
-  ]
-    .map(([label, raw]) => [label, fieldError(raw!)] as const)
-    .find(([, e]) => e);
-  if (bad) {
-    error.value = `${bad[0]}: ${bad[1]}`;
+  const bad = refused.findIndex((why) => why);
+  if (bad >= 0) {
+    error.value = `${FIELDS[bad]!.label}: ${refused[bad]}`;
     return;
   }
-  const result = parseCustomBedSize(fieldNumber(width.value), fieldNumber(depth.value), fieldNumber(height.value));
+  const [width, depth, height] = sizes.map((v) => v ?? Number.NaN) as [number, number, number];
+  const result = parseCustomBedSize(width, depth, height);
   if (!result.ok) {
     error.value = result.message;
     return;
@@ -38,7 +46,7 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault();
     e.stopImmediatePropagation();
     cancel();
-  } else if (e.key === "Enter") {
+  } else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
     e.preventDefault();
     e.stopImmediatePropagation();
     confirm();
@@ -52,58 +60,33 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
   <ModalFrame panel-class="bed-custom-dialog" @close="cancel()">
     <template #title>Custom bed size</template>
 
-    <div class="modal-body prefs">
-      <label class="prefs-row" style="grid-template-columns: 70px 1fr">
-        <span class="prefs-label">Width</span>
-        <span style="display: flex; align-items: center; gap: var(--s-2)">
-          <input
-            v-model="width"
-            class="sm-input"
-            style="flex: 1; min-width: 0"
-            type="text"
-            inputmode="decimal"
-            data-testid="bed-custom-width"
-            autofocus
+    <div class="modal-body">
+      <div :style="S.form">
+        <FieldRow v-for="(f, i) in FIELDS" :key="f.label" v-slot="{ id }" :label="f.label">
+          <NumberField
+            :id="id"
+            :label="f.label"
+            unit="mm"
+            size="sm"
+            commit="live"
+            nullable
+            :parse="readLength"
+            :model-value="sizes[i] ?? null"
+            :data-testid="f.testid"
+            :autofocus="i === 0 || undefined"
+            @update:model-value="sizes[i] = $event"
+            @error="refused[i] = $event"
           />
-          <span style="width: 22px; font-size: var(--fs-small, 12px); color: var(--text-dim)">mm</span>
-        </span>
-      </label>
-      <label class="prefs-row" style="grid-template-columns: 70px 1fr">
-        <span class="prefs-label">Depth</span>
-        <span style="display: flex; align-items: center; gap: var(--s-2)">
-          <input
-            v-model="depth"
-            class="sm-input"
-            style="flex: 1; min-width: 0"
-            type="text"
-            inputmode="decimal"
-            data-testid="bed-custom-depth"
-          />
-          <span style="width: 22px; font-size: var(--fs-small, 12px); color: var(--text-dim)">mm</span>
-        </span>
-      </label>
-      <label class="prefs-row" style="grid-template-columns: 70px 1fr">
-        <span class="prefs-label">Height</span>
-        <span style="display: flex; align-items: center; gap: var(--s-2)">
-          <input
-            v-model="height"
-            class="sm-input"
-            style="flex: 1; min-width: 0"
-            type="text"
-            inputmode="decimal"
-            data-testid="bed-custom-height"
-          />
-          <span style="width: 22px; font-size: var(--fs-small, 12px); color: var(--text-dim)">mm</span>
-        </span>
-      </label>
-      <div v-if="error" class="sm-hint" style="color: var(--error, #f0564a)" data-testid="bed-custom-error">{{
-        error
-      }}</div>
+        </FieldRow>
+        <div v-if="error" class="sm-hint" role="alert" :style="S.error" data-testid="bed-custom-error"
+          >Error: {{ error }}</div
+        >
+      </div>
     </div>
 
     <div class="modal-foot">
-      <button type="button" class="btn" data-testid="bed-custom-cancel" @click="cancel()">Cancel</button>
-      <button type="button" class="btn btn-primary" data-testid="bed-custom-confirm" @click="confirm()">OK</button>
+      <Button data-testid="bed-custom-cancel" @click="cancel()">Cancel</Button>
+      <Button variant="primary" data-testid="bed-custom-confirm" @click="confirm()">OK</Button>
     </div>
   </ModalFrame>
 </template>

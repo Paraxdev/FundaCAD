@@ -153,7 +153,7 @@ describe("the Printability settings", () => {
       expect(input.value).toBe(shown);
       const row = input.closest(".measure-row")!;
       expect(row.querySelector(".measure-k")!.textContent).toBe(word);
-      expect(row.querySelector(".measure-v")!.textContent!.trim()).toBe(unit);
+      expect(row.querySelector(".measure-v .ui-unit-chip")!.textContent!.trim()).toBe(unit);
     });
 
     it("reads a decimal comma, with one write for each keystroke's change", async () => {
