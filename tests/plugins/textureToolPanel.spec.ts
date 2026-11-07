@@ -16,7 +16,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import TextureToolPanel from "../../plugins/FundaCAD.Texture/TextureToolPanel.vue";
 import * as panel from "../../plugins/FundaCAD.Texture/panel";
 import type { TextureMode, TextureValues } from "../../plugins/FundaCAD.Texture/textureForm";
@@ -27,7 +27,7 @@ enableAutoUnmount(afterEach);
  *  condition on it. Everything after this goes through the plugin's own state,
  *  which is the arrangement under test. */
 function mountPanel() {
-  mount(TextureToolPanel, { attachTo: document.body });
+  return mount(TextureToolPanel, { attachTo: document.body });
 }
 
 function open(opts: Partial<Parameters<typeof panel.show>[0]> = {}) {
@@ -37,21 +37,45 @@ function open(opts: Partial<Parameters<typeof panel.show>[0]> = {}) {
     onChange: vi.fn<(v: TextureValues) => void>(),
     onModeChange: vi.fn<(m: TextureMode) => void>(),
   };
-  mountPanel();
+  const wrapper = mountPanel();
   panel.show({ editing: false, mode: "faces", summary: "2 faces", initial: {}, ...opts }, handlers);
-  return { handlers };
+  return { handlers, wrapper };
 }
 
 const visible = (el: HTMLElement | null) => !!el && el.style.display !== "none";
 const rowOf = (labelText: string) =>
   [...document.querySelectorAll<HTMLElement>("label")].find((l) => l.textContent === labelText)?.parentElement ?? null;
 
+// A base Select draws its list only while open, so a pick is a click on the trigger and then on the option.
+const trigger = (labelText: string) =>
+  [...document.querySelectorAll<HTMLElement>("[role=combobox]")].find((el) =>
+    (el.getAttribute("aria-label") ?? "").startsWith(`${labelText},`),
+  )!;
+const optionTexts = () => [...document.querySelectorAll('[role="option"]')].map((o) => o.textContent?.trim() ?? "");
+async function pickOption(labelText: string, option: string) {
+  trigger(labelText).click();
+  await flushPromises();
+  [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((o) => o.textContent?.includes(option))!.click();
+  await flushPromises();
+}
+
 describe("TextureToolPanel", () => {
   beforeEach(() => {
     panel.resetPanel();
     document.body.innerHTML = "";
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
   });
-  afterEach(() => panel.resetPanel());
+  afterEach(() => {
+    panel.resetPanel();
+    vi.unstubAllGlobals();
+  });
 
   // The whole of what "a contributed overlay decides its own visibility" means.
   // Mounted, and drawing nothing, because the tool is not running.
@@ -81,11 +105,11 @@ describe("TextureToolPanel", () => {
   });
 
   it("labels the commit button for the flow it is in", async () => {
-    open({ editing: true });
+    const first = open({ editing: true });
     await nextTick();
     expect(document.body.textContent).toContain("Apply");
     panel.resetPanel();
-    document.body.innerHTML = "";
+    first.wrapper.unmount();
     open({ editing: false });
     await nextTick();
     expect(document.body.textContent).toContain("Add");
@@ -139,30 +163,29 @@ describe("TextureToolPanel", () => {
   it("switches mode from a button and reflects a mode set by the tool", async () => {
     const { handlers } = open({ mode: "faces" });
     await nextTick();
-    const [faces, body] = [...document.querySelectorAll<HTMLButtonElement>("button")];
+    const [faces, body] = [...document.querySelectorAll<HTMLElement>("[role=radio]")];
     expect(faces!.textContent).toBe("Faces");
+    expect(faces!.getAttribute("aria-checked")).toBe("true");
 
     body!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await nextTick();
     expect(handlers.onModeChange).toHaveBeenCalledWith("body");
     expect(panel.mode.value).toBe("body");
+    expect(body!.getAttribute("aria-checked")).toBe("true");
 
     panel.mode.value = "faces";
     await nextTick();
-    expect(document.querySelectorAll("button")[0]!.textContent).toBe("Faces");
+    expect(document.querySelectorAll("[role=radio]")[0]!.getAttribute("aria-checked")).toBe("true");
   });
 
   it("hides the rows the chosen kind has no use for", async () => {
     open({ initial: { kind: "knurl", profile: "round" } });
     await nextTick();
-    expect(visible(rowOf("Angle°"))).toBe(true);
+    expect(visible(rowOf("Angle"))).toBe(true);
     expect(visible(rowOf("Seed"))).toBe(false);
 
-    const kind = document.querySelector<HTMLSelectElement>("select")!;
-    kind.value = "voronoi";
-    kind.dispatchEvent(new Event("change"));
-    await nextTick();
-    expect(visible(rowOf("Angle°"))).toBe(false);
+    await pickOption("Kind", "Voronoi");
+    expect(visible(rowOf("Angle"))).toBe(false);
     expect(visible(rowOf("Seed"))).toBe(true);
     // Direction is not gated on kind: every kind honours it, and gating it left
     // noise/voronoi/image able only to grow the part.
@@ -184,7 +207,9 @@ describe("TextureToolPanel", () => {
     });
     await nextTick();
     expect(visible(rowOf("Print color"))).toBe(true);
-    expect(document.body.textContent).toContain("Red (slot 2)");
+    trigger("Print color").click();
+    await flushPromises();
+    expect(optionTexts()).toEqual(["Body color", "Black (slot 1)", "Red (slot 2)"]);
   });
 
   it("fires the live preview on an edit", async () => {

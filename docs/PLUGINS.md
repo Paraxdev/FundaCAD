@@ -529,6 +529,40 @@ the printer switched off the panel is not hidden by a check: it has no way to
 learn what is loaded, so it draws nothing, which is what it should do on a
 machine with no printer anyway.
 
+### Keep it accessible
+
+A plugin's panel is used with a keyboard, a screen reader and voice control as
+well as a mouse. The base controls are one way to get much of that without
+writing it again:
+
+- Draw with the controls in `fundacad/ui` (`Button`, `IconButton`, `TextField`,
+  `NumberField`, `Select`, `Checkbox`, `Switch`, `Slider`, `Segmented`) inside a
+  `FieldRow`, rather than a raw `input`, `select` or `button`. They carry the
+  focus ring, the keys, the disabled reason and the spoken state, and they
+  follow the theme. `scripts/check-ui-controls.mjs` counts the raw ones.
+- Every control needs a name. Give it `label`, or `labelledby` with the id of
+  the text that names it (`FieldRow` hands its label's id to its slot). An
+  `IconButton`'s `tip` is its name. A dev build warns about an unnamed control.
+- Give a value its unit. `NumberField` takes `unit="mm"` or `unit="deg"`, a
+  `caption` for any other unit word, or `unitless` for a count, and `Slider`
+  takes `unit` and `valueText`, so a screen reader says "width, 60 mm" and not a
+  bare number.
+- Say what a screen reader user would otherwise miss. `announce(text, priority)`
+  from `fundacad/ui` (the same one `fundacad` exports) speaks once through the
+  app's own live regions: a long job that finished, a result drawn away from
+  focus, a check that started failing. A toast alone is not read. A list of
+  problems a person has to fix is a `role="alert"` element, spoken when it
+  changes after an edit, not on first draw. Use one or the other for a problem,
+  never both, or it is heard twice. A list that changes with every key is
+  better as plain text with one `announce` that waits for a pause.
+- A composite widget of the plugin's own, such as a grid of swatches, moves
+  focus with the arrow keys and keeps one Tab stop. `useRovingFocus` from
+  `fundacad/ui` is the helper the base controls use for that.
+- An empty label fails validation. `contribute` refuses a menu, a menu row, a
+  ribbon group, a ribbon button, a tool or a feature row whose label is empty
+  or only spaces, naming the plugin and the place. The manifest refuses an
+  empty name, and the settings schema an empty label.
+
 ## Where a plugin's source lives
 
 **A plugin is a directory under `plugins/` with a `manifest.json` in it.** That

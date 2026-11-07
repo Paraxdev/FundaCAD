@@ -6,6 +6,8 @@ import Button from "../../../src/components/ui/Button.vue";
 import Dialog from "../../../src/components/ui/Dialog.vue";
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import Panel from "../../../src/components/ui/Panel.vue";
+import { announce } from "../../../src/ui/announce";
+import { useRovingFocus } from "../../../src/components/ui/useRovingFocus";
 
 const BASE = [
   "Button",
@@ -85,6 +87,11 @@ describe("fundacad/ui", () => {
     expect(exported.Dialog).toBe(Dialog);
     expect(exported.NumberField).toBe(NumberField);
     expect(exported.Panel).toBe(Panel);
+  });
+
+  it("lets a plugin speak through the app's own announcer and move focus the way the base set does", () => {
+    expect(exported.announce).toBe(announce);
+    expect(exported.useRovingFocus).toBe(useRovingFocus);
   });
 
   it("keeps the names it exported before the base set", () => {
