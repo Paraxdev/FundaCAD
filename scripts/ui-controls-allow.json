@@ -1,5 +1,4 @@
 [
-  { "path": "plugins/FundaCAD.Gamepad/GamepadSection.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "input[type=color]", "count": 1, "reason": "native colour picker, no themed equivalent yet, lane T" },
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "style:inline", "count": 2, "reason": "before the base set, migrates in lane T (shipped plugins)" },

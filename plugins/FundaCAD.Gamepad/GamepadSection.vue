@@ -12,6 +12,7 @@ import {
 } from "./gamepad";
 import { padState } from "./state";
 import { allCommands } from "fundacad";
+import { FieldRow, Select } from "fundacad/ui";
 
 const cfg = reactive<GamepadConfig>(structuredClone(getGamepadConfig()));
 
@@ -37,6 +38,13 @@ const groups = computed(() => {
   }
   return [...out.entries()];
 });
+
+const options = computed(() => [
+  { value: "", label: "Nothing" },
+  { value: CURSOR, label: "Cursor on / off" },
+  ...KEY_CHOICES.map((k) => ({ value: k.value, label: k.label, hint: "Keys" })),
+  ...groups.value.flatMap(([group, cmds]) => cmds.map((c) => ({ value: c.id, label: c.label, hint: group }))),
+]);
 </script>
 
 <template>
@@ -59,30 +67,23 @@ const groups = computed(() => {
       </p>
     </div>
 
-    <div class="pref-card wide">
+    <div class="pref-card wide" role="group" aria-labelledby="gp-buttons-title">
       <div class="pref-head">
-        <span class="pref-title">Buttons</span>
+        <span id="gp-buttons-title" class="pref-title">Buttons</span>
       </div>
       <p class="pref-hint">
         With the cursor on, the left stick moves it and A clicks, so faces can be picked without a mouse.
       </p>
-      <div v-for="i in BINDABLE" :key="i" class="pref-head">
-        <label class="pref-title" :for="`gp-btn-${i}`">{{ BUTTON_LABELS[i] }}</label>
-        <select
-          :id="`gp-btn-${i}`"
-          :value="cfg.buttons[i] ?? ''"
-          @change="bind(i, ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="">Nothing</option>
-          <option :value="CURSOR">Cursor on / off</option>
-          <optgroup label="Keys">
-            <option v-for="k in KEY_CHOICES" :key="k.value" :value="k.value">{{ k.label }}</option>
-          </optgroup>
-          <optgroup v-for="[group, cmds] in groups" :key="group" :label="group">
-            <option v-for="c in cmds" :key="c.id" :value="c.id">{{ c.label }}</option>
-          </optgroup>
-        </select>
-      </div>
+      <FieldRow v-for="i in BINDABLE" :key="i" v-slot="{ id }" :for="`gp-btn-${i}`" :label="BUTTON_LABELS[i] ?? ''">
+        <Select
+          :id="id"
+          size="sm"
+          :label="BUTTON_LABELS[i] ?? ''"
+          :options="options"
+          :model-value="cfg.buttons[i] ?? ''"
+          @update:model-value="bind(i, $event)"
+        />
+      </FieldRow>
     </div>
   </div>
 </template>
