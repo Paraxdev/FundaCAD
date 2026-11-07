@@ -730,6 +730,16 @@
   vertical-align: middle;
   background: var(--key);
 }
+/* The tint of a finding's kind in the Printability panel, set per swatch through --key. */
+.print-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-2);
+  border-radius: 2px;
+  vertical-align: middle;
+  background: var(--key);
+}
 .measure-hint {
   margin-top: var(--s-2);
   font-size: var(--fs-micro);
