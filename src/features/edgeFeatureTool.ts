@@ -155,7 +155,10 @@ export class EdgeFeatureTool {
 
   private editId: string | null = null; // committed feature id being edited
   private awaitingRollback = false; // waiting for the rolled-back model build
+  /** Set by an undo or a redo until the build without our blend lands (rebase). */
+  private rewound: "Undo" | "Redo" | null = null;
   private unsubBuild: (() => void) | null = null;
+  private unsubRewind: (() => void) | null = null;
   private unsubTheme: (() => void) | null = null;
   /** Set when the edited field is a bare reference to another parameter (store.bareParamRef): commit writes the drag's
    *  value into that parameter and the field stays bound. */
@@ -327,6 +330,8 @@ export class EdgeFeatureTool {
     const seed = pre.length ? pre : canConsume(kind, "face") ? this.faceEdgeSelectors() : [];
     this.active = true;
     this.base = this.viewport.holdModel() ?? null;
+    this.watchRewinds();
+    if (!this.unsubBuild) this.watchBuilds(null);
     this.releaseRows = awaitTreePick(
       (pick) => this.takeRow(pick),
       () => this.cancel(),
@@ -427,6 +432,7 @@ export class EdgeFeatureTool {
     if (!sels.length || !sels.every((s) => "point" in s)) return false; // structural selectors, can't re-anchor
 
     this.active = true;
+    this.watchRewinds();
     this.releaseRows = awaitTreePick(
       (pick) => this.takeRow(pick),
       () => this.cancel(),
@@ -471,6 +477,12 @@ export class EdgeFeatureTool {
   private watchBuilds(rollbackSels: Selector[] | null) {
     this.unsubBuild = this.store.onBuild((s) => {
       if (s.building || !s.result) return;
+      if (this.rewound) {
+        // A build sent before the blend was set aside still has it, and the edit's rollback always has a previewBuilt.
+        if (s.previewBuilt?.some((f) => f.id === this.previewId) || (this.editId && !s.previewBuilt)) return;
+        this.rebase();
+        return;
+      }
       if (this.awaitingRollback && rollbackSels) {
         // A build already in flight when the edit opened lands first, and it is
         // the full model, where the blend has already consumed its own edges.
@@ -491,6 +503,37 @@ export class EdgeFeatureTool {
       this.refreshRefusal();
       this.refreshEditGhost();
     });
+  }
+
+  /** The store says before it swaps the document, so the blend is set aside a microtask later and the next build is
+   *  the new model before the feature. A redo has put its step back on the undo stack by then, an undo has not. */
+  private watchRewinds() {
+    this.unsubRewind = this.store.onRewind(() => {
+      const mark = this.store.undoMark;
+      queueMicrotask(() => {
+        if (!this.active || this.awaitingRollback) return;
+        if (this.editId && !this.store.document.features.some((f) => f.id === this.editId)) return this.cancel();
+        this.rewound = this.store.undoMark === mark ? "Undo" : "Redo";
+        if (this.editId) this.store.setEditPreview(null);
+        else this.store.setPreview(null);
+      });
+    });
+  }
+
+  /** Members are matched to the new copy by their middle, unresolved saved selectors stay as they are. */
+  private rebase() {
+    const way = this.rewound;
+    this.rewound = null;
+    this.viewport.releaseModel(this.base);
+    this.base = this.viewport.holdModel() ?? null;
+    this.hoverGhost(null);
+    const before = this.ghosts.length;
+    this.dropGhosts((g) => !this.viewport.edgeLineByMid(g.mid, this.base ?? undefined));
+    const dropped = before - this.ghosts.length;
+    if (this.phase !== "drag") return;
+    this.refreshEditGhost();
+    this.afterMembershipChange();
+    if (dropped) setPrompt(`${way} removed ${dropped} edge${dropped === 1 ? "" : "s"} from the ${this.kind}`);
   }
 
   /** Edit mode only: what the result replaced, faint, and the rims it made. */
@@ -1021,6 +1064,7 @@ export class EdgeFeatureTool {
   }
 
   private pushPreview() {
+    if (this.rewound) return;
     this.refreshContinuityReach();
     if (this.neutral || !this.currentSelectors().length) {
       if (this.editId) this.store.setEditPreview(null);
@@ -1541,6 +1585,9 @@ export class EdgeFeatureTool {
     this.viewport.releaseModel(this.base);
     this.base = null;
     this.unsubBuild?.();
+    this.unsubRewind?.();
+    this.unsubRewind = null;
+    this.rewound = null;
     this.unsubTheme?.();
     this.unsubTheme = null;
     this.unsubBuild = null;
