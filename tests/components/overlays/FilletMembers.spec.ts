@@ -81,10 +81,10 @@ describe("FilletMembers", () => {
   it("holds Include tangent edges, on by default, and hands a flip to the tool", async () => {
     const tool = setup(ROWS);
     await frame();
-    const box = $(".fm-tangent input")[0] as HTMLInputElement;
-    expect($(".fm-tangent")[0]!.textContent!.trim()).toBe("Include tangent edges");
-    expect(box.checked).toBe(true);
-    box.click();
+    const sw = $(".fm-tangent [role=switch]")[0] as HTMLButtonElement;
+    expect($(".fm-tangent .ui-switch-row-label")[0]!.textContent!.trim()).toBe("Include tangent edges");
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    sw.click();
     expect(tool.setIncludeTangentEdges).toHaveBeenCalledWith(false);
   });
 

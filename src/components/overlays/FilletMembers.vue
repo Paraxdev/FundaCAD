@@ -7,8 +7,8 @@ import { useEngine } from "../../app/engineKey";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import Card from "../ui/Card.vue";
-import Checkbox from "../ui/Checkbox.vue";
 import IconButton from "../ui/IconButton.vue";
+import SwitchRow from "../ui/SwitchRow.vue";
 import type { EdgeMemberRow } from "../../features/edgeFeatureTool";
 
 const engine = useEngine();
@@ -99,9 +99,12 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
       </li>
     </ul>
     <template #foot>
-      <Checkbox class="fm-tangent" :model-value="tangent" @update:model-value="setTangent"
-        >Include tangent edges</Checkbox
-      >
+      <SwitchRow
+        class="fm-tangent"
+        label="Include tangent edges"
+        :model-value="tangent"
+        @update:model-value="setTangent"
+      />
       <Button class="fm-add" icon="plus" size="sm" block @pointerdown.prevent.stop="add()">Add edge</Button>
     </template>
   </Card>
