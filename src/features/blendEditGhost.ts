@@ -27,10 +27,11 @@ export class BlendEditGhost {
     transparent: true,
     opacity: GHOST_OPACITY,
     depthWrite: false,
-    // Pushed back so the result wins where the two surfaces agree and only what the blend took away shows.
+    // Pushed back so the result wins where the two surfaces agree and only what the blend took away shows. 1 and 1
+    // still stippled where the two triangulate a shared flat face differently.
     polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
+    polygonOffsetFactor: 4,
+    polygonOffsetUnits: 8,
   });
   private guide: GhostLines | null = null;
   private shown = false;
