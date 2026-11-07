@@ -55,6 +55,7 @@ FAKE_NATIVE = """() => {
       if (cmd === 'plugin_data_adopt') return false;
       if (cmd === 'plugin_data_read') return args.name === 'printers.json' ? registry : null;
       if (cmd === 'plugin_data_write' || cmd === 'plugin_set_disabled') return null;
+      if (cmd === 'plugin_secret_get') return null;
       if (cmd.startsWith('plugin:')) return null;
       if (cmd !== 'plugin_local_request') throw `no ${cmd} in this test`;
       const url = args.request.url;
