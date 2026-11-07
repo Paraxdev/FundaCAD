@@ -128,7 +128,22 @@ function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
   const rollback = () => built?.({ building: false, result: { bbox: null }, previewBuilt: [] });
   const previewLands = () => built?.({ building: false, result: { bbox: null }, previewBuilt: [] });
   const enter = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  return { tool, click, openFromHandle, rollback, previewLands, enter, added, edits, released, BASE, scene, diff };
+  const move = (at: { x: number; y: number }) => pointer("pointermove", at.x, at.y);
+  return {
+    tool,
+    click,
+    move,
+    openFromHandle,
+    rollback,
+    previewLands,
+    enter,
+    added,
+    edits,
+    released,
+    BASE,
+    scene,
+    diff,
+  };
 }
 
 const prompt = () => usePromptStore().text ?? "";
@@ -187,6 +202,18 @@ describe("a fillet opened from the edge handle on a box", () => {
     t.tool.removeMemberByKey("m2");
     t.click(midOnScreen(D));
     expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Edge 1", "Edge 3", "Edge 4"]);
+  });
+
+  it("names the member under the pointer as the one a click removes", () => {
+    const t = rig();
+    open = t.tool;
+    t.openFromHandle();
+    t.click(midOnScreen(B));
+    const at = midOnScreen(B);
+    t.move(at);
+    expect(prompt()).toBe("Fillet, 2 edges · click Edge 2 to remove it · Enter · Esc");
+    t.move({ x: 300, y: 300 });
+    expect(prompt()).toMatch(/^Fillet, 2 edges · drag or type/);
   });
 
   it("refuses a click on the round's own rim in words and adds nothing", () => {

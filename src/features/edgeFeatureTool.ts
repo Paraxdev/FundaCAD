@@ -714,6 +714,12 @@ export class EdgeFeatureTool {
     this.hoveredGhost = g;
     if (prev) this.ghostLines?.setColor(prev.slot, ghostColor(prev));
     if (g) this.ghostLines?.setColor(g.slot, edgeHoverColor());
+    if (g && this.phase === "drag") {
+      const n = this.memberCount();
+      setPrompt(
+        `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · click Edge ${g.id} to remove it · Enter · Esc`,
+      );
+    } else if (prev && this.phase === "drag") this.promptForPhase();
     this.viewport.requestRender();
   }
 
