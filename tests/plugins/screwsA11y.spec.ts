@@ -238,11 +238,14 @@ describe("the custom fastener form", () => {
     expect(describedBy(length)).toMatch(/\bin\b|inch/i);
   });
 
-  it("makes the problem list an alert", async () => {
+  it("makes the problem list an alert that is still read as a list", async () => {
     const w = await form(screw({ length: undefined }));
     const list = w.get(".scr-problems");
     expect(list.attributes("role")).toBe("alert");
     expect(list.findAll("li").length).toBeGreaterThan(0);
+    // An alert role on the ul itself would take its list role away, and the items would be read as loose text.
+    expect(list.findAll("li").every((li) => li.element.parentElement?.tagName === "UL")).toBe(true);
+    expect(list.find("ul").attributes("role")).toBeUndefined();
   });
 
   it("speaks a new problem once, debounced, and nothing on first mount", async () => {
