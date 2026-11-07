@@ -93,6 +93,8 @@ Next Face, Previous Face, Next Edge, Previous Edge and Browse Faces and Edges ha
 
 Show Last Message in the command palette says the newest message again and shows it again, for a message that went by too fast. It has no key.
 
+Describe Model and Describe Selection read the model and the selection as text, see [the view as text](../model/picking.md#the-view-as-text). They are in the View menu and the command palette, and have no key until you give them one.
+
 Show Console in the command palette opens the console and puts focus on its heading. The console shortcut does the same, except inside a text box, where they open it without taking focus. Closing the console puts focus back where it was. A screen reader says Error, Warning or Info before each line.
 
 ## Mouse

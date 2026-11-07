@@ -29,6 +29,7 @@ ALLOWED = read_baseline(BASELINE)
 ARIA_DIR = Path(__file__).with_name("aria")
 ARIA = {
     "empty_workspace": "shell.yml",
+    "example": "example.yml",
     "geometry": "geometry.yml",
     "home": "home.yml",
     "palette": "palette.yml",

@@ -1,12 +1,12 @@
-// The harness's short readouts. They are the one place outside the app that
-// reads its state, so a renamed field breaks this file at compile time.
+// Short readouts of the app's state, for the agent harness and for Describe model. A renamed field breaks this file at
+// compile time, not the harness at run time.
 
 import { SKETCH_MODIFY } from "../app/actionTables";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
-import { stepName } from "../ui/featureMeta";
-import { logEntries } from "../ui/logStore";
-import { sketchRail } from "../ui/railDefs";
+import { stepName } from "./featureMeta";
+import { logEntries } from "./logStore";
+import { sketchRail } from "./railDefs";
 
 export interface ReadHost {
   store: Pick<
@@ -76,6 +76,30 @@ export function bodies(h: ReadHost): BodyRow[] {
     slot: h.store.bodyColorSlot(b.id) ?? null,
     fault: b.fault ?? null,
   }));
+}
+
+export interface BodyPlace {
+  id: string;
+  /** World box in mm, null while the view has not drawn the body. */
+  box: { min: [number, number, number]; max: [number, number, number] } | null;
+  /** mm³, null for a body with a fault, whose mesh has no inside. */
+  volume: number | null;
+}
+
+export type PlaceHost = Pick<ReadHost, "store"> & { viewport: Pick<Viewport, "bodyProperties"> };
+
+/** Walks every triangle of every body, so it is for a command, never a frame. */
+export function bodyPlaces(h: PlaceHost): BodyPlace[] {
+  return (h.store.buildState.result?.bodies ?? []).map((b) => {
+    const p = h.viewport.bodyProperties([b.id]);
+    if (!p || !p.ids.length || p.bbox.isEmpty()) return { id: b.id, box: null, volume: null };
+    const { min, max } = p.bbox;
+    return {
+      id: b.id,
+      box: { min: [min.x, min.y, min.z], max: [max.x, max.y, max.z] },
+      volume: b.fault === undefined ? p.volume : null,
+    };
+  });
 }
 
 export interface Selection {

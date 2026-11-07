@@ -9,6 +9,7 @@ import { choose } from "../ui/choice";
 import { endCommandedPick } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS, GEOMETRY_STEPS } from "./actionTables";
 import { browseGeometry, createGeometryCommands } from "./geometryCommands";
+import { describeSelectionAloud, openDescribeModel } from "./describeModel";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
@@ -59,6 +60,8 @@ const KEEPS_PICK = new Set([
   "next-edge",
   "previous-edge",
   "browse-geometry",
+  "describe-model",
+  "describe-selection",
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
@@ -126,6 +129,8 @@ export function createActions(e: Engine): (action: string) => void {
     // Before the sketch finish below, so a sketch open when the problem showed is reported open.
     if (action === "report-problem") return openReportDialog();
     if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "describe-model") return openDescribeModel(e);
+    if (action === "describe-selection") return describeSelectionAloud(e);
     if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
     const size = /^interface-size-(up|down|reset)$/.exec(action);

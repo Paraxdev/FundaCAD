@@ -3,7 +3,7 @@
 
 import { findControl, HarnessError, noValueBox, stamp, covered, toolPath } from "./locate";
 import { REGIONS, screenLines, walkControls, type WalkOptions } from "./screenTree";
-import * as read from "./readouts";
+import * as read from "../ui/readouts";
 import { settle, probe, describeQuiet, type SettleHost } from "./settle";
 import * as picks from "./picks";
 import { handleList, handlePoint, overHandle, type HandleHost } from "./handles";
