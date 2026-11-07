@@ -376,7 +376,7 @@ export class Viewport {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
-    this.progressive = new ProgressiveModel(this.scene.modelGroup, disposeBody);
+    this.progressive = new ProgressiveModel(this.scene.modelGroup, (b) => this.retireBody(b));
     this.scene.scene.add(markOverlay(this.datumGroup, "origin"));
     this.scene.scene.add(this.contactShadow.group);
     const rect = canvas.getBoundingClientRect();
@@ -2399,16 +2399,19 @@ export class Viewport {
     return this.highlighter?.getSelectedEdges().length ?? 0;
   }
 
-  private midIndex: { edges: readonly EdgeRef[]; count: number; tol: number; index: EdgeMidIndex } | null = null;
+  // Per edge list, so a held model and the one on screen do not evict each other.
+  private midIndexes: WeakMap<readonly EdgeRef[], { count: number; tol: number; index: EdgeMidIndex }> | undefined;
 
   /** Model scaled tolerance. The rebuild stable way to find the edge a saved selector or diagnostic means. */
-  edgeLineByMid(mid: [number, number, number]): EdgeRef | null {
-    if (!this.model) return null;
-    const edges = this.model.edges;
-    const tol = midMatchTol(this.model.box.getSize(this.projScratch).length());
-    let c = this.midIndex;
-    if (!c || c.edges !== edges || c.count !== edges.length || c.tol !== tol) {
-      c = this.midIndex = { edges, count: edges.length, tol, index: new EdgeMidIndex(edges, tol) };
+  edgeLineByMid(mid: [number, number, number], view: ModelView | null = this.model): EdgeRef | null {
+    if (!view) return null;
+    const edges = view.edges;
+    const tol = midMatchTol(view.box.getSize(this.projScratch).length());
+    const cache = (this.midIndexes ??= new WeakMap());
+    let c = cache.get(edges);
+    if (!c || c.count !== edges.length || c.tol !== tol) {
+      c = { count: edges.length, tol, index: new EdgeMidIndex(edges, tol) };
+      cache.set(edges, c);
     }
     const i = c.index.nearest(mid);
     return i == null ? null : (edges[i] ?? null);
@@ -2776,7 +2779,7 @@ export class Viewport {
         if (prev) {
           this.scene.modelGroup.remove(prev.mesh);
           this.scene.modelGroup.remove(prev.edges.object);
-          disposeBody(prev);
+          this.retireBody(prev);
         }
         this.scene.modelGroup.add(body.mesh);
         this.scene.modelGroup.add(body.edges.object);
@@ -2793,7 +2796,7 @@ export class Viewport {
     for (const stale of prevBodies.values()) {
       this.scene.modelGroup.remove(stale.mesh);
       this.scene.modelGroup.remove(stale.edges.object);
-      disposeBody(stale);
+      this.retireBody(stale);
     }
 
     // Orphan edges have no per body cache key, so they are rebuilt every call.
@@ -2950,7 +2953,13 @@ export class Viewport {
     // `streaming` would suppress picking for good.
     this.abortProgressiveModel();
     if (this.model) {
-      detachModel(this.scene.modelGroup, this.model, this.disposeQueue);
+      for (const b of this.model.bodies) {
+        if (!this.isHeld(b)) continue;
+        this.scene.modelGroup.remove(b.mesh);
+        this.scene.modelGroup.remove(b.edges.object);
+      }
+      const bodies = this.model.bodies.filter((b) => !this.isHeld(b));
+      detachModel(this.scene.modelGroup, { ...this.model, bodies }, this.disposeQueue);
       this.model = null;
       this.lastResult = null;
       this.dropHighlighter();
@@ -3095,15 +3104,65 @@ export class Viewport {
   /** Edge-only pick for the edge tools (fillet, chamfer, an axis): the whole
    *  grab radius, faces never compete, and only edges you can see unless the
    *  view is see-through. */
-  pickEdgeAt(clientX: number, clientY: number): EdgeCandidate | null {
-    if (!this.model) return null;
+  pickEdgeAt(clientX: number, clientY: number, view: ModelView | null = this.model): EdgeCandidate | null {
+    if (!view) return null;
     const rect = this.canvas.getBoundingClientRect();
-    return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, this.model, { visibleOnly: !this.seeThrough });
+    return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, view, { visibleOnly: !this.seeThrough });
   }
 
-  /** All visible edge lines of the current model, for tangent-chain expansion. */
-  visibleEdgeLines(): EdgeRef[] {
-    return this.model ? this.picker.visibleEdges(this.model) : [];
+  /** All visible edge lines of the current model, or of a held one, for tangent-chain expansion. */
+  visibleEdgeLines(view: ModelView | null = this.model): EdgeRef[] {
+    return view ? this.picker.visibleEdges(view) : [];
+  }
+
+  // Unset until the first hold: some checks build a Viewport without its constructor.
+  private heldViews: Set<ModelView> | undefined;
+
+  /** The model on screen, kept pickable after a preview replaces it: a body it holds is taken off screen but not
+   *  disposed until releaseModel. Never drawn. */
+  holdModel(): ModelView | null {
+    if (!this.model) return null;
+    const view: ModelView = {
+      bodies: [...this.model.bodies],
+      edges: this.model.bodies.flatMap((b) => b.edges.refs),
+      orphanEdges: null,
+      box: this.model.box.clone(),
+    };
+    (this.heldViews ??= new Set()).add(view);
+    return view;
+  }
+
+  releaseModel(view: ModelView | null) {
+    if (!view || !this.heldViews?.delete(view)) return;
+    const live = new Set(this.model?.bodies ?? []);
+    for (const b of view.bodies) if (!live.has(b) && !this.isHeld(b)) disposeBody(b);
+  }
+
+  /** What the model on screen and a held one do not share: the held bodies off screen, and the edges on screen
+   *  the held model has no edge for. */
+  heldDiff(view: ModelView | null): { gone: BodyMesh[]; fresh: EdgeRef[] } {
+    if (!view || !this.model) return { gone: [], fresh: [] };
+    const live = new Set(this.model.bodies);
+    const held = new Set(view.bodies);
+    const gone = view.bodies.filter((b) => !live.has(b));
+    const changed = this.model.bodies.filter((b) => !held.has(b));
+    const fresh = changed.flatMap((b) => this.picker.visibleEdges({ ...this.model!, bodies: [b], orphanEdges: null }));
+    return {
+      gone,
+      fresh: fresh.filter((e) => {
+        const mid = polylineMid(e.points as [number, number, number][]);
+        return !!mid && !this.edgeLineByMid(mid, view);
+      }),
+    };
+  }
+
+  private isHeld(b: BodyMesh): boolean {
+    for (const v of this.heldViews ?? []) if (v.bodies.includes(b)) return true;
+    return false;
+  }
+
+  private retireBody(b: BodyMesh) {
+    if (!this.isHeld(b)) disposeBody(b);
   }
 
   /** Face vs edge gated like selection. */
@@ -3660,11 +3719,11 @@ export class Viewport {
   }
 
   /** Lights every model edge as selectable while the fillet or chamfer edge tool is active. */
-  emphasizeEdges(on: boolean) {
+  emphasizeEdges(on: boolean, widthPx = 2.8) {
     this.edgesEmphasized = on;
     this.highlighter?.setEdgeBase(this.edgeBaseColor());
     if (this.model) {
-      for (const d of edgeObjects(this.model)) d.material.linewidth = on ? 2.8 : 1.6;
+      for (const d of edgeObjects(this.model)) d.material.linewidth = on ? widthPx : 1.6;
     }
     this.requestRender();
   }
@@ -4134,6 +4193,7 @@ export class Viewport {
     // CSS pixels: a DPR-scaled size thins fat lines and shrinks the edge pick radius.
     this.resolution.set(w, h);
     setEdgeResolution(this.model, this.resolution);
+    for (const v of this.heldViews ?? []) setEdgeResolution(v, this.resolution);
     this.emphasis?.setResolution(this.resolution);
     if (this.model && !this.userMovedCamera && w > 10 && h > 10) {
       this.rig.fit(this.model.box, false);

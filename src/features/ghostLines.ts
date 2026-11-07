@@ -30,13 +30,18 @@ export class GhostLines {
   private readonly material = new LineMaterial({
     color: 0xffffff,
     vertexColors: true,
-    linewidth: 3.5,
+    linewidth: 3,
     worldUnits: false,
     depthTest: false,
     transparent: true,
   });
 
-  constructor(private readonly host: Host) {}
+  constructor(
+    private readonly host: Host,
+    width = 3,
+  ) {
+    this.material.linewidth = width;
+  }
 
   add(points: readonly Vec3[], color: number): GhostSlot {
     const slot: GhostSlot = { points, color, offset: -1 };

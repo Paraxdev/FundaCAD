@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { asFeature } from "../types";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { Viewport } from "../viewport/viewport";
+import type { ModelView } from "../viewport/render";
 import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
@@ -57,7 +58,7 @@ import { HeldSignal } from "./heldEdit";
 import { blendEditCommit } from "./blendEdit";
 import { boxBindings } from "./boxBindings";
 import { pointOnEdge } from "./edgeNudge";
-import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
+import { blendClickTarget, missPrompt, rimPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
 import { hitPx } from "../input/pointerKind";
 import { edgeHoverColor, edgeSelectColor } from "../viewport/highlight";
@@ -79,6 +80,9 @@ const ghostColor = (g: { failed: boolean }, select = edgeSelectColor()) => (g.fa
 /** Only delays the OCCT preview; the client side ghost (viewport.setBlendGhost) still redraws every frame, so a fast
  *  drag does not queue a rebuild per pixel. */
 const PREVIEW_DEBOUNCE_MS = 150;
+// DESIGN.md 7.15: a member draws at 3 px (ghostLines.ts), over these.
+const HOVER_PX = 2.4;
+const IDLE_PX = 1.6;
 
 export type { Continuity };
 /** One segment per profile, in order, so a later G3 is one more entry. */
@@ -137,6 +141,10 @@ export class EdgeFeatureTool {
   private ghosts: GhostEdge[] = []; // membership display + toggle targets
   private releaseRows: (() => void) | null = null;
   private ghostLines: GhostLines | null = null;
+  private hoverLine: GhostLines | null = null;
+  private hoverSlot: GhostSlot | null = null;
+  /** The model before the feature, picked instead of the preview so a click means an edge the blend is applied to. */
+  private base: ModelView | null = null;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
   private editId: string | null = null; // committed feature id being edited
@@ -207,7 +215,7 @@ export class EdgeFeatureTool {
   private clearanceLimitMm: number | null = null;
 
   private measureClearance() {
-    const all = this.viewport.visibleEdgeLines().map((e) => ({ id: e.id, points: e.points }));
+    const all = this.viewport.visibleEdgeLines(this.base ?? undefined).map((e) => ({ id: e.id, points: e.points }));
     // Picked edges are matched by geometry, not model edge ids, which the preview renumbers; localClearance already
     // drops chain mates sharing a vertex as inside the touch tolerance.
     const selected = this.ghosts.map((g, i) => ({ id: `pick:${i}`, points: g.points }));
@@ -312,6 +320,7 @@ export class EdgeFeatureTool {
     // behaviour in step, and opens the face route from every entry point at once.
     const seed = pre.length ? pre : canConsume(kind, "face") ? this.faceEdgeSelectors() : [];
     this.active = true;
+    this.base = this.viewport.holdModel() ?? null;
     this.releaseRows = awaitTreePick(
       (pick) => this.takeRow(pick),
       () => this.cancel(),
@@ -323,7 +332,7 @@ export class EdgeFeatureTool {
     this.tangent = null;
     this.lastPickMid = null;
     this.viewport.suspendPicking = true; // we drive our own edge-only picking
-    this.viewport.emphasizeEdges(true); // light up all edges so they're easy to target
+    this.viewport.emphasizeEdges(true, IDLE_PX);
     this.gesture.attach();
     this.unsubTheme = onThemeChange(() => this.recolorGhosts());
 
@@ -436,7 +445,7 @@ export class EdgeFeatureTool {
     this.awaitingRollback = true;
 
     this.viewport.suspendPicking = true;
-    this.viewport.emphasizeEdges(true); // additions should be easy to see
+    this.viewport.emphasizeEdges(true, IDLE_PX);
     this.gesture.attach();
     setPrompt("Rolling back to edit…");
 
@@ -456,6 +465,7 @@ export class EdgeFeatureTool {
         // the full model, where the blend has already consumed its own edges.
         if (!s.previewBuilt) return;
         this.awaitingRollback = false;
+        this.base = this.viewport.holdModel() ?? null;
         this.seedGhosts(rollbackSels);
         // As stored, so a G2 or G3 the picked edges cannot take is dropped by pushPreview below, said after the
         // phase prompt and written on commit.
@@ -578,9 +588,9 @@ export class EdgeFeatureTool {
 
   /** Matched edges, then unresolved saved selectors. Read fresh each poll so it follows viewport edits too. */
   memberRows(): EdgeMemberRow[] {
-    const rows: EdgeMemberRow[] = this.ghosts.map((g, i) => ({
+    const rows: EdgeMemberRow[] = this.ghosts.map((g) => ({
       key: `m${g.id}`,
-      label: `Edge ${i + 1}`,
+      label: `Edge ${g.id}`,
       resolved: true,
     }));
     this.unmatchedSels.forEach((_, i) => {
@@ -641,7 +651,7 @@ export class EdgeFeatureTool {
     clientY: number,
   ): { kind: "member"; g: GhostEdge } | { kind: "edge"; hit: NonNullable<ReturnType<Viewport["pickEdgeAt"]>> } | null {
     const ghost = this.ghostAt(clientX, clientY);
-    const hit = this.viewport.pickEdgeAt(clientX, clientY);
+    const hit = this.pickBase(clientX, clientY);
     const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, hitPx(EDGE_GRAB_PX));
     if (t === "member" && ghost) return { kind: "member", g: ghost.g };
     if (t === "edge" && hit) return { kind: "edge", hit };
@@ -650,10 +660,30 @@ export class EdgeFeatureTool {
 
   private hoveredGhost: GhostEdge | null = null;
 
-  /** Drawn again wide on top, since the tint alone is hard to tell from the other lit edges. */
+  /** Drawn again from the base polyline, as the edge may be gone from the preview on screen. */
   private hoverModelEdge(edge: EdgeRef | null) {
+    if ((this.hoverSlot?.points ?? null) === (edge?.points ?? null)) return;
     this.viewport.hoverEdge(edge);
-    this.viewport.emphasiseEdge(edge);
+    if (this.hoverSlot) this.hoverLine?.remove(this.hoverSlot);
+    this.hoverSlot = null;
+    if (edge) {
+      this.hoverLine ??= new GhostLines(this.viewport, HOVER_PX);
+      this.hoverSlot = this.hoverLine.add(edge.points as Vec3[], edgeHoverColor());
+    }
+    this.hoverLine?.sync();
+    this.viewport.requestRender();
+  }
+
+  private pickBase(clientX: number, clientY: number) {
+    return this.viewport.pickEdgeAt(clientX, clientY, this.base ?? undefined);
+  }
+
+  /** An edge on screen the model before the feature has no edge for, a rim or seam the blend made. */
+  private resultOnlyEdgeAt(clientX: number, clientY: number): boolean {
+    if (!this.base) return false;
+    const hit = this.viewport.pickEdgeAt(clientX, clientY);
+    const mid = hit ? polylineMid(hit.edge.points as Vec3[]) : undefined;
+    return !!mid && !this.viewport.edgeLineByMid(mid, this.base);
   }
 
   private hoverGhost(g: GhostEdge | null) {
@@ -672,7 +702,7 @@ export class EdgeFeatureTool {
   private chains(): TangentChains {
     const bb = this.store.buildState.result?.bbox;
     const diag = bb ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 100;
-    return new TangentChains(this.viewport.visibleEdgeLines(), Math.max(1e-4, 1e-5 * diag));
+    return new TangentChains(this.viewport.visibleEdgeLines(this.base ?? undefined), Math.max(1e-4, 1e-5 * diag));
   }
 
   private memberMids(): MidSet {
@@ -1007,7 +1037,7 @@ export class EdgeFeatureTool {
 
   private onMove(e: PointerEvent) {
     if (this.phase === "pick") {
-      const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
+      const hit = this.pickBase(e.clientX, e.clientY);
       this.hoverModelEdge(hit?.edge ?? null);
       this.viewport.domElement.style.cursor = hit ? "pointer" : "default";
       return;
@@ -1061,7 +1091,7 @@ export class EdgeFeatureTool {
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
-      const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
+      const hit = this.pickBase(e.clientX, e.clientY);
       if (!hit) return; // missed an edge, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -1127,7 +1157,8 @@ export class EdgeFeatureTool {
     // A clean click that found no edge keeps the tool and its members; only Enter or the check button apply it.
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
-    if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
+    if (this.resultOnlyEdgeAt(e.clientX, e.clientY)) setPrompt(rimPrompt(this.kind));
+    else if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
     else this.promptForPhase();
     this.dim.focus();
   }
@@ -1179,7 +1210,7 @@ export class EdgeFeatureTool {
         const ctx = { chains: this.chains(), mids: this.memberMids(), chained: new MidSet(), pending: 0 };
         for (const g of [...this.ghosts]) {
           if (ctx.chained.has(g.mid)) continue;
-          const line = this.viewport.edgeLineByMid(g.mid);
+          const line = this.viewport.edgeLineByMid(g.mid, this.base ?? undefined);
           if (line) over = this.addPicked(line, "chain", ctx) || over;
         }
       }
@@ -1435,6 +1466,12 @@ export class EdgeFeatureTool {
     this.continuity = "G1";
     this.disposeGizmo();
     this.disposeGhosts();
+    this.memberSeq = 0;
+    this.hoverLine?.dispose();
+    this.hoverLine = null;
+    this.hoverSlot = null;
+    this.viewport.releaseModel(this.base);
+    this.base = null;
     this.unsubBuild?.();
     this.unsubTheme?.();
     this.unsubTheme = null;
