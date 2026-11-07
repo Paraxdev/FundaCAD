@@ -16,6 +16,7 @@ const askKeys = computed(() => props.req.askKeys || changeKeys.value);
 // Inline, because a plugin has nowhere to ship a stylesheet.
 const S = {
   form: { minWidth: "460px", display: "flex", flexDirection: "column", gap: "var(--s-3)" },
+  link: { flex: "1", minWidth: "0" },
   error: { color: "var(--error, #f0564a)" },
 } as const;
 
@@ -61,11 +62,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         <FieldRow
           v-slot="{ id, describedby }"
           label="Link"
+          layout="stacked"
           hint="A part studio link imports that part studio. A document link imports every part studio in it."
         >
           <TextField
             :id="id"
             v-model="link"
+            :style="S.link"
             label="Link"
             type="url"
             spellcheck="false"
