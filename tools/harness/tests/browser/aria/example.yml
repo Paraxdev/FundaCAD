@@ -1,0 +1,3 @@
+- main "Model":
+  - img "Model"
+  - paragraph: /^\d+ bod(y|ies), \d+ features?\. \w+ view, (perspective|orthographic)\. Section off\. Nothing selected\.$/
