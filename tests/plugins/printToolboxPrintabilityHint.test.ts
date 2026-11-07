@@ -7,7 +7,7 @@ const announce = vi.hoisted(() => vi.fn());
 vi.mock("../../src/ui/announce", () => ({ announce }));
 
 import { createPrintabilityPanel, type PrintabilityDeps } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
-import { dismissToastsSaying, hintToast } from "../../src/ui/toast";
+import { dismissToast, hintToast, toast } from "../../src/ui/toast";
 import { useToastStore } from "../../src/stores/toasts";
 import type { PrintabilityReply, PrintabilityResult } from "fundacad";
 
@@ -77,7 +77,8 @@ function rig() {
     setStatus: (t: string, c: string) => {
       if (c === "") hintToast(t);
     },
-    dismissStatus: dismissToastsSaying,
+    toast: (t: string) => toast(t),
+    dismissToast,
     announce: () => {},
   } as unknown as PrintabilityDeps;
   return {
@@ -121,6 +122,21 @@ describe("the Printability panel's hints", () => {
     expect(showing()).not.toContain(OPEN_HINT);
     r.ui.show();
     expect(said(OPEN_HINT)).toBe(2);
+  });
+
+  it("leave the other toasts up when the panel closes", () => {
+    const r = rig();
+    toast("Saved");
+    r.ui.show();
+    r.ui.close();
+    expect(showing()).toEqual(["Saved"]);
+  });
+
+  it("stay one on screen when the panel is shown again while open", () => {
+    const r = rig();
+    r.ui.show();
+    r.ui.show();
+    expect(showing().filter((t) => t === OPEN_HINT)).toHaveLength(1);
   });
 
   it("are said again for a second Check with the same answer", async () => {

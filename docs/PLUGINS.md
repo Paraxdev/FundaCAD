@@ -514,6 +514,9 @@ the person picks, through the native dialog in the app and a download or an uplo
 `announce(text, priority)` in `fundacad` speaks a line through the app's own live regions, polite by default and
 `"assertive"` for a failure. Use it for a result that appears with no focus move, since the status line is not read.
 
+`toast(text)` in `fundacad` shows and speaks a line, and returns its id. A plugin takes down its own toast with
+`dismissToast(id)`, by the id `toast()` gave it, for example when its panel closes.
+
 ### Two plugins that need each other
 
 The filament palette is the case that made this concrete. A palette is a list of

@@ -36,13 +36,14 @@ export interface PrintabilityDeps {
   hasBody: () => boolean;
   /** With no class the text is a toast, which the app speaks. */
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
-  /** Takes down a toast by its words. */
-  dismissStatus: (text: string) => void;
+  /** An info toast, spoken as setStatus with no class is. Its id, or null. */
+  toast: (text: string) => number | null;
+  dismissToast: (id: number) => void;
   announce: (text: string, priority?: "polite" | "assertive") => void;
 }
 
 export function createPrintabilityPanel(deps: PrintabilityDeps) {
-  const { store, viewport, geometry, hasBody, setStatus, dismissStatus, announce } = deps;
+  const { store, viewport, geometry, hasBody, setStatus, toast, dismissToast, announce } = deps;
   const state = createPrintabilityState();
   const { data } = state;
 
@@ -59,13 +60,16 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
 
   // The app neither shows nor says a toast again while the same words are up, so a line the panel left up would keep
   // the next Check's head or a reopen's hint silent. They go when the panel closes or checks again.
-  const putUp = new Set<string>();
+  const putUp = new Map<string, number>();
   function say(text: string) {
-    putUp.add(text);
-    setStatus(text, "");
+    const old = putUp.get(text);
+    if (old !== undefined) dismissToast(old);
+    const id = toast(text);
+    if (id === null) putUp.delete(text);
+    else putUp.set(text, id);
   }
   function takeDown() {
-    for (const text of putUp) dismissStatus(text);
+    for (const id of putUp.values()) dismissToast(id);
     putUp.clear();
   }
 

@@ -81,9 +81,8 @@ export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } fr
 export { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME } from "../features/moveTarget";
 export type { Frame, MoveCommit, MoveHandleSet, MoveResult, MoveTarget } from "../features/moveTarget";
 
-export { toast } from "../ui/toast";
-/** Takes down every toast showing these words, for a hint that no longer applies. */
-export { dismissToastsSaying } from "../ui/toast";
+/** `toast` returns the id `dismissToast` takes, so a plugin takes down only a toast of its own. */
+export { dismissToast, toast } from "../ui/toast";
 /** Speaks a line through the app's live regions for a screen reader, polite unless it is a failure. */
 export { announce } from "../ui/announce";
 /** The line under the viewport that says what a running tool wants next. A plugin tool that takes over the pick needs
