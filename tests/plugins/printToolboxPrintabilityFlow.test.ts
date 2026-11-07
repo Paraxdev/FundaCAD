@@ -154,6 +154,7 @@ function rig() {
       statuses.push(t);
       if (c === "") heard.push([t, "polite"]);
     },
+    dismissStatus: () => {},
     announce: (t: string, p?: string) => {
       announced.push([t, p ?? "polite"]);
       heard.push([t, p ?? "polite"]);

@@ -1,7 +1,7 @@
 // Adding a tool: describe it in printForm.ts, add it to PRINT_TOOLS, give it an icon below, and register its handler
 // in geometry/register.py with its type in manifest.json's featureTypes.
 
-import { announce, choose, contribute, toast } from "fundacad";
+import { announce, choose, contribute, dismissToastsSaying, toast } from "fundacad";
 import type { Engine } from "fundacad";
 import { bedFitMessage, bedSettings, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
 import { openCustomBedDialog } from "./customBedDialog";
@@ -53,6 +53,7 @@ export async function activate(e: Engine): Promise<() => void> {
     geometry: e.geometry,
     hasBody: () => e.hasBody(),
     setStatus: (t, c) => e.setStatus(t, c),
+    dismissStatus: dismissToastsSaying,
     announce,
   });
   printabilityPanel.value = printability;

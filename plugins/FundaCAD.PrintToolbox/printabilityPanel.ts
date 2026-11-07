@@ -36,11 +36,13 @@ export interface PrintabilityDeps {
   hasBody: () => boolean;
   /** With no class the text is a toast, which the app speaks. */
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
+  /** Takes down a toast by its words. */
+  dismissStatus: (text: string) => void;
   announce: (text: string, priority?: "polite" | "assertive") => void;
 }
 
 export function createPrintabilityPanel(deps: PrintabilityDeps) {
-  const { store, viewport, geometry, hasBody, setStatus, announce } = deps;
+  const { store, viewport, geometry, hasBody, setStatus, dismissStatus, announce } = deps;
   const state = createPrintabilityState();
   const { data } = state;
 
@@ -54,6 +56,18 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
   let checkSeq = 0;
   // The document the result's face ids were taken on.
   let checkedEpoch = -1;
+
+  // The app neither shows nor says a toast again while the same words are up, so a line the panel left up would keep
+  // the next Check's head or a reopen's hint silent. They go when the panel closes or checks again.
+  const putUp = new Set<string>();
+  function say(text: string) {
+    putUp.add(text);
+    setStatus(text, "");
+  }
+  function takeDown() {
+    for (const text of putUp) dismissStatus(text);
+    putUp.clear();
+  }
 
   function builtBodies(): { id: string; name: string }[] {
     return labelledBodies(store);
@@ -77,7 +91,7 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     }
     state.show();
     refreshMarks();
-    setStatus("Printability: checks the selected bodies, or every body when none is selected", "");
+    say("Printability: checks the selected bodies, or every body when none is selected");
   }
 
   /** Tint the faces the last Check flagged. Nothing once the model has changed since, when the face ids may name
@@ -138,10 +152,11 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
       setStatus("Printability: this geometry engine cannot run the check", "error");
       return;
     }
+    takeDown();
     const req = buildPrintabilityRequest(d.setup, scope());
     if (!req.ok) {
       state.finished({ error: req.message });
-      setStatus(`Printability: ${req.message}`, "");
+      say(`Printability: ${req.message}`);
       return;
     }
     const seq = ++checkSeq;
@@ -149,7 +164,7 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     state.started();
     state.clearResult();
     viewport.setFaceMarks(null, PRINTABILITY_MARKS);
-    setStatus("Checking printability…", "");
+    say("Checking printability…");
     const res = await geometry.printability(store.builtDocument(), req.options, (id) => {
       if (seq === checkSeq) state.sent(id);
     });
@@ -157,7 +172,8 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     if (!res.ok) {
       state.finished(res.cancelled ? {} : { error: res.message });
       const said = res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`;
-      setStatus(said, res.cancelled ? "" : "error");
+      if (res.cancelled) say(said);
+      else setStatus(said, "error");
       if (!res.cancelled) announce(said, "assertive");
       return;
     }
@@ -166,11 +182,12 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     state.finished({ result: view });
     const head = printabilityHead(view);
     const toasted = problemCount(view) > 0;
-    setStatus(head, toasted ? "" : head === "Printability: nothing found" ? "connected" : "error");
+    if (toasted) say(head);
+    else setStatus(head, head === "Printability: nothing found" ? "connected" : "error");
     // The announcer joins the rest onto the toast's head, so it is still heard as one line.
     announce(toasted ? printabilityDetails(view) : printabilitySummary(view));
     refreshMarks();
-    if (epoch !== docEpoch) setStatus("Printability: the model changed while it ran, check again to see the faces", "");
+    if (epoch !== docEpoch) say("Printability: the model changed while it ran, check again to see the faces");
   }
 
   /** Stop the Check in flight. Only by its own id: without one the client
@@ -180,12 +197,13 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     if (id) await geometry.cancel?.(id);
   }
 
-  /** Close the panel, stopping a Check in flight, and drop its tints. */
+  /** Close the panel, stopping a Check in flight, and drop its tints and its toasts. */
   function close() {
     if (data.value?.running) void cancel();
     checkSeq++;
     state.close();
     viewport.setFaceMarks(null, PRINTABILITY_MARKS);
+    takeDown();
   }
 
   const offs = [
