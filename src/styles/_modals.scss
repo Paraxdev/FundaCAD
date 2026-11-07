@@ -745,6 +745,33 @@
   font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
 }
+/* The Reference images plugin's panel: its title is the image's file name, so it ellipses rather than wraps. */
+.ref-image-window .ui-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-image-panel {
+  width: 260px;
+  max-width: 100%;
+  .param-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+}
+.ref-image-prompt {
+  margin-bottom: var(--s-3);
+  color: var(--text-mute, #6b7280);
+}
+.ref-image-flip {
+  display: flex;
+  gap: var(--s-4);
+  margin-bottom: var(--s-2);
+}
+.ref-image-problem {
+  margin-top: var(--s-2);
+  color: var(--error);
+}
 .mirror-chips {
   display: flex;
   gap: var(--s-2);

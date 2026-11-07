@@ -80,6 +80,7 @@ export class RefImageTool {
     const input = document.createElement("input");
     input.type = "file";
     input.id = "ri-file-input";
+    input.setAttribute("aria-label", "Reference image file");
     input.accept = "image/png,image/jpeg,.png,.jpg,.jpeg";
     input.style.display = "none";
     input.addEventListener("change", () => {

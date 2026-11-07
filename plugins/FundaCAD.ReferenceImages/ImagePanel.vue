@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The selected image's settings, and the distance box of a calibration.
 
-import { computed, nextTick, onUnmounted, ref, watch, type CSSProperties } from "vue";
-import { displayRound, fieldNumber, useEngine } from "fundacad";
+import { computed, nextTick, onUnmounted, reactive, ref, useTemplateRef, watch } from "vue";
+import { displayRound, useEngine } from "fundacad";
+import { Button, Checkbox, FieldRow, NumberField, Panel, Slider, Switch } from "fundacad/ui";
 import { heightOf, withWidth } from "./calibrate";
 import { MIN_OPACITY, readRefImage, type RefImage } from "./refImage";
 import { calibrating, selected, tool } from "./state";
@@ -17,14 +18,22 @@ onUnmounted(off);
 
 const r = computed(() => list.value.find((x) => x.id === (calibrating.value?.id ?? selected.value)) ?? null);
 const step = computed(() => calibrating.value?.stage ?? null);
-const error = ref<string | null>(null);
-const distance = ref<HTMLInputElement | null>(null);
+const body = useTemplateRef<HTMLElement>("body");
+const distance = ref<number | null>(null);
+// A number field refuses typed text itself and says why, the reasons land here by field, with the calibration's own.
+const refused = reactive<Record<string, string | null>>({});
+const problems = computed(() => Object.values(refused).filter((why): why is string => !!why));
+
+function refuse(key: string, label: string, why: string | null) {
+  refused[key] = why && `${label}: ${why}`;
+}
 
 watch(step, async (s) => {
-  error.value = null;
+  for (const k of Object.keys(refused)) delete refused[k];
+  distance.value = null;
   if (s === "distance") {
     await nextTick();
-    distance.value?.focus();
+    body.value?.querySelector<HTMLInputElement>("[data-field=distance]")?.focus();
   }
 });
 
@@ -32,28 +41,22 @@ function set(change: Partial<RefImage>, coalesce?: string) {
   if (r.value) tool.value?.write(r.value.id, change, coalesce);
 }
 
-function onWidth(ev: Event) {
-  const el = ev.target as HTMLInputElement;
-  const next = r.value ? withWidth(r.value, fieldNumber(el.value)) : null;
+function onWidth(width: number | null) {
+  const next = r.value && width !== null ? withWidth(r.value, width) : null;
   if (next) set({ width: next.width });
-  else el.value = String(displayRound(r.value?.width ?? 0));
 }
 
-function onAngle(ev: Event) {
-  const el = ev.target as HTMLInputElement;
-  const a = fieldNumber(el.value);
-  if (Number.isFinite(a)) set({ angle: a });
-  else el.value = String(r.value?.angle ?? 0);
+function onDistance(value: number | null) {
+  if (value === null) return;
+  const why = tool.value?.finishCalibrate(String(value)) ?? null;
+  refused.finish = why;
 }
 
-function onDistance(ev: KeyboardEvent) {
-  if (ev.key === "Escape") {
-    tool.value?.cancel();
-    return;
-  }
-  if (ev.key !== "Enter") return;
-  error.value = tool.value?.finishCalibrate((ev.target as HTMLInputElement).value) ?? null;
+function onDistanceKey(ev: KeyboardEvent) {
+  if (ev.key === "Escape") tool.value?.cancel();
 }
+
+const positive = (v: number) => (v > 0 ? null : "Type a length above zero");
 
 const prompt = computed(() =>
   step.value === "first"
@@ -64,149 +67,115 @@ const prompt = computed(() =>
         ? "The real distance between them:"
         : null,
 );
-
-const root: CSSProperties = {
-  position: "fixed",
-  bottom: "60px",
-  right: "16px",
-  zIndex: "50",
-  padding: "8px",
-  background: "var(--panel, #20242c)",
-  border: "1px solid var(--line-strong, #3a4150)",
-  borderRadius: "var(--r-md, 6px)",
-  boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
-  font: "var(--fs-small, 12px) system-ui, sans-serif",
-  color: "var(--text, #dce3ee)",
-  width: "260px",
-  maxWidth: "calc(100vw - 24px)",
-  boxSizing: "border-box",
-};
-const title: CSSProperties = {
-  fontWeight: "600",
-  marginBottom: "6px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-const row: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "72px 1fr",
-  gap: "6px",
-  alignItems: "center",
-  marginBottom: "4px",
-};
-const muted: CSSProperties = { color: "var(--text-mute, #8b93a3)", marginBottom: "6px" };
-const errorStyle: CSSProperties = { color: "var(--error, #ff5c5c)", marginTop: "4px" };
-const field: CSSProperties = {
-  background: "var(--panel-2, #161a20)",
-  color: "var(--text, #dce3ee)",
-  border: "1px solid var(--line-strong, #3a4150)",
-  borderRadius: "var(--r-sm, 3px)",
-  padding: "3px 4px",
-  font: "inherit",
-  width: "100%",
-  boxSizing: "border-box",
-  minWidth: "0",
-};
-const btn: CSSProperties = {
-  border: "none",
-  borderRadius: "var(--r-sm, 4px)",
-  padding: "4px 10px",
-  cursor: "pointer",
-  font: "inherit",
-};
-const okBtn: CSSProperties = { ...btn, background: "var(--accent, #2b6)", color: "var(--on-accent, #fff)" };
-const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color: "var(--text, #fff)" };
-const actions: CSSProperties = { display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "8px" };
 </script>
 
 <template>
-  <Teleport v-if="r" to="body">
-    <div data-panel="reference-image" :style="root">
-      <div :style="title" :title="r.name">{{ r.name }}</div>
+  <Panel :open="!!r" :title="r?.name" panel-class="ref-image-window">
+    <div v-if="r" ref="body" class="ref-image-panel" data-panel="reference-image">
       <template v-if="prompt">
-        <div :style="muted">{{ prompt }}</div>
-        <input
-          v-if="step === 'distance'"
-          ref="distance"
-          data-field="distance"
-          :style="field"
-          placeholder="100 mm"
-          @keydown="onDistance"
-        />
-        <div v-if="error" :style="errorStyle">{{ error }}</div>
-        <div :style="actions">
-          <button :style="noBtn" data-action="cancel" @click="tool?.cancel()">Cancel</button>
-        </div>
+        <div class="ref-image-prompt" role="status">{{ prompt }}</div>
+        <FieldRow v-if="step === 'distance'" v-slot="{ id }" layout="param" label="Distance">
+          <NumberField
+            :id="id"
+            v-model="distance"
+            data-field="distance"
+            label="Distance"
+            unit="mm"
+            size="sm"
+            commit="change"
+            placeholder="100 mm"
+            :validate="positive"
+            @update:model-value="onDistance"
+            @keydown="onDistanceKey"
+            @error="refuse('distance', 'Distance', $event)"
+          />
+        </FieldRow>
       </template>
       <template v-else>
-        <label :style="row">
-          <span>Width</span>
-          <input
+        <FieldRow v-slot="{ id }" layout="param" label="Width">
+          <NumberField
+            :id="id"
             data-field="width"
-            :style="field"
-            :value="displayRound(r.width)"
+            label="Width"
+            unit="mm"
+            size="sm"
+            commit="change"
+            :model-value="r.width"
             :disabled="r.locked"
-            @change="onWidth"
+            :validate="positive"
+            @update:model-value="onWidth"
+            @error="refuse('width', 'Width', $event)"
           />
-        </label>
-        <div :style="row">
-          <span>Height</span>
+        </FieldRow>
+        <FieldRow layout="param" label="Height" :for="null">
           <span>{{ displayRound(heightOf(r)) }} mm</span>
-        </div>
-        <label :style="row">
-          <span>Angle</span>
-          <input data-field="angle" :style="field" :value="r.angle" :disabled="r.locked" @change="onAngle" />
-        </label>
-        <label :style="row">
-          <span>Opacity</span>
-          <input
-            data-field="opacity"
-            type="range"
-            :min="MIN_OPACITY * 100"
-            max="100"
-            :value="Math.round(r.opacity * 100)"
-            @input="set({ opacity: Number(($event.target as HTMLInputElement).value) / 100 }, 'opacity')"
-            @change="tool?.endGesture()"
+        </FieldRow>
+        <FieldRow v-slot="{ id }" layout="param" label="Angle">
+          <NumberField
+            :id="id"
+            data-field="angle"
+            label="Angle"
+            unit="deg"
+            size="sm"
+            commit="change"
+            :model-value="r.angle"
+            :disabled="r.locked"
+            @update:model-value="(a) => a !== null && set({ angle: a })"
+            @error="refuse('angle', 'Angle', $event)"
           />
-        </label>
-        <div :style="row">
-          <span>Flip</span>
-          <span>
-            <label
-              ><input
-                data-field="flipX"
-                type="checkbox"
-                :checked="r.flipX"
-                :disabled="r.locked"
-                @change="set({ flipX: !r.flipX })"
-              />
-              X</label
-            >
-            <label style="margin-left: 10px"
-              ><input
-                data-field="flipY"
-                type="checkbox"
-                :checked="r.flipY"
-                :disabled="r.locked"
-                @change="set({ flipY: !r.flipY })"
-              />
-              Y</label
-            >
-          </span>
-        </div>
-        <label :style="row">
-          <span>Lock</span>
-          <input data-field="locked" type="checkbox" :checked="r.locked" @change="set({ locked: !r.locked })" />
-        </label>
-        <div v-if="!r.locked" :style="muted">Shift drag the image to move it.</div>
-        <div :style="actions">
-          <button :style="noBtn" data-action="close" @click="selected = null">Close</button>
-          <button :style="okBtn" data-action="calibrate" :disabled="r.locked" @click="tool?.startCalibrate(r.id)"
-            >Calibrate</button
+        </FieldRow>
+        <FieldRow v-slot="{ labelId }" layout="param" label="Opacity" :for="null">
+          <Slider
+            :labelledby="labelId"
+            data-field="opacity"
+            unit="%"
+            :min="MIN_OPACITY * 100"
+            :max="100"
+            show-value
+            :model-value="Math.round(r.opacity * 100)"
+            @update:model-value="set({ opacity: $event / 100 }, 'opacity')"
+            @commit="tool?.endGesture()"
+          />
+        </FieldRow>
+        <div class="ref-image-flip">
+          <Checkbox
+            data-field="flipX"
+            :model-value="!!r.flipX"
+            :disabled="r.locked"
+            @update:model-value="set({ flipX: $event })"
+            >Flip X</Checkbox
+          >
+          <Checkbox
+            data-field="flipY"
+            :model-value="!!r.flipY"
+            :disabled="r.locked"
+            @update:model-value="set({ flipY: $event })"
+            >Flip Y</Checkbox
           >
         </div>
+        <FieldRow v-slot="{ id }" layout="param" label="Lock">
+          <Switch
+            :id="id"
+            data-field="locked"
+            label="Lock"
+            :model-value="r.locked"
+            @update:model-value="set({ locked: !r.locked })"
+          />
+        </FieldRow>
+        <div v-if="!r.locked" class="measure-hint">Shift drag the image to move it.</div>
       </template>
+      <div v-for="why in problems" :key="why" class="ref-image-problem" role="alert">Error: {{ why }}</div>
     </div>
-  </Teleport>
+    <template #foot>
+      <template v-if="r && prompt">
+        <Button data-action="cancel" @click="tool?.cancel()">Cancel</Button>
+      </template>
+      <template v-else-if="r">
+        <Button data-action="close" @click="selected = null">Close</Button>
+        <Button variant="primary" data-action="calibrate" :disabled="r.locked" @click="tool?.startCalibrate(r.id)">
+          Calibrate
+        </Button>
+      </template>
+    </template>
+  </Panel>
 </template>
