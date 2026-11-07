@@ -15,7 +15,7 @@ const STEP_SPEECH_DELAY = 120;
 
 /** Makes the canvas a Tab stop that a pointer press does not land on: with no focus change on a press, every path that
  *  hands focus back only from the body keeps working (focusables.ts, treeRowKeys.ts, Menu.vue, Select.vue).
- *  An img, never an application: that switches off browse mode in NVDA and Orca and the rotor in VoiceOver. */
+ *  An img, never an application: that switches off browse mode in Windows and Linux screen readers and the rotor in VoiceOver. */
 export function installCanvasStop(canvas: HTMLElement): void {
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "img");
