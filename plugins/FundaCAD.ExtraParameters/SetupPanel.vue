@@ -259,7 +259,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
 
       <template v-else>
         <div :style="section">Controls</div>
-        <div :style="grid('1.1fr 0.9fr 3fr 1fr auto')">
+        <div :style="grid('1fr 1.1fr 2.9fr 1fr auto')">
           <span aria-hidden="true" style="opacity: 0.6">Name</span>
           <span aria-hidden="true" style="opacity: 0.6">Control</span>
           <span aria-hidden="true" style="opacity: 0.6">Range or choices</span>

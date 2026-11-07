@@ -84,6 +84,7 @@ const labelFor = (row: TuneRow) =>
   row.editable && (row.control.kind === "number" || row.control.kind === "choice") ? undefined : null;
 
 const rowStyle = { paddingRight: "8px", marginBottom: "0", display: "grid" };
+const configStyle = { ...rowStyle, gridTemplateColumns: "max-content minmax(0, 1fr)" };
 // The name takes its longest name's width up to 62% of the row, but it is the one that gives way: the slider and the
 // number field keep their minimum widths and the name ellipsizes in what is left.
 const nameWidth = computed(() => `${nameColumnChars(groups.value.flatMap((g) => g.rows)) + 1}ch`);
@@ -131,7 +132,7 @@ const rowLayout = (g: { id: string | null }) => ({
         layout="param"
         label="Configuration"
         class="feature-row tree-child"
-        :style="rowStyle"
+        :style="configStyle"
       >
         <Select
           :id="id"
