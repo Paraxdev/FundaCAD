@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { ModalFrame } from "fundacad/ui";
+import { Button, Checkbox, FieldRow, ModalFrame, TextField } from "fundacad/ui";
 import { parseOnshapeUrl } from "./url";
 import type { LinkRequest } from "./dialog";
 
@@ -13,8 +13,11 @@ const remember = ref(true);
 const changeKeys = ref(false);
 const error = ref("");
 const askKeys = computed(() => props.req.askKeys || changeKeys.value);
-// Under the controls, past the .prefs-row label column and its gap.
-const indent = { marginLeft: "calc(92px + var(--s-3))" };
+// Inline, because a plugin has nowhere to ship a stylesheet.
+const S = {
+  form: { minWidth: "460px", display: "flex", flexDirection: "column", gap: "var(--s-3)" },
+  error: { color: "var(--error, #f0564a)" },
+} as const;
 
 function confirm() {
   const parsed = parseOnshapeUrl(link.value);
@@ -39,7 +42,7 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault();
     e.stopImmediatePropagation();
     cancel();
-  } else if (e.key === "Enter") {
+  } else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
     e.preventDefault();
     e.stopImmediatePropagation();
     confirm();
@@ -53,81 +56,66 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
   <ModalFrame panel-class="onshape-link-dialog" @close="cancel()">
     <template #title>Import from Onshape link</template>
 
-    <!-- The Settings dialog styles .modal-body.prefs as its two column page, so the form is a .prefs inside. -->
     <div class="modal-body">
-      <div class="prefs" style="min-width: 460px">
-        <label class="prefs-row">
-          <span class="prefs-label">Link</span>
-          <input
+      <div :style="S.form">
+        <FieldRow
+          v-slot="{ id, describedby }"
+          label="Link"
+          hint="A part studio link imports that part studio. A document link imports every part studio in it."
+        >
+          <TextField
+            :id="id"
             v-model="link"
-            class="sm-input"
-            style="width: 100%"
+            label="Link"
             type="url"
             spellcheck="false"
             autofocus
             placeholder="https://cad.onshape.com/documents/..."
+            :aria-describedby="describedby"
             data-testid="onshape-link"
           />
-        </label>
-        <div class="sm-hint" :style="indent"
-          >A part studio link imports that part studio. A document link imports every part studio in it.</div
-        >
+        </FieldRow>
 
         <template v-if="askKeys">
-          <label class="prefs-row">
-            <span class="prefs-label">Access key</span>
-            <input
+          <FieldRow v-slot="{ id }" label="Access key">
+            <TextField
+              :id="id"
               v-model="access"
-              class="sm-input"
-              style="width: 100%"
+              label="Access key"
               spellcheck="false"
               autocomplete="off"
               data-testid="onshape-access"
             />
-          </label>
-          <label class="prefs-row">
-            <span class="prefs-label">Secret key</span>
-            <input
-              v-model="secret"
-              class="sm-input"
-              style="width: 100%"
-              type="password"
-              autocomplete="off"
-              data-testid="onshape-secret"
-            />
-          </label>
-          <label class="prefs-row">
-            <span class="prefs-label"></span>
-            <span class="sm-hint"
-              ><input v-model="remember" type="checkbox" /> Remember in the system's credential store</span
-            >
-          </label>
-          <div class="sm-hint" :style="indent"
+          </FieldRow>
+          <!-- TextField has no password type, so this raw input sits in the same field well, named by its row. -->
+          <FieldRow v-slot="{ id }" label="Secret key">
+            <span class="ui-field ui-text-field ui-field-md">
+              <input
+                :id="id"
+                v-model="secret"
+                aria-label="Secret key"
+                type="password"
+                autocomplete="off"
+                data-testid="onshape-secret"
+              />
+            </span>
+          </FieldRow>
+          <Checkbox v-model="remember">Remember in the system's credential store</Checkbox>
+          <div class="sm-hint"
             >Create a key with read access at dev-portal.onshape.com/keys. The keys never go in the document.</div
           >
         </template>
-        <button
-          v-else
-          type="button"
-          class="btn"
-          :style="{ ...indent, alignSelf: 'flex-start' }"
-          @click="changeKeys = true"
-          >Use other keys</button
-        >
+        <Button v-else size="sm" @click="changeKeys = true">Use other keys</Button>
 
-        <div
-          v-if="error"
-          class="sm-hint"
-          :style="{ ...indent, color: 'var(--error, #f0564a)' }"
-          data-testid="onshape-error"
-          >{{ error }}</div
+        <div v-if="error" class="sm-hint" role="alert" :style="S.error" data-testid="onshape-error"
+          >Error: {{ error }}</div
         >
       </div>
     </div>
 
     <div class="modal-foot">
-      <button type="button" class="btn" @click="cancel()">Cancel</button>
-      <button type="button" class="btn btn-primary" data-testid="onshape-import" @click="confirm()">Import</button>
+      <Button @click="cancel()">Cancel</Button>
+      <Button variant="primary" data-testid="onshape-import" @click="confirm()">Import</Button>
     </div>
   </ModalFrame>
 </template>

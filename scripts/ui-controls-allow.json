@@ -1,12 +1,6 @@
 [
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "input[type=color]", "count": 1, "reason": "native colour picker, no themed equivalent yet, lane T" },
-  { "path": "plugins/FundaCAD.Onshape/KeysSection.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "button", "count": 3, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "input[type=password]", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "input[type=text]", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "input[type=url]", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "style:inline", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
+  { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "input[type=password]", "count": 1, "reason": "TextField has no password type, kept raw in a field well and named, lane T" },
   { "path": "plugins/FundaCAD.Organic/NodePanel.vue", "kind": "button", "count": 4, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Organic/NodePanel.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Organic/NodePanel.vue", "kind": "input[type=text]", "count": 2, "reason": "before the base set, migrates in lane T (shipped plugins)" },
