@@ -44,3 +44,8 @@ export function missPrompt(kind: "fillet" | "chamfer", members: number): string 
   const kept = `${members} edge${members === 1 ? "" : "s"} kept`;
   return `No edge there, ${kept} · click an edge to add it · Enter or ✓ to ${kind} · Esc`;
 }
+
+/** A click on an edge only the blend's result has, its rim or a seam it made. */
+export function rimPrompt(kind: "fillet" | "chamfer"): string {
+  return `That edge comes from this ${kind}, click an edge of the model before it · Esc`;
+}
