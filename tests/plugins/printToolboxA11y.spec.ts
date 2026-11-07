@@ -1,6 +1,6 @@
 // The Print toolbox's Printability panel and custom bed dialog draw with the base controls: every control is named,
-// the numbers say their unit, the findings sit in labelled lists and groups, and a problem is an alert whose text says
-// its level in words.
+// the numbers say their unit, the findings sit in labelled lists and groups, and a problem says its level in words. The
+// check's own announce speaks the outcome, so a problem is plain text, not an alert, or it would be heard twice.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
@@ -97,6 +97,7 @@ async function printability() {
 }
 
 const alerts = (root: Element) => [...root.querySelectorAll("[role=alert]")].map((a) => a.textContent?.trim());
+const texts = (root: Element, sel: string) => [...root.querySelectorAll(sel)].map((a) => a.textContent?.trim());
 const field = (root: Element, name: string) =>
   [...root.querySelectorAll<HTMLInputElement>(".ui-number-field input")].find((el) => nameOf(el) === name)!;
 
@@ -194,19 +195,23 @@ describe("the Printability panel, for a screen reader", () => {
     expect(root.querySelectorAll(".print-swatch[aria-hidden=true]")).toHaveLength(4);
   });
 
-  it("tells a refused check as an error alert in words", async () => {
+  it("shows a refused check as an error in words, not an alert", async () => {
     const { root, state } = await printability();
-    expect(alerts(root)).toEqual([]);
     state.finished({ error: "face 7 of body1 is not flat" });
     await flushPromises();
-    expect(alerts(root)).toEqual(["Error: face 7 of body1 is not flat"]);
+    expect(texts(root, ".printability-error")).toEqual(["Error: face 7 of body1 is not flat"]);
+    expect(alerts(root)).toEqual([]);
   });
 
-  it("tells a body note and a failed feature as warning alerts in words", async () => {
+  it("shows a body note and a failed feature as warnings in words, not alerts", async () => {
     const { root, state } = await printability();
     state.finished({ result: formatPrintabilityResult(reply) });
     await flushPromises();
-    expect(alerts(root)).toEqual(["Warning: Open shell, 4 open edges", "Warning: f3: fillet failed"]);
+    expect(texts(root, ".printability-note, .printability-warning")).toEqual([
+      "Warning: Open shell, 4 open edges",
+      "Warning: f3: fillet failed",
+    ]);
+    expect(alerts(root)).toEqual([]);
   });
 
   it("keeps a finding a button in a list, not an alert", async () => {

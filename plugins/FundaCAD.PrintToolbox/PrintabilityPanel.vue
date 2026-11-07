@@ -179,7 +179,7 @@ const checksId = `${uid}-checks`;
         <Button v-if="d.running" class="printability-cancel" @click="ctl.cancel()">Cancel</Button>
         <Button v-else class="printability-close" @click="ctl.close()">Close</Button>
       </div>
-      <div v-if="d.error" class="measure-hint printability-error" role="alert" :style="ERROR">Error: {{ d.error }}</div>
+      <div v-if="d.error" class="measure-hint printability-error" :style="ERROR">Error: {{ d.error }}</div>
 
       <template v-if="d.result">
         <div class="measure-divider" />
@@ -194,13 +194,7 @@ const checksId = `${uid}-checks`;
           <div class="measure-row printability-body" :style="BODY_NAME"
             ><span :id="fieldId('body-' + g.body)" class="measure-v">{{ g.name }}</span></div
           >
-          <div
-            v-for="(n, i) in g.notes"
-            :key="'n' + i"
-            class="measure-row printability-note"
-            role="alert"
-            :style="WARN"
-          >
+          <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note" :style="WARN">
             <span class="measure-v">Warning: {{ n }}</span>
           </div>
           <ul v-if="g.rows.length" :style="LIST" :aria-label="g.name + ' findings'">
@@ -233,12 +227,7 @@ const checksId = `${uid}-checks`;
             <span class="print-swatch" :style="swatch(k)" aria-hidden="true" />{{ KIND_LABELS[k] }}
           </span>
         </div>
-        <div
-          v-for="(w, i) in d.result.errors"
-          :key="'e' + i"
-          class="measure-hint printability-warning"
-          role="alert"
-          :style="WARN"
+        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN"
           >Warning: {{ w }}</div
         >
         <div v-if="d.stale" class="measure-hint printability-stale" role="status"
