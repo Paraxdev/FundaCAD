@@ -56,8 +56,19 @@ def app():
         s.close()
 
 
-def test_every_gamepad_button_select_has_one_width_and_right_edge(app):
-    sel = open_gamepad(app)
+def open_radial_slots(s: Session) -> str:
+    sel = plugin_settings("FundaCAD.Navigation")[0](s)
+    radial = s.page.get_by_role("checkbox", name="Radial menu", exact=True)
+    if not radial.is_checked():
+        radial.click()
+    s.page.locator(f"{sel} details").first.wait_for()
+    s.page.evaluate("(sel) => document.querySelectorAll(sel + ' details').forEach((d) => { d.open = true; })", sel)
+    return f"{sel} details"
+
+
+@pytest.mark.parametrize("panel", ("gamepad buttons", "radial slots"))
+def test_every_select_in_a_binding_list_has_one_width_and_right_edge(app, panel):
+    sel = (open_gamepad if panel == "gamepad buttons" else open_radial_slots)(app)
     try:
         boxes = [app.page.evaluate(RECT, h) for h in app.page.locator(f"{sel} [role=combobox]").element_handles()]
         assert len(boxes) > 10
