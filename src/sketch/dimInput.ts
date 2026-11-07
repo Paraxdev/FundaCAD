@@ -13,7 +13,7 @@ import {
   type UiIconButtonOptions,
 } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
-import { isEditableTarget, isHistoryKey, isMenuKey } from "../ui/focus";
+import { isEditableTarget, isHistoryKey, isLiveFocusTarget, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
 import { regionStep } from "../ui/regions";
 import { underZoom } from "../ui/anchor";
@@ -160,6 +160,19 @@ let boxCount = 0;
 let chipCount = 0;
 const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
 const LIST_HELP = "Alt+Down opens the field's list";
+
+let sparing = 0;
+
+/** For a box nobody asked for, the Move gizmo a body selection raises: it shows without taking focus from the text
+ *  field being typed in, or the rest of the typing lands in the box. */
+export function sparingFieldFocus(raise: () => void): void {
+  sparing++;
+  try {
+    raise();
+  } finally {
+    sparing--;
+  }
+}
 
 /** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
 export function typedDimBox(): { confirm(): boolean } | null {
@@ -590,7 +603,8 @@ export class DimInput {
     // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
     // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
     // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes.
-    this.focus();
+    const at = document.activeElement;
+    if (!(sparing && at && isEditableTarget(at) && !this.ownsField(at) && isLiveFocusTarget(at))) this.focus();
     requestAnimationFrame(() => {
       if (this.walked || this.typedNames.size) return;
       const now = document.activeElement;
@@ -1008,7 +1022,9 @@ export class DimInput {
       else this.openChoiceMenu(field, true);
     }
     // Escape is otherwise handled by the owning tool's capture-phase keydown listener.
-    e.stopPropagation(); // never let drawing shortcuts fire while typing
+    // Drawing shortcuts never fire while typing. Ctrl and Cmd chords go on to the window, which leaves a text field's
+    // own chords alone, or the command search, saving and the console stay shut while a selection's Move has focus.
+    if (!(e.ctrlKey || e.metaKey)) e.stopPropagation();
   }
 
   /** The shown fields in order, the tool's extra controls, one stop per shown option (the chosen segment of a group,
