@@ -3,7 +3,7 @@
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
 screen reader. This page is the hand check a person runs before each release: about thirty six minutes per screen
-reader, the same nineteen steps everywhere, and a results table that keeps what was heard.
+reader, the same twenty steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -230,6 +230,19 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     free and projected stay close in hue and the dashes alone have to tell them apart. Fail: two of the three that look the same,
     or an open end and an untied one that differ only in colour.
 
+20. **Read the model as text (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here is a
+    heard fact yet. Open "Box with a lid" and Tab to the 3D view: you hear "Model, 3D view" and then its description,
+    like "2 bodies, 8 features. Custom view, perspective. Section off. Nothing selected." NVDA reads it on focus, Orca
+    may need its read-description key, VoiceOver reads it after a pause or with VO+Shift+H. Select a body in the Items
+    tree and Tab back to the view: the description now ends in "Selected:" and the body's name. Press Ctrl+K, type
+    `describe model` and press Enter: you hear "Model description, dialog". Walk it by headings (H in NVDA and Orca
+    browse mode, VO+Cmd+H or Quick Nav H in VoiceOver): Overview, Bodies, Features, View. Each body line has its size,
+    its center and its volume. Tab to Copy as text and press Enter: you hear "Copied the model description". Paste
+    into a text editor: the same headings and lines. Press Escape, then Ctrl+K, type `describe selection` and press
+    Enter: you hear the selected body with its size and center. Fail: a view read only as "graphic" or "canvas" with
+    no description, a description that still names the old selection, a body line with no size or center, or pasted
+    text that differs from the dialog.
+
 Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
@@ -246,9 +259,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as nineteen marks in order, like `P P P S S W P P P P P P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as twenty marks in order, like `P P P S S W P P P P P P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 19 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 20 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |
