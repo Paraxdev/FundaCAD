@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import * as read from "../../src/harness/readouts";
+import * as read from "../../src/ui/readouts";
 import { clearLog, logError } from "../../src/ui/logStore";
 import { toast } from "../../src/ui/toast";
 import { useToastStore } from "../../src/stores/toasts";
-import { mountApp } from "./fixture";
+import { mountApp } from "../harness/fixture";
 
 function host(
   over: Partial<{
@@ -168,6 +168,40 @@ describe("bodies and selection", () => {
 
   it("numbers a selected face within its body", () => {
     expect(read.selection(host()).faces).toEqual([["body2", 1]]);
+  });
+});
+
+describe("bodyPlaces", () => {
+  const box = (min: number[], max: number[]) => ({
+    min: { x: min[0], y: min[1], z: min[2] },
+    max: { x: max[0], y: max[1], z: max[2] },
+    isEmpty: () => false,
+  });
+  const props: Record<string, { volume: number; bbox: ReturnType<typeof box> }> = {
+    body1: { volume: 9000, bbox: box([-20, -15, 0], [20, 15, 20]) },
+  };
+  const placed = () =>
+    read.bodyPlaces({
+      ...host(),
+      viewport: {
+        bodyProperties: (ids: string[] | null) => {
+          const p = ids && props[ids[0]!];
+          return p ? { ...p, ids } : null;
+        },
+      },
+    } as unknown as Parameters<typeof read.bodyPlaces>[0]);
+
+  it("gives each body's box and volume, and no volume for a body with a fault", () => {
+    props.body2 = { volume: 50, bbox: box([0, 0, 0], [1, 2, 3]) };
+    expect(placed()).toEqual([
+      { id: "body1", box: { min: [-20, -15, 0], max: [20, 15, 20] }, volume: 9000 },
+      { id: "body2", box: { min: [0, 0, 0], max: [1, 2, 3] }, volume: null },
+    ]);
+  });
+
+  it("has no box for a body the view has not drawn", () => {
+    delete props.body2;
+    expect(placed()[1]).toEqual({ id: "body2", box: null, volume: null });
   });
 });
 
