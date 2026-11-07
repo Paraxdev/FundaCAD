@@ -602,11 +602,22 @@ export class DimInput {
     // so focus again next frame too or typing and Tab go nowhere. A field that took focus by then, such as a rename in
     // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
     // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
-    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes.
+    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes,
+    // as when a key moved it out of the box, like Browse Faces and Edges landing on a Geometry row.
     const at = document.activeElement;
     if (!(sparing && at && isEditableTarget(at) && !this.ownsField(at) && isLiveFocusTarget(at))) this.focus();
+    let keyed = false;
+    let keyMoved = false;
+    const onKey = () => (keyed = true);
+    const onFocusIn = (e: FocusEvent) => {
+      if (keyed && !this.ownsTarget(e.target)) keyMoved = true;
+    };
+    window.addEventListener("keydown", onKey, true);
+    document.addEventListener("focusin", onFocusIn, true);
     requestAnimationFrame(() => {
-      if (this.walked || this.typedNames.size) return;
+      window.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      if (this.walked || this.typedNames.size || keyMoved) return;
       const now = document.activeElement;
       if (this.ownsField(now) || !isEditableTarget(now)) this.focus();
     });

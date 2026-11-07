@@ -66,6 +66,37 @@ describe("DimInput focus on the frame after show", () => {
     expect(root().contains(document.activeElement)).toBe(true);
     button.remove();
   });
+
+  // A slow frame after a tree row's Space raised Move: Browse Faces and Edges ran and focused a Geometry row first.
+  it("leaves a row that a key moved focus to before the frame", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    const row = document.createElement("div");
+    row.setAttribute("role", "option");
+    row.tabIndex = -1;
+    document.body.appendChild(row);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
+    row.focus();
+    frames.forEach((f) => f(0));
+    vi.unstubAllGlobals();
+    expect(document.activeElement).toBe(row);
+    row.remove();
+  });
+
+  it("still takes focus back from a pressed button that a key left in place", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    button.focus();
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "5", bubbles: true }));
+    frames.forEach((f) => f(0));
+    vi.unstubAllGlobals();
+    expect(root().contains(document.activeElement)).toBe(true);
+    button.remove();
+  });
 });
 
 describe("DimInput hit testing", () => {
