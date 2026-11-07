@@ -47,6 +47,10 @@ const commandOptions = computed(() => [
   ...keyOnlyDefaults.value.map((s) => ({ value: s.action, label: s.label, hint: "Keys" })),
 ]);
 
+// One fixed width, so every slot's select shares its right edge: the settings card caps a select at 60% of a width
+// that follows each row's own label.
+const S = { select: { width: "240px", maxWidth: "100%" } } as const;
+
 function setItem(ctx: RadialContext, slot: number, id: string) {
   const list = [...cfg.value.items[ctx]];
   while (list.length <= slot) list.push("");
@@ -175,6 +179,7 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
               :id="id"
               size="sm"
               :label="slot <= RING_SLOTS ? `Slot ${slot}` : `More ${slot - RING_SLOTS}`"
+              :style="S.select"
               :options="commandOptions"
               placeholder="Not available"
               :model-value="cfg.items[c.id][slot - 1] ?? ''"
