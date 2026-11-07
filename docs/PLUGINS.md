@@ -552,7 +552,9 @@ writing it again:
   app's own live regions: a long job that finished, a result drawn away from
   focus, a check that started failing. A toast alone is not read. A list of
   problems a person has to fix is a `role="alert"` element, spoken when it
-  changes after an edit, not on first draw.
+  changes after an edit, not on first draw. Use one or the other for a problem,
+  never both, or it is heard twice. A list that changes with every key is
+  better as plain text with one `announce` that waits for a pause.
 - A composite widget of the plugin's own, such as a grid of swatches, moves
   focus with the arrow keys and keeps one Tab stop. `useRovingFocus` from
   `fundacad/ui` is the helper the base controls use for that.
