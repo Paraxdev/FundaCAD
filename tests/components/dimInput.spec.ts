@@ -32,6 +32,8 @@ afterEach(() => {
 const root = () => document.querySelector<HTMLElement>(".dim-input")!;
 
 describe("DimInput focus on the frame after show", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   function showThenFocus(other: HTMLElement) {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
@@ -39,7 +41,6 @@ describe("DimInput focus on the frame after show", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
     other.focus();
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
   }
 
   it("leaves a text field that took focus meanwhile", () => {
@@ -55,7 +56,6 @@ describe("DimInput focus on the frame after show", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
     dim.seed("radius", 12);
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
     const input = document.activeElement as HTMLInputElement;
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
   });
@@ -63,6 +63,35 @@ describe("DimInput focus on the frame after show", () => {
   it("takes focus back from a button a press landed on", () => {
     const button = document.createElement("button");
     showThenFocus(button);
+    expect(root().contains(document.activeElement)).toBe(true);
+    button.remove();
+  });
+
+  // A slow frame after a tree row's Space raised Move: Browse Faces and Edges ran and focused a Geometry row first.
+  it("leaves a row that a key moved focus to before the frame", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    const row = document.createElement("div");
+    row.setAttribute("role", "option");
+    row.tabIndex = -1;
+    document.body.appendChild(row);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
+    row.focus();
+    frames.forEach((f) => f(0));
+    expect(document.activeElement).toBe(row);
+    row.remove();
+  });
+
+  it("still takes focus back from a pressed button that a key left in place", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    button.focus();
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "5", bubbles: true }));
+    frames.forEach((f) => f(0));
     expect(root().contains(document.activeElement)).toBe(true);
     button.remove();
   });
