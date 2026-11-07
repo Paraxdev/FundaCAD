@@ -32,6 +32,8 @@ afterEach(() => {
 const root = () => document.querySelector<HTMLElement>(".dim-input")!;
 
 describe("DimInput focus on the frame after show", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   function showThenFocus(other: HTMLElement) {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
@@ -39,7 +41,6 @@ describe("DimInput focus on the frame after show", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
     other.focus();
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
   }
 
   it("leaves a text field that took focus meanwhile", () => {
@@ -55,7 +56,6 @@ describe("DimInput focus on the frame after show", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
     dim.seed("radius", 12);
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
     const input = document.activeElement as HTMLInputElement;
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
   });
@@ -79,7 +79,6 @@ describe("DimInput focus on the frame after show", () => {
     document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
     row.focus();
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
     expect(document.activeElement).toBe(row);
     row.remove();
   });
@@ -93,7 +92,6 @@ describe("DimInput focus on the frame after show", () => {
     button.focus();
     button.dispatchEvent(new KeyboardEvent("keydown", { key: "5", bubbles: true }));
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
     expect(root().contains(document.activeElement)).toBe(true);
     button.remove();
   });
