@@ -802,8 +802,7 @@ export class EdgeFeatureTool {
       if (over) this.refuseOverCap(over);
     } else {
       this.hoverGhost(null);
-      this.ghosts = this.ghosts.filter((g) => g.picked || void this.ghostLines?.remove(g.slot));
-      this.ghostLines?.sync();
+      this.dropGhosts((g) => !g.picked);
     }
     this.afterMembershipChange();
   }
@@ -820,7 +819,16 @@ export class EdgeFeatureTool {
   /** The chain id is recorded at add time, so this works after the preview consumed the chain's edges. */
   private removeWithChain(g: GhostEdge) {
     if (this.hoveredGhost?.chain === g.chain) this.hoveredGhost = null;
-    this.ghosts = this.ghosts.filter((x) => x.chain !== g.chain || void this.ghostLines?.remove(x.slot));
+    this.dropGhosts((x) => x.chain === g.chain);
+  }
+
+  private dropGhosts(drop: (g: GhostEdge) => boolean) {
+    const kept: GhostEdge[] = [];
+    for (const g of this.ghosts) {
+      if (drop(g)) this.ghostLines?.remove(g.slot);
+      else kept.push(g);
+    }
+    this.ghosts = kept;
     this.ghostLines?.sync();
   }
 
