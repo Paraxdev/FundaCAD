@@ -318,10 +318,16 @@ class Session(Actions):
         if kind != "none":
             close = self.page.locator(".home .modal-close, .modal-overlay .modal-close").first
             if close.count():
-                close.click(timeout=5000)
+                try:
+                    close.click(timeout=15000)
+                except Exception as e:
+                    # A slow VM's first frames can hold the main thread past the click's wait, the Escape below
+                    # still closes it once the page is free (7tft9mw2).
+                    if type(e).__name__ != "TimeoutError":
+                        raise
             if not self._wait_for(lambda: self.bridge.call("startScreen") == "none", 5):
                 self.page.keyboard.press("Escape")
-                if not self._wait_for(lambda: self.bridge.call("startScreen") == "none", 5):
+                if not self._wait_for(lambda: self.bridge.call("startScreen") == "none", 15):
                     self.failed = True
                     raise HarnessError(f"the {kind} screen did not close")
         if not self._wait_for(lambda: not self.bridge.call("stageInert"), 5):
