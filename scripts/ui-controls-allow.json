@@ -1,7 +1,5 @@
 [
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "input[type=color]", "count": 1, "reason": "native colour picker, no themed equivalent yet, lane T" },
-  { "path": "plugins/FundaCAD.Navigation/NavigationSection.vue", "kind": "button", "count": 3, "reason": "before the base set, migrates in lane T (shipped plugins)" },
-  { "path": "plugins/FundaCAD.Navigation/NavigationSection.vue", "kind": "select", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Onshape/KeysSection.vue", "kind": "button", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "button", "count": 3, "reason": "before the base set, migrates in lane T (shipped plugins)" },
   { "path": "plugins/FundaCAD.Onshape/LinkDialog.vue", "kind": "input[type=checkbox]", "count": 1, "reason": "before the base set, migrates in lane T (shipped plugins)" },
