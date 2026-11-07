@@ -49,6 +49,8 @@ function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
   camera.updateMatrixWorld(true);
   const BASE = { tag: "base" };
   const released: unknown[] = [];
+  const scene = new Set<THREE.Object3D>();
+  const diff: { gone: unknown[]; fresh: EdgeRef[] } = { gone: [], fresh: [] };
   const pickIn = (lines: EdgeRef[], x: number, y: number) => {
     let best: { edge: EdgeRef; rankPx: number } | null = null;
     for (const l of lines) {
@@ -75,6 +77,9 @@ function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
     modelDiagonal: () => 30,
     snapStep: () => 0.5,
     holdModel: () => BASE,
+    heldDiff: (v: unknown) => (v === BASE ? diff : { gone: [], fresh: [] }),
+    addToScene: (o: THREE.Object3D) => scene.add(o),
+    removeFromScene: (o: THREE.Object3D) => scene.delete(o),
     releaseModel: (v: unknown) => released.push(v),
     pickEdgeAt: (x: number, y: number, view?: unknown) => pickIn(view === BASE ? baseLines : RESULT_LINES, x, y),
     visibleEdgeLines: (view?: unknown) => (view === BASE ? baseLines : RESULT_LINES),
@@ -121,8 +126,9 @@ function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
     over = false;
   };
   const rollback = () => built?.({ building: false, result: { bbox: null }, previewBuilt: [] });
+  const previewLands = () => built?.({ building: false, result: { bbox: null }, previewBuilt: [] });
   const enter = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  return { tool, click, openFromHandle, rollback, enter, added, edits, released, BASE };
+  return { tool, click, openFromHandle, rollback, previewLands, enter, added, edits, released, BASE, scene, diff };
 }
 
 const prompt = () => usePromptStore().text ?? "";
@@ -294,5 +300,40 @@ describe("Include tangent edges", () => {
     t.tool.startEdit("f9", () => {});
     t.rollback();
     expect(t.tool.includesTangentEdges()).toBe(false);
+  });
+});
+
+describe("the model before the feature while editing", () => {
+  const body = () => ({ mesh: new THREE.Mesh(new THREE.BoxGeometry(20, 20, 10)) });
+  // The edit ghost is the group drawn just under the member lines.
+  const ghosts = (scene: Set<THREE.Object3D>) =>
+    [...scene].filter((o) => o.renderOrder === 997).flatMap((o) => o.children as THREE.Mesh[]);
+
+  it("draws the bodies the result replaced faint, with no depth write, and a guide on the rims", () => {
+    const t = rig([{ id: "f9", type: "fillet", radius: 2, edges: sel(A) } as unknown as Feature]);
+    open = t.tool;
+    t.tool.startEdit("f9", () => {});
+    t.rollback();
+    const before = t.scene.size;
+    t.diff.gone = [body()];
+    t.diff.fresh = [RIM];
+    t.previewLands();
+    const [ghost] = ghosts(t.scene);
+    const m = ghost!.material as THREE.MeshBasicMaterial;
+    expect([m.transparent, m.opacity < 0.2, m.depthWrite]).toEqual([true, true, false]);
+    // The ghost group and the guide line.
+    expect(t.scene.size).toBe(before + 2);
+    t.tool.cancel();
+    expect(ghosts(t.scene)).toEqual([]);
+    expect(t.scene.size).toBeLessThanOrEqual(before);
+  });
+
+  it("is not drawn when the fillet is made fresh", () => {
+    const t = rig();
+    open = t.tool;
+    t.diff.gone = [body()];
+    t.openFromHandle();
+    t.previewLands();
+    expect(ghosts(t.scene)).toEqual([]);
   });
 });

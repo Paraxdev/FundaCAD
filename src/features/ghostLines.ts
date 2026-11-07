@@ -38,9 +38,11 @@ export class GhostLines {
 
   constructor(
     private readonly host: Host,
-    width = 3,
+    opts: { width?: number; opacity?: number; depthTest?: boolean } = {},
   ) {
-    this.material.linewidth = width;
+    this.material.linewidth = opts.width ?? 3;
+    this.material.opacity = opts.opacity ?? 1;
+    this.material.depthTest = opts.depthTest ?? false;
   }
 
   add(points: readonly Vec3[], color: number): GhostSlot {

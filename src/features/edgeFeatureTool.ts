@@ -56,6 +56,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { HeldSignal } from "./heldEdit";
 import { blendEditCommit } from "./blendEdit";
+import { BlendEditGhost } from "./blendEditGhost";
 import { boxBindings } from "./boxBindings";
 import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, rimPrompt, screenPolylineDist } from "./blendPick";
@@ -149,6 +150,7 @@ export class EdgeFeatureTool {
   private base: ModelView | null = null;
   /** The tangentEdges field: off, a click takes only the edge under it and the engine rounds only the edges given. */
   private tangentOn = true;
+  private editGhost: BlendEditGhost | null = null;
   private unmatchedSels: Selector[] = []; // saved selectors we couldn't visualize (kept for commit)
 
   private editId: string | null = null; // committed feature id being edited
@@ -339,7 +341,10 @@ export class EdgeFeatureTool {
     this.viewport.suspendPicking = true; // we drive our own edge-only picking
     this.viewport.emphasizeEdges(true, IDLE_PX);
     this.gesture.attach();
-    this.unsubTheme = onThemeChange(() => this.recolorGhosts());
+    this.unsubTheme = onThemeChange(() => {
+      this.recolorGhosts();
+      this.refreshEditGhost();
+    });
 
     if (seed.length) {
       // A handle grab opens at 0, so the drag is the radius and the press point means no feature; a command opens on
@@ -484,7 +489,16 @@ export class EdgeFeatureTool {
       if (this.phase !== "drag") return;
       this.noteBuildOutcome(s);
       this.refreshRefusal();
+      this.refreshEditGhost();
     });
+  }
+
+  /** Edit mode only: what the result replaced, faint, and the rims it made. */
+  private refreshEditGhost() {
+    if (!this.editId || !this.base) return;
+    const { gone, fresh } = this.viewport.heldDiff(this.base) ?? { gone: [], fresh: [] };
+    this.editGhost ??= new BlendEditGhost(this.viewport);
+    this.editGhost.show(gone, fresh);
   }
 
   /** Records the size that was sent, often no longer the handle's during a fast drag. A reply for another question
@@ -675,7 +689,7 @@ export class EdgeFeatureTool {
     if (this.hoverSlot) this.hoverLine?.remove(this.hoverSlot);
     this.hoverSlot = null;
     if (edge) {
-      this.hoverLine ??= new GhostLines(this.viewport, HOVER_PX);
+      this.hoverLine ??= new GhostLines(this.viewport, { width: HOVER_PX });
       this.hoverSlot = this.hoverLine.add(edge.points as Vec3[], edgeHoverColor());
     }
     this.hoverLine?.sync();
@@ -1508,6 +1522,8 @@ export class EdgeFeatureTool {
     this.hoverLine?.dispose();
     this.hoverLine = null;
     this.hoverSlot = null;
+    this.editGhost?.dispose();
+    this.editGhost = null;
     this.viewport.releaseModel(this.base);
     this.base = null;
     this.unsubBuild?.();
