@@ -20,6 +20,9 @@ declare global {
 /** Not imported from ../plugins/registry.ts, which reads it and tells the engine the moment it loads. */
 export const PLUGINS_OFF_KEY = "fundacad.plugins";
 
+/** Not imported from ../ui/whatsNew.ts, which loads stores and toasts before main.ts. */
+export const WHATS_NEW_SEEN_KEY = "fundacad.whatsNewSeen";
+
 export const BACKUP_FORMAT = "fundacad-settings-backup";
 
 export interface StartChoiceDeps {
@@ -60,9 +63,12 @@ export function backupText(snapshot: Record<string, string>, savedAt: Date): str
   );
 }
 
-/** Everything goes but the recent files list and the plugins switched off, since a reset never turns a plugin on. */
+const KEPT: readonly string[] = [PLUGINS_OFF_KEY, WHATS_NEW_SEEN_KEY, ...RECENT_FILES_KEYS];
+
+/** Everything goes but the recent files list, the What's new card already seen, and the plugins switched off, since a
+ * reset never turns a plugin on. */
 export function clearSettings(storage: Storage, keys: readonly string[]): void {
-  for (const k of keys) if (k !== PLUGINS_OFF_KEY && !RECENT_FILES_KEYS.includes(k)) storage.removeItem(k);
+  for (const k of keys) if (!KEPT.includes(k)) storage.removeItem(k);
 }
 
 function offIds(storage: Storage): string[] {

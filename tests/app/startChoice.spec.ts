@@ -1,5 +1,5 @@
 // Reset settings from Rust's start question: the backup is written before anything is cleared, plugins go off only
-// with the box, and the recent files list stays.
+// with the box, and the recent files list and the What's new card already seen stay.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BACKUP_FORMAT,
@@ -9,6 +9,7 @@ import {
   startChoiceNotice,
   type StartChoice,
   type StartChoiceDeps,
+  WHATS_NEW_SEEN_KEY,
 } from "../../src/app/startChoice";
 import { getRecentFiles } from "../../src/io/recentFiles";
 
@@ -104,6 +105,19 @@ describe("Reset settings", () => {
     await runStartChoice(d);
     expect(Object.keys(settingsSnapshot(localStorage))).toEqual(["fundacad.recentFiles"]);
     expect(getRecentFiles()).toEqual([{ path: "C:/parts/bracket.funda", openedAt: 1 }]);
+  });
+
+  it.each([false, true])("keeps the What's new card hidden, with Also turn off plugins %s", async (plugins) => {
+    localStorage.setItem(WHATS_NEW_SEEN_KEY, "1.0.576:abc123");
+    const { d } = deps({ reset: true, plugins });
+    await runStartChoice(d);
+    expect(localStorage.getItem(WHATS_NEW_SEEN_KEY)).toBe("1.0.576:abc123");
+    expect(localStorage.getItem("fundacad.theme")).toBeNull();
+  });
+
+  it("keeps the key the What's new card reads", async () => {
+    const { SEEN_KEY } = await import("../../src/ui/whatsNew");
+    expect(WHATS_NEW_SEEN_KEY).toBe(SEEN_KEY);
   });
 
   it("keeps an older name of the recent files list too", async () => {
