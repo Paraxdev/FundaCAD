@@ -13,19 +13,7 @@ import {
   type TextureForm,
   type TextureMode,
 } from "./textureForm";
-import {
-  Button,
-  FieldRow,
-  Icon,
-  IconButton,
-  NumberField,
-  Panel,
-  Segmented,
-  Select,
-  Slider,
-  Switch,
-  announce,
-} from "fundacad/ui";
+import { Button, FieldRow, Icon, IconButton, NumberField, Panel, Segmented, Select, Slider, Switch } from "fundacad/ui";
 import { fieldNumber, openDialog, readAs } from "fundacad";
 import * as panel from "./panel";
 
@@ -42,16 +30,6 @@ watch(
   () => {
     Object.assign(form, initialTextureForm(panel.request.value?.initial ?? {}));
     for (const k of Object.keys(refused)) delete refused[k];
-  },
-);
-// Only a refusal the person just caused can change this list, so nothing is spoken for what the form opens with.
-watch(
-  () => problems.value.join("|"),
-  () => {
-    const [first, ...more] = problems.value;
-    if (!first) return;
-    const line = `${first}${more.length ? `, and ${more.length} more` : ""}`;
-    announce(line, "assertive", { key: "texture-problems", delay: 500 });
   },
 );
 

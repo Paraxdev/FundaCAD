@@ -1,5 +1,5 @@
 // The Fasteners library, its custom form and the Standard Thread panel draw with the base controls: every control has
-// a name, a number says its unit, and a failing check is an alert that is also spoken.
+// a name, a number says its unit, and a failing check is listed and spoken once.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
@@ -238,12 +238,13 @@ describe("the custom fastener form", () => {
     expect(describedBy(length)).toMatch(/\bin\b|inch/i);
   });
 
-  it("makes the problem list an alert that is still read as a list", async () => {
+  // It changes while typing, so the debounced announce speaks it and an alert would be heard on every key as well.
+  it("shows the problems as a plain list, not an alert", async () => {
     const w = await form(screw({ length: undefined }));
     const list = w.get(".scr-problems");
-    expect(list.attributes("role")).toBe("alert");
+    expect(list.attributes("role")).toBeUndefined();
+    expect(w.element.querySelectorAll("[role=alert]")).toHaveLength(0);
     expect(list.findAll("li").length).toBeGreaterThan(0);
-    // An alert role on the ul itself would take its list role away, and the items would be read as loose text.
     expect(list.findAll("li").every((li) => li.element.parentElement?.tagName === "UL")).toBe(true);
     expect(list.find("ul").attributes("role")).toBeUndefined();
   });
@@ -267,14 +268,13 @@ describe("the custom fastener form", () => {
     expect(spoken[0]![2]).toEqual({ key: expect.any(String), delay: expect.any(Number) });
   });
 
-  it("a refused countersink angle is in the alert list too", async () => {
+  it("a refused countersink angle is in the problem list and spoken too", async () => {
     const w = await form();
     const angle = [...w.element.querySelectorAll(".ui-number-field input")].find((el) =>
       /Countersink angle/.test(nameOf(el)),
     ) as HTMLInputElement;
     type(angle, "-5");
     await flushPromises();
-    expect(w.get(".scr-problems").attributes("role")).toBe("alert");
     expect(w.get(".scr-problems").text()).toMatch(/Countersink angle: At least 1/);
     await wait(700);
     expect(vi.mocked(announce).mock.calls.some(([t]) => /Countersink angle/.test(t))).toBe(true);

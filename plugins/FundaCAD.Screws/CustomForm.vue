@@ -436,7 +436,6 @@ watch(
         <div
           v-if="allProblems.length"
           class="scr-problems"
-          role="alert"
           :style="{ margin: stacked ? 0 : '8px 0 0', color: 'var(--warn)', fontSize: 'var(--fs-small)' }"
         >
           <ul :style="{ margin: 0, paddingLeft: '16px' }">

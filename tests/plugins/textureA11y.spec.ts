@@ -1,5 +1,5 @@
 // The Texture panel draws with the base controls: every control has a name, a length says its unit, the Faces and Whole
-// Body choice is a radio group, and a refused number is an alert that is also spoken.
+// Body choice is a radio group, and a refused number is an alert.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
@@ -211,7 +211,8 @@ describe("a refused number", () => {
     expect(announce).not.toHaveBeenCalled();
   });
 
-  it("is an alert naming the field, spoken once after an edit, and gone when fixed", async () => {
+  // The alert speaks it, a second announce would have it heard twice.
+  it("is an alert naming the field, not announced as well, and gone when fixed", async () => {
     const { root } = await open();
     type(field(root, "Depth"), "abc");
     await flushPromises();
@@ -220,9 +221,7 @@ describe("a refused number", () => {
     expect(alerts[0]!.getAttribute("role")).toBe("alert");
     expect(alerts[0]!.textContent).toMatch(/Depth/);
     await wait(800);
-    const spoken = vi.mocked(announce).mock.calls.filter(([t]) => /Depth/.test(t));
-    expect(spoken.length).toBeGreaterThan(0);
-    expect(spoken.every(([, priority]) => priority === "assertive")).toBe(true);
+    expect(vi.mocked(announce).mock.calls.filter(([t]) => /Depth/.test(t))).toHaveLength(0);
 
     type(field(root, "Depth"), "0.5");
     await flushPromises();

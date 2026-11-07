@@ -5,17 +5,7 @@
 import { computed, reactive, ref, useId } from "vue";
 import { captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine } from "fundacad";
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
-import {
-  Button,
-  Checkbox,
-  FloatingPanel,
-  Icon,
-  IconButton,
-  NumberField,
-  Select,
-  TextField,
-  announce,
-} from "fundacad/ui";
+import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
 import { convertControl, formatChoices, nextId, parseChoices } from "./view";
 
@@ -49,8 +39,8 @@ const BOUNDS = ["min", "max", "step"] as const;
 type Bound = (typeof BOUNDS)[number];
 const BOUND_WORDS: Record<Bound, string> = { min: "minimum", max: "maximum", step: "step" };
 
-// What is wrong, as text on the panel: a refused edit used to be a toast, which a screen reader never reached. The
-// panel's own refusals are spoken here, a field's own are spoken by the field and only shown here.
+// What is wrong, as alerts on the panel: a refused edit used to be a toast, which a screen reader never reached. A
+// field's own refusal is spoken by the field as well, so it is only shown here.
 const problems = reactive<Record<string, string | null>>({});
 const shownProblems = computed(() => Object.values(problems).filter((why): why is string => !!why));
 function show(key: string, why: string | null) {
@@ -58,7 +48,6 @@ function show(key: string, why: string | null) {
 }
 function fail(why: string) {
   show("panel", why);
-  announce(why, "assertive", { key: "xp-setup-problem" });
 }
 const clear = () => show("panel", null);
 

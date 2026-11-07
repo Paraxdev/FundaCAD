@@ -1,5 +1,5 @@
 // Parameter Setup draws with the base controls: every control has a name, a range says its unit, and a refused edit is
-// an alert that is also spoken, where it used to be a toast.
+// an alert, where it used to be a toast.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
@@ -205,12 +205,12 @@ describe("a refused edit", () => {
     expect(announce).not.toHaveBeenCalled();
   });
 
-  it("is an alert, spoken once, when a slider's max would pass its min", async () => {
+  // The alert speaks it, a second announce would have it heard twice.
+  it("is an alert, and only an alert, when a slider's max would pass its min", async () => {
     const { root, store } = await render();
     await edit(named(root, "lip maximum") as HTMLInputElement, "0");
     expect(alerts(root)).toEqual(["min must be below max"]);
-    expect(vi.mocked(announce).mock.calls.filter(([t]) => /min must be below max/.test(t))).toHaveLength(1);
-    expect(vi.mocked(announce).mock.calls[0]![1]).toBe("assertive");
+    expect(vi.mocked(announce).mock.calls.filter(([t]) => /min must be below max/.test(t))).toHaveLength(0);
     expect(store.document.paramDefs!["lip"]!.control).toMatchObject({ kind: "slider", min: 0, max: 10 });
   });
 
@@ -237,7 +237,7 @@ describe("a refused edit", () => {
     await flushPromises();
     expect(alerts(root)).toHaveLength(1);
     expect(alerts(root)[0]).toMatch(/nope/);
-    expect(vi.mocked(announce).mock.calls.some(([t]) => /nope/.test(t))).toBe(true);
+    expect(vi.mocked(announce).mock.calls.some(([t]) => /nope/.test(t))).toBe(false);
   });
 
   it("is an alert when a check has no rule or message", async () => {
