@@ -99,9 +99,12 @@ describe("the Parameters section", () => {
 
   it("names every control by its parameter, so a screen reader does not read a bare value", async () => {
     const { w } = await render();
+    const nameOf = (el: Element) =>
+      el.getAttribute("aria-label") ??
+      document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent?.trim();
     const named = w
-      .findAll(".xp-row input, .xp-row select")
-      .map((c) => [c.element.closest(".xp-row")?.getAttribute("data-param"), c.attributes("aria-label")]);
+      .findAll(".xp-row input")
+      .map((c) => [c.element.closest(".xp-row")?.getAttribute("data-param"), nameOf(c.element)]);
     expect(named).toEqual([
       ["gap", "gap"],
       ["solidCore", "solidCore"],
@@ -124,7 +127,7 @@ describe("the Parameters section", () => {
     // the check only fails when the value gets there some other way
     expect(store.setParamExpr("gap", "0.2")).toBeNull();
     await settle();
-    expect(w.findAll(".xp-check").map((c) => c.text())).toEqual(["gap below 0.3 mm fuses"]);
+    expect(w.findAll(".xp-check").map((c) => c.text())).toEqual(["Warning: gap below 0.3 mm fuses"]);
     expect(w.find('[data-param="gap"]').attributes("title")).toMatch(/below the minimum/);
   });
 
@@ -141,7 +144,11 @@ describe("the Parameters section", () => {
     await settle();
     expect(store.document.paramDefs!["joinedRings"]!.expr).toBe("5");
 
-    await w.find(".xp-config").setValue("c2");
+    w.find(".xp-config").element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
+    [...document.body.querySelectorAll<HTMLElement>("[role=option]")]
+      .find((o) => o.textContent!.includes("Button"))!
+      .click();
     await settle();
     expect(store.document.paramDefs!["joinedRings"]!.expr).toBe("3");
     expect(w.text()).not.toContain("modified");
