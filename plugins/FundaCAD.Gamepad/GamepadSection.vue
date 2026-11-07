@@ -39,6 +39,10 @@ const groups = computed(() => {
   return [...out.entries()];
 });
 
+// One fixed width, so every select shares its right edge and a long command ellipses inside it: the settings card caps
+// a select at 60% of a width that follows each row's own label.
+const S = { select: { width: "240px", maxWidth: "100%" } } as const;
+
 const options = computed(() => [
   { value: "", label: "Nothing" },
   { value: CURSOR, label: "Cursor on / off" },
@@ -78,6 +82,7 @@ const options = computed(() => [
         <Select
           :id="id"
           size="sm"
+          :style="S.select"
           :label="BUTTON_LABELS[i] ?? ''"
           :options="options"
           :model-value="cfg.buttons[i] ?? ''"
