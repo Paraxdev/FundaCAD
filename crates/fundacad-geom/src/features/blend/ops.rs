@@ -61,11 +61,22 @@ fn built(r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>, status: i32) -> Res
     Ok((Shape::from_raw(p), state))
 }
 
+// Note: two OCCT fillet or chamfer builds at once, even on unrelated shapes, return random
+// face counts, NotDone or invalid shapes, so they take turns (cnmzf0w4).
+static FILLET_BUILDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn one_at_a_time<T>(f: impl FnOnce() -> T) -> T {
+    let _turn = FILLET_BUILDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    f()
+}
+
 pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
     let began = std::time::Instant::now();
-    let r = crate::bench::phase("blend_fillet", || ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status));
+    let r = crate::bench::phase("blend_fillet", || {
+        one_at_a_time(|| ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status))
+    });
     let (shape, n, radii) = (shape.clone(), edges.len(), radii.to_vec());
     traced("BRepFilletAPI_MakeFillet", began, built(r, status), move || {
         format!("shape={}, {n} edges, radii={radii:?}", kernel::describe(&shape))
@@ -76,7 +87,9 @@ pub fn chamfer(shape: &Shape, edges: &[Shape], d1: &[f64], d2: &[f64]) -> Result
     let es = kernel::compound(edges);
     let mut status = 0;
     let began = std::time::Instant::now();
-    let r = crate::bench::phase("blend_chamfer", || ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status));
+    let r = crate::bench::phase("blend_chamfer", || {
+        one_at_a_time(|| ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status))
+    });
     let (shape, n, d1, d2) = (shape.clone(), edges.len(), d1.to_vec(), d2.to_vec());
     traced("BRepFilletAPI_MakeChamfer", began, built(r, status), move || {
         format!("shape={}, {n} edges, d1={d1:?}, d2={d2:?}", kernel::describe(&shape))
@@ -143,7 +156,7 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
     let mut status = 0;
     let mut message = String::new();
     let out = crate::bench::phase("blend_conic", || {
-        ffi::blend_conic(shape.raw(), es.raw(), radius, profile, &mut status, &mut message)
+        one_at_a_time(|| ffi::blend_conic(shape.raw(), es.raw(), radius, profile, &mut status, &mut message))
     });
     match status {
         0 if !out.is_null() => {
