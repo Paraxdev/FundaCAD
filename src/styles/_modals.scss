@@ -928,6 +928,12 @@
   gap: var(--s-3);
   user-select: text;
 }
+/* Inset so the ring keeps clear of the dialog's sides, with the dialog's own corner inside it. */
+.describe-body:focus-visible {
+  corner-shape: squircle;
+  border-radius: calc(var(--r-lg, 10px) + var(--s-2));
+  outline-offset: calc(-1 * var(--s-2));
+}
 .describe-section {
   padding: var(--s-3) var(--s-4);
   corner-shape: squircle;
