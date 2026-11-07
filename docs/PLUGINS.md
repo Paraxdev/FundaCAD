@@ -553,7 +553,8 @@ writing it again:
 - Say what a screen reader user would otherwise miss. `announce(text, priority)`
   from `fundacad/ui` (the same one `fundacad` exports) speaks once through the
   app's own live regions: a long job that finished, a result drawn away from
-  focus, a check that started failing. A toast alone is not read. A list of
+  focus, a check that started failing. A `toast` is spoken as well as shown,
+  unless it is `silent`, so a line it carries needs no `announce` too. A list of
   problems a person has to fix is a `role="alert"` element, spoken when it
   changes after an edit, not on first draw. Use one or the other for a problem,
   never both, or it is heard twice. A list that changes with every key is

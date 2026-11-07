@@ -207,6 +207,7 @@ const rowLayout = (g: { id: string | null }) => ({
             :for="labelFor(row)"
             :error="row.problem ?? undefined"
             class="feature-row tree-child xp-row"
+            control-class="xp-value"
             :data-param="row.name"
             :style="rowLayout(g)"
             :title="rowTooltip(row)"

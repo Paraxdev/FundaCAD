@@ -24,9 +24,11 @@ _PROBE = r"""
   };
   // A visually hidden input inside its label is pressed through the label.
   const inside = (el, hit) => el.contains(hit) || [...(el.labels || [])].some((l) => l.contains(hit));
+  // Vue's generated ids shift with whatever rendered before, so they name nothing for long.
+  const ownId = (el) => (el.id && !/^v-\d/.test(el.id) ? el.id : '');
   const part = (el) => {
     let s = el.tagName.toLowerCase();
-    if (el.id) return s + '#' + el.id;
+    if (ownId(el)) return s + '#' + el.id;
     const t = el.getAttribute('data-testid');
     if (t) return s + '[data-testid="' + t + '"]';
     const cls = [...el.classList].slice(0, 2);
@@ -36,7 +38,7 @@ _PROBE = r"""
     const out = [];
     for (let n = el; n && n !== document.body && out.length < 3; n = n.parentElement) {
       out.unshift(part(n));
-      if (n.id) break;
+      if (ownId(n)) break;
     }
     return out.join(' > ');
   };
