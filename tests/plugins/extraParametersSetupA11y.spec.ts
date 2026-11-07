@@ -254,3 +254,71 @@ describe("a refused edit", () => {
     expect(vi.mocked(announce)).toHaveBeenCalled();
   });
 });
+
+// The panel can be under 300px wide, where a table row has no room for a Select's value.
+describe("Parameter Setup, in a narrow panel", () => {
+  async function renderAt(width: number) {
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(width);
+    return render();
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  const names = (el: Element) => [...el.querySelectorAll(CONTROLS)].map(nameOf);
+
+  it("gives each parameter a block of its own, its range on a line of its own, in reading order", async () => {
+    const { root } = await renderAt(248);
+    const blocks = [...root.querySelectorAll<HTMLElement>(".xp-param")];
+    expect(blocks).toHaveLength(7);
+    for (const b of blocks) {
+      const p = b.querySelector(".xp-kind")!.getAttribute("data-param");
+      expect(b.style.display).toBe("grid");
+      expect(b.querySelector<HTMLElement>(".xp-range")!.style.gridColumn).toBe("1 / -1");
+      const own = names(b);
+      expect(own[0]).toMatch(new RegExp(`^${p} control, `));
+      expect(own.at(-2)).toMatch(new RegExp(`^${p} group, `));
+      expect(own.at(-1)).toBe(`${p} Hide`);
+    }
+    expect(names(blocks.find((b) => b.querySelector("[data-param=lip]"))!)).toEqual([
+      "lip control, Slider",
+      "lip minimum",
+      "lip maximum",
+      "lip step",
+      "lip group, No group",
+      "lip Hide",
+    ]);
+  });
+
+  it("drops the column headings, so the Hide box and the empty group say what they are", async () => {
+    const { root } = await renderAt(248);
+    expect(root.textContent).not.toContain("Range or choices");
+    expect([...root.querySelectorAll(".xp-param .ui-checkbox-label")].map((l) => l.textContent?.trim())).toEqual(
+      Array(7).fill("Hide"),
+    );
+    expect(named(root, "free group").textContent).toContain("No group");
+  });
+
+  it("puts a check's rule and message, and a configuration's name, on lines of their own", async () => {
+    const { root } = await renderAt(248);
+    const line = (name: string) => named(root, name).closest<HTMLElement>(".ui-field")!.style.gridColumn;
+    expect(line("Check 1 rule")).toBe("2 / -1");
+    expect(line("Check 1 message")).toBe("2 / -1");
+    expect(line("Name of configuration Classic")).toBe("1 / -1");
+    expect(line("New configuration name")).toBe("1 / -1");
+    const level = named(root, "Check 1 level");
+    expect(level.style.gridColumn).toBe("2");
+    expect(level.parentElement!.style.display).toBe("grid");
+    expect(named(root, "New check level").style.gridColumn).toBe("2");
+  });
+
+  it("is one table when the panel is wide", async () => {
+    const { root } = await renderAt(640);
+    expect(root.textContent).toContain("Range or choices");
+    expect([...root.querySelectorAll<HTMLElement>(".xp-param")].map((b) => b.style.display)).toEqual(
+      Array(7).fill("contents"),
+    );
+    expect(root.querySelectorAll(".xp-param .ui-checkbox-label")).toHaveLength(0);
+    expect(named(root, "free group").textContent).toContain("none");
+    expect(named(root, "Check 1 level").style.gridColumn).toBe("");
+    expect(named(root, "Name of configuration Classic").closest<HTMLElement>(".ui-field")!.style.gridColumn).toBe("");
+  });
+});

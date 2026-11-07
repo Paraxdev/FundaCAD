@@ -2,7 +2,7 @@
 // Everything here edits the document (ParamDef.control/group/hidden and paramExtras), so it saves with the file,
 // undoes like any edit, and survives the plugin being switched off.
 
-import { computed, reactive, ref, useId } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine } from "fundacad";
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
@@ -52,6 +52,35 @@ function fail(why: string) {
 const clear = () => show("panel", null);
 
 const uid = useId();
+
+// The panel is capped to the span between the rail and the right cards, which a plugin has no stylesheet to query, so
+// below this width the table rows fold onto several lines.
+const STACK_BELOW = 560;
+const scroller = ref<HTMLElement | null>(null);
+const stacked = ref(false);
+let widthWatch: ResizeObserver | null = null;
+let restack = 0;
+const stopWatching = () => {
+  widthWatch?.disconnect();
+  widthWatch = null;
+  cancelAnimationFrame(restack);
+  restack = 0;
+};
+watch(scroller, (el) => {
+  stopWatching();
+  if (!el) return;
+  stacked.value = el.offsetWidth < STACK_BELOW;
+  // Restacking changes the layout, so doing it inside the callback makes WebKit report a ResizeObserver loop error.
+  widthWatch = new ResizeObserver(() => {
+    if (restack) return;
+    restack = requestAnimationFrame(() => {
+      restack = 0;
+      stacked.value = el.offsetWidth < STACK_BELOW;
+    });
+  });
+  widthWatch.observe(el);
+});
+onBeforeUnmount(stopWatching);
 
 function setKind(name: string, kind: ParamControl["kind"], value: number, current?: ParamControl) {
   clear();
@@ -216,7 +245,7 @@ function removeCheck(id: string) {
 
 const empty = computed(() => params.value.length === 0);
 const groupOptions = computed(() => [
-  { value: "", label: "none" },
+  { value: "", label: stacked.value ? "No group" : "none" },
   ...groups.value.map((g) => ({ value: g.id, label: g.name })),
 ]);
 const configTitle = (values: Record<string, string>) =>
@@ -230,6 +259,18 @@ const checkTone = (c: { result?: { ok: boolean } | undefined; check: ParamCheck 
 const section = { margin: "12px 0 4px", fontWeight: "600", opacity: "0.8" };
 const grid = (cols: string) => ({ display: "grid", gridTemplateColumns: cols, gap: "4px 6px", alignItems: "center" });
 const FILL = { width: "100%", minWidth: "0" };
+const ROW = { display: "contents" };
+const BLOCKS = { display: "grid", gap: "6px" };
+const block = (cols: string) => ({
+  ...grid(cols),
+  padding: "6px 8px",
+  background: "var(--float-tile-bg)",
+  borderRadius: "var(--float-chip-radius)",
+  cornerShape: "squircle",
+});
+const PARAM_BLOCK = block("minmax(0, 1fr) minmax(0, 1fr)");
+const CHECK_BLOCK = block("13px minmax(0, 1fr) auto");
+const lineFrom = (col: number) => (stacked.value ? { gridColumn: `${col} / -1` } : {});
 const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0 0 4px" };
 </script>
 
@@ -243,21 +284,29 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
   >
     <div class="measure-title" aria-hidden="true">Parameter Setup</div>
     <div v-for="why in shownProblems" :key="why" role="alert" :style="PROBLEM">{{ why }}</div>
-    <div style="max-height: 70vh; overflow: auto; padding-right: 4px; width: 680px; max-width: 100%">
+    <div ref="scroller" style="max-height: 70vh; overflow: auto; padding-right: 4px; width: 680px; max-width: 100%">
       <div v-if="empty" class="measure-hint">Add a user parameter first (Modify, Parameters).</div>
 
       <template v-else>
         <div :style="section">Controls</div>
-        <div :style="grid('1fr 1.1fr 2.9fr 1fr auto')">
-          <span aria-hidden="true" style="opacity: 0.6">Name</span>
-          <span aria-hidden="true" style="opacity: 0.6">Control</span>
-          <span aria-hidden="true" style="opacity: 0.6">Range or choices</span>
-          <span aria-hidden="true" style="opacity: 0.6">Group</span>
-          <span aria-hidden="true" style="opacity: 0.6" title="Hidden from the Parameters section">Hide</span>
-          <template v-for="(p, i) in params" :key="p.name">
-            <span :title="`${p.def.expr} = ${p.def.value}`" :style="{ opacity: p.def.hidden ? 0.5 : 1 }">{{
-              p.name
-            }}</span>
+        <div :style="stacked ? BLOCKS : grid('1fr 1.1fr 2.9fr 1fr auto')">
+          <template v-if="!stacked">
+            <span aria-hidden="true" style="opacity: 0.6">Name</span>
+            <span aria-hidden="true" style="opacity: 0.6">Control</span>
+            <span aria-hidden="true" style="opacity: 0.6">Range or choices</span>
+            <span aria-hidden="true" style="opacity: 0.6">Group</span>
+            <span aria-hidden="true" style="opacity: 0.6" title="Hidden from the Parameters section">Hide</span>
+          </template>
+          <div v-for="(p, i) in params" :key="p.name" class="xp-param" :style="stacked ? PARAM_BLOCK : ROW">
+            <span
+              :title="`${p.def.expr} = ${p.def.value}`"
+              :style="{
+                opacity: p.def.hidden ? 0.5 : 1,
+                overflowWrap: stacked ? 'anywhere' : undefined,
+                fontWeight: stacked ? 600 : undefined,
+              }"
+              >{{ p.name }}</span
+            >
             <Select
               class="xp-kind"
               :data-param="p.name"
@@ -268,8 +317,9 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :model-value="p.def.control?.kind ?? 'number'"
               @update:model-value="setKind(p.name, $event, p.def.value, p.def.control)"
             />
-            <span v-if="p.def.control?.kind === 'choice'">
+            <div class="xp-range" :style="{ minWidth: 0, ...lineFrom(1) }">
               <TextField
+                v-if="p.def.control?.kind === 'choice'"
                 :label="`${p.name} choices`"
                 size="sm"
                 commit="change"
@@ -279,26 +329,26 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
                 :model-value="formatChoices(p.def.control.choices)"
                 @update:model-value="setChoices(p.name, $event)"
               />
-            </span>
-            <span v-else-if="p.def.control && p.def.control.kind !== 'toggle'" :style="grid('1fr 1fr 1fr')">
-              <NumberField
-                v-for="key in BOUNDS"
-                :key="key"
-                :label="`${p.name} ${BOUND_WORDS[key]}`"
-                :unit="boundUnit(p.def)"
-                :unitless="!boundUnit(p.def)"
-                size="sm"
-                commit="change"
-                nullable
-                :style="FILL"
-                :placeholder="key"
-                :validate="key === 'step' ? stepProblem : undefined"
-                :model-value="boundOf(p.def.control, key)"
-                @update:model-value="setBound(p.name, p.def.control, key, $event)"
-                @error="show(`${p.name}.${key}`, $event && `${p.name} ${BOUND_WORDS[key]}: ${$event}`)"
-              />
-            </span>
-            <span v-else style="opacity: 0.5">{{ p.def.control?.kind === "toggle" ? "0 or 1" : "any value" }}</span>
+              <div v-else-if="p.def.control && p.def.control.kind !== 'toggle'" :style="grid('1fr 1fr 1fr')">
+                <NumberField
+                  v-for="key in BOUNDS"
+                  :key="key"
+                  :label="`${p.name} ${BOUND_WORDS[key]}`"
+                  :unit="boundUnit(p.def)"
+                  :unitless="!boundUnit(p.def)"
+                  size="sm"
+                  commit="change"
+                  nullable
+                  :style="FILL"
+                  :placeholder="key"
+                  :validate="key === 'step' ? stepProblem : undefined"
+                  :model-value="boundOf(p.def.control, key)"
+                  @update:model-value="setBound(p.name, p.def.control, key, $event)"
+                  @error="show(`${p.name}.${key}`, $event && `${p.name} ${BOUND_WORDS[key]}: ${$event}`)"
+                />
+              </div>
+              <span v-else style="opacity: 0.5">{{ p.def.control?.kind === "toggle" ? "0 or 1" : "any value" }}</span>
+            </div>
             <Select
               :label="`${p.name} group`"
               size="sm"
@@ -312,8 +362,10 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :labelledby="hideLabel(i)"
               :model-value="!!p.def.hidden"
               @update:model-value="store.setParamMeta(p.name, { hidden: $event })"
-            />
-          </template>
+            >
+              <template v-if="stacked" #default>Hide</template>
+            </Checkbox>
+          </div>
         </div>
 
         <div :style="section">Groups</div>
@@ -348,13 +400,13 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
         </div>
 
         <div :style="section">Configurations</div>
-        <div :style="grid('1fr auto auto auto')">
+        <div :style="grid(stacked ? 'auto auto minmax(0, 1fr) auto' : '1fr auto auto auto')">
           <template v-for="c in configs" :key="c.id">
             <TextField
               :label="`Name of configuration ${c.name}`"
               size="sm"
               commit="change"
-              :style="FILL"
+              :style="{ ...FILL, ...lineFrom(1) }"
               :title="configTitle(c.values)"
               :model-value="c.name"
               @update:model-value="renameConfig(c.id, $event)"
@@ -380,7 +432,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
             v-model="newConfig"
             label="New configuration name"
             size="sm"
-            :style="FILL"
+            :style="{ ...FILL, ...lineFrom(1) }"
             placeholder="save the current values as…"
             @keydown.enter="saveConfig()"
           />
@@ -391,8 +443,8 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
         <div class="measure-hint" style="margin-bottom: 4px"
           >A rule that must hold, like gap &gt;= 0.3. When it does not, the Parameters section shows its message.</div
         >
-        <div :style="grid('auto 1.2fr 1.6fr 0.8fr auto')">
-          <template v-for="(c, i) in checks" :key="c.check.id">
+        <div :style="stacked ? BLOCKS : grid('auto 1.2fr 1.6fr 0.8fr auto')">
+          <div v-for="(c, i) in checks" :key="c.check.id" :style="stacked ? CHECK_BLOCK : ROW">
             <Icon
               :name="c.result?.ok ? 'check' : 'warning'"
               :size="13"
@@ -404,7 +456,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :label="`Check ${i + 1} rule`"
               size="sm"
               commit="change"
-              :style="FILL"
+              :style="{ ...FILL, ...lineFrom(2) }"
               :validate="(raw) => exprProblem(`check.${c.check.id}`, raw)"
               :model-value="c.check.expr"
               @update:model-value="editCheck(c.check.id, { expr: $event.trim() })"
@@ -413,14 +465,14 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :label="`Check ${i + 1} message`"
               size="sm"
               commit="change"
-              :style="FILL"
+              :style="{ ...FILL, ...lineFrom(2) }"
               :model-value="c.check.message"
               @update:model-value="editCheck(c.check.id, { message: $event.trim() })"
             />
             <Select
               :label="`Check ${i + 1} level`"
               size="sm"
-              :style="FILL"
+              :style="{ ...FILL, gridColumn: stacked ? 2 : undefined }"
               :options="LEVELS"
               :model-value="c.check.level"
               @update:model-value="editCheck(c.check.id, { level: $event })"
@@ -433,26 +485,34 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :tip="`Delete check ${i + 1}`"
               @click="removeCheck(c.check.id)"
             />
-          </template>
-          <span></span>
-          <TextField
-            v-model="newCheck.expr"
-            class="xp-new-check-expr"
-            label="New check rule"
-            size="sm"
-            :style="FILL"
-            placeholder="gap >= 0.3"
-          />
-          <TextField
-            v-model="newCheck.message"
-            label="New check message"
-            size="sm"
-            :style="FILL"
-            placeholder="gap below 0.3 mm fuses"
-            @keydown.enter="addCheck()"
-          />
-          <Select v-model="newCheck.level" label="New check level" size="sm" :style="FILL" :options="LEVELS" />
-          <IconButton icon="plus" :icon-size="13" size="sm" variant="plain" tip="Add check" @click="addCheck()" />
+          </div>
+          <div :style="stacked ? CHECK_BLOCK : ROW">
+            <span></span>
+            <TextField
+              v-model="newCheck.expr"
+              class="xp-new-check-expr"
+              label="New check rule"
+              size="sm"
+              :style="{ ...FILL, ...lineFrom(2) }"
+              placeholder="gap >= 0.3"
+            />
+            <TextField
+              v-model="newCheck.message"
+              label="New check message"
+              size="sm"
+              :style="{ ...FILL, ...lineFrom(2) }"
+              placeholder="gap below 0.3 mm fuses"
+              @keydown.enter="addCheck()"
+            />
+            <Select
+              v-model="newCheck.level"
+              label="New check level"
+              size="sm"
+              :style="{ ...FILL, gridColumn: stacked ? 2 : undefined }"
+              :options="LEVELS"
+            />
+            <IconButton icon="plus" :icon-size="13" size="sm" variant="plain" tip="Add check" @click="addCheck()" />
+          </div>
         </div>
       </template>
       <div class="measure-hint" style="margin-top: 10px"
