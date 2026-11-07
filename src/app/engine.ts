@@ -83,6 +83,7 @@ import { installIsolateCamera } from "./isolateCamera";
 import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
 import { installCanvasPick } from "./canvasPick";
+import { installViewSummary } from "./describeModel";
 import { installKeyboard } from "./keyboard";
 import { installToolFocus } from "./toolFocus";
 import { installTitlebar } from "./titlebar";
@@ -568,6 +569,7 @@ export function mountUi(e: Engine): void {
   e.store.onBuild((s) => e.geometryBrowser.buildChanged(s));
   installSketchStateBridge(e);
   installCanvasPick(e);
+  installViewSummary(e);
   installToolFocus(e);
   installKeyboard(e);
 

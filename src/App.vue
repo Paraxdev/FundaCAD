@@ -29,6 +29,7 @@ import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
 import ExportDialog from "./components/overlays/ExportDialog.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
+import DescribeModelDialog from "./components/overlays/DescribeModelDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
 import TextToolPanel from "./components/overlays/TextToolPanel.vue";
@@ -163,6 +164,7 @@ watch(
   <ShortcutsDialog v-if="dialogs.shortcuts" />
   <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
+  <DescribeModelDialog v-if="dialogs.describeModel" />
 
   <!-- Plugin overlays last, so they open above the app's own, keyed so turning one off unmounts exactly its parts. -->
   <component :is="o.component" v-for="o in overlays" :key="o.key" />

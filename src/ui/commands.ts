@@ -37,6 +37,8 @@ const GLOBAL: Command[] = [
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
   { id: "show-console", label: "Show Console", group: "View", context: "global" },
   { id: "show-last-message", label: "Show Last Message", group: "View", context: "global" },
+  { id: "describe-model", label: "Describe Model…", group: "View", context: "global" },
+  { id: "describe-selection", label: "Describe Selection", group: "View", context: "global" },
   { id: "go-menubar", label: "Go to Menu Bar", group: "Go", context: "global" },
   { id: "go-tools", label: "Go to Tools", group: "Go", context: "global" },
   { id: "go-items", label: "Go to Items", group: "Go", context: "global" },
@@ -71,6 +73,13 @@ export const GEOMETRY_COMMANDS: ReadonlySet<string> = new Set([
   "browse-geometry",
 ]);
 
+/** Shipped without a key like the geometry commands, so their hint is the key the person chose, if any. */
+const CHOSEN_KEY_COMMANDS: ReadonlySet<string> = new Set([
+  ...GEOMETRY_COMMANDS,
+  "describe-model",
+  "describe-selection",
+]);
+
 function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
   const out: Command[] = [];
   for (const g of groups) {
@@ -98,7 +107,7 @@ export function allCommands(): Command[] {
     ...fromGroups(modelGroups(), "model"),
     ...fromGroups(SKETCH, "sketch"),
     ...GLOBAL.map((c) => {
-      if (!GEOMETRY_COMMANDS.has(c.id)) return c;
+      if (!CHOSEN_KEY_COMMANDS.has(c.id)) return c;
       const key = keyHint(c.id);
       return key === undefined ? c : { ...c, key };
     }),

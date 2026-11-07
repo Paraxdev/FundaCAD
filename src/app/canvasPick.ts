@@ -5,6 +5,7 @@ import { singleKeysOn } from "../ui/a11yPrefs";
 import { announce } from "../ui/announce";
 import { isChoiceOpen } from "../ui/choice";
 import { describePick } from "../ui/describePick";
+import { VIEW_SUMMARY_ID } from "../ui/viewSummary";
 import type { Engine } from "./engine";
 import { refuseAloud } from "./planePick";
 
@@ -13,11 +14,14 @@ const KIND_WORDS: Record<GeometryKind, string> = { faces: "Faces", edges: "Edges
 const STEP_SPEECH_DELAY = 120;
 
 /** Makes the canvas a Tab stop that a pointer press does not land on: with no focus change on a press, every path that
- *  hands focus back only from the body keeps working (focusables.ts, treeRowKeys.ts, Menu.vue, Select.vue). */
+ *  hands focus back only from the body keeps working (focusables.ts, treeRowKeys.ts, Menu.vue, Select.vue).
+ *  An img, never an application: that switches off browse mode in NVDA and Orca and the rotor in VoiceOver. */
 export function installCanvasStop(canvas: HTMLElement): void {
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "3D view");
+  canvas.setAttribute("aria-label", "Model");
+  canvas.setAttribute("aria-roledescription", "3D view");
+  canvas.setAttribute("aria-describedby", VIEW_SUMMARY_ID);
   canvas.addEventListener("mousedown", (ev) => {
     ev.preventDefault();
     const active = document.activeElement;

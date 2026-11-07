@@ -10,6 +10,7 @@ import SectionChip from "./SectionChip.vue";
 import UpdatingChip from "./UpdatingChip.vue";
 import { useClearOfCards } from "../../composables/useClearOfCards";
 import { draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope } from "../../ui/materialDrag";
+import { VIEW_SUMMARY_ID, viewSummaryText } from "../../ui/viewSummary";
 
 const engine = useEngine();
 const host = useTemplateRef<HTMLDivElement>("host");
@@ -129,6 +130,8 @@ function onDrop(e: DragEvent) {
     @dragleave="onDragLeave"
     @drop="onDrop"
   >
+    <!-- The 3D view's description (canvasPick.ts installCanvasStop), kept current by app/describeModel.ts. -->
+    <p :id="VIEW_SUMMARY_ID" class="sr-only">{{ viewSummaryText }}</p>
     <PromptBanner />
     <FpsReadout />
     <RoundTripReadout />

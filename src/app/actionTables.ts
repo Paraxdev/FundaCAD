@@ -103,6 +103,8 @@ export const NON_REPEATABLE = new Set([
   "show-all-bodies",
   "show-console",
   "show-last-message",
+  "describe-model",
+  "describe-selection",
   "clean-view",
   "region-next",
   "region-prev",

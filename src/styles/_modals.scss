@@ -920,3 +920,29 @@
   padding: 0;
   list-style: none;
 }
+
+// Describe model: one well per section on the glass, the text selectable so it can be copied in parts.
+.describe-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  user-select: text;
+}
+.describe-section {
+  padding: var(--s-3) var(--s-4);
+  corner-shape: squircle;
+  border-radius: 8px;
+  background: var(--float-tile-bg);
+}
+.describe-head {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.describe-list {
+  margin: 0;
+  padding-left: 1.25em;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
