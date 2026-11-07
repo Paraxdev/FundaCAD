@@ -2,10 +2,20 @@
 // Everything here edits the document (ParamDef.control/group/hidden and paramExtras), so it saves with the file,
 // undoes like any edit, and survives the plugin being switched off.
 
-import { computed, ref } from "vue";
+import { computed, reactive, ref, useId } from "vue";
 import { captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine } from "fundacad";
-import type { ParamCheck, ParamControl } from "fundacad";
-import { FloatingPanel, Icon } from "fundacad/ui";
+import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
+import {
+  Button,
+  Checkbox,
+  FloatingPanel,
+  Icon,
+  IconButton,
+  NumberField,
+  Select,
+  TextField,
+  announce,
+} from "fundacad/ui";
 import { setupOpen } from "./state";
 import { convertControl, formatChoices, nextId, parseChoices } from "./view";
 
@@ -25,40 +35,73 @@ const checks = useDocValue((doc) => {
   return (doc.paramExtras?.checks ?? []).map((c) => ({ check: c, result: results.get(c.id) }));
 });
 
-const KINDS: { kind: ParamControl["kind"]; label: string }[] = [
-  { kind: "number", label: "Number" },
-  { kind: "slider", label: "Slider" },
-  { kind: "toggle", label: "Toggle" },
-  { kind: "choice", label: "Choice" },
+const KINDS: { value: ParamControl["kind"]; label: string }[] = [
+  { value: "number", label: "Number" },
+  { value: "slider", label: "Slider" },
+  { value: "toggle", label: "Toggle" },
+  { value: "choice", label: "Choice" },
 ];
+const LEVELS: { value: ParamCheck["level"]; label: string }[] = [
+  { value: "warning", label: "Warning" },
+  { value: "error", label: "Error" },
+];
+const BOUNDS = ["min", "max", "step"] as const;
+type Bound = (typeof BOUNDS)[number];
+const BOUND_WORDS: Record<Bound, string> = { min: "minimum", max: "maximum", step: "step" };
+
+// What is wrong, as text on the panel: a refused edit used to be a toast, which a screen reader never reached. The
+// panel's own refusals are spoken here, a field's own are spoken by the field and only shown here.
+const problems = reactive<Record<string, string | null>>({});
+const shownProblems = computed(() => Object.values(problems).filter((why): why is string => !!why));
+function show(key: string, why: string | null) {
+  problems[key] = why;
+}
+function fail(why: string) {
+  show("panel", why);
+  announce(why, "assertive", { key: "xp-setup-problem" });
+}
+const clear = () => show("panel", null);
+
+const uid = useId();
 
 function setKind(name: string, kind: ParamControl["kind"], value: number, current?: ParamControl) {
+  clear();
   store.setParamMeta(name, { control: kind === "number" && !current ? null : convertControl(current, kind, value) });
 }
 
 /** A range field left empty removes that bound, except on a slider, which
  *  cannot be drawn without both ends. */
-function setBound(name: string, control: ParamControl, key: "min" | "max" | "step", raw: string) {
+function setBound(name: string, control: ParamControl, key: Bound, v: number | null) {
   if (control.kind !== "number" && control.kind !== "slider") return;
+  clear();
   const next = { ...control } as Record<string, unknown>;
-  if (raw.trim() === "") {
-    if (control.kind === "slider" && key !== "step") return toast(`a slider needs a ${key}`, { kind: "warning" });
+  if (v === null) {
+    if (control.kind === "slider" && key !== "step") return fail(`a slider needs a ${key}`);
     delete next[key];
   } else {
-    const v = Number(raw);
-    if (!Number.isFinite(v) || (key === "step" && v <= 0))
-      return toast(`${key} must be a ${key === "step" ? "positive " : ""}number`, { kind: "warning" });
     next[key] = v;
   }
   const lo = next["min"] as number | undefined;
   const hi = next["max"] as number | undefined;
-  if (lo !== undefined && hi !== undefined && lo >= hi) return toast("min must be below max", { kind: "warning" });
+  if (lo !== undefined && hi !== undefined && lo >= hi) return fail("min must be below max");
   store.setParamMeta(name, { control: next as ParamControl });
 }
 
+const boundOf = (control: ParamControl, key: Bound): number | null =>
+  control.kind === "number" || control.kind === "slider" ? (control[key] ?? null) : null;
+const boundUnit = (def: ParamDef) => (def.unit === "mm" ? "mm" : def.unit === "deg" ? "deg" : null);
+const stepProblem = (v: number) => (v <= 0 ? "step must be a positive number" : null);
+
+function choicesProblem(key: string, raw: string): string | null {
+  const parsed = parseChoices(raw);
+  const why = typeof parsed === "string" ? parsed : null;
+  show(key, why);
+  return why;
+}
 function setChoices(name: string, raw: string) {
   const parsed = parseChoices(raw);
-  if (typeof parsed === "string") return toast(parsed, { kind: "warning" });
+  if (typeof parsed === "string") return;
+  clear();
   store.setParamMeta(name, { control: { kind: "choice", choices: parsed } });
 }
 
@@ -66,6 +109,7 @@ const newGroup = ref("");
 function addGroup() {
   const name = newGroup.value.trim();
   if (!name) return;
+  clear();
   store.updateParamExtras((x) => {
     const list = (x.groups ??= []);
     list.push({
@@ -145,9 +189,10 @@ function exprError(expr: string): string | null {
 
 function addCheck() {
   const { expr, message, level } = newCheck.value;
-  if (!expr.trim() || !message.trim()) return toast("a check needs a rule and a message", { kind: "warning" });
+  if (!expr.trim() || !message.trim()) return fail("a check needs a rule and a message");
   const err = exprError(expr);
-  if (err) return toast(`${expr}: ${err}`, { kind: "warning" });
+  if (err) return fail(`${expr}: ${err}`);
+  clear();
   store.updateParamExtras((x) => {
     const list = (x.checks ??= []);
     list.push({
@@ -162,11 +207,15 @@ function addCheck() {
   });
   newCheck.value = { expr: "", message: "", level: "warning" };
 }
+function exprProblem(key: string, expr: string): string | null {
+  const err = exprError(expr.trim());
+  const why = err && `${expr.trim()}: ${err}`;
+  show(key, why);
+  return why;
+}
 function editCheck(id: string, patch: Partial<ParamCheck>) {
-  if (patch.expr !== undefined) {
-    const err = exprError(patch.expr);
-    if (err) return toast(`${patch.expr}: ${err}`, { kind: "warning" });
-  }
+  if (patch.expr !== undefined && exprError(patch.expr)) return;
+  clear();
   store.updateParamExtras((x) => {
     const c = x.checks?.find((y) => y.id === id);
     if (c) Object.assign(c, patch);
@@ -176,13 +225,23 @@ function removeCheck(id: string) {
   store.updateParamExtras((x) => void (x.checks = (x.checks ?? []).filter((c) => c.id !== id)));
 }
 
-const val = (e: Event) => (e.target as HTMLInputElement).value;
 const empty = computed(() => params.value.length === 0);
+const groupOptions = computed(() => [
+  { value: "", label: "none" },
+  ...groups.value.map((g) => ({ value: g.id, label: g.name })),
+]);
+const configTitle = (values: Record<string, string>) =>
+  Object.entries(values)
+    .map(([n, e]) => `${n} = ${e}`)
+    .join("\n");
+const hideLabel = (i: number) => `${uid}-hide-${i}`;
+const checkTone = (c: { result?: { ok: boolean } | undefined; check: ParamCheck }) =>
+  c.result?.ok ? "var(--ok)" : c.check.level === "error" ? "var(--error)" : "var(--warn)";
 
 const section = { margin: "12px 0 4px", fontWeight: "600", opacity: "0.8" };
 const grid = (cols: string) => ({ display: "grid", gridTemplateColumns: cols, gap: "4px 6px", alignItems: "center" });
-const input = { minWidth: "0", font: "inherit" };
-const iconBtn = { background: "none", border: "none", color: "inherit", cursor: "pointer", padding: "0 2px" };
+const FILL = { width: "100%", minWidth: "0" };
+const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0 0 4px" };
 </script>
 
 <template>
@@ -194,69 +253,76 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
     @close="setupOpen = false"
   >
     <div class="measure-title" aria-hidden="true">Parameter Setup</div>
-    <div style="max-height: 70vh; overflow: auto; padding-right: 4px; width: 560px; max-width: 100%">
+    <div v-for="why in shownProblems" :key="why" role="alert" :style="PROBLEM">{{ why }}</div>
+    <div style="max-height: 70vh; overflow: auto; padding-right: 4px; width: 680px; max-width: 100%">
       <div v-if="empty" class="measure-hint">Add a user parameter first (Modify, Parameters).</div>
 
       <template v-else>
         <div :style="section">Controls</div>
-        <div :style="grid('1.2fr 0.9fr 2.4fr 1fr auto')">
-          <span style="opacity: 0.6">Name</span><span style="opacity: 0.6">Control</span>
-          <span style="opacity: 0.6">Range or choices</span><span style="opacity: 0.6">Group</span>
-          <span style="opacity: 0.6" title="Hidden from the Parameters section">Hide</span>
-          <template v-for="p in params" :key="p.name">
+        <div :style="grid('1.1fr 0.9fr 3fr 1fr auto')">
+          <span aria-hidden="true" style="opacity: 0.6">Name</span>
+          <span aria-hidden="true" style="opacity: 0.6">Control</span>
+          <span aria-hidden="true" style="opacity: 0.6">Range or choices</span>
+          <span aria-hidden="true" style="opacity: 0.6">Group</span>
+          <span aria-hidden="true" style="opacity: 0.6" title="Hidden from the Parameters section">Hide</span>
+          <template v-for="(p, i) in params" :key="p.name">
             <span :title="`${p.def.expr} = ${p.def.value}`" :style="{ opacity: p.def.hidden ? 0.5 : 1 }">{{
               p.name
             }}</span>
-            <select
+            <Select
               class="xp-kind"
               :data-param="p.name"
-              :style="input"
-              :value="p.def.control?.kind ?? 'number'"
-              @change="setKind(p.name, val($event) as ParamControl['kind'], p.def.value, p.def.control)"
-            >
-              <option v-for="k in KINDS" :key="k.kind" :value="k.kind">{{ k.label }}</option>
-            </select>
+              :label="`${p.name} control`"
+              size="sm"
+              :style="FILL"
+              :options="KINDS"
+              :model-value="p.def.control?.kind ?? 'number'"
+              @update:model-value="setKind(p.name, $event, p.def.value, p.def.control)"
+            />
             <span v-if="p.def.control?.kind === 'choice'">
-              <input
-                :style="{ ...input, width: '100%' }"
-                :value="formatChoices(p.def.control.choices)"
+              <TextField
+                :label="`${p.name} choices`"
+                size="sm"
+                commit="change"
+                :style="FILL"
                 placeholder="Small = 10, Large = 30"
-                @change="setChoices(p.name, val($event))"
+                :validate="(raw) => choicesProblem(`${p.name}.choices`, raw)"
+                :model-value="formatChoices(p.def.control.choices)"
+                @update:model-value="setChoices(p.name, $event)"
               />
             </span>
             <span v-else-if="p.def.control && p.def.control.kind !== 'toggle'" :style="grid('1fr 1fr 1fr')">
-              <input
-                :style="input"
-                :value="p.def.control.min ?? ''"
-                placeholder="min"
-                @change="setBound(p.name, p.def.control, 'min', val($event))"
-              />
-              <input
-                :style="input"
-                :value="p.def.control.max ?? ''"
-                placeholder="max"
-                @change="setBound(p.name, p.def.control, 'max', val($event))"
-              />
-              <input
-                :style="input"
-                :value="p.def.control.step ?? ''"
-                placeholder="step"
-                @change="setBound(p.name, p.def.control, 'step', val($event))"
+              <NumberField
+                v-for="key in BOUNDS"
+                :key="key"
+                :label="`${p.name} ${BOUND_WORDS[key]}`"
+                :unit="boundUnit(p.def)"
+                :unitless="!boundUnit(p.def)"
+                size="sm"
+                commit="change"
+                nullable
+                :style="FILL"
+                :placeholder="key"
+                :validate="key === 'step' ? stepProblem : undefined"
+                :model-value="boundOf(p.def.control, key)"
+                @update:model-value="setBound(p.name, p.def.control, key, $event)"
+                @error="show(`${p.name}.${key}`, $event && `${p.name} ${BOUND_WORDS[key]}: ${$event}`)"
               />
             </span>
             <span v-else style="opacity: 0.5">{{ p.def.control?.kind === "toggle" ? "0 or 1" : "any value" }}</span>
-            <select
-              :style="input"
-              :value="p.def.group ?? ''"
-              @change="store.setParamMeta(p.name, { group: val($event) || null })"
-            >
-              <option value="">none</option>
-              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-            </select>
-            <input
-              type="checkbox"
-              :checked="!!p.def.hidden"
-              @change="store.setParamMeta(p.name, { hidden: ($event.target as HTMLInputElement).checked })"
+            <Select
+              :label="`${p.name} group`"
+              size="sm"
+              :style="FILL"
+              :options="groupOptions"
+              :model-value="p.def.group ?? ''"
+              @update:model-value="store.setParamMeta(p.name, { group: $event || null })"
+            />
+            <span :id="hideLabel(i)" class="sr-only">{{ p.name }} Hide</span>
+            <Checkbox
+              :labelledby="hideLabel(i)"
+              :model-value="!!p.def.hidden"
+              @update:model-value="store.setParamMeta(p.name, { hidden: $event })"
             />
           </template>
         </div>
@@ -264,47 +330,72 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
         <div :style="section">Groups</div>
         <div :style="grid('1fr auto')">
           <template v-for="g in groups" :key="g.id">
-            <input :style="input" :value="g.name" @change="renameGroup(g.id, val($event))" />
-            <button
-              :style="iconBtn"
-              :title="`Delete ${g.name}, its parameters become ungrouped`"
+            <TextField
+              :label="`Name of group ${g.name}`"
+              size="sm"
+              commit="change"
+              :style="FILL"
+              :model-value="g.name"
+              @update:model-value="renameGroup(g.id, $event)"
+            />
+            <IconButton
+              icon="close"
+              :icon-size="13"
+              size="sm"
+              variant="plain"
+              :tip="`Delete group ${g.name}, its parameters become ungrouped`"
               @click="removeGroup(g.id)"
-            >
-              <Icon name="close" :size="13" />
-            </button>
+            />
           </template>
-          <input v-model="newGroup" :style="input" placeholder="new group" @keydown.enter="addGroup()" />
-          <button :style="iconBtn" title="Add group" @click="addGroup()"><Icon name="plus" :size="13" /></button>
+          <TextField
+            v-model="newGroup"
+            label="New group name"
+            size="sm"
+            :style="FILL"
+            placeholder="new group"
+            @keydown.enter="addGroup()"
+          />
+          <IconButton icon="plus" :icon-size="13" size="sm" variant="plain" tip="Add group" @click="addGroup()" />
         </div>
 
         <div :style="section">Configurations</div>
         <div :style="grid('1fr auto auto auto')">
           <template v-for="c in configs" :key="c.id">
-            <input
-              :style="input"
-              :value="c.name"
-              :title="
-                Object.entries(c.values)
-                  .map(([n, e]) => `${n} = ${e}`)
-                  .join('\n')
-              "
-              @change="renameConfig(c.id, val($event))"
+            <TextField
+              :label="`Name of configuration ${c.name}`"
+              size="sm"
+              commit="change"
+              :style="FILL"
+              :title="configTitle(c.values)"
+              :model-value="c.name"
+              @update:model-value="renameConfig(c.id, $event)"
             />
-            <button class="xp-apply" @click="applyConfig(c.id)">Apply</button>
-            <button title="Overwrite with the values the parameters have now" @click="updateConfig(c.id, c.name)"
-              >Update</button
+            <Button class="xp-apply" size="sm" :aria-label="`Apply ${c.name}`" @click="applyConfig(c.id)">Apply</Button>
+            <Button
+              size="sm"
+              tip="Overwrite with the values the parameters have now"
+              :aria-label="`Update ${c.name}`"
+              @click="updateConfig(c.id, c.name)"
+              >Update</Button
             >
-            <button :style="iconBtn" :title="`Delete ${c.name}`" @click="removeConfig(c.id)"
-              ><Icon name="close" :size="13"
-            /></button>
+            <IconButton
+              icon="close"
+              :icon-size="13"
+              size="sm"
+              variant="plain"
+              :tip="`Delete ${c.name}`"
+              @click="removeConfig(c.id)"
+            />
           </template>
-          <input
+          <TextField
             v-model="newConfig"
-            :style="input"
+            label="New configuration name"
+            size="sm"
+            :style="FILL"
             placeholder="save the current values as…"
             @keydown.enter="saveConfig()"
           />
-          <button style="grid-column: span 3; justify-self: start" @click="saveConfig()">Save</button>
+          <Button size="sm" style="grid-column: span 3; justify-self: start" @click="saveConfig()">Save</Button>
         </div>
 
         <div :style="section">Checks</div>
@@ -312,45 +403,67 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
           >A rule that must hold, like gap &gt;= 0.3. When it does not, the Parameters section shows its message.</div
         >
         <div :style="grid('auto 1.2fr 1.6fr 0.8fr auto')">
-          <template v-for="c in checks" :key="c.check.id">
+          <template v-for="(c, i) in checks" :key="c.check.id">
             <Icon
               :name="c.result?.ok ? 'check' : 'warning'"
               :size="13"
-              :style="{ color: c.result?.ok ? '#3ba55d' : c.check.level === 'error' ? '#e24a3b' : '#d2a83b' }"
+              :style="{ color: checkTone(c) }"
               :title="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
               :label="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
             />
-            <input :style="input" :value="c.check.expr" @change="editCheck(c.check.id, { expr: val($event).trim() })" />
-            <input
-              :style="input"
-              :value="c.check.message"
-              @change="editCheck(c.check.id, { message: val($event).trim() })"
+            <TextField
+              :label="`Check ${i + 1} rule`"
+              size="sm"
+              commit="change"
+              :style="FILL"
+              :validate="(raw) => exprProblem(`check.${c.check.id}`, raw)"
+              :model-value="c.check.expr"
+              @update:model-value="editCheck(c.check.id, { expr: $event.trim() })"
             />
-            <select
-              :style="input"
-              :value="c.check.level"
-              @change="editCheck(c.check.id, { level: val($event) as ParamCheck['level'] })"
-            >
-              <option value="warning">Warning</option>
-              <option value="error">Error</option>
-            </select>
-            <button :style="iconBtn" title="Delete check" @click="removeCheck(c.check.id)"
-              ><Icon name="close" :size="13"
-            /></button>
+            <TextField
+              :label="`Check ${i + 1} message`"
+              size="sm"
+              commit="change"
+              :style="FILL"
+              :model-value="c.check.message"
+              @update:model-value="editCheck(c.check.id, { message: $event.trim() })"
+            />
+            <Select
+              :label="`Check ${i + 1} level`"
+              size="sm"
+              :style="FILL"
+              :options="LEVELS"
+              :model-value="c.check.level"
+              @update:model-value="editCheck(c.check.id, { level: $event })"
+            />
+            <IconButton
+              icon="close"
+              :icon-size="13"
+              size="sm"
+              variant="plain"
+              :tip="`Delete check ${i + 1}`"
+              @click="removeCheck(c.check.id)"
+            />
           </template>
           <span></span>
-          <input v-model="newCheck.expr" class="xp-new-check-expr" :style="input" placeholder="gap >= 0.3" />
-          <input
+          <TextField
+            v-model="newCheck.expr"
+            class="xp-new-check-expr"
+            label="New check rule"
+            size="sm"
+            :style="FILL"
+            placeholder="gap >= 0.3"
+          />
+          <TextField
             v-model="newCheck.message"
-            :style="input"
+            label="New check message"
+            size="sm"
+            :style="FILL"
             placeholder="gap below 0.3 mm fuses"
             @keydown.enter="addCheck()"
           />
-          <select v-model="newCheck.level" :style="input">
-            <option value="warning">Warning</option>
-            <option value="error">Error</option>
-          </select>
-          <button :style="iconBtn" title="Add check" @click="addCheck()"><Icon name="plus" :size="13" /></button>
+          <Select v-model="newCheck.level" label="New check level" size="sm" :style="FILL" :options="LEVELS" />
+          <IconButton icon="plus" :icon-size="13" size="sm" variant="plain" tip="Add check" @click="addCheck()" />
         </div>
       </template>
       <div class="measure-hint" style="margin-top: 10px"
