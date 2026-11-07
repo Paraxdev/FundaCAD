@@ -97,6 +97,16 @@
   border-radius: var(--r-sm);
   transition: background var(--t-fast) var(--ease);
 }
+/* The MultiColor palette's native colour picker, one swatch per filament slot. */
+.pal-swatch {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  vertical-align: middle;
+}
 .tree-folder:hover {
   background: var(--raised);
 }

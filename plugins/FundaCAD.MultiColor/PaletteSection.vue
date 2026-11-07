@@ -5,7 +5,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import { FILAMENTS, staleSlots, type FilamentSource } from "./palette";
 import { service, useBrowserStore, useBuildValue, useEngine } from "fundacad";
-import { Icon, InlineLabel } from "fundacad/ui";
+import { Icon, IconButton, InlineLabel } from "fundacad/ui";
 
 const engine = useEngine();
 const store = engine.store;
@@ -98,45 +98,35 @@ onUnmounted(() => {
       <span class="feature-icon"><Icon name="filament" :size="14" /></span>
       <span>Palette</span>
       <span style="flex: 1"></span>
-      <span class="pal-dot" :title="dotTitle" :style="dotStyle"></span>
+      <span class="pal-dot" role="img" :aria-label="dotTitle" :title="dotTitle" :style="dotStyle"></span>
+      <span v-if="isStale" class="sr-only" role="alert">Warning: {{ dotTitle }}</span>
       <!-- .stop: the button lives in the header but must not also toggle it -->
-      <button
+      <IconButton
         class="pal-sync"
-        title="Sync filaments from printer"
-        style="
-          background: none;
-          border: none;
-          color: inherit;
-          cursor: pointer;
-          font-size: var(--fs-body, 13px);
-          padding: 0 4px;
-          margin-right: 6px;
-        "
+        icon="sync"
+        tip="Sync filaments from printer"
+        size="sm"
+        variant="plain"
+        :icon-size="14"
+        style="margin-right: 6px"
         @click.stop="sync()"
-        ><Icon name="sync" :size="14"
-      /></button>
+      />
       <span class="tree-count">{{ store.colorPalette.length }}</span>
     </div>
 
-    <template v-if="!collapsed">
+    <div v-if="!collapsed" role="list" aria-label="Filament slots" style="display: contents">
       <div
         v-for="(slot, i) in store.colorPalette"
         :key="`pal:${i}`"
+        role="listitem"
         class="feature-row tree-child"
         :title="`Filament slot ${i + 1} → toolhead ${i + 1}${slot.material ? ` (${slot.material})` : ''}`"
       >
+        <!-- Kept raw: no base control draws a colour picker, so the name is the slot's. -->
         <input
           type="color"
           class="pal-swatch"
-          style="
-            width: 18px;
-            height: 18px;
-            border: none;
-            background: none;
-            padding: 0;
-            cursor: pointer;
-            vertical-align: middle;
-          "
+          :aria-label="`Colour of ${slot.name}`"
           :value="slot.color"
           @change="store.setPaletteSlot(i, { color: ($event.target as HTMLInputElement).value })"
         />
@@ -153,6 +143,6 @@ onUnmounted(() => {
           >{{ slot.material }}</span
         >
       </div>
-    </template>
+    </div>
   </template>
 </template>
