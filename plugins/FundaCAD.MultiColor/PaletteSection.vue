@@ -2,11 +2,12 @@
 // Renders nothing unless there are bodies and a machine answered about filament: the palette is what a machine's
 // toolheads hold, not a colour scheme, and a control that cannot do its job is worse present than absent.
 
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, useId, watch } from "vue";
 import { FILAMENTS, staleSlots, type FilamentSource } from "./palette";
 import { service, useBrowserStore, useBuildValue, useEngine } from "fundacad";
 import { Icon, IconButton, InlineLabel } from "fundacad/ui";
 
+const uid = useId();
 const engine = useEngine();
 const store = engine.store;
 const browser = useBrowserStore();
@@ -93,8 +94,18 @@ onUnmounted(() => {
   <template v-if="shown">
     <!-- Own markup rather than TreeFolder: the dot and sync button sit where a folder's eye would, and the label has
          no .tree-label class on purpose (the e2e panel dump reads that). -->
-    <div class="tree-folder" :aria-expanded="!collapsed" @click="browser.toggle('Palette')">
-      <span class="tree-caret"><Icon :name="collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
+    <div class="tree-folder" @click="browser.toggle('Palette')">
+      <IconButton
+        class="tree-caret"
+        variant="plain"
+        size="sm"
+        :icon="collapsed ? 'caretRight' : 'caretDown'"
+        :icon-size="11"
+        :tip="`${collapsed ? 'Expand' : 'Collapse'} Palette`"
+        :aria-expanded="!collapsed"
+        :aria-controls="`${uid}-body`"
+        @click.stop="browser.toggle('Palette')"
+      />
       <span class="feature-icon"><Icon name="filament" :size="14" /></span>
       <span>Palette</span>
       <span style="flex: 1"></span>
@@ -114,7 +125,7 @@ onUnmounted(() => {
       <span class="tree-count">{{ store.colorPalette.length }}</span>
     </div>
 
-    <div v-if="!collapsed" role="list" aria-label="Filament slots" style="display: contents">
+    <div v-if="!collapsed" :id="`${uid}-body`" role="list" aria-label="Filament slots" style="display: contents">
       <div
         v-for="(slot, i) in store.colorPalette"
         :key="`pal:${i}`"

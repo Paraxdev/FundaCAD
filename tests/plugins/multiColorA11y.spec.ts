@@ -91,6 +91,16 @@ describe("the filament palette, for a screen reader", () => {
     expect(items[0]!.querySelector(".pal-swatch")).not.toBeNull();
   });
 
+  it("puts the expanded state on the caret button that controls the slot list", async () => {
+    machine();
+    const { root } = await open();
+    const caret = root.querySelector(".tree-caret")!;
+    expect(caret.tagName).toBe("BUTTON");
+    expect(caret.getAttribute("aria-expanded")).toBe("true");
+    expect(caret.getAttribute("aria-controls")).toBe(root.querySelector("[role=list]")!.id);
+    expect(root.querySelector(".tree-folder")!.hasAttribute("aria-expanded")).toBe(false);
+  });
+
   it("gives the connection dot a name that says the state", async () => {
     machine();
     const { root } = await open();
