@@ -47,11 +47,15 @@ class Problems(unittest.TestCase):
 
     def test_no_document_fails(self):
         found = atspi.problems([app(node("push button", "Close"))])
-        self.assertEqual(found, ["no document web node, the page never reached the accessibility bus"])
+        self.assertEqual(found, ["no web document node, the page never reached the accessibility bus"])
 
     def test_a_defunct_document_counts_as_none(self):
         dead = node("document web", "FundaCAD", ("defunct",))
-        self.assertIn("no document web node", atspi.problems([app(dead)])[0])
+        self.assertIn("no web document node", atspi.problems([app(dead)])[0])
+
+    def test_a_document_text_root_counts_as_the_page(self):
+        root = node("document text", "Untitled · FundaCAD Dev", children=[node("push button", "Blank")])
+        self.assertEqual(atspi.problems([app(node("scroll pane", children=[root]))]), [])
 
     def test_the_document_may_sit_in_another_checked_app(self):
         shell = app(node("push button", "Close"))

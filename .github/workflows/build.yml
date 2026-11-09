@@ -588,7 +588,7 @@ jobs:
             echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log" "$XDG_DATA_HOME/dev.fundacad.app/logs/fundacad.log" || true; exit 1
           fi
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
-            python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+            python3 scripts/bundle-smoke.py --wait-shared 120 --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
       # The AppImage no longer forces X11, so its native Wayland window gets the
       # Flatpak's headless cage smoke. Not a gate until it has run green on dev.
