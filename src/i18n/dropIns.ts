@@ -32,11 +32,25 @@ export function browserDropIns(storage: DropInStorage): DropInSource {
   };
 }
 
+let core: Promise<typeof import("@tauri-apps/api/core")> | undefined;
+const tauri = () => (core ??= import("@tauri-apps/api/core"));
+
+// Rust (src-tauri/src/languages.rs) takes a language code, never a path, and refuses links and files over 256 KB.
+export const folderDropIns: DropInSource = {
+  kind: "folder",
+  list: async () => (await tauri()).invoke<string[]>("language_files_list"),
+  async read(code) {
+    return isLanguageCode(code) ? (await tauri()).invoke<string | null>("language_file_read", { code }) : null;
+  },
+  open: async () => (await tauri()).invoke<void>("language_folder_open"),
+};
+
 // Safe mode reads no user file.
 export function pickDropInSource(
   page: { __TAURI_INTERNALS__?: unknown; __FUNDACAD_SAFE_MODE__?: unknown } | undefined,
   storage: DropInStorage | null,
 ): DropInSource {
-  if (!page || !storage || page.__FUNDACAD_SAFE_MODE__ || "__TAURI_INTERNALS__" in page) return noDropIns;
-  return browserDropIns(storage);
+  if (!page || page.__FUNDACAD_SAFE_MODE__) return noDropIns;
+  if ("__TAURI_INTERNALS__" in page) return folderDropIns;
+  return storage ? browserDropIns(storage) : noDropIns;
 }

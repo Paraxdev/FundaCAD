@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { browserDropIns, noDropIns, pickDropInSource } from "../../src/i18n/dropIns";
+import { browserDropIns, folderDropIns, noDropIns, pickDropInSource } from "../../src/i18n/dropIns";
 
 function storage(seed: Record<string, string>) {
   const keys = Object.keys(seed);
@@ -120,14 +120,23 @@ describe("the source of the user's language files", () => {
     expect(pickDropInSource({}, s).kind).toBe("browser");
   });
 
-  it("is none in safe mode, in the desktop app for now, without a page and without storage", async () => {
+  it("is the languages folder in the desktop app, with or without storage", () => {
     const kinds = [
-      pickDropInSource({ __FUNDACAD_SAFE_MODE__: { reason: "flag" } }, s),
       pickDropInSource({ __TAURI_INTERNALS__: {} }, s),
+      pickDropInSource({ __TAURI_INTERNALS__: {} }, null),
+    ];
+    expect(kinds).toEqual([folderDropIns, folderDropIns]);
+  });
+
+  it("is none in safe mode, in the browser and the desktop app, without a page and without storage", async () => {
+    const safe = { reason: "flag" };
+    const kinds = [
+      pickDropInSource({ __FUNDACAD_SAFE_MODE__: safe }, s),
+      pickDropInSource({ __TAURI_INTERNALS__: {}, __FUNDACAD_SAFE_MODE__: safe }, s),
       pickDropInSource(undefined, s),
       pickDropInSource({}, null),
     ];
     expect(kinds).toEqual([noDropIns, noDropIns, noDropIns, noDropIns]);
-    expect([await noDropIns.list(), await noDropIns.read("de")]).toEqual([[], null]);
+    expect([await noDropIns.list(), await noDropIns.read("de"), noDropIns.open]).toEqual([[], null, undefined]);
   });
 });

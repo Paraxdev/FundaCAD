@@ -39,6 +39,7 @@ export const setLanguage = catalog.setLanguage;
 export const reloadLanguageFiles = catalog.reloadDropIns;
 export const loadLanguageFile = catalog.loadDropInFile;
 export const removeLanguageFile = catalog.removeDropIn;
+export const openLanguageFolder = catalog.openDropInFolder;
 export const languageFileSource = catalog.dropInKind;
 export const languageSetting = catalog.setting;
 export const activeLanguage = catalog.active;

@@ -9,6 +9,8 @@ import {
   languageFileStatus,
   languageSetting,
   loadLanguageFile,
+  openLanguageFolder,
+  reloadLanguageFiles,
   removeLanguageFile,
   setLanguage,
   t,
@@ -16,6 +18,7 @@ import {
 } from "../../i18n";
 import type { DropInFileError } from "../../i18n/catalog";
 import { MAX_LINE_CHARS, MAX_OVERRIDE_BYTES, shownKey } from "../../i18n/overrides";
+import { safeMode } from "../../ui/safeMode";
 
 const SHOWN_SKIPS = 5;
 
@@ -26,9 +29,13 @@ const FILE_ERRORS: Record<DropInFileError, MessageKey> = {
   "bad-name": "prefs.language.error.badName",
   unreadable: "prefs.language.error.unreadable",
   storage: "prefs.language.error.storage",
+  "not-read": "prefs.language.error.notRead",
+  folder: "prefs.language.error.folder",
 };
 
-const browser = languageFileSource() === "browser";
+const source = languageFileSource();
+// Safe mode reads none of the user's files; its folder buttons stay in view, off, so the reason can show.
+const locked = safeMode() !== null;
 const problem = ref<DropInFileError | null>(null);
 const status = computed(() => languageFileStatus());
 
@@ -63,6 +70,15 @@ async function loadFile() {
 async function removeLines() {
   problem.value = await removeLanguageFile();
 }
+
+async function openFolder() {
+  problem.value = await openLanguageFolder();
+}
+
+async function reload() {
+  problem.value = null;
+  await reloadLanguageFiles();
+}
 </script>
 
 <template>
@@ -79,10 +95,27 @@ async function removeLines() {
       />
     </div>
     <p id="prefs-language-hint" class="pref-hint">{{ t("prefs.language.hint") }}</p>
-    <div v-if="browser" class="prefs-actions">
+    <div v-if="source === 'folder' || locked" class="prefs-actions">
+      <Button
+        class="prefs-language-open"
+        :disabled="locked"
+        :disabled-reason="locked ? t('prefs.language.safeMode') : undefined"
+        @click="openFolder"
+        >{{ t("prefs.language.open") }}</Button
+      >
+      <Button
+        class="prefs-language-reload"
+        :disabled="locked"
+        :disabled-reason="locked ? t('prefs.language.safeMode') : undefined"
+        @click="reload"
+        >{{ t("prefs.language.reload") }}</Button
+      >
+    </div>
+    <div v-else-if="source === 'browser'" class="prefs-actions">
       <Button class="prefs-language-load" @click="loadFile">{{ t("prefs.language.load") }}</Button>
       <Button v-if="status" class="prefs-language-remove" @click="removeLines">{{ t("prefs.language.remove") }}</Button>
     </div>
+    <p v-if="locked" class="pref-hint prefs-language-locked" role="note">{{ t("prefs.language.safeMode") }}</p>
     <div class="prefs-language-status" role="status">
       <p v-if="status && !status.error" class="pref-hint">{{ t("prefs.language.inUse", { n: status.lines }) }}</p>
       <template v-if="skipped.length">

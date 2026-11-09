@@ -96,6 +96,7 @@ describe("the lookup per line", () => {
   it("takes the user's line, then the shipped line, then English", async () => {
     const seed = { "fundacad.language.dropin.de": JSON.stringify({ "stress.setup.title": "Meine Studie" }) };
     const { c } = make({ loaders: files({ "stress.load.force": de["stress.load.force"] }) }, seed);
+    await c.init();
     await c.setLanguage("de");
     expect(lines(c)).toEqual(["Meine Studie", "Kraft 12.5 N auf Face 3", "2,5 faces"]);
   });
@@ -175,13 +176,14 @@ describe("picking a language", () => {
       "fundacad.language.dropin.fr": JSON.stringify({ "stress.load.force": "Force {value} N sur {faces}" }),
     };
     const { c, pageLang } = make({ loaders: files({ "stress.setup.title": de["stress.setup.title"] }) }, seed);
+    await c.init();
     await c.setLanguage("de");
     await c.setLanguage("fr");
     expect(c.t("stress.load.force", ARGS)).toBe("Force 12.5 N sur Face 3");
     await c.setLanguage("de");
     expect([lines(c), pageLang]).toEqual([
       ["Studie einrichten", "Force 12.5 N on Face 3", "2,5 faces"],
-      ["de-DE", "fr", "de-DE"],
+      ["en", "de-DE", "fr", "de-DE"],
     ]);
   });
 
@@ -330,6 +332,7 @@ describe("the user's language file", () => {
       [key]: JSON.stringify({ "stress.setup.title": "Meine Studie", "stress.load.force": "Kraft {value}" }),
     };
     const { c, storage } = make({}, seed);
+    await c.init();
     await c.setLanguage("de");
     expect(lines(c).slice(0, 2)).toEqual(["Meine Studie", "Kraft 12.5"]);
     storage.setItem(key, JSON.stringify({ "stress.setup.title": "Neue Studie" }));
@@ -582,6 +585,7 @@ describe("removing the user's lines", () => {
       throw new DOMException("blocked", "SecurityError");
     };
     const { c } = make({ dropIns: browserDropIns(stored) }, seed);
+    await c.init();
     await c.setLanguage("de");
     const { c: none } = make({ dropIns: noDropIns });
     expect([await c.removeDropIn(), c.t("stress.setup.title"), await none.removeDropIn()]).toEqual([

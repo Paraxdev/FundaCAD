@@ -9,6 +9,8 @@ import { pseudoNodes } from "./pseudo";
 
 export const LANGUAGE_KEY = "fundacad.language";
 export const DROP_IN_PREFIX = "fundacad.language.dropin.";
+// A slow disk never holds the start back longer than this; Reload reads the folder again.
+const START_LIMIT_MS = 2000;
 
 /** The lines the catalog itself shows, so an English table without them fails vue-tsc. */
 export type CoreKey = "prefs.language.system" | "prefs.language.yours";
@@ -19,9 +21,10 @@ export interface DropInSource {
   read(code: string): Promise<string | null>;
   save?(code: string, text: string): Promise<void>;
   remove?(code: string): Promise<void>;
+  open?(): Promise<void>;
 }
 
-export type DropInFileError = NonNullable<OverrideResult["error"]> | "bad-name" | "unreadable" | "storage";
+export type DropInFileError = NonNullable<DropInStatus["error"]> | "bad-name" | "unreadable" | "storage" | "folder";
 
 export interface CatalogDeps<K extends string> {
   english: Readonly<Record<K | CoreKey, string>>;
@@ -45,7 +48,7 @@ export interface LanguageChoice {
 export interface DropInStatus {
   lines: number;
   skipped: OverrideResult["skipped"];
-  error?: OverrideResult["error"];
+  error?: OverrideResult["error"] | "not-read";
 }
 
 interface Active {
@@ -136,28 +139,29 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     }
   }
 
-  async function loadDropIn(code: string): Promise<OverrideResult | null> {
-    if (!isLanguageCode(code)) return null;
+  // Only a listed file is read, so a language without one costs no read.
+  async function loadDropIn(code: string): Promise<Pick<Active, "dropIn" | "status"> | null> {
+    if (!dropInCodes.value.includes(code)) return null;
+    let result: OverrideResult;
     try {
       const text = await deps.dropIns.read(code);
-      return text === null ? null : parseOverrides(text, english);
+      if (text === null) return null;
+      result = parseOverrides(text, english);
     } catch (e) {
       console.warn(`the user's ${code} language file could not be read`, e);
-      return null;
+      return { dropIn: new Map(), status: { lines: 0, skipped: [], error: "not-read" } };
     }
+    const { lines, skipped, error } = result;
+    return { dropIn: lines, status: { lines: lines.size, skipped, ...(error ? { error } : {}) } };
   }
 
-  async function activate(code: string): Promise<void> {
+  async function activate(code: string, late?: Promise<null>): Promise<void> {
     const mine = ++ticket;
-    const [shipped, dropIn] = await Promise.all([loadShipped(code), loadDropIn(code)]);
+    const read = loadDropIn(code);
+    const [shipped, dropIn] = await Promise.all([loadShipped(code), late ? Promise.race([read, late]) : read]);
     if (mine !== ticket) return;
     const bcp47 = languageOf(code)?.bcp47 ?? code;
-    const status = dropIn && {
-      lines: dropIn.lines.size,
-      skipped: dropIn.skipped,
-      ...(dropIn.error ? { error: dropIn.error } : {}),
-    };
-    active.value = { code, bcp47, shipped, dropIn: dropIn?.lines ?? new Map(), status };
+    active.value = { code, bcp47, shipped, dropIn: dropIn?.dropIn ?? new Map(), status: dropIn?.status ?? null };
     try {
       deps.setPageLang(bcp47);
     } catch {
@@ -183,15 +187,21 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
 
   /** Never rejects: a broken setting, file or folder leaves English. */
   async function init(): Promise<void> {
-    dropInCodes.value = await listDropIns();
-    let stored: string | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<null>((r) => (timer = setTimeout(() => r(null), START_LIMIT_MS)));
     try {
-      stored = deps.storage?.getItem(LANGUAGE_KEY) ?? null;
-    } catch {
-      // Blocked storage reads as no setting.
+      dropInCodes.value = (await Promise.race([listDropIns(), late])) ?? [];
+      let stored: string | null = null;
+      try {
+        stored = deps.storage?.getItem(LANGUAGE_KEY) ?? null;
+      } catch {
+        // Blocked storage reads as no setting.
+      }
+      setting.value = stored !== null && known(stored) ? stored : "system";
+      await activate(resolve(setting.value), late);
+    } finally {
+      clearTimeout(timer);
     }
-    setting.value = stored !== null && known(stored) ? stored : "system";
-    await activate(resolve(setting.value));
   }
 
   async function setLanguage(next: string): Promise<void> {
@@ -243,6 +253,17 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     return null;
   }
 
+  async function openDropInFolder(): Promise<"folder" | null> {
+    if (!deps.dropIns.open) return "folder";
+    try {
+      await deps.dropIns.open();
+    } catch (e) {
+      console.warn("the user's languages folder could not be opened", e);
+      return "folder";
+    }
+    return null;
+  }
+
   async function reloadDropIns(): Promise<void> {
     dropInCodes.value = await listDropIns();
     if (!known(setting.value)) setting.value = "system";
@@ -286,6 +307,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     reloadDropIns,
     loadDropInFile,
     removeDropIn,
+    openDropInFolder,
     dropInKind: (): DropInSource["kind"] => deps.dropIns.kind,
     setting: (): string => setting.value,
     active: (): { code: string; bcp47: string } => ({ code: active.value.code, bcp47: active.value.bcp47 }),
