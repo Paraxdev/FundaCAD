@@ -304,6 +304,12 @@ impl RealEngine {
     // free_port releases its port before the engine binds it, so a test starting beside this one can take it
     // first and the engine exits without listening; a fresh port is tried then.
     pub fn start() -> RealEngine {
+        RealEngine::start_with_grace(0.0)
+    }
+
+    /// `grace` is how long the engine counts as still starting while no window has published; the other
+    /// suites start it at 0 so a missing window answers at once.
+    pub fn start_with_grace(grace: f64) -> RealEngine {
         for _ in 0..5 {
             let port = free_port();
             let token = format!("live-test-{port}");
@@ -313,6 +319,7 @@ impl RealEngine {
             cmd.arg("--ws")
                 .env("FUNDACAD_ENGINE_PORT", port.to_string())
                 .env("FUNDACAD_ENGINE_TOKEN", &token)
+                .env("FUNDACAD_ENGINE_START_GRACE_S", grace.to_string())
                 .env_remove("SINDRI_ENGINE_PORT")
                 .env_remove("SINDRI_ENGINE_TOKEN")
                 .stdout(Stdio::piped())

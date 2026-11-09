@@ -1043,8 +1043,9 @@ losing the socket gives it up.
 
 // a guest reading. Also its heartbeat, which is why the name is on a READ.
 { "op": "session_state", "id": "...", "name": "an assistant" }
-// -> { "attached": true, "revision": 12, "title": "...", "status": { ... },
+// -> { "attached": true, "starting": false, "revision": 12, "title": "...", "status": { ... },
 //      "document": { ... }, "guests": [...] }
+// `starting` is true until a window first hosts or 30 s pass, so a guest can wait for a page still loading.
 
 // a guest offering an edit
 { "op": "session_propose", "id": "...", "document": { ... }, "baseRevision": 12,

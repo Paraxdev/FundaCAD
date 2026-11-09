@@ -22,6 +22,10 @@ pub const MAX_ASK_EXTS: usize = 8;
 /// Characters of the tool name an ask carries into the dialog title.
 pub const MAX_ASK_TOOL: usize = 40;
 
+/// Seconds after the engine starts that a window may still be loading its page, which is what starts hosting; the
+/// app writes its session file as soon as the engine is up, a slow WebKit page load measured about 5 s on CI.
+pub const START_GRACE: f64 = 30.0;
+
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
 
 /// A guest's request that the user pick a path in the host's file dialog.
@@ -38,6 +42,10 @@ struct Ask {
 
 pub struct LiveSession {
     clock: Clock,
+    started: f64,
+    start_grace: f64,
+    /// Survives a release: an app that hosted once has finished starting.
+    ever_hosted: bool,
     host_id: Option<String>,
     /// The host's open document session, null for a host that names none. Proposals are only ever for it.
     doc: Value,
@@ -97,8 +105,12 @@ fn session_nonce() -> String {
 
 impl LiveSession {
     pub fn new(clock: Clock) -> LiveSession {
+        let started = clock();
         LiveSession {
             clock,
+            started,
+            start_grace: START_GRACE,
+            ever_hosted: false,
             host_id: None,
             doc: Value::Null,
             document: Value::Null,
@@ -123,6 +135,15 @@ impl LiveSession {
     pub fn monotonic() -> LiveSession {
         let start = std::time::Instant::now();
         LiveSession::new(Box::new(move || start.elapsed().as_secs_f64()))
+    }
+
+    pub fn with_start_grace(mut self, seconds: f64) -> LiveSession {
+        self.start_grace = seconds;
+        self
+    }
+
+    fn starting(&self) -> bool {
+        !self.ever_hosted && (self.clock)() - self.started < self.start_grace
     }
 
     fn reset(&mut self) {
@@ -178,6 +199,7 @@ impl LiveSession {
         }
         if self.host_id.as_deref() != Some(host_id) || self.doc != doc {
             self.host_id = Some(host_id.to_owned());
+            self.ever_hosted = true;
             self.doc = doc;
             self.pending.clear();
             self.refused.clear();
@@ -229,6 +251,7 @@ impl LiveSession {
         }
         let mut st = json!({
             "attached": self.host_id.is_some(),
+            "starting": self.starting(),
             "revision": self.revision,
             "title": self.title,
             "status": self.status_with_refusals(),

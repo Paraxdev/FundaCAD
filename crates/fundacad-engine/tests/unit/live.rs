@@ -630,3 +630,45 @@ fn a_proposal_carries_its_edit_so_the_app_can_apply_it_as_an_edit() {
     );
     assert_eq!(edits, vec![(3, edit), (4, Value::Null), (5, Value::Null)]);
 }
+
+fn starting(s: &mut LiveSession) -> Value {
+    s.state(Some(AGENT), None)["starting"].clone()
+}
+
+#[test]
+fn an_engine_is_starting_until_a_host_publishes_or_the_grace_passes() {
+    let (s, t) = session();
+    let mut s = s.with_start_grace(12.5);
+    assert_eq!(starting(&mut s), true);
+    advance(&t, 12.4);
+    assert_eq!(starting(&mut s), true);
+    advance(&t, 0.1);
+    assert_eq!(starting(&mut s), false, "the grace ends at its exact length");
+    assert_eq!(s.state(Some(AGENT), None)["attached"], false);
+}
+
+#[test]
+fn a_publish_ends_starting_and_a_release_does_not_bring_it_back() {
+    let (s, t) = session();
+    let mut s = s.with_start_grace(30.0);
+    advance(&t, 3.0);
+    assert_eq!(starting(&mut s), true);
+    publish(&mut s, APP, doc(2), 4);
+    let st = s.state(Some(AGENT), None);
+    assert_eq!((st["attached"].clone(), st["starting"].clone()), (json!(true), json!(false)));
+    assert_eq!(s.release(APP)["ok"], true);
+    let st = s.state(Some(AGENT), None);
+    assert_eq!((st["attached"].clone(), st["starting"].clone()), (json!(false), json!(false)));
+    publish(&mut s, OTHER, doc(1), 1);
+    assert_eq!(s.release(OTHER)["ok"], true);
+    assert_eq!(starting(&mut s), false);
+}
+
+#[test]
+fn a_default_engine_gives_a_window_the_named_grace() {
+    let (mut s, t) = session();
+    advance(&t, START_GRACE - 0.5);
+    assert_eq!(starting(&mut s), true);
+    advance(&t, 1.0);
+    assert_eq!(starting(&mut s), false);
+}
