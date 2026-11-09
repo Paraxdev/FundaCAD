@@ -14,6 +14,10 @@ pub const ADOPT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Loopback and a map lookup on the other end: the cost is the message, not the work.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(150);
 
+/// What an assistant is told when a window is still loading its page, which is not the settings advice.
+pub const STILL_STARTING: &str =
+    "FundaCAD is still starting, its window is not sharing a document yet, try again in a few seconds";
+
 /// Each variant is a different answer for the user, which is why they are not one error.
 #[derive(Debug, Clone)]
 pub enum LiveError {
@@ -92,16 +96,42 @@ impl LiveLink {
         }
     }
 
+    /// Polls while the engine says it is starting with no window hosting, until one hosts or it is not starting.
+    /// The flag says a wait happened, so the caller can tell a window that never came from one that is off.
+    pub async fn state_after_start(&self, link: &EngineLink) -> Result<(Value, bool), LiveError> {
+        let mut waited = false;
+        loop {
+            let st = self.state(link).await?;
+            let starting = st.get("starting") == Some(&json!(true));
+            if st.get("attached") == Some(&json!(true)) || !starting {
+                return Ok((st, waited));
+            }
+            waited = true;
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
     /// Refuses rather than returning nothing when no app is hosting,
     /// since a caller that forgot to check would edit nothing.
     pub async fn pull(&mut self, link: &EngineLink) -> Result<Option<Doc>, LiveError> {
-        let st = self.state(link).await?;
+        self.pull_from(link, true).await
+    }
+
+    /// As `pull`, but answers at once while the app is starting, for a server that is itself starting.
+    pub async fn pull_now(&mut self, link: &EngineLink) -> Result<Option<Doc>, LiveError> {
+        self.pull_from(link, false).await
+    }
+
+    async fn pull_from(&mut self, link: &EngineLink, wait: bool) -> Result<Option<Doc>, LiveError> {
+        let (st, waited) = if wait { self.state_after_start(link).await? } else { (self.state(link).await?, false) };
         if st.get("attached") != Some(&json!(true)) {
-            return Err(LiveError::NoAppOpen(
-                "no FundaCAD window is sharing a document, open one, or turn on live editing \
-                 in its settings"
-                    .into(),
-            ));
+            let starting = waited || st.get("starting") == Some(&json!(true));
+            return Err(LiveError::NoAppOpen(if starting {
+                STILL_STARTING.into()
+            } else {
+                "no FundaCAD window is sharing a document, open one, or turn on live editing                  in its settings"
+                    .into()
+            }));
         }
         self.base = Some(st.get("revision").and_then(Value::as_i64).unwrap_or(0));
         self.title = st.get("title").and_then(Value::as_str).map(str::to_string);

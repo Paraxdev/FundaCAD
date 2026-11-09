@@ -10,6 +10,7 @@ use rmcp::{tool, tool_router, ErrorData as McpError};
 use serde_json::{json, Map, Value};
 
 use crate::link::{mode_from_env, EngineLink, Mode};
+use crate::live::{LiveLink, STILL_STARTING};
 use crate::server::{failure, text, FundaCad};
 
 pub const GUIDE_TOOLS: &[&str] = &["guide_highlight", "guide_wait", "guide_clear"];
@@ -113,27 +114,41 @@ impl FundaCad {
         if let Some(c) = command {
             payload["command"] = c;
         }
-        let reply = match link.call("session_guide", payload).await {
-            Ok(r) => r,
-            Err(e) => {
-                let why = format!("FundaCAD's engine went away: {e}");
-                // As call_tool does for document tools, or every later guide call keeps the dead link.
-                self.drop_lost_app(&why).await;
-                return Err(failure(why));
+        let mut waited = false;
+        loop {
+            let reply = match link.call("session_guide", payload.clone()).await {
+                Ok(r) => r,
+                Err(e) => return Err(self.engine_gone(e.to_string()).await),
+            };
+            if reply.get("ok") != Some(&json!(true)) {
+                let why = reply["error"]["message"].as_str().unwrap_or("").to_owned();
+                if why.contains("session_guide") && why.contains("unknown") {
+                    return Err(failure(OLD_ENGINE));
+                }
+                return Err(failure(format!("the engine refused the guide: {why}")));
             }
-        };
-        if reply.get("ok") != Some(&json!(true)) {
-            let why = reply["error"]["message"].as_str().unwrap_or("").to_owned();
-            if why.contains("session_guide") && why.contains("unknown") {
-                return Err(failure(OLD_ENGINE));
+            let res = reply.get("result").cloned().unwrap_or(Value::Null);
+            if res.get("ok") == Some(&json!(true)) {
+                return Ok(res);
             }
-            return Err(failure(format!("the engine refused the guide: {why}")));
+            if waited {
+                return Err(failure(NO_WINDOW));
+            }
+            let probe = LiveLink { name: name.to_owned(), ..LiveLink::default() };
+            match probe.state_after_start(link).await {
+                Ok((st, _)) if st.get("attached") == Some(&json!(true)) => waited = true,
+                Ok((_, true)) => return Err(failure(STILL_STARTING)),
+                Ok(_) => return Err(failure(NO_WINDOW)),
+                Err(e) => return Err(self.engine_gone(e.to_string()).await),
+            }
         }
-        let res = reply.get("result").cloned().unwrap_or(Value::Null);
-        if res.get("ok") != Some(&json!(true)) {
-            return Err(failure(NO_WINDOW));
-        }
-        Ok(res)
+    }
+
+    async fn engine_gone(&self, why: String) -> CallToolResult {
+        let why = format!("FundaCAD's engine went away: {why}");
+        // As call_tool does for document tools, or every later guide call keeps the dead link.
+        self.drop_lost_app(&why).await;
+        failure(why)
     }
 
     fn unreported_stop(&self, guide: &Value) -> Option<String> {
