@@ -85,6 +85,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Parses with vue and typescript, so after npm ci.
+      - name: UI strings
+        run: node scripts/check-ui-strings.mjs
+
+      # A missing English line fails here, minutes before the bundle legs would.
+      - name: Types (vue-tsc)
+        run: npm run typecheck
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
