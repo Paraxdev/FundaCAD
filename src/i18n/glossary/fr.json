@@ -1,0 +1,33 @@
+{
+  "language": "fr",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "Langue"
+    },
+    {
+      "en": "System",
+      "text": "Système",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "traduction automatique",
+      "note": "traduit automatiquement as an adjective"
+    },
+    {
+      "en": "file",
+      "text": "fichier"
+    },
+    {
+      "en": "folder",
+      "text": "dossier",
+      "note": "not répertoire"
+    },
+    {
+      "en": "line",
+      "text": "ligne",
+      "note": "one message in a language file"
+    }
+  ]
+}

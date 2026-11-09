@@ -1,0 +1,9 @@
+{
+  "prefs.language.error.notFlat": "Su archivo de idioma no es una lista simple de líneas, por eso no se usa.",
+  "prefs.language.error.notJson": "Su archivo de idioma no es un JSON válido, por eso no se usa.",
+  "prefs.language.error.tooLarge": "Su archivo de idioma supera los {kb, number} KB, por eso no se usa.",
+  "prefs.language.hint": "Los idiomas traducidos automáticamente pueden sonar extraños. Su propio archivo puede corregir cualquier línea.",
+  "prefs.language.system": "Sistema ({name})",
+  "prefs.language.title": "Idioma",
+  "prefs.language.yours": "{name} (su archivo)"
+}

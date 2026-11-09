@@ -1,0 +1,35 @@
+{
+  "language": "es",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "Idioma",
+      "note": "not lengua"
+    },
+    {
+      "en": "System",
+      "text": "Sistema",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "traducción automática",
+      "note": "traducido automáticamente as an adjective"
+    },
+    {
+      "en": "file",
+      "text": "archivo",
+      "note": "not fichero"
+    },
+    {
+      "en": "folder",
+      "text": "carpeta",
+      "note": "not directorio"
+    },
+    {
+      "en": "line",
+      "text": "línea",
+      "note": "one message in a language file"
+    }
+  ]
+}

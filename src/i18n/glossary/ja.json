@@ -1,0 +1,32 @@
+{
+  "language": "ja",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "言語"
+    },
+    {
+      "en": "System",
+      "text": "システム",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "機械翻訳"
+    },
+    {
+      "en": "file",
+      "text": "ファイル"
+    },
+    {
+      "en": "folder",
+      "text": "フォルダー",
+      "note": "with the long vowel mark, not フォルダ"
+    },
+    {
+      "en": "line",
+      "text": "行",
+      "note": "one message in a language file"
+    }
+  ]
+}

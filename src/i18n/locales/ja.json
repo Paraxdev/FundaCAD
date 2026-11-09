@@ -1,0 +1,9 @@
+{
+  "prefs.language.error.notFlat": "言語ファイルが行の単純な一覧ではないため、使用されません。",
+  "prefs.language.error.notJson": "言語ファイルが有効な JSON ではないため、使用されません。",
+  "prefs.language.error.tooLarge": "言語ファイルが {kb, number} KB を超えているため、使用されません。",
+  "prefs.language.hint": "機械翻訳された言語は不自然な表現になる場合があります。独自のファイルで任意の行を修正できます。",
+  "prefs.language.system": "システム ({name})",
+  "prefs.language.title": "言語",
+  "prefs.language.yours": "{name} (独自のファイル)"
+}

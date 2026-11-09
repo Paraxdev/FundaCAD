@@ -1,0 +1,9 @@
+{
+  "prefs.language.error.notFlat": "Ihre Sprachdatei ist keine flache Liste von Zeilen und wird deshalb nicht verwendet.",
+  "prefs.language.error.notJson": "Ihre Sprachdatei ist kein gültiges JSON und wird deshalb nicht verwendet.",
+  "prefs.language.error.tooLarge": "Ihre Sprachdatei ist größer als {kb, number} KB und wird deshalb nicht verwendet.",
+  "prefs.language.hint": "Maschinell übersetzte Sprachen können holprig klingen. Mit Ihrer eigenen Datei können Sie jede Zeile korrigieren.",
+  "prefs.language.system": "System ({name})",
+  "prefs.language.title": "Sprache",
+  "prefs.language.yours": "{name} (Ihre Datei)"
+}

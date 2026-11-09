@@ -8,7 +8,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 
 | Page | What it sets |
 | --- | --- |
-| Appearance | Theme, Icons, Units, Home background |
+| Appearance | Language, Theme, Icons, Units, Home background |
 | Viewport | Reflections, Background, Environment brightness, Tangent edges, Bloom, Path tracer, Performance mode, Potato mode |
 | Navigation | Smoothing, Orbit pivot, Orbit inertia, Scrolling, Two-finger scroll, Classic camera |
 | Accessibility | Interface size, Comfortable text, Viewport labels, Announcements, Units spoken in full, Hover delay, Notification time, Animations |
@@ -16,6 +16,12 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 | AI assistants | See [Connect an AI assistant](../ai/connect.md) |
 | Plugins | See [Plugins](../plugins/index.md) |
 | Experimental | The limits FundaCAD keeps for stability |
+
+## Language
+
+Language sets the language of FundaCAD's text, and it applies at once. System, the default, is English for now. Deutsch, Français, Español, 简体中文 and 日本語 are machine translated, and the list says so in each language's own words. A machine translated line may read oddly. So far only some panels speak them, the rest stays English until it is translated.
+
+Saved documents never hold translated text, so they open the same in every language.
 
 ## Themes
 

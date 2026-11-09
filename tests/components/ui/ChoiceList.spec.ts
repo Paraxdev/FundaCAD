@@ -96,6 +96,18 @@ describe("ChoiceList", () => {
     expect((await render()).rows[0]!.attributes("aria-keyshortcuts")).toBeUndefined();
   });
 
+  it("puts an option's lang on its label, so the text takes that language's letter forms", async () => {
+    const { rows } = await render({
+      options: [
+        { value: "a", label: "Alpha" },
+        { value: "b", label: "简体中文", lang: "zh-CN" },
+        { value: "c", label: "日本語", lang: "ja" },
+      ],
+    });
+    expect(rows.map((r) => r.find(".opt-label").attributes("lang") ?? null)).toEqual([null, "zh-CN", "ja"]);
+    expect(rows.map((r) => r.attributes("lang") ?? null)).toEqual([null, null, null]);
+  });
+
   it("warns in a dev build when it has no name", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mount(ChoiceList<V>, { props: { options: OPTIONS, modelValue: "c" } as never });

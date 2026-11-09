@@ -1,0 +1,32 @@
+{
+  "language": "zh-CN",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "语言"
+    },
+    {
+      "en": "System",
+      "text": "系统",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "机器翻译"
+    },
+    {
+      "en": "file",
+      "text": "文件"
+    },
+    {
+      "en": "folder",
+      "text": "文件夹",
+      "note": "not 目录"
+    },
+    {
+      "en": "line",
+      "text": "行",
+      "note": "one message in a language file"
+    }
+  ]
+}

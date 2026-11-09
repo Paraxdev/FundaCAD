@@ -1,4 +1,9 @@
 {
+  "prefs.language.error.notFlat": "Your language file is not a flat list of lines, so it is not used.",
+  "prefs.language.error.notJson": "Your language file is not valid JSON, so it is not used.",
+  "prefs.language.error.tooLarge": "Your language file is larger than {kb, number} KB, so it is not used.",
+  "prefs.language.hint": "Machine translated languages may read oddly. Your own file can correct any line.",
   "prefs.language.system": "System ({name})",
+  "prefs.language.title": "Language",
   "prefs.language.yours": "{name} (your file)"
 }

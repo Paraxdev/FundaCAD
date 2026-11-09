@@ -1,0 +1,9 @@
+{
+  "prefs.language.error.notFlat": "您的语言文件不是简单的行列表，因此未被使用。",
+  "prefs.language.error.notJson": "您的语言文件不是有效的 JSON，因此未被使用。",
+  "prefs.language.error.tooLarge": "您的语言文件超过 {kb, number} KB，因此未被使用。",
+  "prefs.language.hint": "机器翻译的语言读起来可能不太自然。您可以用自己的文件更正任何一行。",
+  "prefs.language.system": "系统 ({name})",
+  "prefs.language.title": "语言",
+  "prefs.language.yours": "{name} (您的文件)"
+}

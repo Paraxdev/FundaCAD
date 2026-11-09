@@ -1,0 +1,32 @@
+{
+  "language": "de",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "Sprache"
+    },
+    {
+      "en": "System",
+      "text": "System",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "maschinell übersetzt"
+    },
+    {
+      "en": "file",
+      "text": "Datei"
+    },
+    {
+      "en": "folder",
+      "text": "Ordner",
+      "note": "not Verzeichnis"
+    },
+    {
+      "en": "line",
+      "text": "Zeile",
+      "note": "one message in a language file"
+    }
+  ]
+}

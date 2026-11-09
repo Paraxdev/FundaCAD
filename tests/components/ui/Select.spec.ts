@@ -305,6 +305,20 @@ describe("Select", () => {
     warn.mockRestore();
   });
 
+  it("puts the shown option's lang on the trigger value and each option's on its row label", async () => {
+    const langs = [
+      { value: "apple", label: "Apple" },
+      { value: "banana", label: "Deutsch", lang: "de" },
+      { value: "cherry", label: "日本語", lang: "ja" },
+    ];
+    const { w, trigger } = await render({ options: langs, modelValue: "cherry" });
+    expect(trigger.get(".select-value").attributes("lang")).toBe("ja");
+    await trigger.trigger("click");
+    expect(options().map((o) => o.querySelector(".opt-label")!.getAttribute("lang"))).toEqual([null, "de", "ja"]);
+    await w.setProps({ modelValue: "apple" });
+    expect(trigger.get(".select-value").attributes("lang")).toBeUndefined();
+  });
+
   it("keeps the attributes callers and e2e scripts rely on", async () => {
     const { el } = await render({ id: "fruit", testid: "fruit-pick", size: "sm", tip: "Fruit" });
     expect([

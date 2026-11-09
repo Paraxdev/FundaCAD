@@ -14,6 +14,8 @@ const props = defineProps<
       title?: string | undefined;
       /** The option's own shortcut in aria-keyshortcuts form, such as "Control+Shift+F". */
       keyshortcuts?: string | undefined;
+      /** The label's language, so a language's own name takes its letter forms (Han forms differ in zh and ja). */
+      lang?: string | undefined;
     }[];
     modelValue: T | null;
     /** Set by a combobox that keeps focus itself (Select): the highlighted row, and no row takes focus. Left out, the
@@ -80,7 +82,7 @@ function hover(i: number) {
       @click="pick(o)"
     >
       <slot :option="o" :index="i" :selected="o.value === modelValue" :active="driven && i === active">
-        <span class="opt-label">{{ o.label }}</span>
+        <span class="opt-label" :lang="o.lang">{{ o.label }}</span>
         <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>
       </slot>
     </button>

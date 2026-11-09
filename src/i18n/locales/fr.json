@@ -1,0 +1,9 @@
+{
+  "prefs.language.error.notFlat": "Votre fichier de langue n’est pas une simple liste de lignes, il n’est donc pas utilisé.",
+  "prefs.language.error.notJson": "Votre fichier de langue n’est pas un JSON valide, il n’est donc pas utilisé.",
+  "prefs.language.error.tooLarge": "Votre fichier de langue dépasse {kb, number} Ko, il n’est donc pas utilisé.",
+  "prefs.language.hint": "Les langues traduites automatiquement peuvent sembler maladroites. Votre propre fichier peut corriger n’importe quelle ligne.",
+  "prefs.language.system": "Système ({name})",
+  "prefs.language.title": "Langue",
+  "prefs.language.yours": "{name} (votre fichier)"
+}

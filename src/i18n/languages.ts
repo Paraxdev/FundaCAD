@@ -19,7 +19,14 @@ export interface Language {
   followsSystem: boolean;
 }
 
-export const SHIPPED: readonly Language[] = [{ code: "en", native: "English", bcp47: "en", followsSystem: true }];
+export const SHIPPED: readonly Language[] = [
+  { code: "en", native: "English", bcp47: "en", followsSystem: true },
+  { code: "de", native: "Deutsch", machine: "maschinell übersetzt", bcp47: "de", followsSystem: false },
+  { code: "fr", native: "Français", machine: "traduction automatique", bcp47: "fr", followsSystem: false },
+  { code: "es", native: "Español", machine: "traducción automática", bcp47: "es", followsSystem: false },
+  { code: "zh-CN", native: "简体中文", machine: "机器翻译", bcp47: "zh-CN", followsSystem: false },
+  { code: "ja", native: "日本語", machine: "機械翻訳", bcp47: "ja", followsSystem: false },
+];
 
 // en-XA is the reserved BCP 47 tag for pseudo locales.
 export const PSEUDO_LANGUAGE: Language = { code: PSEUDO, native: "Pseudo", bcp47: "en-XA", followsSystem: false };
