@@ -6,7 +6,8 @@
 The program is whatever starts the stdio server: `fundacad --mcp`, an
 AppImage with `--appimage-extract-and-run --mcp`, `flatpak run dev.fundacad.app
 --mcp`, or a workspace `fundacad-mcp`. Exit 0 when the built volume matches.
-Standard library only.
+Attached to an open window, `--wait-shared 120` gives its page that long to
+start sharing its document. Standard library only.
 """
 
 import argparse
@@ -99,12 +100,36 @@ class Session:
             self.log.close()
 
 
+# What an attached server says while the window's page has not started sharing its document yet.
+NOT_SHARING = "no FundaCAD window is sharing a document"
+
+
+def call_when_shared(s, name, args, wait):
+    """The app writes its session file before WebKit has loaded the page, so the first call can come
+    before the window shares its document. Each call pulls the document again, so a retry sees it."""
+    started = time.monotonic()
+    while True:
+        try:
+            reply = s.call(name, args)
+        except Failure as e:
+            waited = time.monotonic() - started
+            if NOT_SHARING not in str(e) or waited >= wait:
+                if NOT_SHARING in str(e) and wait > 0:
+                    raise Failure(f"{e} (still after {waited:.0f} s)")
+                raise
+            time.sleep(1)
+            continue
+        if wait > 0:
+            print(f"the window shared its document after {time.monotonic() - started:.1f} s")
+        return reply
+
+
 def volume_of(text):
     m = re.search(r"\bvol(?:ume)?\b[^0-9-]*(-?[0-9][0-9,]*(?:\.[0-9]+)?)", text, re.IGNORECASE)
     return float(m.group(1).replace(",", "")) if m else None
 
 
-def smoke(argv, expect, timeout, work):
+def smoke(argv, expect, timeout, work, wait_shared=0.0):
     env = dict(os.environ)
     env.setdefault("FUNDACAD_MCP_MODE", "standalone")
     # A path that never exists, so a FundaCAD the developer has open is never
@@ -127,7 +152,7 @@ def smoke(argv, expect, timeout, work):
         })
         s.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         print(f"initialize: {init.get('serverInfo')} in {time.monotonic() - started:.1f} s")
-        replies["doc_new"] = s.call("doc_new", {})
+        replies["doc_new"] = call_when_shared(s, "doc_new", {}, wait_shared)
         replies["feature_add"] = s.call("feature_add", {"feature": {
             "id": "bx1", "type": "box", "length": 30, "width": 20, "height": 10}})
         t = time.monotonic()
@@ -155,6 +180,8 @@ def main():
     ap.add_argument("--expect", type=float, default=6000.0)
     ap.add_argument("--timeout", type=float, default=180.0, help="seconds per request")
     ap.add_argument("--work", help="directory for the server log and replies (default a temp dir)")
+    ap.add_argument("--wait-shared", type=float, default=0.0,
+                    help="seconds an attached window's page may take to share its document")
     ap.add_argument("argv", nargs=argparse.REMAINDER)
     a = ap.parse_args()
     argv = a.argv[1:] if a.argv[:1] == ["--"] else a.argv
@@ -163,7 +190,7 @@ def main():
     work = a.work or tempfile.mkdtemp(prefix="fundacad-smoke-")
     os.makedirs(work, exist_ok=True)
     try:
-        smoke(argv, a.expect, a.timeout, work)
+        smoke(argv, a.expect, a.timeout, work, a.wait_shared)
     except (Failure, OSError) as e:
         print(f"::error::bundle smoke: {e}")
         log = os.path.join(work, "server.log")
