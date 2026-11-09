@@ -31,6 +31,16 @@ describe("the Flatpak job's Wayland smoke", () => {
     expect(smoke?.text).toMatch(/apt-get install[^\n]*\bcage\b/);
   });
 
+  it("checks the app's own log too, since the app moves its output there once it starts", () => {
+    expect(smoke?.text).toMatch(
+      /SMOKE_APP_LOG="\$HOME\/\.var\/app\/dev\.fundacad\.app\/data\/dev\.fundacad\.app\/logs\/fundacad\.log"/,
+    );
+  });
+
+  it("names a portal backend, so GTK finds the Settings portal a desktop has", () => {
+    expect(smoke?.text).toMatch(/default=gtk[^\n]*> ~\/\.config\/xdg-desktop-portal\/portals\.conf/);
+  });
+
   it("does not gate the job yet", () => {
     expect(smoke?.text).toMatch(/^ {8}continue-on-error: true\r?$/m);
   });
@@ -50,6 +60,16 @@ describe("the AppImage job's Wayland smoke", () => {
     expect(smoke?.text).toMatch(/^ {8}if: matrix\.platform == 'ubuntu-22\.04'\r?$/m);
     expect(smoke?.text).toMatch(/apt-get install[^\n]*\bcage\b/);
     expect(smoke?.text).toMatch(/sh scripts\/wayland-smoke\.sh "\$RUNNER_TEMP\/[^"]+"[\s\S]*"\$img"/);
+  });
+
+  it("installs Xwayland beside cage, which the cage on 22.04 needs to start at all", () => {
+    expect(smoke?.text).toMatch(/apt-get install[^\n]*\bcage\b[^\n]*\bxwayland\b/);
+  });
+
+  it("checks the app's own log in the data folder it gives the app", () => {
+    expect(smoke?.text).toMatch(
+      /XDG_DATA_HOME="\$data" SMOKE_APP_LOG="\$data\/dev\.fundacad\.app\/logs\/fundacad\.log"/,
+    );
   });
 
   it("does not gate the job yet", () => {

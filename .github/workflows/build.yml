@@ -124,6 +124,12 @@ jobs:
         continue-on-error: true
         run: python3 tests/build/test_atspi_dump.py
 
+      # The checks of the Wayland smoke both Linux legs run, against a fake cage. Not a
+      # gate until it has run green here, like the smokes they check.
+      - name: Wayland smoke script tests
+        continue-on-error: true
+        run: python3 tests/build/test_wayland_smoke.py
+
       # The checks of the UI Automation walk the Windows bundle leg runs, against
       # fake trees, in pwsh on Linux. Not a gate until it has run green here.
       - name: UI Automation walk tests
@@ -599,22 +605,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo timeout -k 10 300 apt-get install -y -qq cage
+          # cage 0.1.4 on 22.04 exits at start when it finds no Xwayland binary.
+          sudo timeout -k 10 300 apt-get install -y -qq cage xwayland
           img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
           if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
           fuse=()
           if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
             fuse=(--appimage-extract-and-run)
           fi
-          XDG_DATA_HOME="$RUNNER_TEMP/wayland-data" sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
-            dbus-run-session -- "$img" "${fuse[@]}"
+          data="$RUNNER_TEMP/wayland-data"
+          XDG_DATA_HOME="$data" SMOKE_APP_LOG="$data/dev.fundacad.app/logs/fundacad.log" \
+            sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" dbus-run-session -- "$img" "${fuse[@]}"
 
       - name: Upload the AppImage Wayland smoke log
         if: always() && matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wayland-smoke-appimage
-          path: ${{ runner.temp }}/wayland-smoke/app.log
+          path: |
+            ${{ runner.temp }}/wayland-smoke/app.log
+            ${{ runner.temp }}/wayland-smoke/fundacad.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -839,7 +849,12 @@ jobs:
         shell: bash
         run: |
           sudo timeout -k 10 300 apt-get install -y -qq cage
-          sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+          # A desktop session names its portal backend and a bare runner does not, so the
+          # portal offers no Settings and GTK warns about it on every start.
+          mkdir -p ~/.config/xdg-desktop-portal
+          printf '[preferred]\ndefault=gtk\n' > ~/.config/xdg-desktop-portal/portals.conf
+          SMOKE_APP_LOG="$HOME/.var/app/dev.fundacad.app/data/dev.fundacad.app/logs/fundacad.log" \
+            sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
             dbus-run-session -- flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
 
       - name: Upload the Wayland smoke log
@@ -847,7 +862,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wayland-smoke-flatpak
-          path: ${{ runner.temp }}/wayland-smoke/app.log
+          path: |
+            ${{ runner.temp }}/wayland-smoke/app.log
+            ${{ runner.temp }}/wayland-smoke/fundacad.log
           if-no-files-found: ignore
           retention-days: 7
 
