@@ -5,9 +5,9 @@ mod common;
 
 use std::time::{Duration, Instant};
 
-use common::{Host, Mcp, RealEngine, ToolReply};
+use common::{FakeEngine, Host, Mcp, RealEngine, ToolReply};
 use fundacad_mcp::guide::{NO_WINDOW, OLD_WINDOW};
-use fundacad_mcp::live::POLL_INTERVAL;
+use fundacad_mcp::live::{LiveError, LiveLink, POLL_INTERVAL};
 use serde_json::{json, Value};
 
 /// The tool call blocks its thread, so it runs on one while this side plays the window: silent for `delay`
@@ -32,12 +32,22 @@ async fn call_while_window_loads(
     handle.await.expect("the tool call thread")
 }
 
+/// scripts/bundle-smoke.py keeps retrying while a reply says no window is sharing a document.
 fn is_starting_reply(text: &str) -> bool {
-    text.contains("still starting") && text.contains("try again") && !text.contains("live editing")
+    text.contains("still starting")
+        && text.contains("try again")
+        && text.contains("no FundaCAD window is sharing a document")
+        && !text.contains("live editing")
 }
 
 fn is_no_window_reply(text: &str) -> bool {
-    text.contains("live editing") && !text.contains("still starting")
+    text.contains("no FundaCAD window is sharing a document")
+        && text.contains("turn on live editing in its settings")
+        && !text.contains("still starting")
+}
+
+fn state_reads(engine: &FakeEngine) -> usize {
+    engine.ops().iter().filter(|o| *o == "session_state").count()
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -53,7 +63,7 @@ async fn a_call_made_while_the_window_loads_reads_its_document_once_it_shares() 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_window_that_never_loads_is_called_still_starting_not_switched_off() {
-    let engine = RealEngine::start_with_grace(1.0);
+    let engine = RealEngine::start_with_grace(5.0);
     let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
     let (mut mcp, out, took) = call_while_window_loads(mcp, None, "doc_get", json!({}), 0.0, 0.0).await;
     assert!(out.is_error && is_starting_reply(&out.text), "{}", out.text);
@@ -103,7 +113,7 @@ async fn a_guide_call_made_while_the_window_loads_goes_through_once_it_shares() 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_guide_call_to_a_window_that_never_loads_says_still_starting() {
-    let engine = RealEngine::start_with_grace(1.0);
+    let engine = RealEngine::start_with_grace(5.0);
     let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
     let args = json!({"ui": "pick:fillet", "caption": "Open Fillet"});
     let (mut mcp, out, _) = call_while_window_loads(mcp, None, "guide_highlight", args.clone(), 0.0, 0.0).await;
@@ -120,4 +130,28 @@ async fn a_guide_call_with_nothing_starting_is_refused_at_once() {
     let out = mcp.call("guide_highlight", json!({"ui": "pick:fillet", "caption": "Open Fillet"}));
     assert!(out.is_error && out.text.starts_with(NO_WINDOW), "{}", out.text);
     assert!(start.elapsed() < POLL_INTERVAL * 4, "{:?}", start.elapsed());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_engine_that_says_starting_forever_is_waited_on_no_longer_than_the_cap() {
+    let engine = FakeEngine::always(json!({"ok": true, "result": {"attached": false, "starting": true}}));
+    let cap = Duration::from_millis(700);
+    let mut live = LiveLink { start_wait: cap, ..LiveLink::new() };
+    let start = Instant::now();
+    let err = live.pull(&engine.link()).await.expect_err("no window shares");
+    let took = start.elapsed();
+    assert!(matches!(err, LiveError::NoAppOpen(_)) && is_starting_reply(err.message()), "{err:?}");
+    assert!(took >= cap && took < cap + POLL_INTERVAL * 3, "{took:?}");
+    assert!(state_reads(&engine) >= 4, "{:?}", engine.ops());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_engine_that_sends_no_starting_gets_the_no_window_reply_at_once() {
+    let engine = FakeEngine::always(json!({"ok": true, "result": {"attached": false, "revision": 3}}));
+    let mut live = LiveLink::new();
+    let start = Instant::now();
+    let err = live.pull(&engine.link()).await.expect_err("no window shares");
+    assert!(matches!(err, LiveError::NoAppOpen(_)) && is_no_window_reply(err.message()), "{err:?}");
+    assert!(start.elapsed() < POLL_INTERVAL * 2, "{:?}", start.elapsed());
+    assert_eq!(state_reads(&engine), 1);
 }

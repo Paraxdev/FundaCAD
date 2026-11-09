@@ -14,9 +14,13 @@ pub const ADOPT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Loopback and a map lookup on the other end: the cost is the message, not the work.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(150);
 
-/// What an assistant is told when a window is still loading its page, which is not the settings advice.
+/// The engine's grace counts from its own start, so an honest one never needs longer; this bounds one that says
+/// starting forever, while call_live holds the server's state lock.
+pub const START_WAIT: Duration = Duration::from_secs(30);
+
+/// Not the settings advice. It starts as the no-window reply does because scripts/bundle-smoke.py retries on that.
 pub const STILL_STARTING: &str =
-    "FundaCAD is still starting, its window is not sharing a document yet, try again in a few seconds";
+    "no FundaCAD window is sharing a document yet, FundaCAD is still starting, try again in a few seconds";
 
 /// Each variant is a different answer for the user, which is why they are not one error.
 #[derive(Debug, Clone)]
@@ -72,11 +76,19 @@ pub struct LiveLink {
     pub status: Value,
     /// The app's document session the last pull read, None from an app that names none.
     pub doc: Option<Value>,
+    pub start_wait: Duration,
 }
 
 impl Default for LiveLink {
     fn default() -> Self {
-        LiveLink { name: "an assistant".into(), base: None, title: None, status: json!({}), doc: None }
+        LiveLink {
+            name: "an assistant".into(),
+            base: None,
+            title: None,
+            status: json!({}),
+            doc: None,
+            start_wait: START_WAIT,
+        }
     }
 }
 
@@ -96,14 +108,14 @@ impl LiveLink {
         }
     }
 
-    /// Polls while the engine says it is starting with no window hosting, until one hosts or it is not starting.
     /// The flag says a wait happened, so the caller can tell a window that never came from one that is off.
     pub async fn state_after_start(&self, link: &EngineLink) -> Result<(Value, bool), LiveError> {
+        let deadline = Instant::now() + self.start_wait;
         let mut waited = false;
         loop {
             let st = self.state(link).await?;
             let starting = st.get("starting") == Some(&json!(true));
-            if st.get("attached") == Some(&json!(true)) || !starting {
+            if st.get("attached") == Some(&json!(true)) || !starting || Instant::now() >= deadline {
                 return Ok((st, waited));
             }
             waited = true;
@@ -129,7 +141,8 @@ impl LiveLink {
             return Err(LiveError::NoAppOpen(if starting {
                 STILL_STARTING.into()
             } else {
-                "no FundaCAD window is sharing a document, open one, or turn on live editing                  in its settings"
+                "no FundaCAD window is sharing a document, open one, or turn on live editing \
+                 in its settings"
                     .into()
             }));
         }
