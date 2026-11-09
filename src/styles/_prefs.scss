@@ -198,8 +198,12 @@ label.pref-head {
 
 /* An empty upload error stays in the tree, so its alert role is live before the text lands, but out of the card's gap. */
 .pref-card > .prefs-theme-error:empty,
-.pref-card > .prefs-theme-warning:empty {
+.pref-card > .prefs-theme-warning:empty,
+.pref-card > .prefs-language-status:empty {
   position: absolute;
+}
+.prefs-language-skipped {
+  padding-left: var(--s-4);
 }
 
 .prefs-a11y-actions {

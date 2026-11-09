@@ -1,8 +1,17 @@
 {
+  "prefs.language.error.badName": "无法从文件名判断语言，请以语言代码命名文件，例如 pl.json。",
   "prefs.language.error.notFlat": "您的语言文件不是简单的行列表，因此未被使用。",
   "prefs.language.error.notJson": "您的语言文件不是有效的 JSON，因此未被使用。",
+  "prefs.language.error.storage": "无法更改此浏览器的存储，您的行保持不变。",
   "prefs.language.error.tooLarge": "您的语言文件超过 {kb, number} KB，因此未被使用。",
+  "prefs.language.error.unreadable": "无法读取该文件，您的行保持不变。",
   "prefs.language.hint": "机器翻译的语言读起来可能不太自然。您可以用自己的文件更正任何一行。",
+  "prefs.language.inUse": "{n, plural, =0 {您的文件没有行在使用。} other {您的文件有 # 行在使用。}}",
+  "prefs.language.load": "加载文件…",
+  "prefs.language.more": "{n, plural, other {另有 # 行}}",
+  "prefs.language.remove": "移除我的行",
+  "prefs.language.skip": "{key}：{reason, select, unknownKey {FundaCAD 没有这一行} notText {不是文本} tooLong {超过 {max, number} 个字符} markup {含有标记} controlCharacter {含有控制字符} syntax {花括号或复数无法解析} badArgument {用到了英文行中没有的值} other {未使用}}",
+  "prefs.language.skipped": "{n, plural, other {跳过了 # 行：}}",
   "prefs.language.system": "系统 ({name})",
   "prefs.language.title": "语言",
   "prefs.language.yours": "{name} (您的文件)"

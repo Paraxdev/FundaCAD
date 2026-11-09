@@ -4,7 +4,7 @@
 import { shallowRef } from "vue";
 import { formatMessage, parseMessage, type MessageArgs, type MessageNode } from "./format";
 import { PSEUDO, PSEUDO_LANGUAGE, isLanguageCode, languageName, matchSystemLanguage, type Language } from "./languages";
-import { parseOverrides, type OverrideResult } from "./overrides";
+import { MAX_OVERRIDE_BYTES, parseOverrides, type OverrideResult } from "./overrides";
 import { pseudoNodes } from "./pseudo";
 
 export const LANGUAGE_KEY = "fundacad.language";
@@ -17,7 +17,11 @@ export interface DropInSource {
   kind: "folder" | "browser" | "none";
   list(): Promise<string[]>;
   read(code: string): Promise<string | null>;
+  save?(code: string, text: string): Promise<void>;
+  remove?(code: string): Promise<void>;
 }
+
+export type DropInFileError = NonNullable<OverrideResult["error"]> | "bad-name" | "unreadable" | "storage";
 
 export interface CatalogDeps<K extends string> {
   english: Readonly<Record<K | CoreKey, string>>;
@@ -200,6 +204,45 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     await activate(resolve(setting.value));
   }
 
+  /** Keeps the file and switches to its language; on an error nothing changes. */
+  async function loadDropInFile(file: Pick<File, "name" | "size" | "text">): Promise<DropInFileError | null> {
+    const code = file.name.endsWith(".json") ? file.name.slice(0, -".json".length) : "";
+    if (!isLanguageCode(code)) return "bad-name";
+    // Checked before reading, so a huge file is never pulled into memory.
+    if (file.size > MAX_OVERRIDE_BYTES) return "too-large";
+    let text: string;
+    try {
+      text = await file.text();
+    } catch (e) {
+      console.warn("the picked language file could not be read", e);
+      return "unreadable";
+    }
+    const error = parseOverrides(text, english).error;
+    if (error) return error;
+    if (!deps.dropIns.save) return "storage";
+    try {
+      await deps.dropIns.save(code, text);
+    } catch (e) {
+      console.warn("the picked language file could not be kept", e);
+      return "storage";
+    }
+    dropInCodes.value = await listDropIns();
+    await setLanguage(code);
+    return null;
+  }
+
+  async function removeDropIn(): Promise<"storage" | null> {
+    if (!deps.dropIns.remove) return "storage";
+    try {
+      await deps.dropIns.remove(active.value.code);
+    } catch (e) {
+      console.warn("the user's language file could not be removed", e);
+      return "storage";
+    }
+    await reloadDropIns();
+    return null;
+  }
+
   async function reloadDropIns(): Promise<void> {
     dropInCodes.value = await listDropIns();
     if (!known(setting.value)) setting.value = "system";
@@ -241,6 +284,9 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     init,
     setLanguage,
     reloadDropIns,
+    loadDropInFile,
+    removeDropIn,
+    dropInKind: (): DropInSource["kind"] => deps.dropIns.kind,
     setting: (): string => setting.value,
     active: (): { code: string; bcp47: string } => ({ code: active.value.code, bcp47: active.value.bcp47 }),
     choices,

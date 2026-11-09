@@ -1,8 +1,17 @@
 {
+  "prefs.language.error.badName": "ファイル名から言語を判断できませんでした。pl.json のように、言語コードをファイル名にしてください。",
   "prefs.language.error.notFlat": "言語ファイルが行の単純な一覧ではないため、使用されません。",
   "prefs.language.error.notJson": "言語ファイルが有効な JSON ではないため、使用されません。",
+  "prefs.language.error.storage": "このブラウザーのストレージを変更できなかったため、独自の行は変わっていません。",
   "prefs.language.error.tooLarge": "言語ファイルが {kb, number} KB を超えているため、使用されません。",
+  "prefs.language.error.unreadable": "ファイルを読み取れなかったため、独自の行は変わっていません。",
   "prefs.language.hint": "機械翻訳された言語は不自然な表現になる場合があります。独自のファイルで任意の行を修正できます。",
+  "prefs.language.inUse": "{n, plural, =0 {独自のファイルの行は使用されていません。} other {独自のファイルの # 行が使用されています。}}",
+  "prefs.language.load": "ファイルを読み込む…",
+  "prefs.language.more": "{n, plural, other {ほか # 行}}",
+  "prefs.language.remove": "独自の行を削除",
+  "prefs.language.skip": "{key}：{reason, select, unknownKey {FundaCAD にない行です} notText {テキストではありません} tooLong {{max, number} 文字を超えています} markup {マークアップを含みます} controlCharacter {制御文字を含みます} syntax {波かっこまたは複数形を読み取れません} badArgument {英語の行にない値を使っています} other {使用されません}}",
+  "prefs.language.skipped": "{n, plural, other {# 行をスキップしました：}}",
   "prefs.language.system": "システム ({name})",
   "prefs.language.title": "言語",
   "prefs.language.yours": "{name} (独自のファイル)"

@@ -1,8 +1,17 @@
 {
+  "prefs.language.error.badName": "No se pudo saber el idioma por el nombre del archivo, póngale de nombre el código del idioma, por ejemplo pl.json.",
   "prefs.language.error.notFlat": "Su archivo de idioma no es una lista simple de líneas, por eso no se usa.",
   "prefs.language.error.notJson": "Su archivo de idioma no es un JSON válido, por eso no se usa.",
+  "prefs.language.error.storage": "No se pudo cambiar el almacenamiento de este navegador, sus líneas siguen como estaban.",
   "prefs.language.error.tooLarge": "Su archivo de idioma supera los {kb, number} KB, por eso no se usa.",
+  "prefs.language.error.unreadable": "No se pudo leer el archivo, sus líneas siguen como estaban.",
   "prefs.language.hint": "Los idiomas traducidos automáticamente pueden sonar extraños. Su propio archivo puede corregir cualquier línea.",
+  "prefs.language.inUse": "{n, plural, =0 {Ninguna línea de su archivo está en uso.} one {# línea de su archivo está en uso.} other {# líneas de su archivo están en uso.}}",
+  "prefs.language.load": "Cargar archivo…",
+  "prefs.language.more": "{n, plural, one {y # línea más} other {y # líneas más}}",
+  "prefs.language.remove": "Quitar mis líneas",
+  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD no tiene esa línea} notText {no es texto} tooLong {más de {max, number} caracteres} markup {contiene marcado} controlCharacter {contiene un carácter de control} syntax {llaves o plural ilegibles} badArgument {nombra un valor que la línea en inglés no tiene} other {no se usa}}",
+  "prefs.language.skipped": "{n, plural, one {# línea se omite:} other {# líneas se omiten:}}",
   "prefs.language.system": "Sistema ({name})",
   "prefs.language.title": "Idioma",
   "prefs.language.yours": "{name} (su archivo)"

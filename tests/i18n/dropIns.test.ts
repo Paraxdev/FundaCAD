@@ -5,6 +5,8 @@ function storage(seed: Record<string, string>) {
   const keys = Object.keys(seed);
   return {
     getItem: vi.fn((k: string) => seed[k] ?? null),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
     key: (i: number) => keys[i] ?? null,
     length: keys.length,
   };
@@ -47,6 +49,67 @@ describe("the browser's stored language files", () => {
     const s = storage({ "fundacad.language.dropin.../de": "{}" });
     expect(await browserDropIns(s).read("../de")).toBeNull();
     expect(s.getItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("keeping a file in the browser's storage", () => {
+  function writable(seed: Record<string, string> = {}) {
+    const map = new Map(Object.entries(seed));
+    return {
+      map,
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: vi.fn((k: string, v: string) => void map.set(k, v)),
+      removeItem: vi.fn((k: string) => void map.delete(k)),
+      key: (i: number) => [...map.keys()][i] ?? null,
+      get length() {
+        return map.size;
+      },
+    };
+  }
+
+  it("saves under the language's own key, a second save replacing the first, and removes only that language", async () => {
+    const s = writable({ "fundacad.language.dropin.fr": '{"a.b":"fr"}', "fundacad.theme": "light" });
+    const source = browserDropIns(s);
+    await source.save!("de", '{"a.b":"eins"}');
+    await source.save!("de", '{"c.d":"zwei"}');
+    await source.save!("zh-Hant-TW", "{}");
+    const saved = [...s.map];
+    await source.remove!("de");
+    expect([saved, [...s.map], await source.list()]).toEqual([
+      [
+        ["fundacad.language.dropin.fr", '{"a.b":"fr"}'],
+        ["fundacad.theme", "light"],
+        ["fundacad.language.dropin.de", '{"c.d":"zwei"}'],
+        ["fundacad.language.dropin.zh-Hant-TW", "{}"],
+      ],
+      [
+        ["fundacad.language.dropin.fr", '{"a.b":"fr"}'],
+        ["fundacad.theme", "light"],
+        ["fundacad.language.dropin.zh-Hant-TW", "{}"],
+      ],
+      ["fr", "zh-Hant-TW"],
+    ]);
+  });
+
+  it("refuses a code that is no language code without touching storage", async () => {
+    const s = writable({ "fundacad.language.dropin.../de": "{}" });
+    const source = browserDropIns(s);
+    await expect(source.save!("../de", "{}")).rejects.toThrow();
+    await expect(source.save!("PL", "{}")).rejects.toThrow();
+    await source.remove!("../de");
+    expect([s.setItem.mock.calls, s.removeItem.mock.calls, [...s.map.keys()]]).toEqual([
+      [],
+      [],
+      ["fundacad.language.dropin.../de"],
+    ]);
+  });
+
+  it("passes on a storage that refuses to write", async () => {
+    const s = writable();
+    s.setItem.mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    await expect(browserDropIns(s).save!("pl", "{}")).rejects.toThrow("full");
   });
 });
 

@@ -21,6 +21,9 @@ const MARKUP = /<[A-Za-z/!?]|&(#\d+|#x[0-9a-f]+|[a-z]+);/i;
 // C0 and C1 controls, and the bidi overrides and isolates that can make a line read as something else.
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
 
+// A skipped key is shown in the card as the file wrote it, so it must not reorder or break the text around it.
+export const shownKey = (key: string): string => key.replace(new RegExp(CONTROL, "g"), "\ufffd").slice(0, 80);
+
 export function checkLine(value: string, englishValue: string): SkipReason | null {
   if (value.length > MAX_LINE_CHARS) return "too-long";
   if (MARKUP.test(value)) return "markup";

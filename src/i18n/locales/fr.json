@@ -1,8 +1,17 @@
 {
+  "prefs.language.error.badName": "Impossible de déduire la langue du nom du fichier, nommez le fichier d’après son code de langue, par exemple pl.json.",
   "prefs.language.error.notFlat": "Votre fichier de langue n’est pas une simple liste de lignes, il n’est donc pas utilisé.",
   "prefs.language.error.notJson": "Votre fichier de langue n’est pas un JSON valide, il n’est donc pas utilisé.",
+  "prefs.language.error.storage": "Impossible de modifier le stockage de ce navigateur, vos lignes restent inchangées.",
   "prefs.language.error.tooLarge": "Votre fichier de langue dépasse {kb, number} Ko, il n’est donc pas utilisé.",
+  "prefs.language.error.unreadable": "Impossible de lire le fichier, vos lignes restent inchangées.",
   "prefs.language.hint": "Les langues traduites automatiquement peuvent sembler maladroites. Votre propre fichier peut corriger n’importe quelle ligne.",
+  "prefs.language.inUse": "{n, plural, =0 {Aucune ligne de votre fichier n’est utilisée.} one {# ligne de votre fichier est utilisée.} other {# lignes de votre fichier sont utilisées.}}",
+  "prefs.language.load": "Charger un fichier…",
+  "prefs.language.more": "{n, plural, one {et # autre ligne} other {et # autres lignes}}",
+  "prefs.language.remove": "Retirer mes lignes",
+  "prefs.language.skip": "{key} : {reason, select, unknownKey {FundaCAD n’a pas cette ligne} notText {pas du texte} tooLong {plus de {max, number} caractères} markup {contient du balisage} controlCharacter {contient un caractère de contrôle} syntax {accolades ou pluriel illisibles} badArgument {nomme une valeur absente de la ligne anglaise} other {non utilisée}}",
+  "prefs.language.skipped": "{n, plural, one {# ligne est ignorée :} other {# lignes sont ignorées :}}",
   "prefs.language.system": "Système ({name})",
   "prefs.language.title": "Langue",
   "prefs.language.yours": "{name} (votre fichier)"

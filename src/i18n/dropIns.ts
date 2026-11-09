@@ -5,7 +5,9 @@ import { isLanguageCode } from "./languages";
 
 export const noDropIns: DropInSource = { kind: "none", list: async () => [], read: async () => null };
 
-export function browserDropIns(storage: Pick<Storage, "getItem" | "key" | "length">): DropInSource {
+type DropInStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
+
+export function browserDropIns(storage: DropInStorage): DropInSource {
   return {
     kind: "browser",
     async list() {
@@ -20,13 +22,20 @@ export function browserDropIns(storage: Pick<Storage, "getItem" | "key" | "lengt
     async read(code) {
       return isLanguageCode(code) ? storage.getItem(DROP_IN_PREFIX + code) : null;
     },
+    async save(code, text) {
+      if (!isLanguageCode(code)) throw new Error(`${code} is no language code`);
+      storage.setItem(DROP_IN_PREFIX + code, text);
+    },
+    async remove(code) {
+      if (isLanguageCode(code)) storage.removeItem(DROP_IN_PREFIX + code);
+    },
   };
 }
 
 // Safe mode reads no user file.
 export function pickDropInSource(
   page: { __TAURI_INTERNALS__?: unknown; __FUNDACAD_SAFE_MODE__?: unknown } | undefined,
-  storage: Pick<Storage, "getItem" | "key" | "length"> | null,
+  storage: DropInStorage | null,
 ): DropInSource {
   if (!page || !storage || page.__FUNDACAD_SAFE_MODE__ || "__TAURI_INTERNALS__" in page) return noDropIns;
   return browserDropIns(storage);

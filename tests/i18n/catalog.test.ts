@@ -419,3 +419,179 @@ describe("an OS language change", () => {
     expect([c.setting(), c.active(), pageLang]).toEqual(["fr", { code: "fr", bcp47: "fr" }, ["en", "de-DE", "fr"]]);
   });
 });
+
+describe("loading a language file", () => {
+  const file = (name: string, body: unknown) =>
+    new File([typeof body === "string" ? body : JSON.stringify(body)], name, { type: "application/json" });
+
+  it("keeps the file, lists its language and switches to it, a second file of that language replacing the first", async () => {
+    const { c, storage } = make(
+      {},
+      { "fundacad.language.dropin.fr": JSON.stringify({ "stress.setup.title": "Mon étude" }) },
+    );
+    await c.init();
+    const first = await c.loadDropInFile(
+      file("de.json", { "stress.setup.title": "Meine Studie", "stress.load.force": "<b>Kraft</b>", "x.y": "z" }),
+    );
+    const before = [c.setting(), lines(c), c.dropInStatus()];
+    const second = await c.loadDropInFile(file("de.json", { "stress.load.force": "Kraft {value} auf {faces}" }));
+    expect([first, before]).toEqual([
+      null,
+      [
+        "de",
+        ["Meine Studie", "Kraft 12.5 N auf Face 3", "2,5 Flächen"],
+        {
+          lines: 1,
+          skipped: [
+            { key: "stress.load.force", reason: "markup" },
+            { key: "x.y", reason: "unknown-key" },
+          ],
+        },
+      ],
+    ]);
+    expect([second, lines(c), c.dropInStatus(), storage.map.get(LANGUAGE_KEY)]).toEqual([
+      null,
+      ["Studie einrichten", "Kraft 12.5 auf Face 3", "2,5 Flächen"],
+      { lines: 1, skipped: [] },
+      "de",
+    ]);
+    await c.setLanguage("fr");
+    expect([c.t("stress.load.force", ARGS), c.dropInStatus()]).toEqual([
+      "Force 12.5 N on Face 3",
+      { lines: 1, skipped: [] },
+    ]);
+  });
+
+  it("adds a language FundaCAD does not ship as the user's own, its missing lines in English", async () => {
+    const { c, pageLang } = make();
+    await c.init();
+    expect(await c.loadDropInFile(file("pl.json", { "stress.setup.title": "Ustaw badanie" }))).toBeNull();
+    expect([c.setting(), c.active(), lines(c), c.choices().at(-1), pageLang.at(-1)]).toEqual([
+      "pl",
+      { code: "pl", bcp47: "pl" },
+      ["Ustaw badanie", "Force 12.5 N on Face 3", "2,5 faces"],
+      { value: "pl", label: "polski (your file)", lang: "pl" },
+      "pl",
+    ]);
+  });
+
+  it("takes the language only from a name that is a language code and .json, reading nothing otherwise", async () => {
+    const { c, storage } = make();
+    await c.init();
+    const names = ["Polish.json", "pl_PL.json", "pseudo.json", "pl.JSON", "pl.json.txt", "pl", ".json", "de .json"];
+    const refused: unknown[] = [];
+    for (const name of names) {
+      const f = file(name, { "stress.setup.title": "Ustaw badanie" });
+      const read = vi.spyOn(f, "text");
+      refused.push([await c.loadDropInFile(f), read.mock.calls.length]);
+    }
+    expect(refused).toEqual(names.map(() => ["bad-name", 0]));
+    expect([[...storage.map.keys()], c.setting()]).toEqual([[], "system"]);
+    expect(await c.loadDropInFile(file("zh-Hant-TW.json", {}))).toBeNull();
+  });
+
+  it("loads a file of exactly 256 KB and refuses one byte more before reading it", async () => {
+    const { c } = make();
+    await c.init();
+    const head = '{"stress.setup.title":"Größe"';
+    const pad = 256 * 1024 - new TextEncoder().encode(head + "}").length;
+    const fits = file("de.json", head + " ".repeat(pad) + "}");
+    const over = file("de.json", head + " ".repeat(pad + 1) + "}");
+    const read = vi.spyOn(over, "text");
+    expect([fits.size, over.size]).toEqual([262144, 262145]);
+    expect([await c.loadDropInFile(over), read.mock.calls.length, c.setting()]).toEqual(["too-large", 0, "system"]);
+    expect([await c.loadDropInFile(fits), c.t("stress.setup.title")]).toEqual([null, "Größe"]);
+  });
+
+  it("refuses a whole file it cannot use and keeps the file before it", async () => {
+    const { c, storage } = make();
+    await c.init();
+    await c.loadDropInFile(file("de.json", { "stress.setup.title": "Meine Studie" }));
+    await c.setLanguage("fr");
+    const results = [
+      await c.loadDropInFile(file("de.json", "{ not json")),
+      await c.loadDropInFile(file("de.json", ["stress.setup.title"])),
+      await c.loadDropInFile(file("de.json", { "stress.setup.title": { de: "Studie" } })),
+    ];
+    expect([results, c.setting(), storage.map.get("fundacad.language.dropin.de")]).toEqual([
+      ["not-json", "not-flat", "not-flat"],
+      "fr",
+      JSON.stringify({ "stress.setup.title": "Meine Studie" }),
+    ]);
+  });
+
+  it("says so when the file cannot be read or kept, and changes nothing", async () => {
+    const full = memoryStorage();
+    full.setItem = () => {
+      throw new DOMException("full", "QuotaExceededError");
+    };
+    const { c } = make({ dropIns: browserDropIns(full) });
+    await c.init();
+    const broken = file("de.json", {});
+    vi.spyOn(broken, "text").mockRejectedValue(new Error("gone"));
+    const results = [
+      await c.loadDropInFile(file("de.json", { "stress.setup.title": "Meine Studie" })),
+      await c.loadDropInFile(broken),
+    ];
+    const { c: none } = make({ dropIns: noDropIns });
+    results.push(await none.loadDropInFile(file("de.json", {})));
+    expect([results, c.setting(), c.t("stress.setup.title"), none.setting()]).toEqual([
+      ["storage", "unreadable", "storage"],
+      "system",
+      "Set up the study",
+      "system",
+    ]);
+  });
+});
+
+describe("removing the user's lines", () => {
+  const seed = {
+    "fundacad.language.dropin.de": JSON.stringify({ "stress.setup.title": "Meine Studie" }),
+    "fundacad.language.dropin.fr": JSON.stringify({ "stress.setup.title": "Mon étude" }),
+    "fundacad.language.dropin.pl": JSON.stringify({ "stress.setup.title": "Ustaw badanie" }),
+  };
+
+  it("drops only the shown language's file, and its shipped lines come back", async () => {
+    const { c, storage } = make({}, seed);
+    await c.setLanguage("de");
+    expect(await c.removeDropIn()).toBeNull();
+    expect([c.t("stress.setup.title"), c.dropInStatus(), [...storage.map.keys()].sort()]).toEqual([
+      "Studie einrichten",
+      null,
+      ["fundacad.language", "fundacad.language.dropin.fr", "fundacad.language.dropin.pl"],
+    ]);
+    await c.setLanguage("fr");
+    expect(c.t("stress.setup.title")).toBe("Mon étude");
+  });
+
+  it("leaves a language only the file added, back to System", async () => {
+    const { c } = make({}, seed);
+    await c.init();
+    await c.setLanguage("pl");
+    expect(await c.removeDropIn()).toBeNull();
+    expect([c.setting(), c.active(), c.choices().map((o) => o.value)]).toEqual([
+      "system",
+      { code: "en", bcp47: "en" },
+      ["system", "en", "de", "fr"],
+    ]);
+  });
+
+  it("says so when the storage refuses, keeping the lines", async () => {
+    const stored = memoryStorage(seed);
+    stored.removeItem = () => {
+      throw new DOMException("blocked", "SecurityError");
+    };
+    const { c } = make({ dropIns: browserDropIns(stored) }, seed);
+    await c.setLanguage("de");
+    const { c: none } = make({ dropIns: noDropIns });
+    expect([await c.removeDropIn(), c.t("stress.setup.title"), await none.removeDropIn()]).toEqual([
+      "storage",
+      "Meine Studie",
+      "storage",
+    ]);
+  });
+
+  it("tells where the files come from", () => {
+    expect([make().c.dropInKind(), make({ dropIns: noDropIns }).c.dropInKind()]).toEqual(["browser", "none"]);
+  });
+});

@@ -1,7 +1,7 @@
 // A dropped in language file is untrusted: size, shape, keys, markup, control characters, syntax and arguments.
 
 import { describe, expect, it } from "vitest";
-import { checkLine, MAX_LINE_CHARS, MAX_OVERRIDE_BYTES, parseOverrides } from "../../src/i18n/overrides";
+import { checkLine, MAX_LINE_CHARS, MAX_OVERRIDE_BYTES, parseOverrides, shownKey } from "../../src/i18n/overrides";
 
 const english = {
   "stress.setup.title": "Stress setup",
@@ -177,5 +177,19 @@ describe("checkLine", () => {
     expect(checkLine("{force} N", force)).toBeNull();
     expect(checkLine("Kraft", force)).toBeNull();
     expect(checkLine("{name}: {force, number} N", force)).toBeNull();
+  });
+});
+
+describe("shownKey", () => {
+  it("keeps a plain key, cuts a long one at 80 and replaces each control and bidi character", () => {
+    const long = "stress.load." + "x".repeat(100);
+    expect(["stress.load.force", "", long, "a\u202Eb.c\u0007d", "e\u2066f\nf", "\u200Eg h"].map(shownKey)).toEqual([
+      "stress.load.force",
+      "",
+      long.slice(0, 80),
+      "a\uFFFDb.c\uFFFDd",
+      "e\uFFFDf\uFFFDf",
+      "\u200Eg h",
+    ]);
   });
 });
