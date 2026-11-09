@@ -11,6 +11,7 @@ pub use fundacad_format::{fnda, json_doc};
 mod drop_paths;
 pub mod frames;
 mod home_commands;
+pub mod languages;
 mod launch;
 pub mod launch_args;
 pub mod library;
@@ -274,7 +275,7 @@ struct SafeMode {
     asked: Option<String>,
 }
 
-pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
+pub(crate) fn safe_mode_active<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
     app.try_state::<SafeMode>().is_some_and(|s| s.reason.is_some())
 }
 
@@ -535,6 +536,9 @@ pub fn run() {
         plugins::data::plugin_data_write,
         plugins::data::plugin_data_path,
         plugins::data::plugin_data_adopt,
+        languages::language_files_list,
+        languages::language_file_read,
+        languages::language_folder_open,
         plugins::localnet::plugin_local_request,
         plugins::web::plugin_web_request,
         plugins::web::plugin_download_remove,
