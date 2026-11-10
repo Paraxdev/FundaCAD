@@ -88,6 +88,11 @@
   flex: 0 0 auto;
   min-width: 72px;
 }
+// Rows that start their box at one x: a share of the row, so a long label wraps inside it instead of pushing its box.
+.stress-keyed > .measure-k:first-child {
+  flex: 0 0 40%;
+  min-width: 0;
+}
 .stress-field .select-trigger {
   flex: 1 1 auto;
   width: auto;

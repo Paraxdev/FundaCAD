@@ -17,7 +17,7 @@ function fmt(v: number): string {
 </script>
 
 <template>
-  <label class="stress-field">
+  <label class="stress-field stress-keyed">
     <span class="measure-k">{{ t("stress.setup.material") }}</span>
     <Select v-model="setup.material" :options="options" :label="t('stress.setup.material')" class="stress-material" />
   </label>
@@ -32,11 +32,11 @@ function fmt(v: number): string {
     }}
   </div>
   <template v-else>
-    <div class="stress-field">
+    <div class="stress-field stress-keyed">
       <span class="measure-k">E</span>
       <NumberField v-model="setup.custom.E" commit="live" unit="MPa" :width-ch="7" class="stress-e" label="E" />
     </div>
-    <div class="stress-field">
+    <div class="stress-field stress-keyed">
       <span class="measure-k">{{ t("stress.setup.poisson") }}</span>
       <NumberField
         v-model="setup.custom.nu"
@@ -48,7 +48,7 @@ function fmt(v: number): string {
         :label="t('stress.setup.poisson')"
       />
     </div>
-    <div class="stress-field">
+    <div class="stress-field stress-keyed">
       <span class="measure-k">{{ t("stress.setup.yield") }}</span>
       <NumberField
         v-model="setup.custom.yield"
@@ -59,7 +59,7 @@ function fmt(v: number): string {
         :label="t('stress.setup.yield')"
       />
     </div>
-    <div class="stress-field">
+    <div class="stress-field stress-keyed">
       <span class="measure-k">{{ t("stress.setup.density") }}</span>
       <NumberField
         v-model="setup.custom.density"
