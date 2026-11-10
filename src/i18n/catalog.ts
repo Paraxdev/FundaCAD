@@ -13,7 +13,7 @@ export const DROP_IN_PREFIX = "fundacad.language.dropin.";
 const START_LIMIT_MS = 2000;
 
 /** The lines the catalog itself shows, so an English table without them fails vue-tsc. */
-export type CoreKey = "prefs.language.system" | "prefs.language.yours";
+export type CoreKey = "prefs.language.system" | "prefs.language.systemYours" | "prefs.language.yours";
 
 export interface DropInSource {
   kind: "folder" | "browser" | "none";
