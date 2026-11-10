@@ -172,7 +172,7 @@ export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void 
   else run();
   if (names.length) deps.taken?.();
   const taken = names.length ? takenWords(names, words) : null;
-  if (refusal !== null) deps.hint(taken === null ? refusal : `${taken}. ${refusal}`);
+  if (refusal !== null) deps.hint(taken === null ? refusal : t("pick.takenThenRefused", { taken, refusal }));
   else if (taken !== null) deps.say(taken);
 }
 

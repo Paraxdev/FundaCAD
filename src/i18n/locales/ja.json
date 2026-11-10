@@ -17,6 +17,7 @@
   "pick.doneRun": "{done, select, added {{n}行を追加しました} takenOut {{n}行を外しました} other {{n}行を選びました}}",
   "pick.onBody": "{body}の{label}",
   "pick.overCap": "エッジが多すぎるため、追加しませんでした",
+  "pick.takenThenRefused": "{taken}。{refusal}",
   "prefs.accessibility.manualLink": "マニュアルのアクセシビリティのページを読む",
   "prefs.language.error.badName": "ファイル名から言語を判断できませんでした。pl.json のように、言語コードをファイル名にしてください。",
   "prefs.language.error.folder": "言語ファイルのフォルダーを開けませんでした。",

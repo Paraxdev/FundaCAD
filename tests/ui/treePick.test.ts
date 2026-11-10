@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { setLanguage, t } from "../../src/i18n";
 import {
   awaitTreePick,
   endCommandedPick,
@@ -264,6 +265,20 @@ describe("offering named picks", () => {
     const o = offering([{ done: "added" }, "That row is a face, this step needs an edge"]);
     offerPicks([edge(6), face(7)], o.d);
     expect(o.log).toEqual(["taken", "hint: Line edge 6 of Bracket added. That row is a face, this step needs an edge"]);
+  });
+
+  it("joins the taken words and a refusal as the language does", async () => {
+    const o = offering([{ done: "added" }, "x"]);
+    await setLanguage("ja");
+    let taken = "";
+    try {
+      offerPicks([edge(6), face(7)], o.d);
+      taken = t("pick.done", { name: "Line edge 6 of Bracket", done: "added" });
+    } finally {
+      await setLanguage("system");
+    }
+    expect(taken).not.toBe(t("pick.done", { name: "Line edge 6 of Bracket", done: "added" }));
+    expect(o.log).toEqual(["taken", `hint: ${taken}。x`]);
   });
 
   it("stops when a taker ends the session on the second offer, and says the two", () => {

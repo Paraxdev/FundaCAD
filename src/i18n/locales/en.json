@@ -17,6 +17,7 @@
   "pick.doneRun": "{n, plural, one {# row} other {# rows}} {done, select, added {added} takenOut {taken out} other {picked}}",
   "pick.onBody": "{label} of {body}",
   "pick.overCap": "Too many edges, none added",
+  "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Read the Accessibility page of the manual",
   "prefs.language.error.badName": "Could not tell the language from the file name, name the file by its language code, as in pl.json.",
   "prefs.language.error.folder": "Could not open your languages folder.",
