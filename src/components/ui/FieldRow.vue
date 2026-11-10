@@ -8,7 +8,7 @@ const props = withDefaults(
      *  control named by `aria-labelledby`. */
     for?: string | null | undefined;
     hint?: string | undefined;
-    /** `param` is the inspector's row: it keeps the `.param-row` classes the harness and tests read. */
+    /** `param` is the inspector's row and keeps the `.param-row` classes the harness reads. `inline` and `param` wrap: a control that does not fit beside its label moves under it. */
     layout?: "inline" | "stacked" | "param";
     /** Extra classes for the `param` layout's value column. */
     controlClass?: string | undefined;

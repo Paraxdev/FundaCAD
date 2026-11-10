@@ -1,10 +1,8 @@
+@use "ui/field-row" as row;
+
+// The value takes its 120px beside the label, or the whole line under it when the label is too long for both.
 .param-row {
-  display: grid;
-  /* A track's automatic minimum is min-content, so a long label or value would push the
-     row past the panel instead of ellipsing, as the side-mounted history did at 195px. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 120px);
-  gap: var(--s-3);
-  align-items: center;
+  @include row.wrap-row;
   margin-bottom: var(--s-2);
 }
 .param-note {
@@ -14,17 +12,17 @@
   padding: 2px 0 6px;
 }
 
-.param-row label {
+.param-row > label {
+  @include row.wrap-label;
+  flex: 999 1 auto;
   font-size: var(--fs-small);
   color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 /* The unit sits beside the number, not in the label: "Radius mm | 5in" reads as a
    contradiction. */
 .param-value {
   display: flex;
+  flex: 1 1 120px;
   align-items: center;
   gap: var(--s-1);
   min-width: 0;
@@ -243,13 +241,14 @@
 /* The kernel's refusal of a previewed value, only while typing. Full row width: the
    sentence names the measurements, and the value column is where width runs out. */
 .param-row .param-problem {
-  grid-column: 1 / -1;
-  margin: var(--s-1) 0 0;
+  flex-basis: 100%;
+  margin: var(--s-3) 0 0;
   font-size: var(--fs-small);
   line-height: 1.35;
   color: var(--error);
 }
 
 .param-row > .ui-field-hint {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
+  margin-top: var(--s-2);
 }

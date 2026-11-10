@@ -757,8 +757,8 @@
 .ref-image-panel {
   width: 260px;
   max-width: 100%;
-  .param-row {
-    grid-template-columns: 72px minmax(0, 1fr);
+  .param-row > label {
+    flex: 0 0 72px;
   }
 }
 .ref-image-prompt {

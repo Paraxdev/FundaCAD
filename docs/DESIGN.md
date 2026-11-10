@@ -704,7 +704,7 @@ anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ow
 | `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`, `danger`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
 | `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
-| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
+| `FieldRow` | A label and its control; in `inline` and `param` a control that does not fit beside its label moves under it ([7.9](#79-rows)) | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `ReadoutList` | Label and value pairs in a panel: Measure, Properties, the Stress key rows | `rows` (`k`, `v`); `rowClass`, worn by each row; the `value` slot draws the `dd` for a row (`row`, `index`) | none |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
@@ -998,6 +998,10 @@ The sketch palette holds three lists under one heading each (`SketchShapesList`,
   with what it holds). A row that can be removed sits in an `li.rel-row` with a sibling `IconButton` (`.rel-del`,
   `danger`) named `Delete` and the same words. The button is a sibling, never inside the row button, so Tab reaches
   both. It shows on hover and on `:focus-within`, and stays in the tab order while hidden.
+- A row with a label and a control wraps: a control that does not fit beside its label moves to its own line under it,
+  in every language, and a label is never cut with an ellipsis. `FieldRow` `inline` and `param` rows and `.stress-field`
+  get this from the `wrap-row` and `wrap-label` mixins in `src/styles/ui/_field-row.scss`; a new row of this kind
+  includes them, and a row that fits looks as it did.
 - A Dimensions row is a `FieldRow` with a `NumberField` (`commit="change"`, the unit of the dimension), named by the
   dimension's subject. A driven dimension is disabled and says why.
 - The line above Relations (`.rel-summary`) takes focus after a Delete, so the keys do not fall back to the page. A
@@ -1131,7 +1135,7 @@ defineEmits<{ close: [] }>();
 | `.measure-divider` | 1px `--line`, margin `var(--s-2) 0` |
 | `.measure-select`, `.measure-number` | the old small inline fields; new work uses `Select` and `NumberField` at `sm` |
 | `.measure-hint` | `--fs-micro`, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close"); `hint` writes it |
-| Fields | `FieldRow` with its control, for a label and something to change; `.measure-row` is for a label and a value |
+| Fields | `FieldRow` with its control, for a label and something to change; `.measure-row` is for a label and a value. A `.stress-field` row wraps like a `FieldRow` ([7.9](#79-rows)) |
 | Actions | `Button`, or `Button variant="primary"` for the one main action; a 28px icon action is `IconButton size="md" variant="plain"` ([7.1](#71-floating-card-float-card)) |
 
 Do not add a head with its own padding: the shell padding is the inset, and a
