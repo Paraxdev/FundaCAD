@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import ExperimentalSection from "../../../src/components/overlays/ExperimentalSection.vue";
+import { setLanguage } from "../../../src/i18n";
+import { escapeClaimed } from "../../../src/ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
   experimentalPrefs,
@@ -114,6 +116,29 @@ describe("Experimental numbers", () => {
     ]);
     await type(w, "triangleBudget", "2");
     expect(experimentalPrefs().triangleBudget).toBe(2_000_000);
+  });
+});
+
+describe("Experimental numbers in a comma language", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("counts a box as drafted only when its comma text differs from the stored number, so Escape closes otherwise", async () => {
+    await setLanguage("de");
+    setExperimentalPref("traceScale", 0.35);
+    const w = await open();
+    const after = async (text: string) => {
+      await box(w, "traceScale").setValue(text);
+      return escapeClaimed();
+    };
+    const shown = el(w, "traceScale").value;
+    const same = [await after("0,35"), await after("0,350")];
+    const other = await after("0,45");
+    expect({ shown, same, other, stored: experimentalPrefs().traceScale }).toEqual({
+      shown: "0,35",
+      same: [false, false],
+      other: true,
+      stored: 0.35,
+    });
   });
 });
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { spellNumber } from "../../ui/measure";
+import { fieldNumber, spellNumber } from "../../ui/measure";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
@@ -46,7 +46,7 @@ const refused = (e: Event) => (e.target as HTMLElement).getAttribute("aria-inval
 // A draft that reads back as the stored number leaves Escape nothing to revert, so the first Escape closes.
 function drafted(f: Field, e: Event) {
   const text = (e.target as HTMLInputElement).value.trim();
-  holdEscape(text === "" ? boxValue(f) !== null : Number(text) !== boxValue(f));
+  holdEscape(text === "" ? boxValue(f) !== null : fieldNumber(text) !== boxValue(f));
 }
 function onNumberKey(f: Field, e: KeyboardEvent) {
   if (e.key === "ArrowUp" || e.key === "ArrowDown") void nextTick(() => drafted(f, e));
