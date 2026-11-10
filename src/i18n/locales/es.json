@@ -43,7 +43,7 @@
   "command.undo": "Deshacer",
   "command.viewmodeCycle": "Siguiente modo de vista",
   "command.viewmodeMatcap": "Modo de vista Matcap",
-  "command.viewmodePathtraced": "Modo de vista con trazado de rutas",
+  "command.viewmodePathtraced": "Modo de vista con trazado de trayectorias",
   "command.viewmodeRealtime": "Modo de vista en tiempo real",
   "command.welcome": "Inicio",
   "dim.negative": "menos {amount}",

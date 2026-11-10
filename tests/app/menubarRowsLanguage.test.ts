@@ -47,7 +47,7 @@ describe("File, Edit, Help and analysis rows under a language", () => {
     expect(names(menuOf("File", menus))).toEqual(FILE);
     expect(editMiddle(menuOf("Edit", menus), texts)).toEqual([
       "Löschen",
-      "Unterdrücken / Wieder einblenden",
+      "Unterdrücken / Unterdrückung aufheben",
       "---",
       "Materialien",
       "Einstellungen…",

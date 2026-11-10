@@ -59,7 +59,7 @@
   "menu.edit.delete": "Supprimer",
   "menu.edit.materials": "Matériaux",
   "menu.edit.preferences": "Préférences…",
-  "menu.edit.suppress": "Supprimer l'effet / Rétablir",
+  "menu.edit.suppress": "Désactiver / Réactiver",
   "menu.file": "Fichier",
   "menu.file.export": "Exporter…",
   "menu.file.home": "Accueil",

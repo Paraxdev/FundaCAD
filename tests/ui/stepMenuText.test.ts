@@ -59,12 +59,12 @@ describe("stepMenuText in German", () => {
 });
 
 describe("stepMenuText in Japanese", () => {
-  it("puts the verb first with a step, the bare verb without", async () => {
+  it("puts the step before the verb, the bare verb without", async () => {
     await setLanguage("ja");
     expect([stepMenuText("undo", "フィレット 2"), stepMenuText("redo", "フィレット 2")]).toEqual([
-      "元に戻す: フィレット 2",
-      "やり直し: フィレット 2",
+      "フィレット 2を元に戻す",
+      "フィレット 2をやり直す",
     ]);
-    expect([stepMenuText("undo", null), stepMenuText("redo", null)]).toEqual(["元に戻す", "やり直し"]);
+    expect([stepMenuText("undo", null), stepMenuText("redo", null)]).toEqual(["元に戻す", "やり直す"]);
   });
 });
