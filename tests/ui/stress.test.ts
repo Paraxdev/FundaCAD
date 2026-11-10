@@ -17,6 +17,7 @@ import {
   newLoad,
   newSetup,
   panelMessage,
+  probeLabel,
   setupFromStudy,
   rampColor,
   stressColors,
@@ -26,6 +27,7 @@ import {
   type StressSetup,
 } from "../../src/ui/stress";
 import { setUnit } from "../../src/ui/units";
+import { setLanguage } from "../../src/i18n";
 import type { StressReply } from "../../src/geometry/client";
 import type { Selector } from "../../src/types";
 
@@ -638,5 +640,46 @@ describe("spots", () => {
     expect(panelMessage("the radius of loads[0].spots[1] of load 1 (loads[0]) must be a number above 0 in mm")).toBe(
       "The radius of spot 2 of Load 1 must be a number above 0 in mm",
     );
+  });
+});
+
+describe("stress readouts in German", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("spell the key rows, details, a probe and the legend with a comma and join lists with a semicolon", async () => {
+    await setLanguage("de");
+    const reactions: StressReply["reactions"] = [
+      [1.5, 0, 7],
+      [0, -2.25, 8],
+      [-1.5, 2.25, 5.35],
+    ];
+    const v = formatStressResult({ ...reply, weight: [0, 0, -0.35], reactions }, "mm", ["fixed", "pinned", "slider"]);
+    expect(v.rows).toEqual([
+      { k: "Safety factor", v: "1,6" },
+      { k: "Peak stress", v: "31,25 MPa" },
+      { k: "Max deflection", v: "1,27 mm" },
+    ]);
+    expect(v.details.map((d) => d.v)).toEqual([
+      "PLA",
+      "50 MPa",
+      "0; 0; -0,35 N",
+      "0; 0; -20 N",
+      "0; 0; 20 N",
+      "1,5; 0; 7 N",
+      "0; -2,25; 8 N",
+      "-1,5; 2,25; 5,35 N",
+      "4800 elements, 2,54 mm",
+    ]);
+    expect(probeLabel({ vonMises: 12.375, deflection: 0.45 }, "mm")).toBe("12,375 MPa; 0,45 mm");
+    expect(legendTicks({ min: 2.5, max: 31.25 }).map((t) => t.label)).toEqual([
+      "2,5",
+      "9,69",
+      "16,875",
+      "24,06",
+      "31,25",
+    ]);
+
+    await setLanguage("system");
+    expect(formatStressResult(reply, "mm").rows[1]).toEqual({ k: "Peak stress", v: "31.25 MPa" });
   });
 });

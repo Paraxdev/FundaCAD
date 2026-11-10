@@ -12,11 +12,12 @@ import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
 import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
-import { displayRound, plainNumber } from "../../ui/units";
+import { plainNumber } from "../../ui/units";
 import { onPreviewError } from "../../ui/previewError";
 import {
   canonicalTyping,
   commonUnits,
+  spellRounded,
   tryParseMeasure,
   unitById,
   type Dim,
@@ -357,7 +358,7 @@ const featureRows = useDocValue(() => {
         target,
         kind,
         rowClass: fx ? "fx-row" : undefined,
-        rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${displayRound(bound.value)}` : undefined,
+        rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${spellRounded(bound.value)}` : undefined,
       };
     });
 });

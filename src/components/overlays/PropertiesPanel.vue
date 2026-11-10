@@ -9,7 +9,7 @@ import Select from "../ui/Select.vue";
 import NumberField from "../ui/NumberField.vue";
 import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
-import { displayRound } from "../../ui/units";
+import { spellRounded } from "../../ui/measure";
 import { printPrefs, setPrintPref } from "../../ui/printPrefs";
 import {
   MATERIAL_PRESETS,
@@ -155,11 +155,11 @@ function close() {
           <div class="measure-divider" />
           <div class="measure-row">
             <span class="measure-k">Mass, estimate</span>
-            <span class="measure-v">{{ displayRound(massG) }} g</span>
+            <span class="measure-v">{{ spellRounded(massG) }} g</span>
           </div>
           <div v-for="e in estimates" :key="e.diameter" class="measure-row">
             <span class="measure-k">Filament, {{ e.diameter }}mm</span>
-            <span class="measure-v">{{ displayRound(e.lengthM) }} m</span>
+            <span class="measure-v">{{ spellRounded(e.lengthM) }} m</span>
           </div>
         </template>
 

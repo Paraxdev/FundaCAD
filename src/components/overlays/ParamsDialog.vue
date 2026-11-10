@@ -6,7 +6,8 @@ import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
-import { getUnit, toDisplay, displayRound } from "../../ui/units";
+import { getUnit, toDisplay } from "../../ui/units";
+import { spellRounded } from "../../ui/measure";
 import Panel from "../ui/Panel.vue";
 import TextField from "../ui/TextField.vue";
 import Select from "../ui/Select.vue";
@@ -43,9 +44,9 @@ const userRows = computed(() => rows.value.filter((r) => !r.def.target));
 const modelRows = computed(() => rows.value.filter((r) => r.def.target));
 
 function formatValue(def: ParamDef): string {
-  if (def.unit === "mm") return `${displayRound(toDisplay(def.value))} ${getUnit()}`;
-  if (def.unit === "deg") return `${displayRound(def.value)}°`;
-  return String(displayRound(def.value));
+  if (def.unit === "mm") return `${spellRounded(toDisplay(def.value))} ${getUnit()}`;
+  if (def.unit === "deg") return `${spellRounded(def.value)}°`;
+  return spellRounded(def.value);
 }
 
 function targetLabel(doc: CadDocument, t: ParamTarget): string {

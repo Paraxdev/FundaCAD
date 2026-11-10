@@ -1,7 +1,8 @@
 // The plain words a stress result opens with, from the engine's safety factor and deflection.
 
 import { deformLabel } from "./stress";
-import { displayRound, toDisplay, type Unit } from "./units";
+import { spellNumber, spellRounded } from "./measure";
+import { toDisplay, type Unit } from "./units";
 
 export type VerdictLevel = "holds" | "marginal" | "fails" | "none";
 
@@ -22,7 +23,7 @@ export function aboutFactor(x: number, round: "down" | "up"): string {
   const step = 10 ** (Math.floor(Math.log10(x)) - 1);
   // The nudge keeps 9.9 / 0.1 = 98.99999 from rounding a whole step the wrong way.
   const n = round === "down" ? Math.floor(x / step + 1e-9) : Math.ceil(x / step - 1e-9);
-  return String(Number((n * step).toPrecision(12)));
+  return spellNumber(Number((n * step).toPrecision(12)));
 }
 
 /** Where the engine's own warning puts the peak, from its wording. */
@@ -118,5 +119,5 @@ export function deflectionNote(maxDeflectionMm: number | null, unit: Unit, scale
         : scale < 1
           ? `drawn at ${label} true size`
           : `drawn ${label} larger`;
-  return `Bends at most ${displayRound(toDisplay(maxDeflectionMm))} ${unit}, ${drawn}.`;
+  return `Bends at most ${spellRounded(toDisplay(maxDeflectionMm))} ${unit}, ${drawn}.`;
 }

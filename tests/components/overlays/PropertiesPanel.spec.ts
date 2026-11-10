@@ -9,9 +9,11 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { usePanelsStore } from "../../../src/stores/panels";
 import { printPrefs } from "../../../src/ui/printPrefs";
+import { setLanguage } from "../../../src/i18n";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => setLanguage("system"));
 
 const OPEN = "Casing is not a closed solid, 4 of its edges bound only one face, so it has no inside";
 
@@ -97,5 +99,29 @@ describe("PropertiesPanel", () => {
     wall.dispatchEvent(new Event("change"));
     expect(printPrefs().wallThicknessMm).toBeCloseTo(1.27, 9);
     expect(document.body.querySelector('.properties-panel input[type="number"]')).toBeNull();
+  });
+
+  it("shows the mass and the filament length with the language's decimal mark, and follows a language change", async () => {
+    await mounted();
+    usePanelsStore().showProperties({
+      title: "Casing",
+      rows: [],
+      raw: { volumeMm3: 1234.5, areaMm2: 777.25 },
+      faults: [],
+    });
+    await flushPromises();
+    const estimates = () =>
+      [...document.body.querySelectorAll(".properties-panel .measure-v")]
+        .map((v) => v.textContent ?? "")
+        .filter((v) => / [gm]$/.test(v));
+    const english = estimates();
+    expect(english.length).toBeGreaterThan(1);
+    expect(english.every((v) => /^[0-9]+[.][0-9]+ [gm]$/.test(v))).toBe(true);
+    await setLanguage("de");
+    await flushPromises();
+    expect(estimates()).toEqual(english.map((v) => v.replace(".", ",")));
+    await setLanguage("system");
+    await flushPromises();
+    expect(estimates()).toEqual(english);
   });
 });

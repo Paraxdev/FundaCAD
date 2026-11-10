@@ -288,7 +288,9 @@ describe("StressSetupStep in the picked language", () => {
     const line = (file: Lines, locale: string) =>
       formatMessage(
         parseMessage(file["stress.setup.materialLine"]!),
-        { e: "69000", nu: "0.33", yield: "275", density: "2.7" },
+        locale === "en"
+          ? { e: "69000", nu: "0.33", yield: "275", density: "2.7" }
+          : { e: "69000", nu: "0,33", yield: "275", density: "2,7" },
         locale,
       );
     p.stress!.setup.material = "aluminium 6061-T6";

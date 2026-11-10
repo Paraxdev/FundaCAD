@@ -10,9 +10,11 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { usePanelsStore } from "../../../src/stores/panels";
 import type { CadDocument } from "../../../src/types";
+import { setLanguage } from "../../../src/i18n";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => setLanguage("system"));
 
 function makeEngine() {
   const docVersion = ref(0);
@@ -140,5 +142,24 @@ describe("ParamsDialog", () => {
     add.click();
     await flushPromises();
     expect([add.title, add.classList.contains("btn-danger")]).toEqual(["used by Extrude e1", true]);
+  });
+
+  it("shows the Value column with the language's decimal mark, for a length, an angle and a count", async () => {
+    const fake = makeEngine();
+    Object.assign(fake.doc.paramDefs!, {
+      gap: { expr: "w/3.2", value: 12.375, unit: "mm" },
+      tilt: { expr: "22.5", value: 22.5, unit: "deg" },
+      ribs: { expr: "7", value: 7, unit: "" },
+      ratio: { expr: "0.35", value: 0.35, unit: "" },
+    });
+    await open(fake);
+    const values = () => [...document.body.querySelectorAll(".params-body .params-value")].map((v) => v.textContent);
+    expect(values()).toEqual(["40 mm", "12.375 mm", "22.5°", "7", "0.35"]);
+    await setLanguage("de");
+    await flushPromises();
+    expect(values()).toEqual(["40 mm", "12,375 mm", "22,5°", "7", "0,35"]);
+    await setLanguage("system");
+    await flushPromises();
+    expect(values()).toEqual(["40 mm", "12.375 mm", "22.5°", "7", "0.35"]);
   });
 });

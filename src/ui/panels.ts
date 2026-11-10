@@ -1195,8 +1195,8 @@ export function createPanels(deps: PanelsDeps) {
     panels.stressFinished({ result: view });
     const sf = r.safetyFactor;
     setStatus(
-      `Stress: peak ${displayRound(r.maxVonMises.value)} MPa` +
-        (sf !== null ? `, safety factor ${displayRound(sf)}` : ""),
+      `Stress: peak ${spellRounded(r.maxVonMises.value)} MPa` +
+        (sf !== null ? `, safety factor ${spellRounded(sf)}` : ""),
       view.yields ? "error" : "connected",
     );
     if (epoch !== docEpoch) {
