@@ -157,6 +157,7 @@ export function formatMessage(
   args: MessageArgs,
   locale: string,
   pound?: number,
+  plurals = locale,
 ): string {
   let out = "";
   for (const node of nodes) {
@@ -175,13 +176,13 @@ export function formatMessage(
       }
       case "plural": {
         const n = pluralCount(node.name, args);
-        const chosen = node.options.get(`=${n}`) ?? node.options.get(pluralCategory(n, locale));
-        out += formatMessage(chosen ?? node.options.get("other")!, args, locale, n);
+        const chosen = node.options.get(`=${n}`) ?? node.options.get(pluralCategory(n, plurals));
+        out += formatMessage(chosen ?? node.options.get("other")!, args, locale, n, plurals);
         break;
       }
       case "select": {
         const chosen = node.options.get(String(args[node.name])) ?? node.options.get("other")!;
-        out += formatMessage(chosen, args, locale, pound);
+        out += formatMessage(chosen, args, locale, pound, plurals);
         break;
       }
     }

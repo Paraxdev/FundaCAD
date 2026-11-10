@@ -99,10 +99,12 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       return nodes ? formatMessage(nodes, args, "en") : key;
     }
     const shipped = Object.hasOwn(a.shipped, key) ? a.shipped[key] : undefined;
-    for (const src of [a.dropIn.get(key), shipped, english[key]]) {
+    const sources = [a.dropIn.get(key), shipped, english[key]];
+    for (const [i, src] of sources.entries()) {
       if (typeof src !== "string") continue;
       const nodes = compiled(src);
-      if (nodes) return formatMessage(nodes, args, a.bcp47);
+      // An English line keeps English plurals, or Japanese rules would read "1 lines"; numbers follow the language.
+      if (nodes) return formatMessage(nodes, args, a.bcp47, undefined, i === sources.length - 1 ? "en" : a.bcp47);
     }
     return key;
   }

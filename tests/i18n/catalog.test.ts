@@ -66,6 +66,9 @@ function make(o: Partial<CatalogDeps<Key>> = {}, seed: Record<string, string> = 
   return { c, pageLang, storage };
 }
 
+const file = (name: string, body: unknown) =>
+  new File([typeof body === "string" ? body : JSON.stringify(body)], name, { type: "application/json" });
+
 const ARGS = { value: 12.5, faces: "Face 3", n: 2.5 };
 const lines = (c: ReturnType<typeof make>["c"]) => [
   c.t("stress.setup.title"),
@@ -108,6 +111,21 @@ describe("the lookup per line", () => {
     expect([c.t("stress.setup.faces", { n: 0 }), c.t("stress.setup.faces", { n: 1 })]).toEqual([
       "Keine Flächen",
       "1 Fläche",
+    ]);
+  });
+
+  it("reads an English line's plural by English rules and its numbers by the language's tag", async () => {
+    const { c } = make();
+    await c.init();
+    const faces = () => [0, 1, 2.5, 7].map((n) => c.t("stress.setup.faces", { n }));
+    await c.loadDropInFile(file("id.json", { "stress.setup.title": "Siapkan studi" }));
+    const english = faces();
+    await c.loadDropInFile(
+      file("id.json", { "stress.setup.faces": "{n, plural, =0 {Tidak ada} one {# muka satu} other {# muka}}" }),
+    );
+    expect([english, faces()]).toEqual([
+      ["No faces", "1 face", "2,5 faces", "7 faces"],
+      ["Tidak ada", "1 muka", "2,5 muka", "7 muka"],
     ]);
   });
 
@@ -424,9 +442,6 @@ describe("an OS language change", () => {
 });
 
 describe("loading a language file", () => {
-  const file = (name: string, body: unknown) =>
-    new File([typeof body === "string" ? body : JSON.stringify(body)], name, { type: "application/json" });
-
   it("keeps the file, lists its language and switches to it, a second file of that language replacing the first", async () => {
     const { c, storage } = make(
       {},
