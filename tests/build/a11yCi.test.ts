@@ -1,6 +1,6 @@
 // The accessibility tree checks are not a gate yet: their first runs on a real bus and a real WebView2, and pwsh on
 // Linux for the UI Automation tests, are the spike, so each stays continue-on-error until it has run green.
-// The browser smoke has run green, and a failure there must turn e2e red.
+// The browser smoke has run green, and a failure there must turn its job red.
 
 import { describe, expect, it } from "vitest";
 

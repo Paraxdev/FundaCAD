@@ -33,14 +33,20 @@ describe("the build workflow's runners", () => {
     expect(job("bundle")).toMatch(/vtool -show-build/);
   });
 
-  it("gives e2e enough time to finish the accessibility step on a slow runner", () => {
-    const minutes = Number(/timeout-minutes: (\d+)/.exec(job("e2e"))?.[1]);
-    expect(minutes).toBeGreaterThanOrEqual(90);
-  });
-
-  it("runs the heavy tests beside e2e, each in exactly one job", () => {
+  it("runs the heavy tests and the accessibility smoke beside e2e, each in exactly one job", () => {
     expect(job("e2e")).toContain('-m "smoke and not a11y and not heavy"');
+    expect(job("e2e")).not.toMatch(/-m a11y\b/);
     expect(job("e2e-heavy")).toContain('-m "smoke and heavy"');
     expect(job("e2e-heavy")).toMatch(/needs: rust-geom\r?$/m);
+    expect(job("e2e-a11y")).toContain("-m a11y -q");
+    expect(job("e2e-a11y")).toMatch(/needs: rust-geom\r?$/m);
+  });
+
+  it("gives the accessibility smoke the 34 minutes or so a slow runner needs, with room for the job's setup", () => {
+    const a11y = job("e2e-a11y");
+    const jobMinutes = Number(/^ {4}timeout-minutes: (\d+)/m.exec(a11y)?.[1]);
+    const stepMinutes = Number(/name: Accessibility smoke \(axe[^\n]*\n {8}timeout-minutes: (\d+)/.exec(a11y)?.[1]);
+    expect(stepMinutes).toBeGreaterThanOrEqual(40);
+    expect(jobMinutes).toBeGreaterThanOrEqual(stepMinutes + 15);
   });
 });
