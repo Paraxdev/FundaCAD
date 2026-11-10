@@ -6,12 +6,14 @@ import Checkbox from "../ui/Checkbox.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 import Slider from "../ui/Slider.vue";
-import { computed, onMounted, onUnmounted, ref, shallowRef, useId } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useId, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
 import { t } from "../../i18n";
 import { toast } from "../../ui/toast";
 import { announce, cancelAnnouncement } from "../../ui/announce";
+import { claimEscape } from "../../ui/escapeClaim";
+import type { DocumentSession } from "../../document/session";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
 import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
@@ -72,6 +74,35 @@ let abort: AbortController | null = null;
 // One key, so a quarter still waiting for its frame is replaced by the finish or dropped on a failure.
 const RENDER_KEY = "render";
 
+// Window capture listeners hear Escape before this tab does, so while a trace runs and focus is in the tab the key is
+// claimed for the cancel; otherwise it goes on to whatever owned it before.
+const root = ref<HTMLElement | null>(null);
+const focused = ref(false);
+let releaseEscape: (() => void) | null = null;
+watch(
+  () => tracing.value && focused.value,
+  (own) => {
+    if (own) releaseEscape ??= claimEscape();
+    else {
+      releaseEscape?.();
+      releaseEscape = null;
+    }
+  },
+);
+onUnmounted(() => releaseEscape?.());
+
+function onFocusOut(e: FocusEvent) {
+  const to = e.relatedTarget;
+  focused.value = to instanceof Node && !!root.value?.contains(to);
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key !== "Escape" || !abort) return;
+  e.preventDefault();
+  e.stopPropagation();
+  abort.abort();
+}
+
 const tracedSize = computed(() => {
   void tick.value;
   void ui.traceState;
@@ -96,12 +127,13 @@ const APERTURES = APERTURE_STOPS.map((f) => ({ value: String(f), label: `f/${f}`
 const SCALE_CHOICES = SCALES.map((n) => ({ value: n, label: `${n}×`, attrs: { "data-scale": String(n) } }));
 const SAMPLE_CHOICES = SAMPLES.map((n) => ({ value: n, label: String(n), attrs: { "data-samples": String(n) } }));
 
-async function render(): Promise<string | null> {
+// The start is spoken at the first report, so a trace that returns nothing before it begins says nothing of one.
+async function render(session: Pick<DocumentSession, "alive">): Promise<string | null> {
   if (traced.value) {
     const mine = new AbortController();
     abort = mine;
     progress.value = startProgress(samples.value, Date.now());
-    announce(t("render.progress.started", { total: progress.value.total }));
+    let begun = false;
     try {
       const url = await engine.viewport.renderTracedPicture({
         scale: scale.value,
@@ -110,6 +142,10 @@ async function render(): Promise<string | null> {
         onProgress: (n) => {
           // The native tracer can still report in the 50 ms slice after a cancel, before its picture rejects.
           if (abort !== mine || mine.signal.aborted || !progress.value) return;
+          if (!begun) {
+            begun = true;
+            announce(t("render.progress.started", { total: progress.value.total }));
+          }
           const step = stepProgress(progress.value, n, Date.now());
           progress.value = step.progress;
           if (step.quarter)
@@ -121,7 +157,9 @@ async function render(): Promise<string | null> {
         },
       });
       if (url) {
-        announce(t("render.progress.finished"), "polite", { key: RENDER_KEY });
+        // A closed session saves nothing, so its finish would be a false success.
+        if (session.alive) announce(t("render.progress.finished"), "polite", { key: RENDER_KEY });
+        else cancelAnnouncement(RENDER_KEY);
         return url;
       }
     } catch (e) {
@@ -155,7 +193,7 @@ async function takePicture() {
   try {
     const session = engine.store.session;
     const base = engine.store.fileName === "Untitled" ? "render" : engine.store.fileName;
-    const url = await render();
+    const url = await render(session);
     if (!url || !session.alive) return;
     const path = await saveRenderedImage(url, `${base}.png`);
     if (path) toast(`Saved ${path}`);
@@ -166,7 +204,7 @@ async function takePicture() {
 </script>
 
 <template>
-  <div class="rd-scroll">
+  <div ref="root" class="rd-scroll" @focusin="focused = true" @focusout="onFocusOut" @keydown="onKeydown">
     <section class="rd-section">
       <h3 class="rd-head">Lens</h3>
       <Slider

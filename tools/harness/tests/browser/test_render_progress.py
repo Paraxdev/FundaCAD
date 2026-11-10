@@ -29,7 +29,27 @@ UNSTUB = """() => {
   delete window.viewport.tracedPictureSize;
   delete window.viewport.renderTracedPicture;
   delete window.__trace;
+  window.__escOff?.();
 }"""
+# Added after the app's own listeners, so the capture one reads the claim they read and the bubble one hears what the
+# keymap would.
+PROBE = """async () => {
+  const { escapeClaimed } = await import("/src/ui/escapeClaim.ts");
+  window.__esc = [];
+  window.__escClaimed = escapeClaimed;
+  const capture = (e) => e.key === "Escape" && window.__esc?.push({ at: "capture", claimed: escapeClaimed() });
+  const app = (e) => e.key === "Escape" && window.__esc?.push({ at: "app" });
+  window.addEventListener("keydown", capture, true);
+  window.addEventListener("keydown", app);
+  window.__escOff = () => {
+    window.removeEventListener("keydown", capture, true);
+    window.removeEventListener("keydown", app);
+    delete window.__esc;
+    delete window.__escClaimed;
+    delete window.__escOff;
+  };
+}"""
+LEFT_TO_THE_APP = [{"at": "capture", "claimed": False}, {"at": "app"}]
 SET_VERBOSITY = """async (v) => (await import("/src/ui/a11yPrefs.ts")).setA11yPref("verbosity", v)"""
 FOCUS = """() => {
   const e = document.activeElement;
@@ -169,6 +189,39 @@ def test_a_traced_picture_is_cancelled_by_keys_at_normal_and_says_so_without_qua
     assert s.page.evaluate(BUTTON) == "Save picture…"
     spoken = s.page.evaluate("() => window.__spoken.join(' | ')")
     assert "Rendered" not in spoken and "Saved" not in spoken, spoken
+    no_pointer(s)
+
+
+def test_escape_on_the_camera_tab_cancels_a_trace_and_is_left_to_the_app_when_none_runs(s):
+    s.page.evaluate(SET_VERBOSITY, "normal")
+    go_to_the_take_picture_button(s)
+    s.page.evaluate(PROBE)
+    s.page.evaluate(COUNT_POINTERS)
+    listen(s)
+    kb = s.page.keyboard
+    kb.press("Escape")
+    assert s.page.evaluate("() => window.__esc") == LEFT_TO_THE_APP
+    assert s.page.evaluate(FOCUS)["id"] == "rd-take-picture"
+
+    s.page.evaluate("() => { window.__esc = []; }")
+    kb.press("Enter")
+    heard(s, "Render started, 256 samples")
+    trace(s)
+    s.page.evaluate("() => window.__trace.onProgress(70)")
+    wait_value(s, "70 of 256 samples")
+    kb.press("Escape")
+    heard(s, "Render cancelled")
+    assert s.page.evaluate("() => window.__trace.aborted") is True
+    assert s.page.evaluate("() => window.__esc") == [{"at": "capture", "claimed": True}]
+    s.page.locator(BAR).wait_for(state="detached")
+    assert s.page.evaluate(BUTTON) == "Save picture…"
+
+    s.page.wait_for_function("() => !window.__escClaimed()")
+    s.page.evaluate("() => { window.__esc = []; }")
+    kb.press("Escape")
+    assert s.page.evaluate("() => window.__esc") == LEFT_TO_THE_APP
+    spoken = s.page.evaluate("() => window.__spoken.join(' | ')")
+    assert "Saved" not in spoken and spoken.count("Render cancelled") == 1, spoken
     no_pointer(s)
 
 

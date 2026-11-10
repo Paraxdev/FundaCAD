@@ -1212,7 +1212,11 @@ most once a second, and at once at each quarter and at the total
 (`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame.
 The button that starts the job keeps one name while it runs. Its speech goes
 through `announce()`: start, finish and cancel at Normal, each quarter at
-Verbose, and a failure drops a waiting line before its error is spoken.
+Verbose, and a failure drops a waiting line before its error is spoken. The
+start is said at the job's first report, so a job that never begins is not
+heard as one, and a finish whose result can no longer be used is not said.
+Escape in the job's tab cancels it too, see the Escape table in
+[11](#11-accessibility).
 
 ### 7.15 Marks in the scene
 
@@ -1549,6 +1553,7 @@ Escape depends on what the surface is:
 | A dialog (`Dialog.vue`, `ModalFrame.vue`, the chooser) | Closes the topmost one through the modal gate (`composables/useModalGate.ts`); `Dialog` does it itself, a `ModalFrame` dialog through its own handler |
 | A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `Panel` (or `FloatingPanel`). It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
 | A panel that belongs to a running tool or mode (Measure, Overhang) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close") |
+| A dock tab with a job running (the traced picture on the Camera tab, `RenderCamera.vue`) | Cancels the job. It calls `claimEscape()` only while the job runs and focus is in the tab, and stops the key there so the keymap keeps the selection. With no job running the key goes on to whatever owned it before |
 | A tool panel with layers of its own to back out of (Stress) | No `close-on-esc`, its own bubble phase `keydown` in `StressPanel.vue`. One layer per press: a drag, placing a spot or Read a point first (`viewport/stressGlyphs.ts` takes them in capture and stops the key), then a focused field gives up focus, and only then the panel closes, keeping the setup and the last result as the Close button does |
 
 Never call `claimEscape()` from a tool panel: the tool would stop hearing its
