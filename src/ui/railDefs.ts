@@ -2,7 +2,16 @@
 // selection shows the tools that act on it, and a sketch shows its drawing tools with each family behind one button.
 
 import { keyHint, shortcutRows } from "../input/shortcuts";
-import { leavesOf, modelGroups, SKETCH, type Group, type ToolItem } from "./ribbonDefs";
+import {
+  groupEnglish,
+  groupName,
+  leavesOf,
+  modelGroups,
+  SKETCH,
+  toolEnglish,
+  type Group,
+  type ToolItem,
+} from "./ribbonDefs";
 
 export type RailMode = "model" | "selection" | "sketch";
 
@@ -10,6 +19,8 @@ export interface RailTool {
   kind: "tool";
   action: string;
   label: string;
+  /** The English name, for finding a tool in any language; absent for a plugin tool. */
+  english?: string;
   icon: string;
   keys?: string;
 }
@@ -21,6 +32,7 @@ export interface RailFamily {
   kind: "family";
   id: string;
   label: string;
+  english?: string;
   icon: string;
   style: "variants" | "category";
   items: RailTool[];
@@ -35,15 +47,23 @@ function keyOf(t: ToolItem): string | undefined {
 
 export function railTool(t: ToolItem): RailTool {
   const keys = keyOf(t);
-  return { kind: "tool", action: t.action, label: t.label, icon: t.iconName, ...(keys ? { keys } : {}) };
+  const english = toolEnglish(t.action);
+  return {
+    kind: "tool",
+    action: t.action,
+    label: t.label,
+    ...(english !== undefined ? { english } : {}),
+    icon: t.iconName,
+    ...(keys ? { keys } : {}),
+  };
 }
 
-const CATEGORY: Record<string, { label: string; icon: string }> = {
-  CREATE: { label: "Create", icon: "primitive" },
-  MODIFY: { label: "Modify", icon: "presspull" },
-  CONSTRUCT: { label: "Construct", icon: "datumPlane" },
-  INSPECT: { label: "Inspect", icon: "measure" },
-  INSERT: { label: "Insert", icon: "import" },
+const CATEGORY_ICON: Record<string, string> = {
+  CREATE: "primitive",
+  MODIFY: "presspull",
+  CONSTRUCT: "datumPlane",
+  INSPECT: "measure",
+  INSERT: "import",
 };
 
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
@@ -60,12 +80,13 @@ export function modelRail(groups: Group[] = modelGroups()): RailEntry[] {
       tools = tools.filter((t) => t !== sketch);
     }
     if (!tools.length) continue;
-    const meta = CATEGORY[g.label];
+    const english = groupEnglish(g.label);
     out.push({
       kind: "family",
       id: `cat:${g.label}`,
-      label: meta?.label ?? titleCase(g.label),
-      icon: meta?.icon ?? tools[0]!.icon,
+      label: groupName(g.label) ?? titleCase(g.label),
+      ...(english !== undefined ? { english } : {}),
+      icon: CATEGORY_ICON[g.label] ?? tools[0]!.icon,
       style: "category",
       items: tools,
     });

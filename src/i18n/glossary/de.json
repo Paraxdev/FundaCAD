@@ -158,6 +158,127 @@
     {
       "en": "View",
       "text": "Ansicht"
+    },
+    {
+      "en": "Extrude",
+      "text": "Extrusion"
+    },
+    {
+      "en": "Revolve",
+      "text": "Rotation"
+    },
+    {
+      "en": "Loft",
+      "text": "Ausformung",
+      "note": "Ausformung"
+    },
+    {
+      "en": "Sweep",
+      "text": "Austragung",
+      "note": "Austragung"
+    },
+    {
+      "en": "Press/Pull",
+      "text": "Drücken/Ziehen"
+    },
+    {
+      "en": "Fillet",
+      "text": "Verrundung"
+    },
+    {
+      "en": "Chamfer",
+      "text": "Fase"
+    },
+    {
+      "en": "Hole",
+      "text": "Bohrung"
+    },
+    {
+      "en": "Move",
+      "text": "Verschieben"
+    },
+    {
+      "en": "Scale",
+      "text": "Skalieren"
+    },
+    {
+      "en": "Mirror",
+      "text": "Spiegeln"
+    },
+    {
+      "en": "Shell",
+      "text": "Wandung",
+      "note": "Wandung, not Schale"
+    },
+    {
+      "en": "Draft",
+      "text": "Formschräge",
+      "note": "Formschräge, the mold angle"
+    },
+    {
+      "en": "Thread",
+      "text": "Gewinde"
+    },
+    {
+      "en": "Pattern",
+      "text": "Muster"
+    },
+    {
+      "en": "Plane",
+      "text": "Ebene"
+    },
+    {
+      "en": "Datum",
+      "text": "Bezug"
+    },
+    {
+      "en": "Boolean",
+      "text": "Boolesch"
+    },
+    {
+      "en": "Union",
+      "text": "Vereinigen"
+    },
+    {
+      "en": "Subtract",
+      "text": "Subtrahieren"
+    },
+    {
+      "en": "Intersect",
+      "text": "Schneiden",
+      "note": "Schneiden, the boolean"
+    },
+    {
+      "en": "Section",
+      "text": "Schnitt"
+    },
+    {
+      "en": "Measure",
+      "text": "Messen"
+    },
+    {
+      "en": "Overhang",
+      "text": "Überhang"
+    },
+    {
+      "en": "Thicken",
+      "text": "Verdicken"
+    },
+    {
+      "en": "Primitive",
+      "text": "Grundkörper"
+    },
+    {
+      "en": "Midplane",
+      "text": "Mittelebene"
+    },
+    {
+      "en": "Constraints",
+      "text": "Abhängigkeiten"
+    },
+    {
+      "en": "Sketch",
+      "text": "Skizze"
     }
   ]
 }

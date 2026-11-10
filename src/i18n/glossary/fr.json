@@ -151,6 +151,122 @@
     {
       "en": "View",
       "text": "Affichage"
+    },
+    {
+      "en": "Extrude",
+      "text": "Extruder"
+    },
+    {
+      "en": "Revolve",
+      "text": "Révolution"
+    },
+    {
+      "en": "Loft",
+      "text": "Lissage"
+    },
+    {
+      "en": "Sweep",
+      "text": "Balayage"
+    },
+    {
+      "en": "Press/Pull",
+      "text": "Pousser/Tirer"
+    },
+    {
+      "en": "Fillet",
+      "text": "Congé"
+    },
+    {
+      "en": "Chamfer",
+      "text": "Chanfrein"
+    },
+    {
+      "en": "Hole",
+      "text": "Perçage"
+    },
+    {
+      "en": "Move",
+      "text": "Déplacer"
+    },
+    {
+      "en": "Scale",
+      "text": "Mettre à l'échelle"
+    },
+    {
+      "en": "Mirror",
+      "text": "Miroir"
+    },
+    {
+      "en": "Shell",
+      "text": "Coque"
+    },
+    {
+      "en": "Draft",
+      "text": "Dépouille"
+    },
+    {
+      "en": "Thread",
+      "text": "Filetage"
+    },
+    {
+      "en": "Pattern",
+      "text": "Réseau"
+    },
+    {
+      "en": "Plane",
+      "text": "Plan"
+    },
+    {
+      "en": "Datum",
+      "text": "Référence"
+    },
+    {
+      "en": "Boolean",
+      "text": "Booléen"
+    },
+    {
+      "en": "Union",
+      "text": "Union"
+    },
+    {
+      "en": "Subtract",
+      "text": "Soustraire"
+    },
+    {
+      "en": "Intersect",
+      "text": "Intersection"
+    },
+    {
+      "en": "Section",
+      "text": "Coupe"
+    },
+    {
+      "en": "Measure",
+      "text": "Mesurer"
+    },
+    {
+      "en": "Overhang",
+      "text": "Porte-à-faux"
+    },
+    {
+      "en": "Thicken",
+      "text": "Épaissir"
+    },
+    {
+      "en": "Primitive",
+      "text": "Primitive"
+    },
+    {
+      "en": "Midplane",
+      "text": "Plan médian"
+    },
+    {
+      "en": "Constraints",
+      "text": "Contraintes"
+    },
+    {
+      "en": "Sketch",
+      "text": "Esquisse"
     }
   ]
 }
