@@ -11,6 +11,7 @@ import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
 import { t } from "../../i18n";
 import { toast } from "../../ui/toast";
+import { announce, cancelAnnouncement } from "../../ui/announce";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
 import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
@@ -68,6 +69,8 @@ const countText = computed(() =>
   progress.value ? t("render.progress.samples", { done: progress.value.shown, total: progress.value.total }) : "",
 );
 let abort: AbortController | null = null;
+// One key, so a quarter still waiting for its frame is replaced by the finish or dropped on a failure.
+const RENDER_KEY = "render";
 
 const tracedSize = computed(() => {
   void tick.value;
@@ -97,19 +100,35 @@ async function render(): Promise<string | null> {
   if (traced.value) {
     abort = new AbortController();
     progress.value = startProgress(samples.value, Date.now());
+    announce(t("render.progress.started", { total: progress.value.total }));
     try {
       const url = await engine.viewport.renderTracedPicture({
         scale: scale.value,
         samples: progress.value.total,
         signal: abort.signal,
         onProgress: (n) => {
-          if (progress.value) progress.value = stepProgress(progress.value, n, Date.now()).progress;
+          if (!progress.value) return;
+          const step = stepProgress(progress.value, n, Date.now());
+          progress.value = step.progress;
+          if (step.quarter)
+            announce(
+              t("render.progress.quarter", { done: step.progress.shown, total: step.progress.total }),
+              "polite",
+              { verbose: true, key: RENDER_KEY },
+            );
         },
       });
-      if (url) return url;
+      if (url) {
+        announce(t("render.progress.finished"), "polite", { key: RENDER_KEY });
+        return url;
+      }
     } catch (e) {
-      if ((e as Error).name !== "AbortError")
+      if ((e as Error).name === "AbortError") {
+        announce(t("render.progress.cancelled"), "polite", { key: RENDER_KEY });
+      } else {
+        cancelAnnouncement(RENDER_KEY);
         toast(`The traced picture failed. ${plainError(e, SEE_CONSOLE)}`, { kind: "error", detail: e });
+      }
       return null;
     } finally {
       abort = null;

@@ -1,5 +1,5 @@
-// The Camera tab's traced picture: a constant button name, a progress bar for the samples, and a spoken reason
-// while the picture is being saved.
+// The Camera tab's traced picture: a constant button name, a progress bar for the samples, a spoken reason while
+// the picture is being saved, and what is announced at its start, quarters, finish, cancel and failure.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
@@ -10,7 +10,10 @@ import type { Engine } from "../../../src/app/engine";
 
 const saveRenderedImage = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/io/files", () => ({ saveRenderedImage }));
-vi.mock("../../../src/ui/toast", () => ({ toast: vi.fn() }));
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", () => ({ toast }));
+const speech = vi.hoisted(() => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
+vi.mock("../../../src/ui/announce", () => speech);
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -95,6 +98,9 @@ beforeEach(() => {
   setActivePinia(createPinia());
   traces = [];
   saveRenderedImage.mockReset();
+  toast.mockReset();
+  speech.announce.mockReset();
+  speech.cancelAnnouncement.mockReset();
   saveRenderedImage.mockResolvedValue(SAVED);
   renderStill = vi.fn(async () => "data:still");
   renderTracedPicture = vi.fn((opts: TraceOpts) => {
@@ -236,5 +242,129 @@ describe("Camera tab traced picture", () => {
     still.resolve("data:still");
     await flushPromises();
     expect(saveRenderedImage).toHaveBeenCalledWith("data:still", "render.png");
+  });
+});
+
+const QUARTER = { verbose: true, key: "render" };
+const KEYED = { key: "render" };
+const quarter = (n: number, total = 256) => [`Rendered ${n} of ${total} samples`, "polite", QUARTER];
+const said = () => speech.announce.mock.calls;
+const abortsWith = (i: number) =>
+  traces[i]!.opts.signal.addEventListener("abort", () =>
+    traces[i]!.done.reject(Object.assign(new Error("stop"), { name: "AbortError" })),
+  );
+
+describe("Camera tab traced picture announcements", () => {
+  it("speaks the start, each quarter once, the finish and the save for a full run", async () => {
+    await press();
+    const { onProgress } = traces[0]!.opts;
+    const reports: Array<[number, number]> = [
+      [200, 12],
+      [450, 64],
+      [700, 63],
+      [900, 140],
+      [1100, 200],
+      [1300, 256],
+    ];
+    for (const [ms, n] of reports) {
+      at(ms);
+      onProgress(n);
+    }
+    traces[0]!.done.resolve("data:traced");
+    await flushPromises();
+    expect(said()).toEqual([
+      ["Render started, 256 samples"],
+      quarter(64),
+      quarter(140),
+      quarter(200),
+      ["Render finished", "polite", KEYED],
+    ]);
+    expect(speech.cancelAnnouncement).not.toHaveBeenCalled();
+    expect(toast.mock.calls).toEqual([[`Saved ${SAVED}`]]);
+  });
+
+  it("speaks only the start and the finish with no report, or one at the total", async () => {
+    await press();
+    traces[0]!.done.resolve("data:traced");
+    await flushPromises();
+    expect(said()).toEqual([["Render started, 256 samples"], ["Render finished", "polite", KEYED]]);
+
+    speech.announce.mockClear();
+    await w.get("[data-samples='1024']").trigger("click");
+    await press();
+    at(900);
+    traces[1]!.opts.onProgress(1024);
+    traces[1]!.done.resolve("data:traced");
+    await flushPromises();
+    expect(said()).toEqual([["Render started, 1024 samples"], ["Render finished", "polite", KEYED]]);
+  });
+
+  it("speaks the start, the first quarter and the cancel, with no toast", async () => {
+    await press();
+    abortsWith(0);
+    at(1500);
+    traces[0]!.opts.onProgress(70);
+    await press();
+    expect(said()).toEqual([["Render started, 256 samples"], quarter(70), ["Render cancelled", "polite", KEYED]]);
+    expect(toast).not.toHaveBeenCalled();
+    expect(speech.cancelAnnouncement).not.toHaveBeenCalled();
+  });
+
+  it("cancels the trace and says so when the dock is closed mid trace", async () => {
+    await press();
+    abortsWith(0);
+    at(1500);
+    traces[0]!.opts.onProgress(70);
+    w.unmount();
+    await flushPromises();
+    expect(traces[0]!.opts.signal.aborted).toBe(true);
+    expect(said().at(-1)).toEqual(["Render cancelled", "polite", KEYED]);
+    w = mountCamera();
+  });
+
+  it("drops a waiting line before the error toast on failure, with no finish or cancel line", async () => {
+    await press();
+    at(1500);
+    traces[0]!.opts.onProgress(130);
+    const order: string[] = [];
+    speech.cancelAnnouncement.mockImplementation((k: string) => order.push(`cancel ${k}`));
+    toast.mockImplementation((text: string) =>
+      order.push(text.startsWith("The traced picture failed") ? "toast" : "other"),
+    );
+    traces[0]!.done.reject(new Error("GPU lost"));
+    await flushPromises();
+    expect(order).toEqual(["cancel render", "toast"]);
+    expect(said()).toEqual([["Render started, 256 samples"], quarter(130)]);
+    expect(toast.mock.calls[0]![0]).toContain("GPU lost");
+    expect(toast.mock.calls[0]![1]).toMatchObject({ kind: "error" });
+    expect(buttonState()).toEqual(idle);
+  });
+
+  it("says nothing for a picture that is not traced", async () => {
+    tracedSize = () => null;
+    w.unmount();
+    w = mountCamera();
+    await press();
+    await flushPromises();
+    expect(said()).toEqual([]);
+    expect(speech.cancelAnnouncement).not.toHaveBeenCalled();
+  });
+
+  it("repeats its start and quarters for a second picture", async () => {
+    await press();
+    at(500);
+    traces[0]!.opts.onProgress(100);
+    traces[0]!.done.resolve("data:traced");
+    await flushPromises();
+    speech.announce.mockClear();
+
+    at(9000);
+    await w.get("[data-samples='64']").trigger("click");
+    await press();
+    at(9100);
+    traces[1]!.opts.onProgress(20);
+    traces[1]!.done.resolve("data:traced");
+    await flushPromises();
+    expect(said()).toEqual([["Render started, 64 samples"], quarter(20, 64), ["Render finished", "polite", KEYED]]);
   });
 });

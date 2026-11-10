@@ -2,8 +2,8 @@
 
 FundaCAD has to work with NVDA on Windows, VoiceOver on macOS and Orca on Linux. CI reads the page and each
 platform's accessibility tree on every push (see [What CI checks](#what-ci-checks)), but no job can listen to a
-screen reader. This page is the hand check a person runs before each release: about thirty six minutes per screen
-reader, the same twenty steps everywhere, and a results table that keeps what was heard.
+screen reader. This page is the hand check a person runs before each release: about thirty nine minutes per screen
+reader, the same twenty one steps everywhere, and a results table that keeps what was heard.
 
 ## What CI checks
 
@@ -243,6 +243,15 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     no description, a description that still names the old selection, a body line with no size or center, or pasted
     text that differs from the dialog.
 
+21. **Take a traced picture (3 min).** This step has not been run with NVDA, VoiceOver or Orca, so nothing here is a
+    heard fact yet. Set Announcements to Verbose. Open "Box with a lid", press Ctrl+K, type `materials`, press Enter,
+    open the Camera tab and press Z for Path traced. Tab to "Save picture…" and press Enter: you hear "Render started,
+    256 samples", the button reads "Cancel render", each quarter says a line like "Rendered 64 of 256 samples", then
+    "Render finished", and the save dialog opens; save and you hear "Saved" and the path. Press Enter again and once
+    more while it traces: you hear "Render cancelled". Set Announcements back to Normal and take one more: start and
+    finish, no quarters. Fail: a button name that changes with the count, a count spoken more often than each quarter,
+    a quarter at Normal, or silence on cancel.
+
 Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
@@ -259,9 +268,9 @@ When there is time left, or before a major release:
 
 ## Results
 
-Newest first. Write the steps as twenty marks in order, like `P P P S S W P P P P P P P P P P P P P P`, and put each W in the notes.
+Newest first. Write the steps as twenty one marks in order, like `P P P S S W P P P P P P P P P P P P P P P`, and put each W in the notes.
 
-| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 20 | Tester | Notes |
+| Date | FundaCAD | OS and session | Package | Webview | Screen reader | Steps 1 to 21 | Tester | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | to record | next release | Ubuntu 24.04 GNOME, Wayland | Flatpak | WebKitGTK 4.1, GNOME 50 runtime | Orca |  |  | First run, the Orca on WebKitGTK 4.1 baseline. Note key echo and caret tracking under native Wayland. |
 | to record | next release | Ubuntu 22.04 GNOME, X11 | `.deb` | WebKitGTK 4.1 (system) | Orca |  |  | First run, the X11 half of the baseline. |

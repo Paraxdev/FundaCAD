@@ -1188,6 +1188,8 @@ It returns the toast's id for `dismissToast`, or null for an error.
   `aria-valuetext` when the unit is not a percent (`64 of 256 samples`). It sits in no live region and its values
   change at most once a second (`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame. The
   button that starts the job keeps one name while it runs.
+  Its speech goes through `announce()`: start, finish and cancel at Normal, each quarter at Verbose, and a failure
+  drops a waiting line before its error is spoken.
 - Under a dialog or the command palette the stack is inert and `aria-hidden`
   with the page, below the backdrop, so no region sits beside the modal. A
   toast with a button then waits and gets its full time once the modal closes,
