@@ -117,6 +117,20 @@ describe("a History card above the Stress panel", () => {
     expect(el.style.maxHeight).toBe("");
   });
 
+  it("keeps its list scrolled where it was when the window resizes", async () => {
+    const { list, read } = open(800, 740);
+    list.scrollTop = 398;
+    expect(list.scrollTop).toBe(398);
+    window.dispatchEvent(new Event("resize"));
+    await frame();
+    expect({ ...read(), scrolled: list.scrollTop }).toEqual({
+      history: "520px",
+      top: "582px",
+      cap: "204px",
+      scrolled: 398,
+    });
+  });
+
   it("is cut when it opens after the Stress panel", async () => {
     const right = layer(800);
     const panel = stress();

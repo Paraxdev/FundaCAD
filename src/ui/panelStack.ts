@@ -220,11 +220,11 @@ function assign(cols: Column[], mins: readonly number[]): Column[] {
 }
 
 /** Gives each card whose list scrolls inside it ([data-card-scroll]) its whole height back, and returns those cards
- *  with their list. A card may be cut to give the shelf under it room. */
+ *  with their list and its scroll. A card may be cut to give the shelf under it room. */
 function uncut() {
   const lists = [...document.querySelectorAll<HTMLElement>(RIGHT_CARDS)].flatMap((card) => {
     const list = card.querySelector<HTMLElement>("[data-card-scroll]");
-    return list ? [[card, list] as const] : [];
+    return list ? [[card, list, list.scrollTop] as const] : [];
   });
   for (const [card] of lists) card.style.maxHeight = "";
   return lists;
@@ -232,6 +232,7 @@ function uncut() {
 
 function place() {
   frame = 0;
+  // The browser clamps a list's scroll to its uncut box at the next layout, so it is put back once the cut is decided.
   const lists = uncut();
   // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
   for (const p of open) {
@@ -277,6 +278,7 @@ function place() {
       now = lay();
     }
   }
+  for (const [, list, top] of lists) if (list.scrollTop !== top) list.scrollTop = top;
   const { cols, at } = now;
   for (const c of cols.filter((c) => at.includes(c))) {
     const here = open.filter((_, i) => at[i] === c);

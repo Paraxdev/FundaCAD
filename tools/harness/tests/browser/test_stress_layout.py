@@ -164,6 +164,16 @@ HISTORY_READ = """() => {
   return { cap: history.style.maxHeight, t: r.top, b: r.bottom, list: list.clientHeight };
 }"""
 
+# Scrolls History's list to its end and reads it again after one window resize.
+SCROLL_KEPT = """async () => {
+  const list = document.querySelector('#timeline .timeline-scroll');
+  list.scrollTop = list.scrollHeight;
+  const end = list.scrollTop;
+  window.dispatchEvent(new Event('resize'));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  return { end, after: list.scrollTop };
+}"""
+
 
 @pytest.fixture(scope="module")
 def grown():
@@ -179,6 +189,7 @@ def grown():
                 show_stress(s)
                 settled(s)
                 found[(size, count, "history first")] = s.page.evaluate(GROWN_READ)
+                found[(size, count, "scroll")] = s.page.evaluate(SCROLL_KEPT)
                 s.panel("History", open=False)
                 settled(s)
                 s.panel("History", open=True)
@@ -222,3 +233,10 @@ def test_history_keeps_a_list_to_scroll_when_it_gives_room(grown):
 @pytest.mark.parametrize("size", GROWN_SIZES)
 def test_history_is_whole_again_once_the_stress_panel_closes(grown, size, count):
     assert grown[(size, count, "closed")] == grown[(size, count, "alone")], grown
+
+
+@pytest.mark.parametrize("count", FIXTURES)
+@pytest.mark.parametrize("size", GROWN_SIZES)
+def test_history_keeps_its_list_scrolled_where_it_was_when_the_window_resizes(grown, size, count):
+    got = grown[(size, count, "scroll")]
+    assert got["after"] == got["end"], got
