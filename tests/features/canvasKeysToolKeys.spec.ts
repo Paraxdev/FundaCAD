@@ -1,0 +1,138 @@
+// The 3D view's keys over a real waiting tool: ] steps the Geometry rows, Enter gives the lit one to the tool as a click
+// on it would, and the Enter after that is the tool's own again.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import { installCanvasPick, type CanvasPickHost } from "../../src/app/canvasPick";
+import { MirrorTool } from "../../src/features/mirrorTool";
+import { useToolPanelStore } from "../../src/stores/toolPanels";
+import { announce } from "../../src/ui/announce";
+import { t } from "../../src/i18n";
+import { resetTreePicks, treePickWaiting } from "../../src/ui/treePick";
+import type { Viewport } from "../../src/viewport/viewport";
+import { land, result, rig, topology } from "../app/geometryBrowserRig";
+import { faceRowViewport } from "./faceRowRig";
+
+vi.mock("../../src/ui/toast", () => ({
+  toast: () => {},
+  dismissToast: () => {},
+  dismissToastsSaying: () => {},
+  hintToast: () => {},
+}));
+vi.mock("../../src/ui/announce", async (actual) => ({
+  ...(await actual<typeof import("../../src/ui/announce")>()),
+  announce: vi.fn(),
+}));
+
+const said = () => vi.mocked(announce).mock.calls.map((c) => c[0]);
+
+let canvas: HTMLCanvasElement;
+const stops: (() => void)[] = [];
+
+function key(k: string) {
+  const ev = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true });
+  canvas.dispatchEvent(ev);
+  return ev;
+}
+
+// Faces 14 (flat, slanted), 15 (half cylinder) and 16 (sphere patch) are the ones faceRowRig can answer for.
+async function mirrorWaiting() {
+  const r = rig(result([{ id: "body1", etag: "e1", faceStart: 14 }]));
+  let tool: MirrorTool | null = null;
+  const host = {
+    ...r.host,
+    geometryBrowser: r.browser,
+    viewport: { domElement: canvas },
+    toolOwnsScreen: () => tool?.active ?? false,
+  };
+  stops.push(installCanvasPick(host as unknown as CanvasPickHost));
+  await r.build();
+  r.browser.show(true);
+  await land(r.asks[0]!, topology("body1", 3));
+  r.browser.show(false);
+
+  const viewport = {
+    domElement: canvas,
+    suspendPicking: false,
+    bodyIdAt: () => null,
+    setSelectedBodies: () => {},
+    showAllPlanes: () => {},
+    setPatternGhost: () => {},
+    clearPatternGhost: () => {},
+    hoverBody: () => {},
+    hoverPlane: () => {},
+    highlightDatum: () => {},
+    setFaceMarks: () => {},
+    hoverDatum: () => {},
+    hoverFaceAt: () => {},
+    clearHover: () => {},
+    ...faceRowViewport().parts,
+  } as unknown as Viewport;
+  const addFeatures = vi.spyOn(r.store, "addFeatures").mockImplementation(() => {});
+  const done = vi.fn();
+  tool = new MirrorTool(viewport, r.store, () => null);
+  stops.push(() => tool!.cancel());
+  tool.start(["body1"], done);
+  return { r, tool, addFeatures, done };
+}
+
+const panel = () => {
+  const v = useToolPanelStore().mirror;
+  return v && { values: v.fields.map((f) => f.value), ready: v.ready };
+};
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  vi.mocked(announce).mockClear();
+  canvas = document.createElement("canvas");
+  canvas.tabIndex = 0;
+  document.body.replaceChildren(canvas);
+  canvas.focus();
+});
+afterEach(() => {
+  for (const stop of stops.splice(0).reverse()) stop();
+  resetTreePicks();
+  document.body.replaceChildren();
+});
+
+describe("Mirror waiting for its plane", () => {
+  it("Enter gives it the lit flat face without mirroring, the next Enter is Mirror's own", async () => {
+    const { r, addFeatures, done } = await mirrorWaiting();
+    expect(key("]").defaultPrevented).toBe(true);
+    expect(r.list.cursor).toBe("f:body1:0");
+    expect(panel()).toEqual({ values: ["1 body", "Nothing picked"], ready: false });
+
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(panel()).toEqual({ values: ["1 body", "Flat face"], ready: true });
+    expect(addFeatures).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    expect(r.list.litRow).toBeNull();
+    const word = t("pick.done", { name: "", done: "mirrorPlane" }).trim();
+    expect(said().filter((w) => w.endsWith(word))).toHaveLength(1);
+
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(addFeatures).toHaveBeenCalledTimes(1);
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("a curved face is refused aloud, the tool still waits and the next Enter has no row to give", async () => {
+    const { r, addFeatures } = await mirrorWaiting();
+    key("]");
+    key("]");
+    expect(r.list.cursor).toBe("f:body1:1");
+    key("Enter");
+    expect(panel()).toEqual({ values: ["1 body", "Nothing picked"], ready: false });
+    expect(treePickWaiting()).toBe(true);
+    expect(r.list.litRow).toBeNull();
+    expect(addFeatures).not.toHaveBeenCalled();
+    expect(said().at(-1)).not.toContain(t("pick.done", { name: "", done: "mirrorPlane" }).trim());
+  });
+
+  it("the next ] goes on from the row just offered", async () => {
+    const { r } = await mirrorWaiting();
+    key("]");
+    key("Enter");
+    key("]");
+    expect(r.list.cursor).toBe("f:body1:1");
+    expect(r.list.litRow?.key).toBe("f:body1:1");
+  });
+});
