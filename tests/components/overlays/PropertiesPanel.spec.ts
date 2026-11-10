@@ -124,4 +124,23 @@ describe("PropertiesPanel", () => {
     await flushPromises();
     expect(estimates()).toEqual(english);
   });
+
+  it("shows material densities and filament sizes with the language's mark", async () => {
+    await mounted();
+    usePanelsStore().showProperties({
+      title: "Casing",
+      rows: [{ k: "Volume", v: "1000 mm³" }],
+      raw: { volumeMm3: 1000, areaMm2: 600 },
+      faults: [],
+    });
+    await flushPromises();
+    const decimals = () =>
+      [...text().matchAll(/\((\d+[.,]\d+) g\/cm³\)|Filament, (\d+[.,]\d+)mm/g)].map((m) => m[1] ?? m[2] ?? "");
+    const english = decimals();
+    expect(english.length).toBeGreaterThan(1);
+    expect(english.every((v) => v.includes("."))).toBe(true);
+    await setLanguage("de");
+    await flushPromises();
+    expect(decimals()).toEqual(english.map((v) => v.replace(".", ",")));
+  });
 });

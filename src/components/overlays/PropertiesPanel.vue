@@ -9,7 +9,7 @@ import Select from "../ui/Select.vue";
 import NumberField from "../ui/NumberField.vue";
 import ReadoutList from "../ui/ReadoutList.vue";
 import Slider from "../ui/Slider.vue";
-import { spellRounded } from "../../ui/measure";
+import { spellNumber, spellRounded } from "../../ui/measure";
 import { printPrefs, setPrintPref } from "../../ui/printPrefs";
 import {
   MATERIAL_PRESETS,
@@ -39,10 +39,10 @@ function set<K extends Key>(key: K, v: (typeof prefs)[K] | null) {
   commit(key);
 }
 
-const MATERIALS = [
-  ...MATERIAL_PRESETS.map((m) => ({ value: m.id, label: `${m.label} (${m.density} g/cm³)` })),
+const materials = computed(() => [
+  ...MATERIAL_PRESETS.map((m) => ({ value: m.id, label: `${m.label} (${spellNumber(m.density)} g/cm³)` })),
   { value: CUSTOM_MATERIAL_ID, label: "Custom…" },
-];
+]);
 
 const density = computed(() => densityFor(prefs.materialId, prefs.customDensity));
 
@@ -93,7 +93,7 @@ function close() {
           <span class="measure-k">Material</span>
           <Select
             :model-value="prefs.materialId"
-            :options="MATERIALS"
+            :options="materials"
             size="sm"
             label="Material"
             @update:model-value="set('materialId', $event)"
@@ -158,7 +158,7 @@ function close() {
             <span class="measure-v">{{ spellRounded(massG) }} g</span>
           </div>
           <div v-for="e in estimates" :key="e.diameter" class="measure-row">
-            <span class="measure-k">Filament, {{ e.diameter }}mm</span>
+            <span class="measure-k">Filament, {{ spellNumber(e.diameter) }}mm</span>
             <span class="measure-v">{{ spellRounded(e.lengthM) }} m</span>
           </div>
         </template>

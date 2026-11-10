@@ -1,7 +1,7 @@
 // The sketch Text tool's panel minus the panel: value shape, form mapping and the on-screen clamp, all pure so a
 // headless test can reach them (happy-dom has no layout).
 
-import { fieldError, fieldNumber } from "../ui/measure";
+import { fieldError, fieldNumber, spellNumber } from "../ui/measure";
 
 // The live preview entity sits on the active list so it repaints normally, but is never committed.
 export const TEXT_PREVIEW_ID = "__textpreview__";
@@ -38,12 +38,12 @@ export function initialTextForm(initial: Partial<TextValues>): TextForm {
   return {
     text: initial.text ?? "",
     font: initial.font ?? "",
-    height: String(initial.height ?? 10),
+    height: spellNumber(initial.height ?? 10),
     bold: style.includes("bold"),
     italic: style.includes("italic"),
     align: initial.align ?? "left",
-    angle: String(initial.angle ?? 0),
-    boxWidth: initial.boxWidth ? String(initial.boxWidth) : "",
+    angle: spellNumber(initial.angle ?? 0),
+    boxWidth: initial.boxWidth ? spellNumber(initial.boxWidth) : "",
   };
 }
 
