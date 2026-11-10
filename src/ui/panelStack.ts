@@ -9,6 +9,8 @@ const MIN_HEIGHT = 120;
 
 /** A panel's own scroller keeps at least this much of itself in view, so its form stays usable. */
 const SCROLLER_MIN = 140;
+/** The least of its scroller a panel keeps once even the floors would pass the window's bottom. */
+const SCROLLER_LEAST = 40;
 
 export interface Slot {
   id: string;
@@ -24,6 +26,8 @@ export interface StackPanel {
   height: number;
   /** The least this panel is cut to, `minHeight` when unset. */
   floor?: number | undefined;
+  /** What it is cut to when the floors do not fit even after the folds, so the column stays in the window. `floor` when unset. */
+  least?: number | undefined;
   /** Its header's height, when it can fold to it. */
   head?: number | undefined;
   /** Higher was used more recently, folds go lowest first and never to the highest. Defaults to the order. */
@@ -63,8 +67,8 @@ export function layoutStack(
   const room = bottom - top - gap * Math.max(0, panels.length - 1);
   const folded = new Set<number>();
   let level = Infinity;
+  let floors = panels.map((p) => Math.min(p.height, p.floor ?? minHeight));
   if (panels.reduce((s, p) => s + p.height, 0) > room) {
-    const floors = panels.map((p) => Math.min(p.height, p.floor ?? minHeight));
     const rank = (i: number) => panels[i]!.rank ?? i;
     const byUse = panels.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
     const need = () => floors.reduce((s, f, i) => s + (folded.has(i) ? panels[i]!.head! : f), 0);
@@ -73,6 +77,7 @@ export function layoutStack(
       const head = panels[i]!.head;
       if (head !== undefined && head < floors[i]!) folded.add(i);
     }
+    if (need() > room) floors = panels.map((p, i) => Math.min(floors[i]!, p.least ?? floors[i]!));
     const left = room - [...folded].reduce((s, i) => s + panels[i]!.head!, 0);
     const rest = panels.map((p, i) => ({ h: p.height, f: floors[i]! })).filter((_, i) => !folded.has(i));
     level = waterLevel(rest, left);
@@ -84,7 +89,7 @@ export function layoutStack(
       y += p.head! + gap;
       return slot;
     }
-    const cap = Math.max(level, Math.min(p.height, p.floor ?? minHeight));
+    const cap = Math.max(level, floors[i]!);
     const capped = p.height > cap;
     const slot = { id: p.id, top: Math.round(y), maxHeight: capped ? Math.floor(cap) : null };
     y += (capped ? cap : p.height) + gap;
@@ -118,10 +123,12 @@ function natural(el: HTMLElement): number {
 }
 
 /** A panel whose step scrolls inside it ([data-panel-scroll]) keeps its fixed rows and some of the step. */
-function scrollerFloor(el: HTMLElement): number | undefined {
+function scrollerFloors(el: HTMLElement): { floor?: number; least?: number } {
   const inner = el.querySelector<HTMLElement>("[data-panel-scroll]");
-  if (!inner) return undefined;
-  return Math.max(MIN_HEIGHT, el.offsetHeight - inner.offsetHeight + Math.min(inner.scrollHeight, SCROLLER_MIN));
+  if (!inner) return {};
+  const fixed = el.offsetHeight - inner.offsetHeight;
+  const keep = (step: number) => Math.max(MIN_HEIGHT, fixed + Math.min(inner.scrollHeight, step));
+  return { floor: keep(SCROLLER_MIN), least: keep(SCROLLER_LEAST) };
 }
 
 function header(el: HTMLElement, z: number): number | undefined {
@@ -231,7 +238,7 @@ function place() {
       here.map((p) => ({
         id: p.id,
         height: natural(p.el),
-        floor: scrollerFloor(p.el),
+        ...scrollerFloors(p.el),
         head: header(p.el, z),
         rank: p.used,
       })),

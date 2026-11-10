@@ -128,4 +128,35 @@ describe("the floating panel column", () => {
     );
     expect(out.map((s) => s.maxHeight)).toEqual([200, 300]);
   });
+  describe("a lone panel whose floor is more than the column offers", () => {
+    const lone = { id: "stress", height: 657, head: 58, floor: 304, least: 204 };
+
+    it("is cut to its least so it ends at the bottom, one pixel either side of the floor", () => {
+      // top 504 and bottom 786 leave 282, above the least and under the floor
+      expect(layoutStack([lone], 504, 786)).toEqual([{ id: "stress", top: 504, maxHeight: 282 }]);
+      expect(layoutStack([lone], 482, 786)).toEqual([{ id: "stress", top: 482, maxHeight: 304 }]);
+      expect(layoutStack([lone], 483, 786)).toEqual([{ id: "stress", top: 483, maxHeight: 303 }]);
+    });
+
+    it("keeps its least when even that does not fit, the one case that passes the bottom", () => {
+      expect(layoutStack([lone], 640, 786)).toEqual([{ id: "stress", top: 640, maxHeight: 204 }]);
+      expect(layoutStack([lone], 582, 786)).toEqual([{ id: "stress", top: 582, maxHeight: 204 }]);
+    });
+
+    it("keeps the floor it had when it sets no least", () => {
+      expect(layoutStack([{ ...lone, least: undefined }], 640, 786)).toEqual([
+        { id: "stress", top: 640, maxHeight: 304 },
+      ]);
+    });
+
+    it("folds the older panel first and then fills what is left, without a cut to the least", () => {
+      const old = { id: "old", height: 330, head: 50 };
+      const out = layoutStack([old, lone], 400, 786);
+      expect(out).toEqual([
+        { id: "old", top: 400, maxHeight: 50, folded: true },
+        { id: "stress", top: 462, maxHeight: 324 },
+      ]);
+      expect(out[1]!.top + out[1]!.maxHeight!).toBeLessThanOrEqual(786);
+    });
+  });
 });
