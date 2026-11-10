@@ -29,12 +29,12 @@ This file starts on 2026-08-03. For anything before that, see the
   seen from.** Front, Back, Left, Right, Top, Bottom and Isometric (Cmd on
   macOS) go by the key's place on the digit row, so an AZERTY keyboard uses the
   same keys, and they work from a value box too. Every view is in the command
-  palette and under Look in the right-click menu. After a view, an arrow key turn, Reset camera or a
-  view cube click, a screen reader hears the view, or the nearest side with how
-  far the view is turned and tilted, and the projection. On a layout whose digit
-  key types a plus or minus, such as 6 on French AZERTY, Ctrl with that key still
-  changes the interface size. Choosing a view no longer closes the sketch you
-  are drawing.
+  palette and under Look in the right-click menu. After a view, an arrow key
+  turn, Reset camera or a view cube click, a screen reader hears the view, or
+  the nearest side with how far the view is turned and tilted, and the
+  projection. On a layout whose digit key types a plus or minus, such as 6 on
+  French AZERTY, Ctrl with that key still changes the interface size. Choosing a
+  view no longer closes the sketch you are drawing.
 
 - **Printability says what it found.** When a check ends, a screen reader
   hears the count, each kind, and the largest overhang with its area and face.

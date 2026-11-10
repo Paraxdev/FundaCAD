@@ -77,7 +77,7 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | Esc | Cancel the tool or clear the selection |
 | Tab | While box selecting, choose what the box takes. With a sketch cursor moved by arrows, the next snap. In Extrude, the next profile |
 
-Ctrl+1 to Ctrl+7 go by the key's place on the digit row, so an AZERTY keyboard uses the same keys. Where a digit key types a plus or minus, such as 6 on French AZERTY, Ctrl with that key changes the interface size instead. Pick that view from the Views button, Look in the right-click menu, or the command palette.
+Ctrl+1 to Ctrl+7 go by the key's place on the digit row, so an AZERTY keyboard uses the same keys. Where a digit key types a plus or minus, such as 6 on French AZERTY, Ctrl with that key changes the interface size instead. Pick that view from the Views button, Look in the right-click menu or the command palette, or [give the view another key](#change-a-key).
 
 ## Drawing by keys
 
