@@ -3,7 +3,8 @@ import { fmtKeys, isMac } from "../../input/platform";
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { claimEscape } from "../../ui/escapeClaim";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
-import { allCommands } from "../../ui/commands";
+import { allCommands, commandEnglish, groupText } from "../../ui/commands";
+import { t } from "../../i18n";
 import { score } from "../../ui/commandScore";
 import { announce, cancelAnnouncement } from "../../ui/announce";
 import Combobox from "../ui/Combobox.vue";
@@ -25,7 +26,7 @@ const results = computed(() => {
   return allCommands()
     .filter((c) => c.context === "global" || c.context === cmdk.context)
     .map((c) => ({ ...c, label: cmdk.labelOf(c) }))
-    .map((c) => ({ c, s: score(q, c.label.toLowerCase()) }))
+    .map((c) => ({ c, s: Math.max(score(q, c.label.toLowerCase()), score(q, (commandEnglish(c.id) ?? c.label).toLowerCase())) }))
     .filter((x) => q === "" || x.s > 0)
     .sort((a, b) => b.s - a.s)
     .slice(0, 40)
@@ -64,8 +65,8 @@ watch(query, () => {
   if (!cmdk.open) return;
   const n = results.value.length;
   const first = results.value[0];
-  const name = first ? [first.label, first.group, first.key && fmtKeys(first.key)].filter(Boolean).join(", ") : "";
-  const text = !first ? "No matching command" : `${n === 1 ? "1 command" : `${n} commands`}. ${name}`;
+  const name = first ? [first.label, groupText(first.group), first.key && fmtKeys(first.key)].filter(Boolean).join(", ") : "";
+  const text = first ? t("palette.found", { n, first: name }) : t("palette.empty");
   announce(text, "polite", { key: COUNT, delay: 300 });
 });
 
@@ -123,7 +124,7 @@ function onKey(e: KeyboardEvent) {
 <template>
   <Teleport to="body">
     <div v-if="cmdk.open" ref="backdrop" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
-      <div ref="card" class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div ref="card" class="cmdk-card" role="dialog" aria-modal="true" :aria-label="t('palette.title')">
         <Combobox
           ref="input"
           v-model="query"
@@ -132,8 +133,8 @@ function onKey(e: KeyboardEvent) {
           list-class="cmdk-list"
           option-class="cmdk-item"
           :options="options"
-          placeholder="Search commands…"
-          label="Search commands"
+          :placeholder="t('palette.placeholder')"
+          :label="t('palette.search')"
           spellcheck="false"
           @keydown="onKey"
           @pick="cmdk.runCommand($event)"
@@ -142,13 +143,13 @@ function onKey(e: KeyboardEvent) {
           <template #default="{ index }">
             <span class="cmdk-label">{{ results[index]?.label }}</span>
             <span class="sr-only">, </span>
-            <span class="cmdk-group">{{ results[index]?.group }}</span>
+            <span class="cmdk-group">{{ groupText(results[index]!.group) }}</span>
             <template v-if="results[index]?.key">
               <span class="sr-only">, </span>
               <span class="cmdk-key">{{ fmtKeys(results[index]!.key!) }}</span>
             </template>
           </template>
-          <template #empty><div class="cmdk-empty">No matching command</div></template>
+          <template #empty><div class="cmdk-empty">{{ t("palette.empty") }}</div></template>
         </Combobox>
       </div>
     </div>
