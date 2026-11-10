@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { setLanguage } from "../../src/i18n";
+import { setLanguage, t } from "../../src/i18n";
 import { buildMenus, menuOf, names, row, texts } from "./menuRows";
 
 const FILE = ["Home", "---", "New", "Open…", "---", "Import Mesh…", "---", "Save", "Save As…", "---", "Export…"];
@@ -94,5 +94,19 @@ describe("File, Edit, Help and analysis rows under a language", () => {
     expect(about()).toBe("Über FundaCAD");
     await setLanguage("fr");
     expect(about()).toBe("À propos de FundaCAD");
+  });
+
+  it("put any product name into the About line, not a typed in FundaCAD", async () => {
+    const lines: string[] = [];
+    for (const code of ["system", "de", "fr", "ja"]) {
+      await setLanguage(code);
+      lines.push(t("menu.help.about", { name: "FundaCAD Dev 2" }));
+    }
+    expect(lines).toEqual([
+      "About FundaCAD Dev 2",
+      "Über FundaCAD Dev 2",
+      "À propos de FundaCAD Dev 2",
+      "FundaCAD Dev 2について",
+    ]);
   });
 });
