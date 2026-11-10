@@ -1184,12 +1184,6 @@ It returns the toast's id for `dismissToast`, or null for an error.
   button in Notifications."). An error is spoken by the title bar notice. The
   stack is a permanent region named "Notifications", empty when no toast
   shows, and is not live, so nothing is said twice.
-- A progress bar is `role="progressbar"` with a name, `aria-valuemin`, `aria-valuemax` and `aria-valuenow`, and an
-  `aria-valuetext` when the unit is not a percent (`64 of 256 samples`). It sits in no live region and its values
-  change at most once a second (`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame. The
-  button that starts the job keeps one name while it runs.
-  Its speech goes through `announce()`: start, finish and cancel at Normal, each quarter at Verbose, and a failure
-  drops a waiting line before its error is spoken.
 - Under a dialog or the command palette the stack is inert and `aria-hidden`
   with the page, below the backdrop, so no region sits beside the modal. A
   toast with a button then waits and gets its full time once the modal closes,
@@ -1209,6 +1203,16 @@ Copy has two patterns, pick by the button:
   refuses, fail silently, the text stays selectable.
 - A text action that copies (McpSection's config): `toast("Copied.")`, and on
   failure `toast("Could not copy. Select the text and copy it.", { kind: "error" })`.
+
+A progress bar for a long job, such as the Camera tab's traced picture, is
+`role="progressbar"` with a name, `aria-valuemin`, `aria-valuemax` and
+`aria-valuenow`, and an `aria-valuetext` when the unit is not a percent
+(`64 of 256 samples`). It sits in no live region, and its values change at
+most once a second, and at once at each quarter and at the total
+(`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame.
+The button that starts the job keeps one name while it runs. Its speech goes
+through `announce()`: start, finish and cancel at Normal, each quarter at
+Verbose, and a failure drops a waiting line before its error is spoken.
 
 ### 7.15 Marks in the scene
 
