@@ -3,6 +3,7 @@
 
 import { computed, reactive, ref, watch } from "vue";
 import { Button, FieldRow, NumberField, Select, TextField, announce } from "fundacad/ui";
+import { plainNumber } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
 import {
   HANDS,
@@ -73,9 +74,9 @@ function part(p: PartName): Record<string, unknown> {
 
 // The form's numbers are in its own units, and a written unit would fold to mm whatever those are, so a plain number
 // is all that reads.
-function plainNumber(raw: string): number {
-  const x = Number(raw.trim().replace(",", "."));
-  if (!Number.isFinite(x)) throw new Error("Not a number");
+function readNumber(raw: string): number {
+  const x = plainNumber(raw);
+  if (x === null) throw new Error("Not a number");
   return x;
 }
 
@@ -277,7 +278,7 @@ watch(
               commit="live"
               limits="arrows"
               nullable
-              :parse="plainNumber"
+              :parse="readNumber"
               :min="0"
               :model-value="tpi"
               @update:model-value="writeTpi"
@@ -295,7 +296,7 @@ watch(
               commit="live"
               limits="arrows"
               nullable
-              :parse="plainNumber"
+              :parse="readNumber"
               :min="0"
               :model-value="numberOr(part(p)[f])"
               @update:model-value="writeField(p, f, $event)"
@@ -317,7 +318,7 @@ watch(
             size="sm"
             commit="live"
             nullable
-            :parse="plainNumber"
+            :parse="readNumber"
             :min="1"
             :max="179"
             :step-from="90"
@@ -342,7 +343,7 @@ watch(
             size="sm"
             commit="live"
             nullable
-            :parse="plainNumber"
+            :parse="readNumber"
             :min="0"
             :step="1"
             :model-value="numberOr(part('drive')['number'])"
@@ -394,7 +395,7 @@ watch(
           commit="live"
           limits="arrows"
           nullable
-          :parse="plainNumber"
+          :parse="readNumber"
           :min="0"
           :model-value="numberOr(getPath(draft, path))"
           @update:model-value="writePath(path, $event)"

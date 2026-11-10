@@ -39,6 +39,7 @@ import { ENGINE } from "../../src/app/engineKey";
 import type { Engine } from "../../src/app/engine";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { setLanguage } from "../../src/i18n";
 import type { CadDocument, ParamControl } from "../../src/types";
 
 enableAutoUnmount(afterEach);
@@ -696,6 +697,29 @@ describe("the custom fastener form", () => {
     await flushPromises();
     expect(problems()).toEqual([]);
     expect((await saved())!.thread!.diameter).toBe(3.5);
+  });
+
+  describe("by the language, as every other box reads", () => {
+    afterEach(() => setLanguage("system"));
+
+    async function driver(text: string) {
+      const { byLabel, problems, saved } = await form();
+      const input = byLabel("Driver number");
+      type(input, text);
+      await flushPromises();
+      const number = (await saved())?.drive?.["number"] ?? null;
+      return { number, invalid: input.getAttribute("aria-invalid"), problems: problems() };
+    }
+
+    it("in German reads 1,500 and 0.250 as decimals and refuses 1.500, in English reads 1.500 and refuses 1,500", async () => {
+      await setLanguage("de");
+      const de = [await driver("1,500"), await driver("0.250"), await driver("1.500")];
+      await setLanguage("system");
+      const en = [await driver("1.500"), await driver("1,500")];
+      const read = (number: number) => ({ number, invalid: null, problems: [] });
+      const refused = { number: null, invalid: "true", problems: ["Driver number: Not a number"] };
+      expect({ de, en }).toEqual({ de: [read(1.5), read(0.25), refused], en: [read(1.5), refused] });
+    });
   });
 
   it("reads a decimal comma in a length", async () => {
