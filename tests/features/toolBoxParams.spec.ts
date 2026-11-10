@@ -10,6 +10,7 @@ import { HoleTool } from "../../src/features/holeTool";
 import { PatternTool } from "../../src/features/patternTool";
 import { JointTool } from "../../src/features/jointTool";
 import { DocumentStore } from "../../src/document/store";
+import { setLanguage } from "../../src/i18n";
 import type { DimInput } from "../../src/sketch/dimInput";
 import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
@@ -143,6 +144,28 @@ describe("the Extrude value box with parameters", () => {
     enter("distance");
     expect(depth(s)).toBe(10);
     expect(s.boundExpr(target)?.expr).toBe("width / 4");
+  });
+
+  it("width * 1,5 in German binds width * 1.5", async () => {
+    await setLanguage("de");
+    try {
+      const s = model();
+      startExtrude(s);
+      type("distance", "width * 1,5");
+      enter("distance");
+      expect(depth(s)).toBe(60);
+      expect(s.boundExpr(target)?.expr).toBe("width * 1.5");
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("width * 1,5 in English builds nothing", () => {
+    const s = model();
+    startExtrude(s);
+    type("distance", "width * 1,5");
+    enter("distance");
+    expect([depth(s), s.boundExpr(target)]).toEqual([undefined, null]);
   });
 
   it("the depth follows a later change of width", async () => {

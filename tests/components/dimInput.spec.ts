@@ -1145,6 +1145,32 @@ describe("DimInput reads parameter names", () => {
     expect(dim.getValue("depth")).toBe(15);
     expect(dim.exprOf("depth")).toBeNull();
   });
+
+  describe("with a decimal comma", () => {
+    it.each([
+      ["width * 1,5", 60, "width * 1.5"],
+      ["rib = width / 1,6", 25, "width / 1.6"],
+      ["max(1,5; width / 2) + 0,25", 20.25, "max(1.5; width / 2) + 0.25"],
+    ])("in German %j is %d and binds %j", async (text, value, expr) => {
+      await setLanguage("de");
+      try {
+        type(text);
+        expect(problem()).toBeNull();
+        expect(dim.getValue("depth")).toBe(value);
+        expect(dim.exprOf("depth")).toMatchObject({ expr });
+      } finally {
+        await setLanguage("system");
+      }
+    });
+
+    it("in English the same text is refused, with no expression to bind", () => {
+      type("width * 1,5");
+      enter();
+      expect(commit).not.toHaveBeenCalled();
+      expect(problem()).not.toBeNull();
+      expect(dim.exprOf("depth")).toBeNull();
+    });
+  });
 });
 
 describe("DimInput.wasTyped", () => {

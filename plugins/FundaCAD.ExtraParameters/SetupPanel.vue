@@ -3,7 +3,7 @@
 // undoes like any edit, and survives the plugin being switched off.
 
 import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
-import { captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine } from "fundacad";
+import { captureConfiguration, checkResults, evalExpr, storedExpr, toast, useDocValue, useEngine } from "fundacad";
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
@@ -198,7 +198,7 @@ const newCheck = ref({ expr: "", message: "", level: "warning" as ParamCheck["le
 function exprError(expr: string): string | null {
   const values = Object.fromEntries(Object.entries(store.document.paramDefs ?? {}).map(([n, d]) => [n, d.value]));
   try {
-    evalExpr(expr, values);
+    evalExpr(storedExpr(expr), values);
     return null;
   } catch (e) {
     return e instanceof Error ? e.message : String(e);
@@ -218,7 +218,7 @@ function addCheck() {
         "k",
         list.map((c) => c.id),
       ),
-      expr: expr.trim(),
+      expr: storedExpr(expr.trim()),
       message: message.trim(),
       level,
     });
@@ -234,9 +234,10 @@ function exprProblem(key: string, expr: string): string | null {
 function editCheck(id: string, patch: Partial<ParamCheck>) {
   if (patch.expr !== undefined && exprError(patch.expr)) return;
   clear();
+  const stored = patch.expr === undefined ? patch : { ...patch, expr: storedExpr(patch.expr) };
   store.updateParamExtras((x) => {
     const c = x.checks?.find((y) => y.id === id);
-    if (c) Object.assign(c, patch);
+    if (c) Object.assign(c, stored);
   });
 }
 function removeCheck(id: string) {

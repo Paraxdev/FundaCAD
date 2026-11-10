@@ -28,6 +28,7 @@ import {
 } from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
+import { setLanguage } from "../../../src/i18n";
 import { DocumentStore } from "../../../src/document/store";
 import { createDocBridge } from "../../../src/app/docBridge";
 import type { GeometryBackend } from "../../../src/geometry/client";
@@ -777,6 +778,29 @@ describe("FeatureProperties expressions through NumberField", () => {
       expect(fake.values).toEqual([]);
     },
   );
+
+  it.each([
+    ["width*1,5", "width*1.5"],
+    ["w = width/1,5 + 0,25", "w = width/1.5 + 0.25"],
+    ["max(1,5; width)", "max(1.5; width)"],
+    ["width*1,5 - 2,25*gap", "width*1.5 - 2.25*gap"],
+  ])("in German hands %j to the parameter engine as %j", async (raw, stored) => {
+    await setLanguage("de");
+    try {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      await commit(render(fake, "e1"), "Distance", raw);
+      expect(fake.exprs).toEqual([{ field: "distance", raw: stored }]);
+      expect(fake.values).toEqual([]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("keeps a comma as typed in English, for the tokenizer to refuse", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    await commit(render(fake, "e1"), "Distance", "width*1,5; gap");
+    expect(fake.exprs).toEqual([{ field: "distance", raw: "width*1,5; gap" }]);
+  });
 
   it("keeps an expression the parameter engine refuses, and says why under the row", async () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });

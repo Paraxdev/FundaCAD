@@ -19,6 +19,7 @@ import { regionStep } from "../ui/regions";
 import { underZoom } from "../ui/anchor";
 import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
+import { storedExpr } from "../ui/measure";
 import { getUnit, parseField } from "../ui/units";
 import {
   commonUnits,
@@ -861,7 +862,7 @@ export class DimInput {
     if (!doc || !text || this.parseMeasure(f) !== null) return null;
     const err = measureError(text, f.unit);
     if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
-    return doc.classifyTargetExpr(null, null, text, f.def.kind ?? "length");
+    return doc.classifyTargetExpr(null, null, storedExpr(text), f.def.kind ?? "length");
   }
 
   /** The typed parameter expression a tool binds the feature field to, with the new name of a `name = expr`; null for

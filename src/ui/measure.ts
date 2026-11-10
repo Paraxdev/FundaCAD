@@ -402,6 +402,12 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
   return mark === "," ? text.replace(".", ",") : text;
 }
 
+/** Typed expression text as the stored point grammar. In a dot language it is untouched, so a comma there is
+ *  refused by the tokenizer as before. */
+export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
+  return mark === "," ? commasToPoints(typed) : typed;
+}
+
 /** `toFixed` with the language's mark, trailing zeros kept. */
 export function spellFixed(v: number, digits: number, mark: DecimalMark = decimalMark()): string {
   const text = v.toFixed(digits);

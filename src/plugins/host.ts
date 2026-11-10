@@ -123,6 +123,8 @@ export { fieldNumber, fieldError, readAs } from "../ui/measure";
 export { spellRounded as numberText } from "../ui/measure";
 /** A number or a fixed decimal count spelled with the language's decimal mark. */
 export { spellNumber, spellFixed } from "../ui/measure";
+/** Typed expression text with a decimal comma as the point text the document stores. */
+export { storedExpr } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 

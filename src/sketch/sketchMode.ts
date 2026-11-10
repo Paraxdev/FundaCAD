@@ -166,7 +166,7 @@ import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGr
 import { INFER_TOL_DEG } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 import { InferTag, SnapTag } from "./snapTag";
-import { spellNumber } from "../ui/measure";
+import { spellNumber, storedExpr } from "../ui/measure";
 
 /** Tools that record a point on curve relation when an end snaps onto a curve. */
 const CURVE_SNAP_TOOLS: ReadonlySet<string> = new Set(["line", "arc"]);
@@ -1620,7 +1620,7 @@ export class SketchMode {
     if (!this.store) return { error: "no document" };
     const bound = key ? (this.docBinding(key)?.name ?? null) : null;
     const pending = key ? (this.pendingBindings.get(key)?.name ?? null) : null;
-    const c = this.store.classifyTargetExpr(bound, pending, raw, kind);
+    const c = this.store.classifyTargetExpr(bound, pending, storedExpr(raw), kind);
     if (!c.ok) return { error: c.error };
     if (kind !== "angle" && !(c.value > 0)) return { error: "must evaluate to a positive value" };
     return { value: c.value, expr: c.expr, ...(c.name ? { name: c.name } : {}) };

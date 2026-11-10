@@ -162,4 +162,30 @@ describe("ParamsDialog", () => {
     await flushPromises();
     expect(values()).toEqual(["40 mm", "12.375 mm", "22.5°", "7", "0.35"]);
   });
+
+  describe("a typed decimal comma", () => {
+    it("is stored with a point in German, in the add row and the Expression box", async () => {
+      await setLanguage("de");
+      const fake = makeEngine();
+      await open(fake);
+      const [, , , newName, newExpr] = inputs();
+      await type(newName!, "wall");
+      await type(newExpr!, "2,5 + 0,25");
+      await enter(newExpr!);
+      await type(inputs()[1]!, " max(w*1,5; 2,25) ");
+      await enter(inputs()[1]!);
+      expect(fake.calls).toEqual([
+        ["add", "wall", "2.5 + 0.25", "mm"],
+        ["expr", "w", "max(w*1.5; 2.25)"],
+      ]);
+    });
+
+    it("is passed on untouched in English, where the store refuses it", async () => {
+      const fake = makeEngine();
+      await open(fake);
+      await type(inputs()[1]!, "w*1,5");
+      await enter(inputs()[1]!);
+      expect(fake.calls).toEqual([["expr", "w", "w*1,5"]]);
+    });
+  });
 });
