@@ -44,6 +44,7 @@
 - Press/Pull on a round picked with the walls it meets carries the round along at its own radius, instead of refusing, whichever you click first.
 - Press/Pull on a round alone changes its radius, so it stays smooth with its walls.
 - Extrude and Press/Pull show the body solid while open, with an outline of what the step adds or takes away.
+- Once an extrude has its depth, a click on a face or an edge finishes it and starts Press/Pull or Fillet there, with no Accept.
 - Shell refuses a face picked through its opening, and Shell across several bodies keeps each face on its own body, also when you edit it again.
 - Undo, or any change that removes the step an open tool is editing, closes that tool.
 - A sketch far from the origin that makes an empty body now reports a failure.
