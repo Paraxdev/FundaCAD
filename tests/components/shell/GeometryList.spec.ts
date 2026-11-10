@@ -384,7 +384,7 @@ describe("what to list", () => {
     expect(said()).toEqual(["1 face"]);
   });
 
-  it("says the new kind's count once a build in flight lets it list them, and is listing until then", async () => {
+  it("says the new kind's count once a build in flight lets it list them, and that the model is building until then", async () => {
     const { r, w } = await open(2);
     r.wires.set("body1", [edge("body1", 0, 2), edge("body1", 1, 2), edge("body1", 2, 2)]);
     await kind(w, "edges");
@@ -400,12 +400,13 @@ describe("what to list", () => {
     await kind(w, "faces");
     await nextTick();
     expect(said()).toEqual([]);
-    expect(w.get(".empty-state").text()).toBe("Listing the faces.");
+    expect(w.get(".empty-state").text()).toBe("The model is still building.");
     finish();
     await built;
     await settle();
     await nextTick();
     expect(said()).toEqual(["2 faces"]);
+    expect(w.find(".empty-state").exists()).toBe(false);
   });
 });
 
