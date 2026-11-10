@@ -249,8 +249,8 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
     switch the view to Path traced (Z steps to the next view mode), then open the Camera tab. Tab to "Save picture…" and
     press Enter: you hear "Render started, 256 samples", the button reads "Cancel render", each quarter says a line like
     "Rendered 64 of 256 samples", then "Render finished", and the save dialog opens; save and you hear "Saved" and the
-    path. Press Enter again and once more while it traces: you hear "Render cancelled". Set Announcements back to Normal
-    and take one more: start and finish, no quarters. Fail: a button name that changes with the count, a count spoken
+    path. Press Enter to take another, and press Enter again while it traces: you hear "Render cancelled". Set
+    Announcements back to Normal and take one more: start and finish, no quarters. Fail: a button name that changes with the count, a count spoken
     more often than each quarter, a quarter at Normal, or silence on cancel.
 
 Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
