@@ -35,7 +35,11 @@ describe("top menu names under a language", () => {
   it("send a plugin row naming Help into Hilfe, one or many", async () => {
     await setLanguage("de");
     contribute("P.One", { menus: [{ menu: "Help", items: [row("Tour")] }] });
-    expect(build().find((m) => menuName(m) === "Help")!.items.map((i) => i.label)).toContain("Tour");
+    expect(
+      build()
+        .find((m) => menuName(m) === "Help")!
+        .items.map((i) => i.label),
+    ).toContain("Tour");
     contribute("P.Two", { menus: [{ menu: "Help", items: [row("Tour B"), row("Tour C")] }] });
     const help = build().find((m) => menuName(m) === "Help")!;
     expect(help.items.filter((i) => ["Tour", "Tour B", "Tour C"].includes(i.label as string))).toHaveLength(3);

@@ -36,7 +36,17 @@ const props = withDefaults(
     /** Set by MenuItem on the menu it opens. */
     submenu?: boolean;
   }>(),
-  { anchor: null, at: null, side: "bottom", align: "start", gap: 4, label: undefined, name: undefined, focus: "first", submenu: false },
+  {
+    anchor: null,
+    at: null,
+    side: "bottom",
+    align: "start",
+    gap: 4,
+    label: undefined,
+    name: undefined,
+    focus: "first",
+    submenu: false,
+  },
 );
 const emit = defineEmits<{ close: [] }>();
 

@@ -33,7 +33,11 @@ describe("menu refs", () => {
   });
 
   it("fall back to the popup aria-label without a name", async () => {
-    mount(Menu, { props: { label: "Zeichnen", at: { x: 3, y: 4 } }, slots: { default: '<div class="menu-item">Linie</div>' }, attachTo: document.body });
+    mount(Menu, {
+      props: { label: "Zeichnen", at: { x: 3, y: 4 } },
+      slots: { default: '<div class="menu-item">Linie</div>' },
+      attachTo: document.body,
+    });
     await flushPromises();
     expect(refOf(document.body.querySelector<HTMLElement>(".menu-item")!)).toBe("menu:Zeichnen/Linie");
   });

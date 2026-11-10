@@ -27,7 +27,12 @@ function viewCommand(id: string): Command {
 const LABEL_KEYS = new Map<string, MessageKey>();
 
 // A getter, so the label follows a change of language; the key is kept for the English alias.
-function cmd(id: string, group: string, labelKey: MessageKey, opts: { key?: string; context?: Command["context"] } = {}): Command {
+function cmd(
+  id: string,
+  group: string,
+  labelKey: MessageKey,
+  opts: { key?: string; context?: Command["context"] } = {},
+): Command {
   LABEL_KEYS.set(id, labelKey);
   return {
     id,

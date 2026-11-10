@@ -92,7 +92,9 @@ describe("where the commands are listed", () => {
   it("the Edit menu runs them through the dispatcher", () => {
     const handleAction = vi.fn();
     const edit = buildMenubar({ handleAction } as unknown as Engine).find((m) => menuName(m) === "Edit")!;
-    const items = edit.items.filter((i) => allCommands().find((c) => ALL.includes(c.id) && commandEnglish(c.id) === i.refName));
+    const items = edit.items.filter((i) =>
+      allCommands().find((c) => ALL.includes(c.id) && commandEnglish(c.id) === i.refName),
+    );
     expect(items.map((i) => [rowName(i), i.shortcut])).toEqual([
       ["Next Face", undefined],
       ["Previous Face", undefined],

@@ -26,7 +26,10 @@ const results = computed(() => {
   return allCommands()
     .filter((c) => c.context === "global" || c.context === cmdk.context)
     .map((c) => ({ ...c, label: cmdk.labelOf(c) }))
-    .map((c) => ({ c, s: Math.max(score(q, c.label.toLowerCase()), score(q, (commandEnglish(c.id) ?? c.label).toLowerCase())) }))
+    .map((c) => ({
+      c,
+      s: Math.max(score(q, c.label.toLowerCase()), score(q, (commandEnglish(c.id) ?? c.label).toLowerCase())),
+    }))
     .filter((x) => q === "" || x.s > 0)
     .sort((a, b) => b.s - a.s)
     .slice(0, 40)
@@ -65,7 +68,9 @@ watch(query, () => {
   if (!cmdk.open) return;
   const n = results.value.length;
   const first = results.value[0];
-  const name = first ? [first.label, groupText(first.group), first.key && fmtKeys(first.key)].filter(Boolean).join(", ") : "";
+  const name = first
+    ? [first.label, groupText(first.group), first.key && fmtKeys(first.key)].filter(Boolean).join(", ")
+    : "";
   const text = first ? t("palette.found", { n, first: name }) : t("palette.empty");
   announce(text, "polite", { key: COUNT, delay: 300 });
 });
@@ -149,7 +154,9 @@ function onKey(e: KeyboardEvent) {
               <span class="cmdk-key">{{ fmtKeys(results[index]!.key!) }}</span>
             </template>
           </template>
-          <template #empty><div class="cmdk-empty">{{ t("palette.empty") }}</div></template>
+          <template #empty
+            ><div class="cmdk-empty">{{ t("palette.empty") }}</div></template
+          >
         </Combobox>
       </div>
     </div>

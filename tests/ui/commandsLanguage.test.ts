@@ -65,9 +65,14 @@ describe("command labels in the chosen language", () => {
 
 describe("keys and ids survive a language switch", () => {
   it("a chosen key still shows on the German palette entry and the Edit row, found by its English name", async () => {
-    expect(setUserShortcut(shortcutRows().find((s) => s.action === "next-face")!.id, { key: "F", ctrl: true, shift: true })).toBeNull();
+    expect(
+      setUserShortcut(shortcutRows().find((s) => s.action === "next-face")!.id, { key: "F", ctrl: true, shift: true }),
+    ).toBeNull();
     await setLanguage("de");
-    expect(allCommands().find((c) => c.id === "next-face")).toMatchObject({ key: "Ctrl+Shift+F", label: "Nächste Fläche" });
+    expect(allCommands().find((c) => c.id === "next-face")).toMatchObject({
+      key: "Ctrl+Shift+F",
+      label: "Nächste Fläche",
+    });
     const edit = buildMenus();
     const face = row("Edit", "Next Face", edit);
     expect(itemText(face)).toBe("Nächste Fläche");

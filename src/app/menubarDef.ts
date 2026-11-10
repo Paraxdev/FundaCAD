@@ -46,12 +46,14 @@ const ANALYSIS_ITEMS = [
 ];
 
 // The label is read through commandLabel, since an allCommands() copy holds a getter frozen at its language.
-const commandRow = (e: Engine) => (c: Command): MenuItem => ({
-  label: () => commandLabel(c.id),
-  ...(commandEnglish(c.id) !== undefined ? { refName: commandEnglish(c.id)! } : {}),
-  ...(c.key ? { shortcut: c.key } : {}),
-  onClick: () => e.handleAction(c.id),
-});
+const commandRow =
+  (e: Engine) =>
+  (c: Command): MenuItem => ({
+    label: () => commandLabel(c.id),
+    ...(commandEnglish(c.id) !== undefined ? { refName: commandEnglish(c.id)! } : {}),
+    ...(c.key ? { shortcut: c.key } : {}),
+    onClick: () => e.handleAction(c.id),
+  });
 
 function viewItems(e: Engine): MenuDef["items"] {
   const view = allCommands()
