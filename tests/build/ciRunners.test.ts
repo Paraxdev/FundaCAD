@@ -42,6 +42,11 @@ describe("the build workflow's runners", () => {
     expect(job("e2e-a11y")).toMatch(/needs: rust-geom\r?$/m);
   });
 
+  it("gives e2e room for a slow runner, whose setup alone took up to 30 minutes", () => {
+    const minutes = Number(/^ {4}timeout-minutes: (\d+)/m.exec(job("e2e"))?.[1]);
+    expect(minutes).toBeGreaterThanOrEqual(75);
+  });
+
   it("gives the accessibility smoke the 34 minutes or so a slow runner needs, with room for the job's setup", () => {
     const a11y = job("e2e-a11y");
     const jobMinutes = Number(/^ {4}timeout-minutes: (\d+)/m.exec(a11y)?.[1]);
