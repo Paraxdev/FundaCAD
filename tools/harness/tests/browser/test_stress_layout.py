@@ -42,8 +42,20 @@ READ = """([boxes, material]) => {
     const kb = box(k), cb = box(seen(c));
     return { l: Math.round(cb.l * 10) / 10, one_line: cb.t < kb.b && cb.b > kb.t };
   };
+  // A word is cut when its own range spans two lines.
+  const cut = [...panel.querySelectorAll('.stress-field > .measure-k:first-child')].flatMap((k) => {
+    const node = k.firstChild;
+    if (!node || node.nodeType !== Node.TEXT_NODE) return [];
+    return [...node.data.matchAll(/[^ ]+/g)].filter((m) => {
+      const r = document.createRange();
+      r.setStart(node, m.index);
+      r.setEnd(node, m.index + m[0].length);
+      return new Set([...r.getClientRects()].map((c) => Math.round(c.top))).size > 1;
+    }).map((m) => m[0]);
+  });
   return {
     window: [innerWidth, innerHeight],
+    cut,
     panel: box(panel),
     run: run ? box(run) : null,
     boxes: [...panel.querySelectorAll(boxes)].map(row),
@@ -138,6 +150,13 @@ def test_stress_panel_and_run_stay_inside_the_window(seen, size, lang):
     assert got["panel"]["t"] >= -1
     assert got["panel"]["b"] <= size[1] + 1, got
     assert got["run"]["b"] <= got["panel"]["b"] + 1 and got["run"]["t"] >= got["panel"]["t"], got
+
+
+@pytest.mark.parametrize("lang", LANGS)
+@pytest.mark.parametrize("text", TEXTS)
+@pytest.mark.parametrize("size", SIZES)
+def test_no_stress_label_is_cut_inside_a_word(seen, size, text, lang):
+    assert seen[(size, text, lang)]["cut"] == [], seen[(size, text, lang)]
 
 
 FIXTURES = {10: TEN, 14: "tools/harness/fixtures/history_fourteen.json", 24: "tools/harness/fixtures/history_twentyfour.json"}
@@ -240,3 +259,50 @@ def test_history_is_whole_again_once_the_stress_panel_closes(grown, size, count)
 def test_history_keeps_its_list_scrolled_where_it_was_when_the_window_resizes(grown, size, count):
     got = grown[(size, count, "scroll")]
     assert got["after"] == got["end"], got
+
+
+SHELF_SIZES = [(900, 800), (900, 600)]
+SHELF_FIXTURES = {14: FIXTURES[14], 24: FIXTURES[24]}
+SHELF_LANGS = ["en", "fr"]
+SHELF_TEXTS = {"wide": TEXTS["wide"], "comfortable": TEXTS["comfortable"]}
+
+# The column's bottom is the layer's, less the view cube's margin that place() keeps.
+COLUMN_BOTTOM = """() => {
+  const panel = document.querySelector('.stress-panel').getBoundingClientRect();
+  const run = document.querySelector('.stress-panel .stress-run').getBoundingClientRect();
+  const layer = document.getElementById('float-layer').getBoundingClientRect();
+  return { panel_b: panel.bottom, run_b: run.bottom, column_b: layer.bottom - 14, window_b: innerHeight };
+}"""
+
+
+@pytest.fixture(scope="module")
+def shelved():
+    found = {}
+    for size in SHELF_SIZES:
+        for count, path in SHELF_FIXTURES.items():
+            s = Session(viewport=size)
+            try:
+                s.open_file(path)
+                s.panel("History", open=True)
+                show_stress(s)
+                pick(s, ".stress-material", "Custom")
+                for text, (wide, comfortable) in SHELF_TEXTS.items():
+                    show_text(s, wide, comfortable)
+                    for lang in SHELF_LANGS:
+                        s.page.evaluate("async (c) => (await import('/src/i18n/index.ts')).setLanguage(c)", lang)
+                        s.page.evaluate("() => window.dispatchEvent(new Event('resize'))")
+                        settled(s)
+                        found[(size, count, text, lang)] = s.page.evaluate(COLUMN_BOTTOM)
+            finally:
+                s.close()
+    return found
+
+
+@pytest.mark.parametrize("lang", SHELF_LANGS)
+@pytest.mark.parametrize("text", SHELF_TEXTS)
+@pytest.mark.parametrize("count", SHELF_FIXTURES)
+@pytest.mark.parametrize("size", SHELF_SIZES)
+def test_stress_panel_ends_inside_its_column_and_the_window_under_a_cut_history(shelved, size, count, text, lang):
+    got = shelved[(size, count, text, lang)]
+    assert got["panel_b"] <= got["column_b"] + 1, got
+    assert got["panel_b"] <= got["window_b"] + 1 and got["run_b"] <= got["panel_b"] + 1, got

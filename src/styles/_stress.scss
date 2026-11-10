@@ -92,7 +92,10 @@
 // 11em is the Density box with its unit in a wider face and Comfortable text (132px of 12px), so a row that fits on one line at 72px stays on it.
 .stress-keyed > .measure-k:first-child {
   flex: 0 0 max(72px, min(40%, 100% - 11em - var(--s-2)));
-  min-width: 0;
+  // break-word, unlike anywhere, leaves the longest word as the least width, so a word is never cut and the
+  // box wraps under the label by the row's wrap rule once the word and the box no longer fit side by side.
+  min-width: min-content;
+  overflow-wrap: break-word;
 }
 .stress-field .select-trigger {
   flex: 1 1 auto;
