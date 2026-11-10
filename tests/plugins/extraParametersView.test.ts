@@ -1,5 +1,7 @@
 import { afterEach, describe, it, expect } from "vitest";
 import { setLanguage } from "../../src/i18n";
+import { DocumentStore } from "../../src/document/store";
+import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, ParamDef } from "../../src/types";
 import { recompute } from "../../src/params/engine";
 import {
@@ -9,6 +11,7 @@ import {
   nextId,
   parseChoices,
   tuneGroups,
+  uniqueGroups,
 } from "../../plugins/FundaCAD.ExtraParameters/view";
 
 const def = (expr: string, extra: Partial<ParamDef> = {}): ParamDef => ({ expr, value: 0, unit: "count", ...extra });
@@ -131,5 +134,91 @@ describe("Extra Parameters: what the section lists", () => {
     expect(isPlainNumber("5 mm")).toBe(false);
     expect(isPlainNumber("across / 2")).toBe(false);
     expect(nextId("g", ["g1", "g3"])).toBe("g2");
+  });
+});
+
+describe("Extra Parameters: two groups of one id", () => {
+  const backend = {
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
+    async init() {},
+    onStatus: () => () => {},
+    connected: true,
+  } as unknown as GeometryBackend;
+  const defs = () => ({
+    fx: def("2.5", { unit: "mm", group: "g1" }),
+    gy: def("7", { unit: "mm", group: "g2" }),
+    hz: def("3", { unit: "mm", group: "g1" }),
+    free: def("9", { unit: "mm" }),
+  });
+  const shape = (d: CadDocument) => tuneGroups(d).map((g) => [g.id, g.name, g.rows.map((r) => r.name)]);
+  const opened = (d: CadDocument) => {
+    const store = new DocumentStore(backend, { parameters: {}, features: [] });
+    store.load(JSON.stringify(d));
+    return store;
+  };
+
+  it("shows each parameter once whatever the number of repeated ids", () => {
+    const g = (id: string, name: string) => ({ id, name });
+    const none = [g("g1", "Core"), g("g2", "Rings")];
+    const one = [g("g1", "Core"), g("g2", "Rings"), g("g1", "Core again")];
+    const many = [g("g1", "Core"), g("g1", "B"), g("g2", "Rings"), g("g1", "C"), g("g2", "D"), g("g1", "E")];
+    const expected = [
+      [null, "", ["free"]],
+      ["g1", "Core", ["fx", "hz"]],
+      ["g2", "Rings", ["gy"]],
+    ];
+    expect([none, one, many].map((groups) => shape(doc(defs(), groups)))).toEqual([expected, expected, expected]);
+    expect(uniqueGroups(many)).toEqual([g("g1", "Core"), g("g2", "Rings")]);
+    expect(uniqueGroups(undefined)).toEqual([]);
+  });
+
+  it("keeps the first group of an id and a document without groups as it was", () => {
+    const first = doc(defs(), [
+      { id: "g2", name: "Rings" },
+      { id: "g1", name: "Core" },
+      { id: "g1", name: "Copy" },
+    ]);
+    expect(shape(first)).toEqual([
+      [null, "", ["free"]],
+      ["g2", "Rings", ["gy"]],
+      ["g1", "Core", ["fx", "hz"]],
+    ]);
+    expect(shape(doc(defs()))).toEqual([[null, "", ["fx", "gy", "hz", "free"]]]);
+  });
+
+  it("does not carry the repeat over to a document loaded after it", () => {
+    const dup = opened(
+      doc(defs(), [
+        { id: "g1", name: "Core" },
+        { id: "g1", name: "Copy" },
+      ]),
+    );
+    expect(shape(dup.document)).toEqual([
+      [null, "", ["gy", "free"]],
+      ["g1", "Core", ["fx", "hz"]],
+    ]);
+    const next = opened(
+      doc(defs(), [
+        { id: "g2", name: "Rings" },
+        { id: "g1", name: "Other" },
+      ]),
+    );
+    expect(shape(next.document)).toEqual([
+      [null, "", ["free"]],
+      ["g2", "Rings", ["gy"]],
+      ["g1", "Other", ["fx", "hz"]],
+    ]);
+  });
+
+  it("saves the groups it was given, the second of an id included", () => {
+    const groups = [
+      { id: "g1", name: "Core" },
+      { id: "g1", name: "Copy" },
+    ];
+    const store = opened(doc(defs(), groups));
+    tuneGroups(store.document);
+    expect(JSON.parse(store.toJSON()).paramExtras).toEqual({ groups });
   });
 });

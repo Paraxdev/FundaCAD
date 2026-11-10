@@ -17,7 +17,7 @@ import {
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
-import { choiceSeparator, convertControl, formatChoices, nextId, parseChoices } from "./view";
+import { choiceSeparator, convertControl, formatChoices, nextId, parseChoices, uniqueGroups } from "./view";
 
 const store = useEngine().store;
 
@@ -28,7 +28,7 @@ const params = useDocValue((doc) =>
     .map(([name, def]) => ({ name, def }))
     .sort((a, b) => Number(!!a.def.hidden) - Number(!!b.def.hidden)),
 );
-const groups = useDocValue((doc) => doc.paramExtras?.groups ?? []);
+const groups = useDocValue((doc) => uniqueGroups(doc.paramExtras?.groups));
 const configs = useDocValue((doc) => doc.paramExtras?.configurations ?? []);
 const checks = useDocValue((doc) => {
   const results = new Map(checkResults(doc).map((r) => [r.check.id, r]));
