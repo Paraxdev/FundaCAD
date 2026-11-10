@@ -21,6 +21,7 @@ export interface ReportInput {
   channel: string;
   system: string;
   webview: string | null;
+  accessibility: string | null;
   userAgent: string;
   connected: boolean;
   safeMode: string | null;
@@ -105,6 +106,7 @@ function assemble(r: ReportInput, log: { heading: string; text: string } | null,
     `version: ${r.version} · channel ${r.channel}`,
     `system: ${r.system}`,
     ...(r.webview ? [`webview: ${r.webview}`] : []),
+    ...(r.accessibility ? [`accessibility: ${r.accessibility}`] : []),
     `browser: ${r.userAgent}`,
     `geometry engine connected: ${r.connected}`,
     `safe mode: ${r.safeMode ?? "off"}`,

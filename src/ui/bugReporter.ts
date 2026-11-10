@@ -132,6 +132,7 @@ export function composeReport(snap: ReportSnapshot, choices: ReportChoices): Com
     channel: RELEASE_TAG,
     system: choices.system.system,
     webview: choices.system.webview,
+    accessibility: choices.system.accessibility,
     userAgent: navigator.userAgent,
     connected: snap.connected,
     safeMode: safeModeLine(),

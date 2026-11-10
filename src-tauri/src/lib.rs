@@ -612,6 +612,9 @@ pub fn run() {
                 },
             };
             app.manage(run);
+            if cfg!(target_os = "linux") && system_info::bridge_off(std::env::var("NO_AT_BRIDGE").ok().as_deref()) {
+                eprintln!("{}", system_info::BRIDGE_OFF);
+            }
             let safe = app.state::<SafeMode>();
             let reason = safe.reason;
             if reason.is_none() {
