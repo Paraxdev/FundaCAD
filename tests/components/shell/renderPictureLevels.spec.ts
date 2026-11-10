@@ -25,6 +25,8 @@ const CANCELLED = "polite:Render cancelled";
 const SAVED_LINE = `polite:Saved ${SAVED}`;
 const FAILED = expect.stringMatching(/^assertive:The traced picture failed\..*GPU lost/) as unknown as string;
 const q = (n: number) => `polite:Rendered ${n} of 256 samples`;
+// The start is said at the first report, so a line that report also brings joins it in the same frame.
+const joined = (a: string, b: string) => `${a}. ${b.replace(/^polite:/, "")}`;
 
 let trace: Trace;
 let w: VueWrapper;
@@ -32,10 +34,11 @@ let detach: () => void;
 let level: Verbosity;
 let startedAt: number;
 let runs = 0;
+let session: { alive: boolean };
 
 function mountCamera() {
   const engine = {
-    store: { fileName: "Untitled", session: { alive: true }, onReferenceImagesChange: () => () => {} },
+    store: { fileName: "Untitled", session, onReferenceImagesChange: () => () => {} },
     viewport: {
       tracedPictureSize: () => ({ width: 640, height: 400 }),
       renderStill: vi.fn(),
@@ -79,6 +82,7 @@ beforeEach(async () => {
   // The save dialog is open for a while, so its line is heard apart from the finish.
   saveRenderedImage.mockImplementation(() => new Promise((done) => setTimeout(() => done(SAVED), 300)));
   detach = attachAnnouncer({ polite: { textContent: "" }, assertive: { textContent: "" } });
+  session = { alive: true };
   w = mountCamera();
   setVerbositySource(() => level);
 });
@@ -115,7 +119,12 @@ const LEVELS: Array<[Verbosity, string[], string[], string[]]> = [
   ["off", [], [], []],
   ["errors", [], [], [FAILED]],
   ["normal", [START, FINISHED, SAVED_LINE], [START, CANCELLED], [START, FAILED]],
-  ["verbose", [START, q(64), q(140), FINISHED, SAVED_LINE], [START, q(70), CANCELLED], [START, q(70), FAILED]],
+  [
+    "verbose",
+    [START, q(64), q(140), FINISHED, SAVED_LINE],
+    [joined(START, q(70)), CANCELLED],
+    [joined(START, q(70)), FAILED],
+  ],
 ];
 
 describe.each(LEVELS)("a traced picture at Announcements %s", (lvl, finished, cancelled, failed) => {
@@ -160,7 +169,19 @@ describe("a traced picture that ends before its line is spoken", () => {
     trace.onProgress(200);
     trace.done.resolve("data:traced");
     await step(600);
-    expect(heard()).toEqual([START, FINISHED, SAVED_LINE]);
+    expect(heard()).toEqual([joined(START, FINISHED), SAVED_LINE]);
+  });
+
+  it("says no finish and drops a quarter still waiting when the document closed mid trace", async () => {
+    await press();
+    await report(12);
+    await step(1000);
+    trace.onProgress(200);
+    session.alive = false;
+    trace.done.resolve("data:traced");
+    await step(600);
+    expect(heard()).toEqual([START]);
+    expect(saveRenderedImage).not.toHaveBeenCalled();
   });
 
   it("says a second picture in full after a finished one", async () => {

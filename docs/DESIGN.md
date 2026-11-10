@@ -1212,7 +1212,9 @@ most once a second, and at once at each quarter and at the total
 (`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame.
 The button that starts the job keeps one name while it runs. Its speech goes
 through `announce()`: start, finish and cancel at Normal, each quarter at
-Verbose, and a failure drops a waiting line before its error is spoken.
+Verbose, and a failure drops a waiting line before its error is spoken. The
+start is said at the job's first report, so a job that never begins is not
+heard as one, and a finish whose result can no longer be used is not said.
 
 ### 7.15 Marks in the scene
 

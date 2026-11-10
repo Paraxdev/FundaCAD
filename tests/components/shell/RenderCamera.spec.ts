@@ -43,13 +43,14 @@ let traces: Array<{ opts: TraceOpts; done: Deferred<string | null> }>;
 let renderStill: ReturnType<typeof vi.fn>;
 let renderTracedPicture: ReturnType<typeof vi.fn>;
 let tracedSize: () => { width: number; height: number } | null;
+let session: { alive: boolean };
 let w: VueWrapper;
 
 function mountCamera() {
   const engine = {
     store: {
       fileName: "Untitled",
-      session: { alive: true },
+      session,
       onReferenceImagesChange: () => () => {},
     },
     viewport: { tracedPictureSize: () => tracedSize(), renderTracedPicture, renderStill },
@@ -109,6 +110,7 @@ beforeEach(() => {
     return done.promise;
   });
   tracedSize = () => ({ width: 640, height: 400 });
+  session = { alive: true };
   w = mountCamera();
 });
 afterEach(() => {
@@ -303,11 +305,12 @@ describe("Camera tab traced picture announcements", () => {
     expect(toast.mock.calls).toEqual([[`Saved ${SAVED}`]]);
   });
 
-  it("speaks only the start and the finish with no report, or one at the total", async () => {
+  it("speaks the start at the first report, so a picture with no report says only its finish", async () => {
     await press();
+    expect(said()).toEqual([]);
     traces[0]!.done.resolve("data:traced");
     await flushPromises();
-    expect(said()).toEqual([["Render started, 256 samples"], ["Render finished", "polite", KEYED]]);
+    expect(said()).toEqual([["Render finished", "polite", KEYED]]);
 
     speech.announce.mockClear();
     await w.get("[data-samples='1024']").trigger("click");
@@ -317,6 +320,39 @@ describe("Camera tab traced picture announcements", () => {
     traces[1]!.done.resolve("data:traced");
     await flushPromises();
     expect(said()).toEqual([["Render started, 1024 samples"], ["Render finished", "polite", KEYED]]);
+  });
+
+  it("says nothing of a trace that returns nothing before it begins, and saves the realtime still", async () => {
+    await press();
+    expect(buttonState().text).toBe("Cancel render");
+    traces[0]!.done.resolve(null);
+    await flushPromises();
+    expect(said()).toEqual([]);
+    expect(speech.cancelAnnouncement).not.toHaveBeenCalled();
+    expect(renderStill).toHaveBeenCalledTimes(1);
+    expect(saveRenderedImage).toHaveBeenCalledWith("data:still", "render.png");
+    expect(buttonState()).toEqual(idle);
+  });
+
+  it("speaks only the cancel for a trace cancelled before its first report", async () => {
+    await press();
+    abortsWith(0);
+    await press();
+    expect(said()).toEqual([["Render cancelled", "polite", KEYED]]);
+  });
+
+  it("says no finish and drops a waiting quarter when the document closed before the picture came back", async () => {
+    await press();
+    at(1500);
+    traces[0]!.opts.onProgress(70);
+    session.alive = false;
+    traces[0]!.done.resolve("data:traced");
+    await flushPromises();
+    expect(said()).toEqual([["Render started, 256 samples"], quarter(70)]);
+    expect(speech.cancelAnnouncement.mock.calls).toEqual([["render"]]);
+    expect(saveRenderedImage).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+    expect(buttonState()).toEqual(idle);
   });
 
   it("speaks the start, the first quarter and the cancel, with no toast", async () => {
@@ -423,11 +459,6 @@ describe("Camera tab traced picture announcements", () => {
     first(200);
     await flushPromises();
     expect(barState()).toEqual(barAt(0, 256, "0 of 256 samples"));
-    expect(said()).toEqual([
-      ["Render started, 256 samples"],
-      quarter(70),
-      ["Render finished", "polite", KEYED],
-      ["Render started, 256 samples"],
-    ]);
+    expect(said()).toEqual([["Render started, 256 samples"], quarter(70), ["Render finished", "polite", KEYED]]);
   });
 });

@@ -12,6 +12,7 @@ import { useUiStore } from "../../stores/ui";
 import { t } from "../../i18n";
 import { toast } from "../../ui/toast";
 import { announce, cancelAnnouncement } from "../../ui/announce";
+import type { DocumentSession } from "../../document/session";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
 import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
@@ -96,12 +97,13 @@ const APERTURES = APERTURE_STOPS.map((f) => ({ value: String(f), label: `f/${f}`
 const SCALE_CHOICES = SCALES.map((n) => ({ value: n, label: `${n}×`, attrs: { "data-scale": String(n) } }));
 const SAMPLE_CHOICES = SAMPLES.map((n) => ({ value: n, label: String(n), attrs: { "data-samples": String(n) } }));
 
-async function render(): Promise<string | null> {
+// The start is spoken at the first report, so a trace that returns nothing before it begins says nothing of one.
+async function render(session: Pick<DocumentSession, "alive">): Promise<string | null> {
   if (traced.value) {
     const mine = new AbortController();
     abort = mine;
     progress.value = startProgress(samples.value, Date.now());
-    announce(t("render.progress.started", { total: progress.value.total }));
+    let begun = false;
     try {
       const url = await engine.viewport.renderTracedPicture({
         scale: scale.value,
@@ -110,6 +112,10 @@ async function render(): Promise<string | null> {
         onProgress: (n) => {
           // The native tracer can still report in the 50 ms slice after a cancel, before its picture rejects.
           if (abort !== mine || mine.signal.aborted || !progress.value) return;
+          if (!begun) {
+            begun = true;
+            announce(t("render.progress.started", { total: progress.value.total }));
+          }
           const step = stepProgress(progress.value, n, Date.now());
           progress.value = step.progress;
           if (step.quarter)
@@ -121,7 +127,9 @@ async function render(): Promise<string | null> {
         },
       });
       if (url) {
-        announce(t("render.progress.finished"), "polite", { key: RENDER_KEY });
+        // A closed session saves nothing, so its finish would be a false success.
+        if (session.alive) announce(t("render.progress.finished"), "polite", { key: RENDER_KEY });
+        else cancelAnnouncement(RENDER_KEY);
         return url;
       }
     } catch (e) {
@@ -155,7 +163,7 @@ async function takePicture() {
   try {
     const session = engine.store.session;
     const base = engine.store.fileName === "Untitled" ? "render" : engine.store.fileName;
-    const url = await render();
+    const url = await render(session);
     if (!url || !session.alive) return;
     const path = await saveRenderedImage(url, `${base}.png`);
     if (path) toast(`Saved ${path}`);
