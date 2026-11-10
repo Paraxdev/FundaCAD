@@ -152,8 +152,6 @@
   { "path": "src/components/overlays/ShortcutsDialog.vue", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/ShortcutsDialog.vue", "kind": "template", "count": 14, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/StressLegend.vue", "kind": "template", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/overlays/StressPanel.vue", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/overlays/StressPanel.vue", "kind": "template", "count": 13, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/StressResultsStep.vue", "kind": "template", "count": 24, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/TargetEditPanel.vue", "kind": "template", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/TextToolPanel.vue", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
