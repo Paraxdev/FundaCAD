@@ -8,7 +8,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 
 | Page | What it sets |
 | --- | --- |
-| Appearance | Theme, Icons, Units, Home background |
+| Appearance | Language, Theme, Icons, Units, Home background |
 | Viewport | Reflections, Background, Environment brightness, Tangent edges, Bloom, Path tracer, Performance mode, Potato mode |
 | Navigation | Smoothing, Orbit pivot, Orbit inertia, Scrolling, Two-finger scroll, Classic camera |
 | Accessibility | Interface size, Comfortable text, Viewport labels, Announcements, Units spoken in full, Hover delay, Notification time, Animations |
@@ -16,6 +16,37 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 | AI assistants | See [Connect an AI assistant](../ai/connect.md) |
 | Plugins | See [Plugins](../plugins/index.md) |
 | Experimental | The limits FundaCAD keeps for stability |
+
+## Language
+
+Language sets the language of FundaCAD's text, and it applies at once. System, the default, is English for now. Deutsch, Français, Español, 简体中文 and 日本語 are machine translated, and the list says so in each language's own words. A machine translated line may read oddly. So far the Language card and the Stress setup step speak them, the rest stays English until it is translated.
+
+Your own language file corrects any line. Its name is the language code: `de.json` corrects single German lines, and `pl.json` adds Polish to the list as polski (your file), with its missing lines in English. A regional file such as `de-AT.json` takes its missing lines from German. Whenever a file of yours is in use, the list says (your file) beside its language, and beside System when System is that language. The file is a flat JSON list of lines like FundaCAD's own language files, saved as UTF-8 text, at most 256 KB. A line that is empty, holds markup, or that FundaCAD does not have, is skipped, and the card lists the skipped lines with the reason. The lines that tell you about your file, such as how many of its lines are in use, stay as FundaCAD wrote them.
+
+Each line is the line's name, then its text. Copy the names from FundaCAD's English file, [en.json](https://github.com/Paraxdev/fundacad/blob/main/src/i18n/locales/en.json), which holds every line, and keep the names in braces such as `{name}` as they are, FundaCAD puts a value there. This `de.json` changes two German lines:
+
+```json
+{
+  "prefs.language.title": "Sprache der Oberfläche",
+  "prefs.language.reload": "Neu einlesen"
+}
+```
+
+A count has one text for each plural form, and each language has its own forms. English has `one` and `other`, Polish has `one`, `few`, `many` and `other`, so a Polish file writes all four. With only `one` and `other` it would show "2 ścian" where Polish says "2 ściany":
+
+```json
+{
+  "stress.faces.count": "{n, plural, one {# ściana} few {# ściany} many {# ścian} other {# ściany}}"
+}
+```
+
+Only the text inside the inner braces is yours to translate. The rest is code and stays in English: the words `plural` and `select`, the forms `one`, `few`, `many` and `other`, the option words of a choice such as `up` in `{direction, select, up {, up (+Z)} other {}}`, and the names in braces such as `{n}`. `#` is the number. [docs/I18N.md](https://github.com/Paraxdev/fundacad/blob/main/docs/I18N.md#messages) lists every form.
+
+In the desktop app, Open folder opens your languages folder, and makes it the first time. FundaCAD reads the files there when it starts and when you press Reload, so press Reload after you add or change one. A link in place of a file is not read. In safe mode the folder is not read and both buttons are off.
+
+Outside the desktop app, Load file… takes your own language file and switches to its language. The browser keeps the file until Remove your lines or a Reset settings drops it.
+
+Saved documents never hold translated text, so they open the same in every language.
 
 ## Themes
 

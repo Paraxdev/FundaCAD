@@ -1,0 +1,96 @@
+// A dropped in language file is untrusted, anyone can hand one to a user. Translated text never goes to innerHTML or
+// v-html, it reaches the page through Vue interpolation or textContent only; markup is refused too, should that slip.
+
+import { argNames, parseMessage, type MessageNode } from "./format";
+
+export const MAX_OVERRIDE_BYTES = 256 * 1024;
+export const MAX_LINE_CHARS = 2000;
+
+export type SkipReason =
+  | "unknown-key"
+  | "not-text"
+  | "too-long"
+  | "markup"
+  | "control-character"
+  | "empty"
+  | "syntax"
+  | "bad-argument"
+  /** Set by the catalog for a line that tells the user about their file. */
+  | "locked";
+
+export interface OverrideResult {
+  /** A Map, so a key named __proto__ is never a property of anything. */
+  lines: Map<string, string>;
+  /** arg names the value a bad-argument line asks for. */
+  skipped: { key: string; reason: SkipReason; arg?: string }[];
+  /** Set when the whole file was refused. */
+  error?: "too-large" | "not-json" | "not-flat";
+}
+
+const MARKUP = /<[A-Za-z/!?]|&(#\d+|#x[0-9a-f]+|[a-z]+);/i;
+// A tag or entity can also be split across parts, as in <{n, select, other {img ...}}>, so a text part that something
+// follows may not end in < or in an entity it has not closed.
+const OPEN_END = /(<|&[#A-Za-z0-9]*)$/;
+// A line of spaces or invisible marks shows nothing, so a file could blank out a line without a word.
+const BLANK = /^[\s\u200b-\u200f\u2060]*$/;
+// C0 and C1 controls, line and paragraph separators, a BOM or annotation inside text, tag characters, and the bidi
+// overrides and isolates that can make a line read as something else. LRM, RLM, ZWJ and ZWNJ stay, RTL text needs them.
+const CONTROL =
+  /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff\ufff9-\ufffb\u{e0000}-\u{e007f}]/u;
+
+// A skipped key is shown in the card as the file wrote it, so it must not reorder or break the text around it.
+export const shownKey = (key: string): string => key.replace(new RegExp(CONTROL, "gu"), "\ufffd").slice(0, 80);
+
+export function checkLine(value: string, englishValue: string): SkipReason | null {
+  if (value.length > MAX_LINE_CHARS) return "too-long";
+  if (MARKUP.test(value)) return "markup";
+  if (CONTROL.test(value)) return "control-character";
+  if (BLANK.test(value)) return "empty";
+  try {
+    if (buildsMarkup(parseMessage(value), false)) return "markup";
+    return extraArgument(value, englishValue) === undefined ? null : "bad-argument";
+  } catch {
+    return "syntax";
+  }
+}
+
+function buildsMarkup(nodes: readonly MessageNode[], followed: boolean): boolean {
+  return nodes.some((node, i) => {
+    const next = followed || i < nodes.length - 1;
+    if (node.t === "text") return MARKUP.test(node.v) || (next && OPEN_END.test(node.v));
+    if (node.t !== "plural" && node.t !== "select") return false;
+    return [...node.options.values()].some((option) => buildsMarkup(option, next));
+  });
+}
+
+function extraArgument(value: string, englishValue: string): string | undefined {
+  const allowed = argNames(parseMessage(englishValue));
+  return [...argNames(parseMessage(value))].find((name) => !allowed.has(name));
+}
+
+export function parseOverrides(text: string, english: Readonly<Record<string, string>>): OverrideResult {
+  const result: OverrideResult = { lines: new Map(), skipped: [] };
+  // Measured before the BOM goes, so the limit matches the bytes the desktop reads from disk.
+  if (new TextEncoder().encode(text).length > MAX_OVERRIDE_BYTES) return { ...result, error: "too-large" };
+  let data: unknown;
+  try {
+    data = JSON.parse(text.startsWith("\ufeff") ? text.slice(1) : text);
+  } catch {
+    return { ...result, error: "not-json" };
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return { ...result, error: "not-flat" };
+  const entries = Object.entries(data);
+  if (entries.some(([, value]) => value !== null && typeof value === "object")) return { ...result, error: "not-flat" };
+  for (const [key, value] of entries) {
+    const base = Object.hasOwn(english, key) ? english[key] : undefined;
+    let reason: SkipReason | null;
+    if (base === undefined) reason = "unknown-key";
+    else if (typeof value !== "string") reason = "not-text";
+    else reason = checkLine(value, base);
+    if (reason === "bad-argument")
+      result.skipped.push({ key, reason, arg: extraArgument(value as string, base!) ?? "" });
+    else if (reason) result.skipped.push({ key, reason });
+    else result.lines.set(key, value as string);
+  }
+  return result;
+}

@@ -1,0 +1,106 @@
+{
+  "language": "es",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "Idioma",
+      "note": "not lengua"
+    },
+    {
+      "en": "System",
+      "text": "Sistema",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "traducción automática",
+      "note": "traducido automáticamente as an adjective"
+    },
+    {
+      "en": "file",
+      "text": "archivo",
+      "note": "not fichero"
+    },
+    {
+      "en": "folder",
+      "text": "carpeta",
+      "note": "not directorio"
+    },
+    {
+      "en": "line",
+      "text": "línea",
+      "note": "one message in a language file"
+    },
+    {
+      "en": "Stress",
+      "text": "Tensión",
+      "note": "the Stress panel"
+    },
+    {
+      "en": "Support",
+      "text": "Apoyo"
+    },
+    {
+      "en": "Fixed",
+      "text": "Fijo"
+    },
+    {
+      "en": "Pinned",
+      "text": "Articulado",
+      "note": "held in place, free to turn about its axis"
+    },
+    {
+      "en": "Slider",
+      "text": "Deslizante"
+    },
+    {
+      "en": "Load",
+      "text": "Carga"
+    },
+    {
+      "en": "Force",
+      "text": "Fuerza"
+    },
+    {
+      "en": "Pressure",
+      "text": "Presión"
+    },
+    {
+      "en": "Own weight",
+      "text": "Peso propio"
+    },
+    {
+      "en": "Face",
+      "text": "Cara"
+    },
+    {
+      "en": "Spot",
+      "text": "Punto",
+      "note": "a small round place on the body"
+    },
+    {
+      "en": "Mesh detail",
+      "text": "Detalle de malla"
+    },
+    {
+      "en": "Coarse",
+      "text": "Grueso"
+    },
+    {
+      "en": "Standard",
+      "text": "Estándar"
+    },
+    {
+      "en": "Fine",
+      "text": "Fino"
+    },
+    {
+      "en": "Material",
+      "text": "Material"
+    },
+    {
+      "en": "Custom",
+      "text": "Personalizado"
+    }
+  ]
+}

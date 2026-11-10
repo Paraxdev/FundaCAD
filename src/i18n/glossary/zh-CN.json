@@ -1,0 +1,103 @@
+{
+  "language": "zh-CN",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "语言"
+    },
+    {
+      "en": "System",
+      "text": "系统",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "机器翻译"
+    },
+    {
+      "en": "file",
+      "text": "文件"
+    },
+    {
+      "en": "folder",
+      "text": "文件夹",
+      "note": "not 目录"
+    },
+    {
+      "en": "line",
+      "text": "行",
+      "note": "one message in a language file"
+    },
+    {
+      "en": "Stress",
+      "text": "应力",
+      "note": "the Stress panel"
+    },
+    {
+      "en": "Support",
+      "text": "支撑"
+    },
+    {
+      "en": "Fixed",
+      "text": "固定"
+    },
+    {
+      "en": "Pinned",
+      "text": "铰接",
+      "note": "held in place, free to turn about its axis"
+    },
+    {
+      "en": "Slider",
+      "text": "滑动"
+    },
+    {
+      "en": "Load",
+      "text": "载荷"
+    },
+    {
+      "en": "Force",
+      "text": "力"
+    },
+    {
+      "en": "Pressure",
+      "text": "压力"
+    },
+    {
+      "en": "Own weight",
+      "text": "自重"
+    },
+    {
+      "en": "Face",
+      "text": "面"
+    },
+    {
+      "en": "Spot",
+      "text": "点",
+      "note": "a small round place on the body"
+    },
+    {
+      "en": "Mesh detail",
+      "text": "网格精细度"
+    },
+    {
+      "en": "Coarse",
+      "text": "粗"
+    },
+    {
+      "en": "Standard",
+      "text": "标准"
+    },
+    {
+      "en": "Fine",
+      "text": "精细"
+    },
+    {
+      "en": "Material",
+      "text": "材料"
+    },
+    {
+      "en": "Custom",
+      "text": "自定义"
+    }
+  ]
+}

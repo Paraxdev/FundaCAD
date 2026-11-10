@@ -13,6 +13,7 @@ import Select from "../ui/Select.vue";
 import Slider from "../ui/Slider.vue";
 import Tabs from "../ui/Tabs.vue";
 import { tabPanelAttrs } from "../ui/tabIds";
+import LanguageCard from "./LanguageCard.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import LargerTargetsRow from "./LargerTargetsRow.vue";
@@ -506,6 +507,7 @@ function onClassicCamera(on: boolean) {
         <section v-show="category === 'appearance'" v-bind="pane('appearance')" class="prefs-pane">
           <h3 class="prefs-pane-title" tabindex="-1">Appearance</h3>
           <div class="prefs-grid">
+            <LanguageCard />
             <div class="pref-card wide">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-theme">Theme</label>

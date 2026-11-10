@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BACKUP_FORMAT,
+  LANGUAGE_KEY,
   PLUGINS_OFF_KEY,
   runStartChoice,
   settingsSnapshot,
@@ -118,6 +119,21 @@ describe("Reset settings", () => {
   it("keeps the key the What's new card reads", async () => {
     const { SEEN_KEY } = await import("../../src/ui/whatsNew");
     expect(WHATS_NEW_SEEN_KEY).toBe(SEEN_KEY);
+  });
+
+  it("keeps the language and drops the user's stored language files", async () => {
+    localStorage.setItem(LANGUAGE_KEY, "pl");
+    localStorage.setItem("fundacad.language.dropin.pl", JSON.stringify({ "stress.setup.title": "Ustaw badanie" }));
+    localStorage.setItem("fundacad.language.dropin.de", "{}");
+    const { d } = deps({ reset: true, plugins: false });
+    await runStartChoice(d);
+    expect(settingsSnapshot(localStorage)).toEqual({ "fundacad.language": "pl", "fundacad.recentFiles": RECENT });
+  });
+
+  it("keeps the key the language setting is stored under", async () => {
+    const catalog = await import("../../src/i18n/catalog");
+    expect(LANGUAGE_KEY).toBe(catalog.LANGUAGE_KEY);
+    expect(`${catalog.DROP_IN_PREFIX}de`.startsWith(`${LANGUAGE_KEY}.`)).toBe(true);
   });
 
   it("keeps an older name of the recent files list too", async () => {

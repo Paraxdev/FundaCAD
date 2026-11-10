@@ -1,0 +1,103 @@
+{
+  "language": "ja",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "言語"
+    },
+    {
+      "en": "System",
+      "text": "システム",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "機械翻訳"
+    },
+    {
+      "en": "file",
+      "text": "ファイル"
+    },
+    {
+      "en": "folder",
+      "text": "フォルダー",
+      "note": "with the long vowel mark, not フォルダ"
+    },
+    {
+      "en": "line",
+      "text": "行",
+      "note": "one message in a language file"
+    },
+    {
+      "en": "Stress",
+      "text": "応力",
+      "note": "the Stress panel"
+    },
+    {
+      "en": "Support",
+      "text": "支持"
+    },
+    {
+      "en": "Fixed",
+      "text": "固定"
+    },
+    {
+      "en": "Pinned",
+      "text": "ピン",
+      "note": "held in place, free to turn about its axis"
+    },
+    {
+      "en": "Slider",
+      "text": "スライド"
+    },
+    {
+      "en": "Load",
+      "text": "荷重"
+    },
+    {
+      "en": "Force",
+      "text": "力"
+    },
+    {
+      "en": "Pressure",
+      "text": "圧力"
+    },
+    {
+      "en": "Own weight",
+      "text": "自重"
+    },
+    {
+      "en": "Face",
+      "text": "面"
+    },
+    {
+      "en": "Spot",
+      "text": "スポット",
+      "note": "a small round place on the body, counted with か所"
+    },
+    {
+      "en": "Mesh detail",
+      "text": "メッシュの細かさ"
+    },
+    {
+      "en": "Coarse",
+      "text": "粗い"
+    },
+    {
+      "en": "Standard",
+      "text": "標準"
+    },
+    {
+      "en": "Fine",
+      "text": "細かい"
+    },
+    {
+      "en": "Material",
+      "text": "材料"
+    },
+    {
+      "en": "Custom",
+      "text": "カスタム"
+    }
+  ]
+}

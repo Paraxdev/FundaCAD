@@ -92,6 +92,10 @@ zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # zlib; feature unification is additive and cannot change updater behaviour.
 flate2 = "1"
 
+# O_NOFOLLOW and O_NONBLOCK for the language file read (languages.rs), the version Tauri already links.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # The 3D mouse through spacenavd (spnav/, spacemouse/spnav.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 fundacad-spnav = { path = "spnav" }

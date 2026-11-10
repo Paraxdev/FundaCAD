@@ -1,5 +1,5 @@
 // The page entry: main.ts, whose imports read the settings as they load, loads only after a Reset settings start
-// has cleared them, and the notice comes once the app is up.
+// has cleared them and the language is ready, and the notice comes once the app is up.
 import { describe, expect, it, vi } from "vitest";
 import indexHtml from "../../index.html?raw";
 
@@ -14,6 +14,15 @@ vi.mock("../../src/app/startChoice", () => ({
     }),
   startChoiceNotice: () => ({ text: "Settings were reset.", kind: "info" }),
 }));
+vi.mock("../../src/i18n", () => ({
+  initLanguage: () =>
+    new Promise<void>((r) =>
+      setTimeout(() => {
+        order.push("language ready");
+        r();
+      }, 5),
+    ),
+}));
 vi.mock("../../src/main", () => {
   order.push("main loaded");
   return {};
@@ -27,13 +36,13 @@ describe("the page entry", () => {
     expect(scripts).toEqual(["/src/boot.ts", "/src/entry.ts"]);
   });
 
-  it("loads main.ts once the start choice is carried out, then shows its notice", async () => {
+  it("loads main.ts once the start choice is carried out and the language is ready, then shows its notice", async () => {
     await import("../../src/entry");
     await new Promise((r) => setTimeout(r, 0));
     expect(order).toEqual(["reset started"]);
     finish({ kind: "reset", backup: "C:/b.json", plugins: "kept" });
-    await vi.waitFor(() => expect(order).toHaveLength(3));
-    expect(order).toEqual(["reset started", "main loaded", "toast Settings were reset."]);
+    await vi.waitFor(() => expect(order).toHaveLength(4));
+    expect(order).toEqual(["reset started", "language ready", "main loaded", "toast Settings were reset."]);
     expect(toast).toHaveBeenCalledWith("Settings were reset.", { kind: "info" });
   });
 });

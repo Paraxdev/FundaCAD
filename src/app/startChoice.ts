@@ -23,6 +23,10 @@ export const PLUGINS_OFF_KEY = "fundacad.plugins";
 /** Not imported from ../ui/whatsNew.ts, which loads stores and toasts before main.ts. */
 export const WHATS_NEW_SEEN_KEY = "fundacad.whatsNewSeen";
 
+/** Not imported from ../i18n/catalog.ts, which brings Vue into the entry chunk. Someone who cannot read English
+ *  must not land in English after a reset. */
+export const LANGUAGE_KEY = "fundacad.language";
+
 export const BACKUP_FORMAT = "fundacad-settings-backup";
 
 export interface StartChoiceDeps {
@@ -63,10 +67,10 @@ export function backupText(snapshot: Record<string, string>, savedAt: Date): str
   );
 }
 
-const KEPT: readonly string[] = [PLUGINS_OFF_KEY, WHATS_NEW_SEEN_KEY, ...RECENT_FILES_KEYS];
+const KEPT: readonly string[] = [PLUGINS_OFF_KEY, WHATS_NEW_SEEN_KEY, LANGUAGE_KEY, ...RECENT_FILES_KEYS];
 
-/** Everything goes but the recent files list, the What's new card already seen, and the plugins switched off, since a
- * reset never turns a plugin on. */
+/** Everything goes but the recent files list, the What's new card already seen, the language, and the plugins
+ *  switched off, since a reset never turns a plugin on. The user's stored language files go. */
 export function clearSettings(storage: Storage, keys: readonly string[]): void {
   for (const k of keys) if (!KEPT.includes(k)) storage.removeItem(k);
 }
