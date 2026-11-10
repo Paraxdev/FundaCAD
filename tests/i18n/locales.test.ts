@@ -44,7 +44,11 @@ const badTranslations = (lines: Record<string, unknown>, english: Record<string,
     return reason ? [{ key, reason }] : [];
   });
 
-const GLOSSARY_TERMS = ["Language", "System", "machine translated", "file", "folder", "line"];
+const GLOSSARY_TERMS = [
+  ...["Language", "System", "machine translated", "file", "folder", "line"],
+  ...["Stress", "Support", "Fixed", "Pinned", "Slider", "Load", "Force", "Pressure", "Own weight", "Face", "Spot"],
+  ...["Mesh detail", "Coarse", "Standard", "Fine", "Material", "Custom"],
+];
 
 function glossaryProblems(code: string, glossary: unknown): string[] {
   const g = glossary as { language?: unknown; terms?: unknown };
@@ -143,7 +147,7 @@ describe("the shipped languages", () => {
     );
   });
 
-  it("each have a glossary of the words they use for the language setting", () => {
+  it("each have a glossary of the words they use for the language setting and the Stress setup", () => {
     const codes = SHIPPED.filter((l) => l.code !== "en").map((l) => l.code);
     expect(byCode(glossaries).map(([code, g]) => [code, glossaryProblems(code, g)])).toEqual(
       codes.sort().map((code) => [code, []]),

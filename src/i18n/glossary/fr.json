@@ -28,6 +28,77 @@
       "en": "line",
       "text": "ligne",
       "note": "one message in a language file"
+    },
+    {
+      "en": "Stress",
+      "text": "Contraintes",
+      "note": "the Stress panel"
+    },
+    {
+      "en": "Support",
+      "text": "Appui"
+    },
+    {
+      "en": "Fixed",
+      "text": "Fixe"
+    },
+    {
+      "en": "Pinned",
+      "text": "Articulé",
+      "note": "held in place, free to turn about its axis"
+    },
+    {
+      "en": "Slider",
+      "text": "Glissant"
+    },
+    {
+      "en": "Load",
+      "text": "Charge"
+    },
+    {
+      "en": "Force",
+      "text": "Force"
+    },
+    {
+      "en": "Pressure",
+      "text": "Pression"
+    },
+    {
+      "en": "Own weight",
+      "text": "Poids propre"
+    },
+    {
+      "en": "Face",
+      "text": "Face"
+    },
+    {
+      "en": "Spot",
+      "text": "Point",
+      "note": "a small round place on the body"
+    },
+    {
+      "en": "Mesh detail",
+      "text": "Finesse du maillage"
+    },
+    {
+      "en": "Coarse",
+      "text": "Grossier"
+    },
+    {
+      "en": "Standard",
+      "text": "Standard"
+    },
+    {
+      "en": "Fine",
+      "text": "Fin"
+    },
+    {
+      "en": "Material",
+      "text": "Matériau"
+    },
+    {
+      "en": "Custom",
+      "text": "Personnalisé"
     }
   ]
 }

@@ -2,16 +2,13 @@
 import { computed } from "vue";
 import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
-import { CUSTOM_MATERIAL, STRESS_MATERIALS, type StressSetup } from "../../ui/stress";
+import { STRESS_MATERIALS, materialOptions, type StressSetup } from "../../ui/stress";
 import { displayRound } from "../../ui/units";
 
 const props = defineProps<{ setup: StressSetup }>();
 
 const preset = computed(() => STRESS_MATERIALS.find((m) => m.name === props.setup.material) ?? null);
-const options = [
-  ...STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.name })),
-  { value: CUSTOM_MATERIAL, label: CUSTOM_MATERIAL },
-];
+const options = computed(materialOptions);
 
 function fmt(v: number): string {
   return String(displayRound(v));

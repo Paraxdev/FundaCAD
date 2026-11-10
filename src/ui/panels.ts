@@ -29,6 +29,7 @@ import {
   formatStressResult,
   intoDirection,
   newSetup,
+  pickedFacesStatus,
   pinAxisSegment,
   pressureSites,
   probeLabel,
@@ -917,13 +918,11 @@ export function createPanels(deps: PanelsDeps) {
     else if ("load" in target) panels.setStressLoadFaces(target.load, got.faces);
     viewport.clearSelection();
     refreshStressMarks();
-    const n = got.faces.faceIds.length;
     // Named as the panel's rows are, so the line says which row took them.
-    const kind = support ? SUPPORT_KINDS.find((k) => k.value === support.type)?.label.toLowerCase() : undefined;
-    const row = support
-      ? `Support ${d.setup.supports.indexOf(support) + 1}${kind ? ` (${kind})` : ""}`
-      : `Load ${d.setup.loads.findIndex((l) => "load" in target && l.id === target.load) + 1}`;
-    setStatus(`Stress: ${row}: ${n} face${n === 1 ? "" : "s"}`, "");
+    const index = support
+      ? d.setup.supports.indexOf(support)
+      : d.setup.loads.findIndex((l) => "load" in target && l.id === target.load);
+    setStatus(pickedFacesStatus(support?.type ?? "load", index + 1, got.faces.faceIds.length), "");
   }
 
   /** Change the analysed body, which drops the face sets, the result and a

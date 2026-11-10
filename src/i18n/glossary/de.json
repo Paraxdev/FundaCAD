@@ -27,6 +27,79 @@
       "en": "line",
       "text": "Zeile",
       "note": "one message in a language file"
+    },
+    {
+      "en": "Stress",
+      "text": "Spannung",
+      "note": "the Stress panel, the plain word for mechanical stress"
+    },
+    {
+      "en": "Support",
+      "text": "Halterung",
+      "note": "plain word, not the FEA term Lagerung"
+    },
+    {
+      "en": "Fixed",
+      "text": "Fest"
+    },
+    {
+      "en": "Pinned",
+      "text": "Drehbar",
+      "note": "held in place, free to turn about its axis"
+    },
+    {
+      "en": "Slider",
+      "text": "Gleitend"
+    },
+    {
+      "en": "Load",
+      "text": "Last"
+    },
+    {
+      "en": "Force",
+      "text": "Kraft"
+    },
+    {
+      "en": "Pressure",
+      "text": "Druck"
+    },
+    {
+      "en": "Own weight",
+      "text": "Eigengewicht"
+    },
+    {
+      "en": "Face",
+      "text": "Fläche"
+    },
+    {
+      "en": "Spot",
+      "text": "Stelle",
+      "note": "a small round place on the body"
+    },
+    {
+      "en": "Mesh detail",
+      "text": "Netzfeinheit"
+    },
+    {
+      "en": "Coarse",
+      "text": "Grob"
+    },
+    {
+      "en": "Standard",
+      "text": "Standard"
+    },
+    {
+      "en": "Fine",
+      "text": "Fein"
+    },
+    {
+      "en": "Material",
+      "text": "Material"
+    },
+    {
+      "en": "Custom",
+      "text": "Eigene Werte",
+      "note": "the material typed by hand, Eigener Vektor for a vector"
     }
   ]
 }

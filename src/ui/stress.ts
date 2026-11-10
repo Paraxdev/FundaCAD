@@ -1,6 +1,7 @@
 // The Stress panel's pure half: material presets, setup to `stress` op options and saved study, reply to display
 // rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
+import { t, type MessageKey } from "../i18n";
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
 import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSpotArea } from "../geometry/client";
 import type { PanelRow } from "../stores/panels";
@@ -31,8 +32,15 @@ export const STRESS_MATERIALS: readonly MaterialPreset[] = [
   { name: "steel S235", E: 210000, nu: 0.3, yield: 235, density: 7.85 },
 ];
 
-/** The dropdown's last entry, E, nu, yield and density typed by the user. */
+/** The dropdown's last entry, E, nu, yield and density typed by the user. Saved as is, only its label is translated. */
 export const CUSTOM_MATERIAL = "Custom";
+
+export function materialOptions(): { value: string; label: string }[] {
+  return [
+    ...STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.name })),
+    { value: CUSTOM_MATERIAL, label: t("stress.material.custom") },
+  ];
+}
 
 /** The tints for supports and loaded faces, in the view and beside the panel's
  *  rows. Fixed keeps the blue it has always had. */
@@ -50,11 +58,36 @@ export const SUPPORT_COLORS: Record<StressSupportType, number> = {
   slider: SLIDER_MARK_COLOR,
 };
 
-export const SUPPORT_KINDS: readonly { value: StressSupportType; label: string; hint: string }[] = [
-  { value: "fixed", label: "Fixed", hint: "Held every way" },
-  { value: "pinned", label: "Pinned", hint: "A hole or a pin: held in place, free to turn about its axis" },
-  { value: "slider", label: "Slider", hint: "Held against the face, free to slide along it" },
+// Getters, so a label read in a render follows a change of language.
+function option<V extends string>(value: V, key: MessageKey): { value: V; readonly label: string } {
+  return {
+    value,
+    get label() {
+      return t(key);
+    },
+  };
+}
+
+function supportKind(value: StressSupportType, label: MessageKey, hint: MessageKey) {
+  return {
+    value,
+    get label() {
+      return t(label);
+    },
+    get hint() {
+      return t(hint);
+    },
+  };
+}
+
+export const SUPPORT_KINDS: readonly { value: StressSupportType; readonly label: string; readonly hint: string }[] = [
+  supportKind("fixed", "stress.support.fixed", "stress.support.fixedHint"),
+  supportKind("pinned", "stress.support.pinned", "stress.support.pinnedHint"),
+  supportKind("slider", "stress.support.slider", "stress.support.sliderHint"),
 ];
+
+// The results step is not translated yet, so its reaction rows keep these words.
+const SUPPORT_WORDS: Record<StressSupportType, string> = { fixed: "fixed", pinned: "pinned", slider: "slider" };
 
 export function cssHex(c: number): string {
   return `#${c.toString(16).padStart(6, "0")}`;
@@ -65,19 +98,24 @@ export type ForceDirection = StressStudy["loads"][number]["direction"];
 export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
 
 // Z is up and the front view looks along +Y.
-export const AXIS_LABELS: Record<AxisDirection, string> = {
-  "-Z": "Down (-Z)",
-  "+Z": "Up (+Z)",
-  "+X": "Right (+X)",
-  "-X": "Left (-X)",
-  "+Y": "Back (+Y)",
-  "-Y": "Front (-Y)",
+const AXIS_KEYS: Record<AxisDirection, MessageKey> = {
+  "-Z": "stress.dir.down",
+  "+Z": "stress.dir.up",
+  "+X": "stress.dir.right",
+  "-X": "stress.dir.left",
+  "+Y": "stress.dir.back",
+  "-Y": "stress.dir.front",
 };
 
-export const FORCE_DIRECTIONS: readonly { value: ForceDirection; label: string }[] = [
-  { value: "into", label: "Into the face" },
-  ...GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] })),
-  { value: "custom", label: "Custom vector" },
+export const AXIS_LABELS: Readonly<Record<AxisDirection, string>> = Object.defineProperties(
+  {} as Record<AxisDirection, string>,
+  Object.fromEntries(GRAVITY_DIRECTIONS.map((d) => [d, { get: () => t(AXIS_KEYS[d]), enumerable: true }])),
+);
+
+export const FORCE_DIRECTIONS: readonly { value: ForceDirection; readonly label: string }[] = [
+  option("into", "stress.dir.into"),
+  ...GRAVITY_DIRECTIONS.map((d) => option(d, AXIS_KEYS[d])),
+  option("custom", "stress.dir.custom"),
 ];
 
 export const AXES: Record<AxisDirection, Vec3> = {
@@ -117,21 +155,25 @@ export function unshownFaces(set: StressFaceSet): number {
 export function faceCountLabel(set: StressFaceSet, spots: readonly StressSpot[] = []): string {
   const k = spots.length;
   if (!k) return facesLabel(set);
-  const placed = `${k} spot${k === 1 ? "" : "s"}`;
-  return set.selectors.length ? `${facesLabel(set)}, ${placed}` : placed;
+  const placed = t("stress.spots.count", { k });
+  return set.selectors.length ? t("stress.places.both", { faces: facesLabel(set), spots: placed }) : placed;
 }
 
 function facesLabel(set: StressFaceSet): string {
   const n = set.selectors.length;
-  if (!n) return "No faces yet";
-  const faces = `${n} face${n === 1 ? "" : "s"}`;
+  if (!n) return t("stress.faces.none");
   const missing = set.missing ?? 0;
   if (missing)
-    return `${faces}, ${missing === n ? (n === 1 ? "not" : "none") : `${missing} not`} found on the current model`;
+    return missing === n ? t("stress.faces.missingAll", { n }) : t("stress.faces.missingSome", { n, missing });
   const unshown = unshownFaces(set);
   if (unshown > 0)
-    return `${faces} (${unshown === n ? (n === 1 ? "not" : "none") : `${unshown} not`} shown in the view)`;
-  return faces;
+    return unshown === n ? t("stress.faces.unshownAll", { n }) : t("stress.faces.unshownSome", { n, unshown });
+  return t("stress.faces.count", { n });
+}
+
+/** The status line after a row took the faces picked in the view, `index` counted from 1. */
+export function pickedFacesStatus(row: StressSupportType | "load", index: number, faces: number): string {
+  return t("stress.status.picked", { row, i: index, n: faces });
 }
 
 export function emptyFaceSet(): StressFaceSet {
@@ -171,10 +213,10 @@ export interface StressSetup {
   refine: StressRefine;
 }
 
-export const MESH_DETAIL_CHOICES: readonly { value: StressRefine; label: string }[] = [
-  { value: "off", label: "Coarse" },
-  { value: "standard", label: "Standard" },
-  { value: "fine", label: "Fine" },
+export const MESH_DETAIL_CHOICES: readonly { value: StressRefine; readonly label: string }[] = [
+  option("off", "stress.mesh.coarse"),
+  option("standard", "stress.mesh.standard"),
+  option("fine", "stress.mesh.fine"),
 ];
 
 /** The element limit sent with Fine; the engine's default is about half. */
@@ -182,8 +224,8 @@ export const FINE_MAX_ELEMENTS = 60_000;
 
 /** The one button of a finer answer. The time is rough, so steps of 5 seconds, then whole minutes. */
 export function finerLabel(seconds: number): string {
-  if (seconds < 90) return `Run with finer detail (about ${Math.max(10, Math.round(seconds / 5) * 5)} seconds)`;
-  return `Run with finer detail (about ${Math.max(1, Math.round(seconds / 60))} min)`;
+  if (seconds < 90) return t("stress.finer.seconds", { s: Math.max(10, Math.round(seconds / 5) * 5) });
+  return t("stress.finer.minutes", { m: Math.max(1, Math.round(seconds / 60)) });
 }
 
 /** One row of the setup, by its id. */
@@ -591,7 +633,7 @@ export function formatStressResult(
   if (reactions.length > 1) {
     for (const [i, f] of reactions.entries()) {
       const kind = supports[i];
-      const label = kind ? SUPPORT_KINDS.find((x) => x.value === kind)?.label.toLowerCase() : undefined;
+      const label = kind ? SUPPORT_WORDS[kind] : undefined;
       details.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
     }
   }
