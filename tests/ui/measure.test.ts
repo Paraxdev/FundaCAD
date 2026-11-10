@@ -746,4 +746,15 @@ describe("two bare numbers with only a space between are refused, not joined", (
     ]);
     expect(parseMeasure("1 1/2 in", MM).value).toBeCloseTo(38.1);
   });
+
+  it("gives a no-break space between digits the same refusal and hint as a plain space", async () => {
+    for (const sp of [" ", " ", " ", " "]) {
+      expect(() => normalise(`1${sp}000`), sp).toThrow('write "1000" without the space');
+      expect(() => normalise(`3${sp}7`), sp).toThrow(/operator/);
+      expect(normalise(`12${sp}mm`).expr, sp).toBe("12");
+    }
+    await setLanguage("fr");
+    expect(() => normalise("12 500,5")).toThrow('write "12500" without the space');
+    expect(normalise("2 + 1,5").expr).toBe("2+1.5");
+  });
 });

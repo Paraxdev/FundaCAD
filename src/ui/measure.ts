@@ -194,6 +194,8 @@ interface Normalised {
 }
 
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
+// French typing and pasted numbers group digits with these, they read as a plain space.
+const NO_BREAK_SPACE = /[    ]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 const TWO_POINT_NUMBER = /\d+(?:\.\d+){2,}(?:[eE][+-]?\d+)?/;
 
@@ -202,7 +204,7 @@ const TWO_POINT_NUMBER = /\d+(?:\.\d+){2,}(?:[eE][+-]?\d+)?/;
  *  while "0.250" reads. With a point mark a comma is one only when it is the lone comma with no point or brackets, and
  *  never before exactly three digits, where "1,000" and "0,125" are refused rather than guessed. */
 export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
-  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
+  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").replace(NO_BREAK_SPACE, " ").trim();
   if (mark === ",") return commasToPoints(src);
   const m = loneComma(src);
   if (!m) return src;
@@ -424,7 +426,8 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
 /** Typed expression text as the stored point grammar. A comma there is still refused by the tokenizer, except that a
  *  lone comma before exactly three digits (1,000) throws ExprError as ambiguous, as a value box says. In a comma
  *  language it throws for a number it will not guess, as 1.500 or 1,5,5; `typedExprProblem` says so without throwing. */
-export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
+export function storedExpr(typedRaw: string, mark: DecimalMark = decimalMark()): string {
+  const typed = typedRaw.replace(NO_BREAK_SPACE, " ");
   if (mark !== ",") {
     const src = typed.trim();
     const m = loneComma(src);
