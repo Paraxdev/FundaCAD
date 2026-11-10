@@ -1,10 +1,10 @@
 """A waiting tool takes the face or edge lit by the brackets on the 3D view, in both camera rigs, with no pointer event:
 Mirror takes a flat face as its plane and says so, a row it cannot use is refused aloud while it keeps waiting, and a
-running Fillet adds and takes out edges."""
+running Fillet adds and takes out edges, and Stress Click faces takes a face for its support."""
 
 import pytest
 from fundacad_harness import Session
-from test_geometry_browser import FILLETS, SLANT, heard, next_frames, open_doc, to_canvas
+from test_geometry_browser import FILLETS, OFFSET, SLANT, heard, next_frames, open_doc, to_canvas
 from test_geometry_row_pickers import FEATURES, TWO, tree_to
 
 pytestmark = [pytest.mark.browser, pytest.mark.a11y]
@@ -135,4 +135,46 @@ def test_a_running_fillet_adds_and_takes_out_edges_lit_by_the_brackets(s):
     mid = pytest.approx([-102.5, 15.6848, 51.0477], abs=1e-3)
     edge = {"kind": "edge", "by": "nearest", "point": mid, "body": "body1"}
     assert s.page.evaluate(FILLETS) == [{"type": "fillet", "edges": edge, "radius": 2.5}]
+    assert s.page.evaluate("() => window.__pointer") == 0
+
+
+SUPPORT_FACES = "() => window.store.stressStudy?.supports[0]?.faces ?? null"
+PLACING = ".stress-place-support[aria-pressed=true]"
+
+
+def click_faces_by_keys(s):
+    s.command("stress")
+    s.page.get_by_role("button", name="Close Stress").wait_for()
+    button = s.page.locator(".stress-place-support").first
+    button.focus()
+    s.page.keyboard.press("Enter")
+    s.page.locator(PLACING).wait_for()
+    to_canvas(s)
+
+
+def test_stress_click_faces_takes_the_face_lit_by_the_brackets(s):
+    open_doc(s, OFFSET)
+    click_faces_by_keys(s)
+    step_to(s, "]", "facing up")
+    press_enter_and_hear(s, "Flat face 6 of", "picked")
+    said_after(s, 0, "support has 1 face")
+    s.page.locator(".stress-item .stress-count").first.wait_for()
+    assert s.page.locator(".stress-item .stress-count").first.inner_text() == "1 face"
+    faces = s.page.evaluate(SUPPORT_FACES)
+    # The first triangle of the 40 by 30 top at z 47, so its centre is a third of the way in from its corner.
+    point = pytest.approx([120.1667, -46.25, 47], abs=1e-3)
+    assert faces == [{"kind": "face", "by": "nearest", "point": point, "body": "body1"}]
+    assert not s.page.locator(PLACING).count()
+    assert s.page.evaluate("() => window.__pointer") == 0
+
+
+def test_stress_click_faces_refuses_an_edge_aloud_and_keeps_waiting(s):
+    open_doc(s, OFFSET)
+    click_faces_by_keys(s)
+    s.page.keyboard.press("}")
+    heard(s, "Edges")
+    step_to(s, "]", "edge")
+    press_enter_and_hear(s, "an edge", "needs a face")
+    assert s.page.locator(PLACING).count() == 1
+    assert s.page.evaluate(SUPPORT_FACES) in (None, [])
     assert s.page.evaluate("() => window.__pointer") == 0
