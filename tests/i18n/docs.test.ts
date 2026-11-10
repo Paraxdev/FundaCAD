@@ -3,6 +3,8 @@ import { checkLine } from "../../src/i18n/overrides";
 import design from "../../docs/DESIGN.md?raw";
 import doc from "../../docs/I18N.md?raw";
 import readme from "../../README.md?raw";
+import manual from "../../manual/docs/reference/preferences.md?raw";
+import en from "../../src/i18n/locales/en.json";
 
 const KEY = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 // Only the roots globbed into repoFiles; a path under another root goes unchecked.
@@ -58,6 +60,13 @@ describe("docs/I18N.md", () => {
 
   it("is linked from the wording rules and the developer notes in the README", () => {
     expect([voiceSection(design).includes("(I18N.md)"), readme.includes("(docs/I18N.md)")]).toEqual([true, true]);
+  });
+});
+
+describe("the manual's Language section", () => {
+  it("shows only lines FundaCAD has, each one a language file could hold", () => {
+    const keys = [...manual.matchAll(/^ {2}"([^"]+)": "/gm)].map((m) => m[1]!);
+    expect([keys.length, keys.filter((k) => !Object.hasOwn(en, k)), badExamples(manual)]).toEqual([3, [], []]);
   });
 });
 

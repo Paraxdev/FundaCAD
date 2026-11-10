@@ -23,7 +23,7 @@ Language sets the language of FundaCAD's text, and it applies at once. System, t
 
 Your own language file corrects any line. Its name is the language code: `de.json` corrects single German lines, and `pl.json` adds Polish to the list as polski (your file), with its missing lines in English. A regional file such as `de-AT.json` takes its missing lines from German. The file is a flat JSON list of lines like FundaCAD's own language files, saved as UTF-8 text, at most 256 KB. A line that holds markup, or that FundaCAD does not have, is skipped, and the card lists the skipped lines with the reason.
 
-Each line is the line's name, then its text. Copy the names from FundaCAD's English file, [en.json](https://github.com/Paraxdev/fundacad/blob/main/src/i18n/locales/en.json), which holds every line, and keep the parts in braces such as `{name}` as they are. This `de.json` changes two German lines:
+Each line is the line's name, then its text. Copy the names from FundaCAD's English file, [en.json](https://github.com/Paraxdev/fundacad/blob/main/src/i18n/locales/en.json), which holds every line, and keep the names in braces such as `{name}` as they are, FundaCAD puts a value there. This `de.json` changes two German lines:
 
 ```json
 {
@@ -31,6 +31,16 @@ Each line is the line's name, then its text. Copy the names from FundaCAD's Engl
   "prefs.language.reload": "Neu einlesen"
 }
 ```
+
+A count has one text for each plural form, and each language has its own forms. English has `one` and `other`, Polish has `one`, `few`, `many` and `other`, so a Polish file writes all four. With only `one` and `other` it would show "2 ścian" where Polish says "2 ściany":
+
+```json
+{
+  "stress.faces.count": "{n, plural, one {# ściana} few {# ściany} many {# ścian} other {# ściany}}"
+}
+```
+
+Only the text inside the inner braces is yours to translate. The rest is code and stays in English: the words `plural` and `select`, the forms `one`, `few`, `many` and `other`, the option words of a choice such as `up` in `{direction, select, up {, up (+Z)} other {}}`, and the names in braces such as `{n}`. `#` is the number. [docs/I18N.md](https://github.com/Paraxdev/fundacad/blob/main/docs/I18N.md#messages) lists every form.
 
 In the desktop app, Open folder opens your languages folder, and makes it the first time. FundaCAD reads the files there when it starts and when you press Reload, so press Reload after you add or change one. A link in place of a file is not read. In safe mode the folder is not read and both buttons are off.
 
