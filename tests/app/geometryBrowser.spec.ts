@@ -1010,6 +1010,48 @@ describe("pickBlocked", () => {
   });
 });
 
+describe("stepBlocked", () => {
+  const waitForRow = () => awaitTreePick(() => true, () => {});
+  afterEach(() => resetTreePicks());
+
+  function underTool() {
+    const r = rig();
+    r.host.toolBusy.mockReturnValue(true);
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    return r;
+  }
+
+  it("is pickBlocked with no pick waiting", () => {
+    expect(rig().browser.stepBlocked()).toBeNull();
+    const r = underTool();
+    expect(r.browser.stepBlocked()).toBe("Finish the tool first");
+    expect(r.browser.stepBlocked()).toBe(r.browser.pickBlocked());
+  });
+
+  it("is null for a tool that waits for a row, which holds the screen", () => {
+    const r = underTool();
+    waitForRow();
+    expect(r.browser.stepBlocked()).toBeNull();
+    expect(r.browser.pickBlocked()).toBe("Finish the tool first");
+  });
+
+  it("still names an open sketch under a pick", () => {
+    const r = underTool();
+    r.host.sketch.active = true;
+    waitForRow();
+    expect(r.browser.stepBlocked()).toBe("Finish the sketch first");
+  });
+
+  it("names a model still building under a pick, but not a suspended pick", () => {
+    const r = underTool();
+    waitForRow();
+    r.viewport.picksSuspended = true;
+    expect(r.browser.stepBlocked()).toBeNull();
+    r.viewport.modelUnsettled = true;
+    expect(r.browser.stepBlocked()).toBe("The model is still building");
+  });
+});
+
 describe("picking a row", () => {
   async function ready(
     specs: BodySpec[] = [

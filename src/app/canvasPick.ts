@@ -5,6 +5,7 @@ import { singleKeysOn } from "../ui/a11yPrefs";
 import { announce } from "../ui/announce";
 import { isChoiceOpen } from "../ui/choice";
 import { describePick } from "../ui/describePick";
+import { treePickWaiting } from "../ui/treePick";
 import { VIEW_SUMMARY_ID } from "../ui/viewSummary";
 import type { Engine } from "./engine";
 import { refuseAloud } from "./planePick";
@@ -68,7 +69,8 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   const canvas = e.viewport.domElement;
   let waiting: 1 | -1 | null = null;
 
-  const held = () => e.sketch.active || e.toolOwnsScreen() || isChoiceOpen();
+  // A tool owns the screen except while it waits for a row, which these keys feed.
+  const held = () => e.sketch.active || isChoiceOpen() || (e.toolOwnsScreen() && !treePickWaiting());
   const say = (text: string) => announce(text, "polite", { key: "pick-step", delay: STEP_SPEECH_DELAY });
 
   function putOut() {
@@ -77,7 +79,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   }
 
   function step(delta: 1 | -1) {
-    const blocked = ctl.pickBlocked();
+    const blocked = ctl.stepBlocked();
     if (blocked) return say(blocked);
     ctl.startStepping();
     if (list.state === "loading") {
@@ -114,9 +116,30 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     if (refused) refuseAloud(e, refused);
   }
 
-  function onKey(ev: KeyboardEvent) {
-    // Not taken: the keymap goes on to clear the selection.
+  // The key of an Enter or Space this listener took, so a held key's repeats do not reach the tool either.
+  let claimedKey: string | null = null;
+
+  // A tool's own Enter (Mirror and Fillet apply on it) listens in window capture, so this one must hear first.
+  function onKeyCapture(ev: KeyboardEvent) {
+    // Not taken: the keymap goes on to clear the selection, and a tool's capture may stop the key after this.
     if (ev.key === "Escape") return putOut();
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    if (!ev.repeat) claimedKey = null;
+    if (!treePickWaiting() || held()) return;
+    if (ev.target !== canvas && !(ev.target === document.body && singleKeysOn())) return;
+    if (ev.ctrlKey || ev.altKey || ev.metaKey || ev.shiftKey) return;
+    const row = list.litRow;
+    if (ev.repeat ? claimedKey !== ev.key : !row) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (ev.repeat) return;
+    claimedKey = ev.key;
+    putOut();
+    const stale = ctl.offer([row!]);
+    if (stale) refuseAloud(e, stale);
+  }
+
+  function onKey(ev: KeyboardEvent) {
     if (ev.defaultPrevented || held()) return;
     if (ev.target !== canvas && !(ev.target === document.body && singleKeysOn())) return;
     const bracket = bracketOf(ev);
@@ -157,6 +180,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     },
     { flush: "sync" },
   );
+  window.addEventListener("keydown", onKeyCapture, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("focus", onFocus, true);
   canvas.addEventListener("pointerdown", putOut);
@@ -165,6 +189,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   return () => {
     stopLight();
     stopWaiting();
+    window.removeEventListener("keydown", onKeyCapture, true);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("focus", onFocus, true);
     canvas.removeEventListener("pointerdown", putOut);

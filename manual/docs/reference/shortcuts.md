@@ -54,8 +54,8 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | --- | --- |
 | `]`, `[` | Step to the next or previous face, edge or plane, with a light |
 | Shift+`]`, Shift+`[` | Switch what the brackets step through: Faces, Edges or Planes |
-| Enter | Select the lit row only, or start a sketch on a lit plane |
-| Space | Add or remove the lit row |
+| Enter | Select the lit row only, or start a sketch on a lit plane. Gives it to a tool waiting for a pick |
+| Space | Add or remove the lit row. Gives it to a tool waiting for a pick |
 | Esc | Put the light out and clear the selection |
 
 | Key | Anywhere |

@@ -334,6 +334,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return null;
   }
 
+  const STILL_BUILDING = "The model is still building";
+
   function heldBlocked(): string | null {
     if (e.sketch.active) return "Finish the sketch first";
     return e.toolOwnsScreen() ? "Finish the tool first" : null;
@@ -345,7 +347,13 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     if (held) return held;
     // The Move gizmo a body selection raises suspends picking too, but picking a row drops it first.
     const unsettled = e.toolBusy() ? e.viewport.modelUnsettled : e.viewport.picksSuspended;
-    return unsettled ? "The model is still building" : null;
+    return unsettled ? STILL_BUILDING : null;
+  }
+
+  /** A step may run while a tool waits for a row, only a build in progress or a sketch stops it. */
+  function stepBlocked(): string | null {
+    if (!treePickWaiting() || e.sketch.active) return pickBlocked();
+    return e.viewport.modelUnsettled ? STILL_BUILDING : null;
   }
 
   // Resolved at the moment of acting, so a datum goes where it stands now. Null for one the document has lost.
@@ -457,6 +465,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     },
 
     pickBlocked,
+    stepBlocked,
 
     /** A row's facts, while its number still means this build's face or edge. */
     rowFacts(key: string): GeometryRow["facts"] | null {
