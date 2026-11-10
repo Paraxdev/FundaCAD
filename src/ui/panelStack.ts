@@ -270,9 +270,12 @@ function place() {
     });
   };
   // A panel with a scroller is short when its column is too narrow for it or a shelf offers less than its least, `over`
-  // is what its column lacks of that least. Measured at the width the layout gives it, where capped rows wrap taller.
+  // is what its column lacks of its min-width and of that least. Measured at the width the layout gives it, where capped
+  // rows wrap taller.
+  let fitted: ReturnType<typeof lay> | null = null;
   const judge = (l: ReturnType<typeof lay>) => {
     fit(l);
+    fitted = l;
     floors = open.map((p) => scrollerFloors(p.el));
     let short = 0;
     let over = 0;
@@ -281,7 +284,7 @@ function place() {
       const c = l.at[i]!;
       if (least === undefined) return;
       if (span(c) < mins[i]! || (c !== l.cols[0] && c.bottom - c.top < least)) short++;
-      over += Math.max(0, least - (c.bottom - c.top));
+      over += Math.max(0, least - (c.bottom - c.top)) + Math.max(0, mins[i]! - span(c));
     });
     return { short, over };
   };
@@ -321,7 +324,7 @@ function place() {
   }
   for (const [, list, top] of lists) if (list.scrollTop !== top) list.scrollTop = top;
   const { cols, at } = now;
-  fit(now);
+  if (fitted !== now) fit(now);
   for (const c of cols.filter((c) => at.includes(c))) {
     const here = open.filter((_, i) => at[i] === c);
     const slots = layoutStack(

@@ -116,11 +116,13 @@ describe("a History card above the Stress panel", () => {
     expect(open(800, 521).read()).toEqual({ history: "520px", top: "582px", cap: "204px" });
   });
 
-  it("is cut only when the cut leaves fewer panels short, one pixel either side", () => {
-    expect(open(398, 318).read()).toEqual({ history: "118px", top: "180px", cap: "204px" });
-    panelStack.remove("stress");
-    document.body.replaceChildren();
-    expect(open(397, 318).read()).toEqual({ history: "", top: "146px", cap: "237px" });
+  // Beside History the panel gets 312px of its 360px min-width.
+  it("is cut when the panel beside it would sit under its min-width, also when the shelf it opens is a pixel short", () => {
+    for (const bottom of [398, 397]) {
+      expect(open(bottom, 318).read()).toEqual({ history: "118px", top: "180px", cap: "204px" });
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+    }
   });
 
   it("is cut for the fixed rows at the width the shelf gives the panel, not its natural width", () => {
@@ -151,8 +153,8 @@ describe("a History card above the Stress panel", () => {
     });
   });
 
-  // At bottom 400 the sliver beside History lacks 5 * wrap - 36 px of the panel's least, the cut shelf wrap - 2.
-  it("is cut to its least only when that leaves the panel less far past its column, both sides and the tie", () => {
+  // At bottom 400 the column beside History is 12px wide, the cut shelf 272px wide and wrap - 2 px short of the least.
+  it("is cut to its least rather than leave the panel in a sliver far under its min-width", () => {
     const got = [8, 8.5, 9].map((wrap) => {
       const { read } = open(400, 318, 840, true, wrap, 180, true);
       const r = read();
@@ -161,9 +163,25 @@ describe("a History card above the Stress panel", () => {
       return r;
     });
     expect(got).toEqual([
-      { history: "", top: "146px", cap: "244px" },
-      { history: "", top: "146px", cap: "246px" },
+      { history: "118px", top: "180px", cap: "212px" },
+      { history: "118px", top: "180px", cap: "212px" },
       { history: "118px", top: "180px", cap: "213px" },
+    ]);
+  });
+
+  // At bottom 390 the column beside History is 8px under the 320px min-width and lacks wrap - 26 px of the panel's
+  // least, the cut shelf lacks 8px of it.
+  it("is cut only when that leaves the panel less far past its column in width and height together, both sides and the tie", () => {
+    const got = [25, 26, 27].map((wrap) => {
+      const r = open(390, 318, 840, true, wrap, 320).read();
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+      return r;
+    });
+    expect(got).toEqual([
+      { history: "", top: "146px", cap: "230px" },
+      { history: "", top: "146px", cap: "230px" },
+      { history: "118px", top: "180px", cap: "204px" },
     ]);
   });
 

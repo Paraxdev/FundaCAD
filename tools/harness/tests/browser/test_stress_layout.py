@@ -273,9 +273,12 @@ SHELF_CASES = [
     *[((900, h), 100, 10, "wide", "en") for h in (720, 725)],
     *[((900, h), 100, 10, "comfortable", "en") for h in (730, 735, 740)],
 ]
-# Windows where History cut to its least still leaves the shelf short of the panel's least.
-LEAST_CASES = [((900, h), 100, 14, "wide", "en") for h in (398, 404, 407)] + [
-    ((900, h), 100, 14, "comfortable", "en") for h in (407, 413, 419)
+# Windows where History cut to its least still leaves the shelf short of the panel's least. At 990 wide the column left
+# of History is 173px, under the panel's 180px min-width, and the shelf as short as that column.
+LEAST_CASES = [
+    *[((900, h), 100, 14, "wide", "en") for h in (398, 404, 407)],
+    *[((900, h), 100, 14, "comfortable", "en") for h in (407, 413, 419)],
+    *[((990, h), 100, n, "wide", "en") for h in (398, 402, 406) for n in (10, 14, 24)],
 ]
 
 # The column's bottom is the layer's, less the view cube's margin that place() keeps in CSS pixels under the root zoom.
@@ -321,7 +324,8 @@ def test_stress_panel_ends_inside_its_column_and_the_window_under_a_cut_history(
     assert got["panel_b"] <= got["window_b"] + 1 and got["run_b"] <= got["panel_b"] + 1, got
 
 
-# The column left of History is under 100px wide there, where the panel's rows wrap far past the window.
+# The column left of History is under the panel's min-width there, at 900 wide under 100px where its rows wrap far past
+# the window.
 @pytest.mark.parametrize("case", LEAST_CASES, ids=lambda c: f"{c[0][0]}x{c[0][1]}-{c[2]}-{c[3]}-{c[4]}")
 def test_stress_panel_keeps_its_shelf_when_history_is_cut_to_its_least(shelved, case):
     got = shelved[case]
