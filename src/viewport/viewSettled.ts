@@ -3,8 +3,8 @@ export interface SettleRig {
   poseVersion(): number;
 }
 
-/** Runs `then` once the view has settled: no flight, and the pose still for one `pause`. The classic rig turns to a
- *  named view by its controls' own transition, which `isFlying` does not report. Returns what cancels the wait. */
+/** Runs `then` once the view has settled: no flight or turn, and the pose still for one `pause`. Returns what cancels
+ *  the wait. */
 export function whenViewSettles(rig: SettleRig, pause: number, then: () => void): () => void {
   let seen = rig.poseVersion();
   let timer: ReturnType<typeof setTimeout> | null = null;
