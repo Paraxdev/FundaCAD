@@ -252,7 +252,7 @@ with everything it adds, and gets back the removal:
 
 | point | what it fills |
 | --- | --- |
-| `menus` | rows in a menu that exists, or a whole menu that does not; a core menu is named by its English name (File, Edit, View, Help) in every language |
+| `menus` | rows in a menu that exists, or a whole menu that does not; a core menu is named by its English name (File, Edit, View, Help) in every language. A row label may be `() => t(key)` so it follows the language, with `refName` as its English name; `MenuDef.label` is likewise a string or a function that returns one |
 | `ribbon` | a group of buttons, with a collapse priority |
 | `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
 | `overlays` | components mounted for the life of the capability |
