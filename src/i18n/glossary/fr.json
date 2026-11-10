@@ -267,6 +267,86 @@
     {
       "en": "Sketch",
       "text": "Esquisse"
+    },
+    {
+      "en": "Line",
+      "text": "Ligne"
+    },
+    {
+      "en": "Arc",
+      "text": "Arc"
+    },
+    {
+      "en": "Circle",
+      "text": "Cercle"
+    },
+    {
+      "en": "Polygon",
+      "text": "Polygone"
+    },
+    {
+      "en": "Slot",
+      "text": "Rainure"
+    },
+    {
+      "en": "Spline",
+      "text": "Spline"
+    },
+    {
+      "en": "Trim",
+      "text": "Ajuster"
+    },
+    {
+      "en": "Extend",
+      "text": "Prolonger"
+    },
+    {
+      "en": "Offset",
+      "text": "Décaler"
+    },
+    {
+      "en": "Break",
+      "text": "Couper"
+    },
+    {
+      "en": "Constrain",
+      "text": "Contrainte"
+    },
+    {
+      "en": "Dimension",
+      "text": "Cotation"
+    },
+    {
+      "en": "Tangent",
+      "text": "Tangent"
+    },
+    {
+      "en": "Parallel",
+      "text": "Parallèle"
+    },
+    {
+      "en": "Coincident",
+      "text": "Coïncident"
+    },
+    {
+      "en": "Concentric",
+      "text": "Concentrique"
+    },
+    {
+      "en": "Collinear",
+      "text": "Colinéaire"
+    },
+    {
+      "en": "Symmetric",
+      "text": "Symétrique"
+    },
+    {
+      "en": "Midpoint",
+      "text": "Milieu"
+    },
+    {
+      "en": "Project",
+      "text": "Projeter"
     }
   ]
 }

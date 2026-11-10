@@ -226,96 +226,87 @@ export const SKETCH: Group[] = [
   {
     label: "CREATE",
     items: [
-      { action: "line", label: "Line", iconName: "line", key: "L" },
+      tool("line", "tool.line", "line", { key: "L" }),
       // Each rectangle and circle trio is one shape anchored differently (corner, centre, edge), so each folds into one
       // split button that remembers the last used.
-      {
-        label: "Rectangle",
-        children: [
-          { action: "rectangle", label: "Rectangle", iconName: "rectangle", key: "R" },
-          { action: "centerRectangle", label: "Center Rect", iconName: "centerRectangle" },
-          { action: "rectangle3", label: "Rect 3-Pt", iconName: "rectangle3" },
-        ],
-      },
-      {
-        label: "Circle",
-        children: [
-          { action: "circle", label: "Circle", iconName: "circle", key: "C" },
-          { action: "circle2", label: "Circle 2-Pt", iconName: "circle2" },
-          { action: "circle3", label: "Circle 3-Pt", iconName: "circle3" },
-        ],
-      },
-      { action: "arc", label: "Arc", iconName: "arc", key: "A" },
-      { action: "polygon", label: "Polygon", iconName: "polygon" },
-      { action: "slot", label: "Slot", iconName: "slot" },
-      {
-        label: "Spline",
-        children: [
-          { action: "spline", label: "Spline", iconName: "spline" },
-          { action: "bspline", label: "Control Point Spline", iconName: "bspline" },
-        ],
-      },
-      { action: "point", label: "Point", iconName: "point" },
-      { action: "text", label: "Text", iconName: "text" },
-      { action: "project", label: "Project", iconName: "project", key: "P" },
+      split("tool.rectangle", [
+        tool("rectangle", "tool.rectangle", "rectangle", { key: "R" }),
+        tool("centerRectangle", "tool.centerRectangle", "centerRectangle"),
+        tool("rectangle3", "tool.rect3Pt", "rectangle3"),
+      ]),
+      split("tool.circle", [
+        tool("circle", "tool.circle", "circle", { key: "C" }),
+        tool("circle2", "tool.circle2", "circle2"),
+        tool("circle3", "tool.circle3", "circle3"),
+      ]),
+      tool("arc", "tool.arc", "arc", { key: "A" }),
+      tool("polygon", "tool.polygon", "polygon"),
+      tool("slot", "tool.slot", "slot"),
+      split("tool.spline", [
+        tool("spline", "tool.spline", "spline"),
+        tool("bspline", "tool.controlPointSpline", "bspline"),
+      ]),
+      tool("point", "tool.point", "point"),
+      tool("text", "tool.text", "text"),
+      tool("project", "tool.project", "project", { key: "P" }),
     ],
   },
   {
     label: "MODIFY",
     items: [
-      { action: "fillet-sketch", label: "Fillet", iconName: "fillet", key: "F" },
-      { action: "chamfer-sketch", label: "Chamfer", iconName: "chamfer" },
-      { action: "trim", label: "Trim", iconName: "trim", key: "T" },
-      { action: "extend", label: "Extend", iconName: "extend" },
-      { action: "offset", label: "Offset", iconName: "offset", key: "O" },
-      { action: "break", label: "Break", iconName: "break" },
-      { action: "mirror-sketch", label: "Mirror", iconName: "mirror" },
-      { action: "move-sketch", label: "Move/Rotate", iconName: "move", key: "M" },
-      { action: "copy-sketch", label: "Copy", iconName: "copy" },
-      { action: "rotate-sketch", label: "Rotate", iconName: "rotate" },
-      { action: "scale-sketch", label: "Scale", iconName: "scale" },
-      { action: "dimension", label: "Dimension", iconName: "dimension", key: "D" },
+      tool("fillet-sketch", "tool.fillet", "fillet", { key: "F" }),
+      tool("chamfer-sketch", "tool.chamfer", "chamfer"),
+      tool("trim", "tool.trim", "trim", { key: "T" }),
+      tool("extend", "tool.extend", "extend"),
+      tool("offset", "tool.offset", "offset", { key: "O" }),
+      tool("break", "tool.break", "break"),
+      tool("mirror-sketch", "tool.mirror", "mirror"),
+      tool("move-sketch", "tool.moveRotate", "move", { key: "M" }),
+      tool("copy-sketch", "tool.copy", "copy"),
+      tool("rotate-sketch", "tool.rotate", "rotate"),
+      tool("scale-sketch", "tool.scale", "scale"),
+      tool("dimension", "tool.dimension", "dimension", { key: "D" }),
     ],
   },
   {
     label: "PATTERN",
     items: [
-      { action: "patternLinear", label: "Linear Pattern", iconName: "patternLinear" },
-      { action: "patternCircular", label: "Circular Pat.", iconName: "patternCircular" },
-      { action: "patternRect", label: "Rect Pattern", iconName: "patternRect" },
-      { action: "boltCircle", label: "Bolt Circle", iconName: "boltCircle" },
-      { action: "hexHoles", label: "Staggered Holes", iconName: "hexHoles" },
-      { action: "honeycomb", label: "Honeycomb", iconName: "honeycomb" },
-      { action: "gridHoles", label: "Grid Holes", iconName: "gridHoles" },
+      tool("patternLinear", "tool.linearPattern", "patternLinear"),
+      tool("patternCircular", "tool.circularPat", "patternCircular"),
+      tool("patternRect", "tool.rectPattern", "patternRect"),
+      tool("boltCircle", "tool.boltCircle", "boltCircle"),
+      tool("hexHoles", "tool.staggeredHoles", "hexHoles"),
+      tool("honeycomb", "tool.honeycomb", "honeycomb"),
+      tool("gridHoles", "tool.gridHoles", "gridHoles"),
     ],
   },
   {
     label: "CONSTRAINTS",
     items: [
-      {
-        label: "Constrain",
-        // the hint is read from the keymap, as for the booleans, since some carry Shift
-        children: (
+      split(
+        "tool.family.constrain",
+        // The hint is read from the keymap, as for the booleans, since some carry Shift.
+        (
           [
-            ["horizontal", "Horizontal"],
-            ["vertical", "Vertical"],
-            ["parallel", "Parallel"],
-            ["perpendicular", "Perpendic."],
-            ["equal", "Equal"],
-            ["tangent", "Tangent"],
-            ["coincident", "Coincident"],
-            ["concentric", "Concentric"],
-            ["midpoint", "Midpoint"],
-            ["collinear", "Collinear"],
-            ["symmetric", "Symmetric"],
-            ["fix", "Fix"],
+            ["horizontal", "tool.horizontal"],
+            ["vertical", "tool.vertical"],
+            ["parallel", "tool.parallel"],
+            ["perpendicular", "tool.perpendicular"],
+            ["equal", "tool.equal"],
+            ["tangent", "tool.tangent"],
+            ["coincident", "tool.coincident"],
+            ["concentric", "tool.concentric"],
+            ["midpoint", "tool.midpoint"],
+            ["collinear", "tool.collinear"],
+            ["symmetric", "tool.symmetric"],
+            ["fix", "tool.fix"],
           ] as const
-        ).map(([action, label]) => {
+        ).map(([action, labelKey]) => {
           const key = keyHint(action);
-          return { action, label, iconName: action, ...(key !== undefined ? { key } : {}) };
+          return tool(action, labelKey, action, key !== undefined ? { key } : {});
         }),
-      },
-      { action: "tie-loose-ends", label: "Tie Loose Ends", iconName: "coincident" },
+      ),
+      tool("tie-loose-ends", "tool.tieLooseEnds", "coincident"),
     ],
   },
 ];

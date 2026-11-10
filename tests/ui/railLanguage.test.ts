@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { contribute } from "../../src/plugins/contrib";
 import { setLanguage } from "../../src/i18n";
 import { groupEnglish, groupName, leavesOf, MODEL, modelGroups, toolEnglish, toolLabel } from "../../src/ui/ribbonDefs";
-import { modelRail, type RailEntry } from "../../src/ui/railDefs";
+import { modelRail, sketchRail, sketchToolName, type RailEntry } from "../../src/ui/railDefs";
 import { runningTool } from "../../src/ui/runningTool";
 import type { EngineTools } from "../../src/app/engine";
 
@@ -260,5 +260,91 @@ describe("the running tool's name", () => {
     expect(nameOf("faceOffset", { ...shell, action: "offset-face" })).toBe("Fläche versetzen");
     expect(nameOf("faceOffset", { ...shell, action: "other", label: "Own" })).toBe("Own");
     expect(runningTool(tools("none"))).toBeNull();
+  });
+});
+
+const FAMILY_IDS = [
+  "fam:spline",
+  "fam:rectangle",
+  "fam:circle",
+  "fam:slot",
+  "fam:offset",
+  "fam:corner",
+  "fam:pattern",
+  "fam:constrain",
+];
+
+describe("the sketch tools in the chosen language", () => {
+  const families = () =>
+    sketchRail().flatMap((e) => (e.kind === "family" ? [{ id: e.id, label: e.label, english: e.english }] : []));
+
+  it("names every family in German and keeps the ids", async () => {
+    await setLanguage("de");
+    expect(families()).toEqual([
+      { id: "fam:spline", label: "Spline", english: "Spline" },
+      { id: "fam:rectangle", label: "Rechteck", english: "Rectangle" },
+      { id: "fam:circle", label: "Kreis", english: "Circle" },
+      { id: "fam:slot", label: "Langloch", english: "Slot" },
+      { id: "fam:offset", label: "Versetzen", english: "Offset" },
+      { id: "fam:corner", label: "Verrundung", english: "Fillet" },
+      { id: "fam:pattern", label: "Muster", english: "Pattern" },
+      { id: "fam:constrain", label: "Abhängigkeit", english: "Constrain" },
+    ]);
+    expect(families().map((f) => f.id)).toEqual(FAMILY_IDS);
+  });
+
+  it("reads the same list three ways across a switch", async () => {
+    await setLanguage("en");
+    const en = sketchRail();
+    await setLanguage("de");
+    const de = sketchRail();
+    await setLanguage("fr");
+    const fr = sketchRail();
+    await setLanguage("en");
+    expect(view(sketchRail())).toEqual(view(en));
+    const ids = (r: RailEntry[]) => view(r).map((e) => e.id);
+    expect(ids(de)).toEqual(ids(en));
+    expect(ids(fr)).toEqual(ids(en));
+    expect(view(de)).not.toEqual(view(en));
+    expect(view(fr)).not.toEqual(view(de));
+    const circle = (r: RailEntry[]) => r.find((e) => e.kind === "family" && e.id === "fam:circle");
+    expect(circle(fr)!.label).toBe("Cercle");
+    expect(circle(en)!.label).toBe("Circle");
+  });
+
+  it("gives a family the label of its first tool, and a variant its own", async () => {
+    for (const lang of ["de", "fr"]) {
+      await setLanguage(lang);
+      const rail = sketchRail();
+      const corner = rail.find((e) => e.kind === "family" && e.id === "fam:corner");
+      const rect = rail.find((e) => e.kind === "family" && e.id === "fam:rectangle");
+      if (corner?.kind !== "family" || rect?.kind !== "family") throw new Error("missing family");
+      expect(corner.label).toBe(toolLabel("fillet-sketch"));
+      expect(corner.label).toBe(toolLabel("fillet"));
+      expect(corner.items[1]!.label).toBe(toolLabel("chamfer-sketch"));
+      expect(corner.items[1]!.label).not.toBe(corner.label);
+      expect(rect.label).toBe(rect.items[0]!.label);
+      expect(rect.items[1]!.label).not.toBe(rect.label);
+    }
+  });
+
+  it("names a sketch tool with its key, and null for an unknown one", async () => {
+    await setLanguage("de");
+    expect(sketchToolName("line")).toEqual({ label: "Linie", keys: "L" });
+    expect(sketchToolName("perpendicular")).toEqual({ label: "Senkrecht", keys: expect.any(String) });
+    expect(sketchToolName("tie-loose-ends")).toEqual({ label: "Offene Enden verbinden" });
+    expect(sketchToolName("extrude")).toBeNull();
+    expect(sketchToolName("")).toBeNull();
+    await setLanguage("en");
+    expect(sketchToolName("line")).toEqual({ label: "Line", keys: "L" });
+  });
+
+  it("keeps each tool's English name for the palette", async () => {
+    await setLanguage("de");
+    expect(toolEnglish("rectangle3")).toBe("Rect 3-Pt");
+    expect(toolEnglish("patternCircular")).toBe("Circular Pat.");
+    expect(toolEnglish("perpendicular")).toBe("Perpendic.");
+    expect(toolEnglish("move-sketch")).toBe("Move/Rotate");
+    expect(toolEnglish("nope")).toBeUndefined();
   });
 });

@@ -2,6 +2,7 @@
 // selection shows the tools that act on it, and a sketch shows its drawing tools with each family behind one button.
 
 import { keyHint, shortcutRows } from "../input/shortcuts";
+import { t as translate, tEnglish, type MessageKey } from "../i18n";
 import {
   groupEnglish,
   groupName,
@@ -117,23 +118,23 @@ export function sketchToolName(action: string): { label: string; keys?: string }
   }
 }
 
-type SketchSlot = string | { id: string; label: string; actions: readonly string[] };
+type SketchSlot = string | { id: string; labelKey: MessageKey; actions: readonly string[] };
 
 const SKETCH_SLOTS: readonly SketchSlot[] = [
   "line",
   "arc",
-  { id: "spline", label: "Spline", actions: ["spline", "bspline"] },
-  { id: "rectangle", label: "Rectangle", actions: ["rectangle", "centerRectangle", "rectangle3"] },
-  { id: "circle", label: "Circle", actions: ["circle", "circle2", "circle3"] },
+  { id: "spline", labelKey: "tool.spline", actions: ["spline", "bspline"] },
+  { id: "rectangle", labelKey: "tool.rectangle", actions: ["rectangle", "centerRectangle", "rectangle3"] },
+  { id: "circle", labelKey: "tool.circle", actions: ["circle", "circle2", "circle3"] },
   "polygon",
-  { id: "slot", label: "Slot", actions: ["slot", "point"] },
-  { id: "offset", label: "Offset", actions: ["offset", "extend", "break"] },
-  { id: "corner", label: "Fillet", actions: ["fillet-sketch", "chamfer-sketch"] },
+  { id: "slot", labelKey: "tool.slot", actions: ["slot", "point"] },
+  { id: "offset", labelKey: "tool.offset", actions: ["offset", "extend", "break"] },
+  { id: "corner", labelKey: "tool.fillet", actions: ["fillet-sketch", "chamfer-sketch"] },
   "move-sketch",
   "mirror-sketch",
   {
     id: "pattern",
-    label: "Pattern",
+    labelKey: "tool.family.pattern",
     actions: ["patternLinear", "patternCircular", "patternRect", "boltCircle", "hexHoles", "honeycomb", "gridHoles"],
   },
   "project",
@@ -142,7 +143,7 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   "dimension",
   {
     id: "constrain",
-    label: "Constrain",
+    labelKey: "tool.family.constrain",
     actions: [
       "horizontal",
       "vertical",
@@ -169,7 +170,15 @@ export function sketchRail(): RailEntry[] {
   return SKETCH_SLOTS.map((slot): RailEntry => {
     if (typeof slot === "string") return railTool(sketchLeaf(slot));
     const items = slot.actions.map((a) => railTool(sketchLeaf(a)));
-    return { kind: "family", id: `fam:${slot.id}`, label: slot.label, icon: items[0]!.icon, style: "variants", items };
+    return {
+      kind: "family",
+      id: `fam:${slot.id}`,
+      label: translate(slot.labelKey),
+      english: tEnglish(slot.labelKey),
+      icon: items[0]!.icon,
+      style: "variants",
+      items,
+    };
   });
 }
 

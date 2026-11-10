@@ -266,6 +266,86 @@
     {
       "en": "Sketch",
       "text": "草图"
+    },
+    {
+      "en": "Line",
+      "text": "直线"
+    },
+    {
+      "en": "Arc",
+      "text": "圆弧"
+    },
+    {
+      "en": "Circle",
+      "text": "圆"
+    },
+    {
+      "en": "Polygon",
+      "text": "多边形"
+    },
+    {
+      "en": "Slot",
+      "text": "槽"
+    },
+    {
+      "en": "Spline",
+      "text": "样条曲线"
+    },
+    {
+      "en": "Trim",
+      "text": "修剪"
+    },
+    {
+      "en": "Extend",
+      "text": "延伸"
+    },
+    {
+      "en": "Offset",
+      "text": "偏移"
+    },
+    {
+      "en": "Break",
+      "text": "打断"
+    },
+    {
+      "en": "Constrain",
+      "text": "约束"
+    },
+    {
+      "en": "Dimension",
+      "text": "尺寸"
+    },
+    {
+      "en": "Tangent",
+      "text": "相切"
+    },
+    {
+      "en": "Parallel",
+      "text": "平行"
+    },
+    {
+      "en": "Coincident",
+      "text": "重合"
+    },
+    {
+      "en": "Concentric",
+      "text": "同心"
+    },
+    {
+      "en": "Collinear",
+      "text": "共线"
+    },
+    {
+      "en": "Symmetric",
+      "text": "对称"
+    },
+    {
+      "en": "Midpoint",
+      "text": "中点"
+    },
+    {
+      "en": "Project",
+      "text": "投影"
     }
   ]
 }
