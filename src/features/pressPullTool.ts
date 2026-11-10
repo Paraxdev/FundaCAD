@@ -6,7 +6,9 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
-import { peeksThrough } from "./pressPullPeek";
+import { PARALLEL_COS, planarPushFaces, type PushFaces } from "./pushOutline";
+import { sweepPolylines } from "./sweepOutline";
+import { ToolOutline } from "./toolOutline";
 import {
   DimInput,
   type DimChoice,
@@ -191,6 +193,8 @@ export class PressPullTool {
 
   private previewTimer: number | null = null;
   private unsubBuild: (() => void) | null = null;
+  private outline: ToolOutline | null = null;
+  private rigid: PushFaces | null = null;
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
@@ -258,7 +262,7 @@ export class PressPullTool {
     if (this.enginePreviewOn) this.store.setPreview(null);
     this.enginePreviewOn = false;
     this.viewport.clearPressPullGhost();
-    this.viewport.setPeek(null);
+    this.outline?.hide();
     setPrompt("Click the face to stop at · Esc");
     this.releaseRows = awaitFaceRows(
       this.viewport,
@@ -500,6 +504,7 @@ export class PressPullTool {
     this.faceAnchor.copy(anchor);
     this.faceNormal.copy(normal).normalize();
     this.seedGuides(round, faceIds[0]);
+    this.rigid = this.resizing ? null : planarPushFaces(this.viewport, faceIds, this.faceNormal);
     this.direction = "normal";
     this.holeAxis = null;
     this.phase = "drag";
@@ -879,7 +884,7 @@ export class PressPullTool {
   /** Through the engine for every push, since neighbours slope and re-trim in ways no ghost can draw. `hold` keeps
    *  the last push that built while the kernel refuses this one; `now` skips the debounce. */
   private refreshPreview(now = false) {
-    this.syncPeek();
+    this.refreshOutline();
     this.refreshGhost();
     this.refreshRefusal();
     this.promptNow();
@@ -924,11 +929,36 @@ export class PressPullTool {
     this.previewTimer = null;
   }
 
-  private syncPeek() {
-    const f = this.pickingTarget || !this.faceIds.length ? null : this.buildFeature();
-    const cut = peeksThrough(f, this.mode);
-    const body = this.bodyId ?? this.viewport.faceIdToBodyId(this.faceIds[0] ?? -1);
-    this.viewport.setPeek(cut && body ? () => [body] : null);
+  /** The volume a rigid push of flat faces adds or takes away, over the engine's opaque body. */
+  private refreshOutline() {
+    const rigid = this.rigid;
+    const depth = Math.abs(this.value);
+    const along = this.axis.dot(this.faceNormal);
+    if (
+      !rigid ||
+      this.pickingTarget ||
+      this.upTo ||
+      this.resizing ||
+      this.neutral ||
+      Math.abs(this.taper) >= 0.05 ||
+      Math.abs(along) < PARALLEL_COS
+    ) {
+      this.outline?.hide();
+      return;
+    }
+    const n = this.faceNormal;
+    const dir = this.axis.clone().multiplyScalar(Math.sign(this.value));
+    const polylines = sweepPolylines({
+      rings: rigid.rings,
+      normal: [n.x, n.y, n.z],
+      axis: [dir.x, dir.y, dir.z],
+      stations: [
+        { along: 0, inset: 0 },
+        { along: depth, inset: 0 },
+      ],
+    });
+    this.outline ??= new ToolOutline(this.viewport);
+    this.outline.show(polylines, { cut: this.mode === "cut" || (this.mode === "auto" && this.value < 0) });
   }
 
   private buildGizmo() {
@@ -1351,7 +1381,9 @@ export class PressPullTool {
     this.outcomes.clear();
     this.toggleKind = null;
     this.viewport.clearPressPullGhost();
-    this.viewport.setPeek(null);
+    this.outline?.dispose();
+    this.outline = null;
+    this.rigid = null;
     if (this.enginePreviewOn) {
       this.store.setPreview(null);
       this.enginePreviewOn = false;

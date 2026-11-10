@@ -69,6 +69,7 @@ function rig(selected: number[] = []) {
       id === ROUND ? null : { normal: new THREE.Vector3(0, 0.6, 0.8), origin: new THREE.Vector3(...point(id)) },
     roundFaceAt: (id: number) => (id === ROUND ? bore : null),
     faceTriangles: () => [tri],
+    edgesOfFaces: () => [],
     faceIdNear: () => null,
     faceIdToBodyId: () => "b2",
     setPeek: () => {},

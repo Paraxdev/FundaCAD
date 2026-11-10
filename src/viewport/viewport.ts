@@ -2362,14 +2362,18 @@ export class Viewport {
   /** The edges on the selected faces, found geometrically: the reply never says
    *  which edges bound which face (faceEdges.ts). */
   edgesOfSelectedFaces(): EdgeRef[] {
-    if (!this.highlighter || !this.model) return [];
-    const faces = this.highlighter.getSelectedFaces();
-    if (!faces.length) return [];
+    return this.highlighter ? this.edgesOfFaces(this.highlighter.getSelectedFaces()) : [];
+  }
+
+  /** The edges on these faces. `all` reads every model edge, not only the drawn ones, since the tangent edge
+   *  setting hides edges a face's ring needs. */
+  edgesOfFaces(faceIds: readonly number[], opts: { all?: boolean } = {}): EdgeRef[] {
+    if (!this.model || !faceIds.length) return [];
     const tol = faceEdgeTol(this.model.box.getSize(new THREE.Vector3()).length());
-    const all = this.visibleEdgeLines();
+    const every = opts.all ? this.model.edges : this.visibleEdgeLines();
     const out: EdgeRef[] = [];
     const seen = new Set<EdgeRef>();
-    for (const fid of faces) {
+    for (const fid of faceIds) {
       const tris = this.faceTriangles(fid).map((t): Tri => [
         [t.a.x, t.a.y, t.a.z],
         [t.b.x, t.b.y, t.b.z],
@@ -2377,7 +2381,7 @@ export class Viewport {
       ]);
       if (!tris.length) continue;
       const bodyId = this.faceIdToBodyId(fid);
-      const candidates = bodyId ? all.filter((e) => !e.body || e.body === bodyId) : all;
+      const candidates = bodyId ? every.filter((e) => !e.body || e.body === bodyId) : every;
       for (const edge of edgesOnFace(candidates, faceSurface(tris), tol)) {
         if (seen.has(edge)) continue;
         seen.add(edge);
