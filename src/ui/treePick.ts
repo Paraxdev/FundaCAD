@@ -1,6 +1,7 @@
 // Offers an Items or Geometry row to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
 // would start a sketch, abandoning Offset Plane, Split and the rest. The row's own action runs only when nothing waits.
 
+import { t } from "../i18n";
 import type { Plane3, PlaneDef, Vec3 } from "../types";
 import type { EdgeRef } from "../viewport/edgeLines";
 
@@ -17,8 +18,13 @@ export type TreePick =
   | { kind: "face"; faceId: number }
   | { kind: "edge"; edge: EdgeRef };
 
-/** `true` when the pick was taken, otherwise the short hint saying why not. */
-export type TreePickAnswer = true | string;
+/** What a taker did with a pick it took, so the words come in the person's language. */
+export interface TreePickDone {
+  done: "added" | "takenOut" | "mirrorPlane";
+}
+
+/** `true` or a `done` when the pick was taken, otherwise the short hint saying why not. */
+export type TreePickAnswer = true | string | TreePickDone;
 export type TreePickTaker = (pick: TreePick) => TreePickAnswer;
 
 interface PickSession {
@@ -112,7 +118,7 @@ export type TreeClickRoute = "row" | "taken" | "refused";
 export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRoute {
   if (session) {
     const answer = session.taker(pick);
-    if (answer === true) {
+    if (typeof answer !== "string") {
       deps.taken?.();
       return "taken";
     }
@@ -127,13 +133,47 @@ export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRo
   return "row";
 }
 
-/** Offers each pick in turn, as clicks would, until one is not taken or the session ends. */
-export function routeTreeRun(picks: readonly TreePick[], deps: TreeClickDeps): void {
+export interface NamedPick {
+  pick: TreePick;
+  /** What the pick is called aloud, "Flat face 6 of Bracket". */
+  name: string;
+}
+
+export interface OfferDeps extends TreeClickDeps {
+  say: (text: string) => void;
+}
+
+type DoneWord = TreePickDone["done"] | "other";
+
+function takenWords(names: readonly string[], words: readonly DoneWord[]): string {
+  if (names.length === 1) return t("pick.done", { name: names[0]!, done: words[0]! });
+  return t("pick.doneRun", { n: names.length, done: words.every((w) => w === words[0]) ? words[0]! : "other" });
+}
+
+/** Offers each pick in turn, as clicks would, until one is refused or the session ends, and says what was taken.
+ *  A refusal goes out with the taken words in one hint, so neither cancels the other. */
+export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void {
+  const names: string[] = [];
+  const words: DoneWord[] = [];
+  let refusal = null as string | null;
   const run = () => {
-    for (const p of picks) if (!session || routeTreeClick(p, deps) !== "taken") break;
+    for (const o of offers) {
+      if (!session) return;
+      const answer = session.taker(o.pick);
+      if (typeof answer === "string") {
+        refusal = answer;
+        return;
+      }
+      names.push(o.name);
+      words.push(answer === true ? "other" : answer.done);
+    }
   };
   if (session?.batch) session.batch(run);
   else run();
+  if (names.length) deps.taken?.();
+  const taken = names.length ? takenWords(names, words) : null;
+  if (refusal !== null) deps.hint(taken === null ? refusal : `${taken}. ${refusal}`);
+  else if (taken !== null) deps.say(taken);
 }
 
 export function resetTreePicks() {

@@ -6,7 +6,9 @@ import type { RebuildState } from "../document/store";
 import { useSelectionStore } from "../stores/selection";
 import { useGeometryBrowserStore, type GeometryKind } from "../stores/geometryBrowser";
 import type { TopologyReply } from "../types";
+import { t } from "../i18n";
 import { announce } from "../ui/announce";
+import { describePick } from "../ui/describePick";
 import { stepName } from "../ui/featureMeta";
 import { bodyLabels } from "../ui/bodyLabels";
 import {
@@ -26,8 +28,8 @@ import type { Viewport } from "../viewport/viewport";
 import type { Engine } from "./engine";
 import { featurePick } from "./featurePick";
 import { writeFeatureRows } from "./featureRows";
-import { BASE_PLANES, refuseAloud, routePlaneRow, sketchOnPlane, treeClickDeps, type PlanePick } from "./planePick";
-import { routeTreeRun, treePickWaiting, type TreePick } from "../ui/treePick";
+import { BASE_PLANES, offerDeps, refuseAloud, routePlaneRow, sketchOnPlane, type PlanePick } from "./planePick";
+import { offerPicks, treePickWaiting, type NamedPick, type TreePick } from "../ui/treePick";
 
 export interface GeometryBrowserHost {
   store: Engine["store"];
@@ -302,6 +304,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // A tool's preview build replaces the drawn model, but an edge row keeps the points of the build it came from, the
   // model the tool acts on. A face row is a number in the drawn model, so it must be current.
   function toolPickOf(row: GeometryRow): TreePick | null {
+    if (row.kind === "plane") return planePickOf(row);
     if (row.kind !== "edge") {
       const ref = refOf(row);
       return ref?.kind === "face" ? { kind: "face", faceId: ref.faceId } : null;
@@ -312,11 +315,22 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return current && edge?.body === row.bodyId ? { kind: "edge", edge } : null;
   }
 
-  // Each row goes to the waiting tool in turn, as clicks in the view would. A refusal is spoken by the route.
+  // The body is always named: a tool may refuse a face of another body, and keys alone do not show which one the list has.
+  function nameOf(row: GeometryRow): string {
+    const label = describePick(row.facts).label;
+    const body = list.bodies.find((b) => b.id === row.bodyId)?.name;
+    return row.kind === "plane" || !body ? label : t("pick.onBody", { label, body });
+  }
+
+  // Each row goes to the waiting tool in turn, as clicks in the view would, and what it took is spoken by the route.
   function offerRows(rows: readonly GeometryRow[]): string | null {
-    const picks = rows.map(toolPickOf);
-    if (picks.some((p) => p === null)) return ROW_CHANGED;
-    routeTreeRun(picks as TreePick[], treeClickDeps(e));
+    const offers: NamedPick[] = [];
+    for (const row of rows) {
+      const pick = toolPickOf(row);
+      if (!pick) return ROW_CHANGED;
+      offers.push({ pick, name: nameOf(row) });
+    }
+    offerPicks(offers, offerDeps(e));
     return null;
   }
 
@@ -472,12 +486,20 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       return null;
     },
 
+    /** Hands these rows to the waiting tool and says what it took. The reason in words when a row is stale. */
+    offer: offerRows,
+
     /** True while the list's own pick is applied, not a step's. */
     pickingRows: () => pickingRows,
 
     /** Enter or a plain click on a plane row: a waiting pick takes it, otherwise a sketch starts on it. `start` false
      *  only offers it to the pick, for a Ctrl or Shift click. True when nothing further should happen. */
     activatePlane(row: GeometryRow, start = true): boolean {
+      if (treePickWaiting()) {
+        const stale = offerRows([row]);
+        if (stale) refuseAloud(e, stale);
+        return true;
+      }
       const pick = planePickOf(row);
       if (!pick) {
         refuseAloud(e, ROW_CHANGED);

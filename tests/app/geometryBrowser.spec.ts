@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { SessionEnded } from "../../src/document/session";
+import { SELECTION_SPEECH_DELAY } from "../../src/app/planePick";
 import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
 import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
@@ -1204,10 +1205,72 @@ describe("a tool waiting for a pick", () => {
       { kind: "edge", edge: r.wires[0] },
       { kind: "edge", edge: r.wires[1] },
     ]);
-    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "", {
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith(
+      "Straight edge 1 of BODY1 picked. That row is an edge, this step needs a face",
+      "",
+      { silent: true },
+    );
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+  });
+
+  it("speaks a taken face row by its label and the body's shown name, politely under the selection key", async () => {
+    const r = await waiting();
+    r.store.setBodyName("body1", "Bracket");
+    await settle();
+    announce.mockClear();
+    expect(r.browser.offer([r.list.rows[1]!])).toBeNull();
+    expect(r.taken).toEqual([{ kind: "face", faceId: 8 }]);
+    expect(announce.mock.calls).toEqual([
+      ["Flat face 2 of Bracket picked", "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY }],
+    ]);
+  });
+
+  it("speaks a run of three rows as a count, and a refused third together with the two taken", async () => {
+    const r = await waiting([true, true, "That row is an edge, this step needs a face"]);
+    r.browser.setKind("edges");
+    announce.mockClear();
+    r.browser.offer(r.list.rows);
+    expect(r.taken).toHaveLength(3);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      "2 rows picked. That row is an edge, this step needs a face",
+    ]);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith(
+      "2 rows picked. That row is an edge, this step needs a face",
+      "",
+      { silent: true },
+    );
+  });
+
+  it("says nothing but the refusal for a refused first row, and a stale row is refused before any is offered", async () => {
+    const r = await waiting(["That row is a face, this step needs an edge"]);
+    r.browser.offer([r.list.rows[2]!, r.list.rows[0]!]);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is a face, this step needs an edge", "", {
       silent: true,
     });
-    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    expect(r.taken).toHaveLength(1);
+    r.host.setStatus.mockClear();
+    const old = r.list.rows[0]!;
+    await r.build(result([{ id: "body1", etag: "e1c" }]));
+    expect(r.browser.offer([r.list.rows[0] ?? old, old])).toMatch(/\w/);
+    expect(r.taken).toHaveLength(1);
+  });
+
+  it("offers nothing of the first document to a pick waiting in the second", async () => {
+    const r = await waiting();
+    r.store.setBodyName("body1", "Bracket");
+    await settle();
+    const first = r.list.rows[1]!;
+    r.store.load(
+      JSON.stringify({ parameters: {}, features: [{ id: "g1", type: "box", length: 9, width: 8, height: 7 }] }),
+    );
+    await r.build(result([{ id: "body1", etag: "e1", name: "Lid" }]));
+    announce.mockClear();
+    expect(r.browser.offer([first])).toMatch(/\w/);
+    expect(r.taken).toEqual([]);
+    expect(announce).not.toHaveBeenCalled();
+    await land(r.asks.at(-1)!, topology("body1", 2));
+    expect(r.browser.offer([r.list.rows[1]!])).toBeNull();
+    expect(announce.mock.calls.map((c) => c[0])).toEqual(["Flat face 2 of Lid picked"]);
   });
 
   it("stops offering rows once a pick ends its wait", async () => {
@@ -1546,6 +1609,66 @@ describe("planes", () => {
     r.browser.setKind("planes");
     expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:g5"]);
     expect(r.list.cursor).toBeNull();
+  });
+});
+
+describe("a plane row offered to a waiting pick", () => {
+  const LID = {
+    id: "d1",
+    type: "datumPlane",
+    name: "Lid",
+    plane: { origin: [113.5, -41.25, 37], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] },
+  };
+  async function waitingOnPlanes(answers: TreePickAnswer[] = [true]) {
+    const r = rig();
+    r.store.load(
+      JSON.stringify({ parameters: {}, features: [{ id: "f1", type: "box", length: 40, width: 30, height: 20 }, LID] }),
+    );
+    await r.build();
+    r.browser.show(true);
+    r.browser.setKind("planes");
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    const taken: TreePick[] = [];
+    awaitTreePick(
+      (pick) => {
+        taken.push(pick);
+        return answers[taken.length - 1] ?? true;
+      },
+      () => {},
+    );
+    announce.mockClear();
+    return { ...r, taken };
+  }
+  afterEach(() => resetTreePicks());
+
+  it("gives an origin plane and a datum plane to the tool as picks, speaks each by its label and starts no sketch", async () => {
+    const r = await waitingOnPlanes();
+    expect(r.browser.activatePlane(r.list.rows[1]!)).toBe(true);
+    expect(r.browser.activatePlane(r.list.rows[3]!, false)).toBe(true);
+    expect(r.taken).toEqual([
+      { kind: "basePlane", plane: "XZ" },
+      expect.objectContaining({ kind: "datumPlane", id: "d1" }),
+    ]);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual(["XZ plane picked", "Lid picked"]);
+    expect(r.host.sketch.enter).not.toHaveBeenCalled();
+  });
+
+  it("speaks the refusal of a plane the step cannot take, and nothing else", async () => {
+    const r = await waitingOnPlanes(["That row is a base plane, this step needs a face"]);
+    expect(r.browser.activatePlane(r.list.rows[0]!)).toBe(true);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is a base plane, this step needs a face", "", {
+      silent: true,
+    });
+    expect(r.host.sketch.enter).not.toHaveBeenCalled();
+  });
+
+  it("refuses a datum plane the document has lost, and the tool never sees it", async () => {
+    const r = await waitingOnPlanes();
+    const lid = r.list.rows[3]!;
+    r.store.removeFeature("d1");
+    expect(r.browser.activatePlane(lid)).toBe(true);
+    expect(r.taken).toEqual([]);
+    expect(r.host.setStatus).toHaveBeenCalledOnce();
   });
 });
 

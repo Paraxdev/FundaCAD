@@ -4,10 +4,13 @@ import {
   endCommandedPick,
   endPickSession,
   endRewoundPick,
+  offerPicks,
   resetTreePicks,
   routeTreeClick,
   treePickRefusal,
   treePickWaiting,
+  type NamedPick,
+  type TreePickAnswer,
 } from "../../src/ui/treePick";
 
 const YZ = { kind: "basePlane", plane: "YZ" } as const;
@@ -161,5 +164,136 @@ describe("routing a row click", () => {
     );
     expect(ended).toEqual(["first", "second"]);
     expect(treePickWaiting()).toBe(true);
+  });
+});
+
+describe("offering named picks", () => {
+  const face = (faceId: number): NamedPick => ({
+    pick: { kind: "face", faceId },
+    name: `Flat face ${faceId} of Bracket`,
+  });
+  const edge = (n: number): NamedPick => ({
+    pick: { kind: "edge", edge: { body: "b7", points: [[n, 2 * n, 3]] } as never },
+    name: `Line edge ${n} of Bracket`,
+  });
+
+  function offering(answers: TreePickAnswer[], opts: { onTake?: (n: number) => void; batch?: boolean } = {}) {
+    const log: string[] = [];
+    const seen: unknown[] = [];
+    let taken = 0;
+    awaitTreePick(
+      (pick) => {
+        seen.push(pick);
+        opts.onTake?.(seen.length);
+        return answers[seen.length - 1] ?? true;
+      },
+      () => {},
+      opts.batch ? { batch: (run) => (log.push("batch in"), run(), log.push("batch out")) } : {},
+    );
+    const d = {
+      busyHint: () => null,
+      hint: (t: string) => log.push(`hint: ${t}`),
+      say: (t: string) => log.push(`say: ${t}`),
+      taken: () => {
+        taken++;
+        log.push("taken");
+      },
+    };
+    return { log, seen, d, taken: () => taken };
+  }
+
+  it("says nothing and calls no taker for no offers", () => {
+    const o = offering([]);
+    offerPicks([], o.d);
+    expect([o.log, o.seen]).toEqual([[], []]);
+  });
+
+  it("says nothing with no session, whatever is offered", () => {
+    const d = deps();
+    const log: string[] = [];
+    offerPicks([face(4), face(5)], { ...d, say: (t) => log.push(t), taken: () => log.push("taken") });
+    expect([log, d.hints]).toEqual([[], []]);
+  });
+
+  it("names one pick taken with true as picked, and drops old refusals once", () => {
+    const o = offering([true]);
+    offerPicks([face(6)], o.d);
+    expect(o.seen).toEqual([{ kind: "face", faceId: 6 }]);
+    expect(o.log).toEqual(["taken", "say: Flat face 6 of Bracket picked"]);
+  });
+
+  it.each([
+    ["added", "Line edge 3 of Bracket added"],
+    ["takenOut", "Line edge 3 of Bracket taken out"],
+    ["mirrorPlane", "Line edge 3 of Bracket is the mirror plane"],
+  ] as const)("says the %s words for one pick", (done, words) => {
+    const o = offering([{ done }]);
+    offerPicks([edge(3)], o.d);
+    expect(o.log).toEqual(["taken", `say: ${words}`]);
+  });
+
+  it("says a run of three taken with one word as a count with that word", () => {
+    const o = offering([{ done: "added" }, { done: "added" }, { done: "added" }]);
+    offerPicks([edge(1), edge(2), edge(3)], o.d);
+    expect(o.seen).toHaveLength(3);
+    expect(o.log).toEqual(["taken", "say: 3 rows added"]);
+  });
+
+  it("says a run taken with mixed words as picked, and two rows as many", () => {
+    const o = offering([{ done: "added" }, { done: "takenOut" }]);
+    offerPicks([edge(4), edge(5)], o.d);
+    expect(o.log).toEqual(["taken", "say: 2 rows picked"]);
+  });
+
+  it("a refusal first is the hint alone, nothing is said and nothing was taken", () => {
+    const o = offering(["That row is an edge, this step needs a face"]);
+    offerPicks([edge(2), face(9)], o.d);
+    expect(o.seen).toHaveLength(1);
+    expect(o.log).toEqual(["hint: That row is an edge, this step needs a face"]);
+    expect(o.taken()).toBe(0);
+  });
+
+  it("a refusal after two taken says both in one hint and stops there", () => {
+    const o = offering([true, true, "That row is a face, this step needs an edge"]);
+    offerPicks([edge(1), edge(2), face(7), edge(4)], o.d);
+    expect(o.seen).toHaveLength(3);
+    expect(o.log).toEqual(["taken", "hint: 2 rows picked. That row is a face, this step needs an edge"]);
+  });
+
+  it("a refusal after one taken names that pick", () => {
+    const o = offering([{ done: "added" }, "That row is a face, this step needs an edge"]);
+    offerPicks([edge(6), face(7)], o.d);
+    expect(o.log).toEqual(["taken", "hint: Line edge 6 of Bracket added. That row is a face, this step needs an edge"]);
+  });
+
+  it("stops when a taker ends the session on the second offer, and says the two", () => {
+    const o = offering([true, true], { onTake: (n) => n === 2 && endPickSession() });
+    offerPicks([face(1), face(2), face(3), face(4)], o.d);
+    expect(o.seen).toHaveLength(2);
+    expect(o.log).toEqual(["taken", "say: 2 rows picked"]);
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("wraps the whole run in the session's batch once, and speaks after it", () => {
+    const o = offering([true, true, true], { batch: true });
+    offerPicks([face(1), face(2), face(3)], o.d);
+    expect(o.log).toEqual(["batch in", "batch out", "taken", "say: 3 rows picked"]);
+  });
+
+  it("two offers in a row are two runs, each with its own batch", () => {
+    const o = offering([true, true], { batch: true });
+    offerPicks([face(1)], o.d);
+    offerPicks([face(2)], o.d);
+    expect(o.log.filter((l) => l === "batch in")).toHaveLength(2);
+    expect(o.taken()).toBe(2);
+  });
+
+  it("routeTreeClick counts a done answer as taken", () => {
+    const d = deps();
+    awaitTreePick(
+      () => ({ done: "added" }),
+      () => {},
+    );
+    expect([routeTreeClick(YZ, d), d.hints]).toEqual(["taken", []]);
   });
 });
