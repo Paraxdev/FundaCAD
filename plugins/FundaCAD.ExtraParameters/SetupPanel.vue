@@ -3,7 +3,17 @@
 // undoes like any edit, and survives the plugin being switched off.
 
 import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
-import { captureConfiguration, checkResults, evalExpr, storedExpr, toast, useDocValue, useEngine } from "fundacad";
+import {
+  captureConfiguration,
+  checkResults,
+  evalExpr,
+  shownExpr,
+  spellNumber,
+  storedExpr,
+  toast,
+  useDocValue,
+  useEngine,
+} from "fundacad";
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
@@ -251,7 +261,7 @@ const groupOptions = computed(() => [
 ]);
 const configTitle = (values: Record<string, string>) =>
   Object.entries(values)
-    .map(([n, e]) => `${n} = ${e}`)
+    .map(([n, e]) => `${n} = ${shownExpr(e)}`)
     .join("\n");
 const hideLabel = (i: number) => `${uid}-hide-${i}`;
 const checkTone = (c: { result?: { ok: boolean } | undefined; check: ParamCheck }) =>
@@ -300,7 +310,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
           </template>
           <div v-for="(p, i) in params" :key="p.name" class="xp-param" :style="stacked ? PARAM_BLOCK : ROW">
             <span
-              :title="`${p.def.expr} = ${p.def.value}`"
+              :title="`${shownExpr(p.def.expr)} = ${spellNumber(p.def.value)}`"
               :style="{
                 opacity: p.def.hidden ? 0.5 : 1,
                 overflowWrap: stacked ? 'anywhere' : undefined,
@@ -459,7 +469,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               commit="change"
               :style="{ ...FILL, ...lineFrom(2) }"
               :validate="(raw) => exprProblem(`check.${c.check.id}`, raw)"
-              :model-value="c.check.expr"
+              :model-value="shownExpr(c.check.expr)"
               @update:model-value="editCheck(c.check.id, { expr: $event.trim() })"
             />
             <TextField

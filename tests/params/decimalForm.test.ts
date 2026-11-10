@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { commasToPoints } from "../../src/params/decimalForm";
+import { commasToPoints, pointsToCommas } from "../../src/params/decimalForm";
+import { evalExpr } from "../../src/params/eval";
+import RAW from "../vectors/params.json";
 
 describe("commasToPoints swaps a decimal comma and keeps the length", () => {
   it.each([
@@ -31,5 +33,50 @@ describe("commasToPoints swaps a decimal comma and keeps the length", () => {
   it("turns a doubtful number into one the grammar refuses", () => {
     expect(commasToPoints("1,5,5")).toBe("1.5.5");
     expect(commasToPoints("1.234,5")).toBe("1.234.5");
+  });
+});
+
+describe("pointsToCommas shows the stored point form with a decimal comma", () => {
+  it.each([
+    ["width*1.5", "width*1,5"],
+    ["max(1.5;2.25)", "max(1,5;2,25)"],
+    ["2.5mm", "2,5mm"],
+    ["1e-7", "1e-7"],
+    ["1.5e+21", "1,5e+21"],
+    ["2.75E3 + .5", "2,75E3 + ,5"],
+    ["w2*3", "w2*3"],
+    ["a - 12.375 / b_1 - 0.25", "a - 12,375 / b_1 - 0,25"],
+    ["2 * (3.5", "2 * (3,5"],
+    ["5. + 5.e3 + 5.25", "5. + 5.e3 + 5,25"],
+    ["", ""],
+  ])("%j", (stored, shown) => {
+    expect(pointsToCommas(stored)).toBe(shown);
+    expect(pointsToCommas(stored)).toHaveLength(stored.length);
+  });
+
+  it.each(["1,5", "a.b", "1.5.5", "3.5 $ 2", "a = 1.5", "x,5.5"])("returns %j as it is", (text) => {
+    expect(pointsToCommas(text)).toBe(text);
+  });
+
+  it("round trips the whole eval and error corpus of the shared vectors", () => {
+    const V = RAW as unknown as {
+      eval: { expr: string; values?: Record<string, number>; expect: unknown; digits?: number }[];
+      errors: { expr: string; values?: Record<string, number>; error: string }[];
+    };
+    let changed = 0;
+    for (const c of V.eval) {
+      const shown = pointsToCommas(c.expr);
+      if (shown !== c.expr) changed++;
+      expect(commasToPoints(shown), c.expr).toBe(c.expr);
+      expect(Object.is(evalExpr(commasToPoints(shown), c.values ?? {}), evalExpr(c.expr, c.values ?? {})), c.expr).toBe(
+        true,
+      );
+    }
+    for (const c of V.errors) {
+      const shown = pointsToCommas(c.expr);
+      expect(commasToPoints(shown), c.expr).toBe(c.expr);
+      expect(() => evalExpr(commasToPoints(shown), c.values ?? {}), c.expr).toThrow(c.error);
+    }
+    expect(changed).toBeGreaterThan(10);
   });
 });

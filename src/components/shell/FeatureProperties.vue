@@ -13,7 +13,7 @@ import ToggleRow from "./ToggleRow.vue";
 import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { plainNumber } from "../../ui/units";
-import { storedExpr } from "../../ui/measure";
+import { shownExpr, storedExpr } from "../../ui/measure";
 import { onPreviewError } from "../../ui/previewError";
 import {
   canonicalTyping,
@@ -355,11 +355,11 @@ const featureRows = useDocValue(() => {
         unit: bound ? (dimOf(kind) === "angle" ? "deg" : dimOf(kind) ? "mm" : null) : (u?.id ?? null),
         units: !bound && u ? unitChoices(u) : undefined,
         value: plain ? (cur as number) : null,
-        text: bound ? bound.expr : plain || cur === undefined ? null : String(cur),
+        text: bound ? shownExpr(bound.expr) : plain || cur === undefined ? null : String(cur),
         target,
         kind,
         rowClass: fx ? "fx-row" : undefined,
-        rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${spellRounded(bound.value)}` : undefined,
+        rowTitle: fx && bound ? `${bound.name} = ${shownExpr(bound.expr)} = ${spellRounded(bound.value)}` : undefined,
       };
     });
 });

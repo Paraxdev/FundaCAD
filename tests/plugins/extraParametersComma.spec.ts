@@ -41,8 +41,15 @@ const backend = {
 
 const doc = (): CadDocument => ({
   parameters: {},
-  paramDefs: { wall: { expr: "2", value: 2, unit: "mm" }, gap: { expr: "0.5", value: 0.5, unit: "mm" } },
-  paramExtras: { checks: [{ id: "k1", expr: "gap >= 0.3", message: "thin", level: "warning" }] },
+  paramDefs: {
+    wall: { expr: "2", value: 2, unit: "mm" },
+    gap: { expr: "0.5", value: 0.5, unit: "mm" },
+    rib: { expr: "wall*1.5 + 0.25", value: 3.25, unit: "mm" },
+  },
+  paramExtras: {
+    checks: [{ id: "k1", expr: "gap >= 0.3", message: "thin", level: "warning" }],
+    configurations: [{ id: "c1", name: "Heavy", values: { wall: "2.5", gap: "max(0.5;0.75)" } }],
+  },
   features: [],
 });
 
@@ -98,5 +105,31 @@ describe("checks typed with a decimal comma", () => {
     await edit(box("Check 1 rule"), "gap >= 0,35");
     expect(checks(store)).toEqual([["gap >= 0.3", "thin"]]);
     expect(document.querySelector("[role=alert]")?.textContent).toMatch(/wall > 1,5/);
+  });
+});
+
+describe("saved expressions in the setup panel", () => {
+  const shown = () => [
+    box("Check 1 rule").value,
+    document.querySelector<HTMLElement>('[aria-label="Name of configuration Heavy"]')!.title,
+    document.querySelector<HTMLElement>(".xp-param [title*='wall*1']")?.title,
+  ];
+
+  it("show with a decimal comma in German and a point again in English", async () => {
+    await render();
+    expect(shown()).toEqual(["gap >= 0.3", "wall = 2.5\ngap = max(0.5;0.75)", "wall*1.5 + 0.25 = 3.25"]);
+    await setLanguage("de");
+    await nextTick();
+    expect(shown()).toEqual(["gap >= 0,3", "wall = 2,5\ngap = max(0,5;0,75)", "wall*1,5 + 0,25 = 3,25"]);
+    await setLanguage("system");
+    await nextTick();
+    expect(shown()).toEqual(["gap >= 0.3", "wall = 2.5\ngap = max(0.5;0.75)", "wall*1.5 + 0.25 = 3.25"]);
+  });
+
+  it("commits an untouched check on blur as the same text", async () => {
+    await setLanguage("de");
+    const store = await render();
+    await edit(box("Check 1 rule"), "gap >= 0,3");
+    expect(checks(store)).toEqual([["gap >= 0.3", "thin"]]);
   });
 });

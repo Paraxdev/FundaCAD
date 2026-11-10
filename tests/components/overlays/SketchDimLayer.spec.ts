@@ -337,6 +337,24 @@ describe("SketchDimLayer", () => {
     expect([...labels()].map((el) => el.classList.contains("is-lit"))).toEqual([false, false, false]);
   });
 
+  it("reopens and titles a formula with the language's decimal mark, and commits what is typed back", async () => {
+    await setLanguage("de");
+    try {
+      const commitExpr = vi.fn(() => null);
+      const input = await openEditor({ expr: "max(width*1.5;2.25)", commitExpr });
+      expect([input.value, labels()[0]!.title]).toEqual([
+        "max(width*1,5;2,25)",
+        "= max(width*1,5;2,25) · click to edit",
+      ]);
+      input.value = "max(width*1,5;2,5)";
+      input.dispatchEvent(new Event("input"));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      expect(commitExpr.mock.calls).toEqual([["max(width*1,5;2,5)"]]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   it("reopens the EXPRESSION on a parameter-bound dim, not its value", async () => {
     const input = await openEditor({ expr: "width/2", commitExpr: () => null });
     expect(input.value).toBe("width/2");

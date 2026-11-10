@@ -24,6 +24,8 @@ import {
   unitById,
   canonicalTyping,
   spellNumber,
+  shownExpr,
+  storedExpr,
   spellRounded,
 } from "../../src/ui/measure";
 import { isPlainNumber, parseField, plainNumber } from "../../src/ui/units";
@@ -535,8 +537,18 @@ describe("joining a list of numbers", () => {
 
   it("uses a semicolon with a comma mark and a comma with a point", () => {
     const three = ["12.5", "-3.25", "40"].map(Number);
-    expect(listJoin(three.map((n) => spellNumber(n, ",")), ",")).toBe("12,5; -3,25; 40");
-    expect(listJoin(three.map((n) => spellNumber(n, ".")), ".")).toBe("12.5, -3.25, 40");
+    expect(
+      listJoin(
+        three.map((n) => spellNumber(n, ",")),
+        ",",
+      ),
+    ).toBe("12,5; -3,25; 40");
+    expect(
+      listJoin(
+        three.map((n) => spellNumber(n, ".")),
+        ".",
+      ),
+    ).toBe("12.5, -3.25, 40");
     expect(listJoin(["7,5", "2"], ",")).toBe("7,5; 2");
   });
 
@@ -551,5 +563,22 @@ describe("joining a list of numbers", () => {
     expect(listJoin(["1", "2"])).toBe("1, 2");
     await setLanguage("de");
     expect(listJoin(["1", "2"])).toBe("1; 2");
+  });
+});
+
+describe("shownExpr and storedExpr, one per mark", () => {
+  it.each([
+    ["max(width*1.5;2.25) + 0.125mm", "max(width*1,5;2,25) + 0,125mm"],
+    ["a*3", "a*3"],
+  ])("%j", (stored, shown) => {
+    expect(shownExpr(stored, ",")).toBe(shown);
+    expect(storedExpr(shown, ",")).toBe(stored);
+    expect(shownExpr(stored, ".")).toBe(stored);
+    expect(storedExpr(stored, ".")).toBe(stored);
+  });
+
+  it("keeps a comma in text saved before this change, in either mark", () => {
+    expect(shownExpr("1,5 + x", ",")).toBe("1,5 + x");
+    expect(shownExpr("1,5 + x", ".")).toBe("1,5 + x");
   });
 });

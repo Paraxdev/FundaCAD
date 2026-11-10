@@ -6,6 +6,7 @@ import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
+import { setLanguage } from "../../../src/i18n";
 import SketchDimensionsList from "../../../src/components/shell/SketchDimensionsList.vue";
 import { SketchDimensions, type ExtraDim } from "../../../src/sketch/sketchDimensions";
 import { useSketchAnnotationStore } from "../../../src/stores/sketchAnnotations";
@@ -191,6 +192,33 @@ describe("Dimensions list commits", () => {
     await type(w, 0, "30");
     expect(onEditExpr.mock.calls).toEqual([[0, "width", "30"]]);
     expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("shows a bound expression with the language's decimal mark, and a point again in English", async () => {
+    bound = { "0:width": "max(W*1.5;2.25)" };
+    const { w } = await open([RECT]);
+    expect(valueOf(w, 0)).toBe("max(W*1.5;2.25)");
+    await setLanguage("de");
+    try {
+      await nextTick();
+      expect(valueOf(w, 0)).toBe("max(W*1,5;2,25)");
+    } finally {
+      await setLanguage("system");
+    }
+    await nextTick();
+    expect(valueOf(w, 0)).toBe("max(W*1.5;2.25)");
+  });
+
+  it("sends the text typed in German to the expression path as typed", async () => {
+    bound = { "0:width": "W" };
+    const { w } = await open([RECT]);
+    await setLanguage("de");
+    try {
+      await type(w, 0, "W*1,25");
+      expect(onEditExpr.mock.calls).toEqual([[0, "width", "W*1,25"]]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("keeps a refused expression on the field with its reason", async () => {

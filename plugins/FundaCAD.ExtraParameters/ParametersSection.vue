@@ -5,6 +5,7 @@ import {
   clampToControl,
   configurationDrift,
   readAs,
+  shownExpr,
   spellNumber,
   toast,
   useBrowserStore,
@@ -165,7 +166,7 @@ const rowLayout = (g: { id: string | null }) => ({
           paddingRight: '8px',
           color: r.check.level === 'error' ? 'var(--error)' : 'var(--warn)',
         }"
-        :title="r.error ? `${r.check.expr}: ${r.error}` : r.check.expr"
+        :title="r.error ? `${shownExpr(r.check.expr)}: ${r.error}` : shownExpr(r.check.expr)"
       >
         <Icon name="warning" :size="12" />
         <span style="white-space: normal"
@@ -213,9 +214,9 @@ const rowLayout = (g: { id: string | null }) => ({
             :style="rowLayout(g)"
             :title="rowTooltip(row)"
           >
-            <span v-if="!row.editable" style="opacity: 0.7" :title="`= ${row.def.expr}`"
+            <span v-if="!row.editable" style="opacity: 0.7" :title="`= ${shownExpr(row.def.expr)}`"
               ><span aria-hidden="true">fx </span>{{ spellNumber(shortValue(row.def.value)) }} {{ row.unit
-              }}<span class="sr-only">, calculated from {{ row.def.expr }}</span></span
+              }}<span class="sr-only">, calculated from {{ shownExpr(row.def.expr) }}</span></span
             >
 
             <Checkbox

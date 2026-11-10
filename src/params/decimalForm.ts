@@ -1,6 +1,8 @@
 // A decimal comma typed in a language that writes one, turned into the point the grammar of parse.ts reads. The swap
 // keeps the length, so error positions stay right.
 
+import { ExprError, tokenize } from "./parse";
+
 const DIGIT = /[0-9]/;
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
@@ -35,4 +37,24 @@ export function commasToPoints(text: string): string {
     }
   }
   return out;
+}
+
+/** Stored point text with the point of each number token shown as a comma. A point with no digit after it (5. or 5.e3) stays,
+ *  because a comma there would not read back. Text that does not tokenize is returned as is. */
+export function pointsToCommas(stored: string): string {
+  let tokens;
+  try {
+    tokens = tokenize(stored);
+  } catch (e) {
+    if (e instanceof ExprError) return stored;
+    throw e;
+  }
+  let out = "";
+  let at = 0;
+  for (const t of tokens) {
+    if (t.kind !== "num") continue;
+    out += stored.slice(at, t.start) + stored.slice(t.start, t.end).replace(/\.(?=[0-9])/, ",");
+    at = t.end;
+  }
+  return out + stored.slice(at);
 }

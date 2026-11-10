@@ -4,7 +4,7 @@
 
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
-import { commasToPoints } from "../params/decimalForm";
+import { commasToPoints, pointsToCommas } from "../params/decimalForm";
 import { decimalMark, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
@@ -406,6 +406,11 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
  *  refused by the tokenizer as before. */
 export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
   return mark === "," ? commasToPoints(typed) : typed;
+}
+
+/** Stored expression text as the language shows it, the reverse of storedExpr. */
+export function shownExpr(stored: string, mark: DecimalMark = decimalMark()): string {
+  return mark === "," ? pointsToCommas(stored) : stored;
 }
 
 /** `toFixed` with the language's mark, trailing zeros kept. */

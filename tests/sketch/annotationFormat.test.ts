@@ -77,6 +77,16 @@ describe("dimTitle", () => {
     expect(dimTitle({ fx: true, expr: "width/2" })).toBe("= width/2 · click to edit");
   });
 
+  it("shows the formula with the decimal comma in German and a point again in English", async () => {
+    await setLanguage("de");
+    try {
+      expect(dimTitle({ fx: true, expr: "max(width*1.5;2.25)" })).toBe("= max(width*1,5;2,25) · click to edit");
+    } finally {
+      await setLanguage("system");
+    }
+    expect(dimTitle({ fx: true, expr: "max(width*1.5;2.25)" })).toBe("= max(width*1.5;2.25) · click to edit");
+  });
+
   it("advertises both gestures on an ordinary dim", () => {
     expect(dimTitle({})).toBe("Click to edit, drag to move");
   });
@@ -111,11 +121,11 @@ describe("fmtDim in a comma language", () => {
 
   it("shows a decimal comma in a length and an angle", async () => {
     await setLanguage("de");
-    expect([fmtDim(12.375), fmtDim(37.5, "angle"), fmtDim(37.5, "angle", true), fmtDim(0.35, "length", false, true)]).toEqual([
-      "12,375 mm",
-      "37,5°",
-      "(37,5°)",
-      "fx: 0,35 mm",
-    ]);
+    expect([
+      fmtDim(12.375),
+      fmtDim(37.5, "angle"),
+      fmtDim(37.5, "angle", true),
+      fmtDim(0.35, "length", false, true),
+    ]).toEqual(["12,375 mm", "37,5°", "(37,5°)", "fx: 0,35 mm"]);
   });
 });

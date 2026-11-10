@@ -851,6 +851,27 @@ describe("FeatureProperties expressions through NumberField", () => {
     expect(fake.values).toEqual([{ field: "distance", value: 10 }]);
   });
 
+  it("shows a bound expression and its title with the language's decimal mark, and back", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    storeOf(fake).boundExpr = () => ({ name: "d1", expr: "max(width*1.5;2.25)", value: 12.375 });
+    storeOf(fake).isParamBound = () => true;
+    const w = render(fake, "e1");
+    const shown = () => {
+      const row = field(w, "Distance");
+      return [(row.find("input").element as HTMLInputElement).value, row.attributes("title")];
+    };
+    expect(shown()).toEqual(["max(width*1.5;2.25)", "d1 = max(width*1.5;2.25) = 12.375"]);
+    try {
+      await setLanguage("de");
+      await w.vm.$nextTick();
+      expect(shown()).toEqual(["max(width*1,5;2,25)", "d1 = max(width*1,5;2,25) = 12,375"]);
+    } finally {
+      await setLanguage("system");
+    }
+    await w.vm.$nextTick();
+    expect(shown()).toEqual(["max(width*1.5;2.25)", "d1 = max(width*1.5;2.25) = 12.375"]);
+  });
+
   it("reads a fraction in the row's unit, as one value and not arithmetic", async () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
     const w = mount(FeatureProperties, {

@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import ParametersSection from "../../plugins/FundaCAD.ExtraParameters/ParametersSection.vue";
@@ -175,6 +175,27 @@ describe("the Parameters section in German", () => {
     await setLanguage("de");
     const de = await render(slanted);
     expect(de.w.find('[data-param="pitch"]').text()).toContain("fx 1,25");
+    de.w.unmount();
+  });
+
+  it("shows the expression behind a calculated value with a comma, to sighted and screen reader users", async () => {
+    const slanted = (d: CadDocument) => {
+      d.paramDefs!["pitch"] = { expr: "max(gap * 2.5;0.75)", value: 1.25, unit: "mm" };
+    };
+    await setLanguage("system");
+    const calc = (w: VueWrapper) => w.find('[data-param="pitch"] span[title^="="]');
+    const en = await render(slanted);
+    expect([calc(en.w).attributes("title"), calc(en.w).find(".sr-only").text()]).toEqual([
+      "= max(gap * 2.5;0.75)",
+      ", calculated from max(gap * 2.5;0.75)",
+    ]);
+    en.w.unmount();
+    await setLanguage("de");
+    const de = await render(slanted);
+    expect([calc(de.w).attributes("title"), calc(de.w).find(".sr-only").text()]).toEqual([
+      "= max(gap * 2,5;0,75)",
+      ", calculated from max(gap * 2,5;0,75)",
+    ]);
     de.w.unmount();
   });
 });

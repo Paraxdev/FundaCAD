@@ -9,7 +9,7 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
-import { spellNumber } from "../../ui/measure";
+import { shownExpr, spellNumber } from "../../ui/measure";
 import { pageZoom } from "../../ui/interfaceSize";
 import { labelLeader, layoutUnderZoom, type Held, type LabelAt } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
@@ -284,7 +284,7 @@ function beginEdit(i: number, l: DimItem) {
   editError.value = null;
   // a param-driven dim reopens its EXPRESSION (Fusion behaviour); a plain dim
   // opens its value in display units
-  editText.value = l.fx ? l.expr! : spellNumber(displayValue(l.valueMm, l.kind));
+  editText.value = l.fx ? shownExpr(l.expr!) : spellNumber(displayValue(l.valueMm, l.kind));
   void nextTick(() => {
     const input = els[i]?.querySelector("input");
     input?.focus();

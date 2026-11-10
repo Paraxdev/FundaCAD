@@ -7,7 +7,7 @@ import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
 import { getUnit, toDisplay } from "../../ui/units";
-import { spellRounded, storedExpr } from "../../ui/measure";
+import { shownExpr, spellRounded, storedExpr } from "../../ui/measure";
 import Panel from "../ui/Panel.vue";
 import TextField from "../ui/TextField.vue";
 import Select from "../ui/Select.vue";
@@ -128,7 +128,7 @@ function add() {
         <TextField
           commit="change"
           :label="`Expression of ${r.name}`"
-          :model-value="r.def.expr"
+          :model-value="shownExpr(r.def.expr)"
           :validate="commitExpr((expr) => store.setParamExpr(r.name, expr))"
         />
         <span class="params-value">{{ r.value }}</span>
@@ -177,7 +177,7 @@ function add() {
           <TextField
             commit="change"
             :label="`Expression of ${r.name}`"
-            :model-value="r.def.expr"
+            :model-value="shownExpr(r.def.expr)"
             :validate="commitExpr((expr) => store.setParamExpr(r.name, expr))"
           />
           <span class="params-value">{{ r.value }}</span>

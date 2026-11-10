@@ -163,6 +163,49 @@ describe("ParamsDialog", () => {
     expect(values()).toEqual(["40 mm", "12.375 mm", "22.5°", "7", "0.35"]);
   });
 
+  describe("a saved expression", () => {
+    const exprs = () =>
+      inputs()
+        .filter((el) => el.getAttribute("aria-label")?.startsWith("Expression of"))
+        .map((el) => el.value);
+
+    it("shows with a decimal comma in German, commits nothing on a blur, and goes back to a point in English", async () => {
+      const fake = makeEngine();
+      Object.assign(fake.doc.paramDefs!, {
+        gap: { expr: "max(w*1.5;2.25)", value: 60, unit: "mm" },
+        tilt: { expr: "22.5 + 0.75", value: 23.25, unit: "deg" },
+        ribs: { expr: "7", value: 7, unit: "" },
+      });
+      await open(fake);
+      expect(exprs()).toEqual(["40", "max(w*1.5;2.25)", "22.5 + 0.75", "7"]);
+      await setLanguage("de");
+      await flushPromises();
+      expect(exprs()).toEqual(["40", "max(w*1,5;2,25)", "22,5 + 0,75", "7"]);
+
+      const gap = inputs()[4]!;
+      gap.focus();
+      gap.blur();
+      await flushPromises();
+      expect(fake.calls).toEqual([]);
+
+      await type(gap, "max(w*1,5;2,5)");
+      await enter(gap);
+      expect(fake.calls).toEqual([["expr", "gap", "max(w*1.5;2.5)"]]);
+
+      await setLanguage("system");
+      await flushPromises();
+      expect(exprs()).toEqual(["40", "max(w*1.5;2.25)", "22.5 + 0.75", "7"]);
+    });
+
+    it("shows text that does not read as it is saved", async () => {
+      const fake = makeEngine();
+      Object.assign(fake.doc.paramDefs!, { odd: { expr: "1,5 + a.b", value: 0, unit: "mm" } });
+      await setLanguage("de");
+      await open(fake);
+      expect(exprs()).toEqual(["40", "1,5 + a.b"]);
+    });
+  });
+
   describe("a typed decimal comma", () => {
     it("is stored with a point in German, in the add row and the Expression box", async () => {
       await setLanguage("de");
