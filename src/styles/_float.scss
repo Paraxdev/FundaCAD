@@ -1041,14 +1041,24 @@
 .float-group .btn.grid-btn:not(.is-on) {
   --btn-hover: var(--raised);
 }
+// As wide as the icon tiles, so a fine step's long reading shrinks to fit (useFitText) instead of widening the column.
 .float-group .btn.grid-btn {
+  --grid-label-scale: 1;
+  width: 40px;
   min-width: 40px;
   min-height: 0;
   height: 32px;
   padding: 0 var(--s-1);
   border-radius: calc(var(--float-radius) - 4px);
-  font: 600 var(--fs-micro)/1 var(--mono);
+  font: 600 calc(var(--fs-micro) * var(--grid-label-scale)) / 1 var(--mono);
   font-variant-numeric: tabular-nums;
+}
+// A number never breaks mid value, not even under comfortable text.
+.float-group .btn.grid-btn .btn-label {
+  overflow: visible;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  text-overflow: clip;
 }
 
 /* The Section chip and Normal to Sketch stack at the top middle, clear of the cards (useClearOfCards). */

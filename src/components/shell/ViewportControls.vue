@@ -35,6 +35,7 @@ import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
 import { useScrollCue } from "../../composables/useScrollCue";
+import { useFitText } from "../../composables/useFitText";
 import type { ProjectionMode } from "../../viewport/cameras";
 import { ZEBRA_WIDTH_MAX, ZEBRA_WIDTH_MIN, type ZebraDirection } from "../../viewport/zebraStripes";
 import IconButton from "../ui/IconButton.vue";
@@ -134,6 +135,9 @@ function pickUnit(u: Unit) {
 
 const gridLabel = computed(() => fmtGridStep(ui.gridStepMm));
 const gridLabelCompact = computed(() => fmtLengthCompact(ui.gridStepMm));
+const gridBtn = useTemplateRef<ComponentPublicInstance>("gridBtn");
+const gridEl = () => gridBtn.value?.$el as HTMLElement | undefined;
+useFitText(gridEl, () => gridEl()?.querySelector<HTMLElement>(".btn-label"), "--grid-label-scale", gridLabelCompact);
 
 const VIEWS = [
   { view: "top", label: "Top" },
@@ -356,6 +360,7 @@ async function screenshot() {
         />
         <!-- A reading, not an icon, so a Button: its text is the name and the tip only the tooltip. -->
         <Button
+          ref="gridBtn"
           variant="ghost"
           size="sm"
           class="grid-btn"
