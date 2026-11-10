@@ -84,6 +84,7 @@ function rig(selected: number[] = []) {
     addFeature: (f: Feature) => added.push(f),
     verifyCommit: () => {},
     onBuild: (_fn: (s: RebuildState) => void) => () => {},
+    onSessionBuild: (_fn: (s: RebuildState) => void) => () => {},
     faceAxis: async () => ({ reason: "no axis" }),
   };
   return { vp: vp as unknown as Viewport, store: store as unknown as DocumentStore, added };
