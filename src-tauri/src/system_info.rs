@@ -26,8 +26,8 @@ pub fn system_info() -> SystemInfo {
     }
 }
 
-/// Where Orca would find the app. libatspi looks the same way: AT_SPI_BUS_ADDRESS first, which is how a Flatpak
-/// hands in its proxied bus, then org.a11y.Bus on the session bus.
+/// Where a Linux screen reader would find the app. libatspi looks the same way: AT_SPI_BUS_ADDRESS first,
+/// which is how a Flatpak hands in its proxied bus, then org.a11y.Bus on the session bus.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Bus {
@@ -101,7 +101,7 @@ pub fn accessibility(bus: Bus, env: &dyn Fn(&str) -> Option<String>) -> String {
 }
 
 pub const BRIDGE_OFF: &str =
-    "[a11y] NO_AT_BRIDGE=1 is set, so screen readers such as Orca cannot read FundaCAD. Start it without NO_AT_BRIDGE to use one.";
+    "[a11y] NO_AT_BRIDGE=1 is set, so a screen reader cannot read FundaCAD. Start it without NO_AT_BRIDGE to use one.";
 
 /// at-spi2-core's own test (atk-adaptor/bridge.c): the bridge stays off when atoi(NO_AT_BRIDGE) == 1.
 pub fn bridge_off(value: Option<&str>) -> bool {
