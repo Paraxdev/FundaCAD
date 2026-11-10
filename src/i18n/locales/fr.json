@@ -1,6 +1,6 @@
 {
   "dim.negative": "moins {amount}",
-  "dim.stepHint": "Haut et Bas le changent de {step}, de {fine} avec Maj, Page précédente et Page suivante de {big}",
+  "dim.stepHint": "Flèche haut et flèche bas le changent de {step}, de {fine} avec Maj, Page précédente et Page suivante de {big}",
   "guide.counter": "Étape {step, number} sur {of, number}",
   "guide.keysLabel": "Au clavier :",
   "guide.next": "Suivant",

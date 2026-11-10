@@ -1,6 +1,6 @@
 {
   "dim.negative": "minus {amount}",
-  "dim.stepHint": "Pfeil nach oben und unten ändern um {step}, mit Umschalt um {fine}, Bild auf und Bild ab um {big}",
+  "dim.stepHint": "Pfeil nach oben und unten ändern den Wert um {step}, mit Umschalt um {fine}, Bild auf und Bild ab um {big}",
   "guide.counter": "Schritt {step, number} von {of, number}",
   "guide.keysLabel": "Mit Tasten:",
   "guide.next": "Weiter",
