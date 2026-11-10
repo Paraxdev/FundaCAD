@@ -727,7 +727,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
       @focusin="markerFocus = true"
       @focusout="markerFocus = false"
     />
-    <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
+    <div ref="scroller" class="timeline-scroll" data-card-scroll @dragover="onDragOverScroller">
       <div
         ref="track"
         class="timeline-track"

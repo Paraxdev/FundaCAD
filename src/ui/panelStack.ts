@@ -2,7 +2,7 @@ import { cubeSize, MARGIN as CUBE_MARGIN } from "../viewport/viewCube";
 import { onA11yPrefsChange } from "./a11yPrefs";
 import { underZoom } from "./anchor";
 import { pageZoom } from "./interfaceSize";
-import { LEFT_CARDS, RIGHT_CARDS, cardRects, promptInsets, type Box } from "./promptPlacement";
+import { LEFT_CARDS, RIGHT_CARDS, cardRects, promptInsets, seenRect, type Box } from "./promptPlacement";
 
 const GAP = 12;
 const MIN_HEIGHT = 120;
@@ -108,6 +108,7 @@ interface Open {
 }
 const open: Open[] = [];
 let observer: ResizeObserver | null = null;
+let arrivals: MutationObserver | null = null;
 let offPrefs: (() => void) | null = null;
 let frame = 0;
 let uses = 0;
@@ -151,6 +152,19 @@ export interface Cards {
 }
 
 const span = (c: Column) => c.free.right - c.free.left;
+
+/** The height a card above a shelf is cut to so the shelf offers `need` down to `bottom`, never under the card's own
+ *  `least`. Null when the shelf already offers it or the card has nothing to give. */
+export function yieldedHeight(
+  card: { top: number; bottom: number },
+  bottom: number,
+  need: number,
+  least: number,
+  gap: number,
+): number | null {
+  const cut = Math.max(least, bottom - need - gap - card.top);
+  return cut < card.bottom - card.top ? cut : null;
+}
 
 /** The part of `box` a column from `top` down can use without sliding under a card. */
 function clear(box: Box, cards: Cards, top: number): Box {
@@ -205,6 +219,9 @@ function assign(cols: Column[], mins: readonly number[]): Column[] {
   }
 }
 
+/** A card whose list scrolls inside it ([data-card-scroll]) can be cut to give the shelf under it room. */
+const yielding = (card: HTMLElement) => card.querySelector<HTMLElement>("[data-card-scroll]");
+
 function place() {
   frame = 0;
   // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
@@ -213,13 +230,49 @@ function place() {
     p.el.style.maxWidth = "";
     uncap(p);
   }
+  const cards = [...document.querySelectorAll<HTMLElement>(RIGHT_CARDS)];
+  for (const c of cards) if (yielding(c)) c.style.maxHeight = "";
   const z = pageZoom();
   const area = (document.getElementById("float-layer") ?? document.body).getBoundingClientRect();
-  const cols = columnsUnderZoom(area, { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) }, z);
   // The root's clientWidth stays in window pixels under its own zoom, like the rects.
   const viewWidth = document.documentElement.clientWidth / z;
   const mins = open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0);
-  const at = assign(cols, mins);
+  const floors = open.map((p) => scrollerFloors(p.el));
+  const lay = () => {
+    const cols = columnsUnderZoom(area, { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) }, z);
+    const base = cols[0]!.bottom;
+    return { cols, base, at: assign(cols, mins) };
+  };
+  // A panel with a scroller is short when its column is too narrow for it or a shelf offers less than its least.
+  const shorts = (l: ReturnType<typeof lay>) =>
+    open.filter((_, i) => {
+      const least = floors[i]!.least;
+      const c = l.at[i]!;
+      return least !== undefined && (span(c) < mins[i]! || (c !== l.cols[0] && c.bottom - c.top < least));
+    }).length;
+  let now = lay();
+  const before = shorts(now);
+  const need = Math.max(MIN_HEIGHT, ...floors.map((f) => f.least ?? 0));
+  const cuts = before
+    ? cards.flatMap((card) => {
+        const list = yielding(card);
+        if (!list) return [];
+        const least = card.offsetHeight - list.offsetHeight + Math.min(list.scrollHeight, SCROLLER_LEAST);
+        const box = underZoom(seenRect(card), z);
+        const h = yieldedHeight(box, now.base, need, least, CUBE_MARGIN);
+        return h === null ? [] : [[card, h] as const];
+      })
+    : [];
+  if (cuts.length) {
+    for (const [card, h] of cuts) card.style.maxHeight = `${Math.floor(h)}px`;
+    const cut = lay();
+    if (shorts(cut) < before) now = cut;
+    else {
+      for (const [card] of cuts) card.style.maxHeight = "";
+      now = lay();
+    }
+  }
+  const { cols, at } = now;
   for (const c of cols.filter((c) => at.includes(c))) {
     const here = open.filter((_, i) => at[i] === c);
     const least = mins.filter((_, i) => at[i] === c);
@@ -268,6 +321,13 @@ export const panelStack = {
       observer = new ResizeObserver(schedule);
       window.addEventListener("resize", schedule);
       offPrefs = onA11yPrefsChange(schedule);
+      // A card that opens after the panel (History) moves the shelves without resizing anything observed.
+      arrivals = new MutationObserver(() => {
+        for (const c of document.querySelectorAll(RIGHT_CARDS)) observer?.observe(c);
+        schedule();
+      });
+      const right = document.querySelector(".float-right");
+      if (right) arrivals.observe(right, { childList: true });
     }
     const entry = {
       id,
@@ -301,6 +361,8 @@ export const panelStack = {
     if (open.length) return place();
     observer?.disconnect();
     observer = null;
+    arrivals?.disconnect();
+    arrivals = null;
     window.removeEventListener("resize", schedule);
     offPrefs?.();
     offPrefs = null;

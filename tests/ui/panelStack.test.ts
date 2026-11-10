@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutStack, stackTop } from "../../src/ui/panelStack";
+import { layoutStack, stackTop, yieldedHeight } from "../../src/ui/panelStack";
 import { SIZE, MARGIN } from "../../src/viewport/viewCube";
 
 describe("the floating panel column", () => {
@@ -158,5 +158,32 @@ describe("the floating panel column", () => {
       ]);
       expect(out[1]!.top + out[1]!.maxHeight!).toBeLessThanOrEqual(786);
     });
+  });
+});
+
+describe("a card above a shelf gives it room", () => {
+  // History from y 37 to 700 in a column ending at 788, 12 apart from the shelf under it
+  const card = { top: 37, bottom: 700 };
+  const give = (c = card, bottom = 788, need = 204, least = 130) => yieldedHeight(c, bottom, need, least, 12);
+
+  it("is cut so the shelf under it offers what the panel needs, to the pixel", () => {
+    expect(give()).toBe(535);
+    expect(788 - (37 + 535 + 12)).toBe(204);
+  });
+
+  it("changes nothing while the shelf already offers the need, one pixel either side", () => {
+    expect(give({ top: 37, bottom: 571 })).toBeNull();
+    expect(give({ top: 37, bottom: 572 })).toBeNull();
+    expect(give({ top: 37, bottom: 573 })).toBe(535);
+  });
+
+  it("stops at its own least when the window is too short for both", () => {
+    expect(give(card, 400, 204, 230)).toBe(230);
+    expect(give(card, 400, 204, 100)).toBe(147);
+  });
+
+  it("gives nothing when it is already at or under its least", () => {
+    expect(give({ top: 37, bottom: 167 }, 788, 704, 130)).toBeNull();
+    expect(give({ top: 37, bottom: 150 }, 788, 704, 130)).toBeNull();
   });
 });

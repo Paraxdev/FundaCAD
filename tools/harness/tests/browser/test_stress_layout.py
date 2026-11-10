@@ -1,6 +1,7 @@
 """The Stress material boxes start at one x and stay on their label's line wherever they sat on it before the labels shared a
 width, in the shipped face, a wider fallback face and Comfortable text, and the Stress panel with History open stays inside a
-small window with its Run button in view, in English, German, French and Spanish."""
+small window with its Run button in view, in English, German, French and Spanish, and under a History of ten, fourteen and twenty-four
+features, opened before or after it."""
 
 import pytest
 from test_a11y import show_stress
@@ -137,3 +138,69 @@ def test_stress_panel_and_run_stay_inside_the_window(seen, size, lang):
     assert got["panel"]["t"] >= -1
     assert got["panel"]["b"] <= size[1] + 1, got
     assert got["run"]["b"] <= got["panel"]["b"] + 1 and got["run"]["t"] >= got["panel"]["t"], got
+
+
+FIXTURES = {10: TEN, 14: "tools/harness/fixtures/history_fourteen.json", 24: "tools/harness/fixtures/history_twentyfour.json"}
+GROWN_SIZES = [(900, 800), (1366, 768)]
+
+GROWN_READ = """() => {
+  const box = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+  const panel = document.querySelector('.stress-panel');
+  const history = document.querySelector('#timeline');
+  const run = panel.querySelector('.stress-run');
+  return {
+    panel: box(panel),
+    run: run ? box(run) : null,
+    history: box(history),
+    history_cap: history.style.maxHeight,
+    list: box(history.querySelector('.timeline-scroll')),
+  };
+}"""
+
+
+@pytest.fixture(scope="module")
+def grown():
+    found = {}
+    for size in GROWN_SIZES:
+        for count, path in FIXTURES.items():
+            s = Session(viewport=size)
+            try:
+                s.open_file(path)
+                s.panel("History", open=True)
+                show_stress(s)
+                settled(s)
+                found[(size, count, "history first")] = s.page.evaluate(GROWN_READ)
+                s.panel("History", open=False)
+                settled(s)
+                s.panel("History", open=True)
+                settled(s)
+                found[(size, count, "stress first")] = s.page.evaluate(GROWN_READ)
+            finally:
+                s.close()
+    return found
+
+
+@pytest.mark.parametrize("order", ["history first", "stress first"])
+@pytest.mark.parametrize("count", FIXTURES)
+@pytest.mark.parametrize("size", GROWN_SIZES)
+def test_stress_panel_and_run_stay_inside_the_window_under_a_history_of_any_length(grown, size, count, order):
+    got = grown[(size, count, order)]
+    assert got["panel"]["t"] >= -1 and got["panel"]["b"] <= size[1] + 1, got
+    assert got["run"]["t"] >= got["panel"]["t"] and got["run"]["b"] <= got["panel"]["b"] + 1, got
+    assert got["panel"]["r"] - got["panel"]["l"] >= 250, got
+    beside = got["panel"]["r"] <= got["history"]["l"] + 1 or got["panel"]["l"] >= got["history"]["r"] - 1
+    assert beside or got["history"]["b"] <= got["panel"]["t"] + 1, got
+
+
+@pytest.mark.parametrize("size", GROWN_SIZES)
+def test_history_is_cut_only_where_the_panel_under_it_has_no_room_otherwise(grown, size):
+    cut = {count: grown[(size, count, "history first")]["history_cap"] != "" for count in FIXTURES}
+    if size == (900, 800):
+        assert cut == {10: False, 14: True, 24: True}, grown
+    else:
+        assert not any(cut.values()), grown
+
+
+def test_history_keeps_a_list_to_scroll_when_it_gives_room(grown):
+    got = grown[((900, 800), 24, "history first")]
+    assert got["list"]["b"] - got["list"]["t"] >= 40, got
