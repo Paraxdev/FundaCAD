@@ -9,7 +9,11 @@ import { useToastStore } from "../../src/stores/toasts";
 import type { Engine } from "../../src/app/engine";
 
 function engine(sketchActive: boolean, markPlace = vi.fn(() => "top")) {
-  return { sketch: { active: sketchActive }, tools: { move: { pending: false } }, store: { markPlace } } as unknown as Engine;
+  return {
+    sketch: { active: sketchActive },
+    tools: { move: { pending: false } },
+    store: { markPlace },
+  } as unknown as Engine;
 }
 
 describe("undoIfLatest while Stress is open", () => {
