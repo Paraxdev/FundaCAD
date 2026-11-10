@@ -79,6 +79,30 @@ fn a_code_with_a_separator_a_dot_or_the_wrong_case_is_refused() {
 }
 
 #[test]
+fn a_windows_device_name_is_refused_and_a_code_beside_it_is_not() {
+    for code in ["con", "prn", "aux", "nul"] {
+        assert!(!is_language_code(code), "{code}");
+    }
+    for code in ["cop", "nus", "con-EC", "aux-AU"] {
+        assert!(is_language_code(code), "{code}");
+    }
+}
+
+#[test]
+fn a_device_name_is_neither_listed_nor_read() {
+    let root = scratch("device");
+    let dir = languages(&root);
+    put(&dir, "nus.json", "{}");
+    // On Windows writing nul.json writes to the device, so only the unix legs can make these files.
+    if cfg!(unix) {
+        put(&dir, "nul.json", "{}");
+        put(&dir, "con.json", "{}");
+    }
+    assert_eq!(list(&dir), ["nus"]);
+    assert!(read(&dir, "nul").unwrap_err().starts_with("not a language code"));
+}
+
+#[test]
 fn a_missing_or_empty_folder_lists_nothing() {
     let root = scratch("list-empty");
     assert_eq!(list(&root.0.join("languages")), NONE);

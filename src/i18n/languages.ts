@@ -3,9 +3,11 @@ export const PSEUDO = "pseudo";
 // Lowercase language, optional Titlecase script, optional region; no separator or dot, so a code can only name a file
 // in the languages folder. The Rust read checks the same pattern.
 export const LANGUAGE_CODE = /^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$/;
+// Windows opens a device, not a file, for con.json and the like, whatever the folder.
+const DEVICE_NAMES = new Set(["con", "prn", "aux", "nul"]);
 
 export function isLanguageCode(s: string): boolean {
-  return LANGUAGE_CODE.test(s);
+  return LANGUAGE_CODE.test(s) && !DEVICE_NAMES.has(s);
 }
 
 export interface Language {

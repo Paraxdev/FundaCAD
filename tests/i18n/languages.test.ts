@@ -13,6 +13,14 @@ describe("a language code", () => {
     },
   );
 
+  it.each(["con", "prn", "aux", "nul"])("%j is refused, Windows reads it as a device and not a file", (code) => {
+    expect(isLanguageCode(code)).toBe(false);
+  });
+
+  it.each(["cop", "nus", "con-EC", "aux-AU"])("%j names a language file, no device has that name", (code) => {
+    expect(isLanguageCode(code)).toBe(true);
+  });
+
   it("never names the pseudo language", () => {
     expect(isLanguageCode(PSEUDO)).toBe(false);
   });

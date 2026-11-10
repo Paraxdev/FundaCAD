@@ -11,8 +11,11 @@ pub const MAX_BYTES: u64 = 256 * 1024;
 const MAX_FILES: usize = 100;
 
 /// The page's `LANGUAGE_CODE`, `^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$`. It admits no separator or dot,
-/// so a code only ever names a file in the folder.
+/// so a code only ever names a file in the folder. Windows opens a device for con, prn, aux and nul, so they are out.
 pub fn is_language_code(code: &str) -> bool {
+    if matches!(code, "con" | "prn" | "aux" | "nul") {
+        return false;
+    }
     let mut parts = code.split('-').map(str::as_bytes);
     let language = parts.next().is_some_and(|l| matches!(l.len(), 2 | 3) && l.iter().all(u8::is_ascii_lowercase));
     let script = |s: &[u8]| s.len() == 4 && s[0].is_ascii_uppercase() && s[1..].iter().all(u8::is_ascii_lowercase);
