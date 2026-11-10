@@ -92,10 +92,14 @@ const edgesOf = (ids: readonly number[]) =>
   });
 
 let scene: THREE.Object3D[] = [];
+let listeners: ((s: RebuildState) => void)[] = [];
 const tools: PressPullTool[] = [];
 
 function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = edgesOf) {
   scene = [];
+  listeners = [];
+  const selectOnlyFaces = vi.fn();
+  const stands: { at: P; id: number }[] = [];
   const canvas = document.createElement("canvas");
   const setPeek = vi.fn();
   const vp = {
@@ -128,7 +132,8 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
       ];
       return [new THREE.Triangle(a, b, c), new THREE.Triangle(a, c, d)];
     },
-    faceIdNear: () => null,
+    faceIdNear: (p: P) => stands.find((n) => n.at.every((x, i) => Math.abs(x - p[i]!) < 1e-3))?.id ?? null,
+    selectOnlyFaces,
     faceIdToBodyId: () => "b2",
     clearPressPullGhost: () => {},
     setPressPullGhost: () => {},
@@ -143,7 +148,12 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
     boundExpr: () => null,
     isParamBound: () => false,
     onBuild: (_fn: (s: RebuildState) => void) => () => {},
-    onSessionBuild: (_fn: (s: RebuildState) => void) => () => {},
+    onSessionBuild: (fn: (s: RebuildState) => void) => {
+      listeners.push(fn);
+      return () => {
+        listeners = listeners.filter((l) => l !== fn);
+      };
+    },
     faceAxis: async () => ({ reason: "no axis" }),
   };
   const tool = new PressPullTool(vp as unknown as Viewport, store as unknown as DocumentStore);
@@ -170,7 +180,14 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
     t.value = value;
     t.refreshPreview(true);
   };
-  return { tool, t, added, drawn, outline, colour, push, setPeek };
+  // A preview building and answering, the way the store reports it
+  const land = (distance: number) => {
+    const idle = { building: false, result: {}, errorFeatureId: null, errorMessage: null, progress: null };
+    for (const fn of [...listeners]) fn({ ...idle, building: true, result: null } as never);
+    const built = { id: "p1", type: "press-pull", distance } as Feature;
+    for (const fn of [...listeners]) fn({ ...idle, previewBuilt: [built] } as never);
+  };
+  return { tool, t, added, drawn, outline, colour, push, setPeek, selectOnlyFaces, stands, land };
 }
 
 const same = (a: number, b: number) => [16, 8, 0].every((s) => Math.abs(((a >> s) & 0xff) - ((b >> s) & 0xff)) <= 2);
@@ -290,5 +307,70 @@ describe("Press/Pull outline", () => {
     r.push(-5);
     r.tool.cancel();
     expect(r.setPeek).not.toHaveBeenCalled();
+  });
+});
+
+describe("Press/Pull keeps the pushed faces tinted", () => {
+  // The mark is the centroid of the first of a face's two equal triangles
+  const where = (id: number, along: number): P => corner(id, 2 / 3, 1 / 3, along);
+
+  it("selects each pushed face where it now stands once a preview lands", () => {
+    const r = rig([12, 13]);
+    r.stands.push({ at: where(12, 2.5), id: 40 }, { at: where(13, 2.5), id: 41 });
+    r.push(2.5);
+    r.land(2.5);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[40, 41]]]);
+  });
+
+  it("follows the distance the engine answered, not the one typed since", () => {
+    const r = rig([10]);
+    r.stands.push({ at: where(10, 3), id: 50 }, { at: where(10, 7), id: 51 });
+    r.push(7);
+    r.land(3);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[50]]]);
+  });
+
+  it("finds a face that went in at the negative distance", () => {
+    const r = rig([10]);
+    r.stands.push({ at: where(10, -4), id: 60 });
+    r.push(-4);
+    r.land(-4);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[60]]]);
+  });
+
+  it("keeps the selection when no pushed face is found, and takes the ones that are", () => {
+    const lost = rig([10]);
+    lost.push(2);
+    lost.land(2);
+    expect(lost.selectOnlyFaces).not.toHaveBeenCalled();
+    const some = rig([12, 13]);
+    some.stands.push({ at: where(13, 1.5), id: 71 });
+    some.push(1.5);
+    some.land(1.5);
+    expect(some.selectOnlyFaces.mock.calls).toEqual([[[71]]]);
+  });
+
+  it("does nothing for the state replayed on subscribing, a refused push or a round face", () => {
+    const r = rig([10]);
+    r.stands.push({ at: where(10, 2), id: 80 });
+    r.push(2);
+    const idle = { building: false, result: {}, previewBuilt: [{ id: "p1", distance: 2 }] };
+    for (const fn of [...listeners]) fn(idle as never);
+    for (const fn of [...listeners]) fn({ building: true, result: null } as never);
+    for (const fn of [...listeners]) fn({ ...idle, heldRefusal: { featureId: "p1", message: "no" } } as never);
+    expect(r.selectOnlyFaces).not.toHaveBeenCalled();
+    const bore = rig([ROUND]);
+    bore.push(1);
+    bore.land(1);
+    expect(bore.selectOnlyFaces).not.toHaveBeenCalled();
+  });
+
+  it("stops listening when the tool closes", () => {
+    const r = rig([10]);
+    r.stands.push({ at: where(10, 2), id: 90 });
+    r.push(2);
+    expect(listeners).toHaveLength(1);
+    r.tool.cancel();
+    expect(listeners).toHaveLength(0);
   });
 });

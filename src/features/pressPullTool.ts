@@ -195,6 +195,7 @@ export class PressPullTool {
   private unsubBuild: (() => void) | null = null;
   private outline: ToolOutline | null = null;
   private rigid: PushFaces | null = null;
+  private unsubTint: (() => void) | null = null;
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
@@ -524,6 +525,7 @@ export class PressPullTool {
       if (st.building || !st.result || this.phase !== "drag") return;
       this.noteBuildOutcome(st);
     });
+    this.unsubTint ??= this.tintAfterPreview();
     this.promptNow();
     this.gesture.frame();
   }
@@ -961,6 +963,31 @@ export class PressPullTool {
     this.outline.show(polylines, { cut: this.mode === "cut" || (this.mode === "auto" && this.value < 0) });
   }
 
+  /** The viewport carries a selection over a rebuild by each face's old centroid, so a moved face loses its tint. After
+   *  every preview that lands, the pushed faces are found again where the answered distance put them. */
+  private tintAfterPreview(): () => void {
+    let started = false;
+    // The store replays its current state on subscribing, only a build seen starting is ours to read
+    return this.store.onSessionBuild((s) => {
+      if (s.building) {
+        started = true;
+        return;
+      }
+      if (!started || !s.result || s.heldRefusal) return;
+      const sent = s.previewBuilt?.find((f) => f.id === this.previewId);
+      const marks = this.rigid?.marks;
+      if (!sent || sent.type !== "press-pull" || !marks || this.phase !== "drag") return;
+      started = false;
+      const by = this.axis.clone().multiplyScalar(sent.distance as number);
+      const onBody = this.bodyId ?? undefined;
+      const found = marks.flatMap((m) => {
+        const id = this.viewport.faceIdNear([m.x + by.x, m.y + by.y, m.z + by.z], 0, onBody);
+        return id == null ? [] : [id];
+      });
+      if (found.length) this.viewport.selectOnlyFaces(found);
+    });
+  }
+
   private buildGizmo() {
     this.handle = nameHandle(createDragHandle(), "push");
     this.gizmo = this.handle.group;
@@ -1378,6 +1405,8 @@ export class PressPullTool {
     this.clearPreviewTimer();
     this.unsubBuild?.();
     this.unsubBuild = null;
+    this.unsubTint?.();
+    this.unsubTint = null;
     this.outcomes.clear();
     this.toggleKind = null;
     this.viewport.clearPressPullGhost();
