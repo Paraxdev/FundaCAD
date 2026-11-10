@@ -4,18 +4,19 @@ import { buildMenubar } from "../../src/app/menubarDef";
 import { usePanelsStore } from "../../src/stores/panels";
 import type { Engine } from "../../src/app/engine";
 import { box, freshStore } from "../document/storeKit";
+import { menuName } from "../../src/ui/menu";
 
 describe("Undo and Redo in the Edit menu", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
   const offFor = (e: unknown) => {
-    const edit = buildMenubar(e as Engine).find((m) => m.label === "Edit")!;
+    const edit = buildMenubar(e as Engine).find((m) => menuName(m) === "Edit")!;
     const item = (name: string) => edit.items.find((i) => i.refName === name)!;
     return () => [item("Undo").disabled?.(), item("Redo").disabled?.()];
   };
 
   const labelsFor = (e: unknown) => {
-    const edit = buildMenubar(e as Engine).find((m) => m.label === "Edit")!;
+    const edit = buildMenubar(e as Engine).find((m) => menuName(m) === "Edit")!;
     const text = (name: string) => {
       const l = edit.items.find((i) => i.refName === name)!.label;
       return typeof l === "function" ? l() : l;

@@ -394,14 +394,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
       },
       { separator: true, label: "" },
       {
-        label: stepMenuText("Undo", stepLabelFor(deps, "undo")),
+        label: stepMenuText("undo", stepLabelFor(deps, "undo")),
         refName: "Undo",
         shortcut: "Ctrl+Z",
         disabled: !canStep(deps, "undo"),
         onClick: () => handleAction("undo"),
       },
       {
-        label: stepMenuText("Redo", stepLabelFor(deps, "redo")),
+        label: stepMenuText("redo", stepLabelFor(deps, "redo")),
         refName: "Redo",
         shortcut: "Ctrl+Y",
         disabled: !canStep(deps, "redo"),

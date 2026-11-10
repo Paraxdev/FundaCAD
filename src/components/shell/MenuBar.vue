@@ -5,7 +5,8 @@ import Menu from "../ui/Menu.vue";
 import MenuItem from "../ui/MenuItem.vue";
 import MenuSeparator from "../ui/MenuSeparator.vue";
 import Toolbar from "../ui/Toolbar.vue";
-import { guardMenuKeys, type MenuDef } from "../../ui/menu";
+import { guardMenuKeys, menuName, menuText, type MenuDef } from "../../ui/menu";
+import { t } from "../../i18n";
 import { inertDepth } from "../../composables/useModalGate";
 import { pageZoom } from "../../ui/interfaceSize";
 
@@ -102,11 +103,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <nav id="menubar" class="menubar" ref="root" aria-label="Menu">
-    <Toolbar ref="bar" role="menubar" label="Menu" class="menubar-bar">
+  <nav id="menubar" class="menubar" ref="root" :aria-label="t('menu.bar')">
+    <Toolbar ref="bar" role="menubar" :label="t('menu.bar')" class="menubar-bar">
       <div
         v-for="(m, i) in menus"
-        :key="m.label"
+        :key="menuName(m)"
         :ref="(el) => (cells[i] = el as HTMLElement)"
         class="menu"
         role="none"
@@ -119,9 +120,10 @@ onUnmounted(() => {
           role="menuitem"
           popup="menu"
           :expanded="openIndex === i"
+          :data-ref-name="m.refName"
           @click.stop="toggle(i)"
           @keydown="onButtonKey($event, i)"
-          >{{ m.label }}</Button
+          >{{ menuText(m) }}</Button
         >
       </div>
     </Toolbar>
@@ -131,12 +133,13 @@ onUnmounted(() => {
       :key="openIndex"
       :anchor="cells[openIndex] ?? null"
       :gap="POPUP_GAP"
-      :label="current.label"
+      :label="menuText(current)"
+      :name="menuName(current)"
       @close="openIndex = null"
     >
       <div class="menubar-rows" role="none" :style="{ maxHeight: popupMaxHeight }">
         <!-- Rows a parent adds above a menu's own, as TitleBar.vue does for the folded title bar. -->
-        <slot name="head" :menu="current.label" />
+        <slot name="head" :menu="menuName(current)" />
         <template v-for="(it, j) in current.items" :key="j">
           <MenuSeparator v-if="it.separator" />
           <MenuItem

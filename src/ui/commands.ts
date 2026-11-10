@@ -3,7 +3,7 @@
 
 import { modelGroups, SKETCH, leavesOf, type Group } from "./ribbonDefs";
 import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
-import { t } from "../i18n";
+import { t, tEnglish, type MessageKey } from "../i18n";
 
 export interface Command {
   id: string; // the action id passed to the central dispatcher (handleAction)
@@ -13,7 +13,6 @@ export interface Command {
   key?: string; // display hint
 }
 
-// A getter, so the label follows a change of language.
 function viewCommand(id: string): Command {
   return {
     id,
@@ -25,53 +24,74 @@ function viewCommand(id: string): Command {
   };
 }
 
+const LABEL_KEYS = new Map<string, MessageKey>();
+
+// A getter, so the label follows a change of language; the key is kept for the English alias.
+function cmd(
+  id: string,
+  group: string,
+  labelKey: MessageKey,
+  opts: { key?: string; context?: Command["context"] } = {},
+): Command {
+  LABEL_KEYS.set(id, labelKey);
+  return {
+    id,
+    group,
+    context: opts.context ?? "global",
+    ...(opts.key !== undefined ? { key: opts.key } : {}),
+    get label() {
+      return t(labelKey);
+    },
+  };
+}
+
 // Only commands with no ribbon button, or they show twice in the palette. ribbonDefs.test.ts enforces it.
 const GLOBAL: Command[] = [
-  { id: "welcome", label: "Home", group: "File", context: "global" },
-  { id: "new", label: "New", group: "File", context: "global", key: "Ctrl+N" },
-  { id: "open", label: "Open…", group: "File", context: "global", key: "Ctrl+O" },
-  { id: "save", label: "Save", group: "File", context: "global", key: "Ctrl+S" },
-  { id: "saveas", label: "Save As…", group: "File", context: "global", key: "Ctrl+Shift+S" },
-  { id: "export", label: "Export…", group: "File", context: "global", key: "Ctrl+E" },
-  { id: "undo", label: "Undo", group: "Edit", context: "global", key: "Ctrl+Z" },
-  { id: "redo", label: "Redo", group: "Edit", context: "global", key: "Ctrl+Y" },
-  { id: "fit", label: "Fit View", group: "View", context: "global", key: "Home" },
-  { id: "reset-camera", label: "Reset Camera", group: "View", context: "global", key: "Shift+Home" },
+  cmd("welcome", "File", "command.welcome"),
+  cmd("new", "File", "command.new", { key: "Ctrl+N" }),
+  cmd("open", "File", "command.open", { key: "Ctrl+O" }),
+  cmd("save", "File", "command.save", { key: "Ctrl+S" }),
+  cmd("saveas", "File", "command.saveAs", { key: "Ctrl+Shift+S" }),
+  cmd("export", "File", "command.export", { key: "Ctrl+E" }),
+  cmd("undo", "Edit", "command.undo", { key: "Ctrl+Z" }),
+  cmd("redo", "Edit", "command.redo", { key: "Ctrl+Y" }),
+  cmd("fit", "View", "command.fit", { key: "Home" }),
+  cmd("reset-camera", "View", "command.resetCamera", { key: "Shift+Home" }),
   ...STANDARD_VIEWS.map(viewCommand),
-  { id: "persp", label: "Cycle Projection (Persp / Ortho / Auto)", group: "View", context: "global" },
-  { id: "selmode", label: "Toggle Faces / Bodies selection", group: "View", context: "global" },
-  { id: "viewmode-matcap", label: "Matcap View Mode", group: "View", context: "global" },
-  { id: "viewmode-realtime", label: "Realtime View Mode", group: "View", context: "global" },
-  { id: "viewmode-pathtraced", label: "Path Traced View Mode", group: "View", context: "global" },
-  { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
-  { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
-  { id: "show-console", label: "Show Console", group: "View", context: "global" },
-  { id: "show-last-message", label: "Show Last Message", group: "View", context: "global" },
-  { id: "describe-model", label: "Describe Model…", group: "View", context: "global" },
-  { id: "describe-selection", label: "Describe Selection", group: "View", context: "global" },
-  { id: "go-menubar", label: "Go to Menu Bar", group: "Go", context: "global" },
-  { id: "go-tools", label: "Go to Tools", group: "Go", context: "global" },
-  { id: "go-items", label: "Go to Items", group: "Go", context: "global" },
-  { id: "go-model", label: "Go to Model", group: "Go", context: "global" },
-  { id: "go-panels", label: "Go to Panels", group: "Go", context: "global" },
-  { id: "go-history", label: "Go to History", group: "Go", context: "global" },
-  { id: "browse-geometry", label: "Browse Faces and Edges", group: "Go", context: "global" },
-  { id: "next-face", label: "Next Face", group: "Edit", context: "global" },
-  { id: "previous-face", label: "Previous Face", group: "Edit", context: "global" },
-  { id: "next-edge", label: "Next Edge", group: "Edit", context: "global" },
-  { id: "previous-edge", label: "Previous Edge", group: "Edit", context: "global" },
-  { id: "preferences", label: "Preferences…", group: "Edit", context: "global", key: "Ctrl+," },
-  { id: "accessibility-settings", label: "Accessibility Settings…", group: "Edit", context: "global" },
-  { id: "interface-size-up", label: "Larger Interface", group: "View", context: "global", key: "Ctrl+Plus" },
-  { id: "interface-size-down", label: "Smaller Interface", group: "View", context: "global", key: "Ctrl+Minus" },
-  { id: "interface-size-reset", label: "Reset Interface Size", group: "View", context: "global", key: "Ctrl+0" },
-  { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
-  { id: "manual", label: "Manual", group: "Help", context: "global" },
-  { id: "report-problem", label: "Report a Problem…", group: "Help", context: "global" },
-  { id: "suggest-idea", label: "Suggest an Idea", group: "Help", context: "global" },
+  cmd("persp", "View", "command.persp"),
+  cmd("selmode", "View", "command.selmode"),
+  cmd("viewmode-matcap", "View", "command.viewmodeMatcap"),
+  cmd("viewmode-realtime", "View", "command.viewmodeRealtime"),
+  cmd("viewmode-pathtraced", "View", "command.viewmodePathtraced"),
+  cmd("viewmode-cycle", "View", "command.viewmodeCycle", { key: "Z" }),
+  cmd("show-all-bodies", "View", "command.showAllBodies", { key: "Shift+H" }),
+  cmd("show-console", "View", "command.showConsole"),
+  cmd("show-last-message", "View", "command.showLastMessage"),
+  cmd("describe-model", "View", "command.describeModel"),
+  cmd("describe-selection", "View", "command.describeSelection"),
+  cmd("go-menubar", "Go", "command.goMenubar"),
+  cmd("go-tools", "Go", "command.goTools"),
+  cmd("go-items", "Go", "command.goItems"),
+  cmd("go-model", "Go", "command.goModel"),
+  cmd("go-panels", "Go", "command.goPanels"),
+  cmd("go-history", "Go", "command.goHistory"),
+  cmd("browse-geometry", "Go", "command.browseGeometry"),
+  cmd("next-face", "Edit", "command.nextFace"),
+  cmd("previous-face", "Edit", "command.previousFace"),
+  cmd("next-edge", "Edit", "command.nextEdge"),
+  cmd("previous-edge", "Edit", "command.previousEdge"),
+  cmd("preferences", "Edit", "command.preferences", { key: "Ctrl+," }),
+  cmd("accessibility-settings", "Edit", "command.accessibilitySettings"),
+  cmd("interface-size-up", "View", "command.interfaceSizeUp", { key: "Ctrl+Plus" }),
+  cmd("interface-size-down", "View", "command.interfaceSizeDown", { key: "Ctrl+Minus" }),
+  cmd("interface-size-reset", "View", "command.interfaceSizeReset", { key: "Ctrl+0" }),
+  cmd("shortcut-help", "Help", "command.shortcutHelp", { key: "?" }),
+  cmd("manual", "Help", "command.manual"),
+  cmd("report-problem", "Help", "command.reportProblem"),
+  cmd("suggest-idea", "Help", "command.suggestIdea"),
   // Pinned ribbon groups (FINISH, PALETTE) live outside SKETCH, so the palette lists them explicitly.
-  { id: "finish", label: "Finish Sketch", group: "SKETCH", context: "sketch" },
-  { id: "palette", label: "Sketch Palette", group: "SKETCH", context: "sketch" },
+  cmd("finish", "SKETCH", "command.finish", { context: "sketch" }),
+  cmd("palette", "SKETCH", "command.palette", { context: "sketch" }),
 ];
 
 /** They ship without a key, so a hint is only ever a key the person chose. The Edit menu lists them too. */
@@ -130,4 +150,34 @@ export function allCommands(): Command[] {
       return key === undefined ? c : { ...c, key };
     }),
   ];
+}
+
+/** The live label of a built in command, read at call time so a menu row follows the language. */
+export function commandLabel(id: string): string {
+  return GLOBAL.find((c) => c.id === id)?.label ?? id;
+}
+
+/** The English label, the stable name a menu row is found by and a quiet alias in the palette. */
+export function commandEnglish(id: string): string | undefined {
+  const key = LABEL_KEYS.get(id);
+  if (key) return tEnglish(key);
+  return (STANDARD_VIEWS as readonly string[]).includes(id) ? tEnglish("view.command", { view: id }) : undefined;
+}
+
+/** A group is an id; only the five built in ones have a display text, ribbon groups show as they are. */
+export function groupText(group: string): string {
+  switch (group) {
+    case "File":
+      return t("palette.group.file");
+    case "Edit":
+      return t("palette.group.edit");
+    case "View":
+      return t("palette.group.view");
+    case "Go":
+      return t("palette.group.go");
+    case "Help":
+      return t("palette.group.help");
+    default:
+      return group;
+  }
 }

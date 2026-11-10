@@ -127,6 +127,11 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     return key;
   }
 
+  const englishLine = (key: string, args: MessageArgs = {}): string => {
+    const nodes = typeof english[key] === "string" ? compiled(english[key]) : null;
+    return nodes ? formatMessage(nodes, args, "en") : key;
+  };
+
   const languageOf = (code: string): Language | undefined =>
     code === PSEUDO ? (deps.dev ? PSEUDO_LANGUAGE : undefined) : deps.languages.find((l) => l.code === code);
 
@@ -352,6 +357,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
 
   return {
     t: (key: K, args?: MessageArgs): string => lookup(key, args),
+    english: (key: K, args?: MessageArgs): string => englishLine(key, args),
     init,
     setLanguage,
     reloadDropIns,

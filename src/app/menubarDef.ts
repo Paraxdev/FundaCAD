@@ -8,11 +8,11 @@ import { setWorkspace } from "../ui/workspace";
 import { ACCESSIBILITY_PAGE, MANUAL_URL, openExternal } from "../ui/welcome";
 import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl, REPO_URL } from "../ui/reportText";
-import type { MenuDef } from "../ui/menu";
+import { menuName, type MenuDef, type MenuItem } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
 import { t } from "../i18n";
-import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
+import { allCommands, commandEnglish, commandLabel, GEOMETRY_COMMANDS, type Command } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
 import type { Engine } from "./engine";
@@ -25,12 +25,12 @@ const ISSUES_URL = `${REPO_URL}/issues`;
 function withContributions(menus: MenuDef[]): MenuDef[] {
   const out = menus.map((m) => ({ ...m, items: [...m.items] }));
   for (const c of contributedMenus()) {
-    const existing = out.find((m) => m.label === c.menu);
+    const existing = out.find((m) => menuName(m) === c.menu);
     if (existing) {
       existing.items.push(...c.items);
       continue;
     }
-    const at = c.before ? out.findIndex((m) => m.label === c.before) : -1;
+    const at = c.before ? out.findIndex((m) => menuName(m) === c.before) : -1;
     const fresh: MenuDef = { label: c.menu, items: [...c.items] };
     if (at >= 0) out.splice(at, 0, fresh);
     else out.push(fresh);
@@ -39,18 +39,29 @@ function withContributions(menus: MenuDef[]): MenuDef[] {
 }
 
 const ANALYSIS_ITEMS = [
-  { id: "draft-analysis", label: "Overhang" },
-  { id: "zebra", label: "Zebra" },
-  { id: "curvature", label: "Curvature" },
-  { id: "component-colors", label: "Body Colors" },
+  { id: "draft-analysis", label: () => t("menu.view.overhang"), refName: "Overhang" },
+  { id: "zebra", label: () => t("menu.view.zebra"), refName: "Zebra" },
+  { id: "curvature", label: () => t("menu.view.curvature"), refName: "Curvature" },
+  { id: "component-colors", label: () => t("menu.view.bodyColors"), refName: "Body Colors" },
 ];
+
+// The label is read through commandLabel, since an allCommands() copy holds a getter frozen at its language.
+const commandRow =
+  (e: Engine) =>
+  (c: Command): MenuItem => ({
+    label: () => commandLabel(c.id),
+    ...(commandEnglish(c.id) !== undefined ? { refName: commandEnglish(c.id)! } : {}),
+    ...(c.key ? { shortcut: c.key } : {}),
+    onClick: () => e.handleAction(c.id),
+  });
 
 function viewItems(e: Engine): MenuDef["items"] {
   const view = allCommands()
     .filter((c) => c.group === "View")
-    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+    .map(commandRow(e));
   const analysis = ANALYSIS_ITEMS.map((a) => ({
     label: a.label,
+    refName: a.refName,
     checked: () => analysisFlags(e.viewport)[a.id] === true,
     onClick: () => e.handleAction(a.id),
   }));
@@ -60,42 +71,56 @@ function viewItems(e: Engine): MenuDef["items"] {
 // Left enabled in a sketch: refusing in words says why, a greyed item says nothing.
 function geometryItems(e: Engine): MenuDef["items"] {
   const all = allCommands();
-  return [...GEOMETRY_COMMANDS]
-    .map((id) => all.find((c) => c.id === id)!)
-    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+  return [...GEOMETRY_COMMANDS].map((id) => all.find((c) => c.id === id)!).map(commandRow(e));
 }
 
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
 export function buildMenubar(e: Engine): MenuDef[] {
   return withContributions([
     {
-      label: "File",
+      label: () => t("menu.file"),
+      refName: "File",
       items: [
-        { label: "Home", onClick: () => e.ui.home.open() },
+        { label: () => t("menu.file.home"), refName: "Home", onClick: () => e.ui.home.open() },
         { separator: true, label: "" },
-        { label: "New", shortcut: "Ctrl+N", onClick: () => void e.newDocument() },
-        { label: "Open…", shortcut: "Ctrl+O", onClick: () => void e.openDoc() },
+        { label: () => t("menu.file.new"), refName: "New", shortcut: "Ctrl+N", onClick: () => void e.newDocument() },
+        { label: () => t("menu.file.open"), refName: "Open…", shortcut: "Ctrl+O", onClick: () => void e.openDoc() },
         { separator: true, label: "" },
-        { label: "Import Mesh…", onClick: () => void importModel(e.store, e.geometry) },
+        {
+          label: () => t("menu.file.importMesh"),
+          refName: "Import Mesh…",
+          onClick: () => void importModel(e.store, e.geometry),
+        },
         { separator: true, label: "" },
-        { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveWork(e) },
-        { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveWorkAs(e) },
+        { label: () => t("menu.file.save"), refName: "Save", shortcut: "Ctrl+S", onClick: () => void saveWork(e) },
+        {
+          label: () => t("menu.file.saveAs"),
+          refName: "Save As…",
+          shortcut: "Ctrl+Shift+S",
+          onClick: () => void saveWorkAs(e),
+        },
         { separator: true, label: "" },
-        { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportSelection(e.store, e.geometry, e.viewport) },
+        {
+          label: () => t("menu.file.export"),
+          refName: "Export…",
+          shortcut: "Ctrl+E",
+          onClick: () => void exportSelection(e.store, e.geometry, e.viewport),
+        },
       ],
     },
     {
-      label: "Edit",
+      label: () => t("menu.edit"),
+      refName: "Edit",
       items: [
         {
-          label: () => stepMenuText("Undo", stepLabelFor(e, "undo")),
+          label: () => stepMenuText("undo", stepLabelFor(e, "undo")),
           refName: "Undo",
           shortcut: "Ctrl+Z",
           disabled: () => !canStep(e, "undo"),
           onClick: () => e.doUndo(),
         },
         {
-          label: () => stepMenuText("Redo", stepLabelFor(e, "redo")),
+          label: () => stepMenuText("redo", stepLabelFor(e, "redo")),
           refName: "Redo",
           shortcut: "Ctrl+Y",
           disabled: () => !canStep(e, "redo"),
@@ -103,7 +128,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
         },
         { separator: true, label: "" },
         {
-          label: "Delete",
+          label: () => t("menu.edit.delete"),
+          refName: "Delete",
           shortcut: "Del",
           // A selected face is deletable too. getSelectedFaceIds, since selectedFacesForPressPull walks every triangle.
           disabled: () => !e.selectedFeature && e.viewport.getSelectedFaceIds().length === 0,
@@ -113,16 +139,18 @@ export function buildMenubar(e: Engine): MenuDef[] {
           },
         },
         {
-          label: "Suppress / Unsuppress",
+          label: () => t("menu.edit.suppress"),
+          refName: "Suppress / Unsuppress",
           disabled: () => !e.selectedFeature,
           onClick: () => e.selectedFeature && toggleSuppressRows(e.store, pickedFeatureIds(e)),
         },
         { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.
-        { label: "Materials", onClick: () => setWorkspace("render") },
+        { label: () => t("menu.edit.materials"), refName: "Materials", onClick: () => setWorkspace("render") },
         // Before the geometry rows, so it stays in view when a short window scrolls the menu: it holds Accessibility.
         {
-          label: "Preferences…",
+          label: () => t("menu.edit.preferences"),
+          refName: "Preferences…",
           shortcut: "Ctrl+,",
           onClick: () => {
             useDialogStore().openPreferences();
@@ -132,24 +160,46 @@ export function buildMenubar(e: Engine): MenuDef[] {
         ...geometryItems(e),
       ],
     },
-    { label: "View", items: viewItems(e) },
+    { label: () => t("menu.view"), refName: "View", items: viewItems(e) },
     {
-      label: "Help",
+      label: () => t("menu.help"),
+      refName: "Help",
       items: [
-        { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
-        { label: "Manual", onClick: () => void openExternal(MANUAL_URL) },
+        {
+          label: () => t("menu.help.shortcuts"),
+          refName: "Keyboard Shortcuts",
+          shortcut: "?",
+          onClick: () => toggleShortcutHUD(),
+        },
+        { label: () => t("menu.help.manual"), refName: "Manual", onClick: () => void openExternal(MANUAL_URL) },
         {
           label: () => t("menu.help.accessibility"),
           refName: "Accessibility",
           onClick: () => void openExternal(ACCESSIBILITY_PAGE),
         },
         { separator: true, label: "" },
-        { label: "Report a Problem…", onClick: () => openReportDialog() },
-        { label: "Suggest an Idea", onClick: () => void openExternal(ideaUrl()) },
-        { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
+        { label: () => t("menu.help.reportProblem"), refName: "Report a Problem…", onClick: () => openReportDialog() },
+        {
+          label: () => t("menu.help.suggestIdea"),
+          refName: "Suggest an Idea",
+          onClick: () => void openExternal(ideaUrl()),
+        },
+        {
+          label: () => t("menu.help.issueTracker"),
+          refName: "Issue Tracker",
+          onClick: () => void openExternal(ISSUES_URL),
+        },
         { separator: true, label: "" },
-        { label: "Check for Updates…", onClick: () => void checkForUpdates(true, beforeUpdate(e)) },
-        { label: `About ${PRODUCT_NAME}`, onClick: () => void showAbout() },
+        {
+          label: () => t("menu.help.checkUpdates"),
+          refName: "Check for Updates…",
+          onClick: () => void checkForUpdates(true, beforeUpdate(e)),
+        },
+        {
+          label: () => t("menu.help.about", { name: PRODUCT_NAME }),
+          refName: `About ${PRODUCT_NAME}`,
+          onClick: () => void showAbout(),
+        },
       ],
     },
   ] as MenuDef[]).filter((m) => m.items.length > 0);

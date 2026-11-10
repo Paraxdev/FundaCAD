@@ -176,7 +176,8 @@ export function refOf(el: HTMLElement): string {
   if (el.matches(".menu-btn")) return `menu:${label}`;
   if (el.matches(".menu-item")) {
     // The popup is teleported out of the bar, so the open menu names its button.
-    const top = el.closest("[role=menu]")?.getAttribute("aria-label");
+    const menu = el.closest("[role=menu]");
+    const top = menu?.getAttribute("data-menu-name") ?? menu?.getAttribute("aria-label");
     return `menu:${top ?? "?"}/${label}`;
   }
   if (el.matches(".ctx-item")) return `ctx:${label}`;

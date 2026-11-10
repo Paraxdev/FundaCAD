@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from "pinia";
 import RenderCamera from "../../../src/components/shell/RenderCamera.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
+import { setRenderPref } from "../../../src/ui/renderPrefs";
 import type { Engine } from "../../../src/app/engine";
 
 const saveRenderedImage = vi.hoisted(() => vi.fn());
@@ -553,6 +554,37 @@ describe("Camera tab Escape", () => {
       expect(escapeClaimed()).toBe(true);
     } finally {
       outside.remove();
+      traces[0]?.done.resolve("data:traced");
+      await flushPromises();
+    }
+  });
+
+  // Focus stays on the Aperture trigger inside the tab while its list is open, so only the Popover's window capture
+  // listener keeps this Escape from the tab's cancel.
+  it("closes an open Aperture list on Escape while a trace runs, and keeps the trace and the tab's claim", async () => {
+    setRenderPref("focusBlur", 0.4);
+    try {
+      focusButton();
+      await press();
+      // Vue skips a handler for an event stamped no later than the handler was attached, so the faked clock moves on.
+      at(1500);
+      traces[0]!.opts.onProgress(70);
+      const aperture = w.get("#rd-aperture");
+      (aperture.element as HTMLElement).focus();
+      await aperture.trigger("keydown", { key: "ArrowDown" });
+      await flushPromises();
+      expect(document.body.querySelector("[role=listbox]")).not.toBeNull();
+
+      escape(aperture.element);
+      await flushPromises();
+      await nextTask();
+      expect(document.body.querySelector("[role=listbox]")).toBeNull();
+      expect(traces[0]!.opts.signal.aborted).toBe(false);
+      expect(app.mock.calls.map(([e]) => (e as KeyboardEvent).key)).toEqual(["ArrowDown"]);
+      expect(buttonState().text).toBe("Cancel render");
+      expect(escapeClaimed()).toBe(true);
+    } finally {
+      setRenderPref("focusBlur", 0);
       traces[0]?.done.resolve("data:traced");
       await flushPromises();
     }

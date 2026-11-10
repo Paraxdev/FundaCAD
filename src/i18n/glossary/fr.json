@@ -111,6 +111,46 @@
     {
       "en": "sample",
       "text": "échantillon"
+    },
+    {
+      "en": "Undo",
+      "text": "Annuler"
+    },
+    {
+      "en": "Redo",
+      "text": "Rétablir"
+    },
+    {
+      "en": "Save",
+      "text": "Enregistrer"
+    },
+    {
+      "en": "Open",
+      "text": "Ouvrir"
+    },
+    {
+      "en": "Export",
+      "text": "Exporter"
+    },
+    {
+      "en": "Import",
+      "text": "Importer"
+    },
+    {
+      "en": "Preferences",
+      "text": "Préférences"
+    },
+    {
+      "en": "Menu",
+      "text": "Menu"
+    },
+    {
+      "en": "Command",
+      "text": "Commande"
+    },
+    {
+      "en": "View",
+      "text": "Affichage"
     }
   ]
 }

@@ -21,10 +21,12 @@ import {
 import { useBrowserStore } from "../../src/stores/browser";
 import { useShellStore } from "../../src/stores/shell";
 import { announce } from "../../src/ui/announce";
-import { allCommands } from "../../src/ui/commands";
+import { allCommands, commandEnglish } from "../../src/ui/commands";
 import { describePick } from "../../src/ui/describePick";
 import { awaitTreePick, resetTreePicks, treePickRefusal, treePickWaiting, type TreePick } from "../../src/ui/treePick";
 import { edge, land, result, rig, settle, topology } from "./geometryBrowserRig";
+import { menuName } from "../../src/ui/menu";
+import { rowName, row as menuRow } from "./menuRows";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
 vi.mock("../../src/ui/announce", async (actual) => ({
@@ -89,9 +91,11 @@ describe("where the commands are listed", () => {
 
   it("the Edit menu runs them through the dispatcher", () => {
     const handleAction = vi.fn();
-    const edit = buildMenubar({ handleAction } as unknown as Engine).find((m) => m.label === "Edit")!;
-    const items = edit.items.filter((i) => allCommands().find((c) => ALL.includes(c.id) && c.label === i.label));
-    expect(items.map((i) => [i.label, i.shortcut])).toEqual([
+    const edit = buildMenubar({ handleAction } as unknown as Engine).find((m) => menuName(m) === "Edit")!;
+    const items = edit.items.filter((i) =>
+      allCommands().find((c) => ALL.includes(c.id) && commandEnglish(c.id) === i.refName),
+    );
+    expect(items.map((i) => [rowName(i), i.shortcut])).toEqual([
       ["Next Face", undefined],
       ["Previous Face", undefined],
       ["Next Edge", undefined],
@@ -110,9 +114,9 @@ describe("where the commands are listed", () => {
     expect(resolveShortcut("F9", true, "model")).toBe("next-edge");
     expect(resolveShortcut("F9", true, "sketch")).toBe("next-edge");
     expect(allCommands().find((c) => c.id === "next-edge")?.key).toBe("Shift+F9");
-    const edit = buildMenubar({} as Engine).find((m) => m.label === "Edit")!;
-    expect(edit.items.find((i) => i.label === "Next Edge")?.shortcut).toBe("Shift+F9");
-    expect(edit.items.find((i) => i.label === "Next Face")?.shortcut).toBeUndefined();
+    const edit = buildMenubar({} as Engine).find((m) => menuName(m) === "Edit")!;
+    expect(menuRow("Edit", "Next Edge", [edit])?.shortcut).toBe("Shift+F9");
+    expect(menuRow("Edit", "Next Face", [edit])?.shortcut).toBeUndefined();
   });
 
   it("the ? dialog lets them be bound, and keeps the canvas keys a fixed group", () => {

@@ -2,15 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import { buildMenubar } from "../../src/app/menubarDef";
 import { allCommands } from "../../src/ui/commands";
 import type { Engine } from "../../src/app/engine";
+import { menuName } from "../../src/ui/menu";
+import { itemText } from "./menuRows";
 
 describe("Home in the menus", () => {
   const open = vi.fn();
   const menus = buildMenubar({ ui: { home: { open } } } as unknown as Engine);
-  const menu = (label: string) => menus.find((m) => m.label === label)!;
+  const menu = (label: string) => menus.find((m) => menuName(m) === label)!;
 
   it("is the first row of File", () => {
     const first = menu("File").items[0]!;
-    expect(first.label).toBe("Home");
+    expect(first.refName).toBe("Home");
+    expect(itemText(first)).toBe("Home");
     first.onClick?.();
     expect(open).toHaveBeenCalledOnce();
   });
