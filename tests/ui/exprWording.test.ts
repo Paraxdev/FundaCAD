@@ -40,3 +40,30 @@ describe("English expression with a lone comma before three digits", () => {
     expect(typedExprProblem("w*3,125")).toMatch(/ambiguous/);
   });
 });
+
+describe("German expression number with two marks", () => {
+  it.each([
+    ["1,5,5", "1,5,5"],
+    ["breite * 2,25,5 + 4", "2,25,5"],
+    ["x + 12,5,25,125", "12,5,25,125"],
+    ["3 * 1,5,5e2", "1,5,5e2"],
+  ])("%j quotes the typed text and never the stored point form", (typed, quoted) => {
+    const problem = typedExprProblem(typed, ",");
+    expect(problem).toContain(`"${quoted}"`);
+    expect(problem).not.toContain(quoted.replace(/,/g, "."));
+    expect(() => storedExpr(typed, ",")).toThrow(ExprError);
+  });
+
+  it("quotes the typed text in the language set, German and French", async () => {
+    for (const lang of ["de", "fr"] as const) {
+      await setLanguage(lang);
+      expect(typedExprProblem("w * 2,5,5")).toContain('"2,5,5"');
+    }
+  });
+
+  it.each(["1,5", "breite * 2,25 + 4", "3,5e2", "max(1,5;2,5)", "1.500"])("%j keeps its earlier outcome", (typed) => {
+    const problem = typedExprProblem(typed, ",");
+    if (typed === "1.500") expect(problem).toContain('"1.500" is ambiguous');
+    else expect(problem).toBeNull();
+  });
+});

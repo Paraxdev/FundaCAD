@@ -195,6 +195,7 @@ interface Normalised {
 
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
+const TWO_POINT_NUMBER = /\d+(?:\.\d+){2,}(?:[eE][+-]?\d+)?/;
 
 /** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark, and a
  *  lone point before exactly three digits after a nonzero whole part is refused, "1.500" could be fifteen hundred
@@ -430,7 +431,14 @@ export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): st
     if (m) refuseThousandsComma(src, m);
     return typed;
   }
-  return commasToPoints(typed);
+  const stored = commasToPoints(typed);
+  // The scan keeps lengths, so the same slice of the typed text is what was typed.
+  const bad = TWO_POINT_NUMBER.exec(stored);
+  if (bad) {
+    const at = bad.index;
+    throw new ExprError(`invalid number "${typed.slice(at, at + bad[0].length)}"`, at);
+  }
+  return stored;
 }
 
 /** Why storedExpr refuses typed expression text, null when it takes it. */
