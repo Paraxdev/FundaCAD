@@ -2,6 +2,7 @@ import json
 
 import pytest
 from test_a11y import escape, escape_twice, leave_geometry, show_extrude, show_geometry, show_stress
+from test_plugin_panels_a11y import LIBRARY, closed, open_custom, open_library
 
 from fundacad_harness import Session
 from fundacad_harness.screens import close_settings, open_settings, out_dir, settled
@@ -15,7 +16,10 @@ FAMILIES = {
     "param": (".param-row", ":scope > label", ":scope > .param-value"),
     "inline": (".geometry-filters .ui-field-row-inline", ".ui-field-label", ".ui-field-control"),
     "stress": (".stress-field", ":scope > .measure-k:first-child", ":scope > :not(.measure-k:first-child)"),
+    "fixed": (".scr-form .param-row", ":scope > label", ":scope > .param-value"),
 }
+# A plugin row with a fixed label column keeps its control beside, and a long label wraps inside the column.
+FIXED = {"fixed"}
 
 # Measures every visible row of a family as it is, or the first one with its label lengthened to `text`.
 MEASURE = """({ row, label, control, text }) => {
@@ -41,6 +45,8 @@ MEASURE = """({ row, label, control, text }) => {
       right_gap: Math.abs(c.r - r.r),
       left_gap: Math.abs(c.l - r.l),
       label_whole: lab.scrollWidth <= lab.clientWidth + 1,
+      label_width: Math.round(l.r - l.l),
+      control_left: Math.round(c.l),
       inside: r.r <= out.r + 1 && r.l >= out.l - 1,
     };
     if (text) lab.textContent = saved;
@@ -75,6 +81,10 @@ def found():
         show_stress(s)
         res["stress"] = scan(s, "stress")
         escape(s)
+        open_library(s)
+        open_custom(s)
+        res["fixed"] = scan(s, "fixed")
+        closed(s, LIBRARY)
         open_settings(s, "Accessibility")
         s.page.locator("#prefs-comfortable-text").click()
         settled(s)
@@ -92,7 +102,7 @@ def found():
 
 
 def families():
-    return ["param", "inline", "stress", "param comfortable"]
+    return ["param", "inline", "stress", "fixed", "param comfortable"]
 
 
 @pytest.mark.parametrize("name", families())
@@ -104,6 +114,8 @@ def test_a_row_that_fits_keeps_its_control_beside_the_label(found, name):
     # A stress row can hold several controls, so only the other families end at the row's edge.
     if name != "stress":
         assert [r["label"] for r in rows if r["right_gap"] > 1] == []
+    if name in FIXED:
+        assert len({r["control_left"] for r in rows}) == 1, rows
 
 
 @pytest.mark.parametrize("name", families())
@@ -111,7 +123,11 @@ def test_a_long_label_sends_the_control_to_its_own_line(found, name):
     rows = found[name]["long"]
     assert len(rows) == 1, f"no {name} row to lengthen"
     r = rows[0]
-    assert r["under"], r
-    assert r["left_gap"] <= 1, r
     assert r["label_whole"], r
     assert r["inside"], r
+    if name in FIXED:
+        assert r["same_line"], r
+        assert r["label_width"] == found[name]["rows"][0]["label_width"], r
+        return
+    assert r["under"], r
+    assert r["left_gap"] <= 1, r
