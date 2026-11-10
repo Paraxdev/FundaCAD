@@ -90,14 +90,14 @@ export function buildMenubar(e: Engine): MenuDef[] {
       refName: "Edit",
       items: [
         {
-          label: () => stepMenuText("Undo", stepLabelFor(e, "undo")),
+          label: () => stepMenuText("undo", stepLabelFor(e, "undo")),
           refName: "Undo",
           shortcut: "Ctrl+Z",
           disabled: () => !canStep(e, "undo"),
           onClick: () => e.doUndo(),
         },
         {
-          label: () => stepMenuText("Redo", stepLabelFor(e, "redo")),
+          label: () => stepMenuText("redo", stepLabelFor(e, "redo")),
           refName: "Redo",
           shortcut: "Ctrl+Y",
           disabled: () => !canStep(e, "redo"),

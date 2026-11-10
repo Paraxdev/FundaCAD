@@ -13,7 +13,7 @@ import TitleFold from "./TitleFold.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
 import ErrorNotice from "./ErrorNotice.vue";
-import { stepMenuText } from "../../ui/canStep";
+import { sketchStepName, stepMenuText } from "../../ui/canStep";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import { TITLEBAR_FOLD_QUERY } from "../../ui/layoutBreakpoints";
 import { useMediaQuery } from "../../composables/useMediaQuery";
@@ -34,14 +34,14 @@ const canRedo = computed(() =>
 // Only the tooltip names the step, the button keeps the name Undo for voice control and the harness.
 const undoTip = computed(() =>
   stepMenuText(
-    "Undo",
-    !canUndo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.undoLabel : ui.undoLabel,
+    "undo",
+    !canUndo.value ? null : ui.sketchActive ? sketchStepName() : panels.stress ? panels.stress.undoLabel : ui.undoLabel,
   ),
 );
 const redoTip = computed(() =>
   stepMenuText(
-    "Redo",
-    !canRedo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.redoLabel : ui.redoLabel,
+    "redo",
+    !canRedo.value ? null : ui.sketchActive ? sketchStepName() : panels.stress ? panels.stress.redoLabel : ui.redoLabel,
   ),
 );
 const folded = useMediaQuery(TITLEBAR_FOLD_QUERY);

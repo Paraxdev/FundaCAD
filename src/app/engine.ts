@@ -453,7 +453,7 @@ export function mountUi(e: Engine): void {
   const cmdk = useCommandPaletteStore();
   cmdk.bind((a) => e.handleAction(a));
   cmdk.bindLabels((id) =>
-    id === "undo" || id === "redo" ? stepMenuText(id === "undo" ? "Undo" : "Redo", stepLabelFor(e, id)) : null,
+    id === "undo" || id === "redo" ? stepMenuText(id, stepLabelFor(e, id)) : null,
   );
   window.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === "k" || ev.key === "K")) {
