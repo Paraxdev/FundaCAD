@@ -90,6 +90,23 @@ describe("expression evaluator", () => {
     expect(said[3]).toBe("12.5");
   });
 
+  it.each([
+    ["max(1, 2)", true],
+    ["max(1; abs(2, 3))", true],
+    ["1,5,5", false],
+    ["(1, 2)", false],
+    ["max((1, 2); 3)", false],
+    ["max(1; 2), 3", false],
+    ["2(1, 2)", false],
+  ])("a comma in %j gives the semicolon hint only inside a function's brackets: %s", (src, hint) => {
+    expect(() => ev(src)).toThrow(
+      new ExprError(
+        hint ? 'unexpected character ",", separate arguments with ";"' : 'unexpected character ","',
+        src.indexOf(","),
+      ),
+    );
+  });
+
   it("comparisons and logic yield 1 or 0, and bind looser than arithmetic", () => {
     expect(ev("3 > 2")).toBe(1);
     expect(ev("3 < 2")).toBe(0);

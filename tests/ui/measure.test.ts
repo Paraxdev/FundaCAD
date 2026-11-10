@@ -471,6 +471,19 @@ describe("fieldNumber / fieldError", () => {
     expect(fieldError("3*4")).toBeNull();
     expect(fieldError("3*")).toEqual(expect.any(String));
   });
+
+  it("calls a stray comma in a plain number an unexpected character, without the semicolon hint", async () => {
+    const en = [measureError("1,5,5", null), measureError("max(1, 2)", null)];
+    await setLanguage("de");
+    try {
+      expect({ en, de: measureError("3,", null) }).toEqual({
+        en: ['unexpected character ","', 'unexpected character ",", separate arguments with ";"'],
+        de: 'unexpected character ","',
+      });
+    } finally {
+      await setLanguage("system");
+    }
+  });
 });
 
 describe("spokenUnit", () => {
