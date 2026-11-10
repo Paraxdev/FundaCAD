@@ -38,6 +38,13 @@ function key(k: string) {
   return ev;
 }
 
+// A held key's repeats go to whatever has focus by then, which the take may have moved to the tool's value box.
+function repeatOnFocus(k: string) {
+  const ev = new KeyboardEvent("keydown", { key: k, repeat: true, bubbles: true, cancelable: true });
+  (document.activeElement ?? document.body).dispatchEvent(ev);
+  return ev;
+}
+
 // Faces 14 (flat, slanted), 15 (half cylinder) and 16 (sphere patch) are the ones faceRowRig can answer for.
 async function mirrorWaiting() {
   const r = rig(result([{ id: "body1", etag: "e1", faceStart: 14 }]));
@@ -218,6 +225,15 @@ describe("Fillet waiting for an edge", () => {
     expect(addFeature).toHaveBeenCalledTimes(1);
     expect(done).toHaveBeenCalledTimes(1);
   });
+
+  it("a held Enter's repeats that land on the radius box the take focused do not commit", async () => {
+    const { tool, addFeature, done } = await filletWaiting();
+    key("]");
+    key("Enter");
+    expect(document.activeElement?.tagName).toBe("INPUT");
+    for (let i = 0; i < 3; i++) expect(repeatOnFocus("Enter").defaultPrevented).toBe(true);
+    expect([tool.memberRows().length, addFeature.mock.calls.length, done.mock.calls.length]).toEqual([1, 0, 0]);
+  });
 });
 
 async function textWaiting() {
@@ -280,6 +296,18 @@ describe("Text on face waiting for its face", () => {
     expect(addFeatures).not.toHaveBeenCalled();
     expect(done).not.toHaveBeenCalled();
     expect(treePickWaiting()).toBe(false);
+  });
+
+  it("a held Enter's repeats that land on the text box the take focused do not commit", async () => {
+    const { addFeatures, done } = await textWaiting();
+    key("]");
+    key("Enter");
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.activeElement).not.toBe(canvas);
+    expect(document.activeElement).not.toBe(document.body);
+    for (let i = 0; i < 3; i++) expect(repeatOnFocus("Enter").defaultPrevented).toBe(true);
+    await new Promise((res) => setTimeout(res, 0));
+    expect([addFeatures.mock.calls.length, done.mock.calls.length]).toEqual([0, 0]);
   });
 
   it("a face the engine calls a sphere keeps the tool waiting, and the next lit face is asked as well", async () => {

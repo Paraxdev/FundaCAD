@@ -116,7 +116,8 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     if (refused) refuseAloud(e, refused);
   }
 
-  // The key of an Enter or Space this listener took, so a held key's repeats do not reach the tool either.
+  // The key of an Enter or Space this listener took. Its repeats are swallowed wherever they land, since the take may
+  // have moved focus to the tool's value box, whose own Enter commits.
   let claimedKey: string | null = null;
 
   // A tool's own Enter (Mirror and Fillet apply on it) listens in window capture, so this one must hear first.
@@ -124,18 +125,22 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     // Not taken: the keymap goes on to clear the selection, and a tool's capture may stop the key after this.
     if (ev.key === "Escape") return putOut();
     if (ev.key !== "Enter" && ev.key !== " ") return;
+    if (ev.repeat && claimedKey === ev.key) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
     if (!ev.repeat) claimedKey = null;
     if (!treePickWaiting() || held()) return;
     if (ev.target !== canvas && !(ev.target === document.body && singleKeysOn())) return;
     if (ev.ctrlKey || ev.altKey || ev.metaKey || ev.shiftKey) return;
     const row = list.litRow;
-    if (ev.repeat ? claimedKey !== ev.key : !row) return;
+    if (ev.repeat || !row) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    if (ev.repeat) return;
     claimedKey = ev.key;
     putOut();
-    const stale = ctl.offer([row!]);
+    const stale = ctl.offer([row]);
     if (stale) refuseAloud(e, stale);
   }
 
