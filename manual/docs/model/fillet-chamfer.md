@@ -8,7 +8,7 @@ Fillet (F) rounds an edge and Chamfer (B) cuts it at an angle.
 2. Drag the arrow, or type a size.
 3. Press Enter.
 
-![A fillet radius growing on an edge](../img/fillet-drag.gif)
+![A fillet radius growing on an edge](../img/fillet-drag-still.png){ .fc-motion }
 
 Letting go of the arrow keeps the tool open, so the size and the box options can still change. Click another edge to add it, or a picked edge to drop it. With several edges picked, the arrow stands on the last one and sizes them all.
 

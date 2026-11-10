@@ -8,7 +8,7 @@ Press/Pull (Q) moves a face in or out, and the body grows or shrinks with it. It
 2. Drag the arrow, or type a distance. A negative distance cuts.
 3. Press Enter, or click empty space.
 
-![A face being pulled out with Press/Pull](../img/presspull.gif)
+![A face being pulled out with Press/Pull](../img/presspull-still.png){ .fc-motion }
 
 Letting go of the arrow does not finish the push, so you can still change the box before Enter. Esc drops it.
 
