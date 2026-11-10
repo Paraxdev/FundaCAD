@@ -5,6 +5,7 @@ import {
   clampToControl,
   configurationDrift,
   readAs,
+  spellNumber,
   toast,
   useBrowserStore,
   useDocValue,
@@ -62,7 +63,7 @@ const readPlain = readAs(null);
 const rowParse = (row: TuneRow) => (row.unit === "mm" ? readLength : row.unit === "°" ? readAngle : readPlain);
 const fieldUnit = (row: TuneRow) => (row.unit === "mm" ? "mm" : row.unit === "°" ? "deg" : undefined);
 const spokenUnit = (row: TuneRow) => (row.unit === "°" ? "degrees" : row.unit);
-const sliderText = (row: TuneRow) => (v: number) => [String(v), spokenUnit(row)].filter(Boolean).join(" ");
+const sliderText = (row: TuneRow) => (v: number) => [spellNumber(v), spokenUnit(row)].filter(Boolean).join(" ");
 const sliderStep = (row: TuneRow) =>
   row.control.kind === "slider" ? (row.control.step ?? (row.control.max - row.control.min) / 100) : 1;
 function choiceOptions(row: TuneRow) {
@@ -72,7 +73,7 @@ function choiceOptions(row: TuneRow) {
     label: c.label,
   }));
   if (!row.control.choices.some((c) => c.value === row.def.value)) {
-    out.push({ value: String(row.def.value), label: `${row.def.value} (not listed)`, disabled: true });
+    out.push({ value: String(row.def.value), label: `${spellNumber(row.def.value)} (not listed)`, disabled: true });
   }
   return out;
 }
@@ -213,7 +214,7 @@ const rowLayout = (g: { id: string | null }) => ({
             :title="rowTooltip(row)"
           >
             <span v-if="!row.editable" style="opacity: 0.7" :title="`= ${row.def.expr}`"
-              ><span aria-hidden="true">fx </span>{{ shortValue(row.def.value) }} {{ row.unit
+              ><span aria-hidden="true">fx </span>{{ spellNumber(shortValue(row.def.value)) }} {{ row.unit
               }}<span class="sr-only">, calculated from {{ row.def.expr }}</span></span
             >
 

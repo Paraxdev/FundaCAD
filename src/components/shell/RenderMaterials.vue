@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { spellFixed } from "../../ui/measure";
 import { fmtKeys } from "../../input/platform";
 import RenderSections from "./RenderSections.vue";
 // Editing is live with no OK: none of it is on the undo stack, so a buffered copy would be a library the model is not
@@ -766,7 +767,7 @@ async function doImport() {
           >
         </div>
         <label class="prefs-row">
-          <span class="prefs-label">IOR {{ finishOf(selected).ior.toFixed(2) }}</span>
+          <span class="prefs-label">IOR {{ spellFixed(finishOf(selected).ior, 2) }}</span>
           <input
             class="sm-slider"
             data-field="ior"

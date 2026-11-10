@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { spellFixed } from "../../ui/measure";
 import RenderSections from "./RenderSections.vue";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -173,7 +174,7 @@ async function takePicture() {
         :model-value="prefs.focusBlur"
         @update:model-value="setRenderPref('focusBlur', $event)"
       >
-        <template #value="{ value }">{{ value === 0 ? "off" : value.toFixed(2) }}</template>
+        <template #value="{ value }">{{ value === 0 ? "off" : spellFixed(value, 2) }}</template>
       </Slider>
       <div class="prefs-row">
         <label class="prefs-label" for="rd-aperture">Aperture</label>

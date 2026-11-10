@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { spellNumber } from "../../ui/measure";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
@@ -245,7 +246,7 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
             />
           </span>
         </div>
-        <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : defaultShown(f) }}. </p>
+        <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : spellNumber(defaultShown(f)) }}. </p>
       </div>
     </div>
   </div>

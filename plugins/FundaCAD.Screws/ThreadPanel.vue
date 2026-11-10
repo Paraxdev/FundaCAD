@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { readAs } from "fundacad";
+import { readAs, spellNumber } from "fundacad";
 import { Button, FieldRow, FloatingPanel, NumberField, Select, Switch } from "fundacad/ui";
 import { choicesFor, choiceOf, nearestIn, offByText, threadDraft, threadTool, type ThreadDraft } from "./threadTool";
 import type { ThreadSystem } from "./threadSpec";
@@ -38,8 +38,8 @@ function setSystem(system: ThreadSystem) {
 
 const sizeOptions = computed(() => choices.value.map((c) => ({ value: c.designation, label: c.designation })));
 const faceOptions = computed(() => [
-  { value: "tap", label: `Tap drill${choice.value ? `, ${choice.value.tap} mm` : ""}` },
-  { value: "nominal", label: `Nominal${choice.value ? `, ${+choice.value.d.toFixed(3)} mm` : ""}` },
+  { value: "tap", label: `Tap drill${choice.value ? `, ${spellNumber(choice.value.tap)} mm` : ""}` },
+  { value: "nominal", label: `Nominal${choice.value ? `, ${spellNumber(+choice.value.d.toFixed(3))} mm` : ""}` },
 ]);
 const HANDS = [
   { value: "right", label: "Right" },
@@ -123,7 +123,7 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
           @update:model-value="set({ starts: Number($event) })"
         />
       </FieldRow>
-      <div v-if="choice" class="measure-hint">Pitch {{ +choice.pitch.toFixed(4) }} mm, lead {{ lead }} mm</div>
+      <div v-if="choice" class="measure-hint">Pitch {{ spellNumber(+choice.pitch.toFixed(4)) }} mm, lead {{ spellNumber(lead) }} mm</div>
       <FieldRow v-slot="{ id }" label="Print fit">
         <Switch
           :id="id"

@@ -9,6 +9,7 @@ import type { Engine } from "../../../src/app/engine";
 import { chooseBuiltInEnvironment, useEnvLibrary } from "../../../src/ui/environmentImport";
 import type { EnvEntry, EnvLibrary } from "../../../src/ui/environmentLibrary";
 import { DEFAULT_RENDER, ENVIRONMENTS_LIST, renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
+import { setLanguage } from "../../../src/i18n";
 import { denoiserState } from "../../../src/viewport/pathtrace/denoiser";
 
 const entry = (id: string, name: string): EnvEntry => ({
@@ -336,5 +337,30 @@ describe("RenderEnvironment rows", () => {
     await high.trigger("click");
     expect(renderPrefs().realtimeQuality).not.toBe("high");
     w.unmount();
+  });
+});
+
+describe("RenderEnvironment readouts in German", () => {
+  afterEach(() => {
+    setRenderPref("environment", "studio");
+    return setLanguage("system");
+  });
+
+  it("spells the exposure and brightness with a comma", async () => {
+    setRenderPref("environment", "hdr:0123456789abcdef");
+    setRenderPref("envExposure", 0.75);
+    setRenderPref("brightness", 1.25);
+    const en = mountEnv();
+    await flushPromises();
+    const texts = () => [...document.querySelectorAll(".ui-slider-value")].map((o) => o.textContent?.trim());
+    expect(texts()).toContain("+0.75 EV");
+    expect(texts()).toContain("1.25x");
+    en.unmount();
+    await setLanguage("de");
+    const de = mountEnv();
+    await flushPromises();
+    expect(texts()).toContain("+0,75 EV");
+    expect(texts()).toContain("1,25x");
+    de.unmount();
   });
 });

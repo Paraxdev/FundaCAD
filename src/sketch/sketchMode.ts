@@ -166,6 +166,7 @@ import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGr
 import { INFER_TOL_DEG } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 import { InferTag, SnapTag } from "./snapTag";
+import { spellNumber } from "../ui/measure";
 
 /** Tools that record a point on curve relation when an end snaps onto a curve. */
 const CURVE_SNAP_TOOLS: ReadonlySet<string> = new Set(["line", "arc"]);
@@ -1081,7 +1082,7 @@ export class SketchMode {
       const gap = gapReport(this.entities, this.constraints, snap);
       setPrompt(nothingToTiePrompt(le, gap));
       if (gap.kind === "gap" && !this.solverDead) {
-        toast(`Tie the ${gap.open} open ends across the ${Number(gap.gapMm.toPrecision(2))} mm gap?`, {
+        toast(`Tie the ${gap.open} open ends across the ${spellNumber(Number(gap.gapMm.toPrecision(2)))} mm gap?`, {
           action: {
             label: "Close gap",
             onClick: () => {

@@ -14,6 +14,7 @@ import { DocumentStore } from "../../src/document/store";
 import type { Engine } from "../../src/app/engine";
 import type { CadDocument } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { setLanguage } from "../../src/i18n";
 
 afterEach(() => {
   setupOpen.value = false;
@@ -64,9 +65,11 @@ function fidget(): CadDocument {
   };
 }
 
-async function render() {
+async function render(edit?: (d: CadDocument) => void) {
   setActivePinia(createPinia());
-  const store = new DocumentStore(backend, fidget());
+  const doc = fidget();
+  edit?.(doc);
+  const store = new DocumentStore(backend, doc);
   const docVersion = ref(0);
   store.onDocChange(() => {
     docVersion.value++;
@@ -158,5 +161,20 @@ describe("the Parameters section", () => {
 
     await w.find(".xp-setup").trigger("click");
     expect(setupOpen.value).toBe(true);
+  });
+});
+
+describe("the Parameters section in German", () => {
+  it("spells a calculated value with a comma", async () => {
+    const slanted = (d: CadDocument) => {
+      d.paramDefs!["pitch"] = { expr: "gap * 2.5", value: 1.25, unit: "mm" };
+    };
+    const en = await render(slanted);
+    expect(en.w.find('[data-param="pitch"]').text()).toContain("fx 1.25");
+    en.w.unmount();
+    await setLanguage("de");
+    const de = await render(slanted);
+    expect(de.w.find('[data-param="pitch"]').text()).toContain("fx 1,25");
+    de.w.unmount();
   });
 });

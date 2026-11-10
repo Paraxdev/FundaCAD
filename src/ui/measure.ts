@@ -402,6 +402,12 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
   return mark === "," ? text.replace(".", ",") : text;
 }
 
+/** `toFixed` with the language's mark, trailing zeros kept. */
+export function spellFixed(v: number, digits: number, mark: DecimalMark = decimalMark()): string {
+  const text = v.toFixed(digits);
+  return mark === "," ? text.replace(".", ",") : text;
+}
+
 export function spellRounded(v: number, mark?: DecimalMark): string {
   return spellNumber(roundForDisplay(v), mark);
 }

@@ -121,6 +121,8 @@ export { roundForDisplay as displayRound } from "../ui/measure";
 export { fieldNumber, fieldError, readAs } from "../ui/measure";
 /** A rounded number as a value box shows it, with the language's decimal mark. */
 export { spellRounded as numberText } from "../ui/measure";
+/** A number or a fixed decimal count spelled with the language's decimal mark. */
+export { spellNumber, spellFixed } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 

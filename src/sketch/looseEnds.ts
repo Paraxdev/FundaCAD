@@ -4,6 +4,7 @@ import type { SketchConstraint } from "../types";
 import { refPoint } from "./entityDims";
 import { entityPolyline } from "./region";
 import type { ResolvedEntity } from "./snap";
+import { spellNumber } from "../ui/measure";
 
 export interface EndRef {
   entity: string;
@@ -436,7 +437,7 @@ export function gapReport(
   return { kind, open, tieable, gapMm: 0, reach };
 }
 
-const mm = (v: number) => `${Number(v.toPrecision(2))} mm`;
+const mm = (v: number) => `${spellNumber(Number(v.toPrecision(2)))} mm`;
 
 /** What Tie Loose Ends says when nothing is in its reach, never "no loose ends"
  *  while red ends show. */

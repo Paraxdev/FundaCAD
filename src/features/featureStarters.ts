@@ -63,6 +63,7 @@ import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } f
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
 import { thinExtrudeOf } from "./thinExtrude";
+import { spellNumber } from "../ui/measure";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -1858,7 +1859,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return gapReport(ents, sk.constraints ?? [], defaultReach(ents));
   }
 
-  const gapMm = (v: number) => `${Number(v.toPrecision(2))} mm`;
+  const gapMm = (v: number) => `${spellNumber(Number(v.toPrecision(2)))} mm`;
 
   function toastTie(sketchId: string, message: string, label: string, reach?: number, timeout?: number): number | null {
     const sk = asFeature(

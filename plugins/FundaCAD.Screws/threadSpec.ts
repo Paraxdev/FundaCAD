@@ -1,6 +1,7 @@
 // Standard threads for the core `thread` feature. The engine only sweeps a profile, every standard number lives here.
 
 import THREADS from "./catalogue/threads.json";
+import { spellFixed } from "fundacad";
 
 export type ThreadSystem = "iso" | "unc" | "unf" | "tr" | "acme";
 export type FaceIs = "nominal" | "tap";
@@ -170,7 +171,7 @@ export function nearestThread(
 export function formatOffBy(n: NearestThread): string {
   const how = n.faceIs === "tap" ? "tap drill" : "nominal";
   if (Math.abs(n.offBy) < 0.0005) return `${n.choice.designation}, on ${how}`;
-  return `${n.choice.designation}, ${Math.abs(n.offBy).toFixed(2)} mm ${n.offBy < 0 ? "under" : "over"} ${how}`;
+  return `${n.choice.designation}, ${spellFixed(Math.abs(n.offBy), 2)} mm ${n.offBy < 0 ? "under" : "over"} ${how}`;
 }
 
 interface Groove {
