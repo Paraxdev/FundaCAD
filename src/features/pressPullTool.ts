@@ -980,8 +980,11 @@ export class PressPullTool {
       started = false;
       const by = this.axis.clone().multiplyScalar(sent.distance as number);
       const onBody = this.bodyId ?? undefined;
+      // A Join going into the body leaves the face where it was
       const found = marks.flatMap((m) => {
-        const id = this.viewport.faceIdNear([m.x + by.x, m.y + by.y, m.z + by.z], 0, onBody);
+        const id =
+          this.viewport.faceIdNear([m.x + by.x, m.y + by.y, m.z + by.z], 0, onBody) ??
+          this.viewport.faceIdNear([m.x, m.y, m.z], 0, onBody);
         return id == null ? [] : [id];
       });
       if (found.length) this.viewport.selectOnlyFaces(found);

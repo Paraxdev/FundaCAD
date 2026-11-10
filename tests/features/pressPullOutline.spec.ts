@@ -338,6 +338,14 @@ describe("Press/Pull keeps the pushed faces tinted", () => {
     expect(r.selectOnlyFaces.mock.calls).toEqual([[[60]]]);
   });
 
+  it("finds a face that did not move, as a Join going in leaves it", () => {
+    const r = rig([12, 13]);
+    r.stands.push({ at: where(12, 0), id: 80 }, { at: where(13, -6), id: 81 });
+    r.push(-6);
+    r.land(-6);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[80, 81]]]);
+  });
+
   it("keeps the selection when no pushed face is found, and takes the ones that are", () => {
     const lost = rig([10]);
     lost.push(2);
