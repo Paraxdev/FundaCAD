@@ -9,7 +9,8 @@ import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
-import type { CarryHost } from "./carryOn";
+import { carryTaker, carryWords, pickOfHit, type CarryCommit, type CarryHost } from "./carryOn";
+import { awaitTreePick } from "../ui/treePick";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isBoxButtonKey, isMenuKey, isRailButton, keyTargetFree } from "../ui/focus";
 import { announce } from "../ui/announce";
@@ -307,6 +308,7 @@ export class ExtrudeTool {
     const cur = this.viewport.domElement.style.cursor;
     if (this.hovering || this.taperHovering) this.viewport.domElement.style.cursor = "grab";
     else if (cur === "grab") this.viewport.domElement.style.cursor = "default";
+    this.lightCarry(e.clientX, e.clientY, this.hovering || this.taperHovering);
     if (!this.dim.isUserDriven("distance") && !this.depthHeld && !this.hovering && !this.taperHovering) {
       // The depth tracks the cursor until it is over a handle; otherwise reaching for a handle moves it, and the
       // press commits instead of grabbing.
@@ -406,6 +408,7 @@ export class ExtrudeTool {
         this.disposeDepthHandle();
         this.disposeTaperHandle();
         this.outline?.hide();
+        this.releaseCarry();
         setPrompt("Click a profile area · Esc");
         this.held.sync(this.pending);
         return;
@@ -415,11 +418,17 @@ export class ExtrudeTool {
       return;
     }
     this.pressCommit = true;
-    this.commit();
-    this.pressCommit = false;
+    try {
+      const hit = this.carriesOn() ? pickOfHit(this.viewport.pickEntity(e.clientX, e.clientY)) : null;
+      if (!hit || this.carry!.route(hit) === "row") this.commit();
+    } finally {
+      this.pressCommit = false;
+    }
   }
 
   private pressCommit = false;
+  private releaseCarryRows: (() => void) | null = null;
+  private carryLit = false;
   private releasePicking: (() => void) | null = null;
 
   /** The press that commits is on the old model: its pointerup would run the viewport's click on it, picking a stray
@@ -462,6 +471,7 @@ export class ExtrudeTool {
     } else return;
     if (moved) this.touched = true;
     this.flushPreview();
+    this.refreshPrompt();
     this.held.sync(this.pending);
     this.dim.focus();
   }
@@ -621,6 +631,7 @@ export class ExtrudeTool {
     }
     this.shownOp = null;
     this.promptKey = "";
+    this.armCarry();
     this.refreshPrompt();
     this.positionDim();
     this.updatePreview();
@@ -970,53 +981,73 @@ export class ExtrudeTool {
    *  since this runs every pointermove and plannedOperation() raycasts the whole model per area. */
   private shownOp: Op | null = null;
   private shownSym = false;
+  private shownCarry = false;
   private promptKey = "";
   private refreshPrompt() {
     if (this.phase !== "drag") return;
-    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}${this.symmetric ? "s" : ""}`;
+    const carry = this.carriesOn();
+    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}${this.symmetric ? "s" : ""}${carry ? "c" : ""}`;
     if (key === this.promptKey) return;
     this.promptKey = key;
     const op = this.plannedOperation();
-    // Symmetric is on the line too, so an unchanged word still repaints to announce the toggle.
-    if (op === this.shownOp && this.symmetric === this.shownSym) return;
+    // Symmetric and carry are on the line too, so an unchanged word still repaints to announce a toggle.
+    if (op === this.shownOp && this.symmetric === this.shownSym && carry === this.shownCarry) return;
     this.shownOp = op;
     this.shownSym = this.symmetric;
+    this.shownCarry = carry;
     const word = OP_WORD[op];
     const sym = this.symmetric ? " · both ways (Alt+S)" : " · Alt+S symmetric";
+    const on = carry ? ` · ${carryWords.prompt()}` : "";
     setPrompt(
       this.editId
         ? `${word} · Ctrl-click areas · drag or type a value · Up or Down steps${sym} · click to apply · Esc`
         : this.pinnedOp
-          ? `${word} · Alt+O operation · drag or type a depth · Up or Down steps${sym} · side handle tapers · click to commit · Esc`
-          : `${word} · drag or type a depth, negative cuts · Up or Down steps${sym} · side handle tapers · click to commit · Esc`,
+          ? `${word} · Alt+O operation · drag or type a depth · Up or Down steps${sym} · side handle tapers · click to commit${on} · Esc`
+          : `${word} · drag or type a depth, negative cuts · Up or Down steps${sym} · side handle tapers · click to commit${on} · Esc`,
     );
   }
 
-  private commit() {
-    if (!this.selected.length) return this.cancel();
+  /** What a commit would write now: the typed values are read, the preview pushed and the kernel's verdict taken. */
+  private readCommit():
+    | { kind: "empty" }
+    | { kind: "zero" }
+    | { kind: "refused"; reason: string }
+    | { kind: "ready"; unverified: boolean; taperTyped: boolean; tv: number | null } {
+    if (!this.selected.length) return { kind: "empty" };
     const v = this.dim.getValue("distance");
     // Only when typed: while dragging the field shows |distance|, and reading it back strips the sign so a cut goes
     // the wrong way ("Cut removed nothing").
     if (v != null && this.dim.isUserDriven("distance")) this.distance = v;
-    if (Math.abs(this.distance) < 1e-3) return; // ignore zero
+    if (Math.abs(this.distance) < 1e-3) return { kind: "zero" };
     // A typed ∠ is the truth for the taper, the same rule the depth follows.
     const tv = this.dim.getValue("taper");
     const taperTyped = tv != null && this.dim.isUserDriven("taper");
     if (taperTyped) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
-    const first = this.selected[0];
-    if (!first) return;
     // A typed value has not been previewed until the pointer moves, and the kernel has to have seen the solid before
     // it can be judged.
     this.updatePreview();
     this.flushPreview();
     const verdict = previewVerdict(this.store);
-    const unverified = verdict.kind === "wait";
-    if (verdict.kind === "refused") {
-      setPrompt(`Extrude refused: ${verdict.reason} · drag back or Esc`);
+    if (verdict.kind === "refused") return { kind: "refused", reason: verdict.reason };
+    return { kind: "ready", unverified: verdict.kind === "wait", taperTyped, tv };
+  }
+
+  private commit() {
+    const read = this.readCommit();
+    if (read.kind === "empty") return this.cancel();
+    if (read.kind === "zero") return; // ignore zero
+    if (read.kind === "refused") {
+      setPrompt(`Extrude refused: ${read.reason} · drag back or Esc`);
       this.depthHandle?.paint({ refused: true });
       this.viewport.requestRender();
       return;
     }
+    this.write(read);
+  }
+
+  /** Writes the feature the preview showed, closes the tool and returns the new id. */
+  private write(read: { unverified: boolean; taperTyped: boolean; tv: number | null }): string {
+    const first = this.selected[0]!;
     // A typed value with no drag never ran onMove, so refresh the prompt: buildFeature reads shownOp, so what is
     // built is the word on screen.
     this.refreshPrompt();
@@ -1026,7 +1057,7 @@ export class ExtrudeTool {
     const ext = feature as Extract<Feature, { type: "extrude" }>;
     const boxed: BoxField[] = [{ box: "distance", field: "distance", value: ext.distance as number }];
     // A typed angle past the limit was clamped, so binding its expression would build a taper the tool refused.
-    if (!taperTyped || tv === this.taper) {
+    if (!read.taperTyped || read.tv === this.taper) {
       boxed.push({ box: "taper", field: "taper", value: typeof ext.taper === "number" ? ext.taper : 0, kind: "angle" });
     }
     const bindings = boxBindings(this.dim, this.store, id, boxed);
@@ -1048,10 +1079,58 @@ export class ExtrudeTool {
     } else {
       this.store.addFeature(feature, undefined, bindings);
     }
-    if (unverified) this.store.verifyCommit(id, "Extrude");
+    if (read.unverified) this.store.verifyCommit(id, "Extrude");
     this.overlay.clearRegionSelection();
     this.cleanup();
     this.onDone?.(id);
+    return id;
+  }
+
+  /** Only once the depth is set: while it still follows the pointer, the face under the pointer is the moving top
+   *  face itself. */
+  private carriesOn(): boolean {
+    return (
+      !!this.carry && !this.editId && this.phase === "drag" && (this.depthHeld || this.dim.isUserDriven("distance"))
+    );
+  }
+
+  carryBlocked(): string | null {
+    if (!this.dim.accepts("distance") || !this.dim.accepts("taper")) return carryWords.badValue();
+    const read = this.readCommit();
+    if (read.kind === "refused") return carryWords.refused(read.reason);
+    if (read.kind === "ready" && read.unverified) return carryWords.wait();
+    return null;
+  }
+
+  commitForCarry(): CarryCommit {
+    const read = this.readCommit();
+    if (read.kind === "refused") return { kind: "stayed", why: carryWords.refused(read.reason) };
+    if (read.kind === "ready" && read.unverified) return { kind: "stayed", why: carryWords.wait() };
+    if (read.kind === "ready") return { kind: "added", id: this.write(read) };
+    this.cancel();
+    return { kind: "nothing" };
+  }
+
+  private armCarry() {
+    this.releaseCarry();
+    if (!this.carry || this.editId) return;
+    this.releaseCarryRows = awaitTreePick(carryTaker(this, this.carry, this.viewport), () => this.cancel(), {
+      keepsOnRewind: true,
+      keepsOnCommand: true,
+    });
+  }
+
+  private releaseCarry() {
+    this.releaseCarryRows?.();
+    this.releaseCarryRows = null;
+    if (this.carryLit) this.viewport.hoverEntity(null);
+    this.carryLit = false;
+  }
+
+  private lightCarry(x: number, y: number, onHandle: boolean) {
+    const lit = !onHandle && this.carriesOn() ? this.viewport.pickEntity(x, y) : null;
+    if (lit || this.carryLit) this.viewport.hoverEntity(lit ?? null);
+    this.carryLit = !!lit;
   }
 
   cancel() {
@@ -1104,6 +1183,7 @@ export class ExtrudeTool {
     this.touched = false;
     this.grabProj = null;
     this.dim.hide();
+    this.releaseCarry();
     this.disposeDepthHandle();
     this.disposeTaperHandle();
     this.outline?.dispose();
