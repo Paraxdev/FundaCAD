@@ -225,11 +225,10 @@
   justify-content: space-between;
 }
 .target-count {
+  min-width: 0;
   font-size: var(--fs-small);
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 /* An empty target usually means something ("the whole body"), so it is stated, not
    dimmed away. */
