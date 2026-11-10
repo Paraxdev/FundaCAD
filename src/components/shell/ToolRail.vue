@@ -25,6 +25,7 @@ import { contextMenu } from "../../ui/menu";
 import { pageZoom } from "../../ui/interfaceSize";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { useScrollCue } from "../../composables/useScrollCue";
+import { t } from "../../i18n";
 import { runningTool } from "../../ui/runningTool";
 import { railActive, railToggles } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
@@ -141,14 +142,18 @@ const entries = computed<RailEntry[]>(() => {
   return modelRail();
 });
 
-const sketchName = useDocValue((doc) => {
+const sketchRef = useDocValue((doc) => {
   const id = ribbon.sketchId;
-  if (!id) return "New sketch";
+  if (!id) return { number: 0, name: "" };
   const sketches = doc.features.filter((f) => f.type === "sketch");
   const i = sketches.findIndex((f) => f.id === id);
-  const named = (sketches[i] as { name?: string } | undefined)?.name;
-  return named || `Sketch ${i + 1}`;
+  return { number: i + 1, name: (sketches[i] as { name?: string } | undefined)?.name ?? "" };
 });
+const sketchName = computed(() => {
+  const { number, name } = sketchRef.value;
+  return number === 0 ? t("rail.newSketch") : name || t("rail.sketchN", { n: number });
+});
+const onOff = (on: boolean) => t(on ? "rail.on" : "rail.off");
 
 // Live state the engine does not publish.
 const pulse = ref(0);
@@ -388,9 +393,11 @@ const pressedOf = (action: string) => (railToggles(action, mode.value) ? isActiv
 function familyState(f: RailFamily): string {
   const on = f.items.find((t) => isActive(t.action));
   if (!on) return "";
-  return f.style === "category" ? `${on.label} on` : "on";
+  return f.style === "category" ? t("rail.toolOn", { tool: on.label }) : t("rail.familyOn");
 }
-const flyoutLabel = computed(() => (flyout.value ? (family(flyout.value.id)?.label ?? "Tools") : "Tools"));
+const flyoutLabel = computed(() =>
+  flyout.value ? (family(flyout.value.id)?.label ?? t("rail.title")) : t("rail.title"),
+);
 
 function toggleIsolate() {
   if (isolateActive.value) {
@@ -399,7 +406,7 @@ function toggleIsolate() {
   }
   const ids = engine.viewport.getSelectedBodies();
   if (!ids.length) {
-    engine.setStatus("Isolate: select the bodies to keep", "");
+    engine.setStatus(t("rail.isolateHint"), "");
     return;
   }
   engine.store.isolateBodies(ids);
@@ -414,13 +421,13 @@ function toggleIsolate() {
     :class="{ compact, scrolls, 'more-above': cue.above.value, 'more-below': cue.below.value }"
     :data-mode="mode"
     :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined"
-    aria-label="Tools"
+    :aria-label="t('rail.title')"
   >
-    <Toolbar class="rail-bar" label="Tools" orientation="vertical">
+    <Toolbar class="rail-bar" :label="t('rail.title')" orientation="vertical">
       <div ref="listEl" class="rail-list" @scroll.passive="cue.update()" @focusin="cue.reveal">
         <RailButton
           icon="search"
-          label="Search"
+          :label="t('rail.search')"
           keys="Ctrl F"
           data-action="search"
           @click="cmdk.toggle(ribbon.context)"
@@ -428,7 +435,7 @@ function toggleIsolate() {
         <RailButton
           v-if="mode === 'sketch'"
           icon="close"
-          label="Exit Sketching"
+          :label="t('rail.exitSketching')"
           :sub="sketchName"
           data-action="finish"
           @click="ribbon.act('finish')"
@@ -445,7 +452,7 @@ function toggleIsolate() {
         <RailButton
           v-else-if="mode === 'selection'"
           icon="select-all"
-          label="Deselect All"
+          :label="t('rail.deselectAll')"
           :sub="sel.summary.value"
           keys="Esc"
           data-action="deselect"
@@ -494,7 +501,7 @@ function toggleIsolate() {
             :icon="isCollapsed(g.pluginId) ? 'caretRight' : 'caretDown'"
             :icon-size="18"
             :label="g.name"
-            :tip="`${g.name} · ${g.offers.length} tool${g.offers.length === 1 ? '' : 's'}`"
+            :tip="t('rail.groupTip', { name: g.name, n: g.offers.length })"
             :aria-expanded="!isCollapsed(g.pluginId)"
             :data-group="g.pluginId"
             @click="toggleGroup(g.pluginId)"
@@ -516,8 +523,8 @@ function toggleIsolate() {
         <template v-if="mode === 'sketch'">
           <RailButton
             icon="offset"
-            label="Construction"
-            :sub="sketchPalette.state.construction ? 'On' : 'Off'"
+            :label="t('rail.construction')"
+            :sub="onOff(sketchPalette.state.construction)"
             :active="sketchPalette.state.construction"
             :pressed="sketchPalette.state.construction"
             data-action="construction"
@@ -527,8 +534,8 @@ function toggleIsolate() {
         <template v-else>
           <RailButton
             icon="isolate"
-            label="Isolate"
-            :sub="isolateActive ? 'On' : 'Off'"
+            :label="t('rail.isolate')"
+            :sub="onOff(isolateActive)"
             :active="isolateActive"
             :pressed="isolateActive"
             data-action="isolate"
@@ -536,8 +543,8 @@ function toggleIsolate() {
           />
           <RailButton
             icon="section"
-            label="Section View"
-            :sub="sectionOn ? 'On' : 'Off'"
+            :label="t('rail.sectionView')"
+            :sub="onOff(sectionOn)"
             :active="sectionOn"
             :pressed="sectionOn"
             data-action="section"
@@ -545,7 +552,7 @@ function toggleIsolate() {
           />
           <RailButton
             icon="measure"
-            label="Measure"
+            :label="t('tool.measure')"
             :active="measureOn"
             :pressed="measureOn"
             data-action="measure"
@@ -558,7 +565,7 @@ function toggleIsolate() {
       v-if="cue.above.value"
       class="rail-more rail-more-up"
       icon="caretDown"
-      tip="More tools above"
+      :tip="t('rail.moreAbove')"
       size="md"
       tabindex="-1"
       @click="cue.page(-1)"
@@ -567,7 +574,7 @@ function toggleIsolate() {
       v-if="cue.below.value"
       class="rail-more rail-more-down"
       icon="caretDown"
-      tip="More tools below"
+      :tip="t('rail.moreBelow')"
       size="md"
       tabindex="-1"
       :style="{ bottom: `${cueBottom}px` }"
@@ -586,7 +593,7 @@ function toggleIsolate() {
     >
       <Toolbar
         class="rail-flyout-grid"
-        :label="`${flyoutLabel} tools`"
+        :label="t('rail.familyTools', { family: flyoutLabel })"
         orientation="both"
         :style="{ gridTemplateRows: `repeat(${flyoutRows}, auto)` }"
       >

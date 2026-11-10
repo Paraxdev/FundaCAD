@@ -195,8 +195,6 @@
   { "path": "src/components/shell/TimelineBar.vue", "kind": "template", "count": 24, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/TitleBar.vue", "kind": "template", "count": 5, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/TitleFold.vue", "kind": "template", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/shell/ToolRail.vue", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/shell/ToolRail.vue", "kind": "template", "count": 13, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/TreeFolder.vue", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/TreeFolder.vue", "kind": "template", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/TreeRow.vue", "kind": "script", "count": 5, "reason": "raw text before localisation, a codemod lane converts it" },
