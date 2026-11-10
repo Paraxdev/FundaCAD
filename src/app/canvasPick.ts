@@ -5,7 +5,7 @@ import { singleKeysOn } from "../ui/a11yPrefs";
 import { announce } from "../ui/announce";
 import { isChoiceOpen } from "../ui/choice";
 import { describePick } from "../ui/describePick";
-import { treePickWaiting } from "../ui/treePick";
+import { onPickSessionBegin, treePickWaiting } from "../ui/treePick";
 import { VIEW_SUMMARY_ID } from "../ui/viewSummary";
 import type { Engine } from "./engine";
 import { refuseAloud } from "./planePick";
@@ -187,6 +187,8 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     },
     { flush: "sync" },
   );
+  // A light from before the pick began would go to its first Enter unasked.
+  const stopBegun = onPickSessionBegin(putOut);
   window.addEventListener("keydown", onKeyCapture, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("focus", onFocus, true);
@@ -196,6 +198,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   return () => {
     stopLight();
     stopWaiting();
+    stopBegun();
     window.removeEventListener("keydown", onKeyCapture, true);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("focus", onFocus, true);

@@ -46,7 +46,7 @@ function repeatOnFocus(k: string) {
 }
 
 // Faces 14 (flat, slanted), 15 (half cylinder) and 16 (sphere patch) are the ones faceRowRig can answer for.
-async function mirrorWaiting() {
+async function mirrorWaiting(beforeStart?: () => void) {
   const r = rig(result([{ id: "body1", etag: "e1", faceStart: 14 }]));
   let tool: MirrorTool | null = null;
   const host = {
@@ -82,6 +82,7 @@ async function mirrorWaiting() {
   const done = vi.fn();
   tool = new MirrorTool(viewport, r.store, () => null);
   stops.push(() => tool!.cancel());
+  beforeStart?.();
   tool.start(["body1"], done);
   return { r, tool, addFeatures, done };
 }
@@ -123,6 +124,24 @@ describe("Mirror waiting for its plane", () => {
     expect(key("Enter").defaultPrevented).toBe(true);
     expect(addFeatures).toHaveBeenCalledTimes(1);
     expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("a row lit before it started is put out, its first Enter gives nothing and a fresh step gives a row", async () => {
+    const { r, addFeatures, done } = await mirrorWaiting(() => key("]"));
+    expect(r.list.litRow).toBeNull();
+    expect(r.list.cursor).toBe("f:body1:0");
+    key("Enter");
+    expect(panel()).toEqual({ values: ["1 body", "Nothing picked"], ready: false });
+    expect(addFeatures).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    expect(treePickWaiting()).toBe(true);
+
+    key("]");
+    expect(r.list.litRow?.key).toBe("f:body1:1");
+    key("[");
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(panel()).toEqual({ values: ["1 body", "Flat face"], ready: true });
+    expect(addFeatures).not.toHaveBeenCalled();
   });
 
   it("a curved face is refused aloud, the tool still waits and the next Enter has no row to give", async () => {

@@ -854,14 +854,23 @@ describe("uninstalling", () => {
     expect(r.list.cursor).toBeNull();
   });
 
-  it("leaves no capture listener behind either", async () => {
+  it("leaves no session listener behind, a pick begun after keeps the light", async () => {
     const r = await ready();
     key("]");
+    off();
+    off = () => {};
+    awaitTreePick(() => true, vi.fn());
+    expect(r.list.litRow?.key).toBe("f:body1:0");
+  });
+
+  it("leaves no capture listener behind either", async () => {
+    const r = await ready();
     const taken: TreePick[] = [];
     awaitTreePick(
       (pick) => (taken.push(pick), true),
       () => {},
     );
+    key("]");
     off();
     off = () => {};
     expect(key("Enter").defaultPrevented).toBe(false);

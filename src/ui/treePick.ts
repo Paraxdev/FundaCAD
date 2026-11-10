@@ -36,6 +36,13 @@ interface PickSession {
 }
 
 let session: PickSession | null = null;
+const begun = new Set<() => void>();
+
+/** `fn` runs each time a pick session begins, until the returned stop runs. */
+export function onPickSessionBegin(fn: () => void): () => void {
+  begun.add(fn);
+  return () => begun.delete(fn);
+}
 
 /** Rows go to `taker` until the returned release runs. `end` is the pick's cleanup, run when anything else ends the
  *  session, so a taker never outlives its tool. `keepsOnRewind` is for a tool that stays open through an undo or a
@@ -55,6 +62,7 @@ export function awaitTreePick(
     batch: opts.batch ?? null,
   };
   session = mine;
+  for (const fn of begun) fn();
   return () => {
     if (session === mine) session = null;
   };
