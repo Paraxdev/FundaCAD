@@ -13,7 +13,11 @@ const invoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string) =>
     cmd === "system_info"
-      ? { system: "linux x86_64 · Ubuntu 24.04.1 LTS · AppImage", webview: "WebKitGTK 2.46.3" }
+      ? {
+          system: "linux x86_64 · Ubuntu 24.04.1 LTS · AppImage",
+          webview: "WebKitGTK 2.46.3",
+          accessibility: "AT-SPI bus up · wayland",
+        }
       : invoke(cmd),
 }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: async () => "1.0.7" }));
@@ -99,11 +103,12 @@ describe("the bug report's app log", () => {
     expect(ticked.at(-2)!.split("\n").slice(1).join("\n")).toEqual(TAIL_A);
     expect(ticked.at(-2)).toMatch(/^app log/);
     expect(ticked.at(-1)).toEqual(`document:\n{"features":[{"id":"f7"}]}`);
-    expect(ticked[0]!.split("\n").slice(0, 4)).toEqual([
+    expect(ticked[0]!.split("\n").slice(0, 5)).toEqual([
       "FundaCAD problem report (format 2)",
       "version: 1.0.7 · channel beta",
       "system: linux x86_64 · Ubuntu 24.04.1 LTS · AppImage",
       "webview: WebKitGTK 2.46.3",
+      "accessibility: AT-SPI bus up · wayland",
     ]);
 
     tick(".bug-log input", false);

@@ -131,6 +131,10 @@ jobs:
       - name: AT-SPI dump tests
         run: python3 tests/build/test_atspi_dump.py
 
+      # The AppImage's note on a missing accessibility bus, against fake data dirs.
+      - name: AppImage deps check tests
+        run: python3 tests/build/test_appimage_deps_check.py
+
       # The checks of the Wayland smoke both Linux legs run, against a fake cage.
       - name: Wayland smoke script tests
         run: python3 tests/build/test_wayland_smoke.py

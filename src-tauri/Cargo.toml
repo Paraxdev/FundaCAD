@@ -99,7 +99,7 @@ libc = "0.2"
 # The 3D mouse through spacenavd (spnav/, spacemouse/spnav.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 fundacad-spnav = { path = "spnav" }
-# The uri list of a file drag (drop_paths.rs), the version wry already links.
+# The uri list of a file drag (drop_paths.rs) and the AT-SPI bus probe (system_info.rs), the version wry already links.
 gtk = "0.18"
 
 # The paths of files dropped on the window (drop_paths.rs). The versions wry
