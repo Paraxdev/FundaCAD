@@ -81,6 +81,28 @@ describe("SketchDimLayer", () => {
     expect([...labels()].map((el) => el.textContent)).toEqual(["40 mm", "12 mm"]);
   });
 
+  it("respells the shown badges when the language changes, without a rebuild", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    dims().show([], plane, [
+      extra({ valueMm: 42.375 }),
+      extra({ key: "c:a", valueMm: 37.5, kind: "angle" }),
+      extra({ key: "c:d", valueMm: 12.25, driven: true }),
+    ]);
+    await nextTick();
+    const shown = () => [...labels()].map((el) => el.textContent);
+    const en = shown();
+    await setLanguage("de");
+    await nextTick();
+    const de = shown();
+    await setLanguage("system");
+    await nextTick();
+    expect([en, de, shown()]).toEqual([
+      ["42.375 mm", "37.5°", "(12.25 mm)"],
+      ["42,375 mm", "37,5°", "(12,25 mm)"],
+      ["42.375 mm", "37.5°", "(12.25 mm)"],
+    ]);
+  });
+
   it("carries an entity's own dimensions through, not just the extras", async () => {
     mount(SketchDimLayer, { attachTo: document.body });
     const circle: ResolvedEntity = { type: "circle", id: "c", radius: 5, x: 0, y: 0 };

@@ -3,9 +3,9 @@
 // px and writes style.transform onto a plain array of elements. The drag and the editor's focus are imperative too.
 
 import * as THREE from "three";
-import { nextTick, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import TextField from "../ui/TextField.vue";
-import { screenTransform } from "../../sketch/annotationFormat";
+import { fmtDim, screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
@@ -15,6 +15,8 @@ import { labelLeader, layoutUnderZoom, type Held, type LabelAt } from "../../ui/
 import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
+// Spelled here, not at show(), so a language switch respells the badges without a rebuild.
+const texts = computed(() => s.dimItems.map((l) => fmtDim(l.valueMm, l.kind, l.driven, l.fx)));
 
 const els: (HTMLElement | null)[] = [];
 const leaders: (SVGGElement | null)[] = [];
@@ -369,7 +371,7 @@ function onWheel(e: WheelEvent) {
           @keydown="onEditKey($event, l)"
           @blur="onEditBlur"
         />
-        <template v-else>{{ l.text }}</template>
+        <template v-else>{{ texts[i] }}</template>
       </div>
     </div>
   </Teleport>
