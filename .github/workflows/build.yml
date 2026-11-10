@@ -623,7 +623,7 @@ jobs:
           fi
           data="$RUNNER_TEMP/wayland-data"
           XDG_DATA_HOME="$data" SMOKE_APP_LOG="$data/dev.fundacad.app/logs/fundacad.log" \
-            sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" dbus-run-session -- "$img" "${fuse[@]}"
+            sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" "$img" "${fuse[@]}"
 
       - name: Upload the AppImage Wayland smoke log
         if: always() && matrix.platform == 'ubuntu-22.04'
@@ -861,9 +861,13 @@ jobs:
           # portal offers no Settings and GTK warns about it on every start.
           mkdir -p ~/.config/xdg-desktop-portal
           printf '[preferred]\ndefault=gtk\n' > ~/.config/xdg-desktop-portal/portals.conf
-          SMOKE_APP_LOG="$HOME/.var/app/dev.fundacad.app/data/dev.fundacad.app/logs/fundacad.log" \
+          # bwrap puts the sandbox in a session of its own, out of reach of the smoke's group kill.
+          trap 'flatpak kill dev.fundacad.app 2>/dev/null || true' EXIT
+          # The page stalls on this runner's software output, so the app starts again with
+          # the DMABUF renderer off, which needs the time of two starts.
+          SMOKE_SECONDS=40 SMOKE_APP_LOG="$HOME/.var/app/dev.fundacad.app/data/dev.fundacad.app/logs/fundacad.log" \
             sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
-            dbus-run-session -- flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
+            flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
 
       - name: Upload the Wayland smoke log
         if: always()

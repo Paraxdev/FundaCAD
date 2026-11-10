@@ -41,6 +41,19 @@ describe("the Flatpak job's Wayland smoke", () => {
     expect(smoke?.text).toMatch(/default=gtk[^\n]*> ~\/\.config\/xdg-desktop-portal\/portals\.conf/);
   });
 
+  it("leaves the session bus to the smoke script, since dbus-run-session ends it when the app restarts", () => {
+    expect(smoke?.text).not.toMatch(/dbus-run-session/);
+  });
+
+  it("stops the sandbox when the step ends, since bwrap takes it out of the smoke's process group", () => {
+    expect(smoke?.text).toMatch(/trap 'flatpak kill dev\.fundacad\.app[^']*' EXIT[\s\S]*scripts\/wayland-smoke\.sh/);
+  });
+
+  it("waits long enough for the stall restart and the second start", () => {
+    const secs = Number(/SMOKE_SECONDS=(\d+)/.exec(smoke?.text ?? "")?.[1]);
+    expect(secs).toBeGreaterThanOrEqual(40);
+  });
+
   it("does not gate the job yet", () => {
     expect(smoke?.text).toMatch(/^ {8}continue-on-error: true\r?$/m);
   });
@@ -70,6 +83,10 @@ describe("the AppImage job's Wayland smoke", () => {
     expect(smoke?.text).toMatch(
       /XDG_DATA_HOME="\$data" SMOKE_APP_LOG="\$data\/dev\.fundacad\.app\/logs\/fundacad\.log"/,
     );
+  });
+
+  it("leaves the session bus to the smoke script, as the Flatpak leg does", () => {
+    expect(smoke?.text).not.toMatch(/dbus-run-session/);
   });
 
   it("does not gate the job yet", () => {
