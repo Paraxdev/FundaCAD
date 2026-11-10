@@ -144,17 +144,44 @@ describe("the desktop app's language folder at the start", () => {
     ]);
   });
 
-  it("shows the shipped lines and says so when Rust refuses the file, and init never rejects", async () => {
+  it("shows the shipped lines and names Rust's reason for refusing the file, and init never rejects", async () => {
     put("de", { "prefs.language.title": "Meine Sprache" });
-    answer("language_file_read", () => Promise.reject("de.json is larger than 262144 bytes"));
+    put("fr", { "prefs.language.title": "Ma langue" });
+    const reasons = new Map([
+      ["de", "too-large: de.json is over 256 KiB"],
+      ["fr", "not-utf8: fr.json is not UTF-8 text"],
+    ]);
+    answer("language_file_read", (args) => Promise.reject(reasons.get(args!.code!)));
     localStorage.setItem("fundacad.language", "de");
     await expect(initLanguage()).resolves.toBeUndefined();
     await render();
-    expect([t("prefs.language.title"), languageFileStatus(), status(), text("#prefs-language-error")]).toEqual([
-      line(de, "prefs.language.title", "de"),
-      { lines: 0, skipped: [], error: "not-read" },
-      [],
-      line(de, "prefs.language.error.notRead", "de"),
+    const seen = () => [t("prefs.language.title"), languageFileStatus(), status(), text("#prefs-language-error")];
+    const tooLarge = seen();
+    await setLanguage("fr");
+    await flushPromises();
+    const notUtf8 = seen();
+    reasons.set("de", "de.json: The file cannot be accessed by the system. (os error 1920), not-utf8: too-large:");
+    await setLanguage("de");
+    await flushPromises();
+    expect([tooLarge, notUtf8, seen()]).toEqual([
+      [
+        line(de, "prefs.language.title", "de"),
+        { lines: 0, skipped: [], error: "too-large" },
+        [],
+        line(de, "prefs.language.error.tooLarge", "de", { kb: 256 }),
+      ],
+      [
+        line(fr, "prefs.language.title", "fr"),
+        { lines: 0, skipped: [], error: "not-utf8" },
+        [],
+        line(fr, "prefs.language.error.notUtf8", "fr"),
+      ],
+      [
+        line(de, "prefs.language.title", "de"),
+        { lines: 0, skipped: [], error: "not-read" },
+        [],
+        line(de, "prefs.language.error.notRead", "de"),
+      ],
     ]);
   });
 

@@ -54,6 +54,7 @@ pub fn list(dir: &Path) -> Vec<String> {
 }
 
 /// The text of `<code>.json` in `dir`, `None` when there is none. The code is checked before the disk is touched.
+/// A file too large or not UTF-8 gives an error starting `too-large:` or `not-utf8:`, which the page names to the user.
 pub fn read(dir: &Path, code: &str) -> Result<Option<String>, String> {
     if !is_language_code(code) {
         return Err(format!("not a language code: {code:?}"));
@@ -71,7 +72,7 @@ pub fn read(dir: &Path, code: &str) -> Result<Option<String>, String> {
     if !meta.is_file() {
         return Err(format!("{name} is not a plain file"));
     }
-    let too_large = || format!("{name} is over 256 KiB");
+    let too_large = || format!("too-large: {name} is over 256 KiB");
     if meta.len() > MAX_BYTES {
         return Err(too_large());
     }
@@ -80,7 +81,7 @@ pub fn read(dir: &Path, code: &str) -> Result<Option<String>, String> {
     if bytes.len() as u64 > MAX_BYTES {
         return Err(too_large());
     }
-    String::from_utf8(bytes).map(Some).map_err(|_| format!("{name} is not UTF-8 text"))
+    String::from_utf8(bytes).map(Some).map_err(|_| format!("not-utf8: {name} is not UTF-8 text"))
 }
 
 /// Creates `dir` when it is missing. A link or a file in its place is refused, so Open folder never shows another one.

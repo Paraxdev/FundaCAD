@@ -4,6 +4,7 @@
   "prefs.language.error.notFlat": "您的语言文件不是简单的行列表，因此未被使用。",
   "prefs.language.error.notJson": "您的语言文件不是有效的 JSON，因此未被使用。",
   "prefs.language.error.notRead": "无法读取您的语言文件，因此未使用该文件。",
+  "prefs.language.error.notUtf8": "您的语言文件不是 UTF-8 文本，因此未被使用。",
   "prefs.language.error.pickedNotFlat": "所选文件不是简单的行列表，您的行保持不变。",
   "prefs.language.error.pickedNotJson": "所选文件不是有效的 JSON，您的行保持不变。",
   "prefs.language.error.pickedTooLarge": "所选文件超过 {kb, number} KB，您的行保持不变。",

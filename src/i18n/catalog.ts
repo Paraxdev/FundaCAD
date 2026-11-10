@@ -52,7 +52,7 @@ const NAME_MARK = "\u0000";
 export interface DropInStatus {
   lines: number;
   skipped: OverrideResult["skipped"];
-  error?: OverrideResult["error"] | "not-read";
+  error?: OverrideResult["error"] | "not-read" | "not-utf8";
 }
 
 interface Active {
@@ -61,6 +61,14 @@ interface Active {
   shipped: Readonly<Record<string, unknown>>;
   dropIn: ReadonlyMap<string, string>;
   status: DropInStatus | null;
+}
+
+// Rust's read (src-tauri/src/languages.rs) starts these two refusals with a fixed code, any other reason is free text.
+function readError(e: unknown): NonNullable<DropInStatus["error"]> {
+  const reason = String(e);
+  if (reason.startsWith("too-large:")) return "too-large";
+  if (reason.startsWith("not-utf8:")) return "not-utf8";
+  return "not-read";
 }
 
 export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
@@ -156,7 +164,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       result = parseOverrides(text, english);
     } catch (e) {
       console.warn(`the user's ${code} language file could not be read`, e);
-      return { dropIn: new Map(), status: { lines: 0, skipped: [], error: "not-read" } };
+      return { dropIn: new Map(), status: { lines: 0, skipped: [], error: readError(e) } };
     }
     const { lines, skipped, error } = result;
     return { dropIn: lines, status: { lines: lines.size, skipped, ...(error ? { error } : {}) } };

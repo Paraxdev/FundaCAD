@@ -30,6 +30,7 @@ const FILE_ERRORS: Record<DropInFileError, MessageKey> = {
   unreadable: "prefs.language.error.unreadable",
   storage: "prefs.language.error.storage",
   "not-read": "prefs.language.error.notRead",
+  "not-utf8": "prefs.language.error.notUtf8",
   folder: "prefs.language.error.folder",
 };
 // A refused pick leaves the file before in use, so its message must not read as if that file were refused.

@@ -4,6 +4,7 @@
   "prefs.language.error.notFlat": "Votre fichier de langue n’est pas une simple liste de lignes, il n’est donc pas utilisé.",
   "prefs.language.error.notJson": "Votre fichier de langue n’est pas un JSON valide, il n’est donc pas utilisé.",
   "prefs.language.error.notRead": "Impossible de lire votre fichier de langue, il n’est donc pas utilisé.",
+  "prefs.language.error.notUtf8": "Votre fichier de langue n’est pas un texte UTF-8, il n’est donc pas utilisé.",
   "prefs.language.error.pickedNotFlat": "Le fichier choisi n’est pas une simple liste de lignes, vos lignes restent inchangées.",
   "prefs.language.error.pickedNotJson": "Le fichier choisi n’est pas un JSON valide, vos lignes restent inchangées.",
   "prefs.language.error.pickedTooLarge": "Le fichier choisi dépasse {kb, number} Ko, vos lignes restent inchangées.",

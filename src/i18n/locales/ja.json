@@ -4,6 +4,7 @@
   "prefs.language.error.notFlat": "言語ファイルが行の単純な一覧ではないため、使用されません。",
   "prefs.language.error.notJson": "言語ファイルが有効な JSON ではないため、使用されません。",
   "prefs.language.error.notRead": "独自の言語ファイルを読み取れなかったため、使用していません。",
+  "prefs.language.error.notUtf8": "言語ファイルが UTF-8 テキストではないため、使用されません。",
   "prefs.language.error.pickedNotFlat": "選んだファイルは行の単純な一覧ではないため、独自の行は変わっていません。",
   "prefs.language.error.pickedNotJson": "選んだファイルは有効な JSON ではないため、独自の行は変わっていません。",
   "prefs.language.error.pickedTooLarge": "選んだファイルが {kb, number} KB を超えているため、独自の行は変わっていません。",

@@ -180,8 +180,7 @@ fn read_takes_256_kib_of_bytes_and_refuses_one_more() {
     put(&dir, "de.json", &full);
     put(&dir, "fr.json", format!("{full}x"));
     assert_eq!(read(&dir, "de"), Ok(Some(full)));
-    let refused = read(&dir, "fr").unwrap_err();
-    assert!(refused.contains("fr.json"), "{refused}");
+    assert_eq!(read(&dir, "fr"), Err("too-large: fr.json is over 256 KiB".to_owned()));
 }
 
 #[test]
@@ -190,8 +189,9 @@ fn read_refuses_text_that_is_not_utf8() {
     let dir = languages(&root);
     put(&dir, "de.json", b"{\"menu.file\":\"Dat\xe9i\"}");
     put(&dir, "fr.json", "{\"menu.file\":\"Fichier\"}");
-    let refused = read(&dir, "de").unwrap_err();
-    assert!(refused.contains("de.json"), "{refused}");
+    put(&dir, "es.json", b"\xff\xfe{\0}\0");
+    assert_eq!(read(&dir, "de"), Err("not-utf8: de.json is not UTF-8 text".to_owned()));
+    assert_eq!(read(&dir, "es"), Err("not-utf8: es.json is not UTF-8 text".to_owned()));
     assert_eq!(read(&dir, "fr"), Ok(Some("{\"menu.file\":\"Fichier\"}".to_owned())));
 }
 
@@ -218,6 +218,7 @@ fn read_refuses_a_link_even_to_a_good_file() {
     }
     let refused = read(&dir, "de").unwrap_err();
     assert!(refused.contains("de.json"), "{refused}");
+    assert!(!refused.starts_with("too-large:") && !refused.starts_with("not-utf8:"), "{refused}");
 }
 
 #[test]
