@@ -76,9 +76,11 @@
   font-size: var(--fs-small);
 }
 
-// A label at the left and its control or controls filling the rest of the line.
+// A label at the left and its control or controls filling the rest of the line. A select whose whole value does not
+// fit beside them takes a line of its own, so a long language is never cut.
 .stress-field {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
   min-height: 32px;
@@ -88,7 +90,8 @@
   min-width: 72px;
 }
 .stress-field .select-trigger {
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 
