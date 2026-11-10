@@ -252,7 +252,9 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       console.warn("the user's language file could not be removed", e);
       return "storage";
     }
-    await reloadDropIns();
+    dropInCodes.value = await listDropIns();
+    // Removing is the user's own step, so a language only the file added is forgotten; a file missing at start is not.
+    await (known(setting.value) ? activate(resolve(setting.value)) : setLanguage("system"));
     return null;
   }
 

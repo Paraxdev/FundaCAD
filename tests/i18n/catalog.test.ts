@@ -597,15 +597,16 @@ describe("removing the user's lines", () => {
     expect(c.t("stress.setup.title")).toBe("Mon étude");
   });
 
-  it("leaves a language only the file added, back to System", async () => {
-    const { c } = make({}, seed);
+  it("leaves a language only the file added, back to System, and stores System", async () => {
+    const { c, storage } = make({}, seed);
     await c.init();
     await c.setLanguage("pl");
     expect(await c.removeDropIn()).toBeNull();
-    expect([c.setting(), c.active(), c.choices().map((o) => o.value)]).toEqual([
+    expect([c.setting(), c.active(), c.choices().map((o) => o.value), storage.map.get(LANGUAGE_KEY)]).toEqual([
       "system",
       { code: "en", bcp47: "en" },
       ["system", "en", "de", "fr"],
+      "system",
     ]);
   });
 
