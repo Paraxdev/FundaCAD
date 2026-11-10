@@ -2,6 +2,7 @@
 // v-html, it reaches the page through Vue interpolation or textContent only; markup is refused too, should that slip.
 
 import { argNames, parseMessage, type MessageNode } from "./format";
+import { jsonErrorIndex, positionOf, type TextPosition } from "./jsonError";
 
 export const MAX_OVERRIDE_BYTES = 256 * 1024;
 export const MAX_LINE_CHARS = 2000;
@@ -25,6 +26,8 @@ export interface OverrideResult {
   skipped: { key: string; reason: SkipReason; arg?: string }[];
   /** Set when the whole file was refused. */
   error?: "too-large" | "not-json" | "not-flat";
+  /** Where the JSON breaks, set with a not-json error. */
+  at?: TextPosition;
 }
 
 const MARKUP = /<[A-Za-z/!?]|&(#\d+|#x[0-9a-f]+|[a-z]+);/i;
@@ -72,11 +75,12 @@ export function parseOverrides(text: string, english: Readonly<Record<string, st
   const result: OverrideResult = { lines: new Map(), skipped: [] };
   // Measured before the BOM goes, so the limit matches the bytes the desktop reads from disk.
   if (new TextEncoder().encode(text).length > MAX_OVERRIDE_BYTES) return { ...result, error: "too-large" };
+  const body = text.startsWith("\ufeff") ? text.slice(1) : text;
   let data: unknown;
   try {
-    data = JSON.parse(text.startsWith("\ufeff") ? text.slice(1) : text);
+    data = JSON.parse(body);
   } catch {
-    return { ...result, error: "not-json" };
+    return { ...result, error: "not-json", at: positionOf(body, jsonErrorIndex(body) ?? body.length) };
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) return { ...result, error: "not-flat" };
   const entries = Object.entries(data);

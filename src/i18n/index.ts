@@ -47,6 +47,7 @@ export const activeLanguage = catalog.active;
 export const languageMachineTranslated = catalog.machineTranslated;
 export const languageChoices = catalog.choices;
 export const languageFileStatus = catalog.dropInStatus;
+export const languageFilePickedAt = catalog.pickedAt;
 export const onLanguageChange = catalog.onChange;
 // Reads a shallowRef, so a computed or template that spells a number follows the language.
 export const decimalMark = (): DecimalMark => decimalMarkOf(catalog.active().bcp47);

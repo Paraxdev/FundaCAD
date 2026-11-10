@@ -4,6 +4,7 @@
 import { shallowRef } from "vue";
 import { formatMessage, parseMessage, type MessageArgs, type MessageNode } from "./format";
 import { PSEUDO, PSEUDO_LANGUAGE, isLanguageCode, languageName, matchSystemLanguage, type Language } from "./languages";
+import type { TextPosition } from "./jsonError";
 import { MAX_OVERRIDE_BYTES, parseOverrides, type OverrideResult } from "./overrides";
 import { pseudoNodes } from "./pseudo";
 
@@ -56,6 +57,7 @@ export interface DropInStatus {
   lines: number;
   skipped: OverrideResult["skipped"];
   error?: OverrideResult["error"] | "not-read" | "not-utf8";
+  at?: TextPosition;
 }
 
 interface Active {
@@ -79,6 +81,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
   const active = shallowRef<Active>({ code: "en", bcp47: "en", shipped: {}, dropIn: new Map(), status: null });
   const setting = shallowRef("system");
   const dropInCodes = shallowRef<readonly string[]>([]);
+  const pickedAt = shallowRef<TextPosition | null>(null);
   const parsed = new Map<string, MessageNode[] | null>();
   const pseudoParsed = new Map<string, MessageNode[] | null>();
   const listeners = new Set<() => void>();
@@ -173,12 +176,15 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       console.warn(`the user's ${code} language file could not be read`, e);
       return { dropIn: new Map(), status: { lines: 0, skipped: [], error: readError(e) } };
     }
-    const { lines, skipped, error } = result;
+    const { lines, skipped, error, at } = result;
     for (const key of [...lines.keys()].filter((k) => LOCKED.test(k))) {
       lines.delete(key);
       skipped.push({ key, reason: "locked" });
     }
-    return { dropIn: lines, status: { lines: lines.size, skipped, ...(error ? { error } : {}) } };
+    return {
+      dropIn: lines,
+      status: { lines: lines.size, skipped, ...(error ? { error } : {}), ...(at ? { at } : {}) },
+    };
   }
 
   async function activate(code: string, late?: Promise<null>): Promise<void> {
@@ -255,8 +261,11 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       console.warn("the picked language file could not be read", e);
       return "unreadable";
     }
-    const error = parseOverrides(text, english).error;
-    if (error) return error;
+    const { error, at } = parseOverrides(text, english);
+    if (error) {
+      if (at) pickedAt.value = at;
+      return error;
+    }
     if (!deps.dropIns.save) return "storage";
     try {
       await deps.dropIns.save(code, text);
@@ -353,6 +362,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     machineTranslated: (): boolean => shippedLanguage(active.value.code)?.machine !== undefined,
     choices,
     dropInStatus: (): DropInStatus | null => active.value.status,
+    pickedAt: (): TextPosition | null => pickedAt.value,
     onChange(listener: () => void): () => void {
       listeners.add(listener);
       return () => listeners.delete(listener);

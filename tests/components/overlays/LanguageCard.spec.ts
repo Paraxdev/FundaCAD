@@ -152,7 +152,7 @@ describe("the Language card", () => {
     }
     expect(errors).toEqual([
       ["", ""],
-      [line(de, "prefs.language.error.notJson", "de"), ""],
+      [line(de, "prefs.language.error.notJson", "de", { line: 1, column: 27 }), ""],
       [line(fr, "prefs.language.error.tooLarge", "fr", { kb: 256 }), ""],
       [line(ja, "prefs.language.error.notFlat", "ja"), ""],
       ["", line(es, "prefs.language.inUse", "es", { n: 1 })],
@@ -383,7 +383,7 @@ describe("the user's own file in the browser", () => {
     await load(json("de.json", { "prefs.language.title": "Meine Sprache" }));
     await vi.waitFor(() => expect(text(".pref-title")).toBe("Meine Sprache"));
     const kept = localStorage.getItem("fundacad.language.dropin.de");
-    const notJson = line(de, "prefs.language.error.pickedNotJson", "de");
+    const notJson = line(de, "prefs.language.error.pickedNotJson", "de", { line: 1, column: 27 });
     const notFlat = line(de, "prefs.language.error.pickedNotFlat", "de");
     const shown: (string | null)[][] = [];
     for (const [body, error] of [

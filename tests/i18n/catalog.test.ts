@@ -394,7 +394,7 @@ describe("the user's language file", () => {
           { key: "stress.nope", reason: "unknown-key" },
         ],
       },
-      { lines: 0, skipped: [], error: "not-json" },
+      { lines: 0, skipped: [], error: "not-json", at: { line: 1, column: 3 } },
     ]);
   });
 
@@ -677,7 +677,18 @@ describe("loading a language file", () => {
   it("takes the language only from a name that is a language code and .json, reading nothing otherwise", async () => {
     const { c, storage } = make();
     await c.init();
-    const names = ["Polish.json", "pl_PL.json", "pseudo.json", "pl.JSON", "pl.json.txt", "pl", ".json", "de .json"];
+    const names = [
+      "Polish.json",
+      "pl_PL.json",
+      "pseudo.json",
+      "pl.JSON",
+      "Polish.json.txt",
+      "pl.txt",
+      "pl.json.txt.txt",
+      "pl",
+      ".json",
+      "de .json",
+    ];
     const refused: unknown[] = [];
     for (const name of names) {
       const f = file(name, { "stress.setup.title": "Ustaw badanie" });
@@ -687,6 +698,24 @@ describe("loading a language file", () => {
     expect(refused).toEqual(names.map(() => ["bad-name", 0]));
     expect([[...storage.map.keys()], c.setting()]).toEqual([[], "system"]);
     expect(await c.loadDropInFile(file("zh-Hant-TW.json", {}))).toBeNull();
+  });
+
+  it("says where a picked file breaks, each refusal on its own, and nothing after a file that parses", async () => {
+    const { c, storage } = make();
+    await c.init();
+    const where = [c.pickedAt()];
+    const results: unknown[] = [];
+    for (const text of ['{"stress.setup.title": "Ustaw",\n}', '{\n  "stress.setup.title": "Ustaw"', "{ x"]) {
+      results.push(await c.loadDropInFile(file("pl.json", text)));
+      where.push(c.pickedAt());
+    }
+    expect([results, where, storage.map.size]).toEqual([
+      ["not-json", "not-json", "not-json"],
+      [null, { line: 2, column: 1 }, { line: 2, column: 32 }, { line: 1, column: 3 }],
+      0,
+    ]);
+    expect(await c.loadDropInFile(file("pl.json", { "stress.setup.title": "Ustaw" }))).toBeNull();
+    expect(c.dropInStatus()).toEqual({ lines: 1, skipped: [] });
   });
 
   it("loads a file of exactly 256 KB and refuses one byte more before reading it", async () => {
