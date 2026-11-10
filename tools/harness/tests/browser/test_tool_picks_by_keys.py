@@ -1,6 +1,9 @@
 """A waiting tool takes the face or edge lit by the brackets on the 3D view, in both camera rigs, with no pointer event:
 Mirror takes a flat face as its plane and says so, a row it cannot use is refused aloud while it keeps waiting, and a
-running Fillet adds and takes out edges, and Stress Click faces takes a face for its support."""
+running Fillet adds and takes out edges, Stress Click faces takes a face for its support, and Text on face puts its
+text on a slanted face."""
+
+import math
 
 import pytest
 from fundacad_harness import Session
@@ -177,4 +180,55 @@ def test_stress_click_faces_refuses_an_edge_aloud_and_keeps_waiting(s):
     press_enter_and_hear(s, "an edge", "needs a face")
     assert s.page.locator(PLACING).count() == 1
     assert s.page.evaluate(SUPPORT_FACES) in (None, [])
+    assert s.page.evaluate("() => window.__pointer") == 0
+
+
+TEXT_ACTIVE = "() => window.__fundacad.textOnFace.active"
+TEXT_FEATURES = (
+    '() => window.store.document.features.filter((f) => f.type === "textOnFace").map(({ id, ...f }) => f)'
+)
+
+
+def text_on_face_by_keys(s):
+    open_doc(s, SLANT)
+    s.command("Text on face")
+    s.page.wait_for_function(TEXT_ACTIVE)
+    to_canvas(s)
+
+
+def test_text_on_face_takes_the_slanted_face_lit_by_the_brackets(s):
+    text_on_face_by_keys(s)
+    step_to(s, "]", "tilted 20 degrees from up")
+    press_enter_and_hear(s, "Flat face 6 of", "picked")
+    s.page.locator(".text-tool-text").wait_for()
+    assert s.page.evaluate(TEXT_FEATURES) == []
+    s.page.keyboard.press("Control+a")
+    s.page.keyboard.type("FUNDA")
+    s.page.keyboard.press("Control+Enter")
+    s.settle()
+    (feature,) = s.page.evaluate(TEXT_FEATURES)
+    face = feature["face"]
+    assert feature["text"] == "FUNDA"
+    assert feature["body"] == "body1"
+    point = pytest.approx(feature["point"], abs=1e-3)
+    assert face == {"kind": "face", "by": "nearest", "point": point, "body": "body1"}
+    # The 60 by 25 by 15 wedge's top, turned 20 degrees about x and moved to (-72.5, 18.25, 44).
+    rel = [p - c for p, c in zip(face["point"], [-72.5, 18.25, 44])]
+    tilt = math.radians(20)
+    normal = [0, -math.sin(tilt), math.cos(tilt)]
+    assert sum(r * n for r, n in zip(rel, normal)) == pytest.approx(7.5, abs=1e-3)
+    assert abs(rel[0]) <= 30
+    assert not s.page.evaluate(TEXT_ACTIVE)
+    assert s.page.evaluate("() => window.__pointer") == 0
+
+
+def test_text_on_face_refuses_an_edge_aloud_and_keeps_waiting(s):
+    text_on_face_by_keys(s)
+    s.page.keyboard.press("}")
+    heard(s, "Edges")
+    step_to(s, "]", "edge")
+    press_enter_and_hear(s, "an edge", "needs a face")
+    assert s.page.evaluate(TEXT_ACTIVE)
+    assert s.page.locator(".text-tool-text").count() == 0
+    assert s.page.evaluate(TEXT_FEATURES) == []
     assert s.page.evaluate("() => window.__pointer") == 0
