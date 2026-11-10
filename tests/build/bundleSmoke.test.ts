@@ -132,7 +132,7 @@ describe("the deb-install job", () => {
     expect(release).not.toContain("deb-install");
   });
 
-  it("leaves each image on its own mirror, since the runner's Azure one stalled every Ubuntu install", () => {
+  it("leaves each image on its own mirror, since the runner's Azure one stalled three of four Ubuntu installs", () => {
     const code = (t: string) => t.replace(/\r/g, "").replace(/^\s*#.*$/gm, "");
     expect(code(text)).not.toMatch(/azure\.archive|UBUNTU_MIRROR/);
     expect(code(installSmoke)).not.toMatch(/azure\.archive|UBUNTU_MIRROR|sources\.list/);
@@ -167,7 +167,8 @@ describe("the package install script's apt", () => {
   });
 
   it("shows where a failed or stalled install stopped, which -qq hides", () => {
-    const failed = /if ! timeout [^\n]*apt-get install[^\n]*; then\n([\s\S]*?)\n {4}exit 1\n {2}fi/.exec(deb)?.[1] ?? "";
+    const failed =
+      /if ! timeout [^\n]*apt-get install[^\n]*; then\n([\s\S]*?)\n {4}exit 1\n {2}fi/.exec(deb)?.[1] ?? "";
     expect(failed).toContain("/var/log/apt/term.log");
     expect(failed).toContain("/var/log/dpkg.log");
     expect(failed).toContain("/var/cache/apt/archives/partial");

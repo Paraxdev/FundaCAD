@@ -14,7 +14,7 @@ deb)
   # A stalled mirror once held apt past the job's 20 minutes. A dead one left half the indexes
   # missing while apt-get update still exited 0, so the install failed on "held broken packages".
   # The images keep their own mirror: azure.archive.ubuntu.com, which the runner itself uses,
-  # stalled every Ubuntu install from inside the container (run 42796033842).
+  # stalled three of four Ubuntu installs from inside the container (run 42796033842 and its rerun).
   printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
     'APT::Update::Error-Mode "any";' > /etc/apt/apt.conf.d/80-ci-retries
   for try in 1 2 3; do
