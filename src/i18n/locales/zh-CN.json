@@ -1,4 +1,5 @@
 {
+  "guide.keysLabel": "键盘操作：",
   "menu.help.accessibility": "无障碍",
   "prefs.accessibility.manualLink": "阅读手册中的无障碍页面",
   "prefs.language.error.badName": "无法从文件名判断语言，请以语言代码命名文件，例如 pl.json。",

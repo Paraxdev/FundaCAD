@@ -60,6 +60,8 @@ pub fn guide_highlight_schema() -> JsonObject {
                 it, 0 to 1", "properties": {"x": {"type": "number"}, "y": {"type": "number"},
                 "w": {"type": "number"}, "h": {"type": "number"}}, "required": ["x", "y", "w", "h"]},
             "caption": {"type": "string", "description": "what the user should do, one or two short sentences"},
+            "keys": {"type": "string", "description": "the step for keys alone, in words: press Ctrl+K, type \
+                Fillet, press Enter. Give it whenever keys can do the step"},
             "step": {"type": "integer", "minimum": 1},
             "of": {"type": "integer", "minimum": 1}
         },
@@ -228,13 +230,16 @@ impl FundaCad {
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };
-        let command = json!({
+        let mut command = json!({
             "kind": "highlight",
             "target": {key: args[key].clone()},
             "caption": args.get("caption").cloned().unwrap_or(json!("")),
             "step": args.get("step").cloned().unwrap_or(json!(1)),
             "of": args.get("of").cloned().unwrap_or(json!(1)),
         });
+        if let Some(keys) = args.get("keys").filter(|k| k.as_str().is_some_and(|s| !s.trim().is_empty())) {
+            command["keys"] = keys.clone();
+        }
         Ok(match self.guide_send(command).await {
             Ok((g, _)) => step_reply(&g, &asked),
             Err(out) => out,

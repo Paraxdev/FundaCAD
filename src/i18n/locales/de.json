@@ -1,4 +1,5 @@
 {
+  "guide.keysLabel": "Mit Tasten:",
   "menu.help.accessibility": "Barrierefreiheit",
   "prefs.accessibility.manualLink": "Die Seite Barrierefreiheit im Handbuch lesen",
   "prefs.language.error.badName": "Die Sprache ließ sich nicht aus dem Dateinamen ablesen, benennen Sie die Datei nach dem Sprachcode, etwa pl.json.",

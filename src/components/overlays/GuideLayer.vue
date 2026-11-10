@@ -4,6 +4,8 @@
 import * as THREE from "three";
 import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
+import { announce } from "../../ui/announce";
 import { labelOf } from "../../ui/controlRefs";
 import { resolveControl } from "../../ui/guide/controls";
 import type { GuideState, StepState } from "../../ui/guide/guideSession";
@@ -172,9 +174,23 @@ function restart(): void {
   void nextTick(schedule);
 }
 
+const counterOf = (s: StepState) => (s.of > 1 ? `Step ${s.step} of ${s.of}` : "Guide");
+const sentence = (s: string) => (!s || /[.!?:。：]$/.test(s) ? s : `${s}.`);
+
+// The bubble mounts with its first step's text, and a live region that arrives filled is mostly not read.
+let spokenSeq = -1;
+function speak(s: StepState | null): void {
+  if (!s) spokenSeq = -1;
+  if (!s || s.next || s.seq === spokenSeq) return;
+  spokenSeq = s.seq;
+  const keys = s.keys ? ` ${t("guide.keysLabel")} ${s.keys}` : "";
+  announce(`${sentence(counterOf(s))} ${sentence(s.caption)}${keys}`, "polite", { key: "guide" });
+}
+
 const stopWatching = guide.subscribe((s) => {
   const before = state.value.step;
   state.value = s;
+  speak(s.step);
   if (s.step?.seq !== before?.seq || !!s.step?.next !== !!before?.next) restart();
   else schedule();
 });
@@ -193,9 +209,7 @@ const bubbleStyle = computed(() => {
   const b = bubbleAt.value;
   return b ? { left: `${b.left}px`, top: `${b.top}px` } : { visibility: "hidden" as const };
 });
-const counter = computed(() =>
-  step.value && step.value.of > 1 ? `Step ${step.value.step} of ${step.value.of}` : "Guide",
-);
+const counter = computed(() => (step.value ? counterOf(step.value) : "Guide"));
 </script>
 
 <template>
@@ -216,13 +230,15 @@ const counter = computed(() =>
         ref="bubble"
         class="guide-bubble"
         role="dialog"
-        aria-live="polite"
         :aria-label="counter"
         :data-side="bubbleAt?.side"
         :style="bubbleStyle"
       >
         <div class="guide-count">{{ counter }}</div>
         <p class="guide-caption">{{ step.caption }}</p>
+        <p v-if="step.keys" class="guide-keys" data-guide-keys>
+          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ step.keys }}
+        </p>
         <p v-if="hint" class="guide-hint">{{ hint }}</p>
         <div class="guide-actions">
           <Button id="guide-stop" @click="guide.stop()">Stop</Button>

@@ -1071,7 +1071,8 @@ losing the socket gives it up.
 ```
 
 Commands are `highlight` (`target` is one of `ui`, a control id; `model`, a selector;
-`region`, viewport fractions `{x, y, w, h}`), `clear`, and `wait` (`until`, a list of
+`region`, viewport fractions `{x, y, w, h}`; an optional `keys`, the step in words for keys
+alone, capped like `caption`), `clear`, and `wait` (`until`, a list of
 `next`, `tool`, `feature`, `selection`, `value`, with optional `tool` and `field`).
 The engine keeps the newest step (a highlight or a clear) and the newest wait, never a
 backlog: a window too old to take them shows up as no `ack` rather than as a full queue.

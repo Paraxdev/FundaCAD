@@ -11,7 +11,7 @@ pub const GUEST_TTL: f64 = 45.0;
 pub const MAX_PENDING: usize = 8;
 /// Characters of a guest's note kept; it is shown to the user.
 pub const MAX_NOTE: usize = 400;
-/// Characters of a guide caption kept.
+/// Characters of a guide caption kept, and of its keys.
 pub const MAX_CAPTION: usize = 600;
 /// Refusals of the engine's own kept for guests, as many as the app keeps of its own.
 pub const MAX_REFUSED: usize = 16;
@@ -464,9 +464,11 @@ impl LiveSession {
             return json!({"ok": true, "attached": true, "seq": null, "guide": self.guide_state});
         };
         let mut cmd = cmd.clone();
-        if let Some(Value::String(c)) = cmd.get("caption") {
-            let capped: String = c.chars().take(MAX_CAPTION).collect();
-            cmd.insert("caption".into(), json!(capped));
+        for field in ["caption", "keys"] {
+            if let Some(Value::String(c)) = cmd.get(field) {
+                let capped: String = c.chars().take(MAX_CAPTION).collect();
+                cmd.insert(field.into(), json!(capped));
+            }
         }
         self.next_guide_seq += 1;
         let seq = self.next_guide_seq;

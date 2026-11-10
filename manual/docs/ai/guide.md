@@ -8,6 +8,8 @@ Ask an assistant to show you how to do something, such as "show me how to round 
 
 If the button is folded away, for example Fillet inside Modify, the ring sits on Modify and the caption says to open it first. Then the ring moves to Fillet.
 
+When a step can be done from the keyboard, the assistant can add its keys in words, such as "press Ctrl+K, type Fillet, press Enter". They show under the caption after **With keys:**, and a screen reader says each step with its keys when it arrives, so you can follow the step without the pointer or the ring. Ask for keys if a step comes without them.
+
 1. **Next** tells the assistant you are done with this step, when it waits for you rather than for something in the model.
 2. **Stop** takes the ring and caption away at once and tells the assistant you stopped. It does not undo anything you did.
 

@@ -1,4 +1,5 @@
 {
+  "guide.keysLabel": "Au clavier :",
   "menu.help.accessibility": "Accessibilité",
   "prefs.accessibility.manualLink": "Lire la page Accessibilité du manuel",
   "prefs.language.error.badName": "Impossible de déduire la langue du nom du fichier, nommez le fichier d’après son code de langue, par exemple pl.json.",

@@ -1,4 +1,5 @@
 {
+  "guide.keysLabel": "Con el teclado:",
   "menu.help.accessibility": "Accesibilidad",
   "prefs.accessibility.manualLink": "Leer la página Accesibilidad del manual",
   "prefs.language.error.badName": "No se pudo saber el idioma por el nombre del archivo, póngale de nombre el código del idioma, por ejemplo pl.json.",
