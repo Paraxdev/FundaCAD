@@ -249,6 +249,21 @@ describe("the user's own file in the browser", () => {
     ]);
   });
 
+  it("names a shipped language as the user's file once a file for it is in use", async () => {
+    await render();
+    await pick("de");
+    const before = text(".select-value");
+    await load(json("de.json", { "prefs.language.title": "Meine Sprache" }));
+    await vi.waitFor(() => expect(text(".pref-title")).toBe("Meine Sprache"));
+    const name = document.querySelector(".select-value [lang]");
+    expect([before, text(".select-value"), name?.getAttribute("lang"), name?.textContent]).toEqual([
+      "Deutsch (maschinell übersetzt)",
+      line(de, "prefs.language.yours", "de", { name: "Deutsch (maschinell übersetzt)" }),
+      "de",
+      "Deutsch (maschinell übersetzt)",
+    ]);
+  });
+
   it("keeps the lines that tell about the file as shipped, and says why", async () => {
     await render();
     await load(json("en.json", { "prefs.language.inUse": "All fine.", "prefs.language.title": "Words" }));

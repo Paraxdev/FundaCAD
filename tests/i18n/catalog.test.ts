@@ -413,13 +413,17 @@ describe("the choices", () => {
     "fundacad.language.dropin.PL": "{}",
   };
 
-  it("are System, the shipped languages in their own words, then the user's languages", async () => {
+  it("are System, the shipped languages in their own words, one with a file marked, then the user's languages", async () => {
     const { c } = make({}, seed);
     await c.init();
     expect(c.choices()).toEqual([
       { value: "system", label: "System (English)" },
       { value: "en", label: "English", lang: "en" },
-      { value: "de", label: "Deutsch (maschinell übersetzt)", lang: "de-DE" },
+      {
+        value: "de",
+        label: "Deutsch (maschinell übersetzt) (your file)",
+        parts: [{ text: "Deutsch (maschinell übersetzt)", lang: "de-DE" }, { text: " (your file)" }],
+      },
       { value: "fr", label: "Français (traduction automatique)", lang: "fr" },
       {
         value: "nl",
@@ -469,6 +473,24 @@ describe("the choices", () => {
         { value: "pl", label: "Eigene Sprache", parts: [{ text: "Eigene Sprache" }] },
       ],
     );
+  });
+
+  it("say so when an en.json of the user's changes English under System", async () => {
+    const { c } = make({}, { "fundacad.language.dropin.en": JSON.stringify({ "stress.setup.title": "My study" }) });
+    await c.init();
+    expect([c.setting(), c.t("stress.setup.title"), c.choices().slice(0, 3)]).toEqual([
+      "system",
+      "My study",
+      [
+        { value: "system", label: "System (English (your file))" },
+        {
+          value: "en",
+          label: "English (your file)",
+          parts: [{ text: "English", lang: "en" }, { text: " (your file)" }],
+        },
+        { value: "de", label: "Deutsch (maschinell übersetzt)", lang: "de-DE" },
+      ],
+    ]);
   });
 
   it("name the System language once it follows System", async () => {

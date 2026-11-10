@@ -301,31 +301,32 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     if (setting.value === "system" && code !== active.value.code) void activate(code);
   });
 
+  function yours(value: string, name: string, lang: string): LanguageChoice {
+    const runs = lookup("prefs.language.yours", { name: NAME_MARK }).split(NAME_MARK);
+    const parts = runs.flatMap((text, i) => [...(i ? [{ text: name, lang }] : []), ...(text ? [{ text }] : [])]);
+    return { value, label: runs.join(name), parts };
+  }
+
+  // A shipped language the user's file changes says so too, or its label would hide that the file is in use.
   function choices(): LanguageChoice[] {
-    const system = languageOf(systemCode())?.native ?? "English";
-    const shipped = deps.languages.map((l) => ({
-      value: l.code,
-      label: l.machine ? `${l.native} (${l.machine})` : l.native,
-      lang: l.bcp47,
-    }));
-    const yours = dropInCodes.value
+    const hasFile = (code: string) => dropInCodes.value.includes(code);
+    const systemLanguage = systemCode();
+    const systemName = languageOf(systemLanguage)?.native ?? "English";
+    const system = hasFile(systemLanguage) ? lookup("prefs.language.yours", { name: systemName }) : systemName;
+    const shipped = deps.languages.map((l) => {
+      const name = l.machine ? `${l.native} (${l.machine})` : l.native;
+      return hasFile(l.code) ? yours(l.code, name, l.bcp47) : { value: l.code, label: name, lang: l.bcp47 };
+    });
+    const own = dropInCodes.value
       .filter((code) => !languageOf(code))
-      .map((code) => {
-        const name = languageName(code);
-        const runs = lookup("prefs.language.yours", { name: NAME_MARK }).split(NAME_MARK);
-        const parts = runs.flatMap((text, i) => [
-          ...(i ? [{ text: name, lang: code }] : []),
-          ...(text ? [{ text }] : []),
-        ]);
-        return { value: code, label: runs.join(name), parts };
-      });
+      .map((code) => yours(code, languageName(code), code));
     const pseudoChoice = deps.dev
       ? [{ value: PSEUDO, label: PSEUDO_LANGUAGE.native, lang: PSEUDO_LANGUAGE.bcp47 }]
       : [];
     return [
       { value: "system", label: lookup("prefs.language.system", { name: system }) },
       ...shipped,
-      ...yours,
+      ...own,
       ...pseudoChoice,
     ];
   }
