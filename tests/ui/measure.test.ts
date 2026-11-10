@@ -297,33 +297,49 @@ describe("a decimal comma in a language that writes one", () => {
     expect(plainNumber("1,500")).toBeNull();
   });
 
-  it("refuses a lone point before exactly three digits with a comma mark, the mirror of 1,000 with a point mark", () => {
-    for (const typed of ["1.500", "0.250", "12.000"]) {
+  it("refuses a point before exactly three digits after a nonzero whole part with a comma mark, the mirror of 1,000", () => {
+    const refused: [string, string][] = [
+      ["1.500", "1.500"],
+      ["12.000", "12.000"],
+      ["-1.500", "1.500"],
+    ];
+    for (const [typed, num] of refused) {
       expect(() => canonicalTyping(typed, ","), typed).toThrow(
-        `"${typed}" is ambiguous, write a comma for decimals or leave the point out`,
+        `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
       );
     }
-    const comma = ["1.50", "1.5000", "2.25", "1.5", "1.2345", "1,500", "1,5"].map((t) => canonicalTyping(t, ","));
+    const typed = ["0.250", "-0.250", "0.125", "0.200", ".500", "1.50", "1.5000", "2.25", "1.2345", "1,500", "1,5"];
+    const comma = typed.map((t) => canonicalTyping(t, ","));
     const point = ["1.500", "0.250"].map((t) => canonicalTyping(t, "."));
     expect({ comma, point }).toEqual({
-      comma: ["1.50", "1.5000", "2.25", "1.5", "1.2345", "1.500", "1.5"],
+      comma: ["0.250", "-0.250", "0.125", "0.200", ".500", "1.50", "1.5000", "2.25", "1.2345", "1.500", "1.5"],
       point: ["1.500", "0.250"],
     });
   });
 
-  it("reads 1.500 as 1.5 in English and refuses it in German with the reason, while 2.25 and 1,500 still read", async () => {
+  it("keeps refusing a comma before exactly three digits in English, 0,125 included", () => {
+    for (const typed of ["0,125", "-0,250", "1,500"]) {
+      expect(() => canonicalTyping(typed, "."), typed).toThrow(
+        `"${typed}" is ambiguous, write a point for decimals or leave the comma out`,
+      );
+    }
+  });
+
+  it("reads 1.500 as 1.5 in English and refuses it in German with the reason, while 0.250 and 1,500 still read", async () => {
     const en = [val("1.500"), val("0.250")];
     await setLanguage("de");
     const de = {
-      refused: [measureError("1.500", MM), tryParseMeasure("0.250", MM), plainNumber("1.500")],
-      read: ["1.50", "1.5000", "2.25", "1,500", "1,5", "1.2345"].map((t) => val(t)),
+      refused: [measureError("1.500", MM), tryParseMeasure("-1.500", MM), plainNumber("12.000")],
+      read: ["0.250", "-0.250", ".500", "1.50", "1.5000", "2.25", "1,500", "1,5", "1.2345"].map((t) => val(t)),
+      plain: [plainNumber("0.250"), plainNumber("-0.250")],
       saved: plainNumber("0.125", "."),
     };
     expect({ en, de }).toEqual({
       en: [1.5, 0.25],
       de: {
         refused: ['"1.500" is ambiguous, write a comma for decimals or leave the point out', null, null],
-        read: [1.5, 1.5, 2.25, 1.5, 1.5, 1.2345],
+        read: [0.25, -0.25, 0.5, 1.5, 1.5, 2.25, 1.5, 1.5, 1.2345],
+        plain: [0.25, -0.25],
         saved: 0.125,
       },
     });

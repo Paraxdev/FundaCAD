@@ -42,13 +42,13 @@ describe("commasToPoints swaps a decimal comma and keeps the length", () => {
   it.each([
     ["1.500", "1.500", 0],
     ["12.000", "12.000", 0],
-    ["0.250", "0.250", 0],
     ["-1.500", "1.500", 1],
+    ["01.500", "01.500", 0],
     ["breite * 1.500", "1.500", 9],
     ["2.500mm", "2.500", 0],
     ["10x1.500", "1.500", 3],
     ["max(1,5; 2.125)", "2.125", 9],
-  ])("refuses %j, a lone point before three digits could be a thousands point", (typed, num, at) => {
+  ])("refuses %j, a point before three digits after 1 or more could be a thousands point", (typed, num, at) => {
     let thrown: unknown;
     try {
       commasToPoints(typed);
@@ -68,7 +68,13 @@ describe("commasToPoints swaps a decimal comma and keeps the length", () => {
     ["2.25", "2.25"],
     ["1.2345", "1.2345"],
     ["1.500e3", "1.500e3"],
+    ["0.250", "0.250"],
+    ["-0.250", "-0.250"],
+    ["0.125", "0.125"],
+    ["0.200", "0.200"],
+    ["00.250", "00.250"],
     [".500", ".500"],
+    ["breite * 0.250", "breite * 0.250"],
     ["1,500", "1.500"],
     ["breite * 1,5", "breite * 1.5"],
   ])("takes %j as %j, which no thousands point could have written", (typed, read) => {

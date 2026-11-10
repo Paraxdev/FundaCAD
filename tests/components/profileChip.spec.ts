@@ -189,17 +189,17 @@ describe("ProfileChip", () => {
     }
   });
 
-  it("in a comma language refuses 0.250 with the reason and keeps the profile, 0.25 still commits", async () => {
+  it("in a comma language refuses 1.500 with the reason and keeps the profile, 0.250 commits as 0.25", async () => {
     await setLanguage("de");
     try {
       mount(-0.35).click();
-      field().value = "0.250";
+      field().value = "1.500";
       key(field(), "Enter");
       const refused = [chip.profile, field().getAttribute("aria-invalid"), field().title];
-      field().value = "0.25";
+      field().value = "0.250";
       key(field(), "Enter");
       expect({ refused, taken: [chip.profile, field().value] }).toEqual({
-        refused: [-0.35, "true", '"0.250" is ambiguous, write a comma for decimals or leave the point out'],
+        refused: [-0.35, "true", '"1.500" is ambiguous, write a comma for decimals or leave the point out'],
         taken: [0.25, "+0,250"],
       });
     } finally {

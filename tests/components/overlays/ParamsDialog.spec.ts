@@ -240,13 +240,13 @@ describe("ParamsDialog", () => {
       add.click();
       await flushPromises();
       const expr = inputs()[1]!;
-      await type(expr, "w * 0.250");
+      await type(expr, "w * 2.500");
       await enter(expr);
       const why = (n: string) => `"${n}" is ambiguous, write a comma for decimals or leave the point out`;
       expect({ calls: fake.calls, add: add.title, expr: [expr.value, expr.title] }).toEqual({
         calls: [],
         add: why("1.500"),
-        expr: ["w * 0.250", why("0.250")],
+        expr: ["w * 2.500", why("2.500")],
       });
     });
 

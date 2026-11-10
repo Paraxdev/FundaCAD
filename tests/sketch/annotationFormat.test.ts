@@ -49,7 +49,7 @@ describe("isFormula", () => {
     expect(isFormula("5+3")).toBe(true);
   });
 
-  it("reads a saved literal with three decimals as a literal in German, where typing 0.125 is refused", async () => {
+  it("reads a saved literal with three decimals as a literal in German, where typing 1.500 is refused", async () => {
     await setLanguage("de");
     try {
       expect(["0.125", "1.500", "0.125*w"].map((e) => isFormula(e))).toEqual([false, false, true]);

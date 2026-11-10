@@ -785,6 +785,7 @@ describe("FeatureProperties expressions through NumberField", () => {
     ["max(1,5; width)", "max(1.5; width)"],
     ["width*1,5 - 2,25*gap", "width*1.5 - 2.25*gap"],
     ["breite * 1,5", "breite * 1.5"],
+    ["breite * 0.250", "breite * 0.250"],
   ])("in German hands %j to the parameter engine as %j", async (raw, stored) => {
     await setLanguage("de");
     try {
@@ -800,7 +801,7 @@ describe("FeatureProperties expressions through NumberField", () => {
   it.each([
     ["breite * 1.500", "1.500"],
     ["1.500", "1.500"],
-    ["0.250", "0.250"],
+    ["-12.000", "12.000"],
   ])("in German refuses %j as ambiguous under the row and hands the engine nothing", async (raw, num) => {
     await setLanguage("de");
     try {

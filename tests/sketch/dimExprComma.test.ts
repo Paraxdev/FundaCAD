@@ -41,6 +41,7 @@ describe("evalDimInput with a decimal comma", () => {
     ["width*1,5", { value: 60, expr: "width*1.5" }],
     ["max(1,5;2,25) + width/8", { value: 7.25, expr: "max(1.5;2.25) + width/8" }],
     ["wall = width/1,6", { value: 25, expr: "width/1.6", name: "wall" }],
+    ["width*0.250", { value: 10, expr: "width*0.250" }],
   ])("in German %j is stored with a point", async (raw, expected) => {
     await setLanguage("de");
     expect(evalDim(raw)).toEqual(expected);

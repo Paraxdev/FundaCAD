@@ -197,9 +197,9 @@ const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 
 /** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark, and a
- *  lone point before exactly three digits is refused, "1.500" could be fifteen hundred. With a point mark a comma is
- *  one only when it is the lone comma with no point or brackets, and never before exactly three digits, where "1,000"
- *  is refused rather than guessed. */
+ *  lone point before exactly three digits after a nonzero whole part is refused, "1.500" could be fifteen hundred
+ *  while "0.250" reads. With a point mark a comma is one only when it is the lone comma with no point or brackets, and
+ *  never before exactly three digits, where "1,000" and "0,125" are refused rather than guessed. */
 export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
   const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
   if (mark === ",") return commasToPoints(src);
