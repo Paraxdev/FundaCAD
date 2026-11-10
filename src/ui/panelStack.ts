@@ -245,7 +245,8 @@ function place() {
   // The root's clientWidth stays in window pixels under its own zoom, like the rects.
   const viewWidth = document.documentElement.clientWidth / z;
   const mins = open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0);
-  let floors = open.map((p) => scrollerFloors(p.el));
+  const uncapped = open.map((p) => scrollerFloors(p.el));
+  let floors = uncapped;
   const lay = () => {
     const cols = columnsUnderZoom(area, { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) }, z);
     const base = cols[0]!.bottom;
@@ -268,17 +269,26 @@ function place() {
       if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
     });
   };
-  // A panel with a scroller is short when its column is too narrow for it or a shelf offers less than its least.
-  const shorts = (l: ReturnType<typeof lay>) =>
-    open.filter((_, i) => {
+  // A panel with a scroller is short when its column is too narrow for it or a shelf offers less than its least, `over`
+  // is what its column lacks of that least. Measured at the width the layout gives it, where capped rows wrap taller.
+  const judge = (l: ReturnType<typeof lay>) => {
+    fit(l);
+    floors = open.map((p) => scrollerFloors(p.el));
+    let short = 0;
+    let over = 0;
+    open.forEach((_, i) => {
       const least = floors[i]!.least;
       const c = l.at[i]!;
-      return least !== undefined && (span(c) < mins[i]! || (c !== l.cols[0] && c.bottom - c.top < least));
-    }).length;
-  const needed = () => Math.max(MIN_HEIGHT, ...floors.map((f) => f.least ?? 0));
+      if (least === undefined) return;
+      if (span(c) < mins[i]! || (c !== l.cols[0] && c.bottom - c.top < least)) short++;
+      over += Math.max(0, least - (c.bottom - c.top));
+    });
+    return { short, over };
+  };
+  const needed = (fs: typeof floors) => Math.max(MIN_HEIGHT, ...fs.map((f) => f.least ?? 0));
   let now = lay();
-  const before = shorts(now);
-  if (before) {
+  const before = judge(now);
+  if (before.short) {
     const cuttable = lists.map(([card, list]) => ({
       card,
       least: card.offsetHeight - list.offsetHeight + Math.min(list.scrollHeight, SCROLLER_LEAST),
@@ -289,26 +299,24 @@ function place() {
         const h = yieldedHeight(c.box, now.base, need, c.least, CUBE_MARGIN);
         c.card.style.maxHeight = h === null ? "" : `${Math.floor(h)}px`;
       }
-      return cuttable.some((c) => c.card.style.maxHeight !== "");
     };
-    let need = needed();
-    if (cutTo(need)) {
-      let cut = lay();
-      // The shelf the cut opens can be narrower than the panel's natural width, where its fixed rows wrap taller.
-      fit(cut);
-      floors = open.map((p) => scrollerFloors(p.el));
-      if (needed() > need) {
-        need = needed();
-        cutTo(need);
-        cut = lay();
-        fit(cut);
-        floors = open.map((p) => scrollerFloors(p.el));
-      }
-      if (shorts(cut) < before) now = cut;
-      else {
-        for (const c of cuttable) c.card.style.maxHeight = "";
-        now = lay();
-      }
+    // The shelf the cut opens can be narrower than the panel's natural width, so the cut grows once to the least
+    // measured in that shelf.
+    let need = needed(uncapped);
+    let cut = now;
+    let after = before;
+    for (let grow = 0; grow < 2; grow++) {
+      cutTo(need);
+      cut = lay();
+      after = judge(cut);
+      if (needed(floors) <= need) break;
+      need = needed(floors);
+    }
+    // A cut that leaves as many panels short is still kept when it leaves them less far past their columns.
+    if (after.short < before.short || (after.short === before.short && after.over < before.over)) now = cut;
+    else {
+      for (const c of cuttable) c.card.style.maxHeight = "";
+      now = lay();
     }
   }
   for (const [, list, top] of lists) if (list.scrollTop !== top) list.scrollTop = top;

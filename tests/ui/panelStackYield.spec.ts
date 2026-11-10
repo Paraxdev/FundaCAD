@@ -14,6 +14,7 @@ const HEAD = 78;
 const FIXED = 164;
 const STEP = 400;
 const NATURAL = 340;
+const LINE = 68;
 
 const frame = () => new Promise((r) => requestAnimationFrame(r));
 const capOf = (el: HTMLElement) => {
@@ -60,7 +61,7 @@ function card(tall: number, content: number, scrolls = true) {
   return { el, list };
 }
 
-// A Stress panel is NATURAL wide and wraps `wrap` px of fixed rows taller once place() caps it narrower.
+// A Stress panel is NATURAL wide, its fixed rows wrap `wrap` px taller for each LINE px place() caps it narrower.
 function stress(wrap = 0, min = 360) {
   const el = document.createElement("div");
   el.style.minWidth = `${min}px`;
@@ -69,7 +70,7 @@ function stress(wrap = 0, min = 360) {
   const step = document.createElement("div");
   step.toggleAttribute("data-panel-scroll", true);
   el.append(step);
-  const fixed = () => FIXED + (width() < NATURAL ? wrap : 0);
+  const fixed = () => FIXED + wrap * Math.ceil((NATURAL - width()) / LINE);
   const h = () => Math.min(fixed() + STEP, capOf(el));
   for (const k of ["scrollHeight", "offsetHeight", "clientHeight"]) Object.defineProperty(el, k, { get: h });
   Object.defineProperty(step, "offsetHeight", { get: () => h() - fixed() });
@@ -127,6 +128,43 @@ describe("a History card above the Stress panel", () => {
     const { history, top, cap } = read();
     expect({ history, top, cap }).toEqual({ history: "500px", top: "562px", cap: "224px" });
     expect(parseFloat(top) + parseFloat(cap)).toBeLessThanOrEqual(786);
+  });
+
+  it("is cut when the shelf holds the panel's least at its natural width but not at the shelf's, both sides", () => {
+    for (const tall of [502, 520]) {
+      const { read } = open(800, tall, 840, true, 20, 180, true);
+      expect(read()).toEqual({ history: "500px", top: "562px", cap: "224px" });
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+    }
+    expect(open(800, 500, 840, true, 20, 180, true).read()).toEqual({ history: "", top: "562px", cap: "224px" });
+  });
+
+  it("is cut to its least for a shelf short of the panel's least, not left whole with the panel in a sliver", () => {
+    const { read } = open(404, 318, 840, true, 20, 180, true);
+    const panel = document.querySelector<HTMLElement>("[data-panel-scroll]")!.parentElement!;
+    expect({ ...read(), width: panel.style.maxWidth }).toEqual({
+      history: "118px",
+      top: "180px",
+      cap: "224px",
+      width: "272px",
+    });
+  });
+
+  // At bottom 400 the sliver beside History lacks 5 * wrap - 36 px of the panel's least, the cut shelf wrap - 2.
+  it("is cut to its least only when that leaves the panel less far past its column, both sides and the tie", () => {
+    const got = [8, 8.5, 9].map((wrap) => {
+      const { read } = open(400, 318, 840, true, wrap, 180, true);
+      const r = read();
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+      return r;
+    });
+    expect(got).toEqual([
+      { history: "", top: "146px", cap: "244px" },
+      { history: "", top: "146px", cap: "246px" },
+      { history: "118px", top: "180px", cap: "213px" },
+    ]);
   });
 
   it("is cut as before when the shelf width leaves the fixed rows as they were", () => {

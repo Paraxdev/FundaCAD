@@ -265,48 +265,64 @@ def test_history_keeps_its_list_scrolled_where_it_was_when_the_window_resizes(gr
     assert got["after"] == got["end"], got
 
 
-SHELF_SIZES = [(900, 800), (900, 600)]
-SHELF_FIXTURES = {14: FIXTURES[14], 24: FIXTURES[24]}
-SHELF_LANGS = ["en", "fr"]
-SHELF_TEXTS = {"wide": TEXTS["wide"], "comfortable": TEXTS["comfortable"]}
+# (window, interface size, History features, text, language). The first are shelves that History is cut for, the last
+# two windows are shelves that hold the panel's least at its natural width but not at the 284px it gets there.
+SHELF_CASES = [
+    *[((900, h), 100, n, t, lang) for h in (800, 600) for n in (14, 24) for t in ("wide", "comfortable") for lang in ("en", "fr")],
+    *[((1920, 1080), 200, n, "comfortable", lang) for n in (14, 24) for lang in ("en", "fr")],
+    *[((900, h), 100, 10, "wide", "en") for h in (720, 725)],
+    *[((900, h), 100, 10, "comfortable", "en") for h in (730, 735, 740)],
+]
+# Windows where History cut to its least still leaves the shelf short of the panel's least.
+LEAST_CASES = [((900, h), 100, 14, "wide", "en") for h in (398, 404, 407)] + [
+    ((900, h), 100, 14, "comfortable", "en") for h in (407, 413, 419)
+]
 
-# The column's bottom is the layer's, less the view cube's margin that place() keeps.
+# The column's bottom is the layer's, less the view cube's margin that place() keeps in CSS pixels under the root zoom.
 COLUMN_BOTTOM = """() => {
+  const z = Number(document.documentElement.style.zoom) || 1;
   const panel = document.querySelector('.stress-panel').getBoundingClientRect();
   const run = document.querySelector('.stress-panel .stress-run').getBoundingClientRect();
   const layer = document.getElementById('float-layer').getBoundingClientRect();
-  return { panel_b: panel.bottom, run_b: run.bottom, column_b: layer.bottom - 14, window_b: innerHeight };
+  return { panel_b: panel.bottom, panel_w: panel.width / z, run_b: run.bottom, column_b: layer.bottom - 14 * z, window_b: innerHeight };
 }"""
 
 
 @pytest.fixture(scope="module")
 def shelved():
     found = {}
-    for size in SHELF_SIZES:
-        for count, path in SHELF_FIXTURES.items():
-            s = Session(viewport=size)
-            try:
-                s.open_file(path)
-                s.panel("History", open=True)
-                show_stress(s)
-                pick(s, ".stress-material", "Custom")
-                for text, (wide, comfortable) in SHELF_TEXTS.items():
-                    show_text(s, wide, comfortable)
-                    for lang in SHELF_LANGS:
-                        s.page.evaluate("async (c) => (await import('/src/i18n/index.ts')).setLanguage(c)", lang)
-                        s.page.evaluate("() => window.dispatchEvent(new Event('resize'))")
-                        settled(s)
-                        found[(size, count, text, lang)] = s.page.evaluate(COLUMN_BOTTOM)
-            finally:
-                s.close()
+    cases = SHELF_CASES + LEAST_CASES
+    for pct, count in sorted({(c[1], c[2]) for c in cases}):
+        s = Session(viewport=(900, 800))
+        try:
+            if pct != 100:
+                s.page.evaluate("async (p) => (await import('/src/ui/interfaceSize.ts')).applyInterfaceSize(p)", pct)
+            s.open_file(FIXTURES[count])
+            s.panel("History", open=True)
+            show_stress(s)
+            pick(s, ".stress-material", "Custom")
+            for case in [c for c in cases if c[1:3] == (pct, count)]:
+                size, _, _, text, lang = case
+                show_text(s, *TEXTS[text])
+                s.page.evaluate("async (c) => (await import('/src/i18n/index.ts')).setLanguage(c)", lang)
+                s.page.set_viewport_size({"width": size[0], "height": size[1]})
+                s.page.evaluate("() => window.dispatchEvent(new Event('resize'))")
+                settled(s)
+                found[case] = s.page.evaluate(COLUMN_BOTTOM)
+        finally:
+            s.close()
     return found
 
 
-@pytest.mark.parametrize("lang", SHELF_LANGS)
-@pytest.mark.parametrize("text", SHELF_TEXTS)
-@pytest.mark.parametrize("count", SHELF_FIXTURES)
-@pytest.mark.parametrize("size", SHELF_SIZES)
-def test_stress_panel_ends_inside_its_column_and_the_window_under_a_cut_history(shelved, size, count, text, lang):
-    got = shelved[(size, count, text, lang)]
+@pytest.mark.parametrize("case", SHELF_CASES, ids=lambda c: f"{c[0][0]}x{c[0][1]}@{c[1]}-{c[2]}-{c[3]}-{c[4]}")
+def test_stress_panel_ends_inside_its_column_and_the_window_under_a_cut_history(shelved, case):
+    got = shelved[case]
     assert got["panel_b"] <= got["column_b"] + 1, got
     assert got["panel_b"] <= got["window_b"] + 1 and got["run_b"] <= got["panel_b"] + 1, got
+
+
+# The column left of History is under 100px wide there, where the panel's rows wrap far past the window.
+@pytest.mark.parametrize("case", LEAST_CASES, ids=lambda c: f"{c[0][0]}x{c[0][1]}-{c[2]}-{c[3]}-{c[4]}")
+def test_stress_panel_keeps_its_shelf_when_history_is_cut_to_its_least(shelved, case):
+    got = shelved[case]
+    assert got["panel_w"] >= 180 and got["panel_b"] <= got["window_b"] + 1, got
