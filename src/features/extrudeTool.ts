@@ -29,6 +29,8 @@ import { draftAngle, draftDelta } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 import { sweepProbePoints } from "./sweepProbe";
+import { sweepPolylines, type Station } from "./sweepOutline";
+import { ToolOutline, regionRings } from "./toolOutline";
 import { previewVerdict } from "./previewVerdict";
 import { HeldSignal } from "./heldEdit";
 import { boxBindings, type BoxField } from "./boxBindings";
@@ -398,6 +400,7 @@ export class ExtrudeTool {
         this.previewKey = "";
         this.disposeDepthHandle();
         this.disposeTaperHandle();
+        this.outline?.hide();
         this.clearPeek();
         setPrompt("Click a profile area · Esc");
         this.held.sync(this.pending);
@@ -656,6 +659,38 @@ export class ExtrudeTool {
     this.updateManipulators(sign, depth);
   }
 
+  private outline: ToolOutline | null = null;
+
+  private updateOutline(sign: number, depth: number) {
+    const first = this.selected[0];
+    if (!first || depth <= 1e-6) {
+      this.outline?.hide();
+      return;
+    }
+    const inset = Math.abs(this.taper) >= TAPER_EPS ? depth * Math.tan((this.taper * Math.PI) / 180) : 0;
+    const stations: Station[] = this.symmetric
+      ? [
+          { along: -depth, inset },
+          { along: 0, inset: 0 },
+          { along: depth, inset },
+        ]
+      : [
+          { along: 0, inset: 0 },
+          { along: depth, inset },
+        ];
+    const n = first.plane.n;
+    const polylines = this.selected.flatMap((wr) =>
+      sweepPolylines({
+        rings: regionRings([wr]),
+        normal: [n.x, n.y, n.z],
+        axis: [n.x * sign, n.y * sign, n.z * sign],
+        stations,
+      }),
+    );
+    this.outline ??= new ToolOutline(this.viewport);
+    this.outline.show(polylines, { cut: this.drawsAsCut(sign) });
+  }
+
   private peekKey = "";
 
   /** See through the bodies the preview passes into, or a pocket hides inside opaque material. A cut counts every
@@ -762,6 +797,7 @@ export class ExtrudeTool {
     this.placeHandle(this.depthHandle, this.taperTop, dir, px, this.hovering || this.grabbing, this.drawsAsCut(sign));
 
     this.updateTaperHandle(plane, dir, px);
+    this.updateOutline(sign, depth);
   }
 
   /** A rotation glyph, distinct from the depth handle's straight one. Offered once there is depth, for a new extrude
@@ -1112,6 +1148,8 @@ export class ExtrudeTool {
     this.previewKey = "";
     this.disposeDepthHandle();
     this.disposeTaperHandle();
+    this.outline?.dispose();
+    this.outline = null;
     this.clearPeek();
     this.entersMemo.clear();
     // A create mode cancel or commit can leave a floating taper preview up; an edit's goes with endEditPreview.
