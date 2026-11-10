@@ -12,6 +12,9 @@
   max-width: calc(var(--win-w) - 32px);
   max-height: calc(var(--win-h) - 160px);
   overflow-wrap: anywhere;
+  // The panel and not its scrolling step, so a scrollbar coming and going cannot flip the rows. Its popups are teleported
+  // out, so the layout containment this brings holds none of them.
+  container: stress-panel / inline-size;
 }
 .stress-head {
   display: flex;
@@ -96,6 +99,19 @@
   // box wraps under the label by the row's wrap rule once the word and the box no longer fit side by side.
   min-width: min-content;
   overflow-wrap: break-word;
+}
+// Below the least width at which every keyed row fits on one line, in the longest language and with a scrollbar, every
+// label takes a line of its own, so the rows never mix the two layouts. Spanish needs 202px of row in the shipped face
+// and 246px in Comfortable text, which leaves 14px and 12px of these widths for a thin scrollbar.
+@container stress-panel (width < 18em) {
+  .stress-keyed > .measure-k:first-child {
+    flex-basis: 100%;
+  }
+}
+@container stress-panel (width < 21.5em) {
+  :root[data-text="comfortable"] .stress-keyed > .measure-k:first-child {
+    flex-basis: 100%;
+  }
 }
 .stress-field .select-trigger {
   flex: 1 1 auto;
