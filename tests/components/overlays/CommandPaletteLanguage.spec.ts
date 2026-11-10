@@ -9,6 +9,7 @@ import CommandPalette from "../../../src/components/overlays/CommandPalette.vue"
 import { useCommandPaletteStore } from "../../../src/stores/commandPalette";
 import { attachAnnouncer } from "../../../src/ui/announce";
 import { setLanguage } from "../../../src/i18n";
+import { stepMenuText } from "../../../src/ui/canStep";
 
 enableAutoUnmount(afterEach);
 
@@ -67,6 +68,14 @@ describe("CommandPalette language", () => {
     expect(labels()[0]).toBe("Speichern unter…");
     expect(rows()[0]!.textContent).not.toMatch(/Save/);
     expect($(".cmdk-item .cmdk-group")!.textContent).toBe("Datei");
+  });
+
+  it("finds Undo and Redo by their English names with no step to take", async () => {
+    useCommandPaletteStore().bindLabels((id) => (id === "undo" || id === "redo" ? stepMenuText(id, null) : null));
+    await type("undo");
+    expect(labels()[0]).toBe("Rückgängig");
+    await type("redo");
+    expect(labels()[0]).toBe("Wiederholen");
   });
 
   it("shows the empty line in German when neither language matches", async () => {
