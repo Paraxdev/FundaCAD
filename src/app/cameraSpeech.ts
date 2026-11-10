@@ -7,16 +7,20 @@ export const CAMERA_SPEECH_DELAY = 250;
 
 export interface CameraHost {
   viewDirection(): THREE.Vector3;
-  rig: { isOrtho(): boolean; isFlying(): boolean };
+  rig: { isOrtho(): boolean; isFlying(): boolean; poseVersion(): number };
 }
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Says where the model is seen from once the view has settled, a flight is waited out. */
+/** Says where the model is seen from once the view has settled: no flight, and the pose still for one pause.
+ *  The classic rig turns to a named view by its controls' own transition, which `isFlying` does not report. */
 export function speakCameraWhenSettled(view: CameraHost): void {
   if (timer) clearTimeout(timer);
+  let seen = view.rig.poseVersion();
   const settled = () => {
-    if (view.rig.isFlying()) {
+    const now = view.rig.poseVersion();
+    if (view.rig.isFlying() || now !== seen) {
+      seen = now;
       timer = setTimeout(settled, CAMERA_SPEECH_DELAY);
       return;
     }

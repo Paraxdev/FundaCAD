@@ -21,6 +21,7 @@ const VIEWS = ["front", "back", "left", "right", "top", "bottom", "iso"] as cons
 
 function engine() {
   let flying = 0;
+  let version = 0;
   const look = new THREE.Vector3(0, 1, 0);
   const e = {
     sketch: { active: true, finish: vi.fn() },
@@ -31,10 +32,11 @@ function engine() {
       stepView: vi.fn(),
       resetCamera: vi.fn(),
       viewDirection: () => look.clone(),
-      rig: { isOrtho: () => true, isFlying: () => flying-- > 0 },
+      rig: { isOrtho: () => true, isFlying: () => flying-- > 0, poseVersion: () => version },
     },
   };
-  return { e, act: createActions(e as unknown as Engine), fly: (checks: number) => (flying = checks), look };
+  const move = () => version++;
+  return { e, act: createActions(e as unknown as Engine), fly: (checks: number) => (flying = checks), move, look };
 }
 
 const said = () => vi.mocked(announce).mock.calls.map((c) => [c[0], c[2]]);
@@ -114,6 +116,23 @@ describe("camera speech", () => {
     look.set(-Math.sin(Math.PI / 6), Math.cos(Math.PI / 6), 0);
     vi.advanceTimersByTime(CAMERA_SPEECH_DELAY);
     expect(said()).toEqual([["Front, 30° toward right, orthographic", { key: "camera" }]]);
+  });
+
+  it("waits out a turn the rig does not call a flight, as the classic rig's own transition to a view", () => {
+    const { act, move, look } = engine();
+    act("back");
+    look.set(0.7, 0.7, 0);
+    for (let i = 0; i < 3; i++) {
+      move();
+      vi.advanceTimersByTime(CAMERA_SPEECH_DELAY);
+    }
+    expect(said()).toEqual([]);
+    look.set(0, -1, 0);
+    move();
+    vi.advanceTimersByTime(CAMERA_SPEECH_DELAY);
+    expect(said()).toEqual([]);
+    vi.advanceTimersByTime(CAMERA_SPEECH_DELAY);
+    expect(said()).toEqual([["Back view, orthographic", { key: "camera" }]]);
   });
 
   it("speaks after Reset camera too", () => {
