@@ -137,6 +137,10 @@ def test_a_row_that_sat_on_one_line_before_the_labels_shared_a_width_still_does(
 @pytest.mark.parametrize("size", SIZES)
 def test_material_select_lines_up_with_the_boxes_where_it_stays_on_its_line(seen, size, text, lang):
     got = seen[(size, text, lang)]
+    # It wraps under its label only where it did before the labels shared a width (at 1024x600 de and es, and fr in the
+    # wide face and Comfortable text), never in English.
+    wrapped = not seen[(size, text, lang, "base")]["material"]["one_line"]
+    assert got["material"]["one_line"] or (wrapped and lang != "en"), got
     if got["material"]["one_line"]:
         lefts = [b["l"] for b in got["boxes"] if b["one_line"]]
         assert lefts and abs(got["material"]["l"] - lefts[0]) <= 1, got
