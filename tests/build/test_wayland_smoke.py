@@ -37,9 +37,17 @@ MAPPED = TOPLEVEL + "\n" + ATTACH
 WINDOW = MAPPED + "\n" + PAINTED
 
 
-@unittest.skipUnless(
-    shutil.which("sh") and shutil.which("setsid") and shutil.which("dbus-daemon"), "needs sh, setsid and dbus-daemon"
-)
+MISSING = [tool for tool in ("sh", "setsid", "dbus-daemon") if not shutil.which(tool)]
+
+
+class Tools(unittest.TestCase):
+    # The test job gates on this file, and skipping there would pass having checked nothing.
+    @unittest.skipUnless(os.environ.get("CI"), "only CI has to have them")
+    def test_ci_has_what_the_smoke_needs(self):
+        self.assertEqual(MISSING, [])
+
+
+@unittest.skipIf(MISSING, "needs " + ", ".join(MISSING))
 class WaylandSmoke(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

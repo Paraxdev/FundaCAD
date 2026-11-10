@@ -1,5 +1,6 @@
 // The Flatpak and AppImage jobs start the app under headless Wayland. A new GUI smoke can be flaky,
-// so each step stays continue-on-error until it has run green on dev.
+// so each step stays continue-on-error until it has run green on dev. The script's own tests run
+// against a fake cage and cannot flake that way, so they gate.
 
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +13,14 @@ function jobSteps(name: string) {
     .slice(1)
     .map((text) => ({ name: /name: (.*)/.exec(text)?.[1]?.trim() ?? "", text }));
 }
+
+describe("the Wayland smoke script's own tests", () => {
+  it("gate the test job", () => {
+    const step = jobSteps("test").find((s) => s.text.includes("python3 tests/build/test_wayland_smoke.py"));
+    expect(step).toBeDefined();
+    expect(step?.text).not.toMatch(/continue-on-error/);
+  });
+});
 
 describe("the Flatpak job's Wayland smoke", () => {
   const steps = jobSteps("build-flatpak");

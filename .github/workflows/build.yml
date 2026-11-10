@@ -126,22 +126,18 @@ jobs:
       - name: Version release tests
         run: python3 tests/build/test_version_release.py
 
-      # The checks of the AT-SPI dump the bundle leg runs, against fake trees. Not a
-      # gate until it has run green here, like the walks they check.
+      # The checks of the AT-SPI dump the bundle leg runs, against fake trees. These
+      # three gate, though the real walks and smokes they check do not yet.
       - name: AT-SPI dump tests
-        continue-on-error: true
         run: python3 tests/build/test_atspi_dump.py
 
-      # The checks of the Wayland smoke both Linux legs run, against a fake cage. Not a
-      # gate until it has run green here, like the smokes they check.
+      # The checks of the Wayland smoke both Linux legs run, against a fake cage.
       - name: Wayland smoke script tests
-        continue-on-error: true
         run: python3 tests/build/test_wayland_smoke.py
 
       # The checks of the UI Automation walk the Windows bundle leg runs, against
-      # fake trees, in pwsh on Linux. Not a gate until it has run green here.
+      # fake trees, in pwsh on Linux.
       - name: UI Automation walk tests
-        continue-on-error: true
         shell: pwsh
         run: ./tests/build/test_uia_walk.ps1
 
