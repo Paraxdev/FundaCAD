@@ -5,6 +5,7 @@ import Select from "../ui/Select.vue";
 import { pickFile } from "../ui/dom";
 import {
   languageChoices,
+  languageFilePickedAt,
   languageFileSource,
   languageFileStatus,
   languageMachineTranslated,
@@ -52,7 +53,8 @@ const fileError = computed(() => {
   const key = problem.value
     ? (PICKED_ERRORS[problem.value] ?? FILE_ERRORS[problem.value])
     : status.value?.error && FILE_ERRORS[status.value.error];
-  return key ? t(key, { kb: MAX_OVERRIDE_BYTES / 1024 }) : "";
+  const at = (problem.value ? languageFilePickedAt() : status.value?.at) ?? { line: 1, column: 1 };
+  return key ? t(key, { kb: MAX_OVERRIDE_BYTES / 1024, ...at }) : "";
 });
 
 const skipped = computed(() => (status.value?.error ? [] : (status.value?.skipped ?? [])));

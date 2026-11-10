@@ -34,6 +34,8 @@ Each line is the line's name, then its text. Copy the names from FundaCAD's Engl
 }
 ```
 
+Notes for translators on Windows. Save the file as UTF-8, in Notepad choose Save as and set Encoding to UTF-8, or accented letters will not read back. Turn on File name extensions in the Explorer View menu (Show, File name extensions), so you can see that the file is `pl.json` and not `pl.json.txt`, which Notepad adds when it is allowed to. A file named `pl.json.txt` in the languages folder is not listed, rename it to `pl.json`. A file that is not valid JSON is refused with the line and column where it breaks, for example near line 4, column 18, and a comma after the last line is the usual cause.
+
 A count has one text for each plural form, and each language has its own forms. English has `one` and `other`, Polish has `one`, `few`, `many` and `other`, so a Polish file writes all four. With only `one` and `other` it would show "2 ścian" where Polish says "2 ściany":
 
 ```json

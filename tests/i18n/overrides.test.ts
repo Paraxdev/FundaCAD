@@ -75,12 +75,21 @@ describe("parseOverrides", () => {
     });
   });
 
-  it("refuses text that is not JSON", () => {
-    for (const text of ["", "stress.setup.title = Belastung", '{"stress.setup.title": "Belastung",}', " \ufeff{}"]) {
+  it("refuses text that is not JSON, with where it breaks", () => {
+    const trailing = '{"stress.setup.title": "Belastung",}';
+    const cases: [string, { line: number; column: number }][] = [
+      ["", { line: 1, column: 1 }],
+      ["stress.setup.title = Belastung", { line: 1, column: 1 }],
+      [trailing, { line: 1, column: trailing.length }],
+      [" \ufeff{}", { line: 1, column: 2 }],
+      ['{\n  "stress.setup.title": "Belastung",\n  }', { line: 3, column: 3 }],
+    ];
+    for (const [text, at] of cases) {
       expect(parseOverrides(text, english), JSON.stringify(text)).toEqual({
         lines: new Map(),
         skipped: [],
         error: "not-json",
+        at,
       });
     }
   });

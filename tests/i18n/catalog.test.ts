@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LANGUAGE_KEY, createCatalog, type CatalogDeps, type DropInSource } from "../../src/i18n/catalog";
+import {
+  DROP_IN_PREFIX,
+  LANGUAGE_KEY,
+  createCatalog,
+  type CatalogDeps,
+  type DropInSource,
+} from "../../src/i18n/catalog";
 import { browserDropIns, noDropIns } from "../../src/i18n/dropIns";
 import { formatMessage, parseMessage } from "../../src/i18n/format";
 import type { Language } from "../../src/i18n/languages";
@@ -394,7 +400,7 @@ describe("the user's language file", () => {
           { key: "stress.nope", reason: "unknown-key" },
         ],
       },
-      { lines: 0, skipped: [], error: "not-json" },
+      { lines: 0, skipped: [], error: "not-json", at: { line: 1, column: 3 } },
     ]);
   });
 
@@ -677,7 +683,18 @@ describe("loading a language file", () => {
   it("takes the language only from a name that is a language code and .json, reading nothing otherwise", async () => {
     const { c, storage } = make();
     await c.init();
-    const names = ["Polish.json", "pl_PL.json", "pseudo.json", "pl.JSON", "pl.json.txt", "pl", ".json", "de .json"];
+    const names = [
+      "Polish.json",
+      "pl_PL.json",
+      "pseudo.json",
+      "pl.JSON",
+      "Polish.json.txt",
+      "pl.txt",
+      "pl.json.txt.txt",
+      "pl",
+      ".json",
+      "de .json",
+    ];
     const refused: unknown[] = [];
     for (const name of names) {
       const f = file(name, { "stress.setup.title": "Ustaw badanie" });
@@ -687,6 +704,58 @@ describe("loading a language file", () => {
     expect(refused).toEqual(names.map(() => ["bad-name", 0]));
     expect([[...storage.map.keys()], c.setting()]).toEqual([[], "system"]);
     expect(await c.loadDropInFile(file("zh-Hant-TW.json", {}))).toBeNull();
+  });
+
+  it("takes a picked pl.json.txt as pl.json, since Notepad adds .txt and Explorer hides it", async () => {
+    const { c, storage } = make();
+    await c.init();
+    const badNames = [
+      "PL.json.txt",
+      ".json.txt",
+      "pl_PL.json.txt",
+      "pl.JSON.txt",
+      "pl.txt.json.txt",
+      "pl.json.txt.txt",
+    ];
+    const refused: unknown[] = [];
+    for (const name of badNames) {
+      const f = file(name, { "stress.setup.title": "Ustaw badanie" });
+      const read = vi.spyOn(f, "text");
+      refused.push([await c.loadDropInFile(f), read.mock.calls.length]);
+    }
+    const taken: unknown[] = [];
+    for (const [name, title] of [
+      ["pl.json.txt", "Ustaw badanie"],
+      ["de-AT.json.TXT", "Studie aufsetzen"],
+    ]) {
+      taken.push([await c.loadDropInFile(file(name!, { "stress.setup.title": title })), c.setting(), lines(c)[0]]);
+    }
+    expect([refused, taken, [...storage.map.keys()].filter((k) => k.startsWith(DROP_IN_PREFIX)).sort()]).toEqual([
+      badNames.map(() => ["bad-name", 0]),
+      [
+        [null, "pl", "Ustaw badanie"],
+        [null, "de-AT", "Studie aufsetzen"],
+      ],
+      [DROP_IN_PREFIX + "de-AT", DROP_IN_PREFIX + "pl"],
+    ]);
+  });
+
+  it("says where a picked file breaks, each refusal on its own, and nothing after a file that parses", async () => {
+    const { c, storage } = make();
+    await c.init();
+    const where = [c.pickedAt()];
+    const results: unknown[] = [];
+    for (const text of ['{"stress.setup.title": "Ustaw",\n}', '{\n  "stress.setup.title": "Ustaw"', "{ x"]) {
+      results.push(await c.loadDropInFile(file("pl.json", text)));
+      where.push(c.pickedAt());
+    }
+    expect([results, where, storage.map.size]).toEqual([
+      ["not-json", "not-json", "not-json"],
+      [null, { line: 2, column: 1 }, { line: 2, column: 32 }, { line: 1, column: 3 }],
+      0,
+    ]);
+    expect(await c.loadDropInFile(file("pl.json", { "stress.setup.title": "Ustaw" }))).toBeNull();
+    expect(c.dropInStatus()).toEqual({ lines: 1, skipped: [] });
   });
 
   it("loads a file of exactly 256 KB and refuses one byte more before reading it", async () => {
