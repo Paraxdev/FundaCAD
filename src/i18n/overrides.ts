@@ -7,7 +7,7 @@ export const MAX_OVERRIDE_BYTES = 256 * 1024;
 export const MAX_LINE_CHARS = 2000;
 
 export type SkipReason =
-  "unknown-key" | "not-text" | "too-long" | "markup" | "control-character" | "syntax" | "bad-argument";
+  "unknown-key" | "not-text" | "too-long" | "markup" | "control-character" | "empty" | "syntax" | "bad-argument";
 
 export interface OverrideResult {
   /** A Map, so a key named __proto__ is never a property of anything. */
@@ -22,6 +22,8 @@ const MARKUP = /<[A-Za-z/!?]|&(#\d+|#x[0-9a-f]+|[a-z]+);/i;
 // A tag or entity can also be split across parts, as in <{n, select, other {img ...}}>, so a text part that something
 // follows may not end in < or in an entity it has not closed.
 const OPEN_END = /(<|&[#A-Za-z0-9]*)$/;
+// A line of spaces or invisible marks shows nothing, so a file could blank out a line without a word.
+const BLANK = /^[\s\u200b-\u200f\u2060]*$/;
 // C0 and C1 controls, line and paragraph separators, a BOM or annotation inside text, tag characters, and the bidi
 // overrides and isolates that can make a line read as something else. LRM, RLM, ZWJ and ZWNJ stay, RTL text needs them.
 const CONTROL =
@@ -34,6 +36,7 @@ export function checkLine(value: string, englishValue: string): SkipReason | nul
   if (value.length > MAX_LINE_CHARS) return "too-long";
   if (MARKUP.test(value)) return "markup";
   if (CONTROL.test(value)) return "control-character";
+  if (BLANK.test(value)) return "empty";
   try {
     if (buildsMarkup(parseMessage(value), false)) return "markup";
     return extraArgument(value, englishValue) === undefined ? null : "bad-argument";

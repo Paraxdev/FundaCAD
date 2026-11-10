@@ -20,7 +20,7 @@
   "prefs.language.reload": "Reload",
   "prefs.language.remove": "Remove my lines",
   "prefs.language.safeMode": "Safe mode does not read your language files.",
-  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD has no such line} notText {not text} tooLong {longer than {max, number} characters} markup {has a tag such as {tag}, tags are not allowed} controlCharacter {has a hidden control character} syntax {a brace or plural is written wrong} badArgument {uses {arg}, which the English line does not have} other {not used}}",
+  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD has no such line} notText {not text} tooLong {longer than {max, number} characters} markup {has a tag such as {tag}, tags are not allowed} controlCharacter {has a hidden control character} syntax {a brace or plural is written wrong} badArgument {uses {arg}, which the English line does not have} empty {is empty} other {not used}}",
   "prefs.language.skipped": "{n, plural, one {# line is skipped:} other {# lines are skipped:}}",
   "prefs.language.system": "System ({name})",
   "prefs.language.title": "Language",

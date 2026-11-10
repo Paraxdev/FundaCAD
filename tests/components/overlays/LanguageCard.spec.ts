@@ -239,6 +239,16 @@ describe("the user's own file in the browser", () => {
     ]);
   });
 
+  it("skips an empty or blank line and says so plainly", async () => {
+    await render();
+    await load(json("en.json", { "prefs.language.title": "", "prefs.language.reload": "  " }));
+    await vi.waitFor(() => expect(listed()).toHaveLength(2));
+    expect([text(".pref-title"), listed()]).toEqual([
+      en["prefs.language.title"],
+      ["prefs.language.title: is empty", "prefs.language.reload: is empty"],
+    ]);
+  });
+
   it("replaces a first file of a language wholly with a second one", async () => {
     await render();
     await load(json("de.json", { "prefs.language.title": "Erste Sprache" }));

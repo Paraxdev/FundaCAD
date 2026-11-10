@@ -205,6 +205,17 @@ describe("checkLine", () => {
     expect(checkLine(line, "Stress setup")).toBeNull();
   });
 
+  it.each(["", "   ", "\u3000\u00a0", "\u200e\u200b", " \u2060 "])(
+    "refuses %j as empty, it would show nothing",
+    (line) => {
+      expect(checkLine(line, "Stress setup")).toBe("empty");
+    },
+  );
+
+  it.each([" x ", "\u200ex", "0", "-", "{n, plural, other {}}"])("takes %j, it is not all blank", (line) => {
+    expect(checkLine(line, "{n, plural, other {# faces}}")).toBeNull();
+  });
+
   it("refuses a line that does not parse", () => {
     expect(checkLine("{n, plural, one {# Fläche}}", english["stress.setup.faces"])).toBe("syntax");
     expect(checkLine("Belastung }", "Stress setup")).toBe("syntax");
