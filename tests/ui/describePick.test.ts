@@ -614,14 +614,14 @@ describe("describePick in a comma language", () => {
   };
   const slantedBore: FaceFacts = { ...bore, radius: 5.25, length: 20.5, centroid: [1, 2, 3] };
 
-  it("reads a flat face with a decimal comma and joins facts with semicolons", async () => {
+  it("reads a flat face with a decimal comma and keeps commas between the facts", async () => {
     await setLanguage("de");
     expect(describePick(slanted)).toEqual({
       label: "Flat face 4",
-      hint: "60,5 by 40,25 mm; facing up; Extrude 1",
+      hint: "60,5 by 40,25 mm, facing up, Extrude 1",
       readout: "1 face · flat · 60,5 by 40,25 mm · facing up",
       spoken:
-        "Flat face 4; 60,5 by 40,25 millimetres; 2435,125 square millimetres; facing up; at height 37,5 millimetres; Body1; from Extrude 1",
+        "Flat face 4, 60,5 by 40,25 millimetres, 2435,125 square millimetres, facing up, at height 37,5 millimetres, Body1, from Extrude 1",
     });
   });
 
@@ -630,9 +630,9 @@ describe("describePick in a comma language", () => {
     setUnit("in");
     expect(describePick(slantedBore)).toEqual({
       label: "Hole 7",
-      hint: "diameter 0,413 in; 0,807 in long; Hole 1",
+      hint: "diameter 0,413 in, 0,807 in long, Hole 1",
       readout: "1 face · hole · ⌀0,413 in · 0,807 in long",
-      spoken: "Hole 7; diameter 0,413 inches; 0,807 inches long; axis up; Body1; from Hole 1",
+      spoken: "Hole 7, diameter 0,413 inches, 0,807 inches long, axis up, Body1, from Hole 1",
     });
   });
 

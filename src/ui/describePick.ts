@@ -2,7 +2,7 @@
 // missing, its words are then left out.
 
 import type { TopologyFace, Vec3 } from "../types";
-import { listJoin, spellNumber } from "./measure";
+import { spellNumber } from "./measure";
 import { displayValue, fmtArea, fmtLength, spokenArea, spokenLength } from "./units";
 
 export type FacingWord = "up" | "down" | "front" | "back" | "left" | "right";
@@ -233,9 +233,9 @@ export function describePick(f: PickFacts): PickWords {
   const label = `${name} ${f.number}`;
   return {
     label,
-    hint: listJoin(channel(facts, "hint")),
+    hint: channel(facts, "hint").join(", "),
     readout: [`1 ${f.kind}`, ...(type ? [type] : []), ...channel(facts, "readout")].join(" · "),
-    spoken: listJoin([label, ...channel(facts, "spoken")]),
+    spoken: [label, ...channel(facts, "spoken")].join(", "),
   };
 }
 

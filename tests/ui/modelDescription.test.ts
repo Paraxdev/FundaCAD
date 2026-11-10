@@ -165,11 +165,11 @@ describe("the description in a comma language", () => {
     );
   });
 
-  it("writes the body lines with a comma mark and a semicolon between the parts", async () => {
+  it("writes the body lines with a comma mark, semicolons only inside the center", async () => {
     await setLanguage("de");
     const lines = describeModel(facts()).sections.flatMap((s) => s.items);
     expect(lines.filter((l) => l.startsWith("Lid:"))).toEqual([
-      "Lid: 40 × 30 × 3,5 mm; center at 0; 0; 26,75 mm; volume 4200,25 mm³; Brass; hidden",
+      "Lid: 40 × 30 × 3,5 mm, center at 0; 0; 26,75 mm, volume 4200,25 mm³, Brass, hidden",
     ]);
   });
 

@@ -61,7 +61,7 @@ function bodyLine(b: DescribedBody): string {
   if (b.material) parts.push(b.material);
   if (!b.visible) parts.push("hidden");
   if (b.fault) parts.push(`fault: ${b.fault}`);
-  return `${b.name}: ${listJoin(parts)}`;
+  return `${b.name}: ${parts.join(", ")}`;
 }
 
 function featureLine(f: DescribedFeature): string {

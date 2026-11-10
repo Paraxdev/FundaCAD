@@ -126,13 +126,13 @@ describe("walkWords", () => {
 });
 
 describe("walkWords in a comma language", () => {
-  it("says the area with a decimal comma and joins the parts with semicolons", async () => {
+  it("says the area with a decimal comma and keeps commas between the parts", async () => {
     const flat = walkUnits([wr(plate(0, 0, 4.5, 3.25))])[0]!;
     const english = walkWords({ ...flat, holes: 2 }, 0, 3, true);
     await setLanguage("de");
     expect([english, walkWords({ ...flat, holes: 2 }, 0, 3, true)]).toEqual([
       "Profile 1 of 3, area 14.625 mm², 2 holes, picked.",
-      "Profile 1 of 3; area 14,625 mm²; 2 holes; picked.",
+      "Profile 1 of 3, area 14,625 mm², 2 holes, picked.",
     ]);
   });
 });
