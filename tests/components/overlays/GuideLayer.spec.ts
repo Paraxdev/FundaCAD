@@ -207,7 +207,9 @@ describe("GuideLayer bubble", () => {
   it("shows a step's keys under its caption, labelled in the user's language, and nothing for a step without", async () => {
     const g = setup();
     const keysText = () => document.querySelector("[data-guide-keys]")?.textContent?.replace(/\s+/g, " ").trim();
-    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Here", keys: "press F6" }]);
+    g.guide.apply([
+      { kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Here", keys: "press F6" },
+    ]);
     await tick();
     expect(document.querySelector(".guide-caption")!.nextElementSibling).toBe(
       document.querySelector("[data-guide-keys]"),
