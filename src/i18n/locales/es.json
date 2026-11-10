@@ -31,6 +31,7 @@
   "stress.dir.left": "Hacia la izquierda (-X)",
   "stress.dir.right": "Hacia la derecha (+X)",
   "stress.dir.up": "Hacia arriba (+Z)",
+  "stress.drag.label": "{force} N{direction, select, into {, hacia dentro de la cara} down {, hacia abajo (-Z)} up {, hacia arriba (+Z)} right {, hacia la derecha (+X)} left {, hacia la izquierda (-X)} back {, hacia atrás (+Y)} front {, hacia delante (-Y)} other {}}",
   "stress.faces.count": "{n, plural, one {# cara} other {# caras}}",
   "stress.faces.missingAll": "{n, plural, one {# cara, no encontrada en el modelo actual} other {# caras, ninguna encontrada en el modelo actual}}",
   "stress.faces.missingSome": "{n, plural, one {# cara} other {# caras}}, {missing, plural, one {# no encontrada} other {# no encontradas}} en el modelo actual",

@@ -31,6 +31,7 @@
   "stress.dir.left": "向左 (-X)",
   "stress.dir.right": "向右 (+X)",
   "stress.dir.up": "向上 (+Z)",
+  "stress.drag.label": "{force} N{direction, select, into {，指向面内} down {，向下 (-Z)} up {，向上 (+Z)} right {，向右 (+X)} left {，向左 (-X)} back {，向后 (+Y)} front {，向前 (-Y)} other {}}",
   "stress.faces.count": "{n, number} 个面",
   "stress.faces.missingAll": "{n, plural, =1 {1 个面，在当前模型中找不到} other {# 个面，在当前模型中都找不到}}",
   "stress.faces.missingSome": "{n, number} 个面，其中 {missing, number} 个在当前模型中找不到",

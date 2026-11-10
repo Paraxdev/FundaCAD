@@ -240,14 +240,32 @@ describe("the Stress setup counts", () => {
     expect(rows()[3]).not.toContain("Support");
   });
 
-  it("label a dragged force with the picked language's direction", async () => {
-    const english = forceDragLabel({ direction: "-Y", force: 37.5 });
+  it("label a dragged force with the picked language's direction, as one message", async () => {
+    const all = ["into", "-Z", "+Z", "+X", "-X", "+Y", "-Y", "custom"] as const;
+    const labels = () => all.map((direction, i) => forceDragLabel({ direction, force: 37.5 + i }));
+    const english = labels();
     await setLanguage("de");
-    const front = de["stress.dir.front"]!;
-
-    expect([english, forceDragLabel({ direction: "-Y", force: 37.5 })]).toEqual([
-      "37.5 N, front (-Y)",
-      `37.5 N, ${front.charAt(0).toLowerCase()}${front.slice(1)}`,
+    expect([english, labels()]).toEqual([
+      [
+        "37.5 N, into the face",
+        "38.5 N, down (-Z)",
+        "39.5 N, up (+Z)",
+        "40.5 N, right (+X)",
+        "41.5 N, left (-X)",
+        "42.5 N, back (+Y)",
+        "43.5 N, front (-Y)",
+        "44.5 N",
+      ],
+      [
+        "37.5 N, in die Fläche hinein",
+        "38.5 N, nach unten (-Z)",
+        "39.5 N, nach oben (+Z)",
+        "40.5 N, nach rechts (+X)",
+        "41.5 N, nach links (-X)",
+        "42.5 N, nach hinten (+Y)",
+        "43.5 N, nach vorne (-Y)",
+        "44.5 N",
+      ],
     ]);
   });
 });

@@ -31,6 +31,7 @@
   "stress.dir.left": "左へ (-X)",
   "stress.dir.right": "右へ (+X)",
   "stress.dir.up": "上へ (+Z)",
+  "stress.drag.label": "{force} N{direction, select, into {、面に向かって} down {、下へ (-Z)} up {、上へ (+Z)} right {、右へ (+X)} left {、左へ (-X)} back {、奥へ (+Y)} front {、手前へ (-Y)} other {}}",
   "stress.faces.count": "{n, number}面",
   "stress.faces.missingAll": "{n, plural, =1 {1面、現在のモデルに見つかりません} other {#面、いずれも現在のモデルに見つかりません}}",
   "stress.faces.missingSome": "{n, number}面、うち{missing, number}面が現在のモデルに見つかりません",

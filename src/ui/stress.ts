@@ -918,11 +918,21 @@ export function forceDragPatch(
   return { direction: snapped.key, custom, force: dragForce(start, px) };
 }
 
+// A select option is a plain word, so the label's message names each direction by one.
+const DRAG_WORDS: Record<ForceDirection, string> = {
+  into: "into",
+  custom: "custom",
+  "-Z": "down",
+  "+Z": "up",
+  "+X": "right",
+  "-X": "left",
+  "+Y": "back",
+  "-Y": "front",
+};
+
 /** The live label beside a dragged arrow. */
 export function forceDragLabel(patch: { direction: ForceDirection; force: number }): string {
-  const label = FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label;
-  const named = patch.direction === "custom" || !label ? "" : `, ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
-  return `${patch.force} N${named}`;
+  return t("stress.drag.label", { force: patch.force, direction: DRAG_WORDS[patch.direction] });
 }
 
 function round3(v: number): number {

@@ -31,6 +31,7 @@
   "stress.dir.left": "Nach links (-X)",
   "stress.dir.right": "Nach rechts (+X)",
   "stress.dir.up": "Nach oben (+Z)",
+  "stress.drag.label": "{force} N{direction, select, into {, in die Fläche hinein} down {, nach unten (-Z)} up {, nach oben (+Z)} right {, nach rechts (+X)} left {, nach links (-X)} back {, nach hinten (+Y)} front {, nach vorne (-Y)} other {}}",
   "stress.faces.count": "{n, plural, one {# Fläche} other {# Flächen}}",
   "stress.faces.missingAll": "{n, plural, one {# Fläche, im aktuellen Modell nicht gefunden} other {# Flächen, keine im aktuellen Modell gefunden}}",
   "stress.faces.missingSome": "{n, plural, one {# Fläche} other {# Flächen}}, {missing, number} davon im aktuellen Modell nicht gefunden",
