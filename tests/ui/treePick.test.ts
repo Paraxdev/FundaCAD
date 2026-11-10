@@ -240,6 +240,27 @@ describe("offering named picks", () => {
     expect(o.log).toEqual(["taken", "say: 3 rows added"]);
   });
 
+  it("reads a pick's name only when one is taken, so a long run is never named row by row", () => {
+    const reads: number[] = [];
+    const named = (pick: NamedPick["pick"], n: number): NamedPick => ({
+      pick,
+      get name() {
+        reads.push(n);
+        return `Row ${n}`;
+      },
+    });
+    const run = offering([true, true, true]);
+    offerPicks([named(edge(1).pick, 1), named(edge(2).pick, 2), named(edge(3).pick, 3)], run.d);
+    endPickSession();
+    const one = offering([true, "x"]);
+    offerPicks([named(edge(4).pick, 4), named(face(5).pick, 5)], one.d);
+    expect([run.log, one.log, reads]).toEqual([
+      ["taken", "say: 3 rows picked"],
+      ["taken", "hint: Row 4 picked. x"],
+      [4],
+    ]);
+  });
+
   it("says a run taken with mixed words as picked, and two rows as many", () => {
     const o = offering([{ done: "added" }, { done: "takenOut" }]);
     offerPicks([edge(4), edge(5)], o.d);

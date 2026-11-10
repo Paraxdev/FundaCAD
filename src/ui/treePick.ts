@@ -135,8 +135,8 @@ export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRo
 
 export interface NamedPick {
   pick: TreePick;
-  /** What the pick is called aloud, "Flat face 6 of Bracket". */
-  name: string;
+  /** What the pick is called aloud, "Flat face 6 of Bracket". Read only when one pick is taken, a run says a count. */
+  readonly name: string;
 }
 
 export interface OfferDeps extends TreeClickDeps {
@@ -145,15 +145,15 @@ export interface OfferDeps extends TreeClickDeps {
 
 type DoneWord = TreePickDone["done"] | "other";
 
-function takenWords(names: readonly string[], words: readonly DoneWord[]): string {
-  if (names.length === 1) return t("pick.done", { name: names[0]!, done: words[0]! });
-  return t("pick.doneRun", { n: names.length, done: words.every((w) => w === words[0]) ? words[0]! : "other" });
+function takenWords(taken: readonly NamedPick[], words: readonly DoneWord[]): string {
+  if (taken.length === 1) return t("pick.done", { name: taken[0]!.name, done: words[0]! });
+  return t("pick.doneRun", { n: taken.length, done: words.every((w) => w === words[0]) ? words[0]! : "other" });
 }
 
 /** Offers each pick in turn, as clicks would, until one is refused or the session ends, and says what was taken.
  *  A refusal goes out with the taken words in one hint, so neither cancels the other. */
 export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void {
-  const names: string[] = [];
+  const took: NamedPick[] = [];
   const words: DoneWord[] = [];
   let refusal = null as string | null;
   const run = () => {
@@ -164,14 +164,14 @@ export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void 
         refusal = answer;
         return;
       }
-      names.push(o.name);
+      took.push(o);
       words.push(answer === true ? "other" : answer.done);
     }
   };
   if (session?.batch) session.batch(run);
   else run();
-  if (names.length) deps.taken?.();
-  const taken = names.length ? takenWords(names, words) : null;
+  if (took.length) deps.taken?.();
+  const taken = took.length ? takenWords(took, words) : null;
   if (refusal !== null) deps.hint(taken === null ? refusal : t("pick.takenThenRefused", { taken, refusal }));
   else if (taken !== null) deps.say(taken);
 }

@@ -328,7 +328,12 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     for (const row of rows) {
       const pick = toolPickOf(row);
       if (!pick) return ROW_CHANGED;
-      offers.push({ pick, name: nameOf(row) });
+      offers.push({
+        pick,
+        get name() {
+          return nameOf(row);
+        },
+      });
     }
     offerPicks(offers, offerDeps(e));
     return null;
