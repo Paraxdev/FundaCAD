@@ -378,7 +378,7 @@ export class EdgeFeatureTool {
       if (!sel) return treePickRefusal(pick, "an edge");
       const { mid, tan } = midAndTangent(edge.points);
       this.beginDrag([sel], mid, tan, edge, { scope });
-      return true;
+      return { done: "added" };
     }
     const mid = polylineMid(edge.points);
     const here = new MidSet();
@@ -390,7 +390,7 @@ export class EdgeFeatureTool {
       if (over) this.refuseOverCap(over);
     }
     this.afterMembershipChange();
-    return true;
+    return { done: member ? "takenOut" : "added" };
   }
 
   /** [] when no face is selected. viewport/faceEdges.ts finds the edges by geometry, since the rebuild reply has no

@@ -1,15 +1,17 @@
 // The 3D view's keys over a real waiting tool: ] steps the Geometry rows, Enter gives the lit one to the tool as a click
 // on it would, and the Enter after that is the tool's own again.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
 import { createPinia, setActivePinia } from "pinia";
 import { installCanvasPick, type CanvasPickHost } from "../../src/app/canvasPick";
+import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { MirrorTool } from "../../src/features/mirrorTool";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import { announce } from "../../src/ui/announce";
 import { t } from "../../src/i18n";
 import { resetTreePicks, treePickWaiting } from "../../src/ui/treePick";
 import type { Viewport } from "../../src/viewport/viewport";
-import { land, result, rig, topology } from "../app/geometryBrowserRig";
+import { edge, land, result, rig, topology } from "../app/geometryBrowserRig";
 import { faceRowViewport } from "./faceRowRig";
 
 vi.mock("../../src/ui/toast", () => ({
@@ -134,5 +136,84 @@ describe("Mirror waiting for its plane", () => {
     key("]");
     expect(r.list.cursor).toBe("f:body1:1");
     expect(r.list.litRow?.key).toBe("f:body1:1");
+  });
+});
+
+// Slanted, off origin edges of body1, none sharing an end, so each row is its own chain.
+const FILLET_EDGES = [edge("body1", 0, 4), edge("body1", 1, 4), edge("body1", 2, 4)];
+
+async function filletWaiting() {
+  const r = rig(result([{ id: "body1", etag: "e1", faceStart: 14 }]));
+  let tool: EdgeFeatureTool | null = null;
+  const host = {
+    ...r.host,
+    geometryBrowser: r.browser,
+    viewport: { domElement: canvas },
+    toolOwnsScreen: () => tool?.active ?? false,
+  };
+  stops.push(installCanvasPick(host as unknown as CanvasPickHost));
+  await r.build();
+  r.wires.set("body1", FILLET_EDGES);
+  key("}");
+  await land(r.asks[0]!, topology("body1", 3));
+  expect(r.list.kind).toBe("edges");
+
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(0, -100, 0);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  const own: Record<string, unknown> = {
+    domElement: canvas,
+    camera,
+    suspendPicking: false,
+    selectedEdgeSeeds: () => [],
+    selectedEdgeCount: () => 0,
+    edgesOfSelectedFaces: () => [],
+    edgeScopeView: () => ({ edgePx: 60, viewportPx: 800, pixelWorldSize: 0.1, modelDiagonal: 500 }),
+    pixelWorldSize: () => 0.1,
+    projectToScreen: () => ({ x: 100, y: 100 }),
+    modelDiagonal: () => 500,
+    visibleEdgeLines: () => FILLET_EDGES,
+  };
+  const viewport = new Proxy(own, {
+    get: (t, k) => (k in t ? t[k as string] : () => undefined),
+  }) as unknown as Viewport;
+  const addFeature = vi.spyOn(r.store, "addFeature").mockImplementation(() => {});
+  const done = vi.fn();
+  tool = new EdgeFeatureTool(viewport, r.store);
+  stops.push(() => tool!.cancel());
+  tool.start("fillet", done);
+  return { r, tool, addFeature, done };
+}
+
+describe("Fillet waiting for an edge", () => {
+  it("Enter adds the lit edge without committing, a second adds another, the lit first comes out, the next Enter commits", async () => {
+    const { r, tool, addFeature, done } = await filletWaiting();
+    expect(key("]").defaultPrevented).toBe(true);
+    expect(r.list.cursor).toBe("e:body1:0");
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(tool.memberRows()).toHaveLength(1);
+    expect(addFeature).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    expect(r.list.litRow).toBeNull();
+    const added = t("pick.done", { name: "", done: "added" }).trim();
+    expect(said().filter((w) => w.endsWith(added))).toHaveLength(1);
+
+    key("]");
+    expect(r.list.cursor).toBe("e:body1:1");
+    key("Enter");
+    expect(tool.memberRows()).toHaveLength(2);
+
+    key("[");
+    expect(r.list.cursor).toBe("e:body1:0");
+    key("Enter");
+    expect(tool.memberRows()).toHaveLength(1);
+    const out = t("pick.done", { name: "", done: "takenOut" }).trim();
+    expect(said().filter((w) => w.endsWith(out))).toHaveLength(1);
+    expect(addFeature).not.toHaveBeenCalled();
+
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(addFeature).toHaveBeenCalledTimes(1);
+    expect(done).toHaveBeenCalledTimes(1);
   });
 });

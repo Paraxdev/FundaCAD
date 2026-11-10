@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
+import { t } from "../../src/i18n";
 import {
   endPickSession,
   endRewoundPick,
+  offerPicks,
   resetTreePicks,
   routeTreeClick,
   treePickWaiting,
@@ -74,8 +76,19 @@ function rig() {
   });
   const hints: string[] = [];
   const click = (pick: TreePick) => routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
-  return { tool: new EdgeFeatureTool(vp, store), click, hints };
+  const offer = (pick: TreePick, name: string) => {
+    const said: string[] = [];
+    const refused: string[] = [];
+    offerPicks([{ pick, name }], { busyHint: () => null, hint: (h) => refused.push(h), say: (w) => said.push(w) });
+    return { said, refused };
+  };
+  return { tool: new EdgeFeatureTool(vp, store), click, hints, offer };
 }
+
+const doneSaid = (name: string, done: "added" | "takenOut") => ({
+  said: [t("pick.done", { name, done })],
+  refused: [],
+});
 
 describe("an edge row while Fillet waits", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -115,6 +128,33 @@ describe("an edge row while Fillet waits", () => {
     expect(tool.memberRows()).toHaveLength(1);
     expect(click(edgeRow(0))).toBe("taken");
     expect(tool.memberRows()).toHaveLength(2);
+    tool.cancel();
+  });
+
+  it.each(["fillet", "chamfer"] as const)(
+    "%s says it added the first edge, added a second, took the first out",
+    (kind) => {
+      const { tool, offer } = rig();
+      tool.start(kind, () => {});
+      expect(offer(edgeRow(0), "Line edge 1 of Slant")).toEqual(doneSaid("Line edge 1 of Slant", "added"));
+      expect(offer(edgeRow(2), "Line edge 3 of Slant")).toEqual(doneSaid("Line edge 3 of Slant", "added"));
+      expect(tool.memberRows()).toHaveLength(2);
+      expect(offer(edgeRow(0), "Line edge 1 of Slant")).toEqual(doneSaid("Line edge 1 of Slant", "takenOut"));
+      expect(tool.memberRows()).toHaveLength(1);
+      expect(t("pick.done", { name: "E", done: "added" })).not.toBe(t("pick.done", { name: "E", done: "takenOut" }));
+      tool.cancel();
+    },
+  );
+
+  it("a face offered says nothing taken, only the refusal, before and after members exist", () => {
+    const { tool, offer } = rig();
+    tool.start("fillet", () => {});
+    const face = offer({ kind: "face", faceId: 17 }, "Flat face 6 of Slant");
+    expect(face.said).toEqual([]);
+    expect(face.refused).toHaveLength(1);
+    offer(edgeRow(1), "Line edge 2 of Slant");
+    const again = offer({ kind: "face", faceId: 17 }, "Flat face 6 of Slant");
+    expect([again.said, again.refused.length, tool.memberRows().length]).toEqual([[], 1, 1]);
     tool.cancel();
   });
 
