@@ -238,10 +238,11 @@
   flex: 0 0 auto;
 }
 
-/* The kernel's refusal of a previewed value, only while typing. Full row width: the
-   sentence names the measurements, and the value column is where width runs out. */
+/* The kernel's refusal of a previewed value, only while typing, across the whole row since the value column is where
+   width runs out. grid-column serves a caller that keeps an inline grid, as the Parameters section does. */
 .param-row .param-problem {
   flex-basis: 100%;
+  grid-column: 1 / -1;
   margin: var(--s-3) 0 0;
   font-size: var(--fs-small);
   line-height: 1.35;
@@ -250,5 +251,6 @@
 
 .param-row > .ui-field-hint {
   flex-basis: 100%;
+  grid-column: 1 / -1;
   margin-top: var(--s-2);
 }

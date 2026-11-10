@@ -192,6 +192,14 @@ describe("FieldRow param layout", () => {
     expect([w.find(".param-problem").exists(), w.find(".ui-field-hint").exists()]).toEqual([false, false]);
   });
 
+  it("gives the label a fixed column only when the caller asks for one, and the value column keeps its flex", () => {
+    const flexes = (w: ReturnType<typeof param>) => [w.find("label").element.style.flex, w.find(".param-value").attributes("style")];
+    expect({ fixed: flexes(param({ labelWidth: "96px" })), free: flexes(param({})) }).toEqual({
+      fixed: ["0 0 96px", undefined],
+      free: ["", undefined],
+    });
+  });
+
   it("draws no for when the control is named by something else, and still hands the slot an id", () => {
     const w = param({ for: null });
     expect(w.find("label").attributes("for")).toBeUndefined();

@@ -156,7 +156,7 @@ const titled = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
 const typeOptions = (p: PartName) => Object.entries(PARTS[p]).map(([value, def]) => ({ value, label: def.label }));
 
 // A plugin ships no stylesheet, so the layout is written here.
-const ROW = { gridTemplateColumns: "150px minmax(0, 1fr)" };
+const LABEL_WIDTH = "150px";
 const FILL = { width: "100%" };
 const heading = {
   margin: "10px 0 4px",
@@ -204,7 +204,7 @@ watch(
     @keydown.capture="touch"
   >
     <div :style="{ minHeight: '140px', overflow: 'auto', paddingRight: '6px' }">
-      <FieldRow v-slot="{ id }" layout="param" label="Name" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Name" :label-width="LABEL_WIDTH">
         <TextField
           :id="id"
           class="scr-name"
@@ -215,7 +215,7 @@ watch(
           @update:model-value="draft['name'] = $event"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" layout="param" label="Kind" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Kind" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           class="scr-kind"
@@ -226,7 +226,7 @@ watch(
           @update:model-value="onKind"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" layout="param" label="Units" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Units" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           class="scr-units"
@@ -237,7 +237,7 @@ watch(
           @update:model-value="onUnits"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" layout="param" label="Standard (optional)" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Standard (optional)" :label-width="LABEL_WIDTH">
         <TextField
           :id="id"
           size="sm"
@@ -249,7 +249,7 @@ watch(
 
       <template v-for="p in parts" :key="p">
         <h3 :style="heading">{{ p }}</h3>
-        <FieldRow v-slot="{ id }" layout="param" label="Type" :style="ROW">
+        <FieldRow v-slot="{ id }" layout="param" label="Type" :label-width="LABEL_WIDTH">
           <Select
             :id="id"
             :class="`scr-${p}-type`"
@@ -266,7 +266,7 @@ watch(
             v-slot="{ id }"
             layout="param"
             label="Threads per inch"
-            :style="ROW"
+            :label-width="LABEL_WIDTH"
           >
             <NumberField
               :id="id"
@@ -284,7 +284,7 @@ watch(
               @error="$event && writeTpi(null)"
             />
           </FieldRow>
-          <FieldRow v-else v-slot="{ id }" layout="param" :label="text" :style="ROW">
+          <FieldRow v-else v-slot="{ id }" layout="param" :label="text" :label-width="LABEL_WIDTH">
             <NumberField
               :id="id"
               :class="`scr-${p}-${f}`"
@@ -308,7 +308,7 @@ watch(
           v-slot="{ id }"
           layout="param"
           label="Countersink angle"
-          :style="ROW"
+          :label-width="LABEL_WIDTH"
         >
           <NumberField
             :id="id"
@@ -333,7 +333,7 @@ watch(
           v-slot="{ id }"
           layout="param"
           label="Driver number (optional)"
-          :style="ROW"
+          :label-width="LABEL_WIDTH"
         >
           <NumberField
             :id="id"
@@ -352,7 +352,7 @@ watch(
           />
         </FieldRow>
         <template v-if="p === 'thread'">
-          <FieldRow v-slot="{ id }" layout="param" label="Hand" :style="ROW">
+          <FieldRow v-slot="{ id }" layout="param" label="Hand" :label-width="LABEL_WIDTH">
             <Select
               :id="id"
               size="sm"
@@ -362,7 +362,7 @@ watch(
               @update:model-value="part('thread')['hand'] = $event"
             />
           </FieldRow>
-          <FieldRow v-slot="{ id }" layout="param" label="Thread" :style="ROW">
+          <FieldRow v-slot="{ id }" layout="param" label="Thread" :label-width="LABEL_WIDTH">
             <Select
               :id="id"
               size="sm"
@@ -382,7 +382,7 @@ watch(
         v-slot="{ id }"
         layout="param"
         :label="text"
-        :style="ROW"
+        :label-width="LABEL_WIDTH"
       >
         <NumberField
           :id="id"

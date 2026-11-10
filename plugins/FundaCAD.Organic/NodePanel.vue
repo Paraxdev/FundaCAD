@@ -90,7 +90,7 @@ function spoken(n: NodeValues): string {
 }
 
 const WIDTH: CSSProperties = { width: "300px", maxWidth: "100%", maxHeight: "calc(100vh - 180px)", overflowY: "auto" };
-const ROW: CSSProperties = { gridTemplateColumns: "84px minmax(0, 1fr)" };
+const LABEL_WIDTH = "84px";
 const SECTION: CSSProperties = {
   color: "var(--text-mute)",
   margin: "8px 0 4px",
@@ -205,7 +205,7 @@ const TAG: CSSProperties = {
 
       <h3 :id="`${uid}-body`" :style="SECTION">Body</h3>
       <div role="group" :aria-labelledby="`${uid}-body`">
-        <FieldRow v-slot="{ id }" layout="param" label="Blend" :style="ROW">
+        <FieldRow v-slot="{ id }" layout="param" label="Blend" :label-width="LABEL_WIDTH">
           <NumberField
             :id="id"
             data-field="blend"
@@ -218,7 +218,7 @@ const TAG: CSSProperties = {
             @error="refuse('blend', 'Blend', $event)"
           />
         </FieldRow>
-        <FieldRow v-slot="{ id }" layout="param" label="Operation" :style="ROW">
+        <FieldRow v-slot="{ id }" layout="param" label="Operation" :label-width="LABEL_WIDTH">
           <Select
             :id="id"
             data-field="operation"
