@@ -353,7 +353,9 @@ and on 60 boxes that are all different.
 user's open window, on a control (`ui`, the refs the harness uses: `pick:fillet`,
 `family:cat:MODIFY`, `field:radius`, `#timeline`, `menu:File/Open...`), a model area
 (`model`, harness selectors such as `body1:top` or `between top front`, not
-`inspect`'s fingerprints) or a part of the view (`region`, fractions of it). A
+`inspect`'s fingerprints) or a part of the view (`region`, fractions of it).
+`keys`, optional, gives the same step for keys alone in words and shows under the
+caption after With keys; a window older than it shows the step without them. A
 control folded away is ringed through what opens it, and the reply says so, as it
 names near misses for a ref that is not on screen. `guide_wait` then waits until
 the user presses Next, starts a tool, adds a feature, selects something or types a

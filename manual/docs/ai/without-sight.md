@@ -28,4 +28,4 @@ Ask for real sizes and named parameters, for example "make a box 60 by 40 by 20 
 
 FundaCAD does not speak what an assistant changed. Its reply says it, and a feature it adds shows in History.
 
-A guide from an assistant ([Let an assistant guide you](guide.md)) points at the screen with a ring for now, so it suits sighted use.
+A guide from an assistant ([Let an assistant guide you](guide.md)) points at the screen with a ring. When the assistant gives a step's keys, the caption box says them in words after With keys, so the step does not depend on seeing the ring. You can also ask the assistant to tell you each step in its own window.

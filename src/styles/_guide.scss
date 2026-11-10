@@ -80,6 +80,14 @@
   font-size: var(--fs-body);
   line-height: 1.45;
 }
+.guide-keys {
+  margin: var(--s-1) 0 0;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+.guide-keys-label {
+  font-weight: 600;
+}
 .guide-hint {
   margin: var(--s-1) 0 0;
   font-size: var(--fs-small);

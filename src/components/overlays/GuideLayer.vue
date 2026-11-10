@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { labelOf } from "../../ui/controlRefs";
 import { resolveControl } from "../../ui/guide/controls";
 import type { GuideState, StepState } from "../../ui/guide/guideSession";
@@ -223,6 +224,9 @@ const counter = computed(() =>
       >
         <div class="guide-count">{{ counter }}</div>
         <p class="guide-caption">{{ step.caption }}</p>
+        <p v-if="step.keys" class="guide-keys" data-guide-keys>
+          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ step.keys }}
+        </p>
         <p v-if="hint" class="guide-hint">{{ hint }}</p>
         <div class="guide-actions">
           <Button id="guide-stop" @click="guide.stop()">Stop</Button>

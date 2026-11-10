@@ -277,12 +277,24 @@ fn only_the_host_reports_what_the_guide_shows() {
 }
 
 #[test]
-fn a_guide_caption_is_capped() {
+fn a_guide_caption_and_its_keys_are_capped() {
     let (mut s, _) = session();
     publish(&mut s, APP, doc(1), 1);
-    wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "highlight", "caption": "x".repeat(5000)}}));
-    let c = wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0]["caption"].as_str().unwrap().len();
-    assert_eq!(c, MAX_CAPTION);
+    let long = "x".repeat(5000);
+    wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "highlight", "caption": long, "keys": long}}));
+    let c = &wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0];
+    assert_eq!(c["caption"].as_str().unwrap().len(), MAX_CAPTION);
+    assert_eq!(c["keys"].as_str().unwrap().len(), MAX_CAPTION);
+}
+
+#[test]
+fn a_guide_step_without_keys_reaches_the_window_without_them() {
+    let (mut s, _) = session();
+    publish(&mut s, APP, doc(1), 1);
+    wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "highlight", "caption": "Open Fillet"}}));
+    let c = &wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0];
+    assert_eq!(c["caption"], json!("Open Fillet"));
+    assert!(c.get("keys").is_none());
 }
 
 #[test]

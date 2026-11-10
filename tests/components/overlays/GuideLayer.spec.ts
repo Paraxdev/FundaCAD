@@ -7,6 +7,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import * as THREE from "three";
 import GuideLayer from "../../../src/components/overlays/GuideLayer.vue";
 import { ENGINE } from "../../../src/app/engineKey";
+import { setLanguage } from "../../../src/i18n";
 import type { Engine } from "../../../src/app/engine";
 import { GuideSession } from "../../../src/ui/guide/guideSession";
 import { emptySnapshot, type Snapshot } from "../../../src/ui/guide/wait";
@@ -197,5 +198,32 @@ describe("GuideLayer bubble", () => {
     next.click();
     await tick();
     expect(document.querySelector(".guide-bubble")).toBeNull();
+  });
+
+  it("shows a step's keys under its caption, labelled in the user's language, and nothing for a step without", async () => {
+    const g = setup();
+    const keysText = () => document.querySelector("[data-guide-keys]")?.textContent?.replace(/\s+/g, " ").trim();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Here", keys: "press F6" }]);
+    await tick();
+    expect(document.querySelector(".guide-caption")!.nextElementSibling).toBe(
+      document.querySelector("[data-guide-keys]"),
+    );
+    expect(keysText()).toBe("With keys: press F6");
+
+    try {
+      await setLanguage("de");
+      g.guide.apply([
+        { kind: "highlight", seq: 2, target: { ui: "guide-spec-target" }, caption: "Hier", keys: "F6 drücken" },
+      ]);
+      await tick();
+      expect(keysText()).toBe("Mit Tasten: F6 drücken");
+    } finally {
+      await setLanguage("system");
+    }
+
+    g.guide.apply([{ kind: "highlight", seq: 3, target: { ui: "guide-spec-target" }, caption: "There" }]);
+    await tick();
+    expect(document.querySelector(".guide-caption")!.textContent).toBe("There");
+    expect(document.querySelector("[data-guide-keys]")).toBeNull();
   });
 });
