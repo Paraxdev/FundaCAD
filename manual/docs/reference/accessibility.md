@@ -1,16 +1,16 @@
 # Accessibility
 
-FundaCAD can be used with a keyboard alone, with a screen reader, with larger text and with more contrast. This page says what is checked, how to set it up and how to tell us when something does not work for you.
+FundaCAD is made to be used with a keyboard alone, with a screen reader, with larger text and with more contrast. This page says what is checked and what is not yet, how to set it up and how to tell us when something does not work for you.
 
 ## What every build checks
 
 Each change to FundaCAD runs these checks:
 
-1. Home, the workspace, an open example, Sketch, Extrude, Preferences, Render, Stress, the command palette and a confirm dialog are scanned for the WCAG 2.2 A and AA rules. A new problem on any of them turns the build red.
+1. Home, the workspace, an open example, Sketch, Extrude, Preferences, Render, Stress, the command palette and a confirm dialog are scanned automatically against the WCAG 2.2 A and AA rules such a scan can test. A new problem on any of them turns the build red. A scan finds only part of what WCAG asks, so it is no claim that FundaCAD meets it.
 2. The names and roles a screen reader hears on the main screens are compared with saved copies, so a renamed landmark or a lost name turns the build red.
 3. The Items tree, History, the Geometry tab and the sketch lists are driven by keys alone, and a plate with a hole is drawn with no pointer at all.
-4. Every button, box and handle reacts over at least 24 by 24 pixels, and about 32 with Larger click targets.
-5. At Interface size 150 and 200 percent and with Comfortable text, no control is cut off or out of reach of Tab, and no text is smaller than 11 pixels.
+4. On those screens every button, box and handle reacts over at least 24 by 24 pixels, and about 32 with Larger click targets.
+5. At Interface size 150 and 200 percent and with Comfortable text, in the window sizes the checks use, no control is cut off or out of reach of Tab, and no text is smaller than 11 pixels.
 6. Every button that shows only an icon has a name, and every number box a unit.
 7. On Linux the AppImage's accessibility tree is read the way Orca reads it, and on Windows the window's tree the way NVDA and Narrator read it. A button with no name shows on the run. These two do not turn the build red yet.
 
@@ -18,7 +18,7 @@ macOS is not checked by a build: the Mac machines the builds run on cannot read 
 
 ## What is still checked by hand
 
-No build can listen to a screen reader, so before a release a person runs the same twenty steps with each one, the [screen reader smoke test](https://github.com/Paraxdev/fundacad/blob/main/docs/a11y-smoke.md). These runs are planned:
+No build can listen to a screen reader, so a person runs the same twenty steps with each one before a release, the [screen reader smoke test](https://github.com/Paraxdev/fundacad/blob/main/docs/a11y-smoke.md). No run has been recorded yet, so nothing a screen reader says in FundaCAD has been confirmed by ear. These runs are planned:
 
 | System | Package | Webview | Screen reader | Last run |
 | --- | --- | --- | --- | --- |
@@ -74,23 +74,25 @@ These pages show the keys for each part of the work:
 
 ## Screen readers
 
-FundaCAD is made to work with NVDA and Narrator on Windows, VoiceOver on macOS and Orca on Linux. The table above says which runs have been made.
+FundaCAD is made to work with NVDA and Narrator on Windows, VoiceOver on macOS and Orca on Linux. [The table above](#what-is-still-checked-by-hand) lists the runs planned, none made yet.
 
-1. Press Screen reader preset under Accessibility once. It turns Single key shortcuts off, so a letter typed in browse mode does not start a tool.
-2. FundaCAD hands messages and tool prompts to the screen reader as they appear. Show Last Message, in the command palette (Ctrl+K), brings the newest one back.
+1. FundaCAD opens with Home, a dialog with Blank and the examples. Escape closes it.
+2. Press Ctrl+, to open Preferences, move to its list of pages and press Down Arrow until you hear Accessibility. Tab then reaches Screen reader preset, the first button on that page. It turns Single key shortcuts off, so a letter typed in browse mode does not start a tool.
+3. FundaCAD hands messages and tool prompts to the screen reader as they appear. Show Last Message, in the command palette (Ctrl+K), brings the newest one back.
+4. In browse mode a screen reader may keep some keys for itself, such as the brackets of [Pick with keys](../model/picking.md#pick-with-keys). Switch to focus mode if a key does nothing.
 
 ## Linux
 
 Orca finds FundaCAD through the accessibility bus, which the at-spi2-core package brings. GNOME and KDE Plasma start it for you. A minimal desktop, such as i3 or sway, or a container may not have it.
 
-1. If Orca is silent, start the AppImage from a terminal. With no bus it prints a line with the command that installs at-spi2-core on your distribution.
-2. `NO_AT_BRIDGE=1` in your environment keeps every GTK app, FundaCAD too, from a screen reader. FundaCAD says so when it starts, in its log or in the terminal it was started from. Start it without that variable.
-3. On GNOME, Super+Alt+S turns Orca on and off. `gsettings get org.gnome.desktop.a11y.applications screen-reader-enabled` says whether it is.
+1. If Orca is silent, check that `/usr/share/dbus-1/services/org.a11y.Bus.service` exists. If not, install at-spi2-core from your distribution's packages. The AppImage checks this for you: started from a terminal, it prints the install command when the bus is missing.
+2. `NO_AT_BRIDGE=1` in your environment keeps every GTK app, FundaCAD too, from a screen reader. FundaCAD says so when it starts, in the terminal it was started from or in its [log](../start/install.md). Start it without that variable.
+3. On GNOME, Super+Alt+S turns Orca on and off. On other desktops, start `orca` from a terminal or your launcher.
 4. The Flatpak reaches the bus through Flatpak itself, so only your system needs it.
 
 ## Report a problem
 
-Use Help, Report a Problem… as for any [problem](../start/report.md), and say:
+Open Report a Problem… from the command palette (Ctrl+K), or press F10 for the menu bar and find it under Help. It works as for any [problem](../start/report.md): the report goes to GitHub, which needs an account. In the description, say:
 
 1. the screen reader or other tool, and its version;
 2. the keys you pressed;

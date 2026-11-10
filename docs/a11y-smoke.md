@@ -45,10 +45,10 @@ The checks start from what the app does today and may only get stricter.
   `node scripts/check-ui-controls.mjs --lower`, never raise one.
 - The AT-SPI and UI Automation walks have no baseline: one nameless button fails them.
 
-All of these steps start as `continue-on-error`, because the first runs on a real bus and a real WebView2 are also
-the spike that shows what the trees hold. They become required once the first accessibility wave has landed (the
-announcer, names on the base controls, dialogs that hide the page behind them and the Accessibility settings) and
-each step has run green on dev: delete the `continue-on-error: true` line from the step, so its job goes red.
+The browser checks are required: a red one turns its job red. The AT-SPI dump and the UI Automation walk still run
+as `continue-on-error`, because the first runs on a real bus and a real WebView2 are also the spike that shows what
+the trees hold. Once a walk has run green on dev, delete the `continue-on-error: true` line from its step, so its job
+goes red.
 
 Run the browser part locally like the rest of the harness smoke set ([HARNESS.md](HARNESS.md)):
 

@@ -1,6 +1,6 @@
 # Model without sight
 
-FundaCAD can be used without looking at the screen. There is more than one way to do it, and you can mix them in one document.
+FundaCAD is made to be used without looking at the screen. There is more than one way to do it, and you can mix them in one document.
 
 ## In the app, with keys and a screen reader
 
@@ -9,13 +9,15 @@ FundaCAD can be used without looking at the screen. There is more than one way t
 3. [The view as text](../model/picking.md#the-view-as-text): Describe Model gives every body with its size, center and volume.
 4. The Items tree and History are walked with the arrows, see [Accessibility](../reference/accessibility.md#keyboard).
 
+The words are written for a screen reader and checked by every build, but no screen reader run has been recorded yet, see [what is still checked by hand](../reference/accessibility.md#what-is-still-checked-by-hand).
+
 ## With an AI assistant
 
-An assistant [connected over MCP](connect.md) builds and checks parts with the same engine as the app, and tells you the results in words: sizes, volumes, sections, clashes, print problems and stress. You talk to it in its own window, which your screen reader reads like any other.
+An assistant [connected over MCP](connect.md) builds and checks parts with the same engine as the app, and tells you the results in words: sizes, volumes, sections, clashes, print problems and stress. You talk to it in its own window, so pick one your screen reader can read, such as a terminal it supports.
 
 With Live document set to Share, and allow edits, it changes the document you have open, and Ctrl+Z undoes each change as one step ([Share your document](sharing.md)).
 
-| System | Assistants that work |
+| System | Assistants that can connect |
 | --- | --- |
 | Windows | Claude Code, in a terminal, and Claude Desktop |
 | macOS | Claude Code, in a terminal, and Claude Desktop |
