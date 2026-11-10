@@ -20,6 +20,8 @@ STUB = """(png) => {
       t.aborted = true;
       reject(new DOMException("The picture was cancelled", "AbortError"));
     });
+    // Reported in the task that stamped the start, so the one second hold never depends on the runner's speed.
+    o.onProgress(12);
     window.__trace = t;
   });
 }"""
@@ -107,9 +109,6 @@ def test_a_traced_picture_is_taken_by_keys_and_each_quarter_is_heard_at_verbose(
     heard(s, "Render started, 256 samples")
     trace(s)
     assert s.page.evaluate("() => window.__trace.samples") == SAMPLES
-    assert value_text(s) == "0 of 256 samples"
-
-    s.page.evaluate("() => window.__trace.onProgress(12)")
     s.page.wait_for_timeout(120)
     assert value_text(s) == "0 of 256 samples"
     assert s.page.get_by_role("button", name="Cancel render").count() == 1
