@@ -6,10 +6,12 @@ import Checkbox from "../ui/Checkbox.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 import Slider from "../ui/Slider.vue";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useId } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
+import { t } from "../../i18n";
 import { toast } from "../../ui/toast";
+import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
 import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
 import {
@@ -40,12 +42,11 @@ onUnmounted(() => {
   abort?.abort();
 });
 
-/** A multiple of the viewport size, not a pixel count: the frame is the window's shape, so the file keeps the
- *  on-screen composition. */
+// A multiple of the viewport size, so the file keeps the on-screen composition.
 const scale = ref(2);
 const SCALES = [1, 2, 3, 4];
 const saving = ref(false);
-/** The silhouette outline is off by default, it is what most makes a render look like a CAD screenshot. */
+// Off by default, the silhouette outline is what makes a render look like a CAD screenshot.
 const edges = ref(false);
 /** Reference images are there to draw over, so a picture leaves them out unless asked. */
 const references = ref(false);
@@ -59,8 +60,13 @@ onUnmounted(offReferences);
 const SAMPLES = [64, 256, 1024];
 const samples = ref(256);
 const tracedWanted = ref(true);
-const progress = ref(0);
-const tracing = ref(false);
+const progress = shallowRef<TraceProgress | null>(null);
+const tracing = computed(() => progress.value !== null);
+const blocked = computed(() => saving.value && !tracing.value);
+const reasonId = useId();
+const countText = computed(() =>
+  progress.value ? t("render.progress.samples", { done: progress.value.shown, total: progress.value.total }) : "",
+);
 let abort: AbortController | null = null;
 
 const tracedSize = computed(() => {
@@ -79,8 +85,8 @@ const shotSize = computed(() => {
 });
 
 const buttonText = computed(() => {
-  if (!saving.value) return "Save picture…";
-  return tracing.value ? `Cancel, ${progress.value} of ${samples.value} samples` : "Rendering…";
+  if (!saving.value) return t("render.picture.save");
+  return t(tracing.value ? "render.picture.cancel" : "render.picture.saving");
 });
 
 const APERTURES = APERTURE_STOPS.map((f) => ({ value: String(f), label: `f/${f}` }));
@@ -90,15 +96,14 @@ const SAMPLE_CHOICES = SAMPLES.map((n) => ({ value: n, label: String(n), attrs: 
 async function render(): Promise<string | null> {
   if (traced.value) {
     abort = new AbortController();
-    progress.value = 0;
-    tracing.value = true;
+    progress.value = startProgress(samples.value, Date.now());
     try {
       const url = await engine.viewport.renderTracedPicture({
         scale: scale.value,
-        samples: samples.value,
+        samples: progress.value.total,
         signal: abort.signal,
         onProgress: (n) => {
-          progress.value = n;
+          if (progress.value) progress.value = stepProgress(progress.value, n, Date.now()).progress;
         },
       });
       if (url) return url;
@@ -108,7 +113,7 @@ async function render(): Promise<string | null> {
       return null;
     } finally {
       abort = null;
-      tracing.value = false;
+      progress.value = null;
     }
   }
   // Rendered before the dialog and read as a string: the pixels are valid only in the task that rendered them, so
@@ -229,9 +234,29 @@ async function takePicture() {
         label="Reference images"
       />
       <div class="mats-actions">
-        <Button id="rd-take-picture" variant="primary" :disabled="saving && !tracing" @click="takePicture()">{{
-          buttonText
-        }}</Button>
+        <Button
+          id="rd-take-picture"
+          variant="primary"
+          :disabled="blocked"
+          :disabled-reason="t('render.picture.savingReason')"
+          :aria-describedby="blocked ? reasonId : undefined"
+          @click="takePicture()"
+          >{{ buttonText }}</Button
+        >
+        <span v-if="blocked" :id="reasonId" class="sr-only">{{ t("render.picture.savingReason") }}</span>
+      </div>
+      <div
+        v-if="progress"
+        class="rd-progress"
+        role="progressbar"
+        :aria-label="t('render.progress.label')"
+        aria-valuemin="0"
+        :aria-valuemax="progress.total"
+        :aria-valuenow="progress.shown"
+        :aria-valuetext="countText"
+      >
+        <span class="rd-progress-track"><i :style="{ width: `${(100 * progress.shown) / progress.total}%` }" /></span>
+        <span class="rd-progress-text" aria-hidden="true">{{ countText }}</span>
       </div>
       <div v-if="traced" class="sm-hint">
         Traced to the samples picked, then cleaned with the high quality denoise. More samples take longer and keep

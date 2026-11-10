@@ -61,4 +61,4 @@ A straight-on view has no lens, so neither setting does anything there.
 4. For a plain picture, stay in Realtime or Matcap, or turn Path traced off. Edge lines adds the outlines, and Reference images keeps your reference images in, when the model has some.
 5. Press Save picture… and choose where the file goes.
 
-While it traces, the button counts the samples, press it again to cancel. The grid, the origin arrows and the sketch planes are always left out.
+While it traces, the button reads Cancel render and a bar under it counts the samples, press the button again (Enter or Space) to cancel. While the picture is being saved the button reads Saving picture… and waits. The grid, the origin arrows and the sketch planes are always left out.

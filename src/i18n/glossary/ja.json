@@ -98,6 +98,18 @@
     {
       "en": "Custom",
       "text": "カスタム"
+    },
+    {
+      "en": "render",
+      "text": "レンダリング"
+    },
+    {
+      "en": "picture",
+      "text": "画像"
+    },
+    {
+      "en": "sample",
+      "text": "サンプル"
     }
   ]
 }

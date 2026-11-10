@@ -99,6 +99,18 @@
     {
       "en": "Custom",
       "text": "Personnalisé"
+    },
+    {
+      "en": "render",
+      "text": "rendu"
+    },
+    {
+      "en": "picture",
+      "text": "image"
+    },
+    {
+      "en": "sample",
+      "text": "échantillon"
     }
   ]
 }

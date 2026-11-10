@@ -101,6 +101,18 @@
     {
       "en": "Custom",
       "text": "Personalizado"
+    },
+    {
+      "en": "render",
+      "text": "renderizado"
+    },
+    {
+      "en": "picture",
+      "text": "imagen"
+    },
+    {
+      "en": "sample",
+      "text": "muestra"
     }
   ]
 }

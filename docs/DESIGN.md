@@ -1184,6 +1184,10 @@ It returns the toast's id for `dismissToast`, or null for an error.
   button in Notifications."). An error is spoken by the title bar notice. The
   stack is a permanent region named "Notifications", empty when no toast
   shows, and is not live, so nothing is said twice.
+- A progress bar is `role="progressbar"` with a name, `aria-valuemin`, `aria-valuemax` and `aria-valuenow`, and an
+  `aria-valuetext` when the unit is not a percent (`64 of 256 samples`). It sits in no live region and its values
+  change at most once a second (`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame. The
+  button that starts the job keeps one name while it runs.
 - Under a dialog or the command palette the stack is inert and `aria-hidden`
   with the page, below the backdrop, so no region sits beside the modal. A
   toast with a button then waits and gets its full time once the modal closes,
@@ -1318,7 +1322,7 @@ The standard transition is
 Transition only background, color, box-shadow, opacity and
 transform, never layout. The one layout property that moves is the `width` of
 a progress fill inside a fixed track (`.timeline-busy .busy-bar i` and
-`.timeline-node .t-bar i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
+`.timeline-node .t-bar i` and `.rd-progress-track i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
 `120ms linear`), because it moves nothing around it.
 
 Off the scale, do not copy: `profile-panel-in 0.14s ease-out`

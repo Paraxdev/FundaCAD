@@ -393,3 +393,29 @@
   color: var(--text);
   margin-bottom: var(--s-2);
 }
+
+.rd-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+.rd-progress-track {
+  display: block;
+  height: 3px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--line);
+}
+.rd-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.4s var(--ease);
+}
+.rd-progress-text {
+  color: var(--text-mute);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
