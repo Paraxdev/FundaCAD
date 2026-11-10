@@ -154,6 +154,29 @@ describe("checkLine", () => {
     expect(checkLine(line, "Stress setup")).toBeNull();
   });
 
+  // Each part alone is plain text, put together they render as <img src=x onerror=alert(1)> or &lt;.
+  it.each([
+    "<{n, select, other {img src=x onerror=alert(1)}}>",
+    "&{n, select, other {lt}};",
+    "{n, plural, one {<} other {</}}b>",
+    "{n, select, one {x &l} other {&g}}t;",
+    "&#{n};",
+    "{n, plural, other {&'#'#;}}",
+    "a <{name}",
+    "{n, plural, other {&'#'60;}}",
+  ])("refuses the markup %j builds across its parts", (line) => {
+    expect(checkLine(line, english["stress.load.force"] + " {n, plural, other {#}}")).toBe("markup");
+  });
+
+  it.each([
+    "{n, plural, one {# Fläche < 2} other {# Flächen & mehr}}",
+    "R&D {n, select, other {a < b}} x",
+    "{n, plural, other {# R&D}}",
+    "{name} <= {n, number} & {force}",
+  ])("lets %j through, its < and & close inside their own part", (line) => {
+    expect(checkLine(line, english["stress.load.force"] + " {n, plural, other {#}}")).toBeNull();
+  });
+
   it.each(["bell\u0007", "two\nlines", "next\u0085line", "\u202eevil", "\u2066isolated\u2069", "del\u007f"])(
     "refuses the control character in %j",
     (line) => {

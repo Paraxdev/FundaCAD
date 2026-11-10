@@ -1,7 +1,7 @@
-// A dropped in language file is untrusted, anyone can hand one to a user. Markup is refused here rather than at each
-// use, because a few panels still build innerHTML.
+// A dropped in language file is untrusted, anyone can hand one to a user. Translated text never goes to innerHTML or
+// v-html, it reaches the page through Vue interpolation or textContent only; markup is refused too, should that slip.
 
-import { argNames, parseMessage } from "./format";
+import { argNames, parseMessage, type MessageNode } from "./format";
 
 export const MAX_OVERRIDE_BYTES = 256 * 1024;
 export const MAX_LINE_CHARS = 2000;
@@ -19,6 +19,9 @@ export interface OverrideResult {
 }
 
 const MARKUP = /<[A-Za-z/!?]|&(#\d+|#x[0-9a-f]+|[a-z]+);/i;
+// A tag or entity can also be split across parts, as in <{n, select, other {img ...}}>, so a text part that something
+// follows may not end in < or in an entity it has not closed.
+const OPEN_END = /(<|&[#A-Za-z0-9]*)$/;
 // C0 and C1 controls, and the bidi overrides and isolates that can make a line read as something else.
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
 
@@ -30,10 +33,20 @@ export function checkLine(value: string, englishValue: string): SkipReason | nul
   if (MARKUP.test(value)) return "markup";
   if (CONTROL.test(value)) return "control-character";
   try {
+    if (buildsMarkup(parseMessage(value), false)) return "markup";
     return extraArgument(value, englishValue) === undefined ? null : "bad-argument";
   } catch {
     return "syntax";
   }
+}
+
+function buildsMarkup(nodes: readonly MessageNode[], followed: boolean): boolean {
+  return nodes.some((node, i) => {
+    const next = followed || i < nodes.length - 1;
+    if (node.t === "text") return MARKUP.test(node.v) || (next && OPEN_END.test(node.v));
+    if (node.t !== "plural" && node.t !== "select") return false;
+    return [...node.options.values()].some((option) => buildsMarkup(option, next));
+  });
 }
 
 function extraArgument(value: string, englishValue: string): string | undefined {

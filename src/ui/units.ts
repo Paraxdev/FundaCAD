@@ -15,8 +15,8 @@ const LEGACY_KEYS = ["neocad.unit", "sindricad.unit"];
 let current: Unit = readStored();
 const listeners = new Set<() => void>();
 
-/** Every boundary feeding `current` must narrow here, not cast: the unit is interpolated raw into innerHTML in the
- *  properties and interference panels, so an unchecked value is a script injection path. */
+/** Every boundary feeding `current` must narrow here, not cast: an unknown unit has no factor, so every length would
+ *  read NaN. The unit is shown through Vue interpolation or textContent only, never innerHTML or v-html. */
 export function asUnit(v: unknown): Unit | null {
   return v === "mm" || v === "cm" || v === "in" ? v : null;
 }
