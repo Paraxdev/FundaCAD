@@ -1,7 +1,7 @@
 """The Stress material boxes start at one x and stay on their label's line wherever they sat on it before the labels shared a
 width, in the shipped face, a wider fallback face and Comfortable text, and the Stress panel with History open stays inside a
 small window with its Run button in view, in English, German, French and Spanish, and under a History of ten, fourteen and twenty-four
-features, opened before or after it."""
+features, opened before or after it, with History whole again once Stress closes."""
 
 import pytest
 from test_a11y import show_stress
@@ -157,6 +157,13 @@ GROWN_READ = """() => {
   };
 }"""
 
+HISTORY_READ = """() => {
+  const history = document.querySelector('#timeline');
+  const r = history.getBoundingClientRect();
+  const list = history.querySelector('.timeline-scroll');
+  return { cap: history.style.maxHeight, t: r.top, b: r.bottom, list: list.clientHeight };
+}"""
+
 
 @pytest.fixture(scope="module")
 def grown():
@@ -167,6 +174,8 @@ def grown():
             try:
                 s.open_file(path)
                 s.panel("History", open=True)
+                settled(s)
+                found[(size, count, "alone")] = s.page.evaluate(HISTORY_READ)
                 show_stress(s)
                 settled(s)
                 found[(size, count, "history first")] = s.page.evaluate(GROWN_READ)
@@ -175,6 +184,9 @@ def grown():
                 s.panel("History", open=True)
                 settled(s)
                 found[(size, count, "stress first")] = s.page.evaluate(GROWN_READ)
+                s.page.get_by_role("button", name="Close Stress").click()
+                settled(s)
+                found[(size, count, "closed")] = s.page.evaluate(HISTORY_READ)
             finally:
                 s.close()
     return found
@@ -204,3 +216,9 @@ def test_history_is_cut_only_where_the_panel_under_it_has_no_room_otherwise(grow
 def test_history_keeps_a_list_to_scroll_when_it_gives_room(grown):
     got = grown[((900, 800), 24, "history first")]
     assert got["list"]["b"] - got["list"]["t"] >= 40, got
+
+
+@pytest.mark.parametrize("count", FIXTURES)
+@pytest.mark.parametrize("size", GROWN_SIZES)
+def test_history_is_whole_again_once_the_stress_panel_closes(grown, size, count):
+    assert grown[(size, count, "closed")] == grown[(size, count, "alone")], grown

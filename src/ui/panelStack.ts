@@ -219,19 +219,26 @@ function assign(cols: Column[], mins: readonly number[]): Column[] {
   }
 }
 
-/** A card whose list scrolls inside it ([data-card-scroll]) can be cut to give the shelf under it room. */
-const yielding = (card: HTMLElement) => card.querySelector<HTMLElement>("[data-card-scroll]");
+/** Gives each card whose list scrolls inside it ([data-card-scroll]) its whole height back, and returns those cards
+ *  with their list. A card may be cut to give the shelf under it room. */
+function uncut() {
+  const lists = [...document.querySelectorAll<HTMLElement>(RIGHT_CARDS)].flatMap((card) => {
+    const list = card.querySelector<HTMLElement>("[data-card-scroll]");
+    return list ? [[card, list] as const] : [];
+  });
+  for (const [card] of lists) card.style.maxHeight = "";
+  return lists;
+}
 
 function place() {
   frame = 0;
+  const lists = uncut();
   // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
   for (const p of open) {
     p.el.style.maxHeight = "";
     p.el.style.maxWidth = "";
     uncap(p);
   }
-  const cards = [...document.querySelectorAll<HTMLElement>(RIGHT_CARDS)];
-  for (const c of cards) if (yielding(c)) c.style.maxHeight = "";
   const z = pageZoom();
   const area = (document.getElementById("float-layer") ?? document.body).getBoundingClientRect();
   // The root's clientWidth stays in window pixels under its own zoom, like the rects.
@@ -254,9 +261,7 @@ function place() {
   const before = shorts(now);
   const need = Math.max(MIN_HEIGHT, ...floors.map((f) => f.least ?? 0));
   const cuts = before
-    ? cards.flatMap((card) => {
-        const list = yielding(card);
-        if (!list) return [];
+    ? lists.flatMap(([card, list]) => {
         const least = card.offsetHeight - list.offsetHeight + Math.min(list.scrollHeight, SCROLLER_LEAST);
         const box = underZoom(seenRect(card), z);
         const h = yieldedHeight(box, now.base, need, least, CUBE_MARGIN);
@@ -359,6 +364,7 @@ export const panelStack = {
     el.removeAttribute("data-folded");
     open.splice(i, 1);
     if (open.length) return place();
+    uncut();
     observer?.disconnect();
     observer = null;
     arrivals?.disconnect();
