@@ -398,7 +398,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
-  margin-top: var(--s-2);
+  margin: var(--s-2) 0;
 }
 .rd-progress-track {
   display: block;
