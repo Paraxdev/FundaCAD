@@ -388,4 +388,46 @@ describe("Camera tab traced picture announcements", () => {
     expect(said()).toEqual([["Render started, 64 samples"], quarter(20, 64), ["Render finished", "polite", KEYED]]);
   });
 
+  it("takes no report between a cancel and the trace stopping", async () => {
+    await press();
+    const { onProgress, signal } = traces[0]!.opts;
+    at(1500);
+    onProgress(30);
+    await flushPromises();
+    await press();
+    expect(signal.aborted).toBe(true);
+    at(1620);
+    onProgress(140);
+    await flushPromises();
+    expect(barState()).toEqual(barAt(30, 256, "30 of 256 samples"));
+
+    traces[0]!.done.reject(Object.assign(new Error("stop"), { name: "AbortError" }));
+    await flushPromises();
+    expect(said()).toEqual([["Render started, 256 samples"], ["Render cancelled", "polite", KEYED]]);
+  });
+
+  it("takes no late report from a finished picture, alone or while the next one runs", async () => {
+    await press();
+    const first = traces[0]!.opts.onProgress;
+    at(400);
+    first(70);
+    traces[0]!.done.resolve("data:traced");
+    await flushPromises();
+    at(1900);
+    expect(() => first(140)).not.toThrow();
+    await flushPromises();
+    expect(bar().exists()).toBe(false);
+
+    await press();
+    at(3500);
+    first(200);
+    await flushPromises();
+    expect(barState()).toEqual(barAt(0, 256, "0 of 256 samples"));
+    expect(said()).toEqual([
+      ["Render started, 256 samples"],
+      quarter(70),
+      ["Render finished", "polite", KEYED],
+      ["Render started, 256 samples"],
+    ]);
+  });
 });

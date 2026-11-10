@@ -98,16 +98,18 @@ const SAMPLE_CHOICES = SAMPLES.map((n) => ({ value: n, label: String(n), attrs: 
 
 async function render(): Promise<string | null> {
   if (traced.value) {
-    abort = new AbortController();
+    const mine = new AbortController();
+    abort = mine;
     progress.value = startProgress(samples.value, Date.now());
     announce(t("render.progress.started", { total: progress.value.total }));
     try {
       const url = await engine.viewport.renderTracedPicture({
         scale: scale.value,
         samples: progress.value.total,
-        signal: abort.signal,
+        signal: mine.signal,
         onProgress: (n) => {
-          if (!progress.value) return;
+          // The native tracer can still report in the 50 ms slice after a cancel, before its picture rejects.
+          if (abort !== mine || mine.signal.aborted || !progress.value) return;
           const step = stepProgress(progress.value, n, Date.now());
           progress.value = step.progress;
           if (step.quarter)
