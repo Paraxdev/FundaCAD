@@ -1,6 +1,6 @@
 # Model without sight
 
-FundaCAD is made to be used without looking at the screen. There is more than one way to do it, and you can mix them in one document.
+These routes let you model without looking at the screen, and you can mix them in one document.
 
 ## In the app, with keys and a screen reader
 
@@ -9,7 +9,7 @@ FundaCAD is made to be used without looking at the screen. There is more than on
 3. [The view as text](../model/picking.md#the-view-as-text): Describe Model gives every body with its size, center and volume.
 4. The Items tree and History are walked with the arrows, see [Accessibility](../reference/accessibility.md#keyboard).
 
-The words are written for a screen reader and checked by every build, but no screen reader run has been recorded yet, see [what is still checked by hand](../reference/accessibility.md#what-is-still-checked-by-hand).
+The names and roles a screen reader reads are checked by every build, but no screen reader run has been recorded yet, see [what is still checked by hand](../reference/accessibility.md#what-is-still-checked-by-hand).
 
 ## With an AI assistant
 

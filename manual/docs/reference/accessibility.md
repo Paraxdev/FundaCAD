@@ -86,7 +86,7 @@ FundaCAD is made to work with NVDA and Narrator on Windows, VoiceOver on macOS a
 Orca finds FundaCAD through the accessibility bus, which the at-spi2-core package brings. GNOME and KDE Plasma start it for you. A minimal desktop, such as i3 or sway, or a container may not have it.
 
 1. If Orca is silent, check that `/usr/share/dbus-1/services/org.a11y.Bus.service` exists. If not, install at-spi2-core from your distribution's packages. The AppImage checks this for you: started from a terminal, it prints the install command when the bus is missing.
-2. `NO_AT_BRIDGE=1` in your environment keeps every GTK app, FundaCAD too, from a screen reader. FundaCAD says so when it starts, in the terminal it was started from or in its [log](../start/install.md). Start it without that variable.
+2. `NO_AT_BRIDGE=1` in your environment keeps every GTK app, FundaCAD too, from a screen reader. FundaCAD says so when it starts, in the terminal it was started from or in its [log](../start/install.md#where-fundacad-keeps-its-files). Start it without that variable.
 3. On GNOME, Super+Alt+S turns Orca on and off. On other desktops, start `orca` from a terminal or your launcher.
 4. The Flatpak reaches the bus through Flatpak itself, so only your system needs it.
 
