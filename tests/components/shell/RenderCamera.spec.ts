@@ -156,6 +156,26 @@ describe("Camera tab traced picture", () => {
     expect(bar().attributes("aria-valuetext")).toBe(text.text());
   });
 
+  it("fills the track to the share of the samples shown", async () => {
+    await press();
+    const fill = () => (w.get(".rd-progress-track i").element as HTMLElement).style.width;
+    const widths = [fill()];
+    const { onProgress } = traces[0]!.opts;
+    const steps: Array<[number, number]> = [
+      [300, 64],
+      [1500, 100],
+      [1700, 192],
+      [1800, 256],
+    ];
+    for (const [ms, n] of steps) {
+      at(ms);
+      onProgress(n);
+      await flushPromises();
+      widths.push(fill());
+    }
+    expect(widths).toEqual(["0%", "25%", "39.0625%", "75%", "100%"]);
+  });
+
   it("keeps the total the trace started with when the Samples chip changes", async () => {
     await press();
     await w.get("[data-samples='1024']").trigger("click");
@@ -367,4 +387,5 @@ describe("Camera tab traced picture announcements", () => {
     await flushPromises();
     expect(said()).toEqual([["Render started, 64 samples"], quarter(20, 64), ["Render finished", "polite", KEYED]]);
   });
+
 });
