@@ -125,8 +125,6 @@
   { "path": "src/components/overlays/ExportDialog.vue", "kind": "script", "count": 9, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/ExportDialog.vue", "kind": "template", "count": 29, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/FilletMembers.vue", "kind": "template", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/overlays/GuideLayer.vue", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/overlays/GuideLayer.vue", "kind": "template", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/InterferencePanel.vue", "kind": "template", "count": 12, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/LargerTargetsRow.vue", "kind": "template", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/overlays/McpSection.vue", "kind": "script", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },

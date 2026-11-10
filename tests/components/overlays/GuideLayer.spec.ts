@@ -272,4 +272,25 @@ describe("GuideLayer speech", () => {
     await tick();
     expect(said().map((c) => c[0])).toEqual(["Guide. Here.", "Guide. Again."]);
   });
+
+  it("shows and says the counter and the buttons in the user's language", async () => {
+    const g = setup();
+    const text = (sel: string) => document.querySelector(sel)!.textContent!.trim();
+    try {
+      await setLanguage("de");
+      g.guide.apply([{ kind: "highlight", seq: 1, step: 1, of: 2, target: at, caption: "Hier", keys: "F6 drücken" }]);
+      await tick();
+      expect([text(".guide-count"), text("#guide-stop"), text("#guide-next")]).toEqual([
+        "Schritt 1 von 2",
+        "Beenden",
+        "Weiter",
+      ]);
+      expect(document.querySelector(".guide-bubble")!.getAttribute("aria-label")).toBe("Schritt 1 von 2");
+      g.guide.apply([{ kind: "highlight", seq: 2, target: at, caption: "Fertig." }]);
+      await tick();
+      expect(said().map((c) => c[0])).toEqual(["Schritt 1 von 2. Hier. Mit Tasten: F6 drücken", "Anleitung. Fertig."]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
 });

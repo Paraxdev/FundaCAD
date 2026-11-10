@@ -1,5 +1,10 @@
 {
+  "guide.counter": "Step {step, number} of {of, number}",
   "guide.keysLabel": "With keys:",
+  "guide.next": "Next",
+  "guide.openFirst": "Open {control} first",
+  "guide.stop": "Stop",
+  "guide.title": "Guide",
   "menu.help.accessibility": "Accessibility",
   "prefs.accessibility.manualLink": "Read the Accessibility page of the manual",
   "prefs.language.error.badName": "Could not tell the language from the file name, name the file by its language code, as in pl.json.",
