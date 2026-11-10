@@ -12,6 +12,7 @@ import { classifyExprInput } from "../../src/params/engine";
 import type { CadDocument } from "../../src/types";
 import { icon, iconElement } from "../../src/ui/icons";
 import { escapeClaimed } from "../../src/ui/escapeClaim";
+import { setLanguage } from "../../src/i18n";
 
 /** happy-dom has no PointerEvent constructor in every version, and nothing here
  *  reads a pointer property, only the target, so a plain bubbling Event is
@@ -1430,5 +1431,46 @@ describe("DimInput.hasField", () => {
     expect(dim.hasField("radius")).toBe(false);
     dim.show([{ name: "x", label: "X" }], () => {});
     expect([dim.hasField("radius"), dim.hasField("x")]).toEqual([false, true]);
+  });
+});
+
+describe("DimInput boxes in a comma language", () => {
+  beforeEach(() => setLanguage("de"));
+  afterEach(() => setLanguage("system"));
+
+  const input = () => root().querySelector<HTMLInputElement>("input")!;
+  const type = (text: string) => {
+    input().value = text;
+    input().dispatchEvent(new Event("input", { bubbles: true }));
+    input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  };
+
+  it("fills a seeded and a tracking box with a comma, a count whole", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    dim.seed("distance", 40.25);
+    expect(input().value).toBe("40,25");
+    dim.takeOver("distance");
+    dim.updateFromCursor({ distance: 17.375 });
+    expect(input().value).toBe("17,375");
+    expect(dim.getValue("distance")).toBe(17.375);
+    dim.dispose();
+
+    dim = new DimInput();
+    dim.show([{ name: "copies", label: "N", kind: "count" }], () => {});
+    dim.seed("copies", 5.6);
+    expect(input().value).toBe("6");
+  });
+
+  it("reads back what the box shows, with a comma or a point, and 1,000 is 1", () => {
+    const got: Record<string, number>[] = [];
+    dim.show([{ name: "distance", label: "D" }], (v) => got.push(v));
+    dim.seed("distance", 40.25);
+    type(input().value);
+    type("17,375");
+    type("17.5");
+    expect(got.map((v) => v.distance)).toEqual([40.25, 17.375, 17.5]);
+    type("1,000");
+    expect(got.length).toBe(4);
+    expect(got[3]!.distance).toBe(1);
   });
 });

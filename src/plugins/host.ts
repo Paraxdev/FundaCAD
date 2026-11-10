@@ -119,6 +119,8 @@ export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from 
 export { roundForDisplay as displayRound } from "../ui/measure";
 /** Number boxes read through the app's measure grammar (units, fractions, arithmetic, decimal comma). */
 export { fieldNumber, fieldError, readAs } from "../ui/measure";
+/** A rounded number as a value box shows it, with the language's decimal mark. */
+export { spellRounded as numberText } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 

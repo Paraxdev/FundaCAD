@@ -396,10 +396,20 @@ export function toUnit(canonical: number, unit: UnitDef | null): number {
   return roundForDisplay(canonical / (unit?.factor ?? 1));
 }
 
+/** The number as a box shows it: String(n) with the point swapped for the language's mark. */
+export function spellNumber(n: number, mark: DecimalMark = decimalMark()): string {
+  const text = String(n);
+  return mark === "," ? text.replace(".", ",") : text;
+}
+
+export function spellRounded(v: number, mark?: DecimalMark): string {
+  return spellNumber(roundForDisplay(v), mark);
+}
+
 /** Canonical value → "3.4 mm". `space` off gives "3.4mm" for tight chrome. */
 export function formatMeasure(canonical: number, unit: UnitDef | null, space = true): string {
   const u = unit ?? BY_ID.get("mm")!;
-  const n = toUnit(canonical, u);
+  const n = spellNumber(toUnit(canonical, u));
   // Degrees read as 90° with nothing between; every other unit takes a space.
   const gap = space && u.label !== "°" ? " " : "";
   return `${n}${gap}${u.label}`;

@@ -27,6 +27,7 @@ import { useSketchAnnotationStore } from "../../../src/stores/sketchAnnotations"
 import { SketchDimensions, type ExtraDim } from "../../../src/sketch/sketchDimensions";
 import type { SketchPlane } from "../../../src/sketch/plane";
 import type { Viewport } from "../../../src/viewport/viewport";
+import { setLanguage } from "../../../src/i18n";
 import type { ResolvedEntity } from "../../../src/sketch/snap";
 
 enableAutoUnmount(afterEach);
@@ -299,6 +300,23 @@ describe("SketchDimLayer", () => {
 
   it("opens the value in display units on click", async () => {
     expect((await openEditor()).value).toBe("40");
+  });
+
+  it("opens a value with the language's mark and commits what is typed back, comma or point", async () => {
+    await setLanguage("de");
+    try {
+      const commit = vi.fn();
+      const input = await openEditor({ valueMm: 42.375, commit });
+      expect(input.value).toBe("42,375");
+      for (const text of ["42,375", "17,5", "17.5"]) {
+        input.value = text;
+        input.dispatchEvent(new Event("input"));
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      }
+      expect(commit.mock.calls).toEqual([[42.375], [17.5], [17.5]]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("names the open editor after its dimension", async () => {

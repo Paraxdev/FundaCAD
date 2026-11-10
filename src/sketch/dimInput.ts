@@ -20,7 +20,15 @@ import { underZoom } from "../ui/anchor";
 import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
-import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
+import {
+  commonUnits,
+  measureError,
+  spellNumber,
+  toUnit,
+  tryParseMeasure,
+  unitById,
+  type UnitDef,
+} from "../ui/measure";
 import { valueProblem, type FieldKind, type ValueRule } from "../document/numFields";
 import { splitNameValue, type ExprInput } from "../params/engine";
 import { replayedPress } from "../viewport/navigator/input";
@@ -1142,7 +1150,7 @@ export class DimInput {
           const current = tryParseMeasure(this.numberText(f), f.unit);
           f.unit = u;
           if (f.chip) paintChip(f.chip, u);
-          if (current) f.input.value = String(toUnit(current.value, u));
+          if (current) f.input.value = spellNumber(toUnit(current.value, u));
           this.sizeToContent(f);
           f.input.focus();
         },
@@ -1321,7 +1329,7 @@ export class DimInput {
     for (const f of this.fields) {
       const v = values[f.def.name];
       if (!f.userDriven && v != null) {
-        f.input.value = String(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
+        f.input.value = spellNumber(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
         this.sizeToContent(f);
         // Keep the live value selected while it tracks the cursor, so typing replaces it instead of appending.
         if (document.activeElement === f.input) f.input.select();
@@ -1333,7 +1341,7 @@ export class DimInput {
   seed(name: string, value: number) {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
-    f.input.value = String(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
+    f.input.value = spellNumber(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
     f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);

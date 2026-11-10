@@ -3,7 +3,7 @@
 // keeps the last good value and turns the box red with the reason in its title, as ValidatedInput does.
 
 import { computed, ref, watch } from "vue";
-import { fieldError, fieldNumber } from "../../ui/measure";
+import { fieldError, fieldNumber, spellNumber } from "../../ui/measure";
 
 defineOptions({ inheritAttrs: false });
 
@@ -14,7 +14,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: number | null] }>();
 
-const text = ref(props.modelValue == null ? "" : String(props.modelValue));
+const text = ref(props.modelValue == null ? "" : spellNumber(props.modelValue));
 const error = computed(() => fieldError(text.value));
 
 let sent = props.modelValue;
@@ -25,7 +25,7 @@ watch(
   (v) => {
     if (v === sent) return;
     sent = v;
-    text.value = v == null ? "" : String(v);
+    text.value = v == null ? "" : spellNumber(v);
   },
 );
 

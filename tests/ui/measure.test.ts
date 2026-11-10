@@ -22,6 +22,8 @@ import {
   tryParseMeasure,
   unitById,
   canonicalTyping,
+  spellNumber,
+  spellRounded,
 } from "../../src/ui/measure";
 import { isPlainNumber, parseField, plainNumber } from "../../src/ui/units";
 import { parseHoleSize } from "../../src/features/holeStandards";
@@ -478,5 +480,51 @@ describe("spokenUnit", () => {
       expect(spokenUnit(text, false)).toBe(text);
       expect(spokenUnit(text, true, true)).toBe(text);
     }
+  });
+});
+
+describe("spelling a number", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("swaps only the point for the mark, whatever the size", () => {
+    const cases: [number, string, string][] = [
+      [0, "0", "0"],
+      [1, "1", "1"],
+      [-0.35, "-0.35", "-0,35"],
+      [12.375, "12.375", "12,375"],
+      [1503.25, "1503.25", "1503,25"],
+      [0.000437, "0.000437", "0,000437"],
+      [1.5e21, "1.5e+21", "1,5e+21"],
+    ];
+    for (const [n, point, comma] of cases) {
+      expect(spellNumber(n, ".")).toBe(point);
+      expect(spellNumber(n, ",")).toBe(comma);
+    }
+  });
+
+  it("rounds like the boxes before it spells", () => {
+    const cases: [number, string, string][] = [
+      [12.3456, "12.35", "12,35"],
+      [-0.35004, "-0.35", "-0,35"],
+      [0.000437123, "0.000437", "0,000437"],
+      [17.5, "17.5", "17,5"],
+      [3, "3", "3"],
+    ];
+    for (const [v, point, comma] of cases) {
+      expect(spellRounded(v, ".")).toBe(point);
+      expect(spellRounded(v, ",")).toBe(comma);
+    }
+  });
+
+  it("follows the active language when no mark is given", async () => {
+    expect(spellNumber(12.375)).toBe("12.375");
+    await setLanguage("de");
+    expect(spellNumber(12.375)).toBe("12,375");
+    expect(spellRounded(-4.2567)).toBe("-4,26");
+    expect(formatMeasure(25.4 * 1.25, IN)).toBe("1,25 in");
+    expect(formatMeasure(17.5, MM, false)).toBe("17,5mm");
+    expect(formatMeasure(45.5, unitById("deg"))).toBe("45,5°");
+    await setLanguage("en");
+    expect(formatMeasure(25.4 * 1.25, IN)).toBe("1.25 in");
   });
 });
