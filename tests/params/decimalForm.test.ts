@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { commasToPoints, pointsToCommas } from "../../src/params/decimalForm";
+import { ExprError } from "../../src/params/parse";
 import { evalExpr } from "../../src/params/eval";
 import RAW from "../vectors/params.json";
 
@@ -36,6 +37,42 @@ describe("commasToPoints swaps a decimal comma and keeps the length", () => {
   it("turns a doubtful number into one the grammar refuses", () => {
     expect(commasToPoints("1,5,5")).toBe("1.5.5");
     expect(commasToPoints("1.234,5")).toBe("1.234.5");
+  });
+
+  it.each([
+    ["1.500", "1.500", 0],
+    ["12.000", "12.000", 0],
+    ["0.250", "0.250", 0],
+    ["-1.500", "1.500", 1],
+    ["breite * 1.500", "1.500", 9],
+    ["2.500mm", "2.500", 0],
+    ["10x1.500", "1.500", 3],
+    ["max(1,5; 2.125)", "2.125", 9],
+  ])("refuses %j, a lone point before three digits could be a thousands point", (typed, num, at) => {
+    let thrown: unknown;
+    try {
+      commasToPoints(typed);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ExprError);
+    expect([(thrown as ExprError).message, (thrown as ExprError).pos]).toEqual([
+      `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+      at,
+    ]);
+  });
+
+  it.each([
+    ["1.50", "1.50"],
+    ["1.5000", "1.5000"],
+    ["2.25", "2.25"],
+    ["1.2345", "1.2345"],
+    ["1.500e3", "1.500e3"],
+    [".500", ".500"],
+    ["1,500", "1.500"],
+    ["breite * 1,5", "breite * 1.5"],
+  ])("takes %j as %j, which no thousands point could have written", (typed, read) => {
+    expect(commasToPoints(typed)).toBe(read);
   });
 });
 

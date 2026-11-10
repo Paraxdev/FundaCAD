@@ -20,7 +20,8 @@ export function fmtDim(
 
 /** A real formula, not a bare literal, earns the `fx:` prefix, and a click reopens the expression. */
 export function isFormula(expr?: string | undefined): boolean {
-  return !!expr && !isPlainNumber(expr);
+  // Saved text, so read in point form: "0.125" is a literal in every language.
+  return !!expr && !isPlainNumber(expr, ".");
 }
 
 /** Conflict wins over over-defined, as in diagnosisOf() in glyphs.ts, so the two layers agree on red vs amber.

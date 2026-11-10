@@ -14,7 +14,7 @@ import {
   type TextureMode,
 } from "./textureForm";
 import { Button, FieldRow, Icon, IconButton, NumberField, Panel, Segmented, Select, Slider, Switch } from "fundacad/ui";
-import { fieldNumber, openDialog, readAs } from "fundacad";
+import { fieldNumber, openDialog, readAs, spellNumber } from "fundacad";
 import * as panel from "./panel";
 
 // Reseeded whenever the tool opens a new request: a permanently mounted overlay has no key to remount it, so a reopen
@@ -144,7 +144,7 @@ function numOf(k: NumKey): number | null {
 }
 
 function setNum(k: NumKey, v: number | null) {
-  form[k] = v === null ? "" : String(v);
+  form[k] = v === null ? "" : spellNumber(v);
   emitChange();
 }
 
@@ -155,7 +155,7 @@ function refuse(k: string, label: string, why: string | null) {
 const pctOf = (k: PctKey) => Math.max(0, Math.min(100, Math.round((fieldNumber(form[k]) || 0) * 100)));
 
 function setPct(k: PctKey, v: number) {
-  form[k] = String(v / 100);
+  form[k] = spellNumber(v / 100);
   emitChange();
 }
 

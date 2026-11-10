@@ -9,9 +9,13 @@ const IDENT_PART = /[A-Za-z0-9_]/;
 // "10x2,5" is the drawing form of 10 times 2,5 that ui/measure reads; the x is not the start of a name there.
 const isTimesX = (text: string, i: number) =>
   (text[i] === "x" || text[i] === "X") && /[0-9)]/.test(text[i - 1] ?? "") && DIGIT.test(text[i + 1] ?? "");
+// "1.500" could be a thousands point, the mirror of "1,000" in a point language. With an exponent it never is.
+const POINT_BEFORE_THREE = /^[0-9]+\.[0-9]{3}$/;
+const EXPONENT = /^[eE][+-]?[0-9]/;
 
 /** A comma is a decimal mark when a digit follows it and it starts a number or continues one. After a name or a
- *  closing bracket it stays, so the tokenizer refuses it. A doubtful number (1,5,5) becomes one the grammar refuses. */
+ *  closing bracket it stays, so the tokenizer refuses it. A doubtful number (1,5,5) becomes one the grammar refuses.
+ *  A lone point before exactly three digits (1.500) throws ExprError, refused rather than guessed. */
 export function commasToPoints(text: string): string {
   let out = "";
   let i = 0;
@@ -32,7 +36,11 @@ export function commasToPoints(text: string): string {
         if ((text[j] === "," || text[j] === ".") && DIGIT.test(text[j + 1] ?? "")) j++;
         else break;
       }
-      out += text.slice(i, j).replace(/,/g, ".");
+      const num = text.slice(i, j);
+      if (POINT_BEFORE_THREE.test(num) && !EXPONENT.test(text.slice(j))) {
+        throw new ExprError(`"${num}" is ambiguous, write a comma for decimals or leave the point out`, i);
+      }
+      out += num.replace(/,/g, ".");
       i = j;
     } else if (ch === "," && DIGIT.test(text[i + 1] ?? "") && !/[A-Za-z0-9_)]/.test(text[i - 1] ?? "")) {
       out += ".";

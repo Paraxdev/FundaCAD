@@ -160,6 +160,7 @@ export function snap(v: number, step: number): number {
 import type { FieldKind } from "../document/numFields";
 export type { FieldKind };
 import { canonicalTyping, tryParseMeasure, unitById } from "./measure";
+import type { DecimalMark } from "../i18n";
 
 /** numeric value to show in a field: angles stay in degrees, lengths convert */
 export function displayValue(mm: number, kind: FieldKind = "length"): number {
@@ -188,17 +189,17 @@ export function parsedUnit(raw: string, kind: FieldKind = "length"): string | nu
  *  opposed to an expression (canonical-unit semantics via the params engine).
  *  "5.0" and "-2e3" are plain; "5 mm", "width/2", "5+3" are expressions. */
 const PLAIN_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
-export function isPlainNumber(raw: string): boolean {
-  return plainNumber(raw) !== null;
+export function isPlainNumber(raw: string, mark?: DecimalMark): boolean {
+  return plainNumber(raw, mark) !== null;
 }
 
 /** The value of a plain literal, read the way ui/measure reads one: a decimal
  *  comma and a typographic minus are the same literal. Null for anything else,
- *  an ambiguous "1,000" included. */
-export function plainNumber(raw: string): number | null {
+ *  an ambiguous "1,000" included, or "1.500" with a comma mark. */
+export function plainNumber(raw: string, mark?: DecimalMark): number | null {
   let src: string;
   try {
-    src = canonicalTyping(raw);
+    src = canonicalTyping(raw, mark);
   } catch {
     return null;
   }

@@ -19,17 +19,9 @@ import { regionStep } from "../ui/regions";
 import { underZoom } from "../ui/anchor";
 import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
-import { storedExpr } from "../ui/measure";
+import { storedExpr, typedExprProblem } from "../ui/measure";
 import { getUnit, parseField } from "../ui/units";
-import {
-  commonUnits,
-  measureError,
-  spellNumber,
-  toUnit,
-  tryParseMeasure,
-  unitById,
-  type UnitDef,
-} from "../ui/measure";
+import { commonUnits, measureError, spellNumber, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type FieldKind, type ValueRule } from "../document/numFields";
 import { splitNameValue, type ExprInput } from "../params/engine";
 import { replayedPress } from "../viewport/navigator/input";
@@ -862,6 +854,8 @@ export class DimInput {
     if (!doc || !text || this.parseMeasure(f) !== null) return null;
     const err = measureError(text, f.unit);
     if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
+    const refused = typedExprProblem(text);
+    if (refused) return { ok: false, error: refused };
     return doc.classifyTargetExpr(null, null, storedExpr(text), f.def.kind ?? "length");
   }
 

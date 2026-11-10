@@ -7,7 +7,7 @@ import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
 import { getUnit, toDisplay } from "../../ui/units";
-import { shownExpr, spellRounded, storedExpr } from "../../ui/measure";
+import { shownExpr, spellRounded, storedExpr, typedExprProblem } from "../../ui/measure";
 import Panel from "../ui/Panel.vue";
 import TextField from "../ui/TextField.vue";
 import Select from "../ui/Select.vue";
@@ -87,11 +87,13 @@ const addError = ref("");
 /** The store's own check is the commit, so it runs as TextField's validate, which runs once per commit and keeps the
  *  refused text. */
 const commitWith = (fn: (raw: string) => string | null) => (raw: string) => fn(raw.trim());
-const commitExpr = (fn: (expr: string) => string | null) => commitWith((raw) => fn(storedExpr(raw)));
+const commitExpr = (fn: (expr: string) => string | null) =>
+  commitWith((raw) => typedExprProblem(raw) ?? fn(storedExpr(raw)));
 
 function add() {
   if (!newName.value.trim() || !newExpr.value.trim()) return;
-  const err = store.addParam(newName.value.trim(), storedExpr(newExpr.value.trim()), newUnit.value);
+  const expr = newExpr.value.trim();
+  const err = typedExprProblem(expr) ?? store.addParam(newName.value.trim(), storedExpr(expr), newUnit.value);
   addError.value = err ?? "";
   if (err) return;
   newName.value = "";
@@ -188,8 +190,8 @@ function add() {
       </template>
 
       <div class="measure-hint">
-        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · a semicolon separates arguments:
-        max(a; b) · Esc to close
+        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · a semicolon separates arguments: max(a; b)
+        · Esc to close
       </div>
     </div>
   </Panel>

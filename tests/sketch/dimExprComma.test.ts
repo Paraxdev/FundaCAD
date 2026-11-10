@@ -46,6 +46,20 @@ describe("evalDimInput with a decimal comma", () => {
     expect(evalDim(raw)).toEqual(expected);
   });
 
+  it.each([
+    ["width * 1.500", "1.500"],
+    ["wall = width/1.250", "1.250"],
+  ])("in German %j is refused as ambiguous", async (raw, num) => {
+    await setLanguage("de");
+    expect(evalDim(raw)).toEqual({
+      error: `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+    });
+  });
+
+  it("in English width * 1.500 is width times 1.5", () => {
+    expect(evalDim("width * 1.500")).toEqual({ value: 60, expr: "width * 1.500" });
+  });
+
   it("in German a comma after a name is still refused", async () => {
     await setLanguage("de");
     expect(evalDim("width,5")).toEqual({ error: expect.any(String) });

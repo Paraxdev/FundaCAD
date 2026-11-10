@@ -189,6 +189,24 @@ describe("ProfileChip", () => {
     }
   });
 
+  it("in a comma language refuses 0.250 with the reason and keeps the profile, 0.25 still commits", async () => {
+    await setLanguage("de");
+    try {
+      mount(-0.35).click();
+      field().value = "0.250";
+      key(field(), "Enter");
+      const refused = [chip.profile, field().getAttribute("aria-invalid"), field().title];
+      field().value = "0.25";
+      key(field(), "Enter");
+      expect({ refused, taken: [chip.profile, field().value] }).toEqual({
+        refused: [-0.35, "true", '"0.250" is ambiguous, write a comma for decimals or leave the point out'],
+        taken: [0.25, "+0,250"],
+      });
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   it("claims Escape while open, so a tool that asks leaves it, and gives focus back to the chip", async () => {
     const tick = () => new Promise((r) => setTimeout(r, 0));
     await tick(); // an earlier case's release lands after its event

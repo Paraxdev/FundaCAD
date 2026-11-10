@@ -229,6 +229,27 @@ describe("ParamsDialog", () => {
       ]);
     });
 
+    it("refuses 1.500 in German as ambiguous, in the add row and the Expression box, and stores nothing", async () => {
+      await setLanguage("de");
+      const fake = makeEngine();
+      await open(fake);
+      const [, , , newName, newExpr] = inputs();
+      await type(newName!, "wall");
+      await type(newExpr!, "1.500");
+      const add = [...document.body.querySelectorAll<HTMLButtonElement>(".params-add .btn")].at(-1)!;
+      add.click();
+      await flushPromises();
+      const expr = inputs()[1]!;
+      await type(expr, "w * 0.250");
+      await enter(expr);
+      const why = (n: string) => `"${n}" is ambiguous, write a comma for decimals or leave the point out`;
+      expect({ calls: fake.calls, add: add.title, expr: [expr.value, expr.title] }).toEqual({
+        calls: [],
+        add: why("1.500"),
+        expr: ["w * 0.250", why("0.250")],
+      });
+    });
+
     it("is passed on untouched in English, where the store refuses it", async () => {
       const fake = makeEngine();
       await open(fake);

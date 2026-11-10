@@ -27,7 +27,9 @@ import {
   shownExpr,
   storedExpr,
   spellRounded,
+  typedExprProblem,
 } from "../../src/ui/measure";
+import { ExprError } from "../../src/params/parse";
 import { isPlainNumber, parseField, plainNumber } from "../../src/ui/units";
 import { parseHoleSize } from "../../src/features/holeStandards";
 
@@ -293,6 +295,38 @@ describe("a decimal comma in a language that writes one", () => {
     expect(plainNumber("2.5")).toBe(2.5);
     await setLanguage("system");
     expect(plainNumber("1,500")).toBeNull();
+  });
+
+  it("refuses a lone point before exactly three digits with a comma mark, the mirror of 1,000 with a point mark", () => {
+    for (const typed of ["1.500", "0.250", "12.000"]) {
+      expect(() => canonicalTyping(typed, ","), typed).toThrow(
+        `"${typed}" is ambiguous, write a comma for decimals or leave the point out`,
+      );
+    }
+    const comma = ["1.50", "1.5000", "2.25", "1.5", "1.2345", "1,500", "1,5"].map((t) => canonicalTyping(t, ","));
+    const point = ["1.500", "0.250"].map((t) => canonicalTyping(t, "."));
+    expect({ comma, point }).toEqual({
+      comma: ["1.50", "1.5000", "2.25", "1.5", "1.2345", "1.500", "1.5"],
+      point: ["1.500", "0.250"],
+    });
+  });
+
+  it("reads 1.500 as 1.5 in English and refuses it in German with the reason, while 2.25 and 1,500 still read", async () => {
+    const en = [val("1.500"), val("0.250")];
+    await setLanguage("de");
+    const de = {
+      refused: [measureError("1.500", MM), tryParseMeasure("0.250", MM), plainNumber("1.500")],
+      read: ["1.50", "1.5000", "2.25", "1,500", "1,5", "1.2345"].map((t) => val(t)),
+      saved: plainNumber("0.125", "."),
+    };
+    expect({ en, de }).toEqual({
+      en: [1.5, 0.25],
+      de: {
+        refused: ['"1.500" is ambiguous, write a comma for decimals or leave the point out', null, null],
+        read: [1.5, 1.5, 2.25, 1.5, 1.5, 1.2345],
+        saved: 0.125,
+      },
+    });
   });
 });
 
@@ -587,5 +621,29 @@ describe("shownExpr and storedExpr, one per mark", () => {
   it("keeps a comma in text saved before this change, in either mark", () => {
     expect(shownExpr("1,5 + x", ",")).toBe("1,5 + x");
     expect(shownExpr("1,5 + x", ".")).toBe("1,5 + x");
+  });
+
+  it("refuses breite * 1.500 in German with the reason and stores breite * 1,5 with a point, English untouched", async () => {
+    await setLanguage("de");
+    let de;
+    try {
+      de = {
+        comma: [storedExpr("breite * 1,5"), typedExprProblem("breite * 1,5")],
+        point: typedExprProblem("breite * 1.500"),
+        shownBack: storedExpr(shownExpr("breite * 1.500")),
+      };
+      expect(() => storedExpr("breite * 1.500")).toThrow(ExprError);
+    } finally {
+      await setLanguage("system");
+    }
+    const en = [storedExpr("breite * 1.500"), typedExprProblem("breite * 1.500")];
+    expect({ de, en }).toEqual({
+      de: {
+        comma: ["breite * 1.5", null],
+        point: '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+        shownBack: "breite * 1.500",
+      },
+      en: ["breite * 1.500", null],
+    });
   });
 });

@@ -784,6 +784,7 @@ describe("FeatureProperties expressions through NumberField", () => {
     ["w = width/1,5 + 0,25", "w = width/1.5 + 0.25"],
     ["max(1,5; width)", "max(1.5; width)"],
     ["width*1,5 - 2,25*gap", "width*1.5 - 2.25*gap"],
+    ["breite * 1,5", "breite * 1.5"],
   ])("in German hands %j to the parameter engine as %j", async (raw, stored) => {
     await setLanguage("de");
     try {
@@ -791,6 +792,25 @@ describe("FeatureProperties expressions through NumberField", () => {
       await commit(render(fake, "e1"), "Distance", raw);
       expect(fake.exprs).toEqual([{ field: "distance", raw: stored }]);
       expect(fake.values).toEqual([]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it.each([
+    ["breite * 1.500", "1.500"],
+    ["1.500", "1.500"],
+    ["0.250", "0.250"],
+  ])("in German refuses %j as ambiguous under the row and hands the engine nothing", async (raw, num) => {
+    await setLanguage("de");
+    try {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      const w = render(fake, "e1");
+      await commit(w, "Distance", raw);
+      expect([fake.exprs, fake.values]).toEqual([[], []]);
+      expect(field(w, "Distance").find(".param-problem").text()).toBe(
+        `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+      );
     } finally {
       await setLanguage("system");
     }

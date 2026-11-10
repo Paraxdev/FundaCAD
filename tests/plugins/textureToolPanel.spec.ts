@@ -20,6 +20,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import TextureToolPanel from "../../plugins/FundaCAD.Texture/TextureToolPanel.vue";
 import * as panel from "../../plugins/FundaCAD.Texture/panel";
 import type { TextureMode, TextureValues } from "../../plugins/FundaCAD.Texture/textureForm";
+import { setLanguage } from "../../src/i18n";
 
 enableAutoUnmount(afterEach);
 
@@ -220,6 +221,21 @@ describe("TextureToolPanel", () => {
     depth.dispatchEvent(new Event("input"));
     await nextTick();
     expect(handlers.onChange.mock.lastCall![0].depth).toBe(1.5);
+  });
+
+  it("keeps a typed 0,125 in German, which the form holds in the language's spelling", async () => {
+    await setLanguage("de");
+    try {
+      const { handlers } = open();
+      await nextTick();
+      const depth = document.querySelector<HTMLInputElement>("input[inputmode=decimal]")!;
+      depth.value = "0,125";
+      depth.dispatchEvent(new Event("input"));
+      await nextTick();
+      expect(handlers.onChange.mock.lastCall![0].depth).toBe(0.125);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("commits WITHOUT closing, the tool may refuse and stay active", async () => {

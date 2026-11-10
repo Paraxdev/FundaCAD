@@ -13,7 +13,7 @@ import ToggleRow from "./ToggleRow.vue";
 import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { plainNumber } from "../../ui/units";
-import { shownExpr, storedExpr } from "../../ui/measure";
+import { shownExpr, storedExpr, typedExprProblem } from "../../ui/measure";
 import { onPreviewError } from "../../ui/previewError";
 import {
   canonicalTyping,
@@ -504,7 +504,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
       hint='a value with any unit (2mm, 1 inch, 1/2"), a parameter, or an expression'
       :parse="(raw) => parseField(r, raw)"
       :validate="(v) => validateField(r, v)"
-      :expression="(raw) => store.setTargetExpr(r.target, storedExpr(raw), r.kind)"
+      :expression="(raw) => typedExprProblem(raw) ?? store.setTargetExpr(r.target, storedExpr(raw), r.kind)"
       :preview="(v) => previewField(r, v)"
       :preview-end="endPreview"
       :problem="rowProblem(r.key)"

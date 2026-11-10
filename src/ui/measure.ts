@@ -196,9 +196,10 @@ interface Normalised {
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 
-/** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark. With a
- *  point mark it is one only when it is the lone comma with no point or brackets, and never before exactly three
- *  digits, where "1,000" is refused rather than guessed. */
+/** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark, and a
+ *  lone point before exactly three digits is refused, "1.500" could be fifteen hundred. With a point mark a comma is
+ *  one only when it is the lone comma with no point or brackets, and never before exactly three digits, where "1,000"
+ *  is refused rather than guessed. */
 export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
   const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
   if (mark === ",") return commasToPoints(src);
@@ -403,9 +404,21 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
 }
 
 /** Typed expression text as the stored point grammar. In a dot language it is untouched, so a comma there is
- *  refused by the tokenizer as before. */
+ *  refused by the tokenizer as before. In a comma language it throws ExprError for a number it will not guess, such
+ *  as 1.500; `typedExprProblem` says so without throwing. */
 export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
   return mark === "," ? commasToPoints(typed) : typed;
+}
+
+/** Why storedExpr refuses typed expression text, null when it takes it. */
+export function typedExprProblem(typed: string, mark: DecimalMark = decimalMark()): string | null {
+  try {
+    storedExpr(typed, mark);
+    return null;
+  } catch (e) {
+    if (e instanceof ExprError) return e.message;
+    throw e;
+  }
 }
 
 /** Stored expression text as the language shows it, the reverse of storedExpr. */
