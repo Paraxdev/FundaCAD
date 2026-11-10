@@ -181,13 +181,14 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
     t.refreshPreview(true);
   };
   // A preview building and answering, the way the store reports it
-  const land = (distance: number) => {
+  const land = (distance: number, heldRefusal: unknown = null) => {
     const idle = { building: false, result: {}, errorFeatureId: null, errorMessage: null, progress: null };
     for (const fn of [...listeners]) fn({ ...idle, building: true, result: null } as never);
     const built = { id: "p1", type: "press-pull", distance } as Feature;
-    for (const fn of [...listeners]) fn({ ...idle, previewBuilt: [built] } as never);
+    for (const fn of [...listeners]) fn({ ...idle, previewBuilt: [built], heldRefusal } as never);
   };
-  return { tool, t, added, drawn, outline, colour, push, setPeek, selectOnlyFaces, stands, land };
+  const refuse = (distance: number) => land(distance, { featureId: "p1", message: "no" });
+  return { tool, t, added, drawn, outline, colour, push, setPeek, selectOnlyFaces, stands, land, refuse };
 }
 
 const same = (a: number, b: number) => [16, 8, 0].every((s) => Math.abs(((a >> s) & 0xff) - ((b >> s) & 0xff)) <= 2);
@@ -338,12 +339,22 @@ describe("Press/Pull keeps the pushed faces tinted", () => {
     expect(r.selectOnlyFaces.mock.calls).toEqual([[[60]]]);
   });
 
-  it("finds a face that did not move, as a Join going in leaves it", () => {
-    const r = rig([12, 13]);
-    r.stands.push({ at: where(12, 0), id: 80 }, { at: where(13, -6), id: 81 });
+  it("tints the face where the last good preview left it when a push is refused", () => {
+    const r = rig([10]);
+    r.stands.push({ at: where(10, 2.5), id: 40 });
+    r.push(2.5);
+    r.land(2.5);
     r.push(-6);
-    r.land(-6);
-    expect(r.selectOnlyFaces.mock.calls).toEqual([[[80, 81]]]);
+    r.refuse(-6);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[40]], [[40]]]);
+  });
+
+  it("tints nothing for a refusal before any preview landed", () => {
+    const r = rig([10]);
+    r.stands.push({ at: where(10, 0), id: 40 });
+    r.push(-6);
+    r.refuse(-6);
+    expect(r.selectOnlyFaces).not.toHaveBeenCalled();
   });
 
   it("keeps the selection when no pushed face is found, and takes the ones that are", () => {
@@ -365,7 +376,6 @@ describe("Press/Pull keeps the pushed faces tinted", () => {
     const idle = { building: false, result: {}, previewBuilt: [{ id: "p1", distance: 2 }] };
     for (const fn of [...listeners]) fn(idle as never);
     for (const fn of [...listeners]) fn({ building: true, result: null } as never);
-    for (const fn of [...listeners]) fn({ ...idle, heldRefusal: { featureId: "p1", message: "no" } } as never);
     expect(r.selectOnlyFaces).not.toHaveBeenCalled();
     const bore = rig([ROUND]);
     bore.push(1);

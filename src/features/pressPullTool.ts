@@ -964,27 +964,28 @@ export class PressPullTool {
   }
 
   /** The viewport carries a selection over a rebuild by each face's old centroid, so a moved face loses its tint. After
-   *  every preview that lands, the pushed faces are found again where the answered distance put them. */
+   *  every preview that lands, the pushed faces are found again where the answered distance put them. A refused push
+   *  leaves the last good model on screen, so the faces are looked for where that one put them. */
   private tintAfterPreview(): () => void {
     let started = false;
+    let shown: number | null = null;
     // The store replays its current state on subscribing, only a build seen starting is ours to read
     return this.store.onSessionBuild((s) => {
       if (s.building) {
         started = true;
         return;
       }
-      if (!started || !s.result || s.heldRefusal) return;
+      if (!started || !s.result) return;
       const sent = s.previewBuilt?.find((f) => f.id === this.previewId);
       const marks = this.rigid?.marks;
       if (!sent || sent.type !== "press-pull" || !marks || this.phase !== "drag") return;
       started = false;
-      const by = this.axis.clone().multiplyScalar(sent.distance as number);
+      if (!s.heldRefusal) shown = sent.distance as number;
+      if (shown == null) return;
+      const by = this.axis.clone().multiplyScalar(shown);
       const onBody = this.bodyId ?? undefined;
-      // A Join going into the body leaves the face where it was
       const found = marks.flatMap((m) => {
-        const id =
-          this.viewport.faceIdNear([m.x + by.x, m.y + by.y, m.z + by.z], 0, onBody) ??
-          this.viewport.faceIdNear([m.x, m.y, m.z], 0, onBody);
+        const id = this.viewport.faceIdNear([m.x + by.x, m.y + by.y, m.z + by.z], 0, onBody);
         return id == null ? [] : [id];
       });
       if (found.length) this.viewport.selectOnlyFaces(found);
