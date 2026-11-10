@@ -127,7 +127,11 @@ describe("HoleTool typed values", () => {
       });
       const vp = fakeViewport();
       Object.assign(vp, {
-        planarFaceThrough: () => ({ normal: new THREE.Vector3(0, 0, 1), origin: new THREE.Vector3(0, 0, 10), faceId: 7 }),
+        planarFaceThrough: () => ({
+          normal: new THREE.Vector3(0, 0, 1),
+          origin: new THREE.Vector3(0, 0, 10),
+          faceId: 7,
+        }),
       });
       expect(new HoleTool(vp, s.store).startEdit("h7", () => {})).toBe(true);
       shown[lang] = input("size").value;

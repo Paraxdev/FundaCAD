@@ -17,7 +17,14 @@ const props = withDefaults(
     /** Shown in place of the hint, and the control is marked invalid. */
     error?: string | undefined;
   }>(),
-  { for: undefined, hint: undefined, layout: "inline", controlClass: undefined, labelWidth: undefined, error: undefined },
+  {
+    for: undefined,
+    hint: undefined,
+    layout: "inline",
+    controlClass: undefined,
+    labelWidth: undefined,
+    error: undefined,
+  },
 );
 defineSlots<{
   default(props: {
@@ -41,7 +48,9 @@ const note = computed(() => props.error || props.hint);
 
 <template>
   <div v-if="layout === 'param'" class="param-row">
-    <label :id="labelId" :for="labelFor" :style="labelWidth ? { flex: `0 0 ${labelWidth}` } : undefined">{{ label }}</label>
+    <label :id="labelId" :for="labelFor" :style="labelWidth ? { flex: `0 0 ${labelWidth}` } : undefined">{{
+      label
+    }}</label>
     <div class="param-value" :class="controlClass">
       <slot
         :id="controlId"

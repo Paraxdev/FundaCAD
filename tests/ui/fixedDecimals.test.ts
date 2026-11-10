@@ -54,12 +54,7 @@ describe("fixed decimal readouts in German", () => {
   });
 
   it("the loose ends prompt spells the gap with a comma", async () => {
-    const ents = [
-      line("a", 3, 2, 53, 2),
-      line("b", 53, 2, 53, 52),
-      line("c", 53, 52, 3, 52),
-      line("d", 3, 52, 3, 4.5),
-    ];
+    const ents = [line("a", 3, 2, 53, 2), line("b", 53, 2, 53, 52), line("c", 53, 52, 3, 52), line("d", 3, 52, 3, 4.5)];
     const held = [corner("a", "b"), corner("b", "c"), corner("c", "d")];
     const prompt = () => nothingToTiePrompt(looseEnds(ents, held, 0.7), gapReport(ents, held, defaultReach(ents)));
     expect(prompt()).toContain("2.5 mm apart");

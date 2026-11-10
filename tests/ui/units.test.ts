@@ -65,29 +65,39 @@ describe("shown and spoken numbers take the language's decimal mark", () => {
   type Row = [string, Unit, number, string[]];
   // fmtLength, fmtArea, fmtLengthCompact, fmtGridStep, spokenLength, spokenArea
   const cases: Row[] = [
-    ["de", "mm", 12.375, ["12,375 mm", "12,375 mm²", "12,4mm", "12,375 mm", "12,375 millimetres", "12,375 square millimetres"]],
-    ["fr", "mm", -0.35, ["-0,35 mm", "-0,35 mm²", "-0,35mm", "-0,35 mm", "minus 0,35 millimetres", "minus 0,35 square millimetres"]],
+    [
+      "de",
+      "mm",
+      12.375,
+      ["12,375 mm", "12,375 mm²", "12,4mm", "12,375 mm", "12,375 millimetres", "12,375 square millimetres"],
+    ],
+    [
+      "fr",
+      "mm",
+      -0.35,
+      ["-0,35 mm", "-0,35 mm²", "-0,35mm", "-0,35 mm", "minus 0,35 millimetres", "minus 0,35 square millimetres"],
+    ],
     ["de", "mm", 1, ["1 mm", "1 mm²", "1mm", "1 mm", "1 millimetre", "1 square millimetre"]],
     ["de", "mm", 0, ["0 mm", "0 mm²", "0mm", "0 mm", "0 millimetres", "0 square millimetres"]],
     ["de", "cm", 25, ["2,5 cm", "0,25 cm²", "2,5cm", "2,5 cm", "2,5 centimetres", "0,25 square centimetres"]],
     ["de", "in", 12.5, ["0,492 in", "0,0194 in²", "0,492in", "0,492 in", "0,492 inches", "0,0194 square inches"]],
     ["de", "in", 1.5875, ["0,0625 in", "0,00246 in²", "1/16in", "1/16 in", "0,0625 inches", "0,00246 square inches"]],
     ["de", "in", 38.1, ["1,5 in", "0,0591 in²", "1,5in", "1,5 in", "1,5 inches", "0,0591 square inches"]],
-    ["en", "mm", 12.375, ["12.375 mm", "12.375 mm²", "12.4mm", "12.375 mm", "12.375 millimetres", "12.375 square millimetres"]],
+    [
+      "en",
+      "mm",
+      12.375,
+      ["12.375 mm", "12.375 mm²", "12.4mm", "12.375 mm", "12.375 millimetres", "12.375 square millimetres"],
+    ],
     ["en", "in", 38.1, ["1.5 in", "0.0591 in²", "1.5in", "1.5 in", "1.5 inches", "0.0591 square inches"]],
   ];
   for (const [lang, unit, v, want] of cases)
     it(`${v} in ${unit} in ${lang}`, async () => {
       await setLanguage(lang);
       setUnit(unit);
-      expect([
-        fmtLength(v),
-        fmtArea(v),
-        fmtLengthCompact(v),
-        fmtGridStep(v),
-        spokenLength(v),
-        spokenArea(v),
-      ]).toEqual(want);
+      expect([fmtLength(v), fmtArea(v), fmtLengthCompact(v), fmtGridStep(v), spokenLength(v), spokenArea(v)]).toEqual(
+        want,
+      );
     });
 
   it("a language change alone changes the next reading", async () => {

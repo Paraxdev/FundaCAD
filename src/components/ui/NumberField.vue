@@ -96,9 +96,7 @@ const shownUnit = computed(() => props.unit || props.caption || null);
 
 const spell = (v: number | null) => (v === null ? "" : spellNumber(toUnit(v, unitDef.value)));
 const caption = (v: number) =>
-  unitDef.value
-    ? formatMeasure(v, unitDef.value)
-    : `${spellRounded(v)}${shownUnit.value ? ` ${shownUnit.value}` : ""}`;
+  unitDef.value ? formatMeasure(v, unitDef.value) : `${spellRounded(v)}${shownUnit.value ? ` ${shownUnit.value}` : ""}`;
 
 /** Null for an expression. */
 function read(raw: string): number | null {

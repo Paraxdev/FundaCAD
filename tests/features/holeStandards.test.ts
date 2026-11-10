@@ -187,7 +187,12 @@ describe("parseHoleSize", () => {
   });
 
   it("reads a size name with a decimal comma in every language", async () => {
-    const read = () => [parseHoleSize("M2,5"), parseHoleSize(" m 2,5 "), parseHoleSize("M2,6"), parseHoleSize("M2,5,0")];
+    const read = () => [
+      parseHoleSize("M2,5"),
+      parseHoleSize(" m 2,5 "),
+      parseHoleSize("M2,6"),
+      parseHoleSize("M2,5,0"),
+    ];
     const en = read();
     await setLanguage("de");
     const de = read();

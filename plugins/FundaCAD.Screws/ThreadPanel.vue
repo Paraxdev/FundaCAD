@@ -123,7 +123,9 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
           @update:model-value="set({ starts: Number($event) })"
         />
       </FieldRow>
-      <div v-if="choice" class="measure-hint">Pitch {{ spellNumber(+choice.pitch.toFixed(4)) }} mm, lead {{ spellNumber(lead) }} mm</div>
+      <div v-if="choice" class="measure-hint"
+        >Pitch {{ spellNumber(+choice.pitch.toFixed(4)) }} mm, lead {{ spellNumber(lead) }} mm</div
+      >
       <FieldRow v-slot="{ id }" label="Print fit">
         <Switch
           :id="id"

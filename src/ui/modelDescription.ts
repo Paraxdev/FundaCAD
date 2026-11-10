@@ -56,8 +56,12 @@ const center = (b: Box) => [0, 1, 2].map((i) => num((b.max[i]! + b.min[i]!) / 2)
 function bodyLine(b: DescribedBody): string {
   if (!b.box) return `${b.name}: not built yet`;
   const unit = getUnit();
-  const parts = [`${size(b.box).map(spelled).join(" × ")} ${unit}`, `center at ${listJoin(center(b.box).map(spelled))} ${unit}`];
-  if (b.volume !== null && !b.fault) parts.push(`volume ${spelled(displayRound(b.volume * toDisplay(1) ** 3))} ${unit}³`);
+  const parts = [
+    `${size(b.box).map(spelled).join(" × ")} ${unit}`,
+    `center at ${listJoin(center(b.box).map(spelled))} ${unit}`,
+  ];
+  if (b.volume !== null && !b.fault)
+    parts.push(`volume ${spelled(displayRound(b.volume * toDisplay(1) ** 3))} ${unit}³`);
   if (b.material) parts.push(b.material);
   if (!b.visible) parts.push("hidden");
   if (b.fault) parts.push(`fault: ${b.fault}`);

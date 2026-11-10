@@ -713,8 +713,7 @@ export function legendTicks(legend: { min: number; max: number }): { pct: number
   const [low, high] = legendEnds(legend);
   return [0, 25, 50, 75, 100].map((pct) => ({
     pct,
-    label:
-      pct === 0 ? low : pct === 100 ? high : spellRounded(legend.min + ((legend.max - legend.min) * pct) / 100),
+    label: pct === 0 ? low : pct === 100 ? high : spellRounded(legend.min + ((legend.max - legend.min) * pct) / 100),
   }));
 }
 

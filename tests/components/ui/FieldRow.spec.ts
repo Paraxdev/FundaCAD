@@ -193,7 +193,10 @@ describe("FieldRow param layout", () => {
   });
 
   it("gives the label a fixed column only when the caller asks for one, and the value column keeps its flex", () => {
-    const flexes = (w: ReturnType<typeof param>) => [w.find("label").element.style.flex, w.find(".param-value").attributes("style")];
+    const flexes = (w: ReturnType<typeof param>) => [
+      w.find("label").element.style.flex,
+      w.find(".param-value").attributes("style"),
+    ];
     expect({ fixed: flexes(param({ labelWidth: "96px" })), free: flexes(param({})) }).toEqual({
       fixed: ["0 0 96px", undefined],
       free: ["", undefined],

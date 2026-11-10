@@ -44,7 +44,15 @@ describe("initialTextForm", () => {
   });
 
   it("shows stored decimals with the language's mark and reads them back unchanged", async () => {
-    const v = { text: "Hi", font: "Arial", height: 6.5, style: "regular", align: "center", angle: -12.25, boxWidth: 30.75 } as const;
+    const v = {
+      text: "Hi",
+      font: "Arial",
+      height: 6.5,
+      style: "regular",
+      align: "center",
+      angle: -12.25,
+      boxWidth: 30.75,
+    } as const;
     await setLanguage("de");
     const f = initialTextForm(v);
     const back = toTextValues(f);
