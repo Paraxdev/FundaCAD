@@ -67,7 +67,7 @@ const TOOLS: Record<string, [english: string, de: string, fr: string]> = {
   "compute-all": ["Compute All", "Alles berechnen", "Tout calculer"],
   "boolean-union": ["Union", "Vereinigen", "Union"],
   "boolean-subtract": ["Subtract", "Subtrahieren", "Soustraire"],
-  "boolean-intersect": ["Intersect", "Schneiden", "Intersection"],
+  "boolean-intersect": ["Intersect", "Schnittmenge", "Intersection"],
 };
 
 const GROUPS: Record<string, [english: string, de: string, fr: string]> = {

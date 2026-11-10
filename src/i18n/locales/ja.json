@@ -341,7 +341,7 @@
   "tool.rectPattern": "矩形パターン",
   "tool.rectangle": "長方形",
   "tool.revolve": "回転",
-  "tool.rotate": "回転",
+  "tool.rotate": "回転移動",
   "tool.scale": "拡大縮小",
   "tool.section": "断面",
   "tool.separate": "分離",

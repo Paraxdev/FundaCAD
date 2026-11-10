@@ -245,8 +245,8 @@
     },
     {
       "en": "Intersect",
-      "text": "Schneiden",
-      "note": "Schneiden, the boolean"
+      "text": "Schnittmenge",
+      "note": "the boolean, Schneiden would read as Cut"
     },
     {
       "en": "Section",
@@ -318,7 +318,7 @@
     },
     {
       "en": "Break",
-      "text": "Trennen"
+      "text": "Aufbrechen"
     },
     {
       "en": "Constrain",
@@ -359,6 +359,10 @@
     {
       "en": "Project",
       "text": "Projizieren"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "Kreismuster"
     }
   ]
 }

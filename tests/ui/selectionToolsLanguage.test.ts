@@ -23,7 +23,7 @@ describe("the selection rail in the chosen language", () => {
       ["mirror", "Spiegeln"],
       ["boolean-union", "Vereinigen"],
       ["boolean-subtract", "Subtrahieren"],
-      ["boolean-intersect", "Schneiden"],
+      ["boolean-intersect", "Schnittmenge"],
     ]);
   });
 

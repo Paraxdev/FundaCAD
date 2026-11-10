@@ -346,6 +346,15 @@
     {
       "en": "Project",
       "text": "投影"
+    },
+    {
+      "en": "Rotate",
+      "text": "转动",
+      "note": "Revolve is 旋转"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "环形阵列"
     }
   ]
 }

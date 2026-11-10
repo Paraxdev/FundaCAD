@@ -349,6 +349,15 @@
     {
       "en": "Project",
       "text": "Proyectar"
+    },
+    {
+      "en": "Joint",
+      "text": "Junta",
+      "note": "Union is Unión"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "Patrón circular"
     }
   ]
 }
