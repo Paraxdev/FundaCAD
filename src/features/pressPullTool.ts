@@ -6,6 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
+import type { CarryHost } from "./carryOn";
 import { PARALLEL_COS, planarPushFaces, type PushFaces } from "./pushOutline";
 import { sweepPolylines } from "./sweepOutline";
 import { ToolOutline } from "./toolOutline";
@@ -131,6 +132,9 @@ export class PressPullTool {
   private upTo: Selector | null = null; // "extrude up to this surface" target (else by distance)
   private pickingTarget = false; // waiting for the user to click the up-to target surface
   private releaseRows: (() => void) | null = null;
+  private restsOn: string | null = null;
+  /** Set by the app (app/carryOn.ts): the next face or edge pick finishes this push and goes on. */
+  carry: CarryHost | null = null;
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3(); // gizmo origin = the clicked point on the face
   private axis = new THREE.Vector3(0, 0, 1); // drag axis (unit) = face outward normal, or the outward radial on a round face
@@ -219,13 +223,15 @@ export class PressPullTool {
   }
 
   /** `opts.grabAt` arms from the pre-selection and starts scrubbing in the passive handle's own pointerdown
-   *  (features/faceNudge.ts); both derive the axis from the same selectedFacesForPressPull(). */
-  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number } }) {
+   *  (features/faceNudge.ts); both derive the axis from the same selectedFacesForPressPull(). `opts.restsOn` is the
+   *  step the picked face came from, so undoing it closes the tool. */
+  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number }; restsOn?: string }) {
     if (this.active) return;
     // Read before anything is installed: the direct entry needs the selection its handle was drawn for, or a rebuild
     // in between would arm a pick phase nobody asked for and hold toolBusy().
     const pre = this.viewport.selectedFacesForPressPull();
     if (opts?.grabAt && !pre) return;
+    this.restsOn = opts?.restsOn ?? null;
     this.active = true;
     this.phase = "pick";
     this.onDone = onDone;
@@ -1381,6 +1387,10 @@ export class PressPullTool {
     this.onDone?.(null);
   }
 
+  dependsOn(): readonly string[] {
+    return this.restsOn ? [this.restsOn] : [];
+  }
+
   /** A push dragged or typed that Enter would write. */
   get pending(): boolean {
     return this.active && this.phase === "drag" && !this.pickingTarget && !this.neutral;
@@ -1431,6 +1441,7 @@ export class PressPullTool {
     this.viewport.clearHover();
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.restsOn = null;
     this.grabbing = false;
     this.taperGrabbing = false;
     this.taperHovering = false;

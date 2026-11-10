@@ -134,6 +134,7 @@ export class EdgeFeatureTool {
   private tangent: THREE.Vector3 | null = null; // edge direction (null = pre-selection fallback)
   /** Where the most recently picked edge's middle was, so the handle stays on it as other members come and go. */
   private lastPickMid: Vec3 | null = null;
+  private restsOn: string | null = null;
   private value = 2; // radius / distance in mm, a MAGNITUDE, never negative
   /** Position on the drag axis: |signed| is `value`, and its sign picks between
    *  `positiveKind` and its opposite. 0 means "no feature here". */
@@ -315,11 +316,17 @@ export class EdgeFeatureTool {
   }
 
   /** `opts` is the direct entry (features/edgeNudge.ts): a press on the selection handle arms and starts scrubbing in
-   *  the same pointerdown. Its `tangent` is adopted so the handle does not jump at the grab. */
+   *  the same pointerdown. Its `tangent` is adopted so the handle does not jump at the grab. `restsOn` is the step the
+   *  picked edges came from, so undoing it closes the tool. */
   start(
     kind: Kind,
     onDone: (id: string | null) => void,
-    opts?: { tangent?: THREE.Vector3 | null; grabAt?: { x: number; y: number }; anchor?: THREE.Vector3 },
+    opts?: {
+      tangent?: THREE.Vector3 | null;
+      grabAt?: { x: number; y: number };
+      anchor?: THREE.Vector3;
+      restsOn?: string;
+    },
   ) {
     if (this.active) return;
     // The direct entry needs the selection its handle was drawn for. If a rebuild landed between paint and press,
@@ -330,6 +337,7 @@ export class EdgeFeatureTool {
     // A selected face stands for every edge around it. Asking toolCapabilities.ts here keeps the table and the
     // behaviour in step, and opens the face route from every entry point at once.
     const seed = pre.length ? pre : canConsume(kind, "face") ? this.faceEdgeSelectors() : [];
+    this.restsOn = opts?.restsOn ?? null;
     this.active = true;
     this.base = this.viewport.holdModel() ?? null;
     this.watchRewinds();
@@ -1545,6 +1553,10 @@ export class EdgeFeatureTool {
     this.onDone?.(null);
   }
 
+  dependsOn(): readonly string[] {
+    return this.restsOn ? [this.restsOn] : [];
+  }
+
   /** A blend dragged or typed that Enter would write. */
   get pending(): boolean {
     return this.touched && this.active && this.phase === "drag" && !this.neutral && this.currentSelectors().length > 0;
@@ -1609,6 +1621,7 @@ export class EdgeFeatureTool {
     this.hoverModelEdge(null);
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.restsOn = null;
     this.phase = "pick";
     this.grabbing = false;
     this.touched = false;

@@ -9,6 +9,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
+import type { CarryHost } from "./carryOn";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isBoxButtonKey, isMenuKey, isRailButton, keyTargetFree } from "../ui/focus";
 import { announce } from "../ui/announce";
@@ -55,6 +56,8 @@ const PINNED_CYCLE: readonly Op[] = ["new", "join", "cut"];
 
 export class ExtrudeTool {
   active = false;
+  /** Set by the app (app/carryOn.ts): the next face or edge pick finishes this extrude and goes on. */
+  carry: CarryHost | null = null;
   private phase: Phase = "pick";
   private selected: WorldRegion[] = [];
   private lit: WorldRegion | null = null; // the profile the key walk stands on, only in the pick phase
