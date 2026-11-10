@@ -148,7 +148,7 @@ const moves = () => lastSaved().features.filter((f) => f.type === "move");
 const fileItem = (label: string) =>
   buildMenubar(live)
     .find((m) => menuName(m) === "File")!
-    .items.find((i) => i.label === label)!;
+    .items.find((i) => i.refName === label)!;
 const key = (shift = false) =>
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, shiftKey: shift, bubbles: true }));
 

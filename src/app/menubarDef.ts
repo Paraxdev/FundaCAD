@@ -39,10 +39,10 @@ function withContributions(menus: MenuDef[]): MenuDef[] {
 }
 
 const ANALYSIS_ITEMS = [
-  { id: "draft-analysis", label: "Overhang" },
-  { id: "zebra", label: "Zebra" },
-  { id: "curvature", label: "Curvature" },
-  { id: "component-colors", label: "Body Colors" },
+  { id: "draft-analysis", label: () => t("menu.view.overhang"), refName: "Overhang" },
+  { id: "zebra", label: () => t("menu.view.zebra"), refName: "Zebra" },
+  { id: "curvature", label: () => t("menu.view.curvature"), refName: "Curvature" },
+  { id: "component-colors", label: () => t("menu.view.bodyColors"), refName: "Body Colors" },
 ];
 
 function viewItems(e: Engine): MenuDef["items"] {
@@ -51,6 +51,7 @@ function viewItems(e: Engine): MenuDef["items"] {
     .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
   const analysis = ANALYSIS_ITEMS.map((a) => ({
     label: a.label,
+    refName: a.refName,
     checked: () => analysisFlags(e.viewport)[a.id] === true,
     onClick: () => e.handleAction(a.id),
   }));
@@ -72,17 +73,31 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: () => t("menu.file"),
       refName: "File",
       items: [
-        { label: "Home", onClick: () => e.ui.home.open() },
+        { label: () => t("menu.file.home"), refName: "Home", onClick: () => e.ui.home.open() },
         { separator: true, label: "" },
-        { label: "New", shortcut: "Ctrl+N", onClick: () => void e.newDocument() },
-        { label: "Open…", shortcut: "Ctrl+O", onClick: () => void e.openDoc() },
+        { label: () => t("menu.file.new"), refName: "New", shortcut: "Ctrl+N", onClick: () => void e.newDocument() },
+        { label: () => t("menu.file.open"), refName: "Open…", shortcut: "Ctrl+O", onClick: () => void e.openDoc() },
         { separator: true, label: "" },
-        { label: "Import Mesh…", onClick: () => void importModel(e.store, e.geometry) },
+        {
+          label: () => t("menu.file.importMesh"),
+          refName: "Import Mesh…",
+          onClick: () => void importModel(e.store, e.geometry),
+        },
         { separator: true, label: "" },
-        { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveWork(e) },
-        { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveWorkAs(e) },
+        { label: () => t("menu.file.save"), refName: "Save", shortcut: "Ctrl+S", onClick: () => void saveWork(e) },
+        {
+          label: () => t("menu.file.saveAs"),
+          refName: "Save As…",
+          shortcut: "Ctrl+Shift+S",
+          onClick: () => void saveWorkAs(e),
+        },
         { separator: true, label: "" },
-        { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportSelection(e.store, e.geometry, e.viewport) },
+        {
+          label: () => t("menu.file.export"),
+          refName: "Export…",
+          shortcut: "Ctrl+E",
+          onClick: () => void exportSelection(e.store, e.geometry, e.viewport),
+        },
       ],
     },
     {
@@ -105,7 +120,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
         },
         { separator: true, label: "" },
         {
-          label: "Delete",
+          label: () => t("menu.edit.delete"),
+          refName: "Delete",
           shortcut: "Del",
           // A selected face is deletable too. getSelectedFaceIds, since selectedFacesForPressPull walks every triangle.
           disabled: () => !e.selectedFeature && e.viewport.getSelectedFaceIds().length === 0,
@@ -115,16 +131,18 @@ export function buildMenubar(e: Engine): MenuDef[] {
           },
         },
         {
-          label: "Suppress / Unsuppress",
+          label: () => t("menu.edit.suppress"),
+          refName: "Suppress / Unsuppress",
           disabled: () => !e.selectedFeature,
           onClick: () => e.selectedFeature && toggleSuppressRows(e.store, pickedFeatureIds(e)),
         },
         { separator: true, label: "" },
         // No ellipsis: it opens a workspace, not a window.
-        { label: "Materials", onClick: () => setWorkspace("render") },
+        { label: () => t("menu.edit.materials"), refName: "Materials", onClick: () => setWorkspace("render") },
         // Before the geometry rows, so it stays in view when a short window scrolls the menu: it holds Accessibility.
         {
-          label: "Preferences…",
+          label: () => t("menu.edit.preferences"),
+          refName: "Preferences…",
           shortcut: "Ctrl+,",
           onClick: () => {
             useDialogStore().openPreferences();
@@ -139,20 +157,41 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: () => t("menu.help"),
       refName: "Help",
       items: [
-        { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
-        { label: "Manual", onClick: () => void openExternal(MANUAL_URL) },
+        {
+          label: () => t("menu.help.shortcuts"),
+          refName: "Keyboard Shortcuts",
+          shortcut: "?",
+          onClick: () => toggleShortcutHUD(),
+        },
+        { label: () => t("menu.help.manual"), refName: "Manual", onClick: () => void openExternal(MANUAL_URL) },
         {
           label: () => t("menu.help.accessibility"),
           refName: "Accessibility",
           onClick: () => void openExternal(ACCESSIBILITY_PAGE),
         },
         { separator: true, label: "" },
-        { label: "Report a Problem…", onClick: () => openReportDialog() },
-        { label: "Suggest an Idea", onClick: () => void openExternal(ideaUrl()) },
-        { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
+        { label: () => t("menu.help.reportProblem"), refName: "Report a Problem…", onClick: () => openReportDialog() },
+        {
+          label: () => t("menu.help.suggestIdea"),
+          refName: "Suggest an Idea",
+          onClick: () => void openExternal(ideaUrl()),
+        },
+        {
+          label: () => t("menu.help.issueTracker"),
+          refName: "Issue Tracker",
+          onClick: () => void openExternal(ISSUES_URL),
+        },
         { separator: true, label: "" },
-        { label: "Check for Updates…", onClick: () => void checkForUpdates(true, beforeUpdate(e)) },
-        { label: `About ${PRODUCT_NAME}`, onClick: () => void showAbout() },
+        {
+          label: () => t("menu.help.checkUpdates"),
+          refName: "Check for Updates…",
+          onClick: () => void checkForUpdates(true, beforeUpdate(e)),
+        },
+        {
+          label: () => t("menu.help.about", { name: PRODUCT_NAME }),
+          refName: `About ${PRODUCT_NAME}`,
+          onClick: () => void showAbout(),
+        },
       ],
     },
   ] as MenuDef[]).filter((m) => m.items.length > 0);

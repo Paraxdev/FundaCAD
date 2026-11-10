@@ -3,6 +3,7 @@ import { buildMenubar } from "../../src/app/menubarDef";
 import { allCommands } from "../../src/ui/commands";
 import type { Engine } from "../../src/app/engine";
 import { menuName } from "../../src/ui/menu";
+import { itemText } from "./menuRows";
 
 describe("Home in the menus", () => {
   const open = vi.fn();
@@ -11,7 +12,8 @@ describe("Home in the menus", () => {
 
   it("is the first row of File", () => {
     const first = menu("File").items[0]!;
-    expect(first.label).toBe("Home");
+    expect(first.refName).toBe("Home");
+    expect(itemText(first)).toBe("Home");
     first.onClick?.();
     expect(open).toHaveBeenCalledOnce();
   });

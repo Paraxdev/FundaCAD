@@ -4,6 +4,7 @@ import MenuBar from "../../../src/components/shell/MenuBar.vue";
 import { escapeClaimed } from "../../../src/ui/escapeClaim";
 import { inertOthers } from "../../../src/composables/useModalGate";
 import { t, setLanguage } from "../../../src/i18n";
+import { buildMenus } from "../../app/menuRows";
 
 enableAutoUnmount(afterEach);
 
@@ -263,7 +264,11 @@ describe("menubar language switch", () => {
 
   it("changes the buttons and the rows of an open menu with no rebuild", async () => {
     const defs = [
-      { label: () => t("menu.file"), refName: "File", items: [{ label: () => t("menu.edit"), refName: "Row", onClick: () => {} }] },
+      {
+        label: () => t("menu.file"),
+        refName: "File",
+        items: [{ label: () => t("menu.edit"), refName: "Row", onClick: () => {} }],
+      },
       { label: () => t("menu.help"), refName: "Help", items: [] },
     ];
     const w = mount(MenuBar, { props: { menus: defs }, attachTo: document.body });
@@ -278,5 +283,24 @@ describe("menubar language switch", () => {
     expect([popup()!.getAttribute("aria-label"), popup()!.getAttribute("data-menu-name")]).toEqual(["Datei", "File"]);
     expect(document.body.querySelector(".menu-item")!.textContent).toContain("Bearbeiten");
     expect(w.findAll(".menu-btn")[0]!.attributes("data-ref-name")).toBe("File");
+  });
+
+  it("reads the rows of an open Help menu in German with no rebuild, and English again after", async () => {
+    const w = mount(MenuBar, { props: { menus: buildMenus() }, attachTo: document.body });
+    await w.findAll(".menu-btn")[3]!.trigger("click");
+    await flushPromises();
+    const rows = () => [...document.body.querySelectorAll(".menu-item")].map((r) => r.textContent ?? "");
+    expect(rows()[1]).toContain("Manual");
+    expect(rows()[7]).toContain("About FundaCAD");
+    await setLanguage("de");
+    await flushPromises();
+    expect([0, 1, 7].map((n) => rows()[n]!)).toEqual([
+      expect.stringContaining("Tastenkürzel"),
+      expect.stringContaining("Handbuch"),
+      expect.stringContaining("Über FundaCAD"),
+    ]);
+    await setLanguage("system");
+    await flushPromises();
+    expect(rows()[7]).toContain("About FundaCAD");
   });
 });

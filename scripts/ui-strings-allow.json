@@ -87,7 +87,7 @@
   { "path": "src/app/featureRows.ts", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/geometryBrowser.ts", "kind": "script", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/geometryCommands.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/app/menubarDef.ts", "kind": "script", "count": 22, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/app/menubarDef.ts", "kind": "script", "count": 10, "reason": "English refNames the harness finds rows by" },
   { "path": "src/app/planePick.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/rebuildBridge.ts", "kind": "script", "count": 5, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/selection.ts", "kind": "script", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },

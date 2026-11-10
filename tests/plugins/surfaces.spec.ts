@@ -51,7 +51,7 @@ describe("the menubar", () => {
     const file = buildMenubar(fakeEngine()).find((m) => menuName(m) === "File")!;
     expect(file.items.at(-1)!.label).toBe("Send it");
     // ...after the app's own rows, not instead of them
-    expect(file.items.some((i) => i.label === "Export…")).toBe(true);
+    expect(file.items.some((i) => i.refName === "Export…")).toBe(true);
   });
 
   it("creates a menu that does not exist, where it asked to be", () => {
