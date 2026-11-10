@@ -92,17 +92,28 @@ function inchFraction(mm: number): string | null {
   return null;
 }
 
-/** At most three significant digits and no space, for the 40 px viewport grid button. Inch steps under one inch read
- *  as fractions. */
-export function fmtLengthCompact(mm: number): string {
-  const frac = current === "in" ? inchFraction(mm) : null;
-  return frac ? `${frac}in` : `${spellNumber(Number(toDisplay(mm).toPrecision(3)))}${current}`;
+/** A metric length under a hundredth of its unit in micrometres, so a fine grid step reads 0.5 µm, not 0.0005 mm. */
+function micrometres(mm: number): number | null {
+  return current !== "in" && mm > 0 && toDisplay(mm) < 0.01 ? mm * 1000 : null;
 }
 
-/** fmtLength for a grid step: inch steps under one inch read as fractions. */
+/** At most three significant digits and no space, for the 40 px viewport grid button. Inch steps under one inch read
+ *  as fractions, metric ones under a hundredth of the unit in micrometres. */
+export function fmtLengthCompact(mm: number): string {
+  const frac = current === "in" ? inchFraction(mm) : null;
+  if (frac) return `${frac}in`;
+  const um = micrometres(mm);
+  return um !== null
+    ? `${spellNumber(Number(um.toPrecision(3)))}µm`
+    : `${spellNumber(Number(toDisplay(mm).toPrecision(3)))}${current}`;
+}
+
+/** fmtLength for a grid step, in the same units as fmtLengthCompact. */
 export function fmtGridStep(mm: number): string {
   const frac = current === "in" ? inchFraction(mm) : null;
-  return frac ? `${frac} in` : fmtLength(mm);
+  if (frac) return `${frac} in`;
+  const um = micrometres(mm);
+  return um !== null ? `${spellRounded(um)} µm` : fmtLength(mm);
 }
 
 /** Quantise for storage to a thousandth, `snap()`'s lattice floor and the finest drag step (viewport/dragStep.ts).

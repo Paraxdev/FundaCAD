@@ -1041,10 +1041,11 @@
 .float-group .btn.grid-btn:not(.is-on) {
   --btn-hover: var(--raised);
 }
-// As wide as the icon tiles, so a fine step's long reading shrinks to fit (useFitText) instead of widening the column.
+// As wide as the icon tiles: a long reading shrinks to fit (useFitText), and only one still too wide at its smallest
+// size widens the tile.
 .float-group .btn.grid-btn {
   --grid-label-scale: 1;
-  width: 40px;
+  width: auto;
   min-width: 40px;
   min-height: 0;
   height: 32px;

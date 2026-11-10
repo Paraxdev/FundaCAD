@@ -107,3 +107,22 @@ describe("shown and spoken numbers take the language's decimal mark", () => {
     expect([before, fmtLength(2.5)]).toEqual(["2.5 mm", "2,5 mm"]);
   });
 });
+
+describe("a fine metric grid step reads in micrometres", () => {
+  // fmtLengthCompact, fmtGridStep
+  const cases: [string, Unit, number, [string, string]][] = [
+    ["en", "mm", 0.0005, ["0.5µm", "0.5 µm"]],
+    ["en", "mm", 0.0001, ["0.1µm", "0.1 µm"]],
+    ["en", "mm", 0.005, ["5µm", "5 µm"]],
+    ["en", "mm", 0.01, ["0.01mm", "0.01 mm"]],
+    ["en", "cm", 0.05, ["50µm", "50 µm"]],
+    ["en", "cm", 0.1, ["0.01cm", "0.01 cm"]],
+    ["en", "in", 0.0254, ["0.001in", "0.001 in"]],
+    ["de", "mm", 0.0005, ["0,5µm", "0,5 µm"]],
+  ];
+  it.each(cases)("%s %s %f", async (lang, unit, mm, want) => {
+    await setLanguage(lang);
+    setUnit(unit);
+    expect([fmtLengthCompact(mm), fmtGridStep(mm)]).toEqual(want);
+  });
+});
