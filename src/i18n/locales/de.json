@@ -14,6 +14,7 @@
   "guide.title": "Anleitung",
   "menu.help.accessibility": "Barrierefreiheit",
   "pick.done": "{name} {done, select, added {hinzugefügt} takenOut {entfernt} mirrorPlane {ist die Spiegelebene} other {gewählt}}",
+  "pick.doneChain": "{name} mit tangentialer Kette {done, select, added {hinzugefügt} takenOut {entfernt} other {gewählt}}, {n, plural, one {# Kante} other {# Kanten}}",
   "pick.doneRun": "{n, plural, one {# Zeile} other {# Zeilen}} {done, select, added {hinzugefügt} takenOut {entfernt} other {gewählt}}",
   "pick.onBody": "{label} von {body}",
   "pick.overCap": "Zu viele Kanten, keine hinzugefügt",

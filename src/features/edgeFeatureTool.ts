@@ -374,12 +374,13 @@ export class EdgeFeatureTool {
     if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
     const edge = pick.edge;
     const scope = pickScope({ shift: false, view: this.viewport.edgeScopeView(edge) }).scope;
+    const before = this.ghosts.length;
     if (this.phase === "pick") {
       const sel = edgeSelectorFrom({ points: edge.points, body: edge.body });
       if (!sel) return treePickRefusal(pick, "an edge");
       const { mid, tan } = midAndTangent(edge.points);
-      this.beginDrag([sel], mid, tan, edge, { scope });
-      return { done: "added" };
+      if (!this.beginDrag([sel], mid, tan, edge, { scope })) return t("pick.overCap");
+      return { done: "added", edges: this.ghosts.length - before };
     }
     const mid = polylineMid(edge.points);
     const here = new MidSet();
@@ -390,7 +391,7 @@ export class EdgeFeatureTool {
     if (over) this.refuseOverCap(over);
     this.afterMembershipChange();
     if (over) return t("pick.overCap");
-    return { done: member ? "takenOut" : "added" };
+    return { done: member ? "takenOut" : "added", edges: Math.abs(this.ghosts.length - before) };
   }
 
   /** [] when no face is selected. viewport/faceEdges.ts finds the edges by geometry, since the rebuild reply has no

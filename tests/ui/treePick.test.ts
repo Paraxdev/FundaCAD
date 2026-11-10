@@ -233,6 +233,32 @@ describe("offering named picks", () => {
     expect(o.log).toEqual(["taken", `say: ${words}`]);
   });
 
+  it.each([
+    [{ done: "added", edges: 0 }, "Line edge 3 of Bracket added"],
+    [{ done: "added", edges: 1 }, "Line edge 3 of Bracket added"],
+    [{ done: "added", edges: 2 }, "Line edge 3 of Bracket added with its tangent chain, 2 edges"],
+    [{ done: "takenOut", edges: 7 }, "Line edge 3 of Bracket taken out with its tangent chain, 7 edges"],
+  ] as const)("says how many edges one pick's chain changed, only past one: %j", (answer, words) => {
+    const o = offering([answer]);
+    offerPicks([edge(3)], o.d);
+    expect(o.log).toEqual(["taken", `say: ${words}`]);
+  });
+
+  it("counts a run of chained picks by rows, and a chain then a refusal names the chain", () => {
+    const run = offering([
+      { done: "added", edges: 4 },
+      { done: "added", edges: 3 },
+    ]);
+    offerPicks([edge(1), edge(2)], run.d);
+    expect(run.log).toEqual(["taken", "say: 2 rows added"]);
+    const refused = offering([{ done: "takenOut", edges: 3 }, "Pick an edge"]);
+    offerPicks([edge(5), face(8)], refused.d);
+    expect(refused.log).toEqual([
+      "taken",
+      "hint: Line edge 5 of Bracket taken out with its tangent chain, 3 edges. Pick an edge",
+    ]);
+  });
+
   it("says a run of three taken with one word as a count with that word", () => {
     const o = offering([{ done: "added" }, { done: "added" }, { done: "added" }]);
     offerPicks([edge(1), edge(2), edge(3)], o.d);

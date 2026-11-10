@@ -14,6 +14,7 @@
   "guide.title": "Guía",
   "menu.help.accessibility": "Accesibilidad",
   "pick.done": "{done, select, added {Añadido} takenOut {Quitado} mirrorPlane {Plano de simetría} other {Elegido}}: {name}",
+  "pick.doneChain": "{done, select, added {Añadido} takenOut {Quitado} other {Elegido}} con su cadena tangente: {name}, {n, plural, one {# arista} other {# aristas}}",
   "pick.doneRun": "{done, select, added {Filas añadidas} takenOut {Filas quitadas} other {Filas elegidas}}: {n}",
   "pick.onBody": "{label} de {body}",
   "pick.overCap": "Demasiadas aristas, no se añadió ninguna",

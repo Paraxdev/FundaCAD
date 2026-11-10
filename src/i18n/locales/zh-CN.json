@@ -14,6 +14,7 @@
   "guide.title": "引导",
   "menu.help.accessibility": "无障碍",
   "pick.done": "{done, select, added {已添加{name}} takenOut {已移除{name}} mirrorPlane {{name}已设为镜像平面} other {已选择{name}}}",
+  "pick.doneChain": "{done, select, added {已添加{name}及其相切链} takenOut {已移除{name}及其相切链} other {已选择{name}及其相切链}}，共 {n} 条边",
   "pick.doneRun": "{done, select, added {已添加 {n} 行} takenOut {已移除 {n} 行} other {已选择 {n} 行}}",
   "pick.onBody": "{body}的{label}",
   "pick.overCap": "边太多，未添加",

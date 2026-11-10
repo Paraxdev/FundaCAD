@@ -54,7 +54,29 @@ const LINES = [
 ].map((points, i) => ({ id: `b2:${i}`, body: "b2", points: points as P[], smooth: false, slot: i }));
 const edgeRow = (i: number): TreePick => ({ kind: "edge", edge: LINES[i] as unknown as EdgeRef });
 
-function rig() {
+// Three colinear slanted edges in one tangent chain, and a fourth leaving its end at a corner.
+const CHAIN = [
+  [
+    [5, -2, 3],
+    [11, 1, 6],
+  ],
+  [
+    [11, 1, 6],
+    [17, 4, 9],
+  ],
+  [
+    [17, 4, 9],
+    [23, 7, 12],
+  ],
+  [
+    [23, 7, 12],
+    [23, 15, 12],
+  ],
+].map((points, i) => ({ id: `b4:${i}`, body: "b4", points: points as P[], smooth: false, slot: i }));
+const chainRow = (i: number): TreePick => ({ kind: "edge", edge: CHAIN[i] as unknown as EdgeRef });
+
+// pixelWorldSize 0.1 is a detail view (pickScope.ts), where a pick takes its edge alone; 0.5 takes the chain.
+function rig(lines: typeof LINES = LINES, pixelWorldSize = 0.1) {
   const camera = new THREE.PerspectiveCamera();
   camera.position.set(0, -100, 0);
   camera.lookAt(0, 0, 0);
@@ -66,13 +88,13 @@ function rig() {
     selectedEdgeSeeds: () => [],
     selectedEdgeCount: () => 0,
     edgesOfSelectedFaces: () => [],
-    edgeScopeView: () => ({ edgePx: 60, viewportPx: 800, pixelWorldSize: 0.1, modelDiagonal: 500 }),
+    edgeScopeView: () => ({ edgePx: 60, viewportPx: 800, pixelWorldSize, modelDiagonal: 500 }),
     pixelWorldSize: () => 0.1,
     projectToScreen: () => ({ x: 100, y: 100 }),
     modelDiagonal: () => 500,
     edgeLineForSelector: () => null,
     edgeLineByMid: () => null,
-    visibleEdgeLines: () => LINES,
+    visibleEdgeLines: () => lines,
     rayFrom: () => new THREE.Raycaster(new THREE.Vector3(0, -100, 0), new THREE.Vector3(0, 1, 0)),
   });
   let k = 0;
@@ -154,6 +176,34 @@ describe("an edge row while Fillet waits", () => {
       tool.cancel();
     },
   );
+
+  it.each(["fillet", "chamfer"] as const)("%s says how many edges a row's tangent chain added or took out", (kind) => {
+    const { tool, offer } = rig(CHAIN, 0.5);
+    const chainSaid = (name: string, done: "added" | "takenOut", n: number) => ({
+      said: [t("pick.doneChain", { name, done, n })],
+      refused: [],
+    });
+    tool.start(kind, () => {});
+    expect(offer(chainRow(1), "Line edge 2 of Rail")).toEqual(chainSaid("Line edge 2 of Rail", "added", 3));
+    expect(tool.memberRows()).toHaveLength(3);
+    expect(offer(chainRow(3), "Line edge 4 of Rail")).toEqual(doneSaid("Line edge 4 of Rail", "added"));
+    expect(offer(chainRow(2), "Line edge 3 of Rail")).toEqual(chainSaid("Line edge 3 of Rail", "takenOut", 3));
+    expect(tool.memberRows()).toHaveLength(1);
+    expect(offer(chainRow(0), "Line edge 1 of Rail")).toEqual(chainSaid("Line edge 1 of Rail", "added", 3));
+    expect(tool.memberRows()).toHaveLength(4);
+    expect(t("pick.doneChain", { name: "E", done: "added", n: 3 })).toMatch(/3/);
+    tool.cancel();
+  });
+
+  it("zoomed in on an edge, a row takes that edge alone and says no chain", () => {
+    const { tool, offer } = rig(CHAIN);
+    tool.start("fillet", () => {});
+    expect(offer(chainRow(1), "Line edge 2 of Rail")).toEqual(doneSaid("Line edge 2 of Rail", "added"));
+    expect(offer(chainRow(2), "Line edge 3 of Rail")).toEqual(doneSaid("Line edge 3 of Rail", "added"));
+    expect(offer(chainRow(1), "Line edge 2 of Rail")).toEqual(doneSaid("Line edge 2 of Rail", "takenOut"));
+    expect(tool.memberRows()).toHaveLength(1);
+    tool.cancel();
+  });
 
   it("a face offered says nothing taken, only the refusal, before and after members exist", () => {
     const { tool, offer } = rig();

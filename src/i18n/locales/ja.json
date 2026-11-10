@@ -14,6 +14,7 @@
   "guide.title": "ガイド",
   "menu.help.accessibility": "アクセシビリティ",
   "pick.done": "{done, select, added {{name}を追加しました} takenOut {{name}を外しました} mirrorPlane {{name}をミラー面にしました} other {{name}を選びました}}",
+  "pick.doneChain": "{done, select, added {{name}と接線チェーンを追加しました} takenOut {{name}と接線チェーンを外しました} other {{name}と接線チェーンを選びました}}（エッジ{n}本）",
   "pick.doneRun": "{done, select, added {{n}行を追加しました} takenOut {{n}行を外しました} other {{n}行を選びました}}",
   "pick.onBody": "{body}の{label}",
   "pick.overCap": "エッジが多すぎるため、追加しませんでした",

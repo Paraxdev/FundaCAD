@@ -21,6 +21,8 @@ export type TreePick =
 /** What a taker did with a pick it took, so the words come in the person's language. */
 export interface TreePickDone {
   done: "added" | "takenOut" | "mirrorPlane";
+  /** Edges one pick added or took out, more than one when its tangent chain came along. */
+  edges?: number;
 }
 
 /** `true` or a `done` when the pick was taken, otherwise the short hint saying why not. */
@@ -153,9 +155,14 @@ export interface OfferDeps extends TreeClickDeps {
 
 type DoneWord = TreePickDone["done"] | "other";
 
-function takenWords(taken: readonly NamedPick[], words: readonly DoneWord[]): string {
-  if (taken.length === 1) return t("pick.done", { name: taken[0]!.name, done: words[0]! });
-  return t("pick.doneRun", { n: taken.length, done: words.every((w) => w === words[0]) ? words[0]! : "other" });
+function takenWords(taken: readonly NamedPick[], words: readonly DoneWord[], edges: number): string {
+  if (taken.length > 1) {
+    return t("pick.doneRun", { n: taken.length, done: words.every((w) => w === words[0]) ? words[0]! : "other" });
+  }
+  const name = taken[0]!.name;
+  return edges > 1
+    ? t("pick.doneChain", { name, done: words[0]!, n: edges })
+    : t("pick.done", { name, done: words[0]! });
 }
 
 /** Offers each pick in turn, as clicks would, until one is refused or the session ends, and says what was taken.
@@ -163,6 +170,7 @@ function takenWords(taken: readonly NamedPick[], words: readonly DoneWord[]): st
 export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void {
   const took: NamedPick[] = [];
   const words: DoneWord[] = [];
+  let edges = 0;
   let refusal = null as string | null;
   const run = () => {
     for (const o of offers) {
@@ -174,12 +182,13 @@ export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void 
       }
       took.push(o);
       words.push(answer === true ? "other" : answer.done);
+      edges = answer === true ? 0 : (answer.edges ?? 0);
     }
   };
   if (session?.batch) session.batch(run);
   else run();
   if (took.length) deps.taken?.();
-  const taken = took.length ? takenWords(took, words) : null;
+  const taken = took.length ? takenWords(took, words, edges) : null;
   if (refusal !== null) deps.hint(taken === null ? refusal : t("pick.takenThenRefused", { taken, refusal }));
   else if (taken !== null) deps.say(taken);
 }

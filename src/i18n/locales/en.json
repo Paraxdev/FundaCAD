@@ -14,6 +14,7 @@
   "guide.title": "Guide",
   "menu.help.accessibility": "Accessibility",
   "pick.done": "{name} {done, select, added {added} takenOut {taken out} mirrorPlane {is the mirror plane} other {picked}}",
+  "pick.doneChain": "{name} {done, select, added {added} takenOut {taken out} other {picked}} with its tangent chain, {n, plural, one {# edge} other {# edges}}",
   "pick.doneRun": "{n, plural, one {# row} other {# rows}} {done, select, added {added} takenOut {taken out} other {picked}}",
   "pick.onBody": "{label} of {body}",
   "pick.overCap": "Too many edges, none added",
