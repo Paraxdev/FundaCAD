@@ -1,7 +1,8 @@
 // The Measure readout as a pure function of the picks, kept apart from measureTool.ts so a headless test reaches it.
 
 import * as THREE from "three";
-import { getUnit, toDisplay, displayRound } from "../ui/units";
+import { getUnit, toDisplay } from "../ui/units";
+import { listJoin, spellRounded } from "../ui/measure";
 
 /** `size` is an area (mm²) on a face and a length (mm) on an edge, which is why `kind` travels with it. */
 export type MeasureProbe =
@@ -26,10 +27,9 @@ export function measureRows(
 ): MeasureRow[] {
   const unit = getUnit();
   const f = toDisplay(1); // display units per mm (area uses f²)
-  const L = (mm: number) => `${displayRound(toDisplay(mm))} ${unit}`;
-  const A = (mm2: number) => `${displayRound(mm2 * f * f)} ${unit}²`;
-  const xyz = (v: THREE.Vector3) =>
-    `${displayRound(toDisplay(v.x))}, ${displayRound(toDisplay(v.y))}, ${displayRound(toDisplay(v.z))}`;
+  const L = (mm: number) => `${spellRounded(toDisplay(mm))} ${unit}`;
+  const A = (mm2: number) => `${spellRounded(mm2 * f * f)} ${unit}²`;
+  const xyz = (v: THREE.Vector3) => listJoin([v.x, v.y, v.z].map((c) => spellRounded(toDisplay(c))));
 
   const rows: MeasureRow[] = [];
   const push = (k: string, v: string) => rows.push({ k, v });
@@ -45,7 +45,7 @@ export function measureRows(
     push("Distance", L(near.d));
     push("ΔX ΔY ΔZ", xyz(delta));
     push("Centers", L(a.point.distanceTo(b.point)));
-    push("Angle", `${displayRound(THREE.MathUtils.radToDeg(a.dir.angleTo(b.dir)))}°`);
+    push("Angle", `${spellRounded(THREE.MathUtils.radToDeg(a.dir.angleTo(b.dir)))}°`);
   }
   return rows;
 }

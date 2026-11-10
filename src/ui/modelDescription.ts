@@ -1,6 +1,7 @@
 // Describe model and Describe selection as text. The dialog renders a ModelDescription and Copy as text writes
 // descriptionText of the same one, so the two cannot disagree.
 
+import { listJoin, spellNumber } from "./measure";
 import { displayRound, getUnit, toDisplay } from "./units";
 import { spokenUnit } from "./measure";
 import { countWords, selectionWords, viewWords, type SelectionFacts, type ViewFacts } from "./viewSummary";
@@ -48,18 +49,19 @@ export interface ModelDescription {
 }
 
 const num = (mm: number) => displayRound(toDisplay(mm));
+const spelled = (v: number) => spellNumber(v);
 const size = (b: Box) => [0, 1, 2].map((i) => num(b.max[i]! - b.min[i]!));
 const center = (b: Box) => [0, 1, 2].map((i) => num((b.max[i]! + b.min[i]!) / 2));
 
 function bodyLine(b: DescribedBody): string {
   if (!b.box) return `${b.name}: not built yet`;
   const unit = getUnit();
-  const parts = [`${size(b.box).join(" × ")} ${unit}`, `center at ${center(b.box).join(", ")} ${unit}`];
-  if (b.volume !== null && !b.fault) parts.push(`volume ${displayRound(b.volume * toDisplay(1) ** 3)} ${unit}³`);
+  const parts = [`${size(b.box).map(spelled).join(" × ")} ${unit}`, `center at ${listJoin(center(b.box).map(spelled))} ${unit}`];
+  if (b.volume !== null && !b.fault) parts.push(`volume ${spelled(displayRound(b.volume * toDisplay(1) ** 3))} ${unit}³`);
   if (b.material) parts.push(b.material);
   if (!b.visible) parts.push("hidden");
   if (b.fault) parts.push(`fault: ${b.fault}`);
-  return `${b.name}: ${parts.join(", ")}`;
+  return `${b.name}: ${listJoin(parts)}`;
 }
 
 function featureLine(f: DescribedFeature): string {
@@ -112,7 +114,7 @@ export interface SelectedPart {
 }
 
 // Voices can drop a hyphen before a number, so a negative says minus.
-const said = (v: number) => (v < 0 ? `minus ${Math.abs(v)}` : `${v}`);
+const said = (v: number) => (v < 0 ? `minus ${spelled(Math.abs(v))}` : spelled(v));
 
 export function selectionSpeech(parts: readonly SelectedPart[]): string {
   if (!parts.length) return "Nothing selected";
@@ -121,7 +123,7 @@ export function selectionSpeech(parts: readonly SelectedPart[]): string {
     .map((p) => {
       if (!p.box) return p.what;
       const extent = size(p.box).map(said).join(" by ");
-      return `${p.what}, ${extent} ${unit}, center at ${center(p.box).map(said).join(", ")} ${unit}`;
+      return `${p.what}, ${extent} ${unit}, center at ${listJoin(center(p.box).map(said))} ${unit}`;
     })
     .join(". ");
 }

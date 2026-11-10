@@ -406,6 +406,11 @@ export function spellRounded(v: number, mark?: DecimalMark): string {
   return spellNumber(roundForDisplay(v), mark);
 }
 
+/** A comma mark cannot also separate list items, so comma languages join with a semicolon. */
+export function listJoin(parts: readonly string[], mark: DecimalMark = decimalMark()): string {
+  return parts.join(mark === "," ? "; " : ", ");
+}
+
 /** Canonical value → "3.4 mm". `space` off gives "3.4mm" for tight chrome. */
 export function formatMeasure(canonical: number, unit: UnitDef | null, space = true): string {
   const u = unit ?? BY_ID.get("mm")!;

@@ -8,6 +8,7 @@ import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
 import { announce } from "./announce";
 import { getUnit, toDisplay, displayRound } from "./units";
+import { listJoin, spellRounded } from "./measure";
 import { usePanelsStore, type PanelRow, type StressData, type StressProbePin } from "../stores/panels";
 import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurface } from "./stressDrawn";
 import { locator, type Locator } from "./stressLocate";
@@ -109,22 +110,22 @@ export function createPanels(deps: PanelsDeps) {
       .map((b) => `${names.get(b.id)} ${b.fault}`);
     const solid = faults.length === 0;
     const rows: PanelRow[] = [
-      ...(solid ? [{ k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` }] : []),
-      { k: "Surface area", v: `${displayRound(p.area * f * f)} ${unit}²` },
+      ...(solid ? [{ k: "Volume", v: `${spellRounded(p.volume * f * f * f)} ${unit}³` }] : []),
+      { k: "Surface area", v: `${spellRounded(p.area * f * f)} ${unit}²` },
       ...(solid
         ? [
             {
               k: "Center of mass",
-              v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
+              v: listJoin([p.com.x, p.com.y, p.com.z].map((c) => spellRounded(toDisplay(c)))),
             },
           ]
         : []),
       {
         k: "Bounding box",
         v:
-          `${displayRound(toDisplay(p.bbox.max.x - p.bbox.min.x))} × ` +
-          `${displayRound(toDisplay(p.bbox.max.y - p.bbox.min.y))} × ` +
-          `${displayRound(toDisplay(p.bbox.max.z - p.bbox.min.z))} ${unit}`,
+          `${spellRounded(toDisplay(p.bbox.max.x - p.bbox.min.x))} × ` +
+          `${spellRounded(toDisplay(p.bbox.max.y - p.bbox.min.y))} × ` +
+          `${spellRounded(toDisplay(p.bbox.max.z - p.bbox.min.z))} ${unit}`,
       },
     ];
     panels.showProperties({

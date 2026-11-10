@@ -9,6 +9,7 @@ import { afterEach, describe, it, expect } from "vitest";
 import { setLanguage } from "../../src/i18n";
 import {
   fieldNumber,
+  listJoin,
   fieldError,
   commonUnits,
   spokenUnit,
@@ -526,5 +527,29 @@ describe("spelling a number", () => {
     expect(formatMeasure(45.5, unitById("deg"))).toBe("45,5°");
     await setLanguage("en");
     expect(formatMeasure(25.4 * 1.25, IN)).toBe("1.25 in");
+  });
+});
+
+describe("joining a list of numbers", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("uses a semicolon with a comma mark and a comma with a point", () => {
+    const three = ["12.5", "-3.25", "40"].map(Number);
+    expect(listJoin(three.map((n) => spellNumber(n, ",")), ",")).toBe("12,5; -3,25; 40");
+    expect(listJoin(three.map((n) => spellNumber(n, ".")), ".")).toBe("12.5, -3.25, 40");
+    expect(listJoin(["7,5", "2"], ",")).toBe("7,5; 2");
+  });
+
+  it("puts no separator around one item or none", () => {
+    expect(listJoin(["4,5"], ",")).toBe("4,5");
+    expect(listJoin(["4.5"], ".")).toBe("4.5");
+    expect(listJoin([], ",")).toBe("");
+    expect(listJoin([], ".")).toBe("");
+  });
+
+  it("follows the active language when no mark is given", async () => {
+    expect(listJoin(["1", "2"])).toBe("1, 2");
+    await setLanguage("de");
+    expect(listJoin(["1", "2"])).toBe("1; 2");
   });
 });

@@ -1,9 +1,13 @@
 // Describe model as text: the dialog's sections and the Copy as text string are built from the same description.
 import { afterEach, describe, expect, it } from "vitest";
 import { describeModel, descriptionText, selectionSpeech, type ModelFacts } from "../../src/ui/modelDescription";
+import { setLanguage } from "../../src/i18n";
 import { setUnit } from "../../src/ui/units";
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 const facts = (over: Partial<ModelFacts> = {}): ModelFacts => ({
   file: "Box with a lid",
@@ -144,5 +148,35 @@ describe("selectionSpeech", () => {
       "1 edge, 4 by 0 by 0 millimetres, center at minus 10, minus 4, 0 millimetres",
     );
     expect(selectionSpeech([{ what: "Box", box: null }])).toBe("Box");
+  });
+});
+
+describe("the description in a comma language", () => {
+  it("speaks a decimal comma and joins the center with semicolons", async () => {
+    await setLanguage("de");
+    expect(
+      selectionSpeech([
+        { what: "Lid", box: { min: [-12.5, -4, 25], max: [7.5, 3.25, 28.5] } },
+        { what: "1 edge", box: { min: [-12, -4, 0], max: [-8, -4, 0] } },
+      ]),
+    ).toBe(
+      "Lid, 20 by 7,25 by 3,5 millimetres, center at minus 2,5; minus 0,375; 26,75 millimetres. " +
+        "1 edge, 4 by 0 by 0 millimetres, center at minus 10; minus 4; 0 millimetres",
+    );
+  });
+
+  it("writes the body lines with a comma mark and a semicolon between the parts", async () => {
+    await setLanguage("de");
+    const lines = describeModel(facts()).sections.flatMap((s) => s.items);
+    expect(lines.filter((l) => l.startsWith("Lid:"))).toEqual([
+      "Lid: 40 × 30 × 3,5 mm; center at 0; 0; 26,75 mm; volume 4200,25 mm³; Brass; hidden",
+    ]);
+  });
+
+  it("keeps the point and the comma in English", () => {
+    const lines = describeModel(facts()).sections.flatMap((s) => s.items);
+    expect(lines.filter((l) => l.startsWith("Lid:"))).toEqual([
+      "Lid: 40 × 30 × 3.5 mm, center at 0, 0, 26.75 mm, volume 4200.25 mm³, Brass, hidden",
+    ]);
   });
 });

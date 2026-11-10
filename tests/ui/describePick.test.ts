@@ -8,10 +8,14 @@ import {
   type PickFacts,
   type PlaneFacts,
 } from "../../src/ui/describePick";
+import { setLanguage } from "../../src/i18n";
 import { setUnit, type Unit } from "../../src/ui/units";
 import type { Vec3 } from "../../src/types";
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
 // Three times unit length, so a case also proves the normal is not assumed to be unit.
@@ -598,5 +602,47 @@ describe("describeChange", () => {
     describeChange(["f:body1:3"], ["f:body1:3", "f:body1:6"], spy);
     describeChange([], ["f:body1:3", "f:body1:6", "f:body2:0"], spy);
     expect(asked).toEqual(["f:body1:6"]);
+  });
+});
+
+describe("describePick in a comma language", () => {
+  const slanted: FaceFacts = {
+    ...flat,
+    area: 2435.125,
+    size: [60.5, 40.25],
+    centroid: [113.5, -41.25, 37.5],
+  };
+  const slantedBore: FaceFacts = { ...bore, radius: 5.25, length: 20.5, centroid: [1, 2, 3] };
+
+  it("reads a flat face with a decimal comma and joins facts with semicolons", async () => {
+    await setLanguage("de");
+    expect(describePick(slanted)).toEqual({
+      label: "Flat face 4",
+      hint: "60,5 by 40,25 mm; facing up; Extrude 1",
+      readout: "1 face · flat · 60,5 by 40,25 mm · facing up",
+      spoken:
+        "Flat face 4; 60,5 by 40,25 millimetres; 2435,125 square millimetres; facing up; at height 37,5 millimetres; Body1; from Extrude 1",
+    });
+  });
+
+  it("reads a bore with a decimal comma in inches", async () => {
+    await setLanguage("de");
+    setUnit("in");
+    expect(describePick(slantedBore)).toEqual({
+      label: "Hole 7",
+      hint: "diameter 0,413 in; 0,807 in long; Hole 1",
+      readout: "1 face · hole · ⌀0,413 in · 0,807 in long",
+      spoken: "Hole 7; diameter 0,413 inches; 0,807 inches long; axis up; Body1; from Hole 1",
+    });
+  });
+
+  it("keeps the point and the comma in English", () => {
+    expect(describePick(slanted)).toEqual({
+      label: "Flat face 4",
+      hint: "60.5 by 40.25 mm, facing up, Extrude 1",
+      readout: "1 face · flat · 60.5 by 40.25 mm · facing up",
+      spoken:
+        "Flat face 4, 60.5 by 40.25 millimetres, 2435.125 square millimetres, facing up, at height 37.5 millimetres, Body1, from Extrude 1",
+    });
   });
 });

@@ -2,6 +2,7 @@
 
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
+import { onLanguageChange } from "../i18n";
 import { onUnitChange } from "../ui/units";
 import { deleteRows, soleSelectedFeature } from "./featureRows";
 import type { RowSelection } from "../ui/rowSelection";
@@ -235,6 +236,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   e.viewport = new Viewport(canvas);
   onUnitChange(() => e.viewport.requestRender());
+  onLanguageChange(() => e.viewport.requestRender());
   e.viewport.onGridStep = (mm) => {
     useUiStore().gridStepMm = mm;
   };

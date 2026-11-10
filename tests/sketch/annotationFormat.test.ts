@@ -5,7 +5,8 @@
 // and no WebGL, so that half stays e2e/manual territory. screenTransform's shape
 // is pinned here because it is the one piece of it that is pure.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   dimClass,
   dimTitle,
@@ -102,5 +103,19 @@ describe("screenTransform", () => {
   // top-left corner.
   it("centres the badge on the projected point", () => {
     expect(screenTransform(120, 40.5)).toBe("translate(120px, 40.5px) translate(-50%, -50%)");
+  });
+});
+
+describe("fmtDim in a comma language", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("shows a decimal comma in a length and an angle", async () => {
+    await setLanguage("de");
+    expect([fmtDim(12.375), fmtDim(37.5, "angle"), fmtDim(37.5, "angle", true), fmtDim(0.35, "length", false, true)]).toEqual([
+      "12,375 mm",
+      "37,5°",
+      "(37,5°)",
+      "fx: 0,35 mm",
+    ]);
   });
 });

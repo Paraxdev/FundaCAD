@@ -1,6 +1,7 @@
 // Text, classes and tooltips of the sketch dim badges and constraint glyphs, computed once per sketch rebuild.
 // Badge position changes every camera frame and is written by a rAF loop; screenTransform is its testable part.
 
+import { spellNumber } from "../ui/measure";
 import { displayValue, fmtLength, isPlainNumber } from "../ui/units";
 import type { ConstraintDiagnosis } from "./glyphs";
 
@@ -13,7 +14,7 @@ export function fmtDim(
   driven?: boolean | undefined,
   fx?: boolean | undefined,
 ): string {
-  const s = kind === "angle" ? `${displayValue(mm, "angle")}°` : fmtLength(mm);
+  const s = kind === "angle" ? `${spellNumber(displayValue(mm, "angle"))}°` : fmtLength(mm);
   return driven ? `(${s})` : fx ? `fx: ${s}` : s;
 }
 

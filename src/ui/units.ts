@@ -3,7 +3,7 @@
 
 import { readSetting } from "./storedSetting";
 // The display precision rule lives in ui/measure beside the parser; re-exported here so there is one import path.
-import { roundForDisplay as displayRound, spokenUnit } from "./measure";
+import { roundForDisplay as displayRound, spellNumber, spellRounded, spokenUnit } from "./measure";
 export { displayRound };
 
 export type Unit = "mm" | "cm" | "in";
@@ -58,17 +58,17 @@ export function fromDisplay(v: number): number {
 
 /** mm -> rounded display string with the unit suffix (e.g. "40 mm") */
 export function fmtLength(mm: number): string {
-  return `${displayRound(toDisplay(mm))} ${current}`;
+  return `${spellRounded(toDisplay(mm))} ${current}`;
 }
 
 export function fmtArea(mm2: number): string {
-  return `${displayRound(mm2 / FACTOR[current] ** 2)} ${current}²`;
+  return `${spellRounded(mm2 / FACTOR[current] ** 2)} ${current}²`;
 }
 
 // Voices can drop a hyphen before a number, so a negative says minus.
 function spokenAmount(displayed: number, prefix: string): string {
   const n = displayRound(displayed);
-  return `${n < 0 ? "minus " : ""}${Math.abs(n)} ${prefix}${spokenUnit(current, true, Math.abs(n) === 1)}`;
+  return `${n < 0 ? "minus " : ""}${spellNumber(Math.abs(n))} ${prefix}${spokenUnit(current, true, Math.abs(n) === 1)}`;
 }
 
 export function spokenLength(mm: number): string {
@@ -96,7 +96,7 @@ function inchFraction(mm: number): string | null {
  *  as fractions. */
 export function fmtLengthCompact(mm: number): string {
   const frac = current === "in" ? inchFraction(mm) : null;
-  return frac ? `${frac}in` : `${Number(toDisplay(mm).toPrecision(3))}${current}`;
+  return frac ? `${frac}in` : `${spellNumber(Number(toDisplay(mm).toPrecision(3)))}${current}`;
 }
 
 /** fmtLength for a grid step: inch steps under one inch read as fractions. */

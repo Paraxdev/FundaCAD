@@ -9,10 +9,14 @@ import {
   snapWords,
   walkEndSentence,
 } from "../../src/sketch/sketchSpeech";
+import { setLanguage } from "../../src/i18n";
 import { setUnit } from "../../src/ui/units";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 const ents: ResolvedEntity[] = [
   { type: "line", id: "l1", x1: 0, y1: 0, x2: 4, y2: 0 },
@@ -204,5 +208,37 @@ describe("walkEndSentence", () => {
     expect(walkEndSentence({ x: 20, y: -20 }, c, ents)).toBe(
       "End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 1",
     );
+  });
+});
+
+describe("sketch speech in a comma language", () => {
+  const line: ResolvedEntity = { type: "line", id: "l2", x1: 12, y1: 3, x2: 15, y2: 7.5 };
+
+  it("says a decimal comma and keeps the pair apart with a semicolon", async () => {
+    await setLanguage("de");
+    expect([
+      coordWords(20.5, -3.25),
+      coordWords(5, -7),
+      coordWords(0, 0),
+      coordLabel(-3.25, 20.5),
+      coordLabel(-0.0001, 7),
+    ]).toEqual(["20,5; minus 3,25", "5; minus 7", "0; 0", "-3,25; 20,5", "0; 7"]);
+  });
+
+  it("says a sentence with the mark in every number", async () => {
+    await setLanguage("de");
+    expect([
+      cursorSentence({ x: 20.5, y: -10.5 }, null, ents, 2.5),
+      drawnSentence(line, ents, true, 30),
+      drawnSentence({ type: "rectangle", id: "r1", width: 6.5, height: 4.25, x: 0, y: 0 }, ents, false),
+    ]).toEqual([
+      "Grid step 2,5 mm. Cursor at 20,5; minus 10,5",
+      "Line 2, length 5,408, angle 30 degrees, loop closed",
+      "Rectangle 1, 6,5 by 4,25",
+    ]);
+  });
+
+  it("keeps the point and the comma in English", () => {
+    expect([coordWords(20.5, -3.25), coordLabel(-3.25, 20.5)]).toEqual(["20.5, minus 3.25", "-3.25, 20.5"]);
   });
 });

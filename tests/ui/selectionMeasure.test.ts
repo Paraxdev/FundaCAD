@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   circleDiameter,
   describeSelection,
@@ -14,6 +15,11 @@ const circle = (r: number, n = 64, z = 5): Pt3[] =>
     const a = (i / n) * Math.PI * 2;
     return [r * Math.cos(a), r * Math.sin(a), z] as Pt3;
   });
+
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 describe("selection measure", () => {
   it("sums a polyline's length", () => {
@@ -111,5 +117,34 @@ describe("selection measure", () => {
     const full = roundFacePrompt({ radius: 3.369, full: true });
     expect(full).toContain("(⌀6.74 mm)");
     expect(full).toContain("drag it away to nothing to remove it");
+  });
+});
+
+describe("selection measure in a comma language", () => {
+  it("shows a decimal comma in a round face size and a selection total", async () => {
+    await setLanguage("de");
+    expect([
+      roundSize({ radius: 6.125, full: true }),
+      roundSize({ radius: 6.125, full: false }),
+      describeSelection({
+        count: 2,
+        noun: "edge",
+        plural: "edges",
+        edges: [
+          [
+            [0, 0, 0],
+            [3, 4, 0],
+          ],
+          [
+            [1, 1, 1],
+            [1, 1, 3.5],
+          ],
+        ],
+      }),
+    ]).toEqual(["⌀12,25 mm", "R6,13 mm", "2 edges · 7,5 mm"]);
+  });
+
+  it("keeps the point in English", () => {
+    expect(roundSize({ radius: 6.125, full: true })).toBe("⌀12.25 mm");
   });
 });

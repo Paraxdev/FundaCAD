@@ -1,7 +1,8 @@
 // The order and words of Extrude's profile walk by keys. Pure, so the order is tested without a viewport.
 
 import { regionArea, type Region } from "../sketch/region";
-import { displayRound, getUnit, toDisplay } from "../ui/units";
+import { listJoin, spellRounded } from "../ui/measure";
+import { getUnit, toDisplay } from "../ui/units";
 
 export interface WalkRegion {
   region: Region;
@@ -53,7 +54,7 @@ export function walkStep(count: number, at: number, dir: 1 | -1): number {
 
 function areaWords(mm2: number): string {
   const f = toDisplay(1);
-  return `${displayRound(mm2 * f * f)} ${getUnit()}²`;
+  return `${spellRounded(mm2 * f * f)} ${getUnit()}²`;
 }
 
 export function walkWords<T extends WalkRegion>(
@@ -66,5 +67,5 @@ export function walkWords<T extends WalkRegion>(
   const parts = [`Profile ${index + 1} of ${count}`, `area ${areaWords(unit.area)}`, holes];
   if (unit.members.length > 1) parts.push(`${unit.members.length} shapes taken together`);
   if (picked) parts.push("picked");
-  return `${parts.join(", ")}.`;
+  return `${listJoin(parts)}.`;
 }
