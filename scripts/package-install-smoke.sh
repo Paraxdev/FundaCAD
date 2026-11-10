@@ -11,9 +11,23 @@ smoke() { python3 "$here/bundle-smoke.py" --work /tmp/smoke -- "$@"; }
 case "$kind" in
 deb)
   export DEBIAN_FRONTEND=noninteractive
-  apt-get -o Acquire::Retries=3 update -qq
+  # A stalled mirror once held apt past the job's 20 minutes. A dead one left half the indexes
+  # missing while apt-get update still exited 0, so the install failed on "held broken packages".
+  printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+    'APT::Update::Error-Mode "any";' > /etc/apt/apt.conf.d/80-ci-retries
+  if [ -n "${UBUNTU_MIRROR:-}" ] && grep -qx 'ID=ubuntu' /etc/os-release; then
+    for list in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+      [ ! -f "$list" ] || sed -i "s#http://\(archive\|security\)\.ubuntu\.com/ubuntu/\?#$UBUNTU_MIRROR#" "$list"
+    done
+  fi
+  for try in 1 2 3; do
+    if timeout -k 10 120 apt-get update -qq; then break; fi
+    [ "$try" != 3 ] || { echo "::error::apt-get update failed or stalled in three tries"; exit 1; }
+    echo "::warning::apt-get update failed or stalled, try $try of 3"
+    sleep 15
+  done
   # An unresolvable Depends fails here.
-  apt-get install -y -qq "$pkg"/FundaCAD_*.deb python3
+  timeout -k 10 480 apt-get install -y -qq "$pkg"/FundaCAD_*.deb python3
   smoke /usr/bin/fundacad --mcp
   ;;
 appimage)
