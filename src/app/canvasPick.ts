@@ -93,7 +93,9 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     }
     list.setLit(true);
     const { type, facing, minSize } = list.filters;
-    const words = describePick(row.facts).spoken;
+    const said = describePick(row.facts);
+    // Enter gives a plane to the waiting tool, it starts no sketch then.
+    const words = row.plane && treePickWaiting() ? said.readout.replaceAll(" · ", ", ") : said.spoken;
     say(type !== null || facing !== null || minSize !== null ? `${words}. Filtered` : words);
   }
 

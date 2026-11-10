@@ -138,6 +138,24 @@ describe("Mirror waiting for its plane", () => {
     expect(said().at(-1)).not.toContain(t("pick.done", { name: "", done: "mirrorPlane" }).trim());
   });
 
+  it("a plane stepped to is spoken without the sketch hint, and Enter gives it to Mirror", async () => {
+    const { r, tool, addFeatures } = await mirrorWaiting();
+    r.browser.setKind("planes");
+    vi.mocked(announce).mockClear();
+    key("]");
+    expect(r.list.litRow?.plane?.kind).toBe("basePlane");
+    expect(said()).toHaveLength(1);
+    expect(said()[0]).toMatch(/plane/);
+    expect(said()[0]).not.toMatch(/sketch/i);
+    key("Enter");
+    expect([tool.active, addFeatures.mock.calls.length, panel()?.ready]).toEqual([true, 0, true]);
+    tool.cancel();
+    r.browser.setKind("planes");
+    vi.mocked(announce).mockClear();
+    key("]");
+    expect(said()[0]).toMatch(/sketch/i);
+  });
+
   it("the next ] goes on from the row just offered", async () => {
     const { r } = await mirrorWaiting();
     key("]");
