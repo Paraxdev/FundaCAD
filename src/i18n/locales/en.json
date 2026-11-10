@@ -3,6 +3,8 @@
   "camera.tilted": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {tilt, number}° from {from, select, above {above} other {below}}, {projection, select, ortho {orthographic} other {perspective}}",
   "camera.turned": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {projection, select, ortho {orthographic} other {perspective}}",
   "camera.turnedTilted": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {tilt, number}° from {from, select, above {above} other {below}}, {projection, select, ortho {orthographic} other {perspective}}",
+  "dim.negative": "minus {amount}",
+  "dim.stepHint": "Up and Down change it by {step}, by {fine} with Shift, Page Up and Page Down by {big}",
   "guide.counter": "Step {step, number} of {of, number}",
   "guide.keysLabel": "With keys:",
   "guide.next": "Next",

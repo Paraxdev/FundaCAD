@@ -3,6 +3,8 @@
   "camera.tilted": "{side, select, front {前方} back {后方} left {左侧} other {右侧}}，{from, select, above {俯角} other {仰角}} {tilt, number}°，{projection, select, ortho {正交投影} other {透视投影}}",
   "camera.turned": "{side, select, front {前方} back {后方} left {左侧} other {右侧}}，向{toward, select, front {前} back {后} left {左} other {右}}偏 {turn, number}°，{projection, select, ortho {正交投影} other {透视投影}}",
   "camera.turnedTilted": "{side, select, front {前方} back {后方} left {左侧} other {右侧}}，向{toward, select, front {前} back {后} left {左} other {右}}偏 {turn, number}°，{from, select, above {俯角} other {仰角}} {tilt, number}°，{projection, select, ortho {正交投影} other {透视投影}}",
+  "dim.negative": "负 {amount}",
+  "dim.stepHint": "上下方向键每次改变 {step}，按住 Shift 每次改变 {fine}，Page Up 和 Page Down 每次改变 {big}",
   "guide.counter": "第 {step, number} 步，共 {of, number} 步",
   "guide.keysLabel": "键盘操作：",
   "guide.next": "下一步",

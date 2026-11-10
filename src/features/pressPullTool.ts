@@ -17,6 +17,7 @@ import {
   type DimToggleDef,
 } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
+import { gizmoMoveStep, taperStep } from "../viewport/gizmoStep";
 import { fmtLength, snap } from "../ui/units";
 import {
   axisDragDistance,
@@ -307,7 +308,7 @@ export class PressPullTool {
       const depth = Math.abs(this.value);
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       const inset = this.taperGrabInset + (this.taperGrabProj - proj);
-      const stepped = snap(draftAngle(inset, depth, MAX_PP_TAPER), e.shiftKey ? 0.1 : 1);
+      const stepped = snap(draftAngle(inset, depth, MAX_PP_TAPER), taperStep(e.shiftKey));
       this.taper = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, stepped));
       this.dim.takeOver("taper");
       this.dim.updateFromCursor({ taper: this.taper });
@@ -530,10 +531,11 @@ export class PressPullTool {
         name: "distance",
         ...this.fieldLabel(),
         kind: "length",
+        step: (fine) => gizmoMoveStep(this.viewport.pixelWorldSize(this.anchor), fine),
         ...(this.round ? { choices: this.quantityChoices() } : {}),
       },
     ];
-    if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle" });
+    if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle", step: taperStep });
     this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
     const options: DimOption[] = [
       ...(this.toggleKind === "mode" ? [this.modeOption()] : this.toggleKind === "follow" ? [this.followToggle()] : []),
@@ -861,13 +863,17 @@ export class PressPullTool {
         );
       }
       return setPrompt(
-        this.full ? `Drag or type ${ask} · ${this.removalText(r)} removes it · Esc` : `Drag or type ${ask} · Esc`,
+        this.full
+          ? `Drag or type ${ask} · Up or Down steps · ${this.removalText(r)} removes it · Esc`
+          : `Drag or type ${ask} · Up or Down steps · Esc`,
       );
     }
-    if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Esc");
+    if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Up or Down steps · Esc");
     if (this.faces.length > 1)
-      return setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
-    setPrompt("Drag or type a value, negative cuts · click a face to stop at it · Esc");
+      return setPrompt(
+        `${this.faces.length} faces · drag or type a distance · Up or Down steps · click to commit · Esc`,
+      );
+    setPrompt("Drag or type a value, negative cuts · Up or Down steps · click a face to stop at it · Esc");
   }
 
   /** Through the engine for every push, since neighbours slope and re-trim in ways no ghost can draw. `hold` keeps

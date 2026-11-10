@@ -5,7 +5,7 @@ Fillet (F) rounds an edge and Chamfer (B) cuts it at an angle.
 ![A block edge being rounded, the radius box beside it](../img/fillet-edge.png)
 
 1. Click an edge, or select a face first to treat every edge around it.
-2. Drag the arrow, or type a size.
+2. Drag the arrow, or type a size. Up and Down [step it by keys](../reference/shortcuts.md#value-box-keys).
 3. Press Enter.
 
 ![A fillet radius growing on an edge](../img/fillet-drag-still.png){ .fc-motion }

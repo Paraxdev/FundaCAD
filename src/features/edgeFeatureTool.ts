@@ -18,6 +18,7 @@ import { GhostLines, type GhostSlot } from "./ghostLines";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
+import { gizmoMoveStep } from "../viewport/gizmoStep";
 import {
   createDragHandle,
   nameHandle,
@@ -905,7 +906,14 @@ export class EdgeFeatureTool {
     // doesn't look like an ordinary literal edit it silently isn't.
     const field = this.paramRef ? { ...this.field, label: `${this.field.label}·${this.paramRef}` } : this.field;
     this.dim.show(
-      [{ ...field, kind: "length", ...featureValueRule(this.kind, this.field.name) }],
+      [
+        {
+          ...field,
+          kind: "length",
+          ...featureValueRule(this.kind, this.field.name),
+          step: (fine) => gizmoMoveStep(this.viewport.pixelWorldSize(this.anchor), fine),
+        },
+      ],
       () => this.commit(),
       () => this.cancel(),
       this.kind === "fillet"
@@ -1039,7 +1047,7 @@ export class EdgeFeatureTool {
       this.kind === "fillet" && !isPlainProfile(this.profile) ? ` · profile ${formatProfile(this.profile)}` : "";
     const param = this.paramRef ? ` · sets parameter "${this.paramRef}"` : "";
     setPrompt(
-      `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name}${prof}${param} · Tab · Enter · Esc`,
+      `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name} · Up or Down steps${prof}${param} · Tab · Enter · Esc`,
     );
   }
 

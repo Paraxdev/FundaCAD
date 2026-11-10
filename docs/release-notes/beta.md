@@ -19,6 +19,7 @@
 - Printability, interference and Stress results are also listed in words.
 - Messages are spoken and stay long enough to read, and Undo says what it undid.
 - Fields say their unit, and why a value was refused.
+- Up and Down step the value in Extrude, Press/Pull, Fillet and Chamfer, finer with Shift and ten steps with Page Up or Page Down, and a screen reader hears each new value.
 - Notices stay out of the way of an open dialog, and a notice with a button waits until you can use it.
 - Comfortable text wraps a long dropdown value onto a second line instead of cutting it off.
 

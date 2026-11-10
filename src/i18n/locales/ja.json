@@ -3,6 +3,8 @@
   "camera.tilted": "{side, select, front {正面} back {背面} left {左} other {右}}、{from, select, above {上} other {下}}から {tilt, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
   "camera.turned": "{side, select, front {正面} back {背面} left {左} other {右}}、{toward, select, front {正面} back {背面} left {左} other {右}}へ {turn, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
   "camera.turnedTilted": "{side, select, front {正面} back {背面} left {左} other {右}}、{toward, select, front {正面} back {背面} left {左} other {右}}へ {turn, number}°、{from, select, above {上} other {下}}から {tilt, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
+  "dim.negative": "マイナス {amount}",
+  "dim.stepHint": "上下矢印キーで {step} ずつ、Shift を押しながらで {fine} ずつ、Page Up と Page Down で {big} ずつ変わります",
   "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
   "guide.next": "次へ",

@@ -5,7 +5,7 @@ Extrude (E) pulls a closed shape from a sketch into a solid. It is the tool you 
 ![An extrude preview with a 12 degree taper, the distance and angle boxes below it](../img/extrude-taper.png)
 
 1. Click the profile. Ctrl+click adds more areas.
-2. Drag the arrow, or type a depth.
+2. Drag the arrow, or type a depth. Up and Down [step it by keys](../reference/shortcuts.md#value-box-keys).
 3. Press Enter.
 
 ![Drawing a rectangle and extruding it into a block](../img/rectangle-extrude-still.png){ .fc-motion }

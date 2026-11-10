@@ -10,7 +10,7 @@ Press/Pull (Q) moves a face in or out, and the body grows or shrinks with it. It
 
 ![A face being pulled out with Press/Pull](../img/presspull-still.png){ .fc-motion }
 
-Letting go of the arrow does not finish the push, so you can still change the box before Enter. Esc drops it.
+Letting go of the arrow does not finish the push, so you can still change the box before Enter. Esc drops it. In the box, Up and Down [step it by keys](../reference/shortcuts.md#value-box-keys).
 
 ## Stop at a face
 

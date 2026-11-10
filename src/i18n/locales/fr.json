@@ -3,6 +3,8 @@
   "camera.tilted": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {tilt, number}° {from, select, above {au-dessus} other {en dessous}}, {projection, select, ortho {orthographique} other {en perspective}}",
   "camera.turned": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {turn, number}° vers {toward, select, front {l’avant} back {l’arrière} left {la gauche} other {la droite}}, {projection, select, ortho {orthographique} other {en perspective}}",
   "camera.turnedTilted": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {turn, number}° vers {toward, select, front {l’avant} back {l’arrière} left {la gauche} other {la droite}}, {tilt, number}° {from, select, above {au-dessus} other {en dessous}}, {projection, select, ortho {orthographique} other {en perspective}}",
+  "dim.negative": "moins {amount}",
+  "dim.stepHint": "Flèche haut et flèche bas le changent de {step}, de {fine} avec Maj, Page précédente et Page suivante de {big}",
   "guide.counter": "Étape {step, number} sur {of, number}",
   "guide.keysLabel": "Au clavier :",
   "guide.next": "Suivant",
