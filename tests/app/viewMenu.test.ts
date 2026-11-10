@@ -6,7 +6,7 @@ import { allCommands } from "../../src/ui/commands";
 import { railActive, analysisFlags } from "../../src/ui/railActive";
 import type { Engine } from "../../src/app/engine";
 import { menuName } from "../../src/ui/menu";
-import { rowName } from "./menuRows";
+import { itemText, rowName } from "./menuRows";
 
 afterEach(() => resetContributions());
 
@@ -23,7 +23,7 @@ describe("the core View menu", () => {
     const view = buildMenubar(e).find((m) => menuName(m) === "View")!;
     const core = allCommands().filter((c) => c.group === "View");
     expect(core.length).toBeGreaterThan(5);
-    expect(view.items.slice(0, core.length).map((i) => i.label)).toEqual(core.map((c) => c.label));
+    expect(view.items.slice(0, core.length).map(itemText)).toEqual(core.map((c) => c.label));
     const toggles = view.items.slice(core.length + 1);
     expect(toggles.map(rowName)).toEqual(["Overhang", "Zebra", "Curvature", "Body Colors"]);
     expect(toggles.map((i) => i.checked?.())).toEqual([true, true, false, false]);

@@ -110,6 +110,46 @@
     {
       "en": "sample",
       "text": "サンプル"
+    },
+    {
+      "en": "Undo",
+      "text": "元に戻す"
+    },
+    {
+      "en": "Redo",
+      "text": "やり直す"
+    },
+    {
+      "en": "Save",
+      "text": "保存"
+    },
+    {
+      "en": "Open",
+      "text": "開く"
+    },
+    {
+      "en": "Export",
+      "text": "エクスポート"
+    },
+    {
+      "en": "Import",
+      "text": "インポート"
+    },
+    {
+      "en": "Preferences",
+      "text": "環境設定"
+    },
+    {
+      "en": "Menu",
+      "text": "メニュー"
+    },
+    {
+      "en": "Command",
+      "text": "コマンド"
+    },
+    {
+      "en": "View",
+      "text": "表示"
     }
   ]
 }

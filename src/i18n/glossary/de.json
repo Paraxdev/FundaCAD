@@ -118,6 +118,46 @@
       "en": "sample",
       "text": "Sample",
       "note": "the path tracing term, not Probe"
+    },
+    {
+      "en": "Undo",
+      "text": "Rückgängig"
+    },
+    {
+      "en": "Redo",
+      "text": "Wiederholen"
+    },
+    {
+      "en": "Save",
+      "text": "Speichern"
+    },
+    {
+      "en": "Open",
+      "text": "Öffnen"
+    },
+    {
+      "en": "Export",
+      "text": "Exportieren"
+    },
+    {
+      "en": "Import",
+      "text": "Importieren"
+    },
+    {
+      "en": "Preferences",
+      "text": "Einstellungen"
+    },
+    {
+      "en": "Menu",
+      "text": "Menü"
+    },
+    {
+      "en": "Command",
+      "text": "Befehl"
+    },
+    {
+      "en": "View",
+      "text": "Ansicht"
     }
   ]
 }

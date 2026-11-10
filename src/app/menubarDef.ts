@@ -8,11 +8,11 @@ import { setWorkspace } from "../ui/workspace";
 import { ACCESSIBILITY_PAGE, MANUAL_URL, openExternal } from "../ui/welcome";
 import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl, REPO_URL } from "../ui/reportText";
-import { menuName, type MenuDef } from "../ui/menu";
+import { menuName, type MenuDef, type MenuItem } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
 import { t } from "../i18n";
-import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
+import { allCommands, commandEnglish, commandLabel, GEOMETRY_COMMANDS, type Command } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
 import type { Engine } from "./engine";
@@ -45,10 +45,18 @@ const ANALYSIS_ITEMS = [
   { id: "component-colors", label: () => t("menu.view.bodyColors"), refName: "Body Colors" },
 ];
 
+// The label is read through commandLabel, since an allCommands() copy holds a getter frozen at its language.
+const commandRow = (e: Engine) => (c: Command): MenuItem => ({
+  label: () => commandLabel(c.id),
+  ...(commandEnglish(c.id) !== undefined ? { refName: commandEnglish(c.id)! } : {}),
+  ...(c.key ? { shortcut: c.key } : {}),
+  onClick: () => e.handleAction(c.id),
+});
+
 function viewItems(e: Engine): MenuDef["items"] {
   const view = allCommands()
     .filter((c) => c.group === "View")
-    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+    .map(commandRow(e));
   const analysis = ANALYSIS_ITEMS.map((a) => ({
     label: a.label,
     refName: a.refName,
@@ -61,9 +69,7 @@ function viewItems(e: Engine): MenuDef["items"] {
 // Left enabled in a sketch: refusing in words says why, a greyed item says nothing.
 function geometryItems(e: Engine): MenuDef["items"] {
   const all = allCommands();
-  return [...GEOMETRY_COMMANDS]
-    .map((id) => all.find((c) => c.id === id)!)
-    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+  return [...GEOMETRY_COMMANDS].map((id) => all.find((c) => c.id === id)!).map(commandRow(e));
 }
 
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */

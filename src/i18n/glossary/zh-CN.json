@@ -110,6 +110,46 @@
     {
       "en": "sample",
       "text": "采样"
+    },
+    {
+      "en": "Undo",
+      "text": "撤销"
+    },
+    {
+      "en": "Redo",
+      "text": "重做"
+    },
+    {
+      "en": "Save",
+      "text": "保存"
+    },
+    {
+      "en": "Open",
+      "text": "打开"
+    },
+    {
+      "en": "Export",
+      "text": "导出"
+    },
+    {
+      "en": "Import",
+      "text": "导入"
+    },
+    {
+      "en": "Preferences",
+      "text": "偏好设置"
+    },
+    {
+      "en": "Menu",
+      "text": "菜单"
+    },
+    {
+      "en": "Command",
+      "text": "命令"
+    },
+    {
+      "en": "View",
+      "text": "视图"
     }
   ]
 }
