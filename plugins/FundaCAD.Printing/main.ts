@@ -9,7 +9,7 @@ import { showCamera } from "./state";
 import PrintStatusPill from "./PrintStatusPill.vue";
 import CameraPanel from "./CameraPanel.vue";
 import FilamentMappingHost from "./FilamentMappingHost.vue";
-import { choose, contribute, toast } from "fundacad";
+import { choose, contribute, t, toast } from "fundacad";
 import type { DocumentStore, Engine } from "fundacad";
 
 const ID = "FundaCAD.Printing";
@@ -29,18 +29,25 @@ export async function activate(e: Engine): Promise<() => void> {
         items: [
           { separator: true, label: "" },
           {
-            label: "Export for Print (3MF)…",
+            label: () => t("menu.file.exportPrint"),
+            refName: "Export for Print (3MF)…",
             onClick: () => void exportPrintProject(e.store, e.geometry),
           },
           {
-            label: "Open in OrcaSlicer…",
+            label: () => t("menu.file.openOrca"),
+            refName: "Open in OrcaSlicer…",
             onClick: () => void flow().then((m) => m.openInOrca(e.store, e.geometry)),
           },
           {
-            label: "Send to Printer…",
+            label: () => t("menu.file.sendPrinter"),
+            refName: "Send to Printer…",
             onClick: () => void flow().then((m) => m.sendToPrinter(e.store, e.geometry)),
           },
-          { label: "Camera…", onClick: () => showCamera(activePrinterId()) },
+          {
+            label: () => t("menu.file.printerCamera"),
+            refName: "Camera…",
+            onClick: () => showCamera(activePrinterId()),
+          },
         ],
       },
     ],

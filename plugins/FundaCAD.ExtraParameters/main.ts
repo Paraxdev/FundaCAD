@@ -4,7 +4,7 @@
 import ParametersSection from "./ParametersSection.vue";
 import SetupPanel from "./SetupPanel.vue";
 import { setupOpen } from "./state";
-import { contribute } from "fundacad";
+import { contribute, t } from "fundacad";
 import type { Engine } from "fundacad";
 
 const ID = "FundaCAD.ExtraParameters";
@@ -22,7 +22,7 @@ export async function activate(_e: Engine): Promise<() => void> {
         menu: "Edit",
         items: [
           { separator: true, label: "" },
-          { label: "Parameter Setup…", onClick: open },
+          { label: () => t("menu.edit.parameterSetup"), refName: "Parameter Setup…", onClick: open },
         ],
       },
     ],

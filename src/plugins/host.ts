@@ -128,6 +128,8 @@ export { spellRounded as numberText } from "../ui/measure";
 export { spellNumber, spellFixed, listJoin } from "../ui/measure";
 /** "," in a language that writes a decimal comma, where a list of numbers is split at ";" as listJoin joins it. */
 export { decimalMark } from "../i18n";
+/** A line in the chosen language; a menu row label as `() => t(key)` reads again on a language switch. */
+export { t } from "../i18n";
 /** Typed expression text with a decimal comma as the point text the document stores, the reason it refuses one, and
  *  the way back. */
 export { storedExpr, typedExprProblem, shownExpr } from "../ui/measure";

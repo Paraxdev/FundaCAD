@@ -12,7 +12,7 @@ import {
   type DeviceBlocked,
 } from "./spacemouse";
 import { defineAsyncComponent } from "vue";
-import { contribute, invoke, listen, openPluginSettings, stickyFact, toast } from "fundacad";
+import { contribute, invoke, t, listen, openPluginSettings, stickyFact, toast } from "fundacad";
 import type { Engine, Viewport } from "fundacad";
 
 type Inventory = { picked: string | null; seen: string[]; note?: string | null };
@@ -33,17 +33,23 @@ export async function activate(e: Engine): Promise<() => void> {
           items: [
             { separator: true, label: "" },
             {
-              label: "SpaceMouse: Object Mode",
+              label: () => t("menu.view.spaceMouseObject"),
+              refName: "SpaceMouse: Object Mode",
               checked: () => getSpaceMouseMode() === "object",
               onClick: () => setSpaceMouseMode("object"),
             },
             {
-              label: "SpaceMouse: Camera Mode",
+              label: () => t("menu.view.spaceMouseCamera"),
+              refName: "SpaceMouse: Camera Mode",
               checked: () => getSpaceMouseMode() === "camera",
               onClick: () => setSpaceMouseMode("camera"),
             },
             { separator: true, label: "" },
-            { label: "3D Mouse Settings\u2026", onClick: () => openPluginSettings(PLUGIN_ID) },
+            {
+              label: () => t("menu.view.mouseSettings"),
+              refName: "3D Mouse Settings\u2026",
+              onClick: () => openPluginSettings(PLUGIN_ID),
+            },
           ],
         },
       ],
