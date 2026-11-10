@@ -7,6 +7,7 @@ import {
   type OpenOutcome,
 } from "../io/files";
 import { choose } from "../ui/choice";
+import { t } from "../i18n";
 import { toast } from "../ui/toast";
 import { announce } from "../ui/announce";
 import { stepLabelFor } from "../ui/canStep";
@@ -323,7 +324,7 @@ export function createDocumentActions(
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {
       if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
-      if (usePanelsStore().stress) return void toast("Close Stress first, then undo.");
+      if (usePanelsStore().stress) return void toast(t("history.closeStressFirst"));
       const place = e.tools.move.pending ? "under" : e.store.markPlace(mark);
       if (place === "top") return actions.doUndo();
       toast(UNDO_REFUSED[place ?? "gone"]);

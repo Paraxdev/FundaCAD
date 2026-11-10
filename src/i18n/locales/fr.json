@@ -54,6 +54,7 @@
   "guide.openFirst": "Ouvrez d’abord {control}",
   "guide.stop": "Arrêter",
   "guide.title": "Guide",
+  "history.closeStressFirst": "Fermez d'abord l'analyse des contraintes, puis annulez.",
   "menu.bar": "Menu",
   "menu.edit": "Édition",
   "menu.edit.delete": "Supprimer",

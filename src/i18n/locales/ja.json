@@ -54,6 +54,7 @@
   "guide.openFirst": "先に {control} を開いてください",
   "guide.stop": "終了",
   "guide.title": "ガイド",
+  "history.closeStressFirst": "先に応力解析を閉じてから、元に戻してください。",
   "menu.bar": "メニュー",
   "menu.edit": "編集",
   "menu.edit.delete": "削除",

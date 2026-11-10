@@ -54,6 +54,7 @@
   "guide.openFirst": "Öffnen Sie zuerst {control}",
   "guide.stop": "Beenden",
   "guide.title": "Anleitung",
+  "history.closeStressFirst": "Schließen Sie zuerst die Spannungsanalyse, dann machen Sie rückgängig.",
   "menu.bar": "Menü",
   "menu.edit": "Bearbeiten",
   "menu.edit.delete": "Löschen",

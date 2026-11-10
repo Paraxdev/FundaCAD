@@ -54,6 +54,7 @@
   "guide.openFirst": "Abra primero {control}",
   "guide.stop": "Detener",
   "guide.title": "Guía",
+  "history.closeStressFirst": "Cierre primero el análisis de tensión y luego deshaga.",
   "menu.bar": "Menú",
   "menu.edit": "Editar",
   "menu.edit.delete": "Eliminar",

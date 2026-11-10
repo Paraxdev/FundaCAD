@@ -54,6 +54,7 @@
   "guide.openFirst": "Open {control} first",
   "guide.stop": "Stop",
   "guide.title": "Guide",
+  "history.closeStressFirst": "Close Stress first, then undo.",
   "menu.bar": "Menu",
   "menu.edit": "Edit",
   "menu.edit.delete": "Delete",
