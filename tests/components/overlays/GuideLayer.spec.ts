@@ -293,4 +293,22 @@ describe("GuideLayer speech", () => {
       await setLanguage("system");
     }
   });
+
+  it("ends a Chinese or Japanese sentence with a full stop of its own script, and the Japanese counter has no slash", async () => {
+    const g = setup();
+    try {
+      await setLanguage("zh-CN");
+      g.guide.apply([{ kind: "highlight", seq: 1, step: 1, of: 3, target: at, caption: "选择这条边" }]);
+      await tick();
+      await setLanguage("ja");
+      g.guide.apply([{ kind: "highlight", seq: 2, step: 2, of: 3, target: at, caption: "ここをクリック" }]);
+      await tick();
+      expect(said().map((c) => c[0])).toEqual([
+        "第 1 步，共 3 步。 选择这条边。",
+        "ステップ 2（全 3）。 ここをクリック。",
+      ]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
 });

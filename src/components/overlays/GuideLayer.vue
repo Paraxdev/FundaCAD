@@ -176,7 +176,8 @@ function restart(): void {
 }
 
 const counterOf = (s: StepState) => (s.of > 1 ? t("guide.counter", { step: s.step, of: s.of }) : t("guide.title"));
-const sentence = (s: string) => (!s || /[.!?:。：]$/.test(s) ? s : `${s}.`);
+const sentence = (s: string) =>
+  !s || /[.!?:。：！？]$/.test(s) ? s : /[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]$/.test(s) ? `${s}。` : `${s}.`;
 
 // The bubble mounts with its first step's text, and a live region that arrives filled is mostly not read.
 let spokenSeq = -1;

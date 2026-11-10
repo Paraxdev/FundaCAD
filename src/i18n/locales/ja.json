@@ -1,5 +1,5 @@
 {
-  "guide.counter": "ステップ {step, number}/{of, number}",
+  "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
   "guide.next": "次へ",
   "guide.openFirst": "先に {control} を開いてください",
