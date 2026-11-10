@@ -245,11 +245,28 @@ function place() {
   // The root's clientWidth stays in window pixels under its own zoom, like the rects.
   const viewWidth = document.documentElement.clientWidth / z;
   const mins = open.map((p) => parseFloat(getComputedStyle(p.el).minWidth) || 0);
-  const floors = open.map((p) => scrollerFloors(p.el));
+  let floors = open.map((p) => scrollerFloors(p.el));
   const lay = () => {
     const cols = columnsUnderZoom(area, { left: cardRects(LEFT_CARDS), right: cardRects(RIGHT_CARDS) }, z);
     const base = cols[0]!.bottom;
     return { cols, base, at: assign(cols, mins) };
+  };
+  // Right anchored and under the float layer, so a panel wider than the span would hide under the rail or a card.
+  // Only a panel that is too wide gets the cap, so a panel's own min and max width hold otherwise.
+  const fit = (l: ReturnType<typeof lay>) => {
+    for (const p of open) {
+      p.el.style.maxWidth = "";
+      uncap(p);
+    }
+    open.forEach((p, i) => {
+      const room = Math.max(0, Math.floor(span(l.at[i]!)));
+      if (mins[i]! > room) {
+        p.min = p.el.style.minWidth;
+        p.el.style.minWidth = `${room}px`;
+        p.cap = p.el.style.minWidth;
+      }
+      if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
+    });
   };
   // A panel with a scroller is short when its column is too narrow for it or a shelf offers less than its least.
   const shorts = (l: ReturnType<typeof lay>) =>
@@ -258,42 +275,47 @@ function place() {
       const c = l.at[i]!;
       return least !== undefined && (span(c) < mins[i]! || (c !== l.cols[0] && c.bottom - c.top < least));
     }).length;
+  const needed = () => Math.max(MIN_HEIGHT, ...floors.map((f) => f.least ?? 0));
   let now = lay();
   const before = shorts(now);
-  const need = Math.max(MIN_HEIGHT, ...floors.map((f) => f.least ?? 0));
-  const cuts = before
-    ? lists.flatMap(([card, list]) => {
-        const least = card.offsetHeight - list.offsetHeight + Math.min(list.scrollHeight, SCROLLER_LEAST);
-        const box = underZoom(seenRect(card), z);
-        const h = yieldedHeight(box, now.base, need, least, CUBE_MARGIN);
-        return h === null ? [] : [[card, h] as const];
-      })
-    : [];
-  if (cuts.length) {
-    for (const [card, h] of cuts) card.style.maxHeight = `${Math.floor(h)}px`;
-    const cut = lay();
-    if (shorts(cut) < before) now = cut;
-    else {
-      for (const [card] of cuts) card.style.maxHeight = "";
-      now = lay();
+  if (before) {
+    const cuttable = lists.map(([card, list]) => ({
+      card,
+      least: card.offsetHeight - list.offsetHeight + Math.min(list.scrollHeight, SCROLLER_LEAST),
+      box: underZoom(seenRect(card), z),
+    }));
+    const cutTo = (need: number) => {
+      for (const c of cuttable) {
+        const h = yieldedHeight(c.box, now.base, need, c.least, CUBE_MARGIN);
+        c.card.style.maxHeight = h === null ? "" : `${Math.floor(h)}px`;
+      }
+      return cuttable.some((c) => c.card.style.maxHeight !== "");
+    };
+    let need = needed();
+    if (cutTo(need)) {
+      let cut = lay();
+      // The shelf the cut opens can be narrower than the panel's natural width, where its fixed rows wrap taller.
+      fit(cut);
+      floors = open.map((p) => scrollerFloors(p.el));
+      if (needed() > need) {
+        need = needed();
+        cutTo(need);
+        cut = lay();
+        fit(cut);
+        floors = open.map((p) => scrollerFloors(p.el));
+      }
+      if (shorts(cut) < before) now = cut;
+      else {
+        for (const c of cuttable) c.card.style.maxHeight = "";
+        now = lay();
+      }
     }
   }
   for (const [, list, top] of lists) if (list.scrollTop !== top) list.scrollTop = top;
   const { cols, at } = now;
+  fit(now);
   for (const c of cols.filter((c) => at.includes(c))) {
     const here = open.filter((_, i) => at[i] === c);
-    const least = mins.filter((_, i) => at[i] === c);
-    // Right anchored and under the float layer, so a panel wider than the span would hide under the rail or a card.
-    // Only a panel that is too wide gets the cap, so a panel's own min and max width hold otherwise.
-    const room = Math.max(0, Math.floor(span(c)));
-    for (const [i, p] of here.entries()) {
-      if (least[i]! > room) {
-        p.min = p.el.style.minWidth;
-        p.el.style.minWidth = `${room}px`;
-        p.cap = p.el.style.minWidth;
-      }
-      if (p.el.offsetWidth > room) p.el.style.maxWidth = `${room}px`;
-    }
     const slots = layoutStack(
       here.map((p) => ({
         id: p.id,

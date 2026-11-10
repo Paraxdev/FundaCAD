@@ -13,6 +13,7 @@ Object.defineProperty(document.documentElement, "clientWidth", { configurable: t
 const HEAD = 78;
 const FIXED = 164;
 const STEP = 400;
+const NATURAL = 340;
 
 const frame = () => new Promise((r) => requestAnimationFrame(r));
 const capOf = (el: HTMLElement) => {
@@ -59,24 +60,39 @@ function card(tall: number, content: number, scrolls = true) {
   return { el, list };
 }
 
-function stress() {
+// A Stress panel is NATURAL wide and wraps `wrap` px of fixed rows taller once place() caps it narrower.
+function stress(wrap = 0, min = 360) {
   const el = document.createElement("div");
-  el.style.minWidth = "360px";
+  el.style.minWidth = `${min}px`;
+  const width = () => Math.min(NATURAL, parseFloat(el.style.maxWidth) || NATURAL);
+  Object.defineProperty(el, "offsetWidth", { get: width });
   const step = document.createElement("div");
   step.toggleAttribute("data-panel-scroll", true);
   el.append(step);
-  const h = () => Math.min(FIXED + STEP, capOf(el));
+  const fixed = () => FIXED + (width() < NATURAL ? wrap : 0);
+  const h = () => Math.min(fixed() + STEP, capOf(el));
   for (const k of ["scrollHeight", "offsetHeight", "clientHeight"]) Object.defineProperty(el, k, { get: h });
-  Object.defineProperty(step, "offsetHeight", { get: () => h() - FIXED });
+  Object.defineProperty(step, "offsetHeight", { get: () => h() - fixed() });
   Object.defineProperty(step, "scrollHeight", { get: () => STEP });
   document.body.append(el);
   return el;
 }
 
-function open(bottom: number, tall: number, content = 840, scrolls = true) {
+// A tool card on the left, 0..300 wide down the whole layer, leaves the shelf under History 302..586.
+function leftCard() {
+  const el = document.createElement("div");
+  el.getBoundingClientRect = () => ({ left: 0, right: 300, top: 48, bottom: 800 }) as DOMRect;
+  const stack = document.createElement("div");
+  stack.className = "float-left-stack";
+  stack.append(el);
+  document.getElementById("float-layer")!.append(stack);
+}
+
+function open(bottom: number, tall: number, content = 840, scrolls = true, wrap = 0, min = 360, left = false) {
   const history = card(tall, content, scrolls);
   layer(bottom).append(history.el);
-  const panel = stress();
+  if (left) leftCard();
+  const panel = stress(wrap, min);
   panelStack.add("stress", panel);
   const read = () => ({ history: history.el.style.maxHeight, top: panel.style.top, cap: panel.style.maxHeight });
   return { ...history, read };
@@ -104,6 +120,17 @@ describe("a History card above the Stress panel", () => {
     panelStack.remove("stress");
     document.body.replaceChildren();
     expect(open(397, 318).read()).toEqual({ history: "", top: "146px", cap: "237px" });
+  });
+
+  it("is cut for the fixed rows at the width the shelf gives the panel, not its natural width", () => {
+    const { read } = open(800, 740, 840, true, 20, 180, true);
+    const { history, top, cap } = read();
+    expect({ history, top, cap }).toEqual({ history: "500px", top: "562px", cap: "224px" });
+    expect(parseFloat(top) + parseFloat(cap)).toBeLessThanOrEqual(786);
+  });
+
+  it("is cut as before when the shelf width leaves the fixed rows as they were", () => {
+    expect(open(800, 740, 840, true, 0, 180, true).read()).toEqual({ history: "520px", top: "582px", cap: "204px" });
   });
 
   it("is never cut when it has no list of its own to scroll", () => {
