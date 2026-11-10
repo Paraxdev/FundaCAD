@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LANGUAGE_KEY, createCatalog, type CatalogDeps, type DropInSource } from "../../src/i18n/catalog";
+import {
+  DROP_IN_PREFIX,
+  LANGUAGE_KEY,
+  createCatalog,
+  type CatalogDeps,
+  type DropInSource,
+} from "../../src/i18n/catalog";
 import { browserDropIns, noDropIns } from "../../src/i18n/dropIns";
 import { formatMessage, parseMessage } from "../../src/i18n/format";
 import type { Language } from "../../src/i18n/languages";
@@ -700,34 +706,38 @@ describe("loading a language file", () => {
     expect(await c.loadDropInFile(file("zh-Hant-TW.json", {}))).toBeNull();
   });
 
-  it("tells a name ending in .json.txt from other bad names, reading nothing", async () => {
+  it("takes a picked pl.json.txt as pl.json, since Notepad adds .txt and Explorer hides it", async () => {
     const { c, storage } = make();
     await c.init();
-    const names = [
-      "pl.json.txt",
-      "de-AT.json.txt",
-      "pl.JSON.TXT",
-      "pl.json.TXT",
+    const badNames = [
       "PL.json.txt",
       ".json.txt",
       "pl_PL.json.txt",
+      "pl.JSON.txt",
+      "pl.txt.json.txt",
+      "pl.json.txt.txt",
     ];
     const refused: unknown[] = [];
-    for (const name of names) {
+    for (const name of badNames) {
       const f = file(name, { "stress.setup.title": "Ustaw badanie" });
       const read = vi.spyOn(f, "text");
       refused.push([await c.loadDropInFile(f), read.mock.calls.length]);
     }
-    expect(refused).toEqual([
-      ["bad-extension", 0],
-      ["bad-extension", 0],
-      ["bad-extension", 0],
-      ["bad-extension", 0],
-      ["bad-name", 0],
-      ["bad-name", 0],
-      ["bad-name", 0],
+    const taken: unknown[] = [];
+    for (const [name, title] of [
+      ["pl.json.txt", "Ustaw badanie"],
+      ["de-AT.json.TXT", "Studie aufsetzen"],
+    ]) {
+      taken.push([await c.loadDropInFile(file(name!, { "stress.setup.title": title })), c.setting(), lines(c)[0]]);
+    }
+    expect([refused, taken, [...storage.map.keys()].filter((k) => k.startsWith(DROP_IN_PREFIX)).sort()]).toEqual([
+      badNames.map(() => ["bad-name", 0]),
+      [
+        [null, "pl", "Ustaw badanie"],
+        [null, "de-AT", "Studie aufsetzen"],
+      ],
+      [DROP_IN_PREFIX + "de-AT", DROP_IN_PREFIX + "pl"],
     ]);
-    expect([[...storage.map.keys()], c.setting()]).toEqual([[], "system"]);
   });
 
   it("says where a picked file breaks, each refusal on its own, and nothing after a file that parses", async () => {

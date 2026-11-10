@@ -1,5 +1,4 @@
 {
-  "prefs.language.error.badExtension": "ファイル名が .json.txt で終わっています。.txt を削除して、pl.json のようにしてください。",
   "prefs.language.error.badName": "ファイル名から言語を判断できませんでした。pl.json のように、言語コードをファイル名にしてください。",
   "prefs.language.error.folder": "言語ファイルのフォルダーを開けませんでした。",
   "prefs.language.error.notFlat": "言語ファイルが行の単純な一覧ではないため、使用されません。",

@@ -1,5 +1,4 @@
 {
-  "prefs.language.error.badExtension": "The file name ends in .json.txt, remove the .txt ending so it reads pl.json.",
   "prefs.language.error.badName": "Could not tell the language from the file name, name the file by its language code, as in pl.json.",
   "prefs.language.error.folder": "Could not open your languages folder.",
   "prefs.language.error.notFlat": "Your language file is not a flat list of lines, so it is not used.",

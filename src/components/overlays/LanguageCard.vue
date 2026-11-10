@@ -29,7 +29,6 @@ const FILE_ERRORS: Record<DropInFileError, MessageKey> = {
   "not-json": "prefs.language.error.notJson",
   "not-flat": "prefs.language.error.notFlat",
   "bad-name": "prefs.language.error.badName",
-  "bad-extension": "prefs.language.error.badExtension",
   unreadable: "prefs.language.error.unreadable",
   storage: "prefs.language.error.storage",
   "not-read": "prefs.language.error.notRead",

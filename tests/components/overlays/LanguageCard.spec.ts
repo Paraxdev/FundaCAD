@@ -351,15 +351,19 @@ describe("the user's own file in the browser", () => {
     ]);
   });
 
-  it("says to remove the .txt ending of pl.json.txt, and a plain bad name is not told that", async () => {
+  it("takes a picked pl.json.txt as pl.json, and a plain bad name is still refused", async () => {
     await render();
     await load(json("pl.json.txt", { "prefs.language.title": "Język" }));
-    await vi.waitFor(() =>
-      expect(text("#prefs-language-error")).toBe(line(en, "prefs.language.error.badExtension", "en")),
-    );
+    await vi.waitFor(() => expect(document.documentElement.lang).toBe("pl"));
+    await flushPromises();
+    const taken = [dropIns(), languageSetting(), text(".pref-title"), text("#prefs-language-error")];
     await load(json("Polish.json", { "prefs.language.title": "Język" }));
     await vi.waitFor(() => expect(text("#prefs-language-error")).toBe(line(en, "prefs.language.error.badName", "en")));
-    expect([dropIns(), languageSetting()]).toEqual([[], "system"]);
+    expect([taken, dropIns(), languageSetting()]).toEqual([
+      [["fundacad.language.dropin.pl"], "pl", "Język", ""],
+      ["fundacad.language.dropin.pl"],
+      "pl",
+    ]);
   });
 
   it("refuses a file not named by a language code, and a pick clears the message", async () => {
