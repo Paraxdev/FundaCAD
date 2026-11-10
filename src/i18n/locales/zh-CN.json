@@ -45,7 +45,7 @@
   "stress.finer.seconds": "以更精细的网格运行（约 {s, number} 秒）",
   "stress.frame.busy": "正在分析…",
   "stress.frame.cancel": "取消",
-  "stress.frame.close": "关闭应力",
+  "stress.frame.close": "关闭应力分析",
   "stress.frame.hintFace": "点击一个面即可添加整个面，按住 Shift 点击可添加更多，按 Esc 停止。",
   "stress.frame.hintProbe": "将鼠标移到实体上读取数值，点击以固定，按 Esc 停止。",
   "stress.frame.hintReady": "准备就绪，请点击运行。",

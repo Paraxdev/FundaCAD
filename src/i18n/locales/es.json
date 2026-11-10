@@ -45,7 +45,7 @@
   "stress.finer.seconds": "Calcular con más detalle (unos {s, plural, one {# segundo} other {# segundos}})",
   "stress.frame.busy": "Calculando…",
   "stress.frame.cancel": "Cancelar",
-  "stress.frame.close": "Cerrar Tensión",
+  "stress.frame.close": "Cerrar el análisis de tensión",
   "stress.frame.hintFace": "Haga clic en una cara para añadirla entera, Mayús y clic para más, Esc para detener.",
   "stress.frame.hintProbe": "Pase el cursor sobre el cuerpo para leerlo, haga clic para fijarlo, Esc para detener.",
   "stress.frame.hintReady": "Listo, pulse Calcular.",

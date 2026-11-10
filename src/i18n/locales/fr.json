@@ -45,7 +45,7 @@
   "stress.finer.seconds": "Calculer avec un maillage plus fin (environ {s, plural, one {# seconde} other {# secondes}})",
   "stress.frame.busy": "Calcul en cours…",
   "stress.frame.cancel": "Annuler",
-  "stress.frame.close": "Fermer Contraintes",
+  "stress.frame.close": "Fermer l'analyse des contraintes",
   "stress.frame.hintFace": "Cliquez sur une face pour l'ajouter en entier, Maj+clic pour en ajouter d'autres, Échap pour arrêter.",
   "stress.frame.hintProbe": "Survolez le corps pour lire la valeur, cliquez pour l'épingler, Échap pour arrêter.",
   "stress.frame.hintReady": "Prêt, appuyez sur Calculer.",

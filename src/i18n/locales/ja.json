@@ -45,7 +45,7 @@
   "stress.finer.seconds": "より細かいメッシュで実行 (約{s, number}秒)",
   "stress.frame.busy": "解析中…",
   "stress.frame.cancel": "キャンセル",
-  "stress.frame.close": "応力を閉じる",
+  "stress.frame.close": "応力解析を閉じる",
   "stress.frame.hintFace": "面をクリックすると面全体を追加します。Shiftを押しながらクリックでさらに追加、Escで終了します。",
   "stress.frame.hintProbe": "ボディにカーソルを合わせて値を読み取り、クリックで固定、Escで終了します。",
   "stress.frame.hintReady": "準備ができました。実行を押してください。",
