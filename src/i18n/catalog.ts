@@ -25,7 +25,8 @@ export interface DropInSource {
   open?(): Promise<void>;
 }
 
-export type DropInFileError = NonNullable<DropInStatus["error"]> | "bad-name" | "unreadable" | "storage" | "folder";
+export type DropInFileError =
+  NonNullable<DropInStatus["error"]> | "bad-name" | "bad-extension" | "unreadable" | "storage" | "folder";
 
 export interface CatalogDeps<K extends string> {
   english: Readonly<Record<K | CoreKey, string>>;
@@ -251,7 +252,11 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
   /** Keeps the file and switches to its language; on an error nothing changes. */
   async function loadDropInFile(file: Pick<File, "name" | "size" | "text">): Promise<DropInFileError | null> {
     const code = file.name.endsWith(".json") ? file.name.slice(0, -".json".length) : "";
-    if (!isLanguageCode(code)) return "bad-name";
+    if (!isLanguageCode(code)) {
+      // Notepad adds .txt on a plain save and Explorer hides the ending, so pl.json is often pl.json.txt.
+      const hidden = file.name.match(/^(.+)\.json\.txt$/i);
+      return hidden && isLanguageCode(hidden[1] ?? "") ? "bad-extension" : "bad-name";
+    }
     // Checked before reading, so a huge file is never pulled into memory.
     if (file.size > MAX_OVERRIDE_BYTES) return "too-large";
     let text: string;

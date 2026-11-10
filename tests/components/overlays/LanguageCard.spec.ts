@@ -351,6 +351,17 @@ describe("the user's own file in the browser", () => {
     ]);
   });
 
+  it("says to remove the .txt ending of pl.json.txt, and a plain bad name is not told that", async () => {
+    await render();
+    await load(json("pl.json.txt", { "prefs.language.title": "Język" }));
+    await vi.waitFor(() =>
+      expect(text("#prefs-language-error")).toBe(line(en, "prefs.language.error.badExtension", "en")),
+    );
+    await load(json("Polish.json", { "prefs.language.title": "Język" }));
+    await vi.waitFor(() => expect(text("#prefs-language-error")).toBe(line(en, "prefs.language.error.badName", "en")));
+    expect([dropIns(), languageSetting()]).toEqual([[], "system"]);
+  });
+
   it("refuses a file not named by a language code, and a pick clears the message", async () => {
     await render();
     await load(json("Polish.json", { "prefs.language.title": "Język" }));

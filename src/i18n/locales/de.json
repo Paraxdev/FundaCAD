@@ -1,4 +1,5 @@
 {
+  "prefs.language.error.badExtension": "Der Dateiname endet auf .json.txt, entfernen Sie die Endung .txt, damit die Datei zum Beispiel pl.json heißt.",
   "prefs.language.error.badName": "Die Sprache ließ sich nicht aus dem Dateinamen ablesen, benennen Sie die Datei nach dem Sprachcode, etwa pl.json.",
   "prefs.language.error.folder": "Der Ordner mit Ihren Sprachdateien ließ sich nicht öffnen.",
   "prefs.language.error.notFlat": "Ihre Sprachdatei ist keine flache Liste von Zeilen und wird deshalb nicht verwendet.",

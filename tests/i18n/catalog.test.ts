@@ -700,6 +700,36 @@ describe("loading a language file", () => {
     expect(await c.loadDropInFile(file("zh-Hant-TW.json", {}))).toBeNull();
   });
 
+  it("tells a name ending in .json.txt from other bad names, reading nothing", async () => {
+    const { c, storage } = make();
+    await c.init();
+    const names = [
+      "pl.json.txt",
+      "de-AT.json.txt",
+      "pl.JSON.TXT",
+      "pl.json.TXT",
+      "PL.json.txt",
+      ".json.txt",
+      "pl_PL.json.txt",
+    ];
+    const refused: unknown[] = [];
+    for (const name of names) {
+      const f = file(name, { "stress.setup.title": "Ustaw badanie" });
+      const read = vi.spyOn(f, "text");
+      refused.push([await c.loadDropInFile(f), read.mock.calls.length]);
+    }
+    expect(refused).toEqual([
+      ["bad-extension", 0],
+      ["bad-extension", 0],
+      ["bad-extension", 0],
+      ["bad-extension", 0],
+      ["bad-name", 0],
+      ["bad-name", 0],
+      ["bad-name", 0],
+    ]);
+    expect([[...storage.map.keys()], c.setting()]).toEqual([[], "system"]);
+  });
+
   it("says where a picked file breaks, each refusal on its own, and nothing after a file that parses", async () => {
     const { c, storage } = make();
     await c.init();
