@@ -34,7 +34,7 @@ Each line is the line's name, then its text. Copy the names from FundaCAD's Engl
 
 In the desktop app, Open folder opens your languages folder, and makes it the first time. FundaCAD reads the files there when it starts and when you press Reload, so press Reload after you add or change one. A link in place of a file is not read. In safe mode the folder is not read and both buttons are off.
 
-Outside the desktop app, Load file… takes your own language file and switches to its language. The browser keeps the file until Remove my lines or a Reset settings drops it.
+Outside the desktop app, Load file… takes your own language file and switches to its language. The browser keeps the file until Remove your lines or a Reset settings drops it.
 
 Saved documents never hold translated text, so they open the same in every language.
 

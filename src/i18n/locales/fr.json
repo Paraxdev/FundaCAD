@@ -18,7 +18,7 @@
   "prefs.language.more": "{n, plural, one {et # autre ligne} other {et # autres lignes}}",
   "prefs.language.open": "Ouvrir le dossier",
   "prefs.language.reload": "Recharger",
-  "prefs.language.remove": "Retirer mes lignes",
+  "prefs.language.remove": "Retirer vos lignes",
   "prefs.language.safeMode": "Le mode sans échec ne lit pas vos fichiers de langue.",
   "prefs.language.skip": "{key} : {reason, select, unknownKey {FundaCAD n’a pas cette ligne} notText {pas du texte} tooLong {plus de {max, number} caractères} markup {contient une balise comme {tag}, les balises ne sont pas permises} controlCharacter {contient un caractère de contrôle caché} syntax {une accolade ou un pluriel est mal écrit} badArgument {utilise {arg}, absent de la ligne anglaise} empty {est vide} locked {renseigne sur votre fichier, un fichier ne peut donc pas la changer} other {non utilisée}}",
   "prefs.language.skipped": "{n, plural, one {# ligne est ignorée :} other {# lignes sont ignorées :}}",

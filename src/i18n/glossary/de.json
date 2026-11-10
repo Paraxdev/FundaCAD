@@ -29,6 +29,11 @@
       "note": "one message in a language file"
     },
     {
+      "en": "use",
+      "text": "verwenden",
+      "note": "not nutzen, which reads stiff on a button"
+    },
+    {
       "en": "Stress",
       "text": "Spannung",
       "note": "the Stress panel, the plain word for mechanical stress"

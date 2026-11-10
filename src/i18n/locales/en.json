@@ -18,7 +18,7 @@
   "prefs.language.more": "{n, plural, one {and # more line} other {and # more lines}}",
   "prefs.language.open": "Open folder",
   "prefs.language.reload": "Reload",
-  "prefs.language.remove": "Remove my lines",
+  "prefs.language.remove": "Remove your lines",
   "prefs.language.safeMode": "Safe mode does not read your language files.",
   "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD has no such line} notText {not text} tooLong {longer than {max, number} characters} markup {has a tag such as {tag}, tags are not allowed} controlCharacter {has a hidden control character} syntax {a brace or plural is written wrong} badArgument {uses {arg}, which the English line does not have} empty {is empty} locked {tells you about your file, so a file cannot change it} other {not used}}",
   "prefs.language.skipped": "{n, plural, one {# line is skipped:} other {# lines are skipped:}}",
