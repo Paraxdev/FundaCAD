@@ -18,6 +18,7 @@ import { GhostLines, type GhostSlot } from "./ghostLines";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
+import { t } from "../i18n";
 import { gizmoMoveStep } from "../viewport/gizmoStep";
 import {
   createDragHandle,
@@ -384,12 +385,11 @@ export class EdgeFeatureTool {
     const here = new MidSet();
     if (mid) here.add(mid);
     const member = mid ? this.ghosts.find((g) => here.has(g.mid)) : undefined;
+    const over = member ? 0 : this.addPicked(edge, scope);
     if (member) this.removeWithChain(member);
-    else {
-      const over = this.addPicked(edge, scope);
-      if (over) this.refuseOverCap(over);
-    }
+    if (over) this.refuseOverCap(over);
     this.afterMembershipChange();
+    if (over) return t("pick.overCap");
     return { done: member ? "takenOut" : "added" };
   }
 

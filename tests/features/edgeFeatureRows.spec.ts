@@ -20,6 +20,15 @@ import type { GeometryBackend } from "../../src/geometry/client";
 import type { EdgeRef } from "../../src/viewport/edgeLines";
 import type { Viewport } from "../../src/viewport/viewport";
 
+const cap = vi.hoisted(() => ({ value: 5000, asked: [] as [string, number][] }));
+vi.mock("../../src/features/edgeCountGate", async (actual) => ({
+  ...(await actual<typeof import("../../src/features/edgeCountGate")>()),
+  get EDGE_CAP() {
+    return cap.value;
+  },
+  confirmEdgeCount: async (label: string, count: number) => (cap.asked.push([label, count]), false),
+}));
+
 function lenient<T extends object>(own: Record<string, unknown>): T {
   return new Proxy(own, {
     get: (t, k) => (k in t ? t[k as string] : () => undefined),
@@ -156,6 +165,27 @@ describe("an edge row while Fillet waits", () => {
     const again = offer({ kind: "face", faceId: 17 }, "Flat face 6 of Slant");
     expect([again.said, again.refused.length, tool.memberRows().length]).toEqual([[], 1, 1]);
     tool.cancel();
+  });
+
+  it.each(["fillet", "chamfer"] as const)("%s over the edge cap says none was added and keeps its members", (kind) => {
+    const { tool, offer } = rig();
+    cap.value = 2;
+    cap.asked.length = 0;
+    try {
+      tool.start(kind, () => {});
+      offer(edgeRow(0), "Line edge 1 of Slant");
+      expect(offer(edgeRow(2), "Line edge 3 of Slant")).toEqual(doneSaid("Line edge 3 of Slant", "added"));
+      const over = offer(edgeRow(1), "Line edge 2 of Slant");
+      expect(over.said).toEqual([]);
+      expect(over.refused).toEqual([t("pick.overCap")]);
+      expect([tool.memberRows().length, cap.asked]).toEqual([2, [[kind === "fillet" ? "Fillet" : "Chamfer", 3]]]);
+      expect(offer(edgeRow(0), "Line edge 1 of Slant")).toEqual(doneSaid("Line edge 1 of Slant", "takenOut"));
+      expect(offer(edgeRow(1), "Line edge 2 of Slant")).toEqual(doneSaid("Line edge 2 of Slant", "added"));
+      expect([tool.memberRows().length, cap.asked.length]).toEqual([2, 1]);
+    } finally {
+      cap.value = 5000;
+      tool.cancel();
+    }
   });
 
   it("refuses a face row in words and keeps the members", () => {

@@ -16,6 +16,7 @@
   "pick.done": "{done, select, added {已添加{name}} takenOut {已移除{name}} mirrorPlane {{name}已设为镜像平面} other {已选择{name}}}",
   "pick.doneRun": "{done, select, added {已添加 {n} 行} takenOut {已移除 {n} 行} other {已选择 {n} 行}}",
   "pick.onBody": "{body}的{label}",
+  "pick.overCap": "边太多，未添加",
   "prefs.accessibility.manualLink": "阅读手册中的无障碍页面",
   "prefs.language.error.badName": "无法从文件名判断语言，请以语言代码命名文件，例如 pl.json。",
   "prefs.language.error.folder": "无法打开您的语言文件夹。",
