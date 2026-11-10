@@ -10,6 +10,7 @@
   "prefs.language.error.storage": "このブラウザーのストレージを変更できなかったため、独自の行は変わっていません。",
   "prefs.language.error.tooLarge": "言語ファイルが {kb, number} KB を超えているため、使用されません。",
   "prefs.language.error.unreadable": "ファイルを読み取れなかったため、独自の行は変わっていません。",
+  "prefs.language.fileHint": "ファイル名は言語コードにしてください (例: de.json、pl.json)。中身の書き方はマニュアルをご覧ください。",
   "prefs.language.hint": "機械翻訳された言語は不自然な表現になる場合があります。独自のファイルで任意の行を修正できます。",
   "prefs.language.inUse": "{n, plural, =0 {独自のファイルの行は使用されていません。} other {独自のファイルの # 行が使用されています。}}",
   "prefs.language.load": "ファイルを読み込む…",

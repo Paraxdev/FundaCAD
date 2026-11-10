@@ -10,6 +10,7 @@
   "prefs.language.error.storage": "无法更改此浏览器的存储，您的行保持不变。",
   "prefs.language.error.tooLarge": "您的语言文件超过 {kb, number} KB，因此未被使用。",
   "prefs.language.error.unreadable": "无法读取该文件，您的行保持不变。",
+  "prefs.language.fileHint": "请用语言代码为文件命名，例如 de.json 或 pl.json。文件内容请参阅手册。",
   "prefs.language.hint": "机器翻译的语言读起来可能不太自然。您可以用自己的文件更正任何一行。",
   "prefs.language.inUse": "{n, plural, =0 {您的文件没有行在使用。} other {您的文件有 # 行在使用。}}",
   "prefs.language.load": "加载文件…",

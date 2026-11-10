@@ -216,9 +216,10 @@ describe("the Language card in the desktop app", () => {
   it("has Open folder and Reload and none of the browser's buttons", async () => {
     await start();
     await render();
-    expect([buttons(), document.querySelector(".prefs-language-load")]).toEqual([
+    expect([buttons(), document.querySelector(".prefs-language-load"), text(".prefs-language-file-hint")]).toEqual([
       [en["prefs.language.open"], en["prefs.language.reload"]],
       null,
+      en["prefs.language.fileHint"],
     ]);
   });
 
@@ -321,13 +322,16 @@ describe("safe mode in the desktop app", () => {
     click(".prefs-language-open");
     click(".prefs-language-reload");
     await flushPromises();
-    expect([shown, text(".prefs-language-locked"), tauri.invoke.mock.calls]).toEqual([
+    expect([shown, text(".prefs-language-locked"), text(".prefs-language-file-hint"), tauri.invoke.mock.calls]).toEqual(
       [
-        [en["prefs.language.open"], "true", en["prefs.language.safeMode"]],
-        [en["prefs.language.reload"], "true", en["prefs.language.safeMode"]],
+        [
+          [en["prefs.language.open"], "true", en["prefs.language.safeMode"]],
+          [en["prefs.language.reload"], "true", en["prefs.language.safeMode"]],
+        ],
+        en["prefs.language.safeMode"],
+        null,
+        [],
       ],
-      en["prefs.language.safeMode"],
-      [],
-    ]);
+    );
   });
 });

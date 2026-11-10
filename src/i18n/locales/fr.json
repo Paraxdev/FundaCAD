@@ -10,6 +10,7 @@
   "prefs.language.error.storage": "Impossible de modifier le stockage de ce navigateur, vos lignes restent inchangées.",
   "prefs.language.error.tooLarge": "Votre fichier de langue dépasse {kb, number} Ko, il n’est donc pas utilisé.",
   "prefs.language.error.unreadable": "Impossible de lire le fichier, vos lignes restent inchangées.",
+  "prefs.language.fileHint": "Nommez votre fichier d'après son code de langue, par exemple de.json ou pl.json. Le manuel indique ce qu'il contient.",
   "prefs.language.hint": "Les langues traduites automatiquement peuvent sembler maladroites. Votre propre fichier peut corriger n’importe quelle ligne.",
   "prefs.language.inUse": "{n, plural, =0 {Aucune ligne de votre fichier n’est utilisée.} one {# ligne de votre fichier est utilisée.} other {# lignes de votre fichier sont utilisées.}}",
   "prefs.language.load": "Charger un fichier…",

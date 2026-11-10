@@ -175,7 +175,10 @@ describe("the user's own file in the browser", () => {
 
   it("uses the good lines of a file, lists each skipped one with its reason, and Remove brings the shipped lines back", async () => {
     await render();
-    expect(buttons()).toEqual([en["prefs.language.load"]]);
+    expect([buttons(), text(".prefs-language-file-hint")]).toEqual([
+      [en["prefs.language.load"]],
+      en["prefs.language.fileHint"],
+    ]);
     await load(
       json("de.json", {
         "prefs.language.title": "Meine Sprache",

@@ -10,6 +10,7 @@
   "prefs.language.error.storage": "Could not change this browser's storage, so your lines are as they were.",
   "prefs.language.error.tooLarge": "Your language file is larger than {kb, number} KB, so it is not used.",
   "prefs.language.error.unreadable": "Could not read the file, so your lines are as they were.",
+  "prefs.language.fileHint": "Name your file by its language code, as in de.json or pl.json. The manual shows what goes in it.",
   "prefs.language.hint": "Machine translated languages may read oddly. Your own file can correct any line.",
   "prefs.language.inUse": "{n, plural, =0 {No line of your file is in use.} one {# line of your file is in use.} other {# lines of your file are in use.}}",
   "prefs.language.load": "Load file…",

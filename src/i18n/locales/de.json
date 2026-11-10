@@ -10,6 +10,7 @@
   "prefs.language.error.storage": "Der Speicher dieses Browsers ließ sich nicht ändern, Ihre Zeilen bleiben wie zuvor.",
   "prefs.language.error.tooLarge": "Ihre Sprachdatei ist größer als {kb, number} KB und wird deshalb nicht verwendet.",
   "prefs.language.error.unreadable": "Die Datei ließ sich nicht lesen, Ihre Zeilen bleiben wie zuvor.",
+  "prefs.language.fileHint": "Benennen Sie Ihre Datei nach ihrem Sprachcode, etwa de.json oder pl.json. Was hineingehört, zeigt das Handbuch.",
   "prefs.language.hint": "Maschinell übersetzte Sprachen können holprig klingen. Mit Ihrer eigenen Datei können Sie jede Zeile korrigieren.",
   "prefs.language.inUse": "{n, plural, =0 {Keine Zeile Ihrer Datei wird verwendet.} one {# Zeile Ihrer Datei wird verwendet.} other {# Zeilen Ihrer Datei werden verwendet.}}",
   "prefs.language.load": "Datei laden…",

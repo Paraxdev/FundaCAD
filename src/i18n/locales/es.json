@@ -10,6 +10,7 @@
   "prefs.language.error.storage": "No se pudo cambiar el almacenamiento de este navegador, sus líneas siguen como estaban.",
   "prefs.language.error.tooLarge": "Su archivo de idioma supera los {kb, number} KB, por eso no se usa.",
   "prefs.language.error.unreadable": "No se pudo leer el archivo, sus líneas siguen como estaban.",
+  "prefs.language.fileHint": "Nombre su archivo con su código de idioma, por ejemplo de.json o pl.json. El manual indica qué contiene.",
   "prefs.language.hint": "Los idiomas traducidos automáticamente pueden sonar extraños. Su propio archivo puede corregir cualquier línea.",
   "prefs.language.inUse": "{n, plural, =0 {Ninguna línea de su archivo está en uso.} one {# línea de su archivo está en uso.} other {# líneas de su archivo están en uso.}}",
   "prefs.language.load": "Cargar archivo…",

@@ -125,6 +125,9 @@ async function reload() {
       <Button class="prefs-language-load" @click="loadFile">{{ t("prefs.language.load") }}</Button>
       <Button v-if="status" class="prefs-language-remove" @click="removeLines">{{ t("prefs.language.remove") }}</Button>
     </div>
+    <p v-if="!locked && source !== 'none'" class="pref-hint prefs-language-file-hint">
+      {{ t("prefs.language.fileHint") }}
+    </p>
     <p v-if="locked" class="pref-hint prefs-language-locked" role="note">{{ t("prefs.language.safeMode") }}</p>
     <div class="prefs-language-status" role="status">
       <p v-if="status && !status.error" class="pref-hint">{{ t("prefs.language.inUse", { n: status.lines }) }}</p>

@@ -23,6 +23,15 @@ Language sets the language of FundaCAD's text, and it applies at once. System, t
 
 Your own language file corrects any line. Its name is the language code: `de.json` corrects single German lines, and `pl.json` adds Polish to the list as polski (your file), with its missing lines in English. A regional file such as `de-AT.json` takes its missing lines from German. The file is a flat JSON list of lines like FundaCAD's own language files, at most 256 KB. A line that holds markup, or that FundaCAD does not have, is skipped, and the card lists the skipped lines with the reason.
 
+Each line is the line's name, then its text. Copy the names from FundaCAD's English file, [en.json](https://github.com/Paraxdev/fundacad/blob/main/src/i18n/locales/en.json), which holds every line, and keep the parts in braces such as `{name}` as they are. This `de.json` changes two German lines:
+
+```json
+{
+  "prefs.language.title": "Sprache der Oberfläche",
+  "prefs.language.reload": "Neu einlesen"
+}
+```
+
 In the desktop app, Open folder opens your languages folder, and makes it the first time. FundaCAD reads the files there when it starts and when you press Reload, so press Reload after you add or change one. A link in place of a file is not read. In safe mode the folder is not read and both buttons are off.
 
 Outside the desktop app, Load file… takes your own language file and switches to its language. The browser keeps the file until Remove my lines or a Reset settings drops it.
