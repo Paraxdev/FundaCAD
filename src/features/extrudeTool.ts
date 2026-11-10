@@ -28,14 +28,15 @@ import {
 import { draftAngle, draftDelta } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
-import { sweepProbePoints } from "./sweepProbe";
 import { sweepPolylines, type Station } from "./sweepOutline";
 import { ToolOutline, regionRings } from "./toolOutline";
 import { previewVerdict } from "./previewVerdict";
+import { featureKey } from "./previewOutcomes";
 import { HeldSignal } from "./heldEdit";
 import { boxBindings, type BoxField } from "./boxBindings";
 
 /** Below this the extrude is straight: the frontend prism draws instantly and no kernel preview is asked for. */
+const PREVIEW_DEBOUNCE_MS = 150;
 const TAPER_EPS = 0.05;
 
 /** Under this depth the taper lever, atan(inset / depth), is too short to read and no handle is offered. */
@@ -62,9 +63,6 @@ export class ExtrudeTool {
   /** `distance` each way off the plane. Reset on every entry since it belongs to the gesture, not the tool; an edit
    *  seeds it from the saved feature. */
   private symmetric = false;
-  private preview: THREE.Group | null = null;
-  private previewMat: THREE.MeshStandardMaterial | null = null;
-  private previewKey = ""; // depth+sign+selection of the built preview geometry
   /** The same glyph as the taper, fillet and press/pull handles, drawn through the model so a cut's handle is not
    *  buried in the material it removes. */
   private depthHandle: DragHandle | null = null;
@@ -115,10 +113,12 @@ export class ExtrudeTool {
   private taperGrabInset = 0;
   /** One per gesture, shared by the engine preview and the committed feature, so a tapered preview replaces itself. */
   private previewId = "";
-  /** The exact tapered solid is previewed through the engine (prism hidden), so going straight knows to clear it. */
-  private taperPreviewOn = false;
+  private previewOn = false;
   /** So an unchanged drag does not re-trigger an OCCT rebuild. */
-  private taperKey = "";
+  private pushedKey = "";
+  private previewTimer: number | null = null;
+  /** Read before the first preview lands, since the preview body would make an empty model look solid. */
+  private solidAtStart: boolean | null = null;
 
   private boundMove: (e: PointerEvent) => void;
   private boundDown: (e: PointerEvent) => void;
@@ -162,6 +162,7 @@ export class ExtrudeTool {
     this.phase = "pick";
     this.onDone = onDone;
     this.symmetric = false;
+    this.dropPickingHold();
     this.viewport.suspendPicking = true;
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
@@ -222,6 +223,7 @@ export class ExtrudeTool {
     this.taper = typeof f.taper === "number" ? f.taper : 0;
     this.forcedSketchId = f.sketch;
 
+    this.dropPickingHold();
     this.viewport.suspendPicking = true;
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
@@ -329,6 +331,7 @@ export class ExtrudeTool {
     const v = this.dim.getValue("distance");
     if (v != null) this.distance = v;
     this.updatePreview();
+    this.flushPreview();
   }
 
   /** At a stable spot by the selection centre, clamped inside the viewport; following the cursor made the box
@@ -396,12 +399,10 @@ export class ExtrudeTool {
         // handles would float off nothing.
         this.phase = "pick";
         this.dim.hide();
-        this.disposePreviewGeom();
-        this.previewKey = "";
+        this.clearEnginePreview();
         this.disposeDepthHandle();
         this.disposeTaperHandle();
         this.outline?.hide();
-        this.clearPeek();
         setPrompt("Click a profile area · Esc");
         this.held.sync(this.pending);
         return;
@@ -410,7 +411,31 @@ export class ExtrudeTool {
       this.updatePreview();
       return;
     }
+    this.pressCommit = true;
     this.commit();
+    this.pressCommit = false;
+  }
+
+  private pressCommit = false;
+  private releasePicking: (() => void) | null = null;
+
+  /** The press that commits is on the old model: its pointerup would run the viewport's click on it, picking a stray
+   *  body or edge. Picking comes back once that press is over, after the viewport's own pointerup has run. */
+  private holdPickingThroughPress() {
+    const release = () => {
+      this.dropPickingHold();
+      this.viewport.suspendPicking = false;
+    };
+    this.releasePicking = release;
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+  }
+
+  private dropPickingHold() {
+    if (!this.releasePicking) return;
+    window.removeEventListener("pointerup", this.releasePicking);
+    window.removeEventListener("pointercancel", this.releasePicking);
+    this.releasePicking = null;
   }
 
   /** A drag only ends on release, the depth it reached holds; a press on the depth arrow that never travelled
@@ -433,6 +458,7 @@ export class ExtrudeTool {
       if (moved) this.depthHeld = true;
     } else return;
     if (moved) this.touched = true;
+    this.flushPreview();
     this.held.sync(this.pending);
     this.dim.focus();
   }
@@ -621,13 +647,6 @@ export class ExtrudeTool {
     return regionAnchor(this.selected);
   }
 
-  /** Lets a preview keyed on depth and selection tell a real change from a repaint. */
-  private selectionIds(): string {
-    return this.selected
-      .map((s) => `${s.sketchId}:${s.interior3D.x.toFixed(2)},${s.interior3D.y.toFixed(2)}`)
-      .join("|");
-  }
-
   private updatePreview() {
     if (!this.selected.length) return;
     this.held.sync(this.pending);
@@ -637,25 +656,9 @@ export class ExtrudeTool {
       const tv = this.dim.getValue("taper");
       if (tv != null) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     }
-    this.syncPeek();
     const sign = this.distance >= 0 ? 1 : -1;
     const depth = Math.abs(this.distance);
-    // THREE.ExtrudeGeometry cannot taper, so a tapered extrude previews through the kernel like Draft: a new one via
-    // store.setPreview, an edit via beginEditPreview(id, feature), varying the committed feature in place.
-    const tapering = depth > 1e-6 && Math.abs(this.taper) >= TAPER_EPS;
-    if (tapering) {
-      this.disposePreviewGeom(); // the straight prism, if one is up, is now a lie
-      this.previewKey = "";
-      const key = `${depth.toFixed(3)}:${sign}:${this.taper.toFixed(2)}:${this.symmetric ? "s" : "o"}:${this.selectionIds()}`;
-      if (key !== this.taperKey) {
-        this.taperKey = key;
-        this.pushTaperPreview();
-      }
-      this.taperPreviewOn = true;
-    } else {
-      if (this.taperPreviewOn) this.clearTaperPreview();
-      this.updatePrism(sign, depth);
-    }
+    this.schedulePreview();
     this.updateManipulators(sign, depth);
   }
 
@@ -691,90 +694,49 @@ export class ExtrudeTool {
     this.outline.show(polylines, { cut: this.drawsAsCut(sign) });
   }
 
-  private peekKey = "";
-
-  /** See through the bodies the preview passes into, or a pocket hides inside opaque material. A cut counts every
-   *  body its sweep box reaches: a tapered cut previews the pocket where a parity probe finds no material, and an
-   *  edit starts on a model that may still hold the pocket. Anything else needs the probe to land in material. */
-  private syncPeek() {
-    const op = this.shownOp ?? this.plannedOperation();
-    const key = `${op}:${this.distance.toFixed(1)}:${this.symmetric}:${this.selectionIds()}`;
-    if (key === this.peekKey) return;
-    this.peekKey = key;
-    const points = sweepProbePoints(
-      this.selected.map((wr) => ({
-        interior: wr.interior3D,
-        loop: wr.region.loop.map((p) => wr.plane.to3D(p.x, p.y)),
-        normal: wr.plane.n,
-      })),
-      this.distance,
-      this.symmetric,
-    );
-    const bounds = op === "cut";
-    this.peeking = this.viewport.setPeek(() => this.viewport.bodiesHolding(points, bounds)).size > 0;
+  /** An edit's first push is immediate, or its body would vanish while the rolled back model shows. */
+  private schedulePreview() {
+    this.clearPreviewTimer();
+    if (this.pushedKey === "" && this.editId) return this.pushEnginePreview();
+    this.previewTimer = window.setTimeout(() => {
+      this.previewTimer = null;
+      this.pushEnginePreview();
+    }, PREVIEW_DEBOUNCE_MS);
   }
 
-  /** The prism is drawn over a ghosted body, so it has to be the stronger of the two. */
-  private peeking = false;
-
-  private clearPeek() {
-    this.peekKey = "";
-    this.peeking = false;
-    this.viewport.setPeek(null);
+  private clearPreviewTimer() {
+    if (this.previewTimer == null) return;
+    window.clearTimeout(this.previewTimer);
+    this.previewTimer = null;
   }
 
-  /** A floating preview for a new extrude, a varied edit for a committed one. */
-  private pushTaperPreview() {
-    if (this.editId) this.store.beginEditPreview(this.editId, this.buildFeature());
-    else this.store.setPreview(this.buildFeature());
+  private flushPreview() {
+    if (this.previewTimer == null) return;
+    this.pushEnginePreview();
   }
 
-  /** A new extrude drops its floating preview, an edit returns to the rolled back model. */
-  private clearTaperPreview() {
-    if (this.editId) this.store.beginEditPreview(this.editId);
-    else this.store.setPreview(null);
-    this.taperPreviewOn = false;
-    this.taperKey = "";
+  /** hold keeps the last body that built on screen while the kernel refuses this depth. */
+  private pushEnginePreview() {
+    this.clearPreviewTimer();
+    if (!this.active || this.phase !== "drag" || !this.selected.length) return;
+    if (Math.abs(this.distance) <= 1e-6) return this.clearEnginePreview();
+    const feature = this.buildFeature();
+    const key = featureKey(feature);
+    if (key === this.pushedKey) return;
+    this.pushedKey = key;
+    this.previewOn = true;
+    if (this.editId) this.store.setEditPreview(feature, { hold: true });
+    else this.store.setPreview(feature, { hold: true });
   }
 
-  /** No kernel round trip, which makes depth dragging feel immediate. */
-  private updatePrism(sign: number, depth: number) {
-    const cut = this.drawsAsCut(sign);
-    const key = `${depth.toFixed(3)}:${sign}:${this.symmetric ? "sym" : "one"}:${this.selectionIds()}`;
-    if (key !== this.previewKey) {
-      this.previewKey = key;
-      this.disposePreviewGeom();
-      if (!this.previewMat) {
-        this.previewMat = new THREE.MeshStandardMaterial({
-          transparent: true,
-          opacity: 0.5,
-          metalness: 0.1,
-          roughness: 0.6,
-        });
-      }
-      this.preview = new THREE.Group();
-      for (const wr of this.selected) {
-        const shape = new THREE.Shape(wr.region.loop.map((p) => p.clone()));
-        for (const h of wr.region.holes) {
-          shape.holes.push(new THREE.Path(h.map((p) => p.clone())));
-        }
-        // Symmetric is one prism of twice the depth pulled back half its length in local space, so the same matrix
-        // places it centred on the plane.
-        const geo = new THREE.ExtrudeGeometry(shape, {
-          depth: this.symmetric ? depth * 2 : depth,
-          bevelEnabled: false,
-          steps: 1,
-        });
-        if (this.symmetric) geo.translate(0, 0, -depth);
-        geo.applyMatrix4(wr.plane.basisMatrix(sign)); // local +Z -> plane normal (flipped on cut)
-        this.preview.add(new THREE.Mesh(geo, this.previewMat));
-      }
-      this.viewport.addToScene(this.preview);
+  private clearEnginePreview() {
+    this.clearPreviewTimer();
+    if (this.previewOn) {
+      if (this.editId) this.store.beginEditPreview(this.editId);
+      else this.store.setPreview(null);
     }
-    if (this.previewMat) {
-      this.previewMat.color.set(cut ? 0xff5c5c : 0x5b9bff);
-      this.previewMat.opacity = this.peeking ? 0.75 : 0.5;
-    }
+    this.previewOn = false;
+    this.pushedKey = "";
   }
 
   /** Shown in both preview modes since they are controls, not geometry: one glyph pulled along the normal for depth
@@ -995,7 +957,7 @@ export class ExtrudeTool {
   private plannedOperation(): Op {
     return plannedOperation({
       savedOperation: this.editId ? this.editOp : this.pinnedOp,
-      hasSolid: (this.store.buildState.result?.mesh.positions.length ?? 0) > 0,
+      hasSolid: (this.solidAtStart ??= (this.store.buildState.result?.mesh.positions.length ?? 0) > 0),
       entersSolid: this.entersSolid(),
       allGlyphs: this.selected.length > 0 && this.selected.every((wr) => wr.entityId !== undefined),
     });
@@ -1040,19 +1002,17 @@ export class ExtrudeTool {
     if (taperTyped) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     const first = this.selected[0];
     if (!first) return;
-    // A typed value has not been previewed until the pointer moves, and the
-    // kernel has to have seen the tapered solid before it can be judged.
-    if (Math.abs(this.taper) >= 0.05) this.updatePreview();
-    let unverified = false;
-    if (this.taperPreviewOn) {
-      const verdict = previewVerdict(this.store);
-      unverified = verdict.kind === "wait";
-      if (verdict.kind === "refused") {
-        setPrompt(`Extrude refused: ${verdict.reason} · drag back or Esc`);
-        this.depthHandle?.paint({ refused: true });
-        this.viewport.requestRender();
-        return;
-      }
+    // A typed value has not been previewed until the pointer moves, and the kernel has to have seen the solid before
+    // it can be judged.
+    this.updatePreview();
+    this.flushPreview();
+    const verdict = previewVerdict(this.store);
+    const unverified = verdict.kind === "wait";
+    if (verdict.kind === "refused") {
+      setPrompt(`Extrude refused: ${verdict.reason} · drag back or Esc`);
+      this.depthHandle?.paint({ refused: true });
+      this.viewport.requestRender();
+      return;
     }
     // A typed value with no drag never ran onMove, so refresh the prompt: buildFeature reads shownOp, so what is
     // built is the word on screen.
@@ -1073,13 +1033,12 @@ export class ExtrudeTool {
       top: this.anchor().addScaledVector(dir, Math.abs(this.distance)),
       dir,
     };
-    // A new extrude's floating taper preview carries the same id and would duplicate the write; an edit's goes with
+    // A new extrude's floating preview carries the same id and would duplicate the write; an edit's goes with
     // endEditPreview below.
-    if (this.taperPreviewOn) {
-      if (!this.editId) this.store.setPreview(null);
-      this.taperPreviewOn = false;
-      this.taperKey = "";
-    }
+    this.clearPreviewTimer();
+    if (this.previewOn && !this.editId) this.store.setPreview(null);
+    this.previewOn = false;
+    this.pushedKey = "";
     if (this.editId) {
       this.store.endEditPreview(false); // replaceFeature triggers the rebuild
       this.store.replaceFeature(this.editId, feature, bindings);
@@ -1142,27 +1101,25 @@ export class ExtrudeTool {
     this.touched = false;
     this.grabProj = null;
     this.dim.hide();
-    this.disposePreviewGeom();
-    this.previewMat?.dispose();
-    this.previewMat = null;
-    this.previewKey = "";
     this.disposeDepthHandle();
     this.disposeTaperHandle();
     this.outline?.dispose();
     this.outline = null;
-    this.clearPeek();
     this.entersMemo.clear();
-    // A create mode cancel or commit can leave a floating taper preview up; an edit's goes with endEditPreview.
-    if (this.taperPreviewOn && !this.editId) this.store.setPreview(null);
-    this.taperPreviewOn = false;
-    this.taperKey = "";
+    this.solidAtStart = null;
+    // A cancel or commit can leave a floating preview up; an edit's goes with endEditPreview.
+    this.clearPreviewTimer();
+    if (this.previewOn && !this.editId) this.store.setPreview(null);
+    this.previewOn = false;
+    this.pushedKey = "";
     this.taper = 0;
     this.taperGrabbing = false;
     this.taperHovering = false;
     this.hovering = false;
     this.grabbing = false;
     this.overlay.setHoverRegion(null);
-    this.viewport.suspendPicking = false;
+    if (this.pressCommit) this.holdPickingThroughPress();
+    else this.viewport.suspendPicking = false;
     this.active = false;
     this.symmetric = false;
     this.selected = [];
@@ -1178,15 +1135,5 @@ export class ExtrudeTool {
     }
     setPrompt(null);
     this.held.sync(this.pending);
-  }
-
-  /** The material is reused. */
-  private disposePreviewGeom() {
-    if (!this.preview) return;
-    this.viewport.removeFromScene(this.preview);
-    for (const child of this.preview.children) {
-      if (child instanceof THREE.Mesh) child.geometry.dispose();
-    }
-    this.preview = null;
   }
 }
