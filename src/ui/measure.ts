@@ -269,6 +269,15 @@ export function normalise(raw: string): Normalised {
       let j = num.end;
       while (src[j] === " ") j++;
       const u = matchUnitAt(src, j);
+      // Two numbers with only a space between are not one number, "1 5" is not 15 and "1 .500" not 1.5.
+      if (!pendingJoin && /\s/.test(src[i - 1] ?? "") && /[A-Za-z0-9_.]$/.test(out)) {
+        const digits = /^\d{3}(?!\d)/.test(src.slice(i)) ? /\d+$/.exec(out)?.[0] : undefined;
+        if (digits)
+          throw new ExprError(
+            `write "${digits}${src.slice(i, i + 3)}" without the space, a space does not group digits`,
+          );
+        throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
+      }
       // A bare number right after a unit group (`2"5`, `2mm 3`) is half finished; joining it would invent a number.
       if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
       if (u) {
