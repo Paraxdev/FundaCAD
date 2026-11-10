@@ -123,10 +123,14 @@ export { fieldNumber, fieldError, readAs } from "../ui/measure";
 export { plainNumber } from "../ui/units";
 /** A rounded number as a value box shows it, with the language's decimal mark. */
 export { spellRounded as numberText } from "../ui/measure";
-/** A number or a fixed decimal count spelled with the language's decimal mark. */
-export { spellNumber, spellFixed } from "../ui/measure";
-/** Typed expression text with a decimal comma as the point text the document stores, and the way back. */
-export { storedExpr, shownExpr } from "../ui/measure";
+/** A number or a fixed decimal count spelled with the language's decimal mark, and a list of numbers joined so the
+ *  mark still reads. */
+export { spellNumber, spellFixed, listJoin } from "../ui/measure";
+/** "," in a language that writes a decimal comma, where a list of numbers is split at ";" as listJoin joins it. */
+export { decimalMark } from "../i18n";
+/** Typed expression text with a decimal comma as the point text the document stores, the reason it refuses one, and
+ *  the way back. */
+export { storedExpr, typedExprProblem, shownExpr } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 

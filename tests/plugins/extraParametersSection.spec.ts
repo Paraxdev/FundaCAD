@@ -165,6 +165,34 @@ describe("the Parameters section", () => {
 });
 
 describe("the Parameters section in German", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("shows a choice that is a bare number with a comma", async () => {
+    const sizes = (d: CadDocument) => {
+      d.paramDefs!["size"] = {
+        expr: "2.5",
+        value: 2.5,
+        unit: "mm",
+        control: {
+          kind: "choice",
+          choices: [
+            { label: "2.5", value: 2.5 },
+            { label: "Large", value: 30 },
+          ],
+        },
+      };
+    };
+    await setLanguage("de");
+    const { w } = await render(sizes);
+    w.find('[data-param="size"] [role=combobox]').element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+    const options = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].map((o) => o.textContent!.trim());
+    expect({ shown: w.find('[data-param="size"] [role=combobox]').text(), options }).toEqual({
+      shown: "2,5",
+      options: ["2,5", "Large"],
+    });
+  });
+
   it("spells a calculated value with a comma", async () => {
     const slanted = (d: CadDocument) => {
       d.paramDefs!["pitch"] = { expr: "gap * 2.5", value: 1.25, unit: "mm" };

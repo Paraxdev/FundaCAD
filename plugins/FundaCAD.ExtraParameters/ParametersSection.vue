@@ -14,7 +14,7 @@ import {
 } from "fundacad";
 import { Checkbox, FieldRow, Icon, IconButton, NumberField, Select, Slider, announce } from "fundacad/ui";
 import { setupOpen } from "./state";
-import { nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
+import { choiceLabel, nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
 
 const store = useEngine().store;
 const browser = useBrowserStore();
@@ -71,7 +71,7 @@ function choiceOptions(row: TuneRow) {
   if (row.control.kind !== "choice") return [];
   const out: { value: string; label: string; disabled?: boolean }[] = row.control.choices.map((c) => ({
     value: String(c.value),
-    label: c.label,
+    label: choiceLabel(c),
   }));
   if (!row.control.choices.some((c) => c.value === row.def.value)) {
     out.push({ value: String(row.def.value), label: `${spellNumber(row.def.value)} (not listed)`, disabled: true });

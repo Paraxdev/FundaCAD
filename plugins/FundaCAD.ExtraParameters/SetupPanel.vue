@@ -17,7 +17,7 @@ import {
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
-import { convertControl, formatChoices, nextId, parseChoices } from "./view";
+import { choiceSeparator, convertControl, formatChoices, nextId, parseChoices } from "./view";
 
 const store = useEngine().store;
 
@@ -335,7 +335,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
                 size="sm"
                 commit="change"
                 :style="FILL"
-                placeholder="Small = 10, Large = 30"
+                :placeholder="`Small = 10${choiceSeparator()} Large = 30`"
                 :validate="(raw) => choicesProblem(`${p.name}.choices`, raw)"
                 :model-value="formatChoices(p.def.control.choices)"
                 @update:model-value="setChoices(p.name, $event)"

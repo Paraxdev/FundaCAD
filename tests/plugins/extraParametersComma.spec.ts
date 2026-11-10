@@ -45,6 +45,18 @@ const doc = (): CadDocument => ({
     wall: { expr: "2", value: 2, unit: "mm" },
     gap: { expr: "0.5", value: 0.5, unit: "mm" },
     rib: { expr: "wall*1.5 + 0.25", value: 3.25, unit: "mm" },
+    size: {
+      expr: "10",
+      value: 10,
+      unit: "mm",
+      control: {
+        kind: "choice",
+        choices: [
+          { label: "Small", value: 10 },
+          { label: "Large", value: 30 },
+        ],
+      },
+    },
   },
   paramExtras: {
     checks: [{ id: "k1", expr: "gap >= 0.3", message: "thin", level: "warning" }],
@@ -105,6 +117,55 @@ describe("checks typed with a decimal comma", () => {
     await edit(box("Check 1 rule"), "gap >= 0,35");
     expect(checks(store)).toEqual([["gap >= 0.3", "thin"]]);
     expect(document.querySelector("[role=alert]")?.textContent).toMatch(/wall > 1,5/);
+  });
+});
+
+describe("the choices box", () => {
+  const choices = (s: DocumentStore) => {
+    const c = s.document.paramDefs!["size"]!.control;
+    return c?.kind === "choice" ? c.choices : null;
+  };
+  const alert = () => document.querySelector("[role=alert]")?.textContent ?? null;
+
+  it("in German takes a decimal comma with a semicolon between choices, and refuses 1.500 with the reason", async () => {
+    await setLanguage("de");
+    const store = await render();
+    const shown = { value: box("size choices").value, placeholder: box("size choices").placeholder };
+    await edit(box("size choices"), "Small = 2,5; Large = 30");
+    const taken = { stored: choices(store), value: box("size choices").value, alert: alert() };
+    await edit(box("size choices"), "Small = 1.500; Large = 30");
+    expect({ shown, taken, refused: { stored: choices(store), alert: alert() } }).toEqual({
+      shown: { value: "Small = 10; Large = 30", placeholder: "Small = 10; Large = 30" },
+      taken: {
+        stored: [
+          { label: "Small", value: 2.5 },
+          { label: "Large", value: 30 },
+        ],
+        value: "Small = 2,5; Large = 30",
+        alert: null,
+      },
+      refused: {
+        stored: [
+          { label: "Small", value: 2.5 },
+          { label: "Large", value: 30 },
+        ],
+        alert: expect.stringContaining('"1.500" is ambiguous, write a comma for decimals or leave the point out'),
+      },
+    });
+  });
+
+  it("in English keeps a comma between choices and reads 1.500 as 1.5", async () => {
+    const store = await render();
+    const shown = { value: box("size choices").value, placeholder: box("size choices").placeholder };
+    await edit(box("size choices"), "Small = 1.500, Large = 30");
+    expect({ shown, stored: choices(store), alert: alert() }).toEqual({
+      shown: { value: "Small = 10, Large = 30", placeholder: "Small = 10, Large = 30" },
+      stored: [
+        { label: "Small", value: 1.5 },
+        { label: "Large", value: 30 },
+      ],
+      alert: null,
+    });
   });
 });
 
