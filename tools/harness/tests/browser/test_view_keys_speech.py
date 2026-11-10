@@ -1,6 +1,7 @@
 """Ctrl+2 in Auto from a perspective view lands on the back view, orthographic, and a screen reader hears it so, in both
 camera rigs: the line is spoken once the projection has landed, never the perspective it left. An arrow step from
-there goes perspective and is heard so."""
+there goes perspective and is heard so. The view summary, read when the view takes focus, is written once it has landed
+too."""
 
 import math
 import time
@@ -26,6 +27,14 @@ LISTEN = """() => {
     if (text) window.__spoken.push(text);
   });
   window.__spokenObserver.observe(polite, { childList: true, characterData: true, subtree: true });
+}"""
+
+WATCH_SUMMARY = """() => {
+  const summary = document.getElementById("view-summary");
+  window.__summaries = [];
+  if (window.__summaryObserver) window.__summaryObserver.disconnect();
+  window.__summaryObserver = new MutationObserver(() => window.__summaries.push(summary.textContent));
+  window.__summaryObserver.observe(summary, { childList: true, characterData: true, subtree: true });
 }"""
 
 POSE = """() => {
@@ -112,3 +121,22 @@ def test_an_arrow_step_from_there_is_heard_as_perspective(rig):
     rig.page.wait_for_timeout(600)
     lines = camera_lines(rig)
     assert len(lines) == 1 and lines[0].startswith("Back, 15° toward ") and lines[0].endswith(", perspective"), lines
+
+
+def test_the_view_summary_is_written_once_the_view_has_landed(rig):
+    rig.page.evaluate(PLACE, OUTSIDE)
+    assert not landed(rig)["ortho"]
+    rig.page.evaluate("() => document.activeElement?.blur()")
+    rig.page.evaluate(WATCH_SUMMARY)
+    rig.page.keyboard.press("Control+2")
+    assert landed(rig)["ortho"]
+    try:
+        rig.page.wait_for_function(
+            "() => window.__summaries.some((t) => t.includes('Back view, orthographic'))", timeout=15_000
+        )
+    except PlaywrightTimeout:
+        written = rig.page.evaluate("() => window.__summaries")
+        raise AssertionError(f"the summary never named the back view, it was written {written}") from None
+    rig.page.wait_for_timeout(600)
+    written = rig.page.evaluate("() => window.__summaries")
+    assert len(written) == 1, written

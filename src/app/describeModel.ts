@@ -22,13 +22,14 @@ import {
   type ViewFacts,
 } from "../ui/viewSummary";
 import type { Viewport } from "../viewport/viewport";
+import { whenViewSettles } from "../viewport/viewSettled";
 
 export interface DescribeHost {
   canvas: HTMLElement;
   store: read.ReadHost["store"] & Pick<DocumentStore, "bodyName" | "onBuild" | "onDocChange">;
   viewport: read.ReadHost["viewport"] &
     Pick<Viewport, "bodyProperties" | "facesBox" | "viewDirection"> & {
-      rig: Pick<Viewport["rig"], "isOrtho" | "isFlying">;
+      rig: Pick<Viewport["rig"], "isOrtho" | "isFlying" | "poseVersion">;
     };
   tools: { section: Pick<SectionTool, "phase" | "onChange"> };
 }
@@ -153,26 +154,20 @@ export function describeSelectionAloud(e: DescribeHost): void {
 }
 
 /** Rewrites the summary a pause after a build, selection, view or section change, never on a frame. Camera moves end
- *  in a pointer, key or wheel event, a view flight is waited out. */
+ *  in a pointer, key or wheel event, and the view is waited out until it settles. */
 export function installViewSummary(e: DescribeHost): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let cancel: (() => void) | null = null;
   const write = () => {
     const text = viewSummary(summaryFacts(e));
     if (viewSummaryText.value !== text) viewSummaryText.value = text;
   };
-  const settled = () => {
-    timer = null;
-    if (e.viewport.rig.isFlying()) schedule();
-    else write();
-  };
   const schedule = () => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(settled, SUMMARY_DELAY);
+    cancel?.();
+    cancel = whenViewSettles(e.viewport.rig, SUMMARY_DELAY, write);
   };
   // Read on focus, so it must be right then.
   const now = () => {
-    if (timer) clearTimeout(timer);
-    timer = null;
+    cancel?.();
     write();
   };
   const events = ["pointerup", "keyup", "wheel"] as const;
@@ -189,7 +184,6 @@ export function installViewSummary(e: DescribeHost): () => void {
     for (const ev of events) window.removeEventListener(ev, schedule);
     e.canvas.removeEventListener("focus", now);
     for (const off of offs) off();
-    if (timer) clearTimeout(timer);
-    timer = null;
+    cancel?.();
   };
 }

@@ -28,7 +28,7 @@ function fake() {
   const docs = new Set<() => void>();
   const sections = new Set<() => void>();
   const sel = { bodies: [] as string[], faces: [] as number[] };
-  const look = { dir: new THREE.Vector3(0, 0, -1), flying: false };
+  const look = { dir: new THREE.Vector3(0, 0, -1), flying: false, pose: 0 };
   const boxes: Record<string, THREE.Box3> = {
     body1: box([0, 0, 0], [40, 30, 20]),
     body2: box([0, 0, 30], [10, 10, 40]),
@@ -77,7 +77,7 @@ function fake() {
         return b ? { volume: 24000, area: 0, com: new THREE.Vector3(), bbox: b, ids: [id], names: [] } : null;
       },
       viewDirection: vi.fn(() => look.dir.clone()),
-      rig: { isOrtho: () => true, isFlying: () => look.flying },
+      rig: { isOrtho: () => true, isFlying: () => look.flying, poseVersion: () => look.pose },
     },
     tools: { section: { phase: "off", onChange: (fn: () => void) => (sections.add(fn), () => sections.delete(fn)) } },
   };
@@ -154,6 +154,26 @@ describe("installViewSummary", () => {
     vi.advanceTimersByTime(SUMMARY_DELAY * 3);
     expect(viewSummaryText.value).toContain("Top view");
     f.look.flying = false;
+    vi.advanceTimersByTime(SUMMARY_DELAY);
+    expect(viewSummaryText.value).toContain("Right view");
+    off();
+  });
+
+  it("waits out a turn the rig does not call a flight, as the classic rig's own transition to a view", () => {
+    vi.useFakeTimers();
+    const f = fake();
+    const off = installViewSummary(f.e);
+    window.dispatchEvent(new Event("keyup"));
+    f.look.dir.set(-1, 0, -1).normalize();
+    for (let i = 0; i < 3; i++) {
+      f.look.pose++;
+      vi.advanceTimersByTime(SUMMARY_DELAY);
+    }
+    expect(viewSummaryText.value).toContain("Top view");
+    f.look.dir.set(-1, 0, 0);
+    f.look.pose++;
+    vi.advanceTimersByTime(SUMMARY_DELAY);
+    expect(viewSummaryText.value).toContain("Top view");
     vi.advanceTimersByTime(SUMMARY_DELAY);
     expect(viewSummaryText.value).toContain("Right view");
     off();
