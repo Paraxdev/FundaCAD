@@ -80,7 +80,7 @@
   { "path": "src/app/announcements.ts", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/canvasPick.ts", "kind": "script", "count": 5, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/channel.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/app/documentActions.ts", "kind": "script", "count": 27, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/app/documentActions.ts", "kind": "script", "count": 26, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/engine.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/engineWatch.ts", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/app/errors.ts", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
