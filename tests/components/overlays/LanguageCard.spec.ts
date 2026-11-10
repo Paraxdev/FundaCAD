@@ -249,6 +249,17 @@ describe("the user's own file in the browser", () => {
     ]);
   });
 
+  it("keeps the lines that tell about the file as shipped, and says why", async () => {
+    await render();
+    await load(json("en.json", { "prefs.language.inUse": "All fine.", "prefs.language.title": "Words" }));
+    await vi.waitFor(() => expect(listed()).toHaveLength(1));
+    expect([text(".pref-title"), status(), listed()]).toEqual([
+      "Words",
+      [line(en, "prefs.language.inUse", "en", { n: 1 }), line(en, "prefs.language.skipped", "en", { n: 1 })],
+      ["prefs.language.inUse: tells you about your file, so a file cannot change it"],
+    ]);
+  });
+
   it("replaces a first file of a language wholly with a second one", async () => {
     await render();
     await load(json("de.json", { "prefs.language.title": "Erste Sprache" }));

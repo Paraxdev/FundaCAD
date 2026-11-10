@@ -20,7 +20,7 @@
   "prefs.language.reload": "Recargar",
   "prefs.language.remove": "Quitar mis líneas",
   "prefs.language.safeMode": "El modo seguro no lee sus archivos de idioma.",
-  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD no tiene esa línea} notText {no es texto} tooLong {más de {max, number} caracteres} markup {contiene una etiqueta como {tag}, no se permiten etiquetas} controlCharacter {contiene un carácter de control oculto} syntax {una llave o un plural está mal escrito} badArgument {usa {arg}, que la línea en inglés no tiene} empty {está vacía} other {no se usa}}",
+  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD no tiene esa línea} notText {no es texto} tooLong {más de {max, number} caracteres} markup {contiene una etiqueta como {tag}, no se permiten etiquetas} controlCharacter {contiene un carácter de control oculto} syntax {una llave o un plural está mal escrito} badArgument {usa {arg}, que la línea en inglés no tiene} empty {está vacía} locked {informa sobre su archivo, así que un archivo no puede cambiarla} other {no se usa}}",
   "prefs.language.skipped": "{n, plural, one {# línea se omite:} other {# líneas se omiten:}}",
   "prefs.language.system": "Sistema ({name})",
   "prefs.language.title": "Idioma",

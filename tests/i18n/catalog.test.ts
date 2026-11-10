@@ -316,6 +316,32 @@ describe("the stored setting", () => {
 });
 
 describe("the user's language file", () => {
+  it("cannot change the lines that tell the user about it, and lists them as skipped", async () => {
+    const seed = {
+      "fundacad.language.dropin.de": JSON.stringify({
+        "prefs.language.yours": "{name}",
+        "stress.setup.title": "Meine Studie",
+        "prefs.language.system": "System",
+      }),
+      "fundacad.language.dropin.pl": "{}",
+    };
+    const { c } = make({}, seed);
+    await c.init();
+    await c.setLanguage("de");
+    expect([c.dropInStatus(), c.t("stress.setup.title"), c.choices()[0], c.choices().at(-1)]).toEqual([
+      {
+        lines: 1,
+        skipped: [
+          { key: "prefs.language.yours", reason: "locked" },
+          { key: "prefs.language.system", reason: "locked" },
+        ],
+      },
+      "Meine Studie",
+      { value: "system", label: "System (English)" },
+      { value: "pl", label: "polski (your file)", parts: [{ text: "polski", lang: "pl" }, { text: " (your file)" }] },
+    ]);
+  });
+
   it("reports its lines and the lines it skipped, and the file a whole refusal", async () => {
     const seed = {
       "fundacad.language.dropin.de": JSON.stringify({
@@ -419,12 +445,11 @@ describe("the choices", () => {
   });
 
   it("put the lang on the name alone, wherever the line places it, once or many times or not at all", async () => {
-    const own = (line: string) => ({
-      "fundacad.language.dropin.pl": "{}",
-      "fundacad.language.dropin.de": JSON.stringify({ "prefs.language.yours": line }),
-    });
     const shown = async (line: string) => {
-      const { c } = make({}, own(line));
+      const { c } = make(
+        { loaders: files({ ...de, "prefs.language.yours": line }) },
+        { "fundacad.language.dropin.pl": "{}" },
+      );
       await c.init();
       await c.setLanguage("de");
       return c.choices().at(-1);

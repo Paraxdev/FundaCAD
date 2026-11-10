@@ -46,6 +46,9 @@ export interface LanguageChoice {
   parts?: { text: string; lang?: string }[];
 }
 
+// These lines tell the user that their own file is in use and what it changed, so that file cannot rewrite them.
+const LOCKED = /^prefs\.language\.(system|yours|inUse|skipped|skip|more|remove|safeMode|error\..+)$/;
+
 // A dropped in line cannot hold a control character, so this marks where the name lands in the formatted label.
 const NAME_MARK = "\u0000";
 
@@ -167,6 +170,10 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       return { dropIn: new Map(), status: { lines: 0, skipped: [], error: readError(e) } };
     }
     const { lines, skipped, error } = result;
+    for (const key of [...lines.keys()].filter((k) => LOCKED.test(k))) {
+      lines.delete(key);
+      skipped.push({ key, reason: "locked" });
+    }
     return { dropIn: lines, status: { lines: lines.size, skipped, ...(error ? { error } : {}) } };
   }
 

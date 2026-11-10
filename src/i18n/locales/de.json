@@ -20,7 +20,7 @@
   "prefs.language.reload": "Neu laden",
   "prefs.language.remove": "Meine Zeilen entfernen",
   "prefs.language.safeMode": "Im abgesicherten Modus werden Ihre Sprachdateien nicht gelesen.",
-  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD hat keine solche Zeile} notText {kein Text} tooLong {länger als {max, number} Zeichen} markup {enthält ein Tag wie {tag}, Tags sind nicht erlaubt} controlCharacter {enthält ein verborgenes Steuerzeichen} syntax {eine Klammer oder ein Plural ist falsch geschrieben} badArgument {verwendet {arg}, das die englische Zeile nicht hat} empty {ist leer} other {nicht verwendet}}",
+  "prefs.language.skip": "{key}: {reason, select, unknownKey {FundaCAD hat keine solche Zeile} notText {kein Text} tooLong {länger als {max, number} Zeichen} markup {enthält ein Tag wie {tag}, Tags sind nicht erlaubt} controlCharacter {enthält ein verborgenes Steuerzeichen} syntax {eine Klammer oder ein Plural ist falsch geschrieben} badArgument {verwendet {arg}, das die englische Zeile nicht hat} empty {ist leer} locked {gibt Auskunft über Ihre Datei, eine Datei kann sie daher nicht ändern} other {nicht verwendet}}",
   "prefs.language.skipped": "{n, plural, one {# Zeile wird übersprungen:} other {# Zeilen werden übersprungen:}}",
   "prefs.language.system": "System ({name})",
   "prefs.language.title": "Sprache",

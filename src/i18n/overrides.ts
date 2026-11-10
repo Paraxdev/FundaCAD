@@ -7,7 +7,16 @@ export const MAX_OVERRIDE_BYTES = 256 * 1024;
 export const MAX_LINE_CHARS = 2000;
 
 export type SkipReason =
-  "unknown-key" | "not-text" | "too-long" | "markup" | "control-character" | "empty" | "syntax" | "bad-argument";
+  | "unknown-key"
+  | "not-text"
+  | "too-long"
+  | "markup"
+  | "control-character"
+  | "empty"
+  | "syntax"
+  | "bad-argument"
+  /** Set by the catalog for a line that tells the user about their file. */
+  | "locked";
 
 export interface OverrideResult {
   /** A Map, so a key named __proto__ is never a property of anything. */
