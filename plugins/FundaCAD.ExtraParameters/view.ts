@@ -37,7 +37,11 @@ type GroupRow = { id: string; name: string };
  *  and collide as a v-for key. Read only, the document keeps what it was given. */
 export function uniqueGroups(groups: GroupRow[] | undefined): GroupRow[] {
   const seen = new Set<string>();
-  return (groups ?? []).filter((g) => !seen.has(g.id) && !!seen.add(g.id));
+  return (groups ?? []).filter((g) => {
+    if (seen.has(g.id)) return false;
+    seen.add(g.id);
+    return true;
+  });
 }
 
 /** The user parameters in the document's group order, ungrouped first. Model parameters (bound to one field) and
