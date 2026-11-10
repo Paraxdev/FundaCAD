@@ -6,6 +6,9 @@ import { ExprError, tokenize } from "./parse";
 const DIGIT = /[0-9]/;
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
+// "10x2,5" is the drawing form of 10 times 2,5 that ui/measure reads; the x is not the start of a name there.
+const isTimesX = (text: string, i: number) =>
+  (text[i] === "x" || text[i] === "X") && /[0-9)]/.test(text[i - 1] ?? "") && DIGIT.test(text[i + 1] ?? "");
 
 /** A comma is a decimal mark when a digit follows it and it starts a number or continues one. After a name or a
  *  closing bracket it stays, so the tokenizer refuses it. A doubtful number (1,5,5) becomes one the grammar refuses. */
@@ -14,7 +17,10 @@ export function commasToPoints(text: string): string {
   let i = 0;
   while (i < text.length) {
     const ch = text[i]!;
-    if (IDENT_START.test(ch)) {
+    if (isTimesX(text, i)) {
+      out += ch;
+      i++;
+    } else if (IDENT_START.test(ch)) {
       let j = i + 1;
       while (j < text.length && IDENT_PART.test(text[j]!)) j++;
       out += text.slice(i, j);

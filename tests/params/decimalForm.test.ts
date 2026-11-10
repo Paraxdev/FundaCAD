@@ -15,6 +15,9 @@ describe("commasToPoints swaps a decimal comma and keeps the length", () => {
     ["2,5mm", "2.5mm"],
     ["1,5e3", "1.5e3"],
     ["1,5 + 2,25 * 3,125 - 7,5", "1.5 + 2.25 * 3.125 - 7.5"],
+    ["10x2,5", "10x2.5"],
+    ["1,5X2,25 mm", "1.5X2.25 mm"],
+    ["(1,5+2)x3,5", "(1.5+2)x3.5"],
     ["12.5", "12.5"],
     ["42", "42"],
     ["", ""],
@@ -23,7 +26,7 @@ describe("commasToPoints swaps a decimal comma and keeps the length", () => {
     expect(commasToPoints(typed)).toHaveLength(typed.length);
   });
 
-  it.each(["w2,5", "a,5", "(2),5", "1, 5", "w,", "3,", "max(w,5)", "a_1,25"])(
+  it.each(["w2,5", "a,5", "(2),5", "1, 5", "w,", "3,", "max(w,5)", "a_1,25", "x2,5", "ax2,5", "10x,5"])(
     "leaves %j for the tokenizer to refuse",
     (typed) => {
       expect(commasToPoints(typed)).toBe(typed);
