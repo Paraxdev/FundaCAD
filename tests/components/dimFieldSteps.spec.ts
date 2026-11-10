@@ -34,6 +34,10 @@ const key = (k: string, mods: KeyboardEventInit = {}, i = 0) => {
   input(i).dispatchEvent(e);
   return e.defaultPrevented;
 };
+const hintOf = (i = 0) => {
+  const ids = input(i).getAttribute("aria-describedby")!.split(" ");
+  return document.getElementById(ids.at(-1)!)!;
+};
 const stepped = (def: Partial<DimFieldDef> = {}) => {
   const commits: Record<string, number>[] = [];
   dim.show([{ name: "d", label: "Distance", step: (fine) => (fine ? 0.1 : 1), ...def }], (v) => commits.push(v));
@@ -151,6 +155,33 @@ describe("DimInput steps a value from the keyboard", () => {
     expect(input().value).toBe("1.022");
   });
 
+  describe("in a unit changed while the field has focus", () => {
+    const inchSteps =
+      "Up and Down change it by 0.02 inches, by 0.002 inches with Shift, Page Up and Page Down by 0.2 inches";
+
+    it("steps in a unit typed into the field, and names the new steps", () => {
+      stepped({ step: (fine) => (fine ? 0.05 : 0.5) });
+      type("1 in");
+      key("ArrowUp");
+      expect(input().value).toBe("1.02");
+      expect(hintOf().textContent).toBe(inchSteps);
+    });
+
+    it("steps in a unit picked from the chip, and names the new steps", () => {
+      stepped({ step: (fine) => (fine ? 0.05 : 0.5) });
+      type("25.4");
+      root()
+        .querySelector(".dim-field .dim-unit")!
+        .dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      const inch = [...document.querySelectorAll(".dim-unit-menu .dim-unit-item")].find((r) => r.textContent === "in")!;
+      inch.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      expect(input().value).toBe("1");
+      key("ArrowUp");
+      expect(input().value).toBe("1.02");
+      expect(hintOf().textContent).toBe(inchSteps);
+    });
+  });
+
   describe("on a round face's size, whose typed prefix picks R, diameter or offset", () => {
     const size = () =>
       dim.show(
@@ -229,11 +260,6 @@ describe("DimInput steps a value from the keyboard", () => {
 });
 
 describe("DimInput names its step keys", () => {
-  const hintOf = (i = 0) => {
-    const ids = input(i).getAttribute("aria-describedby")!.split(" ");
-    return document.getElementById(ids.at(-1)!)!;
-  };
-
   it("describes a stepped field by its unit, then the keys and the steps they take", () => {
     stepped();
     const [chip, hint] = input().getAttribute("aria-describedby")!.split(" ");

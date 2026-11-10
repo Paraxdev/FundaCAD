@@ -156,7 +156,9 @@ interface Field {
   capture?: () => () => void;
   /** Names the step keys, for a field with a `step`. */
   stepHint: HTMLElement | null;
-  /** In the unit shown, taken when the field gains focus so they stay the steps its hint names. */
+  /** In mm or degrees, taken when the field gains focus so a zoom does not move them from the steps its hint names. */
+  baseSteps?: { coarse: number; fine: number };
+  /** The base steps niced in the unit shown, again whenever the unit changes. */
   steps?: { coarse: number; fine: number };
 }
 
@@ -1102,13 +1104,19 @@ export class DimInput {
     if (!(e.ctrlKey || e.metaKey)) e.stopPropagation();
   }
 
-  /** The tool's steps in the unit shown, niced there, so an inch field steps by 0.02 in rather than by 0.5 mm. */
   private takeSteps(f: Field) {
     const step = f.def.step;
     if (!step || !f.stepHint) return;
+    f.baseSteps = { coarse: step(false), fine: step(true) };
+    this.niceSteps(f);
+  }
+
+  /** In the unit shown, so an inch field steps by 0.02 in rather than by 0.5 mm. */
+  private niceSteps(f: Field) {
+    if (!f.baseSteps || !f.stepHint) return;
     const factor = f.unit?.factor ?? 1;
-    const coarse = niceStep(step(false) / factor);
-    const fine = niceStep(step(true) / factor);
+    const coarse = niceStep(f.baseSteps.coarse / factor);
+    const fine = niceStep(f.baseSteps.fine / factor);
     f.steps = { coarse, fine };
     f.stepHint.textContent = t("dim.stepHint", {
       step: spokenValue(coarse, f.unit),
@@ -1228,6 +1236,7 @@ export class DimInput {
     if (!m?.unit || m.unit === f.unit) return;
     f.unit = m.unit;
     if (f.chip) paintChip(f.chip, m.unit);
+    this.niceSteps(f);
   }
 
   private adoptTypedChoice(f: Field) {
@@ -1249,6 +1258,7 @@ export class DimInput {
           const current = tryParseMeasure(this.numberText(f), f.unit);
           f.unit = u;
           if (f.chip) paintChip(f.chip, u);
+          this.niceSteps(f);
           if (current) f.input.value = spellNumber(toUnit(current.value, u));
           this.sizeToContent(f);
           f.input.focus();
