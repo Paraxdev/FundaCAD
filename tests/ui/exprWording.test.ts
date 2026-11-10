@@ -71,9 +71,9 @@ describe("German expression number with two marks", () => {
 describe("no-break spaces in an expression", () => {
   it("are stored as plain spaces in English and German", () => {
     expect({
-      en: storedExpr("width + 12", "."),
-      de: storedExpr("2,5 * breite", ","),
-      deRefused: typedExprProblem("2 + 1,5,5", ","),
+      en: storedExpr("width\u00A0+\u202F12", "."),
+      de: storedExpr("2,5\u2009*\u00A0breite", ","),
+      deRefused: typedExprProblem("2\u00A0+\u00A01,5,5", ","),
     }).toEqual({ en: "width + 12", de: "2.5 * breite", deRefused: expect.stringContaining('"1,5,5"') });
   });
 });

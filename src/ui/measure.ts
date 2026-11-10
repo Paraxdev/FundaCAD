@@ -195,7 +195,7 @@ interface Normalised {
 
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 // French typing and pasted numbers group digits with these, they read as a plain space.
-const NO_BREAK_SPACE = /[    ]/g;
+const NO_BREAK_SPACE = /[\u00A0\u2007\u2009\u202F]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 const TWO_POINT_NUMBER = /\d+(?:\.\d+){2,}(?:[eE][+-]?\d+)?/;
 
