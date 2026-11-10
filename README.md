@@ -94,6 +94,7 @@ Building from source, running the tests and fixing common build problems are in
 5. [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle and the kernel are built
 6. [`docs/MCP.md`](docs/MCP.md), how an AI assistant connects and what it can do
 7. [`docs/PLUGINS.md`](docs/PLUGINS.md), writing plugins and what they may reach
+8. [`docs/I18N.md`](docs/I18N.md), the languages of the interface, adding a line or a language
 
 ## Reporting problems
 

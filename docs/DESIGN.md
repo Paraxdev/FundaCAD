@@ -1373,6 +1373,9 @@ its caret glyph. Use "No X yet" for lists that will fill and
 "X appear here" for passive sources. Technical engine text goes after a plain
 lead; the full text is kept in the console.
 
+New UI text goes through `t()`, with its English line in `src/i18n/locales/en.json` and a translation in every
+other language file; [I18N.md](I18N.md) shows how to add a line or a language.
+
 ## 10. Light and dark themes
 
 `src/ui/theme.ts` applies a theme by writing the colour tokens inline on
