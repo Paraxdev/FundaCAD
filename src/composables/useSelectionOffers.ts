@@ -18,6 +18,7 @@ import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
 import { shippedPluginName } from "../plugins/shipped";
 import { describeSelection } from "../ui/selectionMeasure";
+import { treePickWaiting } from "../ui/treePick";
 
 const pluralOf = (k: keyof typeof KIND_LABEL) => (k === "body" ? "bodies" : `${KIND_LABEL[k]}s`);
 
@@ -45,6 +46,7 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
 export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {}) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
+  const pickWaits = ref(false);
   const words = opts.words ? createSelectionWords(engine) : null;
   const geometry = useGeometryBrowserStore();
   let signature = "";
@@ -93,8 +95,8 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
       : base;
   });
   const speech = computed(() => words?.speech.value ?? null);
-  // A tool's own prompt speaks for the screen, so only a row the brackets lit shows on the readout under it.
-  const lit = computed(() => geometry.litRow !== null);
+  // A tool's own prompt speaks for the screen, so only a row the brackets lit for its waiting pick shows under it.
+  const lit = computed(() => geometry.litRow !== null && pickWaits.value);
 
   function refresh(): boolean {
     const next = readCounts(engine);
@@ -103,6 +105,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
       counts.value = next.counts;
     }
     toolOwns.value = engine.toolOwnsScreen();
+    pickWaits.value = treePickWaiting();
     words?.update(signature, toolOwns.value, escaped);
     escaped = false;
     return Object.keys(next.counts).length > 0;
