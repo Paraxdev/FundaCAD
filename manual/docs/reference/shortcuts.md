@@ -68,6 +68,7 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | Ctrl+Plus, Ctrl+Minus, Ctrl+0 | Interface size larger, smaller, back to 100 percent |
 | Ctrl+Alt+S, Ctrl+Alt+H | Show or hide the items and the history |
 | Home, Shift+Home | Fit view, reset camera |
+| Ctrl+1 to Ctrl+7 | Front, Back, Left, Right, Top, Bottom and Isometric view. They leave a sketch open and work from a value box |
 | F6, Shift+F6 | Next and previous region, such as the tools, Items and the 3D view |
 | Arrow keys | Turn or tilt the view 15°, 5° with Shift. With Line, Rectangle or Circle armed they move the sketch cursor instead |
 | Z, Shift+Z | Next and previous view mode |
@@ -75,6 +76,8 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | Del | Delete the selected face or feature |
 | Esc | Cancel the tool or clear the selection |
 | Tab | While box selecting, choose what the box takes. With a sketch cursor moved by arrows, the next snap. In Extrude, the next profile |
+
+Ctrl+1 to Ctrl+7 go by the key's place on the digit row, so an AZERTY keyboard uses the same keys. Where a digit key types a plus or minus, such as 6 on French AZERTY, Ctrl with that key changes the interface size instead. Pick that view from the Views button, Look in the right-click menu, or the command palette.
 
 ## Drawing by keys
 

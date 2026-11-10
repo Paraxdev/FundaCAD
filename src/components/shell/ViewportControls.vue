@@ -537,7 +537,7 @@ async function screenshot() {
             ><template #icon><Icon name="view-fit" :size="16" /></template>Fit to Model</Button
           >
           <div class="pop-rule"></div>
-          <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.viewport.setStandardView(v.view)"
+          <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.handleAction(v.view)"
             ><template #leading><Icon class="ui-list-row-icon" :name="`view-${v.view}`" :size="18" /></template
           ></ListRow>
         </TabPanel>

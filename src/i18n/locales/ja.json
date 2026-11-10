@@ -1,4 +1,8 @@
 {
+  "camera.standard": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}、{projection, select, ortho {平行投影} other {透視投影}}",
+  "camera.tilted": "{side, select, front {正面} back {背面} left {左} other {右}}、{from, select, above {上} other {下}}から {tilt, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
+  "camera.turned": "{side, select, front {正面} back {背面} left {左} other {右}}、{toward, select, front {正面} back {背面} left {左} other {右}}へ {turn, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
+  "camera.turnedTilted": "{side, select, front {正面} back {背面} left {左} other {右}}、{toward, select, front {正面} back {背面} left {左} other {右}}へ {turn, number}°、{from, select, above {上} other {下}}から {tilt, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
   "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
   "guide.next": "次へ",
@@ -125,5 +129,7 @@
   "stress.support.pinned": "ピン",
   "stress.support.pinnedHint": "穴またはピン。位置は保持され、軸の周りを自由に回転します",
   "stress.support.slider": "スライド",
-  "stress.support.sliderHint": "面に押し当てて保持され、面に沿って自由に滑ります"
+  "stress.support.sliderHint": "面に押し当てて保持され、面に沿って自由に滑ります",
+  "view.command": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}",
+  "view.named": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}"
 }

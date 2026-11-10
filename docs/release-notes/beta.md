@@ -10,6 +10,7 @@
 - On Windows and Linux, the part of FundaCAD that reads your files runs with fewer rights, so a bad file can do less harm.
 
 **Accessibility**
+- Ctrl+1 to Ctrl+7 pick the front, back, left, right, top, bottom and isometric views, and a screen reader hears where the model is seen from after each view change.
 - Interface size goes from 80 to 200 percent, with a readable text floor and Comfortable text.
 - After renaming in Items by keyboard, focus goes back to the row.
 - The new Geometry tab beside Items lists faces, edges and planes, so you can find, hear and pick them without a mouse. Every tool that waits for a face, edge or plane takes a row from it.
@@ -72,6 +73,7 @@
 - The Flatpak and AppImage now use native Wayland, for sharper text at a fractional display scale.
 
 **After you update**
+- Choosing a view no longer closes the sketch you are drawing.
 - In the Flatpak, assistants work in Documents/FundaCAD and ask before using any other path.
 - A STEP file that refers to other documents imports without those references, and a note on the import says so.
 - A plugin that uses a name another plugin already uses is not loaded, and the plugin list names the plugin that owns it.

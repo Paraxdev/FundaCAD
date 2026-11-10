@@ -15,7 +15,8 @@ import { isInspectorEditable } from "../document/numFields";
 import { allCommands } from "./commands";
 import { featureMeta } from "./featureMeta";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
-import { keyHint } from "../input/shortcuts";
+import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
+import { t } from "../i18n";
 import type { Feature, PlaneDef } from "../types";
 import type { EdgeHit, FaceHit } from "../viewport/picking";
 import type { FacePlanePick } from "../features/facePlanePick";
@@ -380,12 +381,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Fit view", shortcut: keyHint("fit"), onClick: () => handleAction("fit") },
       {
         label: "Look",
-        children: [
-          { label: "Isometric", onClick: () => handleAction("iso") },
-          { label: "Top", onClick: () => handleAction("top") },
-          { label: "Front", onClick: () => handleAction("front") },
-          { label: "Right", onClick: () => handleAction("right") },
-        ],
+        children: STANDARD_VIEWS.map((view) => ({
+          label: t("view.named", { view }),
+          shortcut: keyHint(view),
+          onClick: () => handleAction(view),
+        })),
       },
       {
         label: "Show all bodies",

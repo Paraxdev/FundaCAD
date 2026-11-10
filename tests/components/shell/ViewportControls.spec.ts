@@ -106,7 +106,7 @@ describe("ViewportControls popover controls", () => {
     expect(document.querySelector(".vc-pop")?.textContent).toContain("Units");
   });
 
-  it("turns the camera from the Views rows and buttons", async () => {
+  it("turns the camera from the Views rows and buttons, through the actions so a row speaks and keeps a sketch open", async () => {
     const { w, handleAction, setStandardView } = await render(TIER);
     await w.get('[aria-label="Views"]').trigger("click");
     const rows = [...document.querySelectorAll<HTMLButtonElement>(".vc-pop .ui-list-row")];
@@ -116,7 +116,7 @@ describe("ViewportControls popover controls", () => {
     rows[2]!.click();
     byText(".vc-pop .btn", "Default View")!.click();
     byText(".vc-pop .btn", "Fit to Model")!.click();
-    expect([setStandardView.mock.calls, handleAction.mock.calls]).toEqual([[["front"]], [["iso"], ["fit"]]]);
+    expect([setStandardView.mock.calls, handleAction.mock.calls]).toEqual([[], [["front"], ["iso"], ["fit"]]]);
   });
 
   it("ties the Views and Appearance tabs to the page each one shows", async () => {

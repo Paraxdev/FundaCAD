@@ -320,6 +320,8 @@ export class Viewport {
 
   onHit: ((hit: Hit | null, shiftKey: boolean) => void) | null = null;
   onSelectionChange: (() => void) | null = null; // fired when edge/face selection changes
+  /** A click on a view cube face, edge or corner turned the view. */
+  onCubeView: (() => void) | null = null;
   /** The verdict of an area box being dragged, for the prompt, and null when it ends. */
   onAreaDrag: ((mode: AreaMode | null) => void) | null = null;
   onPickDatum: ((id: string) => void) | null = null; // fired when a datum plane quad is clicked
@@ -383,10 +385,14 @@ export class Viewport {
     this.rig = createCameraRig(canvas, rect.width / rect.height);
 
     this.cube = new ViewCube(canvas, this.scene.renderer, {
-      applySide: (side) => this.applyCubeSide(side),
+      applySide: (side) => {
+        this.applyCubeSide(side);
+        this.onCubeView?.();
+      },
       applyDir: (dir, up) => {
         this.rig.setViewDir(dir, up, true);
         this.requestRender();
+        this.onCubeView?.();
       },
       getOverrides: () => this.store?.viewOverrides ?? {},
       beginSetOverride: (side) => this.beginSetOverride(side),
