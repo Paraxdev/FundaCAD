@@ -7,6 +7,7 @@ import { pseudoNodes } from "../../src/i18n/pseudo";
 
 const english = {
   "prefs.language.system": "System ({name})",
+  "prefs.language.systemYours": "System, {name} (your file)",
   "prefs.language.yours": "{name} (your file)",
   "stress.load.force": "Force {value} N on {faces}",
   "stress.setup.faces": "{n, plural, =0 {No faces} one {# face} other {# faces}}",
@@ -20,6 +21,8 @@ const de = {
   "stress.setup.title": "Studie einrichten",
 };
 const fr = {
+  "prefs.language.system": "Système ({name})",
+  "prefs.language.systemYours": "Système, {name} (votre fichier)",
   "prefs.language.yours": "{name} (votre fichier)",
   "stress.setup.title": "Configurer l'étude",
 };
@@ -507,13 +510,68 @@ describe("the choices", () => {
       "system",
       "My study",
       [
-        { value: "system", label: "System (English (your file))" },
+        { value: "system", label: "System, English (your file)" },
         {
           value: "en",
           label: "English (your file)",
           parts: [{ text: "English", lang: "en" }, { text: " (your file)" }],
         },
         { value: "de", label: "Deutsch (maschinell übersetzt)", lang: "de-DE" },
+      ],
+    ]);
+  });
+
+  it("reads cleanly under System with and without a file for the System language, or a file for another", async () => {
+    const own = { "stress.setup.title": "My study" };
+    const systemLabel = async (seed: Record<string, string>, language: string | null, following = false) => {
+      const languages = following ? LANGUAGES.map((l) => ({ ...l, followsSystem: l.code !== "fr" })) : LANGUAGES;
+      const { c } = make({ languages }, seed);
+      await c.init();
+      if (language) await c.setLanguage(language);
+      return c.choices()[0]?.label;
+    };
+    const en = { "fundacad.language.dropin.en": JSON.stringify(own) };
+    const de2 = { "fundacad.language.dropin.de": JSON.stringify(own) };
+    const pl = { "fundacad.language.dropin.pl": JSON.stringify(own) };
+    expect([
+      await systemLabel(en, null),
+      await systemLabel({}, null),
+      await systemLabel(pl, null),
+      await systemLabel(de2, null),
+      await systemLabel(de2, null, true),
+      await systemLabel(en, "fr"),
+      await systemLabel(en, "fr", true),
+      await systemLabel(de2, "fr", true),
+      await systemLabel({}, "fr", true),
+      await systemLabel(pl, "fr", true),
+    ]).toEqual([
+      "System, English (your file)",
+      "System (English)",
+      "System (English)",
+      "System (English)",
+      "System, Deutsch (your file)",
+      "Système, English (votre fichier)",
+      "Système (Deutsch)",
+      "Système, Deutsch (votre fichier)",
+      "Système (Deutsch)",
+      "Système (Deutsch)",
+    ]);
+  });
+
+  it("does not let a file rewrite the System label with a file line", async () => {
+    const seed = {
+      "fundacad.language.dropin.en": JSON.stringify({
+        "prefs.language.systemYours": "Hijacked {name}",
+        "prefs.language.system": "Hijacked ({name})",
+      }),
+    };
+    const { c } = make({}, seed);
+    await c.init();
+    expect([c.choices()[0]?.label, c.dropInStatus()?.skipped]).toEqual([
+      "System, English (your file)",
+      [
+        { key: "prefs.language.systemYours", reason: "locked" },
+        { key: "prefs.language.system", reason: "locked" },
       ],
     ]);
   });

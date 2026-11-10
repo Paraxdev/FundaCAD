@@ -13,7 +13,7 @@ export const DROP_IN_PREFIX = "fundacad.language.dropin.";
 const START_LIMIT_MS = 2000;
 
 /** The lines the catalog itself shows, so an English table without them fails vue-tsc. */
-export type CoreKey = "prefs.language.system" | "prefs.language.yours";
+export type CoreKey = "prefs.language.system" | "prefs.language.systemYours" | "prefs.language.yours";
 
 export interface DropInSource {
   kind: "folder" | "browser" | "none";
@@ -47,7 +47,7 @@ export interface LanguageChoice {
 }
 
 // These lines tell the user that their own file is in use and what it changed, so that file cannot rewrite them.
-const LOCKED = /^prefs\.language\.(system|yours|inUse|skipped|skip|more|remove|safeMode|error\..+)$/;
+const LOCKED = /^prefs\.language\.(system|systemYours|yours|inUse|skipped|skip|more|remove|safeMode|error\..+)$/;
 
 // A dropped in line cannot hold a control character, so this marks where the name lands in the formatted label.
 const NAME_MARK = "\u0000";
@@ -316,7 +316,6 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     const hasFile = (code: string) => dropInCodes.value.includes(code);
     const systemLanguage = systemCode();
     const systemName = languageOf(systemLanguage)?.native ?? "English";
-    const system = hasFile(systemLanguage) ? lookup("prefs.language.yours", { name: systemName }) : systemName;
     const shipped = deps.languages.map((l) => {
       const name = l.machine ? `${l.native} (${l.machine})` : l.native;
       return hasFile(l.code) ? yours(l.code, name, l.bcp47) : { value: l.code, label: name, lang: l.bcp47 };
@@ -328,7 +327,12 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       ? [{ value: PSEUDO, label: PSEUDO_LANGUAGE.native, lang: PSEUDO_LANGUAGE.bcp47 }]
       : [];
     return [
-      { value: "system", label: lookup("prefs.language.system", { name: system }) },
+      {
+        value: "system",
+        label: hasFile(systemLanguage)
+          ? lookup("prefs.language.systemYours", { name: systemName })
+          : lookup("prefs.language.system", { name: systemName }),
+      },
       ...shipped,
       ...own,
       ...pseudoChoice,
