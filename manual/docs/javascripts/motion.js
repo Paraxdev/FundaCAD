@@ -10,7 +10,7 @@
   }
 
   function setUp(img) {
-    if (img.dataset.fcStill) return;
+    if (img.dataset.fcStill || !/-still\.png$/.test(img.src)) return;
     img.dataset.fcStill = img.src;
     img.dataset.fcGif = img.src.replace(/-still\.png$/, ".gif");
     const button = document.createElement("button");

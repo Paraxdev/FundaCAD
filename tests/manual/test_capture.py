@@ -116,9 +116,11 @@ class Manifests(unittest.TestCase):
             text = page.read_text(encoding="utf-8")
             rel = page.relative_to(REPO).as_posix()
             wrong += [f"{rel} shows {src}" for src, _ in picture_refs(text) if src.endswith(".gif")]
-            for src in re.findall(r"!\[[^\]]*\]\(([^)\s]+-still\.png)\)(\{[^}]*\})?", text):
-                if ".fc-motion" not in src[1]:
-                    wrong.append(f"{rel} shows {src[0]} without {{ .fc-motion }}")
+            for src, attrs in re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)(\{[^}]*\})?", text):
+                if src.endswith("-still.png") and ".fc-motion" not in attrs:
+                    wrong.append(f"{rel} shows {src} without {{ .fc-motion }}")
+                if ".fc-motion" in attrs and not src.endswith("-still.png"):
+                    wrong.append(f"{rel} marks {src} .fc-motion, but it is no still")
         self.assertEqual(wrong, [])
 
     def test_the_still_of_a_gif_is_a_png_beside_it(self):
