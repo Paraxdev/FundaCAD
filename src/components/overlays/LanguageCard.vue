@@ -7,6 +7,7 @@ import {
   languageChoices,
   languageFileSource,
   languageFileStatus,
+  languageMachineTranslated,
   languageSetting,
   loadLanguageFile,
   openLanguageFolder,
@@ -45,6 +46,7 @@ const source = languageFileSource();
 const locked = safeMode() !== null;
 const problem = ref<DropInFileError | null>(null);
 const status = computed(() => languageFileStatus());
+const machine = computed(() => languageMachineTranslated());
 
 const fileError = computed(() => {
   const key = problem.value
@@ -99,13 +101,13 @@ async function reload() {
       <Select
         id="prefs-language"
         :label="t('prefs.language.title')"
-        aria-describedby="prefs-language-hint"
+        :aria-describedby="machine ? 'prefs-language-hint' : undefined"
         :model-value="languageSetting()"
         :options="languageChoices()"
         @update:model-value="pick"
       />
     </div>
-    <p id="prefs-language-hint" class="pref-hint">{{ t("prefs.language.hint") }}</p>
+    <p v-if="machine" id="prefs-language-hint" class="pref-hint">{{ t("prefs.language.hint") }}</p>
     <div v-if="source === 'folder' || locked" class="prefs-actions">
       <Button
         class="prefs-language-open"

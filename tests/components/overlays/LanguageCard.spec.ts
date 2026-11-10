@@ -107,6 +107,23 @@ describe("the Language card", () => {
     expect(Object.values(de).filter((v) => !v.includes("{") && card.includes(v))).toEqual([]);
   });
 
+  it("says machine translated text may read oddly only under a machine translated language", async () => {
+    await render();
+    const shown = () => [
+      text("#prefs-language-hint"),
+      document.querySelector("#prefs-language")!.getAttribute("aria-describedby"),
+    ];
+    const english = shown();
+    await pick("es");
+    const spanish = shown();
+    await pick("en");
+    expect([english, spanish, shown()]).toEqual([
+      [null, null],
+      [line(es, "prefs.language.hint", "es"), "prefs-language-hint"],
+      [null, null],
+    ]);
+  });
+
   it("goes back to English under System", async () => {
     const w = await render();
     await pick("ja");
@@ -114,7 +131,7 @@ describe("the Language card", () => {
     await pick(null);
     expect([text(".pref-title"), text("#prefs-language-hint"), document.documentElement.lang]).toEqual([
       en["prefs.language.title"],
-      en["prefs.language.hint"],
+      null,
       "en",
     ]);
     expect(localStorage.getItem("fundacad.language")).toBe("system");
@@ -325,7 +342,7 @@ describe("the user's own file in the browser", () => {
       },
       "pl",
       "Język",
-      en["prefs.language.hint"],
+      null,
       undefined,
       [
         ["polski", "pl"],

@@ -43,6 +43,7 @@ export const openLanguageFolder = catalog.openDropInFolder;
 export const languageFileSource = catalog.dropInKind;
 export const languageSetting = catalog.setting;
 export const activeLanguage = catalog.active;
+export const languageMachineTranslated = catalog.machineTranslated;
 export const languageChoices = catalog.choices;
 export const languageFileStatus = catalog.dropInStatus;
 export const onLanguageChange = catalog.onChange;

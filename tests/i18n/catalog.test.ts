@@ -238,6 +238,31 @@ describe("picking a language", () => {
   });
 });
 
+describe("machine translation", () => {
+  it("is the case for a shipped machine translated language and a regional file on one, not for English or the user's own", async () => {
+    const seed = {
+      "fundacad.language.dropin.de-AT": "{}",
+      "fundacad.language.dropin.pl": "{}",
+      "fundacad.language.dropin.en": "{}",
+    };
+    const { c } = make({}, seed);
+    await c.init();
+    const seen: [string, boolean][] = [];
+    for (const code of ["system", "fr", "de-AT", "pl", "en", "de"]) {
+      await c.setLanguage(code);
+      seen.push([code, c.machineTranslated()]);
+    }
+    expect(seen).toEqual([
+      ["system", false],
+      ["fr", true],
+      ["de-AT", true],
+      ["pl", false],
+      ["en", false],
+      ["de", true],
+    ]);
+  });
+});
+
 describe("the stored setting", () => {
   it.each(["pt", "PL", "../de", "", "de.json", "pl"])("%j, unknown or invalid, reads as System", async (stored) => {
     const { c, pageLang } = make({}, { [LANGUAGE_KEY]: stored });

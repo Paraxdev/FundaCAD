@@ -127,6 +127,10 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
   const languageOf = (code: string): Language | undefined =>
     code === PSEUDO ? (deps.dev ? PSEUDO_LANGUAGE : undefined) : deps.languages.find((l) => l.code === code);
 
+  // The shipped file whose lines are in use, a regional code's base included, as loadShipped reads it.
+  const shippedLanguage = (code: string): Language | undefined =>
+    deps.languages.find((l) => l.code === code) ?? deps.languages.find((l) => l.code === code.split("-")[0]);
+
   const known = (value: string) =>
     value === "system" || languageOf(value) !== undefined || dropInCodes.value.includes(value);
 
@@ -342,6 +346,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     dropInKind: (): DropInSource["kind"] => deps.dropIns.kind,
     setting: (): string => setting.value,
     active: (): { code: string; bcp47: string } => ({ code: active.value.code, bcp47: active.value.bcp47 }),
+    machineTranslated: (): boolean => shippedLanguage(active.value.code)?.machine !== undefined,
     choices,
     dropInStatus: (): DropInStatus | null => active.value.status,
     onChange(listener: () => void): () => void {
