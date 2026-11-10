@@ -2,7 +2,7 @@
 // wait is open, none after: a wait used to start a second loop from inside the
 // first, so callbacks doubled every frame until the window crashed.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import * as THREE from "three";
 import GuideLayer from "../../../src/components/overlays/GuideLayer.vue";
@@ -11,6 +11,9 @@ import { setLanguage } from "../../../src/i18n";
 import type { Engine } from "../../../src/app/engine";
 import { GuideSession } from "../../../src/ui/guide/guideSession";
 import { emptySnapshot, type Snapshot } from "../../../src/ui/guide/wait";
+import { announce } from "../../../src/ui/announce";
+
+vi.mock(import("../../../src/ui/announce"), async (orig) => ({ ...(await orig()), announce: vi.fn() }));
 
 enableAutoUnmount(afterEach);
 
@@ -20,6 +23,7 @@ const realRaf = globalThis.requestAnimationFrame;
 const realCaf = globalThis.cancelAnimationFrame;
 
 beforeEach(() => {
+  vi.mocked(announce).mockClear();
   queue = new Map();
   globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
     const id = nextId++;
@@ -225,5 +229,45 @@ describe("GuideLayer bubble", () => {
     await tick();
     expect(document.querySelector(".guide-caption")!.textContent).toBe("There");
     expect(document.querySelector("[data-guide-keys]")).toBeNull();
+  });
+});
+
+describe("GuideLayer speech", () => {
+  const said = () => vi.mocked(announce).mock.calls;
+  const at = { ui: "guide-spec-target" };
+
+  it("says a new step once with its counter, caption and keys, through announce and not a live bubble", async () => {
+    const g = setup();
+    g.guide.apply([
+      { kind: "highlight", seq: 1, step: 1, of: 2, target: at, caption: "Pick the edge", keys: "press F6" },
+      { kind: "wait", seq: 2, until: "tool" },
+    ]);
+    await tick();
+    for (let i = 0; i < 5; i++) frame();
+    g.setTool("Fillet / Chamfer");
+    frame();
+    await tick();
+    expect(said()).toEqual([["Step 1 of 2. Pick the edge. With keys: press F6", "polite", { key: "guide" }]]);
+    expect(document.querySelector(".guide-bubble")!.hasAttribute("aria-live")).toBe(false);
+  });
+
+  it("says a step without keys as its caption alone, nothing on Next, and the next step when it comes", async () => {
+    const g = setup();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: at, caption: "Here" }]);
+    await tick();
+    g.guide.next();
+    await tick();
+    g.guide.apply([{ kind: "highlight", seq: 2, step: 2, of: 2, target: at, caption: "Now there." }]);
+    await tick();
+    expect(said().map((c) => c[0])).toEqual(["Guide. Here.", "Step 2 of 2. Now there."]);
+  });
+
+  it("says the first step again when a new guide starts its count over", async () => {
+    const g = setup();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: at, caption: "Here" }]);
+    g.guide.reset();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: at, caption: "Again" }]);
+    await tick();
+    expect(said().map((c) => c[0])).toEqual(["Guide. Here.", "Guide. Again."]);
   });
 });
