@@ -193,4 +193,3 @@ export function selectionCountText(sel: SelectionCounts): string {
   const kind = primaryKind(sel);
   return kind ? t(COUNT_KEYS[kind], { n: sel[kind] ?? 0 }) : "";
 }
-
