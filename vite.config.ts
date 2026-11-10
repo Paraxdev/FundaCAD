@@ -1,4 +1,5 @@
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vue from "@vitejs/plugin-vue";
 
@@ -14,6 +15,14 @@ export default defineConfig({
     // on a container with a modest fs.inotify.max_user_watches, crashes the dev
     // server with ENOSPC.
     watch: { ignored: ["**/src-tauri/target/**", "**/target/**", "**/target-*/**", "**/third_party/**"] },
+    // A worktree links node_modules from another checkout, and the link's real path sits outside this root, so without
+    // it the font files a stylesheet names are refused and the page falls back to a system face.
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        realpathSync(fileURLToPath(new URL("./node_modules", import.meta.url))),
+      ],
+    },
   },
   // The plugin sandbox imports its bootstrap with `import`, from inside a blob
   // module worker, so the worker chunk has to BE an ES module. Vite's default
