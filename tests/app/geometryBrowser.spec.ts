@@ -1011,7 +1011,11 @@ describe("pickBlocked", () => {
 });
 
 describe("stepBlocked", () => {
-  const waitForRow = () => awaitTreePick(() => true, () => {});
+  const waitForRow = () =>
+    awaitTreePick(
+      () => true,
+      () => {},
+    );
   afterEach(() => resetTreePicks());
 
   function underTool() {

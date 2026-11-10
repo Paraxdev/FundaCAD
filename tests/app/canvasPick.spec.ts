@@ -9,7 +9,13 @@ import { useSelectionStore } from "../../src/stores/selection";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
 import { announce } from "../../src/ui/announce";
 import { describePick } from "../../src/ui/describePick";
-import { awaitTreePick, endRewoundPick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
+import {
+  awaitTreePick,
+  endRewoundPick,
+  resetTreePicks,
+  type TreePick,
+  type TreePickAnswer,
+} from "../../src/ui/treePick";
 import { edge, land, result, rig, topology } from "./geometryBrowserRig";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {}, dismissToastsSaying: () => {} }));
@@ -642,7 +648,9 @@ describe("a tool waiting for a pick", () => {
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
     expect(r.list.litRow).toBeNull();
     expect(r.list.cursor).toBe("f:body1:1");
-    expect(said()).toEqual([`${describePick(r.list.rows[1]!.facts).label} of ${r.list.bodies.find((b) => b.id === "body1")!.name} picked`]);
+    expect(said()).toEqual([
+      `${describePick(r.list.rows[1]!.facts).label} of ${r.list.bodies.find((b) => b.id === "body1")!.name} picked`,
+    ]);
     key("]");
     expect(r.list.cursor).toBe("f:body1:2");
     expect(r.list.litRow?.key).toBe("f:body1:2");

@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { TextOnFaceTool } from "../../src/features/textOnFaceTool";
-import { offerPicks, resetTreePicks, routeTreeClick, treePickWaiting, type NamedPick, type TreePick } from "../../src/ui/treePick";
+import {
+  offerPicks,
+  resetTreePicks,
+  routeTreeClick,
+  treePickWaiting,
+  type NamedPick,
+  type TreePick,
+} from "../../src/ui/treePick";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
