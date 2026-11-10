@@ -6,6 +6,11 @@ import { jsonErrorIndex, positionOf, type TextPosition } from "./jsonError";
 
 export const MAX_OVERRIDE_BYTES = 256 * 1024;
 export const MAX_LINE_CHARS = 2000;
+export const MAX_PLUGIN_LINES = 2000;
+
+// The id part is the plugin id pattern of src/plugins/manifest.ts, kept here so i18n imports nothing from plugins.
+export const PLUGIN_KEY = /^([A-Za-z][A-Za-z0-9-]{0,30}(?:\.[A-Za-z][A-Za-z0-9-]{0,30})?):(.+)$/;
+export const PLUGIN_LINE_KEY = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 
 export type SkipReason =
   | "unknown-key"
@@ -22,6 +27,8 @@ export type SkipReason =
 export interface OverrideResult {
   /** A Map, so a key named __proto__ is never a property of anything. */
   lines: Map<string, string>;
+  /** Lines for a plugin, keyed `<lower case id>:<key>`. */
+  pluginLines: Map<string, string>;
   /** arg names the value a bad-argument line asks for. */
   skipped: { key: string; reason: SkipReason; arg?: string }[];
   /** Set when the whole file was refused. */
@@ -44,13 +51,14 @@ const CONTROL =
 // A skipped key is shown in the card as the file wrote it, so it must not reorder or break the text around it.
 export const shownKey = (key: string): string => key.replace(new RegExp(CONTROL, "gu"), "\ufffd").slice(0, 80);
 
-export function checkLine(value: string, englishValue: string): SkipReason | null {
+export function checkLine(value: string, englishValue?: string): SkipReason | null {
   if (value.length > MAX_LINE_CHARS) return "too-long";
   if (MARKUP.test(value)) return "markup";
   if (CONTROL.test(value)) return "control-character";
   if (BLANK.test(value)) return "empty";
   try {
     if (buildsMarkup(parseMessage(value), false)) return "markup";
+    if (englishValue === undefined) return null;
     return extraArgument(value, englishValue) === undefined ? null : "bad-argument";
   } catch {
     return "syntax";
@@ -72,7 +80,7 @@ function extraArgument(value: string, englishValue: string): string | undefined 
 }
 
 export function parseOverrides(text: string, english: Readonly<Record<string, string>>): OverrideResult {
-  const result: OverrideResult = { lines: new Map(), skipped: [] };
+  const result: OverrideResult = { lines: new Map(), pluginLines: new Map(), skipped: [] };
   // Measured before the BOM goes, so the limit matches the bytes the desktop reads from disk.
   if (new TextEncoder().encode(text).length > MAX_OVERRIDE_BYTES) return { ...result, error: "too-large" };
   const body = text.startsWith("\ufeff") ? text.slice(1) : text;
@@ -86,6 +94,17 @@ export function parseOverrides(text: string, english: Readonly<Record<string, st
   const entries = Object.entries(data);
   if (entries.some(([, value]) => value !== null && typeof value === "object")) return { ...result, error: "not-flat" };
   for (const [key, value] of entries) {
+    const plugin = Object.hasOwn(english, key) ? null : PLUGIN_KEY.exec(key);
+    if (plugin) {
+      const reason = !PLUGIN_LINE_KEY.test(plugin[2]!)
+        ? "unknown-key"
+        : typeof value !== "string"
+          ? "not-text"
+          : checkLine(value);
+      if (reason) result.skipped.push({ key, reason });
+      else result.pluginLines.set(`${plugin[1]!.toLowerCase()}:${plugin[2]}`, value as string);
+      continue;
+    }
     const base = Object.hasOwn(english, key) ? english[key] : undefined;
     let reason: SkipReason | null;
     if (base === undefined) reason = "unknown-key";

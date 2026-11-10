@@ -23,9 +23,10 @@ function sized(total: number, prefix = ""): string {
 
 describe("parseOverrides", () => {
   it("reads an empty file, one line and many", () => {
-    expect(parseOverrides("{}", english)).toEqual({ lines: new Map(), skipped: [] });
+    expect(parseOverrides("{}", english)).toEqual({ lines: new Map(), pluginLines: new Map(), skipped: [] });
     expect(parseOverrides('{"stress.setup.title": "Belastung"}', english)).toEqual({
       lines: new Map([["stress.setup.title", "Belastung"]]),
+      pluginLines: new Map(),
       skipped: [],
     });
     const many = JSON.stringify({
@@ -39,6 +40,7 @@ describe("parseOverrides", () => {
         ["stress.setup.faces", "{n, plural, one {# Fläche} other {# Flächen}}"],
         ["stress.load.force", "{name}: {force, number} N"],
       ]),
+      pluginLines: new Map(),
       skipped: [],
     });
   });
@@ -46,7 +48,11 @@ describe("parseOverrides", () => {
   it("keeps nothing of a first file when a second is read", () => {
     const first = parseOverrides('{"stress.setup.title": "Belastung", "stress.load.force": "{force} N"}', english);
     const second = parseOverrides('{"stress.setup.faces": "{n, plural, other {# faces}}"}', english);
-    expect(second).toEqual({ lines: new Map([["stress.setup.faces", "{n, plural, other {# faces}}"]]), skipped: [] });
+    expect(second).toEqual({
+      lines: new Map([["stress.setup.faces", "{n, plural, other {# faces}}"]]),
+      pluginLines: new Map(),
+      skipped: [],
+    });
     expect(first.lines).toEqual(
       new Map([
         ["stress.setup.title", "Belastung"],
@@ -58,9 +64,10 @@ describe("parseOverrides", () => {
   it("takes a file of exactly the byte limit and refuses one byte more, a BOM included", () => {
     const kept = {
       lines: new Map([["stress.setup.title", "Belastung"]]),
+      pluginLines: new Map(),
       skipped: [{ key: "stress.setup.faces", reason: "too-long" }],
     };
-    const refused = { lines: new Map(), skipped: [], error: "too-large" };
+    const refused = { lines: new Map(), pluginLines: new Map(), skipped: [], error: "too-large" };
     expect(MAX_OVERRIDE_BYTES).toBe(262144);
     expect(parseOverrides(sized(262144), english)).toEqual(kept);
     expect(parseOverrides(sized(262145), english)).toEqual(refused);
@@ -71,6 +78,7 @@ describe("parseOverrides", () => {
   it("reads past a leading BOM", () => {
     expect(parseOverrides('\ufeff{"stress.setup.title": "Belastung"}', english)).toEqual({
       lines: new Map([["stress.setup.title", "Belastung"]]),
+      pluginLines: new Map(),
       skipped: [],
     });
   });
@@ -87,6 +95,7 @@ describe("parseOverrides", () => {
     for (const [text, at] of cases) {
       expect(parseOverrides(text, english), JSON.stringify(text)).toEqual({
         lines: new Map(),
+        pluginLines: new Map(),
         skipped: [],
         error: "not-json",
         at,
@@ -105,7 +114,12 @@ describe("parseOverrides", () => {
       '{"stress.setup.title": "Belastung", "stress.load.force": ["{force} N"]}',
     ];
     for (const text of files) {
-      expect(parseOverrides(text, english), text).toEqual({ lines: new Map(), skipped: [], error: "not-flat" });
+      expect(parseOverrides(text, english), text).toEqual({
+        lines: new Map(),
+        pluginLines: new Map(),
+        skipped: [],
+        error: "not-flat",
+      });
     }
   });
 
@@ -116,6 +130,7 @@ describe("parseOverrides", () => {
       '"stress.load.force": null, "stress.setup.faces": true, "toString": "x"}';
     expect(parseOverrides(text, english)).toEqual({
       lines: new Map(),
+      pluginLines: new Map(),
       skipped: [
         { key: "__proto__", reason: "unknown-key" },
         { key: "stress.setup.titel", reason: "unknown-key" },
@@ -137,6 +152,7 @@ describe("parseOverrides", () => {
     });
     expect(parseOverrides(text, english)).toEqual({
       lines: new Map([["stress.setup.faces", "{n, plural, one {# Fläche} other {# Flächen}}"]]),
+      pluginLines: new Map(),
       skipped: [
         { key: "stress.setup.title", reason: "markup" },
         { key: "stress.load.force", reason: "bad-argument", arg: "body" },
@@ -253,5 +269,92 @@ describe("shownKey", () => {
       "\u200Eg h",
       "i\uFFFDj\uFFFDk",
     ]);
+  });
+});
+
+describe("plugin lines in a user's file", () => {
+  const parse = (data: Record<string, unknown>) => parseOverrides(JSON.stringify(data), english);
+
+  it("go to pluginLines under the lower cased id, a core line stays apart", () => {
+    expect(
+      parse({
+        "stress.setup.title": "Belastung",
+        "Acme.Rivets:menu.file.send": "An Drucker senden",
+        "Zeta-9:tool.extrude": "Ziehen",
+        "Solo:tool.extrude": "Allein",
+      }),
+    ).toEqual({
+      lines: new Map([["stress.setup.title", "Belastung"]]),
+      pluginLines: new Map([
+        ["acme.rivets:menu.file.send", "An Drucker senden"],
+        ["zeta-9:tool.extrude", "Ziehen"],
+        ["solo:tool.extrude", "Allein"],
+      ]),
+      skipped: [],
+    });
+  });
+
+  it("list a refused value with its reason and keep a good sibling", () => {
+    const result = parse({
+      "Acme.Rivets:menu.file.a": "<b>x</b>",
+      "Acme.Rivets:menu.file.b": 17,
+      "Acme.Rivets:menu.file.c": "ok {n, plural, one {#} other",
+      "Acme.Rivets:menu.file.d": "x".repeat(MAX_LINE_CHARS + 1),
+      "Acme.Rivets:menu.file.e": "x".repeat(MAX_LINE_CHARS),
+      "Acme.Rivets:menu.file.f": "a\u0007b",
+      "Acme.Rivets:menu.file.g": "  ",
+    });
+    expect(result.skipped).toEqual([
+      { key: "Acme.Rivets:menu.file.a", reason: "markup" },
+      { key: "Acme.Rivets:menu.file.b", reason: "not-text" },
+      { key: "Acme.Rivets:menu.file.c", reason: "syntax" },
+      { key: "Acme.Rivets:menu.file.d", reason: "too-long" },
+      { key: "Acme.Rivets:menu.file.f", reason: "control-character" },
+      { key: "Acme.Rivets:menu.file.g", reason: "empty" },
+    ]);
+    expect([...result.pluginLines.keys()]).toEqual(["acme.rivets:menu.file.e"]);
+  });
+
+  it("read a bad id or a bad key as an unknown line", () => {
+    const keys = ["a:b", "1a:tool.x", "Acme.Rivets.Extra:tool.x", "Acme.Rivets:Tool.x", "Acme.Rivets:", ":tool.x"];
+    const result = parse(Object.fromEntries(keys.map((k) => [k, "Text"])));
+    expect(result.skipped).toEqual(keys.map((key) => ({ key, reason: "unknown-key" })));
+    expect(result.pluginLines.size).toBe(0);
+  });
+
+  it("keep a __proto__ key as a plain line", () => {
+    const result = parseOverrides('{"Acme.Rivets:__proto__.x": "T", "__proto__": "T"}', english);
+    expect(result.skipped.map((s) => s.reason)).toEqual(["unknown-key", "unknown-key"]);
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
+  });
+
+  it("accept and refuse the same ids as a plugin manifest", async () => {
+    const { parseManifest } = await import("../../src/plugins/manifest");
+    const ids = [
+      "Acme.Rivets",
+      "Acme",
+      "a",
+      "A1-b.C-2",
+      "Acme.Rivets.X",
+      "1Acme",
+      "Acme.",
+      ".Rivets",
+      "Ac_me",
+      "x".repeat(31),
+      "x".repeat(32),
+      `${"x".repeat(31)}.${"y".repeat(31)}`,
+    ];
+    const viaLines = ids.map((id) => parse({ [`${id}:tool.x`]: "T" }).pluginLines.size === 1);
+    const manifestBase = { name: "N", version: "1.0.0", kind: "process", summary: "S", grants: ["document.read"] };
+    const manifest = (id: string) => parseManifest({ ...manifestBase, id });
+    expect(viaLines).toEqual(ids.map((id) => manifest(id).ok));
+  });
+});
+
+describe("checkLine without English", () => {
+  it("skips only the argument check", () => {
+    expect(checkLine("{extra} {n}")).toBeNull();
+    expect(checkLine("{extra}", "none")).toBe("bad-argument");
+    expect(checkLine("<i>")).toBe("markup");
   });
 });

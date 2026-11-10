@@ -4,10 +4,12 @@ import { createCatalog } from "./catalog";
 import { pickDropInSource } from "./dropIns";
 import { decimalMarkOf, type DecimalMark } from "./format";
 import { SHIPPED } from "./languages";
+import { createPluginText } from "./pluginLines";
 import en from "./locales/en.json";
 
 export type MessageKey = keyof typeof en;
 export type { DecimalMark, MessageArgs } from "./format";
+export type { PluginText } from "./pluginLines";
 
 function pageStorage(): Storage | null {
   try {
@@ -37,6 +39,8 @@ const catalog = createCatalog<MessageKey>({
 export const t = catalog.t;
 // The English line whatever the language, for a name a person may also type.
 export const tEnglish = catalog.english;
+// A translator bound to one plugin's own lines, see docs/I18N.md.
+export const pluginText = createPluginText({ active: catalog.active, pluginDropIn: catalog.pluginDropIn });
 export const initLanguage = catalog.init;
 export const setLanguage = catalog.setLanguage;
 export const reloadLanguageFiles = catalog.reloadDropIns;

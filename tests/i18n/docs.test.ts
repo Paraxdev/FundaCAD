@@ -6,7 +6,7 @@ import readme from "../../README.md?raw";
 import manual from "../../manual/docs/reference/preferences.md?raw";
 import en from "../../src/i18n/locales/en.json";
 
-const KEY = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
+const KEY = /^([A-Za-z][A-Za-z0-9.-]*:)?[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 // Only the roots globbed into repoFiles; a path under another root goes unchecked.
 const REPO_PATH = /`((?:src|src-tauri\/src|scripts|tests|docs|manual\/docs|e2e)\/[^`\s<>*]+?)(?::\d+)?`/g;
 
