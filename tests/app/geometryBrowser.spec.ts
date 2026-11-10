@@ -1388,13 +1388,26 @@ describe("a tool waiting for a pick", () => {
     expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
   });
 
-  it("forgets a light with the document, so the second one's tool hover stays", async () => {
+  it("puts out a light with its document, and leaves the second one's tool hover alone", async () => {
     const r = await waiting();
     r.browser.hover(r.list.rows[1]!);
     r.store.newDocument();
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
     r.viewport.hoverPick.mockClear();
     r.browser.hover(null);
+    r.store.newDocument();
     expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("puts out an edge stepped to with no tool running when another document opens", async () => {
+    const r = await waiting();
+    r.release();
+    r.host.toolOwnsScreen.mockReturnValue(false);
+    r.host.toolBusy.mockReturnValue(false);
+    r.browser.setKind("edges");
+    r.browser.hover(r.list.rows[2]!);
+    r.store.newDocument();
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "edge", edge: r.wires[2] }], [null]]);
   });
 
   it("a step selects only, so a waiting tool is never fed by Next Face", async () => {

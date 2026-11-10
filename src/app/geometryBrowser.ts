@@ -402,7 +402,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     cache.clear();
     failedKey = null;
     stepped = false;
-    lit = null;
+    // The edge emphasis outlives a model swap, so a light left on would draw over the next document.
+    putOutLight();
     rowsKey = null;
     rowsStale = true;
     edgeRefs = new Map();
