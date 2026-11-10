@@ -93,6 +93,8 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
       : base;
   });
   const speech = computed(() => words?.speech.value ?? null);
+  // A tool's own prompt speaks for the screen, so only a row the brackets lit shows on the readout under it.
+  const lit = computed(() => geometry.litRow !== null);
 
   function refresh(): boolean {
     const next = readCounts(engine);
@@ -120,7 +122,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
   // A screen reader's click on a row may send no pointer or key release.
   if (words)
     watch(
-      () => [useSelectionStore().rows, useGeometryBrowserStore().selected],
+      () => [useSelectionStore().rows, useGeometryBrowserStore().selected, geometry.litRow],
       () => wake(),
     );
 
@@ -198,6 +200,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     summary,
     readout,
     speech,
+    lit,
     toolOwns,
     run,
     look,

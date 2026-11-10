@@ -38,7 +38,7 @@ These keys are one way to pick, among clicking in the view and the [Geometry tab
 | Space | Add or remove the lit row. While a tool waits for a pick, give it the lit row. |
 | Esc | Put the light out and clear the selection. |
 
-The brackets walk the Geometry tab's list, with its body and its filters, and wrap at the ends. The readout shows the lit row until the light goes out, and moving the pointer over the view puts it out. A tool that is waiting for a face, edge or plane takes the brackets too, and Enter or Space then gives it the lit row, which puts the light out. What it took is spoken, and a refusal is spoken with the kinds it takes. While a sketch is open, a choice menu is up, or a tool is open that takes no rows, these keys do nothing.
+The brackets walk the Geometry tab's list, with its body and its filters, and wrap at the ends. The readout shows the lit row until the light goes out, with a tool waiting too, and moving the pointer over the view puts it out. A tool that is waiting for a face, edge or plane takes the brackets too, and Enter or Space then gives it the lit row, which puts the light out. What it took is spoken, and a refusal is spoken with the kinds it takes. While a sketch is open, a choice menu is up, or a tool is open that takes no rows, these keys do nothing.
 
 They work with Single key shortcuts off, as long as focus is on the 3D view. With it on, they also work when focus is nowhere in particular, say after a click or a finished tool.
 

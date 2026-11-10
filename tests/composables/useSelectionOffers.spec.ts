@@ -897,6 +897,18 @@ describe("the readout and the canvas keys' light", () => {
     expect(t.sel.readout.value).toBe(selected);
   });
 
+  it("reports whether the cursor row is lit, for the readout under a tool", async () => {
+    const t = await listed();
+    expect(t.sel.lit.value).toBe(false);
+    t.list.setCursor("f:body1:2");
+    expect(t.sel.lit.value).toBe(false);
+    t.list.setLit(true);
+    expect(t.sel.lit.value).toBe(true);
+    expect(t.sel.readout.value).toBe(describePick(t.list.rows[2]!.facts).readout);
+    t.list.setLit(false);
+    expect(t.sel.lit.value).toBe(false);
+  });
+
   it("does not take the readout for a row that is only the cursor", async () => {
     const t = await listed();
     t.list.setCursor("f:body1:1");

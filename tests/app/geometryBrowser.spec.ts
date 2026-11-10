@@ -1329,6 +1329,74 @@ describe("a tool waiting for a pick", () => {
     expect(n).toBe(1);
   });
 
+  it("lights a row and puts it out while a pick waits, as the tool's own hover is left alone", async () => {
+    const r = await waiting();
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }]]);
+    r.browser.hover(r.list.rows[2]!);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([
+      [{ kind: "face", faceId: 8 }],
+      [{ kind: "face", faceId: 9 }],
+      [null],
+    ]);
+    r.viewport.hoverPick.mockClear();
+    r.browser.hover(null);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("lights an edge row the same way, as that edge", async () => {
+    const r = await waiting();
+    r.browser.setKind("edges");
+    r.browser.hover(r.list.rows[2]!);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "edge", edge: r.wires[2] }]]);
+  });
+
+  it("lights nothing while the model builds under a pick, and puts out what was lit", async () => {
+    const r = await waiting();
+    r.viewport.modelUnsettled = true;
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+    r.viewport.modelUnsettled = false;
+    r.browser.hover(r.list.rows[1]!);
+    r.viewport.modelUnsettled = true;
+    r.browser.hover(r.list.rows[0]!);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
+  });
+
+  it("lights nothing under a tool that waits for no pick, and under a sketch", async () => {
+    const r = await waiting();
+    r.release();
+    r.browser.hover(r.list.rows[1]!);
+    r.browser.hover(null);
+    awaitTreePick(
+      () => true,
+      () => {},
+    );
+    r.host.sketch.active = true;
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("puts out a light the pick's taker outlived, a sketch having opened since", async () => {
+    const r = await waiting();
+    r.browser.hover(r.list.rows[1]!);
+    r.release();
+    r.host.sketch.active = true;
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
+  });
+
+  it("forgets a light with the document, so the second one's tool hover stays", async () => {
+    const r = await waiting();
+    r.browser.hover(r.list.rows[1]!);
+    r.store.newDocument();
+    r.viewport.hoverPick.mockClear();
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
   it("a step selects only, so a waiting tool is never fed by Next Face", async () => {
     const r = await waiting();
     expect(r.browser.pickRows([r.list.rows[0]!], { additive: false, stepping: true })).toMatch(/tool/i);
@@ -1702,6 +1770,25 @@ describe("a plane row offered to a waiting pick", () => {
       silent: true,
     });
     expect(r.host.sketch.enter).not.toHaveBeenCalled();
+  });
+
+  it("lights a plane row while the pick waits, never raising the origin tiles a pick owns, and puts it out", async () => {
+    const r = await waitingOnPlanes();
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPlane.mock.calls).toEqual([["XZ"]]);
+    r.browser.hover(r.list.rows[3]!);
+    expect(r.viewport.hoverDatum.mock.calls.at(-1)).toEqual(["d1"]);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPlane.mock.calls.at(-1)).toEqual([null]);
+    expect(r.viewport.hoverDatum.mock.calls.at(-1)).toEqual([null]);
+    expect(r.viewport.showAllPlanes).not.toHaveBeenCalled();
+  });
+
+  it("leaves a tool's own plane light alone when the list lit none", async () => {
+    const r = await waitingOnPlanes();
+    r.browser.hover(null);
+    expect(r.viewport.hoverPlane).not.toHaveBeenCalled();
+    expect(r.viewport.hoverDatum).not.toHaveBeenCalled();
   });
 
   it("refuses a datum plane the document has lost, and the tool never sees it", async () => {

@@ -364,6 +364,15 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return f?.type === "datumPlane" ? (featurePick(e, f) as PlanePick) : null;
   }
 
+  // What the list itself lit, so putting it out never touches a tool's own hover, which shares the edge emphasis.
+  let lit: "pick" | "plane" | null = null;
+
+  function putOutLight() {
+    if (lit === "plane") lightPlane(null);
+    else if (lit === "pick") e.viewport.hoverPick(null);
+    lit = null;
+  }
+
   function lightPlane(row: GeometryRow | null) {
     const p = row?.plane;
     // Origin tiles draw only in a plane pick, and a pick owns them while it waits.
@@ -393,6 +402,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     cache.clear();
     failedKey = null;
     stepped = false;
+    lit = null;
     rowsKey = null;
     rowsStale = true;
     edgeRefs = new Map();
@@ -421,7 +431,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     setBody,
     setKind(kind: GeometryKind) {
       if (kind === list.kind) return;
-      if (list.kind === "planes") lightPlane(null);
+      if (list.kind === "planes") putOutLight();
       if (kind === "planes") stopAsking();
       list.setKind(kind);
       rowsKey = null;
@@ -516,19 +526,25 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       }
       if (routePlaneRow(e, pick) !== "row") return true;
       if (!start) return false;
+      lit = null;
       lightPlane(null);
       sketchOnPlane(e, pick);
       return true;
     },
 
-    /** Lights a row in the view. Not while a tool runs, its own hover shares the edge emphasis. */
+    /** Lights a row in the view, also while a tool waits for a pick. Puts out only what the list lit. */
     hover(row: GeometryRow | null) {
-      if (list.kind === "planes") {
-        lightPlane(pickBlocked() ? null : row);
+      if (!row || stepBlocked()) {
+        putOutLight();
         return;
       }
-      if (pickBlocked()) return;
-      e.viewport.hoverPick(row && refOf(row));
+      if (list.kind === "planes") {
+        lightPlane(row);
+        lit = "plane";
+        return;
+      }
+      e.viewport.hoverPick(refOf(row));
+      lit = "pick";
     },
 
     /** From here on the list stays live through builds, tab open or not. */
