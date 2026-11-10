@@ -347,7 +347,6 @@
   { "path": "src/ui/reportText.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/safeMode.ts", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/selectionMeasure.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/ui/selectionTools.ts", "kind": "script", "count": 6, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/stress.ts", "kind": "script", "count": 26, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/stressHistory.ts", "kind": "script", "count": 22, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/stressVerdict.ts", "kind": "script", "count": 13, "reason": "raw text before localisation, a codemod lane converts it" },
