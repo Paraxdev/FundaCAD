@@ -717,8 +717,11 @@ describe("the custom fastener form", () => {
       await setLanguage("system");
       const en = [await driver("1.500"), await driver("1,500")];
       const read = (number: number) => ({ number, invalid: null, problems: [] });
-      const refused = { number: null, invalid: "true", problems: ["Driver number: Not a number"] };
-      expect({ de, en }).toEqual({ de: [read(1.5), read(0.25), refused], en: [read(1.5), refused] });
+      const refused = (why: RegExp) => ({ number: null, invalid: "true", problems: [expect.stringMatching(why)] });
+      expect({ de, en }).toEqual({
+        de: [read(1.5), read(0.25), refused(/^Driver number: "1\.500" is ambiguous/)],
+        en: [read(1.5), refused(/^Driver number: Not a number$/)],
+      });
     });
   });
 

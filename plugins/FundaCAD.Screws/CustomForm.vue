@@ -3,7 +3,7 @@
 
 import { computed, reactive, ref, watch } from "vue";
 import { Button, FieldRow, NumberField, Select, TextField, announce } from "fundacad/ui";
-import { plainNumber } from "fundacad";
+import { plainNumber, typedExprProblem } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
 import {
   HANDS,
@@ -76,7 +76,7 @@ function part(p: PartName): Record<string, unknown> {
 // is all that reads.
 function readNumber(raw: string): number {
   const x = plainNumber(raw);
-  if (x === null) throw new Error("Not a number");
+  if (x === null) throw new Error(typedExprProblem(raw) ?? "Not a number");
   return x;
 }
 
