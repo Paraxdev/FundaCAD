@@ -10,6 +10,7 @@ import {
   uiSlider,
 } from "../components/ui/dom";
 import { claimEscape } from "../ui/escapeClaim";
+import { canonicalTyping } from "../ui/measure";
 import {
   PROFILE_DETENT,
   PROFILE_MAX,
@@ -68,6 +69,15 @@ function glyph(size: number): { svg: SVGSVGElement; set: (p: number) => void } {
       solid.setAttribute("d", `${d} L1 23 Z`);
     },
   };
+}
+
+// Number, not the expression reader: the box shows a signed value and the grammar has no unary plus.
+function profileTyped(text: string): number {
+  try {
+    return Number(canonicalTyping(text));
+  } catch {
+    return Number.NaN;
+  }
 }
 
 function hold(e: Event) {
@@ -223,7 +233,7 @@ export class ProfileChip {
     head.append(title, num.root, word);
     const typed = () => {
       const text = num.input.value.trim();
-      const v = Number(text);
+      const v = profileTyped(text);
       if (!text || !Number.isFinite(v)) {
         setInvalid(num, `Type a profile from ${formatProfile(PROFILE_MIN)} to ${formatProfile(PROFILE_MAX)}`);
         return;
