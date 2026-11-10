@@ -188,7 +188,8 @@ function add() {
       </template>
 
       <div class="measure-hint">
-        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · Esc to close
+        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · a semicolon separates arguments:
+        max(a; b) · Esc to close
       </div>
     </div>
   </Panel>

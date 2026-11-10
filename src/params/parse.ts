@@ -126,6 +126,7 @@ export function tokenize(src: string): Token[] {
       i++;
       continue;
     }
+    if (ch === ",") throw new ExprError('unexpected character ",", separate arguments with ";"', i);
     throw new ExprError(`unexpected character "${ch}"`, i);
   }
   return out;

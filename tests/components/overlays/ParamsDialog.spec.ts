@@ -144,6 +144,12 @@ describe("ParamsDialog", () => {
     expect([add.title, add.classList.contains("btn-danger")]).toEqual(["used by Extrude e1", true]);
   });
 
+  it("tells under the table that function arguments take a semicolon", async () => {
+    await open(makeEngine());
+    const hint = document.body.querySelector(".params-dialog .measure-hint")!.textContent!;
+    expect([hint.includes("max(a; b)"), /semicolon/.test(hint)]).toEqual([true, true]);
+  });
+
   it("shows the Value column with the language's decimal mark, for a length, an angle and a count", async () => {
     const fake = makeEngine();
     Object.assign(fake.doc.paramDefs!, {
