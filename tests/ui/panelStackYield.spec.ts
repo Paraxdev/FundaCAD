@@ -1,0 +1,232 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { panelStack } from "../../src/ui/panelStack";
+
+class RO {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+(globalThis as unknown as { ResizeObserver: typeof RO }).ResizeObserver = RO;
+Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, get: () => 600 });
+
+// History's title and tools above its list, and the Stress rows outside its scroller, as measured at 900x800.
+const HEAD = 78;
+const FIXED = 164;
+const STEP = 400;
+const NATURAL = 340;
+const LINE = 68;
+
+const frame = () => new Promise((r) => requestAnimationFrame(r));
+const capOf = (el: HTMLElement) => {
+  const cap = parseFloat(el.style.maxHeight);
+  return Number.isFinite(cap) ? cap : Infinity;
+};
+
+function layer(bottom: number) {
+  const el = document.createElement("div");
+  el.id = "float-layer";
+  el.getBoundingClientRect = () => ({ left: 0, right: 600, top: 0, bottom }) as DOMRect;
+  const right = document.createElement("div");
+  right.className = "float-right";
+  el.append(right);
+  document.body.append(el);
+  return right;
+}
+
+/** A right card `tall` px high from y 48, with a list of `content` px when `scrolls`. Any layout read clamps the list's
+ *  scroll to what it shows at that moment, as a browser does. */
+function card(tall: number, content: number, scrolls = true) {
+  const el = document.createElement("div");
+  const list = document.createElement("div");
+  list.toggleAttribute("data-card-scroll", scrolls);
+  el.append(list);
+  const h = () => Math.min(tall, capOf(el));
+  let at = 0;
+  const flush = () => (at = Math.max(0, Math.min(at, content - (h() - HEAD))));
+  el.getBoundingClientRect = () => {
+    flush();
+    return { left: 340, right: 588, top: 48, bottom: 48 + h() } as DOMRect;
+  };
+  Object.defineProperty(el, "offsetHeight", { get: () => (flush(), h()) });
+  for (const k of ["offsetHeight", "clientHeight"])
+    Object.defineProperty(list, k, { get: () => (flush(), h() - HEAD) });
+  Object.defineProperty(list, "scrollHeight", { get: () => (flush(), content) });
+  Object.defineProperty(list, "scrollTop", {
+    get: () => flush(),
+    set: (v: number) => {
+      at = v;
+      flush();
+    },
+  });
+  return { el, list };
+}
+
+// A Stress panel is NATURAL wide, its fixed rows wrap `wrap` px taller for each LINE px place() caps it narrower.
+function stress(wrap = 0, min = 360) {
+  const el = document.createElement("div");
+  el.style.minWidth = `${min}px`;
+  const width = () => Math.min(NATURAL, parseFloat(el.style.maxWidth) || NATURAL);
+  Object.defineProperty(el, "offsetWidth", { get: width });
+  const step = document.createElement("div");
+  step.toggleAttribute("data-panel-scroll", true);
+  el.append(step);
+  const fixed = () => FIXED + wrap * Math.ceil((NATURAL - width()) / LINE);
+  const h = () => Math.min(fixed() + STEP, capOf(el));
+  for (const k of ["scrollHeight", "offsetHeight", "clientHeight"]) Object.defineProperty(el, k, { get: h });
+  Object.defineProperty(step, "offsetHeight", { get: () => h() - fixed() });
+  Object.defineProperty(step, "scrollHeight", { get: () => STEP });
+  document.body.append(el);
+  return el;
+}
+
+// A tool card on the left, 0..300 wide down the whole layer, leaves the shelf under History 302..586.
+function leftCard() {
+  const el = document.createElement("div");
+  el.getBoundingClientRect = () => ({ left: 0, right: 300, top: 48, bottom: 800 }) as DOMRect;
+  const stack = document.createElement("div");
+  stack.className = "float-left-stack";
+  stack.append(el);
+  document.getElementById("float-layer")!.append(stack);
+}
+
+function open(bottom: number, tall: number, content = 840, scrolls = true, wrap = 0, min = 360, left = false) {
+  const history = card(tall, content, scrolls);
+  layer(bottom).append(history.el);
+  if (left) leftCard();
+  const panel = stress(wrap, min);
+  panelStack.add("stress", panel);
+  const read = () => ({ history: history.el.style.maxHeight, top: panel.style.top, cap: panel.style.maxHeight });
+  return { ...history, read };
+}
+
+afterEach(() => {
+  for (const id of panelStack.ids()) panelStack.remove(id);
+  document.body.replaceChildren();
+});
+
+describe("a History card above the Stress panel", () => {
+  it("is cut so the shelf under it holds the panel's fixed rows and a sliver of its step", () => {
+    expect(open(800, 740).read()).toEqual({ history: "520px", top: "582px", cap: "204px" });
+  });
+
+  it("stays whole when the shelf under it already holds that, one pixel either side", () => {
+    expect(open(800, 520).read()).toEqual({ history: "", top: "582px", cap: "204px" });
+    panelStack.remove("stress");
+    document.body.replaceChildren();
+    expect(open(800, 521).read()).toEqual({ history: "520px", top: "582px", cap: "204px" });
+  });
+
+  // Beside History the panel gets 312px of its 360px min-width.
+  it("is cut when the panel beside it would sit under its min-width, also when the shelf it opens is a pixel short", () => {
+    for (const bottom of [398, 397]) {
+      expect(open(bottom, 318).read()).toEqual({ history: "118px", top: "180px", cap: "204px" });
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+    }
+  });
+
+  it("is cut for the fixed rows at the width the shelf gives the panel, not its natural width", () => {
+    const { read } = open(800, 740, 840, true, 20, 180, true);
+    const { history, top, cap } = read();
+    expect({ history, top, cap }).toEqual({ history: "500px", top: "562px", cap: "224px" });
+    expect(parseFloat(top) + parseFloat(cap)).toBeLessThanOrEqual(786);
+  });
+
+  it("is cut when the shelf holds the panel's least at its natural width but not at the shelf's, both sides", () => {
+    for (const tall of [502, 520]) {
+      const { read } = open(800, tall, 840, true, 20, 180, true);
+      expect(read()).toEqual({ history: "500px", top: "562px", cap: "224px" });
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+    }
+    expect(open(800, 500, 840, true, 20, 180, true).read()).toEqual({ history: "", top: "562px", cap: "224px" });
+  });
+
+  it("is cut to its least for a shelf short of the panel's least, not left whole with the panel in a sliver", () => {
+    const { read } = open(404, 318, 840, true, 20, 180, true);
+    const panel = document.querySelector<HTMLElement>("[data-panel-scroll]")!.parentElement!;
+    expect({ ...read(), width: panel.style.maxWidth }).toEqual({
+      history: "118px",
+      top: "180px",
+      cap: "224px",
+      width: "272px",
+    });
+  });
+
+  // At bottom 400 the column beside History is 12px wide, the cut shelf 272px wide and wrap - 2 px short of the least.
+  it("is cut to its least rather than leave the panel in a sliver far under its min-width", () => {
+    const got = [8, 8.5, 9].map((wrap) => {
+      const { read } = open(400, 318, 840, true, wrap, 180, true);
+      const r = read();
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+      return r;
+    });
+    expect(got).toEqual([
+      { history: "118px", top: "180px", cap: "212px" },
+      { history: "118px", top: "180px", cap: "212px" },
+      { history: "118px", top: "180px", cap: "213px" },
+    ]);
+  });
+
+  // At bottom 390 the column beside History is 8px under the 320px min-width and lacks wrap - 26 px of the panel's
+  // least, the cut shelf lacks 8px of it.
+  it("is cut only when that leaves the panel less far past its column in width and height together, both sides and the tie", () => {
+    const got = [25, 26, 27].map((wrap) => {
+      const r = open(390, 318, 840, true, wrap, 320).read();
+      panelStack.remove("stress");
+      document.body.replaceChildren();
+      return r;
+    });
+    expect(got).toEqual([
+      { history: "", top: "146px", cap: "230px" },
+      { history: "", top: "146px", cap: "230px" },
+      { history: "118px", top: "180px", cap: "204px" },
+    ]);
+  });
+
+  it("is cut as before when the shelf width leaves the fixed rows as they were", () => {
+    expect(open(800, 740, 840, true, 0, 180, true).read()).toEqual({ history: "520px", top: "582px", cap: "204px" });
+  });
+
+  it("is never cut when it has no list of its own to scroll", () => {
+    expect(open(800, 740, 840, false).read().history).toBe("");
+  });
+
+  it("is whole again once the Stress panel closes", () => {
+    const { el } = open(800, 740);
+    expect(el.style.maxHeight).toBe("520px");
+    panelStack.remove("stress");
+    expect(el.style.maxHeight).toBe("");
+  });
+
+  it("keeps its list scrolled where it was when the window resizes", async () => {
+    const { list, read } = open(800, 740);
+    list.scrollTop = 398;
+    expect(list.scrollTop).toBe(398);
+    window.dispatchEvent(new Event("resize"));
+    await frame();
+    expect({ ...read(), scrolled: list.scrollTop }).toEqual({
+      history: "520px",
+      top: "582px",
+      cap: "204px",
+      scrolled: 398,
+    });
+  });
+
+  it("is cut when it opens after the Stress panel", async () => {
+    const right = layer(800);
+    const panel = stress();
+    panelStack.add("stress", panel);
+    expect(panel.style.top).toBe("146px");
+    const history = card(740, 840);
+    right.append(history.el);
+    await frame();
+    await frame();
+    expect({ history: history.el.style.maxHeight, top: panel.style.top, cap: panel.style.maxHeight }).toEqual({
+      history: "520px",
+      top: "582px",
+      cap: "204px",
+    });
+  });
+});

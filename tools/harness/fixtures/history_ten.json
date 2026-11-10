@@ -1,0 +1,16 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "b0", "type": "box", "name": "Box 1", "length": 10, "width": 10, "height": 5 },
+    { "id": "b1", "type": "box", "name": "Box 2", "length": 11, "width": 10, "height": 5 },
+    { "id": "b2", "type": "box", "name": "Box 3", "length": 12, "width": 10, "height": 5 },
+    { "id": "b3", "type": "box", "name": "Box 4", "length": 13, "width": 10, "height": 5 },
+    { "id": "b4", "type": "box", "name": "Box 5", "length": 14, "width": 10, "height": 5 },
+    { "id": "b5", "type": "box", "name": "Box 6", "length": 15, "width": 10, "height": 5 },
+    { "id": "b6", "type": "box", "name": "Box 7", "length": 16, "width": 10, "height": 5 },
+    { "id": "b7", "type": "box", "name": "Box 8", "length": 17, "width": 10, "height": 5 },
+    { "id": "b8", "type": "box", "name": "Box 9", "length": 18, "width": 10, "height": 5 },
+    { "id": "b9", "type": "box", "name": "Box 10", "length": 19, "width": 10, "height": 5 }
+  ]
+}

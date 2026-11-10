@@ -1001,7 +1001,8 @@ The sketch palette holds three lists under one heading each (`SketchShapesList`,
 - A row with a label and a control wraps: a control that does not fit beside its label moves to its own line under it,
   in every language, and a label is never cut with an ellipsis. `FieldRow` `inline` and `param` rows and `.stress-field`
   get this from the `wrap-row` and `wrap-label` mixins in `src/styles/ui/_field-row.scss`; a new row of this kind
-  includes them, and a row that fits looks as it did.
+  includes them, and a row that fits looks as it did. The rows of one group that should start their boxes at one x (the Stress material and its custom values) wear
+  `.stress-keyed`, which gives their labels one share of the row.
 - A Dimensions row is a `FieldRow` with a `NumberField` (`commit="change"`, the unit of the dimension), named by the
   dimension's subject. A driven dimension is disabled and says why.
 - The line above Relations (`.rel-summary`) takes focus after a Delete, so the keys do not fall back to the page. A
