@@ -23,6 +23,7 @@
   "prefs.language.skip": "{key} : {reason, select, unknownKey {FundaCAD n’a pas cette ligne} notText {pas du texte} tooLong {plus de {max, number} caractères} markup {contient une balise comme {tag}, les balises ne sont pas permises} controlCharacter {contient un caractère de contrôle caché} syntax {une accolade ou un pluriel est mal écrit} badArgument {utilise {arg}, absent de la ligne anglaise} empty {est vide} locked {renseigne sur votre fichier, un fichier ne peut donc pas la changer} other {non utilisée}}",
   "prefs.language.skipped": "{n, plural, one {# ligne est ignorée :} other {# lignes sont ignorées :}}",
   "prefs.language.system": "Système ({name})",
+  "prefs.language.systemYours": "Système, {name} (votre fichier)",
   "prefs.language.title": "Langue",
   "prefs.language.yours": "{name} (votre fichier)",
   "stress.dir.back": "Vers l'arrière (+Y)",
