@@ -54,7 +54,7 @@ const TOOLS: Record<string, [english: string, de: string, fr: string]> = {
   section: ["Section", "Schnitt", "Coupe"],
   properties: ["Properties", "Eigenschaften", "Propriétés"],
   interference: ["Interference", "Kollision", "Interférence"],
-  stress: ["Stress", "Spannung", "Contraintes"],
+  stress: ["Stress", "Spannung", "Analyse des contraintes"],
   "draft-analysis": ["Overhang", "Überhang", "Porte-à-faux"],
   zebra: ["Zebra", "Zebra", "Zébrure"],
   curvature: ["Curvature", "Krümmung", "Courbure"],
@@ -65,9 +65,9 @@ const TOOLS: Record<string, [english: string, de: string, fr: string]> = {
   "simplify-mesh": ["Simplify Mesh", "Netz vereinfachen", "Simplifier le maillage"],
   "clean-up": ["Clean Up", "Bereinigen", "Nettoyer"],
   "compute-all": ["Compute All", "Alles berechnen", "Tout calculer"],
-  "boolean-union": ["Union", "Vereinigen", "Union"],
+  "boolean-union": ["Union", "Vereinigen", "Unir"],
   "boolean-subtract": ["Subtract", "Subtrahieren", "Soustraire"],
-  "boolean-intersect": ["Intersect", "Schnittmenge", "Intersection"],
+  "boolean-intersect": ["Intersect", "Schnittmenge", "Intersecter"],
 };
 
 const GROUPS: Record<string, [english: string, de: string, fr: string]> = {

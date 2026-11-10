@@ -31,7 +31,7 @@
     },
     {
       "en": "Stress",
-      "text": "Contraintes",
+      "text": "Analyse des contraintes",
       "note": "the Stress panel"
     },
     {
@@ -226,7 +226,7 @@
     },
     {
       "en": "Union",
-      "text": "Union"
+      "text": "Unir"
     },
     {
       "en": "Subtract",
@@ -234,7 +234,7 @@
     },
     {
       "en": "Intersect",
-      "text": "Intersection"
+      "text": "Intersecter"
     },
     {
       "en": "Section",

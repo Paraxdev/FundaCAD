@@ -8,12 +8,26 @@ import zhCN from "../../src/i18n/locales/zh-CN.json";
 
 type Table = Record<string, string>;
 
-const isToolName = (key: string) =>
-  key.startsWith("tool.") && !key.startsWith("tool.group.") && !key.startsWith("tool.family.");
+// Everything the rail shows by name: tools, families, groups and its own buttons.
+const RAIL_NAMES = new Set([
+  "rail.construction",
+  "rail.deselectAll",
+  "rail.exitSketching",
+  "rail.isolate",
+  "rail.newSketch",
+  "rail.search",
+  "rail.sectionView",
+]);
+const isToolName = (key: string) => key.startsWith("tool.") || RAIL_NAMES.has(key);
 
 // "Circular Pat." is the short label of "Circular Pattern", one tool under two lengths.
 const sameName = (a: string, b: string) =>
   a === b || (a.endsWith(".") && b.startsWith(a.slice(0, -1))) || (b.endsWith(".") && a.startsWith(b.slice(0, -1)));
+
+// A family on the rail is a group folded into one button, so the two may share a word (ja 拘束 for both).
+const familyAndGroup = (a: string, b: string) =>
+  (a.startsWith("tool.family.") && b.startsWith("tool.group.")) ||
+  (a.startsWith("tool.group.") && b.startsWith("tool.family."));
 
 // Two tools with different English names that one language gives the same word, as "a | b | word".
 function collisions(english: Table, lang: Table): string[] {
@@ -21,7 +35,7 @@ function collisions(english: Table, lang: Table): string[] {
   for (const key of Object.keys(english).filter(isToolName)) {
     const text = lang[key]!;
     const keys = byText.get(text) ?? [];
-    if (!keys.some((k) => sameName(english[k]!, english[key]!))) keys.push(key);
+    if (!keys.some((k) => sameName(english[k]!, english[key]!) || familyAndGroup(k, key))) keys.push(key);
     byText.set(text, keys);
   }
   return [...byText].filter(([, keys]) => keys.length > 1).map(([text, keys]) => `${keys.join(" | ")} | ${text}`);
@@ -52,9 +66,21 @@ describe("tool names in a language", () => {
     expect(collisions(clipped, { ...clipped, "tool.offset": "Muster", "tool.circularPattern": "Muster" })).toEqual([
       "tool.offset | tool.circularPattern | Muster",
     ]);
-    const grouped = { ...english, "tool.group.pattern": "Pattern", "tool.family.pattern": "Pattern Family" };
-    expect(collisions(grouped, { ...grouped, "tool.group.pattern": "Union", "tool.family.pattern": "Union" })).toEqual(
-      [],
-    );
+    const grouped = { ...english, "tool.group.constraints": "Constraints", "tool.stress": "Stress" };
+    expect(
+      collisions(grouped, { ...grouped, "tool.group.constraints": "Contraintes", "tool.stress": "Contraintes" }),
+    ).toEqual(["tool.group.constraints | tool.stress | Contraintes"]);
+    const button = { ...english, "rail.isolate": "Isolate", "tool.separate": "Separate", "rail.title": "Tools" };
+    expect(collisions(button, { ...button, "rail.isolate": "分離", "tool.separate": "分離" })).toEqual([
+      "rail.isolate | tool.separate | 分離",
+    ]);
+    expect(collisions(button, { ...button, "rail.title": "Joint", "tool.joint": "Joint" })).toEqual([]);
+    const folded = { ...english, "tool.family.constrain": "Constrain", "tool.group.constraints": "Constraints" };
+    expect(
+      collisions(folded, { ...folded, "tool.family.constrain": "拘束", "tool.group.constraints": "拘束" }),
+    ).toEqual([]);
+    expect(collisions(folded, { ...folded, "tool.family.constrain": "拘束", "tool.union": "拘束" })).toEqual([
+      "tool.union | tool.family.constrain | 拘束",
+    ]);
   });
 });
