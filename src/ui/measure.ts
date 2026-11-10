@@ -4,6 +4,8 @@
 
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
+import { commasToPoints } from "../params/decimalForm";
+import { decimalMark, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
 
@@ -194,10 +196,12 @@ interface Normalised {
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 
-/** Locale minus signs and a decimal comma become ASCII. A comma is a decimal point only when it is the lone comma with
- *  no point or brackets, and never before exactly three digits, where "1,000" is refused rather than guessed. */
-export function canonicalTyping(raw: string): string {
+/** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark. With a
+ *  point mark it is one only when it is the lone comma with no point or brackets, and never before exactly three
+ *  digits, where "1,000" is refused rather than guessed. */
+export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
   const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
+  if (mark === ",") return commasToPoints(src);
   if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
   if (src.indexOf(",") !== src.lastIndexOf(",")) return src;
   const m = DECIMAL_COMMA.exec(src);

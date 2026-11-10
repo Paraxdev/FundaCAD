@@ -1,6 +1,8 @@
 // Reads the X and Y fields of the sketch point box: absolute values, @dx,dy relative to the last placed point, and a
-// pair typed into one field. The comma is split here, before measure.ts, which would read a lone one as a decimal.
+// pair typed into one field. A lone comma is split here, before measure.ts, which would read it as a decimal, but only
+// in a language with a decimal point: with a decimal comma a pair takes a semicolon.
 
+import { decimalMark, type DecimalMark } from "../i18n";
 import { measureError, tryParseMeasure, type UnitDef } from "../ui/measure";
 
 export interface PointTyping {
@@ -36,12 +38,13 @@ function number(text: string, unit: UnitDef | null): Part {
   return { ok: false, problem: /unknown parameter/.test(problem) ? `"${text.trim()}" is not a number` : problem };
 }
 
-/** One value, or two split on a semicolon or on the only comma. Null for the problem, with `problem` filled. */
-function split(body: string): { parts: string[] } | { problem: string } {
+/** One value, or two split on a semicolon or, with a point mark, on the only comma. */
+function split(body: string, mark: DecimalMark): { parts: string[] } | { problem: string } {
   if (body.includes(";")) {
     const parts = body.split(";");
     return parts.length === 2 ? { parts } : { problem: "Give two numbers at most, X then Y" };
   }
+  if (mark === ",") return { parts: [body] };
   const commas = body.split(",").length - 1;
   if (commas === 0) return { parts: [body] };
   if (commas === 1) return { parts: body.split(",") };
@@ -55,12 +58,13 @@ function read(
   t: PointTyping,
   units: { x: UnitDef | null; y: UnitDef | null },
   from: { x: number; y: number },
+  mark: DecimalMark,
 ): PointRead {
   const xText = t.xTyped ? t.x.trim() : null;
   const yText = t.yTyped ? t.y.trim() : null;
   const fail = (field: Field, problem: string): PointRead => ({ ok: false, field, problem });
   const rel = (field: Field, text: string): Part => {
-    const s = split(text);
+    const s = split(text, mark);
     if ("problem" in s) return { ok: false, problem: s.problem };
     if (s.parts.length !== 1) return { ok: false, problem: "Give one number here" };
     return number(s.parts[0]!, units[field]);
@@ -69,7 +73,7 @@ function read(
 
   // @dx,dy in X, or in Y while X is untouched: both axes, relative.
   const pairIn = (field: Field, text: string): PointRead | null => {
-    const s = split(text.slice(1));
+    const s = split(text.slice(1), mark);
     if ("problem" in s) return fail(field, s.problem);
     if (s.parts.length !== 2) return null;
     const dx = number(s.parts[0]!, units.x);
@@ -106,9 +110,10 @@ function read(
   }
 
   if (xText !== null && yText === null) {
-    const pairWanted = xText.includes(";") || (xText.includes(",") && !THREE_DIGITS_AFTER_COMMA.test(xText));
+    const pairWanted =
+      xText.includes(";") || (mark === "." && xText.includes(",") && !THREE_DIGITS_AFTER_COMMA.test(xText));
     if (pairWanted) {
-      const s = split(xText);
+      const s = split(xText, mark);
       if ("problem" in s) return fail("x", s.problem);
       if (s.parts.length === 2) {
         const x = abs("x", s.parts[0]!);
@@ -141,7 +146,7 @@ export function readPoint(
   units: { x: UnitDef | null; y: UnitDef | null },
   from: { x: number; y: number },
 ): PointRead {
-  const r = read(t, units, from);
+  const r = read(t, units, from, decimalMark());
   if (!r.ok) return r;
   // The field to mark is the one holding the text, as @dx,dy in X can put Y out of reach.
   if (!within(r.x)) return { ok: false, field: !t.xTyped && t.yTyped ? "y" : "x", problem: tooFar("x") };

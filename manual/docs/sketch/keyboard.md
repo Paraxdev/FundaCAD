@@ -41,12 +41,14 @@ A number can also be relative to the last point you placed.
 | Type | It means |
 | --- | --- |
 | X `20`, Y `10` | The point at 20, 10 |
-| X `20,10`, Y left alone | The same pair in one box |
-| X `@5,3` | 5 along X and 3 along Y from the last point |
+| X `20,10`, Y left alone | The same pair in one box (a language with a decimal point) |
+| X `20;10`, Y left alone | The same pair in one box, in any language |
+| X `@5,3` | 5 along X and 3 along Y from the last point (a language with a decimal point) |
+| X `@5;3` | The same step, in any language |
 | X `@5` | 5 along X, same Y as the last point |
 | X `@5`, Y `@-3` | Each box is relative on its own axis |
 
-The comma splits a pair only while Y is empty. With Y typed, a lone comma is a decimal comma, as in every other box. Write `1,5;2,5` with a semicolon for a pair with decimal commas.
+The comma splits a pair only while Y is empty. With Y typed, a lone comma is a decimal comma, as in every other box. In a language with a decimal comma, such as Deutsch, Français and Español, the comma is always a decimal comma, so `20,1` is the number 20.1 and a pair takes a semicolon. Write `1,5;2,5` with a semicolon for a pair with decimal commas, it works in every language.
 
 After the first point, the box of [exact sizes](exact-sizes.md) takes over: W and H, Diameter, or L and Angle. Type a number, Tab, a number and Enter, or press an arrow and Enter to place the end where the cursor is.
 

@@ -5,7 +5,8 @@
 // is 1. You always got a number back, so nothing ever reported an error, the
 // part was just the wrong size.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   fieldNumber,
   fieldError,
@@ -230,6 +231,56 @@ describe("what a keyboard or a paste hands over", () => {
   it("leaves commas alone once there are brackets or a point", () => {
     expect(canonicalTyping("max(2,3)")).toBe("max(2,3)");
     expect(tryParseMeasure("1.000,5", MM)).toBeNull();
+  });
+});
+
+describe("a decimal comma in a language that writes one", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("reads 1,500 as 1.500 with a comma mark, and refuses it with a point mark", () => {
+    expect(canonicalTyping("1,500", ",")).toBe("1.500");
+    expect(() => canonicalTyping("1,500", ".")).toThrow(/ambiguous/);
+  });
+
+  it("reads one or four decimals the same in both marks, and keeps 0,125 a number", () => {
+    expect(canonicalTyping("1,50", ",")).toBe("1.50");
+    expect(canonicalTyping("1,50", ".")).toBe("1.50");
+    expect(canonicalTyping("1,5000", ",")).toBe("1.5000");
+    expect(canonicalTyping("1,5000", ".")).toBe("1.5000");
+    expect(canonicalTyping("0,125", ",")).toBe("0.125");
+    expect(canonicalTyping(",5", ",")).toBe(".5");
+  });
+
+  it("swaps every comma in brackets and in several places with a comma mark, none with a point mark", () => {
+    expect(canonicalTyping("max(1,5;2,25)", ",")).toBe("max(1.5;2.25)");
+    expect(canonicalTyping("1,5 + 2,25 * 3,125", ",")).toBe("1.5 + 2.25 * 3.125");
+    expect(canonicalTyping("max(1,5;2,25)", ".")).toBe("max(1,5;2,25)");
+    expect(canonicalTyping("1,5 + 2,25", ".")).toBe("1,5 + 2,25");
+  });
+
+  it("never guesses a doubtful number", () => {
+    expect(canonicalTyping("1,5,5", ",")).toBe("1.5.5");
+    expect(canonicalTyping("1.234,5", ",")).toBe("1.234.5");
+  });
+
+  it("parses typed measures whole", async () => {
+    await setLanguage("de");
+    expect(parseMeasure("12,375 mm", MM)).toEqual({ value: 12.375, unit: MM, derived: false });
+    expect(parseMeasure("1,5 * 2,25", MM)).toEqual({ value: 3.375, unit: null, derived: true });
+    expect(parseMeasure("1,500 in", MM).value).toBeCloseTo(38.1);
+    expect(parseMeasure(",5", MM).value).toBe(0.5);
+    expect(tryParseMeasure("1,5,5", MM)).toBeNull();
+    expect(tryParseMeasure("1.234,5", MM)).toBeNull();
+  });
+
+  it("reads a field's plain number by the language, and goes back to refusing 1,500 in English", async () => {
+    expect(plainNumber("1,500")).toBeNull();
+    await setLanguage("de");
+    expect(plainNumber("1,500")).toBe(1.5);
+    expect(plainNumber("0,125")).toBe(0.125);
+    expect(plainNumber("2.5")).toBe(2.5);
+    await setLanguage("system");
+    expect(plainNumber("1,500")).toBeNull();
   });
 });
 

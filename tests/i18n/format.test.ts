@@ -1,7 +1,14 @@
 // The message format: arguments, numbers, plurals and choices per language, ICU quoting and every syntax error.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { argNames, formatMessage, MessageSyntaxError, parseMessage, type MessageArgs } from "../../src/i18n/format";
+import {
+  argNames,
+  decimalMarkOf,
+  formatMessage,
+  MessageSyntaxError,
+  parseMessage,
+  type MessageArgs,
+} from "../../src/i18n/format";
 
 function say(src: string, args: MessageArgs = {}, locale = "en"): string {
   return formatMessage(parseMessage(src), args, locale);
@@ -35,6 +42,34 @@ describe("arguments and numbers", () => {
   it("shows a missing argument by its name", () => {
     expect(say("Load on {name}, {n, number} N", { n: 3.5 })).toBe("Load on {name}, 3.5 N");
     expect(say("Load on {name}, {n, number} N", {})).toBe("Load on {name}, {n} N");
+  });
+});
+
+describe("decimalMarkOf", () => {
+  it.each([
+    ["en", "."],
+    ["de", ","],
+    ["fr", ","],
+    ["es", ","],
+    ["zh-CN", "."],
+    ["ja", "."],
+    ["de-CH", "."],
+    ["de-AT", ","],
+    ["pt-BR", ","],
+    ["en-IN", "."],
+    ["en-XA", "."],
+  ])("%s gives %j", (tag, mark) => {
+    expect(decimalMarkOf(tag)).toBe(mark);
+  });
+
+  it("gives a point for a tag the runtime does not know or cannot read", () => {
+    expect(decimalMarkOf("zz")).toBe(".");
+    expect(decimalMarkOf("not a tag")).toBe(".");
+    expect(decimalMarkOf("")).toBe(".");
+  });
+
+  it("keeps each tag's own answer when asked in turn", () => {
+    expect([decimalMarkOf("de"), decimalMarkOf("en"), decimalMarkOf("de")]).toEqual([",", ".", ","]);
   });
 });
 

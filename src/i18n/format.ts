@@ -9,6 +9,7 @@ export type MessageNode =
   | { t: "select"; name: string; options: Map<string, MessageNode[]> };
 
 export type MessageArgs = Record<string, string | number>;
+export type DecimalMark = "." | ",";
 
 export class MessageSyntaxError extends Error {}
 
@@ -134,6 +135,25 @@ function formatNumber(n: number, locale: string): string {
   // No grouping: German 210.000 reads as 210 beside a value box, and value boxes do not group either.
   if (!f) numberFormats.set(locale, (f = new Intl.NumberFormat(locale, { useGrouping: false })));
   return f.format(n);
+}
+
+const decimalMarks = new Map<string, DecimalMark>();
+
+// An unsupported tag would make Intl use the PC's own locale, so lookup decides first. A third mark (Arabic) reads as a point, the only two the readers know.
+export function decimalMarkOf(tag: string): DecimalMark {
+  let mark = decimalMarks.get(tag);
+  if (mark) return mark;
+  mark = ".";
+  try {
+    if (Intl.NumberFormat.supportedLocalesOf([tag], { localeMatcher: "lookup" }).length > 0) {
+      const part = new Intl.NumberFormat(tag).formatToParts(1.5).find((p) => p.type === "decimal");
+      if (part?.value === ",") mark = ",";
+    }
+  } catch {
+    // a malformed tag keeps the point
+  }
+  decimalMarks.set(tag, mark);
+  return mark;
 }
 
 function pluralCategory(n: number, locale: string): string {
