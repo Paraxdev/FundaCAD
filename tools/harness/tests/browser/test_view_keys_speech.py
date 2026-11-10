@@ -3,7 +3,6 @@ camera rigs: the line is spoken once the projection has landed, never the perspe
 there goes perspective and is heard so. The view summary, read when the view takes focus, is written once it has landed
 too."""
 
-import math
 import time
 from pathlib import Path
 
@@ -41,6 +40,12 @@ POSE = """() => {
   const rig = window.viewport.rig;
   const d = rig.viewDirection();
   return { ortho: !!rig.active.isOrthographicCamera, dir: [d.x, d.y, d.z], flying: rig.isFlying(), version: rig.poseVersion() };
+}"""
+
+# Within a degree of looking along -Y, which is where the back view's eye on +Y looks.
+TOWARD_BACK = """() => {
+  const d = window.viewport.rig.viewDirection();
+  return d.y < -Math.cos(Math.PI / 180) * d.length();
 }"""
 
 PLACE = """(c) => {
@@ -102,10 +107,11 @@ def test_ctrl_2_from_perspective_is_heard_as_the_back_view_orthographic(rig):
     rig.page.evaluate("() => document.activeElement?.blur()")
     rig.page.evaluate(LISTEN)
     rig.page.keyboard.press("Control+2")
-    end = landed(rig)
-    assert end["ortho"]
-    d = end["dir"]
-    assert d[1] < -math.cos(math.radians(1)) * math.hypot(*d)
+    try:
+        rig.page.wait_for_function(TOWARD_BACK, timeout=15_000)
+    except PlaywrightTimeout:
+        raise AssertionError(f"never turned to the back view, last {rig.page.evaluate(POSE)}") from None
+    assert landed(rig)["ortho"]
     heard(rig, "Back view, orthographic")
     rig.page.wait_for_timeout(600)
     assert camera_lines(rig) == ["Back view, orthographic"]

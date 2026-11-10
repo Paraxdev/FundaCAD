@@ -142,6 +142,9 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   // growing the model around the camera never swaps the picture.
   let eyeSet = false;
   let deliberate: THREE.Vector3 | null = null;
+  // A named view's turn runs on camera-controls' own transition, which `flight` does not cover; isFlying() reports it too,
+  // so whatever waits for the view to settle waits for the turn, not for frames to arrive.
+  let turning = false;
   function viewAxisAligned(askBox = eyeSet): boolean {
     const eye = controls.getPosition(tmpPos);
     const dir = controls.getTarget(tmpTarget).sub(eye);
@@ -253,6 +256,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   };
   controls.addEventListener("controlstart", () => {
     deliberate = null;
+    turning = false;
     emit("inputstart");
   });
   controls.addEventListener("controlend", () => emit("inputend"));
@@ -425,6 +429,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       if (!moved) {
         eyeSet = false;
         deliberate = null;
+        turning = false;
       }
       // After camera-controls positions the camera: update() rewrites the orientation each frame, so re-banking is idempotent
       // and never touches camera.up, which would fight the sketch plane up handling.
@@ -526,6 +531,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       ortho.up.set(0, 0, 1);
       controls.updateCameraUp();
       const home = HOME_EYE.clone();
+      turning = true;
       if (!box || box.isEmpty()) {
         controls.setLookAt(home.x, home.y, home.z, 0, 0, 0, cameraFlightsOn());
         return;
@@ -555,6 +561,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       const t = controls.getTarget(new THREE.Vector3());
       const n = new THREE.Vector3(x, y, z).normalize().multiplyScalar(d);
       deliberate = n.clone().normalize().negate();
+      turning = true;
       controls.setPosition(t.x + n.x, t.y + n.y, t.z + n.z, true);
     },
     setViewDir(dir, up, click = false) {
@@ -569,6 +576,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       ortho.up.copy(u);
       controls.updateCameraUp();
       const t = controls.getTarget(new THREE.Vector3());
+      turning = true;
       controls.setLookAt(t.x + n.x * d, t.y + n.y * d, t.z + n.z * d, t.x, t.y, t.z, true);
     },
     lookAtPlane(origin, normal, up, opts) {
@@ -617,7 +625,7 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
       };
     },
     isFlying() {
-      return flight !== null;
+      return flight !== null || turning;
     },
     restoreUp() {
       rollAngle = 0;

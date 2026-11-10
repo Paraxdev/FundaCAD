@@ -154,8 +154,8 @@ export interface CameraRig {
     up: THREE.Vector3,
     opts?: { animate?: boolean; onArrive?: () => void },
   ): void;
-  /** True while a flight is in the air. Anything measuring the framing (the
-   *  sketch lock's baseline) has to wait for it. */
+  /** True while a flight, or a named view's turn, is in the air. Anything measuring the framing (the sketch lock's
+   *  baseline) has to wait for it. */
   isFlying(): boolean;
   /** Level the horizon again (Z up) after a sketch or a 3D mouse roll. */
   restoreUp(): void;
