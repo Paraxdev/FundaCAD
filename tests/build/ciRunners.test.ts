@@ -33,9 +33,9 @@ describe("the build workflow's runners", () => {
     expect(job("bundle")).toMatch(/vtool -show-build/);
   });
 
-  it("gives e2e enough time to reach the accessibility step", () => {
+  it("gives e2e enough time to finish the accessibility step on a slow runner", () => {
     const minutes = Number(/timeout-minutes: (\d+)/.exec(job("e2e"))?.[1]);
-    expect(minutes).toBeGreaterThanOrEqual(60);
+    expect(minutes).toBeGreaterThanOrEqual(90);
   });
 
   it("runs the heavy tests beside e2e, each in exactly one job", () => {
