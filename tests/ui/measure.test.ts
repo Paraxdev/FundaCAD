@@ -639,6 +639,26 @@ describe("joining a list of numbers", () => {
 });
 
 describe("shownExpr and storedExpr, one per mark", () => {
+  it.each(["22.125°", "10x2.500", "2.500 + 22.125°", "x.5 + 1.500 $"])(
+    "German shows %j so that committing it unchanged stores the same text",
+    async (stored) => {
+      await setLanguage("de");
+      let shown, back, problem;
+      try {
+        shown = shownExpr(stored);
+        back = storedExpr(shown);
+        problem = typedExprProblem(shown);
+      } finally {
+        await setLanguage("system");
+      }
+      expect({ shown, back, problem }).toEqual({
+        shown: stored.replace(/(\d)\.(\d)/g, "$1,$2"),
+        back: stored,
+        problem: null,
+      });
+    },
+  );
+
   it.each([
     ["max(width*1.5;2.25) + 0.125mm", "max(width*1,5;2,25) + 0,125mm"],
     ["a*3", "a*3"],
