@@ -21,9 +21,14 @@ export interface MenuItem {
 }
 
 export interface MenuDef {
-  label: string;
+  label: string | (() => string);
+  /** The English name plugins, refs and tests know the menu by when `label` follows the language. */
+  refName?: string;
   items: MenuItem[];
 }
+
+export const menuName = (m: MenuDef): string => m.refName ?? (typeof m.label === "string" ? m.label : "");
+export const menuText = (m: MenuDef): string => (typeof m.label === "function" ? m.label() : m.label);
 
 export type { CtxItem };
 

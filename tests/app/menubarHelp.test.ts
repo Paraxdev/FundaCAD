@@ -16,13 +16,13 @@ import { ACCESSIBILITY_PAGE, MANUAL_URL } from "../../src/ui/welcome";
 import { useDialogStore } from "../../src/stores/dialogs";
 import type { BugReportDeps } from "../../src/ui/bugReporter";
 import type { Engine } from "../../src/app/engine";
-import type { MenuItem } from "../../src/ui/menu";
+import { menuName, type MenuItem } from "../../src/ui/menu";
 import { setLanguage } from "../../src/i18n";
 import capabilitiesJson from "../../src-tauri/capabilities/default.json?raw";
 import zensicalToml from "../../manual/zensical.toml?raw";
 
 const help = () =>
-  buildMenubar({ ui: { home: { open: () => {} } } } as unknown as Engine).find((m) => m.label === "Help")!;
+  buildMenubar({ ui: { home: { open: () => {} } } } as unknown as Engine).find((m) => menuName(m) === "Help")!;
 const text = (i: MenuItem) => (typeof i.label === "function" ? i.label() : i.label);
 const item = (label: string) => help().items.find((i) => (i.refName ?? text(i)) === label)!;
 

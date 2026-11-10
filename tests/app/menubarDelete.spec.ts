@@ -6,6 +6,7 @@ import { buildMenubar } from "../../src/app/menubarDef";
 import { useSelectionStore } from "../../src/stores/selection";
 import { useToastStore } from "../../src/stores/toasts";
 import type { Engine } from "../../src/app/engine";
+import { menuName } from "../../src/ui/menu";
 
 beforeEach(() => setActivePinia(createPinia()));
 
@@ -33,7 +34,7 @@ describe("Edit, Delete", () => {
       },
     } as unknown as Engine;
     const del = buildMenubar(e)
-      .find((m) => m.label === "Edit")!
+      .find((m) => menuName(m) === "Edit")!
       .items.find((i) => i.label === "Delete")!;
     del.onClick!();
     expect(removeFeatures).toHaveBeenCalledWith(["f2"]);

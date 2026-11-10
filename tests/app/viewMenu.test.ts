@@ -5,6 +5,7 @@ import { contribute, resetContributions } from "../../src/plugins/contrib";
 import { allCommands } from "../../src/ui/commands";
 import { railActive, analysisFlags } from "../../src/ui/railActive";
 import type { Engine } from "../../src/app/engine";
+import { menuName } from "../../src/ui/menu";
 
 afterEach(() => resetContributions());
 
@@ -18,7 +19,7 @@ function engine(viewport: object = {}) {
 describe("the core View menu", () => {
   it("lists the View commands, then the four analysis toggles, each running its action", () => {
     const { e, handleAction } = engine({ zebraOn: true, combsOn: false, analysis: "draft" });
-    const view = buildMenubar(e).find((m) => m.label === "View")!;
+    const view = buildMenubar(e).find((m) => menuName(m) === "View")!;
     const core = allCommands().filter((c) => c.group === "View");
     expect(core.length).toBeGreaterThan(5);
     expect(view.items.slice(0, core.length).map((i) => i.label)).toEqual(core.map((c) => c.label));
@@ -33,8 +34,8 @@ describe("the core View menu", () => {
   it("takes a plugin's rows into the same menu instead of a second one", () => {
     contribute("A.One", { menus: [{ menu: "View", before: "Help", items: [{ label: "Tumble" }] }] });
     const menus = buildMenubar(engine({}).e);
-    expect(menus.filter((m) => m.label === "View")).toHaveLength(1);
-    expect(menus.map((m) => m.label)).toEqual(["File", "Edit", "View", "Help"]);
+    expect(menus.filter((m) => menuName(m) === "View")).toHaveLength(1);
+    expect(menus.map(menuName)).toEqual(["File", "Edit", "View", "Help"]);
     expect(menus[2]!.items.at(-1)!.label).toBe("Tumble");
   });
 });

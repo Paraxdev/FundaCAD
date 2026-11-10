@@ -8,7 +8,7 @@ import { setWorkspace } from "../ui/workspace";
 import { ACCESSIBILITY_PAGE, MANUAL_URL, openExternal } from "../ui/welcome";
 import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl, REPO_URL } from "../ui/reportText";
-import type { MenuDef } from "../ui/menu";
+import { menuName, type MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
 import { t } from "../i18n";
@@ -25,12 +25,12 @@ const ISSUES_URL = `${REPO_URL}/issues`;
 function withContributions(menus: MenuDef[]): MenuDef[] {
   const out = menus.map((m) => ({ ...m, items: [...m.items] }));
   for (const c of contributedMenus()) {
-    const existing = out.find((m) => m.label === c.menu);
+    const existing = out.find((m) => menuName(m) === c.menu);
     if (existing) {
       existing.items.push(...c.items);
       continue;
     }
-    const at = c.before ? out.findIndex((m) => m.label === c.before) : -1;
+    const at = c.before ? out.findIndex((m) => menuName(m) === c.before) : -1;
     const fresh: MenuDef = { label: c.menu, items: [...c.items] };
     if (at >= 0) out.splice(at, 0, fresh);
     else out.push(fresh);
@@ -69,7 +69,8 @@ function geometryItems(e: Engine): MenuDef["items"] {
 export function buildMenubar(e: Engine): MenuDef[] {
   return withContributions([
     {
-      label: "File",
+      label: () => t("menu.file"),
+      refName: "File",
       items: [
         { label: "Home", onClick: () => e.ui.home.open() },
         { separator: true, label: "" },
@@ -85,7 +86,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
       ],
     },
     {
-      label: "Edit",
+      label: () => t("menu.edit"),
+      refName: "Edit",
       items: [
         {
           label: () => stepMenuText("Undo", stepLabelFor(e, "undo")),
@@ -132,9 +134,10 @@ export function buildMenubar(e: Engine): MenuDef[] {
         ...geometryItems(e),
       ],
     },
-    { label: "View", items: viewItems(e) },
+    { label: () => t("menu.view"), refName: "View", items: viewItems(e) },
     {
-      label: "Help",
+      label: () => t("menu.help"),
+      refName: "Help",
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
         { label: "Manual", onClick: () => void openExternal(MANUAL_URL) },

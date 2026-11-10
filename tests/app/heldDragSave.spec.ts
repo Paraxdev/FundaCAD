@@ -11,6 +11,7 @@ import { createFeatureStarters, type FeatureStartersDeps } from "../../src/featu
 import type { Engine } from "../../src/app/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import { box, stubBackend } from "../document/storeKit";
+import { menuName } from "../../src/ui/menu";
 
 const host = vi.hoisted(() => ({
   saved: [] as string[],
@@ -146,7 +147,7 @@ const lastSaved = () => JSON.parse(host.saved[host.saved.length - 1]!) as { feat
 const moves = () => lastSaved().features.filter((f) => f.type === "move");
 const fileItem = (label: string) =>
   buildMenubar(live)
-    .find((m) => m.label === "File")!
+    .find((m) => menuName(m) === "File")!
     .items.find((i) => i.label === label)!;
 const key = (shift = false) =>
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, shiftKey: shift, bubbles: true }));

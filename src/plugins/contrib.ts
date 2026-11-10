@@ -17,7 +17,7 @@ import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts"
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
 export type Unregister = () => void;
 
-/** `menu` matches a core menu by label. An unmatched label becomes a new menu before Help. */
+/** `menu` matches a core menu by its English name, File, Edit, View or Help, in every language. An unmatched label becomes a new menu before Help. */
 export interface MenuContribution {
   menu: string;
   items: MenuItem[];
