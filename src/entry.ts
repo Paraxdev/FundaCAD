@@ -1,6 +1,5 @@
-// A Reset settings start (app/startChoice.ts) clears localStorage before main.ts loads, since its imports read their
-// settings once, as they load. The language loads after the reset and before any label, so nothing paints in English
-// first.
+// A Reset settings start (app/startChoice.ts) clears localStorage before main.ts, whose imports read settings once;
+// the language loads between the two, so no label paints in English first.
 import { runStartChoice, startChoiceNotice } from "./app/startChoice";
 
 // A reset that throws still opens the app.

@@ -163,6 +163,8 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     const read = loadDropIn(code);
     const [shipped, dropIn] = await Promise.all([loadShipped(code), late ? Promise.race([read, late]) : read]);
     if (mine !== ticket) return;
+    // Started again per language, so the lines of a file read again on Reload do not pile up.
+    parsed.clear();
     const bcp47 = languageOf(code)?.bcp47 ?? code;
     active.value = { code, bcp47, shipped, dropIn: dropIn?.dropIn ?? new Map(), status: dropIn?.status ?? null };
     try {
