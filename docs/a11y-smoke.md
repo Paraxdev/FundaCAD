@@ -45,10 +45,10 @@ The checks start from what the app does today and may only get stricter.
   `node scripts/check-ui-controls.mjs --lower`, never raise one.
 - The AT-SPI and UI Automation walks have no baseline: one nameless button fails them.
 
-All of these steps start as `continue-on-error`, because the first runs on a real bus and a real WebView2 are also
-the spike that shows what the trees hold. They become required once the first accessibility wave has landed (the
-announcer, names on the base controls, dialogs that hide the page behind them and the Accessibility settings) and
-each step has run green on dev: delete the `continue-on-error: true` line from the step, so its job goes red.
+The browser checks are required: a red one turns its job red. The AT-SPI dump and the UI Automation walk still run
+as `continue-on-error`, because the first runs on a real bus and a real WebView2 are also the spike that shows what
+the trees hold. Once a walk has run green on dev, delete the `continue-on-error: true` line from its step, so its job
+goes red.
 
 Run the browser part locally like the rest of the harness smoke set ([HARNESS.md](HARNESS.md)):
 
@@ -246,6 +246,19 @@ Each step says what to do and what you should hear. Mark it in the results: **P*
 Some of these are expected to be silent today: tool prompts and the added feature are spoken once the
 announcer lands. Record what you hear anyway. A step that was P and turns S or W is a regression and blocks the
 release; one that was S and is still S is not.
+
+### Display scale on GNOME
+
+Once per release, with the screen reader off, on GNOME on Wayland, from the Flatpak and from the AppImage (about
+five minutes). Put the result in the Notes of the Linux runs.
+
+1. Set Scale in Settings, Displays to 125 percent. If only 100 and 200 are offered, turn fractional scaling on
+   first. Start FundaCAD: its text, icons and sketch lines are as sharp as those of Files beside it, and the window
+   fits the screen.
+2. Do the same at 200 percent, then turn on Large Text in Settings, Accessibility and check again.
+3. At each scale press Ctrl+Plus twice and Ctrl+0: the interface grows and comes back, still sharp.
+
+Fail: text or lines softer than in Files, a window larger than the screen, or a menu that opens off screen.
 
 ### Bonus checks
 

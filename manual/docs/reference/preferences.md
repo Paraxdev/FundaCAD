@@ -11,7 +11,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 | Appearance | Language, Theme, Icons, Units, Home background |
 | Viewport | Reflections, Background, Environment brightness, Tangent edges, Bloom, Path tracer, Performance mode, Potato mode |
 | Navigation | Smoothing, Orbit pivot, Orbit inertia, Scrolling, Two-finger scroll, Classic camera |
-| Accessibility | Interface size, Comfortable text, Viewport labels, Announcements, Units spoken in full, Hover delay, Notification time, Animations |
+| Accessibility | Contrast, Solid panels, Interface size, Comfortable text, Viewport labels, Announcements, Units spoken in full, Hover delay, Notification time, Single key shortcuts, Larger click targets, Animations. See [Accessibility](accessibility.md) |
 | Updates | Check for updates automatically, how often, and Channel |
 | AI assistants | See [Connect an AI assistant](../ai/connect.md) |
 | Plugins | See [Plugins](../plugins/index.md) |

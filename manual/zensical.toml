@@ -54,8 +54,8 @@ nav = [
     "plugins/gamepad.md",
     "plugins/spacemouse.md",
   ] },
-  { "AI assistants" = ["ai/connect.md", "ai/sharing.md", "ai/guide.md"] },
-  { "Reference" = ["reference/shortcuts.md", "reference/preferences.md", "reference/glossary.md"] },
+  { "AI assistants" = ["ai/connect.md", "ai/sharing.md", "ai/guide.md", "ai/without-sight.md"] },
+  { "Reference" = ["reference/shortcuts.md", "reference/preferences.md", "reference/accessibility.md", "reference/glossary.md"] },
 ]
 
 [project.theme]

@@ -5,12 +5,13 @@ import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
 import { useDialogStore } from "../stores/dialogs";
 import { setWorkspace } from "../ui/workspace";
-import { MANUAL_URL, openExternal } from "../ui/welcome";
+import { ACCESSIBILITY_PAGE, MANUAL_URL, openExternal } from "../ui/welcome";
 import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
+import { t } from "../i18n";
 import { allCommands, GEOMETRY_COMMANDS } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
@@ -137,6 +138,11 @@ export function buildMenubar(e: Engine): MenuDef[] {
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
         { label: "Manual", onClick: () => void openExternal(MANUAL_URL) },
+        {
+          label: () => t("menu.help.accessibility"),
+          refName: "Accessibility",
+          onClick: () => void openExternal(ACCESSIBILITY_PAGE),
+        },
         { separator: true, label: "" },
         { label: "Report a Problem…", onClick: () => openReportDialog() },
         { label: "Suggest an Idea", onClick: () => void openExternal(ideaUrl()) },
