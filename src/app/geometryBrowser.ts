@@ -340,6 +340,9 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   }
 
   const STILL_BUILDING = "The model is still building";
+  // A tool's preview holds the rows until the tool ends, a plain build only until it lands.
+  const heldWhy = (s: RebuildState) =>
+    (s.previewBuilt?.length ?? 0) > 0 ? "The list fills in once the tool is done" : s.building ? STILL_BUILDING : null;
 
   function heldBlocked(): string | null {
     if (e.sketch.active) return "Finish the sketch first";
@@ -442,7 +445,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       list.setKind(kind);
       rowsKey = null;
       // The old rows are gone, and a build in flight puts off ensure, so "ready" would say a body has none.
-      if (kind !== "planes") list.setState("loading", heldBuild(e.store.buildState) ? STILL_BUILDING : null);
+      if (kind !== "planes") list.setState("loading", heldWhy(e.store.buildState));
       if (wanted()) ensure();
     },
     /** Ask again after an error. */
@@ -452,7 +455,10 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     },
 
     buildChanged(s: RebuildState) {
-      if (heldBuild(s)) return;
+      if (heldBuild(s)) {
+        if (list.state === "loading" && list.error) list.setState("loading", heldWhy(s));
+        return;
+      }
       if (s.result !== lastResult) {
         lastResult = s.result;
         resultSerial++;

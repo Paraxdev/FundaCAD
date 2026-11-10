@@ -1435,7 +1435,7 @@ describe("a tool waiting for a pick", () => {
     expect(r.taken).toEqual([{ kind: "edge", edge: r.wires[2] }]);
   });
 
-  it("says the model is still building on a kind switch during the tool's preview, and lists once it settles", async () => {
+  it("says the list fills in once the tool is done on a kind switch during the tool's preview, and lists once it settles", async () => {
     const r = await waiting();
     r.state.result = result([
       { id: "other", etag: "o", faceCount: 7 },
@@ -1446,7 +1446,7 @@ describe("a tool waiting for a pick", () => {
     r.browser.setKind("edges");
     expect({ state: r.list.state, error: r.list.error }).toEqual({
       state: "loading",
-      error: "The model is still building",
+      error: "The list fills in once the tool is done",
     });
 
     r.store.setPreview(null);
@@ -1455,6 +1455,32 @@ describe("a tool waiting for a pick", () => {
     expect(keys(r.list.rows)).toEqual(["e:body1:0", "e:body1:1", "e:body1:2"]);
     r.browser.setKind("faces");
     expect(r.list.error).toBeNull();
+  });
+
+  it("says the model is building while the tool's first preview is in flight, then that the list waits on the tool", async () => {
+    const r = await waiting();
+    const geometry = (r.store as unknown as { geometry: { rebuild(): unknown } }).geometry;
+    let finish!: (v: unknown) => void;
+    geometry.rebuild = () =>
+      new Promise((res) => {
+        finish = res;
+      });
+    r.store.setPreview({ id: "p1", type: "box", length: 1, width: 1, height: 1 } as never);
+    await settle();
+    expect(r.store.buildState.building).toBe(true);
+    r.browser.setKind("edges");
+    expect({ state: r.list.state, error: r.list.error }).toEqual({
+      state: "loading",
+      error: "The model is still building",
+    });
+
+    finish({ ok: true, result: result([{ id: "body1", etag: "preview" }]) });
+    await settle();
+    expect(r.store.buildState.previewBuilt).toHaveLength(1);
+    expect({ state: r.list.state, error: r.list.error }).toEqual({
+      state: "loading",
+      error: "The list fills in once the tool is done",
+    });
   });
 
   it("refuses a face row in the tool's preview build, its number means the drawn model's face", async () => {
