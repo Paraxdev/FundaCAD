@@ -1,0 +1,21 @@
+.md-typeset .fc-motion-toggle {
+  display: block;
+  margin-top: 0.4em;
+  padding: 0.3em 0.9em;
+  border: 0.1rem solid currentcolor;
+  border-radius: 0.4em;
+  color: var(--md-typeset-a-color);
+  background: transparent;
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.md-typeset .fc-motion-toggle:hover {
+  background: var(--md-accent-fg-color--transparent);
+}
+
+.md-typeset .fc-motion-toggle:focus-visible {
+  outline: 0.15rem solid var(--md-accent-fg-color);
+  outline-offset: 0.15rem;
+}

@@ -61,11 +61,21 @@ def picture_refs(text: str) -> list[tuple[str, str]]:
     return found
 
 
+def files_of(shot: dict) -> list[str]:
+    """The entry's file, and for a GIF the still beside it that pages show."""
+    file = shot["file"]
+    return [file, capture.still_of(Path(file)).as_posix()] if file.endswith(".gif") else [file]
+
+
+def shown_name(shot: dict) -> str:
+    return Path(files_of(shot)[-1]).name
+
+
 class Manifests(unittest.TestCase):
     def test_every_use_is_a_page_that_shows_the_picture_with_its_alt(self):
         wrong = []
         for area, shot in entries():
-            name = Path(shot["file"]).name
+            name = shown_name(shot)
             for use in shot["uses"]:
                 page = REPO / use
                 if not page.is_file():
@@ -80,7 +90,7 @@ class Manifests(unittest.TestCase):
         self.assertEqual(wrong, [])
 
     def test_every_manual_and_readme_picture_has_one_entry(self):
-        listed = [shot["file"] for _, shot in entries()]
+        listed = [f for _, shot in entries() for f in files_of(shot)]
         on_disk = sorted(
             p.relative_to(REPO).as_posix()
             for folder in ("manual/docs/img", "assets/readme")
@@ -92,11 +102,29 @@ class Manifests(unittest.TestCase):
 
     def test_every_entry_has_the_size_of_its_file(self):
         wrong = {
-            shot["file"]: (picture_size(REPO / shot["file"]), tuple(shot["size"]))
+            f: (picture_size(REPO / f), tuple(shot["size"]))
             for _, shot in entries()
-            if picture_size(REPO / shot["file"]) != tuple(shot["size"])
+            for f in files_of(shot)
+            if picture_size(REPO / f) != tuple(shot["size"])
         }
         self.assertEqual(wrong, {})
+
+    # motion.js swaps the still for the GIF only where motion is allowed, so no page loads a GIF itself.
+    def test_a_page_shows_an_animation_as_its_still_marked_for_the_motion_script(self):
+        wrong = []
+        for page in sorted((REPO / "manual" / "docs").rglob("*.md")):
+            text = page.read_text(encoding="utf-8")
+            rel = page.relative_to(REPO).as_posix()
+            wrong += [f"{rel} shows {src}" for src, _ in picture_refs(text) if src.endswith(".gif")]
+            for src in re.findall(r"!\[[^\]]*\]\(([^)\s]+-still\.png)\)(\{[^}]*\})?", text):
+                if ".fc-motion" not in src[1]:
+                    wrong.append(f"{rel} shows {src[0]} without {{ .fc-motion }}")
+        self.assertEqual(wrong, [])
+
+    def test_the_still_of_a_gif_is_a_png_beside_it(self):
+        self.assertEqual(
+            capture.still_of(Path("manual/docs/img/orbit.gif")).as_posix(), "manual/docs/img/orbit-still.png"
+        )
 
     def test_no_two_retaken_entries_share_a_file_name_for_out(self):
         names = [Path(shot["file"]).name for _, shot in entries() if shot.get("crop") != "copy"]

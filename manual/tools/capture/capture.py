@@ -357,6 +357,11 @@ def grab(s, rect) -> bytes:
             s.page.wait_for_timeout(500)
 
 
+# The manual shows this under reduced motion, and until its script swaps in the GIF.
+def still_of(gif: Path) -> Path:
+    return gif.with_name(f"{gif.stem}-still.png")
+
+
 def take_gif(s, shot: dict, rect, path: Path, frames_dir: Path) -> str:
     from gif import write_gif
 
@@ -379,6 +384,7 @@ def take_gif(s, shot: dict, rect, path: Path, frames_dir: Path) -> str:
     if not frames:
         raise ShotError("a GIF entry needs frames")
     info = write_gif(path, frames, loop=gif.get("loop", 0))
+    still_of(path).write_bytes(png)
     return f'{info["frames"]} frames, {info["colours"]} colours, {info["bytes"] // 1024} KB, frames in {frames_dir}'
 
 

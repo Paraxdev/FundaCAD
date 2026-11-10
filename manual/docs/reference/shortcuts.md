@@ -99,7 +99,7 @@ Show Console in the command palette opens the console and puts focus on its head
 
 ## Mouse
 
-![A part turning in the viewport as the right button is dragged](../img/orbit.gif)
+![A part turning in the viewport as the right button is dragged](../img/orbit-still.png){ .fc-motion }
 
 | Mouse | What it does |
 | --- | --- |

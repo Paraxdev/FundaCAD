@@ -8,7 +8,7 @@ Extrude (E) pulls a closed shape from a sketch into a solid. It is the tool you 
 2. Drag the arrow, or type a depth.
 3. Press Enter.
 
-![Drawing a rectangle and extruding it into a block](../img/rectangle-extrude.gif)
+![Drawing a rectangle and extruding it into a block](../img/rectangle-extrude-still.png){ .fc-motion }
 
 Dragging into material cuts and dragging away adds, so one rectangle makes a boss or a pocket. An outline with a hole inside, such as a washer, keeps the hole open.
 
