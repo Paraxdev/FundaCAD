@@ -1439,7 +1439,7 @@ jobs:
   e2e:
     needs: rust-geom
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -1630,27 +1630,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Accessibility smoke (axe and aria snapshots)
-        timeout-minutes: 25
-        env:
-          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
-          FUNDACAD_CHROME: /usr/bin/google-chrome
-          FUNDACAD_HARNESS_KEEP: "1"
-          FUNDACAD_A11Y_OUT: ${{ runner.temp }}/a11y/out
-          TMPDIR: ${{ runner.temp }}/a11y/harness
-        run: |
-          mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
-          python -m pytest tools/harness/tests -m a11y -q --durations=25
-
-      - name: Accessibility smoke report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: a11y-smoke
-          path: ${{ runner.temp }}/a11y
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
@@ -1712,6 +1691,69 @@ jobs:
         with:
           name: harness-heavy-logs
           path: ${{ runner.temp }}/harness
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The axe and aria smoke took up to 21 minutes, about 34 on a slow runner, and pushed e2e into its limit, so it runs
+  # beside it. Like e2e, a failure turns the run red but does not hold back promote.sh.
+  e2e-a11y:
+    needs: rust-geom
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        uses: ./.github/actions/linux-deps
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm i --no-save playwright-core@1.56.0
+
+      - name: Fetch the engine rust-geom built
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fundacad-engine-linux
+          path: engine-bin
+
+      # The axe baseline was counted in e2e after this install, so the Render screen sees the same adapters.
+      - name: Install a software Vulkan driver
+        run: sudo timeout -k 10 600 apt-get install -y mesa-vulkan-drivers
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the agent harness
+        run: pip install -e "tools/harness[test]"
+
+      - name: Accessibility smoke (axe and aria snapshots)
+        timeout-minutes: 45
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          FUNDACAD_A11Y_OUT: ${{ runner.temp }}/a11y/out
+          TMPDIR: ${{ runner.temp }}/a11y/harness
+        run: |
+          chmod +x engine-bin/fundacad-engine
+          mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
+          python -m pytest tools/harness/tests -m a11y -q --durations=25
+
+      - name: Accessibility smoke report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: a11y-smoke
+          path: ${{ runner.temp }}/a11y
           if-no-files-found: ignore
           retention-days: 7
 
