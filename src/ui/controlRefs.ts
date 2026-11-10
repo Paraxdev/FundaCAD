@@ -295,15 +295,15 @@ export interface FamilyStep {
 }
 
 /** The family a rail tool is folded into, and the button that opens it, matched by
- *  action id first, then by label, exact before prefix. */
+ *  action id first, then by label or English name, exact before prefix. */
 export function familyOf(name: string, entries: RailEntry[]): { family: FamilyStep; pick: string } | null {
   const want = matchName(name.replace(/^pick:/, ""));
   for (const pass of ["exact", "prefix"] as const) {
     for (const e of entries) {
       if (e.kind !== "family") continue;
       const hit = e.items.find((t) => {
-        const label = matchName(t.label);
-        return t.action === want || (pass === "exact" ? label === want : label.startsWith(want));
+        const names = [t.label, t.english ?? ""].filter(Boolean).map(matchName);
+        return t.action === want || names.some((n) => (pass === "exact" ? n === want : n.startsWith(want)));
       });
       if (hit)
         return {
