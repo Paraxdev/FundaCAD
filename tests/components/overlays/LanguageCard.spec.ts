@@ -34,7 +34,9 @@ const rows = () => [...document.querySelectorAll<HTMLElement>("[role=option]")];
 async function pick(lang: string | null) {
   document.querySelector<HTMLElement>("#prefs-language")!.click();
   await flushPromises();
-  const row = rows().find((r) => r.querySelector(".opt-label")!.getAttribute("lang") === lang)!;
+  const row = rows().find(
+    (r) => (r.querySelector(".opt-label[lang], .opt-label [lang]")?.getAttribute("lang") ?? null) === lang,
+  )!;
   row.click();
   await vi.waitFor(() => expect(document.documentElement.lang).toBe(lang ?? "en"));
   await flushPromises();
@@ -275,12 +277,21 @@ describe("the user's own file in the browser", () => {
       text(".pref-title"),
       text("#prefs-language-hint"),
       w.get(".select-value").attributes("lang"),
+      w.findAll(".select-value span").map((s) => [s.text(), s.attributes("lang")]),
     ]).toEqual([
-      { value: "pl", label: line(en, "prefs.language.yours", "pl", { name: "polski" }), lang: "pl" },
+      {
+        value: "pl",
+        label: line(en, "prefs.language.yours", "en", { name: "polski" }),
+        parts: [{ text: "polski", lang: "pl" }, { text: line(en, "prefs.language.yours", "en", { name: "" }) }],
+      },
       "pl",
       "Język",
       en["prefs.language.hint"],
-      "pl",
+      undefined,
+      [
+        ["polski", "pl"],
+        [line(en, "prefs.language.yours", "en", { name: "" }).trim(), undefined],
+      ],
     ]);
   });
 

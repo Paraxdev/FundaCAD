@@ -27,8 +27,12 @@ describe("the app's catalog in the browser", () => {
       "System (English)",
       ["pl", "pl", "System (x) PL"],
       [
-        { value: "nl", label: "Nederlands (your file)", lang: "nl" },
-        { value: "pl", label: "polski (your file)", lang: "pl" },
+        {
+          value: "nl",
+          label: "Nederlands (your file)",
+          parts: [{ text: "Nederlands", lang: "nl" }, { text: " (your file)" }],
+        },
+        { value: "pl", label: "polski (your file)", parts: [{ text: "polski", lang: "pl" }, { text: " (your file)" }] },
         { value: "pseudo", label: "Pseudo", lang: "en-XA" },
       ],
       { code: "en", bcp47: "en" },

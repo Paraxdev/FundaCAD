@@ -319,6 +319,38 @@ describe("Select", () => {
     expect(trigger.get(".select-value").attributes("lang")).toBeUndefined();
   });
 
+  it("draws the shown option's parts in the trigger, the lang only on the name", async () => {
+    const own = [
+      { value: "apple", label: "Apple" },
+      {
+        value: "banana",
+        label: "polski (Ihre Datei)",
+        parts: [{ text: "polski", lang: "pl" }, { text: " (Ihre Datei)" }],
+      },
+    ];
+    const { w, trigger } = await render({ options: own, modelValue: "banana" });
+    const runs = () =>
+      trigger.findAll(".select-value span").map((s) => [s.element.textContent, s.attributes("lang") ?? null]);
+    const shown = [
+      trigger.get(".select-value").attributes("lang") ?? null,
+      runs(),
+      trigger.get(".select-value").text(),
+    ];
+    await w.setProps({ modelValue: "apple" });
+    expect([shown, runs(), trigger.get(".select-value").text()]).toEqual([
+      [
+        null,
+        [
+          ["polski", "pl"],
+          [" (Ihre Datei)", null],
+        ],
+        "polski (Ihre Datei)",
+      ],
+      [],
+      "Apple",
+    ]);
+  });
+
   it("keeps the attributes callers and e2e scripts rely on", async () => {
     const { el } = await render({ id: "fruit", testid: "fruit-pick", size: "sm", tip: "Fruit" });
     expect([

@@ -16,6 +16,8 @@ const props = defineProps<
       keyshortcuts?: string | undefined;
       /** The label's language, so a language's own name takes its letter forms (Han forms differ in zh and ja). */
       lang?: string | undefined;
+      /** The label in runs, so only the run that is a language's name carries its lang. */
+      parts?: readonly { text: string; lang?: string | undefined }[] | undefined;
     }[];
     modelValue: T | null;
     /** Set by a combobox that keeps focus itself (Select): the highlighted row, and no row takes focus. Left out, the
@@ -82,7 +84,12 @@ function hover(i: number) {
       @click="pick(o)"
     >
       <slot :option="o" :index="i" :selected="o.value === modelValue" :active="driven && i === active">
-        <span class="opt-label" :lang="o.lang">{{ o.label }}</span>
+        <span class="opt-label" :lang="o.lang">
+          <template v-if="o.parts">
+            <span v-for="(p, j) in o.parts" :key="j" :lang="p.lang">{{ p.text }}</span>
+          </template>
+          <template v-else>{{ o.label }}</template>
+        </span>
         <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>
       </slot>
     </button>

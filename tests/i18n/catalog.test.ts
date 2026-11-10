@@ -395,8 +395,12 @@ describe("the choices", () => {
       { value: "en", label: "English", lang: "en" },
       { value: "de", label: "Deutsch (maschinell übersetzt)", lang: "de-DE" },
       { value: "fr", label: "Français (traduction automatique)", lang: "fr" },
-      { value: "nl", label: "Nederlands (your file)", lang: "nl" },
-      { value: "pl", label: "polski (your file)", lang: "pl" },
+      {
+        value: "nl",
+        label: "Nederlands (your file)",
+        parts: [{ text: "Nederlands", lang: "nl" }, { text: " (your file)" }],
+      },
+      { value: "pl", label: "polski (your file)", parts: [{ text: "polski", lang: "pl" }, { text: " (your file)" }] },
     ]);
   });
 
@@ -405,9 +409,41 @@ describe("the choices", () => {
     await c.init();
     await c.setLanguage("fr");
     expect(c.choices().slice(-2)).toEqual([
-      { value: "pl", label: "polski (votre fichier)", lang: "pl" },
+      {
+        value: "pl",
+        label: "polski (votre fichier)",
+        parts: [{ text: "polski", lang: "pl" }, { text: " (votre fichier)" }],
+      },
       { value: "pseudo", label: "Pseudo", lang: "en-XA" },
     ]);
+  });
+
+  it("put the lang on the name alone, wherever the line places it, once or many times or not at all", async () => {
+    const own = (line: string) => ({
+      "fundacad.language.dropin.pl": "{}",
+      "fundacad.language.dropin.de": JSON.stringify({ "prefs.language.yours": line }),
+    });
+    const shown = async (line: string) => {
+      const { c } = make({}, own(line));
+      await c.init();
+      await c.setLanguage("de");
+      return c.choices().at(-1);
+    };
+    expect([await shown("Ihre Datei: {name}!"), await shown("{name} ({name})"), await shown("Eigene Sprache")]).toEqual(
+      [
+        {
+          value: "pl",
+          label: "Ihre Datei: polski!",
+          parts: [{ text: "Ihre Datei: " }, { text: "polski", lang: "pl" }, { text: "!" }],
+        },
+        {
+          value: "pl",
+          label: "polski (polski)",
+          parts: [{ text: "polski", lang: "pl" }, { text: " (" }, { text: "polski", lang: "pl" }, { text: ")" }],
+        },
+        { value: "pl", label: "Eigene Sprache", parts: [{ text: "Eigene Sprache" }] },
+      ],
+    );
   });
 
   it("name the System language once it follows System", async () => {
@@ -488,7 +524,7 @@ describe("loading a language file", () => {
       "pl",
       { code: "pl", bcp47: "pl" },
       ["Ustaw badanie", "Force 12.5 N on Face 3", "2,5 faces"],
-      { value: "pl", label: "polski (your file)", lang: "pl" },
+      { value: "pl", label: "polski (your file)", parts: [{ text: "polski", lang: "pl" }, { text: " (your file)" }] },
       "pl",
     ]);
   });

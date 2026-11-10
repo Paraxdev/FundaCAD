@@ -127,7 +127,7 @@ describe("the desktop app's language folder at the start", () => {
       t("prefs.language.hint"),
       document.documentElement.lang,
     ]).toEqual([
-      [{ value: "pl", label: "polski (your file)", lang: "pl" }],
+      [{ value: "pl", label: "polski (your file)", parts: [{ text: "polski", lang: "pl" }, { text: " (your file)" }] }],
       [["language_files_list"], ["language_file_read", { code: "pl" }]],
       "Mój język",
       en["prefs.language.hint"],

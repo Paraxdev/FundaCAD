@@ -43,7 +43,11 @@ export interface LanguageChoice {
   value: string;
   label: string;
   lang?: string;
+  parts?: { text: string; lang?: string }[];
 }
+
+// A dropped in line cannot hold a control character, so this marks where the name lands in the formatted label.
+const NAME_MARK = "\u0000";
 
 export interface DropInStatus {
   lines: number;
@@ -291,11 +295,15 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     }));
     const yours = dropInCodes.value
       .filter((code) => !languageOf(code))
-      .map((code) => ({
-        value: code,
-        label: lookup("prefs.language.yours", { name: languageName(code) }),
-        lang: code,
-      }));
+      .map((code) => {
+        const name = languageName(code);
+        const runs = lookup("prefs.language.yours", { name: NAME_MARK }).split(NAME_MARK);
+        const parts = runs.flatMap((text, i) => [
+          ...(i ? [{ text: name, lang: code }] : []),
+          ...(text ? [{ text }] : []),
+        ]);
+        return { value: code, label: runs.join(name), parts };
+      });
     const pseudoChoice = deps.dev
       ? [{ value: PSEUDO, label: PSEUDO_LANGUAGE.native, lang: PSEUDO_LANGUAGE.bcp47 }]
       : [];

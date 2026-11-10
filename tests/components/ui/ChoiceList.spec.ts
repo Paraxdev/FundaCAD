@@ -108,6 +108,33 @@ describe("ChoiceList", () => {
     expect(rows.map((r) => r.attributes("lang") ?? null)).toEqual([null, null, null]);
   });
 
+  it("draws a label given in parts as runs, the lang only on the runs that carry one", async () => {
+    const { rows } = await render({
+      options: [
+        { value: "a", label: "Alpha" },
+        {
+          value: "b",
+          label: "Ihre Datei: polski!",
+          parts: [{ text: "Ihre Datei: " }, { text: "polski", lang: "pl" }, { text: "!" }],
+        },
+      ],
+    });
+    const runs = rows.map((r) =>
+      r.findAll(".opt-label span").map((s) => [s.element.textContent, s.attributes("lang") ?? null]),
+    );
+    expect([runs, rows.map((r) => r.find(".opt-label").text())]).toEqual([
+      [
+        [],
+        [
+          ["Ihre Datei: ", null],
+          ["polski", "pl"],
+          ["!", null],
+        ],
+      ],
+      ["Alpha", "Ihre Datei: polski!"],
+    ]);
+  });
+
   it("warns in a dev build when it has no name", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mount(ChoiceList<V>, { props: { options: OPTIONS, modelValue: "c" } as never });
