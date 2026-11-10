@@ -13,21 +13,23 @@ deb)
   export DEBIAN_FRONTEND=noninteractive
   # A stalled mirror once held apt past the job's 20 minutes. A dead one left half the indexes
   # missing while apt-get update still exited 0, so the install failed on "held broken packages".
+  # The images keep their own mirror: azure.archive.ubuntu.com, which the runner itself uses,
+  # stalled every Ubuntu install from inside the container (run 42796033842).
   printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
     'APT::Update::Error-Mode "any";' > /etc/apt/apt.conf.d/80-ci-retries
-  if [ -n "${UBUNTU_MIRROR:-}" ] && grep -qx 'ID=ubuntu' /etc/os-release; then
-    for list in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
-      [ ! -f "$list" ] || sed -i "s#http://\(archive\|security\)\.ubuntu\.com/ubuntu/\?#$UBUNTU_MIRROR#" "$list"
-    done
-  fi
   for try in 1 2 3; do
     if timeout -k 10 120 apt-get update -qq; then break; fi
     [ "$try" != 3 ] || { echo "::error::apt-get update failed or stalled in three tries"; exit 1; }
     echo "::warning::apt-get update failed or stalled, try $try of 3"
     sleep 15
   done
-  # An unresolvable Depends fails here.
-  timeout -k 10 480 apt-get install -y -qq "$pkg"/FundaCAD_*.deb python3
+  # An unresolvable Depends fails here. Its Get: lines stay in the log, to show a download that stalls.
+  if ! timeout -k 10 480 apt-get install -y -q -o Dpkg::Use-Pty=0 "$pkg"/FundaCAD_*.deb python3; then
+    echo "::error::apt-get install failed or stalled, where it was:"
+    tail -n 15 /var/log/apt/term.log /var/log/dpkg.log 2>/dev/null || true
+    find /var/cache/apt/archives/partial -type f -printf '%s bytes %p\n' 2>/dev/null | tail -n 5
+    exit 1
+  fi
   smoke /usr/bin/fundacad --mcp
   ;;
 appimage)
