@@ -45,6 +45,10 @@ describe("the Flatpak job's Wayland smoke", () => {
     expect(smoke?.text).not.toMatch(/dbus-run-session/);
   });
 
+  it("stops the sandbox when the step ends, since bwrap takes it out of the smoke's process group", () => {
+    expect(smoke?.text).toMatch(/trap 'flatpak kill dev\.fundacad\.app[^']*' EXIT[\s\S]*scripts\/wayland-smoke\.sh/);
+  });
+
   it("waits long enough for the stall restart and the second start", () => {
     const secs = Number(/SMOKE_SECONDS=(\d+)/.exec(smoke?.text ?? "")?.[1]);
     expect(secs).toBeGreaterThanOrEqual(40);

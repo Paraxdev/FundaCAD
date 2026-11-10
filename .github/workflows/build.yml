@@ -853,6 +853,8 @@ jobs:
           # portal offers no Settings and GTK warns about it on every start.
           mkdir -p ~/.config/xdg-desktop-portal
           printf '[preferred]\ndefault=gtk\n' > ~/.config/xdg-desktop-portal/portals.conf
+          # bwrap puts the sandbox in a session of its own, out of reach of the smoke's group kill.
+          trap 'flatpak kill dev.fundacad.app 2>/dev/null || true' EXIT
           # The page stalls on this runner's software output, so the app starts again with
           # the DMABUF renderer off, which needs the time of two starts.
           SMOKE_SECONDS=40 SMOKE_APP_LOG="$HOME/.var/app/dev.fundacad.app/data/dev.fundacad.app/logs/fundacad.log" \
