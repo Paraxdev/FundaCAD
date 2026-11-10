@@ -18,6 +18,7 @@ import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
 import type { WorldRegion } from "../sketch/overlay";
 import type { Engine } from "./engine";
+import { speakCameraWhenSettled } from "./cameraSpeech";
 import type { Selector } from "../types";
 import { onThemeChange } from "../ui/theme";
 import { hitPx } from "../input/pointerKind";
@@ -325,6 +326,8 @@ export function installViewportWiring(e: Engine): void {
     refreshNudge();
     e.geometryBrowser.selectionChanged();
   };
+
+  e.viewport.onCubeView = () => speakCameraWhenSettled(e.viewport);
 
   let roundAsk = 0;
   /** The engine's size and wrap replace the mesh's guess in the prompt and the readout. */

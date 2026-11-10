@@ -1,4 +1,8 @@
 {
+  "camera.standard": "{view, select, front {前视图} back {后视图} left {左视图} right {右视图} top {俯视图} bottom {仰视图} other {等轴测视图}}，{projection, select, ortho {正交投影} other {透视投影}}",
+  "camera.tilted": "{side, select, front {前方} back {后方} left {左侧} other {右侧}}，{from, select, above {俯角} other {仰角}} {tilt, number}°，{projection, select, ortho {正交投影} other {透视投影}}",
+  "camera.turned": "{side, select, front {前方} back {后方} left {左侧} other {右侧}}，向{toward, select, front {前} back {后} left {左} other {右}}偏 {turn, number}°，{projection, select, ortho {正交投影} other {透视投影}}",
+  "camera.turnedTilted": "{side, select, front {前方} back {后方} left {左侧} other {右侧}}，向{toward, select, front {前} back {后} left {左} other {右}}偏 {turn, number}°，{from, select, above {俯角} other {仰角}} {tilt, number}°，{projection, select, ortho {正交投影} other {透视投影}}",
   "guide.counter": "第 {step, number} 步，共 {of, number} 步",
   "guide.keysLabel": "键盘操作：",
   "guide.next": "下一步",
@@ -135,5 +139,7 @@
   "stress.support.pinned": "铰接",
   "stress.support.pinnedHint": "孔或销：位置固定，可绕自身轴线自由转动",
   "stress.support.slider": "滑动",
-  "stress.support.sliderHint": "贴着面固定，可沿面自由滑动"
+  "stress.support.sliderHint": "贴着面固定，可沿面自由滑动",
+  "view.command": "{view, select, front {前视图} back {后视图} left {左视图} right {右视图} top {俯视图} bottom {仰视图} other {等轴测视图}}",
+  "view.named": "{view, select, front {前视图} back {后视图} left {左视图} right {右视图} top {俯视图} bottom {仰视图} other {等轴测视图}}"
 }

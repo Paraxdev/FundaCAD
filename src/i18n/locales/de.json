@@ -1,4 +1,8 @@
 {
+  "camera.standard": "{view, select, front {Vorderansicht} back {Rückansicht} left {Linke Seitenansicht} right {Rechte Seitenansicht} top {Draufsicht} bottom {Untersicht} other {Isometrische Ansicht}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
+  "camera.tilted": "{side, select, front {Vorne} back {Hinten} left {Links} other {Rechts}}, {tilt, number}° von {from, select, above {oben} other {unten}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
+  "camera.turned": "{side, select, front {Vorne} back {Hinten} left {Links} other {Rechts}}, {turn, number}° Richtung {toward, select, front {vorne} back {hinten} left {links} other {rechts}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
+  "camera.turnedTilted": "{side, select, front {Vorne} back {Hinten} left {Links} other {Rechts}}, {turn, number}° Richtung {toward, select, front {vorne} back {hinten} left {links} other {rechts}}, {tilt, number}° von {from, select, above {oben} other {unten}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
   "guide.counter": "Schritt {step, number} von {of, number}",
   "guide.keysLabel": "Mit Tasten:",
   "guide.next": "Weiter",
@@ -135,5 +139,7 @@
   "stress.support.pinned": "Drehbar",
   "stress.support.pinnedHint": "Eine Bohrung oder ein Bolzen: an Ort und Stelle gehalten, frei um die eigene Achse drehbar",
   "stress.support.slider": "Gleitend",
-  "stress.support.sliderHint": "An der Fläche gehalten, frei entlang der Fläche verschiebbar"
+  "stress.support.sliderHint": "An der Fläche gehalten, frei entlang der Fläche verschiebbar",
+  "view.command": "{view, select, front {Vorderansicht} back {Rückansicht} left {Linke Seitenansicht} right {Rechte Seitenansicht} top {Draufsicht} bottom {Untersicht} other {Isometrische Ansicht}}",
+  "view.named": "{view, select, front {Vorderansicht} back {Rückansicht} left {Linke Seitenansicht} right {Rechte Seitenansicht} top {Draufsicht} bottom {Untersicht} other {Isometrische Ansicht}}"
 }

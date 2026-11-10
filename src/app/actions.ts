@@ -3,7 +3,7 @@ import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
-import { toggleShortcutHUD } from "../input/shortcuts";
+import { STANDARD_VIEWS, toggleShortcutHUD } from "../input/shortcuts";
 import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
 import { endCommandedPick } from "../ui/treePick";
@@ -28,7 +28,10 @@ import { openConsole } from "../ui/logStore";
 import { changeInterfaceSize } from "../ui/interfaceSize";
 import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
+import { speakCameraWhenSettled } from "./cameraSpeech";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
+
+const VIEWS: ReadonlySet<string> = new Set(STANDARD_VIEWS);
 
 /** View actions leave the model alone, so a pick still waiting survives them. */
 const KEEPS_PICK = new Set([
@@ -37,7 +40,10 @@ const KEEPS_PICK = new Set([
   "iso",
   "top",
   "front",
+  "back",
+  "left",
   "right",
+  "bottom",
   "persp",
   "selmode",
   "selmode-auto",
@@ -156,6 +162,14 @@ export function createActions(e: Engine): (action: string) => void {
     if (step) {
       if (isChoiceOpen() || (!e.sketch.active && e.toolBusy())) return;
       e.viewport.stepView(step[1] as "left" | "right" | "up" | "down", !!step[2]);
+      speakCameraWhenSettled(e.viewport);
+      return;
+    }
+    // A view leaves an open sketch open too, the palette and the menus included.
+    if (VIEWS.has(action)) {
+      if (isChoiceOpen()) return;
+      e.viewport.setStandardView(action as StandardView);
+      speakCameraWhenSettled(e.viewport);
       return;
     }
     // Before the finish below, or Ctrl+Z would commit the sketch and then undo it whole.
@@ -413,12 +427,7 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "reset-camera":
         e.viewport.resetCamera();
-        break;
-      case "iso":
-      case "top":
-      case "front":
-      case "right":
-        e.viewport.setStandardView(action as StandardView);
+        speakCameraWhenSettled(e.viewport);
         break;
       case "persp": {
         const mode = e.viewport.cycleProjection();

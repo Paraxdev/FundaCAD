@@ -6,16 +6,35 @@ import { singleKeysOn } from "../ui/a11yPrefs";
 import { latinKey } from "./platform";
 import { readSetting } from "../ui/storedSetting";
 import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
+import type { StandardView } from "../viewport/cameras";
+import { t } from "../i18n";
 
 export interface Shortcut {
   key: string; // normalized lowercase key ("b", "home", "f6", "?")
   shift?: boolean;
-  /** Ctrl (or Cmd) must be held. Only the booleans use it: U, B and I are taken, and the three want keys that
-   *  read as a family. Everything else is bare so tool keys work one-handed beside the mouse. */
+  /** Ctrl (or Cmd) must be held. The booleans use it, since U, B and I are taken and the three want keys that read as
+   *  a family, and the views, whose digits are the selection modes bare. Everything else is bare so tool keys work
+   *  one-handed beside the mouse. */
   ctrl?: boolean;
   action: string; // action id fed to main's handleAction (or a special-cased id)
   context: "model" | "sketch" | "global";
   label: string;
+}
+
+/** The seven views in the order of their Ctrl digit. */
+export const STANDARD_VIEWS: readonly StandardView[] = ["front", "back", "left", "right", "top", "bottom", "iso"];
+
+// A getter, so the label follows a change of language.
+function viewShortcut(action: StandardView, key: string): Shortcut {
+  return {
+    key,
+    ctrl: true,
+    action,
+    context: "global",
+    get label() {
+      return t("view.named", { view: action });
+    },
+  };
 }
 
 export const SHORTCUTS: Shortcut[] = [
@@ -73,6 +92,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "p", action: "project", context: "model", label: "Sketch: Project" },
   { key: "home", action: "fit", context: "global", label: "Fit view" },
   { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
+  ...STANDARD_VIEWS.map((view, i) => viewShortcut(view, String(i + 1))),
   {
     key: "f6",
     action: "region-next",

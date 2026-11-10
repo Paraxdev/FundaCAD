@@ -33,7 +33,7 @@ describe("an action and the light", () => {
     ({
       sketch: { active: false, finish: vi.fn() },
       toolBusy: () => false,
-      viewport: { stepView: vi.fn() },
+      viewport: { stepView: vi.fn(), rig: { poseVersion: () => 0, isFlying: () => false } },
       lastAction: null,
     }) as unknown as Engine;
 

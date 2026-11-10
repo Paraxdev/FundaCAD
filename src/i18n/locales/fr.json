@@ -1,4 +1,8 @@
 {
+  "camera.standard": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}, {projection, select, ortho {orthographique} other {en perspective}}",
+  "camera.tilted": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {tilt, number}° {from, select, above {au-dessus} other {en dessous}}, {projection, select, ortho {orthographique} other {en perspective}}",
+  "camera.turned": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {turn, number}° vers {toward, select, front {l’avant} back {l’arrière} left {la gauche} other {la droite}}, {projection, select, ortho {orthographique} other {en perspective}}",
+  "camera.turnedTilted": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {turn, number}° vers {toward, select, front {l’avant} back {l’arrière} left {la gauche} other {la droite}}, {tilt, number}° {from, select, above {au-dessus} other {en dessous}}, {projection, select, ortho {orthographique} other {en perspective}}",
   "guide.counter": "Étape {step, number} sur {of, number}",
   "guide.keysLabel": "Au clavier :",
   "guide.next": "Suivant",
@@ -135,5 +139,7 @@
   "stress.support.pinned": "Articulé",
   "stress.support.pinnedHint": "Un trou ou un axe : tenu en place, libre de tourner autour de son axe",
   "stress.support.slider": "Glissant",
-  "stress.support.sliderHint": "Tenu contre la face, libre de glisser le long de celle-ci"
+  "stress.support.sliderHint": "Tenu contre la face, libre de glisser le long de celle-ci",
+  "view.command": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}",
+  "view.named": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}"
 }

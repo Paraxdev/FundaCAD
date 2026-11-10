@@ -74,6 +74,8 @@ These keys have not been tried yet with a screen reader. In browse mode a screen
 
 To a screen reader the 3D view is a picture named Model. Its description says how many bodies and features there are, which view you look from, whether Section is on and what is selected. It is brought up to date after each build, pick and view change, so moving focus to the view reads it again.
 
+Ctrl+1 to Ctrl+7 turn to the Front, Back, Left, Right, Top, Bottom and Isometric views. After one of them, an arrow key turn, Reset camera or a view cube click, the screen reader hears where the model is seen from: the view by name, or the nearest side with how far the view is turned and tilted, and whether it is orthographic or perspective.
+
 Describe Model, in the View menu and the command palette, opens a dialog with headings for Overview, Bodies, Features and View. Each body has its size, the center of its box and its volume. Sizes are X by Y by Z in your units, and Z points up. Copy as text puts the same text on the clipboard. Describe Selection says what is selected, with its size and center. Neither has a key until you [give them one](../reference/shortcuts.md#change-a-key).
 
 With VoiceOver on a Mac, Quick Nav is a quick way through the view and the dialog. Press Left Arrow and Right Arrow together to turn Quick Nav on. Then G moves to the next graphic, the 3D view, and VoiceOver reads its name and description. In the Describe Model dialog, H moves to the next heading and L to the next list, and the arrow keys read one body at a time. Turn Quick Nav off the same way before you type a value. Single key Quick Nav has to be on for G, H and L, VoiceOver Utility has the switch. These steps have not been tried yet with a screen reader.

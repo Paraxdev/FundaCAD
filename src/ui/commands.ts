@@ -2,7 +2,8 @@
 // src/input/shortcuts.ts so the palette cannot advertise a key the keymap does not bind.
 
 import { modelGroups, SKETCH, leavesOf, type Group } from "./ribbonDefs";
-import { keyHint } from "../input/shortcuts";
+import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
+import { t } from "../i18n";
 
 export interface Command {
   id: string; // the action id passed to the central dispatcher (handleAction)
@@ -10,6 +11,18 @@ export interface Command {
   group: string; // shown as a subtle category in the palette
   context: "model" | "sketch" | "global";
   key?: string; // display hint
+}
+
+// A getter, so the label follows a change of language.
+function viewCommand(id: string): Command {
+  return {
+    id,
+    group: "View",
+    context: "global",
+    get label() {
+      return t("view.command", { view: id });
+    },
+  };
 }
 
 // Only commands with no ribbon button, or they show twice in the palette. ribbonDefs.test.ts enforces it.
@@ -24,10 +37,7 @@ const GLOBAL: Command[] = [
   { id: "redo", label: "Redo", group: "Edit", context: "global", key: "Ctrl+Y" },
   { id: "fit", label: "Fit View", group: "View", context: "global", key: "Home" },
   { id: "reset-camera", label: "Reset Camera", group: "View", context: "global", key: "Shift+Home" },
-  { id: "iso", label: "Isometric View", group: "View", context: "global" },
-  { id: "top", label: "Top View", group: "View", context: "global" },
-  { id: "front", label: "Front View", group: "View", context: "global" },
-  { id: "right", label: "Right View", group: "View", context: "global" },
+  ...STANDARD_VIEWS.map(viewCommand),
   { id: "persp", label: "Cycle Projection (Persp / Ortho / Auto)", group: "View", context: "global" },
   { id: "selmode", label: "Toggle Faces / Bodies selection", group: "View", context: "global" },
   { id: "viewmode-matcap", label: "Matcap View Mode", group: "View", context: "global" },
@@ -73,11 +83,19 @@ export const GEOMETRY_COMMANDS: ReadonlySet<string> = new Set([
   "browse-geometry",
 ]);
 
-/** Shipped without a key like the geometry commands, so their hint is the key the person chose, if any. */
+/** Their hint comes from the shortcut table, so it is the key the person chose: the geometry commands ship without
+ *  one, the views with Ctrl and a digit. */
 const CHOSEN_KEY_COMMANDS: ReadonlySet<string> = new Set([
   ...GEOMETRY_COMMANDS,
   "describe-model",
   "describe-selection",
+  "front",
+  "back",
+  "left",
+  "right",
+  "top",
+  "bottom",
+  "iso",
 ]);
 
 function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {

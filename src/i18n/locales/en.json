@@ -1,4 +1,8 @@
 {
+  "camera.standard": "{view, select, front {Front view} back {Back view} left {Left view} right {Right view} top {Top view} bottom {Bottom view} other {Isometric view}}, {projection, select, ortho {orthographic} other {perspective}}",
+  "camera.tilted": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {tilt, number}° from {from, select, above {above} other {below}}, {projection, select, ortho {orthographic} other {perspective}}",
+  "camera.turned": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {projection, select, ortho {orthographic} other {perspective}}",
+  "camera.turnedTilted": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {tilt, number}° from {from, select, above {above} other {below}}, {projection, select, ortho {orthographic} other {perspective}}",
   "guide.counter": "Step {step, number} of {of, number}",
   "guide.keysLabel": "With keys:",
   "guide.next": "Next",
@@ -135,5 +139,7 @@
   "stress.support.pinned": "Pinned",
   "stress.support.pinnedHint": "A hole or a pin: held in place, free to turn about its axis",
   "stress.support.slider": "Slider",
-  "stress.support.sliderHint": "Held against the face, free to slide along it"
+  "stress.support.sliderHint": "Held against the face, free to slide along it",
+  "view.command": "{view, select, front {Front View} back {Back View} left {Left View} right {Right View} top {Top View} bottom {Bottom View} other {Isometric View}}",
+  "view.named": "{view, select, front {Front view} back {Back view} left {Left view} right {Right view} top {Top view} bottom {Bottom view} other {Isometric view}}"
 }
