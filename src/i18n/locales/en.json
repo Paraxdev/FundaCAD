@@ -6,6 +6,7 @@
   "dim.negative": "minus {amount}",
   "dim.stepHint": "Up and Down change it by {step}, by {fine} with Shift, Page Up and Page Down by {big}",
   "geometry.commands.pickWaiting": "The tool is waiting for a pick, step to it with ] and [ on the 3D view",
+  "geometry.list.waitsOnTool": "The list fills in once the tool is done",
   "guide.counter": "Step {step, number} of {of, number}",
   "guide.keysLabel": "With keys:",
   "guide.next": "Next",

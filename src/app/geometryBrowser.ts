@@ -342,7 +342,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   const STILL_BUILDING = "The model is still building";
   // A tool's preview holds the rows until the tool ends, a plain build only until it lands.
   const heldWhy = (s: RebuildState) =>
-    (s.previewBuilt?.length ?? 0) > 0 ? "The list fills in once the tool is done" : s.building ? STILL_BUILDING : null;
+    (s.previewBuilt?.length ?? 0) > 0 ? t("geometry.list.waitsOnTool") : s.building ? STILL_BUILDING : null;
 
   function heldBlocked(): string | null {
     if (e.sketch.active) return "Finish the sketch first";
