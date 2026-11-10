@@ -32,7 +32,9 @@ import {
   setTheme,
   themes,
 } from "../../ui/theme";
+import { t } from "../../i18n";
 import { confirmDanger } from "../../ui/choice";
+import { ACCESSIBILITY_PAGE, openExternal } from "../../ui/welcome";
 import { toast } from "../../ui/toast";
 import { describeFailures } from "../../ui/contrast";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
@@ -854,6 +856,9 @@ function onClassicCamera(on: boolean) {
               Single key shortcuts off and Solid panels on, the setup that suits NVDA, VoiceOver and other screen
               readers. Reset to defaults clears every choice below, so Contrast and Animations follow the system again.
             </p>
+            <Button variant="ghost" size="sm" data-a11y-manual @click="void openExternal(ACCESSIBILITY_PAGE)">{{
+              t("prefs.accessibility.manualLink")
+            }}</Button>
           </div>
 
           <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-vision">

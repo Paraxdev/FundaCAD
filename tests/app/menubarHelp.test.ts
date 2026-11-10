@@ -12,16 +12,19 @@ import { createActions } from "../../src/app/actions";
 import { NON_REPEATABLE } from "../../src/app/actionTables";
 import { allCommands } from "../../src/ui/commands";
 import { ideaUrl } from "../../src/ui/reportText";
-import { MANUAL_URL } from "../../src/ui/welcome";
+import { ACCESSIBILITY_PAGE, MANUAL_URL } from "../../src/ui/welcome";
 import { useDialogStore } from "../../src/stores/dialogs";
 import type { BugReportDeps } from "../../src/ui/bugReporter";
 import type { Engine } from "../../src/app/engine";
+import type { MenuItem } from "../../src/ui/menu";
+import { setLanguage } from "../../src/i18n";
 import capabilitiesJson from "../../src-tauri/capabilities/default.json?raw";
 import zensicalToml from "../../manual/zensical.toml?raw";
 
 const help = () =>
   buildMenubar({ ui: { home: { open: () => {} } } } as unknown as Engine).find((m) => m.label === "Help")!;
-const item = (label: string) => help().items.find((i) => i.label === label)!;
+const text = (i: MenuItem) => (typeof i.label === "function" ? i.label() : i.label);
+const item = (label: string) => help().items.find((i) => (i.refName ?? text(i)) === label)!;
 
 function openerScopes(): string[] {
   const caps = JSON.parse(capabilitiesJson);
@@ -38,9 +41,10 @@ describe("the Help menu", () => {
   });
 
   it("lists the manual, the report, the idea form and the issue tracker", () => {
-    expect(help().items.map((i) => (i.separator ? "---" : i.label))).toEqual([
+    expect(help().items.map((i) => (i.separator ? "---" : text(i)))).toEqual([
       "Keyboard Shortcuts",
       "Manual",
+      "Accessibility",
       "---",
       "Report a Problem…",
       "Suggest an Idea",
@@ -51,19 +55,41 @@ describe("the Help menu", () => {
     ]);
   });
 
-  it("opens the idea form, the manual and the issues, each inside the opener's allow list", async () => {
+  it("opens the idea form, the manual, its Accessibility page and the issues, each inside the opener's allow list", async () => {
     item("Suggest an Idea").onClick!();
     item("Manual").onClick!();
+    item("Accessibility").onClick!();
     item("Issue Tracker").onClick!();
     await Promise.resolve();
-    expect(opened).toEqual([ideaUrl(), MANUAL_URL, "https://github.com/Paraxdev/fundacad/issues"]);
-    expect(opened.map(inScope)).toEqual([true, true, true]);
+    expect(opened).toEqual([
+      ideaUrl(),
+      MANUAL_URL,
+      `${MANUAL_URL}reference/accessibility/`,
+      "https://github.com/Paraxdev/fundacad/issues",
+    ]);
+    expect(opened.map(inScope)).toEqual([true, true, true, true]);
     expect(inScope("https://paraxdev.github.io/elsewhere/")).toBe(false);
   });
 
   it("names the beta manual of the site the docs build publishes", () => {
     const site = /^site_url = "(.+)"$/m.exec(zensicalToml)![1];
     expect(MANUAL_URL).toBe(`${site}beta/`);
+  });
+
+  it("links an Accessibility page the manual builds", () => {
+    expect(zensicalToml).toContain('"reference/accessibility.md"');
+    expect(ACCESSIBILITY_PAGE).toBe(`${MANUAL_URL}reference/accessibility/`);
+  });
+
+  it("names the Accessibility row in the language in use, read again on each open", async () => {
+    const row = item("Accessibility");
+    await setLanguage("de");
+    try {
+      expect(text(row)).toBe("Barrierefreiheit");
+    } finally {
+      await setLanguage("system");
+    }
+    expect(text(row)).toBe("Accessibility");
   });
 
   it("opens the report only once the reporter is bound", () => {

@@ -26,11 +26,18 @@ import {
 import { experimentalPrefs, resetExperimentalPrefs, setExperimentalPref } from "../../../src/ui/experimentalPrefs";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { customThemes, DEFAULT_THEME_ID, getTheme, removeCustomTheme, setTheme, themes } from "../../../src/ui/theme";
+import { ACCESSIBILITY_PAGE } from "../../../src/ui/welcome";
+import { setLanguage } from "../../../src/i18n";
 
 const confirm = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/ui/choice", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/choice")>()),
   confirmDanger: confirm,
+}));
+const opened = vi.hoisted(() => [] as string[]);
+vi.mock("../../../src/ui/welcome", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/welcome")>()),
+  openExternal: async (url: string) => void opened.push(url),
 }));
 
 enableAutoUnmount(afterEach);
@@ -459,6 +466,27 @@ describe("Preferences Accessibility", () => {
     await category("access");
     const groups = [...$('[data-pane="access"]').querySelectorAll("[role=group]")];
     expect(groups.map(groupName)).toEqual(["Vision", "Speech", "Keyboard and pointer", "Motion"]);
+  });
+
+  it("opens the Accessibility page of the manual from a button after the hint, named in the language in use", async () => {
+    opened.length = 0;
+    await open();
+    await category("access");
+    const link = $("[data-a11y-manual]");
+    expect([label(link), link.previousElementSibling?.id]).toEqual([
+      "Read the Accessibility page of the manual",
+      "prefs-a11y-actions-hint",
+    ]);
+    link.click();
+    await flushPromises();
+    expect(opened).toEqual([ACCESSIBILITY_PAGE]);
+    try {
+      await setLanguage("de");
+      await flushPromises();
+      expect(label(link)).toBe("Die Seite Barrierefreiheit im Handbuch lesen");
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("picks Animations from Follow system, On and Off, and says what the system has while following it", async () => {
