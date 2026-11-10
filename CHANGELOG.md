@@ -29,6 +29,11 @@ This file starts on 2026-08-03. For anything before that, see the
   hears the count, each kind, and the largest overhang with its area and face.
   A failed or cancelled check is spoken too.
 
+- **Up and Down step the value in Extrude, Press/Pull, Fillet and Chamfer.**
+  Shift steps finer, Page Up and Page Down take ten steps, and a screen reader
+  hears each new value and, in the box, the size of a step. Ctrl+Z takes a
+  step back like typing. A box that holds a parameter name is left as typed.
+
 - **The Stress panel offers Perceptual, Rainbow or Greyscale colours, banded or
   smooth.** Colour map and Bands sit under the colour bar. The body and the bar
   change at once, with no new Run, and the choice is kept across studies and

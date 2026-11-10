@@ -97,6 +97,18 @@ Describe Model and Describe Selection read the model and the selection as text, 
 
 Show Console in the command palette opens the console and puts focus on its heading. The console shortcut does the same, except inside a text box, where they open it without taking focus. Closing the console puts focus back where it was. A screen reader says Error, Warning or Info before each line.
 
+## Value box keys
+
+In the distance and angle boxes of Extrude and Press/Pull, and the size box of Fillet and Chamfer:
+
+| Key | What it does |
+| --- | --- |
+| Up, Down | Steps the number up or down, by the arrow's step at this zoom, or 1° for an angle |
+| Shift+Up, Shift+Down | A finer step |
+| Page Up, Page Down | Ten steps |
+
+An empty box steps from 0. A box that holds a parameter name or an expression is left as typed, and a step past what the box takes is refused and said. Ctrl+Z takes a step back.
+
 ## Mouse
 
 ![A part turning in the viewport as the right button is dragged](../img/orbit-still.png){ .fc-motion }

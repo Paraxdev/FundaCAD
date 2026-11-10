@@ -88,6 +88,7 @@ function rig(regions: Fake[]) {
   const viewport = {
     domElement: canvas,
     suspendPicking: false,
+    pixelWorldSize: () => 0.1,
     pointInSolid: () => false,
     requestRender: vi.fn(),
     setPeek: vi.fn(),

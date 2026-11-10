@@ -25,6 +25,11 @@ export function gizmoRotateStep(fine = false): number {
   return fine ? ROTATE_FINE_DEG : ROTATE_STEP_DEG;
 }
 
+/** A taper's step in degrees, as its arc's drag rounds it. */
+export function taperStep(fine = false): number {
+  return fine ? 0.1 : 1;
+}
+
 /** Snap a resize factor so the dragged extent (`extent` mm before resizing)
  *  lands on whole slide steps. */
 export function snapScaleFactor(factor: number, extent: number, moveStep: number): number {

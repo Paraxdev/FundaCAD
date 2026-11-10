@@ -13,6 +13,7 @@ import { escapeClaimed } from "../ui/escapeClaim";
 import { isBoxButtonKey, isMenuKey, isRailButton, keyTargetFree } from "../ui/focus";
 import { announce } from "../ui/announce";
 import { setPrompt } from "../ui/prompt";
+import { gizmoMoveStep, taperStep } from "../viewport/gizmoStep";
 import { KeySurface } from "../sketch/keySurface";
 import { walkStep, walkUnits, walkWords } from "./profileWalk";
 import { snap } from "../ui/units";
@@ -275,7 +276,7 @@ export class ExtrudeTool {
       const depth = Math.abs(this.distance);
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       const inset = this.taperGrabInset + (this.taperGrabProj - proj);
-      const stepped = snap(draftAngle(inset, depth, MAX_TAPER_DEG), e.shiftKey ? 0.1 : 1);
+      const stepped = snap(draftAngle(inset, depth, MAX_TAPER_DEG), taperStep(e.shiftKey));
       this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, stepped));
       this.dim.takeOver("taper"); // the handle owns the ∠ field while it is held
       this.dim.updateFromCursor({ taper: this.taper });
@@ -543,8 +544,12 @@ export class ExtrudeTool {
     this.dim.show(
       // The ∠ field rides beside the depth; they never clobber each other, updateFromCursor only pushes `distance`.
       [
-        { name: "distance", label: "D" },
-        { name: "taper", label: "Angle", icon: "angle", kind: "angle" },
+        {
+          name: "distance",
+          label: "D",
+          step: (fine) => gizmoMoveStep(this.viewport.pixelWorldSize(this.anchor()), fine),
+        },
+        { name: "taper", label: "Angle", icon: "angle", kind: "angle", step: taperStep },
       ],
       () => this.commit(),
       () => this.cancel(),
@@ -979,10 +984,10 @@ export class ExtrudeTool {
     const sym = this.symmetric ? " · both ways (Alt+S)" : " · Alt+S symmetric";
     setPrompt(
       this.editId
-        ? `${word} · Ctrl-click areas · drag or type a value${sym} · click to apply · Esc`
+        ? `${word} · Ctrl-click areas · drag or type a value · Up or Down steps${sym} · click to apply · Esc`
         : this.pinnedOp
-          ? `${word} · Alt+O operation · drag or type a depth${sym} · side handle tapers · click to commit · Esc`
-          : `${word} · drag or type a depth, negative cuts${sym} · side handle tapers · click to commit · Esc`,
+          ? `${word} · Alt+O operation · drag or type a depth · Up or Down steps${sym} · side handle tapers · click to commit · Esc`
+          : `${word} · drag or type a depth, negative cuts · Up or Down steps${sym} · side handle tapers · click to commit · Esc`,
     );
   }
 

@@ -116,6 +116,7 @@ function startExtrude(real: DocumentStore, edit?: string) {
   const viewport = {
     domElement: document.createElement("canvas"),
     suspendPicking: false,
+    pixelWorldSize: () => 0.1,
     pointInSolid: () => false,
     requestRender: vi.fn(),
     setPeek: vi.fn(),

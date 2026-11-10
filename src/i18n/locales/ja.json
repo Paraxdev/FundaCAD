@@ -1,4 +1,6 @@
 {
+  "dim.negative": "マイナス {amount}",
+  "dim.stepHint": "上下矢印キーで {step} ずつ、Shift を押しながらで {fine} ずつ、Page Up と Page Down で {big} ずつ変わります",
   "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
   "guide.next": "次へ",

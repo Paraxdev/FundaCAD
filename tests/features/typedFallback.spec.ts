@@ -206,6 +206,7 @@ describe("extrude depth box", () => {
     const viewport = {
       domElement: document.createElement("canvas"),
       suspendPicking: false,
+      pixelWorldSize: () => 0.1,
       pointInSolid: () => true,
       requestRender: vi.fn(),
       setPeek: vi.fn(),
