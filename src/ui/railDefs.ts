@@ -2,7 +2,17 @@
 // selection shows the tools that act on it, and a sketch shows its drawing tools with each family behind one button.
 
 import { keyHint, shortcutRows } from "../input/shortcuts";
-import { leavesOf, modelGroups, SKETCH, type Group, type ToolItem } from "./ribbonDefs";
+import { t as translate, tEnglish, type MessageKey } from "../i18n";
+import {
+  groupEnglish,
+  groupName,
+  leavesOf,
+  modelGroups,
+  SKETCH,
+  toolEnglish,
+  type Group,
+  type ToolItem,
+} from "./ribbonDefs";
 
 export type RailMode = "model" | "selection" | "sketch";
 
@@ -10,6 +20,8 @@ export interface RailTool {
   kind: "tool";
   action: string;
   label: string;
+  /** The English name, for finding a tool in any language; absent for a plugin tool. */
+  english?: string;
   icon: string;
   keys?: string;
 }
@@ -21,6 +33,7 @@ export interface RailFamily {
   kind: "family";
   id: string;
   label: string;
+  english?: string;
   icon: string;
   style: "variants" | "category";
   items: RailTool[];
@@ -35,15 +48,23 @@ function keyOf(t: ToolItem): string | undefined {
 
 export function railTool(t: ToolItem): RailTool {
   const keys = keyOf(t);
-  return { kind: "tool", action: t.action, label: t.label, icon: t.iconName, ...(keys ? { keys } : {}) };
+  const english = toolEnglish(t.action);
+  return {
+    kind: "tool",
+    action: t.action,
+    label: t.label,
+    ...(english !== undefined ? { english } : {}),
+    icon: t.iconName,
+    ...(keys ? { keys } : {}),
+  };
 }
 
-const CATEGORY: Record<string, { label: string; icon: string }> = {
-  CREATE: { label: "Create", icon: "primitive" },
-  MODIFY: { label: "Modify", icon: "presspull" },
-  CONSTRUCT: { label: "Construct", icon: "datumPlane" },
-  INSPECT: { label: "Inspect", icon: "measure" },
-  INSERT: { label: "Insert", icon: "import" },
+const CATEGORY_ICON: Record<string, string> = {
+  CREATE: "primitive",
+  MODIFY: "presspull",
+  CONSTRUCT: "datumPlane",
+  INSPECT: "measure",
+  INSERT: "import",
 };
 
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
@@ -60,12 +81,13 @@ export function modelRail(groups: Group[] = modelGroups()): RailEntry[] {
       tools = tools.filter((t) => t !== sketch);
     }
     if (!tools.length) continue;
-    const meta = CATEGORY[g.label];
+    const english = groupEnglish(g.label);
     out.push({
       kind: "family",
       id: `cat:${g.label}`,
-      label: meta?.label ?? titleCase(g.label),
-      icon: meta?.icon ?? tools[0]!.icon,
+      label: groupName(g.label) ?? titleCase(g.label),
+      ...(english !== undefined ? { english } : {}),
+      icon: CATEGORY_ICON[g.label] ?? tools[0]!.icon,
       style: "category",
       items: tools,
     });
@@ -96,23 +118,23 @@ export function sketchToolName(action: string): { label: string; keys?: string }
   }
 }
 
-type SketchSlot = string | { id: string; label: string; actions: readonly string[] };
+type SketchSlot = string | { id: string; labelKey: MessageKey; actions: readonly string[] };
 
 const SKETCH_SLOTS: readonly SketchSlot[] = [
   "line",
   "arc",
-  { id: "spline", label: "Spline", actions: ["spline", "bspline"] },
-  { id: "rectangle", label: "Rectangle", actions: ["rectangle", "centerRectangle", "rectangle3"] },
-  { id: "circle", label: "Circle", actions: ["circle", "circle2", "circle3"] },
+  { id: "spline", labelKey: "tool.spline", actions: ["spline", "bspline"] },
+  { id: "rectangle", labelKey: "tool.rectangle", actions: ["rectangle", "centerRectangle", "rectangle3"] },
+  { id: "circle", labelKey: "tool.circle", actions: ["circle", "circle2", "circle3"] },
   "polygon",
-  { id: "slot", label: "Slot", actions: ["slot", "point"] },
-  { id: "offset", label: "Offset", actions: ["offset", "extend", "break"] },
-  { id: "corner", label: "Fillet", actions: ["fillet-sketch", "chamfer-sketch"] },
+  { id: "slot", labelKey: "tool.slot", actions: ["slot", "point"] },
+  { id: "offset", labelKey: "tool.offset", actions: ["offset", "extend", "break"] },
+  { id: "corner", labelKey: "tool.fillet", actions: ["fillet-sketch", "chamfer-sketch"] },
   "move-sketch",
   "mirror-sketch",
   {
     id: "pattern",
-    label: "Pattern",
+    labelKey: "tool.family.pattern",
     actions: ["patternLinear", "patternCircular", "patternRect", "boltCircle", "hexHoles", "honeycomb", "gridHoles"],
   },
   "project",
@@ -121,7 +143,7 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   "dimension",
   {
     id: "constrain",
-    label: "Constrain",
+    labelKey: "tool.family.constrain",
     actions: [
       "horizontal",
       "vertical",
@@ -148,7 +170,15 @@ export function sketchRail(): RailEntry[] {
   return SKETCH_SLOTS.map((slot): RailEntry => {
     if (typeof slot === "string") return railTool(sketchLeaf(slot));
     const items = slot.actions.map((a) => railTool(sketchLeaf(a)));
-    return { kind: "family", id: `fam:${slot.id}`, label: slot.label, icon: items[0]!.icon, style: "variants", items };
+    return {
+      kind: "family",
+      id: `fam:${slot.id}`,
+      label: translate(slot.labelKey),
+      english: tEnglish(slot.labelKey),
+      icon: items[0]!.icon,
+      style: "variants",
+      items,
+    };
   });
 }
 

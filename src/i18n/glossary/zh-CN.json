@@ -150,6 +150,211 @@
     {
       "en": "View",
       "text": "视图"
+    },
+    {
+      "en": "Extrude",
+      "text": "拉伸"
+    },
+    {
+      "en": "Revolve",
+      "text": "旋转"
+    },
+    {
+      "en": "Loft",
+      "text": "放样"
+    },
+    {
+      "en": "Sweep",
+      "text": "扫掠"
+    },
+    {
+      "en": "Press/Pull",
+      "text": "推拉"
+    },
+    {
+      "en": "Fillet",
+      "text": "圆角"
+    },
+    {
+      "en": "Chamfer",
+      "text": "倒角"
+    },
+    {
+      "en": "Hole",
+      "text": "孔"
+    },
+    {
+      "en": "Move",
+      "text": "移动"
+    },
+    {
+      "en": "Scale",
+      "text": "缩放"
+    },
+    {
+      "en": "Mirror",
+      "text": "镜像"
+    },
+    {
+      "en": "Shell",
+      "text": "抽壳"
+    },
+    {
+      "en": "Draft",
+      "text": "拔模"
+    },
+    {
+      "en": "Thread",
+      "text": "螺纹"
+    },
+    {
+      "en": "Pattern",
+      "text": "阵列"
+    },
+    {
+      "en": "Plane",
+      "text": "平面"
+    },
+    {
+      "en": "Datum",
+      "text": "基准"
+    },
+    {
+      "en": "Boolean",
+      "text": "布尔"
+    },
+    {
+      "en": "Union",
+      "text": "合并"
+    },
+    {
+      "en": "Subtract",
+      "text": "减去"
+    },
+    {
+      "en": "Intersect",
+      "text": "相交"
+    },
+    {
+      "en": "Section",
+      "text": "截面"
+    },
+    {
+      "en": "Measure",
+      "text": "测量"
+    },
+    {
+      "en": "Overhang",
+      "text": "悬垂"
+    },
+    {
+      "en": "Thicken",
+      "text": "加厚"
+    },
+    {
+      "en": "Primitive",
+      "text": "基本体"
+    },
+    {
+      "en": "Midplane",
+      "text": "中间平面"
+    },
+    {
+      "en": "Constraints",
+      "text": "约束"
+    },
+    {
+      "en": "Sketch",
+      "text": "草图"
+    },
+    {
+      "en": "Line",
+      "text": "直线"
+    },
+    {
+      "en": "Arc",
+      "text": "圆弧"
+    },
+    {
+      "en": "Circle",
+      "text": "圆"
+    },
+    {
+      "en": "Polygon",
+      "text": "多边形"
+    },
+    {
+      "en": "Slot",
+      "text": "槽"
+    },
+    {
+      "en": "Spline",
+      "text": "样条曲线"
+    },
+    {
+      "en": "Trim",
+      "text": "修剪"
+    },
+    {
+      "en": "Extend",
+      "text": "延伸"
+    },
+    {
+      "en": "Offset",
+      "text": "偏移"
+    },
+    {
+      "en": "Break",
+      "text": "打断"
+    },
+    {
+      "en": "Constrain",
+      "text": "约束"
+    },
+    {
+      "en": "Dimension",
+      "text": "尺寸"
+    },
+    {
+      "en": "Tangent",
+      "text": "相切"
+    },
+    {
+      "en": "Parallel",
+      "text": "平行"
+    },
+    {
+      "en": "Coincident",
+      "text": "重合"
+    },
+    {
+      "en": "Concentric",
+      "text": "同心"
+    },
+    {
+      "en": "Collinear",
+      "text": "共线"
+    },
+    {
+      "en": "Symmetric",
+      "text": "对称"
+    },
+    {
+      "en": "Midpoint",
+      "text": "中点"
+    },
+    {
+      "en": "Project",
+      "text": "投影"
+    },
+    {
+      "en": "Rotate",
+      "text": "转动",
+      "note": "Revolve is 旋转"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "环形阵列"
     }
   ]
 }

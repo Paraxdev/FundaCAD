@@ -467,6 +467,7 @@
   flex-direction: column;
   justify-content: center;
   min-height: 28px;
+  max-width: 14rem;
   padding: 3px 8px;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
@@ -478,19 +479,23 @@
 .rail-line {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  white-space: nowrap;
 }
 .rail-label {
   font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .rail-sub {
   font-size: var(--fs-micro);
   line-height: 1.2;
   color: var(--text-mute);
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .rail-btn.active .rail-label {
   color: var(--accent-hot);

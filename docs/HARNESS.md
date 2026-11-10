@@ -110,6 +110,9 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.page_errors()` | uncaught page errors seen so far |
 | `s.screenshot(path=None, target=None)` | a PNG of the page or of one control, returns its path |
 
+`s.tool()` finds a tool by its English name in any language. `s.status(raw=True)["tool"]` and the running tool's
+aria-label give the name the user sees, so a script that compares them to "Extrude" runs in English only.
+
 `screen()` regions: titlebar, menu, toolrail, history, props, items, valuebox, dialog, context,
 render, views, status, other. Each line is a ref, a role, a label and flags such as `disabled`,
 `on`, `selected` or `= "value"`. Refs are what actions take, for example `#undo-btn`,

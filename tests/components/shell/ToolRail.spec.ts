@@ -41,7 +41,7 @@ vi.mock("../../../src/composables/useSelectionOffers", () => ({
 }));
 
 vi.mock("../../../src/app/useDoc", () => ({
-  useDocValue: () => computed(() => "New sketch"),
+  useDocValue: () => computed(() => ({ number: 0, name: "" })),
   useBuildValue: () => computed(() => false),
 }));
 

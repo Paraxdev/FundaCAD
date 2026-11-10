@@ -31,7 +31,7 @@
     },
     {
       "en": "Stress",
-      "text": "Contraintes",
+      "text": "Analyse des contraintes",
       "note": "the Stress panel"
     },
     {
@@ -151,6 +151,206 @@
     {
       "en": "View",
       "text": "Affichage"
+    },
+    {
+      "en": "Extrude",
+      "text": "Extruder"
+    },
+    {
+      "en": "Revolve",
+      "text": "Révolution"
+    },
+    {
+      "en": "Loft",
+      "text": "Lissage"
+    },
+    {
+      "en": "Sweep",
+      "text": "Balayage"
+    },
+    {
+      "en": "Press/Pull",
+      "text": "Pousser/Tirer"
+    },
+    {
+      "en": "Fillet",
+      "text": "Congé"
+    },
+    {
+      "en": "Chamfer",
+      "text": "Chanfrein"
+    },
+    {
+      "en": "Hole",
+      "text": "Perçage"
+    },
+    {
+      "en": "Move",
+      "text": "Déplacer"
+    },
+    {
+      "en": "Scale",
+      "text": "Mettre à l'échelle"
+    },
+    {
+      "en": "Mirror",
+      "text": "Miroir"
+    },
+    {
+      "en": "Shell",
+      "text": "Coque"
+    },
+    {
+      "en": "Draft",
+      "text": "Dépouille"
+    },
+    {
+      "en": "Thread",
+      "text": "Filetage"
+    },
+    {
+      "en": "Pattern",
+      "text": "Réseau"
+    },
+    {
+      "en": "Plane",
+      "text": "Plan"
+    },
+    {
+      "en": "Datum",
+      "text": "Référence"
+    },
+    {
+      "en": "Boolean",
+      "text": "Booléen"
+    },
+    {
+      "en": "Union",
+      "text": "Unir"
+    },
+    {
+      "en": "Subtract",
+      "text": "Soustraire"
+    },
+    {
+      "en": "Intersect",
+      "text": "Intersecter"
+    },
+    {
+      "en": "Section",
+      "text": "Coupe"
+    },
+    {
+      "en": "Measure",
+      "text": "Mesurer"
+    },
+    {
+      "en": "Overhang",
+      "text": "Porte-à-faux"
+    },
+    {
+      "en": "Thicken",
+      "text": "Épaissir"
+    },
+    {
+      "en": "Primitive",
+      "text": "Primitive"
+    },
+    {
+      "en": "Midplane",
+      "text": "Plan médian"
+    },
+    {
+      "en": "Constraints",
+      "text": "Contraintes"
+    },
+    {
+      "en": "Sketch",
+      "text": "Esquisse"
+    },
+    {
+      "en": "Line",
+      "text": "Ligne"
+    },
+    {
+      "en": "Arc",
+      "text": "Arc"
+    },
+    {
+      "en": "Circle",
+      "text": "Cercle"
+    },
+    {
+      "en": "Polygon",
+      "text": "Polygone"
+    },
+    {
+      "en": "Slot",
+      "text": "Rainure"
+    },
+    {
+      "en": "Spline",
+      "text": "Spline"
+    },
+    {
+      "en": "Trim",
+      "text": "Ajuster"
+    },
+    {
+      "en": "Extend",
+      "text": "Prolonger"
+    },
+    {
+      "en": "Offset",
+      "text": "Décaler"
+    },
+    {
+      "en": "Break",
+      "text": "Couper"
+    },
+    {
+      "en": "Constrain",
+      "text": "Contrainte"
+    },
+    {
+      "en": "Dimension",
+      "text": "Cotation"
+    },
+    {
+      "en": "Tangent",
+      "text": "Tangent"
+    },
+    {
+      "en": "Parallel",
+      "text": "Parallèle"
+    },
+    {
+      "en": "Coincident",
+      "text": "Coïncident"
+    },
+    {
+      "en": "Concentric",
+      "text": "Concentrique"
+    },
+    {
+      "en": "Collinear",
+      "text": "Colinéaire"
+    },
+    {
+      "en": "Symmetric",
+      "text": "Symétrique"
+    },
+    {
+      "en": "Midpoint",
+      "text": "Milieu"
+    },
+    {
+      "en": "Project",
+      "text": "Projeter"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "Réseau circulaire"
     }
   ]
 }

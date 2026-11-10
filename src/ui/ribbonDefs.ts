@@ -3,6 +3,7 @@
 import { contributedRibbon } from "../plugins/contrib";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint } from "../input/shortcuts";
+import { t, tEnglish, type MessageKey } from "../i18n";
 
 export type RibbonContext = "model" | "sketch";
 
@@ -32,130 +33,165 @@ export function leavesOf(it: Item): ToolItem[] {
   return "children" in it ? it.children : [it];
 }
 
+const TOOL_KEYS = new Map<string, MessageKey>();
+
+// A getter, so the label follows a change of language; the key is kept for the English alias.
+function tool(action: string, labelKey: MessageKey, iconName: string, opts: { key?: string } = {}): ToolItem {
+  TOOL_KEYS.set(action, labelKey);
+  return {
+    action,
+    iconName,
+    ...(opts.key !== undefined ? { key: opts.key } : {}),
+    get label() {
+      return t(labelKey);
+    },
+  };
+}
+
+function split(labelKey: MessageKey, children: ToolItem[]): SplitItem {
+  return {
+    get label() {
+      return t(labelKey);
+    },
+    children,
+  };
+}
+
+const BOOLEAN_KEYS = { union: "tool.union", subtract: "tool.subtract", intersect: "tool.intersect" } as const;
+
+// Group labels are ids, so the display text is looked up here.
+const GROUP_KEYS: Record<string, MessageKey> = {
+  CREATE: "tool.group.create",
+  MODIFY: "tool.group.modify",
+  CONSTRUCT: "tool.group.construct",
+  INSPECT: "tool.group.inspect",
+  INSERT: "tool.group.insert",
+  PATTERN: "tool.group.pattern",
+  CONSTRAINTS: "tool.group.constraints",
+};
+
+/** The live name of a built in tool, undefined for one the tables do not carry (a plugin's). */
+export function toolLabel(action: string): string | undefined {
+  const key = TOOL_KEYS.get(action);
+  return key ? t(key) : undefined;
+}
+
+export function toolEnglish(action: string): string | undefined {
+  const key = TOOL_KEYS.get(action);
+  return key ? tEnglish(key) : undefined;
+}
+
+export function groupName(id: string): string | undefined {
+  const key = Object.hasOwn(GROUP_KEYS, id) ? GROUP_KEYS[id] : undefined;
+  return key ? t(key) : undefined;
+}
+
+export function groupEnglish(id: string): string | undefined {
+  const key = Object.hasOwn(GROUP_KEYS, id) ? GROUP_KEYS[id] : undefined;
+  return key ? tEnglish(key) : undefined;
+}
+
 export const MODEL: Group[] = [
   {
     label: "CREATE",
     items: [
-      { action: "sketch", label: "Sketch", iconName: "sketch", key: "S" },
-      { action: "extrude", label: "Extrude", iconName: "extrude", key: "E" },
-      { action: "primitive", label: "Primitive", iconName: "primitive" },
-      {
-        label: "Revolve",
-        children: [
-          { action: "revolve", label: "Revolve", iconName: "revolve" },
-          { action: "loft", label: "Loft", iconName: "loft" },
-          { action: "sweep", label: "Sweep", iconName: "sweep" },
-        ],
-      },
+      tool("sketch", "tool.sketch", "sketch", { key: "S" }),
+      tool("extrude", "tool.extrude", "extrude", { key: "E" }),
+      tool("primitive", "tool.primitive", "primitive"),
+      split("tool.revolve", [
+        tool("revolve", "tool.revolve", "revolve"),
+        tool("loft", "tool.loft", "loft"),
+        tool("sweep", "tool.sweep", "sweep"),
+      ]),
     ],
   },
   {
     label: "MODIFY",
     items: [
-      { action: "presspull", label: "Press/Pull", iconName: "presspull", key: "Q" },
-      { action: "fillet", label: "Fillet", iconName: "fillet", key: "F" },
-      { action: "chamfer", label: "Chamfer", iconName: "chamfer", key: "B" },
-      { action: "hole", label: "Hole", iconName: "hole" },
-      {
-        label: "Move",
-        children: [
-          { action: "move", label: "Move", iconName: "move", key: "M" },
-          { action: "scale", label: "Scale", iconName: "scale" },
-          { action: "mirror", label: "Mirror", iconName: "mirror" },
-          { action: "joint", label: "Joint", iconName: "assembly" },
-          { action: "mechanism", label: "Mechanism", iconName: "mechanism" },
-          // Two entries: linear and circular are different gestures, so the choice belongs on the button.
-          { action: "pattern-linear", label: "Linear Pattern", iconName: "patternLinear" },
-          { action: "pattern-circular", label: "Circular Pattern", iconName: "patternCircular" },
-          { action: "pattern-rect", label: "Rect Pattern", iconName: "patternRect" },
-        ],
-      },
+      tool("presspull", "tool.pressPull", "presspull", { key: "Q" }),
+      tool("fillet", "tool.fillet", "fillet", { key: "F" }),
+      tool("chamfer", "tool.chamfer", "chamfer", { key: "B" }),
+      tool("hole", "tool.hole", "hole"),
+      split("tool.move", [
+        tool("move", "tool.move", "move", { key: "M" }),
+        tool("scale", "tool.scale", "scale"),
+        tool("mirror", "tool.mirror", "mirror"),
+        tool("joint", "tool.joint", "assembly"),
+        tool("mechanism", "tool.mechanism", "mechanism"),
+        // Two entries: linear and circular are different gestures, so the choice belongs on the button.
+        tool("pattern-linear", "tool.linearPattern", "patternLinear"),
+        tool("pattern-circular", "tool.circularPattern", "patternCircular"),
+        tool("pattern-rect", "tool.rectPattern", "patternRect"),
+      ]),
       // Split Body is not a boolean: it cuts one body with a plane, so it stands on its own.
-      {
-        label: "Boolean",
+      split(
+        "tool.family.boolean",
         // Hints are read from the keymap, since the booleans' keys carry a modifier a hand-written "U" would misstate.
-        children: BOOLEAN_COMMANDS.map((c) => {
+        BOOLEAN_COMMANDS.map((c) => {
           const key = keyHint(c.action);
-          return {
-            action: c.action,
-            label: c.label,
-            iconName: c.iconName,
-            ...(key !== undefined ? { key } : {}),
-          };
+          return tool(c.action, BOOLEAN_KEYS[c.op], c.iconName, key !== undefined ? { key } : {});
         }),
-      },
-      { action: "split", label: "Split Body", iconName: "split", key: "K" },
-      { action: "separate", label: "Separate", iconName: "split" },
-      {
-        label: "Shell",
-        children: [
-          { action: "shell", label: "Shell", iconName: "shell" },
-          { action: "draft", label: "Draft", iconName: "draft" },
-          { action: "thread", label: "Thread", iconName: "thread" },
-          { action: "text-on-face", label: "Text on Face", iconName: "text" },
-          { action: "offset-face", label: "Offset Face", iconName: "offsetFace" },
-          { action: "thicken", label: "Thicken", iconName: "thicken" },
-        ],
-      },
-      { action: "change-parameters", label: "Parameters", iconName: "parameters" },
+      ),
+      tool("split", "tool.splitBody", "split", { key: "K" }),
+      tool("separate", "tool.separate", "split"),
+      split("tool.shell", [
+        tool("shell", "tool.shell", "shell"),
+        tool("draft", "tool.draft", "draft"),
+        tool("thread", "tool.thread", "thread"),
+        tool("text-on-face", "tool.textOnFace", "text"),
+        tool("offset-face", "tool.offsetFace", "offsetFace"),
+        tool("thicken", "tool.thicken", "thicken"),
+      ]),
+      tool("change-parameters", "tool.parameters", "parameters"),
     ],
   },
   {
     label: "CONSTRUCT",
     items: [
-      { action: "offset-plane", label: "Offset Plane", iconName: "offsetPlane", key: "O" },
-      {
-        label: "Plane",
-        children: [
-          { action: "datum-plane", label: "Datum Plane", iconName: "datumPlane" },
-          { action: "midplane", label: "Midplane", iconName: "midplane" },
-          { action: "plane-points", label: "Plane, 3 Pts", iconName: "planePoints" },
-          { action: "plane-normal-edge", label: "Normal to Edge", iconName: "datumPlane" },
-          { action: "plane-two-edges", label: "Plane, 2 Edges", iconName: "datumPlane" },
-          { action: "plane-angle", label: "Plane at Angle", iconName: "datumPlane" },
-        ],
-      },
-      {
-        label: "Datum",
-        children: [
-          { action: "datum-point", label: "Datum Point", iconName: "datumPoint" },
-          { action: "datum-axis", label: "Datum Axis", iconName: "datumAxis" },
-          { action: "datum-axis-edge", label: "Axis on Edge", iconName: "datumAxis" },
-          { action: "axis-cylinder", label: "Axis of Cylinder", iconName: "datumAxis" },
-          { action: "axis-planes", label: "Axis, 2 Planes", iconName: "datumAxis" },
-        ],
-      },
+      tool("offset-plane", "tool.offsetPlane", "offsetPlane", { key: "O" }),
+      split("tool.family.plane", [
+        tool("datum-plane", "tool.datumPlane", "datumPlane"),
+        tool("midplane", "tool.midplane", "midplane"),
+        tool("plane-points", "tool.planePoints", "planePoints"),
+        tool("plane-normal-edge", "tool.normalToEdge", "datumPlane"),
+        tool("plane-two-edges", "tool.planeTwoEdges", "datumPlane"),
+        tool("plane-angle", "tool.planeAtAngle", "datumPlane"),
+      ]),
+      split("tool.family.datum", [
+        tool("datum-point", "tool.datumPoint", "datumPoint"),
+        tool("datum-axis", "tool.datumAxis", "datumAxis"),
+        tool("datum-axis-edge", "tool.axisOnEdge", "datumAxis"),
+        tool("axis-cylinder", "tool.axisOfCylinder", "datumAxis"),
+        tool("axis-planes", "tool.axisTwoPlanes", "datumAxis"),
+      ]),
     ],
   },
   {
     label: "INSPECT",
     items: [
-      { action: "measure", label: "Measure", iconName: "measure", key: "I" },
-      { action: "section", label: "Section", iconName: "section" },
-      {
-        label: "Analyze",
-        children: [
-          { action: "properties", label: "Properties", iconName: "properties" },
-          { action: "interference", label: "Interference", iconName: "interference" },
-          { action: "stress", label: "Stress", iconName: "stress" },
-          { action: "draft-analysis", label: "Overhang", iconName: "draftAnalysis" },
-          { action: "zebra", label: "Zebra", iconName: "zebra" },
-          { action: "curvature", label: "Curvature", iconName: "curvature" },
-          { action: "component-colors", label: "Body Colors", iconName: "componentColors" },
-        ],
-      },
+      tool("measure", "tool.measure", "measure", { key: "I" }),
+      tool("section", "tool.section", "section"),
+      split("tool.family.analyze", [
+        tool("properties", "tool.properties", "properties"),
+        tool("interference", "tool.interference", "interference"),
+        tool("stress", "tool.stress", "stress"),
+        tool("draft-analysis", "tool.overhang", "draftAnalysis"),
+        tool("zebra", "tool.zebra", "zebra"),
+        tool("curvature", "tool.curvature", "curvature"),
+        tool("component-colors", "tool.bodyColors", "componentColors"),
+      ]),
       // Beside Zebra, Curvature and Body Colors, ways of looking at the model; in the Edit menu alone nobody found it.
-      { action: "materials", label: "Materials", iconName: "material" },
+      tool("materials", "tool.materials", "material"),
     ],
   },
   {
     label: "INSERT",
     items: [
-      { action: "import", label: "Import Mesh", iconName: "import" },
-      { action: "insert-document", label: "Insert Document", iconName: "insertDocument" },
-      { action: "simplify-mesh", label: "Simplify Mesh", iconName: "simplifyMesh" },
-      { action: "clean-up", label: "Clean Up", iconName: "cleanUp", key: "U" },
-      { action: "compute-all", label: "Compute All", iconName: "computeAll" },
+      tool("import", "tool.importMesh", "import"),
+      tool("insert-document", "tool.insertDocument", "insertDocument"),
+      tool("simplify-mesh", "tool.simplifyMesh", "simplifyMesh"),
+      tool("clean-up", "tool.cleanUp", "cleanUp", { key: "U" }),
+      tool("compute-all", "tool.computeAll", "computeAll"),
     ],
   },
 ];
@@ -190,96 +226,87 @@ export const SKETCH: Group[] = [
   {
     label: "CREATE",
     items: [
-      { action: "line", label: "Line", iconName: "line", key: "L" },
+      tool("line", "tool.line", "line", { key: "L" }),
       // Each rectangle and circle trio is one shape anchored differently (corner, centre, edge), so each folds into one
       // split button that remembers the last used.
-      {
-        label: "Rectangle",
-        children: [
-          { action: "rectangle", label: "Rectangle", iconName: "rectangle", key: "R" },
-          { action: "centerRectangle", label: "Center Rect", iconName: "centerRectangle" },
-          { action: "rectangle3", label: "Rect 3-Pt", iconName: "rectangle3" },
-        ],
-      },
-      {
-        label: "Circle",
-        children: [
-          { action: "circle", label: "Circle", iconName: "circle", key: "C" },
-          { action: "circle2", label: "Circle 2-Pt", iconName: "circle2" },
-          { action: "circle3", label: "Circle 3-Pt", iconName: "circle3" },
-        ],
-      },
-      { action: "arc", label: "Arc", iconName: "arc", key: "A" },
-      { action: "polygon", label: "Polygon", iconName: "polygon" },
-      { action: "slot", label: "Slot", iconName: "slot" },
-      {
-        label: "Spline",
-        children: [
-          { action: "spline", label: "Spline", iconName: "spline" },
-          { action: "bspline", label: "Control Point Spline", iconName: "bspline" },
-        ],
-      },
-      { action: "point", label: "Point", iconName: "point" },
-      { action: "text", label: "Text", iconName: "text" },
-      { action: "project", label: "Project", iconName: "project", key: "P" },
+      split("tool.rectangle", [
+        tool("rectangle", "tool.rectangle", "rectangle", { key: "R" }),
+        tool("centerRectangle", "tool.centerRectangle", "centerRectangle"),
+        tool("rectangle3", "tool.rect3Pt", "rectangle3"),
+      ]),
+      split("tool.circle", [
+        tool("circle", "tool.circle", "circle", { key: "C" }),
+        tool("circle2", "tool.circle2", "circle2"),
+        tool("circle3", "tool.circle3", "circle3"),
+      ]),
+      tool("arc", "tool.arc", "arc", { key: "A" }),
+      tool("polygon", "tool.polygon", "polygon"),
+      tool("slot", "tool.slot", "slot"),
+      split("tool.spline", [
+        tool("spline", "tool.spline", "spline"),
+        tool("bspline", "tool.controlPointSpline", "bspline"),
+      ]),
+      tool("point", "tool.point", "point"),
+      tool("text", "tool.text", "text"),
+      tool("project", "tool.project", "project", { key: "P" }),
     ],
   },
   {
     label: "MODIFY",
     items: [
-      { action: "fillet-sketch", label: "Fillet", iconName: "fillet", key: "F" },
-      { action: "chamfer-sketch", label: "Chamfer", iconName: "chamfer" },
-      { action: "trim", label: "Trim", iconName: "trim", key: "T" },
-      { action: "extend", label: "Extend", iconName: "extend" },
-      { action: "offset", label: "Offset", iconName: "offset", key: "O" },
-      { action: "break", label: "Break", iconName: "break" },
-      { action: "mirror-sketch", label: "Mirror", iconName: "mirror" },
-      { action: "move-sketch", label: "Move/Rotate", iconName: "move", key: "M" },
-      { action: "copy-sketch", label: "Copy", iconName: "copy" },
-      { action: "rotate-sketch", label: "Rotate", iconName: "rotate" },
-      { action: "scale-sketch", label: "Scale", iconName: "scale" },
-      { action: "dimension", label: "Dimension", iconName: "dimension", key: "D" },
+      tool("fillet-sketch", "tool.fillet", "fillet", { key: "F" }),
+      tool("chamfer-sketch", "tool.chamfer", "chamfer"),
+      tool("trim", "tool.trim", "trim", { key: "T" }),
+      tool("extend", "tool.extend", "extend"),
+      tool("offset", "tool.offset", "offset", { key: "O" }),
+      tool("break", "tool.break", "break"),
+      tool("mirror-sketch", "tool.mirror", "mirror"),
+      tool("move-sketch", "tool.moveRotate", "move", { key: "M" }),
+      tool("copy-sketch", "tool.copy", "copy"),
+      tool("rotate-sketch", "tool.rotate", "rotate"),
+      tool("scale-sketch", "tool.scale", "scale"),
+      tool("dimension", "tool.dimension", "dimension", { key: "D" }),
     ],
   },
   {
     label: "PATTERN",
     items: [
-      { action: "patternLinear", label: "Linear Pattern", iconName: "patternLinear" },
-      { action: "patternCircular", label: "Circular Pat.", iconName: "patternCircular" },
-      { action: "patternRect", label: "Rect Pattern", iconName: "patternRect" },
-      { action: "boltCircle", label: "Bolt Circle", iconName: "boltCircle" },
-      { action: "hexHoles", label: "Staggered Holes", iconName: "hexHoles" },
-      { action: "honeycomb", label: "Honeycomb", iconName: "honeycomb" },
-      { action: "gridHoles", label: "Grid Holes", iconName: "gridHoles" },
+      tool("patternLinear", "tool.linearPattern", "patternLinear"),
+      tool("patternCircular", "tool.circularPat", "patternCircular"),
+      tool("patternRect", "tool.rectPattern", "patternRect"),
+      tool("boltCircle", "tool.boltCircle", "boltCircle"),
+      tool("hexHoles", "tool.staggeredHoles", "hexHoles"),
+      tool("honeycomb", "tool.honeycomb", "honeycomb"),
+      tool("gridHoles", "tool.gridHoles", "gridHoles"),
     ],
   },
   {
     label: "CONSTRAINTS",
     items: [
-      {
-        label: "Constrain",
-        // the hint is read from the keymap, as for the booleans, since some carry Shift
-        children: (
+      split(
+        "tool.family.constrain",
+        // The hint is read from the keymap, as for the booleans, since some carry Shift.
+        (
           [
-            ["horizontal", "Horizontal"],
-            ["vertical", "Vertical"],
-            ["parallel", "Parallel"],
-            ["perpendicular", "Perpendic."],
-            ["equal", "Equal"],
-            ["tangent", "Tangent"],
-            ["coincident", "Coincident"],
-            ["concentric", "Concentric"],
-            ["midpoint", "Midpoint"],
-            ["collinear", "Collinear"],
-            ["symmetric", "Symmetric"],
-            ["fix", "Fix"],
+            ["horizontal", "tool.horizontal"],
+            ["vertical", "tool.vertical"],
+            ["parallel", "tool.parallel"],
+            ["perpendicular", "tool.perpendicular"],
+            ["equal", "tool.equal"],
+            ["tangent", "tool.tangent"],
+            ["coincident", "tool.coincident"],
+            ["concentric", "tool.concentric"],
+            ["midpoint", "tool.midpoint"],
+            ["collinear", "tool.collinear"],
+            ["symmetric", "tool.symmetric"],
+            ["fix", "tool.fix"],
           ] as const
-        ).map(([action, label]) => {
+        ).map(([action, labelKey]) => {
           const key = keyHint(action);
-          return { action, label, iconName: action, ...(key !== undefined ? { key } : {}) };
+          return tool(action, labelKey, action, key !== undefined ? { key } : {});
         }),
-      },
-      { action: "tie-loose-ends", label: "Tie Loose Ends", iconName: "coincident" },
+      ),
+      tool("tie-loose-ends", "tool.tieLooseEnds", "coincident"),
     ],
   },
 ];

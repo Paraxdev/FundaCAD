@@ -10,6 +10,7 @@ import {
   primaryKind,
   toolbarOffers,
   KIND_LABEL,
+  selectionCountText,
   type AppearanceOffer,
   type ToolOffer,
 } from "../ui/selectionTools";
@@ -70,11 +71,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     }));
   });
   const looks = computed(() => appearanceOffers(counts.value));
-  const summary = computed(() => {
-    const k = kind.value;
-    if (!k) return "";
-    return describeSelection({ count: primaryCount(counts.value), noun: KIND_LABEL[k], plural: pluralOf(k) });
-  });
+  const summary = computed(() => selectionCountText(counts.value));
   // A body selection gives no hint that a second click or a pause reaches the face or edge under the cursor
   // (viewport/clickIntent.ts), so the readout spells it out. Speech leaves that out, it is no use without a pointer.
   const readout = computed(() => {

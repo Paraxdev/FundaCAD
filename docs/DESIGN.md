@@ -840,7 +840,8 @@ wears it.
 `RailButton.vue`. The tile is glass A at `--rail-tile`, `--float-tile-radius`,
 filled with `--float-tile-bg`. The pill (label) is glass A, `--float-chip-radius`,
 filled with `--float-chip-bg`, padding `3px 9px`, label `.rail-label`
-`--fs-body`/600, sub label `.rail-sub` `--fs-micro` `--text-mute`.
+`--fs-body`/600, sub label `.rail-sub` `--fs-micro` `--text-mute`. The pill is at most `14rem` wide and its label and sub label wrap
+(`overflow-wrap: break-word`, `hyphens: auto`), so a long translated name grows the pill taller, never cut.
 
 | State | Recipe |
 |---|---|

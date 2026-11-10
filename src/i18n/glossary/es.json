@@ -153,6 +153,211 @@
     {
       "en": "View",
       "text": "Ver"
+    },
+    {
+      "en": "Extrude",
+      "text": "Extruir"
+    },
+    {
+      "en": "Revolve",
+      "text": "Revolución"
+    },
+    {
+      "en": "Loft",
+      "text": "Solevación"
+    },
+    {
+      "en": "Sweep",
+      "text": "Barrido"
+    },
+    {
+      "en": "Press/Pull",
+      "text": "Empujar/Tirar"
+    },
+    {
+      "en": "Fillet",
+      "text": "Redondeo"
+    },
+    {
+      "en": "Chamfer",
+      "text": "Chaflán"
+    },
+    {
+      "en": "Hole",
+      "text": "Agujero"
+    },
+    {
+      "en": "Move",
+      "text": "Mover"
+    },
+    {
+      "en": "Scale",
+      "text": "Escalar"
+    },
+    {
+      "en": "Mirror",
+      "text": "Simetría"
+    },
+    {
+      "en": "Shell",
+      "text": "Vaciado"
+    },
+    {
+      "en": "Draft",
+      "text": "Ángulo de desmoldeo"
+    },
+    {
+      "en": "Thread",
+      "text": "Rosca"
+    },
+    {
+      "en": "Pattern",
+      "text": "Patrón"
+    },
+    {
+      "en": "Plane",
+      "text": "Plano"
+    },
+    {
+      "en": "Datum",
+      "text": "Referencia"
+    },
+    {
+      "en": "Boolean",
+      "text": "Booleana"
+    },
+    {
+      "en": "Union",
+      "text": "Unir"
+    },
+    {
+      "en": "Subtract",
+      "text": "Restar"
+    },
+    {
+      "en": "Intersect",
+      "text": "Intersecar"
+    },
+    {
+      "en": "Section",
+      "text": "Sección"
+    },
+    {
+      "en": "Measure",
+      "text": "Medir"
+    },
+    {
+      "en": "Overhang",
+      "text": "Voladizo"
+    },
+    {
+      "en": "Thicken",
+      "text": "Engrosar"
+    },
+    {
+      "en": "Primitive",
+      "text": "Primitiva"
+    },
+    {
+      "en": "Midplane",
+      "text": "Plano medio"
+    },
+    {
+      "en": "Constraints",
+      "text": "Restricciones"
+    },
+    {
+      "en": "Sketch",
+      "text": "Boceto"
+    },
+    {
+      "en": "Line",
+      "text": "Línea"
+    },
+    {
+      "en": "Arc",
+      "text": "Arco"
+    },
+    {
+      "en": "Circle",
+      "text": "Círculo"
+    },
+    {
+      "en": "Polygon",
+      "text": "Polígono"
+    },
+    {
+      "en": "Slot",
+      "text": "Ranura"
+    },
+    {
+      "en": "Spline",
+      "text": "Spline"
+    },
+    {
+      "en": "Trim",
+      "text": "Recortar"
+    },
+    {
+      "en": "Extend",
+      "text": "Alargar"
+    },
+    {
+      "en": "Offset",
+      "text": "Desfasar"
+    },
+    {
+      "en": "Break",
+      "text": "Romper"
+    },
+    {
+      "en": "Constrain",
+      "text": "Restricción"
+    },
+    {
+      "en": "Dimension",
+      "text": "Cota"
+    },
+    {
+      "en": "Tangent",
+      "text": "Tangente"
+    },
+    {
+      "en": "Parallel",
+      "text": "Paralela"
+    },
+    {
+      "en": "Coincident",
+      "text": "Coincidente"
+    },
+    {
+      "en": "Concentric",
+      "text": "Concéntrico"
+    },
+    {
+      "en": "Collinear",
+      "text": "Colineal"
+    },
+    {
+      "en": "Symmetric",
+      "text": "Simétrico"
+    },
+    {
+      "en": "Midpoint",
+      "text": "Punto medio"
+    },
+    {
+      "en": "Project",
+      "text": "Proyectar"
+    },
+    {
+      "en": "Joint",
+      "text": "Junta",
+      "note": "Union is Unir"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "Patrón circular"
     }
   ]
 }

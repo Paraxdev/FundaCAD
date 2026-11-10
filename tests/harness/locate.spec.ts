@@ -176,6 +176,61 @@ describe("toolPath", () => {
   });
 });
 
+describe("toolPath by English name", () => {
+  const de: RailEntry[] = [
+    { kind: "tool", action: "sketch", label: "Skizze", english: "Sketch", icon: "sketch" },
+    { kind: "tool", action: "measure", label: "Messen", english: "Measure", icon: "measure" },
+    {
+      kind: "family",
+      id: "cat:CREATE",
+      label: "Erstellen",
+      english: "Create",
+      icon: "extrude",
+      style: "category",
+      items: [
+        { kind: "tool", action: "extrude", label: "Extrudieren", english: "Extrude", icon: "extrude" },
+        { kind: "tool", action: "extrudeCut", label: "Extru", english: "Cut extrude", icon: "extrude" },
+      ],
+    },
+  ];
+  const germanRail = () => {
+    document.querySelector('[data-action="sketch"]')!.setAttribute("aria-label", "Skizze (S)");
+  };
+
+  it("clicks a direct tool whose label is German by its English name, exact or prefix", () => {
+    germanRail();
+    expect(toolPath(walk(), "Sketch", "model", de)).toEqual([{ ref: "action:sketch", button: "left" }]);
+    expect(toolPath(walk(), "Sket", "model", de)).toEqual([{ ref: "action:sketch", button: "left" }]);
+    expect(toolPath(walk(), "Skizze", "model", de)).toEqual([{ ref: "action:sketch", button: "left" }]);
+  });
+
+  it("opens the family of a tool found by English, exact before prefix across label and English", () => {
+    expect(toolPath(walk(), "Extrude", "model", de)).toEqual([
+      { ref: "family:cat:CREATE", button: "left" },
+      { ref: "pick:extrude", button: "left" },
+    ]);
+    expect(toolPath(walk(), "Extrudi", "model", de)[1]).toEqual({ ref: "pick:extrude", button: "left" });
+    // "Extru" is exact for extrudeCut's German label, a prefix of extrude's
+    expect(toolPath(walk(), "Extru", "model", de)[1]).toEqual({ ref: "pick:extrudeCut", button: "left" });
+  });
+
+  it("throws NotFound listing the families when neither language matches, or the tool is not on screen", () => {
+    germanRail();
+    const err = (() => {
+      try {
+        toolPath(walk(), "Loft", "model", de);
+      } catch (e) {
+        return e as HarnessError;
+      }
+      throw new Error("found");
+    })();
+    expect(err.kind).toBe("NotFound");
+    expect(err.message).toContain("family:cat:MODIFY");
+    document.querySelector('[data-action="sketch"]')!.remove();
+    expect(() => toolPath(walk(), "Sketch", "model", de)).toThrow(/no tool "Sketch"/);
+  });
+});
+
 describe("covered", () => {
   const box = (w: number) => {
     const el = document.createElement("button");

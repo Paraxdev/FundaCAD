@@ -8,10 +8,13 @@ import {
   type AnyToolId,
   type EntityKind,
   type SelectionCounts,
+  type ToolCapability,
   type ToolId,
 } from "../features/toolCapabilities";
 import { contributedToolOwner } from "../plugins/contrib";
 import { keyHint } from "../input/shortcuts";
+import { t, type MessageKey } from "../i18n";
+import { toolLabel } from "./ribbonDefs";
 
 /** Must match app/viewportWiring.ts's drag-handle ranking: the handle and the toolbar are one affordance seen twice.
  *  Bodies come last, not never, so a two-body selection still offers the booleans. */
@@ -88,6 +91,11 @@ const TOOL_ICON: Record<ToolId, string> = {
  *  still belongs in what applies to a face, so the seam is declared here. */
 const ACTIONLESS: ReadonlySet<string> = new Set<string>(["delete-face"]);
 
+// A plugin tool keeps its own words; Delete Face is never drawn, so it has no key.
+function offerLabel(tool: AnyToolId, cap: ToolCapability): string {
+  return Object.hasOwn(TOOL_ICON, tool) ? (toolLabel(tool) ?? cap.label) : cap.label;
+}
+
 /** The app table first, as two app tools are named apart from their id; a contributed tool answers from its own
  *  capability row. */
 function iconFor(tool: AnyToolId, declared: string | undefined): string {
@@ -108,7 +116,7 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
     const cap = caps.get(tool)!;
     return {
       tool,
-      label: cap.label,
+      label: offerLabel(tool, cap),
       iconName: iconFor(tool, cap.icon),
       action: ACTIONLESS.has(tool) ? null : tool,
       hint: keyHint(tool),
@@ -136,7 +144,7 @@ function bodyEdgeToolOffers(): ToolOffer[] {
     const cap = caps.get(tool)!;
     return {
       tool,
-      label: cap.label,
+      label: offerLabel(tool, cap),
       iconName: iconFor(tool, cap.icon),
       action: tool,
       hint: keyHint(tool),
@@ -164,12 +172,24 @@ export interface AppearanceOffer {
 export function appearanceOffers(sel: SelectionCounts): AppearanceOffer[] {
   if (primaryKind(sel) !== "body") return [];
   const n = sel.body ?? 0;
-  const many = n > 1 ? ` ${n} bodies` : "";
   return [
-    // Material first: it is the one that is not about visibility, and it is the
-    // one this bar was asked for.
-    { id: "material", label: many ? `Material for${many}` : "Material", iconName: "material" },
-    { id: "hide", label: many ? `Hide${many}` : "Hide body", iconName: "hidden" },
-    { id: "isolate", label: many ? `Isolate${many}` : "Isolate body", iconName: "isolate" },
+    // Material first: it is the one that is not about visibility, and it is the one this bar was asked for.
+    { id: "material", label: t("rail.look.material", { n }), iconName: "material" },
+    { id: "hide", label: t("rail.look.hide", { n }), iconName: "hidden" },
+    { id: "isolate", label: t("rail.look.isolate", { n }), iconName: "isolate" },
   ];
+}
+
+const COUNT_KEYS: Record<EntityKind, MessageKey> = {
+  edge: "rail.count.edge",
+  face: "rail.count.face",
+  vertex: "rail.count.corner",
+  body: "rail.count.body",
+  "sketch-region": "rail.count.profile",
+};
+
+/** "3 faces" in the chosen language, empty for an empty selection. */
+export function selectionCountText(sel: SelectionCounts): string {
+  const kind = primaryKind(sel);
+  return kind ? t(COUNT_KEYS[kind], { n: sel[kind] ?? 0 }) : "";
 }

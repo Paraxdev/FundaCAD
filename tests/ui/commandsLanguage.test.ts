@@ -16,6 +16,14 @@ afterEach(async () => {
 const labels = () => Object.fromEntries(allCommands().map((c) => [c.id, c.label]));
 
 describe("command labels in the chosen language", () => {
+  it("keeps a tool command held across a switch in step with the language", async () => {
+    const held = allCommands();
+    const pick = (id: string) => held.find((c) => c.id === id)!.label;
+    expect([pick("extrude"), pick("pattern-circular"), pick("trim")]).toEqual(["Extrude", "Circular Pattern", "Trim"]);
+    await setLanguage("de");
+    expect([pick("extrude"), pick("pattern-circular"), pick("trim")]).toEqual(["Extrusion", "Kreismuster", "Stutzen"]);
+  });
+
   it("read English by default and German after a switch, for the same ids", async () => {
     const english = labels();
     const ids = allCommands().map((c) => c.id);
@@ -34,7 +42,9 @@ describe("command labels in the chosen language", () => {
     await setLanguage("de");
     expect(commandEnglish("saveas")).toBe("Save As…");
     expect(commandEnglish("top")).toBe("Top View");
-    expect(commandEnglish("line")).toBeUndefined();
+    expect(commandEnglish("extrude")).toBe("Extrude");
+    expect(commandEnglish("line")).toBe("Line");
+    expect(commandEnglish("plugin.thing")).toBeUndefined();
     expect(commandEnglish("no-such-command")).toBeUndefined();
     const groups = new Set(allCommands().map((c) => c.group));
     for (const g of ["File", "Edit", "View", "Go", "Help"]) expect(groups.has(g)).toBe(true);
@@ -51,9 +61,18 @@ describe("command labels in the chosen language", () => {
       "Gehe zu",
       "Hilfe",
     ]);
-    expect(groupText("CREATE")).toBe("CREATE");
-    expect(groupText("SKETCH")).toBe("SKETCH");
+    expect(
+      ["CREATE", "MODIFY", "CONSTRUCT", "INSPECT", "INSERT", "PATTERN", "CONSTRAINTS", "SKETCH"].map(groupText),
+    ).toEqual(["Erstellen", "Ändern", "Konstruieren", "Prüfen", "Einfügen", "Muster", "Abhängigkeiten", "Skizze"]);
+    expect(groupText("Plugin Group")).toBe("Plugin Group");
     expect(groupText("")).toBe("");
+  });
+
+  it("label a ribbon tool in German and fall back to the id for a plugin tool", async () => {
+    await setLanguage("de");
+    expect(commandLabel("extrude")).toBe("Extrusion");
+    expect(commandLabel("plugin.thing")).toBe("plugin.thing");
+    expect(allCommands().find((c) => c.id === "extrude")?.label).toBe("Extrusion");
   });
 
   it("read live through commandLabel, and fall back to the id for an unknown command", async () => {
