@@ -18,6 +18,7 @@ import { GhostLines, type GhostSlot } from "./ghostLines";
 import { DimInput, type DimSegment } from "../sketch/dimInput";
 import { type Continuity, continuityBlocked, continuityOf, pickedReach } from "./continuity";
 import { setPrompt } from "../ui/prompt";
+import { t } from "../i18n";
 import { gizmoMoveStep } from "../viewport/gizmoStep";
 import {
   createDragHandle,
@@ -373,24 +374,24 @@ export class EdgeFeatureTool {
     if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
     const edge = pick.edge;
     const scope = pickScope({ shift: false, view: this.viewport.edgeScopeView(edge) }).scope;
+    const before = this.ghosts.length;
     if (this.phase === "pick") {
       const sel = edgeSelectorFrom({ points: edge.points, body: edge.body });
       if (!sel) return treePickRefusal(pick, "an edge");
       const { mid, tan } = midAndTangent(edge.points);
-      this.beginDrag([sel], mid, tan, edge, { scope });
-      return true;
+      if (!this.beginDrag([sel], mid, tan, edge, { scope })) return t("pick.overCap");
+      return { done: "added", edges: this.ghosts.length - before };
     }
     const mid = polylineMid(edge.points);
     const here = new MidSet();
     if (mid) here.add(mid);
     const member = mid ? this.ghosts.find((g) => here.has(g.mid)) : undefined;
+    const over = member ? 0 : this.addPicked(edge, scope);
     if (member) this.removeWithChain(member);
-    else {
-      const over = this.addPicked(edge, scope);
-      if (over) this.refuseOverCap(over);
-    }
+    if (over) this.refuseOverCap(over);
     this.afterMembershipChange();
-    return true;
+    if (over) return t("pick.overCap");
+    return { done: member ? "takenOut" : "added", edges: Math.abs(this.ghosts.length - before) };
   }
 
   /** [] when no face is selected. viewport/faceEdges.ts finds the edges by geometry, since the rebuild reply has no

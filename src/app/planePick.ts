@@ -4,7 +4,7 @@ import type { Engine } from "./engine";
 import type { Plane3 } from "../types";
 import { announce } from "../ui/announce";
 import { dismissToastsSaying } from "../ui/toast";
-import { routeTreeClick, type TreeClickDeps, type TreeClickRoute, type TreePick } from "../ui/treePick";
+import { routeTreeClick, type OfferDeps, type TreeClickDeps, type TreeClickRoute, type TreePick } from "../ui/treePick";
 
 export const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
 
@@ -42,6 +42,13 @@ function dropRefusals() {
 
 export function treeClickDeps(e: PlaneRowHost): TreeClickDeps {
   return { busyHint: () => busyHint(e), hint: (text) => refuseAloud(e, text), taken: dropRefusals };
+}
+
+export function offerDeps(e: PlaneRowHost): OfferDeps {
+  return {
+    ...treeClickDeps(e),
+    say: (text) => announce(text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY }),
+  };
 }
 
 export function sketchOnPlane(e: PlaneRowHost, pick: PlanePick) {

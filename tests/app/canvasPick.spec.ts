@@ -9,9 +9,16 @@ import { useSelectionStore } from "../../src/stores/selection";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
 import { announce } from "../../src/ui/announce";
 import { describePick } from "../../src/ui/describePick";
+import {
+  awaitTreePick,
+  endRewoundPick,
+  resetTreePicks,
+  type TreePick,
+  type TreePickAnswer,
+} from "../../src/ui/treePick";
 import { edge, land, result, rig, topology } from "./geometryBrowserRig";
 
-vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {}, dismissToastsSaying: () => {} }));
 vi.mock("../../src/ui/announce", async (actual) => ({
   ...(await actual<typeof import("../../src/ui/announce")>()),
   announce: vi.fn(),
@@ -56,6 +63,7 @@ beforeEach(() => {
   document.body.replaceChildren(canvas);
 });
 afterEach(() => {
+  resetTreePicks();
   off();
   off = () => {};
   setA11yPref("singleKeys", true);
@@ -588,6 +596,255 @@ describe("the next document", () => {
   });
 });
 
+describe("a tool waiting for a pick", () => {
+  type Waiting = Awaited<ReturnType<typeof waiting>>;
+  const cleanups: (() => void)[] = [];
+  afterEach(() => {
+    for (const fn of cleanups.splice(0)) fn();
+  });
+
+  async function waiting(answer: (n: number, pick: TreePick) => TreePickAnswer = () => true) {
+    const r = await ready();
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    r.host.toolBusy.mockReturnValue(true);
+    const taken: TreePick[] = [];
+    awaitTreePick(
+      (pick) => answer(taken.push(pick), pick),
+      () => {},
+    );
+    // A tool's own Enter and Escape listen in window capture, added after the install.
+    const heard: string[] = [];
+    const toolKeys = (ev: KeyboardEvent) => {
+      if (ev.key.length > 1 || ev.key === " ") heard.push(ev.key);
+      if (ev.key === "Escape") ev.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", toolKeys, true);
+    cleanups.push(() => window.removeEventListener("keydown", toolKeys, true));
+    return { ...r, taken, heard };
+  }
+
+  it("steps and says the row under the step key, as with no tool", async () => {
+    const r = await waiting();
+    const ev = key("]");
+    expect(ev.defaultPrevented).toBe(true);
+    expect(r.list.cursor).toBe("f:body1:0");
+    expect(r.list.litRow?.key).toBe("f:body1:0");
+    expect(vi.mocked(announce).mock.calls).toEqual([
+      [describePick(r.list.rows[0]!.facts).spoken, "polite", { key: "pick-step", delay: 120 }],
+    ]);
+    key("[");
+    expect(r.list.cursor).toBe("f:body1:2");
+    expect(r.taken).toEqual([]);
+  });
+
+  it("Enter gives the lit row to the tool, puts the light out and goes on from that row", async () => {
+    const r = await waiting();
+    key("]");
+    key("]");
+    vi.mocked(announce).mockClear();
+    const ev = key("Enter");
+    expect(ev.defaultPrevented).toBe(true);
+    expect(r.taken).toEqual([face(1)]);
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    expect(r.list.litRow).toBeNull();
+    expect(r.list.cursor).toBe("f:body1:1");
+    expect(said()).toEqual([
+      `${describePick(r.list.rows[1]!.facts).label} of ${r.list.bodies.find((b) => b.id === "body1")!.name} picked`,
+    ]);
+    key("]");
+    expect(r.list.cursor).toBe("f:body1:2");
+    expect(r.list.litRow?.key).toBe("f:body1:2");
+  });
+
+  it("Space gives the lit row the same way", async () => {
+    const r = await waiting();
+    key("[");
+    expect(key(" ").defaultPrevented).toBe(true);
+    expect(r.taken).toEqual([face(2)]);
+    expect(r.list.litRow).toBeNull();
+  });
+
+  it.each(["Enter", " "])("a held %s offers once and its repeats never reach the tool", async (k) => {
+    const r = await waiting();
+    key("]");
+    expect(key(k).defaultPrevented).toBe(true);
+    for (let i = 0; i < 3; i++) expect(key(k, { repeat: true }).defaultPrevented).toBe(true);
+    expect(r.taken).toEqual([face(0)]);
+    expect(r.heard).toEqual([]);
+    key(k);
+    expect(r.heard).toEqual([k]);
+    expect(key(k, { repeat: true }).defaultPrevented).toBe(false);
+  });
+
+  it.each([{ ctrlKey: true }, { altKey: true }, { shiftKey: true }, { metaKey: true }])(
+    "Enter with %o is left to the tool and the light stays",
+    async (mod) => {
+      const r = await waiting();
+      key("]");
+      expect(key("Enter", mod).defaultPrevented).toBe(false);
+      expect(r.taken).toEqual([]);
+      expect(r.heard).toEqual(["Enter"]);
+      expect(r.list.litRow?.key).toBe("f:body1:0");
+    },
+  );
+
+  it("the tool's own Enter is claimed while a row is lit and heard again once the light is out", async () => {
+    const r = await waiting();
+    key("]");
+    key("Enter");
+    expect(r.heard).toEqual([]);
+    expect(key("Enter").defaultPrevented).toBe(false);
+    expect(r.heard).toEqual(["Enter"]);
+    expect(r.taken).toEqual([face(0)]);
+  });
+
+  it("with no light the tool's own Enter is heard from the start", async () => {
+    const r = await waiting();
+    key("Enter");
+    expect(r.heard).toEqual(["Enter"]);
+    expect(r.taken).toEqual([]);
+  });
+
+  it("a refused row puts the light out and the refusal is said under the selection key", async () => {
+    const r = await waiting(() => "That row is a face, this step needs an edge");
+    key("]");
+    vi.mocked(announce).mockClear();
+    key("Enter");
+    expect(r.list.litRow).toBeNull();
+    expect(vi.mocked(announce).mock.calls).toEqual([
+      ["That row is a face, this step needs an edge", "polite", { key: "selection", delay: 250 }],
+    ]);
+    expect(r.host.setStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("a plane row is offered as that plane, no sketch starts", async () => {
+    const r = await waiting();
+    key("{");
+    key("]");
+    expect(r.list.litRow?.kind).toBe("plane");
+    const plane = r.list.litRow!.plane;
+    key("Enter");
+    expect(r.taken).toEqual([plane]);
+    expect(r.host.sketch.enter).not.toHaveBeenCalled();
+    expect(r.list.litRow).toBeNull();
+  });
+
+  it("the kind switch works while a tool waits", async () => {
+    const r = await waiting();
+    key("}");
+    expect(r.list.kind).toBe("edges");
+    expect(lastSaid()).toBe("Edges");
+  });
+
+  it("a row gone stale is refused in words and nothing reaches the tool", async () => {
+    const r = await waiting();
+    key("]");
+    await r.build(result([{ id: "body1", etag: "changed" }]));
+    vi.mocked(announce).mockClear();
+    key("Enter");
+    expect(r.taken).toEqual([]);
+    expect(said()).toHaveLength(1);
+    expect(r.list.litRow).toBeNull();
+  });
+
+  describe("stands down", () => {
+    async function litUnder(prepare: (r: Waiting) => void) {
+      const r = await waiting();
+      key("]");
+      prepare(r);
+      vi.mocked(announce).mockClear();
+      return r;
+    }
+    const quiet = (r: Waiting) => {
+      expect(r.taken).toEqual([]);
+      expect(r.list.litRow?.key).toBe("f:body1:0");
+      expect(announce).not.toHaveBeenCalled();
+    };
+
+    it.each(["]", "Enter", " "])("%s in a sketch", async (k) => {
+      const r = await litUnder((x) => (x.host.sketch.active = true));
+      expect(key(k).defaultPrevented).toBe(false);
+      quiet(r);
+    });
+
+    it.each(["]", "Enter", " "])("%s under a choice menu", async (k) => {
+      const r = await litUnder(() => (useModalStore().depth = 1));
+      expect(key(k).defaultPrevented).toBe(false);
+      quiet(r);
+    });
+
+    it.each(["]", "Enter", " "])("%s on another control", async (k) => {
+      const r = await litUnder(() => {});
+      const button = document.createElement("button");
+      document.body.append(button);
+      expect(key(k, {}, button).defaultPrevented).toBe(false);
+      quiet(r);
+    });
+
+    it.each(["]", "Enter", " "])("%s on the body with single key shortcuts off", async (k) => {
+      const r = await litUnder(() => setA11yPref("singleKeys", false));
+      expect(key(k, {}, document.body).defaultPrevented).toBe(false);
+      quiet(r);
+    });
+
+    it("Enter on the body with single key shortcuts on offers the row", async () => {
+      const r = await litUnder(() => {});
+      key("Enter", {}, document.body);
+      expect(r.taken).toEqual([face(0)]);
+    });
+
+    it("a tool that takes no rows keeps the keys down", async () => {
+      const r = await litUnder(() => resetTreePicks());
+      expect(key("Enter").defaultPrevented).toBe(false);
+      expect(key("]").defaultPrevented).toBe(false);
+      expect(r.taken).toEqual([]);
+    });
+  });
+
+  it("a build in progress refuses the step in words, a suspended pick does not", async () => {
+    const r = await waiting();
+    r.viewport.picksSuspended = true;
+    key("]");
+    expect(r.list.litRow?.key).toBe("f:body1:0");
+    r.viewport.picksSuspended = false;
+    r.viewport.modelUnsettled = true;
+    vi.mocked(announce).mockClear();
+    key("]");
+    expect(r.list.cursor).toBe("f:body1:0");
+    expect(said()).toEqual(["The model is still building"]);
+    r.viewport.modelUnsettled = false;
+    key("]");
+    expect(r.list.cursor).toBe("f:body1:1");
+  });
+
+  it("Esc puts the light out even when the tool's own Escape stops the key", async () => {
+    const r = await waiting();
+    key("]");
+    const ev = key("Escape");
+    expect(r.heard).toEqual(["Escape"]);
+    expect(ev.defaultPrevented).toBe(false);
+    expect(r.list.litRow).toBeNull();
+    expect(r.list.cursor).toBe("f:body1:0");
+  });
+
+  it("the next document ends the pick, drops the light and hands nothing to the old taker", async () => {
+    const r = await waiting();
+    r.store.onRewind(endRewoundPick);
+    key("]");
+    r.store.newDocument();
+    expect(r.list.litRow).toBeNull();
+    key("Enter");
+    key("]");
+    expect(r.taken).toEqual([]);
+    r.host.toolOwnsScreen.mockReturnValue(false);
+    await r.build(result([{ id: "body1", etag: "other" }]));
+    key("]");
+    await land(r.asks.at(-1)!, topology("body1", 2));
+    key("Enter");
+    expect(r.taken).toEqual([]);
+  });
+});
+
 describe("uninstalling", () => {
   it("leaves no listener behind", async () => {
     const r = await ready();
@@ -595,5 +852,29 @@ describe("uninstalling", () => {
     off = () => {};
     expect(key("]").defaultPrevented).toBe(false);
     expect(r.list.cursor).toBeNull();
+  });
+
+  it("leaves no session listener behind, a pick begun after keeps the light", async () => {
+    const r = await ready();
+    key("]");
+    off();
+    off = () => {};
+    awaitTreePick(() => true, vi.fn());
+    expect(r.list.litRow?.key).toBe("f:body1:0");
+  });
+
+  it("leaves no capture listener behind either", async () => {
+    const r = await ready();
+    const taken: TreePick[] = [];
+    awaitTreePick(
+      (pick) => (taken.push(pick), true),
+      () => {},
+    );
+    key("]");
+    off();
+    off = () => {};
+    expect(key("Enter").defaultPrevented).toBe(false);
+    expect(taken).toEqual([]);
+    expect(r.list.litRow?.key).toBe("f:body1:0");
   });
 });

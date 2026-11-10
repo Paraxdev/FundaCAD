@@ -6,7 +6,9 @@ import type { RebuildState } from "../document/store";
 import { useSelectionStore } from "../stores/selection";
 import { useGeometryBrowserStore, type GeometryKind } from "../stores/geometryBrowser";
 import type { TopologyReply } from "../types";
+import { t } from "../i18n";
 import { announce } from "../ui/announce";
+import { describePick } from "../ui/describePick";
 import { stepName } from "../ui/featureMeta";
 import { bodyLabels } from "../ui/bodyLabels";
 import {
@@ -26,8 +28,8 @@ import type { Viewport } from "../viewport/viewport";
 import type { Engine } from "./engine";
 import { featurePick } from "./featurePick";
 import { writeFeatureRows } from "./featureRows";
-import { BASE_PLANES, refuseAloud, routePlaneRow, sketchOnPlane, treeClickDeps, type PlanePick } from "./planePick";
-import { routeTreeRun, treePickWaiting, type TreePick } from "../ui/treePick";
+import { BASE_PLANES, offerDeps, refuseAloud, routePlaneRow, sketchOnPlane, type PlanePick } from "./planePick";
+import { offerPicks, treePickWaiting, type NamedPick, type TreePick } from "../ui/treePick";
 
 export interface GeometryBrowserHost {
   store: Engine["store"];
@@ -302,6 +304,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // A tool's preview build replaces the drawn model, but an edge row keeps the points of the build it came from, the
   // model the tool acts on. A face row is a number in the drawn model, so it must be current.
   function toolPickOf(row: GeometryRow): TreePick | null {
+    if (row.kind === "plane") return planePickOf(row);
     if (row.kind !== "edge") {
       const ref = refOf(row);
       return ref?.kind === "face" ? { kind: "face", faceId: ref.faceId } : null;
@@ -312,13 +315,34 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return current && edge?.body === row.bodyId ? { kind: "edge", edge } : null;
   }
 
-  // Each row goes to the waiting tool in turn, as clicks in the view would. A refusal is spoken by the route.
+  // The body is always named: a tool may refuse a face of another body, and keys alone do not show which one the list has.
+  function nameOf(row: GeometryRow): string {
+    const label = describePick(row.facts).label;
+    const body = list.bodies.find((b) => b.id === row.bodyId)?.name;
+    return row.kind === "plane" || !body ? label : t("pick.onBody", { label, body });
+  }
+
+  // Each row goes to the waiting tool in turn, as clicks in the view would, and what it took is spoken by the route.
   function offerRows(rows: readonly GeometryRow[]): string | null {
-    const picks = rows.map(toolPickOf);
-    if (picks.some((p) => p === null)) return ROW_CHANGED;
-    routeTreeRun(picks as TreePick[], treeClickDeps(e));
+    const offers: NamedPick[] = [];
+    for (const row of rows) {
+      const pick = toolPickOf(row);
+      if (!pick) return ROW_CHANGED;
+      offers.push({
+        pick,
+        get name() {
+          return nameOf(row);
+        },
+      });
+    }
+    offerPicks(offers, offerDeps(e));
     return null;
   }
+
+  const STILL_BUILDING = "The model is still building";
+  // A tool's preview holds the rows until the tool ends, a plain build only until it lands.
+  const heldWhy = (s: RebuildState) =>
+    (s.previewBuilt?.length ?? 0) > 0 ? t("geometry.list.waitsOnTool") : s.building ? STILL_BUILDING : null;
 
   function heldBlocked(): string | null {
     if (e.sketch.active) return "Finish the sketch first";
@@ -331,7 +355,13 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     if (held) return held;
     // The Move gizmo a body selection raises suspends picking too, but picking a row drops it first.
     const unsettled = e.toolBusy() ? e.viewport.modelUnsettled : e.viewport.picksSuspended;
-    return unsettled ? "The model is still building" : null;
+    return unsettled ? STILL_BUILDING : null;
+  }
+
+  /** A step may run while a tool waits for a row, only a build in progress or a sketch stops it. */
+  function stepBlocked(): string | null {
+    if (!treePickWaiting() || e.sketch.active) return pickBlocked();
+    return e.viewport.modelUnsettled ? STILL_BUILDING : null;
   }
 
   // Resolved at the moment of acting, so a datum goes where it stands now. Null for one the document has lost.
@@ -340,6 +370,15 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     if (p?.kind === "basePlane") return p;
     const f = e.store.document.features.find((x) => x.id === p?.id);
     return f?.type === "datumPlane" ? (featurePick(e, f) as PlanePick) : null;
+  }
+
+  // What the list itself lit, so putting it out never touches a tool's own hover, which shares the edge emphasis.
+  let lit: "pick" | "plane" | null = null;
+
+  function putOutLight() {
+    if (lit === "plane") lightPlane(null);
+    else if (lit === "pick") e.viewport.hoverPick(null);
+    lit = null;
   }
 
   function lightPlane(row: GeometryRow | null) {
@@ -371,6 +410,8 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     cache.clear();
     failedKey = null;
     stepped = false;
+    // The edge emphasis outlives a model swap, so a light left on would draw over the next document.
+    putOutLight();
     rowsKey = null;
     rowsStale = true;
     edgeRefs = new Map();
@@ -399,12 +440,12 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     setBody,
     setKind(kind: GeometryKind) {
       if (kind === list.kind) return;
-      if (list.kind === "planes") lightPlane(null);
+      if (list.kind === "planes") putOutLight();
       if (kind === "planes") stopAsking();
       list.setKind(kind);
       rowsKey = null;
       // The old rows are gone, and a build in flight puts off ensure, so "ready" would say a body has none.
-      if (kind !== "planes") list.setState("loading");
+      if (kind !== "planes") list.setState("loading", heldWhy(e.store.buildState));
       if (wanted()) ensure();
     },
     /** Ask again after an error. */
@@ -414,7 +455,10 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     },
 
     buildChanged(s: RebuildState) {
-      if (heldBuild(s)) return;
+      if (heldBuild(s)) {
+        if (list.state === "loading" && list.error) list.setState("loading", heldWhy(s));
+        return;
+      }
       if (s.result !== lastResult) {
         lastResult = s.result;
         resultSerial++;
@@ -442,7 +486,9 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       if (owner !== null) setBody(owner);
     },
 
+    heldBlocked,
     pickBlocked,
+    stepBlocked,
 
     /** A row's facts, while its number still means this build's face or edge. */
     rowFacts(key: string): GeometryRow["facts"] | null {
@@ -472,12 +518,20 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       return null;
     },
 
+    /** Hands these rows to the waiting tool and says what it took. The reason in words when a row is stale. */
+    offer: offerRows,
+
     /** True while the list's own pick is applied, not a step's. */
     pickingRows: () => pickingRows,
 
     /** Enter or a plain click on a plane row: a waiting pick takes it, otherwise a sketch starts on it. `start` false
      *  only offers it to the pick, for a Ctrl or Shift click. True when nothing further should happen. */
     activatePlane(row: GeometryRow, start = true): boolean {
+      if (treePickWaiting()) {
+        const stale = offerRows([row]);
+        if (stale) refuseAloud(e, stale);
+        return true;
+      }
       const pick = planePickOf(row);
       if (!pick) {
         refuseAloud(e, ROW_CHANGED);
@@ -485,19 +539,25 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       }
       if (routePlaneRow(e, pick) !== "row") return true;
       if (!start) return false;
+      lit = null;
       lightPlane(null);
       sketchOnPlane(e, pick);
       return true;
     },
 
-    /** Lights a row in the view. Not while a tool runs, its own hover shares the edge emphasis. */
+    /** Lights a row in the view, also while a tool waits for a pick. Puts out only what the list lit. */
     hover(row: GeometryRow | null) {
-      if (list.kind === "planes") {
-        lightPlane(pickBlocked() ? null : row);
+      if (!row || stepBlocked()) {
+        putOutLight();
         return;
       }
-      if (pickBlocked()) return;
-      e.viewport.hoverPick(row && refOf(row));
+      if (list.kind === "planes") {
+        lightPlane(row);
+        lit = "plane";
+        return;
+      }
+      e.viewport.hoverPick(refOf(row));
+      lit = "pick";
     },
 
     /** From here on the list stays live through builds, tab open or not. */

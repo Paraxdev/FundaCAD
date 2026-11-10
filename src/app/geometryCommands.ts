@@ -5,8 +5,10 @@ import { watch } from "vue";
 import { useBrowserStore } from "../stores/browser";
 import { useGeometryBrowserStore, type GeometryKind } from "../stores/geometryBrowser";
 import { useShellStore } from "../stores/shell";
+import { t } from "../i18n";
 import { announce } from "../ui/announce";
 import { describePick } from "../ui/describePick";
+import { treePickWaiting } from "../ui/treePick";
 import { emptyStepWords } from "./canvasPick";
 import type { Engine } from "./engine";
 import { refuseAloud, SELECTION_SPEECH_DELAY } from "./planePick";
@@ -80,7 +82,12 @@ export function createGeometryCommands(e: Pick<Engine, "geometryBrowser" | "setS
       const ctl = e.geometryBrowser;
       const list = useGeometryBrowserStore();
       const blocked = ctl.pickBlocked();
-      if (blocked) return refuse(blocked);
+      if (blocked) {
+        // Under a waiting pick the tool alone is no reason to refuse, the sketch or the build still is.
+        const why =
+          treePickWaiting() && ctl.heldBlocked() ? (ctl.stepBlocked() ?? t("geometry.commands.pickWaiting")) : blocked;
+        return refuse(why);
+      }
       ctl.setKind(kind);
       ctl.startStepping();
       if (list.state !== "loading") return select(delta);

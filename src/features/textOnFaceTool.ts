@@ -228,7 +228,7 @@ export class TextOnFaceTool {
   private prompt() {
     setPrompt(
       `${this.engrave ? "Engrave" : "Emboss"} "${this.values.text.trim()}" · click or drag on the face to move it · ` +
-        "Add or Enter to commit · Esc",
+        "Add or Ctrl+Enter to commit · Esc",
     );
   }
 

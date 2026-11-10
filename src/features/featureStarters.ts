@@ -694,7 +694,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a datum point row, or a point in the view");
+        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a datum point");
         take(pick.point, { datum: pick.id });
         return true;
       },
@@ -1097,7 +1097,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         const only = mine.length === 1 ? mine[0] : undefined;
         if (!only) {
           return mine.length
-            ? `That sketch has ${mine.length} profiles, click the one you mean in the view`
+            ? `That sketch has ${mine.length} profiles, this step takes a sketch with one closed profile`
             : `That sketch shows no closed profile${offerTie(pick.id)}`;
         }
         cleanup();

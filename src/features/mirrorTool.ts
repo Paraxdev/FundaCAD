@@ -5,7 +5,7 @@ import type { Plane3 } from "../types";
 import { bodyLabels } from "../ui/bodyLabels";
 import { setPrompt } from "../ui/prompt";
 import { focusOnMenuRow, isEditableTarget } from "../ui/focus";
-import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
+import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer, type TreePickDone } from "../ui/treePick";
 import { CanvasGesture } from "./canvasGesture";
 import { freshIds } from "./moveTarget";
 import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
@@ -32,6 +32,7 @@ import {
 
 const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
 export const PLANE_REFUSED = CURVED_FACE_ROW;
+const PLANE_TAKEN: TreePickDone = { done: "mirrorPlane" };
 
 type PlaneAt = (viewport: Viewport, x: number, y: number) => PlanePickTarget;
 
@@ -243,17 +244,17 @@ export class MirrorTool {
     }
     if (pick.kind === "basePlane") {
       this.set(pickLine(this.fields, { kind: "base", plane: pick.plane }, null));
-      return true;
+      return PLANE_TAKEN;
     }
     if (pick.kind === "datumPlane") {
       this.set(pickLine(this.fields, { kind: "datum", id: pick.id, def: pick.def }, null));
-      return true;
+      return PLANE_TAKEN;
     }
     if (pick.kind === "face") {
       const face = facePlaneOfRow(this.viewport, pick.faceId);
       if (face?.kind !== "planar") return PLANE_REFUSED;
       this.set(pickLine(this.fields, { kind: "face", face }, null));
-      return true;
+      return PLANE_TAKEN;
     }
     return treePickRefusal(pick, "a body, a plane or a flat face");
   }

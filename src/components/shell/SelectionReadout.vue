@@ -21,7 +21,11 @@ watch(
 </script>
 
 <template>
-  <div v-if="sel.readout.value && !sel.toolOwns.value" class="sel-readout" data-testid="selection-readout">
+  <div
+    v-if="sel.readout.value && (!sel.toolOwns.value || sel.lit.value)"
+    class="sel-readout"
+    data-testid="selection-readout"
+  >
     {{ sel.readout.value }}
   </div>
 </template>

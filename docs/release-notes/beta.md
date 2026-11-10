@@ -13,7 +13,7 @@
 - Ctrl+1 to Ctrl+7 pick the front, back, left, right, top, bottom and isometric views, and a screen reader hears where the model is seen from after each view change.
 - Interface size goes from 80 to 200 percent, with a readable text floor and Comfortable text.
 - After renaming in Items by keyboard, focus goes back to the row.
-- The new Geometry tab beside Items lists faces, edges and planes, so you can find, hear and pick them without a mouse. Every tool that waits for a face, edge or plane takes a row from it.
+- The new Geometry tab beside Items lists faces, edges and planes, so you can find, hear and pick them without a mouse. Every tool that waits for a face, edge or plane takes a row from it, or the lit row from the brackets and Enter on the 3D view.
 - Line, rectangle and circle can be drawn with keys only, and are spoken as you draw.
 - Sketch dimensions and constraints are a list you can move through with keys, and free or fixed sketch lines differ by more than colour.
 - Printability, interference and Stress results are also listed in words.

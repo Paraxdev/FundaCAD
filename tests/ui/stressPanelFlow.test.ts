@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { createPanels, type PanelsDeps } from "../../src/ui/panels";
-import { resetTreePicks, routeTreeClick, treePickWaiting, awaitTreePick } from "../../src/ui/treePick";
+import {
+  resetTreePicks,
+  routeTreeClick,
+  offerPicks,
+  treePickWaiting,
+  awaitTreePick,
+  type NamedPick,
+} from "../../src/ui/treePick";
 import { usePanelsStore } from "../../src/stores/panels";
 import type { StressOptions, StressReply, StressResult } from "../../src/geometry/client";
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
@@ -1840,6 +1847,118 @@ describe("Click faces takes a face row", () => {
     r2.ui.placeStressSpot({ load: 1 });
     expect(row(1).route).toBe("taken");
     expect(d2.setup.loads[0]!.faces.faceIds).toEqual([1]);
+    expect(d2.setup.supports[0]!.faces.faceIds).toEqual([]);
+  });
+});
+
+describe("Click faces takes a face lit by the brackets", () => {
+  const SLANT: FaceMap = {
+    ...FIRST,
+    3: {
+      body: "b1",
+      z: 5,
+      n: 1,
+      tris: [new THREE.Triangle(new THREE.Vector3(2, 1, 3), new THREE.Vector3(9, 2, 5), new THREE.Vector3(4, 8, 7))],
+    },
+  };
+  const named = (kind: "face" | "edge", id: number, name: string): NamedPick => ({
+    pick: kind === "face" ? { kind, faceId: id } : { kind, edge: { id, body: "b1" } as never },
+    name,
+  });
+  const offer = (offers: NamedPick[]) => {
+    const hints: string[] = [];
+    const said: string[] = [];
+    offerPicks(offers, { busyHint: () => null, hint: (t) => hints.push(t), say: (t) => said.push(t) });
+    return { hints, said };
+  };
+
+  it("a slanted face is taken, the support gains it, and its name is spoken", () => {
+    const r = rig();
+    r.rebuild(SLANT);
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    spoken.length = 0;
+    expect(offer([named("face", 3, "Flat face 3 of Block")])).toEqual({
+      hints: [],
+      said: ["Flat face 3 of Block picked"],
+    });
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]).toMatch(/support has 1 face/);
+    expect(d.setup.body).toBe("b1");
+    expect(d.setup.supports[0]!.faces).toEqual({
+      selectors: [{ kind: "face", by: "nearest", point: [5, 3.6667, 5], body: "b1" }],
+      faceIds: [3],
+      normalSum: [-5, -12, 23.5],
+      area: 26.85609800399157,
+    });
+    expect(d.placing).toBeNull();
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("a run offers only the first face, and the next wait takes the second after it", () => {
+    const r = rig();
+    r.rebuild(SLANT);
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ load: 1 });
+    const first = offer([named("face", 3, "A"), named("face", 2, "B")]);
+    expect(first.said).toEqual(["A picked"]);
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([3]);
+    r.ui.placeStressSpot({ load: 1 });
+    expect(offer([named("face", 2, "B")]).said).toEqual(["B picked"]);
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([3, 2]);
+  });
+
+  it("an edge is refused naming a face, nothing is added, and the waiting goes on", () => {
+    const r = rig();
+    r.rebuild(SLANT);
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    const out = offer([named("edge", 5, "Edge 5 of Block")]);
+    expect(out.said).toEqual([]);
+    expect(out.hints).toHaveLength(1);
+    expect(out.hints[0]).toMatch(/an edge.*needs a face/);
+    expect(d.setup.supports[0]!.faces.faceIds).toEqual([]);
+    expect(d.placing).toEqual({ support: 1 });
+    expect(treePickWaiting()).toBe(true);
+  });
+
+  it("a face of another body keeps its refusal once the body is set, and the first face of a run ends the wait", () => {
+    const r = rig();
+    r.rebuild(SLANT);
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ load: 1 });
+    expect(offer([named("face", 3, "Flat face 3 of Block")]).said).toEqual(["Flat face 3 of Block picked"]);
+    r.ui.placeStressSpot({ load: 1 });
+    const out = offer([named("face", 9, "Lid face")]);
+    expect(out.said).toEqual([]);
+    expect(out.hints).toHaveLength(1);
+    expect(out.hints[0]).toMatch(/another body/);
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([3]);
+    expect(d.placing).toEqual({ load: 1 });
+    const run = offer([named("face", 2, "Top"), named("face", 9, "Lid face")]);
+    expect(run).toEqual({ hints: [], said: ["Top picked"] });
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([3, 2]);
+    expect(treePickWaiting()).toBe(false);
+  });
+
+  it("a second document leaves no session, so an offer reaches nothing", () => {
+    const r = rig();
+    r.rebuild(SLANT);
+    r.ui.showStress();
+    r.ui.placeStressSpot({ support: 1 });
+    r.ui.closeStress();
+    expect(offer([named("face", 3, "A")])).toEqual({ hints: [], said: [] });
+    const r2 = rig();
+    r2.rebuild(SLANT);
+    r2.ui.showStress();
+    const d2 = usePanelsStore().stress!;
+    expect(d2.setup.supports[0]!.faces.faceIds).toEqual([]);
+    expect(treePickWaiting()).toBe(false);
+    expect(offer([named("face", 3, "A")])).toEqual({ hints: [], said: [] });
     expect(d2.setup.supports[0]!.faces.faceIds).toEqual([]);
   });
 });

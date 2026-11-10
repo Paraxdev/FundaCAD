@@ -6,6 +6,7 @@ const sel = vi.hoisted(() => ({
   readout: null as unknown as { value: string },
   speech: null as unknown as { value: { text: string; verbose?: boolean } | null },
   toolOwns: null as unknown as { value: boolean },
+  lit: null as unknown as { value: boolean },
 }));
 vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 vi.mock("../../../src/app/engineKey", () => ({ useEngine: () => ({}) }));
@@ -22,6 +23,7 @@ describe("the selection readout", () => {
     sel.readout = ref("");
     sel.speech = shallowRef(null);
     sel.toolOwns = ref(false);
+    sel.lit = ref(false);
   });
 
   it("shows the symbols and speaks the words", async () => {
@@ -73,5 +75,33 @@ describe("the selection readout", () => {
     await nextTick();
     expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
     expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("shows the lit row's readout under a tool and drops it with the light, still saying nothing", async () => {
+    const w = mount(SelectionReadout);
+    sel.toolOwns.value = true;
+    sel.readout.value = "Flat face 3 · 41.5 by 22 mm";
+    sel.speech.value = { text: "Flat face 3" };
+    await nextTick();
+    expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
+    sel.lit.value = true;
+    await nextTick();
+    expect(w.get("[data-testid=selection-readout]").text()).toBe("Flat face 3 · 41.5 by 22 mm");
+    sel.lit.value = false;
+    await nextTick();
+    expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("keeps a lit row with no words off the screen, and a lit row without a tool still shows", async () => {
+    const w = mount(SelectionReadout);
+    sel.toolOwns.value = true;
+    sel.lit.value = true;
+    await nextTick();
+    expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
+    sel.toolOwns.value = false;
+    sel.readout.value = "Edge 7 · 18.2 mm";
+    await nextTick();
+    expect(w.get("[data-testid=selection-readout]").text()).toBe("Edge 7 · 18.2 mm");
   });
 });

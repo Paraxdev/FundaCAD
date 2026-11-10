@@ -97,7 +97,8 @@ const blank = computed(() => {
   if (list.bodyId === null) return "No body to list yet.";
   if (list.rows.length > 0) return filteredOut.value ? `No ${noun.value} match.` : null;
   if (failed.value) return null;
-  return list.state === "ready" ? `This body has no ${noun.value}.` : `Listing the ${noun.value}.`;
+  if (list.state === "ready") return `This body has no ${noun.value}.`;
+  return list.error ? `${list.error}.` : `Listing the ${noun.value}.`;
 });
 
 function sayCount() {

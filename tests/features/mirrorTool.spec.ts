@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
+import { t } from "../../src/i18n";
 import { MirrorTool, PLANE_REFUSED } from "../../src/features/mirrorTool";
 import { basePlaneDef, reflectionMatrix } from "../../src/features/mirrorMath";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
@@ -11,6 +12,7 @@ import { usePromptStore } from "../../src/stores/prompt";
 import {
   endPickSession,
   endRewoundPick,
+  offerPicks,
   resetTreePicks,
   routeTreeClick,
   treePickWaiting,
@@ -135,6 +137,13 @@ const row = (pick: TreePick) => {
   const hints: string[] = [];
   const route = routeTreeClick(pick, { busyHint: () => null, hint: (h) => hints.push(h) });
   return { route, hints };
+};
+
+const offered = (pick: TreePick, name: string) => {
+  const said: string[] = [];
+  const hints: string[] = [];
+  offerPicks([{ pick, name }], { busyHint: () => null, hint: (h) => hints.push(h), say: (w) => said.push(w) });
+  return { said, hints };
 };
 
 beforeEach(() => setActivePinia(createPinia()));
@@ -406,6 +415,28 @@ describe("Items rows", () => {
     expect(sketch.route).toBe("refused");
     expect(sketch.hints).toHaveLength(1);
     expect(summary()!.plane).toBe("XY");
+  });
+
+  it("a flat face, a base plane and a datum plane each say they are the mirror plane, a body only picked", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    const plane = (name: string) => ({ said: [t("pick.done", { name, done: "mirrorPlane" })], hints: [] });
+    expect(offered({ kind: "face", faceId: 23 }, "Flat face 2 of Box 2")).toEqual(plane("Flat face 2 of Box 2"));
+    expect(offered({ kind: "basePlane", plane: "YZ" }, "YZ plane")).toEqual(plane("YZ plane"));
+    expect(offered({ kind: "datumPlane", id: "f5", def: DATUM }, "Slant")).toEqual(plane("Slant"));
+    expect(offered({ kind: "body", id: "body3" }, "Pin")).toEqual({
+      said: [t("pick.done", { name: "Pin", done: "other" })],
+      hints: [],
+    });
+    expect(t("pick.done", { name: "X", done: "mirrorPlane" })).not.toBe(t("pick.done", { name: "X", done: "other" }));
+  });
+
+  it("a curved face and an edge are refused by the offer, nothing is said as taken", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    const curved = offered({ kind: "face", faceId: 15 }, "Curved face 1 of Box 2");
+    expect(curved).toEqual({ said: [], hints: [PLANE_REFUSED] });
+    expect(treePickWaiting()).toBe(true);
   });
 
   it("a flat face row sets the Line and lights the face with Objects active or with Line active", () => {

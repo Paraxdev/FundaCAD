@@ -9,6 +9,7 @@ import { useSelectionOffers } from "../../src/composables/useSelectionOffers";
 import { SessionEnded } from "../../src/document/session";
 import { useSelectionStore } from "../../src/stores/selection";
 import { describePick } from "../../src/ui/describePick";
+import { awaitTreePick, resetTreePicks } from "../../src/ui/treePick";
 import { exactRound } from "../../src/ui/selectionMeasure";
 import { setUnit } from "../../src/ui/units";
 import { edge, land, result, rig, settle, topology } from "../app/geometryBrowserRig";
@@ -35,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  resetTreePicks();
 });
 
 function setup(first?: Parameters<typeof rig>[0]) {
@@ -895,6 +897,30 @@ describe("the readout and the canvas keys' light", () => {
     expect(t.sel.readout.value).not.toBe(selected);
     t.list.setLit(false);
     expect(t.sel.readout.value).toBe(selected);
+  });
+
+  it("reports the cursor row lit for the readout under a tool only while a pick waits", async () => {
+    const t = await listed();
+    t.owned.tool = true;
+    const release = awaitTreePick(() => true as const, vi.fn());
+    await t.settled();
+    expect(t.sel.lit.value).toBe(false);
+    t.list.setCursor("f:body1:2");
+    expect(t.sel.lit.value).toBe(false);
+    t.list.setLit(true);
+    expect(t.sel.lit.value).toBe(true);
+    expect(t.sel.readout.value).toBe(describePick(t.list.rows[2]!.facts).readout);
+    t.list.setLit(false);
+    expect(t.sel.lit.value).toBe(false);
+
+    release();
+    t.list.setLit(true);
+    await t.settled();
+    expect(t.sel.lit.value).toBe(false);
+    expect(t.sel.toolOwns.value).toBe(true);
+    awaitTreePick(() => true as const, vi.fn());
+    await t.settled();
+    expect(t.sel.lit.value).toBe(true);
   });
 
   it("does not take the readout for a row that is only the cursor", async () => {

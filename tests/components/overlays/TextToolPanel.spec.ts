@@ -36,6 +36,9 @@ const down = (el: Element) => {
   el.dispatchEvent(e);
   return e;
 };
+// Enter or Space on a focused button clicks it with detail 0, a mouse click counts its presses from 1.
+const click = (el: Element, detail: number) =>
+  el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail }));
 const key = (el: Element, k: string, init: KeyboardEventInit = {}) =>
   el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
 const type = (el: HTMLInputElement | HTMLTextAreaElement, text: string) => {
@@ -202,6 +205,29 @@ describe("TextToolPanel", () => {
     await nextTick();
     expect(handlers.onCommit).toHaveBeenCalledOnce();
     expect(handlers.onCommit.mock.lastCall![0].text).toBe("Hi");
+    expect(useToolPanelStore().text).toBeNull();
+  });
+
+  it("commits on Enter or Space on a focused Add, and leaves a mouse click to its press", async () => {
+    const { handlers } = open({ text: "Hi" });
+    click(q(".text-tool-add"), 1);
+    await nextTick();
+    expect(handlers.onCommit).not.toHaveBeenCalled();
+    click(q(".text-tool-add"), 0);
+    await nextTick();
+    expect(handlers.onCommit).toHaveBeenCalledOnce();
+    expect(handlers.onCommit.mock.lastCall![0].text).toBe("Hi");
+    expect(useToolPanelStore().text).toBeNull();
+  });
+
+  it("cancels on Enter or Space on a focused Cancel, and leaves a mouse click to its press", async () => {
+    const { handlers } = open({ text: "Hi" });
+    click(q(".text-tool-cancel"), 2);
+    await nextTick();
+    expect(handlers.onCancel).not.toHaveBeenCalled();
+    click(q(".text-tool-cancel"), 0);
+    await nextTick();
+    expect(handlers.onCancel).toHaveBeenCalledOnce();
     expect(useToolPanelStore().text).toBeNull();
   });
 

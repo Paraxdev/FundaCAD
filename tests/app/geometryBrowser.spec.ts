@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { SessionEnded } from "../../src/document/session";
+import { SELECTION_SPEECH_DELAY } from "../../src/app/planePick";
 import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
 import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
@@ -1009,6 +1010,52 @@ describe("pickBlocked", () => {
   });
 });
 
+describe("stepBlocked", () => {
+  const waitForRow = () =>
+    awaitTreePick(
+      () => true,
+      () => {},
+    );
+  afterEach(() => resetTreePicks());
+
+  function underTool() {
+    const r = rig();
+    r.host.toolBusy.mockReturnValue(true);
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    return r;
+  }
+
+  it("is pickBlocked with no pick waiting", () => {
+    expect(rig().browser.stepBlocked()).toBeNull();
+    const r = underTool();
+    expect(r.browser.stepBlocked()).toBe("Finish the tool first");
+    expect(r.browser.stepBlocked()).toBe(r.browser.pickBlocked());
+  });
+
+  it("is null for a tool that waits for a row, which holds the screen", () => {
+    const r = underTool();
+    waitForRow();
+    expect(r.browser.stepBlocked()).toBeNull();
+    expect(r.browser.pickBlocked()).toBe("Finish the tool first");
+  });
+
+  it("still names an open sketch under a pick", () => {
+    const r = underTool();
+    r.host.sketch.active = true;
+    waitForRow();
+    expect(r.browser.stepBlocked()).toBe("Finish the sketch first");
+  });
+
+  it("names a model still building under a pick, but not a suspended pick", () => {
+    const r = underTool();
+    waitForRow();
+    r.viewport.picksSuspended = true;
+    expect(r.browser.stepBlocked()).toBeNull();
+    r.viewport.modelUnsettled = true;
+    expect(r.browser.stepBlocked()).toBe("The model is still building");
+  });
+});
+
 describe("picking a row", () => {
   async function ready(
     specs: BodySpec[] = [
@@ -1204,10 +1251,72 @@ describe("a tool waiting for a pick", () => {
       { kind: "edge", edge: r.wires[0] },
       { kind: "edge", edge: r.wires[1] },
     ]);
-    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is an edge, this step needs a face", "", {
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith(
+      "Straight edge 1 of BODY1 picked. That row is an edge, this step needs a face",
+      "",
+      { silent: true },
+    );
+    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+  });
+
+  it("speaks a taken face row by its label and the body's shown name, politely under the selection key", async () => {
+    const r = await waiting();
+    r.store.setBodyName("body1", "Bracket");
+    await settle();
+    announce.mockClear();
+    expect(r.browser.offer([r.list.rows[1]!])).toBeNull();
+    expect(r.taken).toEqual([{ kind: "face", faceId: 8 }]);
+    expect(announce.mock.calls).toEqual([
+      ["Flat face 2 of Bracket picked", "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY }],
+    ]);
+  });
+
+  it("speaks a run of three rows as a count, and a refused third together with the two taken", async () => {
+    const r = await waiting([true, true, "That row is an edge, this step needs a face"]);
+    r.browser.setKind("edges");
+    announce.mockClear();
+    r.browser.offer(r.list.rows);
+    expect(r.taken).toHaveLength(3);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      "2 rows picked. That row is an edge, this step needs a face",
+    ]);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith(
+      "2 rows picked. That row is an edge, this step needs a face",
+      "",
+      { silent: true },
+    );
+  });
+
+  it("says nothing but the refusal for a refused first row, and a stale row is refused before any is offered", async () => {
+    const r = await waiting(["That row is a face, this step needs an edge"]);
+    r.browser.offer([r.list.rows[2]!, r.list.rows[0]!]);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is a face, this step needs an edge", "", {
       silent: true,
     });
-    expect(r.viewport.applyPicks).not.toHaveBeenCalled();
+    expect(r.taken).toHaveLength(1);
+    r.host.setStatus.mockClear();
+    const old = r.list.rows[0]!;
+    await r.build(result([{ id: "body1", etag: "e1c" }]));
+    expect(r.browser.offer([r.list.rows[0] ?? old, old])).toMatch(/\w/);
+    expect(r.taken).toHaveLength(1);
+  });
+
+  it("offers nothing of the first document to a pick waiting in the second", async () => {
+    const r = await waiting();
+    r.store.setBodyName("body1", "Bracket");
+    await settle();
+    const first = r.list.rows[1]!;
+    r.store.load(
+      JSON.stringify({ parameters: {}, features: [{ id: "g1", type: "box", length: 9, width: 8, height: 7 }] }),
+    );
+    await r.build(result([{ id: "body1", etag: "e1", name: "Lid" }]));
+    announce.mockClear();
+    expect(r.browser.offer([first])).toMatch(/\w/);
+    expect(r.taken).toEqual([]);
+    expect(announce).not.toHaveBeenCalled();
+    await land(r.asks.at(-1)!, topology("body1", 2));
+    expect(r.browser.offer([r.list.rows[1]!])).toBeNull();
+    expect(announce.mock.calls.map((c) => c[0])).toEqual(["Flat face 2 of Lid picked"]);
   });
 
   it("stops offering rows once a pick ends its wait", async () => {
@@ -1222,6 +1331,87 @@ describe("a tool waiting for a pick", () => {
     );
     r.browser.pickRows(rows, { additive: false });
     expect(n).toBe(1);
+  });
+
+  it("lights a row and puts it out while a pick waits, as the tool's own hover is left alone", async () => {
+    const r = await waiting();
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }]]);
+    r.browser.hover(r.list.rows[2]!);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([
+      [{ kind: "face", faceId: 8 }],
+      [{ kind: "face", faceId: 9 }],
+      [null],
+    ]);
+    r.viewport.hoverPick.mockClear();
+    r.browser.hover(null);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("lights an edge row the same way, as that edge", async () => {
+    const r = await waiting();
+    r.browser.setKind("edges");
+    r.browser.hover(r.list.rows[2]!);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "edge", edge: r.wires[2] }]]);
+  });
+
+  it("lights nothing while the model builds under a pick, and puts out what was lit", async () => {
+    const r = await waiting();
+    r.viewport.modelUnsettled = true;
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+    r.viewport.modelUnsettled = false;
+    r.browser.hover(r.list.rows[1]!);
+    r.viewport.modelUnsettled = true;
+    r.browser.hover(r.list.rows[0]!);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
+  });
+
+  it("lights nothing under a tool that waits for no pick, and under a sketch", async () => {
+    const r = await waiting();
+    r.release();
+    r.browser.hover(r.list.rows[1]!);
+    r.browser.hover(null);
+    awaitTreePick(
+      () => true,
+      () => {},
+    );
+    r.host.sketch.active = true;
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("puts out a light the pick's taker outlived, a sketch having opened since", async () => {
+    const r = await waiting();
+    r.browser.hover(r.list.rows[1]!);
+    r.release();
+    r.host.sketch.active = true;
+    r.browser.hover(null);
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
+  });
+
+  it("puts out a light with its document, and leaves the second one's tool hover alone", async () => {
+    const r = await waiting();
+    r.browser.hover(r.list.rows[1]!);
+    r.store.newDocument();
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "face", faceId: 8 }], [null]]);
+    r.viewport.hoverPick.mockClear();
+    r.browser.hover(null);
+    r.store.newDocument();
+    expect(r.viewport.hoverPick).not.toHaveBeenCalled();
+  });
+
+  it("puts out an edge stepped to with no tool running when another document opens", async () => {
+    const r = await waiting();
+    r.release();
+    r.host.toolOwnsScreen.mockReturnValue(false);
+    r.host.toolBusy.mockReturnValue(false);
+    r.browser.setKind("edges");
+    r.browser.hover(r.list.rows[2]!);
+    r.store.newDocument();
+    expect(r.viewport.hoverPick.mock.calls).toEqual([[{ kind: "edge", edge: r.wires[2] }], [null]]);
   });
 
   it("a step selects only, so a waiting tool is never fed by Next Face", async () => {
@@ -1243,6 +1433,54 @@ describe("a tool waiting for a pick", () => {
     expect(r.store.buildState.previewBuilt).toBeTruthy();
     expect(r.browser.pickRows([r.list.rows[2]!], { additive: false })).toBeNull();
     expect(r.taken).toEqual([{ kind: "edge", edge: r.wires[2] }]);
+  });
+
+  it("says the list fills in once the tool is done on a kind switch during the tool's preview, and lists once it settles", async () => {
+    const r = await waiting();
+    r.state.result = result([
+      { id: "other", etag: "o", faceCount: 7 },
+      { id: "body1", etag: "preview" },
+    ]);
+    r.store.setPreview({ id: "p1", type: "box", length: 1, width: 1, height: 1 } as never);
+    await settle();
+    r.browser.setKind("edges");
+    expect({ state: r.list.state, error: r.list.error }).toEqual({
+      state: "loading",
+      error: "The list fills in once the tool is done",
+    });
+
+    r.store.setPreview(null);
+    await settle();
+    expect({ state: r.list.state, error: r.list.error }).toEqual({ state: "ready", error: null });
+    expect(keys(r.list.rows)).toEqual(["e:body1:0", "e:body1:1", "e:body1:2"]);
+    r.browser.setKind("faces");
+    expect(r.list.error).toBeNull();
+  });
+
+  it("says the model is building while the tool's first preview is in flight, then that the list waits on the tool", async () => {
+    const r = await waiting();
+    const geometry = (r.store as unknown as { geometry: { rebuild(): unknown } }).geometry;
+    let finish!: (v: unknown) => void;
+    geometry.rebuild = () =>
+      new Promise((res) => {
+        finish = res;
+      });
+    r.store.setPreview({ id: "p1", type: "box", length: 1, width: 1, height: 1 } as never);
+    await settle();
+    expect(r.store.buildState.building).toBe(true);
+    r.browser.setKind("edges");
+    expect({ state: r.list.state, error: r.list.error }).toEqual({
+      state: "loading",
+      error: "The model is still building",
+    });
+
+    finish({ ok: true, result: result([{ id: "body1", etag: "preview" }]) });
+    await settle();
+    expect(r.store.buildState.previewBuilt).toHaveLength(1);
+    expect({ state: r.list.state, error: r.list.error }).toEqual({
+      state: "loading",
+      error: "The list fills in once the tool is done",
+    });
   });
 
   it("refuses a face row in the tool's preview build, its number means the drawn model's face", async () => {
@@ -1546,6 +1784,85 @@ describe("planes", () => {
     r.browser.setKind("planes");
     expect(keys(r.list.rows)).toEqual(["p:o:XY", "p:o:XZ", "p:o:YZ", "p:g5"]);
     expect(r.list.cursor).toBeNull();
+  });
+});
+
+describe("a plane row offered to a waiting pick", () => {
+  const LID = {
+    id: "d1",
+    type: "datumPlane",
+    name: "Lid",
+    plane: { origin: [113.5, -41.25, 37], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] },
+  };
+  async function waitingOnPlanes(answers: TreePickAnswer[] = [true]) {
+    const r = rig();
+    r.store.load(
+      JSON.stringify({ parameters: {}, features: [{ id: "f1", type: "box", length: 40, width: 30, height: 20 }, LID] }),
+    );
+    await r.build();
+    r.browser.show(true);
+    r.browser.setKind("planes");
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    const taken: TreePick[] = [];
+    awaitTreePick(
+      (pick) => {
+        taken.push(pick);
+        return answers[taken.length - 1] ?? true;
+      },
+      () => {},
+    );
+    announce.mockClear();
+    return { ...r, taken };
+  }
+  afterEach(() => resetTreePicks());
+
+  it("gives an origin plane and a datum plane to the tool as picks, speaks each by its label and starts no sketch", async () => {
+    const r = await waitingOnPlanes();
+    expect(r.browser.activatePlane(r.list.rows[1]!)).toBe(true);
+    expect(r.browser.activatePlane(r.list.rows[3]!, false)).toBe(true);
+    expect(r.taken).toEqual([
+      { kind: "basePlane", plane: "XZ" },
+      expect.objectContaining({ kind: "datumPlane", id: "d1" }),
+    ]);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual(["XZ plane picked", "Lid picked"]);
+    expect(r.host.sketch.enter).not.toHaveBeenCalled();
+  });
+
+  it("speaks the refusal of a plane the step cannot take, and nothing else", async () => {
+    const r = await waitingOnPlanes(["That row is a base plane, this step needs a face"]);
+    expect(r.browser.activatePlane(r.list.rows[0]!)).toBe(true);
+    expect(r.host.setStatus).toHaveBeenCalledExactlyOnceWith("That row is a base plane, this step needs a face", "", {
+      silent: true,
+    });
+    expect(r.host.sketch.enter).not.toHaveBeenCalled();
+  });
+
+  it("lights a plane row while the pick waits, never raising the origin tiles a pick owns, and puts it out", async () => {
+    const r = await waitingOnPlanes();
+    r.browser.hover(r.list.rows[1]!);
+    expect(r.viewport.hoverPlane.mock.calls).toEqual([["XZ"]]);
+    r.browser.hover(r.list.rows[3]!);
+    expect(r.viewport.hoverDatum.mock.calls.at(-1)).toEqual(["d1"]);
+    r.browser.hover(null);
+    expect(r.viewport.hoverPlane.mock.calls.at(-1)).toEqual([null]);
+    expect(r.viewport.hoverDatum.mock.calls.at(-1)).toEqual([null]);
+    expect(r.viewport.showAllPlanes).not.toHaveBeenCalled();
+  });
+
+  it("leaves a tool's own plane light alone when the list lit none", async () => {
+    const r = await waitingOnPlanes();
+    r.browser.hover(null);
+    expect(r.viewport.hoverPlane).not.toHaveBeenCalled();
+    expect(r.viewport.hoverDatum).not.toHaveBeenCalled();
+  });
+
+  it("refuses a datum plane the document has lost, and the tool never sees it", async () => {
+    const r = await waitingOnPlanes();
+    const lid = r.list.rows[3]!;
+    r.store.removeFeature("d1");
+    expect(r.browser.activatePlane(lid)).toBe(true);
+    expect(r.taken).toEqual([]);
+    expect(r.host.setStatus).toHaveBeenCalledOnce();
   });
 });
 
