@@ -47,6 +47,7 @@ MEASURE = """({ row, label, control, text }) => {
       label_whole: lab.scrollWidth <= lab.clientWidth + 1,
       label_width: Math.round(l.r - l.l),
       control_left: Math.round(c.l),
+      target: ctl.classList.contains('target-value'),
       inside: r.r <= out.r + 1 && r.l >= out.l - 1,
     };
     if (text) lab.textContent = saved;
@@ -55,6 +56,27 @@ MEASURE = """({ row, label, control, text }) => {
   const list = text ? rows.slice(0, 1) : rows;
   return list.map(one).filter((x) => x !== null);
 }"""
+
+
+# The words of each target summary that a line break cuts in two, as it is or with its text set to `text`.
+CUT_WORDS = """(text) => [...document.querySelectorAll('.target-count')].filter((e) => e.getClientRects().length > 0).map((e) => {
+  const node = e.firstChild;
+  const saved = node.data;
+  if (text) node.data = text;
+  const cut = [];
+  for (const m of node.data.matchAll(/\\S+/g)) {
+    const r = document.createRange();
+    r.setStart(node, m.index);
+    r.setEnd(node, m.index + m[0].length);
+    if (new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size > 1) cut.push(m[0]);
+  }
+  const found = { text: node.data, cut };
+  node.data = saved;
+  return found;
+})"""
+
+# Words wider than the room beside the Edit button, and narrower than the row.
+SUMMARIES = ("", "die ganze Skizzenfläche")
 
 
 def measure(s: Session, family: str, text: str = "") -> list[dict]:
@@ -91,6 +113,8 @@ def found():
         close_settings(s)
         show_extrude(s)
         res["param comfortable"] = scan(s, "param")
+        for text in SUMMARIES:
+            res[f"words {text}"] = s.page.evaluate(CUT_WORDS, text)
         try:
             s.screenshot(out / "field_wrap_extrude.png")
         except Exception as e:
@@ -109,13 +133,23 @@ def families():
 def test_a_row_that_fits_keeps_its_control_beside_the_label(found, name):
     rows = found[name]["rows"]
     assert rows, f"no {name} row was on the screen"
-    off = [r["label"] for r in rows if not r["same_line"]]
+    # Comfortable text widens a target summary past the room beside its label, so it moves under as the wrap rule says.
+    moved = [r for r in rows if r["target"] and not r["same_line"]] if name == "param comfortable" else []
+    off = [r["label"] for r in rows if not r["same_line"] and r not in moved]
     assert off == [], f"controls under their label: {off}"
+    assert [r for r in moved if not r["under"] or r["left_gap"] > 1] == []
     # A stress row can hold several controls, so only the other families end at the row's edge.
     if name != "stress":
         assert [r["label"] for r in rows if r["right_gap"] > 1] == []
     if name in FIXED:
         assert len({r["control_left"] for r in rows}) == 1, rows
+
+
+@pytest.mark.parametrize("text", SUMMARIES)
+def test_a_target_summary_under_comfortable_text_breaks_only_between_words(found, text):
+    summaries = found[f"words {text}"]
+    assert summaries, "no target summary was on the screen"
+    assert [x for x in summaries if x["cut"]] == []
 
 
 @pytest.mark.parametrize("name", families())

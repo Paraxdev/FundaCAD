@@ -218,15 +218,17 @@
 }
 
 /* What a feature is applied to, in the value row rhythm: the count sits where a number
-   would and the button where a unit chip would. */
-.target-value {
+   would and the button where a unit chip would. The basis is its text, so a summary that
+   does not fit beside the label moves under it instead of breaking inside its words. */
+.param-value.target-value {
+  flex-basis: auto;
   justify-content: space-between;
 }
 .target-count {
   min-width: 0;
   font-size: var(--fs-small);
   color: var(--text);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 /* An empty target usually means something ("the whole body"), so it is stated, not
    dimmed away. */
