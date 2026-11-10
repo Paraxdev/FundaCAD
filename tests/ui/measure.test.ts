@@ -280,11 +280,13 @@ describe("a decimal comma in a language that writes one", () => {
     expect(tryParseMeasure("1.234,5", MM)).toBeNull();
   });
 
-  it("reads the compact drawing form 10x2,5 as a product, as English reads 10x2.5", async () => {
+  it("reads the compact drawing form 10x2,5 and 10x,5 as a product, as English reads 10x2.5 and 10x.5", async () => {
     await setLanguage("de");
     const de = [parseMeasure("10x2,5", MM).value, parseMeasure("1,5X3,25 mm", MM).value, fieldNumber("(1+2)x2,5")];
+    const short = [parseMeasure("10x,5", MM).value, parseMeasure("10x0,5", MM).value];
     await setLanguage("system");
-    expect({ de, en: parseMeasure("10x2.5", MM).value }).toEqual({ de: [25, 4.875, 7.5], en: 25 });
+    const en = [parseMeasure("10x2.5", MM).value, parseMeasure("10x.5", MM).value];
+    expect({ de, short, en }).toEqual({ de: [25, 4.875, 7.5], short: [5, 5], en: [25, 5] });
   });
 
   it("reads a field's plain number by the language, and goes back to refusing 1,500 in English", async () => {

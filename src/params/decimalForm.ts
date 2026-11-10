@@ -6,9 +6,12 @@ import { ExprError, tokenize } from "./parse";
 const DIGIT = /[0-9]/;
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
-// "10x2,5" is the drawing form of 10 times 2,5 that ui/measure reads; the x is not the start of a name there.
+// "10x2,5" and "10x,5" are the drawing form of 10 times 2,5 and 0,5 that ui/measure reads; the x is not the start of a
+// name there.
 const isTimesX = (text: string, i: number) =>
-  (text[i] === "x" || text[i] === "X") && /[0-9)]/.test(text[i - 1] ?? "") && DIGIT.test(text[i + 1] ?? "");
+  (text[i] === "x" || text[i] === "X") &&
+  /[0-9)]/.test(text[i - 1] ?? "") &&
+  (DIGIT.test(text[i + 1] ?? "") || (/[,.]/.test(text[i + 1] ?? "") && DIGIT.test(text[i + 2] ?? "")));
 // "1.500" could be a thousands point, the mirror of "1,000" in a point language. After a zero whole part (0.250) or
 // with an exponent it never is.
 const POINT_BEFORE_THREE = /^0*[1-9][0-9]*\.[0-9]{3}$/;
@@ -26,6 +29,10 @@ export function commasToPoints(text: string): string {
     if (isTimesX(text, i)) {
       out += ch;
       i++;
+      if (text[i] === ",") {
+        out += ".";
+        i++;
+      }
     } else if (IDENT_START.test(ch)) {
       let j = i + 1;
       while (j < text.length && IDENT_PART.test(text[j]!)) j++;
