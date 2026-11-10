@@ -31,11 +31,24 @@ export function unitLabel(def: ParamDef): string {
   return def.unit === "mm" ? "mm" : def.unit === "deg" ? "°" : "";
 }
 
+type GroupRow = { id: string; name: string };
+
+/** The first group of each id: nothing validates a loaded document, and a repeated id would list its parameters twice
+ *  and collide as a v-for key. Read only, the document keeps what it was given. */
+export function uniqueGroups(groups: GroupRow[] | undefined): GroupRow[] {
+  const seen = new Set<string>();
+  return (groups ?? []).filter((g) => {
+    if (seen.has(g.id)) return false;
+    seen.add(g.id);
+    return true;
+  });
+}
+
 /** The user parameters in the document's group order, ungrouped first. Model parameters (bound to one field) and
  *  hidden helpers are left out: this is the list of knobs, not the table. */
 export function tuneGroups(doc: CadDocument): TuneGroup[] {
   const defs = doc.paramDefs ?? {};
-  const groups = doc.paramExtras?.groups ?? [];
+  const groups = uniqueGroups(doc.paramExtras?.groups);
   const known = new Set(groups.map((g) => g.id));
   const rowsIn = (id: string | null): TuneRow[] =>
     Object.entries(defs)
