@@ -139,7 +139,10 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
     if stage.as_deref() != Some("mounted") {
         return;
     }
-    state.mounted.store(true, Relaxed);
+    if !state.mounted.swap(true, Relaxed) {
+        // scripts/wayland-smoke.sh waits for this line, after a stall restart too.
+        println!("[frontend] the interface painted its first frame");
+    }
     if !safe_mode::clears_count(safe.reason) {
         return;
     }
