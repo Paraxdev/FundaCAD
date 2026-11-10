@@ -3,7 +3,7 @@
 
 import { readSetting } from "./storedSetting";
 // The display precision rule lives in ui/measure beside the parser; re-exported here so there is one import path.
-import { roundForDisplay as displayRound, spokenUnit } from "./measure";
+import { roundForDisplay as displayRound, spellNumber, spellRounded, spokenUnit } from "./measure";
 export { displayRound };
 
 export type Unit = "mm" | "cm" | "in";
@@ -58,17 +58,17 @@ export function fromDisplay(v: number): number {
 
 /** mm -> rounded display string with the unit suffix (e.g. "40 mm") */
 export function fmtLength(mm: number): string {
-  return `${displayRound(toDisplay(mm))} ${current}`;
+  return `${spellRounded(toDisplay(mm))} ${current}`;
 }
 
 export function fmtArea(mm2: number): string {
-  return `${displayRound(mm2 / FACTOR[current] ** 2)} ${current}²`;
+  return `${spellRounded(mm2 / FACTOR[current] ** 2)} ${current}²`;
 }
 
 // Voices can drop a hyphen before a number, so a negative says minus.
 function spokenAmount(displayed: number, prefix: string): string {
   const n = displayRound(displayed);
-  return `${n < 0 ? "minus " : ""}${Math.abs(n)} ${prefix}${spokenUnit(current, true, Math.abs(n) === 1)}`;
+  return `${n < 0 ? "minus " : ""}${spellNumber(Math.abs(n))} ${prefix}${spokenUnit(current, true, Math.abs(n) === 1)}`;
 }
 
 export function spokenLength(mm: number): string {
@@ -96,7 +96,7 @@ function inchFraction(mm: number): string | null {
  *  as fractions. */
 export function fmtLengthCompact(mm: number): string {
   const frac = current === "in" ? inchFraction(mm) : null;
-  return frac ? `${frac}in` : `${Number(toDisplay(mm).toPrecision(3))}${current}`;
+  return frac ? `${frac}in` : `${spellNumber(Number(toDisplay(mm).toPrecision(3)))}${current}`;
 }
 
 /** fmtLength for a grid step: inch steps under one inch read as fractions. */
@@ -160,6 +160,7 @@ export function snap(v: number, step: number): number {
 import type { FieldKind } from "../document/numFields";
 export type { FieldKind };
 import { canonicalTyping, tryParseMeasure, unitById } from "./measure";
+import type { DecimalMark } from "../i18n";
 
 /** numeric value to show in a field: angles stay in degrees, lengths convert */
 export function displayValue(mm: number, kind: FieldKind = "length"): number {
@@ -188,17 +189,17 @@ export function parsedUnit(raw: string, kind: FieldKind = "length"): string | nu
  *  opposed to an expression (canonical-unit semantics via the params engine).
  *  "5.0" and "-2e3" are plain; "5 mm", "width/2", "5+3" are expressions. */
 const PLAIN_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
-export function isPlainNumber(raw: string): boolean {
-  return plainNumber(raw) !== null;
+export function isPlainNumber(raw: string, mark?: DecimalMark): boolean {
+  return plainNumber(raw, mark) !== null;
 }
 
 /** The value of a plain literal, read the way ui/measure reads one: a decimal
  *  comma and a typographic minus are the same literal. Null for anything else,
- *  an ambiguous "1,000" included. */
-export function plainNumber(raw: string): number | null {
+ *  an ambiguous "1,000" included, or "1.500" with a comma mark. */
+export function plainNumber(raw: string, mark?: DecimalMark): number | null {
   let src: string;
   try {
-    src = canonicalTyping(raw);
+    src = canonicalTyping(raw, mark);
   } catch {
     return null;
   }

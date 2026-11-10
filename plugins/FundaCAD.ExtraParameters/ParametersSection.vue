@@ -5,6 +5,8 @@ import {
   clampToControl,
   configurationDrift,
   readAs,
+  shownExpr,
+  spellNumber,
   toast,
   useBrowserStore,
   useDocValue,
@@ -12,7 +14,7 @@ import {
 } from "fundacad";
 import { Checkbox, FieldRow, Icon, IconButton, NumberField, Select, Slider, announce } from "fundacad/ui";
 import { setupOpen } from "./state";
-import { nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
+import { choiceLabel, nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
 
 const store = useEngine().store;
 const browser = useBrowserStore();
@@ -62,17 +64,17 @@ const readPlain = readAs(null);
 const rowParse = (row: TuneRow) => (row.unit === "mm" ? readLength : row.unit === "°" ? readAngle : readPlain);
 const fieldUnit = (row: TuneRow) => (row.unit === "mm" ? "mm" : row.unit === "°" ? "deg" : undefined);
 const spokenUnit = (row: TuneRow) => (row.unit === "°" ? "degrees" : row.unit);
-const sliderText = (row: TuneRow) => (v: number) => [String(v), spokenUnit(row)].filter(Boolean).join(" ");
+const sliderText = (row: TuneRow) => (v: number) => [spellNumber(v), spokenUnit(row)].filter(Boolean).join(" ");
 const sliderStep = (row: TuneRow) =>
   row.control.kind === "slider" ? (row.control.step ?? (row.control.max - row.control.min) / 100) : 1;
 function choiceOptions(row: TuneRow) {
   if (row.control.kind !== "choice") return [];
   const out: { value: string; label: string; disabled?: boolean }[] = row.control.choices.map((c) => ({
     value: String(c.value),
-    label: c.label,
+    label: choiceLabel(c),
   }));
   if (!row.control.choices.some((c) => c.value === row.def.value)) {
-    out.push({ value: String(row.def.value), label: `${row.def.value} (not listed)`, disabled: true });
+    out.push({ value: String(row.def.value), label: `${spellNumber(row.def.value)} (not listed)`, disabled: true });
   }
   return out;
 }
@@ -86,7 +88,7 @@ const labelFor = (row: TuneRow) =>
 const rowStyle = { paddingRight: "8px", marginBottom: "0", display: "grid" };
 const configStyle = { ...rowStyle, gridTemplateColumns: "max-content minmax(0, 1fr)" };
 // The name takes its longest name's width up to 62% of the row, but it is the one that gives way: the slider and the
-// number field keep their minimum widths and the name ellipsizes in what is left.
+// number field keep their minimum widths and the name wraps in what is left.
 const nameWidth = computed(() => `${nameColumnChars(groups.value.flatMap((g) => g.rows)) + 1}ch`);
 const rowLayout = (g: { id: string | null }) => ({
   ...rowStyle,
@@ -164,7 +166,7 @@ const rowLayout = (g: { id: string | null }) => ({
           paddingRight: '8px',
           color: r.check.level === 'error' ? 'var(--error)' : 'var(--warn)',
         }"
-        :title="r.error ? `${r.check.expr}: ${r.error}` : r.check.expr"
+        :title="r.error ? `${shownExpr(r.check.expr)}: ${r.error}` : shownExpr(r.check.expr)"
       >
         <Icon name="warning" :size="12" />
         <span style="white-space: normal"
@@ -212,9 +214,9 @@ const rowLayout = (g: { id: string | null }) => ({
             :style="rowLayout(g)"
             :title="rowTooltip(row)"
           >
-            <span v-if="!row.editable" style="opacity: 0.7" :title="`= ${row.def.expr}`"
-              ><span aria-hidden="true">fx </span>{{ shortValue(row.def.value) }} {{ row.unit
-              }}<span class="sr-only">, calculated from {{ row.def.expr }}</span></span
+            <span v-if="!row.editable" style="opacity: 0.7" :title="`= ${shownExpr(row.def.expr)}`"
+              ><span aria-hidden="true">fx </span>{{ spellNumber(shortValue(row.def.value)) }} {{ row.unit
+              }}<span class="sr-only">, calculated from {{ shownExpr(row.def.expr) }}</span></span
             >
 
             <Checkbox

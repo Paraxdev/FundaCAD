@@ -4,7 +4,7 @@ import NumberField from "../ui/NumberField.vue";
 import Select from "../ui/Select.vue";
 import { t } from "../../i18n";
 import { STRESS_MATERIALS, materialOptions, type StressSetup } from "../../ui/stress";
-import { displayRound } from "../../ui/units";
+import { spellNumber, spellRounded } from "../../ui/measure";
 
 const props = defineProps<{ setup: StressSetup }>();
 
@@ -12,7 +12,7 @@ const preset = computed(() => STRESS_MATERIALS.find((m) => m.name === props.setu
 const options = computed(materialOptions);
 
 function fmt(v: number): string {
-  return String(displayRound(v));
+  return spellRounded(v);
 }
 </script>
 
@@ -25,7 +25,7 @@ function fmt(v: number): string {
     {{
       t("stress.setup.materialLine", {
         e: fmt(preset.E),
-        nu: String(preset.nu),
+        nu: spellNumber(preset.nu),
         yield: fmt(preset.yield),
         density: fmt(preset.density),
       })

@@ -12,6 +12,7 @@ import { classifyExprInput } from "../../src/params/engine";
 import type { CadDocument } from "../../src/types";
 import { icon, iconElement } from "../../src/ui/icons";
 import { escapeClaimed } from "../../src/ui/escapeClaim";
+import { setLanguage } from "../../src/i18n";
 
 /** happy-dom has no PointerEvent constructor in every version, and nothing here
  *  reads a pointer property, only the target, so a plain bubbling Event is
@@ -1144,6 +1145,32 @@ describe("DimInput reads parameter names", () => {
     expect(dim.getValue("depth")).toBe(15);
     expect(dim.exprOf("depth")).toBeNull();
   });
+
+  describe("with a decimal comma", () => {
+    it.each([
+      ["width * 1,5", 60, "width * 1.5"],
+      ["rib = width / 1,6", 25, "width / 1.6"],
+      ["max(1,5; width / 2) + 0,25", 20.25, "max(1.5; width / 2) + 0.25"],
+    ])("in German %j is %d and binds %j", async (text, value, expr) => {
+      await setLanguage("de");
+      try {
+        type(text);
+        expect(problem()).toBeNull();
+        expect(dim.getValue("depth")).toBe(value);
+        expect(dim.exprOf("depth")).toMatchObject({ expr });
+      } finally {
+        await setLanguage("system");
+      }
+    });
+
+    it("in English the same text is refused, with no expression to bind", () => {
+      type("width * 1,5");
+      enter();
+      expect(commit).not.toHaveBeenCalled();
+      expect(problem()).not.toBeNull();
+      expect(dim.exprOf("depth")).toBeNull();
+    });
+  });
 });
 
 describe("DimInput.wasTyped", () => {
@@ -1430,5 +1457,46 @@ describe("DimInput.hasField", () => {
     expect(dim.hasField("radius")).toBe(false);
     dim.show([{ name: "x", label: "X" }], () => {});
     expect([dim.hasField("radius"), dim.hasField("x")]).toEqual([false, true]);
+  });
+});
+
+describe("DimInput boxes in a comma language", () => {
+  beforeEach(() => setLanguage("de"));
+  afterEach(() => setLanguage("system"));
+
+  const input = () => root().querySelector<HTMLInputElement>("input")!;
+  const type = (text: string) => {
+    input().value = text;
+    input().dispatchEvent(new Event("input", { bubbles: true }));
+    input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  };
+
+  it("fills a seeded and a tracking box with a comma, a count whole", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    dim.seed("distance", 40.25);
+    expect(input().value).toBe("40,25");
+    dim.takeOver("distance");
+    dim.updateFromCursor({ distance: 17.375 });
+    expect(input().value).toBe("17,375");
+    expect(dim.getValue("distance")).toBe(17.375);
+    dim.dispose();
+
+    dim = new DimInput();
+    dim.show([{ name: "copies", label: "N", kind: "count" }], () => {});
+    dim.seed("copies", 5.6);
+    expect(input().value).toBe("6");
+  });
+
+  it("reads back what the box shows, with a comma or a point, and 1,000 is 1", () => {
+    const got: Record<string, number>[] = [];
+    dim.show([{ name: "distance", label: "D" }], (v) => got.push(v));
+    dim.seed("distance", 40.25);
+    type(input().value);
+    type("17,375");
+    type("17.5");
+    expect(got.map((v) => v.distance)).toEqual([40.25, 17.375, 17.5]);
+    type("1,000");
+    expect(got.length).toBe(4);
+    expect(got[3]!.distance).toBe(1);
   });
 });

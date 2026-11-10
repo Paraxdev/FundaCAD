@@ -1,5 +1,7 @@
 // The Stress tool panel. Its glass comes from .measure-panel, these rules only lay out its rows.
 
+@use "ui/field-row" as row;
+
 // A fixed narrow column, clear of the model and arrows it analyses. Only the step scrolls, so the head, the tabs and
 // the Run bar stay put however long the setup grows.
 .stress-panel {
@@ -76,16 +78,13 @@
   font-size: var(--fs-small);
 }
 
-// A label at the left and its control or controls filling the rest of the line. A select whose whole value does not
-// fit beside them takes a line of its own, so a long language is never cut.
+// A label at the left and its control or controls filling the rest of the line, under the one wrap rule of FieldRow.
 .stress-field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2);
+  @include row.wrap-row(var(--s-2), var(--s-2));
   min-height: 32px;
 }
 .stress-field > .measure-k:first-child {
+  @include row.wrap-label;
   flex: 0 0 auto;
   min-width: 72px;
 }

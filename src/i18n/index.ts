@@ -2,11 +2,12 @@
 
 import { createCatalog } from "./catalog";
 import { pickDropInSource } from "./dropIns";
+import { decimalMarkOf, type DecimalMark } from "./format";
 import { SHIPPED } from "./languages";
 import en from "./locales/en.json";
 
 export type MessageKey = keyof typeof en;
-export type { MessageArgs } from "./format";
+export type { DecimalMark, MessageArgs } from "./format";
 
 function pageStorage(): Storage | null {
   try {
@@ -47,3 +48,5 @@ export const languageMachineTranslated = catalog.machineTranslated;
 export const languageChoices = catalog.choices;
 export const languageFileStatus = catalog.dropInStatus;
 export const onLanguageChange = catalog.onChange;
+// Reads a shallowRef, so a computed or template that spells a number follows the language.
+export const decimalMark = (): DecimalMark => decimalMarkOf(catalog.active().bcp47);

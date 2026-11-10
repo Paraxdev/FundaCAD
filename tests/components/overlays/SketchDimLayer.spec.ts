@@ -27,6 +27,7 @@ import { useSketchAnnotationStore } from "../../../src/stores/sketchAnnotations"
 import { SketchDimensions, type ExtraDim } from "../../../src/sketch/sketchDimensions";
 import type { SketchPlane } from "../../../src/sketch/plane";
 import type { Viewport } from "../../../src/viewport/viewport";
+import { setLanguage } from "../../../src/i18n";
 import type { ResolvedEntity } from "../../../src/sketch/snap";
 
 enableAutoUnmount(afterEach);
@@ -78,6 +79,28 @@ describe("SketchDimLayer", () => {
     dims().show([], plane, [extra(), extra({ valueMm: 12 })]);
     await nextTick();
     expect([...labels()].map((el) => el.textContent)).toEqual(["40 mm", "12 mm"]);
+  });
+
+  it("respells the shown badges when the language changes, without a rebuild", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    dims().show([], plane, [
+      extra({ valueMm: 42.375 }),
+      extra({ key: "c:a", valueMm: 37.5, kind: "angle" }),
+      extra({ key: "c:d", valueMm: 12.25, driven: true }),
+    ]);
+    await nextTick();
+    const shown = () => [...labels()].map((el) => el.textContent);
+    const en = shown();
+    await setLanguage("de");
+    await nextTick();
+    const de = shown();
+    await setLanguage("system");
+    await nextTick();
+    expect([en, de, shown()]).toEqual([
+      ["42.375 mm", "37.5°", "(12.25 mm)"],
+      ["42,375 mm", "37,5°", "(12,25 mm)"],
+      ["42.375 mm", "37.5°", "(12.25 mm)"],
+    ]);
   });
 
   it("carries an entity's own dimensions through, not just the extras", async () => {
@@ -301,6 +324,23 @@ describe("SketchDimLayer", () => {
     expect((await openEditor()).value).toBe("40");
   });
 
+  it("opens a value with the language's mark and commits what is typed back, comma or point", async () => {
+    await setLanguage("de");
+    try {
+      const commit = vi.fn();
+      const input = await openEditor({ valueMm: 42.375, commit });
+      expect(input.value).toBe("42,375");
+      for (const text of ["42,375", "17,5", "17.5"]) {
+        input.value = text;
+        input.dispatchEvent(new Event("input"));
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      }
+      expect(commit.mock.calls).toEqual([[42.375], [17.5], [17.5]]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   it("names the open editor after its dimension", async () => {
     const input = await openEditor({ name: "Width of Rectangle 2" });
     expect(input.getAttribute("aria-label")).toBe("Width of Rectangle 2");
@@ -317,6 +357,24 @@ describe("SketchDimLayer", () => {
     store.dimLit = null;
     await nextTick();
     expect([...labels()].map((el) => el.classList.contains("is-lit"))).toEqual([false, false, false]);
+  });
+
+  it("reopens and titles a formula with the language's decimal mark, and commits what is typed back", async () => {
+    await setLanguage("de");
+    try {
+      const commitExpr = vi.fn(() => null);
+      const input = await openEditor({ expr: "max(width*1.5;2.25)", commitExpr });
+      expect([input.value, labels()[0]!.title]).toEqual([
+        "max(width*1,5;2,25)",
+        "= max(width*1,5;2,25) · click to edit",
+      ]);
+      input.value = "max(width*1,5;2,5)";
+      input.dispatchEvent(new Event("input"));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      expect(commitExpr.mock.calls).toEqual([["max(width*1,5;2,5)"]]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("reopens the EXPRESSION on a parameter-bound dim, not its value", async () => {

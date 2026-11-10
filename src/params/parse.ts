@@ -84,6 +84,8 @@ export function tokenize(src: string): Token[] {
     throw new ExprError(`expression is longer than ${MAX_EXPR_LEN} characters`);
   }
   const out: Token[] = [];
+  // One entry per open bracket, true when it opens a function's arguments.
+  const calls: boolean[] = [];
   let i = 0;
   while (i < src.length) {
     const ch = src[i]!;
@@ -122,10 +124,13 @@ export function tokenize(src: string): Token[] {
       continue;
     }
     if ("+-*/^();<>!".includes(ch)) {
+      if (ch === "(") calls.push(out.at(-1)?.kind === "ident");
+      else if (ch === ")") calls.pop();
       out.push({ kind: "op", op: ch, start: i, end: i + 1 });
       i++;
       continue;
     }
+    if (ch === "," && calls.at(-1)) throw new ExprError('unexpected character ",", separate arguments with ";"', i);
     throw new ExprError(`unexpected character "${ch}"`, i);
   }
   return out;

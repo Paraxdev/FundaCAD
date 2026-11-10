@@ -4,6 +4,8 @@
 
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
+import { commasToPoints, pointsToCommas } from "../params/decimalForm";
+import { decimalMark, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
 
@@ -194,10 +196,13 @@ interface Normalised {
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 
-/** Locale minus signs and a decimal comma become ASCII. A comma is a decimal point only when it is the lone comma with
- *  no point or brackets, and never before exactly three digits, where "1,000" is refused rather than guessed. */
-export function canonicalTyping(raw: string): string {
+/** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark, and a
+ *  lone point before exactly three digits after a nonzero whole part is refused, "1.500" could be fifteen hundred
+ *  while "0.250" reads. With a point mark a comma is one only when it is the lone comma with no point or brackets, and
+ *  never before exactly three digits, where "1,000" and "0,125" are refused rather than guessed. */
+export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
   const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
+  if (mark === ",") return commasToPoints(src);
   if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
   if (src.indexOf(",") !== src.lastIndexOf(",")) return src;
   const m = DECIMAL_COMMA.exec(src);
@@ -392,10 +397,54 @@ export function toUnit(canonical: number, unit: UnitDef | null): number {
   return roundForDisplay(canonical / (unit?.factor ?? 1));
 }
 
+/** The number as a box shows it: String(n) with the point swapped for the language's mark. */
+export function spellNumber(n: number, mark: DecimalMark = decimalMark()): string {
+  const text = String(n);
+  return mark === "," ? text.replace(".", ",") : text;
+}
+
+/** Typed expression text as the stored point grammar. In a dot language it is untouched, so a comma there is
+ *  refused by the tokenizer as before. In a comma language it throws ExprError for a number it will not guess, such
+ *  as 1.500; `typedExprProblem` says so without throwing. */
+export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
+  return mark === "," ? commasToPoints(typed) : typed;
+}
+
+/** Why storedExpr refuses typed expression text, null when it takes it. */
+export function typedExprProblem(typed: string, mark: DecimalMark = decimalMark()): string | null {
+  try {
+    storedExpr(typed, mark);
+    return null;
+  } catch (e) {
+    if (e instanceof ExprError) return e.message;
+    throw e;
+  }
+}
+
+/** Stored expression text as the language shows it, the reverse of storedExpr. */
+export function shownExpr(stored: string, mark: DecimalMark = decimalMark()): string {
+  return mark === "," ? pointsToCommas(stored) : stored;
+}
+
+/** `toFixed` with the language's mark, trailing zeros kept. */
+export function spellFixed(v: number, digits: number, mark: DecimalMark = decimalMark()): string {
+  const text = v.toFixed(digits);
+  return mark === "," ? text.replace(".", ",") : text;
+}
+
+export function spellRounded(v: number, mark?: DecimalMark): string {
+  return spellNumber(roundForDisplay(v), mark);
+}
+
+/** A comma mark cannot also separate list items, so comma languages join with a semicolon. */
+export function listJoin(parts: readonly string[], mark: DecimalMark = decimalMark()): string {
+  return parts.join(mark === "," ? "; " : ", ");
+}
+
 /** Canonical value → "3.4 mm". `space` off gives "3.4mm" for tight chrome. */
 export function formatMeasure(canonical: number, unit: UnitDef | null, space = true): string {
   const u = unit ?? BY_ID.get("mm")!;
-  const n = toUnit(canonical, u);
+  const n = spellNumber(toUnit(canonical, u));
   // Degrees read as 90° with nothing between; every other unit takes a space.
   const gap = space && u.label !== "°" ? " " : "";
   return `${n}${gap}${u.label}`;

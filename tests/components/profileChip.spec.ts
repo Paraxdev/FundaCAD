@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfileChip } from "../../src/features/profileChip";
 import { escapeClaimed } from "../../src/ui/escapeClaim";
+import { setLanguage } from "../../src/i18n";
 
 function pointer(type: string, target: EventTarget, clientX: number, shiftKey = false) {
   const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, button: 0, shiftKey });
@@ -163,6 +164,47 @@ describe("ProfileChip", () => {
     key(field(), "Enter");
     expect(field().getAttribute("aria-invalid")).toBe("true");
     expect(chip.profile).toBe(0.95);
+  });
+
+  it("in a comma language the field commits its own shown value and a typed comma", async () => {
+    await setLanguage("de");
+    try {
+      mount(-0.35).click();
+      const shown = field().value;
+      key(field(), "Enter");
+      const untouched = { shown, profile: chip.profile, invalid: field().getAttribute("aria-invalid") };
+      field().value = "0,625";
+      key(field(), "Enter");
+      const comma = { profile: chip.profile, value: field().value };
+      field().value = "1.5";
+      key(field(), "Enter");
+      const point = { profile: chip.profile, value: field().value };
+      expect({ untouched, comma, point }).toEqual({
+        untouched: { shown: "-0,350", profile: -0.35, invalid: null },
+        comma: { profile: 0.625, value: "+0,625" },
+        point: { profile: 0.95, value: "+0,950" },
+      });
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("in a comma language refuses 1.500 with the reason and keeps the profile, 0.250 commits as 0.25", async () => {
+    await setLanguage("de");
+    try {
+      mount(-0.35).click();
+      field().value = "1.500";
+      key(field(), "Enter");
+      const refused = [chip.profile, field().getAttribute("aria-invalid"), field().title];
+      field().value = "0.250";
+      key(field(), "Enter");
+      expect({ refused, taken: [chip.profile, field().value] }).toEqual({
+        refused: [-0.35, "true", '"1.500" is ambiguous, write a comma for decimals or leave the point out'],
+        taken: [0.25, "+0,250"],
+      });
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("claims Escape while open, so a tool that asks leaves it, and gives focus back to the chip", async () => {

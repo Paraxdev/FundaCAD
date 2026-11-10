@@ -1,6 +1,7 @@
 // The one-line readout for several picked things, and the measures it and the prompts share.
 
 import { shallowRef } from "vue";
+import { spellNumber } from "./measure";
 import { fmtLength } from "./units";
 
 export type Pt3 = readonly [number, number, number];
@@ -50,7 +51,7 @@ export function circleDiameter(points: readonly Pt3[], tol = 0.01): number | nul
   return radii.every((r) => Math.abs(r - mean) <= mean * tol) ? mean * 2 : null;
 }
 
-const mm = (v: number) => `${Number(v.toFixed(2))} mm`;
+const mm = (v: number) => `${spellNumber(Number(v.toFixed(2)))} mm`;
 
 export interface RoundSize {
   radius: number;

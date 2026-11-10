@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import type { CadDocument, ParamDef } from "../../src/types";
 import { recompute } from "../../src/params/engine";
 import {
@@ -72,6 +73,48 @@ describe("Extra Parameters: what the section lists", () => {
         { label: "45", value: 45 },
       ]),
     ).toBe("Small = 10, 45");
+  });
+
+  describe("a list of choices by the language", () => {
+    afterEach(() => setLanguage("system"));
+    const CHOICES = [
+      { label: "Small", value: 2.5 },
+      { label: "1.5", value: 1.5 },
+      { label: "Large", value: 30 },
+    ];
+
+    it("in German takes a decimal comma with a semicolon between choices, and shows them so", async () => {
+      await setLanguage("de");
+      expect({
+        read: [parseChoices("Small = 2,5; 1,5; Large = 30"), parseChoices("Klein = 0.250")],
+        shown: formatChoices(CHOICES),
+        back: parseChoices(formatChoices(CHOICES)),
+      }).toEqual({
+        read: [CHOICES, [{ label: "Klein", value: 0.25 }]],
+        shown: "Small = 2,5; 1,5; Large = 30",
+        back: CHOICES,
+      });
+    });
+
+    it("in German refuses 1.500 with the reason, and a comma where a semicolon belongs", async () => {
+      await setLanguage("de");
+      expect([parseChoices("Small = 1.500; Large = 30"), parseChoices("Small = 2,5, Large = 30")]).toEqual([
+        '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+        '"Small = 2,5, Large = 30" is two choices, put ; between them',
+      ]);
+    });
+
+    it("in English keeps the comma between choices and reads a point", () => {
+      expect({
+        read: [parseChoices("Small = 2.5, 1.5, Large = 30"), parseChoices("Small = 1.500")],
+        shown: formatChoices(CHOICES),
+        semicolon: parseChoices("Small = 10; Large = 30"),
+      }).toEqual({
+        read: [CHOICES, [{ label: "Small", value: 1.5 }]],
+        shown: "Small = 2.5, 1.5, Large = 30",
+        semicolon: '"Small = 10; Large = 30" is two choices, put , between them',
+      });
+    });
   });
 
   it("keeps a range across a change of control kind, and invents a usable one for a new slider", () => {

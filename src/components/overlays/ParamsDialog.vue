@@ -6,7 +6,8 @@ import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
-import { getUnit, toDisplay, displayRound } from "../../ui/units";
+import { getUnit, toDisplay } from "../../ui/units";
+import { shownExpr, spellRounded, storedExpr, typedExprProblem } from "../../ui/measure";
 import Panel from "../ui/Panel.vue";
 import TextField from "../ui/TextField.vue";
 import Select from "../ui/Select.vue";
@@ -43,9 +44,9 @@ const userRows = computed(() => rows.value.filter((r) => !r.def.target));
 const modelRows = computed(() => rows.value.filter((r) => r.def.target));
 
 function formatValue(def: ParamDef): string {
-  if (def.unit === "mm") return `${displayRound(toDisplay(def.value))} ${getUnit()}`;
-  if (def.unit === "deg") return `${displayRound(def.value)}°`;
-  return String(displayRound(def.value));
+  if (def.unit === "mm") return `${spellRounded(toDisplay(def.value))} ${getUnit()}`;
+  if (def.unit === "deg") return `${spellRounded(def.value)}°`;
+  return spellRounded(def.value);
 }
 
 function targetLabel(doc: CadDocument, t: ParamTarget): string {
@@ -86,10 +87,13 @@ const addError = ref("");
 /** The store's own check is the commit, so it runs as TextField's validate, which runs once per commit and keeps the
  *  refused text. */
 const commitWith = (fn: (raw: string) => string | null) => (raw: string) => fn(raw.trim());
+const commitExpr = (fn: (expr: string) => string | null) =>
+  commitWith((raw) => typedExprProblem(raw) ?? fn(storedExpr(raw)));
 
 function add() {
   if (!newName.value.trim() || !newExpr.value.trim()) return;
-  const err = store.addParam(newName.value.trim(), newExpr.value.trim(), newUnit.value);
+  const expr = newExpr.value.trim();
+  const err = typedExprProblem(expr) ?? store.addParam(newName.value.trim(), storedExpr(expr), newUnit.value);
   addError.value = err ?? "";
   if (err) return;
   newName.value = "";
@@ -126,8 +130,8 @@ function add() {
         <TextField
           commit="change"
           :label="`Expression of ${r.name}`"
-          :model-value="r.def.expr"
-          :validate="commitWith((raw) => store.setParamExpr(r.name, raw))"
+          :model-value="shownExpr(r.def.expr)"
+          :validate="commitExpr((expr) => store.setParamExpr(r.name, expr))"
         />
         <span class="params-value">{{ r.value }}</span>
         <TextField
@@ -175,8 +179,8 @@ function add() {
           <TextField
             commit="change"
             :label="`Expression of ${r.name}`"
-            :model-value="r.def.expr"
-            :validate="commitWith((raw) => store.setParamExpr(r.name, raw))"
+            :model-value="shownExpr(r.def.expr)"
+            :validate="commitExpr((expr) => store.setParamExpr(r.name, expr))"
           />
           <span class="params-value">{{ r.value }}</span>
           <!-- a dN has no comment and no delete: it dies with its target -->
@@ -186,7 +190,8 @@ function add() {
       </template>
 
       <div class="measure-hint">
-        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · Esc to close
+        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · a semicolon separates arguments: max(a; b)
+        · Esc to close
       </div>
     </div>
   </Panel>

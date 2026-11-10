@@ -2,7 +2,7 @@
 // The selected image's settings, and the distance box of a calibration.
 
 import { computed, nextTick, onUnmounted, reactive, ref, useTemplateRef, watch } from "vue";
-import { displayRound, useEngine } from "fundacad";
+import { numberText, useEngine } from "fundacad";
 import { Button, Checkbox, FieldRow, NumberField, Panel, Slider, Switch } from "fundacad/ui";
 import { heightOf, withWidth } from "./calibrate";
 import { MIN_OPACITY, readRefImage, type RefImage } from "./refImage";
@@ -108,7 +108,7 @@ const prompt = computed(() =>
           />
         </FieldRow>
         <FieldRow layout="param" label="Height" :for="null">
-          <span>{{ displayRound(heightOf(r)) }} mm</span>
+          <span>{{ numberText(heightOf(r)) }} mm</span>
         </FieldRow>
         <FieldRow v-slot="{ id }" layout="param" label="Angle">
           <NumberField

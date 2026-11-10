@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import type { Component } from "vue";
+import { setLanguage } from "../../../src/i18n";
 
 vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 
@@ -203,6 +204,28 @@ describe("dom.ts controls match their Vue twins", () => {
       b.value,
       b.style.getPropertyValue("--ui-slider-fill"),
     ]);
+  });
+
+  it("a Slider readout and spoken value use the comma of a comma language, as the Vue one does", async () => {
+    await setLanguage("de");
+    try {
+      for (const p of [
+        { value: 0.35, min: 0, max: 1, step: 0.05, label: "Round", showValue: true },
+        { value: 1.25, min: 0, max: 3, step: 0.25, unit: "mm", label: "Gap", showValue: true },
+      ]) {
+        const mine = uiSlider(p);
+        const { value, ...props } = p;
+        const theirs = vue(Slider, { modelValue: value, ...props });
+        expect(mine.input.getAttribute("aria-valuetext")).not.toBeNull();
+        expect(mine.input.getAttribute("aria-valuetext")).toBe(
+          theirs.querySelector("input")!.getAttribute("aria-valuetext"),
+        );
+        const text = (r: Element) => r.querySelector(".ui-slider-value")?.textContent;
+        expect(text(mine.root)).toBe(text(theirs));
+      }
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   const choices = [

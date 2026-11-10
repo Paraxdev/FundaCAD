@@ -256,7 +256,7 @@ overlaps another item or a card, each box cut to what its clipping ancestors sho
 example through the UI. `tests/browser/test_size.py` checks 100 and 150 percent in a 1366 by 768
 window, `tests/browser/test_reach.py` walks 200 percent in 1280 by 800 and 800 by 600 (640 by 400 and
 400 by 300 CSS px) with Tab, and through both rails' toolbars with the arrows, and `tests/browser/test_text_size.py` walks the axe screens with Comfortable text
-on, and `tests/browser/test_bottom_row.py` keeps a sketch tool's hint card and the frame rate chip
+on, in English and again in Pseudo, and `tests/browser/test_bottom_row.py` keeps a sketch tool's hint card and the frame rate chip
 clear of each other and of the rails at 100, 150 and 200 percent, all in the smoke set, with shots and
 results in `FUNDACAD_SIZE_OUT` (default the temp folder's `fundacad-size`).
 

@@ -1,10 +1,8 @@
+@use "ui/field-row" as row;
+
+// The value takes its 120px beside the label, or the whole line under it when the label is too long for both.
 .param-row {
-  display: grid;
-  /* A track's automatic minimum is min-content, so a long label or value would push the
-     row past the panel instead of ellipsing, as the side-mounted history did at 195px. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 120px);
-  gap: var(--s-3);
-  align-items: center;
+  @include row.wrap-row;
   margin-bottom: var(--s-2);
 }
 .param-note {
@@ -14,17 +12,17 @@
   padding: 2px 0 6px;
 }
 
-.param-row label {
+.param-row > label {
+  @include row.wrap-label;
+  flex: 999 1 auto;
   font-size: var(--fs-small);
   color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 /* The unit sits beside the number, not in the label: "Radius mm | 5in" reads as a
    contradiction. */
 .param-value {
   display: flex;
+  flex: 1 1 120px;
   align-items: center;
   gap: var(--s-1);
   min-width: 0;
@@ -220,16 +218,17 @@
 }
 
 /* What a feature is applied to, in the value row rhythm: the count sits where a number
-   would and the button where a unit chip would. */
-.target-value {
+   would and the button where a unit chip would. The basis is its text, so a summary that
+   does not fit beside the label moves under it instead of breaking inside its words. */
+.param-value.target-value {
+  flex-basis: auto;
   justify-content: space-between;
 }
 .target-count {
+  min-width: 0;
   font-size: var(--fs-small);
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 /* An empty target usually means something ("the whole body"), so it is stated, not
    dimmed away. */
@@ -241,16 +240,19 @@
   flex: 0 0 auto;
 }
 
-/* The kernel's refusal of a previewed value, only while typing. Full row width: the
-   sentence names the measurements, and the value column is where width runs out. */
+/* The kernel's refusal of a previewed value, only while typing, across the whole row since the value column is where
+   width runs out. grid-column serves a caller that keeps an inline grid, as the Parameters section does. */
 .param-row .param-problem {
+  flex-basis: 100%;
   grid-column: 1 / -1;
-  margin: var(--s-1) 0 0;
+  margin: var(--s-3) 0 0;
   font-size: var(--fs-small);
   line-height: 1.35;
   color: var(--error);
 }
 
 .param-row > .ui-field-hint {
+  flex-basis: 100%;
   grid-column: 1 / -1;
+  margin-top: var(--s-2);
 }

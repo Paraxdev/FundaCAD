@@ -7,7 +7,8 @@ import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSp
 import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
-import { displayRound, toDisplay, type Unit } from "./units";
+import { listJoin, spellNumber, spellRounded } from "./measure";
+import { toDisplay, type Unit } from "./units";
 import { peakPlaceOf, type VerdictInput } from "./stressVerdict";
 import { vonMisesAt } from "./stressLocate";
 
@@ -576,8 +577,8 @@ const PEAK_SIZE_FALLBACK = 20;
 const PEAK_SIZE_MIN = 5;
 
 function fmtPoint(p: Vec3, unit: Unit): string {
-  const [x, y, z] = p.map((v) => displayRound(toDisplay(v)));
-  return `x ${x}, y ${y}, z ${z} ${unit}`;
+  const [x, y, z] = p.map((v) => spellRounded(toDisplay(v)));
+  return `${listJoin([`x ${x}`, `y ${y}`, `z ${z}`])} ${unit}`;
 }
 
 // A third of the drawn surface's diagonal, to the hundredth and at least 5 mm, so the point sits in a view of the part.
@@ -618,13 +619,13 @@ export function formatStressResult(
 ): StressResultView {
   const sf = r.safetyFactor;
   const rows: PanelRow[] = [
-    { k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${displayRound(sf)}` : "none, no stress" },
-    { k: "Peak stress", v: `${displayRound(r.maxVonMises.value)} MPa` },
-    { k: "Max deflection", v: `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}` },
+    { k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${spellRounded(sf)}` : "none, no stress" },
+    { k: "Peak stress", v: `${spellRounded(r.maxVonMises.value)} MPa` },
+    { k: "Max deflection", v: `${spellRounded(toDisplay(r.maxDisplacement.value))} ${unit}` },
   ];
   const details: PanelRow[] = [];
   details.push({ k: "Material", v: r.material.name });
-  details.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
+  details.push({ k: "Yield", v: `${spellRounded(r.material.yield)} MPa` });
   if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
   details.push({ k: "Applied", v: fmtForce(r.applied) });
   details.push({ k: "Reaction", v: fmtForce(r.reaction) });
@@ -659,8 +660,8 @@ export function formatStressResult(
     warnings,
     legend,
     peaks: [
-      peak("Peak stress", `${displayRound(r.maxVonMises.value)} MPa`, r.maxVonMises.at),
-      peak("Max deflection", `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}`, r.maxDisplacement.at),
+      peak("Peak stress", `${spellRounded(r.maxVonMises.value)} MPa`, r.maxVonMises.at),
+      peak("Max deflection", `${spellRounded(toDisplay(r.maxDisplacement.value))} ${unit}`, r.maxDisplacement.at),
     ],
     yields: sf !== null && sf < 1,
     verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
@@ -670,10 +671,10 @@ export function formatStressResult(
 }
 
 function meshRow(m: StressReply["mesh"]): string {
-  const row = `${m.elements} elements, ${displayRound(m.size)} mm`;
+  const row = `${m.elements} elements, ${spellRounded(m.size)} mm`;
   const passes = m.passes?.length ?? 1;
   if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
-  return `${row}, ${displayRound(m.finest)} mm at the peak, ${passes} passes`;
+  return `${row}, ${spellRounded(m.finest)} mm at the peak, ${passes} passes`;
 }
 
 const FINE_NOTE =
@@ -697,14 +698,14 @@ function refinementRow(m: StressReply["mesh"]): string | null {
     return why ? why[0]!.toUpperCase() + why.slice(1) : null;
   }
   const n = passes.length - 1;
-  const moved = `${n === 1 ? "Refined once" : `Refined ${n} times`}, the peak went from ${displayRound(passes[0]!.maxVonMises)} to ${displayRound(passes[n]!.maxVonMises)} MPa`;
+  const moved = `${n === 1 ? "Refined once" : `Refined ${n} times`}, the peak went from ${spellRounded(passes[0]!.maxVonMises)} to ${spellRounded(passes[n]!.maxVonMises)} MPa`;
   return why ? `${moved}, then ${why}` : moved;
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
 export function legendEnds(legend: { min: number; max: number }): [string, string] {
   const min = Math.abs(legend.min) < Math.abs(legend.max) / 1000 ? 0 : legend.min;
-  return [String(displayRound(min)), String(displayRound(legend.max))];
+  return [spellRounded(min), spellRounded(legend.max)];
 }
 
 /** Labels for the colour bar at each quarter of the range, MPa, the ends as legendEnds reads them. */
@@ -712,8 +713,7 @@ export function legendTicks(legend: { min: number; max: number }): { pct: number
   const [low, high] = legendEnds(legend);
   return [0, 25, 50, 75, 100].map((pct) => ({
     pct,
-    label:
-      pct === 0 ? low : pct === 100 ? high : String(displayRound(legend.min + ((legend.max - legend.min) * pct) / 100)),
+    label: pct === 0 ? low : pct === 100 ? high : spellRounded(legend.min + ((legend.max - legend.min) * pct) / 100),
   }));
 }
 
@@ -727,7 +727,7 @@ export function setupSummary(s: StressSetup): string {
 }
 
 function fmtForce(f: Vec3): string {
-  return `${displayRound(f[0])}, ${displayRound(f[1])}, ${displayRound(f[2])} N`;
+  return `${listJoin(f.map((v) => spellRounded(v)))} N`;
 }
 
 export type StressRamp = "perceptual" | "rainbow" | "greyscale";
@@ -1038,7 +1038,7 @@ export function deformSliderMax(auto: number): number {
 
 /** The factor as the slider's label reads it. */
 export function deformLabel(scale: number): string {
-  return `${scale === 0 ? 0 : roundSig(scale, 2)}x`;
+  return `${spellNumber(scale === 0 ? 0 : roundSig(scale, 2))}x`;
 }
 
 /** Positions moved by `scale` times their displacement, into `out` when given. */
@@ -1107,8 +1107,8 @@ export function probeValues(
 
 /** A probe's readout: stress in MPa, deflection in the display unit. */
 export function probeLabel(p: { vonMises: number; deflection: number | null }, unit: Unit): string {
-  const vm = `${displayRound(p.vonMises)} MPa`;
-  return p.deflection === null ? vm : `${vm}, ${displayRound(toDisplay(p.deflection))} ${unit}`;
+  const vm = `${spellRounded(p.vonMises)} MPa`;
+  return p.deflection === null ? vm : listJoin([vm, `${spellRounded(toDisplay(p.deflection))} ${unit}`]);
 }
 
 /** An engine refusal in the panel's words. The engine names a support or a

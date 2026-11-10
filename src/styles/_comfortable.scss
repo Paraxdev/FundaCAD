@@ -10,11 +10,9 @@
 
   .btn-label,
   .ui-segment-label,
-  .ui-field-label,
   .ui-list-row-label,
   .home-example-name,
   .home-example-line,
-  .param-row label,
   .select-trigger .select-value {
     overflow: visible;
     white-space: normal;
@@ -51,8 +49,5 @@
     min-width: 0;
     height: auto;
     white-space: normal;
-  }
-  .stress-field .select-trigger {
-    flex-basis: 12em;
   }
 }

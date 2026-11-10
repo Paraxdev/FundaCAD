@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { spellFixed } from "../../ui/measure";
 import RenderSections from "./RenderSections.vue";
 import DenoiserRow from "./DenoiserRow.vue";
 import Button from "../ui/Button.vue";
@@ -424,7 +425,7 @@ const qualityChoices = computed(() =>
           :model-value="prefs.envExposure"
           @update:model-value="setRenderPref('envExposure', $event)"
         >
-          <template #value="{ value }">{{ value > 0 ? "+" : "" }}{{ value.toFixed(2) }} EV</template>
+          <template #value="{ value }">{{ value > 0 ? "+" : "" }}{{ spellFixed(value, 2) }} EV</template>
         </Slider>
         <div class="rd-chips" role="group" aria-label="Panorama behind the model">
           <Button size="sm" data-env-behind :pressed="prefs.envBackground" @click="toggleBehind">{{
@@ -451,7 +452,7 @@ const qualityChoices = computed(() =>
         :model-value="prefs.brightness"
         @update:model-value="setRenderPref('brightness', $event)"
       >
-        <template #value="{ value }">{{ value.toFixed(2) }}x</template>
+        <template #value="{ value }">{{ spellFixed(value, 2) }}x</template>
       </Slider>
       <div class="sm-hint">
         How strongly the environment lights the model and shows in its reflections, an imported HDR included.

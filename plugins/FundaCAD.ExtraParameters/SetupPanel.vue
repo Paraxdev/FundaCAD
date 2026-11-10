@@ -3,11 +3,21 @@
 // undoes like any edit, and survives the plugin being switched off.
 
 import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
-import { captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine } from "fundacad";
+import {
+  captureConfiguration,
+  checkResults,
+  evalExpr,
+  shownExpr,
+  spellNumber,
+  storedExpr,
+  toast,
+  useDocValue,
+  useEngine,
+} from "fundacad";
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
-import { convertControl, formatChoices, nextId, parseChoices } from "./view";
+import { choiceSeparator, convertControl, formatChoices, nextId, parseChoices } from "./view";
 
 const store = useEngine().store;
 
@@ -198,7 +208,7 @@ const newCheck = ref({ expr: "", message: "", level: "warning" as ParamCheck["le
 function exprError(expr: string): string | null {
   const values = Object.fromEntries(Object.entries(store.document.paramDefs ?? {}).map(([n, d]) => [n, d.value]));
   try {
-    evalExpr(expr, values);
+    evalExpr(storedExpr(expr), values);
     return null;
   } catch (e) {
     return e instanceof Error ? e.message : String(e);
@@ -218,7 +228,7 @@ function addCheck() {
         "k",
         list.map((c) => c.id),
       ),
-      expr: expr.trim(),
+      expr: storedExpr(expr.trim()),
       message: message.trim(),
       level,
     });
@@ -234,9 +244,10 @@ function exprProblem(key: string, expr: string): string | null {
 function editCheck(id: string, patch: Partial<ParamCheck>) {
   if (patch.expr !== undefined && exprError(patch.expr)) return;
   clear();
+  const stored = patch.expr === undefined ? patch : { ...patch, expr: storedExpr(patch.expr) };
   store.updateParamExtras((x) => {
     const c = x.checks?.find((y) => y.id === id);
-    if (c) Object.assign(c, patch);
+    if (c) Object.assign(c, stored);
   });
 }
 function removeCheck(id: string) {
@@ -250,7 +261,7 @@ const groupOptions = computed(() => [
 ]);
 const configTitle = (values: Record<string, string>) =>
   Object.entries(values)
-    .map(([n, e]) => `${n} = ${e}`)
+    .map(([n, e]) => `${n} = ${shownExpr(e)}`)
     .join("\n");
 const hideLabel = (i: number) => `${uid}-hide-${i}`;
 const checkTone = (c: { result?: { ok: boolean } | undefined; check: ParamCheck }) =>
@@ -299,7 +310,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
           </template>
           <div v-for="(p, i) in params" :key="p.name" class="xp-param" :style="stacked ? PARAM_BLOCK : ROW">
             <span
-              :title="`${p.def.expr} = ${p.def.value}`"
+              :title="`${shownExpr(p.def.expr)} = ${spellNumber(p.def.value)}`"
               :style="{
                 opacity: p.def.hidden ? 0.5 : 1,
                 overflowWrap: stacked ? 'anywhere' : undefined,
@@ -324,7 +335,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
                 size="sm"
                 commit="change"
                 :style="FILL"
-                placeholder="Small = 10, Large = 30"
+                :placeholder="`Small = 10${choiceSeparator()} Large = 30`"
                 :validate="(raw) => choicesProblem(`${p.name}.choices`, raw)"
                 :model-value="formatChoices(p.def.control.choices)"
                 @update:model-value="setChoices(p.name, $event)"
@@ -458,7 +469,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               commit="change"
               :style="{ ...FILL, ...lineFrom(2) }"
               :validate="(raw) => exprProblem(`check.${c.check.id}`, raw)"
-              :model-value="c.check.expr"
+              :model-value="shownExpr(c.check.expr)"
               @update:model-value="editCheck(c.check.id, { expr: $event.trim() })"
             />
             <TextField

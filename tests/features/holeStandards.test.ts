@@ -14,6 +14,7 @@ import {
   standardDims,
 } from "../../src/features/holeStandards";
 import type { Feature } from "../../src/types";
+import { setLanguage } from "../../src/i18n";
 import vectors from "../vectors/hole_standards.json";
 
 type Hole = Extract<Feature, { type: "hole" }>;
@@ -183,5 +184,20 @@ describe("parseHoleSize", () => {
     expect(parseHoleSize("M7")).toBeNull();
     expect(parseHoleSize("0")).toBeNull();
     expect(parseHoleSize("abc")).toBeNull();
+  });
+
+  it("reads a size name with a decimal comma in every language", async () => {
+    const read = () => [
+      parseHoleSize("M2,5"),
+      parseHoleSize(" m 2,5 "),
+      parseHoleSize("M2,6"),
+      parseHoleSize("M2,5,0"),
+    ];
+    const en = read();
+    await setLanguage("de");
+    const de = read();
+    await setLanguage("system");
+    const both = [{ size: "M2.5" }, { size: "M2.5" }, null, null];
+    expect({ en, de }).toEqual({ en: both, de: both });
   });
 });

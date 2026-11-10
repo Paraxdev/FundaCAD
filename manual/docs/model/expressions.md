@@ -12,6 +12,7 @@ Type `width / 4` in the value box of Extrude, and the depth stays tied to width,
 2. Units are mm, cm, in, deg and rad, so `1 in` is 25.4 mm.
 3. Without a unit, a length is mm and an angle is degrees.
 4. Use `+`, `-`, `*`, `/`, `^` for powers, brackets, and `PI`.
+5. In a language that writes a decimal comma, such as Deutsch, Français and Español, type `width * 1,5` and it works. FundaCAD saves it as `width * 1.5`, so the file reads the same in every language. In English a comma in an expression is refused. Saved expressions show back with the comma in those languages, in the Parameters table, the field boxes and the tooltips.
 
 ## Functions
 

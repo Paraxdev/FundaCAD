@@ -5,9 +5,11 @@
 // is 1. You always got a number back, so nothing ever reported an error, the
 // part was just the wrong size.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   fieldNumber,
+  listJoin,
   fieldError,
   commonUnits,
   spokenUnit,
@@ -21,7 +23,13 @@ import {
   tryParseMeasure,
   unitById,
   canonicalTyping,
+  spellNumber,
+  shownExpr,
+  storedExpr,
+  spellRounded,
+  typedExprProblem,
 } from "../../src/ui/measure";
+import { ExprError } from "../../src/params/parse";
 import { isPlainNumber, parseField, plainNumber } from "../../src/ui/units";
 import { parseHoleSize } from "../../src/features/holeStandards";
 
@@ -233,6 +241,113 @@ describe("what a keyboard or a paste hands over", () => {
   });
 });
 
+describe("a decimal comma in a language that writes one", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("reads 1,500 as 1.500 with a comma mark, and refuses it with a point mark", () => {
+    expect(canonicalTyping("1,500", ",")).toBe("1.500");
+    expect(() => canonicalTyping("1,500", ".")).toThrow(/ambiguous/);
+  });
+
+  it("reads one or four decimals the same in both marks, and keeps 0,125 a number", () => {
+    expect(canonicalTyping("1,50", ",")).toBe("1.50");
+    expect(canonicalTyping("1,50", ".")).toBe("1.50");
+    expect(canonicalTyping("1,5000", ",")).toBe("1.5000");
+    expect(canonicalTyping("1,5000", ".")).toBe("1.5000");
+    expect(canonicalTyping("0,125", ",")).toBe("0.125");
+    expect(canonicalTyping(",5", ",")).toBe(".5");
+  });
+
+  it("swaps every comma in brackets and in several places with a comma mark, none with a point mark", () => {
+    expect(canonicalTyping("max(1,5;2,25)", ",")).toBe("max(1.5;2.25)");
+    expect(canonicalTyping("1,5 + 2,25 * 3,125", ",")).toBe("1.5 + 2.25 * 3.125");
+    expect(canonicalTyping("max(1,5;2,25)", ".")).toBe("max(1,5;2,25)");
+    expect(canonicalTyping("1,5 + 2,25", ".")).toBe("1,5 + 2,25");
+  });
+
+  it("never guesses a doubtful number", () => {
+    expect(canonicalTyping("1,5,5", ",")).toBe("1.5.5");
+    expect(canonicalTyping("1.234,5", ",")).toBe("1.234.5");
+  });
+
+  it("parses typed measures whole", async () => {
+    await setLanguage("de");
+    expect(parseMeasure("12,375 mm", MM)).toEqual({ value: 12.375, unit: MM, derived: false });
+    expect(parseMeasure("1,5 * 2,25", MM)).toEqual({ value: 3.375, unit: null, derived: true });
+    expect(parseMeasure("1,500 in", MM).value).toBeCloseTo(38.1);
+    expect(parseMeasure(",5", MM).value).toBe(0.5);
+    expect(tryParseMeasure("1,5,5", MM)).toBeNull();
+    expect(tryParseMeasure("1.234,5", MM)).toBeNull();
+  });
+
+  it("reads the compact drawing form 10x2,5 and 10x,5 as a product, as English reads 10x2.5 and 10x.5", async () => {
+    await setLanguage("de");
+    const de = [parseMeasure("10x2,5", MM).value, parseMeasure("1,5X3,25 mm", MM).value, fieldNumber("(1+2)x2,5")];
+    const short = [parseMeasure("10x,5", MM).value, parseMeasure("10x0,5", MM).value];
+    await setLanguage("system");
+    const en = [parseMeasure("10x2.5", MM).value, parseMeasure("10x.5", MM).value];
+    expect({ de, short, en }).toEqual({ de: [25, 4.875, 7.5], short: [5, 5], en: [25, 5] });
+  });
+
+  it("reads a field's plain number by the language, and goes back to refusing 1,500 in English", async () => {
+    expect(plainNumber("1,500")).toBeNull();
+    await setLanguage("de");
+    expect(plainNumber("1,500")).toBe(1.5);
+    expect(plainNumber("0,125")).toBe(0.125);
+    expect(plainNumber("2.5")).toBe(2.5);
+    await setLanguage("system");
+    expect(plainNumber("1,500")).toBeNull();
+  });
+
+  it("refuses a point before exactly three digits after a nonzero whole part with a comma mark, the mirror of 1,000", () => {
+    const refused: [string, string][] = [
+      ["1.500", "1.500"],
+      ["12.000", "12.000"],
+      ["-1.500", "1.500"],
+    ];
+    for (const [typed, num] of refused) {
+      expect(() => canonicalTyping(typed, ","), typed).toThrow(
+        `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+      );
+    }
+    const typed = ["0.250", "-0.250", "0.125", "0.200", ".500", "1.50", "1.5000", "2.25", "1.2345", "1,500", "1,5"];
+    const comma = typed.map((t) => canonicalTyping(t, ","));
+    const point = ["1.500", "0.250"].map((t) => canonicalTyping(t, "."));
+    expect({ comma, point }).toEqual({
+      comma: ["0.250", "-0.250", "0.125", "0.200", ".500", "1.50", "1.5000", "2.25", "1.2345", "1.500", "1.5"],
+      point: ["1.500", "0.250"],
+    });
+  });
+
+  it("keeps refusing a comma before exactly three digits in English, 0,125 included", () => {
+    for (const typed of ["0,125", "-0,250", "1,500"]) {
+      expect(() => canonicalTyping(typed, "."), typed).toThrow(
+        `"${typed}" is ambiguous, write a point for decimals or leave the comma out`,
+      );
+    }
+  });
+
+  it("reads 1.500 as 1.5 in English and refuses it in German with the reason, while 0.250 and 1,500 still read", async () => {
+    const en = [val("1.500"), val("0.250")];
+    await setLanguage("de");
+    const de = {
+      refused: [measureError("1.500", MM), tryParseMeasure("-1.500", MM), plainNumber("12.000")],
+      read: ["0.250", "-0.250", ".500", "1.50", "1.5000", "2.25", "1,500", "1,5", "1.2345"].map((t) => val(t)),
+      plain: [plainNumber("0.250"), plainNumber("-0.250")],
+      saved: plainNumber("0.125", "."),
+    };
+    expect({ en, de }).toEqual({
+      en: [1.5, 0.25],
+      de: {
+        refused: ['"1.500" is ambiguous, write a comma for decimals or leave the point out', null, null],
+        read: [0.25, -0.25, 0.5, 1.5, 1.5, 2.25, 1.5, 1.5, 1.2345],
+        plain: [0.25, -0.25],
+        saved: 0.125,
+      },
+    });
+  });
+});
+
 describe("the other field readers", () => {
   it("a count is no longer parseFloat, so trailing junk is refused, not dropped", () => {
     expect(parseField("12abc", "count")).toBeNull();
@@ -374,6 +489,19 @@ describe("fieldNumber / fieldError", () => {
     expect(fieldError("3*4")).toBeNull();
     expect(fieldError("3*")).toEqual(expect.any(String));
   });
+
+  it("calls a stray comma in a plain number an unexpected character, without the semicolon hint", async () => {
+    const en = [measureError("1,5,5", null), measureError("max(1, 2)", null)];
+    await setLanguage("de");
+    try {
+      expect({ en, de: measureError("3,", null) }).toEqual({
+        en: ['unexpected character ","', 'unexpected character ",", separate arguments with ";"'],
+        de: 'unexpected character ","',
+      });
+    } finally {
+      await setLanguage("system");
+    }
+  });
 });
 
 describe("spokenUnit", () => {
@@ -427,5 +555,126 @@ describe("spokenUnit", () => {
       expect(spokenUnit(text, false)).toBe(text);
       expect(spokenUnit(text, true, true)).toBe(text);
     }
+  });
+});
+
+describe("spelling a number", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("swaps only the point for the mark, whatever the size", () => {
+    const cases: [number, string, string][] = [
+      [0, "0", "0"],
+      [1, "1", "1"],
+      [-0.35, "-0.35", "-0,35"],
+      [12.375, "12.375", "12,375"],
+      [1503.25, "1503.25", "1503,25"],
+      [0.000437, "0.000437", "0,000437"],
+      [1.5e21, "1.5e+21", "1,5e+21"],
+    ];
+    for (const [n, point, comma] of cases) {
+      expect(spellNumber(n, ".")).toBe(point);
+      expect(spellNumber(n, ",")).toBe(comma);
+    }
+  });
+
+  it("rounds like the boxes before it spells", () => {
+    const cases: [number, string, string][] = [
+      [12.3456, "12.35", "12,35"],
+      [-0.35004, "-0.35", "-0,35"],
+      [0.000437123, "0.000437", "0,000437"],
+      [17.5, "17.5", "17,5"],
+      [3, "3", "3"],
+    ];
+    for (const [v, point, comma] of cases) {
+      expect(spellRounded(v, ".")).toBe(point);
+      expect(spellRounded(v, ",")).toBe(comma);
+    }
+  });
+
+  it("follows the active language when no mark is given", async () => {
+    expect(spellNumber(12.375)).toBe("12.375");
+    await setLanguage("de");
+    expect(spellNumber(12.375)).toBe("12,375");
+    expect(spellRounded(-4.2567)).toBe("-4,26");
+    expect(formatMeasure(25.4 * 1.25, IN)).toBe("1,25 in");
+    expect(formatMeasure(17.5, MM, false)).toBe("17,5mm");
+    expect(formatMeasure(45.5, unitById("deg"))).toBe("45,5°");
+    await setLanguage("en");
+    expect(formatMeasure(25.4 * 1.25, IN)).toBe("1.25 in");
+  });
+});
+
+describe("joining a list of numbers", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("uses a semicolon with a comma mark and a comma with a point", () => {
+    const three = ["12.5", "-3.25", "40"].map(Number);
+    expect(
+      listJoin(
+        three.map((n) => spellNumber(n, ",")),
+        ",",
+      ),
+    ).toBe("12,5; -3,25; 40");
+    expect(
+      listJoin(
+        three.map((n) => spellNumber(n, ".")),
+        ".",
+      ),
+    ).toBe("12.5, -3.25, 40");
+    expect(listJoin(["7,5", "2"], ",")).toBe("7,5; 2");
+  });
+
+  it("puts no separator around one item or none", () => {
+    expect(listJoin(["4,5"], ",")).toBe("4,5");
+    expect(listJoin(["4.5"], ".")).toBe("4.5");
+    expect(listJoin([], ",")).toBe("");
+    expect(listJoin([], ".")).toBe("");
+  });
+
+  it("follows the active language when no mark is given", async () => {
+    expect(listJoin(["1", "2"])).toBe("1, 2");
+    await setLanguage("de");
+    expect(listJoin(["1", "2"])).toBe("1; 2");
+  });
+});
+
+describe("shownExpr and storedExpr, one per mark", () => {
+  it.each([
+    ["max(width*1.5;2.25) + 0.125mm", "max(width*1,5;2,25) + 0,125mm"],
+    ["a*3", "a*3"],
+  ])("%j", (stored, shown) => {
+    expect(shownExpr(stored, ",")).toBe(shown);
+    expect(storedExpr(shown, ",")).toBe(stored);
+    expect(shownExpr(stored, ".")).toBe(stored);
+    expect(storedExpr(stored, ".")).toBe(stored);
+  });
+
+  it("keeps a comma in text saved before this change, in either mark", () => {
+    expect(shownExpr("1,5 + x", ",")).toBe("1,5 + x");
+    expect(shownExpr("1,5 + x", ".")).toBe("1,5 + x");
+  });
+
+  it("refuses breite * 1.500 in German with the reason and stores breite * 1,5 with a point, English untouched", async () => {
+    await setLanguage("de");
+    let de;
+    try {
+      de = {
+        comma: [storedExpr("breite * 1,5"), typedExprProblem("breite * 1,5")],
+        point: typedExprProblem("breite * 1.500"),
+        shownBack: storedExpr(shownExpr("breite * 1.500")),
+      };
+      expect(() => storedExpr("breite * 1.500")).toThrow(ExprError);
+    } finally {
+      await setLanguage("system");
+    }
+    const en = [storedExpr("breite * 1.500"), typedExprProblem("breite * 1.500")];
+    expect({ de, en }).toEqual({
+      de: {
+        comma: ["breite * 1.5", null],
+        point: '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+        shownBack: "breite * 1.500",
+      },
+      en: ["breite * 1.500", null],
+    });
   });
 });

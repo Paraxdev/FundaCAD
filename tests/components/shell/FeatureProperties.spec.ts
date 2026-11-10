@@ -28,6 +28,7 @@ import {
 } from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
+import { setLanguage } from "../../../src/i18n";
 import { DocumentStore } from "../../../src/document/store";
 import { createDocBridge } from "../../../src/app/docBridge";
 import type { GeometryBackend } from "../../../src/geometry/client";
@@ -778,6 +779,50 @@ describe("FeatureProperties expressions through NumberField", () => {
     },
   );
 
+  it.each([
+    ["width*1,5", "width*1.5"],
+    ["w = width/1,5 + 0,25", "w = width/1.5 + 0.25"],
+    ["max(1,5; width)", "max(1.5; width)"],
+    ["width*1,5 - 2,25*gap", "width*1.5 - 2.25*gap"],
+    ["breite * 1,5", "breite * 1.5"],
+    ["breite * 0.250", "breite * 0.250"],
+  ])("in German hands %j to the parameter engine as %j", async (raw, stored) => {
+    await setLanguage("de");
+    try {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      await commit(render(fake, "e1"), "Distance", raw);
+      expect(fake.exprs).toEqual([{ field: "distance", raw: stored }]);
+      expect(fake.values).toEqual([]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it.each([
+    ["breite * 1.500", "1.500"],
+    ["1.500", "1.500"],
+    ["-12.000", "12.000"],
+  ])("in German refuses %j as ambiguous under the row and hands the engine nothing", async (raw, num) => {
+    await setLanguage("de");
+    try {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      const w = render(fake, "e1");
+      await commit(w, "Distance", raw);
+      expect([fake.exprs, fake.values]).toEqual([[], []]);
+      expect(field(w, "Distance").find(".param-problem").text()).toBe(
+        `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+      );
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("keeps a comma as typed in English, for the tokenizer to refuse", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    await commit(render(fake, "e1"), "Distance", "width*1,5; gap");
+    expect(fake.exprs).toEqual([{ field: "distance", raw: "width*1,5; gap" }]);
+  });
+
   it("keeps an expression the parameter engine refuses, and says why under the row", async () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
     storeOf(fake).setTargetExpr = () => 'unknown parameter "widht"';
@@ -825,6 +870,27 @@ describe("FeatureProperties expressions through NumberField", () => {
     // The same number the expression yields still replaces the expression: the user typed a literal.
     await commit(w, "Distance", "10");
     expect(fake.values).toEqual([{ field: "distance", value: 10 }]);
+  });
+
+  it("shows a bound expression and its title with the language's decimal mark, and back", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    storeOf(fake).boundExpr = () => ({ name: "d1", expr: "max(width*1.5;2.25)", value: 12.375 });
+    storeOf(fake).isParamBound = () => true;
+    const w = render(fake, "e1");
+    const shown = () => {
+      const row = field(w, "Distance");
+      return [(row.find("input").element as HTMLInputElement).value, row.attributes("title")];
+    };
+    expect(shown()).toEqual(["max(width*1.5;2.25)", "d1 = max(width*1.5;2.25) = 12.375"]);
+    try {
+      await setLanguage("de");
+      await w.vm.$nextTick();
+      expect(shown()).toEqual(["max(width*1,5;2,25)", "d1 = max(width*1,5;2,25) = 12,375"]);
+    } finally {
+      await setLanguage("system");
+    }
+    await w.vm.$nextTick();
+    expect(shown()).toEqual(["max(width*1.5;2.25)", "d1 = max(width*1.5;2.25) = 12.375"]);
   });
 
   it("reads a fraction in the row's unit, as one value and not arithmetic", async () => {

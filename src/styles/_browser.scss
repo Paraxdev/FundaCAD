@@ -37,12 +37,10 @@
   margin-bottom: 0;
 }
 /* A label beside its control, the control taking the width that is left. */
-.geometry-filters .ui-field-row-inline {
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: var(--s-3);
+.geometry-filters .ui-field-row-inline > .ui-field-label {
+  flex: 0 1 auto;
 }
-.geometry-filters .ui-field-row-inline .ui-field-control {
-  justify-self: stretch;
+.geometry-filters .ui-field-row-inline > .ui-field-control {
   justify-content: flex-end;
 }
 .geometry-filters .select-trigger {

@@ -1,4 +1,4 @@
-import { parseMeasure, toUnit, unitById, type UnitDef } from "../ui/measure";
+import { parseMeasure, spellNumber, toUnit, unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type NumberSetting } from "./settings";
 
 /** The unit a bare number in this field means, null for a plain number. */
@@ -33,7 +33,8 @@ export function numberField(
   const unit = fieldUnit(p, lengthUnit);
   const declared = p.step ?? (p.integer ? 1 : undefined);
   const step = declared && declared > 0 ? declared : null;
-  const shown = (v: number, u: UnitDef | null) => String(toUnit(v, u));
+  const shownAs = (v: number, u: UnitDef | null, raw: string) =>
+    ([".", ","] as const).some((mark) => spellNumber(toUnit(v, u), mark) === raw.trim());
   const factor = unit?.factor ?? 1;
   const perStep = step ? step / factor : 0;
   const reach = Math.max(
@@ -51,7 +52,7 @@ export function numberField(
     parse: (raw, u) => {
       const v = parseMeasure(raw, u).value;
       const onStep = step ? Math.round(Math.round(v / step) * step * 1e9) / 1e9 : undefined;
-      return [onStep, p.min, p.max].find((c) => c !== undefined && shown(c, u) === raw.trim()) ?? v;
+      return [onStep, p.min, p.max].find((c) => c !== undefined && shownAs(c, u, raw)) ?? v;
     },
     validate: (v) => valueProblem(p, v),
   };

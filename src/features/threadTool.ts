@@ -16,6 +16,7 @@ import { MIN_THREAD_TURNS, coarsePitchFor, grooveProfile, threadAngleDeg, thread
 import { CanvasGesture } from "./canvasGesture";
 import { awaitFaceRows } from "./faceRows";
 import type { PressPullFaces } from "../viewport/faceAnalysis";
+import { spellFixed, spellNumber } from "../ui/measure";
 
 /** Long enough that a drag across a shank is one kernel build rather than fifty, short enough to feel live. */
 const SETTLE_MS = 350;
@@ -170,8 +171,8 @@ export class ThreadTool {
   private prompt() {
     const turns = threadTurns(this.length, this.pitch);
     setPrompt(
-      `${this.external ? "External" : "Internal"} thread · ⌀${(2 * this.radius).toFixed(2)} × ` +
-        `${this.pitch}mm pitch · ${turns.toFixed(1)} turns · drag or type · click to commit · Esc`,
+      `${this.external ? "External" : "Internal"} thread · ⌀${spellFixed(2 * this.radius, 2)} × ` +
+        `${spellNumber(this.pitch)}mm pitch · ${spellFixed(turns, 1)} turns · drag or type · click to commit · Esc`,
     );
   }
 

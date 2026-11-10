@@ -13,7 +13,8 @@ CONTROLS = (
 
 # The roots of the base components in src/components/ui, the controls Comfortable text must never cut.
 BASE = (
-    ".btn, .icon-btn, .chip, .key-chip, .ui-checkbox, .opt-row, .ui-field-row, .ui-field, .ui-list-row,"
+    ".btn, .icon-btn, .chip, .key-chip, .ui-checkbox, .opt-row, .ui-field-row, .param-row, .stress-field, .ui-field,"
+    " .ui-list-row,"
     " .ui-menu-item, .rail-btn, .ui-segment, .select-value, .ui-slider, .ui-switch-row, .ui-tab, .ui-unit-chip,"
     " .float-card-head, .ui-panel-head"
 )

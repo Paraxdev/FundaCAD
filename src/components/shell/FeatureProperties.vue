@@ -12,11 +12,13 @@ import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
 import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
-import { displayRound, plainNumber } from "../../ui/units";
+import { plainNumber } from "../../ui/units";
+import { shownExpr, storedExpr, typedExprProblem } from "../../ui/measure";
 import { onPreviewError } from "../../ui/previewError";
 import {
   canonicalTyping,
   commonUnits,
+  spellRounded,
   tryParseMeasure,
   unitById,
   type Dim,
@@ -353,11 +355,11 @@ const featureRows = useDocValue(() => {
         unit: bound ? (dimOf(kind) === "angle" ? "deg" : dimOf(kind) ? "mm" : null) : (u?.id ?? null),
         units: !bound && u ? unitChoices(u) : undefined,
         value: plain ? (cur as number) : null,
-        text: bound ? bound.expr : plain || cur === undefined ? null : String(cur),
+        text: bound ? shownExpr(bound.expr) : plain || cur === undefined ? null : String(cur),
         target,
         kind,
         rowClass: fx ? "fx-row" : undefined,
-        rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${displayRound(bound.value)}` : undefined,
+        rowTitle: fx && bound ? `${bound.name} = ${shownExpr(bound.expr)} = ${spellRounded(bound.value)}` : undefined,
       };
     });
 });
@@ -502,7 +504,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
       hint='a value with any unit (2mm, 1 inch, 1/2"), a parameter, or an expression'
       :parse="(raw) => parseField(r, raw)"
       :validate="(v) => validateField(r, v)"
-      :expression="(raw) => store.setTargetExpr(r.target, raw, r.kind)"
+      :expression="(raw) => typedExprProblem(raw) ?? store.setTargetExpr(r.target, storedExpr(raw), r.kind)"
       :preview="(v) => previewField(r, v)"
       :preview-end="endPreview"
       :problem="rowProblem(r.key)"

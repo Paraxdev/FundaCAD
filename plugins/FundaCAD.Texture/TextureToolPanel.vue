@@ -14,7 +14,7 @@ import {
   type TextureMode,
 } from "./textureForm";
 import { Button, FieldRow, Icon, IconButton, NumberField, Panel, Segmented, Select, Slider, Switch } from "fundacad/ui";
-import { fieldNumber, openDialog, readAs } from "fundacad";
+import { fieldNumber, openDialog, readAs, spellNumber } from "fundacad";
 import * as panel from "./panel";
 
 // Reseeded whenever the tool opens a new request: a permanently mounted overlay has no key to remount it, so a reopen
@@ -144,7 +144,7 @@ function numOf(k: NumKey): number | null {
 }
 
 function setNum(k: NumKey, v: number | null) {
-  form[k] = v === null ? "" : String(v);
+  form[k] = v === null ? "" : spellNumber(v);
   emitChange();
 }
 
@@ -155,7 +155,7 @@ function refuse(k: string, label: string, why: string | null) {
 const pctOf = (k: PctKey) => Math.max(0, Math.min(100, Math.round((fieldNumber(form[k]) || 0) * 100)));
 
 function setPct(k: PctKey, v: number) {
-  form[k] = String(v / 100);
+  form[k] = spellNumber(v / 100);
   emitChange();
 }
 
@@ -229,7 +229,7 @@ const byKey = (e: MouseEvent, run: () => void) => {
 
 // A plugin ships no stylesheet, so the layout is written here, and every look comes from the base controls.
 const WIDTH = { width: "290px", maxWidth: "100%" } as const;
-const ROW = { gridTemplateColumns: "96px minmax(0, 1fr)" } as const;
+const LABEL_WIDTH = "96px";
 const FILL = { width: "100%", marginBottom: "6px" } as const;
 const LINE = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "6px" } as const;
 const GROW = { flex: "1 1 auto", minWidth: 0 } as const;
@@ -255,7 +255,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
         @update:model-value="chooseMode"
       />
 
-      <FieldRow v-slot="{ id }" layout="param" label="Kind" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Kind" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           label="Kind"
@@ -267,7 +267,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
       </FieldRow>
 
       <!-- Hard surface is the default, planar facets and creases are what a printer reproduces. -->
-      <FieldRow v-slot="{ id }" layout="param" label="Profile" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Profile" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           label="Profile"
@@ -286,7 +286,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
         layout="param"
         :label="labelOf(n)"
         :title="tipOf(n)"
-        :style="ROW"
+        :label-width="LABEL_WIDTH"
       >
         <NumberField
           :id="id"
@@ -308,7 +308,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
       </FieldRow>
 
       <!-- Every kind honours direction, the engine applies it to the height field (out = h, in = h-1, both = centred). -->
-      <FieldRow v-slot="{ id }" layout="param" label="Direction" :style="ROW">
+      <FieldRow v-slot="{ id }" layout="param" label="Direction" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           label="Direction"
@@ -326,7 +326,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
         layout="param"
         label="Projection"
         title="How a curved (freeform) face lays out the pattern. Triplanar keeps one size across the curve; Box favours the nearest axis; Planar projects along one direction and foreshortens. Flat, cylindrical and conical faces use their exact chart regardless."
-        :style="ROW"
+        :label-width="LABEL_WIDTH"
       >
         <Select
           :id="id"
@@ -350,7 +350,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
         :for="null"
         :label="s.label"
         :title="s.tip"
-        :style="ROW"
+        :label-width="LABEL_WIDTH"
       >
         <Slider
           :labelledby="labelId"
@@ -365,7 +365,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
         />
       </FieldRow>
 
-      <FieldRow v-show="rows.seed" v-slot="{ id }" layout="param" label="Seed" :style="ROW">
+      <FieldRow v-show="rows.seed" v-slot="{ id }" layout="param" label="Seed" :label-width="LABEL_WIDTH">
         <NumberField
           :id="id"
           label="Seed"
@@ -387,12 +387,12 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
         <Button size="sm" @click="browse">Browse…</Button>
         <span class="measure-k" :style="PATH">{{ form.imagePath ? basename(form.imagePath) : "No file chosen" }}</span>
       </div>
-      <FieldRow v-show="rows.image" v-slot="{ id }" layout="param" label="Invert" :style="ROW">
+      <FieldRow v-show="rows.image" v-slot="{ id }" layout="param" label="Invert" :label-width="LABEL_WIDTH">
         <Switch :id="id" label="Invert" :model-value="form.invert" @update:model-value="pick('invert', $event)" />
       </FieldRow>
 
       <!-- Shown only when the caller passed a palette, i.e. in a document with bodies. -->
-      <FieldRow v-show="palette.length" v-slot="{ id }" layout="param" label="Print color" :style="ROW">
+      <FieldRow v-show="palette.length" v-slot="{ id }" layout="param" label="Print color" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           label="Print color"
@@ -421,7 +421,7 @@ const ACTIONS = { display: "flex", gap: "6px", justifyContent: "flex-end", margi
           layout="param"
           :label="n.label"
           :title="n.tip"
-          :style="ROW"
+          :label-width="LABEL_WIDTH"
         >
           <NumberField
             :id="id"

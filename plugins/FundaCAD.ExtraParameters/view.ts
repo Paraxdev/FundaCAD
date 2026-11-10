@@ -1,6 +1,6 @@
 // What the two panels show, worked out from a document with no DOM so the node suite can test the rules.
 
-import { controlProblem } from "fundacad";
+import { controlProblem, decimalMark, listJoin, plainNumber, spellNumber, typedExprProblem } from "fundacad";
 import type { CadDocument, ParamControl, ParamDef } from "fundacad";
 
 export interface TuneRow {
@@ -59,24 +59,36 @@ export function tuneGroups(doc: CadDocument): TuneGroup[] {
   return out;
 }
 
-/** "Small = 10, Large = 30" as choices. A bare number is its own label. Returns
- *  an error rather than guessing when an entry has no number in it. */
+/** Choices are split where listJoin joins a list of numbers: at ";" in a language with a decimal comma. */
+export const choiceSeparator = (): string => (decimalMark() === "," ? ";" : ",");
+
+/** "Small = 10, Large = 30" as choices, "Small = 2,5; Large = 30" in a language with a decimal comma. A bare number
+ *  is its own label. Returns an error rather than guessing when an entry has no number in it, or two. */
 export function parseChoices(text: string): { label: string; value: number }[] | string {
   const out: { label: string; value: number }[] = [];
-  for (const raw of text.split(",")) {
+  for (const raw of text.split(choiceSeparator())) {
     const part = raw.trim();
     if (!part) continue;
     const eq = part.lastIndexOf("=");
-    const label = eq >= 0 ? part.slice(0, eq).trim() : part;
-    const value = Number(eq >= 0 ? part.slice(eq + 1).trim() : part);
-    if (!Number.isFinite(value)) return `"${part}" needs a number, like Large = 30`;
+    const number = part.slice(eq + 1).trim();
+    const value = plainNumber(number);
+    if (value === null) return typedExprProblem(number) ?? `"${part}" needs a number, like Large = 30`;
+    const label = eq >= 0 ? part.slice(0, eq).trim() : "";
+    if (label.includes("=")) return `"${part}" is two choices, put ${choiceSeparator()} between them`;
     out.push({ label: label || String(value), value });
   }
   return out.length ? out : "list at least one choice";
 }
 
+/** A bare number choice keeps its point text as its label, shown with the language's mark. */
+export function choiceLabel(c: { label: string; value: number }): string {
+  return c.label === String(c.value) ? spellNumber(c.value) : c.label;
+}
+
 export function formatChoices(choices: { label: string; value: number }[]): string {
-  return choices.map((c) => (c.label === String(c.value) ? String(c.value) : `${c.label} = ${c.value}`)).join(", ");
+  return listJoin(
+    choices.map((c) => (c.label === String(c.value) ? spellNumber(c.value) : `${c.label} = ${spellNumber(c.value)}`)),
+  );
 }
 
 /** The next free id with a prefix, `g1`, `g2`, over the ids already in use. */

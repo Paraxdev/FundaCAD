@@ -6,7 +6,7 @@ import { valueProblem } from "../../document/numFields";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import { distinctNames } from "../../sketch/sketchNames";
 import { getUnit, onUnitChange } from "../../ui/units";
-import { tryParseMeasure } from "../../ui/measure";
+import { shownExpr, tryParseMeasure } from "../../ui/measure";
 import type { DimKind } from "../../sketch/annotationFormat";
 
 const s = useSketchAnnotationStore();
@@ -157,7 +157,7 @@ function focusOut(r: Row, e: FocusEvent) {
           :width-ch="6"
           :unit="unitOf(r)"
           :model-value="r.valueMm"
-          :text="r.expr ?? null"
+          :text="r.expr === undefined ? null : shownExpr(r.expr)"
           :parse="parse(r)"
           :validate="validate(r)"
           :expression="(raw: string) => expression(r, raw)"
