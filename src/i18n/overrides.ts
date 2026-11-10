@@ -22,11 +22,13 @@ const MARKUP = /<[A-Za-z/!?]|&(#\d+|#x[0-9a-f]+|[a-z]+);/i;
 // A tag or entity can also be split across parts, as in <{n, select, other {img ...}}>, so a text part that something
 // follows may not end in < or in an entity it has not closed.
 const OPEN_END = /(<|&[#A-Za-z0-9]*)$/;
-// C0 and C1 controls, and the bidi overrides and isolates that can make a line read as something else.
-const CONTROL = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
+// C0 and C1 controls, line and paragraph separators, a BOM or annotation inside text, tag characters, and the bidi
+// overrides and isolates that can make a line read as something else. LRM, RLM, ZWJ and ZWNJ stay, RTL text needs them.
+const CONTROL =
+  /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff\ufff9-\ufffb\u{e0000}-\u{e007f}]/u;
 
 // A skipped key is shown in the card as the file wrote it, so it must not reorder or break the text around it.
-export const shownKey = (key: string): string => key.replace(new RegExp(CONTROL, "g"), "\ufffd").slice(0, 80);
+export const shownKey = (key: string): string => key.replace(new RegExp(CONTROL, "gu"), "\ufffd").slice(0, 80);
 
 export function checkLine(value: string, englishValue: string): SkipReason | null {
   if (value.length > MAX_LINE_CHARS) return "too-long";

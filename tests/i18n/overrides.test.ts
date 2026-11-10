@@ -184,8 +184,25 @@ describe("checkLine", () => {
     },
   );
 
-  it("lets a left to right mark through", () => {
-    expect(checkLine("\u200eStress", "Stress setup")).toBeNull();
+  it.each([
+    "line\u2028break",
+    "para\u2029break",
+    "in\ufefftext",
+    "\ufff9ruby\ufffanote\ufffb",
+    "tag\u{e0001}start",
+    "flag\u{e0067}\u{e0062}\u{e007f}",
+  ])("refuses the invisible format character in %j", (line) => {
+    expect(checkLine(line, "Stress setup")).toBe("control-character");
+  });
+
+  it.each([
+    "\u200eStress",
+    "\u05e2\u05d5\u05de\u05e1\u200f 3",
+    "\u0634\u200c\u0645",
+    "\u{1f468}\u200d\u{1f527}",
+    "\ufff8\u{e0080}",
+  ])("lets %j through, RTL text and emoji need its marks and joiners", (line) => {
+    expect(checkLine(line, "Stress setup")).toBeNull();
   });
 
   it("refuses a line that does not parse", () => {
@@ -206,13 +223,15 @@ describe("checkLine", () => {
 describe("shownKey", () => {
   it("keeps a plain key, cuts a long one at 80 and replaces each control and bidi character", () => {
     const long = "stress.load." + "x".repeat(100);
-    expect(["stress.load.force", "", long, "a\u202Eb.c\u0007d", "e\u2066f\nf", "\u200Eg h"].map(shownKey)).toEqual([
+    const keys = ["stress.load.force", "", long, "a\u202Eb.c\u0007d", "e\u2066f\nf", "\u200Eg h", "i\u2028j\u{e0041}k"];
+    expect(keys.map(shownKey)).toEqual([
       "stress.load.force",
       "",
       long.slice(0, 80),
       "a\uFFFDb.c\uFFFDd",
       "e\uFFFDf\uFFFDf",
       "\u200Eg h",
+      "i\uFFFDj\uFFFDk",
     ]);
   });
 });
