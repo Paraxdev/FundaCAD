@@ -480,6 +480,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       if (owner !== null) setBody(owner);
     },
 
+    heldBlocked,
     pickBlocked,
     stepBlocked,
 

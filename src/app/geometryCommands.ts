@@ -84,7 +84,8 @@ export function createGeometryCommands(e: Pick<Engine, "geometryBrowser" | "setS
       const blocked = ctl.pickBlocked();
       if (blocked) {
         // Under a waiting pick the tool alone is no reason to refuse, the sketch or the build still is.
-        const why = treePickWaiting() ? (ctl.stepBlocked() ?? t("geometry.commands.pickWaiting")) : blocked;
+        const why =
+          treePickWaiting() && ctl.heldBlocked() ? (ctl.stepBlocked() ?? t("geometry.commands.pickWaiting")) : blocked;
         return refuse(why);
       }
       ctl.setKind(kind);

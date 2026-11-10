@@ -423,6 +423,21 @@ describe("what a command refuses", () => {
     ]);
   });
 
+  it("a pick that owns no screen gives the suspended picks' own reason, not the waiting pick's words", async () => {
+    const { r, run } = await opened();
+    awaitTreePick(() => true as const, vi.fn());
+    r.viewport.picksSuspended = true;
+    run("next-face");
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    run("next-edge");
+    expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual([
+      "The model is still building",
+      t("geometry.commands.pickWaiting"),
+    ]);
+    expect(picks(r)).toEqual([]);
+    expect(treePickWaiting()).toBe(true);
+  });
+
   it("a pick the screen does not count as a tool, as setting a view's face, is passed over and the step selects", async () => {
     const { r, run } = await opened();
     const taker = vi.fn((pick: TreePick) => treePickRefusal(pick, "a model face, pick it in the view"));
