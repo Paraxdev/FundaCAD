@@ -139,6 +139,7 @@
   "render.progress.quarter": "已渲染 {done, number} / {total, plural, other {#}} 个采样",
   "render.progress.samples": "{done, number} / {total, plural, other {#}} 个采样",
   "render.progress.started": "渲染已开始，{total, plural, other {#}} 个采样",
+  "step.history": "撤销和重做",
   "step.redo": "重做",
   "step.redoNamed": "重做{step}",
   "step.sketchEdit": "草图编辑",

@@ -139,6 +139,7 @@
   "render.progress.quarter": "{total, plural, other {#}} サンプル中 {done, number} サンプルをレンダリングしました",
   "render.progress.samples": "{done, number} / {total, plural, other {#}} サンプル",
   "render.progress.started": "レンダリングを開始しました。{total, plural, other {#}} サンプル",
+  "step.history": "元に戻す・やり直し",
   "step.redo": "やり直し",
   "step.redoNamed": "やり直し: {step}",
   "step.sketchEdit": "スケッチの編集",

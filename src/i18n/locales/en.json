@@ -139,6 +139,7 @@
   "render.progress.quarter": "Rendered {done, number} of {total, plural, one {# sample} other {# samples}}",
   "render.progress.samples": "{done, number} of {total, plural, one {# sample} other {# samples}}",
   "render.progress.started": "Render started, {total, plural, one {# sample} other {# samples}}",
+  "step.history": "Undo and redo",
   "step.redo": "Redo",
   "step.redoNamed": "Redo {step}",
   "step.sketchEdit": "sketch edit",

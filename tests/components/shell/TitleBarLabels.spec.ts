@@ -9,6 +9,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import { useUiStore } from "../../../src/stores/ui";
 import { usePanelsStore } from "../../../src/stores/panels";
 import TitleBar from "../../../src/components/shell/TitleBar.vue";
+import { setLanguage } from "../../../src/i18n";
 
 vi.mock("../../../src/app/menubarDef", () => ({ buildMenubar: () => [] }));
 
@@ -118,5 +119,26 @@ describe("TitleBar undo and redo toolbar", () => {
     expect([w.get("#undo-btn").attributes("tabindex"), w.get("#redo-btn").attributes("tabindex")]).toEqual(["-1", "0"]);
     press("ArrowLeft");
     expect(document.activeElement?.id).toBe("undo-btn");
+  });
+});
+
+describe("TitleBar undo and redo names under a language", () => {
+  afterEach(async () => {
+    await setLanguage("system");
+  });
+
+  it("follow a switch to German and to French without a remount", async () => {
+    const w = mountBar();
+    const labels = () => [
+      w.get("[role=toolbar]").attributes("aria-label"),
+      w.get("#undo-btn").attributes("aria-label"),
+      w.get("#redo-btn").attributes("aria-label"),
+    ];
+    await setLanguage("de");
+    await nextTick();
+    expect(labels()).toEqual(["Rückgängig und Wiederholen", "Rückgängig", "Wiederholen"]);
+    await setLanguage("fr");
+    await nextTick();
+    expect(labels()).toEqual(["Annuler et rétablir", "Annuler", "Rétablir"]);
   });
 });

@@ -139,6 +139,7 @@
   "render.progress.quarter": "Renderizadas {done, number} de {total, plural, one {# muestra} other {# muestras}}",
   "render.progress.samples": "{done, number} de {total, plural, one {# muestra} other {# muestras}}",
   "render.progress.started": "Renderizado iniciado, {total, plural, one {# muestra} other {# muestras}}",
+  "step.history": "Deshacer y rehacer",
   "step.redo": "Rehacer",
   "step.redoNamed": "Rehacer {step}",
   "step.sketchEdit": "edición del boceto",
