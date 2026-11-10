@@ -8,6 +8,7 @@ import type { DocumentStore, RebuildState } from "../../src/document/store";
 import { classifyExprInput } from "../../src/params/engine";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { Feature } from "../../src/types";
+import { setLanguage } from "../../src/i18n";
 
 // The real store reads names in the value box; these fakes hold no parameters.
 const classifyTargetExpr: DocumentStore["classifyTargetExpr"] = (bound, pending, raw, kind) =>
@@ -97,5 +98,44 @@ describe("HoleTool typed values", () => {
     typeThenEnter("depth", "5");
     expect(s.added).toHaveLength(1);
     expect((s.added[0] as unknown as { depth: number }).depth).toBe(5);
+  });
+
+  it("an edited custom hole shows its diameter with the language's mark and keeps it on Enter", async () => {
+    const hole = {
+      id: "h7",
+      type: "hole",
+      holeType: "simple",
+      standard: "custom",
+      size: "M5",
+      diameter: 6.35,
+      extent: "blind",
+      depth: 12.5,
+      face: { by: "plane", point: [3.5, -2, 10], normal: [0, 0, 1] },
+      points: [[3.5, -2, 10]],
+    } as unknown as Feature;
+    const shown: Record<string, string> = {};
+    for (const lang of ["en", "de"] as const) {
+      await setLanguage(lang);
+      const s = fakeStore();
+      Object.assign(s.store, {
+        document: { parameters: {}, features: [hole] },
+        beginEditPreview: () => {},
+        setEditPreview: () => {},
+        endEditPreview: () => {},
+        replaceFeature: (_id: string, f: Feature) => s.added.push(f),
+        buildState: { building: false, result: { trackedFaces: {} } },
+      });
+      const vp = fakeViewport();
+      Object.assign(vp, {
+        planarFaceThrough: () => ({ normal: new THREE.Vector3(0, 0, 1), origin: new THREE.Vector3(0, 0, 10), faceId: 7 }),
+      });
+      expect(new HoleTool(vp, s.store).startEdit("h7", () => {})).toBe(true);
+      shown[lang] = input("size").value;
+      typeThenEnter("size", input("size").value);
+      expect(s.added.map((f) => (f as unknown as { diameter: number }).diameter)).toEqual([6.35]);
+      document.body.innerHTML = "";
+    }
+    await setLanguage("system");
+    expect(shown).toEqual({ en: "6.35", de: "6,35" });
   });
 });

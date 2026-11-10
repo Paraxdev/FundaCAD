@@ -28,6 +28,7 @@ import {
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 import { boxBindings } from "./boxBindings";
+import { spellNumber } from "../ui/measure";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
@@ -395,7 +396,7 @@ export class HoleTool {
   }
 
   private sizeText(): string {
-    return this.diameter != null ? String(this.diameter) : this.size;
+    return this.diameter != null ? spellNumber(this.diameter) : this.size;
   }
 
   private blind(): boolean {
