@@ -98,6 +98,18 @@
     {
       "en": "Custom",
       "text": "自定义"
+    },
+    {
+      "en": "render",
+      "text": "渲染"
+    },
+    {
+      "en": "picture",
+      "text": "图片"
+    },
+    {
+      "en": "sample",
+      "text": "采样"
     }
   ]
 }

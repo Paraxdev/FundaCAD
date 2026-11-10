@@ -1204,6 +1204,16 @@ Copy has two patterns, pick by the button:
 - A text action that copies (McpSection's config): `toast("Copied.")`, and on
   failure `toast("Could not copy. Select the text and copy it.", { kind: "error" })`.
 
+A progress bar for a long job, such as the Camera tab's traced picture, is
+`role="progressbar"` with a name, `aria-valuemin`, `aria-valuemax` and
+`aria-valuenow`, and an `aria-valuetext` when the unit is not a percent
+(`64 of 256 samples`). It sits in no live region, and its values change at
+most once a second, and at once at each quarter and at the total
+(`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame.
+The button that starts the job keeps one name while it runs. Its speech goes
+through `announce()`: start, finish and cancel at Normal, each quarter at
+Verbose, and a failure drops a waiting line before its error is spoken.
+
 ### 7.15 Marks in the scene
 
 The origin triad and the origin plane tiles are drawn in the 3D scene, so the
@@ -1318,7 +1328,7 @@ The standard transition is
 Transition only background, color, box-shadow, opacity and
 transform, never layout. The one layout property that moves is the `width` of
 a progress fill inside a fixed track (`.timeline-busy .busy-bar i` and
-`.timeline-node .t-bar i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
+`.timeline-node .t-bar i` and `.rd-progress-track i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
 `120ms linear`), because it moves nothing around it.
 
 Off the scale, do not copy: `profile-panel-in 0.14s ease-out`

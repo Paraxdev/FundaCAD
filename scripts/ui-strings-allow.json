@@ -170,7 +170,7 @@
   { "path": "src/components/shell/InlineLabel.vue", "kind": "template", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/MenuBar.vue", "kind": "template", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/NormalToSketch.vue", "kind": "template", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/components/shell/RenderCamera.vue", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/components/shell/RenderCamera.vue", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/RenderCamera.vue", "kind": "template", "count": 20, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/RenderDock.vue", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/components/shell/RenderDock.vue", "kind": "template", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },

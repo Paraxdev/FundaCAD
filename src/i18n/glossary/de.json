@@ -105,6 +105,19 @@
       "en": "Custom",
       "text": "Eigene Werte",
       "note": "the material typed by hand, Eigener Vektor for a vector"
+    },
+    {
+      "en": "render",
+      "text": "Rendern"
+    },
+    {
+      "en": "picture",
+      "text": "Bild"
+    },
+    {
+      "en": "sample",
+      "text": "Sample",
+      "note": "the path tracing term, not Probe"
     }
   ]
 }
