@@ -57,7 +57,7 @@ To fillet two edges:
 3. Step to the second edge and press Space.
 4. Press F, type a radius and press Enter.
 
-You can also start the tool first. Press F, press F6 to reach the 3D view, step to an edge and press Enter. You hear the edge's name and "added", and the radius box takes the focus, so type a radius there. Press F6 to return to the 3D view and step to another edge, and press Enter to add it. Stepping to an edge that is already in and pressing Enter takes it out, and you hear "taken out". When the edges are right, press Enter on the 3D view to apply.
+You can also start the tool first. Press F, press F6 to reach the 3D view, step to an edge and press Enter. You hear the edge's name and "added", and the radius box takes the focus, so type a radius there. Press F6 to return to the 3D view and step to another edge, and press Enter to add it. Stepping to an edge that is already in and pressing Enter takes it out, and you hear "taken out". With Include Tangent Edges on, an edge that runs smoothly into others brings them along, and you hear how many edges that made. When the edges are right, press Enter on the 3D view to apply.
 
 To sketch on a face, step to it, press Enter, then S. To sketch on a plane, press Shift+`]` until you hear Planes, step to it and press Enter. With Single key shortcuts off, start the tool from the command palette.
 
