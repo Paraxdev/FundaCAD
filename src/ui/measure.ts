@@ -203,14 +203,22 @@ const DECIMAL_COMMA = /(\d),(\d+)/;
 export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
   const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
   if (mark === ",") return commasToPoints(src);
-  if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
-  if (src.indexOf(",") !== src.lastIndexOf(",")) return src;
-  const m = DECIMAL_COMMA.exec(src);
+  const m = loneComma(src);
   if (!m) return src;
+  refuseThousandsComma(src, m);
+  return src.replace(DECIMAL_COMMA, "$1.$2");
+}
+
+function loneComma(src: string): RegExpExecArray | null {
+  if (!src.includes(",") || src.includes("(") || src.includes(".")) return null;
+  if (src.indexOf(",") !== src.lastIndexOf(",")) return null;
+  return DECIMAL_COMMA.exec(src);
+}
+
+function refuseThousandsComma(src: string, m: RegExpExecArray): void {
   if (m[2]!.length === 3) {
     throw new ExprError(`"${src}" is ambiguous, write a point for decimals or leave the comma out`);
   }
-  return src.replace(DECIMAL_COMMA, "$1.$2");
 }
 
 /** A unit becomes a multiplication rather than a suffix, so feet, microns and thou, which the language has no suffix
@@ -412,11 +420,17 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
   return mark === "," ? text.replace(".", ",") : text;
 }
 
-/** Typed expression text as the stored point grammar. In a dot language it is untouched, so a comma there is
- *  refused by the tokenizer as before. In a comma language it throws ExprError for a number it will not guess, such
- *  as 1.500; `typedExprProblem` says so without throwing. */
+/** Typed expression text as the stored point grammar. A comma there is still refused by the tokenizer, except that a
+ *  lone comma before exactly three digits (1,000) throws ExprError as ambiguous, as a value box says. In a comma
+ *  language it throws for a number it will not guess, as 1.500 or 1,5,5; `typedExprProblem` says so without throwing. */
 export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
-  return mark === "," ? commasToPoints(typed) : typed;
+  if (mark !== ",") {
+    const src = typed.trim();
+    const m = loneComma(src);
+    if (m) refuseThousandsComma(src, m);
+    return typed;
+  }
+  return commasToPoints(typed);
 }
 
 /** Why storedExpr refuses typed expression text, null when it takes it. */
