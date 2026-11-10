@@ -1,5 +1,10 @@
 {
+  "guide.counter": "Paso {step, number} de {of, number}",
   "guide.keysLabel": "Con el teclado:",
+  "guide.next": "Siguiente",
+  "guide.openFirst": "Abra primero {control}",
+  "guide.stop": "Detener",
+  "guide.title": "Guía",
   "menu.help.accessibility": "Accesibilidad",
   "prefs.accessibility.manualLink": "Leer la página Accesibilidad del manual",
   "prefs.language.error.badName": "No se pudo saber el idioma por el nombre del archivo, póngale de nombre el código del idioma, por ejemplo pl.json.",

@@ -1,5 +1,10 @@
 {
+  "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
+  "guide.next": "次へ",
+  "guide.openFirst": "先に {control} を開いてください",
+  "guide.stop": "終了",
+  "guide.title": "ガイド",
   "menu.help.accessibility": "アクセシビリティ",
   "prefs.accessibility.manualLink": "マニュアルのアクセシビリティのページを読む",
   "prefs.language.error.badName": "ファイル名から言語を判断できませんでした。pl.json のように、言語コードをファイル名にしてください。",

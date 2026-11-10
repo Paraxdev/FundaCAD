@@ -54,7 +54,8 @@ function locateUi(s: StepState): void {
   const own = target ? parseFloat(getComputedStyle(target).borderTopLeftRadius) : NaN;
   radius.value = Number.isFinite(own) && own > 0 ? `${own + 4}px` : null;
   ref_.value = r.el ? (r.via ?? r.ref) : "";
-  hint.value = r.el && r.via ? `Open ${labelOf(r.el) || r.via} first` : r.el ? "" : (r.missing ?? "");
+  hint.value =
+    r.el && r.via ? t("guide.openFirst", { control: labelOf(r.el) || r.via }) : r.el ? "" : (r.missing ?? "");
   guide.updateResolution(r.el ? { found: true, via: r.via } : { found: false, missing: r.missing, near: r.near });
   if (target && !r.via && scrolledFor !== s.seq) {
     scrolledFor = s.seq;
@@ -174,8 +175,9 @@ function restart(): void {
   void nextTick(schedule);
 }
 
-const counterOf = (s: StepState) => (s.of > 1 ? `Step ${s.step} of ${s.of}` : "Guide");
-const sentence = (s: string) => (!s || /[.!?:。：]$/.test(s) ? s : `${s}.`);
+const counterOf = (s: StepState) => (s.of > 1 ? t("guide.counter", { step: s.step, of: s.of }) : t("guide.title"));
+const sentence = (s: string) =>
+  !s || /[.!?:。：！？]$/.test(s) ? s : /[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]$/.test(s) ? `${s}。` : `${s}.`;
 
 // The bubble mounts with its first step's text, and a live region that arrives filled is mostly not read.
 let spokenSeq = -1;
@@ -209,7 +211,7 @@ const bubbleStyle = computed(() => {
   const b = bubbleAt.value;
   return b ? { left: `${b.left}px`, top: `${b.top}px` } : { visibility: "hidden" as const };
 });
-const counter = computed(() => (step.value ? counterOf(step.value) : "Guide"));
+const counter = computed(() => (step.value ? counterOf(step.value) : t("guide.title")));
 </script>
 
 <template>
@@ -241,8 +243,8 @@ const counter = computed(() => (step.value ? counterOf(step.value) : "Guide"));
         </p>
         <p v-if="hint" class="guide-hint">{{ hint }}</p>
         <div class="guide-actions">
-          <Button id="guide-stop" @click="guide.stop()">Stop</Button>
-          <Button id="guide-next" variant="primary" @click="guide.next()">Next</Button>
+          <Button id="guide-stop" @click="guide.stop()">{{ t("guide.stop") }}</Button>
+          <Button id="guide-next" variant="primary" @click="guide.next()">{{ t("guide.next") }}</Button>
         </div>
       </div>
     </div>

@@ -1,5 +1,10 @@
 {
+  "guide.counter": "Étape {step, number} sur {of, number}",
   "guide.keysLabel": "Au clavier :",
+  "guide.next": "Suivant",
+  "guide.openFirst": "Ouvrez d’abord {control}",
+  "guide.stop": "Arrêter",
+  "guide.title": "Guide",
   "menu.help.accessibility": "Accessibilité",
   "prefs.accessibility.manualLink": "Lire la page Accessibilité du manuel",
   "prefs.language.error.badName": "Impossible de déduire la langue du nom du fichier, nommez le fichier d’après son code de langue, par exemple pl.json.",
