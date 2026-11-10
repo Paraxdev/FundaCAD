@@ -10,6 +10,8 @@ on:
       - "manual/**"
       - ".github/workflows/manual.yml"
       - "tests/manual/test_versions.py"
+      - "tools/harness/src/fundacad_harness/a11y.py"
+      - "tools/harness/src/fundacad_harness/vendor/**"
   workflow_dispatch:
 
 permissions:
@@ -27,6 +29,26 @@ jobs:
       - run: gh workflow run manual.yml --repo "$GITHUB_REPOSITORY" --ref main
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # A dispatch only republishes, the push that changed the manual is the one checked.
+  axe:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            manual
+            tools/harness/src
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install "zensical==0.0.69" "playwright==1.62.0"
+      - run: zensical build
+        working-directory: manual
+      - run: python manual/tools/axe_site.py manual/site --chrome /usr/bin/google-chrome
 
   deploy:
     if: github.ref_name == 'main'

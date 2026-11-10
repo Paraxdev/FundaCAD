@@ -53,7 +53,7 @@ Each entry starts from a new document in its theme unless its first step opens s
 
 Copies are made after the retakes, so a copy holds the picture taken in the same run. The last line counts what was taken, failed, still a stub, kept and copied. A run fails when a picture fails, or when `--only` names a stub or a name no manifest has.
 
-`python3 tests/manual/test_capture.py` checks that each page in `uses` shows the picture with the entry's `alt`, that every manual and README picture has an entry of its size, and the GIF encoder.
+`python3 tests/manual/test_capture.py` checks that each page in `uses` shows the picture with the entry's `alt`, that every manual and README picture has an entry of its size, that a page shows a GIF as its still, and the GIF encoder.
 
 What the tool works around:
 
@@ -98,5 +98,7 @@ frames = [
 ```
 
 `repeat` runs the frame's steps again before each of its pictures, `hold` is how long a frame shows in ms. The encoder is in `gif.py`, plain Python with no dependency: one palette of up to 255 colours, and each frame stores only what changed.
+
+Beside each GIF goes its last frame as `<name>-still.png`. A page shows the still, written `![alt](../img/<name>-still.png){ .fc-motion }`, and `javascripts/motion.js` swaps in the GIF unless the system asks for reduced motion, with a button below to play or pause it. `python manual/tools/axe_site.py manual/site`, after `zensical build`, checks this in both settings.
 
 To turn the camera, make each frame its own short right drag (down, move `by`, up) pressed on empty canvas well away from the part: the orbit then pivots on the part's centre every time, and the picture is still when it is taken. Pressed on the part, each drag pivots on whatever is under the cursor, and the mouse left over a face highlights it. `orbit` in `ai-plugins-reference.toml` does this.
