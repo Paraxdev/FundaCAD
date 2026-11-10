@@ -39,21 +39,32 @@ describe("stepMenuText in German", () => {
     expect(stepMenuText("redo", null)).toBe("Wiederholen");
   });
 
-  it("puts the step where German wants it", async () => {
+  it("puts the verb first, so a clipped step never pushes it away", async () => {
     await setLanguage("de");
-    expect(stepMenuText("undo", "Fase 4")).toBe("Fase 4 rückgängig machen");
-    expect(stepMenuText("redo", "Fase 4")).toBe("Fase 4 wiederholen");
+    expect(stepMenuText("undo", "Fase 4")).toBe("Rückgängig: Fase 4");
+    expect(stepMenuText("redo", "Fase 4")).toBe("Wiederholen: Fase 4");
   });
 
   it("clips at 32 characters, 32 exactly stays whole", async () => {
     await setLanguage("de");
-    expect(stepMenuText("undo", exact)).toBe(`${exact} rückgängig machen`);
-    expect(stepMenuText("undo", `${exact}X`)).toBe(`${exact}… rückgängig machen`);
+    expect(stepMenuText("undo", exact)).toBe(`Rückgängig: ${exact}`);
+    expect(stepMenuText("undo", `${exact}X`)).toBe(`Rückgängig: ${exact}…`);
   });
 
   it("names the sketch step", async () => {
     await setLanguage("de");
     expect(sketchStepName()).toBe("Skizzenänderung");
-    expect(stepMenuText("redo", sketchStepName())).toBe("Skizzenänderung wiederholen");
+    expect(stepMenuText("redo", sketchStepName())).toBe("Wiederholen: Skizzenänderung");
+  });
+});
+
+describe("stepMenuText in Japanese", () => {
+  it("puts the verb first with a step, the bare verb without", async () => {
+    await setLanguage("ja");
+    expect([stepMenuText("undo", "フィレット 2"), stepMenuText("redo", "フィレット 2")]).toEqual([
+      "元に戻す: フィレット 2",
+      "やり直し: フィレット 2",
+    ]);
+    expect([stepMenuText("undo", null), stepMenuText("redo", null)]).toEqual(["元に戻す", "やり直し"]);
   });
 });
