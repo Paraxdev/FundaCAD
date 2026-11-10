@@ -30,11 +30,15 @@ export interface RibbonEntry {
   action: string;
   label: string;
   iconName: string;
+  /** The English name, stable whatever the language: the palette finds the tool by it and the harness locates it. */
+  refName?: string;
 }
 
 export interface RibbonContribution {
-  /** Group heading, in the ribbon's own upper-case style. */
+  /** Group heading, in the ribbon's own upper-case style. Stays the stable id, a shared group matches on it. */
   group: string;
+  /** The shown heading, a getter when it follows the language. The first running contributor that gives one wins. */
+  label?: string;
   /** Collapse priority, lower folds into the overflow first. Defaults to the bottom, so a plugin's group folds
    *  first. */
   priority?: number;
@@ -122,6 +126,8 @@ export interface ToolContribution {
   id: string;
   /** Human name, for prompts, menus and the selection toolbar. */
   label: string;
+  /** The English name, stable whatever the language. */
+  refName?: string;
   /** Resolved like every icon in the app. A plugin that draws its own mark contributes it under `icons`. */
   iconName: string;
   /** Entity kinds this tool acts on, MOST SPECIFIC FIRST, as in the core's own table. */
@@ -324,6 +330,19 @@ export function contributedMenus(): MenuContribution[] {
 
 export function contributedRibbon(): RibbonContribution[] {
   return all("ribbon").flat();
+}
+
+/** The English name a plugin gave a tool, from its ribbon button first, then its tool contribution. */
+export function contributedEnglish(action: string): string | undefined {
+  for (const r of contributedRibbon()) {
+    const it = r.items.find((i) => i.action === action && i.refName);
+    if (it) return it.refName;
+  }
+  return contributedTools().find((t) => t.id === action && t.refName)?.refName;
+}
+
+export function contributedGroupLabel(group: string): string | undefined {
+  return contributedRibbon().find((r) => r.group === group && r.label)?.label;
 }
 
 export function contributedOverlays(): { key: string; component: Component }[] {

@@ -1,6 +1,6 @@
 // The ribbon's tools, groups and collapse order, apart from the component so ui/commands.ts can use the same tables.
 
-import { contributedRibbon } from "../plugins/contrib";
+import { contributedEnglish, contributedGroupLabel, contributedRibbon } from "../plugins/contrib";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint } from "../input/shortcuts";
 import { t, tEnglish, type MessageKey } from "../i18n";
@@ -78,7 +78,7 @@ export function toolLabel(action: string): string | undefined {
 
 export function toolEnglish(action: string): string | undefined {
   const key = TOOL_KEYS.get(action);
-  return key ? tEnglish(key) : undefined;
+  return key ? tEnglish(key) : contributedEnglish(action);
 }
 
 export function groupName(id: string): string | undefined {
@@ -89,6 +89,11 @@ export function groupName(id: string): string | undefined {
 export function groupEnglish(id: string): string | undefined {
   const key = Object.hasOwn(GROUP_KEYS, id) ? GROUP_KEYS[id] : undefined;
   return key ? tEnglish(key) : undefined;
+}
+
+/** A group's shown text: the core heading for a core group, else the label a plugin gave it. */
+export function groupShown(id: string): string | undefined {
+  return groupName(id) ?? contributedGroupLabel(id);
 }
 
 export const MODEL: Group[] = [

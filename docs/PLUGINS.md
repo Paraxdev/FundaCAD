@@ -252,7 +252,7 @@ with everything it adds, and gets back the removal:
 
 | point | what it fills |
 | --- | --- |
-| `menus` | rows in a menu that exists, or a whole menu that does not; a core menu is named by its English name (File, Edit, View, Help) in every language. A row or menu label may be a function that returns the text, read again each time the menu shows, with `refName` as the name refs and the harness find it by. A plugin's own rows stay in its own words until plugins ship their own language lines |
+| `menus` | rows in a menu that exists, or a whole menu that does not; a core menu is named by its English name (File, Edit, View, Help) in every language. A row or menu label may be a function that returns the text, read again each time the menu shows, with `refName` as the name refs and the harness find it by. A plugin's own rows follow the language when it ships its own lines, see Your plugin in other languages |
 | `ribbon` | a group of buttons, with a collapse priority |
 | `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
 | `overlays` | components mounted for the life of the capability |
@@ -313,6 +313,41 @@ rows it wants are still loading and is then left showing the previous state
 permanently, because nothing else is coming. `TitleBar.vue` and `RibbonBar.vue`
 watch `onContribChange` for exactly this reason. It is written down because it
 was got wrong, and because no unit test caught it, a rendered app did.
+
+### Your plugin in other languages
+
+A plugin may ship its own lines in `locales/<code>.json` beside its code, `en.json` complete, and read them with
+`pluginText` from `fundacad`. It never reads a core key. The chain per line is the person's own `<id>:<key>` line,
+the plugin's file for the language, its base language, then English. The full format is in `docs/I18N.md`.
+
+```ts
+// lines.ts
+import { pluginText } from "fundacad";
+
+export const { t, tEnglish } = pluginText<typeof import("./locales/en.json")>(
+  "Acme.Rivets",
+  import.meta.glob("./locales/*.json", { eager: true, import: "default" }),
+);
+```
+
+```ts
+contribute("Acme.Rivets", {
+  menus: [{ menu: "File", items: [{ label: () => t("menu.file.send"), refName: "Send to Printer…", onClick }] }],
+  ribbon: [
+    {
+      group: "PRINT",
+      get label() { return t("group.print"); },
+      items: [{ action: "print-send", get label() { return t("tool.send"); }, refName: "Send to Printer", iconName: "printerSend" }],
+    },
+  ],
+});
+```
+
+- A label is a getter or a function, so it follows a language switch without contributing again.
+- `refName` is the literal English name. The palette finds the tool by it in every language, and the harness locates it by it. A ribbon button or a tool contribution without one has no English alias.
+- `group` stays the stable id and is what groups match on. `label` on the group is the shown heading, the first running plugin that gives one wins, so plugins that share a group should use the same line. A core group (CREATE, MODIFY and the rest) keeps the core heading whatever a plugin says.
+- A plugin without locales changes nothing, its text stays as written.
+- A plugin that must also run on an older app guards the call: `import * as host from "fundacad"`, then use its own `en.json` when `host.pluginText` is missing.
 
 ### A modeling tool, which is what the last three points are for
 
