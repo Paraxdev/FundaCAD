@@ -111,4 +111,24 @@ describe("CommandPalette language", () => {
     expect($(".cmdk-card")!.getAttribute("aria-label")).toBe("Palette de commandes");
     expect($(".cmdk-item .cmdk-group")!.textContent).toBe("Fichier");
   });
+
+  it("finds a rail tool by the German and the English name, shown in German", async () => {
+    await type("extrude");
+    expect(labels()[0]).toBe("Extrusion");
+    expect($(".cmdk-item .cmdk-group")!.textContent).toBe("Erstellen");
+    await type("extru");
+    expect(labels()).toContain("Extrusion");
+    expect(rows()[0]!.textContent).not.toMatch(/Extrude/);
+    await setLanguage("en");
+    await nextTick();
+    expect(labels()[0]).toBe("Extrude");
+  });
+
+  it("switches a rail tool and its group live from German to French", async () => {
+    await type("extrude");
+    await setLanguage("fr");
+    await nextTick();
+    expect(labels()[0]).toBe("Extruder");
+    expect($(".cmdk-item .cmdk-group")!.textContent).toBe("Créer");
+  });
 });

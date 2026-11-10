@@ -1,7 +1,7 @@
 // The command palette registry: the ribbon's tool groups plus File and View commands. Key hints come from
 // src/input/shortcuts.ts so the palette cannot advertise a key the keymap does not bind.
 
-import { modelGroups, SKETCH, leavesOf, type Group } from "./ribbonDefs";
+import { modelGroups, SKETCH, leavesOf, toolLabel, toolEnglish, groupName, type Group } from "./ribbonDefs";
 import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
 import { t, tEnglish, type MessageKey } from "../i18n";
 
@@ -128,7 +128,9 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
         const key = keyHint(leaf.action) ?? leaf.key;
         out.push({
           id: leaf.action,
-          label: leaf.label,
+          get label() {
+            return leaf.label;
+          },
           group: g.label,
           context,
           ...(key !== undefined ? { key } : {}),
@@ -154,17 +156,18 @@ export function allCommands(): Command[] {
 
 /** The live label of a built in command, read at call time so a menu row follows the language. */
 export function commandLabel(id: string): string {
-  return GLOBAL.find((c) => c.id === id)?.label ?? id;
+  return GLOBAL.find((c) => c.id === id)?.label ?? toolLabel(id) ?? id;
 }
 
 /** The English label, the stable name a menu row is found by and a quiet alias in the palette. */
 export function commandEnglish(id: string): string | undefined {
   const key = LABEL_KEYS.get(id);
   if (key) return tEnglish(key);
-  return (STANDARD_VIEWS as readonly string[]).includes(id) ? tEnglish("view.command", { view: id }) : undefined;
+  if ((STANDARD_VIEWS as readonly string[]).includes(id)) return tEnglish("view.command", { view: id });
+  return toolEnglish(id);
 }
 
-/** A group is an id; only the five built in ones have a display text, ribbon groups show as they are. */
+/** A group is an id; built in and ribbon groups have a display text, any other shows as it is. */
 export function groupText(group: string): string {
   switch (group) {
     case "File":
@@ -177,7 +180,9 @@ export function groupText(group: string): string {
       return t("palette.group.go");
     case "Help":
       return t("palette.group.help");
+    case "SKETCH":
+      return t("tool.sketch");
     default:
-      return group;
+      return groupName(group) ?? group;
   }
 }
