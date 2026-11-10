@@ -6,6 +6,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import RenderCamera from "../../../src/components/shell/RenderCamera.vue";
 import { ENGINE } from "../../../src/app/engineKey";
+import { escapeClaimed } from "../../../src/ui/escapeClaim";
 import type { Engine } from "../../../src/app/engine";
 
 const saveRenderedImage = vi.hoisted(() => vi.fn());
@@ -46,7 +47,7 @@ let tracedSize: () => { width: number; height: number } | null;
 let session: { alive: boolean };
 let w: VueWrapper;
 
-function mountCamera() {
+function mountCamera(attachTo?: HTMLElement) {
   const engine = {
     store: {
       fileName: "Untitled",
@@ -56,7 +57,7 @@ function mountCamera() {
     viewport: { tracedPictureSize: () => tracedSize(), renderTracedPicture, renderStill },
     canvas: { getBoundingClientRect: () => ({ width: 320, height: 200 }) },
   } as unknown as Engine;
-  return mount(RenderCamera, { global: { provide: { [ENGINE as symbol]: engine } } });
+  return mount(RenderCamera, { ...(attachTo && { attachTo }), global: { provide: { [ENGINE as symbol]: engine } } });
 }
 
 const button = () => w.get("#rd-take-picture");
@@ -460,5 +461,100 @@ describe("Camera tab traced picture announcements", () => {
     await flushPromises();
     expect(barState()).toEqual(barAt(0, 256, "0 of 256 samples"));
     expect(said()).toEqual([["Render started, 256 samples"], quarter(70), ["Render finished", "polite", KEYED]]);
+  });
+});
+
+const escape = (el: Element) => {
+  const ev = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  el.dispatchEvent(ev);
+  return ev;
+};
+// claimEscape's release lands a task later.
+const nextTask = () => new Promise((done) => setTimeout(done, 0));
+
+describe("Camera tab Escape", () => {
+  let app: ReturnType<typeof vi.fn<(e: Event) => void>>;
+  let host: HTMLElement;
+  beforeEach(() => {
+    w.unmount();
+    host = document.body.appendChild(document.createElement("div"));
+    w = mountCamera(host);
+    app = vi.fn<(e: Event) => void>();
+    window.addEventListener("keydown", app);
+  });
+  afterEach(async () => {
+    window.removeEventListener("keydown", app);
+    w.unmount();
+    host.remove();
+    w = mountCamera();
+    await nextTask();
+  });
+  const focusButton = () => (button().element as HTMLElement).focus();
+
+  it("cancels a running trace from the tab, says so and keeps the key from the app", async () => {
+    focusButton();
+    await press();
+    abortsWith(0);
+    at(1500);
+    traces[0]!.opts.onProgress(70);
+    await flushPromises();
+    expect(escapeClaimed()).toBe(true);
+
+    const ev = escape(button().element);
+    await flushPromises();
+    expect(traces[0]!.opts.signal.aborted).toBe(true);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(app).not.toHaveBeenCalled();
+    expect(said().at(-1)).toEqual(["Render cancelled", "polite", KEYED]);
+    expect(buttonState()).toEqual(idle);
+    await nextTask();
+    expect(escapeClaimed()).toBe(false);
+  });
+
+  it("leaves Escape to whatever owned it before when no trace runs, before a picture and after one", async () => {
+    focusButton();
+    const before = escape(button().element);
+    expect(before.defaultPrevented).toBe(false);
+    expect(app).toHaveBeenCalledTimes(1);
+    expect(escapeClaimed()).toBe(false);
+
+    await press();
+    traces[0]!.opts.onProgress(256);
+    traces[0]!.done.resolve("data:traced");
+    await flushPromises();
+    await nextTask();
+    expect(buttonState()).toEqual(idle);
+    expect(escapeClaimed()).toBe(false);
+    const after = escape(button().element);
+    expect(after.defaultPrevented).toBe(false);
+    expect(app).toHaveBeenCalledTimes(2);
+    expect(said().filter(([text]) => text === "Render cancelled")).toEqual([]);
+  });
+
+  it("leaves Escape to the app while a trace runs and focus is outside the tab", async () => {
+    const outside = document.body.appendChild(document.createElement("button"));
+    try {
+      focusButton();
+      await press();
+      traces[0]!.opts.onProgress(70);
+      outside.focus();
+      await flushPromises();
+      await nextTask();
+      expect(escapeClaimed()).toBe(false);
+
+      const ev = escape(outside);
+      expect(ev.defaultPrevented).toBe(false);
+      expect(app).toHaveBeenCalledTimes(1);
+      expect(traces[0]!.opts.signal.aborted).toBe(false);
+      expect(buttonState().text).toBe("Cancel render");
+
+      focusButton();
+      await flushPromises();
+      expect(escapeClaimed()).toBe(true);
+    } finally {
+      outside.remove();
+      traces[0]?.done.resolve("data:traced");
+      await flushPromises();
+    }
   });
 });

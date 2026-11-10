@@ -6,12 +6,13 @@ import Checkbox from "../ui/Checkbox.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
 import Slider from "../ui/Slider.vue";
-import { computed, onMounted, onUnmounted, ref, shallowRef, useId } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useId, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
 import { t } from "../../i18n";
 import { toast } from "../../ui/toast";
 import { announce, cancelAnnouncement } from "../../ui/announce";
+import { claimEscape } from "../../ui/escapeClaim";
 import type { DocumentSession } from "../../document/session";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
 import { plainError, SEE_CONSOLE } from "../../ui/plainError";
@@ -72,6 +73,35 @@ const countText = computed(() =>
 let abort: AbortController | null = null;
 // One key, so a quarter still waiting for its frame is replaced by the finish or dropped on a failure.
 const RENDER_KEY = "render";
+
+// Window capture listeners hear Escape before this tab does, so while a trace runs and focus is in the tab the key is
+// claimed for the cancel; otherwise it goes on to whatever owned it before.
+const root = ref<HTMLElement | null>(null);
+const focused = ref(false);
+let releaseEscape: (() => void) | null = null;
+watch(
+  () => tracing.value && focused.value,
+  (own) => {
+    if (own) releaseEscape ??= claimEscape();
+    else {
+      releaseEscape?.();
+      releaseEscape = null;
+    }
+  },
+);
+onUnmounted(() => releaseEscape?.());
+
+function onFocusOut(e: FocusEvent) {
+  const to = e.relatedTarget;
+  focused.value = to instanceof Node && !!root.value?.contains(to);
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key !== "Escape" || !abort) return;
+  e.preventDefault();
+  e.stopPropagation();
+  abort.abort();
+}
 
 const tracedSize = computed(() => {
   void tick.value;
@@ -174,7 +204,7 @@ async function takePicture() {
 </script>
 
 <template>
-  <div class="rd-scroll">
+  <div ref="root" class="rd-scroll" @focusin="focused = true" @focusout="onFocusOut" @keydown="onKeydown">
     <section class="rd-section">
       <h3 class="rd-head">Lens</h3>
       <Slider
