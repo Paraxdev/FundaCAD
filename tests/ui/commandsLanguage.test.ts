@@ -16,6 +16,14 @@ afterEach(async () => {
 const labels = () => Object.fromEntries(allCommands().map((c) => [c.id, c.label]));
 
 describe("command labels in the chosen language", () => {
+  it("keeps a tool command held across a switch in step with the language", async () => {
+    const held = allCommands();
+    const pick = (id: string) => held.find((c) => c.id === id)!.label;
+    expect([pick("extrude"), pick("pattern-circular"), pick("trim")]).toEqual(["Extrude", "Circular Pattern", "Trim"]);
+    await setLanguage("de");
+    expect([pick("extrude"), pick("pattern-circular"), pick("trim")]).toEqual(["Extrusion", "Kreismuster", "Stutzen"]);
+  });
+
   it("read English by default and German after a switch, for the same ids", async () => {
     const english = labels();
     const ids = allCommands().map((c) => c.id);
