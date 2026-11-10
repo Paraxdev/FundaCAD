@@ -35,6 +35,8 @@ const catalog = createCatalog<MessageKey>({
 });
 
 export const t = catalog.t;
+// The English line whatever the language, for a name a person may also type.
+export const tEnglish = catalog.english;
 export const initLanguage = catalog.init;
 export const setLanguage = catalog.setLanguage;
 export const reloadLanguageFiles = catalog.reloadDropIns;
