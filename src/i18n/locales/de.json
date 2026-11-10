@@ -5,6 +5,7 @@
   "camera.turnedTilted": "{side, select, front {Vorne} back {Hinten} left {Links} other {Rechts}}, {turn, number}° Richtung {toward, select, front {vorne} back {hinten} left {links} other {rechts}}, {tilt, number}° von {from, select, above {oben} other {unten}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
   "dim.negative": "minus {amount}",
   "dim.stepHint": "Pfeil nach oben und unten ändern den Wert um {step}, mit Umschalt um {fine}, Bild auf und Bild ab um {big}",
+  "geometry.commands.pickWaiting": "Das Werkzeug wartet auf eine Auswahl, gehen Sie in der 3D-Ansicht mit ] und [ dorthin",
   "guide.counter": "Schritt {step, number} von {of, number}",
   "guide.keysLabel": "Mit Tasten:",
   "guide.next": "Weiter",

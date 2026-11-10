@@ -149,7 +149,10 @@ describe("a tool's pick answered from the Items tree", () => {
     expect(r.click({ kind: "face", faceId: 9 })).toBe("refused");
     expect(r.click({ kind: "edge", edge: { id: "b2:3", body: "b2", points: [] } as never })).toBe("refused");
     expect(r.hints).toHaveLength(2);
-    for (const h of r.hints) expect(h).toContain("datum point");
+    for (const h of r.hints) {
+      expect(h).toContain("a datum point");
+      expect(h).not.toMatch(/view|click/i);
+    }
     expect(usePromptStore().text).toContain("0 of 3");
     expect(r.click({ kind: "datumPoint", id: "p2", point: [7, -3, 5] })).toBe("taken");
     expect(usePromptStore().text).toContain("1 of 3");
@@ -639,5 +642,56 @@ describe("a face or an edge row from the Geometry list", () => {
       expect(r.deps.sketch.enter).toHaveBeenCalledTimes(1);
       expect(r.addFeature).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("a refused row names the kinds the step takes, never a pointer", () => {
+  const region = (sketchId: string, n: number) => ({ sketchId, interior3D: { x: n, y: 2 * n, z: 3 } });
+  const profileRig = (regions: { sketchId: string; interior3D: unknown }[]) => {
+    const r = rig([{ id: "b2", name: "Lid" }]);
+    Object.assign(r.viewport, {
+      emphasizeEdges: () => {},
+      hoverEdge: () => {},
+      scene: { triad: { arms: [], highlight: vi.fn() } },
+    });
+    Object.assign(r.deps.overlay, { regions, setHoverRegion: vi.fn() });
+    r.starters.startRevolve();
+    return r;
+  };
+
+  it.each([2, 3])("a sketch with %i profiles is refused with the count and the one profile it needs", (n) => {
+    const r = profileRig([...Array.from({ length: n }, (_, i) => region("s1", i + 4)), region("s2", 9)]);
+    expect(r.click({ kind: "sketch", id: "s1" })).toBe("refused");
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toContain(`${n} profiles`);
+    expect(r.hints[0]).toContain("one closed profile");
+    expect(r.hints[0]).not.toMatch(/view|click/i);
+    expect(treePickWaiting()).toBe(true);
+    flushFrame();
+    expect(r.addFeature).not.toHaveBeenCalled();
+  });
+
+  it("a sketch with 1 profile is taken, and the revolve goes on to its axis", () => {
+    const r = profileRig([region("s1", 4), region("s2", 5), region("s2", 6)]);
+    expect(r.click({ kind: "sketch", id: "s1" })).toBe("taken");
+    expect(r.hints).toEqual([]);
+    flushFrame();
+    expect(treePickWaiting()).toBe(true);
+    expect(r.click({ kind: "sketch", id: "s2" })).toBe("refused");
+  });
+
+  it("a sketch with 0 profiles keeps its own refusal", () => {
+    const r = profileRig([region("s2", 5), region("s2", 6)]);
+    expect(r.click({ kind: "sketch", id: "s1" })).toBe("refused");
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toContain("no closed profile");
+    expect(r.hints[0]).not.toMatch(/view|click/i);
+  });
+
+  it("a face row is refused by the profile pick naming a sketch profile", () => {
+    const r = profileRig([region("s1", 4), region("s2", 5)]);
+    expect(r.click({ kind: "face", faceId: 9 })).toBe("refused");
+    expect(r.hints[0]).toContain("a sketch profile");
+    expect(r.hints[0]).not.toMatch(/view|click/i);
   });
 });

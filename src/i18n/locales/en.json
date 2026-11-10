@@ -5,6 +5,7 @@
   "camera.turnedTilted": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {tilt, number}° from {from, select, above {above} other {below}}, {projection, select, ortho {orthographic} other {perspective}}",
   "dim.negative": "minus {amount}",
   "dim.stepHint": "Up and Down change it by {step}, by {fine} with Shift, Page Up and Page Down by {big}",
+  "geometry.commands.pickWaiting": "The tool is waiting for a pick, step to it with ] and [ on the 3D view",
   "guide.counter": "Step {step, number} of {of, number}",
   "guide.keysLabel": "With keys:",
   "guide.next": "Next",

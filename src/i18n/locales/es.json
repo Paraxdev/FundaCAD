@@ -5,6 +5,7 @@
   "camera.turnedTilted": "{side, select, front {Delante} back {Detrás} left {Izquierda} other {Derecha}}, {turn, number}° hacia {toward, select, front {delante} back {atrás} left {la izquierda} other {la derecha}}, {tilt, number}° desde {from, select, above {arriba} other {abajo}}, {projection, select, ortho {ortográfica} other {en perspectiva}}",
   "dim.negative": "menos {amount}",
   "dim.stepHint": "Flecha arriba y abajo lo cambian en {step}, con Mayús en {fine}, Re Pág y Av Pág en {big}",
+  "geometry.commands.pickWaiting": "La herramienta espera una selección, llegue a ella con ] y [ en la vista 3D",
   "guide.counter": "Paso {step, number} de {of, number}",
   "guide.keysLabel": "Con el teclado:",
   "guide.next": "Siguiente",

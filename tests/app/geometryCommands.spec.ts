@@ -20,6 +20,7 @@ import {
 } from "../../src/input/shortcuts";
 import { useBrowserStore } from "../../src/stores/browser";
 import { useShellStore } from "../../src/stores/shell";
+import { t } from "../../src/i18n";
 import { announce } from "../../src/ui/announce";
 import { allCommands } from "../../src/ui/commands";
 import { describePick } from "../../src/ui/describePick";
@@ -390,8 +391,36 @@ describe("what a command refuses", () => {
     expect(treePickWaiting()).toBe(true);
     expect(end).not.toHaveBeenCalled();
     expect(taker).not.toHaveBeenCalled();
+    const words = r.host.setStatus.mock.calls.map((c) => c[0]);
+    expect(words).toEqual(STEPS.map(() => t("geometry.commands.pickWaiting")));
+    expect(words[0]).toMatch(/\]/);
+    expect(words[0]).not.toMatch(/Finish/);
+    expect(said()).toEqual(words);
+    expect(picks(r)).toEqual([]);
+  });
+
+  it("a tool on screen with no pick waiting still says to finish it first", async () => {
+    const { r, run } = await opened();
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    expect(treePickWaiting()).toBe(false);
+    for (const a of STEPS) run(a);
     expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual(STEPS.map(() => "Finish the tool first"));
     expect(picks(r)).toEqual([]);
+  });
+
+  it("an open sketch or a build under way outranks the waiting pick's words", async () => {
+    const { r, run } = await opened();
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    awaitTreePick(() => true as const, vi.fn());
+    r.host.sketch.active = true;
+    run("next-face");
+    r.host.sketch.active = false;
+    r.viewport.modelUnsettled = true;
+    run("next-edge");
+    expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual([
+      "Finish the sketch first",
+      "The model is still building",
+    ]);
   });
 
   it("a pick the screen does not count as a tool, as setting a view's face, is passed over and the step selects", async () => {
