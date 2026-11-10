@@ -1,7 +1,7 @@
 // Everything that knows Onshape is in this directory. The app lends it three generic things: an https request to
 // the hosts in manifest.json, the system's credential store, and the ordinary import.
 
-import { contribute, t } from "fundacad";
+import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
 import LinkHost from "./LinkHost.vue";
 import KeysSection from "./KeysSection.vue";
@@ -15,7 +15,7 @@ export async function activate(e: Engine): Promise<() => void> {
         menu: "File",
         items: [
           { separator: true, label: "" },
-          { label: () => t("menu.file.importOnshape"), refName: "Import from Onshape link\u2026", onClick: run },
+          { label: "Import from Onshape link\u2026", onClick: run },
         ],
       },
     ],
