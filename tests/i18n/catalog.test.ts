@@ -493,6 +493,21 @@ describe("loading a language file", () => {
     ]);
   });
 
+  it("fills a regional language's missing lines from its base's shipped file, or English when none is shipped", async () => {
+    const { c, pageLang } = make();
+    await c.init();
+    await c.loadDropInFile(file("de-AT.json", { "stress.setup.title": "Studie aufsetzen" }));
+    const austrian = [c.active(), lines(c), pageLang.at(-1)];
+    await c.loadDropInFile(file("es-419.json", { "stress.setup.title": "Configurar el estudio" }));
+    const spanish = [c.active(), lines(c), pageLang.at(-1)];
+    await c.setLanguage("de");
+    expect([austrian, spanish, lines(c)]).toEqual([
+      [{ code: "de-AT", bcp47: "de-AT" }, ["Studie aufsetzen", "Kraft 12.5 N auf Face 3", "2,5 Flächen"], "de-AT"],
+      [{ code: "es-419", bcp47: "es-419" }, ["Configurar el estudio", "Force 12.5 N on Face 3", "2.5 faces"], "es-419"],
+      ["Studie einrichten", "Kraft 12.5 N auf Face 3", "2,5 Flächen"],
+    ]);
+  });
+
   it("takes the language only from a name that is a language code and .json, reading nothing otherwise", async () => {
     const { c, storage } = make();
     await c.init();

@@ -130,8 +130,9 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
 
   const resolve = (value: string) => (value === "system" ? systemCode() : value);
 
+  // A regional file the user adds, as de-AT.json, falls back through its base's shipped file; zh-TW finds no zh.json.
   async function loadShipped(code: string): Promise<Readonly<Record<string, unknown>>> {
-    const loader = deps.loaders[`./locales/${code}.json`];
+    const loader = deps.loaders[`./locales/${code}.json`] ?? deps.loaders[`./locales/${code.split("-")[0]}.json`];
     if (!loader) return {};
     try {
       return (await loader()).default;
