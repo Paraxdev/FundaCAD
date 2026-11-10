@@ -720,7 +720,7 @@ describe("the custom fastener form", () => {
       const refused = (why: RegExp) => ({ number: null, invalid: "true", problems: [expect.stringMatching(why)] });
       expect({ de, en }).toEqual({
         de: [read(1.5), read(0.25), refused(/^Driver number: "1\.500" is ambiguous/)],
-        en: [read(1.5), refused(/^Driver number: Not a number$/)],
+        en: [read(1.5), refused(/^Driver number: "1,500" is ambiguous/)],
       });
     });
   });

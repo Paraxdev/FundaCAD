@@ -639,6 +639,26 @@ describe("joining a list of numbers", () => {
 });
 
 describe("shownExpr and storedExpr, one per mark", () => {
+  it.each(["22.125°", "10x2.500", "2.500 + 22.125°", "x.5 + 1.500 $"])(
+    "German shows %j so that committing it unchanged stores the same text",
+    async (stored) => {
+      await setLanguage("de");
+      let shown, back, problem;
+      try {
+        shown = shownExpr(stored);
+        back = storedExpr(shown);
+        problem = typedExprProblem(shown);
+      } finally {
+        await setLanguage("system");
+      }
+      expect({ shown, back, problem }).toEqual({
+        shown: stored.replace(/(\d)\.(\d)/g, "$1,$2"),
+        back: stored,
+        problem: null,
+      });
+    },
+  );
+
   it.each([
     ["max(width*1.5;2.25) + 0.125mm", "max(width*1,5;2,25) + 0,125mm"],
     ["a*3", "a*3"],
@@ -676,5 +696,65 @@ describe("shownExpr and storedExpr, one per mark", () => {
       },
       en: ["breite * 1.500", null],
     });
+  });
+});
+
+describe("two bare numbers with only a space between are refused, not joined", () => {
+  afterEach(() => setLanguage("system"));
+  const exprs = (list: string[]) => list.map((t) => normalise(t).expr);
+
+  it("refuses 1 5 and 12 34 in English and reads 15, 1 + 5 and 12*34", () => {
+    for (const t of ["1 5", "12 34", "2.5 7", "1 5mm", "a1 5", "2 + 1 5", " 1 5 "]) {
+      expect(() => normalise(t), t).toThrow(ExprError);
+    }
+    expect(exprs(["15", "1 + 5", "12 * 34", "  7  ", "7 ", " 7"])).toEqual(["15", "1+5", "12*34", "7", "7", "7"]);
+  });
+
+  it("says to write the number without the space when the second part is three digits", () => {
+    expect(() => normalise("1 000")).toThrow('write "1000" without the space');
+    expect(() => normalise("2 + 12 345")).toThrow('write "12345" without the space');
+    expect(() => normalise("12 3456")).toThrow(/operator/);
+    expect(() => normalise("12 3456")).not.toThrow(/without the space/);
+  });
+
+  it("keeps mixed fractions, compounds, x products, units after a space and spaces around operators", () => {
+    expect(
+      exprs(["1 1/2", "3 1/4 in", "1m 20cm", "1 m 20 cm", "10 x 5", "10 mm", "2 * (3 + 4)", "(2 + 3) * 4"]),
+    ).toEqual(["1.5", "82.55", "1000+200", "1000+200", "10*5", "10", "2*(3+4)", "(2+3)*4"]);
+    expect(normalise(`2' 5"`).expr).toBe(normalise(`2'5"`).expr);
+    expect(normalise("width + 5").expr).toBe("width+5");
+  });
+
+  it("refuses a bare number after a unit group, as before", () => {
+    expect(() => normalise("1m 20")).toThrow(ExprError);
+    expect(() => normalise("1 1/2 3")).toThrow(ExprError);
+  });
+
+  it("refuses German 1 .500, 10 ,5 and 1 5, reads 1,5 and 10x2,5 and 1 + 5", async () => {
+    await setLanguage("de");
+    for (const t of ["1 .500", "10 ,5", "1 5", "1 ,500", "2 + 3 ,25"]) {
+      expect(() => normalise(t), t).toThrow(ExprError);
+    }
+    expect(() => normalise("1 000")).toThrow('write "1000" without the space');
+    expect(exprs(["1,5", "10x2,5", "10 x 2,5", "1 + 5", "10 mm", "1,5 mm"])).toEqual([
+      "1.5",
+      "10*2.5",
+      "10*2.5",
+      "1+5",
+      "10",
+      "1.5",
+    ]);
+    expect(parseMeasure("1 1/2 in", MM).value).toBeCloseTo(38.1);
+  });
+
+  it("gives a no-break space between digits the same refusal and hint as a plain space", async () => {
+    for (const sp of ["\u00A0", "\u202F", "\u2009", "\u2007"]) {
+      expect(() => normalise(`1${sp}000`), sp).toThrow('write "1000" without the space');
+      expect(() => normalise(`3${sp}7`), sp).toThrow(/operator/);
+      expect(normalise(`12${sp}mm`).expr, sp).toBe("12");
+    }
+    await setLanguage("fr");
+    expect(() => normalise("12\u202F500,5")).toThrow('write "12500" without the space');
+    expect(normalise("2\u00A0+\u00A01,5").expr).toBe("2+1.5");
   });
 });

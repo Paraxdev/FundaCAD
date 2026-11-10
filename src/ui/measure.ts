@@ -194,23 +194,34 @@ interface Normalised {
 }
 
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
+// French typing and pasted numbers group digits with these, they read as a plain space.
+const NO_BREAK_SPACE = /[\u00A0\u2007\u2009\u202F]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
+const TWO_POINT_NUMBER = /\d+(?:\.\d+){2,}(?:[eE][+-]?\d+)?/;
 
 /** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark, and a
  *  lone point before exactly three digits after a nonzero whole part is refused, "1.500" could be fifteen hundred
  *  while "0.250" reads. With a point mark a comma is one only when it is the lone comma with no point or brackets, and
  *  never before exactly three digits, where "1,000" and "0,125" are refused rather than guessed. */
 export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
-  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
+  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").replace(NO_BREAK_SPACE, " ").trim();
   if (mark === ",") return commasToPoints(src);
-  if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
-  if (src.indexOf(",") !== src.lastIndexOf(",")) return src;
-  const m = DECIMAL_COMMA.exec(src);
+  const m = loneComma(src);
   if (!m) return src;
+  refuseThousandsComma(src, m);
+  return src.replace(DECIMAL_COMMA, "$1.$2");
+}
+
+function loneComma(src: string): RegExpExecArray | null {
+  if (!src.includes(",") || src.includes("(") || src.includes(".")) return null;
+  if (src.indexOf(",") !== src.lastIndexOf(",")) return null;
+  return DECIMAL_COMMA.exec(src);
+}
+
+function refuseThousandsComma(src: string, m: RegExpExecArray): void {
   if (m[2]!.length === 3) {
     throw new ExprError(`"${src}" is ambiguous, write a point for decimals or leave the comma out`);
   }
-  return src.replace(DECIMAL_COMMA, "$1.$2");
 }
 
 /** A unit becomes a multiplication rather than a suffix, so feet, microns and thou, which the language has no suffix
@@ -269,6 +280,15 @@ export function normalise(raw: string): Normalised {
       let j = num.end;
       while (src[j] === " ") j++;
       const u = matchUnitAt(src, j);
+      // Two numbers with only a space between are not one number, "1 5" is not 15 and "1 .500" not 1.5.
+      if (!pendingJoin && /\s/.test(src[i - 1] ?? "") && /[A-Za-z0-9_.]$/.test(out)) {
+        const digits = /^\d{3}(?!\d)/.test(src.slice(i)) ? /\d+$/.exec(out)?.[0] : undefined;
+        if (digits)
+          throw new ExprError(
+            `write "${digits}${src.slice(i, i + 3)}" without the space, a space does not group digits`,
+          );
+        throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
+      }
       // A bare number right after a unit group (`2"5`, `2mm 3`) is half finished; joining it would invent a number.
       if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
       if (u) {
@@ -403,11 +423,25 @@ export function spellNumber(n: number, mark: DecimalMark = decimalMark()): strin
   return mark === "," ? text.replace(".", ",") : text;
 }
 
-/** Typed expression text as the stored point grammar. In a dot language it is untouched, so a comma there is
- *  refused by the tokenizer as before. In a comma language it throws ExprError for a number it will not guess, such
- *  as 1.500; `typedExprProblem` says so without throwing. */
-export function storedExpr(typed: string, mark: DecimalMark = decimalMark()): string {
-  return mark === "," ? commasToPoints(typed) : typed;
+/** Typed expression text as the stored point grammar. A comma there is still refused by the tokenizer, except that a
+ *  lone comma before exactly three digits (1,000) throws ExprError as ambiguous, as a value box says. In a comma
+ *  language it throws for a number it will not guess, as 1.500 or 1,5,5; `typedExprProblem` says so without throwing. */
+export function storedExpr(typedRaw: string, mark: DecimalMark = decimalMark()): string {
+  const typed = typedRaw.replace(NO_BREAK_SPACE, " ");
+  if (mark !== ",") {
+    const src = typed.trim();
+    const m = loneComma(src);
+    if (m) refuseThousandsComma(src, m);
+    return typed;
+  }
+  const stored = commasToPoints(typed);
+  // The scan keeps lengths, so the same slice of the typed text is what was typed.
+  const bad = TWO_POINT_NUMBER.exec(stored);
+  if (bad) {
+    const at = bad.index;
+    throw new ExprError(`invalid number "${typed.slice(at, at + bad[0].length)}"`, at);
+  }
+  return stored;
 }
 
 /** Why storedExpr refuses typed expression text, null when it takes it. */

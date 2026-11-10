@@ -22,6 +22,12 @@ const EXPONENT = /^[eE][+-]?[0-9]/;
  *  A lone point before exactly three digits after a nonzero whole part (1.500, not 0.250) throws ExprError, refused
  *  rather than guessed. */
 export function commasToPoints(text: string): string {
+  return swapMark(text, ",", ".");
+}
+
+// The one scan both directions share, so what pointsToCommas shows commasToPoints reads back. Going to a point it
+// refuses a doubtful point (1.500); going to a comma it never refuses.
+function swapMark(text: string, from: "," | ".", to: "," | "."): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
@@ -29,8 +35,8 @@ export function commasToPoints(text: string): string {
     if (isTimesX(text, i)) {
       out += ch;
       i++;
-      if (text[i] === ",") {
-        out += ".";
+      if (text[i] === from) {
+        out += to;
         i++;
       }
     } else if (IDENT_START.test(ch)) {
@@ -46,13 +52,13 @@ export function commasToPoints(text: string): string {
         else break;
       }
       const num = text.slice(i, j);
-      if (POINT_BEFORE_THREE.test(num) && !EXPONENT.test(text.slice(j))) {
+      if (to === "." && POINT_BEFORE_THREE.test(num) && !EXPONENT.test(text.slice(j))) {
         throw new ExprError(`"${num}" is ambiguous, write a comma for decimals or leave the point out`, i);
       }
-      out += num.replace(/,/g, ".");
+      out += num.split(from).join(to);
       i = j;
-    } else if (ch === "," && DIGIT.test(text[i + 1] ?? "") && !/[A-Za-z0-9_)]/.test(text[i - 1] ?? "")) {
-      out += ".";
+    } else if (ch === from && DIGIT.test(text[i + 1] ?? "") && !/[A-Za-z0-9_)]/.test(text[i - 1] ?? "")) {
+      out += to;
       i++;
     } else {
       out += ch;
@@ -62,15 +68,16 @@ export function commasToPoints(text: string): string {
   return out;
 }
 
-/** Stored point text with the point of each number token shown as a comma. A point with no digit after it (5. or 5.e3) stays,
- *  because a comma there would not read back. Text that does not tokenize is returned as is. */
+/** Stored point text with the point of each number shown as a comma. A point with no digit after it (5. or 5.e3)
+ *  stays, because a comma there would not read back. Text the tokenizer refuses (22.125°, 10x2.500) is swapped by the
+ *  scan commasToPoints reads, so it commits back unchanged. */
 export function pointsToCommas(stored: string): string {
   let tokens;
   try {
     tokens = tokenize(stored);
   } catch (e) {
-    if (e instanceof ExprError) return stored;
-    throw e;
+    if (!(e instanceof ExprError)) throw e;
+    return swapMark(stored, ".", ",");
   }
   let out = "";
   let at = 0;

@@ -103,8 +103,26 @@ describe("pointsToCommas shows the stored point form with a decimal comma", () =
     expect(pointsToCommas(stored)).toHaveLength(stored.length);
   });
 
-  it.each(["1,5", "a.b", "1.5.5", "3.5 $ 2", "a = 1.5", "x,5.5"])("returns %j as it is", (text) => {
+  it.each(["1,5", "a.b", "x.5"])("returns %j as it is", (text) => {
     expect(pointsToCommas(text)).toBe(text);
+  });
+
+  it.each([
+    ["22.125°", "22,125°"],
+    ["10x2.500", "10x2,500"],
+    ["10x.5 + 1.500°", "10x,5 + 1,500°"],
+    ["1.5.5", "1,5,5"],
+    ["3.5 $ 2", "3,5 $ 2"],
+    ["a = 1.5", "a = 1,5"],
+    ["x,5.5", "x,5,5"],
+  ])("swaps the points of %j the tokenizer refuses, and commasToPoints reads it back", (stored, shown) => {
+    expect(pointsToCommas(stored)).toBe(shown);
+    expect(commasToPoints(shown)).toBe(stored);
+  });
+
+  it("shows a long refused text as it shows a short one", () => {
+    const stored = `${"a = 1.25 + ".repeat(200)}2.500°`;
+    expect(pointsToCommas(stored)).toBe(stored.replace(/\./g, ","));
   });
 
   it("round trips the whole eval and error corpus of the shared vectors", () => {
