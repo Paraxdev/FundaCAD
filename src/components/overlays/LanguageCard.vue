@@ -32,6 +32,12 @@ const FILE_ERRORS: Record<DropInFileError, MessageKey> = {
   "not-read": "prefs.language.error.notRead",
   folder: "prefs.language.error.folder",
 };
+// A refused pick leaves the file before in use, so its message must not read as if that file were refused.
+const PICKED_ERRORS: Partial<Record<DropInFileError, MessageKey>> = {
+  "too-large": "prefs.language.error.pickedTooLarge",
+  "not-json": "prefs.language.error.pickedNotJson",
+  "not-flat": "prefs.language.error.pickedNotFlat",
+};
 
 const source = languageFileSource();
 // Safe mode reads none of the user's files; its folder buttons stay in view, off, so the reason can show.
@@ -40,19 +46,23 @@ const problem = ref<DropInFileError | null>(null);
 const status = computed(() => languageFileStatus());
 
 const fileError = computed(() => {
-  const error = problem.value ?? status.value?.error;
-  return error ? t(FILE_ERRORS[error], { kb: MAX_OVERRIDE_BYTES / 1024 }) : "";
+  const key = problem.value
+    ? (PICKED_ERRORS[problem.value] ?? FILE_ERRORS[problem.value])
+    : status.value?.error && FILE_ERRORS[status.value.error];
+  return key ? t(key, { kb: MAX_OVERRIDE_BYTES / 1024 }) : "";
 });
 
 const skipped = computed(() => (status.value?.error ? [] : (status.value?.skipped ?? [])));
 
 // Select option keys are plain words, so the reason's dash goes.
 const skipLines = computed(() =>
-  skipped.value.slice(0, SHOWN_SKIPS).map(({ key, reason }) =>
+  skipped.value.slice(0, SHOWN_SKIPS).map(({ key, reason, arg }) =>
     t("prefs.language.skip", {
       key: shownKey(key),
       reason: reason.replace(/-(\w)/g, (_, c: string) => c.toUpperCase()),
       max: MAX_LINE_CHARS,
+      tag: "<b>",
+      arg: shownKey(`{${arg ?? ""}}`),
     }),
   ),
 );

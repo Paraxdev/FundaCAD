@@ -175,7 +175,12 @@ describe("the user's own file in the browser", () => {
     await render();
     expect(buttons()).toEqual([en["prefs.language.load"]]);
     await load(
-      json("de.json", { "prefs.language.title": "Meine Sprache", "prefs.language.hint": "<b>Tipp</b>", "x.y": "z" }),
+      json("de.json", {
+        "prefs.language.title": "Meine Sprache",
+        "prefs.language.hint": "<b>Tipp</b>",
+        "x.y": "z",
+        "prefs.language.more": "und {nummer, number} weitere",
+      }),
     );
     await vi.waitFor(() => expect(text(".pref-title")).toBe("Meine Sprache"));
     expect(languageFileStatus()).toEqual({
@@ -183,6 +188,7 @@ describe("the user's own file in the browser", () => {
       skipped: [
         { key: "prefs.language.hint", reason: "markup" },
         { key: "x.y", reason: "unknown-key" },
+        { key: "prefs.language.more", reason: "bad-argument", arg: "nummer" },
       ],
     });
     expect([
@@ -195,10 +201,11 @@ describe("the user's own file in the browser", () => {
     ]).toEqual([
       "de",
       line(de, "prefs.language.hint", "de"),
-      [line(de, "prefs.language.inUse", "de", { n: 1 }), line(de, "prefs.language.skipped", "de", { n: 2 })],
+      [line(de, "prefs.language.inUse", "de", { n: 1 }), line(de, "prefs.language.skipped", "de", { n: 3 })],
       [
-        line(de, "prefs.language.skip", "de", { key: "prefs.language.hint", reason: "markup", max: 2000 }),
-        line(de, "prefs.language.skip", "de", { key: "x.y", reason: "unknownKey", max: 2000 }),
+        line(de, "prefs.language.skip", "de", { key: "prefs.language.hint", reason: "markup", tag: "<b>" }),
+        line(de, "prefs.language.skip", "de", { key: "x.y", reason: "unknownKey" }),
+        line(de, "prefs.language.skip", "de", { key: "prefs.language.more", reason: "badArgument", arg: "{nummer}" }),
       ],
       [line(de, "prefs.language.load", "de"), line(de, "prefs.language.remove", "de")],
       "",
@@ -293,7 +300,7 @@ describe("the user's own file in the browser", () => {
     const over = json("de.json", head + " ".repeat(pad + 1) + "}");
     const read = vi.spyOn(over, "text");
     await load(over);
-    const tooLarge = line(en, "prefs.language.error.tooLarge", "en", { kb: 256 });
+    const tooLarge = line(en, "prefs.language.error.pickedTooLarge", "en", { kb: 256 });
     await vi.waitFor(() => expect(text("#prefs-language-error")).toBe(tooLarge));
     expect([over.size, read.mock.calls.length, dropIns()]).toEqual([262145, 0, []]);
     await load(json("de.json", head + " ".repeat(pad) + "}"));
@@ -301,6 +308,32 @@ describe("the user's own file in the browser", () => {
     expect([text("#prefs-language-error"), localStorage.getItem("fundacad.language.dropin.de")!.length]).toEqual([
       "",
       262144 - 2,
+    ]);
+  });
+
+  it("says a refused pick is the picked file, the file before staying in use", async () => {
+    await render();
+    await load(json("de.json", { "prefs.language.title": "Meine Sprache" }));
+    await vi.waitFor(() => expect(text(".pref-title")).toBe("Meine Sprache"));
+    const kept = localStorage.getItem("fundacad.language.dropin.de");
+    const notJson = line(de, "prefs.language.error.pickedNotJson", "de");
+    const notFlat = line(de, "prefs.language.error.pickedNotFlat", "de");
+    const shown: (string | null)[][] = [];
+    for (const [body, error] of [
+      ['{ "prefs.language.title": ', notJson],
+      [{ "prefs.language.title": { de: "Sprache" } }, notFlat],
+    ] as const) {
+      await load(json("de.json", body));
+      await vi.waitFor(() => expect(text("#prefs-language-error")).toBe(error));
+      shown.push([text(".prefs-language-status"), text(".pref-title")]);
+    }
+    const inUse = line(de, "prefs.language.inUse", "de", { n: 1 });
+    expect([shown, localStorage.getItem("fundacad.language.dropin.de")]).toEqual([
+      [
+        [inUse, "Meine Sprache"],
+        [inUse, "Meine Sprache"],
+      ],
+      kept,
     ]);
   });
 
@@ -312,7 +345,7 @@ describe("the user's own file in the browser", () => {
     expect([languageFileStatus(), text(".pref-title"), listed()]).toEqual([
       { lines: 0, skipped: [{ key: "prefs.language.title", reason: "markup" }] },
       line(de, "prefs.language.title", "de"),
-      [line(de, "prefs.language.skip", "de", { key: "prefs.language.title", reason: "markup", max: 2000 })],
+      [line(de, "prefs.language.skip", "de", { key: "prefs.language.title", reason: "markup", tag: "<b>" })],
     ]);
   });
 

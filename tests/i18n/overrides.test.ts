@@ -130,7 +130,7 @@ describe("parseOverrides", () => {
       lines: new Map([["stress.setup.faces", "{n, plural, one {# Fläche} other {# Flächen}}"]]),
       skipped: [
         { key: "stress.setup.title", reason: "markup" },
-        { key: "stress.load.force", reason: "bad-argument" },
+        { key: "stress.load.force", reason: "bad-argument", arg: "body" },
       ],
     });
   });

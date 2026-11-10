@@ -12,7 +12,8 @@ export type SkipReason =
 export interface OverrideResult {
   /** A Map, so a key named __proto__ is never a property of anything. */
   lines: Map<string, string>;
-  skipped: { key: string; reason: SkipReason }[];
+  /** arg names the value a bad-argument line asks for. */
+  skipped: { key: string; reason: SkipReason; arg?: string }[];
   /** Set when the whole file was refused. */
   error?: "too-large" | "not-json" | "not-flat";
 }
@@ -28,15 +29,16 @@ export function checkLine(value: string, englishValue: string): SkipReason | nul
   if (value.length > MAX_LINE_CHARS) return "too-long";
   if (MARKUP.test(value)) return "markup";
   if (CONTROL.test(value)) return "control-character";
-  let names: Set<string>;
   try {
-    names = argNames(parseMessage(value));
+    return extraArgument(value, englishValue) === undefined ? null : "bad-argument";
   } catch {
     return "syntax";
   }
+}
+
+function extraArgument(value: string, englishValue: string): string | undefined {
   const allowed = argNames(parseMessage(englishValue));
-  for (const name of names) if (!allowed.has(name)) return "bad-argument";
-  return null;
+  return [...argNames(parseMessage(value))].find((name) => !allowed.has(name));
 }
 
 export function parseOverrides(text: string, english: Readonly<Record<string, string>>): OverrideResult {
@@ -58,7 +60,9 @@ export function parseOverrides(text: string, english: Readonly<Record<string, st
     if (base === undefined) reason = "unknown-key";
     else if (typeof value !== "string") reason = "not-text";
     else reason = checkLine(value, base);
-    if (reason) result.skipped.push({ key, reason });
+    if (reason === "bad-argument")
+      result.skipped.push({ key, reason, arg: extraArgument(value as string, base!) ?? "" });
+    else if (reason) result.skipped.push({ key, reason });
     else result.lines.set(key, value as string);
   }
   return result;
