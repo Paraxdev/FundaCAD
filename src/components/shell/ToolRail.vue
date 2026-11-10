@@ -27,6 +27,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { useScrollCue } from "../../composables/useScrollCue";
 import { t } from "../../i18n";
 import { runningTool } from "../../ui/runningTool";
+import { FEATURE_META } from "../../ui/featureMeta";
 import { railActive, railToggles } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
 import IconButton from "../ui/IconButton.vue";
@@ -151,7 +152,8 @@ const sketchRef = useDocValue((doc) => {
 });
 const sketchName = computed(() => {
   const { number, name } = sketchRef.value;
-  return number === 0 ? t("rail.newSketch") : name || t("rail.sketchN", { n: number });
+  // An unnamed sketch keeps the default feature name the timeline and History give it, which stays English.
+  return number === 0 ? t("rail.newSketch") : name || `${FEATURE_META.sketch!.label} ${number}`;
 });
 const onOff = (on: boolean) => t(on ? "rail.on" : "rail.off");
 
