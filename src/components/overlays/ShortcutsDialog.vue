@@ -24,6 +24,7 @@ import {
 import { contributedKeymaps, onContribChange } from "../../plugins/contrib";
 import { shippedPlugins } from "../../plugins/shipped";
 import { sameId } from "../../plugins/manifest";
+import { pluginName } from "../../plugins/pluginNames";
 import Button from "../ui/Button.vue";
 import Dialog from "../ui/Dialog.vue";
 import KeyCapture, { type CapturedKey } from "../ui/KeyCapture.vue";
@@ -49,7 +50,10 @@ const pages = computed<Page[]>(() => {
   const maps = contributedKeymaps();
   const core = new Set(SHORTCUTS.map((s) => s.action));
   const theirs = new Set(maps.flatMap((m) => m.keymap.map((o) => o.action).filter((a) => !core.has(a))));
-  const nameOf = (id: string) => shippedPlugins().find((p) => sameId(p.manifest.id, id))?.manifest.name ?? id;
+  const nameOf = (id: string) => {
+    const found = shippedPlugins().find((p) => sameId(p.manifest.id, id));
+    return found ? pluginName(found.manifest) : id;
+  };
   return [
     { id: "general", label: "General", groups: shortcutHudGroups(theirs) },
     ...maps.map((m) => ({

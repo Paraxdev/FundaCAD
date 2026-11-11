@@ -231,3 +231,69 @@ describe("the promise, as something that can be stored and compared", () => {
     expect(promiseCovers(wider, consented)).toBe(true);
   });
 });
+
+describe("manifest translations", () => {
+  const withT = (translations: unknown) => ok({ ...base, translations });
+  const asObject = (m: PluginManifest) => Object.fromEntries(m.translations);
+
+  it("parses a good block whole, and a manifest without one has none", () => {
+    const block = {
+      de: { name: "Nietenwerk", summary: "Setzt 17 Nieten schräg." },
+      "de-AT": { name: "Nietenwerk AT" },
+      "zh-Hans-CN": { summary: "铆钉" },
+    };
+    expect(asObject(withT(block))).toEqual(block);
+    expect(ok(base).translations.size).toBe(0);
+    expect(asObject(withT({}))).toEqual({});
+  });
+
+  it("drops each bad entry or field and keeps the good ones", () => {
+    const m = withT({
+      de: { name: "Gut", summary: "Auch gut" },
+      "not a code": { name: "X" },
+      EN: { name: "X" },
+      fr: { name: "<b>Fort</b>", summary: "Résumé" },
+      es: { name: "Nombre", summary: "   " },
+      ja: { name: "名前", summary: "x".repeat(2001) },
+      pl: { name: "x".repeat(2000) },
+      it: "text",
+      nl: ["name"],
+      sv: null,
+      da: { name: 5, summary: {} },
+      nb: { name: "Ny {x" },
+    });
+    expect(asObject(m)).toEqual({
+      de: { name: "Gut", summary: "Auch gut" },
+      fr: { summary: "Résumé" },
+      es: { name: "Nombre" },
+      ja: { name: "名前" },
+      pl: { name: "x".repeat(2000) },
+    });
+  });
+
+  it("ignores a block that is not an object", () => {
+    for (const bad of ["de", 7, null, [{ name: "x" }], true]) expect(withT(bad).translations.size).toBe(0);
+  });
+
+  it("keeps 64 languages and drops the 65th", () => {
+    const code = (i: number) => String.fromCharCode(97 + Math.floor(i / 26), 97 + (i % 26));
+    const many = (n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [code(i), { name: `N${i}` }]));
+    expect(withT(many(64)).translations.size).toBe(64);
+    const over = withT(many(65));
+    expect(over.translations.size).toBe(64);
+    expect(over.translations.has(code(64))).toBe(false);
+  });
+
+  it("does not change what a plugin promises", () => {
+    const plain = ok(base);
+    const translated = withT({ de: { name: "Nietenwerk" } });
+    expect(promiseOf(translated)).toBe(promiseOf(plain));
+    expect(promiseCovers(plain, translated)).toBe(true);
+  });
+
+  it("never makes a __proto__ key a property", () => {
+    const m = ok({ ...base, translations: JSON.parse('{"__proto__": {"name": "X"}, "de": {"name": "Y"}}') });
+    expect(asObject(m)).toEqual({ de: { name: "Y" } });
+    expect(({} as Record<string, unknown>).name).toBeUndefined();
+  });
+});

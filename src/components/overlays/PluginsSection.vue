@@ -4,6 +4,7 @@
 
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { describeGrants, sandboxNote } from "../../plugins/manifest";
+import { pluginName, pluginSummary } from "../../plugins/pluginNames";
 import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { removePluginSettings, settingMatches } from "../../plugins/settings";
 import { pluginFocus } from "../../plugins/settingsFocus";
@@ -102,7 +103,7 @@ function toggleSettings(id: string) {
 function nameOf(id: string): string {
   const rec = record(id);
   const manifest = (rec && installedManifest(rec)) || suggested.value.find((p) => p.manifest.id === id)?.manifest;
-  return manifest?.name ?? id;
+  return manifest ? pluginName(manifest) : id;
 }
 
 const byName = (a: string, b: string) => nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: "base" });
@@ -198,10 +199,13 @@ async function accept(plugin: OfficialPlugin, done: "installed" | "updated" = "i
     await installPlugin(plugin);
     showing.value = "";
     await refresh();
-    toast(`${plugin.manifest.name} is ${done}.`);
+    toast(`${pluginName(plugin.manifest)} is ${done}.`);
   } catch (err) {
     // A refusal names itself, so its own sentence is kept: "install failed" cannot be told from a flat network.
-    toast(`Could not install ${plugin.manifest.name}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
+    toast(`Could not install ${pluginName(plugin.manifest)}. ${plainError(err, SEE_CONSOLE)}`, {
+      kind: "error",
+      detail: err,
+    });
   } finally {
     busy.value = "";
   }
@@ -239,9 +243,12 @@ async function acceptCandidate(c: Candidate) {
     candidate.value = null;
     url.value = "";
     await refresh();
-    toast(`${c.manifest.name} is installed.`);
+    toast(`${pluginName(c.manifest)} is installed.`);
   } catch (err) {
-    toast(`Could not install ${c.manifest.name}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
+    toast(`Could not install ${pluginName(c.manifest)}. ${plainError(err, SEE_CONSOLE)}`, {
+      kind: "error",
+      detail: err,
+    });
   } finally {
     busy.value = "";
   }
@@ -295,8 +302,8 @@ async function drop(id: string, name: string) {
   >
     <div class="plug-head">
       <div>
-        <div :id="`prefs-plugin-${rec.id}-name`" class="plug-name">{{ manifest ? manifest.name : rec.id }}</div>
-        <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
+        <div :id="`prefs-plugin-${rec.id}-name`" class="plug-name">{{ manifest ? pluginName(manifest) : rec.id }}</div>
+        <div class="plug-summary">{{ manifest ? pluginSummary(manifest) : "" }}</div>
       </div>
       <div class="plug-controls">
         <Button
@@ -314,11 +321,11 @@ async function drop(id: string, name: string) {
           :id="`prefs-plugin-${rec.id}`"
           :model-value="on[rec.id] !== false"
           :labelledby="`prefs-plugin-${rec.id}-name`"
-          :tip="`Run ${manifest ? manifest.name : rec.id}`"
+          :tip="`Run ${manifest ? pluginName(manifest) : rec.id}`"
           :title="on[rec.id] === false ? 'Switched off' : 'Running'"
-          @update:model-value="toggle(rec.id, $event, manifest ? manifest.name : rec.id)"
+          @update:model-value="toggle(rec.id, $event, manifest ? pluginName(manifest) : rec.id)"
         />
-        <Button :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
+        <Button :disabled="busy === rec.id" @click="drop(rec.id, manifest ? pluginName(manifest) : rec.id)">
           {{ busy === rec.id ? "Removing…" : "Remove" }}
         </Button>
       </div>
@@ -406,8 +413,8 @@ async function drop(id: string, name: string) {
   <div v-for="{ id, manifest } in fromSource" :key="id" class="plug-row" :data-plugin-row="id">
     <div class="plug-head">
       <div>
-        <div class="plug-name">{{ manifest ? manifest.name : id }}</div>
-        <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
+        <div class="plug-name">{{ manifest ? pluginName(manifest) : id }}</div>
+        <div class="plug-summary">{{ manifest ? pluginSummary(manifest) : "" }}</div>
       </div>
       <div class="plug-controls">
         <Button
@@ -463,8 +470,8 @@ async function drop(id: string, name: string) {
   <div v-if="candidate" class="plug-row" data-plugin-candidate>
     <div class="plug-head">
       <div>
-        <div class="plug-name">{{ candidate.manifest.name }}</div>
-        <div class="plug-summary">{{ candidate.manifest.summary }}</div>
+        <div class="plug-name">{{ pluginName(candidate.manifest) }}</div>
+        <div class="plug-summary">{{ pluginSummary(candidate.manifest) }}</div>
       </div>
     </div>
     <div class="plug-consent">
@@ -475,7 +482,7 @@ async function drop(id: string, name: string) {
         <template v-else> Version {{ candidate.manifest.version }}, from {{ candidate.origin }}, unchecked. </template>
       </div>
       <div class="plug-can">
-        <div class="plug-listhead">{{ candidate.manifest.name }} will be able to</div>
+        <div class="plug-listhead">{{ pluginName(candidate.manifest) }} will be able to</div>
         <ul>
           <li v-for="line in describeGrants(candidate.manifest).can" :key="line">{{ line }}</li>
         </ul>
@@ -501,15 +508,15 @@ async function drop(id: string, name: string) {
   <div v-for="p in notYet" :key="p.manifest.id" class="plug-row" :data-plugin="p.manifest.id">
     <div class="plug-head">
       <div>
-        <div class="plug-name">{{ p.manifest.name }}</div>
-        <div class="plug-summary">{{ p.manifest.summary }}</div>
+        <div class="plug-name">{{ pluginName(p.manifest) }}</div>
+        <div class="plug-summary">{{ pluginSummary(p.manifest) }}</div>
       </div>
       <Button v-if="showing !== p.manifest.id" variant="primary" @click="showing = p.manifest.id">Install</Button>
     </div>
 
     <div v-if="showing === p.manifest.id" class="plug-consent">
       <div class="plug-can">
-        <div class="plug-listhead">{{ p.manifest.name }} will be able to</div>
+        <div class="plug-listhead">{{ pluginName(p.manifest) }} will be able to</div>
         <ul>
           <li v-for="line in describeGrants(p.manifest).can" :key="line">{{ line }}</li>
         </ul>

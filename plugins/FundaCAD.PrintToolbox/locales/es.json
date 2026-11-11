@@ -1,0 +1,13 @@
+{
+  "group.print": "Imprimir",
+  "tool.bedFit": "Comprobar ajuste a la cama",
+  "tool.counterboreBridge": "Puente de avellanado",
+  "tool.elephantFootChamfer": "Chaflán de pie de elefante",
+  "tool.printability": "Imprimibilidad",
+  "tool.roofBridge": "Puente de techo",
+  "tool.sacrificialLayer": "Capa de sacrificio",
+  "tool.teardrop": "Gota",
+  "tool.threadRibs": "Nervaduras formadoras de rosca",
+  "tool.verticalFillet": "Redondeo de aristas verticales",
+  "tool.zipTieChannel": "Canal para brida"
+}

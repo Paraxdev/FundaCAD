@@ -6,6 +6,7 @@ import type { Engine } from "fundacad";
 import LinkHost from "./LinkHost.vue";
 import KeysSection from "./KeysSection.vue";
 import { PLUGIN_ID } from "./native";
+import { t } from "./lines";
 
 export async function activate(e: Engine): Promise<() => void> {
   const run = () => void import("./flow").then((m) => m.importFromOnshape(e.store, e.geometry));
@@ -15,7 +16,7 @@ export async function activate(e: Engine): Promise<() => void> {
         menu: "File",
         items: [
           { separator: true, label: "" },
-          { label: "Import from Onshape link\u2026", onClick: run },
+          { label: () => t("menu.file.importLink"), refName: "Import from Onshape link\u2026", onClick: run },
         ],
       },
     ],

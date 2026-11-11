@@ -1,0 +1,10 @@
+{
+  "group.print": "印刷",
+  "menu.file.camera": "カメラ…",
+  "menu.file.exportPrint": "印刷用にエクスポート (3MF)…",
+  "menu.file.openSlicer": "OrcaSlicer で開く…",
+  "menu.file.send": "プリンターに送信…",
+  "tool.export": "プロジェクトを印刷",
+  "tool.openSlicer": "OrcaSlicer で開く",
+  "tool.send": "プリンターに送信"
+}

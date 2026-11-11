@@ -13,5 +13,27 @@
   "featureTypes": [
     "texture"
   ],
-  "geometryWasm": "geometry.wasm"
+  "geometryWasm": "geometry.wasm",
+  "translations": {
+    "de": {
+      "name": "Oberflächentextur",
+      "summary": "Eine gedruckte Oberflächentextur auf gewählten Flächen oder einem ganzen Körper: Rändel, Sechseck, Wellen, Rippen, Voronoi, Rauschen oder eine Höhenkarte aus einem Bild."
+    },
+    "es": {
+      "name": "Textura de superficie",
+      "summary": "Una textura de superficie impresa en caras elegidas o en todo un cuerpo: moleteado, hexágonos, ondas, nervaduras, voronoi, ruido o un mapa de alturas leído de una imagen."
+    },
+    "fr": {
+      "name": "Texture de surface",
+      "summary": "Une texture de surface imprimée sur des faces choisies ou sur tout un corps : moletage, hexagones, vagues, nervures, voronoï, bruit ou carte de hauteur lue depuis une image."
+    },
+    "ja": {
+      "name": "サーフェステクスチャ",
+      "summary": "選んだ面やボディ全体に印刷用の表面テクスチャを付けます。ローレット、六角、波、リブ、ボロノイ、ノイズ、画像から読み取るハイトマップがあります。"
+    },
+    "zh-CN": {
+      "name": "表面纹理",
+      "summary": "在选定的面或整个实体上添加可打印的表面纹理:滚花、六边形、波浪、肋条、泰森多边形、噪点,或从图像读取的高度图。"
+    }
+  }
 }

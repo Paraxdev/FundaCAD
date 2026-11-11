@@ -1,7 +1,7 @@
 // The command palette registry: the ribbon's tool groups plus File and View commands. Key hints come from
 // src/input/shortcuts.ts so the palette cannot advertise a key the keymap does not bind.
 
-import { modelGroups, SKETCH, leavesOf, toolLabel, toolEnglish, groupName, type Group } from "./ribbonDefs";
+import { modelGroups, SKETCH, leavesOf, toolLabel, toolEnglish, groupShown, type Group } from "./ribbonDefs";
 import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
 import { t, tEnglish, type MessageKey } from "../i18n";
 
@@ -183,6 +183,6 @@ export function groupText(group: string): string {
     case "SKETCH":
       return t("tool.sketch");
     default:
-      return groupName(group) ?? group;
+      return groupShown(group) ?? group;
   }
 }

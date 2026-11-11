@@ -65,6 +65,7 @@ interface Active {
   bcp47: string;
   shipped: Readonly<Record<string, unknown>>;
   dropIn: ReadonlyMap<string, string>;
+  pluginDropIn: ReadonlyMap<string, string>;
   status: DropInStatus | null;
 }
 
@@ -78,7 +79,14 @@ function readError(e: unknown): NonNullable<DropInStatus["error"]> {
 
 export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
   const english: Readonly<Record<string, string>> = deps.english;
-  const active = shallowRef<Active>({ code: "en", bcp47: "en", shipped: {}, dropIn: new Map(), status: null });
+  const active = shallowRef<Active>({
+    code: "en",
+    bcp47: "en",
+    shipped: {},
+    dropIn: new Map(),
+    pluginDropIn: new Map(),
+    status: null,
+  });
   const setting = shallowRef("system");
   const dropInCodes = shallowRef<readonly string[]>([]);
   const pickedAt = shallowRef<TextPosition | null>(null);
@@ -170,7 +178,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
   }
 
   // Only a listed file is read, so a language without one costs no read.
-  async function loadDropIn(code: string): Promise<Pick<Active, "dropIn" | "status"> | null> {
+  async function loadDropIn(code: string): Promise<Pick<Active, "dropIn" | "pluginDropIn" | "status"> | null> {
     if (!dropInCodes.value.includes(code)) return null;
     let result: OverrideResult;
     try {
@@ -179,16 +187,17 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
       result = parseOverrides(text, english);
     } catch (e) {
       console.warn(`the user's ${code} language file could not be read`, e);
-      return { dropIn: new Map(), status: { lines: 0, skipped: [], error: readError(e) } };
+      return { dropIn: new Map(), pluginDropIn: new Map(), status: { lines: 0, skipped: [], error: readError(e) } };
     }
-    const { lines, skipped, error, at } = result;
+    const { lines, pluginLines, skipped, error, at } = result;
     for (const key of [...lines.keys()].filter((k) => LOCKED.test(k))) {
       lines.delete(key);
       skipped.push({ key, reason: "locked" });
     }
     return {
       dropIn: lines,
-      status: { lines: lines.size, skipped, ...(error ? { error } : {}), ...(at ? { at } : {}) },
+      pluginDropIn: pluginLines,
+      status: { lines: lines.size + pluginLines.size, skipped, ...(error ? { error } : {}), ...(at ? { at } : {}) },
     };
   }
 
@@ -200,7 +209,14 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     // Started again per language, so the lines of a file read again on Reload do not pile up.
     parsed.clear();
     const bcp47 = languageOf(code)?.bcp47 ?? code;
-    active.value = { code, bcp47, shipped, dropIn: dropIn?.dropIn ?? new Map(), status: dropIn?.status ?? null };
+    active.value = {
+      code,
+      bcp47,
+      shipped,
+      dropIn: dropIn?.dropIn ?? new Map(),
+      pluginDropIn: dropIn?.pluginDropIn ?? new Map(),
+      status: dropIn?.status ?? null,
+    };
     try {
       deps.setPageLang(bcp47);
     } catch {
@@ -369,6 +385,7 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     active: (): { code: string; bcp47: string } => ({ code: active.value.code, bcp47: active.value.bcp47 }),
     machineTranslated: (): boolean => shippedLanguage(active.value.code)?.machine !== undefined,
     choices,
+    pluginDropIn: (): ReadonlyMap<string, string> => active.value.pluginDropIn,
     dropInStatus: (): DropInStatus | null => active.value.status,
     pickedAt: (): TextPosition | null => pickedAt.value,
     onChange(listener: () => void): () => void {

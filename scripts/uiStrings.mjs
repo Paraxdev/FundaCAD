@@ -289,6 +289,14 @@ const validEntry = (e) =>
   typeof e.reason === "string" &&
   e.reason.trim() !== "";
 
+const PLUGIN_PATH = /^plugins\/([^/]+)\//;
+
+/** A plugin's text goes in its own language file, not the core's. */
+export function hintFor(path) {
+  const id = PLUGIN_PATH.exec(path)?.[1];
+  return id ? `add it to plugins/${id}/locales/en.json and show it with the plugin's t()` : "show it with t()";
+}
+
 /** A count above its entry is new raw text, one below is a conversion that forgot the list. */
 export function checkAllowlist(findings, allow) {
   const problems = [];
@@ -311,7 +319,7 @@ export function checkAllowlist(findings, allow) {
     const max = allowed.get(k) ?? 0;
     const head = `${path}: ${hits.length} raw ${kind} strings, the allowlist allows ${max}`;
     if (hits.length > max) {
-      const lines = hits.map((f) => `  ${f.path}:${f.line} ${f.detail} ${JSON.stringify(f.text)}, show it with t()`);
+      const lines = hits.map((f) => `  ${f.path}:${f.line} ${f.detail} ${JSON.stringify(f.text)}, ${hintFor(f.path)}`);
       problems.push([head, ...lines].join("\n"));
     } else if (hits.length < max) {
       problems.push(hits.length ? `${head}, lower its count to ${hits.length}` : `${head}, remove the entry`);

@@ -1,0 +1,13 @@
+{
+  "group.print": "打印",
+  "tool.bedFit": "打印平台适配检查",
+  "tool.counterboreBridge": "沉孔桥接",
+  "tool.elephantFootChamfer": "象脚倒角",
+  "tool.printability": "可打印性",
+  "tool.roofBridge": "顶部桥接",
+  "tool.sacrificialLayer": "牺牲层",
+  "tool.teardrop": "泪滴形",
+  "tool.threadRibs": "成螺纹肋",
+  "tool.verticalFillet": "垂直边圆角",
+  "tool.zipTieChannel": "扎带槽"
+}

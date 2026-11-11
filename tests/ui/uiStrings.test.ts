@@ -271,6 +271,17 @@ describe("the allowlist", () => {
     expect(checkAllowlist(findings, [])).toEqual([expect.stringMatching(/^src\/ui\/A\.ts: 2 .*allows 0\n/)]);
   });
 
+  it("points a plugin's raw text at that plugin's own language file, core text at the core's", () => {
+    const code = (path: string) => scanStrings({ [path]: `toast("Saved the part.");` });
+    const plugin = checkAllowlist(code("plugins/Acme.Tool/main.ts"), []);
+    expect(plugin).toHaveLength(1);
+    expect(plugin[0]).toContain("plugins/Acme.Tool/locales/en.json");
+    expect(plugin[0]).toContain("plugin's t()");
+    const core = checkAllowlist(code("src/ui/B.ts"), []);
+    expect(core[0]).not.toContain("locales");
+    expect(core[0]).toMatch(/show it with t\(\)$/);
+  });
+
   it("fails below the count, so a conversion lowers it", () => {
     expect(checkAllowlist(findings, [entry(3)])).toEqual([expect.stringMatching(/allows 3, lower its count to 2$/)]);
     expect(checkAllowlist([], [entry(2)])).toEqual([expect.stringMatching(/: 0 .*allows 2, remove the entry$/)]);

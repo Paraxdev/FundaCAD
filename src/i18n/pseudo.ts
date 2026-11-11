@@ -48,3 +48,5 @@ function mapNodes(nodes: readonly MessageNode[]): MessageNode[] {
 export function pseudoNodes(nodes: readonly MessageNode[]): MessageNode[] {
   return [{ t: "text", v: "[" }, ...mapNodes(nodes), { t: "text", v: "]" }];
 }
+
+export const pseudoText = (text: string): string => `[${stretch(text)}]`;

@@ -158,7 +158,7 @@ export async function installPlugin(plugin: OfficialPlugin): Promise<InstalledPl
   });
 }
 
-/** Disk holds only the promise (grants, hosts, kind, version). Name and summary come from our own manifest or the id.
+/** Disk holds only the promise (grants, hosts, kind, version). Name, summary and their translations come from our own manifest or the id.
  *  Null rather than a best guess when the record will not parse, so the screen shows it plainly. */
 export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
   // `sameId`, not `===`: ids that differ only in case are one directory on Windows and macOS.
@@ -172,7 +172,8 @@ export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
     grants: rec.consented.grants,
     hosts: rec.consented.hosts,
   });
-  return parsed.ok ? parsed.manifest : null;
+  if (!parsed.ok) return null;
+  return known ? { ...parsed.manifest, translations: known.translations } : parsed.manifest;
 }
 
 /** Rust picks the file name from what the plugin declared, so this is not a file reader with an id attached. */

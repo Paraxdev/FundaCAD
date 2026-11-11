@@ -115,6 +115,10 @@ export function openPluginSettings(pluginId: string) {
 }
 export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from "./settings";
 
+/** A translator bound to the plugin's own language files, English when a line is missing. */
+export { pluginText } from "../i18n";
+export type { PluginText } from "../i18n";
+
 /** The app's display precision rule, so a plugin's readout rounds a length like every other panel. */
 export { roundForDisplay as displayRound } from "../ui/measure";
 /** Number boxes read through the app's measure grammar (units, fractions, arithmetic, decimal comma). */

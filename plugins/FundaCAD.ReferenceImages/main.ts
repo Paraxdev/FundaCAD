@@ -8,6 +8,7 @@ import ItemsSection from "./ItemsSection.vue";
 import { ImageLayer } from "./quads";
 import { calibrating, missingTick, selected, tool } from "./state";
 import { RefImageTool } from "./tool";
+import { t } from "./lines";
 
 const ID = "FundaCAD.ReferenceImages";
 
@@ -20,29 +21,44 @@ const UNLOCKED_ICON =
 
 export async function activate(e: Engine): Promise<() => void> {
   const layer = new ImageLayer(e);
-  const t = new RefImageTool(e, layer);
+  const imageTool = new RefImageTool(e, layer);
   layer.onMissing = () => {
     missingTick.value++;
   };
   layer.start();
-  tool.value = t;
-  e.viewport.domElement.addEventListener("pointerdown", t.onDragDown, true);
+  tool.value = imageTool;
+  e.viewport.domElement.addEventListener("pointerdown", imageTool.onDragDown, true);
 
   const off = contribute(ID, {
     tools: [
       {
         id: "referenceImage",
-        label: "Reference image",
+        get label() {
+          return t("tool.referenceImageTool");
+        },
+        refName: "Reference image",
         iconName: "ref-image",
         consumes: [],
         source: "selection",
-        busy: () => t.active,
-        cancel: () => t.cancel(),
+        busy: () => imageTool.active,
+        cancel: () => imageTool.cancel(),
       },
     ],
-    actions: { referenceImage: () => t.insert() },
+    actions: { referenceImage: () => imageTool.insert() },
     ribbon: [
-      { group: "INSERT", items: [{ action: "referenceImage", label: "Reference Image", iconName: "ref-image" }] },
+      {
+        group: "INSERT",
+        items: [
+          {
+            action: "referenceImage",
+            get label() {
+              return t("tool.referenceImage");
+            },
+            refName: "Reference Image",
+            iconName: "ref-image",
+          },
+        ],
+      },
     ],
     icons: { "ref-image": IMAGE_ICON, "ref-locked": LOCKED_ICON, "ref-unlocked": UNLOCKED_ICON },
     browserSections: [{ key: "referenceImages", component: ItemsSection }],
@@ -50,8 +66,8 @@ export async function activate(e: Engine): Promise<() => void> {
   });
 
   return () => {
-    t.cancel();
-    e.viewport.domElement.removeEventListener("pointerdown", t.onDragDown, true);
+    imageTool.cancel();
+    e.viewport.domElement.removeEventListener("pointerdown", imageTool.onDragDown, true);
     off();
     layer.stop();
     tool.value = null;

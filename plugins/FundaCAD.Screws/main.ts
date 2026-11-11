@@ -5,6 +5,7 @@ import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
 import LibraryPanel from "./LibraryPanel.vue";
 import ThreadPanel from "./ThreadPanel.vue";
+import { t } from "./lines";
 import { StandardThreadTool, threadTool } from "./threadTool";
 import { insertFastener, placementAt, specOfBody } from "./insert";
 import { DRAG_MIME, PLUGIN_ID, dragging, open, resetState, selection, tab } from "./state";
@@ -63,7 +64,10 @@ export async function activate(e: Engine): Promise<() => void> {
     tools: [
       {
         id: "standardThread",
-        label: "Standard Thread",
+        get label() {
+          return t("tool.standardThread");
+        },
+        refName: "Standard Thread",
         iconName: "thread",
         consumes: ["face"],
         source: "selection",
@@ -76,8 +80,22 @@ export async function activate(e: Engine): Promise<() => void> {
       {
         group: "INSERT",
         items: [
-          { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
-          { action: "standardThread", label: "Standard Thread", iconName: "thread" },
+          {
+            action: "fasteners",
+            get label() {
+              return t("tool.fasteners");
+            },
+            refName: "Fasteners",
+            iconName: "fasteners",
+          },
+          {
+            action: "standardThread",
+            get label() {
+              return t("tool.standardThread");
+            },
+            refName: "Standard Thread",
+            iconName: "thread",
+          },
         ],
       },
     ],
@@ -88,7 +106,8 @@ export async function activate(e: Engine): Promise<() => void> {
       if (!spec) return [];
       return [
         {
-          label: "Fastener Specs...",
+          label: t("context.fastenerSpecs"),
+          refName: "Fastener Specs...",
           onClick: () => {
             selection.value = { source: "document", spec };
             tab.value = "catalogue";

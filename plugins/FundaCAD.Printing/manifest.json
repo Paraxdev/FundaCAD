@@ -18,5 +18,27 @@
   "geometryWasm": "geometry.wasm",
   "exporters": [
     "print-project-3mf"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Druckerverbindung",
+      "summary": "Sendet Aufträge an einen Drucker in Ihrem Netzwerk, liest seinen Status und öffnet ein Modell in Ihrem Slicer."
+    },
+    "es": {
+      "name": "Conexión con la impresora",
+      "summary": "Envía trabajos a una impresora de su red, lee su estado y abre un modelo en su slicer."
+    },
+    "fr": {
+      "name": "Connexion à l'imprimante",
+      "summary": "Envoie des travaux à une imprimante de votre réseau, lit son état et ouvre un modèle dans votre slicer."
+    },
+    "ja": {
+      "name": "プリンター接続",
+      "summary": "ネットワーク上のプリンターにジョブを送り、状態を読み取り、モデルをスライサーで開きます。"
+    },
+    "zh-CN": {
+      "name": "打印机连接",
+      "summary": "将任务发送到网络中的打印机，读取其状态，并在切片软件中打开模型。"
+    }
+  }
 }

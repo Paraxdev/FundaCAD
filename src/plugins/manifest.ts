@@ -1,6 +1,9 @@
 // The grant vocabulary and how it is worded for the person deciding. Pure and Vue-free. An unknown grant is refused,
 // and consent is recorded against `promiseOf()`, so a version asking for more has to ask again.
 
+import { LANGUAGE_CODE } from "../i18n/languages";
+import { checkLine } from "../i18n/overrides";
+
 /** Everything a plugin can ask for. Closed set, deliberately small. */
 export const GRANTS = [
   "document.read",
@@ -64,6 +67,13 @@ const COPY: Record<Grant, GrantCopy> = {
   },
 };
 
+export const MAX_TRANSLATIONS = 64;
+
+export interface ManifestText {
+  name?: string;
+  summary?: string;
+}
+
 export interface PluginManifest {
   /** `Publisher.Name`. See the ID pattern below for why it has two halves. */
   id: string;
@@ -87,6 +97,8 @@ export interface PluginManifest {
   /** The bundle path of the WebAssembly component the Rust engine runs, "" for
    *  a plugin with no geometry or a bundle built for the Python engine only. */
   geometryWasm: string;
+  /** The name and summary per language code. Outside `promiseOf()`, text only, a bad entry is dropped. */
+  translations: ReadonlyMap<string, ManifestText>;
 }
 
 export type ParseResult = { ok: true; manifest: PluginManifest } | { ok: false; why: string };
@@ -108,6 +120,21 @@ const isGrant = (v: unknown): v is Grant => (GRANTS as readonly unknown[]).inclu
 const isKind = (v: unknown): v is PluginKind => (PLUGIN_KINDS as readonly unknown[]).includes(v);
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
+
+function parseTranslations(raw: unknown): Map<string, ManifestText> {
+  const out = new Map<string, ManifestText>();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [code, entry] of Object.entries(raw)) {
+    if (out.size >= MAX_TRANSLATIONS) break;
+    if (!LANGUAGE_CODE.test(code) || !entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const text: ManifestText = {};
+    const { name, summary } = entry as Record<string, unknown>;
+    if (typeof name === "string" && checkLine(name) === null) text.name = name;
+    if (typeof summary === "string" && checkLine(summary) === null) text.summary = summary;
+    if (text.name !== undefined || text.summary !== undefined) out.set(code, text);
+  }
+  return out;
+}
 
 /** Every rejection names its reason, so a publisher knows which line to fix. */
 export function parseManifest(raw: unknown): ParseResult {
@@ -190,6 +217,7 @@ export function parseManifest(raw: unknown): ParseResult {
       formerIds,
       featureTypes,
       geometryWasm: str(r.geometryWasm),
+      translations: parseTranslations(r.translations),
     },
   };
 }

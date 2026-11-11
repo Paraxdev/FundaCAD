@@ -9,5 +9,27 @@
     "device.input",
     "document.read",
     "document.write"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Gamecontroller",
+      "summary": "Steuert die Ansicht und startet Befehle mit einem Gamecontroller oder einem Steam Deck."
+    },
+    "es": {
+      "name": "Mando de juegos",
+      "summary": "Mueve la vista y ejecuta comandos con un mando de juegos o una Steam Deck."
+    },
+    "fr": {
+      "name": "Manette de jeu",
+      "summary": "Déplace la vue et lance des commandes avec une manette de jeu ou un Steam Deck."
+    },
+    "ja": {
+      "name": "ゲームコントローラー",
+      "summary": "ゲームコントローラーや Steam Deck で、ビューの移動とコマンドの実行ができます。"
+    },
+    "zh-CN": {
+      "name": "游戏手柄",
+      "summary": "用游戏手柄或 Steam Deck 移动视图并运行命令。"
+    }
+  }
 }

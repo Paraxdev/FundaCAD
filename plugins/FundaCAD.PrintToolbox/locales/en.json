@@ -1,0 +1,13 @@
+{
+  "group.print": "Print",
+  "tool.bedFit": "Bed Fit Check",
+  "tool.counterboreBridge": "Counterbore Bridge",
+  "tool.elephantFootChamfer": "Elephant-Foot Chamfer",
+  "tool.printability": "Printability",
+  "tool.roofBridge": "Roof Bridge",
+  "tool.sacrificialLayer": "Sacrificial Layer",
+  "tool.teardrop": "Teardrop",
+  "tool.threadRibs": "Thread-Forming Ribs",
+  "tool.verticalFillet": "Vertical Edge Fillet",
+  "tool.zipTieChannel": "Zip-Tie Channel"
+}

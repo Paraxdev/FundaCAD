@@ -6,7 +6,7 @@ import readme from "../../README.md?raw";
 import manual from "../../manual/docs/reference/preferences.md?raw";
 import en from "../../src/i18n/locales/en.json";
 
-const KEY = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
+const KEY = /^([A-Za-z][A-Za-z0-9.-]*:)?[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 // Only the roots globbed into repoFiles; a path under another root goes unchecked.
 const REPO_PATH = /`((?:src|src-tauri\/src|scripts|tests|docs|manual\/docs|e2e)\/[^`\s<>*]+?)(?::\d+)?`/g;
 
@@ -66,7 +66,14 @@ describe("docs/I18N.md", () => {
 describe("the manual's Language section", () => {
   it("shows only lines FundaCAD has, each one a language file could hold", () => {
     const keys = [...manual.matchAll(/^ {2}"([^"]+)": "/gm)].map((m) => m[1]!);
-    expect([keys.length, keys.filter((k) => !Object.hasOwn(en, k)), badExamples(manual)]).toEqual([3, [], []]);
+    const core = keys.filter((k) => !k.includes(":"));
+    const plugin = keys.filter((k) => k.includes(":"));
+    expect([core.length, core.filter((k) => !Object.hasOwn(en, k)), plugin, badExamples(manual)]).toEqual([
+      3,
+      [],
+      ["FundaCAD.Printing:menu.file.send"],
+      [],
+    ]);
   });
 });
 

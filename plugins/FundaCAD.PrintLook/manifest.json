@@ -7,5 +7,27 @@
   "enabledByDefault": true,
   "grants": [
     "document.read"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Druckbild",
+      "summary": "Zeigt in der Echtzeit-Ansicht die feinen Schichtlinien, die ein gedrucktes Teil auf seiner Oberfläche hat."
+    },
+    "es": {
+      "name": "Aspecto impreso",
+      "summary": "Dibuja en la vista en tiempo real las finas líneas de capa que tiene una pieza impresa en su superficie."
+    },
+    "fr": {
+      "name": "Aspect imprimé",
+      "summary": "Dessine dans la vue temps réel les fines lignes de couche qu'une pièce imprimée porte sur sa surface."
+    },
+    "ja": {
+      "name": "印刷の見た目",
+      "summary": "印刷した部品の表面にある細かい積層線を、リアルタイムビューに描きます。"
+    },
+    "zh-CN": {
+      "name": "打印外观",
+      "summary": "在实时视图中绘制打印件表面的细密层纹。"
+    }
+  }
 }

@@ -5,7 +5,7 @@ import { keyHint, shortcutRows } from "../input/shortcuts";
 import { t as translate, tEnglish, type MessageKey } from "../i18n";
 import {
   groupEnglish,
-  groupName,
+  groupShown,
   leavesOf,
   modelGroups,
   SKETCH,
@@ -81,11 +81,12 @@ export function modelRail(groups: Group[] = modelGroups()): RailEntry[] {
       tools = tools.filter((t) => t !== sketch);
     }
     if (!tools.length) continue;
-    const english = groupEnglish(g.label);
+    const shown = groupShown(g.label);
+    const english = groupEnglish(g.label) ?? (shown !== undefined ? titleCase(g.label) : undefined);
     out.push({
       kind: "family",
       id: `cat:${g.label}`,
-      label: groupName(g.label) ?? titleCase(g.label),
+      label: shown ?? titleCase(g.label),
       ...(english !== undefined ? { english } : {}),
       icon: CATEGORY_ICON[g.label] ?? tools[0]!.icon,
       style: "category",

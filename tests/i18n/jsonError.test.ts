@@ -118,7 +118,13 @@ describe("a language file refused as not JSON", () => {
       ['{\n  "stress.setup.title": "Belastung"', 2, 36],
     ];
     expect(files.map(([text]) => parseOverrides(text, english))).toEqual(
-      files.map(([, line, column]) => ({ lines: new Map(), skipped: [], error: "not-json", at: { line, column } })),
+      files.map(([, line, column]) => ({
+        lines: new Map(),
+        pluginLines: new Map(),
+        skipped: [],
+        error: "not-json",
+        at: { line, column },
+      })),
     );
   });
 
@@ -127,6 +133,7 @@ describe("a language file refused as not JSON", () => {
     expect(parseOverrides('\ufeff{"stress.setup.title": "x"\n', english).at).toEqual({ line: 2, column: 1 });
     expect(parseOverrides('{\n "stress.setup.title": "Einrichtung"\n}', english)).toEqual({
       lines: new Map([["stress.setup.title", "Einrichtung"]]),
+      pluginLines: new Map(),
       skipped: [],
     });
     expect(parseOverrides("[1,]", english).error).toBe("not-json");

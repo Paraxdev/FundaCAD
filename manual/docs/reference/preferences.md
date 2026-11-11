@@ -19,7 +19,7 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 
 ## Language
 
-Language sets the language of FundaCAD's text, and it applies at once. System, the default, is English for now. Deutsch, Français, Español, 简体中文 and 日本語 are machine translated, and the list says so in each language's own words. A machine translated line may read oddly. So far the Language card, the Stress setup step, the menu bar, the command palette and the tool rail speak them, the rest stays English until it is translated. The command palette also finds a command or a tool by its English name, so `save as` still finds Save As and `extrude` still finds the extrude tool in Deutsch.
+Language sets the language of FundaCAD's text, and it applies at once. System, the default, is English for now. Deutsch, Français, Español, 简体中文 and 日本語 are machine translated, and the list says so in each language's own words. A machine translated line may read oddly. So far the Language card, the Stress setup step, the menu bar, the command palette, the tool rail, and the menu rows, tools and names of plugins in Preferences speak them, the rest stays English until it is translated. The command palette also finds a command or a tool by its English name, so `save as` still finds Save As and `extrude` still finds the extrude tool in Deutsch.
 
 Numbers follow the language, in the boxes and when you type them. In Deutsch, Français and Español a box shows a comma, `12,375`, and a comma is the decimal mark, so `1,5` and `1,500` mean 1.5, and a point works too, so `0.250` means 0.25, except a point before exactly three digits after a whole number of 1 or more, such as `1.500`, which is refused because it could be a thousand, so write `1,5` or `1500`. In English, 简体中文 and 日本語 `1,5` still means 1.5, and `1,500` is refused because it could be a thousand, so write `1.5` or `1500`. A pair of numbers in one box, and a list of choices such as `Small = 2,5; Large = 30`, takes a semicolon in a language with a decimal comma. Your own language file follows its code, so `pl.json` gives a comma and `de-CH.json` a point. Saved files always keep the point.
 
@@ -33,6 +33,16 @@ Each line is the line's name, then its text. Copy the names from FundaCAD's Engl
   "prefs.language.reload": "Neu einlesen"
 }
 ```
+
+A plugin ships its own lines and follows the language too. Your file can correct one of them by putting the plugin's id and a colon before the line's name, and it reads only in that plugin. This one changes a menu row of the Printing plugin:
+
+```json
+{
+  "FundaCAD.Printing:menu.file.send": "An Drucker senden…"
+}
+```
+
+An installed plugin keeps its lines inside its code, so you will not find them on disk. The plugin's author lists the line names, and for the plugins that come with FundaCAD they are in `plugins/<id>/locales/en.json` in the FundaCAD source.
 
 Notes for translators on Windows. Save the file as UTF-8, in Notepad choose Save as and set Encoding to UTF-8, or accented letters will not read back. Turn on File name extensions in the Explorer View menu (Show, File name extensions), so you can see that the file is `pl.json` and not `pl.json.txt`, which Notepad adds when it is allowed to. A file named `pl.json.txt` in the languages folder is not listed, rename it to `pl.json`. A file that is not valid JSON is refused with the line and column where it breaks, for example near line 4, column 18, and a comma after the last line is the usual cause.
 
