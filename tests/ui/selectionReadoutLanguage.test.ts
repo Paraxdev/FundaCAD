@@ -47,7 +47,9 @@ describe("the selection readout in the chosen language", () => {
     const text = describeSelection({ kind: "edge", count: 1, edges: [circleAt(10)] });
     expect(text).toMatch(/^1 Kante · 62,\d+ mm · ⌀20 mm$/);
     await setLanguage("ja");
-    expect(describeSelection({ kind: "edge", count: 1, edges: [circleAt(10)] })).toMatch(/^1 エッジ · 62\.\d+ mm · ⌀20 mm$/);
+    expect(describeSelection({ kind: "edge", count: 1, edges: [circleAt(10)] })).toMatch(
+      /^1 エッジ · 62\.\d+ mm · ⌀20 mm$/,
+    );
   });
 
   it("says the pointer hint for 1 and 3 bodies only when asked", async () => {

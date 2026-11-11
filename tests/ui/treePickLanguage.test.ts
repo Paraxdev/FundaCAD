@@ -44,7 +44,9 @@ describe("a refused list row in the chosen language", () => {
   it("keeps the English wording", () => {
     expect(treePickRefusal(ROWS[0]!, "oneBody")).toBe("That row is a base plane, this step needs one body");
     expect(treePickRefusal(ROWS[7]!, "planeOrFace")).toBe("That row is a feature, this step needs a plane or a face");
-    expect(treePickRefusal(ROWS[9]!, "axisOrStraightEdge")).toBe("That row is an edge, this step needs an axis or a straight edge");
+    expect(treePickRefusal(ROWS[9]!, "axisOrStraightEdge")).toBe(
+      "That row is an edge, this step needs an axis or a straight edge",
+    );
   });
 
   it("puts the German accusative on the wanted noun", async () => {
