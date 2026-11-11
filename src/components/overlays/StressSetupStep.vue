@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { t } from "../../i18n";
 import { usePanelsStore } from "../../stores/panels";
@@ -35,6 +35,10 @@ const engine = useEngine();
 const panels = usePanelsStore();
 
 const running = computed(() => !!panels.stress?.running);
+
+// A long language pushes the refusal below the column's fold, under Run, where nobody looks for it.
+const errorLine = ref<HTMLElement | null>(null);
+watch([errorLine, () => panels.stress?.error], ([el]) => el?.scrollIntoView?.({ block: "nearest" }), { flush: "post" });
 // The time on the button was for the setup that ran.
 const finer = computed(() => {
   const s = panels.stress;
@@ -364,7 +368,7 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <div class="sm-hint">{{ t("stress.setup.meshHint") }}</div>
     </div>
 
-    <div v-if="panels.stress?.error" class="measure-hint stress-error">{{ panels.stress.error }}</div>
+    <div v-if="panels.stress?.error" ref="errorLine" class="measure-hint stress-error">{{ panels.stress.error }}</div>
     <Button v-if="finer" variant="primary" size="sm" class="stress-finer" @click="engine.ui.panels.runStress(true)">{{
       finerLabel(finer.seconds)
     }}</Button>

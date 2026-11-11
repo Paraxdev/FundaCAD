@@ -76,6 +76,46 @@
       "note": "a small round place on the body"
     },
     {
+      "en": "Safety factor",
+      "text": "安全系数",
+      "note": "how many times the load the part carries before it yields"
+    },
+    {
+      "en": "Peak stress",
+      "text": "峰值应力",
+      "note": "the highest stress anywhere in the body"
+    },
+    {
+      "en": "Deflection",
+      "text": "挠度",
+      "note": "how far the body bends under the load"
+    },
+    {
+      "en": "Mesh",
+      "text": "网格",
+      "note": "the small elements the body is cut into for the study, not the imported triangle mesh"
+    },
+    {
+      "en": "Inside corner",
+      "text": "内角",
+      "note": "a sharp concave edge where stress piles up"
+    },
+    {
+      "en": "Thin wall",
+      "text": "薄壁",
+      "note": "a wall thinner than the mesh can resolve"
+    },
+    {
+      "en": "Yield",
+      "text": "屈服强度",
+      "note": "the stress where the material starts to deform for good"
+    },
+    {
+      "en": "Reaction",
+      "text": "反力",
+      "note": "the force a support pushes back with"
+    },
+    {
       "en": "Mesh detail",
       "text": "网格精细度"
     },

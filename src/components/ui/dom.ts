@@ -4,7 +4,7 @@ import { iconElement } from "../../ui/icons";
 import { announce } from "../../ui/announce";
 import { a11yPrefs, onA11yPrefsChange } from "../../ui/a11yPrefs";
 import { spellNumber, spokenUnit, unitById } from "../../ui/measure";
-import { decimalMark } from "../../i18n";
+import { decimalMark, onLanguageChange } from "../../i18n";
 import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
 import { swallowDisabled } from "./useDisabled";
@@ -305,13 +305,15 @@ let numberNo = 0;
 type UnitWord = { word: WeakRef<HTMLElement>; unit: string };
 const unitWords = new Set<UnitWord>();
 const forgetUnitWord = new FinalizationRegistry<UnitWord>((w) => unitWords.delete(w));
-onA11yPrefsChange(() => {
+function refreshUnitWords(): void {
   const full = a11yPrefs().unitsInFull;
   for (const w of unitWords) {
     const word = w.word.deref();
     if (word) word.textContent = spokenUnit(w.unit, full);
   }
-});
+}
+onA11yPrefsChange(refreshUnitWords);
+onLanguageChange(refreshUnitWords);
 
 function followUnitsInFull(word: HTMLElement, unit: string): void {
   word.textContent = spokenUnit(unit, a11yPrefs().unitsInFull);

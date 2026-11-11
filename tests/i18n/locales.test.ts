@@ -48,6 +48,7 @@ const GLOSSARY_TERMS = [
   ...["Language", "System", "machine translated", "file", "folder", "line"],
   ...["Stress", "Support", "Fixed", "Pinned", "Slider", "Load", "Force", "Pressure", "Own weight", "Face", "Spot"],
   ...["Mesh detail", "Coarse", "Standard", "Fine", "Material", "Custom"],
+  ...["Safety factor", "Peak stress", "Deflection", "Mesh", "Inside corner", "Thin wall", "Yield", "Reaction"],
 ];
 
 function glossaryProblems(code: string, glossary: unknown): string[] {
@@ -200,6 +201,11 @@ describe("the checks on the shipped languages", () => {
       "term body",
       "twice file",
       "missing Language",
+    ]);
+    const withoutNew = terms.filter((t) => !["Safety factor", "Reaction"].includes(t.en));
+    expect(glossaryProblems("de", { language: "de", terms: withoutNew })).toEqual([
+      "missing Safety factor",
+      "missing Reaction",
     ]);
     expect(glossaryProblems("ja", { language: "ja" })).toEqual([
       "no terms",

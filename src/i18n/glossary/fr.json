@@ -31,7 +31,7 @@
     },
     {
       "en": "Stress",
-      "text": "Analyse des contraintes",
+      "text": "Contraintes",
       "note": "the Stress panel"
     },
     {
@@ -75,6 +75,46 @@
       "en": "Spot",
       "text": "Point",
       "note": "a small round place on the body"
+    },
+    {
+      "en": "Safety factor",
+      "text": "coefficient de sécurité",
+      "note": "how many times the load the part carries before it yields"
+    },
+    {
+      "en": "Peak stress",
+      "text": "contrainte maximale",
+      "note": "the highest stress anywhere in the body"
+    },
+    {
+      "en": "Deflection",
+      "text": "flèche",
+      "note": "how far the body bends under the load"
+    },
+    {
+      "en": "Mesh",
+      "text": "maillage",
+      "note": "the small elements the body is cut into for the study, not the imported triangle mesh"
+    },
+    {
+      "en": "Inside corner",
+      "text": "angle rentrant",
+      "note": "a sharp concave edge where stress piles up"
+    },
+    {
+      "en": "Thin wall",
+      "text": "paroi mince",
+      "note": "a wall thinner than the mesh can resolve"
+    },
+    {
+      "en": "Yield",
+      "text": "limite élastique",
+      "note": "the stress where the material starts to deform for good"
+    },
+    {
+      "en": "Reaction",
+      "text": "réaction",
+      "note": "the force a support pushes back with"
     },
     {
       "en": "Mesh detail",

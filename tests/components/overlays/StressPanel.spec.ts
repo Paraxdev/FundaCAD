@@ -428,6 +428,29 @@ describe("StressPanel", () => {
     }
   });
 
+  it("scrolls each new refusal into view, from the results and on the setup, and not without one", async () => {
+    const seen: string[] = [];
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (
+      this: HTMLElement,
+      arg?: boolean | ScrollIntoViewOptions,
+    ) {
+      seen.push(`${this.textContent} ${JSON.stringify(arg)}`);
+    });
+    try {
+      const { p } = await withResult();
+      p.stressFinished({ result: view() });
+      await flushPromises();
+      expect(seen).toEqual([]);
+      p.stressFinished({ result: view(), error: "Add a support." });
+      await flushPromises();
+      p.stressFinished({ result: view(), error: "Load 2 needs a force." });
+      await flushPromises();
+      expect(seen).toEqual(['Add a support. {"block":"nearest"}', 'Load 2 needs a force. {"block":"nearest"}']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("shows the setup again when the result goes, a Run is refused, or the panel reopens", async () => {
     const { p } = await withResult();
     p.clearStressResult();

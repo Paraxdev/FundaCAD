@@ -54,7 +54,7 @@ const TOOLS: Record<string, [english: string, de: string, fr: string]> = {
   section: ["Section", "Schnitt", "Coupe"],
   properties: ["Properties", "Eigenschaften", "Propriétés"],
   interference: ["Interference", "Kollision", "Interférence"],
-  stress: ["Stress", "Spannung", "Analyse des contraintes"],
+  stress: ["Stress", "Spannung", "Contraintes"],
   "draft-analysis": ["Overhang", "Überhang", "Porte-à-faux"],
   zebra: ["Zebra", "Zebra", "Zébrure"],
   curvature: ["Curvature", "Krümmung", "Courbure"],

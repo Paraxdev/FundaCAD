@@ -6,6 +6,7 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
+import { onLanguageChange, t, type MessageKey } from "../i18n";
 import { announce } from "./announce";
 import { getUnit, toDisplay, displayRound } from "./units";
 import { listJoin, spellRounded } from "./measure";
@@ -14,7 +15,7 @@ import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurf
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
 import { StressHistory } from "./stressHistory";
-import { plainError, sentence } from "./stressWarnings";
+import { plainError } from "./stressWarnings";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -259,7 +260,7 @@ export function createPanels(deps: PanelsDeps) {
   type Colours = { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface; locate: Locator };
   let colours: Colours | null = null;
   // The drawn point nearest the engine's peak stress, pinned in the view while the colours show.
-  type WeakSpot = Pick<StressProbePin, "tri" | "weights" | "label">;
+  type WeakSpot = Pick<StressProbePin, "tri" | "weights" | "label"> & { safetyFactor: number | null };
   let weakSpot: WeakSpot | null = null;
   // The study as last written to (or read from) the document, so an edit is
   // saved once and a study the document gained some other way (a version put
@@ -364,11 +365,11 @@ export function createPanels(deps: PanelsDeps) {
 
   function showStress() {
     if (!hasBody()) {
-      setStatus("Stress: create or import a body first", "");
+      setStatus(t("stress.status.needBody"), "");
       return;
     }
     if (!geometry.stress) {
-      setStatus("Stress: this geometry engine cannot run an analysis", "error");
+      setStatus(t("stress.status.noEngine"), "error");
       return;
     }
     const bodies = stressBodies();
@@ -398,6 +399,7 @@ export function createPanels(deps: PanelsDeps) {
     weakSpot = k.weakSpot;
     if (k.data.deform) panels.setStressDeform({ ...k.data.deform, animate: false });
     d.pins = k.data.pins;
+    relabelStressPins();
     glyphs?.setProbePins(d.pins);
     panels.setStressColours("hidden");
     if (k.data.colours === "shown") setStressColours(true);
@@ -524,15 +526,9 @@ export function createPanels(deps: PanelsDeps) {
     }
     const missing = relocateStressFaces();
     if (missing && !bodyOnModel()) {
-      setStatus(
-        "Stress: the body analysed is not on the current model; its setup is kept for when it is back, or pick another body",
-        "",
-      );
+      setStatus(t("stress.status.bodyGoneKept"), "");
     } else if (missing) {
-      setStatus(
-        `Stress: ${missing} face${missing === 1 ? " is" : "s are"} not found on the current model, set the faces again`,
-        "",
-      );
+      setStatus(t("stress.status.facesMissing", { n: missing }), "");
     }
     drawGlyphs();
     const s = d.setup;
@@ -563,10 +559,35 @@ export function createPanels(deps: PanelsDeps) {
     showWeakSpot();
   }
 
+  function probeLabelAt(hit: { tri: number; weights: Vec3 }): string | null {
+    const at = colours ? readAt(colours.drawn, colours.locate, hit.tri, hit.weights) : null;
+    const v = colours && at ? probeValues(colours.surface, at.tri, at.weights) : null;
+    return v ? probeLabel(v, getUnit()) : null;
+  }
+
+  // The pins' labels are text in the language of the moment they were made, so a switch spells them again.
+  function relabelStressPins() {
+    const d = panels.stress;
+    if (!d) return;
+    if (weakSpot) weakSpot = { ...weakSpot, label: weakSpotLabel(weakSpot.safetyFactor) };
+    d.pins = d.pins.map((p) => ({ ...p, label: probeLabelAt(p) ?? p.label }));
+  }
+
+  const stopRelabel = onLanguageChange(() => {
+    const d = panels.stress;
+    if (!d) return;
+    showUndo();
+    if (!weakSpot && !d.pins.length) return;
+    relabelStressPins();
+    showWeakSpot();
+    glyphs?.setProbePins(d.pins);
+  });
+
   /** The weakest spot's pin, shown while the result is, colours or not. */
   function showWeakSpot() {
     const c = panels.stress?.colours;
-    glyphs?.setWeakSpot?.(c === "shown" || c === "hidden" ? weakSpot : null);
+    const pin = weakSpot && { tri: weakSpot.tri, weights: weakSpot.weights, label: weakSpot.label };
+    glyphs?.setWeakSpot?.(c === "shown" || c === "hidden" ? pin : null);
   }
 
   let glyphsPending = false;
@@ -645,7 +666,7 @@ export function createPanels(deps: PanelsDeps) {
       // On its faces when it has any, else on its first spot.
       const anchor = areaCentre(tris) ?? spots[0]?.at ?? null;
       const dir = forceDirection(l);
-      if (!anchor || typeof dir === "string") continue;
+      if (!anchor || !Array.isArray(dir)) continue;
       // The force sign is part of the direction, so dragging along the arrow writes a positive force back.
       const force = Number(l.force) || 0;
       const flip = force < 0;
@@ -715,11 +736,7 @@ export function createPanels(deps: PanelsDeps) {
       l.custom = was.custom;
       l.force = was.force;
     },
-    probeLabel(hit) {
-      const at = colours ? readAt(colours.drawn, colours.locate, hit.tri, hit.weights) : null;
-      const v = colours && at ? probeValues(colours.surface, at.tri, at.weights) : null;
-      return v ? probeLabel(v, getUnit()) : null;
-    },
+    probeLabel: probeLabelAt,
     pinProbe(hit) {
       const label = glyphHandlers.probeLabel(hit);
       if (!label) return;
@@ -735,12 +752,7 @@ export function createPanels(deps: PanelsDeps) {
       if (!d || !target) return;
       if (!hit.body) return;
       if (d.setup.body && d.setup.body !== hit.body) {
-        setStatus(
-          bodyOnModel()
-            ? "Stress: that is another body than the one analysed, click the analysed body"
-            : "Stress: the body analysed is not on the current model, pick another body first",
-          "",
-        );
+        setStatus(t(bodyOnModel() ? "stress.status.otherBody" : "stress.status.bodyGone"), "");
         return;
       }
       if (!d.setup.body) panels.setStressBody(hit.body);
@@ -807,7 +819,7 @@ export function createPanels(deps: PanelsDeps) {
     panels.setStressPlacing(target, as);
     if (as === "face") {
       releaseRows = awaitTreePick(takeFaceRow, stopPlacing, { keepsOnRewind: true, keepsOnCommand: true });
-      announce(`Pick a face for the ${"support" in target ? "support" : "load"}, Esc to stop`);
+      announce(t("stress.say.pickFace", { row: "support" in target ? "support" : "load" }));
     }
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = as === "face" ? null : body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
@@ -841,22 +853,19 @@ export function createPanels(deps: PanelsDeps) {
     if (pick.kind !== "face") return treePickRefusal(pick, "face");
     const d = panels.stress;
     const target = d?.placing;
-    if (!d || !target) return "Stress is not waiting for a face";
+    if (!d || !target) return t("stress.pick.notWaiting");
     const body = viewport.faceIdToBodyId(pick.faceId);
-    if (!body) return "That face is on no body";
+    if (!body) return t("stress.pick.noBody");
     if (d.setup.body && d.setup.body !== body) {
-      return bodyOnModel()
-        ? "That face is on another body, pick a face of the body analysed"
-        : "The body analysed is not on the current model, pick another body first";
+      return t(bodyOnModel() ? "stress.pick.otherBody" : "stress.pick.bodyGone");
     }
     const sel = viewport.faceSelectorOf(pick.faceId);
-    if (sel.kind !== "face" || sel.by !== "nearest") return "The model is still building";
+    if (sel.kind !== "face" || sel.by !== "nearest") return t("stress.pick.building");
     if (!d.setup.body) panels.setStressBody(body);
     addStressFace(target, body, pick.faceId, sel.point);
     stopPlacing();
     const n = panels.stressRow(target)?.faces.faceIds.length ?? 0;
-    const noun = "support" in target ? "support" : "load";
-    announce(`The ${noun} has ${n} ${n === 1 ? "face" : "faces"}, Click faces again for another`);
+    announce(t("stress.say.faceTaken", { row: "support" in target ? "support" : "load", n }));
     return true;
   }
 
@@ -878,19 +887,25 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
   }
 
+  type StressFacesRefusal = "selectFaces" | "oneBody" | "selectedOtherBody" | "bodyGone";
+  const REFUSAL_LINES: Record<StressFacesRefusal, MessageKey> = {
+    selectFaces: "stress.status.selectFaces",
+    oneBody: "stress.status.oneBody",
+    selectedOtherBody: "stress.status.selectedOtherBody",
+    bodyGone: "stress.status.bodyGone",
+  };
+
   /** The selected faces as a face set, each selector stamped with its body,
    *  or why they cannot be one. */
-  function selectedStressFaces(): { faces: StressFaceSet; body: string } | string {
+  function selectedStressFaces(): { faces: StressFaceSet; body: string } | StressFacesRefusal {
     const sel = viewport.selectedFacesForPressPull();
-    if (!sel) return "select one or more faces first";
+    if (!sel) return "selectFaces";
     const bodies = new Set(sel.faceIds.map((f) => viewport.faceIdToBodyId(f)));
     const body = bodies.size === 1 ? [...bodies][0] : null;
-    if (!body) return "the selected faces must all be on one body";
+    if (!body) return "oneBody";
     const current = panels.stress?.setup.body;
     if (current && current !== body) {
-      return bodyOnModel()
-        ? "the selected faces are on another body than the one analysed"
-        : "the body analysed is not on the current model, pick another body first";
+      return bodyOnModel() ? "selectedOtherBody" : "bodyGone";
     }
     return {
       faces: faceSet(
@@ -910,7 +925,7 @@ export function createPanels(deps: PanelsDeps) {
     relocateStressFaces();
     const got = selectedStressFaces();
     if (typeof got === "string") {
-      setStatus(`Stress: ${got}`, "");
+      setStatus(t(REFUSAL_LINES[got]), "");
       return;
     }
     if (!d.setup.body) panels.setStressBody(got.body);
@@ -1122,7 +1137,7 @@ export function createPanels(deps: PanelsDeps) {
     const d = panels.stress;
     if (!d) return;
     if (on && d.colours === "none") {
-      setStatus("Stress: run the analysis first, then probe its result", "");
+      setStatus(t("stress.status.runFirst"), "");
       return;
     }
     if (on) stopPlacing();
@@ -1131,7 +1146,7 @@ export function createPanels(deps: PanelsDeps) {
       // The model changed since the Run, and putting the colours back found
       // them stale and dropped them: there is nothing to probe.
       if (panels.stress?.colours !== "shown") {
-        setStatus("Stress: the model changed since the run, run the analysis again to probe it", "");
+        setStatus(t("stress.status.probeStale"), "");
         return;
       }
     }
@@ -1148,21 +1163,20 @@ export function createPanels(deps: PanelsDeps) {
     const d = panels.stress;
     if (!d || d.running) return;
     if (!geometry.stress) {
-      setStatus("Stress: this geometry engine cannot run an analysis", "error");
+      setStatus(t("stress.status.noEngine"), "error");
       return;
     }
     relocateStressFaces();
     if (d.setup.body && !bodyOnModel()) {
       panels.stressFinished({
-        error:
-          "The body analysed is not on the current model. Pick another body, or bring the model back to where it has it.",
+        error: t("stress.status.bodyGoneRun"),
       });
       return;
     }
     // Faces the model lacks are refused here, by the support or load they are in.
     const req = buildStressRequest(d.setup);
     if (!req.ok) {
-      panels.stressFinished({ error: sentence(req.message) });
+      panels.stressFinished({ error: t(req.key, req.args) });
       return;
     }
     const seq = ++runSeq;
@@ -1180,7 +1194,7 @@ export function createPanels(deps: PanelsDeps) {
       const message = plainError(res.message, !!res.finer);
       panels.stressFinished(res.cancelled ? {} : { error: message, ...(res.finer ? { finer: res.finer } : {}) });
       setStatus(
-        res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
+        res.cancelled ? t("stress.status.cancelled") : t("stress.status.failed", { message }),
         res.cancelled ? "" : "error",
       );
       return;
@@ -1195,12 +1209,15 @@ export function createPanels(deps: PanelsDeps) {
     panels.stressFinished({ result: view });
     const sf = r.safetyFactor;
     setStatus(
-      `Stress: peak ${spellRounded(r.maxVonMises.value)} MPa` +
-        (sf !== null ? `, safety factor ${spellRounded(sf)}` : ""),
+      t("stress.status.done", {
+        peak: spellRounded(r.maxVonMises.value),
+        factor: sf !== null ? "yes" : "no",
+        sf: sf !== null ? spellRounded(sf) : "",
+      }),
       view.yields ? "error" : "connected",
     );
     if (epoch !== docEpoch) {
-      setStatus("Stress: the model changed while it ran, run it again to see the colours", "");
+      setStatus(t("stress.status.changedWhileRan"), "");
       return;
     }
     if (r.surface) {
@@ -1213,7 +1230,7 @@ export function createPanels(deps: PanelsDeps) {
       if (seq !== runSeq) return;
       if (epoch !== docEpoch) {
         panels.setStressColours("none");
-        setStatus("Stress: the model changed while it ran, run it again to see the colours", "");
+        setStatus(t("stress.status.changedWhileRan"), "");
         return;
       }
       colours = {
@@ -1231,7 +1248,7 @@ export function createPanels(deps: PanelsDeps) {
         locate,
       };
       const spot = drawnWeakSpot(drawn, r.maxVonMises.at, r.maxVonMises.face ?? null);
-      weakSpot = spot && { ...spot, label: weakSpotLabel(r.safetyFactor) };
+      weakSpot = spot && { ...spot, label: weakSpotLabel(r.safetyFactor), safetyFactor: r.safetyFactor };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
         panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false, shown: true });
@@ -1262,7 +1279,7 @@ export function createPanels(deps: PanelsDeps) {
     if (!d) return false;
     const step = history[way](d.setup, Date.now());
     if (!step) {
-      setStatus(way === "undo" ? "Nothing left to undo in Stress" : "Nothing to redo in Stress", "");
+      setStatus(t(way === "undo" ? "stress.status.nothingToUndo" : "stress.status.nothingToRedo"), "");
       showUndo();
       return true;
     }
@@ -1280,7 +1297,7 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
     showUndo();
     // doUndo and doRedo say the step on the history key, so the toast only shows it.
-    toast(`${way === "undo" ? "Undid" : "Redid"}: ${step.label}`, { silent: true });
+    toast(t("stress.status.stepped", { way, label: step.label }), { silent: true });
     return true;
   }
 
@@ -1359,6 +1376,7 @@ export function createPanels(deps: PanelsDeps) {
     setStressProbe,
     lookAtStressPoint,
     removeStressProbe,
+    dispose: stopRelabel,
   };
 }
 

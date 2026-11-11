@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
+import { t } from "../../i18n";
 import { announce } from "../../ui/announce";
 import { deflectionNote, verdictView, type VerdictInput } from "../../ui/stressVerdict";
 import type { Unit } from "../../ui/units";
@@ -17,10 +18,14 @@ const bend = computed(() =>
   props.scale === null ? null : deflectionNote(props.maxDeflection, props.unit, props.scale),
 );
 
-// Mounted with the result, so the first verdict is spoken as it appears. Every headline ends in a full stop.
+// Mounted with the result, so the first verdict is spoken as it appears. Keyed on the result, not on the text, so a
+// language switch rewrites the words and says nothing.
 watch(
-  () => [view.value.headline, view.value.detail].filter(Boolean).join(" "),
-  (text) => announce(text, "polite", { key: "stress" }),
+  [() => props.input.safetyFactor, () => props.input.peakPlace ?? null, () => props.marked],
+  () => {
+    const { headline, detail } = view.value;
+    announce(detail ? t("stress.verdict.said", { headline, detail }) : headline, "polite", { key: "stress" });
+  },
   { immediate: true },
 );
 </script>

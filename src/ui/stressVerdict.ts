@@ -1,6 +1,7 @@
 // The plain words a stress result opens with, from the engine's safety factor and deflection.
 
-import { deformLabel } from "./stress";
+import { t } from "../i18n";
+import { deformScale } from "./stress";
 import { spellNumber, spellRounded } from "./measure";
 import { toDisplay, type Unit } from "./units";
 
@@ -15,10 +16,12 @@ export interface StressVerdictView {
 // A printed or moulded part is kept at about 1.5 times what it takes before it counts as safe.
 export const SAFE_MARGIN = 1.5;
 
+const isBeyondCap = (x: number) => !Number.isFinite(x) || x > 100;
+
 /** `x` to two significant figures, rounded down for a safety margin so it is never overstated, up for an overload
  *  so it is never understated. */
 export function aboutFactor(x: number, round: "down" | "up"): string {
-  if (!Number.isFinite(x) || x > 100) return "more than 100";
+  if (isBeyondCap(x)) return t("stress.verdict.moreThan100");
   if (x <= 0) return "0";
   const step = 10 ** (Math.floor(Math.log10(x)) - 1);
   // The nudge keeps 9.9 / 0.1 = 98.99999 from rounding a whole step the wrong way.
@@ -38,17 +41,6 @@ export function peakPlaceOf(warnings: readonly string[]): PeakPlace {
 // The engine reads the peak at a sharp inside corner or a support's edge too high, and higher with a finer mesh.
 export type PeakPlace = "corner" | "support" | null;
 
-const SPOT: Record<"corner" | "support" | "plain", [marked: string, unmarked: string | null]> = {
-  corner: ["at the marked sharp corner", "at a sharp inside corner"],
-  support: ["at the marked edge of a support", "at the edge of a support"],
-  plain: ["at the marked spot", null],
-};
-
-const ROUGH: Record<"corner" | "support", string> = {
-  corner: "The number at a sharp corner is rough, and rounding the corner makes it stronger.",
-  support: "The number there is rough, so read the colour a little away from it.",
-};
-
 /** The overload of a factor below 1: under 2x in whole percent, rounded up, otherwise as a factor. */
 function overload(sf: number): { pct: number } | { factor: string } {
   const x = 1 / sf;
@@ -61,63 +53,63 @@ export interface VerdictInput {
   peakPlace?: PeakPlace;
 }
 
+const yesNo = (on: boolean) => (on ? "yes" : "no");
+
 /** `marked` while the weakest spot's pin shows in the view. */
 export function verdictView(r: VerdictInput, margin = SAFE_MARGIN, marked = true): StressVerdictView {
   const sf = r.safetyFactor;
-  if (sf === null || Number.isNaN(sf)) {
-    return { level: "none", headline: "Nothing is stressed, check the loads.", detail: null };
-  }
-  const place = r.peakPlace ?? null;
-  const spot = SPOT[place ?? "plain"][marked ? 0 : 1];
-  const rough = place ? ROUGH[place] : null;
+  if (sf === null || Number.isNaN(sf)) return { level: "none", headline: t("stress.verdict.none"), detail: null };
+  const place = r.peakPlace ?? "plain";
+  const at = { place, marked: yesNo(marked) };
   if (sf < 1) {
     const o = overload(sf);
-    const load =
+    const over =
       "pct" in o
-        ? `The load is about ${o.pct}% more than it can take.`
-        : o.factor.startsWith("more")
-          ? "The load is more than 100x what it can take."
-          : `The load is about ${o.factor}x what it can take.`;
+        ? { over: "pct", pct: o.pct }
+        : isBeyondCap(1 / sf)
+          ? { over: "more" }
+          : { over: "factor", factor: o.factor };
     return {
       level: "fails",
-      headline: `Likely to fail${spot ? ` ${spot}` : ""}${rough ? ", by a rough reading" : ""}.`,
-      detail: rough ? `${load} ${rough}` : load,
+      headline: t("stress.verdict.failHead", at),
+      detail: t("stress.verdict.failDetail", { ...over, place }),
     };
   }
-  const safe = aboutFactor(sf, "down");
   // Rounded down, so "at least": a 4.57 in the table reads 4.5 here.
-  const about = safe.startsWith("more") ? safe : `at least ${safe}`;
-  const holds = rough ? "Holds by a rough reading," : "Holds,";
-  const weakest = spot ? `Weakest ${spot}.` : null;
-  const detail = [weakest, rough].filter(Boolean).join(" ") || null;
-  if (sf < margin) {
-    return { level: "marginal", headline: `${holds} ${about}x safe, but keep about ${margin}x.`, detail };
-  }
-  return { level: "holds", headline: `${holds} ${about}x safe.`, detail };
+  const held = {
+    place,
+    over: isBeyondCap(sf) ? "more" : "other",
+    safe: aboutFactor(sf, "down"),
+    keep: yesNo(sf < margin),
+    margin: spellNumber(margin),
+  };
+  const detail = place === "plain" && !marked ? null : t("stress.verdict.holdDetail", at);
+  return { level: sf < margin ? "marginal" : "holds", headline: t("stress.verdict.holdHead", held), detail };
 }
 
 /** The weakest spot's pin label, in the verdict's numbers. */
 export function weakSpotLabel(sf: number | null): string {
-  if (sf === null || !Number.isFinite(sf)) return "Weakest";
+  if (sf === null || !Number.isFinite(sf)) return t("stress.verdict.weakest", { kind: "none" });
   if (sf >= 1) {
-    const safe = aboutFactor(sf, "down");
-    return `Weakest, ${safe.startsWith("more") ? safe : `at least ${safe}`}x safe`;
+    return t("stress.verdict.weakest", {
+      kind: "safe",
+      over: isBeyondCap(sf) ? "more" : "other",
+      safe: aboutFactor(sf, "down"),
+    });
   }
   const o = overload(sf);
-  return "pct" in o ? `Weakest, ${o.pct}% over` : `Weakest, ${o.factor}x over`;
+  if ("pct" in o) return t("stress.verdict.weakest", { kind: "pct", pct: o.pct });
+  return t("stress.verdict.weakest", {
+    kind: "factor",
+    over: isBeyondCap(1 / sf) ? "more" : "other",
+    factor: o.factor,
+  });
 }
 
 /** How far the part bends and how it is drawn at the slider's `scale`; null without a deflection. */
 export function deflectionNote(maxDeflectionMm: number | null, unit: Unit, scale: number): string | null {
   if (maxDeflectionMm === null || !Number.isFinite(maxDeflectionMm)) return null;
-  const label = deformLabel(scale);
-  const drawn =
-    scale === 0
-      ? "not drawn"
-      : label === "1x"
-        ? "drawn at true size"
-        : scale < 1
-          ? `drawn at ${label} true size`
-          : `drawn ${label} larger`;
-  return `Bends at most ${spellRounded(toDisplay(maxDeflectionMm))} ${unit}, ${drawn}.`;
+  const shown = deformScale(scale);
+  const drawn = scale === 0 ? "none" : shown === "1" ? "true" : scale < 1 ? "smaller" : "other";
+  return t("stress.verdict.bends", { amount: spellRounded(toDisplay(maxDeflectionMm)), unit, drawn, scale: shown });
 }

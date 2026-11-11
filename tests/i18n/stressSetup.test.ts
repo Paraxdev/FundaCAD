@@ -16,7 +16,6 @@ import {
   faceCountLabel,
   finerLabel,
   forceDragLabel,
-  formatStressResult,
   materialOptions,
   newLoad,
   newSetup,
@@ -25,7 +24,6 @@ import {
   studyFromSetup,
   type StressFaceSet,
 } from "../../src/ui/stress";
-import type { StressReply } from "../../src/geometry/client";
 import type { Selector, StressSpot } from "../../src/types";
 
 type Lines = Record<string, string>;
@@ -278,34 +276,5 @@ describe("a German session", () => {
 
     expect(german).toEqual(english);
     expect(english.study.material).toBe("Custom");
-  });
-
-  it("keeps the results step's support words English", async () => {
-    const reply: StressReply = {
-      body: "b2",
-      name: "Hook",
-      material: { name: "PETG", E: 2100, nu: 0.38, yield: 50 },
-      mesh: { nodes: 1300, elements: 5200, size: 2.2, minDihedral: 9.6 },
-      maxVonMises: { value: 18.4, at: [3, -2, 9], face: 6 },
-      maxDisplacement: { value: 0.62, at: [14, 5.5, -1], vector: [0.1, -0.2, -0.58] },
-      safetyFactor: 2.7,
-      applied: [0, -12.5, -20],
-      reaction: [0, 12.5, 20],
-      reactions: [
-        [1.25, 3, 7],
-        [-1.25, 9.5, 13],
-      ],
-    };
-    const rows = () =>
-      formatStressResult(reply, "mm", ["pinned", "slider"])
-        .details.map((d) => d.k)
-        .filter((k) => k.startsWith("Support"));
-    const english = rows();
-    await setLanguage("de");
-
-    expect([english, rows()]).toEqual([
-      ["Support 1, pinned", "Support 2, slider"],
-      ["Support 1, pinned", "Support 2, slider"],
-    ]);
   });
 });
