@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export type MirrorFieldKey = "objects" | "line";
 
 export interface MirrorFields<L> {
@@ -44,10 +46,10 @@ export function enterStep<L>(f: MirrorFields<L>): MirrorFields<L> | "commit" {
   return activate(f, f.objects.length ? "line" : "objects");
 }
 
-export function nextPick(f: MirrorFields<unknown>, lineNoun: string, onListRow = false): string {
-  if (f.active === "line") return `Pick the mirror ${lineNoun}`;
-  if (isReady(f)) return `${onListRow ? "F6 to the view, then " : ""}Enter to mirror, or pick more to mirror`;
-  return f.objects.length ? "Pick what to mirror, Enter when done" : "Pick what to mirror";
+export function nextPick(f: MirrorFields<unknown>, what: "plane" | "line", onListRow = false): string {
+  if (f.active === "line") return t("mirror.pick", { state: "line", what });
+  if (isReady(f)) return t("mirror.pick", { state: onListRow ? "readyList" : "ready", what });
+  return t("mirror.pick", { state: f.objects.length ? "some" : "none", what });
 }
 
 export function activate<L>(f: MirrorFields<L>, k: MirrorFieldKey): MirrorFields<L> {
@@ -71,7 +73,6 @@ export function isReady(f: MirrorFields<unknown>): boolean {
   return f.objects.length > 0 && f.line !== null;
 }
 
-export function countLabel(n: number, one: string, many: string): string {
-  if (n === 0) return "Nothing picked";
-  return `${n} ${n === 1 ? one : many}`;
+export function countLabel(n: number, what: "body" | "object"): string {
+  return t("mirror.count", { n, what });
 }

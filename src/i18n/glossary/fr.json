@@ -728,6 +728,11 @@
     {
       "en": "Plugin",
       "text": "extension"
+    },
+    {
+      "en": "Object",
+      "text": "objet",
+      "note": "an item the Mirror tool can take, a body or a sketch entity"
     }
   ]
 }
