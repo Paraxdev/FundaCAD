@@ -9,6 +9,8 @@ export interface EngineText {
   example: string;
   key: MessageKey;
   args: MessageArgs;
+  // The English line is the engine's own words, so only a translation shows the rule matched.
+  englishAsSent?: true;
 }
 
 const STRESS = "crates/fundacad-geom/src/stress.rs";
@@ -262,5 +264,27 @@ export const REFUSAL_TEXTS: EngineText[] = [
       "the body is not held and can still move, its stiffness matrix is singular, fix more faces or check the mesh for flat elements",
     key: "stress.refuse.notHeld",
     args: { wall: "no", fix: "no" },
+  },
+  {
+    name: "dead load",
+    file: STRESS,
+    literal:
+      "the load is only on fixed faces, a fixed face does not move, so the load pushes on the fixture and not the part, load a face that is not fixed",
+    example:
+      "the load is only on fixed faces, a fixed face does not move, so the load pushes on the fixture and not the part, load a face that is not fixed",
+    key: "stress.refuse.deadLoad",
+    args: { wall: "no", fix: "no" },
+    englishAsSent: true,
+  },
+  {
+    name: "dead loads",
+    file: STRESS,
+    literal:
+      "every load is only on fixed faces, a fixed face does not move, so the loads push on the fixture and not the part, load a face that is not fixed",
+    example:
+      "every load is only on fixed faces, a fixed face does not move, so the loads push on the fixture and not the part, load a face that is not fixed",
+    key: "stress.refuse.deadLoads",
+    args: { wall: "no", fix: "no" },
+    englishAsSent: true,
   },
 ];

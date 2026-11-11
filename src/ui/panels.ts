@@ -15,7 +15,7 @@ import { drawnSurfaceInFrames, readAt, weakSpot as drawnWeakSpot, type DrawnSurf
 import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
 import { StressHistory } from "./stressHistory";
-import { plainError, sentence } from "./stressWarnings";
+import { plainError } from "./stressWarnings";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -666,7 +666,7 @@ export function createPanels(deps: PanelsDeps) {
       // On its faces when it has any, else on its first spot.
       const anchor = areaCentre(tris) ?? spots[0]?.at ?? null;
       const dir = forceDirection(l);
-      if (!anchor || typeof dir === "string") continue;
+      if (!anchor || !Array.isArray(dir)) continue;
       // The force sign is part of the direction, so dragging along the arrow writes a positive force back.
       const force = Number(l.force) || 0;
       const flip = force < 0;
@@ -1176,7 +1176,7 @@ export function createPanels(deps: PanelsDeps) {
     // Faces the model lacks are refused here, by the support or load they are in.
     const req = buildStressRequest(d.setup);
     if (!req.ok) {
-      panels.stressFinished({ error: sentence(req.message) });
+      panels.stressFinished({ error: t(req.key, req.args) });
       return;
     }
     const seq = ++runSeq;

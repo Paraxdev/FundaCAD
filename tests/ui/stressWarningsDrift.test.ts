@@ -1,6 +1,6 @@
 // A reworded engine warning fails here by name instead of silently falling through to English.
 import { beforeAll, describe, expect, it } from "vitest";
-import { setLanguage, tEnglish } from "../../src/i18n";
+import { setLanguage, t, tEnglish } from "../../src/i18n";
 import { plainError, plainWarning, sentence } from "../../src/ui/stressWarnings";
 import { panelMessage } from "../../src/ui/stress";
 import solveRs from "../../crates/fundacad-geom/src/fem/solve.rs?raw";
@@ -51,10 +51,16 @@ describe("the engine refusals the panel rewords", () => {
 
   it.each(REFUSAL_TEXTS.map((r) => [r.name, r] as const))(
     "%s reaches its own line, not the fall through",
-    (_n, row) => {
+    async (_n, row) => {
       const said = plainError(row.example);
       expect(said).toBe(tEnglish(row.key, row.args));
-      expect(said).not.toBe(sentence(panelMessage(row.example)));
+      if (!row.englishAsSent) return void expect(said).not.toBe(sentence(panelMessage(row.example)));
+      expect(said).toBe(sentence(panelMessage(row.example)));
+      await setLanguage("de");
+      const german = { said: plainError(row.example), line: t(row.key, row.args) };
+      await setLanguage("en");
+      expect(german.said).toBe(german.line);
+      expect(german.said).not.toBe(said);
     },
   );
 

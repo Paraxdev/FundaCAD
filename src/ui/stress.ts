@@ -1,7 +1,7 @@
 // The Stress panel's pure half: material presets, setup to `stress` op options and saved study, reply to display
 // rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
-import { t, type MessageArgs, type MessageKey } from "../i18n";
+import { t, tEnglish, type MessageArgs, type MessageKey } from "../i18n";
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
 import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSpotArea } from "../geometry/client";
 import type { PanelRow } from "../stores/panels";
@@ -375,39 +375,31 @@ export function intoDirection(faces: StressFaceSet, spots: readonly StressSpot[]
   return [-x / len + 0, -y / len + 0, -z / len + 0];
 }
 
+/** Why a setup cannot run, as a line and its arguments. */
+export type Refusal = { key: MessageKey; args?: MessageArgs };
+
 /** One load's unit direction, or why it has none. */
-export function forceDirection(load: StressLoadSetup): Vec3 | string {
+export function forceDirection(load: StressLoadSetup): Vec3 | Refusal {
   if (load.direction === "into") {
     // "Into the face" is read off the faces drawn in the view, so with any unplaced the direction would be a guess.
     const unplaced = unshownFaces(load.faces) + (load.faces.missing ?? 0);
-    if (unplaced > 0) {
-      return (
-        `${unplaced === 1 ? "one of its faces is" : `${unplaced} of its faces are`} not shown in the view, so ` +
-        '"into the face" cannot be worked out; set the faces again, or pick an axis or a custom vector'
-      );
-    }
-    if (load.spots?.some((s) => !s.normal)) {
-      return 'one of its spots has no direction of its own, so "into the face" cannot be worked out; place the spot again, or pick an axis or a custom vector';
-    }
-    const d = intoDirection(load.faces, load.spots);
-    return (
-      d ??
-      'its faces point different ways, so "into the face" has no single direction; pick an axis, a custom vector or a pressure'
-    );
+    if (unplaced > 0) return { key: "stress.request.dirUnshown", args: { n: unplaced } };
+    if (load.spots?.some((s) => !s.normal)) return { key: "stress.request.dirSpot" };
+    return intoDirection(load.faces, load.spots) ?? { key: "stress.request.dirMixed" };
   }
   if (load.direction === "custom") {
     const [x, y, z] = load.custom;
     const len = Math.hypot(x, y, z);
-    if (!(len > 0) || !Number.isFinite(len)) return "the custom direction is zero";
+    if (!(len > 0) || !Number.isFinite(len)) return { key: "stress.request.dirZero" };
     return [x / len, y / len, z / len];
   }
   return AXES[load.direction];
 }
 
 /** One load's force vector in N, or why it has none. */
-export function forceVector(load: StressLoadSetup): Vec3 | string {
+export function forceVector(load: StressLoadSetup): Vec3 | Refusal {
   const dir = forceDirection(load);
-  if (typeof dir === "string") return dir;
+  if (!Array.isArray(dir)) return dir;
   return [dir[0] * load.force, dir[1] * load.force, dir[2] * load.force];
 }
 
@@ -417,7 +409,21 @@ export function gravityVector(direction: AxisDirection): Vec3 {
   return [a[0] * GRAVITY + 0, a[1] * GRAVITY + 0, a[2] * GRAVITY + 0];
 }
 
-export type StressRequest = { ok: true; body: string; options: StressOptions } | { ok: false; message: string };
+export type StressRequest =
+  | { ok: true; body: string; options: StressOptions }
+  | { ok: false; message: string; key: MessageKey; args: MessageArgs };
+
+/** A support or load row; `i` is its number, 0 when it is the only one. */
+type Row = { owner: "support" | "load"; i: number };
+
+// `message` is the English line as a lower case fragment, which the request tests read; the panel shows
+// `t(key, args)`. A line opening on a name (Poisson's ratio) keeps its capital.
+function refused({ key, args = {} }: Refusal, row: Row | null = null): StressRequest {
+  const all = { ...args, ...row };
+  const line = tEnglish(key, all).replace(/\.$/, "");
+  const message = /^\w+'s /.test(line) ? line : line.charAt(0).toLowerCase() + line.slice(1);
+  return { ok: false, key, args: all, message };
+}
 
 /** A load row as a fresh panel adds it, never touched: no faces and every
  *  value its default. */
@@ -434,27 +440,16 @@ function untouchedLoad(l: StressLoadSetup): boolean {
   );
 }
 
-/** Why a face set cannot be sent as it is: faces the current model lacks. */
-function missingFaces(set: StressFaceSet, which: string): string | null {
-  const k = set.missing ?? 0;
-  if (!k) return null;
-  return `${k === 1 ? "a face" : `${k} faces`} of ${which} ${k === 1 ? "is" : "are"} not found on the current model, set the faces again`;
-}
-
 /** What a row holds or pushes on, as the engine takes it: its faces when it
  *  has any, its spots when it has any, or why it cannot be sent. */
 function areaOf(
   faces: StressFaceSet,
   spots: readonly StressSpot[] | undefined,
-  which: string,
-): { faces?: Selector[]; spots?: StressSpotArea[] } | string {
+): { faces?: Selector[]; spots?: StressSpotArea[] } | Refusal {
   const placed = spots ?? [];
-  if (!faces.selectors.length && !placed.length) {
-    return `${which} has no faces yet, place it on the body or use selected faces`;
-  }
-  const missing = missingFaces(faces, which);
-  if (missing) return missing;
-  if (placed.some((s) => !isNum(s.radius) || !(s.radius > 0))) return `a spot of ${which} needs a radius above 0`;
+  if (!faces.selectors.length && !placed.length) return { key: "stress.request.noFaces" };
+  if (faces.missing) return { key: "stress.request.missingFaces", args: { k: faces.missing } };
+  if (placed.some((s) => !isNum(s.radius) || !(s.radius > 0))) return { key: "stress.request.spotRadius" };
   return {
     ...(faces.selectors.length ? { faces: faces.selectors } : {}),
     ...(placed.length ? { spots: placed.map((s) => ({ at: [...s.at] as Vec3, radius: s.radius })) } : {}),
@@ -470,55 +465,51 @@ export function defaultSpotRadius(diagonal: number): number {
 /** The panel's setup as the `stress` op's options, or the first thing in the
  *  way, phrased for the status line. */
 export function buildStressRequest(s: StressSetup): StressRequest {
-  if (!s.body) return { ok: false, message: "pick the body to analyse" };
-  if (!s.supports.length) return { ok: false, message: "add a support" };
+  if (!s.body) return refused({ key: "stress.request.noBody" });
+  if (!s.supports.length) return refused({ key: "stress.request.noSupport" });
   const supports: NonNullable<StressOptions["supports"]> = [];
   for (const [i, x] of s.supports.entries()) {
-    const which = s.supports.length > 1 ? `support ${i + 1}` : "the support";
-    const area = areaOf(x.faces, x.spots, which);
-    if (typeof area === "string") return { ok: false, message: area };
+    const row: Row = { owner: "support", i: s.supports.length > 1 ? i + 1 : 0 };
+    const area = areaOf(x.faces, x.spots);
+    if ("key" in area) return refused(area, row);
     if (area.spots && x.type !== "fixed") {
-      return {
-        ok: false,
-        message: `${which} is ${x.type} but has a spot, and a spot holds every way, so make it fixed or remove the spot`,
-      };
+      return refused({ key: "stress.request.spotNotFixed", args: { type: x.type } }, row);
     }
     supports.push({ type: x.type, ...area });
   }
   // Its own weight is a load, so a body under gravity alone is a study, and
   // the blank row a fresh panel starts with is no load at all then.
   const rows = s.gravity.on ? s.loads.filter((l) => !untouchedLoad(l)) : s.loads;
-  if (!rows.length && !s.gravity.on) return { ok: false, message: "add a load, or turn on Own weight" };
+  if (!rows.length && !s.gravity.on) return refused({ key: "stress.request.noLoad" });
   const loads: StressOptions["loads"] = [];
   for (const l of rows) {
     const i = s.loads.indexOf(l);
-    const which = s.loads.length > 1 ? `load ${i + 1}` : "the load";
-    const area = areaOf(l.faces, l.spots, which);
-    if (typeof area === "string") return { ok: false, message: area };
+    const row: Row = { owner: "load", i: s.loads.length > 1 ? i + 1 : 0 };
+    const area = areaOf(l.faces, l.spots);
+    if ("key" in area) return refused(area, row);
     if (l.kind === "pressure") {
-      if (!Number.isFinite(l.pressure) || l.pressure === 0) return { ok: false, message: `${which} needs a pressure` };
+      if (!Number.isFinite(l.pressure) || l.pressure === 0) return refused({ key: "stress.request.noPressure" }, row);
       loads.push({ ...area, pressure: l.pressure });
       continue;
     }
-    if (!Number.isFinite(l.force) || l.force === 0) return { ok: false, message: `${which} needs a force` };
+    if (!Number.isFinite(l.force) || l.force === 0) return refused({ key: "stress.request.noForce" }, row);
     const v = forceVector(l);
-    if (typeof v === "string") return { ok: false, message: `${which}: ${v}` };
+    if (!Array.isArray(v)) return refused(v, row);
     loads.push({ ...area, force: v.map(roundForce) as Vec3 });
   }
   let material: StressMaterial;
   if (s.material === CUSTOM_MATERIAL) {
     const { E, nu, yield: y, density } = s.custom;
     // A cleared number input reads as "", which compares as 0, so check the type first.
-    if (!isNum(E) || !(E > 0)) return { ok: false, message: "the custom material needs a modulus E above 0" };
-    if (!isNum(nu) || !(nu >= 0 && nu < 0.5))
-      return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
-    if (!isNum(y) || !(y > 0)) return { ok: false, message: "the custom material needs a yield strength above 0" };
+    if (!isNum(E) || !(E > 0)) return refused({ key: "stress.request.modulus" });
+    if (!isNum(nu) || !(nu >= 0 && nu < 0.5)) return refused({ key: "stress.request.poisson" });
+    if (!isNum(y) || !(y > 0)) return refused({ key: "stress.request.yield" });
     const hasDensity = isNum(density) && density > 0;
-    if (s.gravity.on && !hasDensity) return { ok: false, message: "own weight needs the material's density in g/cm3" };
+    if (s.gravity.on && !hasDensity) return refused({ key: "stress.request.density" });
     material = { E, nu, yield: y, ...(hasDensity ? { density } : {}), name: CUSTOM_MATERIAL };
   } else {
     if (!STRESS_MATERIALS.some((m) => m.name === s.material))
-      return { ok: false, message: `unknown material ${s.material}` };
+      return refused({ key: "stress.request.material", args: { name: s.material } });
     material = s.material;
   }
   const options: StressOptions = { supports, loads, material };
@@ -719,7 +710,12 @@ function refinementLine(m: StressReply["mesh"]): { key: MessageKey; args: Messag
     return known || m.stop === "off" ? { key: "stress.result.refineOnce", args: { stop: m.stop } } : null;
   }
   const n = passes.length - 1;
-  const args = { n, from: spellRounded(passes[0]!.maxVonMises), to: spellRounded(passes[n]!.maxVonMises), stop: m.stop };
+  const args = {
+    n,
+    from: spellRounded(passes[0]!.maxVonMises),
+    to: spellRounded(passes[n]!.maxVonMises),
+    stop: m.stop,
+  };
   return { key: "stress.result.refined", args };
 }
 

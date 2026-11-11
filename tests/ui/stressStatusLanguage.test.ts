@@ -27,7 +27,7 @@ type Scenario = (r?: Rig) => Promise<string> | string;
 const FACE_B1 = { body: "b1", z: 5, n: 1 };
 const peak = (over: Partial<StressReply>): StressReply => ({
   ...reply,
-  maxVonMises: { value: 12.5, at: [0, 0, 0], face: 0 },
+  maxVonMises: { value: 12.5, at: [12.5, -7.25, 31.4], face: 3 },
   ...over,
 });
 
@@ -162,6 +162,26 @@ const SCENARIOS: Record<string, Scenario> = {
     await run;
     return lastStatus(r);
   },
+  runNoSupportFaces: async () => {
+    const r = rig();
+    r.ui.showStress();
+    r.select([2]);
+    r.ui.setStressFacesFromSelection({ load: 1 });
+    await r.ui.runStress();
+    return usePanelsStore().stress!.error!;
+  },
+  runDeadLoad: async () => {
+    const r = rig();
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({
+      ok: false,
+      message:
+        "the load is only on fixed faces, a fixed face does not move, so the load pushes on the fixture and not the part, load a face that is not fixed",
+    });
+    await run;
+    return usePanelsStore().stress!.error!;
+  },
   nothingToUndo: () => {
     const r = rig();
     r.ui.showStress();
@@ -286,6 +306,9 @@ describe("Stress status lines, announcements and row refusals", () => {
       doneNoFactor: "Stress: peak 12.5 MPa",
       cancelled: "Stress analysis cancelled",
       failed: "Stress analysis failed: Solver gave up at step 7.",
+      runNoSupportFaces: "The support has no faces yet, place it on the body or use selected faces.",
+      runDeadLoad:
+        "The load is only on fixed faces, a fixed face does not move, so the load pushes on the fixture and not the part, load a face that is not fixed.",
       nothingToUndo: "Nothing left to undo in Stress",
       nothingToRedo: "Nothing to redo in Stress",
       pickFace: "Pick a face for the load, Esc to stop",

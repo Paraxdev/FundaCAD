@@ -96,6 +96,8 @@ const REFUSALS: { re: RegExp; key: MessageKey; args?: (m: RegExpMatchArray) => M
   },
   { re: /^there is not enough memory to solve this mesh/, key: "stress.refuse.noMemory" },
   { re: /^the body is not held and can still move, its stiffness matrix is singular/, key: "stress.refuse.notHeld" },
+  { re: /^the load is only on fixed faces, a fixed face does not move/, key: "stress.refuse.deadLoad" },
+  { re: /^every load is only on fixed faces, a fixed face does not move/, key: "stress.refuse.deadLoads" },
 ];
 
 const WALL_TAIL = /, the thinnest wall is about ([\d.]+) mm thick, near \(([^)]+)\) mm$/;
