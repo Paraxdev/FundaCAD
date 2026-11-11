@@ -169,6 +169,28 @@ describe("a plugin that follows the language", () => {
     expect(family("cat:RIVETS").items.map((i) => i.action)).toEqual(["b1"]);
   });
 
+  it("skips a first contributor that gives no label for the next one's heading", async () => {
+    contribute("Acme.Plain", {
+      ribbon: [{ group: "RIVETS", items: [{ action: "p1", label: "P1", iconName: "extrude" }] }],
+    });
+    contribute("Acme.Rivets", {
+      ribbon: [
+        {
+          group: "RIVETS",
+          get label() {
+            return rivets.t("group.rivets");
+          },
+          items: [{ action: "r1", label: "R1", iconName: "extrude" }],
+        },
+      ],
+    });
+    expect(contributedGroupLabel("RIVETS")).toBe("Rivets");
+    await setLanguage("de");
+    expect(contributedGroupLabel("RIVETS")).toBe("Nieten");
+    expect(family("cat:RIVETS").label).toBe("Nieten");
+    expect(family("cat:RIVETS").items.map((i) => i.action)).toEqual(["p1", "r1"]);
+  });
+
   it("leaves a plugin without locales as it was across a switch", async () => {
     contribute("Acme.Plain", {
       ribbon: [{ group: "PLAIN", items: [{ action: "plain-x", label: "Plain X", iconName: "extrude" }] }],
