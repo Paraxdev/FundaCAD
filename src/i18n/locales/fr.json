@@ -6,6 +6,7 @@
   "carry.badValue": "Le champ contient une valeur illisible, corrigez-la ou appuyez sur Échap",
   "carry.depthFirst": "Fixez d'abord la profondeur, saisissez-la ou cliquez pour la placer",
   "carry.lost": "{kind, select, face {La face choisie} other {L'arête choisie}} n'est pas dans le résultat, choisissez-la à nouveau",
+  "carry.nothingMade": "Profondeur 0, rien n'a été créé",
   "carry.prompt": "cliquez sur une face pour la pousser, sur une arête pour l'arrondir",
   "carry.refused": "Refusé : {reason}",
   "carry.wait": "L'aperçu est encore en cours de calcul, cliquez à nouveau dans un instant",

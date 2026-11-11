@@ -201,6 +201,16 @@ describe("after a step that added nothing", () => {
     expect(r.store.watching).toBe(0);
   });
 
+  it("says the note a step that added nothing left, and still carries on", () => {
+    const quiet = rig();
+    quiet.host.after({ kind: "nothing" }, FACE);
+    expect(quiet.status).toEqual([]);
+    const noted = rig();
+    noted.host.after({ kind: "nothing", note: "Depth is 0, nothing made" }, FACE);
+    expect(noted.status).toEqual(["Depth is 0, nothing made"]);
+    expect(noted.calls).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull null"]);
+  });
+
   it("waits while the preview is still on screen, then acts once it is gone", () => {
     const r = rig();
     r.store.state = state({ previewBuilt: PREVIEW });

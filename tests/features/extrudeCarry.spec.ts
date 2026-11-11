@@ -287,7 +287,10 @@ describe("Extrude carries on to the next pick", () => {
     r.under.hit = faceHit;
     r.pointer("pointerdown");
     expect(r.calls.added).toEqual([]);
-    expect(r.after).toHaveBeenCalledWith({ kind: "nothing" }, { kind: "face", point: LARGE_CENTRE });
+    expect(r.after).toHaveBeenCalledWith(
+      { kind: "nothing", note: carryWords.nothingMade() },
+      { kind: "face", point: LARGE_CENTRE },
+    );
     expect(r.tool.active).toBe(false);
   });
 

@@ -6,6 +6,7 @@
   "carry.badValue": "ボックスの値を読み取れません。修正するか Esc を押してください",
   "carry.depthFirst": "先に深さを決めてください。入力するか、クリックして決めます",
   "carry.lost": "{kind, select, face {選んだ面} other {選んだエッジ}}は結果にありません。もう一度選んでください",
+  "carry.nothingMade": "深さが 0 のため、何も作成されませんでした",
   "carry.prompt": "面をクリックして押し出し、エッジをクリックして丸めます",
   "carry.refused": "拒否されました: {reason}",
   "carry.wait": "プレビューを作成中です。少し待ってからもう一度クリックしてください",

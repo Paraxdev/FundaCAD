@@ -17,7 +17,10 @@ export interface CarryTarget {
   point: Vec3;
 }
 
-export type CarryCommit = { kind: "added"; id: string } | { kind: "nothing" } | { kind: "stayed"; why: string };
+export type CarryCommit =
+  | { kind: "added"; id: string }
+  | { kind: "nothing"; note?: string }
+  | { kind: "stayed"; why: string };
 
 export interface CarrySource {
   /** The localized reason a commit must not go ahead now, else null. */
@@ -35,6 +38,7 @@ export const carryWords = {
   wait: () => t("carry.wait"),
   badValue: () => t("carry.badValue"),
   depthFirst: () => t("carry.depthFirst"),
+  nothingMade: () => t("carry.nothingMade"),
   refused: (reason: string) => t("carry.refused", { reason }),
   prompt: () => t("carry.prompt"),
 };

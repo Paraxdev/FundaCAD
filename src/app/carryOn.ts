@@ -57,6 +57,7 @@ export function installCarryOn(e: CarryEngine): void {
       drop?.();
       afterPress = null;
       const id = done.kind === "added" ? done.id : null;
+      if (done.kind === "nothing" && done.note) refuseAloud(e, done.note);
       let started = false;
       let over = false;
       const undo: (() => void)[] = [];

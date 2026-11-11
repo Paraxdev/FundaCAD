@@ -6,6 +6,7 @@
   "carry.badValue": "输入框中的值无法读取，请修改或按 Esc",
   "carry.depthFirst": "请先确定深度，输入数值或点击放置",
   "carry.lost": "{kind, select, face {所选的面} other {所选的边}}不在结果中，请重新选择",
+  "carry.nothingMade": "深度为 0，未创建任何内容",
   "carry.prompt": "点击面以推拉，点击边以倒圆",
   "carry.refused": "已拒绝：{reason}",
   "carry.wait": "预览仍在生成，请稍后再点击",

@@ -6,6 +6,7 @@
   "carry.badValue": "Das Feld enthält einen Wert, der nicht gelesen werden kann, korrigieren Sie ihn oder drücken Sie Esc",
   "carry.depthFirst": "Legen Sie zuerst die Tiefe fest, tippen Sie sie ein oder klicken Sie, um sie zu setzen",
   "carry.lost": "{kind, select, face {Die gewählte Fläche} other {Die gewählte Kante}} ist nicht im Ergebnis, wählen Sie sie erneut",
+  "carry.nothingMade": "Tiefe ist 0, nichts erstellt",
   "carry.prompt": "klicken Sie auf eine Fläche, um sie zu verschieben, auf eine Kante, um sie zu runden",
   "carry.refused": "Abgelehnt: {reason}",
   "carry.wait": "Die Vorschau wird noch berechnet, klicken Sie gleich noch einmal",

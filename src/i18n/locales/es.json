@@ -6,6 +6,7 @@
   "carry.badValue": "El cuadro contiene un valor que no se puede leer, corríjalo o pulse Esc",
   "carry.depthFirst": "Fije primero la profundidad, escríbala o haga clic para colocarla",
   "carry.lost": "{kind, select, face {La cara elegida} other {La arista elegida}} no está en el resultado, elíjala de nuevo",
+  "carry.nothingMade": "La profundidad es 0, no se ha creado nada",
   "carry.prompt": "haga clic en una cara para empujarla, en una arista para redondearla",
   "carry.refused": "Rechazado: {reason}",
   "carry.wait": "La vista previa aún se está generando, vuelva a hacer clic en un momento",

@@ -1108,7 +1108,7 @@ export class ExtrudeTool {
     if (read.kind === "ready" && read.unverified) return { kind: "stayed", why: carryWords.wait() };
     if (read.kind === "ready") return { kind: "added", id: this.write(read) };
     this.cancel();
-    return { kind: "nothing" };
+    return read.kind === "zero" ? { kind: "nothing", note: carryWords.nothingMade() } : { kind: "nothing" };
   }
 
   private armCarry() {
