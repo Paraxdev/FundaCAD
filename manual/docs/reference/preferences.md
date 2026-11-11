@@ -42,7 +42,7 @@ A plugin ships its own lines and follows the language too. Your file can correct
 }
 ```
 
-Copy the plugin's names from the `locales/en.json` in its folder.
+An installed plugin keeps its lines inside its code, so you will not find them on disk. The plugin's author lists the line names, and for the plugins that come with FundaCAD they are in `plugins/<id>/locales/en.json` in the FundaCAD source.
 
 Notes for translators on Windows. Save the file as UTF-8, in Notepad choose Save as and set Encoding to UTF-8, or accented letters will not read back. Turn on File name extensions in the Explorer View menu (Show, File name extensions), so you can see that the file is `pl.json` and not `pl.json.txt`, which Notepad adds when it is allowed to. A file named `pl.json.txt` in the languages folder is not listed, rename it to `pl.json`. A file that is not valid JSON is refused with the line and column where it breaks, for example near line 4, column 18, and a comma after the last line is the usual cause.
 
