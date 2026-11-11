@@ -128,3 +128,15 @@ fn a_tool_is_sliced_across_the_axis_asked_for() {
     assert!(near(across(1), [2.5, 3.0, 9.0]));
     assert!(near(across(2), [5.0, 1.5, 9.0]));
 }
+
+fn kept(got: Option<SlicedCut>) -> Option<(f64, bool)> {
+    got.map(|c| ((left(&c) * 1e6).round() / 1e6, c.doubtful))
+}
+
+#[test]
+fn a_slicing_that_cannot_be_made_does_not_stop_the_next_axis() {
+    let (got, drawn) = run(vec![vec![body()], taking(30.0), taking(30.0)]);
+    assert_eq!((kept(got), drawn), (Some((663.0, false)), 3));
+    let (got, drawn) = run(vec![taking(30.0), vec![body()], taking(45.0)]);
+    assert_eq!((kept(got), drawn), (Some((648.0, true)), 3));
+}

@@ -151,7 +151,7 @@ fn sliced_cut(
     let mut refused = None;
     for pieces in attempts {
         if pieces.len() < 2 {
-            break;
+            continue;
         }
         let out = match pieces.iter().try_fold(shape.clone(), |out, piece| boolean(&out, piece)) {
             Ok(out) => out,
