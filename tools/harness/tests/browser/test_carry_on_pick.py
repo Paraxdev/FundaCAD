@@ -1,6 +1,7 @@
-"""A set Extrude depth carries on to the next pick, in both camera rigs: a click on the new top face starts Press/Pull
-on it, a click on an edge starts Fillet, a refused preview refuses the click and commits nothing, Ctrl+Z takes the
-extrude back and closes the tool that started from it. The ambient Move gizmo the commit raises is stood down."""
+"""A set Extrude depth or a pushed Press/Pull carries on to the next pick, in both camera rigs: a click on the new top
+face starts Press/Pull on it, a click on an edge starts Fillet, a refused preview refuses the click and commits nothing,
+Ctrl+Z takes the extrude back and closes the tool that started from it. The ambient Move gizmo the commit raises is
+stood down."""
 
 import pytest
 from fundacad_harness import Session
@@ -196,5 +197,42 @@ def test_the_brackets_and_enter_carry_an_edge_row_on_like_a_click(s):
     st = state(s)
     assert st["fillet"] == "fillet" and st["extrude"] is False and st["pressPull"] is False
     assert st["types"] == [*before, "extrude"]
+    assert len(st["rests"]) == 1
+    assert s.page_errors() == []
+
+
+def open_press_pull(s, mm=6):
+    s.pick_face("top")
+    s.tool("Press/Pull")
+    s.settle()
+    s.drag_handle(s.call("handles")[0].split(" ")[0], mm=mm)
+    s.page.wait_for_function(BUILT, timeout=20000)
+    s.settle()
+
+
+def test_a_click_on_another_face_after_a_push_finishes_it_and_starts_press_pull_there(s):
+    before = state(s)["types"]
+    open_press_pull(s)
+    assert state(s)["pressPull"] is True
+    click_canvas(s, s.call("facePoint", select="front"))
+    s.page.wait_for_function(
+        "() => window.pressPull.active && window.store.document.features.length === 3", timeout=20000)
+    s.settle()
+    st = state(s)
+    assert st["types"] == [*before, "press-pull"]
+    assert len(st["rests"]) == 1
+    assert st["faces"] == 1 and st["extrude"] is False and st["fillet"] is None
+    assert s.page_errors() == []
+
+
+def test_a_click_on_an_edge_after_a_push_finishes_it_and_starts_fillet(s):
+    before = state(s)["types"]
+    open_press_pull(s)
+    click_canvas(s, s.call("edgePoint", select="between right front", via="edge"))
+    s.page.wait_for_function("() => window.edgeFeature.active", timeout=20000)
+    s.settle()
+    st = state(s)
+    assert st["fillet"] == "fillet" and st["pressPull"] is False
+    assert st["types"] == [*before, "press-pull"]
     assert len(st["rests"]) == 1
     assert s.page_errors() == []
