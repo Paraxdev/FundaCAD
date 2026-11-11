@@ -275,4 +275,43 @@ describe("what drops a carry", () => {
     built(r.store);
     expect(r.calls.slice(2)).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull f9"]);
   });
+
+  it("a step finished by a press that is still down starts the next tool only once the press ends", () => {
+    const r = rig();
+    window.dispatchEvent(new Event("pointerdown"));
+    r.host.after({ kind: "added", id: "f7" }, FACE);
+    built(r.store);
+    expect(r.calls).toEqual([]);
+    expect(r.store.watching).toBe(0);
+    window.dispatchEvent(new Event("pointerup"));
+    expect(r.calls).toEqual([]);
+    vi.advanceTimersByTime(0);
+    expect(r.calls).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull f7"]);
+  });
+
+  it("a press that added nothing lands after a pointercancel, a press already over lands at once", () => {
+    const held = rig();
+    window.dispatchEvent(new Event("pointerdown"));
+    held.host.after({ kind: "nothing" }, EDGE);
+    expect(held.calls).toEqual([]);
+    window.dispatchEvent(new Event("pointercancel"));
+    vi.advanceTimersByTime(0);
+    expect(held.calls).toEqual(['picks [{"kind":"edge","edge":{"id":"edge-9"}}]', "fillet null"]);
+
+    const over = rig();
+    over.host.after({ kind: "nothing" }, EDGE);
+    expect(over.calls).toEqual(['picks [{"kind":"edge","edge":{"id":"edge-9"}}]', "fillet null"]);
+  });
+
+  it("a second carry during the press replaces the waiting one", () => {
+    const r = rig();
+    window.dispatchEvent(new Event("pointerdown"));
+    r.host.after({ kind: "nothing" }, EDGE);
+    r.host.after({ kind: "added", id: "f7" }, FACE);
+    window.dispatchEvent(new Event("pointerup"));
+    vi.advanceTimersByTime(0);
+    expect(r.calls).toEqual([]);
+    built(r.store);
+    expect(r.calls).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull f7"]);
+  });
 });

@@ -18,6 +18,19 @@ export type CarryEngine = Pick<
 
 export function installCarryOn(e: CarryEngine): void {
   let drop: (() => void) | null = null;
+  let pressed = false;
+  let afterPress: (() => void) | null = null;
+  window.addEventListener("pointerdown", () => (pressed = true), true);
+  const lift = () => {
+    pressed = false;
+    const go = afterPress;
+    afterPress = null;
+    // Runs after the viewport's pointerup and click, and after the finished step's press hold lets picking go
+    if (go) setTimeout(go, 0);
+  };
+  window.addEventListener("pointerup", lift);
+  window.addEventListener("pointercancel", lift);
+  window.addEventListener("blur", lift);
 
   const land = (target: CarryTarget, id: string | null) => {
     if (id && !e.store.document.features.some((f) => f.id === id)) return;
@@ -42,6 +55,7 @@ export function installCarryOn(e: CarryEngine): void {
     route: (pick) => routeTreeClick(pick, treeClickDeps(e)),
     after(done, target) {
       drop?.();
+      afterPress = null;
       const id = done.kind === "added" ? done.id : null;
       let started = false;
       let over = false;
@@ -80,7 +94,10 @@ export function installCarryOn(e: CarryEngine): void {
         if ((id && !started) || !s.result || s.previewBuilt) return;
         const errored = id != null && s.errorFeatureId === id;
         end();
-        if (!errored) land(target, id);
+        if (errored) return;
+        // The tool the pressed button started would get picking turned back on under it when the press ends
+        if (pressed) afterPress = () => land(target, id);
+        else land(target, id);
       };
       const off = e.store.onSessionBuild(seen);
       if (over) off();
