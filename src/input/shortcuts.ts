@@ -184,6 +184,13 @@ export interface ShortcutOverride {
   label?: string;
 }
 
+export const ALT_REFUSAL = "Alt is read by the tools, pick a key without it";
+
+/** The refusal in the chosen language; the English text is plugin API, so only that one is translated. */
+export function refusalLabel(refused: string, tr: typeof t = t): string {
+  return refused === ALT_REFUSAL ? tr("shortcuts.problem.alt") : refused;
+}
+
 export type ShortcutProblem = { conflict: Shortcut } | { reserved: string } | { refused: string };
 
 /** Combos handled before the table is asked (keymap.ts, app/keyboard.ts,
@@ -331,7 +338,7 @@ export function shortcutOverridden(action: string): boolean {
 
 /** Why a key cannot go to an action, or null when it can. */
 export function checkShortcut(o: ShortcutOverride, table: Shortcut[] = activeShortcuts()): ShortcutProblem | null {
-  if (o.alt) return { refused: "Alt is read by the tools, pick a key without it" };
+  if (o.alt) return { refused: ALT_REFUSAL };
   if (!o.key) return null;
   const row = combo(o);
   const name = formatShortcut({ ...row, action: o.action, context: "global", label: "" });
@@ -376,7 +383,7 @@ export function checkRow(
   id: string,
   c: { key: string; shift?: boolean; ctrl?: boolean; alt?: boolean },
 ): ShortcutProblem | null {
-  if (c.alt) return { refused: "Alt is read by the tools, pick a key without it" };
+  if (c.alt) return { refused: ALT_REFUSAL };
   const row = combo(c);
   const name = formatShortcut({ ...row, action: "", context: "global", label: "" });
   if (RESERVED[name]) return { reserved: RESERVED[name]! };
@@ -436,6 +443,7 @@ export function shortcutConflicts(): [Shortcut, Shortcut][] {
 /** One section of the dialog, derived from SHORTCUTS so it cannot drift from the dispatcher. A row with an `id` can be
  *  changed; one without is fixed. */
 export interface HudGroup {
+  id: string;
   name: string;
   rows: { key: string; label: string; changed?: boolean; id?: string }[];
 }
@@ -457,6 +465,7 @@ function contextGroups(keep: (s: Shortcut) => boolean, core: boolean): HudGroup[
   const shipped = new Set(SHORTCUTS.map((s) => s.action));
   const order = new Map(SHORTCUTS.map((s, i) => [idOf(s), i]));
   return CONTEXTS.map(([name, ctx]) => ({
+    id: ctx,
     name,
     rows: shortcutRows()
       .filter((s) => s.context === ctx && keep(s))
@@ -484,9 +493,10 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
   }));
   const custom = pointerBindings() !== DEFAULT_BINDINGS;
   return [
-    ...(clashes.length ? [{ name: "Conflicts", rows: clashes }] : []),
+    ...(clashes.length ? [{ id: "conflicts", name: "Conflicts", rows: clashes }] : []),
     ...contextGroups((s) => !skip.has(s.action), true),
     {
+      id: "mouse",
       name: "Mouse",
       rows: [
         ...bindingRows(pointerBindings()).map((r) => (custom ? { ...r, changed: true } : r)),
@@ -497,6 +507,7 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
       ],
     },
     {
+      id: "focus",
       name: "3D view focused",
       rows: [
         { key: "] / [", label: "Step to the next / previous face, edge or plane, with a highlight" },
@@ -507,6 +518,7 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGro
       ],
     },
     {
+      id: "always",
       name: "Always",
       rows: [
         { key: "Ctrl+K", label: "Command palette" },
