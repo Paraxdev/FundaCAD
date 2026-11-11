@@ -41,6 +41,7 @@ export const t = catalog.t;
 export const tEnglish = catalog.english;
 // A translator bound to one plugin's own lines, see docs/I18N.md.
 export const pluginText = createPluginText({ active: catalog.active, pluginDropIn: catalog.pluginDropIn });
+export const pluginDropInLines = catalog.pluginDropIn;
 export const initLanguage = catalog.init;
 export const setLanguage = catalog.setLanguage;
 export const reloadLanguageFiles = catalog.reloadDropIns;

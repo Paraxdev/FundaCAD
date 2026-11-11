@@ -17,7 +17,7 @@ import {
 import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
-import { shippedPluginName } from "../plugins/shipped";
+import { shippedPluginName } from "../plugins/pluginNames";
 import { describeSelection } from "../ui/selectionMeasure";
 import { treePickWaiting } from "../ui/treePick";
 

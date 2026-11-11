@@ -11,5 +11,27 @@
   ],
   "hosts": [
     ".onshape.com"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Onshape-Link",
+      "summary": "Importiert die Part Studios eines Onshape-Dokuments über seinen Link, mit Ihren eigenen API-Schlüsseln."
+    },
+    "es": {
+      "name": "Enlace de Onshape",
+      "summary": "Importa los Part Studios de un documento de Onshape desde su enlace, con sus propias claves de API."
+    },
+    "fr": {
+      "name": "Lien Onshape",
+      "summary": "Importe les Part Studios d'un document Onshape depuis son lien, avec vos propres clés d'API."
+    },
+    "ja": {
+      "name": "Onshape リンク",
+      "summary": "Onshape ドキュメントのパートスタジオを、リンクと独自の API キーでインポートします。"
+    },
+    "zh-CN": {
+      "name": "Onshape 链接",
+      "summary": "通过链接导入 Onshape 文档的零件工作室，使用您自己的 API 密钥。"
+    }
+  }
 }
