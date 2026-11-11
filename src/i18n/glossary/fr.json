@@ -724,6 +724,10 @@
     {
       "en": "Curve",
       "text": "Courbe"
+    },
+    {
+      "en": "Plugin",
+      "text": "extension"
     }
   ]
 }

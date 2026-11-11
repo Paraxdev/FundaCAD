@@ -56,7 +56,7 @@ const GLOSSARY_TERMS = [
   ...["Emboss", "Engrave", "Tapped", "Drill point", "Centered", "Two sides", "Axis", "Hand", "Right", "Left"],
   ...["Flip direction", "Fit", "Inside", "Outside", "Tangent faces", "Tangent edges"],
   ...["Delete Face", "Divide Face", "Box", "Cylinder", "Cone", "Sphere", "Torus", "Duplicate", "Remove Body"],
-  ...["Thin extrude", "Features", "Curve"],
+  ...["Thin extrude", "Features", "Curve", "Plugin"],
 ];
 
 function glossaryProblems(code: string, glossary: unknown): string[] {
