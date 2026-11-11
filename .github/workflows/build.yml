@@ -15,6 +15,10 @@
 # release, though nothing sends people there. The retired Python engine is
 # frozen on the `legacy` branch, which publishes nothing.
 #
+# A push whose Rust inputs match a green run reuses that run's engine and skips
+# rust-geom's builds and tests, see rust-key. A manual run (Run workflow)
+# always builds everything.
+#
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
 name: build
