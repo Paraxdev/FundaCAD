@@ -618,11 +618,11 @@ describe("describePick in a comma language", () => {
     await setLanguage("de");
     expect(describePick(slanted)).toEqual({
       label: "Ebene Fläche 4",
-      hint: "60,5 by 40,25 mm, facing up, Extrude 1",
-      readout: "1 Fläche · eben · 60,5 by 40,25 mm · facing up",
-      aloud: "1 Fläche · eben, 60,5 by 40,25 mm, facing up",
+      hint: "60,5 mal 40,25 mm, zeigt nach oben, Extrude 1",
+      readout: "1 Fläche · eben · 60,5 mal 40,25 mm · zeigt nach oben",
+      aloud: "1 Fläche, eben, 60,5 mal 40,25 Millimeter, zeigt nach oben",
       spoken:
-        "Ebene Fläche 4, 60,5 by 40,25 Millimeter, 2435,125 Quadratmillimeter, facing up, at height 37,5 Millimeter, Body1, from Extrude 1",
+        "Ebene Fläche 4, 60,5 mal 40,25 Millimeter, 2435,125 Quadratmillimeter, zeigt nach oben, in Höhe 37,5 Millimeter, Body1, aus Extrude 1",
     });
   });
 
@@ -631,10 +631,10 @@ describe("describePick in a comma language", () => {
     setUnit("in");
     expect(describePick(slantedBore)).toEqual({
       label: "Bohrung 7",
-      hint: "diameter 0,413 in, 0,807 in long, Hole 1",
-      readout: "1 Fläche · Bohrung · ⌀0,413 in · 0,807 in long",
-      aloud: "1 Fläche · Bohrung, ⌀0,413 in, 0,807 in long",
-      spoken: "Bohrung 7, diameter 0,413 Zoll, 0,807 Zoll long, axis up, Body1, from Hole 1",
+      hint: "Durchmesser 0,413 in, 0,807 in lang, Hole 1",
+      readout: "1 Fläche · Bohrung · ⌀0,413 in · 0,807 in lang",
+      aloud: "1 Fläche, Bohrung, Durchmesser 0,413 Zoll, 0,807 Zoll lang",
+      spoken: "Bohrung 7, Durchmesser 0,413 Zoll, 0,807 Zoll lang, Achse senkrecht, Body1, aus Hole 1",
     });
   });
 
@@ -643,7 +643,7 @@ describe("describePick in a comma language", () => {
       label: "Flat face 4",
       hint: "60.5 by 40.25 mm, facing up, Extrude 1",
       readout: "1 face · flat · 60.5 by 40.25 mm · facing up",
-      aloud: "1 face · flat, 60.5 by 40.25 mm, facing up",
+      aloud: "1 face, flat, 60.5 by 40.25 millimetres, facing up",
       spoken:
         "Flat face 4, 60.5 by 40.25 millimetres, 2435.125 square millimetres, facing up, at height 37.5 millimetres, Body1, from Extrude 1",
     });
