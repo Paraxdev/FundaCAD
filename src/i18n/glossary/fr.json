@@ -351,6 +351,18 @@
     {
       "en": "Circular Pattern",
       "text": "Réseau circulaire"
+    },
+    {
+      "en": "shortcut",
+      "text": "raccourci"
+    },
+    {
+      "en": "reset",
+      "text": "réinitialiser"
+    },
+    {
+      "en": "default",
+      "text": "par défaut"
     }
   ]
 }

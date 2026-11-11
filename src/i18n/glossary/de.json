@@ -363,6 +363,18 @@
     {
       "en": "Circular Pattern",
       "text": "Kreismuster"
+    },
+    {
+      "en": "shortcut",
+      "text": "Tastenkürzel"
+    },
+    {
+      "en": "reset",
+      "text": "Zurücksetzen"
+    },
+    {
+      "en": "default",
+      "text": "Standard"
     }
   ]
 }

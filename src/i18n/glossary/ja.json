@@ -355,6 +355,18 @@
     {
       "en": "Circular Pattern",
       "text": "円形パターン"
+    },
+    {
+      "en": "shortcut",
+      "text": "ショートカット"
+    },
+    {
+      "en": "reset",
+      "text": "リセット"
+    },
+    {
+      "en": "default",
+      "text": "デフォルト"
     }
   ]
 }

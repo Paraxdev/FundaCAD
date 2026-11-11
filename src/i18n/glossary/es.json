@@ -358,6 +358,18 @@
     {
       "en": "Circular Pattern",
       "text": "Patrón circular"
+    },
+    {
+      "en": "shortcut",
+      "text": "atajo"
+    },
+    {
+      "en": "reset",
+      "text": "restablecer"
+    },
+    {
+      "en": "default",
+      "text": "predeterminado"
     }
   ]
 }
