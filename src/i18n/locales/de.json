@@ -336,6 +336,7 @@
   "shortcuts.resetTip": "Zurück zum Standard",
   "shortcuts.search": "Tastenkürzel suchen",
   "shortcuts.title": "Tastenkürzel",
+  "sketch.offsetSplineOpen": "Versetzen: Eine Spline-Kante kann dieser Entfernung nicht folgen, das Profil bliebe offen. Versuche einen kleineren Wert",
   "step.history": "Rückgängig und Wiederholen",
   "step.redo": "Wiederholen",
   "step.redoNamed": "Wiederholen: {step}",

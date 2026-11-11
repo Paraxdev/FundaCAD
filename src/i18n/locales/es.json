@@ -336,6 +336,7 @@
   "shortcuts.resetTip": "Volver al valor predeterminado",
   "shortcuts.search": "Buscar atajos",
   "shortcuts.title": "Atajos de teclado",
+  "sketch.offsetSplineOpen": "Desfasar: un borde de spline no puede seguir esa distancia, el perfil quedaría abierto. Prueba con una menor",
   "step.history": "Deshacer y rehacer",
   "step.redo": "Rehacer",
   "step.redoNamed": "Rehacer {step}",

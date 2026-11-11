@@ -336,6 +336,7 @@
   "shortcuts.resetTip": "既定に戻す",
   "shortcuts.search": "ショートカットを検索",
   "shortcuts.title": "キーボードショートカット",
+  "sketch.offsetSplineOpen": "オフセット: スプラインの辺がこの距離に追従できず、輪郭が開いたままになります。もっと小さい値を試してください",
   "step.history": "元に戻す・やり直す",
   "step.redo": "やり直す",
   "step.redoNamed": "{step}をやり直す",

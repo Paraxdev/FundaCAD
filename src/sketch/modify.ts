@@ -9,6 +9,7 @@ import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
 import { coincKey } from "./sketchSolve";
 import {
+  type Pt,
   bsplineDegree,
   bsplineFit,
   bsplinePolyline,
@@ -383,12 +384,23 @@ export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | nu
   return null;
 }
 
+/** A point moved `dist` along the left normal of the chord through its neighbours, so an interior corner offsets to the
+ *  miter direction and an end uses its own segment. */
+const shiftAlongChord = (p: Pt, prev: Pt, next: Pt, dist: number): Pt => {
+  const dx = next.x - prev.x,
+    dy = next.y - prev.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
+};
+
 /** `pairs` are the source and copy operands the `offset` constraint governs (rect operands are edges). `linked:
  *  false` means correct but free floating: the solver models polygon, slot and spline as RIGID, nothing ties them. */
 export type OffsetResult = {
   entities: ResolvedEntity[];
   pairs: OffsetPair[];
   linked: boolean;
+  /** offsetChain could not close the profile around a spline edge at this distance, so nothing was added */
+  refused?: true;
 };
 
 /** Closed shapes grow with positive dist, lines shift to their left normal. Null only for types that cannot be
@@ -441,8 +453,6 @@ export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number
       pairs = [{ src: e.id, cpy: copy.id }];
     }
   } else if (e.type === "spline") {
-    // Each point moves along the perpendicular to the chord through its neighbours, so an interior corner offsets to
-    // the miter direction and the ends use their own segment.
     const pts = e.points;
     if (pts.length >= 2) {
       // a closed spline's seam point is an interior point too, or the two ends
@@ -454,14 +464,14 @@ export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number
         type: "spline",
         id,
         ...constr(e),
-        points: pts.map((p, i) => {
-          const prev = pts[i - 1] ?? (closed ? pts[pts.length - 2]! : p);
-          const next = pts[i + 1] ?? (closed ? pts[1]! : p);
-          const dx = next.x - prev.x,
-            dy = next.y - prev.y;
-          const len = Math.hypot(dx, dy) || 1;
-          return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
-        }),
+        points: pts.map((p, i) =>
+          shiftAlongChord(
+            p,
+            pts[i - 1] ?? (closed ? pts[pts.length - 2]! : p),
+            pts[i + 1] ?? (closed ? pts[1]! : p),
+            dist,
+          ),
+        ),
       };
       linked = false;
     }
@@ -472,14 +482,14 @@ export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number
       const line = bsplinePolyline(e);
       if (e.closed) line.pop();
       const n = line.length;
-      const moved = line.map((p, i) => {
-        const prev = line[i - 1] ?? (e.closed ? line[n - 1]! : p);
-        const next = line[i + 1] ?? (e.closed ? line[0]! : p);
-        const dx = next.x - prev.x,
-          dy = next.y - prev.y;
-        const len = Math.hypot(dx, dy) || 1;
-        return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
-      });
+      const moved = line.map((p, i) =>
+        shiftAlongChord(
+          p,
+          line[i - 1] ?? (e.closed ? line[n - 1]! : p),
+          line[i + 1] ?? (e.closed ? line[0]! : p),
+          dist,
+        ),
+      );
       const deg = bsplineDegree(e);
       const fit = bsplineFit(moved, Math.min(60, e.poles.length * 2), !!e.closed, deg);
       if (fit) {
@@ -519,14 +529,40 @@ export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number
 
 type LineE = Extract<ResolvedEntity, { type: "line" }>;
 type ArcE = Extract<ResolvedEntity, { type: "arc" }>;
-type ChainE = LineE | ArcE;
+type SplineE = Extract<ResolvedEntity, { type: "spline" }>;
+type BsplineE = Extract<ResolvedEntity, { type: "bspline" }>;
+type ChainE = LineE | ArcE | SplineE | BsplineE;
+
+/** The two ends of a chain member. An open B-spline's end poles are on the curve. */
+function chainEnds(e: ChainE): [THREE.Vector2, THREE.Vector2] {
+  if (e.type === "spline") return [v(e.points[0]!.x, e.points[0]!.y), v(e.points.at(-1)!.x, e.points.at(-1)!.y)];
+  if (e.type === "bspline") return [v(e.poles[0]!.x, e.poles[0]!.y), v(e.poles.at(-1)!.x, e.poles.at(-1)!.y)];
+  return [v(e.x1, e.y1), v(e.x2, e.y2)];
+}
+
+/** A closed spline is a loop of its own, never a link of a chain. */
+function isChainMember(e: ResolvedEntity | undefined): e is ChainE {
+  if (!e) return false;
+  if (e.type === "line" || e.type === "arc") return true;
+  if (e.type === "spline") {
+    const a = e.points[0],
+      z = e.points.at(-1);
+    return e.points.length >= 2 && !(e.points.length > 3 && Math.hypot(a!.x - z!.x, a!.y - z!.y) < 1e-9);
+  }
+  return e.type === "bspline" && !e.closed && bsplineValid(e);
+}
 
 /** A member of the chain being offset, in traversal order. `ccw` is meaningful
  *  for arcs only: whether this traversal runs along the arc's CCW sweep. */
 type Member = { i: number; e: ChainE; from: THREE.Vector2; to: THREE.Vector2; ccw: boolean };
 
-/** An offset member. Lines carry their two endpoints; arcs carry the (unchanged)
- *  centre plus the offset radius, and their endpoints ride on that circle. */
+/** Where an offset polyline meets its neighbour: `s` is the segment index plus the parameter along it, so a
+ *  negative `s` or one past the last segment is an extension of the end segment. */
+type PolyHit = { p: THREE.Vector2; s: number };
+
+/** An offset member. Lines carry their two endpoints; arcs carry the (unchanged) centre plus the offset radius, and
+ *  their endpoints ride on that circle. A spline or B-spline carries its offset samples in traversal order, `from`
+ *  and `to` are where its neighbours trim or extend it. */
 type Off =
   | { kind: "line"; src: string; a: THREE.Vector2; b: THREE.Vector2; dir: THREE.Vector2 }
   | {
@@ -538,7 +574,18 @@ type Off =
       R: number;
       ccw: boolean;
       flip: boolean;
+    }
+  | {
+      kind: "poly";
+      src: string;
+      a: THREE.Vector2;
+      b: THREE.Vector2;
+      pts: THREE.Vector2[];
+      from?: PolyHit;
+      to?: PolyHit;
     };
+type PolyOff = Extract<Off, { kind: "poly" }>;
+type LocusOff = Exclude<Off, PolyOff>;
 
 /** Nearly collinear offset lines meet arbitrarily far away; past this multiple of |dist| the corner is left butted.
  *  4 is the common CAD and stroke default (about 29 deg between segments). */
@@ -560,18 +607,77 @@ function arcFromEnds(
   return ccw ? arcFromSpan(C, R, aS, delta, src) : arcFromSpan(C, R, aE, delta, src);
 }
 
-/** Offsets a connected chain of lines and arcs as one, joining corners. Null for a lone curve or a junction, where
- *  the caller falls back to offsetEntity. Members shift LEFT of the traversal, so a CCW loop moves inward. */
+/** An offset polyline after its neighbours cut or extend it; null when the cuts overlap or leave under two points. */
+function trimmedPoly(o: PolyOff): THREE.Vector2[] | null {
+  const n = o.pts.length;
+  if (o.from && o.to && o.from.s >= o.to.s - 1e-9) return null;
+  const mid = o.pts.filter((_p, j) => (o.from ? j > o.from.s : j > 0) && (o.to ? j < o.to.s : j < n - 1));
+  const all = [o.from?.p ?? o.pts[0]!, ...mid, o.to?.p ?? o.pts[n - 1]!];
+  const out = all.filter((p, k) => k === 0 || p.distanceTo(all[k - 1]!) > 1e-9);
+  return out.length >= 2 ? out : null;
+}
+
+/** Whether two segments that do not share a vertex cross. */
+function selfCrosses(pts: THREE.Vector2[]): boolean {
+  for (let i = 0; i + 1 < pts.length; i++)
+    for (let j = i + 2; j + 1 < pts.length; j++)
+      if (segIntersect(pts[i]!, pts[i + 1]!, pts[j]!, pts[j + 1]!)) return true;
+  return false;
+}
+
+/** Where a line or arc offset meets a polyline's end: on a segment (a trim) or on the extension of the end segment. */
+function locusHits(o: LocusOff, pts: THREE.Vector2[], atStart: boolean): PolyHit[] {
+  const hits: PolyHit[] = [];
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k]!,
+      b = pts[k + 1]!;
+    const found = o.kind === "line" ? [lineIntersect(a, b, o.a, o.b)] : circleLineIntersect(a, b, o.C, o.R);
+    for (const p of found) {
+      if (!p) continue;
+      const u = paramOnSeg(a, b, p);
+      const inside = u >= -1e-9 && u <= 1 + 1e-9;
+      const beyond = (atStart && k === 0 && u < 0) || (!atStart && k === pts.length - 2 && u > 1);
+      if (inside || beyond) hits.push({ p, s: k + u });
+    }
+  }
+  return hits;
+}
+
+/** Where the end of one polyline meets the start of the next: a crossing of any two segments, else the two end
+ *  segments extended. */
+function polyHits(p0: PolyOff, p1: PolyOff): { h0: PolyHit; h1: PolyHit }[] {
+  const out: { h0: PolyHit; h1: PolyHit }[] = [];
+  const n0 = p0.pts.length,
+    n1 = p1.pts.length;
+  const at = (a: THREE.Vector2[], k: number, p: THREE.Vector2): PolyHit => ({
+    p,
+    s: k + paramOnSeg(a[k]!, a[k + 1]!, p),
+  });
+  for (let k = 0; k + 1 < n0; k++)
+    for (let m = 0; m + 1 < n1; m++) {
+      const p = segIntersect(p0.pts[k]!, p0.pts[k + 1]!, p1.pts[m]!, p1.pts[m + 1]!);
+      if (p) out.push({ h0: at(p0.pts, k, p), h1: at(p1.pts, m, p) });
+    }
+  if (!out.length) {
+    const p = lineIntersect(p0.pts[n0 - 2]!, p0.pts[n0 - 1]!, p1.pts[0]!, p1.pts[1]!);
+    if (p) out.push({ h0: at(p0.pts, n0 - 2, p), h1: at(p1.pts, 0, p) });
+  }
+  return out;
+}
+
+/** Offsets a connected chain of lines, arcs, splines and B-splines as one, joining corners. Null for a lone curve or a
+ *  junction, where the caller falls back to offsetEntity. Members shift LEFT of the traversal, so a CCW loop moves
+ *  inward. A spline edge that cannot be joined at this distance gives a `refused` result rather than an open profile. */
 export function offsetChain(ents: ResolvedEntity[], index: number, dist: number): OffsetResult | null {
-  const isChain = (e: ResolvedEntity | undefined): e is ChainE => e?.type === "line" || e?.type === "arc";
-  if (!isChain(ents[index])) return null;
+  if (!isChainMember(ents[index])) return null;
 
   // endpoint key -> chain-entity indices touching it. coincKey is the solver's
   // canonical coincidence key, so "connected" here matches what the solver merges.
+  const keysOf = (e: ChainE) => chainEnds(e).map((p) => coincKey(p.x, p.y));
   const touch = new Map<string, number[]>();
   ents.forEach((e, i) => {
-    if (!isChain(e)) return;
-    for (const k of [coincKey(e.x1, e.y1), coincKey(e.x2, e.y2)]) {
+    if (!isChainMember(e)) return;
+    for (const k of keysOf(e)) {
       const arr = touch.get(k);
       if (arr) arr.push(i);
       else touch.set(k, [i]);
@@ -586,9 +692,9 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     const i = stack.pop();
     if (i === undefined || comp.has(i)) continue;
     const e = ents[i];
-    if (!isChain(e)) continue;
+    if (!isChainMember(e)) continue;
     comp.add(i);
-    for (const k of [coincKey(e.x1, e.y1), coincKey(e.x2, e.y2)]) {
+    for (const k of keysOf(e)) {
       const arr = touch.get(k);
       if (!arr) continue;
       if (arr.length > 2) return null; // junction
@@ -601,23 +707,18 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
   let start = -1,
     startKey = "";
   for (const i of comp) {
-    const e = ents[i] as ChainE;
-    if (touch.get(coincKey(e.x1, e.y1))?.length === 1) {
+    const keys = keysOf(ents[i] as ChainE);
+    const free = keys.findIndex((k) => touch.get(k)?.length === 1);
+    if (free >= 0) {
       start = i;
-      startKey = coincKey(e.x1, e.y1);
-      break;
-    }
-    if (touch.get(coincKey(e.x2, e.y2))?.length === 1) {
-      start = i;
-      startKey = coincKey(e.x2, e.y2);
+      startKey = keys[free]!;
       break;
     }
   }
   const closed = start === -1;
   if (closed) {
     start = comp.values().next().value as number;
-    const s = ents[start] as ChainE;
-    startKey = coincKey(s.x1, s.y1);
+    startKey = keysOf(ents[start] as ChainE)[0]!;
   }
 
   const path: Member[] = [];
@@ -627,8 +728,7 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
   while (cur !== -1 && !used.has(cur)) {
     used.add(cur);
     const e = ents[cur] as ChainE;
-    const p1 = v(e.x1, e.y1),
-      p2 = v(e.x2, e.y2);
+    const [p1, p2] = chainEnds(e);
     const fromP1 = coincKey(p1.x, p1.y) === curKey;
     const from = fromP1 ? p1 : p2,
       to = fromP1 ? p2 : p1;
@@ -654,8 +754,8 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
   const value = dist;
   const picked = path.find((m) => m.i === index);
   if (picked) {
-    const backwards = picked.from.distanceTo(v(picked.e.x1, picked.e.y1)) > 1e-9;
-    if (picked.e.type === "line" ? backwards : picked.ccw) dist = -dist;
+    const backwards = picked.from.distanceTo(chainEnds(picked.e)[0]) > 1e-9;
+    if (picked.e.type === "arc" ? picked.ccw : backwards) dist = -dist;
   }
 
   /** For an arc the left normal points at the centre when travelling CCW, so a CCW arc shrinks and a CW arc grows,
@@ -665,6 +765,15 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
       const dir = m.to.clone().sub(m.from).normalize();
       const n = v(-dir.y, dir.x).multiplyScalar(dist);
       return { kind: "line", src: m.e.id, a: m.from.clone().add(n), b: m.to.clone().add(n), dir };
+    }
+    if (m.e.type === "spline" || m.e.type === "bspline") {
+      const raw: Pt[] = m.e.type === "spline" ? m.e.points : bsplinePolyline(m.e);
+      const along = m.from.distanceTo(chainEnds(m.e)[0]) > 1e-9 ? [...raw].reverse() : raw;
+      const pts = along.map((p, k) => {
+        const q = shiftAlongChord(p, along[k - 1] ?? p, along[k + 1] ?? p, dist);
+        return v(q.x, q.y);
+      });
+      return { kind: "poly", src: m.e.id, a: pts[0]!, b: pts[pts.length - 1]!, pts };
     }
     const g = arcGeom(m.e);
     if (!g) return null;
@@ -681,6 +790,34 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
   /** Picks the intersection root nearest the ORIGINAL corner, which keeps a line-arc join on the right branch.
    *  False when there is none or the miter exceeds MITER_LIMIT, leaving the corner butted. */
   const joinAt = (s0: Off, s1: Off, corner: THREE.Vector2): boolean => {
+    const nearest = <T extends { p: THREE.Vector2 }>(c: T[]): T | undefined =>
+      c.length ? c.reduce((p, q) => (q.p.distanceTo(corner) < p.p.distanceTo(corner) ? q : p)) : undefined;
+    const take = <T extends { p: THREE.Vector2 }>(c: T[]): T | undefined => {
+      const best = nearest(c);
+      return best && best.p.distanceTo(corner) <= MITER_LIMIT * Math.abs(dist) + 1e-9 ? best : undefined;
+    };
+    if (s0.kind === "poly" && s1.kind === "poly") {
+      const best = take(polyHits(s0, s1).map((h) => ({ ...h, p: h.h0.p })));
+      if (!best) return false;
+      s0.to = best.h0;
+      s1.from = best.h1;
+      s0.b = s1.a = best.p;
+      return true;
+    }
+    if (s0.kind === "poly" && s1.kind !== "poly") {
+      const best = take(locusHits(s1, s0.pts, false));
+      if (!best) return false;
+      s0.to = best;
+      s0.b = s1.a = best.p;
+      return true;
+    }
+    if (s1.kind === "poly" && s0.kind !== "poly") {
+      const best = take(locusHits(s0, s1.pts, true));
+      if (!best) return false;
+      s1.from = best;
+      s0.b = s1.a = best.p;
+      return true;
+    }
     let cands: THREE.Vector2[] = [];
     if (s0.kind === "line" && s1.kind === "line") {
       const m = lineIntersect(s0.a, s0.b, s1.a, s1.b);
@@ -692,11 +829,10 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     } else if (s0.kind === "arc" && s1.kind === "arc") {
       cands = circleCircleIntersect(s0.C, s0.R, s1.C, s1.R);
     }
-    if (!cands.length) return false;
-    const best = cands.reduce((p, q) => (q.distanceTo(corner) < p.distanceTo(corner) ? q : p));
-    if (best.distanceTo(corner) > MITER_LIMIT * Math.abs(dist) + 1e-9) return false;
-    s0.b = best;
-    s1.a = best;
+    const best = take(cands.map((p) => ({ p })));
+    if (!best || s0.kind === "poly" || s1.kind === "poly") return false;
+    s0.b = best.p;
+    s1.a = best.p;
     return true;
   };
 
@@ -704,6 +840,7 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
   // across the gap, repeating since removing one can expose the next. Bounded by the member count.
   let live = path;
   let offs: Off[] = [];
+  let polyJoinFailed = false;
   for (let pass = 0; pass <= path.length; pass++) {
     const built = live.map(offsetOne);
     offs = built.filter((o): o is Off => o !== null);
@@ -711,8 +848,13 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     live = survivors;
     if (!offs.length) return null;
     const last = offs.length - 1;
-    for (let k = 0; k < last; k++) joinAt(offs[k]!, offs[k + 1]!, live[k]!.to);
-    if (closed && offs.length > 1) joinAt(offs[last]!, offs[0]!, live[last]!.to);
+    polyJoinFailed = false;
+    const join = (k0: number, k1: number) => {
+      const ok = joinAt(offs[k0]!, offs[k1]!, live[k0]!.to);
+      if (!ok && (offs[k0]!.kind === "poly" || offs[k1]!.kind === "poly")) polyJoinFailed = true;
+    };
+    for (let k = 0; k < last; k++) join(k, k + 1);
+    if (closed && offs.length > 1) join(last, 0);
     // a LINE that now points the other way has been swallowed by the offset
     const reversed = offs
       .map((o, k) => (o.kind === "line" && o.b.clone().sub(o.a).dot(o.dir) < 0 ? k : -1))
@@ -723,6 +865,9 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     if (live.length < 1) return null;
   }
 
+  const refused: OffsetResult = { entities: ents, pairs: [], linked: false, refused: true };
+  if (polyJoinFailed) return refused;
+
   const pairs: OffsetPair[] = [];
   const copies: ResolvedEntity[] = [];
   for (const o of offs) {
@@ -731,6 +876,31 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
       const id = newEntityId();
       copies.push({ type: "line", id, x1: o.a.x, y1: o.a.y, x2: o.b.x, y2: o.b.y, ...constr(srcEnt) });
       pairs.push({ src: o.src, cpy: id });
+    } else if (o.kind === "poly") {
+      // the solver ties no offset to a spline, only its two ends follow the neighbours
+      const pts = trimmedPoly(o);
+      if (!pts || selfCrosses(pts)) return refused;
+      const src = srcEnt as SplineE | BsplineE;
+      if (src.type === "bspline") {
+        const deg = bsplineDegree(src);
+        const fit = bsplineFit(pts, Math.min(60, src.poles.length * 2), false, deg);
+        if (!fit) return refused;
+        const degree = src.degree === undefined && deg === DEFAULT_BSPLINE_DEGREE ? undefined : deg;
+        copies.push({
+          type: "bspline",
+          id: newEntityId(),
+          poles: fit.poles,
+          ...bsplineShape({ ...src, degree, knots: undefined }),
+          ...constr(src),
+        });
+      } else {
+        copies.push({
+          type: "spline",
+          id: newEntityId(),
+          points: pts.map((p) => ({ x: p.x, y: p.y })),
+          ...constr(src),
+        });
+      }
     } else {
       const arc = arcFromEnds(o.C, o.R, o.a, o.b, o.ccw, srcEnt);
       if (!arc) continue; // swept to nothing

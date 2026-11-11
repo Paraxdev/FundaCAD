@@ -336,6 +336,7 @@
   "shortcuts.resetTip": "恢复默认",
   "shortcuts.search": "搜索快捷键",
   "shortcuts.title": "键盘快捷键",
+  "sketch.offsetSplineOpen": "偏移：样条边无法跟随该距离，轮廓将保持开放。请尝试更小的值",
   "step.history": "撤销和重做",
   "step.redo": "重做",
   "step.redoNamed": "重做{step}",
