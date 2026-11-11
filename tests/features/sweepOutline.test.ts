@@ -72,22 +72,17 @@ describe("sweepPolylines", () => {
     expect(out[0]).toHaveLength(65);
   });
 
-  it("a slot gets sides at its four tangent ends only", () => {
-    const pts = [...arc(10, 0, 2, -90, 90, 24), ...arc(0, 0, 2, 90, 270, 24)];
+  it("a slot's tangent ends get no sides, a coarse D gets them at its two square ends only", () => {
+    const slot = [...arc(10, 0, 2, -90, 90, 24), ...arc(0, 0, 2, 90, 270, 24)];
     const ends = [0, 24, 25, 49];
-    const plain = sweepPolylines(spec({ rings: [{ points: W(pts) }] }));
-    expect(R(plain)).toEqual(R([loop(pts, 0), loop(pts, 4)]));
-    const joints = pts.map((_, i) => ends.includes(i));
-    const marked = sweepPolylines(spec({ rings: [{ points: W(pts), joints }] }));
-    expect(R(marked)).toEqual(
-      R([
-        loop(pts, 0),
-        loop(pts, 4),
-        ...rise(
-          ends.map((i) => pts[i]!),
-          4,
-        ),
-      ]),
+    const joints = slot.map((_, i) => ends.includes(i));
+    expect(R(sweepPolylines(spec({ rings: [{ points: W(slot), joints }] })))).toEqual(
+      R([loop(slot, 0), loop(slot, 4)]),
+    );
+    const d = arc(0, 0, 3, -90, 90, 4);
+    const square = d.map((_, i) => i === 0 || i === 4);
+    expect(R(sweepPolylines(spec({ rings: [{ points: W(d), joints: square }] })))).toEqual(
+      R([loop(d, 0), loop(d, 4), ...rise([d[0]!, d[4]!], 4)]),
     );
   });
 
@@ -223,10 +218,11 @@ describe("cornerFlags", () => {
     expect(cornerFlags({ points: turn(21) })[1]).toBe(true);
   });
 
-  it("a joint is a corner however gentle the turn", () => {
-    const pts = [flat(0, 0), flat(10, 0), flat(20, 1), flat(10, 8)];
-    expect(cornerFlags({ points: pts })[1]).toBe(false);
-    expect(cornerFlags({ points: pts, joints: [false, true, false, false] })[1]).toBe(true);
+  it("a joint is a corner only past the corner angle, a point inside one edge never is", () => {
+    const gentle = [flat(0, 0), flat(10, 0), flat(20, 1), flat(10, 8)];
+    expect(cornerFlags({ points: gentle, joints: [true, true, true, true] })).toEqual([true, false, true, true]);
+    const sharp = [flat(0, 0), flat(10, 0), flat(10, 8), flat(0, 8)];
+    expect(cornerFlags({ points: sharp, joints: [true, false, true, true] })).toEqual([true, false, true, true]);
   });
 
   it("a repeated point is not a corner", () => {
@@ -334,15 +330,13 @@ describe("chainLoops", () => {
     expect(chainLoops([[pt(1, 1)]], 1e-6)).toEqual([]);
   });
 
-  it("feeds sweepPolylines with sides at the joints only", () => {
-    const right = W(arc(10, 0, 2, -90, 90, 24));
-    const left = W(arc(0, 0, 2, 90, 270, 24));
-    const rings = chainLoops([right, [right[24]!, left[0]!], left, [left[24]!, right[0]!]], 1e-6);
-    expect(rings).toHaveLength(1);
-    expect(rings[0]?.points).toHaveLength(50);
+  it("feeds sweepPolylines with sides at the square joints only", () => {
+    const curve = W(arc(0, 0, 3, -90, 90, 4));
+    const rings = chainLoops([curve, [curve[4]!, curve[0]!]], 1e-6);
+    expect(rings).toEqual([{ points: curve, joints: [true, false, false, false, true] }]);
     const out = sweepPolylines(spec({ rings }));
-    const ends = [right[0]!, right[24]!, left[0]!, left[24]!];
+    const ends = [curve[0]!, curve[4]!];
     expect(R(out.slice(2))).toEqual(R(ends.map((p) => [p, [p[0] + 4 * N[0], p[1] + 4 * N[1], p[2] + 4 * N[2]] as V3])));
-    expect(out).toHaveLength(6);
+    expect(out).toHaveLength(4);
   });
 });

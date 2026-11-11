@@ -52,7 +52,8 @@ export function cornerFlags(ring: SweepRing, cornerDeg = CORNER_DEG): boolean[] 
   const p = ring.points;
   const n = p.length;
   return p.map((q, i) => {
-    if (ring.joints?.[i]) return true;
+    // A ring read off model edges turns only where two edges meet, its other points sample one curve
+    if (ring.joints && !ring.joints[i]) return false;
     const a = sub(q, p[(i + n - 1) % n]!);
     const b = sub(p[(i + 1) % n]!, q);
     if (len(a) === 0 || len(b) === 0) return false;
