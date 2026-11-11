@@ -166,6 +166,21 @@ describe("Extrude engine preview", () => {
     ]);
   });
 
+  it("lets a move that keeps the same depth run the wait out, a new depth starts it over", () => {
+    const r = rig();
+    r.begin();
+    r.depth(5);
+    vi.advanceTimersByTime(100);
+    r.depth(5);
+    vi.advanceTimersByTime(60);
+    expect(r.calls.setPreview).toEqual([[feat(5), { hold: true }]]);
+    r.depth(7);
+    vi.advanceTimersByTime(100);
+    r.depth(8);
+    vi.advanceTimersByTime(60);
+    expect(r.calls.setPreview).toEqual([[feat(5), { hold: true }]]);
+  });
+
   it("asks nothing again for a repaint of the same depth", () => {
     const r = rig();
     r.begin();

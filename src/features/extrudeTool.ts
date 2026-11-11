@@ -676,6 +676,7 @@ export class ExtrudeTool {
   }
 
   private outline: ToolOutline | null = null;
+  private timedKey = "";
 
   private updateOutline(sign: number, depth: number) {
     const first = this.selected[0];
@@ -709,8 +710,11 @@ export class ExtrudeTool {
 
   /** An edit's first push is immediate, or its body would vanish while the rolled back model shows. */
   private schedulePreview() {
-    this.clearPreviewTimer();
     if (this.pushedKey === "" && this.editId) return this.pushEnginePreview();
+    const key = this.selected.length && Math.abs(this.distance) > 1e-6 ? featureKey(this.buildFeature()) : "";
+    if (this.previewTimer != null && key === this.timedKey) return;
+    this.clearPreviewTimer();
+    this.timedKey = key;
     this.previewTimer = window.setTimeout(() => {
       this.previewTimer = null;
       this.pushEnginePreview();
