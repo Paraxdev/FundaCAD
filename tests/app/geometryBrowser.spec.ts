@@ -5,7 +5,19 @@ import { createPinia, setActivePinia } from "pinia";
 import { SessionEnded } from "../../src/document/session";
 import { SELECTION_SPEECH_DELAY } from "../../src/app/planePick";
 import { GEOMETRY_PAGE_SIZE } from "../../src/stores/geometryBrowser";
-import { edge, keys, land, plane, result, rig, settle, topology, type BodySpec } from "./geometryBrowserRig";
+import {
+  edge,
+  keys,
+  land,
+  plane,
+  previewOnScreen,
+  result,
+  rig,
+  settle,
+  topology,
+  type BodySpec,
+} from "./geometryBrowserRig";
+import { t } from "../../src/i18n";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
 
 const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
@@ -1299,6 +1311,20 @@ describe("a tool waiting for a pick", () => {
     await r.build(result([{ id: "body1", etag: "e1c" }]));
     expect(r.browser.offer([r.list.rows[0] ?? old, old])).toMatch(/\w/);
     expect(r.taken).toHaveLength(1);
+  });
+
+  it("says a stale row waits on the open tool while its preview holds the list, else that the row changed", async () => {
+    const r = await waiting();
+    const old = r.list.rows[0]!;
+    await r.build(result([{ id: "body1", etag: "e1c" }]));
+    const back = previewOnScreen(r.store);
+    expect(r.browser.offer([old])).toBe(t("geometry.list.waitsOnTool"));
+    expect(r.browser.pickRows([old], { additive: false })).toBe(t("geometry.list.waitsOnTool"));
+    back();
+    const changed = r.browser.offer([old]);
+    expect(changed).toMatch(/\w/);
+    expect(changed).not.toBe(t("geometry.list.waitsOnTool"));
+    expect(r.taken).toEqual([]);
   });
 
   it("offers nothing of the first document to a pick waiting in the second", async () => {

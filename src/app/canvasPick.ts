@@ -84,12 +84,12 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     ctl.startStepping();
     if (list.state === "loading") {
       waiting = delta;
-      return say(`Listing ${list.kind}`);
+      return say(ctl.waitsOnTool() ?? `Listing ${list.kind}`);
     }
     const row = ctl.step(delta);
     if (!row) {
       list.setLit(false);
-      return say(emptyStepWords(list));
+      return say((!list.rows.length && ctl.waitsOnTool()) || emptyStepWords(list));
     }
     list.setLit(true);
     const { type, facing, minSize } = list.filters;
