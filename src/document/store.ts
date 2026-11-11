@@ -97,8 +97,8 @@ import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { logEditTiming } from "../diagnostics/editTiming";
 import { t } from "../i18n";
-import { labelOf, numberedEnglish } from "../ui/featureMeta";
-import { STEP_LABEL, stepLabel } from "./stepLabels";
+import { labelOf, nameRef, numberedEnglish } from "../ui/featureMeta";
+import { STEP_LABEL, stepLabel, stepText, type StepLabel } from "./stepLabels";
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
@@ -210,7 +210,7 @@ const TIMELINE_KEYS: ReadonlySet<string> = new Set(["suppressed", "rollback"]);
 
 // Snapshots and display-only overlay changes share one chronological stack, so Ctrl+Z undoes whichever came last.
 // `label` names the step for "Undid Fillet 2". `mark` is unique across documents, so a toast's Undo can tell its own step.
-type Stamp = { label: string; mark: number };
+type Stamp = { label: StepLabel; mark: number };
 type UndoEntry = (
   | { kind: "doc"; doc: CadDocument; state?: StateSwap }
   | { kind: "overlay"; undo: () => void; redo: () => void }
@@ -1146,7 +1146,7 @@ export class DocumentStore {
 
   private markSeq = 0;
 
-  private pushUndo(label: string = STEP_LABEL.edit): UndoEntry & { kind: "doc" } {
+  private pushUndo(label: StepLabel = STEP_LABEL.edit): UndoEntry & { kind: "doc" } {
     const entry = { kind: "doc" as const, doc: clone(this.doc), label, mark: ++this.markSeq };
     if (this.collecting) this.collecting.push(entry);
     else {
@@ -1156,7 +1156,7 @@ export class DocumentStore {
     return entry;
   }
 
-  private pushOverlayUndo(entry: { undo: () => void; redo: () => void; label: string }) {
+  private pushOverlayUndo(entry: { undo: () => void; redo: () => void; label: StepLabel }) {
     const stamped = { kind: "overlay" as const, mark: ++this.markSeq, ...entry };
     if (this.collecting) return void this.collecting.push(stamped);
     this.stepped();
@@ -1167,11 +1167,11 @@ export class DocumentStore {
 
   // setBodiesVisibility has its own, since a visible id is always set, never deleted. False when nothing changed, so
   // the caller can skip its own emit and dirty.
-  private writeOverlayBatch<T>(overlay: Overlay<T>, ids: Iterable<string>, value: T | null, label: string): boolean {
+  private writeOverlayBatch<T>(overlay: Overlay<T>, ids: Iterable<string>, value: T | null, label: StepLabel): boolean {
     return this.writeOverlayMap(overlay, new Map([...ids].map((id) => [id, value])), label);
   }
 
-  private writeOverlayMap<T>(overlay: Overlay<T>, writes: ReadonlyMap<string, T | null>, label: string): boolean {
+  private writeOverlayMap<T>(overlay: Overlay<T>, writes: ReadonlyMap<string, T | null>, label: StepLabel): boolean {
     const prior = new Map<string, T | undefined>();
     for (const [id, value] of writes) {
       const was = overlay.get(id);
@@ -1206,12 +1206,12 @@ export class DocumentStore {
     return true;
   }
 
-  mutate(fn: (doc: CadDocument) => void, immediate = false, label?: string) {
+  mutate(fn: (doc: CadDocument) => void, immediate = false, label?: StepLabel) {
     this.step(fn, immediate, undefined, label);
   }
   /** `move` shifts the rollback marker or the suppress set with the edit, inside its undo step. `label` replaces the
    *  one read off the document before and after. */
-  private step(fn: (doc: CadDocument) => void, immediate: boolean, move?: () => void, label?: string) {
+  private step(fn: (doc: CadDocument) => void, immediate: boolean, move?: () => void, label?: StepLabel) {
     const before = move && this.timelineSections();
     move?.();
     const entry = this.pushUndo();
@@ -1249,7 +1249,7 @@ export class DocumentStore {
   onProjectionsApplied?: (updates: ProjectionUpdate[]) => void;
 
   // In series: recompute a draft, re-solve affected sketches, land it as one undo step and one rebuild.
-  private queueParamCommit(fn: (d: CadDocument) => void, label?: string) {
+  private queueParamCommit(fn: (d: CadDocument) => void, label?: StepLabel) {
     const st = this.st;
     st.paramPending++;
     const owner = this.untitledDoc;
@@ -1274,7 +1274,7 @@ export class DocumentStore {
     fn: (d: CadDocument) => void,
     immediate: boolean,
     owner: number,
-    label?: string,
+    label?: StepLabel,
   ): Promise<void> {
     const st = this.st;
     for (let tries = 1; ; tries++) {
@@ -1791,6 +1791,12 @@ export class DocumentStore {
     const f = this.doc.features.find((x) => x.id === id);
     return f ? numberedEnglish(f, this.doc.features) : "step";
   }
+  private suppressLabel(on: boolean, ids: readonly string[]): StepLabel {
+    const f = ids.length === 1 ? this.doc.features.find((x) => x.id === ids[0]) : undefined;
+    const step =
+      ids.length === 1 ? (f ? nameRef(f, this.doc.features) : nameRef({ type: "step", name: "step" })) : undefined;
+    return { key: "step.label.suppress", args: { state: on ? "on" : "off", n: ids.length }, ...(step && { step }) };
+  }
   toggleSuppress(id: string) {
     const was = this.suppressed.has(id);
     const set = (on: boolean) => {
@@ -1802,7 +1808,7 @@ export class DocumentStore {
     };
     set(!was);
     this.pushOverlayUndo({
-      label: `${was ? "Unsuppress" : "Suppress"} ${this.stepNameOf(id)}`,
+      label: this.suppressLabel(!was, [id]),
       undo: () => set(was),
       redo: () => set(!was),
     });
@@ -1824,9 +1830,8 @@ export class DocumentStore {
       this.scheduleRebuild(true);
     };
     set(on);
-    const what = todo.length === 1 ? this.stepNameOf(todo[0]!) : `${todo.length} steps`;
     this.pushOverlayUndo({
-      label: `${on ? "Suppress" : "Unsuppress"} ${what}`,
+      label: this.suppressLabel(on, todo),
       undo: () => set(!on),
       redo: () => set(on),
     });
@@ -1933,7 +1938,7 @@ export class DocumentStore {
         d.features.splice(Math.max(0, Math.min(d.features.length, toIndex)), 0, f);
       },
       true,
-      moved && `Move ${numberedEnglish(moved, this.doc.features)}`,
+      moved && { key: "step.label.move", step: nameRef(moved, this.doc.features) },
     );
   }
 
@@ -1949,7 +1954,7 @@ export class DocumentStore {
     this.emitRewind();
     this.redoStack.push(this.applyUndoEntry(prev, "undo"));
     this.settleDirty();
-    return prev.label;
+    return stepText(prev.label);
   }
   redo(): string | null {
     if (this.st.historyHeld) return null;
@@ -1960,7 +1965,7 @@ export class DocumentStore {
     this.undoStack.push(this.applyUndoEntry(next, "redo"));
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.settleDirty();
-    return next.label;
+    return stepText(next.label);
   }
   private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
     if (e.kind === "overlay") {
@@ -1986,7 +1991,7 @@ export class DocumentStore {
   undoAsOne(
     fn: () => void,
     onto?: (before: CadDocument) => boolean,
-    opts: { only?: boolean; label?: string } = {},
+    opts: { only?: boolean; label?: StepLabel } = {},
   ): boolean {
     const top = this.undoStack.at(-1);
     const join = top?.kind === "doc" && !!onto?.(top.doc);
@@ -2019,10 +2024,10 @@ export class DocumentStore {
     return false;
   }
   get undoLabel(): string | null {
-    return this.canUndo ? this.undoStack.at(-1)!.label : null;
+    return this.canUndo ? stepText(this.undoStack.at(-1)!.label) : null;
   }
   get redoLabel(): string | null {
-    return this.canRedo ? this.redoStack.at(-1)!.label : null;
+    return this.canRedo ? stepText(this.redoStack.at(-1)!.label) : null;
   }
   get undoMark(): number | null {
     return this.canUndo ? this.undoStack.at(-1)!.mark : null;

@@ -143,19 +143,31 @@ export function labelOf(f: Feature): string {
 
 type Placed = Nameable & { id?: string };
 
+/** A step's name as data: a typed name, or the type and its place, spoken in the language of the moment. */
+export interface NameRef {
+  fixed: string | null;
+  meta: { type: string; operation?: unknown; thin?: unknown };
+  place: number | null;
+}
+
 // Steps are counted by their English type name, so a language switch never renumbers a step.
-function numbered(f: Placed, features: readonly Placed[], english: boolean): string {
-  if (f.name?.trim()) return english ? stepEnglish(f) : stepName(f);
-  const word = english ? featureEnglish(f) : featureMeta(f).label;
-  const at = features.findIndex((g) => g === f || (f.id !== undefined && g.id === f.id));
-  if (at < 0) return word;
+export function nameRef(f: Placed, features?: readonly Placed[]): NameRef {
+  const meta = { type: f.type, operation: f.operation, thin: f.thin };
+  if (f.name?.trim()) return { fixed: nameWith(f, () => ""), meta, place: null };
+  const at = features ? features.findIndex((g) => g === f || (f.id !== undefined && g.id === f.id)) : -1;
+  if (!features || at < 0) return { fixed: null, meta, place: null };
   const kind = featureEnglish(f);
-  const n = features.slice(0, at + 1).filter((g) => featureEnglish(g) === kind).length;
-  return (english ? tEnglish : t)("feature.numbered", { name: word, n });
+  return { fixed: null, meta, place: features.slice(0, at + 1).filter((g) => featureEnglish(g) === kind).length };
+}
+
+export function nameText(ref: NameRef, english = false): string {
+  if (ref.fixed !== null) return ref.fixed;
+  const word = english ? featureEnglish(ref.meta) : featureMeta(ref.meta).label;
+  return ref.place === null ? word : (english ? tEnglish : t)("feature.numbered", { name: word, n: ref.place });
 }
 
 /** stepName, with the 1-based place among same-typed steps added to an unnamed one. A named
  *  step counts toward the place so a rename does not renumber the others. */
-export const numberedName = (f: Placed, features: readonly Placed[]): string => numbered(f, features, false);
+export const numberedName = (f: Placed, features: readonly Placed[]): string => nameText(nameRef(f, features));
 
-export const numberedEnglish = (f: Placed, features: readonly Placed[]): string => numbered(f, features, true);
+export const numberedEnglish = (f: Placed, features: readonly Placed[]): string => nameText(nameRef(f, features), true);

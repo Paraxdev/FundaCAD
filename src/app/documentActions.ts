@@ -302,21 +302,25 @@ export function createDocumentActions(
       // A drag not yet entered is the last step, so undo takes back only that.
       const pending = e.tools.move.pending;
       e.tools.move.cancel();
-      if (pending) return void speak("Undid Move");
+      if (pending) return void speak(t("history.stepped", { way: "undo", label: t("tool.move") }));
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "undo");
       const inSketch = e.sketch.undoEdit();
       const inStress = !inSketch && e.ui.panels.undoStress();
       if (!inSketch && !inStress) e.store.undo();
       if (saysOwnEmpty && label === null) return;
-      speak(!label ? "Nothing to undo" : inStress ? t("stress.say.stepped", { way: "undo", label }) : `Undid ${label}`);
+      speak(
+        !label
+          ? t("history.nothing", { way: "undo" })
+          : t(inStress ? "stress.say.stepped" : "history.stepped", { way: "undo", label }),
+      );
     },
     doRedo() {
       closeHome();
       // A drag not yet entered is a new step, which leaves nothing to redo.
       if (e.tools.move.pending) {
         e.tools.move.settle();
-        return void speak("Nothing to redo");
+        return void speak(t("history.nothing", { way: "redo" }));
       }
       e.tools.move.cancel();
       const saysOwnEmpty = ownHistoryOpen(e);
@@ -325,7 +329,11 @@ export function createDocumentActions(
       const inStress = !inSketch && e.ui.panels.redoStress();
       if (!inSketch && !inStress) e.store.redo();
       if (saysOwnEmpty && label === null) return;
-      speak(!label ? "Nothing to redo" : inStress ? t("stress.say.stepped", { way: "redo", label }) : `Redid ${label}`);
+      speak(
+        !label
+          ? t("history.nothing", { way: "redo" })
+          : t(inStress ? "stress.say.stepped" : "history.stepped", { way: "redo", label }),
+      );
     },
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {
