@@ -281,15 +281,18 @@ describe("numbering", () => {
   });
 
   it("counts two plugin types that share a word apart, by their English names, and one without refName by its label", async () => {
-    const shared = {
+    // A getter per meta, a spread would read the label once and freeze it in English.
+    const sharedWord = (refName: string) => ({
+      icon: "g",
+      refName,
       get label() {
         return t("feature.cylinder");
       },
-    };
+    });
     contribute("Gears", {
       features: [
-        { type: "spur", meta: { icon: "g", ...shared, refName: "Spur gear" } },
-        { type: "helical", meta: { icon: "g", ...shared, refName: "Helical gear" } },
+        { type: "spur", meta: sharedWord("Spur gear") },
+        { type: "helical", meta: sharedWord("Helical gear") },
         { type: "plain", meta: { icon: "g", label: "Plain" } },
       ],
     });
@@ -297,7 +300,13 @@ describe("numbering", () => {
     const list = [step("1", "spur"), step("2", "helical"), step("3", "spur"), step("4", "plain"), step("5", "plain")];
     const places = list.map((f) => numberedEnglish(f, list));
     expect(places).toEqual(["Spur gear 1", "Helical gear 1", "Spur gear 2", "Plain 1", "Plain 2"]);
-    expect(list.map((f) => /(\d+)$/.exec(numberedName(f, list))?.[1])).toEqual(["1", "1", "2", "1", "2"]);
+    expect(list.map((f) => numberedName(f, list))).toEqual([
+      "Zylinder 1",
+      "Zylinder 1",
+      "Zylinder 2",
+      "Plain 1",
+      "Plain 2",
+    ]);
   });
 });
 
