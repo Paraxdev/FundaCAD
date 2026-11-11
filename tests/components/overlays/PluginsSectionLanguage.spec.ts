@@ -16,6 +16,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue")).default;
 const { candidateFrom } = await import("../../../src/plugins");
+const { shippedPlugins } = await import("../../../src/plugins/shipped");
 const { setLanguage } = await import("../../../src/i18n");
 
 enableAutoUnmount(afterEach);
@@ -77,5 +78,35 @@ describe("plugin names in Preferences follow the language", () => {
     await flushPromises();
     expect(nameOf(w, "FundaCAD.Onshape")).toBe("Lien Onshape");
     expect(stranger.find(".plug-name").text()).toBe("Gasket maker");
+  });
+
+  it("translates a shipped plugin that is installed from its release, as on a release build", async () => {
+    const m = shippedPlugins().find((p) => p.manifest.id === "FundaCAD.Printing")!.manifest;
+    installedPlugins.mockResolvedValue([
+      {
+        id: m.id,
+        version: m.version,
+        promise: "",
+        source: "https://github.com/Paraxdev/FundaCAD/releases/download/v1/printing.zip",
+        sha256: "e".repeat(64),
+        installedAt: 0,
+        dir: "/plugins/FundaCAD.Printing",
+        consented: { kind: m.kind, version: m.version, grants: [...m.grants], hosts: [...m.hosts] },
+        official: true,
+      },
+    ]);
+    const w = mount(PluginsSection);
+    await flushPromises();
+    expect(nameOf(w, "FundaCAD.Printing")).toBe("Printer connection");
+
+    await setLanguage("de");
+    await flushPromises();
+    expect(nameOf(w, "FundaCAD.Printing")).toBe("Druckerverbindung");
+    expect(row(w, "FundaCAD.Printing").find(".plug-summary").text()).not.toBe(m.summary);
+
+    await setLanguage("fr");
+    await flushPromises();
+    expect(nameOf(w, "FundaCAD.Printing")).not.toBe("Printer connection");
+    expect(nameOf(w, "FundaCAD.Printing")).not.toBe("Druckerverbindung");
   });
 });
