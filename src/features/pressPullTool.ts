@@ -931,7 +931,7 @@ export class PressPullTool {
       );
     }
     if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Up or Down steps · Esc");
-    const on = this.carry ? ` · ${carryWords.prompt()}` : " · click to commit";
+    const on = this.carry ? ` · click to commit · ${carryWords.prompt()}` : " · click to commit";
     if (this.faces.length > 1) {
       return setPrompt(
         `${this.faces.length} faces · drag or type a distance · Up or Down steps · T stops at a face${on} · Esc`,

@@ -458,7 +458,6 @@ describe("hover and prompt", () => {
   it("say that T stops at a face and a click goes on", () => {
     const r = rig();
     r.begin();
-    expect(prompts.at(-1)).toContain(carryWords.prompt());
-    expect(prompts.at(-1)).toMatch(/T stops at a face/);
+    expect(prompts.at(-1)).toContain(`T stops at a face · click to commit · ${carryWords.prompt()} · Esc`);
   });
 });
