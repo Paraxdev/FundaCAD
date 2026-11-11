@@ -336,6 +336,7 @@
   "shortcuts.resetTip": "Retour à la valeur par défaut",
   "shortcuts.search": "Rechercher un raccourci",
   "shortcuts.title": "Raccourcis clavier",
+  "sketch.offsetSplineOpen": "Décaler : un bord spline ne peut pas suivre cette distance, le profil resterait ouvert. Essayez une valeur plus petite",
   "step.history": "Annuler et rétablir",
   "step.redo": "Rétablir",
   "step.redoNamed": "Rétablir {step}",

@@ -336,6 +336,7 @@
   "shortcuts.resetTip": "Back to the default",
   "shortcuts.search": "Search shortcuts",
   "shortcuts.title": "Keyboard shortcuts",
+  "sketch.offsetSplineOpen": "Offset: a spline edge cannot follow that distance, the profile would stay open. Try a smaller one",
   "step.history": "Undo and redo",
   "step.redo": "Redo",
   "step.redoNamed": "Redo {step}",
