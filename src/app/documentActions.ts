@@ -305,8 +305,11 @@ export function createDocumentActions(
       if (pending) return void speak("Undid Move");
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "undo");
-      if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) e.store.undo();
-      if (!(saysOwnEmpty && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
+      const inSketch = e.sketch.undoEdit();
+      const inStress = !inSketch && e.ui.panels.undoStress();
+      if (!inSketch && !inStress) e.store.undo();
+      if (saysOwnEmpty && label === null) return;
+      speak(!label ? "Nothing to undo" : inStress ? t("stress.say.stepped", { way: "undo", label }) : `Undid ${label}`);
     },
     doRedo() {
       closeHome();
@@ -318,8 +321,11 @@ export function createDocumentActions(
       e.tools.move.cancel();
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "redo");
-      if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) e.store.redo();
-      if (!(saysOwnEmpty && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
+      const inSketch = e.sketch.redoEdit();
+      const inStress = !inSketch && e.ui.panels.redoStress();
+      if (!inSketch && !inStress) e.store.redo();
+      if (saysOwnEmpty && label === null) return;
+      speak(!label ? "Nothing to redo" : inStress ? t("stress.say.stepped", { way: "redo", label }) : `Redid ${label}`);
     },
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {

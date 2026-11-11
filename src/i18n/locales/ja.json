@@ -461,6 +461,7 @@
   "stress.results.where": "値が最も高い場所",
   "stress.say.faceTaken": "{row, select, support {支持} other {荷重}}の面は{n, number}面です。もう1つ追加するには、もう一度「面をクリック」を押します",
   "stress.say.pickFace": "{row, select, support {支持} other {荷重}}の面を選んでください。Escで中止します",
+  "stress.say.stepped": "{way, select, undo {元に戻しました: {label}} other {やり直しました: {label}}}",
   "stress.setup.addLoad": "荷重を追加",
   "stress.setup.addSupport": "支持を追加",
   "stress.setup.body": "ボディ",

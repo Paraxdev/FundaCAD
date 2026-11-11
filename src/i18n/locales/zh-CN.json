@@ -461,6 +461,7 @@
   "stress.results.where": "最高值所在位置",
   "stress.say.faceTaken": "{row, select, support {支撑} other {载荷}}有 {n, number} 个面，再次点击“点击面”可添加另一个",
   "stress.say.pickFace": "请为{row, select, support {支撑} other {载荷}}选择一个面，按 Esc 停止",
+  "stress.say.stepped": "{way, select, undo {已撤销：{label}} other {已重做：{label}}}",
   "stress.setup.addLoad": "添加载荷",
   "stress.setup.addSupport": "添加支撑",
   "stress.setup.body": "实体",

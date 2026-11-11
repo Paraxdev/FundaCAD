@@ -461,6 +461,7 @@
   "stress.results.where": "Where the highest values are",
   "stress.say.faceTaken": "The {row, select, support {support} other {load}} has {n, plural, one {# face} other {# faces}}, Click faces again for another",
   "stress.say.pickFace": "Pick a face for the {row, select, support {support} other {load}}, Esc to stop",
+  "stress.say.stepped": "{way, select, undo {Undid {label}} other {Redid {label}}}",
   "stress.setup.addLoad": "Add load",
   "stress.setup.addSupport": "Add support",
   "stress.setup.body": "Body",

@@ -461,6 +461,7 @@
   "stress.results.where": "Wo die höchsten Werte liegen",
   "stress.say.faceTaken": "{row, select, support {Die Halterung hat} other {Die Last hat}} {n, plural, one {# Fläche} other {# Flächen}}, Flächen anklicken noch einmal für eine weitere",
   "stress.say.pickFace": "Wählen Sie eine Fläche für {row, select, support {die Halterung} other {die Last}}, Esc zum Beenden",
+  "stress.say.stepped": "{way, select, undo {Rückgängig: {label}} other {Wiederholt: {label}}}",
   "stress.setup.addLoad": "Last hinzufügen",
   "stress.setup.addSupport": "Halterung hinzufügen",
   "stress.setup.body": "Körper",

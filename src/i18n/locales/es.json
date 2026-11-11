@@ -461,6 +461,7 @@
   "stress.results.where": "Dónde están los valores más altos",
   "stress.say.faceTaken": "{row, select, support {El apoyo tiene} other {La carga tiene}} {n, plural, one {# cara} other {# caras}}, Hacer clic en caras otra vez para añadir otra",
   "stress.say.pickFace": "Elija una cara para {row, select, support {el apoyo} other {la carga}}, Esc para parar",
+  "stress.say.stepped": "{way, select, undo {Deshecho: {label}} other {Rehecho: {label}}}",
   "stress.setup.addLoad": "Añadir carga",
   "stress.setup.addSupport": "Añadir apoyo",
   "stress.setup.body": "Cuerpo",
