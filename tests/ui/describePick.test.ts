@@ -617,11 +617,12 @@ describe("describePick in a comma language", () => {
   it("reads a flat face with a decimal comma and keeps commas between the facts", async () => {
     await setLanguage("de");
     expect(describePick(slanted)).toEqual({
-      label: "Flat face 4",
+      label: "Ebene Fläche 4",
       hint: "60,5 by 40,25 mm, facing up, Extrude 1",
-      readout: "1 face · flat · 60,5 by 40,25 mm · facing up",
+      readout: "1 Fläche · eben · 60,5 by 40,25 mm · facing up",
+      aloud: "1 Fläche · eben, 60,5 by 40,25 mm, facing up",
       spoken:
-        "Flat face 4, 60,5 by 40,25 Millimeter, 2435,125 Quadratmillimeter, facing up, at height 37,5 Millimeter, Body1, from Extrude 1",
+        "Ebene Fläche 4, 60,5 by 40,25 Millimeter, 2435,125 Quadratmillimeter, facing up, at height 37,5 Millimeter, Body1, from Extrude 1",
     });
   });
 
@@ -629,10 +630,11 @@ describe("describePick in a comma language", () => {
     await setLanguage("de");
     setUnit("in");
     expect(describePick(slantedBore)).toEqual({
-      label: "Hole 7",
+      label: "Bohrung 7",
       hint: "diameter 0,413 in, 0,807 in long, Hole 1",
-      readout: "1 face · hole · ⌀0,413 in · 0,807 in long",
-      spoken: "Hole 7, diameter 0,413 Zoll, 0,807 Zoll long, axis up, Body1, from Hole 1",
+      readout: "1 Fläche · Bohrung · ⌀0,413 in · 0,807 in long",
+      aloud: "1 Fläche · Bohrung, ⌀0,413 in, 0,807 in long",
+      spoken: "Bohrung 7, diameter 0,413 Zoll, 0,807 Zoll long, axis up, Body1, from Hole 1",
     });
   });
 
@@ -641,6 +643,7 @@ describe("describePick in a comma language", () => {
       label: "Flat face 4",
       hint: "60.5 by 40.25 mm, facing up, Extrude 1",
       readout: "1 face · flat · 60.5 by 40.25 mm · facing up",
+      aloud: "1 face · flat, 60.5 by 40.25 mm, facing up",
       spoken:
         "Flat face 4, 60.5 by 40.25 millimetres, 2435.125 square millimetres, facing up, at height 37.5 millimetres, Body1, from Extrude 1",
     });

@@ -2,6 +2,7 @@
 // missing, its words are then left out.
 
 import type { TopologyFace, Vec3 } from "../types";
+import { t } from "../i18n";
 import { spellNumber } from "./measure";
 import { displayValue, fmtArea, fmtLength, spokenArea, spokenLength } from "./units";
 
@@ -49,6 +50,8 @@ export interface PickWords {
   hint: string;
   readout: string;
   spoken: string;
+  /** The readout's parts folded for the voice, with no glyph between them. */
+  aloud: string;
 }
 
 export const MATCH_COS = Math.cos((2 * Math.PI) / 180);
@@ -138,28 +141,29 @@ function isDisc({ size, area }: FaceFacts): boolean {
   return near(size[0], size[1]) && near(area, (Math.PI / 4) * size[0] * size[1]);
 }
 
-function faceName(f: FaceFacts): { name: string; type: string | null } {
+type FaceType = "flat" | "round" | "hole" | "cylinder" | "cone" | "sphere" | "torus" | "curved";
+type EdgeType = "straight" | "round" | "curved";
+
+function faceType(f: FaceFacts): FaceType | null {
   switch (f.surface) {
     case "plane":
-      return { name: "Flat face", type: "flat" };
+      return "flat";
     case "cylinder":
-      if (f.full === false) return { name: "Round face", type: "round" };
-      return f.full && f.concave ? { name: "Hole", type: "hole" } : { name: "Cylinder", type: "cylinder" };
+      if (f.full === false) return "round";
+      return f.full && f.concave ? "hole" : "cylinder";
     case "cone":
-      return { name: "Cone", type: "cone" };
     case "sphere":
-      return { name: "Sphere", type: "sphere" };
     case "torus":
-      return { name: "Torus", type: "torus" };
+      return f.surface;
     case "bspline":
     case "curved":
-      return { name: "Curved face", type: "curved" };
+      return "curved";
     default:
-      return { name: "Face", type: null };
+      return null;
   }
 }
 
-function faceFacts(f: FaceFacts, type: string | null): (Fact | null)[] {
+function faceFacts(f: FaceFacts, type: FaceType | null): (Fact | null)[] {
   const isFlat = f.surface === "plane";
   const main: (Fact | null)[] = [];
   if (isFlat) main.push(isDisc(f) ? diameter(f.size![0] / 2) : sizeFact(f.size));
@@ -185,12 +189,15 @@ function faceFacts(f: FaceFacts, type: string | null): (Fact | null)[] {
   ];
 }
 
-const EDGE_NAME: Record<EdgeFacts["curve"], { name: string; type: string }> = {
-  line: { name: "Straight edge", type: "straight" },
-  circle: { name: "Round edge", type: "round" },
-  arc: { name: "Round edge", type: "round" },
-  curve: { name: "Curved edge", type: "curved" },
+const EDGE_TYPE: Record<EdgeFacts["curve"], EdgeType> = {
+  line: "straight",
+  circle: "round",
+  arc: "round",
+  curve: "curved",
 };
+
+const joinFacts = (parts: string[]): string =>
+  parts.length ? parts.reduce((before, after) => t("pick.list.more", { before, after })) : "";
 
 const listed = (parts: string[]): string => `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 
@@ -218,24 +225,29 @@ const channel = (facts: (Fact | null)[], key: keyof Fact): string[] =>
 
 export function describePick(f: PickFacts): PickWords {
   if (f.kind === "plane") {
-    const label = f.origin ? `${f.name} plane` : f.name;
-    const where = f.origin ? "origin" : "datum plane";
+    const label = f.origin ? t("pick.plane.name", { name: f.name }) : f.name;
+    const where = t("pick.plane.where", { where: f.origin ? "origin" : "datum" });
     const look = facing(f.normal);
+    const aloud = joinFacts([label, where, ...channel([look], "spoken")]);
     return {
       label,
       hint: where,
       readout: [label, where, ...channel([look], "readout")].join(" · "),
-      spoken: `${[label, where, ...channel([look], "spoken")].join(", ")}. Enter starts a sketch`,
+      spoken: t("pick.plane.spoken", { facts: aloud }),
+      aloud: joinFacts([label, where, ...channel([look], "readout")]),
     };
   }
-  const { name, type } = f.kind === "face" ? faceName(f) : EDGE_NAME[f.curve];
-  const facts = f.kind === "face" ? faceFacts(f, type) : edgeFacts(f);
-  const label = `${name} ${f.number}`;
+  const type = f.kind === "face" ? faceType(f) : EDGE_TYPE[f.curve];
+  const facts = f.kind === "face" ? faceFacts(f, type as FaceType | null) : edgeFacts(f);
+  const label = t(f.kind === "face" ? "pick.name.face" : "pick.name.edge", { type: type ?? "other", n: f.number });
+  const head = t(f.kind === "face" ? "pick.head.face" : "pick.head.edge", { type: type ?? "other" });
+  const shownFacts = channel(facts, "readout");
   return {
     label,
-    hint: channel(facts, "hint").join(", "),
-    readout: [`1 ${f.kind}`, ...(type ? [type] : []), ...channel(facts, "readout")].join(" · "),
-    spoken: [label, ...channel(facts, "spoken")].join(", "),
+    hint: joinFacts(channel(facts, "hint")),
+    readout: [head, ...shownFacts].join(" · "),
+    spoken: joinFacts([label, ...channel(facts, "spoken")]),
+    aloud: joinFacts([head, ...shownFacts]),
   };
 }
 
