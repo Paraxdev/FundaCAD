@@ -4,6 +4,7 @@ extrude back and closes the tool that started from it. The ambient Move gizmo th
 
 import pytest
 from fundacad_harness import Session
+from test_geometry_browser import LISTEN, heard, next_frames, to_canvas
 
 pytestmark = [pytest.mark.browser, pytest.mark.a11y]
 
@@ -18,6 +19,10 @@ TOP = """() => {
   let top = -Infinity;
   for (let i = 2; i < p.length; i += 3) top = Math.max(top, p[i]);
   return top;
+}"""
+ROW_SPOKEN = """() => {
+  const last = window.__spoken[window.__spoken.length - 1];
+  return last !== "Edges" && !last.startsWith("Listing");
 }"""
 BUILT = "() => window.store.hasPreview && !window.store.buildState.building"
 STATE = """() => ({
@@ -165,4 +170,31 @@ def test_ctrl_z_takes_the_extrude_back_and_closes_the_tool_that_started_from_it(
     s.settle()
     st = state(s)
     assert st["pressPull"] is False and st["types"] == before
+    assert s.page_errors() == []
+
+
+def test_the_brackets_and_enter_carry_an_edge_row_on_like_a_click(s):
+    before = state(s)["types"]
+    s.page.evaluate(LISTEN)
+    # An open step holds the rows it has not listed yet, so the edges are listed before the extrude opens
+    to_canvas(s)
+    s.page.keyboard.press("}")
+    heard(s, "Edges")
+    next_frames(s)
+    s.page.keyboard.press("]")
+    s.page.wait_for_function(ROW_SPOKEN, timeout=20000)
+    open_extrude(s)
+    set_depth(s)
+    s.page.evaluate(LISTEN)
+    to_canvas(s)
+    s.page.keyboard.press("]")
+    s.page.wait_for_function("() => window.__spoken.length > 0", timeout=20000)
+    next_frames(s)
+    s.page.keyboard.press("Enter")
+    s.page.wait_for_function("() => window.edgeFeature.active", timeout=20000)
+    s.settle()
+    st = state(s)
+    assert st["fillet"] == "fillet" and st["extrude"] is False and st["pressPull"] is False
+    assert st["types"] == [*before, "extrude"]
+    assert len(st["rests"]) == 1
     assert s.page_errors() == []
