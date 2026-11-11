@@ -9,7 +9,6 @@ import {
   primaryCount,
   primaryKind,
   toolbarOffers,
-  KIND_LABEL,
   selectionCountText,
   type AppearanceOffer,
   type ToolOffer,
@@ -18,10 +17,9 @@ import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
 import { shippedPluginName } from "../plugins/pluginNames";
+import { t } from "../i18n";
 import { describeSelection } from "../ui/selectionMeasure";
 import { treePickWaiting } from "../ui/treePick";
-
-const pluralOf = (k: keyof typeof KIND_LABEL) => (k === "body" ? "bodies" : `${KIND_LABEL[k]}s`);
 
 export interface PluginToolGroup {
   pluginId: string;
@@ -79,17 +77,14 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     if (geometry.litRow) return describePick(geometry.litRow.facts).readout;
     if (words.line.value) return words.line.value;
     const k = kind.value;
-    if (!k) return words.planeCount.value > 1 ? `${words.planeCount.value} planes` : "";
-    const base = describeSelection({
+    if (!k) return words.planeCount.value > 1 ? t("readout.planes", { n: words.planeCount.value }) : "";
+    return describeSelection({
+      kind: k,
       // A run of pieces is one face to the person who picked it.
       count: (k === "face" && words.faceRowCount.value) || primaryCount(counts.value),
-      noun: KIND_LABEL[k],
-      plural: pluralOf(k),
       ...(k === "edge" ? { edges: words.edges.value } : {}),
+      bodyHint: k === "body" && engine.viewport.policy === "auto",
     });
-    return k === "body" && engine.viewport.policy === "auto"
-      ? `${base} · click again for a face, or pause over it`
-      : base;
   });
   const speech = computed(() => words?.speech.value ?? null);
   // A tool's own prompt speaks for the screen, so only a row the brackets lit for its waiting pick shows under it.

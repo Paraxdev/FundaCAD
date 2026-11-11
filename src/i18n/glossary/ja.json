@@ -375,6 +375,46 @@
     {
       "en": "replace",
       "text": "置き換える"
+    },
+    {
+      "en": "edge",
+      "text": "エッジ"
+    },
+    {
+      "en": "body",
+      "text": "ボディ"
+    },
+    {
+      "en": "base plane",
+      "text": "基準平面"
+    },
+    {
+      "en": "datum plane",
+      "text": "参照平面"
+    },
+    {
+      "en": "datum point",
+      "text": "参照点"
+    },
+    {
+      "en": "datum axis",
+      "text": "参照軸"
+    },
+    {
+      "en": "flat face",
+      "text": "平らな面"
+    },
+    {
+      "en": "round face",
+      "text": "丸い面"
+    },
+    {
+      "en": "straight edge",
+      "text": "直線エッジ"
+    },
+    {
+      "en": "profile",
+      "text": "プロファイル"
     }
   ]
 }

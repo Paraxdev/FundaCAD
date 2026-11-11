@@ -118,7 +118,7 @@ export class HoleTool {
     if (pre && this.takeFace(pre)) return;
     this.releaseRows = awaitFaceRows(
       this.viewport,
-      "a flat face",
+      "flatFace",
       (faces) => this.takeFace(faces) || "That face is curved, a hole needs a flat face",
       () => this.cancel(),
     );

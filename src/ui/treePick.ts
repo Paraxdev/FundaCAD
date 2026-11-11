@@ -97,22 +97,25 @@ export function pickHoldsEdits(): boolean {
   return session !== null && !session.keepsOnCommand;
 }
 
-const NOUN: Record<TreePick["kind"], string> = {
-  basePlane: "a base plane",
-  datumPlane: "a datum plane",
-  datumPoint: "a datum point",
-  datumAxis: "a datum axis",
-  body: "a body",
-  bodies: "a folder of bodies",
-  sketch: "a sketch",
-  feature: "a feature",
-  face: "a face",
-  edge: "an edge",
-};
+export type TreePickWant =
+  | "face"
+  | "flatFace"
+  | "roundFace"
+  | "modelFlatFace"
+  | "edge"
+  | "faceOrEdge"
+  | "axisFaceOrEdge"
+  | "planeOrFace"
+  | "planeOrFlatFace"
+  | "bodyPlaneOrFlatFace"
+  | "body"
+  | "oneBody"
+  | "datumPoint"
+  | "sketchProfile"
+  | "axisOrStraightEdge";
 
-/** The hint for a row a step cannot take: what the row is and what the step wants. */
-export function treePickRefusal(pick: TreePick, wanted: string): string {
-  return `That row is ${NOUN[pick.kind]}, this step needs ${wanted}`;
+export function treePickRefusal(pick: TreePick, wanted: TreePickWant): string {
+  return t("pick.refused", { row: pick.kind, wanted });
 }
 
 export interface TreeClickDeps {

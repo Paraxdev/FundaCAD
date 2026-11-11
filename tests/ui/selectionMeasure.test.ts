@@ -79,7 +79,7 @@ describe("selection measure", () => {
   });
 
   it("describes one round edge with its length and diameter", () => {
-    const text = describeSelection({ count: 1, noun: "edge", plural: "edges", edges: [circle(10)] });
+    const text = describeSelection({ count: 1, kind: "edge", edges: [circle(10)] });
     expect(text).toMatch(/^1 edge · 62\.\d+ mm · ⌀20 mm$/);
   });
 
@@ -88,20 +88,20 @@ describe("selection measure", () => {
       [0, 0, 0],
       [10, 0, 0],
     ];
-    expect(describeSelection({ count: 2, noun: "edge", plural: "edges", edges: [line, line] })).toBe("2 edges · 20 mm");
+    expect(describeSelection({ count: 2, kind: "edge", edges: [line, line] })).toBe("2 edges · 20 mm");
   });
 
   it("follows the display unit, the total and the diameter alike", () => {
     setUnit("cm");
-    const text = describeSelection({ count: 1, noun: "edge", plural: "edges", edges: [circle(10)] });
+    const text = describeSelection({ count: 1, kind: "edge", edges: [circle(10)] });
     setUnit("mm");
     expect(text).toMatch(/^1 edge · 6\.\d+ cm · ⌀2 cm$/);
   });
 
   it("counts faces, and nothing for none", () => {
-    expect(describeSelection({ count: 3, noun: "face", plural: "faces" })).toBe("3 faces");
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces" })).toBe("1 face");
-    expect(describeSelection({ count: 0, noun: "face", plural: "faces" })).toBe("");
+    expect(describeSelection({ count: 3, kind: "face" })).toBe("3 faces");
+    expect(describeSelection({ count: 1, kind: "face" })).toBe("1 face");
+    expect(describeSelection({ count: 0, kind: "face" })).toBe("");
   });
 
   it("gives a round face's size by its radius on a partial arc and a diameter on a full wrap", () => {
@@ -128,8 +128,7 @@ describe("selection measure in a comma language", () => {
       roundSize({ radius: 6.125, full: false }),
       describeSelection({
         count: 2,
-        noun: "edge",
-        plural: "edges",
+        kind: "edge",
         edges: [
           [
             [0, 0, 0],
@@ -141,7 +140,7 @@ describe("selection measure in a comma language", () => {
           ],
         ],
       }),
-    ]).toEqual(["⌀12,25 mm", "R6,13 mm", "2 edges · 7,5 mm"]);
+    ]).toEqual(["⌀12,25 mm", "R6,13 mm", "2 Kanten · 7,5 mm"]);
   });
 
   it("keeps the point in English", () => {

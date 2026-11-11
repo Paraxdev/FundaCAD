@@ -48,7 +48,7 @@ export class MeasureTool {
     window.addEventListener("keydown", this.boundKey, true);
     this.releaseRows = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "face" && pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge");
+        if (pick.kind !== "face" && pick.kind !== "edge") return treePickRefusal(pick, "faceOrEdge");
         return this.addProbe(this.toProbe(pick)) || "Nothing to measure there";
       },
       () => this.stop(),

@@ -227,7 +227,7 @@ export class TargetEditTool {
     if (!t || this.awaitingRollback) return STILL_BUILDING;
     if (t.kind === "body") return this.takeBodyRow(pick, t);
     if (t.kind === "face") return this.takeFaceRow(pick, t);
-    if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+    if (pick.kind !== "edge") return treePickRefusal(pick, "edge");
     const sel = edgeSelectorFrom(pick.edge);
     const mid = polylineMid(pick.edge.points);
     const there = mid && this.viewport.edgeLineByMid(mid);
@@ -241,7 +241,7 @@ export class TargetEditTool {
 
   // The Geometry list follows the roll back, so a face row numbers a face of the model this feature edits.
   private takeFaceRow(pick: TreePick, t: TargetField): TreePickAnswer {
-    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    if (pick.kind !== "face") return treePickRefusal(pick, "face");
     if (t.tracked) {
       const at = this.viewport.facesForPressPull([pick.faceId]);
       if (!at) return STILL_BUILDING;
@@ -255,7 +255,7 @@ export class TargetEditTool {
   }
 
   private takeBodyRow(pick: TreePick, t: TargetField): TreePickAnswer {
-    if (pick.kind !== "body" && pick.kind !== "bodies") return treePickRefusal(pick, "a body");
+    if (pick.kind !== "body" && pick.kind !== "bodies") return treePickRefusal(pick, "body");
     const ids = pick.kind === "body" ? [pick.id] : pick.ids;
     if (t.arity === "one" && ids.length !== 1) return "This takes one body";
     const built = this.store.buildState.result?.bodies ?? [];

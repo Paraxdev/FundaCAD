@@ -383,6 +383,46 @@
     {
       "en": "replace",
       "text": "Ersetzen"
+    },
+    {
+      "en": "edge",
+      "text": "Kante"
+    },
+    {
+      "en": "body",
+      "text": "Körper"
+    },
+    {
+      "en": "base plane",
+      "text": "Basisebene"
+    },
+    {
+      "en": "datum plane",
+      "text": "Bezugsebene"
+    },
+    {
+      "en": "datum point",
+      "text": "Bezugspunkt"
+    },
+    {
+      "en": "datum axis",
+      "text": "Bezugsachse"
+    },
+    {
+      "en": "flat face",
+      "text": "ebene Fläche"
+    },
+    {
+      "en": "round face",
+      "text": "runde Fläche"
+    },
+    {
+      "en": "straight edge",
+      "text": "gerade Kante"
+    },
+    {
+      "en": "profile",
+      "text": "Profil"
     }
   ]
 }

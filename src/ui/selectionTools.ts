@@ -20,16 +20,6 @@ import { toolLabel } from "./ribbonDefs";
  *  Bodies come last, not never, so a two-body selection still offers the booleans. */
 export const KIND_RANK: readonly EntityKind[] = ["edge", "sketch-region", "face", "body"];
 
-/** Human name for the kind, for a title or a prompt. Singular, callers that
- *  have a count add the plural. */
-export const KIND_LABEL: Record<EntityKind, string> = {
-  edge: "edge",
-  face: "face",
-  vertex: "corner",
-  body: "body",
-  "sketch-region": "profile",
-};
-
 /** The kind this selection is primarily made of, or null when it is empty. */
 export function primaryKind(sel: SelectionCounts): EntityKind | null {
   return KIND_RANK.find((k) => (sel[k] ?? 0) > 0) ?? null;
@@ -188,8 +178,10 @@ const COUNT_KEYS: Record<EntityKind, MessageKey> = {
   "sketch-region": "rail.count.profile",
 };
 
+export const countLine = (kind: EntityKind, n: number): string => t(COUNT_KEYS[kind], { n });
+
 /** "3 faces" in the chosen language, empty for an empty selection. */
 export function selectionCountText(sel: SelectionCounts): string {
   const kind = primaryKind(sel);
-  return kind ? t(COUNT_KEYS[kind], { n: sel[kind] ?? 0 }) : "";
+  return kind ? countLine(kind, sel[kind] ?? 0) : "";
 }

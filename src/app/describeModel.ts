@@ -2,6 +2,7 @@
 
 import { watch } from "vue";
 import type * as THREE from "three";
+import { t } from "../i18n";
 import type { DocumentStore } from "../document/store";
 import type { SectionTool } from "../features/sectionTool";
 import { useDialogStore } from "../stores/dialogs";
@@ -12,8 +13,8 @@ import { bodyLabels } from "../ui/bodyLabels";
 import { numberedName } from "../ui/featureMeta";
 import { describeModel, selectionSpeech, type Box, type ModelFacts, type SelectedPart } from "../ui/modelDescription";
 import * as read from "../ui/readouts";
+import { countLine } from "../ui/selectionTools";
 import {
-  count,
   standardViewOf,
   viewSummary,
   viewSummaryText,
@@ -120,26 +121,34 @@ const BODIES_ONE_BY_ONE = 3;
 export function selectedParts(e: DescribeHost): SelectedPart[] {
   const names = labelsOf(e);
   const nameOf = (id: string) => names.get(id) ?? id;
-  const on = (ids: readonly (string | null | undefined)[]) => {
+  const counted = (kind: "face" | "edge", n: number, ids: readonly (string | null | undefined)[]) => {
     const owners = new Set(ids);
     const only = owners.size === 1 ? [...owners][0] : null;
-    return only ? ` on ${nameOf(only)}` : "";
+    return only ? t("describe.selection.on", { kind, n, body: nameOf(only) }) : countLine(kind, n);
   };
   const parts: SelectedPart[] = [];
   const bodies = e.viewport.getSelectedBodies();
   if (bodies.length > BODIES_ONE_BY_ONE)
-    parts.push({ what: count(bodies.length, "body", "bodies"), box: boxOf(e.viewport.bodyProperties(bodies)?.bbox) });
+    parts.push({ what: countLine("body", bodies.length), box: boxOf(e.viewport.bodyProperties(bodies)?.bbox) });
   else for (const id of bodies) parts.push({ what: nameOf(id), box: boxOf(e.viewport.bodyProperties([id])?.bbox) });
   const faces = e.viewport.getSelectedFaceIds();
   if (faces.length)
     parts.push({
-      what: count(faces.length, "face", "faces") + on(faces.map((f) => e.viewport.faceIdToBodyId(f))),
+      what: counted(
+        "face",
+        faces.length,
+        faces.map((f) => e.viewport.faceIdToBodyId(f)),
+      ),
       box: boxOf(e.viewport.facesBox(faces)),
     });
   const edges = e.viewport.selectedEdgeLines();
   if (edges.length)
     parts.push({
-      what: count(edges.length, "edge", "edges") + on(edges.map((l) => l.body)),
+      what: counted(
+        "edge",
+        edges.length,
+        edges.map((l) => l.body),
+      ),
       box: pointsBox(edges.flatMap((l) => l.points)),
     });
   return parts;

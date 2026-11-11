@@ -1,9 +1,10 @@
 // Display and input units. Geometry is always stored in mm; the setting only converts what the user sees and types.
 // Angles are always degrees.
 
+import { t } from "../i18n";
 import { readSetting } from "./storedSetting";
 // The display precision rule lives in ui/measure beside the parser; re-exported here so there is one import path.
-import { roundForDisplay as displayRound, spellNumber, spellRounded, spokenUnit } from "./measure";
+import { roundForDisplay as displayRound, spellNumber, spellRounded } from "./measure";
 export { displayRound };
 
 export type Unit = "mm" | "cm" | "in";
@@ -66,17 +67,18 @@ export function fmtArea(mm2: number): string {
 }
 
 // Voices can drop a hyphen before a number, so a negative says minus.
-function spokenAmount(displayed: number, prefix: string): string {
+function spokenAmount(displayed: number, key: "units.spoken.length" | "units.spoken.area"): string {
   const n = displayRound(displayed);
-  return `${n < 0 ? "minus " : ""}${spellNumber(Math.abs(n))} ${prefix}${spokenUnit(current, true, Math.abs(n) === 1)}`;
+  const said = t(key, { unit: current, n: Math.abs(n), amount: spellNumber(Math.abs(n)) });
+  return n < 0 ? t("units.spoken.minus", { amount: said }) : said;
 }
 
 export function spokenLength(mm: number): string {
-  return spokenAmount(toDisplay(mm), "");
+  return spokenAmount(toDisplay(mm), "units.spoken.length");
 }
 
 export function spokenArea(mm2: number): string {
-  return spokenAmount(mm2 / FACTOR[current] ** 2, "square ");
+  return spokenAmount(mm2 / FACTOR[current] ** 2, "units.spoken.area");
 }
 
 const FRACTION_DENOMINATORS = [2, 4, 8, 16, 32, 64];

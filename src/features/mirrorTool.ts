@@ -256,7 +256,7 @@ export class MirrorTool {
       this.set(pickLine(this.fields, { kind: "face", face }, null));
       return PLANE_TAKEN;
     }
-    return treePickRefusal(pick, "a body, a plane or a flat face");
+    return treePickRefusal(pick, "bodyPlaneOrFlatFace");
   }
 
   private planeLabel(p: MirrorPlanePick | null): string {

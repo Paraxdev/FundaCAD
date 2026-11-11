@@ -45,7 +45,7 @@ describe("routing a row click", () => {
 
   it("says why a refused row was refused, and keeps waiting", () => {
     awaitTreePick(
-      (p) => treePickRefusal(p, "one body"),
+      (p) => treePickRefusal(p, "oneBody"),
       () => {},
     );
     const d = deps();

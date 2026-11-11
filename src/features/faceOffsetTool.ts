@@ -140,7 +140,7 @@ export class FaceOffsetTool {
     else {
       this.releaseRows = awaitFaceRows(
         this.viewport,
-        "a face",
+        "face",
         (faces) => (this.takeFaces(faces), true),
         () => this.cancel(),
       );

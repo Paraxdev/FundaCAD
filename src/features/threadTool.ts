@@ -77,7 +77,7 @@ export class ThreadTool {
     if (pre && this.takeFace(pre)) return;
     this.releaseRows = awaitFaceRows(
       this.viewport,
-      "a round face",
+      "roundFace",
       (faces) => this.takeFace(faces) || "That face is not round. A thread needs a cylinder, a shank or a bore",
       () => this.cancel(),
     );

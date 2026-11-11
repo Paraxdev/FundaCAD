@@ -378,6 +378,46 @@
     {
       "en": "replace",
       "text": "reemplazar"
+    },
+    {
+      "en": "edge",
+      "text": "arista"
+    },
+    {
+      "en": "body",
+      "text": "cuerpo"
+    },
+    {
+      "en": "base plane",
+      "text": "plano base"
+    },
+    {
+      "en": "datum plane",
+      "text": "plano de referencia"
+    },
+    {
+      "en": "datum point",
+      "text": "punto de referencia"
+    },
+    {
+      "en": "datum axis",
+      "text": "eje de referencia"
+    },
+    {
+      "en": "flat face",
+      "text": "cara plana"
+    },
+    {
+      "en": "round face",
+      "text": "cara redonda"
+    },
+    {
+      "en": "straight edge",
+      "text": "arista recta"
+    },
+    {
+      "en": "profile",
+      "text": "perfil"
     }
   ]
 }

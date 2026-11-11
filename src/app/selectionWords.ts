@@ -2,6 +2,8 @@
 // the other users of useSelectionOffers cost nothing here.
 
 import { computed, shallowRef } from "vue";
+import { t } from "../i18n";
+import { countLine } from "../ui/selectionTools";
 import { isOriginKey, useSelectionStore } from "../stores/selection";
 import { describeChange, describePick, type FaceFacts, type PickFacts, type PickWords } from "../ui/describePick";
 import { edgeKeyOf, edgeRows, faceRows, planeRows } from "../ui/geometryRows";
@@ -93,15 +95,15 @@ export function createSelectionWords(e: Engine) {
     if (facts) {
       const words = describePick(facts);
       // A row's Enter starts a sketch, a plane picked elsewhere may not.
-      return facts.kind === "plane" ? { label: words.label, spoken: words.readout.replaceAll(" · ", ", ") } : words;
+      return facts.kind === "plane" ? { label: words.label, spoken: words.aloud ?? words.spoken } : words;
     }
     const kind = key.slice(0, 2);
     if (kind === "b:") {
       const name = metaOf(key.slice(2))?.name ?? key.slice(2);
       return { label: name, spoken: name };
     }
-    if (kind === "r:") return { label: "Profile", spoken: "1 profile" };
-    const name = `${kind === "e:" ? "Edge" : "Face"} ${keyPlace(key).place + 1}`;
+    if (kind === "r:") return { label: t("pick.name.profile"), spoken: countLine("sketch-region", 1) };
+    const name = t(kind === "e:" ? "pick.name.edge" : "pick.name.face", { type: "other", n: keyPlace(key).place + 1 });
     return { label: name, spoken: name };
   }
 

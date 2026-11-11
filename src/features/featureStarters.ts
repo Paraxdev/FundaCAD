@@ -237,8 +237,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           return true;
         }
         const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
-        if (!spec || opts.roundFace)
-          return treePickRefusal(pick, opts.roundFace ? "a round face" : "a plane or a face");
+        if (!spec || opts.roundFace) return treePickRefusal(pick, opts.roundFace ? "roundFace" : "planeOrFace");
         cleanup();
         deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
         return true;
@@ -700,7 +699,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a datum point");
+        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "datumPoint");
         take(pick.point, { datum: pick.id });
         return true;
       },
@@ -934,7 +933,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "body") return treePickRefusal(pick, "one body");
+        if (pick.kind !== "body") return treePickRefusal(pick, "oneBody");
         if (exclude.includes(pick.id)) return "That body is already part of this operation, pick another";
         cleanup();
         requestAnimationFrame(() => onPick(pick.id));
@@ -1098,7 +1097,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     // A sketch row names a profile only when that sketch shows exactly one.
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "sketch") return treePickRefusal(pick, "a sketch profile");
+        if (pick.kind !== "sketch") return treePickRefusal(pick, "sketchProfile");
         const mine = overlay.regions.filter((r) => r.sketchId === pick.id);
         const only = mine.length === 1 ? mine[0] : undefined;
         if (!only) {
@@ -1230,7 +1229,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           requestAnimationFrame(() => onPick(line, sel));
           return true;
         }
-        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis or a straight edge");
+        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "axisOrStraightEdge");
         cleanup();
         requestAnimationFrame(() => onPick({ origin: pick.origin, dir: pick.dir }));
         return true;
@@ -1380,7 +1379,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (e.key === "Escape") cancel();
     };
     const releaseTree = awaitTreePick((pick) => {
-      if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+      if (pick.kind !== "face") return treePickRefusal(pick, "face");
       cleanup();
       const n = viewport.planarFace(pick.faceId)?.normal;
       const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
@@ -1438,10 +1437,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (e.key === "Escape") cancel();
     };
     const releaseTree = awaitTreePick((pick) => {
-      if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+      if (pick.kind !== "edge") return treePickRefusal(pick, "edge");
       const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
       const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
-      if (!sel) return treePickRefusal(pick, "an edge");
+      if (!sel) return treePickRefusal(pick, "edge");
       cleanup();
       requestAnimationFrame(() => onPick(sel, pts));
       return true;
@@ -1652,7 +1651,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           } else if (pick.kind === "edge") {
             body = pick.edge.body;
             sel = edgeSelectorFrom({ points: pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3), body });
-          } else return treePickRefusal(pick, "a face or an edge");
+          } else return treePickRefusal(pick, "faceOrEdge");
           if (!body || !sel) return `That ${pick.kind} is on no part, pick a face or an edge on a part`;
           if (body === exclude) return "That is on the part already picked, pick a face or an edge on the other part";
           cleanup();

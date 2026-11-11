@@ -2,6 +2,8 @@
 // missing, its words are then left out.
 
 import type { TopologyFace, Vec3 } from "../types";
+import { t } from "../i18n";
+import { countLine } from "./selectionTools";
 import { spellNumber } from "./measure";
 import { displayValue, fmtArea, fmtLength, spokenArea, spokenLength } from "./units";
 
@@ -49,6 +51,8 @@ export interface PickWords {
   hint: string;
   readout: string;
   spoken: string;
+  /** A plane's readout with the language's list join in place of ` · `. */
+  aloud?: string;
 }
 
 export const MATCH_COS = Math.cos((2 * Math.PI) / 180);
@@ -79,56 +83,53 @@ export function facingOf(n: Vec3): { word: FacingWord; tilt: number } | null {
 
 // Where a fact is shown or said. A channel left out does not carry it.
 type Fact = { hint?: string; readout?: string; spoken?: string };
+type As = "hint" | "readout" | "spoken";
 
 const known = (v: number | undefined | null): v is number => typeof v === "number" && Number.isFinite(v);
+const every = (make: (as: As) => string): Required<Fact> => ({
+  hint: make("hint"),
+  readout: make("readout"),
+  spoken: make("spoken"),
+});
+const lengthIn = (as: As, mm: number) => (as === "spoken" ? spokenLength(mm) : fmtLength(mm));
 const shown = (screen: string, spoken: string): Required<Fact> => ({ hint: screen, readout: screen, spoken });
 
 const facing = (n: Vec3 | undefined): Fact | null => {
   const f = n ? facingOf(n) : null;
   if (!f) return null;
-  return f.tilt
-    ? shown(`tilted ${f.tilt}° from ${f.word}`, `tilted ${f.tilt} degrees from ${f.word}`)
-    : shown(`facing ${f.word}`, `facing ${f.word}`);
+  return every((as) => t("pick.fact.facing", { as, tilted: f.tilt ? "yes" : "no", deg: f.tilt, dir: f.word }));
 };
 
 // An axis is a line, its sign means nothing.
 const AXIS_LINE: Record<FacingWord, string> = {
   up: "up",
   down: "up",
-  front: "front to back",
-  back: "front to back",
-  left: "left to right",
-  right: "left to right",
+  front: "frontBack",
+  back: "frontBack",
+  left: "leftRight",
+  right: "leftRight",
 };
 const axisFact = (axis: Vec3 | undefined): Fact | null => {
   const f = axis ? facingOf(axis) : null;
   if (!f) return null;
-  const line = AXIS_LINE[f.word];
-  return { spoken: f.tilt ? `axis tilted ${f.tilt} degrees from ${line}` : `axis ${line}` };
+  return { spoken: t("pick.fact.axis", { tilted: f.tilt ? "yes" : "no", deg: f.tilt, line: AXIS_LINE[f.word] }) };
 };
 
-const diameter = (radius: number, prefix = ""): Fact => ({
-  hint: `${prefix}diameter ${fmtLength(radius * 2)}`,
-  readout: `${prefix}⌀${fmtLength(radius * 2)}`,
-  spoken: `${prefix}diameter ${spokenLength(radius * 2)}`,
-});
-const radiusFact = (radius: number): Fact => ({
-  hint: `radius ${fmtLength(radius)}`,
-  readout: `R${fmtLength(radius)}`,
-  spoken: `radius ${spokenLength(radius)}`,
-});
-const longFact = (mm: number) => shown(`${fmtLength(mm)} long`, `${spokenLength(mm)} long`);
+const diameter = (radius: number, tube = false): Fact =>
+  every((as) => t("pick.fact.diameter", { as, tube: tube ? "yes" : "no", size: lengthIn(as, radius * 2) }));
+const radiusFact = (radius: number): Fact => every((as) => t("pick.fact.radius", { as, size: lengthIn(as, radius) }));
+const longFact = (mm: number) => every((as) => t("pick.fact.long", { size: lengthIn(as, mm) }));
 const areaFact = (mm2: number) => shown(fmtArea(mm2), spokenArea(mm2));
 
 const sizeFact = (size: [number, number] | undefined): Fact | null => {
   if (!size || !known(size[0]) || !known(size[1])) return null;
-  const first = spellNumber(displayValue(size[0]));
-  return shown(`${first} by ${fmtLength(size[1])}`, `${first} by ${spokenLength(size[1])}`);
+  const w = spellNumber(displayValue(size[0]));
+  return every((as) => t("pick.fact.size", { w, h: lengthIn(as, size[1]) }));
 };
 
 // A body named as its feature, "Box" from Box, is said once.
 const ownerFact = (owner: string | null | undefined, body: string | undefined): Fact | null =>
-  owner ? { hint: owner, ...(owner === body ? {} : { spoken: `from ${owner}` }) } : null;
+  owner ? { hint: owner, ...(owner === body ? {} : { spoken: t("pick.fact.from", { owner }) }) } : null;
 const bodyFact = (body: string | undefined): Fact | null => (body ? { spoken: body } : null);
 
 // A flat face as wide as long whose area is the circle's inside that square: a rounded square or a ring falls short.
@@ -138,33 +139,40 @@ function isDisc({ size, area }: FaceFacts): boolean {
   return near(size[0], size[1]) && near(area, (Math.PI / 4) * size[0] * size[1]);
 }
 
-function faceName(f: FaceFacts): { name: string; type: string | null } {
+type FaceType = "flat" | "round" | "hole" | "cylinder" | "cone" | "sphere" | "torus" | "curved";
+type EdgeType = "straight" | "round" | "curved";
+
+function faceType(f: FaceFacts): FaceType | null {
   switch (f.surface) {
     case "plane":
-      return { name: "Flat face", type: "flat" };
+      return "flat";
     case "cylinder":
-      if (f.full === false) return { name: "Round face", type: "round" };
-      return f.full && f.concave ? { name: "Hole", type: "hole" } : { name: "Cylinder", type: "cylinder" };
+      if (f.full === false) return "round";
+      return f.full && f.concave ? "hole" : "cylinder";
     case "cone":
-      return { name: "Cone", type: "cone" };
     case "sphere":
-      return { name: "Sphere", type: "sphere" };
     case "torus":
-      return { name: "Torus", type: "torus" };
+      return f.surface;
     case "bspline":
     case "curved":
-      return { name: "Curved face", type: "curved" };
+      return "curved";
     default:
-      return { name: "Face", type: null };
+      return null;
   }
 }
 
-function faceFacts(f: FaceFacts, type: string | null): (Fact | null)[] {
+// The readout under the rail never counted the pieces.
+function pieces(n: number): Fact {
+  const line = t("pick.fact.pieces", { n });
+  return { hint: line, spoken: line };
+}
+
+function faceFacts(f: FaceFacts, type: FaceType | null): (Fact | null)[] {
   const isFlat = f.surface === "plane";
   const main: (Fact | null)[] = [];
   if (isFlat) main.push(isDisc(f) ? diameter(f.size![0] / 2) : sizeFact(f.size));
   if (known(f.radius)) {
-    if (f.surface === "torus") main.push(diameter(f.radius, "tube "));
+    if (f.surface === "torus") main.push(diameter(f.radius, true));
     else main.push(f.surface === "sphere" || f.full ? diameter(f.radius) : radiusFact(f.radius));
   }
   if (known(f.length)) main.push(type === "round" ? { spoken: longFact(f.length).spoken } : longFact(f.length));
@@ -177,29 +185,40 @@ function faceFacts(f: FaceFacts, type: string | null): (Fact | null)[] {
     ...main,
     hasMain ? (isFlat && area ? { spoken: area.spoken } : null) : area,
     isFlat ? facing(f.normal) : null,
-    level && known(f.centroid?.[2]) ? { spoken: `at height ${spokenLength(f.centroid![2])}` } : null,
+    level && known(f.centroid?.[2]) ? { spoken: t("pick.fact.height", { h: spokenLength(f.centroid![2]) }) } : null,
     f.surface === "cylinder" || f.surface === "cone" ? axisFact(f.axis) : null,
-    known(f.pieces) && f.pieces > 1 ? { hint: `in ${f.pieces} pieces`, spoken: `in ${f.pieces} pieces` } : null,
+    known(f.pieces) && f.pieces > 1 ? pieces(f.pieces) : null,
     bodyFact(f.body),
     ownerFact(f.owner, f.body),
   ];
 }
 
-const EDGE_NAME: Record<EdgeFacts["curve"], { name: string; type: string }> = {
-  line: { name: "Straight edge", type: "straight" },
-  circle: { name: "Round edge", type: "round" },
-  arc: { name: "Round edge", type: "round" },
-  curve: { name: "Curved edge", type: "curved" },
+const EDGE_TYPE: Record<EdgeFacts["curve"], EdgeType> = {
+  line: "straight",
+  circle: "round",
+  arc: "round",
+  curve: "curved",
 };
 
-const listed = (parts: string[]): string => `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+const joinFacts = (parts: string[]): string =>
+  parts.length ? parts.reduce((before, after) => t("pick.list.more", { before, after })) : "";
+
+const listed = (parts: string[]): string =>
+  parts.length > 1
+    ? t("pick.list.last", { before: joinFacts(parts.slice(0, -1)), last: parts[parts.length - 1]! })
+    : (parts[0] ?? "");
 
 function edgeFaces(faces: number[] | undefined): Fact | null {
   if (!faces?.length) return null;
-  if (faces.length === 1) return { hint: `face ${faces[0]}`, spoken: `on face ${faces[0]}` };
+  const on = (as: As) => t("pick.fact.onFace", { as, n: faces[0]! });
+  if (faces.length === 1) return { hint: on("hint"), spoken: on("spoken") };
+  const between = (as: As, nums: string[]) => t("pick.fact.betweenFaces", { as, faces: listed(nums) });
   return {
-    hint: `faces ${listed(faces.map(String))}`,
-    spoken: `between ${listed(faces.map((n) => `face ${n}`))}`,
+    hint: between("hint", faces.map(String)),
+    spoken: between(
+      "spoken",
+      faces.map((n) => t("pick.fact.faceNumber", { n })),
+    ),
   };
 }
 
@@ -218,34 +237,37 @@ const channel = (facts: (Fact | null)[], key: keyof Fact): string[] =>
 
 export function describePick(f: PickFacts): PickWords {
   if (f.kind === "plane") {
-    const label = f.origin ? `${f.name} plane` : f.name;
-    const where = f.origin ? "origin" : "datum plane";
+    const label = f.origin ? t("pick.plane.name", { name: f.name }) : f.name;
+    const where = t("pick.plane.where", { where: f.origin ? "origin" : "datum" });
     const look = facing(f.normal);
+    const shownFacts = [label, where, ...channel([look], "readout")];
     return {
       label,
       hint: where,
-      readout: [label, where, ...channel([look], "readout")].join(" · "),
-      spoken: `${[label, where, ...channel([look], "spoken")].join(", ")}. Enter starts a sketch`,
+      readout: shownFacts.join(" · "),
+      spoken: t("pick.plane.spoken", { facts: joinFacts([label, where, ...channel([look], "spoken")]) }),
+      aloud: joinFacts(shownFacts),
     };
   }
-  const { name, type } = f.kind === "face" ? faceName(f) : EDGE_NAME[f.curve];
-  const facts = f.kind === "face" ? faceFacts(f, type) : edgeFacts(f);
-  const label = `${name} ${f.number}`;
+  const type = f.kind === "face" ? faceType(f) : EDGE_TYPE[f.curve];
+  const facts = f.kind === "face" ? faceFacts(f, type as FaceType | null) : edgeFacts(f);
+  const label = t(f.kind === "face" ? "pick.name.face" : "pick.name.edge", { type: type ?? "other", n: f.number });
+  const head = t(f.kind === "face" ? "pick.head.face" : "pick.head.edge", { type: type ?? "other" });
   return {
     label,
-    hint: channel(facts, "hint").join(", "),
-    readout: [`1 ${f.kind}`, ...(type ? [type] : []), ...channel(facts, "readout")].join(" · "),
-    spoken: [label, ...channel(facts, "spoken")].join(", "),
+    hint: joinFacts(channel(facts, "hint")),
+    readout: [head, ...channel(facts, "readout")].join(" · "),
+    spoken: joinFacts([label, ...channel(facts, "spoken")]),
   };
 }
 
-const COUNT_NOUN: Record<string, [one: string, many: string]> = {
-  f: ["face", "faces"],
-  e: ["edge", "edges"],
-  p: ["plane", "planes"],
-  b: ["body", "bodies"],
-  r: ["profile", "profiles"],
-  other: ["item", "items"],
+const COUNT_OF: Record<string, (n: number) => string> = {
+  f: (n) => countLine("face", n),
+  e: (n) => countLine("edge", n),
+  p: (n) => t("readout.planes", { n }),
+  b: (n) => countLine("body", n),
+  r: (n) => countLine("sketch-region", n),
+  other: (n) => t("selection.count.item", { n }),
 };
 
 /** What to say for a selection change, by row keys (`f:`, `e:`, `p:`, `b:`, `r:`). Null when nothing changed. One
@@ -261,28 +283,26 @@ export function describeChange(
   const added = [...after].filter((k) => !before.has(k));
   const removed = [...before].filter((k) => !after.has(k));
   if (!added.length && !removed.length) return null;
-  if (!after.size) return "Nothing selected";
+  if (!after.size) return t("selection.said.none");
   const named = (key: string, rest: Set<string>) => {
     const body = bodyOf(key);
     const apart = body !== null && ![...rest].some((k) => bodyOf(k) === body);
-    return apart ? `${words(key).label} of ${body}` : words(key).label;
+    return apart ? t("pick.onBody", { label: words(key).label, body }) : words(key).label;
   };
   if (added.length === 1 && !removed.length && before.size)
-    return `${named(added[0]!, before)} added, ${after.size} selected`;
-  if (removed.length === 1 && !added.length) return `${named(removed[0]!, after)} removed, ${after.size} selected`;
+    return t("selection.said.added", { name: named(added[0]!, before), n: after.size });
+  if (removed.length === 1 && !added.length)
+    return t("selection.said.removed", { name: named(removed[0]!, after), n: after.size });
   if (after.size === 1) return words([...after][0]!).spoken;
 
   const counts = new Map<string, number>();
   for (const k of after) {
     const prefix = k.split(":", 1)[0]!;
-    const kind = prefix in COUNT_NOUN ? prefix : "other";
+    const kind = prefix in COUNT_OF ? prefix : "other";
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
-  const parts = Object.keys(COUNT_NOUN)
+  const parts = Object.keys(COUNT_OF)
     .filter((kind) => counts.has(kind))
-    .map((kind) => {
-      const n = counts.get(kind)!;
-      return `${n} ${COUNT_NOUN[kind]![n === 1 ? 0 : 1]}`;
-    });
-  return `${parts.join(", ")} selected`;
+    .map((kind) => COUNT_OF[kind]!(counts.get(kind)!));
+  return t("selection.said.many", { items: joinFacts(parts) });
 }

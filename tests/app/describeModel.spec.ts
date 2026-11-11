@@ -17,6 +17,7 @@ import { useDialogStore } from "../../src/stores/dialogs";
 import { useSelectionStore } from "../../src/stores/selection";
 import { viewSummaryText } from "../../src/ui/viewSummary";
 import { announce } from "../../src/ui/announce";
+import { setLanguage } from "../../src/i18n";
 import type { Engine } from "../../src/app/engine";
 
 vi.mock(import("../../src/ui/announce"), async (orig) => ({ ...(await orig()), announce: vi.fn() }));
@@ -27,7 +28,12 @@ function fake() {
   const builds = new Set<() => void>();
   const docs = new Set<() => void>();
   const sections = new Set<() => void>();
-  const sel = { bodies: [] as string[], faces: [] as number[] };
+  const sel = {
+    bodies: [] as string[],
+    faces: [] as number[],
+    edges: [] as { body: string; points: number[][] }[],
+    faceBox: null as THREE.Box3 | null,
+  };
   const look = { dir: new THREE.Vector3(0, 0, -1), flying: false, pose: 0 };
   const boxes: Record<string, THREE.Box3> = {
     body1: box([0, 0, 0], [40, 30, 20]),
@@ -69,8 +75,8 @@ function fake() {
       getSelectedBodies: () => sel.bodies,
       getSelectedFaceIds: () => sel.faces,
       faceIdToBodyId: (id: number) => (id < 6 ? "body1" : "body2"),
-      selectedEdgeLines: () => [],
-      facesBox: () => box([0, 0, 20], [40, 30, 20]),
+      selectedEdgeLines: () => sel.edges,
+      facesBox: () => sel.faceBox ?? box([0, 0, 20], [40, 30, 20]),
       bodyProperties: (ids: string[] | null) => {
         const id = ids?.[0];
         const b = id ? boxes[id] : undefined;
@@ -93,6 +99,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   document.body.innerHTML = "";
+  return setLanguage("system");
 });
 
 describe("installViewSummary", () => {
@@ -235,6 +242,64 @@ describe("describeSelectionAloud", () => {
     expect(vi.mocked(announce).mock.calls[0]![0]).toBe(
       "2 faces on Plate, 40 by 30 by 0 millimetres, center at 20, 15, 20 millimetres",
     );
+  });
+
+  it("says a face count on one body in German, with a negative and a fractional centre", async () => {
+    await setLanguage("de");
+    const f = fake();
+    f.sel.faces = [1, 2];
+    f.sel.faceBox = box([-30, -4, 0.5], [-10, 6, 7.75]);
+    describeSelectionAloud(f.e);
+    expect(vi.mocked(announce).mock.calls[0]![0]).toBe(
+      "2 Flächen auf Plate, 20 mal 10 mal 7,25 Millimeter, Mitte bei minus 20; 1; 4,125 Millimeter",
+    );
+  });
+
+  it("drops the body when the faces are on two bodies, and names edges and five bodies", async () => {
+    await setLanguage("de");
+    const f = fake();
+    f.sel.faces = [1, 7, 8];
+    f.sel.edges = [
+      {
+        body: "body1",
+        points: [
+          [5, 2, 3],
+          [9, 2, 3],
+        ],
+      },
+    ];
+    describeSelectionAloud(f.e);
+    expect(vi.mocked(announce).mock.calls[0]![0]).toBe(
+      "3 Flächen, 40 mal 30 mal 0 Millimeter, Mitte bei 20; 15; 20 Millimeter. " +
+        "1 Kante auf Plate, 4 mal 0 mal 0 Millimeter, Mitte bei 7; 2; 3 Millimeter",
+    );
+  });
+
+  it("joins the parts with the Japanese full stop and says the unit word", async () => {
+    await setLanguage("ja");
+    const f = fake();
+    f.sel.faces = [1, 2];
+    f.sel.faceBox = box([-30, -4, 0.5], [-10, 6, 7.75]);
+    f.sel.edges = [
+      {
+        body: "body1",
+        points: [
+          [5, 2, 3],
+          [9, 2, 3],
+        ],
+      },
+    ];
+    describeSelectionAloud(f.e);
+    expect(vi.mocked(announce).mock.calls[0]![0]).toBe(
+      "Plateの 2 面、20 × 10 × 7.25 ミリメートル、中心 マイナス 20, 1, 4.125 ミリメートル。" +
+        "Plateの 1 エッジ、4 × 0 × 0 ミリメートル、中心 7, 2, 3 ミリメートル",
+    );
+  });
+
+  it("says nothing selected in German", async () => {
+    await setLanguage("de");
+    describeSelectionAloud(fake().e);
+    expect(vi.mocked(announce).mock.calls[0]![0]).toBe("Nichts ausgewählt");
   });
 
   it("says when nothing is selected", () => {

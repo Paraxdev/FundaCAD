@@ -379,13 +379,13 @@ export class EdgeFeatureTool {
 
   /** An edge row from the Geometry list acts as a plain click on that edge would. */
   private takeRow(pick: TreePick): TreePickAnswer {
-    if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+    if (pick.kind !== "edge") return treePickRefusal(pick, "edge");
     const edge = pick.edge;
     const scope = pickScope({ shift: false, view: this.viewport.edgeScopeView(edge) }).scope;
     const before = this.ghosts.length;
     if (this.phase === "pick") {
       const sel = edgeSelectorFrom({ points: edge.points, body: edge.body });
-      if (!sel) return treePickRefusal(pick, "an edge");
+      if (!sel) return treePickRefusal(pick, "edge");
       const { mid, tan } = midAndTangent(edge.points);
       if (!this.beginDrag([sel], mid, tan, edge, { scope })) return t("pick.overCap");
       return { done: "added", edges: this.ghosts.length - before };

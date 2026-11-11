@@ -375,6 +375,46 @@
     {
       "en": "replace",
       "text": "替换"
+    },
+    {
+      "en": "edge",
+      "text": "边"
+    },
+    {
+      "en": "body",
+      "text": "实体"
+    },
+    {
+      "en": "base plane",
+      "text": "基准平面"
+    },
+    {
+      "en": "datum plane",
+      "text": "参考平面"
+    },
+    {
+      "en": "datum point",
+      "text": "参考点"
+    },
+    {
+      "en": "datum axis",
+      "text": "参考轴"
+    },
+    {
+      "en": "flat face",
+      "text": "平整的面"
+    },
+    {
+      "en": "round face",
+      "text": "圆面"
+    },
+    {
+      "en": "straight edge",
+      "text": "直边"
+    },
+    {
+      "en": "profile",
+      "text": "轮廓"
     }
   ]
 }

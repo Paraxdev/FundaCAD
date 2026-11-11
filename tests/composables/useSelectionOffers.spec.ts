@@ -11,6 +11,7 @@ import { useSelectionStore } from "../../src/stores/selection";
 import { describePick } from "../../src/ui/describePick";
 import { awaitTreePick, resetTreePicks } from "../../src/ui/treePick";
 import { exactRound } from "../../src/ui/selectionMeasure";
+import { setLanguage } from "../../src/i18n";
 import { setUnit } from "../../src/ui/units";
 import { edge, land, result, rig, settle, topology } from "../app/geometryBrowserRig";
 
@@ -37,6 +38,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   resetTreePicks();
+  return setLanguage("system");
 });
 
 function setup(first?: Parameters<typeof rig>[0]) {
@@ -269,6 +271,27 @@ describe("the readout of edges and bodies", () => {
     r.regions.push({ interior3D: { x: 3.5 } }, { interior3D: { x: -8.25 } });
     await r.settled();
     expect(r.sel.speech.value?.text).toBe("2 bodies, 2 profiles selected");
+  });
+});
+
+describe("the readout follows the language", () => {
+  it("rewrites its count on a switch with no new selection, edges and bodies too", async () => {
+    const r = setup(result([{ id: "body1", etag: "e1", faceCount: 9 }]));
+    await r.build();
+    r.selection.faces = [1, 4, 7];
+    await r.settled();
+    expect(r.sel.readout.value).toBe("3 faces");
+    await setLanguage("de");
+    expect(r.sel.readout.value).toBe("3 Flächen");
+    await setLanguage("ja");
+    expect(r.sel.readout.value).toBe("3 面");
+    await setLanguage("en");
+    expect(r.sel.readout.value).toBe("3 faces");
+    r.selection.faces = [];
+    r.selection.bodies = ["body1", "body2"];
+    await setLanguage("de");
+    await r.settled();
+    expect(r.sel.readout.value).toMatch(/^2 Körper/);
   });
 });
 
