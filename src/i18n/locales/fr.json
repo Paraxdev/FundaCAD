@@ -4,6 +4,7 @@
   "camera.turned": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {turn, number}° vers {toward, select, front {l’avant} back {l’arrière} left {la gauche} other {la droite}}, {projection, select, ortho {orthographique} other {en perspective}}",
   "camera.turnedTilted": "{side, select, front {Avant} back {Arrière} left {Gauche} other {Droite}}, {turn, number}° vers {toward, select, front {l’avant} back {l’arrière} left {la gauche} other {la droite}}, {tilt, number}° {from, select, above {au-dessus} other {en dessous}}, {projection, select, ortho {orthographique} other {en perspective}}",
   "carry.badValue": "Le champ contient une valeur illisible, corrigez-la ou appuyez sur Échap",
+  "carry.depthFirst": "Fixez d'abord la profondeur, saisissez-la ou cliquez pour la placer",
   "carry.lost": "{kind, select, face {La face choisie} other {L'arête choisie}} n'est pas dans le résultat, choisissez-la à nouveau",
   "carry.prompt": "cliquez sur une face pour la pousser, sur une arête pour l'arrondir",
   "carry.refused": "Refusé : {reason}",

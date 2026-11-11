@@ -4,6 +4,7 @@
   "camera.turned": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {projection, select, ortho {orthographic} other {perspective}}",
   "camera.turnedTilted": "{side, select, front {Front} back {Back} left {Left} other {Right}}, {turn, number}° toward {toward, select, front {front} back {back} left {left} other {right}}, {tilt, number}° from {from, select, above {above} other {below}}, {projection, select, ortho {orthographic} other {perspective}}",
   "carry.badValue": "The box holds a value that cannot be read, fix it or press Esc",
+  "carry.depthFirst": "Set the depth first, type it or click to place it",
   "carry.lost": "{kind, select, face {The face} other {The edge}} you picked is not on the result, pick it again",
   "carry.prompt": "click a face to push it, an edge to round it",
   "carry.refused": "Refused: {reason}",

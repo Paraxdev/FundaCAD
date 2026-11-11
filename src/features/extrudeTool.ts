@@ -37,7 +37,6 @@ import { featureKey } from "./previewOutcomes";
 import { HeldSignal } from "./heldEdit";
 import { boxBindings, type BoxField } from "./boxBindings";
 
-/** Below this the extrude is straight: the frontend prism draws instantly and no kernel preview is asked for. */
 const PREVIEW_DEBOUNCE_MS = 150;
 const TAPER_EPS = 0.05;
 
@@ -1095,6 +1094,7 @@ export class ExtrudeTool {
   }
 
   carryBlocked(): string | null {
+    if (!this.carriesOn()) return carryWords.depthFirst();
     if (!this.dim.accepts("distance") || !this.dim.accepts("taper")) return carryWords.badValue();
     const read = this.readCommit();
     if (read.kind === "refused") return carryWords.refused(read.reason);

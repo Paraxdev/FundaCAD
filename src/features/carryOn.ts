@@ -34,6 +34,7 @@ export interface CarryHost {
 export const carryWords = {
   wait: () => t("carry.wait"),
   badValue: () => t("carry.badValue"),
+  depthFirst: () => t("carry.depthFirst"),
   refused: (reason: string) => t("carry.refused", { reason }),
   prompt: () => t("carry.prompt"),
 };

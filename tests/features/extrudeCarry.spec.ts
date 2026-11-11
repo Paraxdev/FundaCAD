@@ -291,6 +291,24 @@ describe("Extrude carries on to the next pick", () => {
     expect(r.tool.active).toBe(false);
   });
 
+  it("a row or bracket pick while the depth follows the pointer is refused until the depth is set", () => {
+    const r = rig();
+    r.begin();
+    r.depth(7.5);
+    const hints: string[] = [];
+    const deps = { busyHint: () => null, hint: (m: string) => void hints.push(m) };
+    expect(routeTreeClick({ kind: "face", faceId: 4 }, deps)).toBe("refused");
+    expect(hints).toEqual([carryWords.depthFirst()]);
+    expect(r.calls.added).toEqual([]);
+    expect(r.after).not.toHaveBeenCalled();
+    expect(r.tool.active).toBe(true);
+    r.type("7.5");
+    r.state.hasPreview = true;
+    expect(routeTreeClick({ kind: "edge", edge: edgeHit.edge as never }, deps)).toBe("taken");
+    expect(r.calls.added).toEqual([expect.objectContaining({ distance: 7.5 })]);
+    expect(r.after).toHaveBeenCalledWith({ kind: "added", id: "f9" }, { kind: "edge", point: [14, 1, 6] });
+  });
+
   it("a row of the Geometry list or a bracket pick reaches the same rule through the session", () => {
     const r = rig();
     r.begin();

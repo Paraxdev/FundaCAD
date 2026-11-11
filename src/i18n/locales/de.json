@@ -4,6 +4,7 @@
   "camera.turned": "{side, select, front {Vorne} back {Hinten} left {Links} other {Rechts}}, {turn, number}° Richtung {toward, select, front {vorne} back {hinten} left {links} other {rechts}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
   "camera.turnedTilted": "{side, select, front {Vorne} back {Hinten} left {Links} other {Rechts}}, {turn, number}° Richtung {toward, select, front {vorne} back {hinten} left {links} other {rechts}}, {tilt, number}° von {from, select, above {oben} other {unten}}, {projection, select, ortho {orthografisch} other {perspektivisch}}",
   "carry.badValue": "Das Feld enthält einen Wert, der nicht gelesen werden kann, korrigieren Sie ihn oder drücken Sie Esc",
+  "carry.depthFirst": "Legen Sie zuerst die Tiefe fest, tippen Sie sie ein oder klicken Sie, um sie zu setzen",
   "carry.lost": "{kind, select, face {Die gewählte Fläche} other {Die gewählte Kante}} ist nicht im Ergebnis, wählen Sie sie erneut",
   "carry.prompt": "klicken Sie auf eine Fläche, um sie zu verschieben, auf eine Kante, um sie zu runden",
   "carry.refused": "Abgelehnt: {reason}",
