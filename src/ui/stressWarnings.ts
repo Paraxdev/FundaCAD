@@ -1,108 +1,101 @@
-// The engine's stress warnings and refusals in the panel's plain words. The engine keeps its own wording for MCP
-// callers, so a text this does not know still shows, as a sentence.
+// The engine's stress warnings and refusals in the panel's plain words. The engine keeps its own English wording for
+// MCP callers, so each rule matches that text and names a line and its arguments; a text no rule knows still shows,
+// as a sentence.
 
+import { decimalMark, t, type MessageArgs, type MessageKey } from "../i18n";
+import { listJoin } from "./measure";
 import { panelMessage } from "./stress";
 
-const FINER = "Stress there grows as the mesh gets finer, so read the colour a little away from it.";
-const PICK_FINE = "Choose Fine under Mesh detail in More options.";
-const MADE_COARSER = "The mesh was made coarser to keep the analysis small enough to run.";
+/** The engine's digits spelled with the language's mark, by text so English keeps them exactly as sent. */
+export function markDigits(digits: string): string {
+  return decimalMark() === "," ? digits.replace(/\./g, ",") : digits;
+}
 
-const RULES: [RegExp, (m: RegExpMatchArray) => string][] = [
-  [/^the peak stress is at a sharp inside corner,/, () => `The peak is at a sharp inside corner. ${FINER}`],
-  [/^the peak stress is where a (.+?) ends,/, (m) => `The peak is where a ${m[1]} ends. ${FINER}`],
+type Said = [MessageKey, MessageArgs?];
+type Rule = [RegExp, (m: RegExpMatchArray, pick: string) => Said];
+
+const EDGES: Record<string, string> = {
+  "fixed spot": "fixedSpot",
+  "fixed face": "fixed",
+  "pinned face": "pinned",
+  "slider face": "slider",
+};
+
+const SPOT = /^spot (\d+) of (support|load) (\d+) \((?:supports|loads)\[\d+\]\)$/;
+
+function spotOwner(label: string): MessageArgs {
+  const s = label.match(SPOT);
+  return s ? { owner: s[2]!, k: Number(s[1]), i: Number(s[3]) } : { owner: "other", what: panelMessage(label) };
+}
+
+const RULES: Rule[] = [
+  [/^the peak stress is at a sharp inside corner,/, () => ["stress.warn.corner"]],
   [
-    /^the largest deflection, .* is more than a tenth of the part's smallest size/,
-    () => "The part bends more than a tenth of its smallest size. The numbers are rough for a bend this large.",
+    /^the peak stress is where a (.+?) ends,/,
+    (m) => ["stress.warn.supportEnd", EDGES[m[1]!] ? { edge: EDGES[m[1]!]! } : { edge: "other", what: m[1]! }],
   ],
+  [/^the largest deflection, .* is more than a tenth of the part's smallest size/, () => ["stress.warn.bigBend"]],
   [
     /^the elements \(.*\) are larger than half the part's typical thickness/,
-    () => `The mesh is coarse for the thinnest walls, so they read stiffer than they are. ${PICK_FINE}`,
+    (_m, pick) => ["stress.warn.thinWalls", { pick }],
   ],
-  [/^the element size grew from/, () => MADE_COARSER],
-  [/^maxElements is capped at/, () => MADE_COARSER],
+  [/^the element size grew from/, () => ["stress.warn.coarser"]],
+  [/^maxElements is capped at/, () => ["stress.warn.coarser"]],
   [
     /^(\d+) of the (\w+) faces got no elements/,
-    (m) => `${m[1]} of the ${m[2]} faces are too narrow for the mesh and hold nothing. ${PICK_FINE}`,
+    (m, pick) => ["stress.warn.narrowFaces", { n: Number(m[1]), which: m[2]!, pick }],
   ],
   [
     /^(spot \d+ of .+?) \(radius [\d.]+ mm\) is smaller than the elements/,
-    (m) => `${panelMessage(m[1]!)} is tiny next to the mesh, so the stress right at it is rough. ${PICK_FINE}`,
+    (m, pick) => ["stress.warn.smallSpot", { ...spotOwner(m[1]!), pick }],
   ],
   [
     /^the peak stress moved by (\d+)% with the last refinement, so it may not have settled yet, (a fine)?/,
-    (m) =>
-      `The peak moved by ${m[1]}% with the last pass, so it may not have settled yet.${m[2] ? ` ${PICK_FINE}` : ""}`,
+    (m, pick) => ["stress.warn.unsettled", { pct: Number(m[1]), pick: m[2] ? pick : "" }],
   ],
-  [
-    /^printed parts are weaker across their layers/,
-    () =>
-      "A printed part is weaker across its layers, often by half. Keep a margin when the load pulls the layers apart.",
-  ],
-  [
-    /^(load \d+ \(loads\[\d+\]\)) is only on fixed faces/,
-    (m) => `${panelMessage(m[1]!)} is only on fixed faces, so it does nothing to the part.`,
-  ],
+  [/^printed parts are weaker across their layers/, () => ["stress.warn.printed"]],
+  [/^load (\d+) \(loads\[\d+\]\) is only on fixed faces/, (m) => ["stress.warn.deadLoad", { i: Number(m[1]) }]],
 ];
 
-export function plainWarning(w: string): string {
+/** A Fine run has no finer choice left, so the advice to pick Fine goes. */
+export function plainWarningFor(w: string, fine: boolean): string {
   for (const [re, say] of RULES) {
     const m = w.match(re);
-    if (m) return say(m);
+    if (m) {
+      const [key, args] = say(m, fine ? "" : "fine");
+      return t(key, args);
+    }
   }
   return sentence(panelMessage(w));
 }
 
-/** A Fine run has no finer choice left, so the advice to pick Fine goes. */
-export function plainWarningFor(w: string, fine: boolean): string {
-  const said = plainWarning(w);
-  return fine ? said.replace(` ${PICK_FINE}`, "") : said;
-}
+export const plainWarning = (w: string): string => plainWarningFor(w, false);
 
-const WALLS_FIX = "Thicker walls would let it run.";
-const FACE_FIX = "Pick a wider face.";
-const SIMPLER_FIX = "Close other programs, or study a simpler part.";
-
-// The last entry is the fix to name when no finer run is offered beside the message.
-const REFUSALS: [RegExp, (m: RegExpMatchArray) => string, string?][] = [
-  [
-    /^the body could not be meshed, parts of the body are thinner than/,
-    () => "The mesh comes apart in the thin walls of this body.",
-    WALLS_FIX,
-  ],
-  [
-    /^the body could not be meshed, the part is thinner than/,
-    () => "This part is too thin for the mesh to fit inside it.",
-    WALLS_FIX,
-  ],
-  [
-    /^the body could not be meshed, the part needs more than/,
-    () => "This part needs more detail than a run may use.",
-    "Study a simpler part.",
-  ],
-  [/^the fixed face got no elements/, () => "The fixed face is too narrow for the mesh to reach.", FACE_FIX],
-  [
-    /^none of the fixed faces got any elements/,
-    () => "The fixed faces are too narrow for the mesh to reach.",
-    FACE_FIX,
-  ],
-  [
-    /^a face of (load \d+ \(loads\[\d+\]\)) got no elements/,
-    (m) => `A face of ${panelMessage(m[1]!)} is too narrow for the mesh to reach.`,
-    FACE_FIX,
-  ],
-  [
-    /^solving this mesh(?: of \d+ elements)? needs about ([\d.]+) GB of memory, more than the ([\d.]+) GB it may use/,
-    (m) => `This study needs about ${m[1]} GB of memory, more than the ${m[2]} GB it may use.`,
-    SIMPLER_FIX,
-  ],
-  [
-    /^there is not enough memory to solve this mesh/,
-    () => "There is not enough memory to solve this study. Close other programs and run it again.",
-  ],
-  [
-    /^the body is not held and can still move, its stiffness matrix is singular/,
-    () => "The body is not held and can still move. Fix more faces.",
-  ],
+// `fix` is set when the refusal has a fix to name when no finer run is offered beside the message.
+const REFUSALS: { re: RegExp; key: MessageKey; args?: (m: RegExpMatchArray) => MessageArgs; fix?: true }[] = [
+  {
+    re: /^the body could not be meshed, parts of the body are thinner than/,
+    key: "stress.refuse.thinWalls",
+    fix: true,
+  },
+  { re: /^the body could not be meshed, the part is thinner than/, key: "stress.refuse.tooThin", fix: true },
+  { re: /^the body could not be meshed, the part needs more than/, key: "stress.refuse.tooBig", fix: true },
+  { re: /^the fixed face got no elements/, key: "stress.refuse.fixedFace", fix: true },
+  { re: /^none of the fixed faces got any elements/, key: "stress.refuse.fixedFaces", fix: true },
+  {
+    re: /^a face of load (\d+) \(loads\[\d+\]\) got no elements/,
+    key: "stress.refuse.loadFace",
+    args: (m) => ({ i: Number(m[1]) }),
+    fix: true,
+  },
+  {
+    re: /^solving this mesh(?: of \d+ elements)? needs about ([\d.]+) GB of memory, more than the ([\d.]+) GB it may use/,
+    key: "stress.refuse.memory",
+    args: (m) => ({ need: markDigits(m[1]!), may: markDigits(m[2]!) }),
+    fix: true,
+  },
+  { re: /^there is not enough memory to solve this mesh/, key: "stress.refuse.noMemory" },
+  { re: /^the body is not held and can still move, its stiffness matrix is singular/, key: "stress.refuse.notHeld" },
 ];
 
 const WALL_TAIL = /, the thinnest wall is about ([\d.]+) mm thick, near \(([^)]+)\) mm$/;
@@ -110,17 +103,19 @@ const WALL_TAIL = /, the thinnest wall is about ([\d.]+) mm thick, near \(([^)]+
 export function plainError(message: string, finerOffered = false): string {
   const wall = message.match(WALL_TAIL);
   const body = wall ? message.slice(0, wall.index) : message;
-  const where = wall ? ` The thinnest wall is about ${wall[1]} mm thick, near (${wall[2]}) mm.` : "";
-  for (const [re, say, fix] of REFUSALS) {
+  const where: MessageArgs = wall
+    ? { wall: "yes", thickness: markDigits(wall[1]!), at: listJoin(wall[2]!.split(", ").map(markDigits)) }
+    : { wall: "no" };
+  for (const { re, key, args, fix } of REFUSALS) {
     const m = body.match(re);
-    if (m) return `${say(m)}${where}${fix && !finerOffered ? ` ${fix}` : ""}`;
+    if (m) return t(key, { ...args?.(m), ...where, fix: fix && !finerOffered ? "yes" : "no" });
   }
   return sentence(panelMessage(message));
 }
 
 export function sentence(text: string): string {
-  const t = text.trim();
-  if (!t) return "";
-  const s = t.charAt(0).toUpperCase() + t.slice(1);
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const s = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
   return /[.?!]$/.test(s) ? s : `${s}.`;
 }
