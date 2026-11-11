@@ -97,7 +97,7 @@ function micrometres(mm: number): number | null {
   return current !== "in" && mm > 0 && toDisplay(mm) < 0.01 ? mm * 1000 : null;
 }
 
-/** At most three significant digits and no space, for the 40 px viewport grid button. Inch steps under one inch read
+/** At most three significant digits and no space, for the viewport grid button. Inch steps under one inch read
  *  as fractions, metric ones under a hundredth of the unit in micrometres. */
 export function fmtLengthCompact(mm: number): string {
   const frac = current === "in" ? inchFraction(mm) : null;
