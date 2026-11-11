@@ -138,7 +138,8 @@ struct SlicedCut {
 /// A long helical tool sliced along its own axis comes back as long helices the kernel still cuts half-way and
 /// reports as done, so for a cut the slicings across each axis are compared by the volume they remove. A cut cannot
 /// remove too much, so the largest is kept. It is only trusted once a second slicing agrees; with none agreeing after
-/// two or more ran, or after the kernel refused another, it is `doubtful`.
+/// two or more ran, or after the kernel refused another, it is `doubtful`. A lone slicing is trusted when every other
+/// axis's planes missed the tool, since nothing contradicts it.
 fn sliced_cut(
     shape: &Shape,
     attempts: impl IntoIterator<Item = Vec<Shape>>,
