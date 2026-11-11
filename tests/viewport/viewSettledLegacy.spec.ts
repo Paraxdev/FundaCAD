@@ -49,6 +49,26 @@ describe("whenViewSettles, Classic camera", () => {
     ]);
   });
 
+  it("waits for an arrow step's first frame, so a stall before it never reads the view it left", () => {
+    vi.useFakeTimers();
+    const rig = makeRig();
+    rig.setStandardView("back");
+    for (let i = 0; i < 600 && rig.isFlying(); i++) rig.update(1 / 60);
+    const before = rig.viewDirection(new THREE.Vector3());
+    rig.stepView("left", false);
+    const then = vi.fn(() => rig.viewDirection(new THREE.Vector3()).angleTo(before));
+    whenViewSettles(rig, 250, then);
+    vi.advanceTimersByTime(2000);
+    const early = then.mock.calls.length;
+    for (let i = 0; i < 600 && rig.isFlying(); i++) rig.update(1 / 60);
+    vi.advanceTimersByTime(600);
+    expect([early, then.mock.calls.length, THREE.MathUtils.radToDeg(then.mock.results[0]?.value ?? 0)]).toEqual([
+      0,
+      1,
+      expect.closeTo(15, 0),
+    ]);
+  });
+
   it("lets a drag take over the turn, so the user's own motion is no named view in the air", () => {
     const rig = makeRig();
     rig.setViewDir(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), true);

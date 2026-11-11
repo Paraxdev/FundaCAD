@@ -143,7 +143,8 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
   let eyeSet = false;
   let deliberate: THREE.Vector3 | null = null;
   // A named view's turn runs on camera-controls' own transition, which `flight` does not cover; isFlying() reports it too,
-  // so whatever waits for the view to settle waits for the turn, not for frames to arrive.
+  // so whatever waits for the view to settle waits for the turn, not for frames to arrive. An arrow step is set too: the
+  // controls only apply it on their next update, so until a frame lands the pose still reads as the view it left.
   let turning = false;
   function viewAxisAligned(askBox = eyeSet): boolean {
     const eye = controls.getPosition(tmpPos);
@@ -760,11 +761,13 @@ export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & {
     },
     orbitBy(az, pol) {
       deliberate = null;
+      turning = true;
       controls.rotate(az, pol, false);
     },
     stepView(dir, fine) {
       const [az, pol] = stepAngles(dir, fine);
       deliberate = null;
+      turning = true;
       controls.rotate(az, pol, false);
     },
     setPivotSource() {},
