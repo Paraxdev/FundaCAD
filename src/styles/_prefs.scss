@@ -359,14 +359,17 @@ label.pref-head {
 .sc-problem {
   display: flex;
   flex: 1 1 100%;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-1) var(--s-3);
   border-left: 2px solid var(--accent);
   color: var(--text);
 }
-.sc-problem span {
-  flex: 1;
+.sc-problem > span {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 640px) {

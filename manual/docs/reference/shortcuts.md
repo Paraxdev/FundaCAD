@@ -13,6 +13,8 @@ Press ? or use Help, Keyboard Shortcuts to see every key. On a Mac, use Cmd for 
 
 Reset puts one key back, Reset all a whole page, after it asks. A key marked fixed cannot be changed. A plugin with its own keys gets its own page.
 
+The window reads in the language you chose in Preferences. Key names stay as they are on the keyboard, and the English name of a command still finds it in the search.
+
 ## Keys
 
 | Key | In the model |

@@ -5,9 +5,9 @@ import { useDialogStore } from "../stores/dialogs";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { latinKey } from "./platform";
 import { readSetting } from "../ui/storedSetting";
-import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
+import { DEFAULT_BINDINGS, bindingEntries, pointerBindings, type BindingEntry } from "../viewport/navigator/bindings";
 import type { StandardView } from "../viewport/cameras";
-import { t } from "../i18n";
+import { t, type MessageArgs, type MessageKey } from "../i18n";
 
 export interface Shortcut {
   key: string; // normalized lowercase key ("b", "home", "f6", "?")
@@ -24,113 +24,137 @@ export interface Shortcut {
 /** The seven views in the order of their Ctrl digit. */
 export const STANDARD_VIEWS: readonly StandardView[] = ["front", "back", "left", "right", "top", "bottom", "iso"];
 
-// A getter, so the label follows a change of language.
-function viewShortcut(action: StandardView, key: string): Shortcut {
+/** `t` and `tEnglish` share this shape, so one say function gives the shown name and the English search alias. */
+export type Translate = (key: MessageKey, args?: MessageArgs) => string;
+type Say = (tr: Translate) => string;
+
+// Spreading a row copies a getter's value, so labels shown from a copy are read again from here by action|context.
+const SAY = new Map<string, Say>();
+const sayKey = (action: string, context: string) => `${action}|${context}`;
+
+interface Keys {
+  shift?: boolean;
+  ctrl?: boolean;
+}
+
+function row(key: string, action: string, context: Shortcut["context"], say: Say, mods: Keys = {}): Shortcut {
+  SAY.set(sayKey(action, context), say);
   return {
     key,
-    ctrl: true,
+    ...mods,
     action,
-    context: "global",
+    context,
     get label() {
-      return t("view.named", { view: action });
+      return say(t);
     },
   };
 }
 
+/** The name of a row in the language of `tr`, whether the row is the table's own or a copy of it. */
+export function shortcutLabel(s: Shortcut, tr: Translate = t): string {
+  const say = SAY.get(sayKey(s.action, s.context));
+  if (say) return say(tr);
+  // A plugin's label may be a getter, read it from the plugin's own object since a cached copy holds an old language.
+  const own = overrides.find((o) => o.action === s.action)?.label;
+  if (own !== undefined) return own;
+  // A plugin keymap may move a core action to another context, its name still lives under the old one.
+  for (const [k, moved] of SAY) if (k.startsWith(`${s.action}|`)) return moved(tr);
+  return s.label;
+}
+
+const line =
+  (key: MessageKey): Say =>
+  (tr) =>
+    tr(key);
+const withTool =
+  (key: MessageKey, tool: MessageKey): Say =>
+  (tr) =>
+    tr(key, { tool: tr(tool) });
+const turn =
+  (key: MessageKey, deg: number): Say =>
+  (tr) =>
+    tr(key, { deg });
+
+const viewShortcut = (action: StandardView, key: string) =>
+  row(key, action, "global", (tr) => tr("view.named", { view: action }), { ctrl: true });
+
 export const SHORTCUTS: Shortcut[] = [
-  { key: "s", action: "sketch", context: "model", label: "Sketch" },
-  { key: "e", action: "extrude", context: "model", label: "Extrude" },
-  { key: "q", action: "presspull", context: "model", label: "Press/Pull" },
-  { key: "f", action: "fillet", context: "model", label: "Fillet" },
-  { key: "b", action: "chamfer", context: "model", label: "Chamfer (bevel)" },
-  { key: "m", action: "move", context: "model", label: "Move" },
-  { key: "i", action: "measure", context: "model", label: "Measure" },
-  { key: "k", action: "split", context: "model", label: "Split Body" },
-  { key: "u", ctrl: true, action: "boolean-union", context: "model", label: "Union" },
-  { key: "b", ctrl: true, action: "boolean-subtract", context: "model", label: "Subtract" },
-  { key: "i", ctrl: true, action: "boolean-intersect", context: "model", label: "Intersect" },
-  { key: "u", action: "clean-up", context: "model", label: "Clean Up" },
-  { key: "o", action: "offset-plane", context: "model", label: "Offset Plane" },
-  { key: "h", action: "hide-selected", context: "model", label: "Hide selected bodies" },
-  { key: "h", shift: true, action: "show-all-bodies", context: "model", label: "Show all bodies" },
-  { key: "1", action: "selmode-faces", context: "model", label: "Select faces" },
-  { key: "3", action: "selmode-auto", context: "model", label: "Select a body, then its faces" },
-  { key: "2", action: "selmode-bodies", context: "model", label: "Select bodies" },
-  { key: "x", action: "toggle-xray", context: "model", label: "See through (select what is behind)" },
-  { key: "x", shift: true, action: "toggle-wireframe", context: "model", label: "Wireframe (edges only)" },
-  { key: "l", action: "line", context: "sketch", label: "Line" },
-  { key: "c", action: "circle", context: "sketch", label: "Circle" },
-  { key: "r", action: "rectangle", context: "sketch", label: "Rectangle" },
-  { key: "a", action: "arc", context: "sketch", label: "Arc" },
-  { key: "d", action: "dimension", context: "sketch", label: "Dimension" },
-  { key: "t", action: "trim", context: "sketch", label: "Trim" },
-  { key: "o", action: "offset", context: "sketch", label: "Offset" },
-  { key: "f", action: "fillet-sketch", context: "sketch", label: "Sketch Fillet" },
-  { key: "p", action: "project", context: "sketch", label: "Project" },
-  { key: "m", action: "move-sketch", context: "sketch", label: "Move/Rotate" },
+  row("s", "sketch", "model", line("tool.sketch")),
+  row("e", "extrude", "model", line("tool.extrude")),
+  row("q", "presspull", "model", line("tool.pressPull")),
+  row("f", "fillet", "model", line("tool.fillet")),
+  row("b", "chamfer", "model", line("shortcuts.action.chamfer")),
+  row("m", "move", "model", line("tool.move")),
+  row("i", "measure", "model", line("tool.measure")),
+  row("k", "split", "model", line("tool.splitBody")),
+  row("u", "boolean-union", "model", line("tool.union"), { ctrl: true }),
+  row("b", "boolean-subtract", "model", line("tool.subtract"), { ctrl: true }),
+  row("i", "boolean-intersect", "model", line("tool.intersect"), { ctrl: true }),
+  row("u", "clean-up", "model", line("tool.cleanUp")),
+  row("o", "offset-plane", "model", line("tool.offsetPlane")),
+  row("h", "hide-selected", "model", line("shortcuts.action.hideSelected")),
+  row("h", "show-all-bodies", "model", line("command.showAllBodies"), { shift: true }),
+  row("1", "selmode-faces", "model", line("shortcuts.action.selectFaces")),
+  row("3", "selmode-auto", "model", line("shortcuts.action.selectAuto")),
+  row("2", "selmode-bodies", "model", line("shortcuts.action.selectBodies")),
+  row("x", "toggle-xray", "model", line("shortcuts.action.xray")),
+  row("x", "toggle-wireframe", "model", line("shortcuts.action.wireframe"), { shift: true }),
+  row("l", "line", "sketch", line("tool.line")),
+  row("c", "circle", "sketch", line("tool.circle")),
+  row("r", "rectangle", "sketch", line("tool.rectangle")),
+  row("a", "arc", "sketch", line("tool.arc")),
+  row("d", "dimension", "sketch", line("tool.dimension")),
+  row("t", "trim", "sketch", line("tool.trim")),
+  row("o", "offset", "sketch", line("tool.offset")),
+  row("f", "fillet-sketch", "sketch", line("shortcuts.action.sketchFillet")),
+  row("p", "project", "sketch", line("tool.project")),
+  row("m", "move-sketch", "sketch", line("tool.moveRotate")),
   // Finish and go: E/Q in a sketch commit it and start the 3D tool (handleAction finishes the sketch first).
-  { key: "e", action: "extrude", context: "sketch", label: "Finish & Extrude" },
-  { key: "q", action: "presspull", context: "sketch", label: "Finish & Press/Pull" },
+  row("e", "extrude", "sketch", withTool("shortcuts.action.finishWith", "tool.extrude")),
+  row("q", "presspull", "sketch", withTool("shortcuts.action.finishWith", "tool.pressPull")),
   // With a fitting selection these apply at once, otherwise they arm the tool.
-  { key: "h", action: "horizontal", context: "sketch", label: "Horizontal" },
-  { key: "v", action: "vertical", context: "sketch", label: "Vertical" },
-  { key: "i", action: "coincident", context: "sketch", label: "Coincident or on curve" },
-  { key: "g", action: "tangent", context: "sketch", label: "Tangent" },
-  { key: "n", action: "perpendicular", context: "sketch", label: "Perpendicular" },
-  { key: "p", shift: true, action: "parallel", context: "sketch", label: "Parallel" },
-  { key: "e", shift: true, action: "equal", context: "sketch", label: "Equal" },
-  { key: "l", shift: true, action: "collinear", context: "sketch", label: "Collinear" },
-  { key: "c", shift: true, action: "concentric", context: "sketch", label: "Concentric" },
-  { key: "m", shift: true, action: "midpoint", context: "sketch", label: "Midpoint" },
-  { key: "s", shift: true, action: "symmetric", context: "sketch", label: "Symmetric" },
-  { key: "f", shift: true, action: "fix", context: "sketch", label: "Fix" },
+  row("h", "horizontal", "sketch", line("tool.horizontal")),
+  row("v", "vertical", "sketch", line("tool.vertical")),
+  row("i", "coincident", "sketch", line("shortcuts.action.coincident")),
+  row("g", "tangent", "sketch", line("tool.tangent")),
+  row("n", "perpendicular", "sketch", line("shortcuts.action.perpendicular")),
+  row("p", "parallel", "sketch", line("tool.parallel"), { shift: true }),
+  row("e", "equal", "sketch", line("tool.equal"), { shift: true }),
+  row("l", "collinear", "sketch", line("tool.collinear"), { shift: true }),
+  row("c", "concentric", "sketch", line("tool.concentric"), { shift: true }),
+  row("m", "midpoint", "sketch", line("tool.midpoint"), { shift: true }),
+  row("s", "symmetric", "sketch", line("tool.symmetric"), { shift: true }),
+  row("f", "fix", "sketch", line("tool.fix"), { shift: true }),
   // sketch-start conveniences from model mode (L/C/R/A/P start a sketch with that tool)
-  { key: "l", action: "line", context: "model", label: "Sketch: Line" },
-  { key: "c", action: "circle", context: "model", label: "Sketch: Circle" },
-  { key: "r", action: "rectangle", context: "model", label: "Sketch: Rectangle" },
-  { key: "a", action: "arc", context: "model", label: "Sketch: Arc" },
-  { key: "p", action: "project", context: "model", label: "Sketch: Project" },
-  { key: "home", action: "fit", context: "global", label: "Fit view" },
-  { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
+  row("l", "line", "model", withTool("shortcuts.action.sketchWith", "tool.line")),
+  row("c", "circle", "model", withTool("shortcuts.action.sketchWith", "tool.circle")),
+  row("r", "rectangle", "model", withTool("shortcuts.action.sketchWith", "tool.rectangle")),
+  row("a", "arc", "model", withTool("shortcuts.action.sketchWith", "tool.arc")),
+  row("p", "project", "model", withTool("shortcuts.action.sketchWith", "tool.project")),
+  row("home", "fit", "global", line("command.fit")),
+  row("home", "reset-camera", "global", line("command.resetCamera"), { shift: true }),
   ...STANDARD_VIEWS.map((view, i) => viewShortcut(view, String(i + 1))),
-  {
-    key: "f6",
-    action: "region-next",
-    context: "global",
-    label: "Next region (menu bar, tools, Items, model, panels, History)",
-  },
-  { key: "f6", shift: true, action: "region-prev", context: "global", label: "Previous region" },
-  { key: "", action: "next-face", context: "global", label: "Next face" },
-  { key: "", action: "previous-face", context: "global", label: "Previous face" },
-  { key: "", action: "next-edge", context: "global", label: "Next edge" },
-  { key: "", action: "previous-edge", context: "global", label: "Previous edge" },
-  { key: "", action: "browse-geometry", context: "global", label: "Browse faces and edges" },
-  { key: "", action: "describe-model", context: "global", label: "Describe the model" },
-  { key: "", action: "describe-selection", context: "global", label: "Describe the selection" },
-  { key: "arrowleft", action: "view-step-left", context: "global", label: "Turn the view left 15°" },
-  { key: "arrowright", action: "view-step-right", context: "global", label: "Turn the view right 15°" },
-  { key: "arrowup", action: "view-step-up", context: "global", label: "Tilt the view up 15°" },
-  { key: "arrowdown", action: "view-step-down", context: "global", label: "Tilt the view down 15°" },
-  { key: "arrowleft", shift: true, action: "view-step-left-fine", context: "global", label: "Turn the view left 5°" },
-  {
-    key: "arrowright",
-    shift: true,
-    action: "view-step-right-fine",
-    context: "global",
-    label: "Turn the view right 5°",
-  },
-  { key: "arrowup", shift: true, action: "view-step-up-fine", context: "global", label: "Tilt the view up 5°" },
-  { key: "arrowdown", shift: true, action: "view-step-down-fine", context: "global", label: "Tilt the view down 5°" },
-  { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
-  { key: "z", action: "viewmode-cycle", context: "global", label: "Next view mode" },
-  { key: "z", shift: true, action: "viewmode-cycle-back", context: "global", label: "Previous view mode" },
-  {
-    key: "v",
-    shift: true,
-    action: "clean-view",
-    context: "global",
-    label: "Clean view (hide every overlay, again to bring them back)",
-  },
+  row("f6", "region-next", "global", line("shortcuts.action.regionNext")),
+  row("f6", "region-prev", "global", line("shortcuts.action.regionPrev"), { shift: true }),
+  row("", "next-face", "global", line("command.nextFace")),
+  row("", "previous-face", "global", line("command.previousFace")),
+  row("", "next-edge", "global", line("command.nextEdge")),
+  row("", "previous-edge", "global", line("command.previousEdge")),
+  row("", "browse-geometry", "global", line("command.browseGeometry")),
+  row("", "describe-model", "global", line("shortcuts.action.describeModel")),
+  row("", "describe-selection", "global", line("shortcuts.action.describeSelection")),
+  row("arrowleft", "view-step-left", "global", turn("shortcuts.action.turnLeft", 15)),
+  row("arrowright", "view-step-right", "global", turn("shortcuts.action.turnRight", 15)),
+  row("arrowup", "view-step-up", "global", turn("shortcuts.action.tiltUp", 15)),
+  row("arrowdown", "view-step-down", "global", turn("shortcuts.action.tiltDown", 15)),
+  row("arrowleft", "view-step-left-fine", "global", turn("shortcuts.action.turnLeft", 5), { shift: true }),
+  row("arrowright", "view-step-right-fine", "global", turn("shortcuts.action.turnRight", 5), { shift: true }),
+  row("arrowup", "view-step-up-fine", "global", turn("shortcuts.action.tiltUp", 5), { shift: true }),
+  row("arrowdown", "view-step-down-fine", "global", turn("shortcuts.action.tiltDown", 5), { shift: true }),
+  row("?", "shortcut-help", "global", line("shortcuts.action.help")),
+  row("z", "viewmode-cycle", "global", line("command.viewmodeCycle")),
+  row("z", "viewmode-cycle-back", "global", line("shortcuts.action.viewmodeBack"), { shift: true }),
+  row("v", "clean-view", "global", line("shortcuts.action.cleanView"), { shift: true }),
 ];
 
 /** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home"), shared by keyHint and the `?` HUD so
@@ -182,6 +206,40 @@ export interface ShortcutOverride {
   alt?: boolean;
   context?: Shortcut["context"];
   label?: string;
+}
+
+export const ALT_REFUSAL = "Alt is read by the tools, pick a key without it";
+
+/** The refusal in the chosen language; the English text is plugin API, so only that one is translated. */
+export function refusalLabel(refused: string, tr: Translate = t): string {
+  return refused === ALT_REFUSAL ? tr("shortcuts.problem.alt") : refused;
+}
+
+const RESERVED_LINES: Record<string, MessageKey> = {
+  Undo: "command.undo",
+  Redo: "command.redo",
+  Save: "command.save",
+  "Save As": "shortcuts.reserved.saveAs",
+  New: "command.new",
+  Open: "shortcuts.reserved.open",
+  Export: "shortcuts.reserved.export",
+  Find: "shortcuts.reserved.find",
+  "Command palette": "palette.title",
+  Preferences: "shortcuts.reserved.preferences",
+  Items: "shortcuts.reserved.items",
+  History: "shortcuts.reserved.history",
+  Console: "shortcuts.reserved.console",
+  "Interface size": "shortcuts.reserved.interfaceSize",
+  Cancel: "shortcuts.reserved.cancel",
+  "Box select filter": "shortcuts.reserved.boxFilter",
+  Delete: "menu.edit.delete",
+  "This sheet": "shortcuts.reserved.thisSheet",
+};
+
+/** The English name a plugin sees in a taken-by problem, in the chosen language; an unknown name shows as given. */
+export function reservedLabel(name: string, tr: Translate = t): string {
+  const key = RESERVED_LINES[name];
+  return key ? tr(key) : name;
 }
 
 export type ShortcutProblem = { conflict: Shortcut } | { reserved: string } | { refused: string };
@@ -331,7 +389,7 @@ export function shortcutOverridden(action: string): boolean {
 
 /** Why a key cannot go to an action, or null when it can. */
 export function checkShortcut(o: ShortcutOverride, table: Shortcut[] = activeShortcuts()): ShortcutProblem | null {
-  if (o.alt) return { refused: "Alt is read by the tools, pick a key without it" };
+  if (o.alt) return { refused: ALT_REFUSAL };
   if (!o.key) return null;
   const row = combo(o);
   const name = formatShortcut({ ...row, action: o.action, context: "global", label: "" });
@@ -376,7 +434,7 @@ export function checkRow(
   id: string,
   c: { key: string; shift?: boolean; ctrl?: boolean; alt?: boolean },
 ): ShortcutProblem | null {
-  if (c.alt) return { refused: "Alt is read by the tools, pick a key without it" };
+  if (c.alt) return { refused: ALT_REFUSAL };
   const row = combo(c);
   const name = formatShortcut({ ...row, action: "", context: "global", label: "" });
   if (RESERVED[name]) return { reserved: RESERVED[name]! };
@@ -436,28 +494,30 @@ export function shortcutConflicts(): [Shortcut, Shortcut][] {
 /** One section of the dialog, derived from SHORTCUTS so it cannot drift from the dispatcher. A row with an `id` can be
  *  changed; one without is fixed. */
 export interface HudGroup {
+  id: string;
   name: string;
   rows: { key: string; label: string; changed?: boolean; id?: string }[];
 }
 
-const CONTEXTS = [
-  ["Model", "model"],
-  ["Sketch", "sketch"],
-  ["Global", "global"],
-] as const;
+const CONTEXTS: readonly (readonly [Shortcut["context"], MessageKey])[] = [
+  ["model", "shortcuts.group.model"],
+  ["sketch", "tool.sketch"],
+  ["global", "shortcuts.group.global"],
+];
 
 /** The editable rows of some actions, by context. Empty contexts are left out. */
-export function shortcutGroupsOf(actions: ReadonlySet<string>): HudGroup[] {
-  return contextGroups((s) => actions.has(s.action), false).filter((g) => g.rows.length);
+export function shortcutGroupsOf(actions: ReadonlySet<string>, tr: Translate = t): HudGroup[] {
+  return contextGroups((s) => actions.has(s.action), false, tr).filter((g) => g.rows.length);
 }
 
-function contextGroups(keep: (s: Shortcut) => boolean, core: boolean): HudGroup[] {
+function contextGroups(keep: (s: Shortcut) => boolean, core: boolean, tr: Translate): HudGroup[] {
   const mine = new Set(userOverrides.map((u) => u.id));
   const fixed = new Set(Object.keys(RESERVED));
   const shipped = new Set(SHORTCUTS.map((s) => s.action));
   const order = new Map(SHORTCUTS.map((s, i) => [idOf(s), i]));
-  return CONTEXTS.map(([name, ctx]) => ({
-    name,
+  return CONTEXTS.map(([ctx, heading]) => ({
+    id: ctx,
+    name: tr(heading),
     rows: shortcutRows()
       .filter((s) => s.context === ctx && keep(s))
       .sort((a, b) => (order.get(a.id) ?? SHORTCUTS.length) - (order.get(b.id) ?? SHORTCUTS.length))
@@ -466,7 +526,7 @@ function contextGroups(keep: (s: Shortcut) => boolean, core: boolean): HudGroup[
         const changed = user || (core && shipped.has(s.action) && shortcutOverridden(s.action));
         return {
           key: s.key ? formatShortcut(s) : "",
-          label: s.label,
+          label: shortcutLabel(s, tr),
           ...(changed ? { changed: true } : {}),
           ...(fixed.has(formatShortcut(s)) ? {} : { id: s.id }),
         };
@@ -474,57 +534,74 @@ function contextGroups(keep: (s: Shortcut) => boolean, core: boolean): HudGroup[
   }));
 }
 
+function gestureKey(e: Pick<BindingEntry, "button" | "mods" | "kind">, tr: Translate): string {
+  const args = { button: e.button, kind: e.kind };
+  return e.mods.length
+    ? tr("shortcuts.mouse.gestureHeld", { ...args, mods: e.mods.join("+") })
+    : tr("shortcuts.mouse.gesture", args);
+}
+
+const MOUSE_WHAT: Record<BindingEntry["what"], MessageKey> = {
+  orbit: "shortcuts.mouse.orbit",
+  pan: "shortcuts.mouse.pan",
+  zoom: "shortcuts.mouse.zoom",
+  gesture: "shortcuts.mouse.radial",
+  menu: "shortcuts.mouse.context",
+};
+
 /** Pure: the dialog's General content. Exported so it is unit-testable without a DOM. `skip` leaves out actions another
  *  page shows. */
-export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGroup[] {
-  const fmt = formatShortcut;
+export function shortcutHudGroups(skip: ReadonlySet<string> = new Set(), tr: Translate = t): HudGroup[] {
   const clashes = shortcutConflicts().map(([a, b]) => ({
-    key: fmt(a),
-    label: `${a.label} and ${b.label} share this key, ${a.label} applies`,
+    key: formatShortcut(a),
+    label: tr("shortcuts.conflict", { first: shortcutLabel(a, tr), second: shortcutLabel(b, tr) }),
   }));
-  const custom = pointerBindings() !== DEFAULT_BINDINGS;
+  const entryId = (e: BindingEntry) => `${e.button}|${e.mods.join("+")}|${e.kind}|${e.what}`;
+  const stock = new Set(bindingEntries(DEFAULT_BINDINGS).map(entryId));
+  const left = (kind: BindingEntry["kind"], mods: string[] = []) => gestureKey({ button: "left", mods, kind }, tr);
   return [
-    ...(clashes.length ? [{ name: "Conflicts", rows: clashes }] : []),
-    ...contextGroups((s) => !skip.has(s.action), true),
+    ...(clashes.length ? [{ id: "conflicts", name: tr("shortcuts.group.conflicts"), rows: clashes }] : []),
+    ...contextGroups((s) => !skip.has(s.action), true, tr),
     {
-      name: "Mouse",
+      id: "mouse",
+      name: tr("shortcuts.group.mouse"),
       rows: [
-        ...bindingRows(pointerBindings()).map((r) => (custom ? { ...r, changed: true } : r)),
-        { key: "Wheel", label: "Zoom" },
-        { key: "Ctrl+Wheel", label: "Pan up and down (a touchpad pinch zooms)" },
-        { key: "Left drag", label: "Box select (see Always, below)" },
-        { key: "Left click", label: "Select a body, then a face on it (pause over it to light the face up first)" },
+        ...bindingEntries(pointerBindings()).map((e) => ({
+          key: gestureKey(e, tr),
+          label: tr(MOUSE_WHAT[e.what]),
+          ...(stock.has(entryId(e)) ? {} : { changed: true }),
+        })),
+        { key: tr("shortcuts.mouse.wheel"), label: tr("shortcuts.mouse.zoom") },
+        { key: `Ctrl+${tr("shortcuts.mouse.wheel")}`, label: tr("shortcuts.mouse.panWheel") },
+        { key: left("drag"), label: tr("shortcuts.mouse.boxSelect") },
+        { key: left("click"), label: tr("shortcuts.mouse.pick") },
       ],
     },
     {
-      name: "3D view focused",
+      id: "focus",
+      name: tr("shortcuts.group.focus"),
       rows: [
-        { key: "] / [", label: "Step to the next / previous face, edge or plane, with a highlight" },
-        { key: "Shift+] / Shift+[", label: "Switch what the brackets step: faces, edges, planes" },
-        { key: "Enter", label: "Select the lit row, or start a sketch on a lit plane" },
-        { key: "Space", label: "Add or remove the lit row" },
-        { key: "Esc", label: "Drop the highlight and clear the selection" },
+        { key: "] / [", label: tr("shortcuts.focus.step") },
+        { key: "Shift+] / Shift+[", label: tr("shortcuts.focus.stepKind") },
+        { key: "Enter", label: tr("shortcuts.focus.select") },
+        { key: "Space", label: tr("shortcuts.focus.toggle") },
+        { key: "Esc", label: tr("shortcuts.focus.drop") },
       ],
     },
     {
-      name: "Always",
+      id: "always",
+      name: tr("shortcuts.group.always"),
       rows: [
-        { key: "Ctrl+K", label: "Command palette" },
-        { key: "Ctrl+Z / Ctrl+Y", label: "Undo / Redo" },
-        { key: "Ctrl+S / Ctrl+Shift+S", label: "Save / Save As" },
-        { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: "New / Open / Export" },
-        { key: "Ctrl+Plus / Ctrl+Minus / Ctrl+0", label: "Interface size larger / smaller / 100%" },
-        { key: "Del", label: "Delete face (heal) / feature" },
-        { key: "Esc", label: "Cancel / clear selection" },
-        // A gesture, not a key, listed here because this is where anyone would look. "right"/"left" name the
-        // drag direction; all are left-button drags.
-        {
-          key: "Drag",
-          label:
-            "Box select: dragging to the right takes what is fully inside, dragging to the left takes what it touches",
-        },
-        { key: "Shift+Drag", label: "Box select, adding to what is selected" },
-        { key: "Tab", label: "While boxing: take everything / faces / sketch profiles / edges / bodies" },
+        { key: "Ctrl+K", label: tr("palette.title") },
+        { key: "Ctrl+Z / Ctrl+Y", label: tr("shortcuts.always.undoRedo") },
+        { key: "Ctrl+S / Ctrl+Shift+S", label: tr("shortcuts.always.save") },
+        { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: tr("shortcuts.always.newOpenExport") },
+        { key: "Ctrl+Plus / Ctrl+Minus / Ctrl+0", label: tr("shortcuts.always.size") },
+        { key: "Del", label: tr("shortcuts.always.delete") },
+        { key: "Esc", label: tr("shortcuts.always.cancel") },
+        { key: tr("shortcuts.mouse.drag"), label: tr("shortcuts.always.drag") },
+        { key: `Shift+${tr("shortcuts.mouse.drag")}`, label: tr("shortcuts.always.dragAdd") },
+        { key: "Tab", label: tr("shortcuts.always.tab") },
       ],
     },
   ];

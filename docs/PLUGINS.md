@@ -346,6 +346,7 @@ contribute("Acme.Rivets", {
 - A label is a getter or a function, so it follows a language switch without contributing again.
 - `refName` is the literal English name. The palette finds the tool by it in every language, and the harness locates it by it. A ribbon button or a tool contribution without one has no English alias.
 - `group` stays the stable id and is what groups match on. `label` on the group is the shown heading, the first running plugin that gives one wins, so plugins that share a group should use the same line. A core group (CREATE, MODIFY and the rest) keeps the core heading whatever a plugin says.
+- A `keymap` row's `label` may be a getter too, `get label() { return t("keys.rivet"); }`. The Keyboard Shortcuts window reads it each time it draws, so the row follows the language. A plain string stays in the plugin's language, and the window finds the row by what it shows.
 - A plugin without locales changes nothing, its text stays as written.
 - A plugin that must also run on an older app guards the call: `import * as host from "fundacad"`, then use its own `en.json` when `host.pluginText` is missing.
 

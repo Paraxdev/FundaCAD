@@ -355,6 +355,26 @@
     {
       "en": "Circular Pattern",
       "text": "环形阵列"
+    },
+    {
+      "en": "shortcut",
+      "text": "快捷键"
+    },
+    {
+      "en": "reset",
+      "text": "重置"
+    },
+    {
+      "en": "default",
+      "text": "默认"
+    },
+    {
+      "en": "conflict",
+      "text": "冲突"
+    },
+    {
+      "en": "replace",
+      "text": "替换"
     }
   ]
 }

@@ -9,13 +9,17 @@ import { escapeClaimed } from "../../ui/escapeClaim";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
 import { fmtKeys, spokenKeys } from "../../input/platform";
+import { t, tEnglish, type MessageKey, type MessageArgs } from "../../i18n";
 import {
   SHORTCUTS,
   formatShortcut,
   onShortcutsChange,
+  refusalLabel,
+  reservedLabel,
   resetUserShortcuts,
   setUserShortcut,
   shortcutGroupsOf,
+  shortcutLabel,
   shortcutHudGroups,
   userShortcutIds,
   type HudGroup,
@@ -38,10 +42,12 @@ const close = () => {
 const modals = useModalStore();
 let ownDepth = 0;
 
+type Group = HudGroup & { alias: string };
+
 interface Page {
   id: string;
   label: string;
-  groups: HudGroup[];
+  groups: Group[];
 }
 
 const tick = ref(0);
@@ -54,13 +60,25 @@ const pages = computed<Page[]>(() => {
     const found = shippedPlugins().find((p) => sameId(p.manifest.id, id));
     return found ? pluginName(found.manifest) : id;
   };
+  const build = (tr: (key: MessageKey, args?: MessageArgs) => string) => [
+    shortcutHudGroups(theirs, tr),
+    ...maps.map((m) => shortcutGroupsOf(new Set(m.keymap.map((o) => o.action)), tr)),
+  ];
+  const english = build(tEnglish);
+  // The English name stays searchable beside the shown one, the groups of both builds have the same shape.
+  const withAlias = (groups: HudGroup[], i: number): Group[] =>
+    groups.map((g, gi) => ({
+      ...g,
+      alias: english[i]![gi]?.name ?? "",
+      rows: g.rows.map((r, ri) => ({
+        ...r,
+        alias: `${english[i]![gi]?.rows[ri]?.label ?? ""} ${english[i]![gi]?.rows[ri]?.key ?? ""}`,
+      })),
+    }));
+  const shown = build(t);
   return [
-    { id: "general", label: "General", groups: shortcutHudGroups(theirs) },
-    ...maps.map((m) => ({
-      id: m.plugin,
-      label: nameOf(m.plugin),
-      groups: shortcutGroupsOf(new Set(m.keymap.map((o) => o.action))),
-    })),
+    { id: "general", label: t("shortcuts.page.general"), groups: withAlias(shown[0]!, 0) },
+    ...maps.map((m, i) => ({ id: m.plugin, label: nameOf(m.plugin), groups: withAlias(shown[i + 1]!, i + 1) })),
   ];
 });
 const mine = computed(() => {
@@ -72,14 +90,21 @@ const category = ref("general");
 const current = computed(() => pages.value.find((p) => p.id === category.value) ?? pages.value[0]!);
 const query = ref("");
 
-const matches = (r: { key: string; label: string }, q: string) => `${r.label} ${r.key}`.toLowerCase().includes(q);
+const matches = (r: { key: string; label: string; alias?: string }, q: string) =>
+  `${r.label} ${r.key} ${r.alias ?? ""}`.toLowerCase().includes(q);
 const shown = computed<Page[]>(() => {
   const q = query.value.trim().toLowerCase();
   if (!q) return [current.value];
   return pages.value
     .map((p) => ({
       ...p,
-      groups: p.groups.map((g) => ({ ...g, rows: g.rows.filter((r) => matches(r, q)) })).filter((g) => g.rows.length),
+      groups: p.groups
+        .map((g) =>
+          matches({ label: g.name, key: "", alias: g.alias }, q)
+            ? g
+            : { ...g, rows: g.rows.filter((r) => matches(r, q)) },
+        )
+        .filter((g) => g.rows.length),
     }))
     .filter((p) => p.groups.length);
 });
@@ -88,7 +113,7 @@ const resettable = computed(() =>
   current.value.groups.flatMap((g) => g.rows.flatMap((r) => (r.id && mine.value.has(r.id) ? [r.id] : []))),
 );
 
-const wide = (g: HudGroup) => ["Conflicts", "Mouse", "Always"].includes(g.name);
+const wide = (g: HudGroup) => ["conflicts", "mouse", "always"].includes(g.id);
 
 interface Pending {
   id: string;
@@ -109,9 +134,9 @@ function onCapture(id: string, k: CapturedKey) {
 
 function problemText(p: Pending, keys: (k: string) => string = fmtKeys): string {
   const p0 = p.problem;
-  if ("conflict" in p0) return `${keys(p.name)} is already used by ${p0.conflict.label}`;
-  if ("reserved" in p0) return `${keys(p.name)} is taken by ${p0.reserved}`;
-  return p0.refused;
+  if ("conflict" in p0) return t("shortcuts.problem.used", { keys: keys(p.name), action: shortcutLabel(p0.conflict) });
+  if ("reserved" in p0) return t("shortcuts.problem.taken", { keys: keys(p.name), action: reservedLabel(p0.reserved) });
+  return refusalLabel(p0.refused);
 }
 const problemOf = (id: string) => (pending.value?.id === id ? problemText(pending.value, spokenKeys) : undefined);
 const problemId = useId();
@@ -129,15 +154,15 @@ function reset(ids: string[]) {
 
 async function resetAll() {
   const page = current.value;
-  const what = page.id === "general" ? "shortcuts" : `${page.label} shortcuts`;
+  const general = page.id === "general";
   const ok = await confirmDanger(
-    `Reset ${what}?`,
-    "Reset",
-    "Every key you changed on this page goes back to its default.",
+    general ? t("shortcuts.resetPage.title") : t("shortcuts.resetPage.titleNamed", { name: page.label }),
+    t("shortcuts.reset"),
+    t("shortcuts.resetPage.body"),
   );
   if (!ok) return;
   reset(resettable.value);
-  toast(`${what[0]!.toUpperCase()}${what.slice(1)} are back to their defaults.`);
+  toast(general ? t("shortcuts.resetPage.done") : t("shortcuts.resetPage.doneNamed", { name: page.label }));
 }
 
 function onKey(e: KeyboardEvent) {
@@ -167,7 +192,7 @@ onUnmounted(() => {
 <template>
   <!-- Escape is this dialog's own layered handler above; the frame holds the modal gate, focus and its return. -->
   <Dialog
-    title="Keyboard shortcuts"
+    :title="t('shortcuts.title')"
     panel-class="prefs-panel shortcuts-panel"
     :close-on-esc="false"
     :body="false"
@@ -175,7 +200,7 @@ onUnmounted(() => {
     @close="close()"
   >
     <div class="modal-body prefs">
-      <nav class="prefs-nav" aria-label="Shortcut pages">
+      <nav class="prefs-nav" :aria-label="t('shortcuts.pages')">
         <button
           v-for="p in pages"
           :key="p.id"
@@ -198,27 +223,27 @@ onUnmounted(() => {
           class="sc-search"
           type="search"
           spellcheck="false"
-          placeholder="Search shortcuts"
-          label="Search shortcuts"
+          :placeholder="t('shortcuts.search')"
+          :label="t('shortcuts.search')"
           data-shortcut-search
         />
 
-        <div v-if="!shown.length" class="pref-hint">No shortcut matches that.</div>
+        <div v-if="!shown.length" class="pref-hint">{{ t("shortcuts.empty") }}</div>
         <section v-for="p in shown" :key="p.id" class="prefs-pane" :data-page="p.id">
           <div class="sc-head">
             <h3 class="prefs-pane-title">{{ p.label }}</h3>
-            <Button v-if="!query.trim() && resettable.length" size="sm" class="sc-reset-all" @click="resetAll()"
-              >Reset all</Button
-            >
+            <Button v-if="!query.trim() && resettable.length" size="sm" class="sc-reset-all" @click="resetAll()">{{
+              t("shortcuts.resetAll")
+            }}</Button>
           </div>
           <div class="prefs-grid">
-            <div v-for="g in p.groups" :key="g.name" class="pref-card" :class="{ wide: wide(g) }">
+            <div v-for="g in p.groups" :key="g.id" class="pref-card" :class="{ wide: wide(g) }">
               <div class="pref-head">
                 <span class="pref-title">{{ g.name }}</span>
               </div>
               <div v-for="(r, i) in g.rows" :key="r.id ?? i" class="sc-row" :class="{ changed: r.changed }">
                 <span class="sc-label">{{ r.label }}</span>
-                <span v-if="r.changed" class="sc-changed">changed</span>
+                <span v-if="r.changed" class="sc-changed">{{ t("shortcuts.changed") }}</span>
                 <template v-if="r.id">
                   <KeyCapture
                     class="sc-key"
@@ -232,14 +257,14 @@ onUnmounted(() => {
                     v-if="mine.has(r.id)"
                     type="button"
                     class="sc-reset"
-                    title="Back to the default"
+                    :title="t('shortcuts.resetTip')"
                     @click="reset([r.id])"
-                    >Reset</button
+                    >{{ t("shortcuts.reset") }}</button
                   >
                 </template>
                 <template v-else>
                   <kbd>{{ fmtKeys(r.key) }}</kbd>
-                  <span class="sc-fixed" title="This one cannot be changed here">fixed</span>
+                  <span class="sc-fixed" :title="t('shortcuts.fixedTip')">{{ t("shortcuts.fixed") }}</span>
                 </template>
                 <!-- KeyCapture speaks the problem as it closes, so the row is no second live region. -->
                 <div v-if="pending && pending.id === r.id" class="sc-problem">
@@ -250,9 +275,11 @@ onUnmounted(() => {
                     variant="primary"
                     :aria-describedby="problemId"
                     @click="replace()"
-                    >Replace</Button
+                    >{{ t("shortcuts.replace") }}</Button
                   >
-                  <Button size="sm" :aria-describedby="problemId" @click="pending = null">Cancel</Button>
+                  <Button size="sm" :aria-describedby="problemId" @click="pending = null">{{
+                    t("shortcuts.cancel")
+                  }}</Button>
                 </div>
               </div>
             </div>
@@ -262,7 +289,7 @@ onUnmounted(() => {
     </div>
 
     <template #footer>
-      <Button variant="primary" @click="close()">Done</Button>
+      <Button variant="primary" @click="close()">{{ t("shortcuts.done") }}</Button>
     </template>
   </Dialog>
 </template>

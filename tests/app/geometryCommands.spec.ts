@@ -122,7 +122,7 @@ describe("where the commands are listed", () => {
 
   it("the ? dialog lets them be bound, and keeps the canvas keys a fixed group", () => {
     const groups = shortcutHudGroups();
-    const rows = groups.find((g) => g.name === "Global")!.rows.filter((x) => /face|edge/.test(x.label));
+    const rows = groups.find((g) => g.name === "Global")!.rows.filter((x) => /face|edge/i.test(x.label));
     expect(rows.map((x) => x.key)).toEqual(["", "", "", "", ""]);
     expect(rows.every((x) => x.id !== undefined)).toBe(true);
     const canvas = groups.find((g) => g.name === "3D view focused")!.rows;

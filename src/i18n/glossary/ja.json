@@ -355,6 +355,26 @@
     {
       "en": "Circular Pattern",
       "text": "円形パターン"
+    },
+    {
+      "en": "shortcut",
+      "text": "ショートカット"
+    },
+    {
+      "en": "reset",
+      "text": "リセット"
+    },
+    {
+      "en": "default",
+      "text": "デフォルト"
+    },
+    {
+      "en": "conflict",
+      "text": "競合"
+    },
+    {
+      "en": "replace",
+      "text": "置き換える"
     }
   ]
 }
