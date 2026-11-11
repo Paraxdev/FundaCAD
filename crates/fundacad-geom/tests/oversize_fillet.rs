@@ -511,13 +511,22 @@ fn two_distance_setbacks_short_of_an_inside_corner_or_meeting_on_a_bar_build() {
 const SLANT_TOP: [(f64, f64); 6] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (20.0, 10.0), (10.0, 20.0), (0.0, 20.0)];
 
 /// The inside corner turns 225 degrees. Each size fits one way round but OCCT fails it, and the section build ended
-/// both chamfers square at the corner: 2/8 came back 3819.2 where OCP cuts at most 3797.5, with no word.
+/// both chamfers square at the corner: 2/8 came back 3819.2 where OCP cuts at most 3797.5, with no word. The offer
+/// is the largest size OCCT builds, on its volume trend (2/8: 4273.59, 4260.24, 4251.17 at 0.95, 0.98 and 1 of 1.24).
 #[test]
 fn two_distance_chamfers_the_kernel_fails_past_a_slanted_inside_corner_are_refused() {
-    for (d, d2) in [(2.0, 8.0), (3.0, 8.0), (4.0, 8.0), (3.0, 5.0)] {
+    for (d, d2, offer, built) in
+        [(2.0, 8.0, 1.24, 4251.17), (3.0, 8.0, 1.87, 4123.06), (4.0, 8.0, 2.49, 3998.65), (3.0, 5.0, 2.99, 3897.64)]
+    {
         let r = top_ring(&SLANT_TOP, d, d2);
-        let got = (outcome(&r), messages(&r).first().and_then(|m| offered(m)));
-        assert_eq!(got, ((1, vec![], 4500.0), None), "at {d}/{d2}: {:?}", messages(&r));
+        let s = messages(&r).first().and_then(|m| offered(m));
+        let fits = s.map(|s| outcome(&top_ring(&SLANT_TOP, s, d2 * s / d)).2);
+        assert_eq!(
+            (outcome(&r), s, fits),
+            ((1, vec![], 4500.0), Some(offer), Some(built)),
+            "at {d}/{d2}: {:?}",
+            messages(&r)
+        );
     }
     for (d, d2, want) in [(4.0, 3.0, 3983.15), (5.0, 2.0, 4055.96)] {
         let r = top_ring(&SLANT_TOP, d, d2);
@@ -625,7 +634,7 @@ fn equal_chamfers_round_a_hole_rim_cut_the_mitre_on_a_tilted_face_too() {
 
 /// Three chosen edges meet at each inside corner, two on the face and the concave wall edge, whose fill the section
 /// build adds after its cuts, so no mitre makes it right: the L all round at 5 came back 2434.89 where OCCT's trend
-/// gives about 2397, no word said. The corner offers no size, while the holed plate's own overlap still offers one.
+/// gives about 2397, no word said. The corner offers the largest size OCCT builds, 4.99 as below.
 #[test]
 fn chamfers_where_three_chosen_edges_meet_at_an_inside_corner_are_refused() {
     let all = json!({"kind": "edge", "by": "all", "body": "body1"});
@@ -648,7 +657,7 @@ fn chamfers_where_three_chosen_edges_meet_at_an_inside_corner_are_refused() {
     let want = vec![
         (1, vec![], 3000.0, Some(1.0)),
         (0, vec![], 2737.5, None),
-        (1, vec![], 4680.0, None),
+        (1, vec![], 4680.0, Some(4.99)),
         (0, vec![], 2403.96, None),
         (0, vec![], 3726.0, None),
     ];
@@ -667,9 +676,13 @@ fn a_chamfer_past_an_inside_corner_too_sharp_to_mitre_is_refused_at_the_corner()
         let r = plate(&[&notch[..]], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], 10.0, vec![c]);
         (owned(&r), messages(&r).iter().any(|m| m.contains("through (15.858, 11.856, 13)")))
     };
-    let got = vec![slit(0.5), slit(0.8), slit(1.7)];
-    let want =
-        vec![((0, vec![], 5870.35, None), false), ((1, vec![], 5885.7, None), true), ((1, vec![], 5885.7, None), true)];
+    let got = vec![slit(0.5), slit(0.8), slit(1.7), slit(0.687)];
+    let want = vec![
+        ((0, vec![], 5870.35, None), false),
+        ((1, vec![], 5885.7, Some(0.687)), true),
+        ((1, vec![], 5885.7, Some(0.687)), true),
+        ((0, vec![], 5856.55, None), false),
+    ];
     assert_eq!(got, want);
 }
 
@@ -681,7 +694,8 @@ fn with_faces(r: &Rebuild) -> (usize, Vec<String>, f64, Option<f64>, Option<usiz
 /// 10 + 10 just meets across the 20 x 20 top and bottom, so OCCT cannot build it and the section build cut every
 /// chamfer past its ends, leaving at each corner the pyramid under OCCT's corner triangle: 1645.71 for 1493.33
 /// (8 x 19.05), and with the top and Z edges 2422.86 for 2346.67, no word said. Both Z edges of one wall take 10
-/// there, closing it to a line, so 21 faces. A slanted corner is refused, OCCT's corner there is no plane.
+/// there, closing it to a line, so 21 faces. A slanted corner is refused, OCCT's corner there is no plane, with the
+/// largest size OCCT builds: 2.56 gives 2267.33, on its trend of 2368.97 and 2308.21 at 0.95 and 0.98 of it.
 #[test]
 fn two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_triangle() {
     let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
@@ -710,6 +724,7 @@ fn two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_tri
         block(3.9996, 9.999, all()),
         block(4.0, 10.0, top),
         with_faces(&prism_chamfer(&PARALLELOGRAM, 10.0, 3.0, 8.0, all(), json!({}))),
+        with_faces(&prism_chamfer(&PARALLELOGRAM, 10.0, 2.56, 8.0 * 2.56 / 3.0, all(), json!({}))),
     ];
     let want = vec![
         (0, vec![], 1493.33, None, Some(21)),
@@ -718,7 +733,8 @@ fn two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_tri
         (0, vec![], 2346.67, None, Some(15)),
         (0, vec![], 1493.69, None, Some(26)),
         (0, vec![], 2933.33, None, Some(9)),
-        (1, vec![], 3520.0, None, Some(6)),
+        (1, vec![], 3520.0, Some(2.56), Some(6)),
+        (0, vec![], 2267.33, None, Some(26)),
     ];
     assert_eq!(got, want);
 }
@@ -762,7 +778,8 @@ fn d_block(blends: Vec<Value>) -> Rebuild {
 
 /// Where a curved wall's chamfer met two straight ones the section build cut no corner patch: every edge at 5 built
 /// 2841.78 where OCCT's trend gives 2755.38, at 4/10 2103.55, no word said. The caps alone, two chosen edges a
-/// corner, need no patch: 2917.95 is OCCT's trend at 0.999, 0.9999 and 0.99999 of 5.
+/// corner, need no patch: 2917.95 is OCCT's trend at 0.999, 0.9999 and 0.99999 of 5. All edges offer the largest
+/// size OCCT builds, which builds in chamfers_refused_at_a_slanted_or_curved_three_edge_corner_offer_a_size_that_builds.
 #[test]
 fn chamfers_where_a_curved_chamfer_meets_two_straight_ones_at_a_corner_are_refused() {
     let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
@@ -778,8 +795,8 @@ fn chamfers_where_a_curved_chamfer_meets_two_straight_ones_at_a_corner_are_refus
         with_faces(&d_block(vec![equal(2.0, all())])),
     ];
     let want = vec![
-        (1, vec![], 4675.9, None, Some(6)),
-        (1, vec![], 4675.9, None, Some(6)),
+        (1, vec![], 4675.9, Some(3.99), Some(6)),
+        (1, vec![], 4675.9, Some(4.99), Some(6)),
         (0, vec![], 2917.95, None, Some(10)),
         (0, vec![], 4310.76, None, Some(26)),
     ];
@@ -839,5 +856,76 @@ fn chamfers_meeting_at_an_apex_of_four_edges_or_with_a_concave_one_are_refused()
     };
     let got = vec![run(false, dt, json!(apex)), run(true, dt, notched())];
     let want = vec![((1, vec![], 2666.67, None, Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
+    assert_eq!(got, want);
+}
+
+/// At the meeting size OCCT is not done and the section build has no corner patch where three chamfers meet on
+/// slanted or curved walls, so it refused with no size, while OCCT builds a hair under it: the offer is OCCT's.
+#[test]
+fn chamfers_refused_at_a_slanted_or_curved_three_edge_corner_offer_a_size_that_builds() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let equal = |d: f64| json!({"id": "c", "type": "chamfer", "edges": all(), "distance": d});
+    let poly = |n: usize, a0: f64| -> Vec<(f64, f64)> {
+        (0..n)
+            .map(|k| {
+                let a = (a0 + 360.0 * k as f64 / n as f64).to_radians();
+                (13.0 + 10.0 * a.cos(), -7.0 + 10.0 * a.sin())
+            })
+            .collect()
+    };
+    let offer = |r: &Rebuild| messages(r).first().and_then(|m| offered(m));
+    let mut got = vec![];
+    for corners in [poly(6, 17.0), poly(3, 107.0)] {
+        let r = prism_with(&corners, 4.0, vec![equal(2.0)]);
+        let s = offer(&r);
+        got.push((r.errors.len(), s, s.map(|s| with_faces(&prism_with(&corners, 4.0, vec![equal(s)])))));
+    }
+    let r = d_block(vec![equal(5.0)]);
+    let s = offer(&r);
+    got.push((r.errors.len(), s, s.map(|s| with_faces(&d_block(vec![equal(s)])))));
+    let r = d_block(vec![two_distance("c", 4.0, 10.0, all(), json!({}))]);
+    let s = offer(&r);
+    got.push((
+        r.errors.len(),
+        s,
+        s.map(|s| with_faces(&d_block(vec![two_distance("c", s, 10.0 * s / 4.0, all(), json!({}))]))),
+    ));
+    assert_eq!(
+        got,
+        vec![
+            (1, Some(1.99), Some((0, vec![], 797.76, None, Some(38)))),
+            (1, Some(1.99), Some((0, vec![], 331.72, None, Some(20)))),
+            (1, Some(4.99), Some((0, vec![], 2761.87, None, Some(26)))),
+            (1, Some(3.99), Some((0, vec![], 1870.74, None, Some(26)))),
+        ]
+    );
+}
+
+/// A drag tries only the size a step under the asked one, so it stays quick: the hexagon's 1.99 builds, the slanted
+/// inside corner's does not and offers none there, while its commit searches down to 1.24.
+#[test]
+fn a_dragged_chamfer_refused_at_a_corner_offers_only_the_size_a_step_under_it() {
+    let hexagon: Vec<(f64, f64)> = (0..6)
+        .map(|k| {
+            let a = (17.0 + 60.0 * k as f64).to_radians();
+            (13.0 + 10.0 * a.cos(), -7.0 + 10.0 * a.sin())
+        })
+        .collect();
+    let slant: Vec<(f64, f64)> =
+        SLANT_TOP.iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    let all = json!({"kind": "edge", "by": "all", "body": "body1"});
+    let drag = json!({"draft": true});
+    let got = vec![
+        owned(&prism_with(
+            &hexagon,
+            4.0,
+            vec![json!({"id": "c", "type": "chamfer", "edges": all, "distance": 2.0, "draft": true})],
+        )),
+        owned(&prism_chamfer(&slant, 10.0, 2.0, 8.0, top.clone(), drag.clone())),
+        owned(&prism_chamfer(&slant, 10.0, 1.24, 4.96, top, drag)),
+    ];
+    let want = vec![(1, vec![], 1039.23, Some(1.99)), (1, vec![], 4500.0, None), (0, vec![], 4251.17, None)];
     assert_eq!(got, want);
 }

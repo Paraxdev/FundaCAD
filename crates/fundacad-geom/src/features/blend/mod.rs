@@ -793,6 +793,42 @@ fn smooth_size(size: f64, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
         .find(|&v| checkpoint().is_ok() && builds(v))
 }
 
+/// The largest size under `size`, on the grid a refusal offers sizes on, that `builds` takes. A `quick` search tries
+/// only the top one. The kernel fails sizes in no order, so the bisection offers only a size that built.
+fn kernel_size(size: f64, quick: bool, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
+    let on_grid = |v: f64| {
+        let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+        (v * step + 1e-6).floor() / step
+    };
+    let step = if size > 1.0 + 1e-9 { 100.0 } else { 1000.0 };
+    let top = ((size * step - 1e-6).ceil() - 1.0) / step;
+    if top <= 0.0 || checkpoint().is_err() {
+        return None;
+    }
+    if builds(top) {
+        return Some(top);
+    }
+    if quick {
+        return None;
+    }
+    let start = std::time::Instant::now();
+    let (mut lo, mut hi, mut best) = (0.0, top, None);
+    while start.elapsed() < KERNEL_SIZE_BUDGET && checkpoint().is_ok() {
+        let mid = on_grid(0.5 * (lo + hi));
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if builds(mid) {
+            (lo, best) = (mid, Some(mid));
+        } else {
+            hi = mid;
+        }
+    }
+    best
+}
+
+const KERNEL_SIZE_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// A blend over an edge whose faces turn tangent that came out rippled, or did not build. `found` is `None` when
 /// no smaller size was tried, and `Some(None)` when none tried built smooth.
 fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option<Option<f64>>) -> Fail {
@@ -859,7 +895,7 @@ fn blend_edges(
         let edges = drop_seams(&body_shape, sels, edges, label)?;
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
-        let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
+        let misfit: std::cell::Cell<Option<(Misfit, Fits, [f64; 3])>> = std::cell::Cell::new(None);
         let ends = smooth::fade_ends(&body_shape, &edges);
         let fades = !ends.is_empty();
         let gauge = fades.then(|| smooth::Gauge::new(&body_shape, &edges, ends, ball, blend_size));
@@ -888,7 +924,7 @@ fn blend_edges(
                     kept
                 }
                 Err(SectionErr::TooLarge { why, fits, at }) => {
-                    misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
+                    misfit.set(Some((why, fits, at)));
                     None
                 }
                 Err(_) => None,
@@ -949,6 +985,36 @@ fn blend_edges(
             let found = (!draft).then(|| smooth_size(blend_size, &builds_smooth));
             uneven_error(label, &body_name, blend_size, rippled.get(), found)
         };
+        let kernel_builds = |size: f64| {
+            use crate::kernel::{count, Kind};
+            ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
+                op(&b, &es, size).is_ok_and(|out| {
+                    !overlap::folds_over_itself(&b, &out, size)
+                        && smooth_at(&out, size)
+                        && still_sharp(&out, &es).is_empty()
+                        && keeps_voids(&b, &out)
+                        && count(&out, Kind::Solid) == count(&b, Kind::Solid)
+                        && crate::soundness::of(&out).fault().is_none()
+                })
+            })
+        };
+        // Where four or more chosen edges meet, OCCT builds sizes under the limit off its own volume trend (a tilted
+        // pyramid's apex at 9.12 of 9.13 built 137.19, plain OCCT on it untilted 432.11), so no size is offered.
+        let meeting = |at: [f64; 3]| {
+            let at = DVec3::from(at);
+            edges.iter().filter(|e| vertex_points(e).iter().any(|&v| DVec3::from(v).distance(at) < 1e-3)).count()
+        };
+        // The section build cannot size a chamfer corner it has no patch for, while OCCT, the path that builds
+        // these chamfers, often stops only at the asked size, so the offer is the largest size OCCT builds.
+        let refused = |(why, fits, at): (Misfit, Fits, [f64; 3])| {
+            let fits = match fits {
+                Fits::Unknown if label == "Chamfer" && meeting(at) < 4 => {
+                    kernel_size(blend_size, draft, &kernel_builds).map_or(fits, Fits::UpTo)
+                }
+                _ => fits,
+            };
+            misfit_error(label, &body_name, blend_size, why, fits, at)
+        };
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -978,8 +1044,8 @@ fn blend_edges(
                     if fades {
                         return Err(uneven());
                     }
-                    if let Some(fail) = misfit.take() {
-                        return Err(fail);
+                    if let Some(m) = misfit.take() {
+                        return Err(refused(m));
                     }
                     let body = BodyRef { name: &body_name, shape: &work };
                     return Err(blend_failure(label, &body, &unresolved, &one_edge_at, op, blend_size, &combined_err));
@@ -991,7 +1057,7 @@ fn blend_edges(
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None if fades => return Err(uneven()),
-                None => return Err(misfit.take().unwrap_or_else(|| fold_error(&body_name))),
+                None => return Err(misfit.take().map_or_else(|| fold_error(&body_name), refused)),
             }
         } else if !smooth_at(&new_shape, blend_size) {
             match try_section(&body_shape, &edges) {
