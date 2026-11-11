@@ -55,18 +55,19 @@ describe("a lone pick named in the chosen language", () => {
     expect(describePick(datum).label).toBe("Mittelebene");
   });
 
-  it("aloud is the readout in words, joined with the language's comma", async () => {
+  it("aloud is the plane's readout joined with the language's comma", async () => {
     const cases = [
-      ["en", ", ", "XY plane, origin, tilted 21 degrees from up"],
-      ["de", ", ", "XY-Ebene, Ursprung, um 21 Grad gegen oben geneigt"],
-      ["ja", "、", "XY 平面、原点、上から21度傾斜"],
+      ["en", ", ", "XY plane, origin, tilted 21° from up"],
+      ["de", ", ", null],
+      ["ja", "、", null],
     ] as const;
     for (const [lang, join, expected] of cases) {
       await setLanguage(lang);
-      expect(describePick(base).aloud).toBe(expected);
-      expect(describePick(base).readout).toContain("°");
-      expect(describePick(base).aloud).not.toMatch(/[°·⌀²]/);
-      expect(describePick(datum).aloud.split(join)[0]).toBe("Mittelebene");
+      const w = describePick(base);
+      expect(w.aloud).toBe(expected ?? w.readout.replaceAll(" · ", join));
+      expect(w.aloud).not.toContain("·");
+      expect(w.aloud).toContain("21°");
+      expect(describePick(datum).aloud!.split(join)[0]).toBe("Mittelebene");
     }
   });
 
@@ -119,9 +120,9 @@ describe("the facts of a pick, on screen and aloud", () => {
     expect(describePick(level).spoken).toContain("in Höhe 7,25");
     expect(w.spoken).toContain("aus Extrude 2");
     expect(w.spoken).toContain("Platte");
-    expect(w.aloud).not.toMatch(glyph);
     expect(w.spoken).not.toMatch(glyph);
     expect(w.readout).not.toContain("Teil");
+    expect(w.aloud).toBeUndefined();
     expect(describePick(level).readout).not.toContain("in 1 Teil");
     expect(describePick(level).spoken).not.toContain("Teil");
     const hole = describePick(bore);
@@ -164,9 +165,8 @@ describe("the facts of a pick, on screen and aloud", () => {
       await setLanguage(lang);
       for (const f of [plate, level, tube, bore, between, onOne]) {
         const w = describePick(f);
-        for (const text of [w.readout, w.hint, w.spoken, w.aloud]) expect(text).not.toMatch(/[{}]/);
+        for (const text of [w.readout, w.hint, w.spoken]) expect(text).not.toMatch(/[{}]/);
         expect(w.spoken).not.toMatch(glyph);
-        expect(w.aloud).not.toMatch(glyph);
       }
     }
   });

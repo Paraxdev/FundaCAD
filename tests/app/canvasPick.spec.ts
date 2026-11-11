@@ -17,7 +17,7 @@ import {
   type TreePickAnswer,
 } from "../../src/ui/treePick";
 import { edge, land, previewOnScreen, result, rig, topology } from "./geometryBrowserRig";
-import { t } from "../../src/i18n";
+import { setLanguage, t } from "../../src/i18n";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {}, dismissToastsSaying: () => {} }));
 vi.mock("../../src/ui/announce", async (actual) => ({
@@ -672,6 +672,32 @@ describe("a tool waiting for a pick", () => {
     key("[");
     expect(r.list.cursor).toBe("f:body1:2");
     expect(r.taken).toEqual([]);
+  });
+
+  it("says a plane row by its readout in the chosen language's list, no sketch offered", async () => {
+    await setLanguage("ja");
+    try {
+      const r = await waiting();
+      key("{");
+      key("]");
+      const plane = r.list.litRow!;
+      expect(plane.kind).toBe("plane");
+      const words = describePick(plane.facts);
+      expect(lastSaid()).toBe(words.readout.replaceAll(" · ", "、"));
+      expect(lastSaid()).not.toMatch(/[,·]/);
+      expect(lastSaid()).not.toBe(words.spoken);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("says a plane row with its sketch offer when no tool waits", async () => {
+    const r = await ready();
+    key("{");
+    key("]");
+    const plane = r.list.litRow!;
+    expect(lastSaid()).toBe(describePick(plane.facts).spoken);
+    expect(lastSaid()).toContain("Enter starts a sketch");
   });
 
   it("Enter gives the lit row to the tool, puts the light out and goes on from that row", async () => {

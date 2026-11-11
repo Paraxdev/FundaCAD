@@ -51,8 +51,8 @@ export interface PickWords {
   hint: string;
   readout: string;
   spoken: string;
-  /** The readout's parts folded for the voice, with no glyph between them. */
-  aloud: string;
+  /** A plane's readout with the language's list join in place of ` · `. */
+  aloud?: string;
 }
 
 export const MATCH_COS = Math.cos((2 * Math.PI) / 180);
@@ -234,34 +234,30 @@ function edgeFacts(e: EdgeFacts): (Fact | null)[] {
 
 const channel = (facts: (Fact | null)[], key: keyof Fact): string[] =>
   facts.flatMap((f) => (f?.[key] ? [f[key]!] : []));
-// What the readout shows, in the words of the voice.
-const aloudOf = (facts: (Fact | null)[]): string[] => facts.flatMap((f) => (f?.readout ? [f.spoken ?? f.readout] : []));
 
 export function describePick(f: PickFacts): PickWords {
   if (f.kind === "plane") {
     const label = f.origin ? t("pick.plane.name", { name: f.name }) : f.name;
     const where = t("pick.plane.where", { where: f.origin ? "origin" : "datum" });
     const look = facing(f.normal);
-    const aloud = joinFacts([label, where, ...channel([look], "spoken")]);
+    const shownFacts = [label, where, ...channel([look], "readout")];
     return {
       label,
       hint: where,
-      readout: [label, where, ...channel([look], "readout")].join(" · "),
-      spoken: t("pick.plane.spoken", { facts: aloud }),
-      aloud,
+      readout: shownFacts.join(" · "),
+      spoken: t("pick.plane.spoken", { facts: joinFacts([label, where, ...channel([look], "spoken")]) }),
+      aloud: joinFacts(shownFacts),
     };
   }
   const type = f.kind === "face" ? faceType(f) : EDGE_TYPE[f.curve];
   const facts = f.kind === "face" ? faceFacts(f, type as FaceType | null) : edgeFacts(f);
   const label = t(f.kind === "face" ? "pick.name.face" : "pick.name.edge", { type: type ?? "other", n: f.number });
   const head = t(f.kind === "face" ? "pick.head.face" : "pick.head.edge", { type: type ?? "other" });
-  const shownFacts = channel(facts, "readout");
   return {
     label,
     hint: joinFacts(channel(facts, "hint")),
-    readout: [head, ...shownFacts].join(" · "),
+    readout: [head, ...channel(facts, "readout")].join(" · "),
     spoken: joinFacts([label, ...channel(facts, "spoken")]),
-    aloud: joinFacts([...head.split(" · "), ...aloudOf(facts)]),
   };
 }
 

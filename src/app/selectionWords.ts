@@ -95,7 +95,7 @@ export function createSelectionWords(e: Engine) {
     if (facts) {
       const words = describePick(facts);
       // A row's Enter starts a sketch, a plane picked elsewhere may not.
-      return facts.kind === "plane" ? { label: words.label, spoken: words.aloud } : words;
+      return facts.kind === "plane" ? { label: words.label, spoken: words.aloud ?? words.spoken } : words;
     }
     const kind = key.slice(0, 2);
     if (kind === "b:") {
