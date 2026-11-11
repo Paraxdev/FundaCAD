@@ -451,6 +451,231 @@
     {
       "en": "profile",
       "text": "profil"
+    },
+    {
+      "en": "Distance",
+      "text": "Distance"
+    },
+    {
+      "en": "Taper",
+      "text": "Conicité",
+      "note": "the angle a side leans in while it extrudes"
+    },
+    {
+      "en": "Thickness",
+      "text": "Épaisseur"
+    },
+    {
+      "en": "Diameter",
+      "text": "Diamètre"
+    },
+    {
+      "en": "Depth",
+      "text": "Profondeur"
+    },
+    {
+      "en": "Angle",
+      "text": "Angle"
+    },
+    {
+      "en": "Pitch",
+      "text": "Pas",
+      "note": "the climb of a thread per turn"
+    },
+    {
+      "en": "Count",
+      "text": "Nombre"
+    },
+    {
+      "en": "Radius",
+      "text": "Rayon"
+    },
+    {
+      "en": "Height",
+      "text": "Hauteur"
+    },
+    {
+      "en": "Width",
+      "text": "Largeur"
+    },
+    {
+      "en": "Length",
+      "text": "Longueur"
+    },
+    {
+      "en": "Spacing",
+      "text": "Espacement",
+      "note": "the gap between the copies of a pattern, not Distance"
+    },
+    {
+      "en": "Tolerance",
+      "text": "Tolérance"
+    },
+    {
+      "en": "Offset value",
+      "text": "Décalage",
+      "note": "the Offset row, a distance; the Offset tool keeps its own verb"
+    },
+    {
+      "en": "New body",
+      "text": "Nouveau corps",
+      "note": "uses the word chosen for body"
+    },
+    {
+      "en": "Join",
+      "text": "Joindre",
+      "note": "the operation that adds to a body"
+    },
+    {
+      "en": "Cut",
+      "text": "Couper",
+      "note": "the operation that removes from a body"
+    },
+    {
+      "en": "Through all",
+      "text": "Traversant"
+    },
+    {
+      "en": "Up to face",
+      "text": "Jusqu'à la face"
+    },
+    {
+      "en": "Up to plane",
+      "text": "Jusqu'au plan"
+    },
+    {
+      "en": "Up to point",
+      "text": "Jusqu'au point"
+    },
+    {
+      "en": "Operation",
+      "text": "Opération",
+      "note": "the row that picks New body, Join or Cut"
+    },
+    {
+      "en": "Counterbore",
+      "text": "Lamage",
+      "note": "a flat bottomed widening of a hole"
+    },
+    {
+      "en": "Countersink",
+      "text": "Fraisure",
+      "note": "a cone shaped widening of a hole"
+    },
+    {
+      "en": "Heat-set insert",
+      "text": "Insert à chaud",
+      "note": "a threaded insert pressed in with heat for printed parts"
+    },
+    {
+      "en": "Clearance",
+      "text": "Trou de passage",
+      "note": "a hole a screw passes through"
+    },
+    {
+      "en": "Tap drill",
+      "text": "Avant-trou",
+      "note": "the hole drilled before a thread is cut"
+    },
+    {
+      "en": "Blind",
+      "text": "Borgne",
+      "note": "a hole that stops inside the part"
+    },
+    {
+      "en": "Chord length",
+      "text": "Longueur de corde"
+    },
+    {
+      "en": "Continuity",
+      "text": "Continuité",
+      "note": "how smoothly a fillet meets its faces: G1, G2, G3"
+    },
+    {
+      "en": "Drive",
+      "text": "Entraînement",
+      "note": "what moves a draft or press/pull"
+    },
+    {
+      "en": "Hole type",
+      "text": "Type de perçage"
+    },
+    {
+      "en": "Wall side",
+      "text": "Côté de la paroi"
+    },
+    {
+      "en": "Keep originals",
+      "text": "Conserver les originaux"
+    },
+    {
+      "en": "Emboss",
+      "text": "Estamper",
+      "note": "text raised from a face"
+    },
+    {
+      "en": "Engrave",
+      "text": "Graver",
+      "note": "text cut into a face"
+    },
+    {
+      "en": "Tapped",
+      "text": "Taraudé",
+      "note": "a hole that carries a thread"
+    },
+    {
+      "en": "Drill point",
+      "text": "Pointe de perçage"
+    },
+    {
+      "en": "Centered",
+      "text": "Centré"
+    },
+    {
+      "en": "Two sides",
+      "text": "Deux côtés"
+    },
+    {
+      "en": "Axis",
+      "text": "Axe"
+    },
+    {
+      "en": "Hand",
+      "text": "Sens",
+      "note": "the winding of a thread, Right or Left"
+    },
+    {
+      "en": "Right",
+      "text": "Droite"
+    },
+    {
+      "en": "Left",
+      "text": "Gauche"
+    },
+    {
+      "en": "Flip direction",
+      "text": "Inverser la direction"
+    },
+    {
+      "en": "Fit",
+      "text": "Ajustement",
+      "note": "how tight a thread or hole fits: Close, Normal, Loose"
+    },
+    {
+      "en": "Inside",
+      "text": "Intérieur"
+    },
+    {
+      "en": "Outside",
+      "text": "Extérieur"
+    },
+    {
+      "en": "Tangent faces",
+      "text": "Faces tangentes"
+    },
+    {
+      "en": "Tangent edges",
+      "text": "Arêtes tangentes"
     }
   ]
 }

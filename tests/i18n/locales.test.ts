@@ -49,6 +49,12 @@ const GLOSSARY_TERMS = [
   ...["Stress", "Support", "Fixed", "Pinned", "Slider", "Load", "Force", "Pressure", "Own weight", "Face", "Spot"],
   ...["Mesh detail", "Coarse", "Standard", "Fine", "Material", "Custom"],
   ...["Safety factor", "Peak stress", "Deflection", "Mesh", "Inside corner", "Thin wall", "Yield", "Reaction"],
+  ...["Distance", "Taper", "Thickness", "Diameter", "Depth", "Angle", "Pitch", "Count", "Radius", "Height", "Width"],
+  ...["Length", "Spacing", "Tolerance", "Offset value", "New body", "Join", "Cut", "Through all", "Operation"],
+  ...["Up to face", "Up to plane", "Up to point", "Counterbore", "Countersink", "Heat-set insert", "Clearance"],
+  ...["Tap drill", "Blind", "Chord length", "Continuity", "Drive", "Hole type", "Wall side", "Keep originals"],
+  ...["Emboss", "Engrave", "Tapped", "Drill point", "Centered", "Two sides", "Axis", "Hand", "Right", "Left"],
+  ...["Flip direction", "Fit", "Inside", "Outside", "Tangent faces", "Tangent edges"],
 ];
 
 function glossaryProblems(code: string, glossary: unknown): string[] {
@@ -207,6 +213,14 @@ describe("the checks on the shipped languages", () => {
       "missing Safety factor",
       "missing Reaction",
     ]);
+    const feature = ["Taper", "Heat-set insert", "Tangent edges"];
+    for (const [code, g] of byCode(glossaries)) {
+      const real = (g as { terms: { en: string }[] }).terms;
+      for (const gone of [feature.slice(0, 1), feature]) {
+        const cut = { language: code, terms: real.filter((t) => !gone.includes(t.en)) };
+        expect(glossaryProblems(code, cut)).toEqual(gone.map((en) => `missing ${en}`));
+      }
+    }
     expect(glossaryProblems("ja", { language: "ja" })).toEqual([
       "no terms",
       ...GLOSSARY_TERMS.map((t) => `missing ${t}`),
