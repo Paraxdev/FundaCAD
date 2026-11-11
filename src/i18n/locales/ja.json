@@ -147,6 +147,7 @@
   "pick.onBody": "{body}の{label}",
   "pick.oneBody": "その面は別のボディにあります。1 回のプッシュで動かせるのは 1 つのボディの面だけです",
   "pick.overCap": "エッジが多すぎるため、追加しませんでした",
+  "pick.refused": "この行は{row, select, basePlane {基準平面} datumPlane {参照平面} datumPoint {参照点} datumAxis {参照軸} body {ボディ} bodies {ボディのフォルダー} sketch {スケッチ} face {面} edge {エッジ} other {フィーチャー}}です。この手順には{wanted, select, face {面} flatFace {平らな面} roundFace {丸い面} modelFlatFace {モデルの平らな面} edge {エッジ} faceOrEdge {面またはエッジ} axisFaceOrEdge {軸用の面またはエッジ} planeOrFace {平面または面} planeOrFlatFace {平面または平らな面} bodyPlaneOrFlatFace {ボディ、平面、または平らな面} body {ボディ} oneBody {ボディ1つ} datumPoint {参照点} sketchProfile {スケッチプロファイル} axisOrStraightEdge {軸または直線エッジ} other {面}}が必要です",
   "pick.takenThenRefused": "{taken}。{refusal}",
   "prefs.accessibility.manualLink": "マニュアルのアクセシビリティのページを読む",
   "prefs.language.error.badName": "ファイル名から言語を判断できませんでした。pl.json のように、言語コードをファイル名にしてください。",

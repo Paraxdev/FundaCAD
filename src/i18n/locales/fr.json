@@ -147,6 +147,7 @@
   "pick.onBody": "{label} de {body}",
   "pick.oneBody": "Cette face est sur un autre corps, une poussée déplace les faces d’un seul corps",
   "pick.overCap": "Trop d’arêtes, aucune ajoutée",
+  "pick.refused": "Cette ligne est {row, select, basePlane {un plan de base} datumPlane {un plan de référence} datumPoint {un point de référence} datumAxis {un axe de référence} body {un corps} bodies {un dossier de corps} sketch {une esquisse} face {une face} edge {une arête} other {un élément}}, cette étape demande {wanted, select, face {une face} flatFace {une face plane} roundFace {une face ronde} modelFlatFace {une face plane du modèle} edge {une arête} faceOrEdge {une face ou une arête} axisFaceOrEdge {une face ou une arête pour l'axe} planeOrFace {un plan ou une face} planeOrFlatFace {un plan ou une face plane} bodyPlaneOrFlatFace {un corps, un plan ou une face plane} body {un corps} oneBody {un seul corps} datumPoint {un point de référence} sketchProfile {un profil d'esquisse} axisOrStraightEdge {un axe ou une arête droite} other {une face}}",
   "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Lire la page Accessibilité du manuel",
   "prefs.language.error.badName": "Impossible de déduire la langue du nom du fichier, nommez le fichier d’après son code de langue, par exemple pl.json.",

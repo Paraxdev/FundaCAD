@@ -257,7 +257,7 @@ export class PressPullTool {
     } else {
       this.releaseRows = awaitFaceRows(
         this.viewport,
-        "a face",
+        "face",
         (faces) => this.takeRow(faces),
         () => this.cancel(),
         (run) => this.takeRowRun(run),
@@ -312,7 +312,7 @@ export class PressPullTool {
     setPrompt("Click the face to stop at · Esc");
     this.releaseRows = awaitFaceRows(
       this.viewport,
-      "a face",
+      "face",
       (faces) => this.takeStop(faces),
       () => this.endStopPick(),
     );

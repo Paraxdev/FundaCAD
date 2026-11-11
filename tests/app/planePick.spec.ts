@@ -97,7 +97,7 @@ describe("routePlaneRow", () => {
   it("says why a waiting pick refused the row", () => {
     const { e, setStatus } = host();
     awaitTreePick(
-      (p) => treePickRefusal(p, "one body"),
+      (p) => treePickRefusal(p, "oneBody"),
       () => {},
     );
     expect(routePlaneRow(e, XZ)).toBe("refused");
@@ -131,7 +131,7 @@ describe("a refusal toast and the row taken after it", () => {
   };
   const wantsFace = () =>
     awaitTreePick(
-      (p) => (p.kind === "face" ? true : treePickRefusal(p, "a face")),
+      (p) => (p.kind === "face" ? true : treePickRefusal(p, "face")),
       () => {},
     );
 
@@ -142,8 +142,8 @@ describe("a refusal toast and the row taken after it", () => {
     wantsFace();
     expect(routePlaneRow(e, XZ)).toBe("refused");
     expect(routePlaneRow(e, DATUM)).toBe("refused");
-    const datum = treePickRefusal(DATUM, "a face");
-    expect(showing()).toEqual(["Copied.", treePickRefusal(XZ, "a face"), datum]);
+    const datum = treePickRefusal(DATUM, "face");
+    expect(showing()).toEqual(["Copied.", treePickRefusal(XZ, "face"), datum]);
     expect(routeTreeClick({ kind: "face", faceId: 14 }, treeClickDeps(e))).toBe("taken");
     expect(showing()).toEqual(["Copied."]);
     vi.advanceTimersByTime(200);
@@ -165,7 +165,7 @@ describe("a refusal toast and the row taken after it", () => {
     wantsFace();
     said.length = 0;
     expect(routePlaneRow(e, XZ)).toBe("refused");
-    const text = treePickRefusal(XZ, "a face");
+    const text = treePickRefusal(XZ, "face");
     expect(showing()).toEqual([text]);
     expect(said).toEqual([[text, "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY }]]);
   });
@@ -175,6 +175,6 @@ describe("a refusal toast and the row taken after it", () => {
     wantsFace();
     routePlaneRow(e, XZ);
     routePlaneRow(e, XZ);
-    expect(showing()).toEqual([treePickRefusal(XZ, "a face")]);
+    expect(showing()).toEqual([treePickRefusal(XZ, "face")]);
   });
 });

@@ -18,7 +18,7 @@ export function overrideRowAnswer(
   planeOf: (faceId: number) => PlaneDef | null,
   take: (override: ViewOverride) => void,
 ): TreePickAnswer {
-  if (pick.kind !== "face") return treePickRefusal(pick, "a flat face of the model");
+  if (pick.kind !== "face") return treePickRefusal(pick, "modelFlatFace");
   const plane = planeOf(pick.faceId);
   if (!plane) return CURVED_FACE_ROW;
   take(viewOverrideOf(plane));

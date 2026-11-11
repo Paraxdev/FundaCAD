@@ -47,7 +47,7 @@ describe("a face row for a tool that waits for faces", () => {
     const got: PressPullFaces[] = [];
     awaitFaceRows(
       vp,
-      "a face",
+      "face",
       (f) => (got.push(f), true),
       () => {},
     );
@@ -61,7 +61,7 @@ describe("a face row for a tool that waits for faces", () => {
     const seen: number[] = [];
     awaitFaceRows(
       vp,
-      "a face",
+      "face",
       (f) => (seen.push(f.faceIds[0]!), seen.length < 2 ? "Not that one" : true),
       () => {},
     );
@@ -87,7 +87,7 @@ describe("a face row for a tool that waits for faces", () => {
     let took = 0;
     awaitFaceRows(
       a.vp,
-      "a face",
+      "face",
       () => (took++, true),
       () => {},
     );
@@ -104,7 +104,7 @@ describe("a face row for a tool that waits for faces", () => {
     const b = rig(false);
     awaitFaceRows(
       b.vp,
-      "a face",
+      "face",
       () => (took++, true),
       () => {},
     );
@@ -119,7 +119,7 @@ describe("a face row for a tool that waits for faces", () => {
     const ended: string[] = [];
     awaitFaceRows(
       vp,
-      "a face",
+      "face",
       () => true,
       () => ended.push("rows"),
     );
@@ -128,7 +128,7 @@ describe("a face row for a tool that waits for faces", () => {
     expect([ended, treePickWaiting()]).toEqual([[], true]);
     const release = awaitFaceRows(
       vp,
-      "a face",
+      "face",
       () => true,
       () => ended.push("second"),
     );

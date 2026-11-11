@@ -147,6 +147,7 @@
   "pick.onBody": "{label} von {body}",
   "pick.oneBody": "Diese Fläche gehört zu einem anderen Körper, ein Schieben bewegt Flächen eines Körpers",
   "pick.overCap": "Zu viele Kanten, keine hinzugefügt",
+  "pick.refused": "Diese Zeile ist {row, select, basePlane {eine Basisebene} datumPlane {eine Bezugsebene} datumPoint {ein Bezugspunkt} datumAxis {eine Bezugsachse} body {ein Körper} bodies {ein Ordner mit Körpern} sketch {eine Skizze} face {eine Fläche} edge {eine Kante} other {ein Element}}, dieser Schritt braucht {wanted, select, face {eine Fläche} flatFace {eine ebene Fläche} roundFace {eine runde Fläche} modelFlatFace {eine ebene Fläche des Modells} edge {eine Kante} faceOrEdge {eine Fläche oder eine Kante} axisFaceOrEdge {eine Fläche oder eine Kante für die Achse} planeOrFace {eine Ebene oder eine Fläche} planeOrFlatFace {eine Ebene oder eine ebene Fläche} bodyPlaneOrFlatFace {einen Körper, eine Ebene oder eine ebene Fläche} body {einen Körper} oneBody {genau einen Körper} datumPoint {einen Bezugspunkt} sketchProfile {ein Skizzenprofil} axisOrStraightEdge {eine Achse oder eine gerade Kante} other {eine Fläche}}",
   "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Die Seite Barrierefreiheit im Handbuch lesen",
   "prefs.language.error.badName": "Die Sprache ließ sich nicht aus dem Dateinamen ablesen, benennen Sie die Datei nach dem Sprachcode, etwa pl.json.",

@@ -75,7 +75,7 @@ export class TextOnFaceTool {
       });
     this.releaseRows = awaitFaceRows(
       this.viewport,
-      "a face",
+      "face",
       (f) => {
         const [selector] = f.selectors;
         if (!selector || f.faceIds.length !== 1) return "Pick one face to put text on";

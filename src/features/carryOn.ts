@@ -71,7 +71,7 @@ export function targetOf(pick: TreePick, vp: Pick<Viewport, "faceTriangles">): C
     const point = polylineMid(pick.edge.points);
     return point ? { kind: "edge", point } : carryWords.wait();
   }
-  return treePickRefusal(pick, "a face or an edge");
+  return treePickRefusal(pick, "faceOrEdge");
 }
 
 export function carryTaker(
@@ -80,7 +80,7 @@ export function carryTaker(
   vp: Pick<Viewport, "faceTriangles">,
 ): TreePickTaker {
   return (pick) => {
-    if (pick.kind !== "face" && pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge");
+    if (pick.kind !== "face" && pick.kind !== "edge") return treePickRefusal(pick, "faceOrEdge");
     const blocked = source.carryBlocked();
     if (blocked) return blocked;
     const target = targetOf(pick, vp);

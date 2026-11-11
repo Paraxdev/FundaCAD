@@ -444,7 +444,7 @@ describe("what a command refuses", () => {
 
   it("a pick the screen does not count as a tool, as setting a view's face, is passed over and the step selects", async () => {
     const { r, run } = await opened();
-    const taker = vi.fn((pick: TreePick) => treePickRefusal(pick, "a model face, pick it in the view"));
+    const taker = vi.fn((pick: TreePick) => treePickRefusal(pick, "modelFlatFace"));
     awaitTreePick(taker, vi.fn());
     run("next-face");
     expect(taker).not.toHaveBeenCalled();

@@ -838,7 +838,7 @@ export function createPanels(deps: PanelsDeps) {
 
   // A row names a face and not a spot, so only Click faces waits for rows.
   function takeFaceRow(pick: Parameters<typeof treePickRefusal>[0]): TreePickAnswer {
-    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    if (pick.kind !== "face") return treePickRefusal(pick, "face");
     const d = panels.stress;
     const target = d?.placing;
     if (!d || !target) return "Stress is not waiting for a face";

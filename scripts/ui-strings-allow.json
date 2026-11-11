@@ -350,7 +350,6 @@
   { "path": "src/ui/theme.ts", "kind": "script", "count": 15, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/toast.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/traceFault.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/ui/treePick.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/updateChannel.ts", "kind": "script", "count": 6, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/updatePrefs.ts", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/updates.ts", "kind": "script", "count": 18, "reason": "raw text before localisation, a codemod lane converts it" },

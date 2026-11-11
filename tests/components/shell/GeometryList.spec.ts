@@ -1189,7 +1189,7 @@ describe("the Planes list", () => {
     it("says why when the waiting pick wants something else, and keeps waiting", async () => {
       const { r, w } = await planesOpen();
       awaitTreePick(
-        (p) => treePickRefusal(p, "one body"),
+        (p) => treePickRefusal(p, "oneBody"),
         () => {},
       );
       await enterOn(w, 3);

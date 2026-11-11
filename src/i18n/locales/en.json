@@ -147,6 +147,7 @@
   "pick.onBody": "{label} of {body}",
   "pick.oneBody": "That face is on another body, one push moves faces of one body",
   "pick.overCap": "Too many edges, none added",
+  "pick.refused": "That row is {row, select, basePlane {a base plane} datumPlane {a datum plane} datumPoint {a datum point} datumAxis {a datum axis} body {a body} bodies {a folder of bodies} sketch {a sketch} face {a face} edge {an edge} other {a feature}}, this step needs {wanted, select, face {a face} flatFace {a flat face} roundFace {a round face} modelFlatFace {a flat face of the model} edge {an edge} faceOrEdge {a face or an edge} axisFaceOrEdge {a face or an edge for the axis} planeOrFace {a plane or a face} planeOrFlatFace {a plane or a flat face} bodyPlaneOrFlatFace {a body, a plane or a flat face} body {a body} oneBody {one body} datumPoint {a datum point} sketchProfile {a sketch profile} axisOrStraightEdge {an axis or a straight edge} other {a face}}",
   "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Read the Accessibility page of the manual",
   "prefs.language.error.badName": "Could not tell the language from the file name, name the file by its language code, as in pl.json.",
