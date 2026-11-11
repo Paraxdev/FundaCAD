@@ -333,7 +333,7 @@
   { "path": "src/ui/interfaceSize.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/interferenceRows.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/measure.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/ui/modelDescription.ts", "kind": "script", "count": 12, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/ui/modelDescription.ts", "kind": "script", "count": 11, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/panels.ts", "kind": "script", "count": 35, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/plainError.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/ui/regions.ts", "kind": "script", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },

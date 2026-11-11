@@ -54,6 +54,9 @@
   "command.viewmodePathtraced": "Pfadverfolgungs-Ansichtsmodus",
   "command.viewmodeRealtime": "Echtzeit-Ansichtsmodus",
   "command.welcome": "Startseite",
+  "describe.selection.box": "{what}, {x} mal {y} mal {z} {unit}, Mitte bei {center} {unit}",
+  "describe.selection.next": "{before}. {after}",
+  "describe.selection.on": "{kind, select, face {{n, plural, one {# Fläche auf {body}} other {# Flächen auf {body}}}} other {{n, plural, one {# Kante auf {body}} other {# Kanten auf {body}}}}}",
   "dim.negative": "minus {amount}",
   "dim.stepHint": "Pfeil nach oben und unten ändern den Wert um {step}, mit Umschalt um {fine}, Bild auf und Bild ab um {big}",
   "geometry.commands.pickWaiting": "Das Werkzeug wartet auf eine Auswahl, gehen Sie in der 3D-Ansicht mit ] und [ dorthin",
@@ -546,6 +549,7 @@
   "units.spoken.area": "{unit, select, cm {{amount} Quadratzentimeter} in {{amount} Quadratzoll} other {{amount} Quadratmillimeter}}",
   "units.spoken.length": "{unit, select, cm {{amount} Zentimeter} in {{amount} Zoll} other {{amount} Millimeter}}",
   "units.spoken.minus": "minus {amount}",
+  "units.spoken.word": "{unit, select, cm {Zentimeter} in {Zoll} other {Millimeter}}",
   "view.command": "{view, select, front {Vorderansicht} back {Rückansicht} left {Linke Seitenansicht} right {Rechte Seitenansicht} top {Draufsicht} bottom {Untersicht} other {Isometrische Ansicht}}",
   "view.named": "{view, select, front {Vorderansicht} back {Rückansicht} left {Linke Seitenansicht} right {Rechte Seitenansicht} top {Draufsicht} bottom {Untersicht} other {Isometrische Ansicht}}"
 }

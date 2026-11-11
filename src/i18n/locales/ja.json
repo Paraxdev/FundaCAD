@@ -54,6 +54,9 @@
   "command.viewmodePathtraced": "パストレース表示モード",
   "command.viewmodeRealtime": "リアルタイム表示モード",
   "command.welcome": "ホーム",
+  "describe.selection.box": "{what}、{x} × {y} × {z} {unit}、中心 {center} {unit}",
+  "describe.selection.next": "{before}。{after}",
+  "describe.selection.on": "{kind, select, face {{body}の {n} 面} other {{body}の {n} 辺}}",
   "dim.negative": "マイナス {amount}",
   "dim.stepHint": "上下矢印キーで {step} ずつ、Shift を押しながらで {fine} ずつ、Page Up と Page Down で {big} ずつ変わります",
   "geometry.commands.pickWaiting": "ツールが選択を待っています。3Dビューで ] と [ を使って移動してください",
@@ -546,6 +549,7 @@
   "units.spoken.area": "{unit, select, cm {{amount} 平方センチメートル} in {{amount} 平方インチ} other {{amount} 平方ミリメートル}}",
   "units.spoken.length": "{unit, select, cm {{amount} センチメートル} in {{amount} インチ} other {{amount} ミリメートル}}",
   "units.spoken.minus": "マイナス {amount}",
+  "units.spoken.word": "{unit, select, cm {センチメートル} in {インチ} other {ミリメートル}}",
   "view.command": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}",
   "view.named": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}"
 }

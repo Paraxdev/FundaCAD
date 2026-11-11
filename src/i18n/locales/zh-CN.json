@@ -54,6 +54,9 @@
   "command.viewmodePathtraced": "路径追踪视图模式",
   "command.viewmodeRealtime": "实时视图模式",
   "command.welcome": "主页",
+  "describe.selection.box": "{what}，{x} × {y} × {z} {unit}，中心位于 {center} {unit}",
+  "describe.selection.next": "{before}。{after}",
+  "describe.selection.on": "{kind, select, face {{body}上的 {n} 个面} other {{body}上的 {n} 条边}}",
   "dim.negative": "负 {amount}",
   "dim.stepHint": "上下方向键每次改变 {step}，按住 Shift 每次改变 {fine}，Page Up 和 Page Down 每次改变 {big}",
   "geometry.commands.pickWaiting": "工具正在等待选择，请在 3D 视图中用 ] 和 [ 逐项移动",
@@ -546,6 +549,7 @@
   "units.spoken.area": "{unit, select, cm {{amount} 平方厘米} in {{amount} 平方英寸} other {{amount} 平方毫米}}",
   "units.spoken.length": "{unit, select, cm {{amount} 厘米} in {{amount} 英寸} other {{amount} 毫米}}",
   "units.spoken.minus": "负 {amount}",
+  "units.spoken.word": "{unit, select, cm {厘米} in {英寸} other {毫米}}",
   "view.command": "{view, select, front {前视图} back {后视图} left {左视图} right {右视图} top {俯视图} bottom {仰视图} other {等轴测视图}}",
   "view.named": "{view, select, front {前视图} back {后视图} left {左视图} right {右视图} top {俯视图} bottom {仰视图} other {等轴测视图}}"
 }

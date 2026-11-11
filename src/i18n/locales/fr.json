@@ -54,6 +54,9 @@
   "command.viewmodePathtraced": "Mode d'affichage à tracé de chemins",
   "command.viewmodeRealtime": "Mode d'affichage temps réel",
   "command.welcome": "Accueil",
+  "describe.selection.box": "{what}, {x} par {y} par {z} {unit}, centre à {center} {unit}",
+  "describe.selection.next": "{before}. {after}",
+  "describe.selection.on": "{kind, select, face {{n, plural, one {# face sur {body}} other {# faces sur {body}}}} other {{n, plural, one {# arête sur {body}} other {# arêtes sur {body}}}}}",
   "dim.negative": "moins {amount}",
   "dim.stepHint": "Flèche haut et flèche bas le changent de {step}, de {fine} avec Maj, Page précédente et Page suivante de {big}",
   "geometry.commands.pickWaiting": "L'outil attend un choix, allez-y avec ] et [ dans la vue 3D",
@@ -546,6 +549,7 @@
   "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} centimètre carré} other {{amount} centimètres carrés}}} in {{n, plural, one {{amount} pouce carré} other {{amount} pouces carrés}}} other {{n, plural, one {{amount} millimètre carré} other {{amount} millimètres carrés}}}}",
   "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centimètre} other {{amount} centimètres}}} in {{n, plural, one {{amount} pouce} other {{amount} pouces}}} other {{n, plural, one {{amount} millimètre} other {{amount} millimètres}}}}",
   "units.spoken.minus": "moins {amount}",
+  "units.spoken.word": "{unit, select, cm {centimètres} in {pouces} other {millimètres}}",
   "view.command": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}",
   "view.named": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}"
 }

@@ -152,17 +152,29 @@ describe("selectionSpeech", () => {
 });
 
 describe("the description in a comma language", () => {
-  it("speaks a decimal comma and joins the center with semicolons", async () => {
+  it("speaks a decimal comma, joins the center with semicolons and says the unit in German", async () => {
     await setLanguage("de");
     expect(
       selectionSpeech([
         { what: "Lid", box: { min: [-12.5, -4, 25], max: [7.5, 3.25, 28.5] } },
-        { what: "1 edge", box: { min: [-12, -4, 0], max: [-8, -4, 0] } },
+        { what: "1 Kante", box: { min: [-12, -4, 0], max: [-8, -4, 0] } },
       ]),
     ).toBe(
-      "Lid, 20 by 7,25 by 3,5 millimetres, center at minus 2,5; minus 0,375; 26,75 millimetres. " +
-        "1 edge, 4 by 0 by 0 millimetres, center at minus 10; minus 4; 0 millimetres",
+      "Lid, 20 mal 7,25 mal 3,5 Millimeter, Mitte bei minus 2,5; minus 0,375; 26,75 Millimeter. " +
+        "1 Kante, 4 mal 0 mal 0 Millimeter, Mitte bei minus 10; minus 4; 0 Millimeter",
     );
+  });
+
+  it("says the chosen unit word and the empty case in each language", async () => {
+    setUnit("in");
+    await setLanguage("de");
+    expect(selectionSpeech([{ what: "Box", box: { min: [2.5, 3, 1], max: [27.9, 3, 1] } }])).toContain("Zoll");
+    expect(selectionSpeech([])).toBe("Nichts ausgewählt");
+    setUnit("cm");
+    await setLanguage("ja");
+    expect(selectionSpeech([{ what: "Box", box: { min: [0, 0, 0], max: [30, 0, 0] } }])).toContain("センチメートル");
+    await setLanguage("fr");
+    expect(selectionSpeech([])).toBe("Aucune sélection");
   });
 
   it("writes the body lines with a comma mark, semicolons only inside the center", async () => {

@@ -1,9 +1,9 @@
 // Describe model and Describe selection as text. The dialog renders a ModelDescription and Copy as text writes
 // descriptionText of the same one, so the two cannot disagree.
 
+import { t } from "../i18n";
 import { listJoin, spellNumber } from "./measure";
 import { displayRound, getUnit, toDisplay } from "./units";
-import { spokenUnit } from "./measure";
 import { countWords, selectionWords, viewWords, type SelectionFacts, type ViewFacts } from "./viewSummary";
 
 export type Vec3 = readonly [number, number, number];
@@ -118,16 +118,16 @@ export interface SelectedPart {
 }
 
 // Voices can drop a hyphen before a number, so a negative says minus.
-const said = (v: number) => (v < 0 ? `minus ${spelled(Math.abs(v))}` : spelled(v));
+const said = (v: number) => (v < 0 ? t("units.spoken.minus", { amount: spelled(Math.abs(v)) }) : spelled(v));
 
 export function selectionSpeech(parts: readonly SelectedPart[]): string {
-  if (!parts.length) return "Nothing selected";
-  const unit = spokenUnit(getUnit(), true);
+  if (!parts.length) return t("selection.said.none");
+  const unit = t("units.spoken.word", { unit: getUnit() });
   return parts
     .map((p) => {
       if (!p.box) return p.what;
-      const extent = size(p.box).map(said).join(" by ");
-      return `${p.what}, ${extent} ${unit}, center at ${listJoin(center(p.box).map(said))} ${unit}`;
+      const [x = "", y = "", z = ""] = size(p.box).map(said);
+      return t("describe.selection.box", { what: p.what, x, y, z, unit, center: listJoin(center(p.box).map(said)) });
     })
-    .join(". ");
+    .reduce((before, after) => t("describe.selection.next", { before, after }));
 }
