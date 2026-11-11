@@ -31,6 +31,7 @@ import { applyDrivingDimsDirect, dimAnchor, upsertDrivingDim } from "../../sketc
 import { toast } from "../../ui/toast";
 import { t, type MessageKey } from "../../i18n";
 import {
+  exprProblem,
   featureNumFields,
   featureValueRule,
   featureWithTarget,
@@ -528,7 +529,9 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
       :hint="t('field.hint.expression', { examples: HINT_EXAMPLES })"
       :parse="(raw) => parseField(r, raw)"
       :validate="(v) => validateField(r, v)"
-      :expression="(raw) => typedExprProblem(raw) ?? store.setTargetExpr(r.target, storedExpr(raw), r.kind)"
+      :expression="
+        (raw) => typedExprProblem(raw) ?? exprProblem(store.setTargetExpr(r.target, storedExpr(raw), r.kind))
+      "
       :preview="(v) => previewField(r, v)"
       :preview-end="endPreview"
       :problem="rowProblem(r.key)"

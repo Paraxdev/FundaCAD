@@ -363,6 +363,13 @@ export function valueProblem(label: string, rule: ValueRule, v: number): string 
   return null;
 }
 
+// The parameter engine words its problems in English for the MCP tools too, so a row translates the one a mistype
+// gives and passes every other through as sent.
+export function exprProblem(problem: string | null): string | null {
+  const unknown = problem === null ? null : /^unknown parameter "(.*)"$/.exec(problem);
+  return unknown ? t("field.problem.unknownName", { name: unknown[1]! }) : problem;
+}
+
 // String fields that can never hold a bare parameter name, skipped by the legacy scans. Keep in sync with the unions.
 export const NON_NUM_STRING_FIELDS = new Set([
   "id",

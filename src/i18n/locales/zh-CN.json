@@ -179,6 +179,7 @@
   "field.problem.laterFails": "{name} 使用此值时失败：{message}",
   "field.problem.notValue": "不是数值",
   "field.problem.positive": "{label}必须大于 0",
+  "field.problem.unknownName": "“{name}”不是数字，也不是参数",
   "field.problem.unsolvable": "无法在草图的其他约束下满足此{dim, select, width {宽度} height {高度} diameter {直径} radius {半径} length {长度} other {{dim}}}",
   "field.problem.whole": "{label}必须是整数",
   "field.problem.wrongUnit": "{unit} 不是{dim, select, angle {角度} other {长度}}单位",

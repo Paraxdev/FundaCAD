@@ -746,6 +746,11 @@
       "en": "Object",
       "text": "Objekt",
       "note": "an item the Mirror tool can take, a body or a sketch entity"
+    },
+    {
+      "en": "Parameter",
+      "text": "Parameter",
+      "note": "a named value of the Parameters list, typed into a value box"
     }
   ]
 }

@@ -179,6 +179,7 @@
   "field.problem.laterFails": "{name} はこの値では失敗します: {message}",
   "field.problem.notValue": "値ではありません",
   "field.problem.positive": "{label}は0より大きくしてください",
+  "field.problem.unknownName": "「{name}」は数値でもパラメーターでもありません",
   "field.problem.unsolvable": "スケッチの他の拘束では、この{dim, select, width {幅} height {高さ} diameter {直径} radius {半径} length {長さ} other {{dim}}}を満たせませんでした",
   "field.problem.whole": "{label}は整数にしてください",
   "field.problem.wrongUnit": "{unit}は{dim, select, angle {角度} other {長さ}}の単位ではありません",

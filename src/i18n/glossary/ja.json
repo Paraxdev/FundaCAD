@@ -737,6 +737,11 @@
       "en": "Object",
       "text": "オブジェクト",
       "note": "an item the Mirror tool can take, a body or a sketch entity"
+    },
+    {
+      "en": "Parameter",
+      "text": "パラメーター",
+      "note": "a named value of the Parameters list, typed into a value box"
     }
   ]
 }

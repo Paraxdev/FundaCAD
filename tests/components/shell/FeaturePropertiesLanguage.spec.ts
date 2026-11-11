@@ -8,7 +8,7 @@ import { createDocBridge } from "../../../src/app/docBridge";
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { DocumentStore } from "../../../src/document/store";
-import { valueProblem } from "../../../src/document/numFields";
+import { exprProblem, valueProblem } from "../../../src/document/numFields";
 import type { GeometryBackend } from "../../../src/geometry/client";
 import { setLanguage } from "../../../src/i18n";
 import de from "../../../src/i18n/locales/de.json";
@@ -228,6 +228,52 @@ describe("the problems a value box shows", () => {
     expect(problemOf(w, "taper")).toBe("in ist kein Winkel");
     await type(w, "distance", "5deg");
     expect(problemOf(w, "distance")).toBe("° ist keine Länge");
+  });
+
+  it("say in the language that a typed name is no number and no parameter, and keep the typed text", async () => {
+    const said: Record<string, string> = {};
+    for (const code of ["de", "ja", "en"]) {
+      await setLanguage(code);
+      const w = panel("e1");
+      await type(w, "distance", "widht*2.5");
+      expect([inputOf(w, "distance").element.value, inputOf(w, "distance").attributes("aria-invalid")]).toEqual([
+        "widht*2.5",
+        "true",
+      ]);
+      said[code] = problemOf(w, "distance");
+      w.unmount();
+      open!.dispose();
+      open = null;
+    }
+    expect(said.en).toBe('unknown parameter "widht"');
+    expect([said.de!.includes("„widht“"), said.de!.includes("Parameter"), said.de!.includes("unknown")]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect([said.ja!.includes("「widht」"), said.ja!.includes("パラメーター"), said.ja!.includes("unknown")]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("pass every other parameter engine text through as sent", async () => {
+    await setLanguage("de");
+    const w = panel("p1");
+    await type(w, "count", "3mm");
+    expect(problemOf(w, "count")).toBe("this field is unitless, write a plain number");
+    expect([
+      exprProblem(null),
+      exprProblem('unknown parameter "gap" in sketch'),
+      exprProblem('unknown function "sqr"'),
+      exprProblem('unknown parameter "gap2"'),
+    ]).toEqual([
+      null,
+      'unknown parameter "gap" in sketch',
+      'unknown function "sqr"',
+      "„gap2“ ist keine Zahl und kein Parameter",
+    ]);
   });
 
   it("say that a sketch box holds no value", async () => {

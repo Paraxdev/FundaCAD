@@ -179,6 +179,7 @@
   "field.problem.laterFails": "{name} schlägt mit diesem Wert fehl: {message}",
   "field.problem.notValue": "kein Wert",
   "field.problem.positive": "{label} muss größer als 0 sein",
+  "field.problem.unknownName": "„{name}“ ist keine Zahl und kein Parameter",
   "field.problem.unsolvable": "{dim, select, width {Die Breite} height {Die Höhe} diameter {Der Durchmesser} radius {Der Radius} length {Die Länge} other {{dim}}} lässt sich mit den anderen Abhängigkeiten der Skizze nicht erfüllen",
   "field.problem.whole": "{label} muss eine ganze Zahl sein",
   "field.problem.wrongUnit": "{unit} ist {dim, select, angle {kein Winkel} other {keine Länge}}",
