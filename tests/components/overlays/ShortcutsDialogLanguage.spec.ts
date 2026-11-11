@@ -122,7 +122,7 @@ describe("the shortcuts window chrome in German", () => {
     await type({ key: "z", ctrlKey: true, shiftKey: true });
     const row = rowOf(line("tool.fillet"));
     expect(row.querySelector(".sc-problem span")?.textContent).toBe(
-      line("shortcuts.problem.taken", { keys: "Ctrl+Shift+Z", action: "Redo" }),
+      line("shortcuts.problem.taken", { keys: "Ctrl+Shift+Z", action: line("command.redo") }),
     );
     expect(row.querySelector(".sc-problem .btn-primary")).toBeNull();
   });
@@ -206,9 +206,12 @@ describe("the shortcuts window chrome in German", () => {
     const card = (title: string) => $$(".pref-card").find((c) => c.querySelector(".pref-title")?.textContent === title);
     expect(shortcutHudGroups().map((g) => g.id)).toEqual(["model", "sketch", "global", "mouse", "focus", "always"]);
     expect(
-      [card("Mouse"), card("Always"), card(line("shortcuts.group.model")), card(line("tool.sketch"))].map((c) =>
-        c?.classList.contains("wide"),
-      ),
+      [
+        card(line("shortcuts.group.mouse")),
+        card(line("shortcuts.group.always")),
+        card(line("shortcuts.group.model")),
+        card(line("tool.sketch")),
+      ].map((c) => c?.classList.contains("wide")),
     ).toEqual([true, true, false, false]);
   });
 });

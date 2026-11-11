@@ -15,6 +15,7 @@ import {
   formatShortcut,
   onShortcutsChange,
   refusalLabel,
+  reservedLabel,
   resetUserShortcuts,
   setUserShortcut,
   shortcutGroupsOf,
@@ -125,7 +126,7 @@ function onCapture(id: string, k: CapturedKey) {
 function problemText(p: Pending, keys: (k: string) => string = fmtKeys): string {
   const p0 = p.problem;
   if ("conflict" in p0) return t("shortcuts.problem.used", { keys: keys(p.name), action: shortcutLabel(p0.conflict) });
-  if ("reserved" in p0) return t("shortcuts.problem.taken", { keys: keys(p.name), action: p0.reserved });
+  if ("reserved" in p0) return t("shortcuts.problem.taken", { keys: keys(p.name), action: reservedLabel(p0.reserved) });
   return refusalLabel(p0.refused);
 }
 const problemOf = (id: string) => (pending.value?.id === id ? problemText(pending.value, spokenKeys) : undefined);

@@ -5,7 +5,7 @@ import { useDialogStore } from "../stores/dialogs";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { latinKey } from "./platform";
 import { readSetting } from "../ui/storedSetting";
-import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
+import { DEFAULT_BINDINGS, bindingEntries, pointerBindings, type BindingEntry } from "../viewport/navigator/bindings";
 import type { StandardView } from "../viewport/cameras";
 import { t, type MessageArgs, type MessageKey } from "../i18n";
 
@@ -207,6 +207,33 @@ export const ALT_REFUSAL = "Alt is read by the tools, pick a key without it";
 /** The refusal in the chosen language; the English text is plugin API, so only that one is translated. */
 export function refusalLabel(refused: string, tr: typeof t = t): string {
   return refused === ALT_REFUSAL ? tr("shortcuts.problem.alt") : refused;
+}
+
+const RESERVED_LINES: Record<string, MessageKey> = {
+  Undo: "command.undo",
+  Redo: "command.redo",
+  Save: "command.save",
+  "Save As": "shortcuts.reserved.saveAs",
+  New: "command.new",
+  Open: "shortcuts.reserved.open",
+  Export: "shortcuts.reserved.export",
+  Find: "shortcuts.reserved.find",
+  "Command palette": "palette.title",
+  Preferences: "shortcuts.reserved.preferences",
+  Items: "shortcuts.reserved.items",
+  History: "shortcuts.reserved.history",
+  Console: "shortcuts.reserved.console",
+  "Interface size": "shortcuts.reserved.interfaceSize",
+  Cancel: "shortcuts.reserved.cancel",
+  "Box select filter": "shortcuts.reserved.boxFilter",
+  Delete: "menu.edit.delete",
+  "This sheet": "shortcuts.reserved.thisSheet",
+};
+
+/** The English name a plugin sees in a taken-by problem, in the chosen language; an unknown name shows as given. */
+export function reservedLabel(name: string, tr: Translate = t): string {
+  const key = RESERVED_LINES[name];
+  return key ? tr(key) : name;
 }
 
 export type ShortcutProblem = { conflict: Shortcut } | { reserved: string } | { refused: string };
@@ -501,60 +528,73 @@ function contextGroups(keep: (s: Shortcut) => boolean, core: boolean, tr: Transl
   }));
 }
 
+function gestureKey(e: Pick<BindingEntry, "button" | "mods" | "kind">, tr: Translate): string {
+  const args = { button: e.button, kind: e.kind };
+  return e.mods.length
+    ? tr("shortcuts.mouse.gestureHeld", { ...args, mods: e.mods.join("+") })
+    : tr("shortcuts.mouse.gesture", args);
+}
+
+const MOUSE_WHAT: Record<BindingEntry["what"], MessageKey> = {
+  orbit: "shortcuts.mouse.orbit",
+  pan: "shortcuts.mouse.pan",
+  zoom: "shortcuts.mouse.zoom",
+  gesture: "shortcuts.mouse.radial",
+  menu: "shortcuts.mouse.context",
+};
+
 /** Pure: the dialog's General content. Exported so it is unit-testable without a DOM. `skip` leaves out actions another
  *  page shows. */
 export function shortcutHudGroups(skip: ReadonlySet<string> = new Set(), tr: Translate = t): HudGroup[] {
-  const fmt = formatShortcut;
   const clashes = shortcutConflicts().map(([a, b]) => ({
-    key: fmt(a),
-    label: `${shortcutLabel(a, tr)} and ${shortcutLabel(b, tr)} share this key, ${shortcutLabel(a, tr)} applies`,
+    key: formatShortcut(a),
+    label: tr("shortcuts.conflict", { first: shortcutLabel(a, tr), second: shortcutLabel(b, tr) }),
   }));
   const custom = pointerBindings() !== DEFAULT_BINDINGS;
+  const left = (kind: BindingEntry["kind"], mods: string[] = []) => gestureKey({ button: "left", mods, kind }, tr);
   return [
-    ...(clashes.length ? [{ id: "conflicts", name: "Conflicts", rows: clashes }] : []),
+    ...(clashes.length ? [{ id: "conflicts", name: tr("shortcuts.group.conflicts"), rows: clashes }] : []),
     ...contextGroups((s) => !skip.has(s.action), true, tr),
     {
       id: "mouse",
-      name: "Mouse",
+      name: tr("shortcuts.group.mouse"),
       rows: [
-        ...bindingRows(pointerBindings()).map((r) => (custom ? { ...r, changed: true } : r)),
-        { key: "Wheel", label: "Zoom" },
-        { key: "Ctrl+Wheel", label: "Pan up and down (a touchpad pinch zooms)" },
-        { key: "Left drag", label: "Box select (see Always, below)" },
-        { key: "Left click", label: "Select a body, then a face on it (pause over it to light the face up first)" },
+        ...bindingEntries(pointerBindings()).map((e) => ({
+          key: gestureKey(e, tr),
+          label: tr(MOUSE_WHAT[e.what]),
+          ...(custom ? { changed: true } : {}),
+        })),
+        { key: tr("shortcuts.mouse.wheel"), label: tr("shortcuts.mouse.zoom") },
+        { key: `Ctrl+${tr("shortcuts.mouse.wheel")}`, label: tr("shortcuts.mouse.panWheel") },
+        { key: left("drag"), label: tr("shortcuts.mouse.boxSelect") },
+        { key: left("click"), label: tr("shortcuts.mouse.pick") },
       ],
     },
     {
       id: "focus",
-      name: "3D view focused",
+      name: tr("shortcuts.group.focus"),
       rows: [
-        { key: "] / [", label: "Step to the next / previous face, edge or plane, with a highlight" },
-        { key: "Shift+] / Shift+[", label: "Switch what the brackets step: faces, edges, planes" },
-        { key: "Enter", label: "Select the lit row, or start a sketch on a lit plane" },
-        { key: "Space", label: "Add or remove the lit row" },
-        { key: "Esc", label: "Drop the highlight and clear the selection" },
+        { key: "] / [", label: tr("shortcuts.focus.step") },
+        { key: "Shift+] / Shift+[", label: tr("shortcuts.focus.stepKind") },
+        { key: "Enter", label: tr("shortcuts.focus.select") },
+        { key: "Space", label: tr("shortcuts.focus.toggle") },
+        { key: "Esc", label: tr("shortcuts.focus.drop") },
       ],
     },
     {
       id: "always",
-      name: "Always",
+      name: tr("shortcuts.group.always"),
       rows: [
-        { key: "Ctrl+K", label: "Command palette" },
-        { key: "Ctrl+Z / Ctrl+Y", label: "Undo / Redo" },
-        { key: "Ctrl+S / Ctrl+Shift+S", label: "Save / Save As" },
-        { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: "New / Open / Export" },
-        { key: "Ctrl+Plus / Ctrl+Minus / Ctrl+0", label: "Interface size larger / smaller / 100%" },
-        { key: "Del", label: "Delete face (heal) / feature" },
-        { key: "Esc", label: "Cancel / clear selection" },
-        // A gesture, not a key, listed here because this is where anyone would look. "right"/"left" name the
-        // drag direction; all are left-button drags.
-        {
-          key: "Drag",
-          label:
-            "Box select: dragging to the right takes what is fully inside, dragging to the left takes what it touches",
-        },
-        { key: "Shift+Drag", label: "Box select, adding to what is selected" },
-        { key: "Tab", label: "While boxing: take everything / faces / sketch profiles / edges / bodies" },
+        { key: "Ctrl+K", label: tr("palette.title") },
+        { key: "Ctrl+Z / Ctrl+Y", label: tr("shortcuts.always.undoRedo") },
+        { key: "Ctrl+S / Ctrl+Shift+S", label: tr("shortcuts.always.save") },
+        { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: tr("shortcuts.always.newOpenExport") },
+        { key: "Ctrl+Plus / Ctrl+Minus / Ctrl+0", label: tr("shortcuts.always.size") },
+        { key: "Del", label: tr("shortcuts.always.delete") },
+        { key: "Esc", label: tr("shortcuts.always.cancel") },
+        { key: tr("shortcuts.mouse.drag"), label: tr("shortcuts.always.drag") },
+        { key: `Shift+${tr("shortcuts.mouse.drag")}`, label: tr("shortcuts.always.dragAdd") },
+        { key: "Tab", label: tr("shortcuts.always.tab") },
       ],
     },
   ];
