@@ -46,6 +46,12 @@ function source(over: Partial<CarrySource> = {}) {
   return { src, commitForCarry };
 }
 
+describe("carryWords", () => {
+  it("asks for a depth the way one is set, a click would finish the extrude instead", () => {
+    expect(carryWords.depthFirst()).toBe("Set the depth first, drag and let go or type it");
+  });
+});
+
 describe("pointOnFace", () => {
   it("is the centre of the largest triangle, whichever order they come in", () => {
     expect(pointOnFace([SMALL, LARGE])).toEqual(centre(LARGE));

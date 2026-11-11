@@ -4,7 +4,7 @@
   "camera.turned": "{side, select, front {正面} back {背面} left {左} other {右}}、{toward, select, front {正面} back {背面} left {左} other {右}}へ {turn, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
   "camera.turnedTilted": "{side, select, front {正面} back {背面} left {左} other {右}}、{toward, select, front {正面} back {背面} left {左} other {右}}へ {turn, number}°、{from, select, above {上} other {下}}から {tilt, number}°、{projection, select, ortho {平行投影} other {透視投影}}",
   "carry.badValue": "ボックスの値を読み取れません。修正するか Esc を押してください",
-  "carry.depthFirst": "先に深さを決めてください。入力するか、クリックして決めます",
+  "carry.depthFirst": "先に深さを決めてください。ドラッグして離すか、入力します",
   "carry.lost": "{kind, select, face {選んだ面} other {選んだエッジ}}は結果にありません。もう一度選んでください",
   "carry.nothingMade": "深さが 0 のため、何も作成されませんでした",
   "carry.prompt": "面をクリックして押し出し、エッジをクリックして丸めます",
