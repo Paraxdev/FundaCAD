@@ -421,7 +421,7 @@
   "stress.request.spotNotFixed": "{owner, select, support {{i, plural, =0 {Die Halterung} other {Halterung {i, number}}}} other {{i, plural, =0 {Die Last} other {Last {i, number}}}}} ist {type, select, pinned {drehbar} slider {gleitend} other {{type}}}, hat aber eine Stelle, und eine Stelle hält in jede Richtung. Machen Sie sie fest oder entfernen Sie die Stelle.",
   "stress.request.spotRadius": "Eine Stelle {owner, select, support {{i, plural, =0 {der Halterung} other {von Halterung {i, number}}}} other {{i, plural, =0 {der Last} other {von Last {i, number}}}}} braucht einen Radius über 0.",
   "stress.request.yield": "Der eigene Werkstoff braucht eine Streckgrenze über 0.",
-  "stress.result.applied": "Aufgebracht",
+  "stress.result.applied": "Aufgebrachte Kraft",
   "stress.result.fineNote": "Fein beginnt mit einem feineren Netz als Standard und kann eine niedrigere Spitze anzeigen, prüfen Sie den Sicherheitsfaktor auch mit Standard",
   "stress.result.maxDeflection": "Max. Durchbiegung",
   "stress.result.mesh": "Netz",

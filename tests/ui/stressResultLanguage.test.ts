@@ -71,7 +71,7 @@ describe("the result in German", () => {
         { k: "Material", v: "PETG" },
         { k: "Streckgrenze", v: "50 MPa" },
         { k: "Gewicht", v: "0; 0; -0,35 N" },
-        { k: "Aufgebracht", v: "0; -12,5; -20,5 N" },
+        { k: "Aufgebrachte Kraft", v: "0; -12,5; -20,5 N" },
         { k: "Reaktionskraft", v: "0; 12,5; 20,5 N" },
         { k: "Halterung 1, fest", v: "1,25; 3; 7 N" },
         { k: "Halterung 2, drehbar", v: "-1,25; 9,5; 13 N" },
@@ -161,7 +161,7 @@ describe("the result in German", () => {
     expect(plain(v.details).map((d) => d.k)).toEqual([
       "Material",
       "Streckgrenze",
-      "Aufgebracht",
+      "Aufgebrachte Kraft",
       "Reaktionskraft",
       "Netz",
       "Netzfeinheit",
