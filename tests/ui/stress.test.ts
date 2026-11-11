@@ -655,9 +655,9 @@ describe("stress readouts in German", () => {
     ];
     const v = formatStressResult({ ...reply, weight: [0, 0, -0.35], reactions }, "mm", ["fixed", "pinned", "slider"]);
     expect(v.rows).toEqual([
-      { k: "Safety factor", v: "1,6" },
-      { k: "Peak stress", v: "31,25 MPa" },
-      { k: "Max deflection", v: "1,27 mm" },
+      { k: "Sicherheitsfaktor", v: "1,6" },
+      { k: "Spitzenspannung", v: "31,25 MPa" },
+      { k: "Max. Durchbiegung", v: "1,27 mm" },
     ]);
     expect(v.details.map((d) => d.v)).toEqual([
       "PLA",
@@ -668,7 +668,7 @@ describe("stress readouts in German", () => {
       "1,5; 0; 7 N",
       "0; -2,25; 8 N",
       "-1,5; 2,25; 5,35 N",
-      "4800 elements, 2,54 mm",
+      "4800 Elemente, 2,54 mm",
     ]);
     expect(probeLabel({ vonMises: 12.375, deflection: 0.45 }, "mm")).toBe("12,375 MPa; 0,45 mm");
     expect(legendTicks({ min: 2.5, max: 31.25 }).map((t) => t.label)).toEqual([

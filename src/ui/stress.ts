@@ -1,7 +1,7 @@
 // The Stress panel's pure half: material presets, setup to `stress` op options and saved study, reply to display
 // rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
-import { t, type MessageKey } from "../i18n";
+import { t, type MessageArgs, type MessageKey } from "../i18n";
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
 import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSpotArea } from "../geometry/client";
 import type { PanelRow } from "../stores/panels";
@@ -86,9 +86,6 @@ export const SUPPORT_KINDS: readonly { value: StressSupportType; readonly label:
   supportKind("pinned", "stress.support.pinned", "stress.support.pinnedHint"),
   supportKind("slider", "stress.support.slider", "stress.support.sliderHint"),
 ];
-
-// The results step is not translated yet, so its reaction rows keep these words.
-const SUPPORT_WORDS: Record<StressSupportType, string> = { fixed: "fixed", pinned: "pinned", slider: "slider" };
 
 export function cssHex(c: number): string {
   return `#${c.toString(16).padStart(6, "0")}`;
@@ -609,6 +606,21 @@ export function valueRange(values: readonly number[]): { min: number; max: numbe
   return min <= max ? { min, max } : { min: 0, max: 0 };
 }
 
+// Getters, so a row read in a render follows a change of language.
+function liveRow(k: MessageKey, v: () => string): PanelRow {
+  return {
+    get k() {
+      return t(k);
+    },
+    get v() {
+      return v();
+    },
+  };
+}
+
+const peakValue = (r: StressReply) => `${spellRounded(r.maxVonMises.value)} MPa`;
+const deflectionValue = (r: StressReply, unit: Unit) => `${spellRounded(toDisplay(r.maxDisplacement.value))} ${unit}`;
+
 /** `supports` are the kinds of the supports sent, in order, which is the order
  *  the engine's per-support reactions come back in. */
 export function formatStressResult(
@@ -619,49 +631,67 @@ export function formatStressResult(
 ): StressResultView {
   const sf = r.safetyFactor;
   const rows: PanelRow[] = [
-    { k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${spellRounded(sf)}` : "none, no stress" },
-    { k: "Peak stress", v: `${spellRounded(r.maxVonMises.value)} MPa` },
-    { k: "Max deflection", v: `${spellRounded(toDisplay(r.maxDisplacement.value))} ${unit}` },
+    liveRow("stress.result.safetyFactor", () =>
+      sf !== null && Number.isFinite(sf) ? spellRounded(sf) : t("stress.result.noStress"),
+    ),
+    liveRow("stress.result.peakStress", () => peakValue(r)),
+    liveRow("stress.result.maxDeflection", () => deflectionValue(r, unit)),
   ];
   const details: PanelRow[] = [];
-  details.push({ k: "Material", v: r.material.name });
-  details.push({ k: "Yield", v: `${spellRounded(r.material.yield)} MPa` });
-  if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
-  details.push({ k: "Applied", v: fmtForce(r.applied) });
-  details.push({ k: "Reaction", v: fmtForce(r.reaction) });
+  details.push(liveRow("stress.setup.material", () => r.material.name));
+  details.push(liveRow("stress.setup.yield", () => `${spellRounded(r.material.yield)} MPa`));
+  const weight = r.weight;
+  if (weight) details.push(liveRow("stress.result.weight", () => fmtForce(weight)));
+  details.push(liveRow("stress.result.applied", () => fmtForce(r.applied)));
+  details.push(liveRow("stress.result.reaction", () => fmtForce(r.reaction)));
   // One support's reaction is the total above, so per support only with several.
   const reactions = r.reactions ?? [];
   if (reactions.length > 1) {
     for (const [i, f] of reactions.entries()) {
-      const kind = supports[i];
-      const label = kind ? SUPPORT_WORDS[kind] : undefined;
-      details.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
+      const kind = supports[i] ?? "none";
+      details.push({
+        get k() {
+          return t("stress.result.support", { i: i + 1, kind });
+        },
+        get v() {
+          return fmtForce(f);
+        },
+      });
     }
   }
-  details.push({ k: "Mesh", v: meshRow(r.mesh) });
-  const refinement = refinementRow(r.mesh);
-  if (refinement) details.push({ k: "Mesh detail", v: refinement });
+  details.push(liveRow("stress.result.mesh", () => meshRow(r.mesh)));
+  const refinement = refinementLine(r.mesh);
+  if (refinement) details.push(liveRow("stress.setup.meshDetail", () => t(refinement.key, refinement.args)));
   // Fine starts on a finer mesh, so on some parts its peak reads lower than Standard's (Wall bracket 14.0 against
   // 15.2 MPa, a deep round groove 5% lower) and on others higher.
-  if (refine === "fine") details.push({ k: "Note", v: FINE_NOTE });
+  if (refine === "fine") details.push(liveRow("stress.result.note", () => t("stress.result.fineNote")));
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
   const size = peakSize(r.surface?.positions);
   // No face number: the engine's one counts the faces of a copy of the body, which nothing else in the app shows.
-  const peak = (label: string, value: string, at: Vec3): StressPeak => {
-    const where = fmtPoint(at, unit);
-    return { label, where, spoken: `${label}, ${value}, at ${where}`, at, size };
-  };
+  const peak = (label: MessageKey, value: () => string, at: Vec3): StressPeak => ({
+    get label() {
+      return t(label);
+    },
+    get where() {
+      return fmtPoint(at, unit);
+    },
+    get spoken() {
+      return t("stress.result.peakSaid", { label: t(label), value: value(), where: fmtPoint(at, unit) });
+    },
+    at,
+    size,
+  });
   return {
     rows,
     details,
     warnings,
     legend,
     peaks: [
-      peak("Peak stress", `${spellRounded(r.maxVonMises.value)} MPa`, r.maxVonMises.at),
-      peak("Max deflection", `${spellRounded(toDisplay(r.maxDisplacement.value))} ${unit}`, r.maxDisplacement.at),
+      peak("stress.result.peakStress", () => peakValue(r), r.maxVonMises.at),
+      peak("stress.result.maxDeflection", () => deflectionValue(r, unit), r.maxDisplacement.at),
     ],
     yields: sf !== null && sf < 1,
     verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
@@ -671,35 +701,26 @@ export function formatStressResult(
 }
 
 function meshRow(m: StressReply["mesh"]): string {
-  const row = `${m.elements} elements, ${spellRounded(m.size)} mm`;
+  const size = spellRounded(m.size);
   const passes = m.passes?.length ?? 1;
-  if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
-  return `${row}, ${spellRounded(m.finest)} mm at the peak, ${passes} passes`;
+  if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) {
+    return t("stress.result.meshLine", { elements: m.elements, size });
+  }
+  return t("stress.result.meshRefined", { elements: m.elements, size, finest: spellRounded(m.finest), passes });
 }
 
-const FINE_NOTE =
-  "Fine starts on a finer mesh than Standard and can read a lower peak, check the safety factor with Standard too";
+const REFINE_STOPS = ["settled", "elements", "time", "memory", "unrefinable"];
 
-const REFINE_STOPS: Record<string, string> = {
-  settled: "a finer mesh would barely move the peak",
-  elements: "stopped at the element limit",
-  time: "stopped to stay within about a minute",
-  memory: "stopped as a finer mesh needs more memory",
-  unrefinable: "nothing left to refine",
-};
-
-function refinementRow(m: StressReply["mesh"]): string | null {
+function refinementLine(m: StressReply["mesh"]): { key: MessageKey; args: MessageArgs } | null {
   if (m.stop === undefined) return null;
   const passes = m.passes ?? [];
-  const why = REFINE_STOPS[m.stop];
+  const known = REFINE_STOPS.includes(m.stop);
   if (passes.length < 2) {
-    if (m.stop === "off") return "Coarse";
-    if (m.stop === "settled") return `Not needed, ${why}`;
-    return why ? why[0]!.toUpperCase() + why.slice(1) : null;
+    return known || m.stop === "off" ? { key: "stress.result.refineOnce", args: { stop: m.stop } } : null;
   }
   const n = passes.length - 1;
-  const moved = `${n === 1 ? "Refined once" : `Refined ${n} times`}, the peak went from ${spellRounded(passes[0]!.maxVonMises)} to ${spellRounded(passes[n]!.maxVonMises)} MPa`;
-  return why ? `${moved}, then ${why}` : moved;
+  const args = { n, from: spellRounded(passes[0]!.maxVonMises), to: spellRounded(passes[n]!.maxVonMises), stop: m.stop };
+  return { key: "stress.result.refined", args };
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
@@ -719,11 +740,13 @@ export function legendTicks(legend: { min: number; max: number }): { pct: number
 
 /** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
 export function setupSummary(s: StressSetup): string {
-  const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;
-  const parts = [n(s.supports.length, "support"), n(s.loads.length, "load")];
-  if (s.gravity.on) parts.push(`own weight ${s.gravity.direction}`);
-  parts.push(s.material);
-  return parts.join(", ");
+  return t("stress.result.ranWith", {
+    supports: s.supports.length,
+    loads: s.loads.length,
+    gravity: s.gravity.on ? "on" : "off",
+    direction: s.gravity.direction,
+    material: s.material,
+  });
 }
 
 function fmtForce(f: Vec3): string {

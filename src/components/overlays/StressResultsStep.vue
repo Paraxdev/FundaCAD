@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
@@ -166,7 +167,7 @@ const deformStep = computed(() => {
 
     <ReadoutList :rows="keyRows" row-class="stress-key-row">
       <template #value="{ row }">
-        <dd class="measure-v" :class="{ 'stress-yields': row.k === 'Safety factor' && result.yields }">{{ row.v }}</dd>
+        <dd class="measure-v" :class="{ 'stress-yields': row.k === t('stress.result.safetyFactor') && result.yields }">{{ row.v }}</dd>
       </template>
     </ReadoutList>
 
