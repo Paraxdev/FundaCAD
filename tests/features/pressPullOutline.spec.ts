@@ -25,7 +25,11 @@ const rects: Record<number, { at: P; w: number; h: number }> = {
   11: { at: [1, 1, 1], w: 1, h: 1 },
   12: { at: [-4, 1.5, 2], w: 2.5, h: 7 },
   13: { at: [9, 0.25, 5], w: 4, h: 4 },
+  14: { at: [-7, -3.5, 4.5], w: 3, h: 2 },
 };
+// A flat face on the same body that does not face the way the others do
+const ASKEW = 14;
+const ASKEW_NORMAL = new THREE.Vector3(0.8, 0, 0.6);
 const corner = (id: number, a: number, b: number, along = 0): P => {
   const r = rects[id]!;
   const p = new THREE.Vector3(...r.at)
@@ -102,6 +106,7 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
   const stands: { at: P; id: number }[] = [];
   const canvas = document.createElement("canvas");
   const setPeek = vi.fn();
+  let hit: object | null = null;
   const vp = {
     suspendPicking: false,
     domElement: canvas,
@@ -116,11 +121,13 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
     snapStep: () => 0.05,
     clearHover: () => {},
     hoverFaceAt: () => null,
-    pickFaceForPressPull: () => null,
+    pickFaceForPressPull: () => hit,
     selectedFacesForPressPull: () => facesOf(selected),
     facesForPressPull: (ids: readonly number[]) => facesOf(ids),
     planarFace: (id: number) =>
-      id === ROUND ? null : { normal: NORMAL.clone(), origin: new THREE.Vector3(...point(id)) },
+      id === ROUND
+        ? null
+        : { normal: (id === ASKEW ? ASKEW_NORMAL : NORMAL).clone(), origin: new THREE.Vector3(...point(id)) },
     roundFaceAt: (id: number) => (id === ROUND ? bore : null),
     edgesOfFaces: edges,
     faceTriangles: (id: number) => {
@@ -188,7 +195,15 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
     for (const fn of [...listeners]) fn({ ...idle, previewBuilt: [built], heldRefusal } as never);
   };
   const refuse = (distance: number) => land(distance, { featureId: "p1", message: "no" });
-  return { tool, t, added, drawn, outline, colour, push, setPeek, selectOnlyFaces, stands, land, refuse };
+  const ctrlAdd = (id: number) => {
+    const normal = id === ASKEW ? ASKEW_NORMAL.clone() : NORMAL.clone();
+    const anchor = new THREE.Vector3(...point(id));
+    hit = { bodyId: "b2", faceId: id, anchor, normal, selector: { kind: "face", by: "nearest", point: point(id) } };
+    const down = new MouseEvent("pointerdown", { ctrlKey: true, clientX: 140, clientY: 95 });
+    (tool as unknown as { onDown(e: Event): void }).onDown(down);
+    hit = null;
+  };
+  return { tool, t, added, drawn, outline, colour, push, setPeek, selectOnlyFaces, stands, land, refuse, ctrlAdd };
 }
 
 const same = (a: number, b: number) => [16, 8, 0].every((s) => Math.abs(((a >> s) & 0xff) - ((b >> s) & 0xff)) <= 2);
@@ -246,6 +261,22 @@ describe("Press/Pull outline", () => {
     const r = rig([12, 13]);
     r.push(2.5);
     expect(keys(r.outline()!)).toEqual(keys([...box(12, 2.5), ...box(13, 2.5)]));
+  });
+
+  it("adds the ring of a face Ctrl clicked in, facing the same way", () => {
+    const r = rig([10]);
+    r.ctrlAdd(12);
+    r.push(3.5);
+    expect(keys(r.outline()!)).toEqual(keys([...box(10, 3.5), ...box(12, 3.5)]));
+  });
+
+  it("draws nothing once a Ctrl clicked face faces another way, the push is no longer one rigid sweep", () => {
+    const r = rig([10]);
+    r.push(3.5);
+    expect(keys(r.outline()!)).toEqual(keys(box(10, 3.5)));
+    r.ctrlAdd(ASKEW);
+    r.push(4.25);
+    expect(r.drawn()).toHaveLength(0);
   });
 
   it("draws nothing at zero, and again once the value moves", () => {
@@ -321,6 +352,15 @@ describe("Press/Pull keeps the pushed faces tinted", () => {
     r.push(2.5);
     r.land(2.5);
     expect(r.selectOnlyFaces.mock.calls).toEqual([[[40, 41]]]);
+  });
+
+  it("tints a face Ctrl clicked in along with the first", () => {
+    const r = rig([10]);
+    r.ctrlAdd(13);
+    r.stands.push({ at: where(10, 2.5), id: 60 }, { at: where(13, 2.5), id: 61 });
+    r.push(2.5);
+    r.land(2.5);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[60, 61]]]);
   });
 
   it("follows the distance the engine answered, not the one typed since", () => {

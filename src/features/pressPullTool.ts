@@ -416,6 +416,7 @@ export class PressPullTool {
           this.faceNormal.copy(hit.normal).normalize();
           this.axis.copy(this.faceNormal);
         }
+        this.rigid = this.resizing ? null : planarPushFaces(this.viewport, this.faceIds, this.faceNormal);
         if (was !== this.boxShape()) this.showBox();
         else this.syncToggle();
         this.refreshPreview(true);
