@@ -142,7 +142,11 @@ describe("a plugin that follows the language", () => {
     const create = family("cat:CREATE");
     expect(create.label).toBe("Erstellen");
     expect(create.english).toBe("Create");
-    expect(create.items.at(-1)).toMatchObject({ action: "rivet-bolt", label: "Niete schrauben", english: "Bolt Rivet" });
+    expect(create.items.at(-1)).toMatchObject({
+      action: "rivet-bolt",
+      label: "Niete schrauben",
+      english: "Bolt Rivet",
+    });
     expect(groupText("CREATE")).toBe("Erstellen");
   });
 

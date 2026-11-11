@@ -202,7 +202,10 @@ async function accept(plugin: OfficialPlugin, done: "installed" | "updated" = "i
     toast(`${pluginName(plugin.manifest)} is ${done}.`);
   } catch (err) {
     // A refusal names itself, so its own sentence is kept: "install failed" cannot be told from a flat network.
-    toast(`Could not install ${pluginName(plugin.manifest)}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
+    toast(`Could not install ${pluginName(plugin.manifest)}. ${plainError(err, SEE_CONSOLE)}`, {
+      kind: "error",
+      detail: err,
+    });
   } finally {
     busy.value = "";
   }
@@ -242,7 +245,10 @@ async function acceptCandidate(c: Candidate) {
     await refresh();
     toast(`${pluginName(c.manifest)} is installed.`);
   } catch (err) {
-    toast(`Could not install ${pluginName(c.manifest)}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
+    toast(`Could not install ${pluginName(c.manifest)}. ${plainError(err, SEE_CONSOLE)}`, {
+      kind: "error",
+      detail: err,
+    });
   } finally {
     busy.value = "";
   }
