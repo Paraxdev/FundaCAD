@@ -31,6 +31,8 @@ export function installCarryOn(e: CarryEngine): void {
   window.addEventListener("pointerup", lift);
   window.addEventListener("pointercancel", lift);
   window.addEventListener("blur", lift);
+  // A key that finishes a step means no press is holding it, whatever pointerup was missed
+  window.addEventListener("keydown", (ev) => !MODIFIERS.has(ev.key) && lift(), true);
 
   const land = (target: CarryTarget, id: string | null) => {
     if (id && !e.store.document.features.some((f) => f.id === id)) return;
@@ -57,7 +59,9 @@ export function installCarryOn(e: CarryEngine): void {
       drop?.();
       afterPress = null;
       const id = done.kind === "added" ? done.id : null;
-      if (done.kind === "nothing" && done.note) refuseAloud(e, done.note);
+      const note = done.kind === "nothing" ? done.note : undefined;
+      // After the take that finished the step, whose taken words dismiss the hints before them
+      if (note) setTimeout(() => refuseAloud(e, note), 0);
       let started = false;
       let over = false;
       const undo: (() => void)[] = [];

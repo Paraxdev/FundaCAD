@@ -208,8 +208,10 @@ describe("after a step that added nothing", () => {
     expect(quiet.status).toEqual([]);
     const noted = rig();
     noted.host.after({ kind: "nothing", note: "Depth is 0, nothing made" }, FACE);
+    // Said once the take that finished the step is over, its taken words would dismiss it at once
+    expect([noted.status, noted.calls]).toEqual([[], ['picks [{"kind":"face","faceId":14}]', "pressPull null"]]);
+    vi.advanceTimersByTime(0);
     expect(noted.status).toEqual(["Depth is 0, nothing made"]);
-    expect(noted.calls).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull null"]);
   });
 
   it("waits while the preview is still on screen, then acts once it is gone", () => {
@@ -314,6 +316,21 @@ describe("what drops a carry", () => {
     const over = rig();
     over.host.after({ kind: "nothing" }, EDGE);
     expect(over.calls).toEqual(['picks [{"kind":"edge","edge":{"id":"edge-9"}}]', "fillet null"]);
+  });
+
+  it("a key after a press whose pointerup never came lands at once", () => {
+    const r = rig();
+    window.dispatchEvent(new Event("pointerdown"));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift" }));
+    r.host.after({ kind: "nothing" }, EDGE);
+    expect(r.calls).toEqual([]);
+    window.dispatchEvent(new Event("pointercancel"));
+    vi.advanceTimersByTime(0);
+
+    window.dispatchEvent(new Event("pointerdown"));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    r.host.after({ kind: "nothing" }, FACE);
+    expect(r.calls.slice(2)).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull null"]);
   });
 
   it("a second carry during the press replaces the waiting one", () => {
