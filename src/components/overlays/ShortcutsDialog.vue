@@ -9,7 +9,7 @@ import { escapeClaimed } from "../../ui/escapeClaim";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
 import { fmtKeys, spokenKeys } from "../../input/platform";
-import { t } from "../../i18n";
+import { t, tEnglish, type MessageKey, type MessageArgs } from "../../i18n";
 import {
   SHORTCUTS,
   formatShortcut,
@@ -18,6 +18,7 @@ import {
   resetUserShortcuts,
   setUserShortcut,
   shortcutGroupsOf,
+  shortcutLabel,
   shortcutHudGroups,
   userShortcutIds,
   type HudGroup,
@@ -56,13 +57,24 @@ const pages = computed<Page[]>(() => {
     const found = shippedPlugins().find((p) => sameId(p.manifest.id, id));
     return found ? pluginName(found.manifest) : id;
   };
+  const build = (tr: (key: MessageKey, args?: MessageArgs) => string) => [
+    shortcutHudGroups(theirs, tr),
+    ...maps.map((m) => shortcutGroupsOf(new Set(m.keymap.map((o) => o.action)), tr)),
+  ];
+  const english = build(tEnglish);
+  // The English name stays searchable beside the shown one, the groups of both builds have the same shape.
+  const withAlias = (groups: HudGroup[], i: number): HudGroup[] =>
+    groups.map((g, gi) => ({
+      ...g,
+      rows: g.rows.map((r, ri) => ({
+        ...r,
+        alias: `${english[i]![gi]?.rows[ri]?.label ?? ""} ${english[i]![gi]?.rows[ri]?.key ?? ""}`,
+      })),
+    }));
+  const shown = build(t);
   return [
-    { id: "general", label: t("shortcuts.page.general"), groups: shortcutHudGroups(theirs) },
-    ...maps.map((m) => ({
-      id: m.plugin,
-      label: nameOf(m.plugin),
-      groups: shortcutGroupsOf(new Set(m.keymap.map((o) => o.action))),
-    })),
+    { id: "general", label: t("shortcuts.page.general"), groups: withAlias(shown[0]!, 0) },
+    ...maps.map((m, i) => ({ id: m.plugin, label: nameOf(m.plugin), groups: withAlias(shown[i + 1]!, i + 1) })),
   ];
 });
 const mine = computed(() => {
@@ -74,7 +86,8 @@ const category = ref("general");
 const current = computed(() => pages.value.find((p) => p.id === category.value) ?? pages.value[0]!);
 const query = ref("");
 
-const matches = (r: { key: string; label: string }, q: string) => `${r.label} ${r.key}`.toLowerCase().includes(q);
+const matches = (r: { key: string; label: string; alias?: string }, q: string) =>
+  `${r.label} ${r.key} ${r.alias ?? ""}`.toLowerCase().includes(q);
 const shown = computed<Page[]>(() => {
   const q = query.value.trim().toLowerCase();
   if (!q) return [current.value];
@@ -111,7 +124,7 @@ function onCapture(id: string, k: CapturedKey) {
 
 function problemText(p: Pending, keys: (k: string) => string = fmtKeys): string {
   const p0 = p.problem;
-  if ("conflict" in p0) return t("shortcuts.problem.used", { keys: keys(p.name), action: p0.conflict.label });
+  if ("conflict" in p0) return t("shortcuts.problem.used", { keys: keys(p.name), action: shortcutLabel(p0.conflict) });
   if ("reserved" in p0) return t("shortcuts.problem.taken", { keys: keys(p.name), action: p0.reserved });
   return refusalLabel(p0.refused);
 }

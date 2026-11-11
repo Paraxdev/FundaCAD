@@ -75,11 +75,13 @@ describe("the shortcuts window chrome in German", () => {
       expect(text()).not.toContain(english(k));
     }
 
-    await capture("Fillet");
+    await capture(line("tool.fillet"));
     await type({ key: "j" });
-    expect(rowOf("Fillet").querySelector(".sc-changed")?.textContent).toBe(line("shortcuts.changed"));
-    expect(rowOf("Fillet").querySelector(".sc-reset")?.textContent).toBe(line("shortcuts.reset"));
-    expect(rowOf("Fillet").querySelector(".sc-reset")?.getAttribute("title")).toBe(line("shortcuts.resetTip"));
+    expect(rowOf(line("tool.fillet")).querySelector(".sc-changed")?.textContent).toBe(line("shortcuts.changed"));
+    expect(rowOf(line("tool.fillet")).querySelector(".sc-reset")?.textContent).toBe(line("shortcuts.reset"));
+    expect(rowOf(line("tool.fillet")).querySelector(".sc-reset")?.getAttribute("title")).toBe(
+      line("shortcuts.resetTip"),
+    );
     expect($(".sc-reset-all")?.textContent).toBe(line("shortcuts.resetAll"));
   });
 
@@ -103,11 +105,11 @@ describe("the shortcuts window chrome in German", () => {
   });
 
   it("writes the conflict line with the keys and the action, Replace and Cancel in German", async () => {
-    await capture("Fillet");
+    await capture(line("tool.fillet"));
     await type({ key: "e" });
-    const problem = rowOf("Fillet").querySelector(".sc-problem")!;
+    const problem = rowOf(line("tool.fillet")).querySelector(".sc-problem")!;
     expect(problem.querySelector("span")?.textContent).toBe(
-      line("shortcuts.problem.used", { keys: "E", action: "Extrude" }),
+      line("shortcuts.problem.used", { keys: "E", action: line("tool.extrude") }),
     );
     expect([...problem.querySelectorAll(".btn")].map((b) => b.textContent)).toEqual([
       line("shortcuts.replace"),
@@ -116,9 +118,9 @@ describe("the shortcuts window chrome in German", () => {
   });
 
   it("writes the taken line for a key the app handles first, with no Replace", async () => {
-    await capture("Fillet");
+    await capture(line("tool.fillet"));
     await type({ key: "z", ctrlKey: true, shiftKey: true });
-    const row = rowOf("Fillet");
+    const row = rowOf(line("tool.fillet"));
     expect(row.querySelector(".sc-problem span")?.textContent).toBe(
       line("shortcuts.problem.taken", { keys: "Ctrl+Shift+Z", action: "Redo" }),
     );
@@ -126,9 +128,11 @@ describe("the shortcuts window chrome in German", () => {
   });
 
   it("refuses Alt in German, and any other refusal shows as given", async () => {
-    await capture("Fillet");
+    await capture(line("tool.fillet"));
     await type({ key: "k", altKey: true });
-    expect(rowOf("Fillet").querySelector(".sc-problem span")?.textContent).toBe(line("shortcuts.problem.alt"));
+    expect(rowOf(line("tool.fillet")).querySelector(".sc-problem span")?.textContent).toBe(
+      line("shortcuts.problem.alt"),
+    );
     expect(refusalLabel(ALT_REFUSAL)).toBe(line("shortcuts.problem.alt"));
     expect(refusalLabel("Some other refusal")).toBe("Some other refusal");
     await setLanguage("en");
@@ -142,7 +146,7 @@ describe("the shortcuts window chrome in German", () => {
   }
 
   it("asks and tells in German before and after Reset all on General", async () => {
-    await capture("Measure");
+    await capture(line("tool.measure"));
     await type({ key: "j" });
     await openReset();
     const box = $(".ui-confirm")!.textContent!;
@@ -172,11 +176,39 @@ describe("the shortcuts window chrome in German", () => {
     off();
   });
 
+  it("lists rows by their German names and finds them by German word, English name or key", async () => {
+    const names = () => $$(".sc-row .sc-label").map((l) => l.textContent);
+    const find = async (q: string) => {
+      search().value = q;
+      search().dispatchEvent(new Event("input", { bubbles: true }));
+      await nextTick();
+      return names();
+    };
+    expect(names()).toContain(line("tool.fillet"));
+    expect(names()).not.toContain(english("tool.fillet"));
+
+    const fillets = [line("tool.fillet"), line("shortcuts.action.sketchFillet")];
+    expect(await find("fillet")).toEqual(fillets);
+    expect(await find("verrundung")).toEqual(fillets);
+    expect(await find("Press/Pull")).toEqual([
+      line("tool.pressPull"),
+      line("shortcuts.action.finishWith", { tool: line("tool.pressPull") }),
+    ]);
+    expect(await find("zzqx")).toEqual([]);
+    expect($(".pref-hint")?.textContent).toBe(line("shortcuts.empty"));
+
+    await setLanguage("en");
+    await nextTick();
+    expect(await find("fillet")).toEqual([english("tool.fillet"), english("shortcuts.action.sketchFillet")]);
+  });
+
   it("gives the wide class by group id", () => {
     const card = (title: string) => $$(".pref-card").find((c) => c.querySelector(".pref-title")?.textContent === title);
     expect(shortcutHudGroups().map((g) => g.id)).toEqual(["model", "sketch", "global", "mouse", "focus", "always"]);
     expect(
-      [card("Mouse"), card("Always"), card("Model"), card("Sketch")].map((c) => c?.classList.contains("wide")),
+      [card("Mouse"), card("Always"), card(line("shortcuts.group.model")), card(line("tool.sketch"))].map((c) =>
+        c?.classList.contains("wide"),
+      ),
     ).toEqual([true, true, false, false]);
   });
 });
