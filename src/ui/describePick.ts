@@ -161,6 +161,12 @@ function faceType(f: FaceFacts): FaceType | null {
   }
 }
 
+// The readout under the rail never counted the pieces.
+function pieces(n: number): Fact {
+  const line = t("pick.fact.pieces", { n });
+  return { hint: line, spoken: line };
+}
+
 function faceFacts(f: FaceFacts, type: FaceType | null): (Fact | null)[] {
   const isFlat = f.surface === "plane";
   const main: (Fact | null)[] = [];
@@ -181,7 +187,7 @@ function faceFacts(f: FaceFacts, type: FaceType | null): (Fact | null)[] {
     isFlat ? facing(f.normal) : null,
     level && known(f.centroid?.[2]) ? { spoken: t("pick.fact.height", { h: spokenLength(f.centroid![2]) }) } : null,
     f.surface === "cylinder" || f.surface === "cone" ? axisFact(f.axis) : null,
-    known(f.pieces) && f.pieces > 1 ? every(() => t("pick.fact.pieces", { n: f.pieces! })) : null,
+    known(f.pieces) && f.pieces > 1 ? pieces(f.pieces) : null,
     bodyFact(f.body),
     ownerFact(f.owner, f.body),
   ];

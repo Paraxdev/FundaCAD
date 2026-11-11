@@ -121,6 +121,7 @@ describe("the facts of a pick, on screen and aloud", () => {
     expect(w.spoken).toContain("Platte");
     expect(w.aloud).not.toMatch(glyph);
     expect(w.spoken).not.toMatch(glyph);
+    expect(w.readout).not.toContain("Teil");
     expect(describePick(level).readout).not.toContain("in 1 Teil");
     expect(describePick(level).spoken).not.toContain("Teil");
     const hole = describePick(bore);
