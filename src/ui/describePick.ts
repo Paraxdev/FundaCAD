@@ -3,6 +3,7 @@
 
 import type { TopologyFace, Vec3 } from "../types";
 import { t } from "../i18n";
+import { countLine } from "./selectionTools";
 import { spellNumber } from "./measure";
 import { displayValue, fmtArea, fmtLength, spokenArea, spokenLength } from "./units";
 
@@ -258,13 +259,13 @@ export function describePick(f: PickFacts): PickWords {
   };
 }
 
-const COUNT_NOUN: Record<string, [one: string, many: string]> = {
-  f: ["face", "faces"],
-  e: ["edge", "edges"],
-  p: ["plane", "planes"],
-  b: ["body", "bodies"],
-  r: ["profile", "profiles"],
-  other: ["item", "items"],
+const COUNT_OF: Record<string, (n: number) => string> = {
+  f: (n) => countLine("face", n),
+  e: (n) => countLine("edge", n),
+  p: (n) => t("readout.planes", { n }),
+  b: (n) => countLine("body", n),
+  r: (n) => countLine("sketch-region", n),
+  other: (n) => t("selection.count.item", { n }),
 };
 
 /** What to say for a selection change, by row keys (`f:`, `e:`, `p:`, `b:`, `r:`). Null when nothing changed. One
@@ -280,28 +281,26 @@ export function describeChange(
   const added = [...after].filter((k) => !before.has(k));
   const removed = [...before].filter((k) => !after.has(k));
   if (!added.length && !removed.length) return null;
-  if (!after.size) return "Nothing selected";
+  if (!after.size) return t("selection.said.none");
   const named = (key: string, rest: Set<string>) => {
     const body = bodyOf(key);
     const apart = body !== null && ![...rest].some((k) => bodyOf(k) === body);
-    return apart ? `${words(key).label} of ${body}` : words(key).label;
+    return apart ? t("pick.onBody", { label: words(key).label, body }) : words(key).label;
   };
   if (added.length === 1 && !removed.length && before.size)
-    return `${named(added[0]!, before)} added, ${after.size} selected`;
-  if (removed.length === 1 && !added.length) return `${named(removed[0]!, after)} removed, ${after.size} selected`;
+    return t("selection.said.added", { name: named(added[0]!, before), n: after.size });
+  if (removed.length === 1 && !added.length)
+    return t("selection.said.removed", { name: named(removed[0]!, after), n: after.size });
   if (after.size === 1) return words([...after][0]!).spoken;
 
   const counts = new Map<string, number>();
   for (const k of after) {
     const prefix = k.split(":", 1)[0]!;
-    const kind = prefix in COUNT_NOUN ? prefix : "other";
+    const kind = prefix in COUNT_OF ? prefix : "other";
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
-  const parts = Object.keys(COUNT_NOUN)
+  const parts = Object.keys(COUNT_OF)
     .filter((kind) => counts.has(kind))
-    .map((kind) => {
-      const n = counts.get(kind)!;
-      return `${n} ${COUNT_NOUN[kind]![n === 1 ? 0 : 1]}`;
-    });
-  return `${parts.join(", ")} selected`;
+    .map((kind) => COUNT_OF[kind]!(counts.get(kind)!));
+  return t("selection.said.many", { items: joinFacts(parts) });
 }
