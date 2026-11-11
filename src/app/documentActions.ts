@@ -58,9 +58,15 @@ export function needsSave(e: SaveEngine): boolean {
   return e.store.dirty || anySavableHeld(e);
 }
 
-/** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
-function settleForSave(e: SaveEngine): void {
+/** Three seconds covers a verifying rebuild the engine has mostly cached from the preview; a slower answer means a
+ *  stuck engine, where a longer wait gains nothing. */
+export const SAVE_VERIFY_CAP_MS = 3000;
+
+/** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. After
+ *  the kernel's verdict on the commit, so a refused edit is never written; past the cap the store is written as it is. */
+async function settleForSave(e: SaveEngine): Promise<void> {
   settleHeldEdit(e);
+  await e.store.provisionalVerdict(SAVE_VERIFY_CAP_MS);
   if (anySavableHeld(e))
     toast("A drag you were holding could not be applied, so the save left it out", { kind: "warning" });
 }

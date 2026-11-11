@@ -846,6 +846,7 @@ export class DocumentStore {
     st.rebuildQueued = false;
     st.restoreArmed = false;
     st.provisional = null;
+    this.wakeProvisional(st);
     const engineEnds = this.geometry.endsSessions === true;
     for (const op of st.busyOps) {
       if (engineEnds) op.abort.abort();
@@ -991,6 +992,7 @@ export class DocumentStore {
     this.emitBuild();
     this.st.committedShown = null;
     this.st.provisional = null;
+    this.wakeProvisional(this.st);
     this.st.restoreArmed = false;
     // Only the build on the wire stops. Its loop goes on and sends the replacing document next, which an abort of the
     // loop's op would refuse before it went out. Other ops of the document run on (an import lands in the replacement).
@@ -3593,7 +3595,37 @@ export class DocumentStore {
     this.st.provisional = { id: featureId, what, key: buildKey(this.effectiveDoc()) };
   }
 
+  // Settles once no commit awaits the kernel's verdict, so a refusal is already undone in the store. A verdict
+  // that never comes ("capped") leaves the commit armed, a later refusal still undoes it.
+  provisionalVerdict(capMs: number): Promise<"settled" | "capped"> {
+    const st = this.st;
+    if (!st.provisional) return Promise.resolve("settled");
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        st.provisionalWaiters.delete(check);
+        resolve("capped");
+      }, capMs);
+      const check = () => {
+        if (st.provisional) return;
+        clearTimeout(timer);
+        st.provisionalWaiters.delete(check);
+        resolve("settled");
+      };
+      st.provisionalWaiters.add(check);
+    });
+  }
+
+  private wakeProvisional(st: SessionState) {
+    for (const w of [...st.provisionalWaiters]) w();
+  }
+
   private refusedProvisional(reply: RebuildReply, key: string): boolean {
+    const refused = this.judgeProvisional(reply, key);
+    this.wakeProvisional(this.st);
+    return refused;
+  }
+
+  private judgeProvisional(reply: RebuildReply, key: string): boolean {
     const p = this.st.provisional;
     if (!p) return false;
     this.st.provisional = null;
