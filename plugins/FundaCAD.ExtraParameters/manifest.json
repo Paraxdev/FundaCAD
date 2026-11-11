@@ -8,5 +8,27 @@
   "grants": [
     "document.read",
     "document.write"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Zusatzparameter",
+      "summary": "Schieberegler, Schalter und Auswahllisten für Parameter, Gruppen zum Ablegen, benannte Konfigurationen eines Entwurfs und Prüfungen, die warnen, wenn Werte nicht mehr sinnvoll sind."
+    },
+    "es": {
+      "name": "Parámetros adicionales",
+      "summary": "Controles deslizantes, interruptores y listas de opciones para parámetros, grupos donde organizarlos, configuraciones con nombre de un diseño y comprobaciones que avisan cuando los valores dejan de tener sentido."
+    },
+    "fr": {
+      "name": "Paramètres supplémentaires",
+      "summary": "Curseurs, interrupteurs et listes de choix pour les paramètres, groupes pour les ranger, configurations nommées d'une conception et contrôles qui avertissent quand les valeurs n'ont plus de sens."
+    },
+    "ja": {
+      "name": "追加パラメーター",
+      "summary": "パラメーター用のスライダー、スイッチ、選択肢、分類用のグループ、設計に名前を付けた構成、値が不自然になったときに警告するチェックを提供します。"
+    },
+    "zh-CN": {
+      "name": "附加参数",
+      "summary": "为参数提供滑块、开关和选项，可归类的分组，设计的命名配置，以及在数值不合理时发出警告的检查。"
+    }
+  }
 }

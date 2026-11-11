@@ -6,6 +6,7 @@ import { setPrinterPillClick } from "./printStatusLine";
 import { exportPrintProject } from "./exportProject";
 import { ICONS } from "./icons";
 import { showCamera } from "./state";
+import { t } from "./lines";
 import PrintStatusPill from "./PrintStatusPill.vue";
 import CameraPanel from "./CameraPanel.vue";
 import FilamentMappingHost from "./FilamentMappingHost.vue";
@@ -29,18 +30,21 @@ export async function activate(e: Engine): Promise<() => void> {
         items: [
           { separator: true, label: "" },
           {
-            label: "Export for Print (3MF)…",
+            label: () => t("menu.file.exportPrint"),
+            refName: "Export for Print (3MF)…",
             onClick: () => void exportPrintProject(e.store, e.geometry),
           },
           {
-            label: "Open in OrcaSlicer…",
+            label: () => t("menu.file.openSlicer"),
+            refName: "Open in OrcaSlicer…",
             onClick: () => void flow().then((m) => m.openInOrca(e.store, e.geometry)),
           },
           {
-            label: "Send to Printer…",
+            label: () => t("menu.file.send"),
+            refName: "Send to Printer…",
             onClick: () => void flow().then((m) => m.sendToPrinter(e.store, e.geometry)),
           },
-          { label: "Camera…", onClick: () => showCamera(activePrinterId()) },
+          { label: () => t("menu.file.camera"), refName: "Camera…", onClick: () => showCamera(activePrinterId()) },
         ],
       },
     ],
