@@ -1,7 +1,6 @@
 // The non-numeric feature rows: FEATURE_CHOICE_FIELDS (dropdowns) and FEATURE_TOGGLE_FIELDS (switches), plus a
 // plugin's contributed rows. Derived fields, geometry selections and PlaneSpec `plane` are left out on purpose.
 
-import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { HOLE_SIZES, holeFieldApplies } from "../features/holeStandards";
 import { t, type MessageKey } from "../i18n";
 import { contributedFeature } from "../plugins/contrib";
@@ -39,55 +38,45 @@ export interface FileField {
 }
 
 const BOOLEAN_OPS: ChoiceOption[] = [
-  { value: "new", label: "New body" },
-  { value: "join", label: "Join" },
-  { value: "cut", label: "Cut" },
-  { value: "intersect", label: "Intersect" },
+  opt("new", "field.option.newBody"),
+  opt("join", "field.option.join"),
+  opt("cut", "field.option.cut"),
+  opt("intersect", "field.option.intersect"),
 ];
 
-// Off the same inventory as the three commands and ribbon buttons, so a row never shows a word its command lacks.
-const BOOLEAN_KINDS: ChoiceOption[] = BOOLEAN_COMMANDS.map((c) => ({ value: c.op, label: c.label }));
-
-const AXES: ChoiceOption[] = [
-  { value: "X", label: "X" },
-  { value: "Y", label: "Y" },
-  { value: "Z", label: "Z" },
+// The same words as the three commands and ribbon buttons, so a row never shows a word its command lacks.
+const BOOLEAN_KINDS: ChoiceOption[] = [
+  opt("union", "tool.union"),
+  opt("subtract", "tool.subtract"),
+  opt("intersect", "tool.intersect"),
 ];
 
-const PLANES: ChoiceOption[] = [
-  { value: "XY", label: "XY" },
-  { value: "XZ", label: "XZ" },
-  { value: "YZ", label: "YZ" },
-];
+const AXES: ChoiceOption[] = [symbol("X"), symbol("Y"), symbol("Z")];
+
+const PLANES: ChoiceOption[] = [symbol("XY"), symbol("XZ"), symbol("YZ")];
 
 const EXTRUDE_STARTS: ChoiceOption[] = [
-  { value: "sketch", label: "Sketch plane" },
-  { value: "offset", label: "Offset" },
-  { value: "face", label: "Face" },
-  { value: "plane", label: "Plane" },
-  { value: "point", label: "Point" },
+  opt("sketch", "field.option.sketchPlane"),
+  opt("offset", "field.option.offset"),
+  opt("face", "field.option.face"),
+  opt("plane", "field.option.plane"),
+  opt("point", "field.option.point"),
 ];
 
 const EXTRUDE_ENDS: ChoiceOption[] = [
-  { value: "distance", label: "Distance" },
-  { value: "upToFace", label: "Up to face" },
-  { value: "upToPlane", label: "Up to plane" },
-  { value: "upToPoint", label: "Up to point" },
-  { value: "throughAll", label: "Through all" },
+  opt("distance", "field.option.distance"),
+  opt("upToFace", "field.option.upToFace"),
+  opt("upToPlane", "field.option.upToPlane"),
+  opt("upToPoint", "field.option.upToPoint"),
+  opt("throughAll", "field.option.throughAll"),
 ];
-
-const END_TITLE =
-  "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short";
 
 const THIN_SIDES: ChoiceOption[] = [
-  { value: "center", label: "Centered" },
-  { value: "inside", label: "Inside" },
-  { value: "outside", label: "Outside" },
-  { value: "twoSides", label: "Two sides" },
+  opt("center", "field.option.centered"),
+  opt("inside", "field.option.inside"),
+  opt("outside", "field.option.outside"),
+  opt("twoSides", "field.option.twoSides"),
 ];
-
-const THIN_SIDE_TITLE =
-  "Inside is the enclosed side, of an open chain the side it bends toward, of a straight line its left as drawn; two sides puts Thickness inside and Thickness 2 outside";
 
 export function datumChoices(field: string, features: readonly Feature[]): ChoiceOption[] | null {
   if (/^(startPlane|upToPlane2?)$/.test(field)) {
@@ -123,13 +112,13 @@ export function datumChoiceRow(
     ? mirrorPlaneName((feature as Extract<Feature, { type: "mirror" }>).plane)
     : (feature as unknown as Record<string, unknown>)[field];
   if (v && typeof v === "object") {
-    return { options: [...options, { value: PICKED_POINT, label: "Picked point" }], current: PICKED_POINT };
+    return { options: [...options, opt(PICKED_POINT, "field.option.pickedPoint")], current: PICKED_POINT };
   }
   if (typeof v === "string" && v) {
     if (options.some((o) => o.value === v)) return { options, current: v };
-    return { options: [...options, { value: v, label: `${v} (missing)` }], current: v };
+    return { options: [...options, { value: v, label: t("field.option.missing", { name: v }) }], current: v };
   }
-  return { options: [{ value: "", label: "Choose one" }, ...options], current: "" };
+  return { options: [opt("", "field.option.chooseOne"), ...options], current: "" };
 }
 
 export function datumChoiceIsNoOp(field: string, value: string | boolean): boolean {
@@ -187,23 +176,38 @@ function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean
   }
 }
 
-// The row name is a getter so an open panel follows a change of language.
+// Row names, option labels and tips are getters so an open panel follows a change of language.
+export function opt(value: string, key: MessageKey): ChoiceOption {
+  return {
+    value,
+    get label() {
+      return t(key);
+    },
+  };
+}
+
+// An option whose label is its value: X, XY, G1, a hole size.
+function symbol(value: string): ChoiceOption {
+  return { value, label: value };
+}
+
 function choice(
   field: string,
   key: MessageKey,
   options: ChoiceOption[],
   fallback: string,
-  title?: string,
+  tip?: MessageKey,
 ): ChoiceField {
-  return {
+  const row: ChoiceField = {
     field,
     get label() {
       return t(key);
     },
     options,
     fallback,
-    ...(title === undefined ? {} : { title }),
   };
+  if (tip) Object.defineProperty(row, "title", { get: () => t(tip), enumerable: true });
+  return row;
 }
 
 function toggle(field: string, key: MessageKey, fallback: boolean): ToggleField {
@@ -229,46 +233,28 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     choice("startType", "field.start", EXTRUDE_STARTS, "sketch"),
     choice("startPlane", "field.startPlane", PLANES, "XY"),
     choice("startPoint", "field.startPoint", [], ""),
-    choice("endType", "field.end", EXTRUDE_ENDS, "distance", END_TITLE),
+    choice("endType", "field.end", EXTRUDE_ENDS, "distance", "field.tip.end"),
     choice("upToPlane", "field.upToPlane", PLANES, "XY"),
     choice("upToPoint", "field.upToPoint", [], ""),
-    choice("endType2", "field.end2", EXTRUDE_ENDS, "distance", END_TITLE),
+    choice("endType2", "field.end2", EXTRUDE_ENDS, "distance", "field.tip.end"),
     choice("upToPlane2", "field.upToPlane2", PLANES, "XY"),
     choice("upToPoint2", "field.upToPoint2", [], ""),
-    choice("side", "field.wallSide", THIN_SIDES, "center", THIN_SIDE_TITLE),
+    choice("side", "field.wallSide", THIN_SIDES, "center", "field.tip.wallSide"),
   ],
   revolve: [operation(BOOLEAN_OPS, "new"), choice("axis", "field.axis", AXES, "Z")],
   thread: [
-    choice(
-      "hand",
-      "field.hand",
-      [
-        { value: "right", label: "Right" },
-        { value: "left", label: "Left" },
-      ],
-      "right",
-    ),
+    choice("hand", "field.hand", [opt("right", "field.option.right"), opt("left", "field.option.left")], "right"),
     operation(
       BOOLEAN_OPS.filter((o) => o.value === "cut" || o.value === "join"),
       "cut",
     ),
   ],
   textOnFace: [
-    operation(
-      [
-        { value: "join", label: "Emboss" },
-        { value: "cut", label: "Engrave" },
-      ],
-      "join",
-    ),
+    operation([opt("join", "field.option.emboss"), opt("cut", "field.option.engrave")], "join"),
     choice(
       "align",
       "field.align",
-      [
-        { value: "left", label: "Left" },
-        { value: "center", label: "Centre" },
-        { value: "right", label: "Right" },
-      ],
+      [opt("left", "field.option.left"), opt("center", "field.option.centre"), opt("right", "field.option.right")],
       "center",
     ),
   ],
@@ -291,67 +277,40 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   patternLinear: [choice("axis", "field.direction", AXES, "X")],
   patternCircular: [choice("axis", "field.axis", AXES, "Z")],
   // Options come from mechanismDriveChoice in FeatureProperties; this entry only puts the row there.
-  mechanism: [
-    choice(
-      "drive",
-      "field.drive",
-      [{ value: NO_DRIVE, label: "None" }],
-      NO_DRIVE,
-      "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
-    ),
-  ],
+  mechanism: [choice("drive", "field.drive", [opt(NO_DRIVE, "field.option.none")], NO_DRIVE, "field.tip.drive")],
   // press-pull's operation is read off the sign of `distance` by the builder, so a dropdown over it would offer states
   // the rebuild cannot produce. `mode` is the explicit choice.
   "press-pull": [
     choice(
       "mode",
       "field.operation",
-      [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
+      [opt("auto", "field.option.auto"), ...BOOLEAN_OPS],
       "auto",
-      "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
+      "field.tip.pressPullMode",
     ),
     choice(
       "direction",
       "field.direction",
-      [
-        { value: "normal", label: "Along normal" },
-        { value: "axis", label: "Along axis" },
-      ],
+      [opt("normal", "field.option.alongNormal"), opt("axis", "field.option.alongAxis")],
       "normal",
-      "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
+      "field.tip.direction",
     ),
   ],
   fillet: [
     choice(
       "sizeType",
       "field.sizeType",
-      [
-        { value: "radius", label: "Radius" },
-        { value: "chord", label: "Chord Length" },
-      ],
+      [opt("radius", "field.option.radius"), opt("chord", "field.option.chordLength")],
       "radius",
-      "Chord Length sizes the round by the width across it rather than its radius",
+      "field.tip.sizeType",
     ),
-    choice(
-      "continuity",
-      "field.continuity",
-      [
-        { value: "G1", label: "G1" },
-        { value: "G2", label: "G2" },
-        { value: "G3", label: "G3" },
-      ],
-      "G1",
-      "G1 is a circular round; G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either. G2 and G3 need both faces flat across the edge",
-    ),
+    choice("continuity", "field.continuity", [symbol("G1"), symbol("G2"), symbol("G3")], "G1", "field.tip.continuity"),
   ],
   chamfer: [
     choice(
       "chamferType",
       "field.type",
-      [
-        { value: "equal", label: "Equal Distance" },
-        { value: "twoDistance", label: "Two-Distance" },
-      ],
+      [opt("equal", "field.option.equalDistance"), opt("twoDistance", "field.option.twoDistance")],
       "equal",
     ),
   ],
@@ -360,48 +319,36 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
       "holeType",
       "field.holeType",
       [
-        { value: "simple", label: "Simple" },
-        { value: "counterbore", label: "Counterbore" },
-        { value: "countersink", label: "Countersink" },
-        { value: "insert", label: "Heat-set insert" },
+        opt("simple", "field.option.simple"),
+        opt("counterbore", "field.option.counterbore"),
+        opt("countersink", "field.option.countersink"),
+        opt("insert", "field.option.heatSetInsert"),
       ],
       "simple",
-      "Heat-set insert sizes the bore for a brass insert of the chosen size",
+      "field.tip.holeType",
     ),
     choice(
       "standard",
       "field.standard",
       [
-        { value: "clearance", label: "Clearance" },
-        { value: "tap", label: "Tap drill" },
-        { value: "custom", label: "Custom" },
+        opt("clearance", "field.option.clearance"),
+        opt("tap", "field.option.tapDrill"),
+        opt("custom", "field.option.custom"),
       ],
       "clearance",
-      "Clearance is ISO 273, Tap drill the coarse pitch drill; Custom keeps the diameter you type",
+      "field.tip.standard",
     ),
-    choice(
-      "size",
-      "field.size",
-      HOLE_SIZES.map((s) => ({ value: s, label: s })),
-      "M3",
-    ),
+    choice("size", "field.size", HOLE_SIZES.map(symbol), "M3"),
     choice(
       "fit",
       "field.fit",
-      [
-        { value: "close", label: "Close" },
-        { value: "normal", label: "Normal" },
-        { value: "loose", label: "Loose" },
-      ],
+      [opt("close", "field.option.close"), opt("normal", "field.option.normal"), opt("loose", "field.option.loose")],
       "normal",
     ),
     choice(
       "extent",
       "field.extent",
-      [
-        { value: "blind", label: "Blind" },
-        { value: "through", label: "Through all" },
-      ],
+      [opt("blind", "field.option.blind"), opt("through", "field.option.throughAll")],
       "blind",
     ),
   ],
@@ -523,7 +470,7 @@ export function patternAxisChoice(
   const datum = patternAxisDatum(raw.axis);
   const placed = raw.axisRef != null || (raw.axis != null && typeof raw.axis !== "string" && datum == null);
   if (placed) {
-    options.push({ value: PLACED_AXIS, label: raw.axisRef != null ? "Picked" : "Line" });
+    options.push(opt(PLACED_AXIS, raw.axisRef != null ? "field.option.picked" : "field.option.line"));
     return { options, current: PLACED_AXIS };
   }
   const name = datum ?? (typeof raw.axis === "string" ? raw.axis : "Z");

@@ -96,7 +96,8 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { logEditTiming } from "../diagnostics/editTiming";
-import { featureEnglish, numberedEnglish } from "../ui/featureMeta";
+import { t } from "../i18n";
+import { labelOf, numberedEnglish } from "../ui/featureMeta";
 import { STEP_LABEL, stepLabel } from "./stepLabels";
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
@@ -1915,8 +1916,8 @@ export class DocumentStore {
     }
     if (!first) return null;
     const f = features[first.index]!;
-    const name = (f as { name?: string }).name?.trim() || featureEnglish(f);
-    return `${name} fails with this value: ${first.message}`;
+    const name = (f as { name?: string }).name?.trim() || labelOf(f);
+    return t("field.problem.laterFails", { name, message: first.message });
   }
   // Failed by the last preview-free build, so an in-place edit is not blamed for them.
   private committedFailures = new Set<string>();
