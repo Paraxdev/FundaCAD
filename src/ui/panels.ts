@@ -575,7 +575,9 @@ export function createPanels(deps: PanelsDeps) {
 
   onLanguageChange(() => {
     const d = panels.stress;
-    if (!d || (!weakSpot && !d.pins.length)) return;
+    if (!d) return;
+    showUndo();
+    if (!weakSpot && !d.pins.length) return;
     relabelStressPins();
     showWeakSpot();
     glyphs?.setProbePins(d.pins);
