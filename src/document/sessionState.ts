@@ -36,6 +36,8 @@ export class SessionState {
   committedShown: { key: string; modelKey: string; state: RebuildState } | null = null;
   /** A commit the kernel had not answered for yet, see verifyCommit. */
   provisional: { id: string; what: string; key: string } | null = null;
+  /** Woken whenever `provisional` is cleared or replaced, see DocumentStore.provisionalVerdict. */
+  provisionalWaiters = new Set<() => void>();
   /** Set when a preview is dropped or a refused commit undone, the only times
    *  the committed model may be shown again without asking the engine. */
   restoreArmed = false;
