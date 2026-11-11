@@ -984,9 +984,8 @@ export class PressPullTool {
     this.outline.show(polylines, { cut: this.mode === "cut" || (this.mode === "auto" && this.value < 0) });
   }
 
-  /** The viewport carries a selection over a rebuild by each face's old centroid, so a moved face loses its tint. After
-   *  every preview that lands, the pushed faces are found again where the answered distance put them. A refused push
-   *  leaves the last good model on screen, so the faces are looked for where that one put them. */
+  // A selection rides a rebuild by each face's old centroid, so the pushed faces are found again after each preview,
+  // where the last good model put them when the push was refused.
   private tintAfterPreview(): () => void {
     let started = false;
     let shown: number | null = null;
