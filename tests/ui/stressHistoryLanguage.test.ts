@@ -13,6 +13,17 @@ import { rig } from "./stressPanelRig";
 vi.stubGlobal("window", globalThis);
 vi.mock("../../src/ui/announce", () => ({ announce: () => {} }));
 
+// A language that words a load's force and its pressure alike, to tell a merge by step from a merge by label.
+const alike = vi.hoisted(() => ({ on: false }));
+vi.mock("../../src/i18n", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../src/i18n")>();
+  const t: typeof real.t = (key, args) =>
+    alike.on && (key === "stress.undo.force" || key === "stress.undo.pressure")
+      ? `Last ${String(args?.i)} Wert`
+      : real.t(key, args);
+  return { ...real, t };
+});
+
 beforeEach(() => setActivePinia(createPinia()));
 afterEach(async () => {
   await setLanguage("system");
@@ -149,6 +160,27 @@ describe("a step read late", () => {
     expect(h.canUndo).toBe(false);
   });
 
+  it("keeps a force and a pressure that read alike as two steps", async () => {
+    alike.on = true;
+    try {
+      const h = new StressHistory();
+      h.reset(base);
+      const forced = edit(base, (s) => (s.loads[1]!.force = 40));
+      const pressed = edit(forced, (s) => (s.loads[1]!.pressure = 7));
+      h.note(forced, 1000);
+      h.note(pressed, 1000 + MERGE_MS - 1);
+      const first = h.undo(pressed, 4000)!;
+      const second = h.undo(first.setup, 4000)!;
+      expect([first, second, h.canUndo]).toEqual([
+        { setup: forced, label: "Last 2 Wert" },
+        { setup: base, label: "Last 2 Wert" },
+        false,
+      ]);
+    } finally {
+      alike.on = false;
+    }
+  });
+
   it("does not merge across the window, nor two loads, nor a force and a pressure", async () => {
     await setLanguage("de");
     const h = new StressHistory();
@@ -213,5 +245,20 @@ describe("the panel's undo tip and toast", () => {
     expect([d.undoLabel, d.redoLabel]).toEqual(["Body", "Load 1 force"]);
     expect(r.ui.redoStress()).toBe(true);
     expect(useToastStore().items.at(-1)?.message).toBe("Redid: Load 1 force");
+  });
+
+  it("stops rewriting the tip once the panels are disposed", async () => {
+    const r = rig();
+    r.ui.showStress();
+    r.ui.setStressBody("b1");
+    await nextTick();
+    const d = usePanelsStore().stress!;
+    d.setup.loads[0]!.force = 654;
+    await nextTick();
+    await setLanguage("de");
+    expect(d.undoLabel).toBe("Last 1 Kraft");
+    r.ui.dispose();
+    await setLanguage("ja");
+    expect(d.undoLabel).toBe("Last 1 Kraft");
   });
 });
