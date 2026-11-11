@@ -22,7 +22,14 @@ type Lines = ReadonlyMap<string, string>;
 const FILE_PATH = /(?:^|\/)([^/]+)\.json$/;
 
 function readFile(id: string, code: string, data: unknown, english: Lines | undefined): Lines | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  if (typeof data === "function") {
+    console.warn(`the ${code} language file of ${id} is not loaded, import the locales glob with { eager: true }`);
+    return null;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    console.warn(`the ${code} language file of ${id} is not a JSON object, it is ignored`);
+    return null;
+  }
   const entries = Object.entries(data);
   if (entries.length > MAX_PLUGIN_LINES || new TextEncoder().encode(JSON.stringify(data)).length > MAX_OVERRIDE_BYTES) {
     console.warn(`the ${code} language file of ${id} is too large, it is ignored`);

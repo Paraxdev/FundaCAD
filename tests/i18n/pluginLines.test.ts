@@ -339,6 +339,23 @@ describe("the limits on a plugin's own files", () => {
       await catalog.setLanguage(code);
       expect(text.t("a.b")).toBe("English");
     }
+    expect(warn.mock.calls.map((c) => String(c[0]).includes("not a JSON object"))).toEqual([true, true]);
+  });
+
+  it("warns once that a lazy glob is not loaded and falls back, for English and for one language", async () => {
+    const { catalog, pluginText } = make();
+    const lazy = () => Promise.resolve({ default: { "a.b": "Lazy" } });
+    const half = pluginText<Record<string, string>>("Acme.Rivets", {
+      "./locales/en.json": { "a.b": "English" },
+      "./locales/de.json": lazy,
+    });
+    const none = pluginText<Record<string, string>>("Acme.Gaskets", { "./locales/en.json": lazy });
+    await catalog.setLanguage("de");
+    expect([half.t("a.b"), half.t("a.b"), none.t("a.b"), none.t("a.b")]).toEqual(["English", "English", "a.b", "a.b"]);
+    expect(warn.mock.calls.map((c) => [String(c[0]).includes("eager"), String(c[0]).includes("Gaskets")])).toEqual([
+      [true, false],
+      [true, true],
+    ]);
   });
 
   it("never throws without any files", () => {
