@@ -144,6 +144,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   };
   const startFillet = () => startEdgeFeature("fillet");
+  /** Fillet on the edge the carry on just selected, closed when the step it rests on is undone. */
+  const startFilletOn = (restsOn: string | null) => startEdgeFeature("fillet", restsOn ? { restsOn } : undefined);
   const startChamfer = () => startEdgeFeature("chamfer");
   /** The edge selection handle was pressed (features/edgeNudge.ts): arm the same tool already holding the arrow. It
    *  opens on fillet, the arrow's own direction, since asking first would put a decision before the gesture; a
@@ -153,6 +155,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   const startPressPull = () => {
     if (toolBusy()) return;
     pressPull.start(committed);
+  };
+  const startPressPullOn = (restsOn: string | null) => {
+    if (toolBusy()) return;
+    pressPull.start(committed, restsOn ? { restsOn } : undefined);
   };
   /** The same hand-off for a selected face's arrow (features/faceNudge.ts); a face has one drag, so no default. */
   const grabFaceHandle = (x: number, y: number) => {
@@ -1920,10 +1926,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   return {
     pickPlane: pickPlaneInteractive,
     startFillet,
+    startFilletOn,
     startChamfer,
     grabEdgeHandle,
     grabFaceHandle,
     startPressPull,
+    startPressPullOn,
     startSketch,
     offsetPlane,
     createDatumPlane,

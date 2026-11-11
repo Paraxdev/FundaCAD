@@ -9,6 +9,7 @@ export function awaitFaceRows(
   wanted: string,
   take: (faces: PressPullFaces) => TreePickAnswer,
   end: () => void,
+  batch?: (run: () => void) => void,
 ): () => void {
   return awaitTreePick(
     (pick) => {
@@ -17,6 +18,6 @@ export function awaitFaceRows(
       return faces ? take(faces) : "The model is still building";
     },
     end,
-    { keepsOnRewind: true, keepsOnCommand: true },
+    { keepsOnRewind: true, keepsOnCommand: true, ...(batch ? { batch } : {}) },
   );
 }

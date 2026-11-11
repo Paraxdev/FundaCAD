@@ -6,7 +6,11 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
-import { peeksThrough } from "./pressPullPeek";
+import { carryTaker, carryWords, pickOfHit, type CarryCommit, type CarryHost } from "./carryOn";
+import { awaitTreePick, type TreePickAnswer } from "../ui/treePick";
+import { PARALLEL_COS, planarPushFaces, type PushFaces } from "./pushOutline";
+import { sweepPolylines } from "./sweepOutline";
+import { ToolOutline } from "./toolOutline";
 import {
   DimInput,
   type DimChoice,
@@ -17,6 +21,7 @@ import {
   type DimToggleDef,
 } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
+import { t } from "../i18n";
 import { gizmoMoveStep, taperStep } from "../viewport/gizmoStep";
 import { fmtLength, snap } from "../ui/units";
 import {
@@ -95,6 +100,14 @@ function inPlaneAxis(normal: THREE.Vector3): THREE.Vector3 {
 
 type Phase = "pick" | "drag";
 
+type PushRead =
+  | { kind: "unreadable" }
+  | { kind: "negative" }
+  | { kind: "neutral" }
+  | { kind: "stay" }
+  | { kind: "cancel" }
+  | { kind: "ready"; value: number; unverified: boolean; refused: boolean };
+
 const Y_AXIS = HANDLE_UP;
 
 const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
@@ -129,6 +142,11 @@ export class PressPullTool {
   private upTo: Selector | null = null; // "extrude up to this surface" target (else by distance)
   private pickingTarget = false; // waiting for the user to click the up-to target surface
   private releaseRows: (() => void) | null = null;
+  private restsOn: string | null = null;
+  /** Set by the app (app/carryOn.ts): the next face or edge pick finishes this push and goes on. */
+  carry: CarryHost | null = null;
+  private releaseCarryRows: (() => void) | null = null;
+  private carryLit = false;
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3(); // gizmo origin = the clicked point on the face
   private axis = new THREE.Vector3(0, 0, 1); // drag axis (unit) = face outward normal, or the outward radial on a round face
@@ -191,6 +209,10 @@ export class PressPullTool {
 
   private previewTimer: number | null = null;
   private unsubBuild: (() => void) | null = null;
+  private outline: ToolOutline | null = null;
+  private rigid: PushFaces | null = null;
+  private rowRun = false;
+  private unsubTint: (() => void) | null = null;
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
@@ -214,13 +236,15 @@ export class PressPullTool {
   }
 
   /** `opts.grabAt` arms from the pre-selection and starts scrubbing in the passive handle's own pointerdown
-   *  (features/faceNudge.ts); both derive the axis from the same selectedFacesForPressPull(). */
-  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number } }) {
+   *  (features/faceNudge.ts); both derive the axis from the same selectedFacesForPressPull(). `opts.restsOn` is the
+   *  step the picked face came from, so undoing it closes the tool. */
+  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number }; restsOn?: string }) {
     if (this.active) return;
     // Read before anything is installed: the direct entry needs the selection its handle was drawn for, or a rebuild
     // in between would arm a pick phase nobody asked for and hold toolBusy().
     const pre = this.viewport.selectedFacesForPressPull();
     if (opts?.grabAt && !pre) return;
+    this.restsOn = opts?.restsOn ?? null;
     this.active = true;
     this.phase = "pick";
     this.onDone = onDone;
@@ -234,8 +258,9 @@ export class PressPullTool {
       this.releaseRows = awaitFaceRows(
         this.viewport,
         "a face",
-        (faces) => (this.takeFaces(faces), true),
+        (faces) => this.takeRow(faces),
         () => this.cancel(),
+        (run) => this.takeRowRun(run),
       );
       setPrompt("Click a face · Ctrl-click adds more");
     }
@@ -245,12 +270,37 @@ export class PressPullTool {
     this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId, f.round ?? f.lead);
   }
 
+  private takeRow(f: PressPullFaces): TreePickAnswer {
+    if (this.phase !== "drag") return (this.takeFaces(f), true);
+    const id = f.faceIds[0]!;
+    if (f.bodyId !== this.bodyId) return t("pick.oneBody");
+    if (!this.faceIds.includes(id))
+      this.addFace({ selector: f.selectors[0]!, faceId: id, anchor: f.anchor, normal: f.normal });
+    return true;
+  }
+
+  // Rows offered together join one push as Ctrl-clicks would, so the row and carry sessions change hands after the run.
+  private takeRowRun(run: () => void) {
+    const waiting = this.phase === "pick";
+    this.rowRun = waiting;
+    try {
+      run();
+    } finally {
+      this.rowRun = false;
+      if (waiting && this.active && this.phase === "drag") {
+        this.dropRows();
+        this.armCarry();
+      }
+    }
+  }
+
   private dropRows() {
     this.releaseRows?.();
     this.releaseRows = null;
   }
 
   private beginStopPick() {
+    this.releaseCarry();
     this.pickingTarget = true;
     this.dim.hide(); // Enter must not commit a plain distance while picking
     this.clearPreviewTimer();
@@ -258,7 +308,7 @@ export class PressPullTool {
     if (this.enginePreviewOn) this.store.setPreview(null);
     this.enginePreviewOn = false;
     this.viewport.clearPressPullGhost();
-    this.viewport.setPeek(null);
+    this.outline?.hide();
     setPrompt("Click the face to stop at · Esc");
     this.releaseRows = awaitFaceRows(
       this.viewport,
@@ -274,6 +324,7 @@ export class PressPullTool {
     // Restore the distance field T-mode hid; left active it let Enter commit a plain distance mid-pick.
     this.showBox();
     this.refreshPreview(true);
+    this.armCarry();
   }
 
   private takeStop(f: PressPullFaces) {
@@ -330,6 +381,7 @@ export class PressPullTool {
     this.taperHovering = this.hitTaper(e.clientX, e.clientY);
     this.hovering = !this.taperHovering && this.hitGizmo(e.clientX, e.clientY);
     this.viewport.domElement.style.cursor = this.hovering || this.taperHovering ? "grab" : "default";
+    this.lightCarry(e.clientX, e.clientY, this.hovering || this.taperHovering);
   }
 
   private onDown(e: PointerEvent) {
@@ -368,32 +420,7 @@ export class PressPullTool {
       if (hit && hit.bodyId === this.bodyId) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const was = this.boxShape();
-        const curved = this.curve !== null;
-        this.faces.push(hit.selector);
-        this.faceIds.push(hit.faceId);
-        // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
-        this.axisAsk++;
-        this.holeAxis = null;
-        this.curve = null;
-        this.curveRound = null;
-        this.dim.setOptionHidden("direction", true);
-        if (this.direction === "axis") this.setDirection("normal");
-        if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
-        if (this.round && !this.inTangentRun()) this.dropRound();
-        if (this.resizing) {
-          this.mode = "auto";
-          this.taper = 0;
-        } else {
-          // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
-          this.anchor.copy(hit.anchor);
-          this.faceAnchor.copy(hit.anchor);
-          this.faceNormal.copy(hit.normal).normalize();
-          this.axis.copy(this.faceNormal);
-        }
-        if (was !== this.boxShape()) this.showBox();
-        else this.syncToggle();
-        this.refreshPreview(true);
+        this.addFace(hit);
       }
       return;
     }
@@ -442,14 +469,11 @@ export class PressPullTool {
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
-    // A clean click on another face extrudes up to it; empty space or one of its own faces commits. Never on a round
-    // face: a resize is not travelling anywhere.
-    const hit = this.resizing ? null : this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-    if (hit && !this.faceIds.includes(hit.faceId)) {
-      this.upTo = upToFace(hit, this.viewport.planarFace(hit.faceId));
-      this.commitUpTo();
-      return;
-    }
+    // A clean click on another face or an edge finishes the push and goes on from there, T is the way to stop at a
+    // face; empty space or one of its own faces just commits.
+    const hit = this.carriesOn() ? pickOfHit(this.viewport.pickEntity(e.clientX, e.clientY)) : null;
+    const own = hit?.kind === "face" && this.faceIds.includes(hit.faceId);
+    if (hit && !own && this.carry!.route(hit) !== "row") return;
     this.commit();
   }
 
@@ -473,6 +497,40 @@ export class PressPullTool {
     }
   }
 
+  private addFace(hit: { selector: Selector; faceId: number; anchor: THREE.Vector3; normal: THREE.Vector3 }) {
+    const was = this.boxShape();
+    const curved = this.curve !== null;
+    const before = this.faceNormal.clone();
+    this.faces.push(hit.selector);
+    this.faceIds.push(hit.faceId);
+    // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
+    this.axisAsk++;
+    this.holeAxis = null;
+    this.curve = null;
+    this.curveRound = null;
+    this.dim.setOptionHidden("direction", true);
+    if (this.direction === "axis") this.setDirection("normal");
+    if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
+    if (this.round && !this.inTangentRun()) this.dropRound();
+    if (this.resizing) {
+      this.mode = "auto";
+      this.taper = 0;
+    } else {
+      // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
+      this.anchor.copy(hit.anchor);
+      this.faceAnchor.copy(hit.anchor);
+      this.faceNormal.copy(hit.normal).normalize();
+      this.axis.copy(this.faceNormal);
+    }
+    // The model on screen may be a landed preview with the earlier faces moved, so only the new face is read off it.
+    const added = this.resizing || !this.rigid ? null : planarPushFaces(this.viewport, [hit.faceId], before);
+    this.rigid = added &&
+      this.rigid && { rings: [...this.rigid.rings, ...added.rings], marks: [...this.rigid.marks, ...added.marks] };
+    if (was !== this.boxShape()) this.showBox();
+    else this.syncToggle();
+    this.refreshPreview(true);
+  }
+
   private beginDrag(
     faces: Selector[],
     faceIds: number[],
@@ -481,7 +539,10 @@ export class PressPullTool {
     bodyId: string | null = null,
     round: RoundFace | null = null,
   ) {
-    this.dropRows();
+    if (!this.rowRun) {
+      this.dropRows();
+      this.armCarry();
+    }
     this.faces = faces;
     this.faceIds = faceIds;
     this.upTo = null;
@@ -500,6 +561,7 @@ export class PressPullTool {
     this.faceAnchor.copy(anchor);
     this.faceNormal.copy(normal).normalize();
     this.seedGuides(round, faceIds[0]);
+    this.rigid = this.resizing ? null : planarPushFaces(this.viewport, faceIds, this.faceNormal);
     this.direction = "normal";
     this.holeAxis = null;
     this.phase = "drag";
@@ -519,6 +581,7 @@ export class PressPullTool {
       if (st.building || !st.result || this.phase !== "drag") return;
       this.noteBuildOutcome(st);
     });
+    this.unsubTint ??= this.tintAfterPreview();
     this.promptNow();
     this.gesture.frame();
   }
@@ -869,17 +932,19 @@ export class PressPullTool {
       );
     }
     if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Up or Down steps · Esc");
-    if (this.faces.length > 1)
+    const on = this.carry ? ` · click to commit · ${carryWords.prompt()}` : " · click to commit";
+    if (this.faces.length > 1) {
       return setPrompt(
-        `${this.faces.length} faces · drag or type a distance · Up or Down steps · click to commit · Esc`,
+        `${this.faces.length} faces · drag or type a distance · Up or Down steps · T stops at a face${on} · Esc`,
       );
-    setPrompt("Drag or type a value, negative cuts · Up or Down steps · click a face to stop at it · Esc");
+    }
+    setPrompt(`Drag or type a value, negative cuts · Up or Down steps · T stops at a face${on} · Esc`);
   }
 
   /** Through the engine for every push, since neighbours slope and re-trim in ways no ghost can draw. `hold` keeps
    *  the last push that built while the kernel refuses this one; `now` skips the debounce. */
   private refreshPreview(now = false) {
-    this.syncPeek();
+    this.refreshOutline();
     this.refreshGhost();
     this.refreshRefusal();
     this.promptNow();
@@ -924,11 +989,64 @@ export class PressPullTool {
     this.previewTimer = null;
   }
 
-  private syncPeek() {
-    const f = this.pickingTarget || !this.faceIds.length ? null : this.buildFeature();
-    const cut = peeksThrough(f, this.mode);
-    const body = this.bodyId ?? this.viewport.faceIdToBodyId(this.faceIds[0] ?? -1);
-    this.viewport.setPeek(cut && body ? () => [body] : null);
+  /** The volume a rigid push of flat faces adds or takes away, over the engine's opaque body. */
+  private refreshOutline() {
+    const rigid = this.rigid;
+    const depth = Math.abs(this.value);
+    const along = this.axis.dot(this.faceNormal);
+    if (
+      !rigid ||
+      this.pickingTarget ||
+      this.upTo ||
+      this.resizing ||
+      this.neutral ||
+      Math.abs(this.taper) >= 0.05 ||
+      Math.abs(along) < PARALLEL_COS
+    ) {
+      this.outline?.hide();
+      return;
+    }
+    const n = this.faceNormal;
+    const dir = this.axis.clone().multiplyScalar(Math.sign(this.value));
+    const polylines = sweepPolylines({
+      rings: rigid.rings,
+      normal: [n.x, n.y, n.z],
+      axis: [dir.x, dir.y, dir.z],
+      stations: [
+        { along: 0, inset: 0 },
+        { along: depth, inset: 0 },
+      ],
+    });
+    this.outline ??= new ToolOutline(this.viewport);
+    this.outline.show(polylines, { cut: this.mode === "cut" || (this.mode === "auto" && this.value < 0) });
+  }
+
+  // A selection rides a rebuild by each face's old centroid, so the pushed faces are found again after each preview,
+  // where the last good model put them when the push was refused.
+  private tintAfterPreview(): () => void {
+    let started = false;
+    let shown: number | null = null;
+    // The store replays its current state on subscribing, only a build seen starting is ours to read
+    return this.store.onSessionBuild((s) => {
+      if (s.building) {
+        started = true;
+        return;
+      }
+      if (!started || !s.result) return;
+      const sent = s.previewBuilt?.find((f) => f.id === this.previewId);
+      const marks = this.rigid?.marks;
+      if (!sent || sent.type !== "press-pull" || !marks || this.phase !== "drag") return;
+      started = false;
+      if (!s.heldRefusal) shown = sent.distance as number;
+      if (shown == null) return;
+      const by = this.axis.clone().multiplyScalar(shown);
+      const onBody = this.bodyId ?? undefined;
+      const found = marks.flatMap((m) => {
+        const id = this.viewport.faceIdNear([m.x + by.x, m.y + by.y, m.z + by.z], 0, onBody);
+        return id == null ? [] : [id];
+      });
+      if (found.length) this.viewport.selectOnlyFaces(found);
+    });
   }
 
   private buildGizmo() {
@@ -1217,19 +1335,13 @@ export class PressPullTool {
     };
   }
 
-  private commit() {
-    if (this.phase !== "drag") return this.cancel();
+  /** The box and the preview's answer read as Enter would act on them. Reading may start the push the debounce held. */
+  private readCommit(): PushRead {
     const v = this.dim.getValue("distance");
     const typed = this.dim.isUserDriven("distance");
-    if (v == null && typed) {
-      // Committing the stale drag value instead of unreadable text would be a silent wrong number.
-      setPrompt("That number can't be read · Esc");
-      return;
-    }
-    if (typed && v != null && this.absolute && v < 0) {
-      this.dim.flag(this.negativeSize());
-      return;
-    }
+    // Committing the stale drag value instead of unreadable text would be a silent wrong number.
+    if (v == null && typed) return { kind: "unreadable" };
+    if (typed && v != null && this.absolute && v < 0) return { kind: "negative" };
     // A typed ∠ is the truth for the taper, the same rule the distance follows.
     const tv = this.dim.getValue("taper");
     if (tv != null && this.dim.isUserDriven("taper")) {
@@ -1243,27 +1355,42 @@ export class PressPullTool {
     } else {
       this.flushPreviewNow();
     }
-    if (this.neutral) {
-      // keep the tool alive: silently cancelling here read as "nothing happened"
-      setPrompt(
-        this.round
-          ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged`
-          : "Nothing to commit yet",
-      );
-      return;
-    }
+    if (this.neutral) return { kind: "neutral" };
     const k = featureKey(this.buildFeature());
+    const verdict = this.outcomes.verdict(k);
     const decision = commitDecision({
       value: this.size(),
-      verdict: this.outcomes.verdict(k),
+      verdict,
       settled: this.outcomes.settled(k),
       shown: this.shown,
       typed,
       meaningful: (x) => Math.abs(x) >= MIN_PUSH,
     });
-    if (decision.action === "stay") return this.promptNow();
-    if (decision.action === "cancel") return this.cancel();
-    this.value = decision.value;
+    if (decision.action !== "commit") return { kind: decision.action };
+    return { kind: "ready", value: decision.value, unverified: !!decision.unverified, refused: verdict === "refused" };
+  }
+
+  private commit() {
+    if (this.phase !== "drag") return this.cancel();
+    const read = this.readCommit();
+    if (read.kind === "unreadable") return setPrompt("That number can't be read · Esc");
+    if (read.kind === "negative") return void this.dim.flag(this.negativeSize());
+    if (read.kind === "neutral") {
+      // keep the tool alive: silently cancelling here read as "nothing happened"
+      return setPrompt(
+        this.round
+          ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged`
+          : "Nothing to commit yet",
+      );
+    }
+    if (read.kind === "stay") return this.promptNow();
+    if (read.kind === "cancel") return this.cancel();
+    const { id, reselect } = this.write(read);
+    if (reselect) this.reselectAfterBuild(id, reselect);
+  }
+
+  private write(read: Extract<PushRead, { kind: "ready" }>) {
+    this.value = read.value;
     const feature = this.buildFeature();
     // Drop the live preview before the real add: it carries the same id, so both would duplicate it.
     if (this.enginePreviewOn) {
@@ -1275,10 +1402,71 @@ export class PressPullTool {
         ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
         : null;
     this.store.addFeature(feature, undefined, this.bindings(feature));
-    if (decision.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
+    if (read.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
     this.onDone?.(feature.id);
-    if (reselect) this.reselectAfterBuild(feature.id, reselect);
+    return { id: feature.id, reselect };
+  }
+
+  /** Only in the drag phase and outside the T pick, where the next face is the stop. */
+  private carriesOn(): boolean {
+    return !!this.carry && this.phase === "drag" && !this.pickingTarget;
+  }
+
+  carryBlocked(): string | null {
+    if (!this.dim.accepts("distance") || !this.dim.accepts("taper")) return carryWords.badValue();
+    return this.whyNotCarry(this.readCommit());
+  }
+
+  private whyNotCarry(read: PushRead): string | null {
+    switch (read.kind) {
+      case "unreadable":
+        return carryWords.badValue();
+      case "negative":
+        return carryWords.refused(this.negativeSize());
+      case "stay":
+      case "cancel":
+        return carryWords.refused(this.outcomes.refusal ?? "");
+      case "ready":
+        if (read.refused) return carryWords.refused(this.outcomes.refusal ?? "");
+        return read.unverified ? carryWords.wait() : null;
+      case "neutral":
+        return null;
+    }
+  }
+
+  commitForCarry(): CarryCommit {
+    const read = this.readCommit();
+    const why = this.whyNotCarry(read);
+    if (why) return { kind: "stayed", why };
+    if (read.kind !== "ready") {
+      this.cancel();
+      return { kind: "nothing" };
+    }
+    // The carried selection is the next tool's, a reselect of the pushed face would overwrite it.
+    return { kind: "added", id: this.write(read).id };
+  }
+
+  private armCarry() {
+    this.releaseCarry();
+    if (!this.carry) return;
+    this.releaseCarryRows = awaitTreePick(carryTaker(this, this.carry, this.viewport), () => this.cancel(), {
+      keepsOnRewind: true,
+      keepsOnCommand: true,
+    });
+  }
+
+  private releaseCarry() {
+    this.releaseCarryRows?.();
+    this.releaseCarryRows = null;
+    if (this.carryLit) this.viewport.hoverEntity(null);
+    this.carryLit = false;
+  }
+
+  private lightCarry(x: number, y: number, onHandle: boolean) {
+    const lit = !onHandle && this.carriesOn() ? this.viewport.pickEntity(x, y) : null;
+    if (lit || this.carryLit) this.viewport.hoverEntity(lit ?? null);
+    this.carryLit = !!lit;
   }
 
   private bindings(feature: Feature): SketchBinding[] {
@@ -1320,6 +1508,10 @@ export class PressPullTool {
     this.onDone?.(null);
   }
 
+  dependsOn(): readonly string[] {
+    return this.restsOn ? [this.restsOn] : [];
+  }
+
   /** A push dragged or typed that Enter would write. */
   get pending(): boolean {
     return this.active && this.phase === "drag" && !this.pickingTarget && !this.neutral;
@@ -1342,16 +1534,21 @@ export class PressPullTool {
 
   private cleanup() {
     this.dropRows();
+    this.releaseCarry();
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
     this.clearPreviewTimer();
     this.unsubBuild?.();
     this.unsubBuild = null;
+    this.unsubTint?.();
+    this.unsubTint = null;
     this.outcomes.clear();
     this.toggleKind = null;
     this.viewport.clearPressPullGhost();
-    this.viewport.setPeek(null);
+    this.outline?.dispose();
+    this.outline = null;
+    this.rigid = null;
     if (this.enginePreviewOn) {
       this.store.setPreview(null);
       this.enginePreviewOn = false;
@@ -1366,6 +1563,7 @@ export class PressPullTool {
     this.viewport.clearHover();
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.restsOn = null;
     this.grabbing = false;
     this.taperGrabbing = false;
     this.taperHovering = false;

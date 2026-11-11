@@ -220,7 +220,7 @@ function extrude(name: "taper"): Opened {
     sketchId: "s1",
     interior3D: new THREE.Vector3(0, 0, 0),
     plane: { n: new THREE.Vector3(0, 0, 1), plane, to2D: () => new THREE.Vector2(), to3D: () => new THREE.Vector3() },
-    region: { loop: [] },
+    region: { loop: [], holes: [] },
   };
   let selected: unknown[] = [area];
   const overlay = lenient({

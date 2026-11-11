@@ -62,6 +62,7 @@ import { startWhatsNew } from "../ui/whatsNew";
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
 import { safeMode } from "../ui/safeMode";
+import { installCarryOn } from "./carryOn";
 import { closeToolOnLostStep, createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
@@ -569,6 +570,7 @@ export function mountUi(e: Engine): void {
   e.store.onBuild((s) => e.geometryBrowser.buildChanged(s));
   installSketchStateBridge(e);
   installCanvasPick(e);
+  installCarryOn(e);
   installViewSummary(e);
   installToolFocus(e);
   installKeyboard(e);

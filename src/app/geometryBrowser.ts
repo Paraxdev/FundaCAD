@@ -323,11 +323,16 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   }
 
   // Each row goes to the waiting tool in turn, as clicks in the view would, and what it took is spoken by the route.
+  // An open tool's preview holds the rows of the model before it, which never catch up while it stays open
+  const waitsOnTool = () =>
+    (e.store.buildState.previewBuilt?.length ?? 0) > 0 ? t("geometry.list.waitsOnTool") : null;
+  const rowChanged = () => waitsOnTool() ?? ROW_CHANGED;
+
   function offerRows(rows: readonly GeometryRow[]): string | null {
     const offers: NamedPick[] = [];
     for (const row of rows) {
       const pick = toolPickOf(row);
-      if (!pick) return ROW_CHANGED;
+      if (!pick) return rowChanged();
       offers.push({
         pick,
         get name() {
@@ -505,7 +510,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       const blocked = pickBlocked();
       if (blocked) return blocked;
       const refs = rows.map(refOf);
-      if (refs.some((r) => r === null)) return ROW_CHANGED;
+      if (refs.some((r) => r === null)) return rowChanged();
       e.dropBodyGizmo();
       // applyPicks leaves the policy alone, and with Bodies still set the toolbar would keep showing it.
       if (e.viewport.policy === "bodies") e.handleAction("selmode-faces");
@@ -520,6 +525,14 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
 
     /** Hands these rows to the waiting tool and says what it took. The reason in words when a row is stale. */
     offer: offerRows,
+
+    waitsOnTool,
+
+    /** The open tool's words once its preview moved the listed body, whose face rows then name no drawn face. */
+    rowsHeld(): string | null {
+      const row = list.kind === "faces" ? list.rows[0] : undefined;
+      return row && refOf(row) === null ? waitsOnTool() : null;
+    },
 
     /** True while the list's own pick is applied, not a step's. */
     pickingRows: () => pickingRows,

@@ -43,7 +43,8 @@
 - Ctrl+Z in a tool first takes back what you typed in its field.
 - Press/Pull on a round picked with the walls it meets carries the round along at its own radius, instead of refusing, whichever you click first.
 - Press/Pull on a round alone changes its radius, so it stays smooth with its walls.
-- Press/Pull shows the body see-through only in Cut.
+- Extrude and Press/Pull show the body solid while open, with an outline of what the step adds or takes away.
+- Once an extrude or a push has its value, a click on a face or an edge finishes it and starts Press/Pull or Fillet there, with no Accept. In Press/Pull, T is now the way to stop at a face.
 - Shell refuses a face picked through its opening, and Shell across several bodies keeps each face on its own body, also when you edit it again.
 - Undo, or any change that removes the step an open tool is editing, closes that tool.
 - A sketch far from the origin that makes an empty body now reports a failure.

@@ -104,6 +104,7 @@ function fakeStore(reply: FaceAxisReply) {
     addFeature: () => {},
     verifyCommit: () => {},
     onBuild: (_fn: (s: RebuildState) => void) => () => {},
+    onSessionBuild: (_fn: (s: RebuildState) => void) => () => {},
     faceAxis: async () => reply,
   };
   return { store: store as unknown as DocumentStore, previews };

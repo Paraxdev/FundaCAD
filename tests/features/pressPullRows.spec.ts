@@ -7,10 +7,12 @@ import { PressPullTool } from "../../src/features/pressPullTool";
 import {
   endCommandedPick,
   endRewoundPick,
+  offerPicks,
   resetTreePicks,
   routeTreeClick,
   treePickWaiting,
 } from "../../src/ui/treePick";
+import { t } from "../../src/i18n";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { PressPullFaces } from "../../src/viewport/faceAnalysis";
@@ -69,6 +71,7 @@ function rig(selected: number[] = []) {
       id === ROUND ? null : { normal: new THREE.Vector3(0, 0.6, 0.8), origin: new THREE.Vector3(...point(id)) },
     roundFaceAt: (id: number) => (id === ROUND ? bore : null),
     faceTriangles: () => [tri],
+    edgesOfFaces: () => [],
     faceIdNear: () => null,
     faceIdToBodyId: () => "b2",
     setPeek: () => {},
@@ -83,6 +86,7 @@ function rig(selected: number[] = []) {
     addFeature: (f: Feature) => added.push(f),
     verifyCommit: () => {},
     onBuild: (_fn: (s: RebuildState) => void) => () => {},
+    onSessionBuild: (_fn: (s: RebuildState) => void) => () => {},
     faceAxis: async () => ({ reason: "no axis" }),
   };
   return { vp: vp as unknown as Viewport, store: store as unknown as DocumentStore, added };
@@ -186,6 +190,53 @@ describe("Press/Pull takes a face row", () => {
       "That row is an edge, this step needs a face",
       "pick",
       true,
+    ]);
+    tool.cancel();
+  });
+
+  it("two face rows offered at once both join one push, and the next click carries on from it", () => {
+    const { tool } = begin();
+    const after = vi.fn();
+    tool.carry = { route: vi.fn(), after };
+    const said: string[] = [];
+    const d = { ...hints(), say: (text: string) => void said.push(text) };
+    offerPicks(
+      [
+        { pick: { kind: "face", faceId: SLANT }, name: "Flat face 7" },
+        { pick: { kind: "face", faceId: OTHER }, name: "Flat face 9" },
+      ],
+      d,
+    );
+    expect(seen(tool)).toMatchObject({ phase: "drag", faces: [face(SLANT), face(OTHER)], faceIds: [SLANT, OTHER] });
+    expect([after.mock.calls, d.said, said, treePickWaiting()]).toEqual([
+      [],
+      [],
+      [t("pick.doneRun", { n: 2, done: "other" })],
+      true,
+    ]);
+    tool.cancel();
+  });
+
+  it("of two face rows offered at once, one on another body is refused after the first is taken", () => {
+    const { tool, vp } = begin();
+    const refused: string[] = [];
+    const own = vp.facesForPressPull.bind(vp);
+    vp.facesForPressPull = (ids) => ({ ...own(ids)!, ...(ids[0] === OTHER ? { bodyId: "b3" } : {}) });
+    offerPicks(
+      [
+        { pick: { kind: "face", faceId: SLANT }, name: "Flat face 7" },
+        { pick: { kind: "face", faceId: OTHER }, name: "Flat face 9" },
+      ],
+      { ...hints(), hint: (text: string) => void refused.push(text), say: () => {} },
+    );
+    expect([seen(tool).faceIds, refused]).toEqual([
+      [SLANT],
+      [
+        t("pick.takenThenRefused", {
+          taken: t("pick.done", { name: "Flat face 7", done: "other" }),
+          refusal: t("pick.oneBody"),
+        }),
+      ],
     ]);
     tool.cancel();
   });

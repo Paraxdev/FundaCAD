@@ -150,3 +150,13 @@ export const land = async (a: Ask, r: TopologyReply | null) => {
   await settle();
 };
 export const keys = (rows: readonly { key: string }[]) => rows.map((r) => r.key);
+
+/** An open tool's preview on screen, the way an open Extrude leaves the build state. Returns the undo. */
+export function previewOnScreen(store: DocumentStore): () => void {
+  const real = Object.getOwnPropertyDescriptor(DocumentStore.prototype, "buildState")!.get!;
+  Object.defineProperty(store, "buildState", {
+    configurable: true,
+    get: () => ({ ...real.call(store), previewBuilt: [{ id: "x9", type: "extrude" }] }),
+  });
+  return () => void delete (store as { buildState?: unknown }).buildState;
+}

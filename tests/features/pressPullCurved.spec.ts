@@ -73,6 +73,8 @@ function fakeViewport(average: Vec3, facet: Vec3) {
     }),
     roundFaceAt: () => null,
     faceTriangles: () => [tri],
+    planarFace: () => null,
+    edgesOfFaces: () => [],
     faceIdNear: () => 7,
     faceIdToBodyId: () => "b1",
     setPeek: () => {},

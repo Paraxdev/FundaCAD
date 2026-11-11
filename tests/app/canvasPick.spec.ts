@@ -16,7 +16,8 @@ import {
   type TreePick,
   type TreePickAnswer,
 } from "../../src/ui/treePick";
-import { edge, land, result, rig, topology } from "./geometryBrowserRig";
+import { edge, land, previewOnScreen, result, rig, topology } from "./geometryBrowserRig";
+import { t } from "../../src/i18n";
 
 vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {}, dismissToastsSaying: () => {} }));
 vi.mock("../../src/ui/announce", async (actual) => ({
@@ -193,6 +194,32 @@ describe("stepping", () => {
     expect(r.viewport.hoverPick.mock.calls.at(-1)).toEqual([face(1)]);
   });
 
+  it("says the list waits on the open tool for a body with no rows under its preview, and none without it", async () => {
+    const r = await ready(0);
+    const back = previewOnScreen(r.store);
+    key("]");
+    expect(lastSaid()).toBe(t("geometry.list.waitsOnTool"));
+    back();
+    key("]");
+    expect(lastSaid()).toContain("No faces");
+  });
+
+  it("says the list waits on the open tool from the first step once its preview moved the listed body", async () => {
+    const r = await ready();
+    const real = r.store.buildState;
+    const held = (over: object) =>
+      Object.defineProperty(r.store, "buildState", {
+        configurable: true,
+        get: () => ({ ...real, previewBuilt: [{ id: "x9", type: "press-pull" }], ...over }),
+      });
+    held({ result: result([{ id: "body1", etag: "e7" }]) });
+    key("]");
+    expect([lastSaid(), r.list.litRow]).toEqual([t("geometry.list.waitsOnTool"), null]);
+    held({});
+    key("]");
+    expect(r.list.litRow?.key).toBe("f:body1:0");
+  });
+
   it("refuses in words while the model is building and leaves the cursor", async () => {
     const r = await ready();
     key("]");
@@ -229,6 +256,16 @@ describe("the first step before the list is there", () => {
     expect(r.list.litRow).toBeNull();
     expect(r.list.error).toBeTruthy();
     expect(lastSaid()).toBe(r.list.error);
+  });
+
+  it("says the list waits on the open tool instead of listing while a preview holds it", async () => {
+    const r = rig();
+    install(r);
+    await r.build();
+    previewOnScreen(r.store);
+    key("]");
+    expect(lastSaid()).toBe(t("geometry.list.waitsOnTool"));
+    expect(r.list.litRow).toBeNull();
   });
 
   it("drops the wait when a tool took the screen before the reply", async () => {
