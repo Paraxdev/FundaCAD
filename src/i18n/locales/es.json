@@ -880,6 +880,7 @@
   "tool.vertical": "Vertical",
   "tool.zebra": "Cebra",
   "units.caption.spoken": "{unit, select, newton {{one, select, yes {newton} other {newtons}}} megapascal {{one, select, yes {megapascal} other {megapascales}}} density {{one, select, yes {gramo por centímetro cúbico} other {gramos por centímetro cúbico}}} ms {{one, select, yes {milisegundo} other {milisegundos}}} other {por ciento}}",
+  "units.measure.spoken": "{unit, select, mm {{one, select, yes {milímetro} other {milímetros}}} cm {{one, select, yes {centímetro} other {centímetros}}} m {{one, select, yes {metro} other {metros}}} in {{one, select, yes {pulgada} other {pulgadas}}} ft {{one, select, yes {pie} other {pies}}} um {{one, select, yes {micrómetro} other {micrómetros}}} thou {{one, select, yes {thou} other {thou}}} deg {{one, select, yes {grado} other {grados}}} other {{one, select, yes {radián} other {radianes}}}}",
   "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} centímetro cuadrado} other {{amount} centímetros cuadrados}}} in {{n, plural, one {{amount} pulgada cuadrada} other {{amount} pulgadas cuadradas}}} other {{n, plural, one {{amount} milímetro cuadrado} other {{amount} milímetros cuadrados}}}}",
   "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centímetro} other {{amount} centímetros}}} in {{n, plural, one {{amount} pulgada} other {{amount} pulgadas}}} other {{n, plural, one {{amount} milímetro} other {{amount} milímetros}}}}",
   "units.spoken.minus": "menos {amount}",

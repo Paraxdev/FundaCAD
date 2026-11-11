@@ -505,26 +505,52 @@ describe("fieldNumber / fieldError", () => {
 });
 
 describe("spokenUnit", () => {
-  it("lists a spoken name for every measure unit", () => {
-    expect(UNITS.map((u) => [u.id, u.spoken.short, u.spoken.one, u.spoken.many])).toEqual([
-      ["mm", "mm", "millimetre", "millimetres"],
-      ["cm", "cm", "centimetre", "centimetres"],
-      ["m", "m", "metre", "metres"],
-      ["in", "in", "inch", "inches"],
-      ["ft", "ft", "foot", "feet"],
-      ["um", "µm", "micrometre", "micrometres"],
+  it("names every measure unit in English, singular, plural and short", () => {
+    expect(
+      UNITS.map((u) => [u.id, spokenUnit(u.id, true, true), spokenUnit(u.id, true), spokenUnit(u.id, false)]),
+    ).toEqual([
+      ["mm", "millimetre", "millimetres", "mm"],
+      ["cm", "centimetre", "centimetres", "cm"],
+      ["m", "metre", "metres", "m"],
+      ["in", "inch", "inches", "in"],
+      ["ft", "foot", "feet", "ft"],
+      ["um", "micrometre", "micrometres", "µm"],
       ["thou", "thou", "thou", "thou"],
-      ["deg", "deg", "degree", "degrees"],
-      ["rad", "rad", "radian", "radians"],
+      ["deg", "degree", "degrees", "deg"],
+      ["rad", "radian", "radians", "rad"],
     ]);
+    for (const u of UNITS) expect(spokenUnit(u.id, false, true)).toBe(spokenUnit(u.id, false));
   });
 
-  it("says the plural, the singular with one, and the short form when not in full", () => {
-    for (const u of UNITS) {
-      expect(spokenUnit(u.id, true)).toBe(u.spoken.many);
-      expect(spokenUnit(u.id, true, true)).toBe(u.spoken.one);
-      expect(spokenUnit(u.id, false)).toBe(u.spoken.short);
-      expect(spokenUnit(u.id, false, true)).toBe(u.spoken.short);
+  it("speaks the full unit in the chosen language and keeps the short form a symbol", async () => {
+    const said = () =>
+      ["cm", "ft", "deg", "rad"].map((id) => [spokenUnit(id, true, true), spokenUnit(id, true), spokenUnit(id, false)]);
+    try {
+      await setLanguage("de");
+      expect(said()).toEqual([
+        ["Zentimeter", "Zentimeter", "cm"],
+        ["Fuß", "Fuß", "ft"],
+        ["Grad", "Grad", "deg"],
+        ["Radiant", "Radiant", "rad"],
+      ]);
+      await setLanguage("ja");
+      expect(said()).toEqual([
+        ["センチメートル", "センチメートル", "cm"],
+        ["フィート", "フィート", "ft"],
+        ["度", "度", "deg"],
+        ["ラジアン", "ラジアン", "rad"],
+      ]);
+      await setLanguage("fr");
+      expect(said()).toEqual([
+        ["centimètre", "centimètres", "cm"],
+        ["pied", "pieds", "ft"],
+        ["degré", "degrés", "deg"],
+        ["radian", "radians", "rad"],
+      ]);
+      await setLanguage("en");
+      expect(said()[2]).toEqual(["degree", "degrees", "deg"]);
+    } finally {
+      await setLanguage("system");
     }
   });
 

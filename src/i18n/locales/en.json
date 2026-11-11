@@ -880,6 +880,7 @@
   "tool.vertical": "Vertical",
   "tool.zebra": "Zebra",
   "units.caption.spoken": "{unit, select, newton {{one, select, yes {newton} other {newtons}}} megapascal {{one, select, yes {megapascal} other {megapascals}}} density {{one, select, yes {gram per cubic centimetre} other {grams per cubic centimetre}}} ms {{one, select, yes {millisecond} other {milliseconds}}} other {percent}}",
+  "units.measure.spoken": "{unit, select, mm {{one, select, yes {millimetre} other {millimetres}}} cm {{one, select, yes {centimetre} other {centimetres}}} m {{one, select, yes {metre} other {metres}}} in {{one, select, yes {inch} other {inches}}} ft {{one, select, yes {foot} other {feet}}} um {{one, select, yes {micrometre} other {micrometres}}} thou {{one, select, yes {thou} other {thou}}} deg {{one, select, yes {degree} other {degrees}}} other {{one, select, yes {radian} other {radians}}}}",
   "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} square centimetre} other {{amount} square centimetres}}} in {{n, plural, one {{amount} square inch} other {{amount} square inches}}} other {{n, plural, one {{amount} square millimetre} other {{amount} square millimetres}}}}",
   "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centimetre} other {{amount} centimetres}}} in {{n, plural, one {{amount} inch} other {{amount} inches}}} other {{n, plural, one {{amount} millimetre} other {{amount} millimetres}}}}",
   "units.spoken.minus": "minus {amount}",

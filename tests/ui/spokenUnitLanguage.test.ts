@@ -66,12 +66,12 @@ describe("spoken unit captions in the chosen language", () => {
     }
   });
 
-  it("a measure stays with the field lane, text it does not know comes back as written", async () => {
+  it("a measure is said in the language and keeps its symbol, text it does not know comes back as written", async () => {
     await setLanguage("de");
-    expect([spokenUnit("mm", true), spokenUnit("mm", true, true), spokenUnit("mm", false)]).toEqual([
-      "millimetres",
-      "millimetre",
-      "mm",
+    expect([spokenUnit("in", true), spokenUnit("in", true, true), spokenUnit("in", false)]).toEqual([
+      "Zoll",
+      "Zoll",
+      "in",
     ]);
     expect([spokenUnit("samples", true), spokenUnit("constructor", true), spokenUnit("kN", true, true)]).toEqual([
       "samples",

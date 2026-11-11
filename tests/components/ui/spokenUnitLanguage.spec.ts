@@ -24,7 +24,7 @@ const wordOf = (f: ReturnType<typeof uiNumberInput>) =>
   f.root.querySelector(`#${f.input.getAttribute("aria-describedby")}`)?.textContent;
 
 describe("a DOM number box says its unit in the chosen language", () => {
-  it("follows a switch for a shown box and for one not on the page yet, and a measure keeps its words", async () => {
+  it("follows a switch for a shown box and for one not on the page yet, a measure too", async () => {
     const force = uiNumberInput({ tip: "Force", unit: "N" });
     document.body.append(force.root);
     const stress = uiNumberInput({ tip: "Stress", unit: "MPa" });
@@ -32,9 +32,9 @@ describe("a DOM number box says its unit in the chosen language", () => {
     const said = () => [force, stress, width].map(wordOf);
     expect(said()).toEqual(["newtons", "megapascals", "millimetres"]);
     await setLanguage("de");
-    expect(said()).toEqual(["Newton", "Megapascal", "millimetres"]);
+    expect(said()).toEqual(["Newton", "Megapascal", "Millimeter"]);
     await setLanguage("ja");
-    expect(said()).toEqual(["ニュートン", "メガパスカル", "millimetres"]);
+    expect(said()).toEqual(["ニュートン", "メガパスカル", "ミリメートル"]);
     const late = uiNumberInput({ tip: "Density", unit: "g/cm³" });
     expect(wordOf(late)).toBe("グラム毎立方センチメートル");
     await setLanguage("en");

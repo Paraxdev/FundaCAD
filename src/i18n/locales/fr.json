@@ -880,6 +880,7 @@
   "tool.vertical": "Vertical",
   "tool.zebra": "Zébrure",
   "units.caption.spoken": "{unit, select, newton {{one, select, yes {newton} other {newtons}}} megapascal {{one, select, yes {mégapascal} other {mégapascals}}} density {{one, select, yes {gramme par centimètre cube} other {grammes par centimètre cube}}} ms {{one, select, yes {milliseconde} other {millisecondes}}} other {pour cent}}",
+  "units.measure.spoken": "{unit, select, mm {{one, select, yes {millimètre} other {millimètres}}} cm {{one, select, yes {centimètre} other {centimètres}}} m {{one, select, yes {mètre} other {mètres}}} in {{one, select, yes {pouce} other {pouces}}} ft {{one, select, yes {pied} other {pieds}}} um {{one, select, yes {micromètre} other {micromètres}}} thou {{one, select, yes {thou} other {thou}}} deg {{one, select, yes {degré} other {degrés}}} other {{one, select, yes {radian} other {radians}}}}",
   "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} centimètre carré} other {{amount} centimètres carrés}}} in {{n, plural, one {{amount} pouce carré} other {{amount} pouces carrés}}} other {{n, plural, one {{amount} millimètre carré} other {{amount} millimètres carrés}}}}",
   "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centimètre} other {{amount} centimètres}}} in {{n, plural, one {{amount} pouce} other {{amount} pouces}}} other {{n, plural, one {{amount} millimètre} other {{amount} millimètres}}}}",
   "units.spoken.minus": "moins {amount}",
