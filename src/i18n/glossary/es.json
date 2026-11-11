@@ -370,6 +370,14 @@
     {
       "en": "default",
       "text": "predeterminado"
+    },
+    {
+      "en": "conflict",
+      "text": "conflicto"
+    },
+    {
+      "en": "replace",
+      "text": "reemplazar"
     }
   ]
 }

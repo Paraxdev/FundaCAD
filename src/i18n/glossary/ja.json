@@ -367,6 +367,14 @@
     {
       "en": "default",
       "text": "デフォルト"
+    },
+    {
+      "en": "conflict",
+      "text": "競合"
+    },
+    {
+      "en": "replace",
+      "text": "置き換える"
     }
   ]
 }

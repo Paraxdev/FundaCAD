@@ -375,6 +375,14 @@
     {
       "en": "default",
       "text": "Standard"
+    },
+    {
+      "en": "conflict",
+      "text": "Konflikt"
+    },
+    {
+      "en": "replace",
+      "text": "Ersetzen"
     }
   ]
 }

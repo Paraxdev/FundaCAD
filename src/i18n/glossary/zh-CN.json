@@ -367,6 +367,14 @@
     {
       "en": "default",
       "text": "默认"
+    },
+    {
+      "en": "conflict",
+      "text": "冲突"
+    },
+    {
+      "en": "replace",
+      "text": "替换"
     }
   ]
 }

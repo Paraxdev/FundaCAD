@@ -363,6 +363,14 @@
     {
       "en": "default",
       "text": "par défaut"
+    },
+    {
+      "en": "conflict",
+      "text": "conflit"
+    },
+    {
+      "en": "replace",
+      "text": "remplacer"
     }
   ]
 }
