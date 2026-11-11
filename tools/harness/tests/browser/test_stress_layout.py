@@ -43,11 +43,13 @@ def case(light: bool, *values):
 
 
 def wanted(request, keys) -> set:
-    """What the selected tests that use this fixture read, from their parameters, so a run measures only that."""
+    """What the selected tests that use this fixture read, from their parameters, so a run measures only that.
+
+    Other modules have fixtures of the same name with other parameters, so only this module's tests count."""
     return {
         k
         for item in request.session.items
-        if request.fixturename in getattr(item, "fixturenames", ())
+        if getattr(item, "module", None) is request.module and request.fixturename in getattr(item, "fixturenames", ())
         for k in keys(item.callspec.params if hasattr(item, "callspec") else {})
     }
 
