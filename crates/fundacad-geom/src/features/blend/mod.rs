@@ -1,6 +1,7 @@
 //! Fillets and chamfers, blends.py. One kernel call on the whole group first, on a copy. When that refuses the
 //! edges go one at a time in canonical order, and one that still refuses fails saying whether a smaller size builds.
 
+pub mod apex;
 pub mod eval;
 pub mod ops;
 pub mod overlap;
@@ -80,6 +81,8 @@ pub enum Misfit {
     /// It would carve away the face line the blend on a neighbouring edge
     /// rests on.
     Overlap,
+    /// The patch that closes a corner where four or more chamfers meet would bulge out of the body.
+    Corner,
 }
 
 impl Misfit {
@@ -112,6 +115,7 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
         Misfit::Mixed => "it would run off a face on part of the edge only",
         Misfit::Split => "it would cut the body in pieces",
         Misfit::Overlap => &neighbour,
+        Misfit::Corner => "the patch that closes the corner where the chamfers meet would bulge out through the faces",
     };
     let head = format!(
         "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
@@ -121,7 +125,7 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
     // At the limit the ball ends exactly on a face's edge and the kernel leaves a sliver face, so the offer stays
     // a hair below it. A split's or an overlap's limit is a size that built, already on this grid.
     let shown = |v: f64| {
-        let v = if matches!(why, Misfit::Split | Misfit::Overlap) { v + 1e-6 } else { v - 1e-4 };
+        let v = if matches!(why, Misfit::Split | Misfit::Overlap | Misfit::Corner) { v + 1e-6 } else { v - 1e-4 };
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
         (v * step).floor() / step
     };
@@ -793,6 +797,46 @@ fn smooth_size(size: f64, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
         .find(|&v| checkpoint().is_ok() && builds(v))
 }
 
+/// The largest size under `size`, on the grid a refusal offers sizes on, that `builds` takes. A `quick` search tries
+/// only the top one. The kernel fails sizes in no order, so the bisection offers only a size that built.
+fn kernel_size(size: f64, quick: bool, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
+    let on_grid = |v: f64| {
+        let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+        (v * step + 1e-6).floor() / step
+    };
+    let step = if size > 1.0 + 1e-9 { 100.0 } else { 1000.0 };
+    let top = ((size * step - 1e-6).ceil() - 1.0) / step;
+    if top <= 0.0 || checkpoint().is_err() {
+        return None;
+    }
+    if builds(top) {
+        return Some(top);
+    }
+    if quick {
+        return None;
+    }
+    let (mut lo, mut hi, mut best) = (0.0, top, None);
+    for _ in 0..KERNEL_SIZE_STEPS {
+        if checkpoint().is_err() {
+            break;
+        }
+        let mid = on_grid(0.5 * (lo + hi));
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if builds(mid) {
+            (lo, best) = (mid, Some(mid));
+        } else {
+            hi = mid;
+        }
+    }
+    best
+}
+
+/// Builds the bisection may try, by count and not by time, so the size offered is the same on a slow or busy
+/// machine. Fourteen halvings reach the 0.01 grid under 163.84.
+const KERNEL_SIZE_STEPS: usize = 14;
+
 /// A blend over an edge whose faces turn tangent that came out rippled, or did not build. `found` is `None` when
 /// no smaller size was tried, and `Some(None)` when none tried built smooth.
 fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option<Option<f64>>) -> Fail {
@@ -859,7 +903,7 @@ fn blend_edges(
         let edges = drop_seams(&body_shape, sels, edges, label)?;
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
-        let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
+        let misfit: std::cell::Cell<Option<(Misfit, Fits, [f64; 3])>> = std::cell::Cell::new(None);
         let ends = smooth::fade_ends(&body_shape, &edges);
         let fades = !ends.is_empty();
         let gauge = fades.then(|| smooth::Gauge::new(&body_shape, &edges, ends, ball, blend_size));
@@ -888,7 +932,7 @@ fn blend_edges(
                     kept
                 }
                 Err(SectionErr::TooLarge { why, fits, at }) => {
-                    misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
+                    misfit.set(Some((why, fits, at)));
                     None
                 }
                 Err(_) => None,
@@ -949,6 +993,56 @@ fn blend_edges(
             let found = (!draft).then(|| smooth_size(blend_size, &builds_smooth));
             uneven_error(label, &body_name, blend_size, rippled.get(), found)
         };
+        let apex = (label == "Chamfer").then(|| apex::convex_apex(&body_shape, &edges)).flatten();
+        let meeting = |at: [f64; 3]| {
+            let at = DVec3::from(at);
+            edges.iter().filter(|e| vertex_points(e).iter().any(|&v| DVec3::from(v).distance(at) < 1e-3)).count()
+        };
+        // Only at four edges does OCCT's patch run through the setback meets, at eight it keeps most of the spike.
+        let capped_apex = apex.is_some_and(|at| meeting(at) == 4);
+        let kernel_builds = |size: f64| {
+            use crate::kernel::{count, Kind};
+            let capped = capped_apex
+                && section.is_some_and(|sec| {
+                    sec(&body_shape, &edges, size).is_ok_and(|out| {
+                        still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
+                    })
+                });
+            capped
+                || ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
+                    op(&b, &es, size).is_ok_and(|out| {
+                        !overlap::folds_over_itself(&b, &out, size)
+                            && (apex.is_none() || !apex::leaves_body(&b, &out))
+                            && smooth_at(&out, size)
+                            && still_sharp(&out, &es).is_empty()
+                            && keeps_voids(&b, &out)
+                            && count(&out, Kind::Solid) == count(&b, Kind::Solid)
+                            && crate::soundness::of(&out).fault().is_none()
+                    })
+                })
+        };
+        // Where four or more chosen edges meet off a convex apex OCCT builds sizes under the limit off its own volume
+        // trend (a tilted pyramid's apex at 9.12 of 9.13 built 137.19), so no size is offered there.
+        // The section build cannot size a chamfer corner it has no patch for, while OCCT, the path that builds
+        // these chamfers, often stops only at the asked size, so the offer is the largest size OCCT builds.
+        let refused = |(why, fits, at): (Misfit, Fits, [f64; 3])| {
+            let fits = match fits {
+                Fits::Unknown if label == "Chamfer" && (apex.is_some() || meeting(at) < 4) => {
+                    kernel_size(blend_size, draft, &kernel_builds).map_or(fits, Fits::UpTo)
+                }
+                _ => fits,
+            };
+            misfit_error(label, &body_name, blend_size, why, fits, at)
+        };
+        // OCCT's plate at a convex apex of four chamfers strays off its flat setback meets by frame and edge order, the
+        // section build caps it flat when they are coplanar.
+        if capped_apex {
+            checkpoint()?;
+            if let Some(built) = try_section(&body_shape, &edges) {
+                staged.push((index, built));
+                continue;
+            }
+        }
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -978,8 +1072,8 @@ fn blend_edges(
                     if fades {
                         return Err(uneven());
                     }
-                    if let Some(fail) = misfit.take() {
-                        return Err(fail);
+                    if let Some(m) = misfit.take() {
+                        return Err(refused(m));
                     }
                     let body = BodyRef { name: &body_name, shape: &work };
                     return Err(blend_failure(label, &body, &unresolved, &one_edge_at, op, blend_size, &combined_err));
@@ -991,13 +1085,15 @@ fn blend_edges(
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None if fades => return Err(uneven()),
-                None => return Err(misfit.take().unwrap_or_else(|| fold_error(&body_name))),
+                None => return Err(misfit.take().map_or_else(|| fold_error(&body_name), refused)),
             }
         } else if !smooth_at(&new_shape, blend_size) {
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None => return Err(uneven()),
             }
+        } else if let Some(at) = apex.filter(|_| apex::leaves_body(&work, &new_shape)) {
+            return Err(refused((Misfit::Corner, Fits::Unknown, at)));
         } else {
             new_shape
         };
