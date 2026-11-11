@@ -72,8 +72,8 @@ Delete and Backspace do nothing here, so a key press in the list never removes a
 1. Sketch: a plane or a flat face.
 2. Section and Mirror: a flat face, for the plane.
 3. Fillet and Chamfer: edges, added, or taken out again if already in.
-4. Extrude, once its depth is set: a face or an edge, which finishes the extrude and starts Press/Pull or Fillet on it.
-5. Press/Pull, Draft, Offset Face, Thicken, Shell and Text: a face. Press/Pull also takes the face to stop at.
+4. Extrude and Press/Pull, once the value is set: a face or an edge, which finishes the step and starts Press/Pull or Fillet on it.
+5. Press/Pull, Draft, Offset Face, Thicken, Shell and Text: a face. After T, Press/Pull takes the face to stop at.
 6. Hole: a flat face. Thread and Axis from cylinder: a round face.
 7. Revolve: a straight edge, for the axis. A circular pattern: a face or an edge, for the axis.
 8. Measure and a mechanism joint: faces and edges.

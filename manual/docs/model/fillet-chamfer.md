@@ -10,6 +10,8 @@ Fillet (F) rounds an edge and Chamfer (B) cuts it at an angle.
 
 ![A fillet radius growing on an edge](../img/fillet-drag-still.png){ .fc-motion }
 
+Fillet also starts from a click on an edge while Extrude or Press/Pull is open and has its value, which finishes that step first.
+
 Letting go of the arrow keeps the tool open, so the size and the box options can still change. Click another edge to add it, or a picked edge to drop it. With several edges picked, the arrow stands on the last one and sizes them all.
 
 Tab swaps between fillet and chamfer without starting over. Dragging the arrow back past the edge swaps them too.
