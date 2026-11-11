@@ -654,6 +654,7 @@
   "tool.union": "Unir",
   "tool.vertical": "Vertical",
   "tool.zebra": "Zébrure",
+  "units.caption.spoken": "{unit, select, newton {{one, select, yes {newton} other {newtons}}} megapascal {{one, select, yes {mégapascal} other {mégapascals}}} density {{one, select, yes {gramme par centimètre cube} other {grammes par centimètre cube}}} ms {{one, select, yes {milliseconde} other {millisecondes}}} other {pour cent}}",
   "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} centimètre carré} other {{amount} centimètres carrés}}} in {{n, plural, one {{amount} pouce carré} other {{amount} pouces carrés}}} other {{n, plural, one {{amount} millimètre carré} other {{amount} millimètres carrés}}}}",
   "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centimètre} other {{amount} centimètres}}} in {{n, plural, one {{amount} pouce} other {{amount} pouces}}} other {{n, plural, one {{amount} millimètre} other {{amount} millimètres}}}}",
   "units.spoken.minus": "moins {amount}",

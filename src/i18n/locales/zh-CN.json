@@ -654,6 +654,7 @@
   "tool.union": "合并",
   "tool.vertical": "竖直",
   "tool.zebra": "斑马纹",
+  "units.caption.spoken": "{unit, select, newton {{one, select, yes {牛顿} other {牛顿}}} megapascal {{one, select, yes {兆帕} other {兆帕}}} density {{one, select, yes {克每立方厘米} other {克每立方厘米}}} ms {{one, select, yes {毫秒} other {毫秒}}} other {百分比}}",
   "units.spoken.area": "{unit, select, cm {{amount} 平方厘米} in {{amount} 平方英寸} other {{amount} 平方毫米}}",
   "units.spoken.length": "{unit, select, cm {{amount} 厘米} in {{amount} 英寸} other {{amount} 毫米}}",
   "units.spoken.minus": "负 {amount}",

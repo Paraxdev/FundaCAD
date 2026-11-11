@@ -654,6 +654,7 @@
   "tool.union": "結合",
   "tool.vertical": "垂直",
   "tool.zebra": "ゼブラ",
+  "units.caption.spoken": "{unit, select, newton {{one, select, yes {ニュートン} other {ニュートン}}} megapascal {{one, select, yes {メガパスカル} other {メガパスカル}}} density {{one, select, yes {グラム毎立方センチメートル} other {グラム毎立方センチメートル}}} ms {{one, select, yes {ミリ秒} other {ミリ秒}}} other {パーセント}}",
   "units.spoken.area": "{unit, select, cm {{amount} 平方センチメートル} in {{amount} 平方インチ} other {{amount} 平方ミリメートル}}",
   "units.spoken.length": "{unit, select, cm {{amount} センチメートル} in {{amount} インチ} other {{amount} ミリメートル}}",
   "units.spoken.minus": "マイナス {amount}",

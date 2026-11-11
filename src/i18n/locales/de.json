@@ -654,6 +654,7 @@
   "tool.union": "Vereinigen",
   "tool.vertical": "Vertikal",
   "tool.zebra": "Zebra",
+  "units.caption.spoken": "{unit, select, newton {{one, select, yes {Newton} other {Newton}}} megapascal {{one, select, yes {Megapascal} other {Megapascal}}} density {{one, select, yes {Gramm pro Kubikzentimeter} other {Gramm pro Kubikzentimeter}}} ms {{one, select, yes {Millisekunde} other {Millisekunden}}} other {Prozent}}",
   "units.spoken.area": "{unit, select, cm {{amount} Quadratzentimeter} in {{amount} Quadratzoll} other {{amount} Quadratmillimeter}}",
   "units.spoken.length": "{unit, select, cm {{amount} Zentimeter} in {{amount} Zoll} other {{amount} Millimeter}}",
   "units.spoken.minus": "minus {amount}",

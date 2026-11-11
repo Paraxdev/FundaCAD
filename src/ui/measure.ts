@@ -5,7 +5,7 @@
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
 import { commasToPoints, pointsToCommas } from "../params/decimalForm";
-import { decimalMark, type DecimalMark } from "../i18n";
+import { decimalMark, t, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
 
@@ -111,12 +111,12 @@ export const UNITS: UnitDef[] = [
 
 const BY_ID = new Map(UNITS.map((u) => [u.id, u]));
 
-const SPOKEN_CAPTIONS: Record<string, { one: string; many: string }> = {
-  "%": { one: "percent", many: "percent" },
-  ms: { one: "millisecond", many: "milliseconds" },
-  MPa: { one: "megapascal", many: "megapascals" },
-  N: { one: "newton", many: "newtons" },
-  "g/cm³": { one: "gram per cubic centimetre", many: "grams per cubic centimetre" },
+const SPOKEN_CAPTIONS: Record<string, string> = {
+  "%": "percent",
+  ms: "ms",
+  MPa: "megapascal",
+  N: "newton",
+  "g/cm³": "density",
 };
 
 /** A measure id or a caption as a screen reader says it, text it does not know comes back as written. */
@@ -124,8 +124,9 @@ export function spokenUnit(unit: string, full: boolean, one = false): string {
   const measure = BY_ID.get(unit)?.spoken;
   if (measure) return full ? (one ? measure.one : measure.many) : measure.short;
   const caption = Object.hasOwn(SPOKEN_CAPTIONS, unit) ? SPOKEN_CAPTIONS[unit] : null;
-  return caption && full ? (one ? caption.one : caption.many) : unit;
+  return caption && full ? t("units.caption.spoken", { unit: caption, one: one ? "yes" : "no" }) : unit;
 }
+
 /** Longest alias first, so "mm" is matched before "m" and "inches" before "in". */
 const ALIASES: { text: string; unit: UnitDef }[] = UNITS.flatMap((unit) =>
   unit.aliases.map((text) => ({ text, unit })),
