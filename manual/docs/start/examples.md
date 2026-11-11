@@ -32,7 +32,7 @@ A tube and a screw-on cap laid side by side, ready to print. Both threads are mo
 3. If the thread prints too tight, raise `clearance` to 0.3 or 0.4.
 4. `threadLength` sets how far the thread runs down the tube. It stays between 2.5 and 9 pitches, and within `innerLength`.
 
-With a tube under 20 mm `innerDiameter` or a longer thread, set `screwedOn` to 1 and run [Interference](../inspect/interference.md) to check that the parts do not touch.
+The threads are checked from 8 mm `innerDiameter` up at the default pitch, at any `threadLength`. With a tube under 8 mm, another `pitch`, or a thread the part reports as partly uncut, set `screwedOn` to 1 and run [Interference](../inspect/interference.md) to check that the parts do not touch.
 
 See [Parameters](../model/parameters.md).
 
