@@ -1004,6 +1004,8 @@ The sketch palette holds three lists under one heading each (`SketchShapesList`,
   get this from the `wrap-row` and `wrap-label` mixins in `src/styles/ui/_field-row.scss`; a new row of this kind
   includes them, and a row that fits looks as it did. The rows of one group that should start their boxes at one x (the Stress material and its custom values) wear
   `.stress-keyed`, which gives their labels one share of the row.
+  In plain text a `.param-row` select takes the width of its whole value (at least 120px), so a long option such as
+  "Plan de l'esquisse" is read in full or the row stacks; Comfortable text wraps the value instead.
 - A Dimensions row is a `FieldRow` with a `NumberField` (`commit="change"`, the unit of the dimension), named by the
   dimension's subject. A driven dimension is disabled and says why.
 - The line above Relations (`.rel-summary`) takes focus after a Delete, so the keys do not fall back to the page. A

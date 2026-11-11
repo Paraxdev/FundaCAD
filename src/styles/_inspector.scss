@@ -45,6 +45,13 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+/* A select shows its whole value: its column takes the value's width and the row stacks when label and value do not
+   both fit. Comfortable text wraps the value instead. */
+:root:not([data-text="comfortable"]) .param-value:has(> .select-trigger) {
+  flex-basis: max-content;
+  min-width: min(120px, 100%);
+  max-width: 100%;
+}
 /* Same box as .param-row input: they sit interleaved in one column and must read as one
    kind of control. */
 .param-select {

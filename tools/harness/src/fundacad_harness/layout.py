@@ -128,10 +128,10 @@ _CUELESS = r"""
 """
 
 
-def clipped_controls(page: Any, slack: float = 1, cover: bool = False) -> list[str]:
+def clipped_controls(page: Any, slack: float = 1, cover: bool = False, controls: str = CONTROLS) -> list[str]:
     """Every rendered control outside the viewport or cut by an ancestor that clips, one line each. With `cover`,
-    also every one that another box lies over where no scroll would move it."""
-    return page.evaluate(_CLIPPED, [CONTROLS, slack, cover])
+    also every one that another box lies over where no scroll would move it. `controls` narrows the selector."""
+    return page.evaluate(_CLIPPED, [controls, slack, cover])
 
 
 def focus_stop(page: Any, slack: float = 1) -> dict | None:
