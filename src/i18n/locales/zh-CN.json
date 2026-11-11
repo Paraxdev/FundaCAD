@@ -106,6 +106,7 @@
   "pick.doneChain": "{done, select, added {已添加{name}及其相切链} takenOut {已移除{name}及其相切链} other {已选择{name}及其相切链}}，共 {n} 条边",
   "pick.doneRun": "{done, select, added {已添加 {n} 行} takenOut {已移除 {n} 行} other {已选择 {n} 行}}",
   "pick.onBody": "{body}的{label}",
+  "pick.oneBody": "该面属于另一个实体，一次推拉只能移动同一实体的面",
   "pick.overCap": "边太多，未添加",
   "pick.takenThenRefused": "{taken}。{refusal}",
   "prefs.accessibility.manualLink": "阅读手册中的无障碍页面",

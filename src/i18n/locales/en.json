@@ -106,6 +106,7 @@
   "pick.doneChain": "{name} {done, select, added {added} takenOut {taken out} other {picked}} with its tangent chain, {n, plural, one {# edge} other {# edges}}",
   "pick.doneRun": "{n, plural, one {# row} other {# rows}} {done, select, added {added} takenOut {taken out} other {picked}}",
   "pick.onBody": "{label} of {body}",
+  "pick.oneBody": "That face is on another body, one push moves faces of one body",
   "pick.overCap": "Too many edges, none added",
   "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Read the Accessibility page of the manual",

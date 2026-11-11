@@ -106,6 +106,7 @@
   "pick.doneChain": "{done, select, added {{name}と接線チェーンを追加しました} takenOut {{name}と接線チェーンを外しました} other {{name}と接線チェーンを選びました}}（エッジ{n}本）",
   "pick.doneRun": "{done, select, added {{n}行を追加しました} takenOut {{n}行を外しました} other {{n}行を選びました}}",
   "pick.onBody": "{body}の{label}",
+  "pick.oneBody": "その面は別のボディにあります。1 回のプッシュで動かせるのは 1 つのボディの面だけです",
   "pick.overCap": "エッジが多すぎるため、追加しませんでした",
   "pick.takenThenRefused": "{taken}。{refusal}",
   "prefs.accessibility.manualLink": "マニュアルのアクセシビリティのページを読む",

@@ -217,6 +217,30 @@ describe("Press/Pull takes a face row", () => {
     tool.cancel();
   });
 
+  it("of two face rows offered at once, one on another body is refused after the first is taken", () => {
+    const { tool, vp } = begin();
+    const refused: string[] = [];
+    const own = vp.facesForPressPull.bind(vp);
+    vp.facesForPressPull = (ids) => ({ ...own(ids)!, ...(ids[0] === OTHER ? { bodyId: "b3" } : {}) });
+    offerPicks(
+      [
+        { pick: { kind: "face", faceId: SLANT }, name: "Flat face 7" },
+        { pick: { kind: "face", faceId: OTHER }, name: "Flat face 9" },
+      ],
+      { ...hints(), hint: (text: string) => void refused.push(text), say: () => {} },
+    );
+    expect([seen(tool).faceIds, refused]).toEqual([
+      [SLANT],
+      [
+        t("pick.takenThenRefused", {
+          taken: t("pick.done", { name: "Flat face 7", done: "other" }),
+          refusal: t("pick.oneBody"),
+        }),
+      ],
+    ]);
+    tool.cancel();
+  });
+
   it("T takes another face row as the face to stop at, as a click on it would", () => {
     const { tool, added, done } = begin();
     routeTreeClick({ kind: "face", faceId: SLANT }, hints());

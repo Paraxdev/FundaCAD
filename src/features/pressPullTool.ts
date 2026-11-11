@@ -21,6 +21,7 @@ import {
   type DimToggleDef,
 } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
+import { t } from "../i18n";
 import { gizmoMoveStep, taperStep } from "../viewport/gizmoStep";
 import { fmtLength, snap } from "../ui/units";
 import {
@@ -272,7 +273,7 @@ export class PressPullTool {
   private takeRow(f: PressPullFaces): TreePickAnswer {
     if (this.phase !== "drag") return (this.takeFaces(f), true);
     const id = f.faceIds[0]!;
-    if (f.bodyId !== this.bodyId) return "That face is on another body, one push moves faces of one body";
+    if (f.bodyId !== this.bodyId) return t("pick.oneBody");
     if (!this.faceIds.includes(id))
       this.addFace({ selector: f.selectors[0]!, faceId: id, anchor: f.anchor, normal: f.normal });
     return true;

@@ -106,6 +106,7 @@
   "pick.doneChain": "{done, select, added {Ajouté} takenOut {Retiré} other {Choisi}} avec sa chaîne tangente : {name}, {n, plural, one {# arête} other {# arêtes}}",
   "pick.doneRun": "{done, select, added {Lignes ajoutées} takenOut {Lignes retirées} other {Lignes choisies}} : {n}",
   "pick.onBody": "{label} de {body}",
+  "pick.oneBody": "Cette face est sur un autre corps, une poussée déplace les faces d’un seul corps",
   "pick.overCap": "Trop d’arêtes, aucune ajoutée",
   "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Lire la page Accessibilité du manuel",

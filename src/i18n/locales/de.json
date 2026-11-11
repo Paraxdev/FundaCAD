@@ -106,6 +106,7 @@
   "pick.doneChain": "{name} mit tangentialer Kette {done, select, added {hinzugefügt} takenOut {entfernt} other {gewählt}}, {n, plural, one {# Kante} other {# Kanten}}",
   "pick.doneRun": "{n, plural, one {# Zeile} other {# Zeilen}} {done, select, added {hinzugefügt} takenOut {entfernt} other {gewählt}}",
   "pick.onBody": "{label} von {body}",
+  "pick.oneBody": "Diese Fläche gehört zu einem anderen Körper, ein Schieben bewegt Flächen eines Körpers",
   "pick.overCap": "Zu viele Kanten, keine hinzugefügt",
   "pick.takenThenRefused": "{taken}. {refusal}",
   "prefs.accessibility.manualLink": "Die Seite Barrierefreiheit im Handbuch lesen",
