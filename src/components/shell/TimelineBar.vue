@@ -6,7 +6,7 @@ import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
-import { featureMeta, stepName } from "../../ui/featureMeta";
+import { featureMeta, stepEnglish, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
@@ -55,6 +55,7 @@ const features = useDocValue((doc) =>
       type: f.type,
       name: (f as { name?: string }).name ?? "",
       shown: stepName(f as Parameters<typeof stepName>[0]),
+      english: stepEnglish(f as Parameters<typeof stepEnglish>[0]),
       hasCondition: activeWhen !== undefined,
       inactive: activeWhen === 0,
     };
@@ -196,7 +197,7 @@ const chip = computed(() =>
     ? { label: "waiting…", pct: 0 }
     : buildProgress(
         progress.value,
-        features.value.map((f) => f.shown),
+        features.value.map((f) => f.english),
       ),
 );
 const line = computed(() => busyLine(busy.value));
@@ -362,10 +363,10 @@ function reorderStep(i: number, delta: -1 | 1) {
   let j = i + delta;
   while (j >= 0 && j < list.length && filtering.value && !related.value?.has(list[j]!.id)) j += delta;
   const to = list[j];
-  if (!to) return announce(`${f.shown} is already the ${delta < 0 ? "first" : "last"} step`);
+  if (!to) return announce(`${f.english} is already the ${delta < 0 ? "first" : "last"} step`);
   refocus = { id: f.id, at: performance.now() };
   store.moveFeature(f.id, j);
-  announce(`Moved ${f.shown} ${delta < 0 ? "before" : "after"} ${to.shown}`);
+  announce(`Moved ${f.english} ${delta < 0 ? "before" : "after"} ${to.english}`);
 }
 let menuKeyAt = -Infinity;
 function claim(e: KeyboardEvent) {
@@ -538,8 +539,8 @@ const markerFocus = ref(false);
 function rollbackText(k: number) {
   const f = features.value;
   if (!f.length) return "no steps";
-  if (k <= 0) return `at the start, before ${f[0]!.shown}`;
-  return `after ${f[Math.min(k, f.length) - 1]!.shown}, step ${k} of ${f.length}`;
+  if (k <= 0) return `at the start, before ${f[0]!.english}`;
+  return `after ${f[Math.min(k, f.length) - 1]!.english}, step ${k} of ${f.length}`;
 }
 function onRollbackKey(e: KeyboardEvent) {
   if (e.defaultPrevented) e.stopPropagation();

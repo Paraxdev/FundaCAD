@@ -152,8 +152,10 @@ const sketchRef = useDocValue((doc) => {
 });
 const sketchName = computed(() => {
   const { number, name } = sketchRef.value;
-  // An unnamed sketch keeps the default feature name the timeline and History give it, which stays English.
-  return number === 0 ? t("rail.newSketch") : name || `${FEATURE_META.sketch!.label} ${number}`;
+  // An unnamed sketch reads as its History chip.
+  return number === 0
+    ? t("rail.newSketch")
+    : name || t("feature.numbered", { name: FEATURE_META.sketch!.label, n: number });
 });
 const onOff = (on: boolean) => t(on ? "rail.on" : "rail.off");
 

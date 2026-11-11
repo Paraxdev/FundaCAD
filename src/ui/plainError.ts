@@ -1,4 +1,4 @@
-import { numberedName } from "./featureMeta";
+import { numberedEnglish } from "./featureMeta";
 import type { Feature } from "../types";
 
 export const SEE_CONSOLE = "The details are in the console.";
@@ -52,6 +52,6 @@ export function failedText(label: string, raw: unknown): string {
 
 export function sketchConflictText(sketchId: string, features: readonly Feature[]): string {
   const f = features.find((g) => g.id === sketchId);
-  const name = f ? numberedName(f, features) : "a sketch";
+  const name = f ? numberedEnglish(f, features) : "a sketch";
   return `The dimensions in ${name} conflict, so the sketch was left as it was`;
 }

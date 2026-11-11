@@ -96,7 +96,7 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { logEditTiming } from "../diagnostics/editTiming";
-import { featureMeta, numberedName } from "../ui/featureMeta";
+import { featureEnglish, numberedEnglish } from "../ui/featureMeta";
 import { STEP_LABEL, stepLabel } from "./stepLabels";
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
@@ -1788,7 +1788,7 @@ export class DocumentStore {
   }
   private stepNameOf(id: string): string {
     const f = this.doc.features.find((x) => x.id === id);
-    return f ? numberedName(f, this.doc.features) : "step";
+    return f ? numberedEnglish(f, this.doc.features) : "step";
   }
   toggleSuppress(id: string) {
     const was = this.suppressed.has(id);
@@ -1915,7 +1915,7 @@ export class DocumentStore {
     }
     if (!first) return null;
     const f = features[first.index]!;
-    const name = (f as { name?: string }).name?.trim() || featureMeta(f).label;
+    const name = (f as { name?: string }).name?.trim() || featureEnglish(f);
     return `${name} fails with this value: ${first.message}`;
   }
   // Failed by the last preview-free build, so an in-place edit is not blamed for them.
@@ -1932,7 +1932,7 @@ export class DocumentStore {
         d.features.splice(Math.max(0, Math.min(d.features.length, toIndex)), 0, f);
       },
       true,
-      moved && `Move ${numberedName(moved, this.doc.features)}`,
+      moved && `Move ${numberedEnglish(moved, this.doc.features)}`,
     );
   }
 

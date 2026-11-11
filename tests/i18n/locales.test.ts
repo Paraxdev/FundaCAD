@@ -55,6 +55,8 @@ const GLOSSARY_TERMS = [
   ...["Tap drill", "Blind", "Chord length", "Continuity", "Drive", "Hole type", "Wall side", "Keep originals"],
   ...["Emboss", "Engrave", "Tapped", "Drill point", "Centered", "Two sides", "Axis", "Hand", "Right", "Left"],
   ...["Flip direction", "Fit", "Inside", "Outside", "Tangent faces", "Tangent edges"],
+  ...["Delete Face", "Divide Face", "Box", "Cylinder", "Cone", "Sphere", "Torus", "Duplicate", "Remove Body"],
+  ...["Thin extrude"],
 ];
 
 function glossaryProblems(code: string, glossary: unknown): string[] {

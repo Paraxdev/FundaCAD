@@ -680,6 +680,46 @@
     {
       "en": "Tangent edges",
       "text": "相切边"
+    },
+    {
+      "en": "Delete Face",
+      "text": "删除面"
+    },
+    {
+      "en": "Divide Face",
+      "text": "分割面"
+    },
+    {
+      "en": "Box",
+      "text": "长方体"
+    },
+    {
+      "en": "Cylinder",
+      "text": "圆柱体"
+    },
+    {
+      "en": "Cone",
+      "text": "圆锥体"
+    },
+    {
+      "en": "Sphere",
+      "text": "球体"
+    },
+    {
+      "en": "Torus",
+      "text": "圆环体"
+    },
+    {
+      "en": "Duplicate",
+      "text": "复制"
+    },
+    {
+      "en": "Remove Body",
+      "text": "移除实体"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "薄壁拉伸"
     }
   ]
 }

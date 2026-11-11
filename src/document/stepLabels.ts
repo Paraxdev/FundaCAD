@@ -1,5 +1,5 @@
 import type { CadDocument, Feature } from "../types";
-import { numberedName } from "../ui/featureMeta";
+import { numberedEnglish } from "../ui/featureMeta";
 
 export const STEP_LABEL = {
   edit: "Edit",
@@ -19,7 +19,7 @@ const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
 /** "Extrude 1" for one step, "3 steps" for several; names come from the list as given. */
 export function deletedWhat(features: readonly Feature[], ids: readonly string[]): string {
   const gone = features.filter((f) => ids.includes(f.id));
-  return gone.length === 1 ? numberedName(gone[0]!, features) : plural(gone.length, "step");
+  return gone.length === 1 ? numberedEnglish(gone[0]!, features) : plural(gone.length, "step");
 }
 
 // Walks instead of stringifying, which copied an import's inline BREP twice per compare: 4 ms against 9 ms on 300 steps with 5 MB.
@@ -38,7 +38,7 @@ function movedLabel(before: readonly Feature[], after: readonly Feature[]): stri
   const without = (list: readonly Feature[], id: string) => list.filter((f) => f.id !== id).map((f) => f.id);
   for (const id of [before[at]!.id, after[at]!.id]) {
     if (same(without(before, id), without(after, id))) {
-      return `Move ${numberedName(
+      return `Move ${numberedEnglish(
         before.find((f) => f.id === id)!,
         before,
       )}`;
@@ -71,7 +71,7 @@ export function stepLabel(before: CadDocument, after: CadDocument): string {
       removed.map((f) => f.id),
     )}`;
   const added = now.filter((f) => !wasIds.has(f.id));
-  if (added.length) return added.length === 1 ? numberedName(added[0]!, now) : `Add ${plural(added.length, "step")}`;
+  if (added.length) return added.length === 1 ? numberedEnglish(added[0]!, now) : `Add ${plural(added.length, "step")}`;
   if (was.some((f, i) => f.id !== now[i]!.id)) return movedLabel(was, now);
 
   const edited = now.filter((f, i) => !same(was[i], f));
@@ -79,9 +79,9 @@ export function stepLabel(before: CadDocument, after: CadDocument): string {
   if (edited.length === 1) {
     const at = now.indexOf(edited[0]!);
     const unnamed = (f: Feature) => ({ ...f, name: undefined });
-    if (same(unnamed(was[at]!), unnamed(now[at]!))) return `Rename ${numberedName(was[at]!, was)}`;
+    if (same(unnamed(was[at]!), unnamed(now[at]!))) return `Rename ${numberedEnglish(was[at]!, was)}`;
     // Lower case: it is only ever said after Undo, Redo, Undid or Redid.
-    return `edit of ${numberedName(now[at]!, now)}`;
+    return `edit of ${numberedEnglish(now[at]!, now)}`;
   }
   return paramLabel(before, after) ?? STEP_LABEL.edit;
 }

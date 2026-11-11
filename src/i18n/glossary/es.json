@@ -683,6 +683,46 @@
     {
       "en": "Tangent edges",
       "text": "Aristas tangentes"
+    },
+    {
+      "en": "Delete Face",
+      "text": "Eliminar cara"
+    },
+    {
+      "en": "Divide Face",
+      "text": "Dividir cara"
+    },
+    {
+      "en": "Box",
+      "text": "Caja"
+    },
+    {
+      "en": "Cylinder",
+      "text": "Cilindro"
+    },
+    {
+      "en": "Cone",
+      "text": "Cono"
+    },
+    {
+      "en": "Sphere",
+      "text": "Esfera"
+    },
+    {
+      "en": "Torus",
+      "text": "Toro"
+    },
+    {
+      "en": "Duplicate",
+      "text": "Duplicar"
+    },
+    {
+      "en": "Remove Body",
+      "text": "Quitar cuerpo"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "Extrusión delgada"
     }
   ]
 }

@@ -680,6 +680,46 @@
     {
       "en": "Tangent edges",
       "text": "接するエッジ"
+    },
+    {
+      "en": "Delete Face",
+      "text": "面を削除"
+    },
+    {
+      "en": "Divide Face",
+      "text": "面を分割"
+    },
+    {
+      "en": "Box",
+      "text": "ボックス"
+    },
+    {
+      "en": "Cylinder",
+      "text": "円柱"
+    },
+    {
+      "en": "Cone",
+      "text": "円錐"
+    },
+    {
+      "en": "Sphere",
+      "text": "球"
+    },
+    {
+      "en": "Torus",
+      "text": "トーラス"
+    },
+    {
+      "en": "Duplicate",
+      "text": "複製"
+    },
+    {
+      "en": "Remove Body",
+      "text": "ボディを除去"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "薄肉押し出し"
     }
   ]
 }

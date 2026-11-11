@@ -136,7 +136,8 @@ describe("the tool rail in another language", () => {
     w.unmount();
     const w2 = mountRail();
     expect(byAction("finish").textContent).toContain("Skizze beenden");
-    expect(byAction("finish").textContent).toContain("Sketch 3");
+    expect(byAction("finish").textContent).toContain("Skizze 3");
+    expect(byAction("finish").textContent).not.toContain("Sketch 3");
     w2.unmount();
     state.sketch = { number: 3, name: "Bracket" };
     const w3 = mountRail();
