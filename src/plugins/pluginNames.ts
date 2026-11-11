@@ -2,6 +2,8 @@
 // the user's own `<id>:plugin.name` line, the manifest's text for the language, its base language, then the manifest.
 
 import { activeLanguage, pluginDropInLines } from "../i18n";
+import { PSEUDO } from "../i18n/languages";
+import { pseudoText } from "../i18n/pseudo";
 import type { PluginManifest } from "./manifest";
 import { shippedPlugins } from "./shipped";
 
@@ -9,6 +11,7 @@ type Field = "name" | "summary";
 
 function textOf(m: PluginManifest, field: Field): string {
   const { code } = activeLanguage();
+  if (code === PSEUDO) return pseudoText(m[field]);
   const mine = pluginDropInLines().get(`${m.id.toLowerCase()}:plugin.${field}`);
   if (mine !== undefined) return mine;
   const own = m.translations.get(code)?.[field] ?? m.translations.get(code.split("-")[0]!)?.[field];

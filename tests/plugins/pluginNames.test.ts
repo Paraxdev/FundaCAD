@@ -36,7 +36,7 @@ vi.mock("../../src/i18n", async () => {
     dropIns: browserDropIns(storage),
     storage,
     systemTags: () => [],
-    dev: false,
+    dev: true,
     setPageLang: () => {},
   });
   return { activeLanguage: catalog.active, pluginDropInLines: catalog.pluginDropIn, catalog };
@@ -103,6 +103,11 @@ describe("plugin names and summaries follow the language", () => {
     expect(both(m)).toEqual(["Nietenwerk", "Mein Text"]);
     await catalog.loadDropInFile(file("de.json", { "tool.extrude": "Kern" }));
     expect(both(m)).toEqual(["Nietenwerk", "Setzt 17 Nieten schräg."]);
+  });
+
+  it("stretches the manifest English under Pseudo, not a translation", async () => {
+    await catalog.setLanguage("pseudo");
+    expect(both(manifest())).toEqual(["[Ríívéétt shööpp]", "[Séétss 17 ríívéétss áátt áá slááññtt.]"]);
   });
 
   it("a computed follows a live switch", async () => {
