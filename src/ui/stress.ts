@@ -652,7 +652,7 @@ export function formatStressResult(
   }
   details.push(liveRow("stress.result.mesh", () => meshRow(r.mesh)));
   const refinement = refinementLine(r.mesh);
-  if (refinement) details.push(liveRow("stress.setup.meshDetail", () => t(refinement.key, refinement.args)));
+  if (refinement) details.push(liveRow("stress.setup.meshDetail", refinement));
   // Fine starts on a finer mesh, so on some parts its peak reads lower than Standard's (Wall bracket 14.0 against
   // 15.2 MPa, a deep round groove 5% lower) and on others higher.
   if (refine === "fine") details.push(liveRow("stress.result.note", () => t("stress.result.fineNote")));
@@ -702,21 +702,16 @@ function meshRow(m: StressReply["mesh"]): string {
 
 const REFINE_STOPS = ["settled", "elements", "time", "memory", "unrefinable"];
 
-function refinementLine(m: StressReply["mesh"]): { key: MessageKey; args: MessageArgs } | null {
-  if (m.stop === undefined) return null;
+function refinementLine(m: StressReply["mesh"]): (() => string) | null {
+  const stop = m.stop;
+  if (stop === undefined) return null;
   const passes = m.passes ?? [];
-  const known = REFINE_STOPS.includes(m.stop);
   if (passes.length < 2) {
-    return known || m.stop === "off" ? { key: "stress.result.refineOnce", args: { stop: m.stop } } : null;
+    return REFINE_STOPS.includes(stop) || stop === "off" ? () => t("stress.result.refineOnce", { stop }) : null;
   }
   const n = passes.length - 1;
-  const args = {
-    n,
-    from: spellRounded(passes[0]!.maxVonMises),
-    to: spellRounded(passes[n]!.maxVonMises),
-    stop: m.stop,
-  };
-  return { key: "stress.result.refined", args };
+  const [from, to] = [passes[0]!.maxVonMises, passes[n]!.maxVonMises];
+  return () => t("stress.result.refined", { n, from: spellRounded(from), to: spellRounded(to), stop });
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */

@@ -233,6 +233,21 @@ describe("a view built in English and read after a switch", () => {
     expect(read(view)).toEqual(english);
   });
 
+  it("spells the refinement's peaks with the mark of the language read in, not the one run in", async () => {
+    await setLanguage("de");
+    const view = markRaw(formatStressResult(reply({ reactions: [] }), "mm"));
+    const peaks = () => view.details[6]!.v.match(/\d+[.,]\d+/g);
+    const german = peaks();
+    await setLanguage("en");
+    const english = peaks();
+    await setLanguage("ja");
+    expect([german, english, peaks()]).toEqual([
+      ["14,2", "12,5"],
+      ["14.2", "12.5"],
+      ["14.2", "12.5"],
+    ]);
+  });
+
   it("leaves no English in the rows of any language", async () => {
     const allow = ["MPa", "PETG", "mesh", "material", "standard", "passes", "factor"];
     for (const code of ["de", "fr", "es", "ja", "zh-CN"]) {
