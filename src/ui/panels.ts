@@ -573,7 +573,7 @@ export function createPanels(deps: PanelsDeps) {
     d.pins = d.pins.map((p) => ({ ...p, label: probeLabelAt(p) ?? p.label }));
   }
 
-  onLanguageChange(() => {
+  const stopRelabel = onLanguageChange(() => {
     const d = panels.stress;
     if (!d) return;
     showUndo();
@@ -1376,6 +1376,7 @@ export function createPanels(deps: PanelsDeps) {
     setStressProbe,
     lookAtStressPoint,
     removeStressProbe,
+    dispose: stopRelabel,
   };
 }
 

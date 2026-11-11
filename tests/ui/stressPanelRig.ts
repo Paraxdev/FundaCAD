@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { afterEach } from "vitest";
 import { createPanels, type PanelsDeps } from "../../src/ui/panels";
 import type { StressOptions, StressReply, StressResult } from "../../src/geometry/client";
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
@@ -37,6 +38,10 @@ export const reply: StressReply = {
   reaction: [0, 0, 100],
   surface: { positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], indices: [0, 1, 2], vonMises: [1, 4, 2] },
 };
+
+// Each rig's language listener goes with its test, so a later switch runs no old rig's closures.
+const made: { dispose: () => void }[] = [];
+afterEach(() => made.splice(0).forEach((ui) => ui.dispose()));
 
 export function rig(opts: { hasBody?: boolean; engine?: boolean } = {}) {
   // The current tessellation's display faces; a rebuild may renumber them.
@@ -171,6 +176,7 @@ export function rig(opts: { hasBody?: boolean; engine?: boolean } = {}) {
     },
   } as unknown as PanelsDeps;
   const ui = createPanels(deps);
+  made.push(ui);
   return {
     ui,
     store,
