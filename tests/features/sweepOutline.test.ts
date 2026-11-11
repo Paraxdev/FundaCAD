@@ -324,9 +324,12 @@ describe("chainLoops", () => {
     expect(chainLoops(edges, 0.2)).toEqual([]);
   });
 
-  it("a single closed edge is a ring with one joint, no edges is no ring, one point is skipped", () => {
-    const circle = [pt(3, 0), pt(0, 3), pt(-3, 0), pt(0, -3), pt(3, 0)];
-    expect(chainLoops([circle], 1e-6)).toEqual([{ points: circle.slice(0, 4), joints: [true, false, false, false] }]);
+  it("a single closed edge is a ring with no joint, no edges is no ring, one point is skipped", () => {
+    const square = [pt(3, 0), pt(0, 3), pt(-3, 0), pt(0, -3), pt(3, 0)];
+    expect(chainLoops([square], 1e-6)).toEqual([{ points: square.slice(0, 4), joints: [false, false, false, false] }]);
+    const [ring] = chainLoops([W(arc(4, -2, 3, 30, 390, 48))], 1e-6);
+    expect(ring?.points).toHaveLength(48);
+    expect(cornerFlags(ring!)).toEqual(Array(48).fill(false));
     expect(chainLoops([], 1e-6)).toEqual([]);
     expect(chainLoops([[pt(1, 1)]], 1e-6)).toEqual([]);
   });

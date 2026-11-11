@@ -155,7 +155,7 @@ export function chainLoops(edges: V3[][], tol: number): SweepRing[] {
     for (const e of chain) {
       e.slice(0, -1).forEach((q, i) => {
         points.push(q);
-        joints.push(i === 0);
+        joints.push(i === 0 && chain.length > 1);
       });
     }
     rings.push({ points, joints });
