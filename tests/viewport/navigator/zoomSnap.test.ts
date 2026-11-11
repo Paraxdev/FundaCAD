@@ -2,7 +2,7 @@
 // goes by the nearest surface in view: scaling about an anchor moves a point by what is left of the log, times the
 // point's pixels from the anchor, times anchor depth over point depth.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import * as THREE from "three";
 import { H, W, BoxScene, maxDiff, pixel, screenPrint, settle, setup } from "./kit";
 import { NearestSweep, ZOOM_SNAP_PX, nearestBound, zoomSnapLog } from "../../../src/viewport/navigator/zoomSnap";
@@ -674,6 +674,7 @@ describe("a zoom's tail", () => {
     expect(scene.rays).toBeLessThanOrEqual(1);
   });
 
+  // The clock stands still so the frame after the change casts every ray on a busy runner too.
   it.each([
     ["the model's box", (nav: Navigator) => nav.setContentBox(nav.contentBox())],
     ["the scene", (nav: Navigator, scene: BoxScene) => nav.setScene(scene)],
@@ -681,6 +682,10 @@ describe("a zoom's tail", () => {
     ["the anchor plane", (nav: Navigator) => nav.setAnchorPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0))],
     ["an immediate zoom", (nav: Navigator) => nav.zoomBy(1.0001)],
   ])("looks over the view again when %s changes during the tail", (_name, change) => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    onTestFinished(() => {
+      vi.restoreAllMocks();
+    });
     const { nav, scene } = room();
     nav.wheel(W / 2, H / 2, -NOTCH);
     nav.update(DT);
