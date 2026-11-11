@@ -8,11 +8,14 @@ vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 import MeasureReadout from "../../../src/components/overlays/MeasureReadout.vue";
 import StressVerdict from "../../../src/components/overlays/StressVerdict.vue";
 import { useToolPanelStore } from "../../../src/stores/toolPanels";
+import { setLanguage } from "../../../src/i18n";
 import { verdictView } from "../../../src/ui/stressVerdict";
 import { announce } from "../../../src/ui/announce";
 
 enableAutoUnmount(afterEach);
 const said = () => vi.mocked(announce).mock.calls;
+
+afterEach(() => setLanguage("system"));
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -63,6 +66,27 @@ describe("Stress verdict speech", () => {
     expect(spoken).toBe(`${view.headline} ${view.detail}`);
     expect(spoken).not.toContain("..");
     expect(spoken.match(/\. /g)?.length).toBe(2);
+  });
+
+  it("says the verdict once in the language, a switch rewrites the text and says nothing, a new result speaks anew", async () => {
+    await setLanguage("de");
+    const input = { safetyFactor: 3.32, peakPlace: "corner" as const };
+    const w = mount(StressVerdict, { props: { ...props, input } });
+    const german = verdictView(input);
+    expect(said()).toEqual([[`${german.headline} ${german.detail}`, "polite", { key: "stress" }]]);
+    expect(w.text()).toContain("nach grober Ablesung");
+    await setLanguage("ja");
+    await nextTick();
+    expect(said()).toHaveLength(1);
+    expect(w.text()).toContain("概算");
+    expect(w.text()).not.toContain("Ablesung");
+    await w.setProps({ input: { safetyFactor: 0.8 } });
+    const japanese = verdictView({ safetyFactor: 0.8 });
+    expect(said()).toHaveLength(2);
+    expect(said()[1]?.[0]).toBe(`${japanese.headline}${japanese.detail}`);
+    expect(said()[1]?.[0]).toContain("可能性が高い");
+    await w.setProps({ marked: false });
+    expect(said()).toHaveLength(3);
   });
 
   it("speaks only the headline when there is no detail", () => {

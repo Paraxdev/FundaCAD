@@ -1036,9 +1036,13 @@ export function deformSliderMax(auto: number): number {
   return Math.max(4 * auto, 1);
 }
 
-/** The factor as the slider's label reads it. */
+/** The slider's factor to two significant figures, spelled with the language's mark. */
+export function deformScale(scale: number): string {
+  return spellNumber(scale === 0 ? 0 : roundSig(scale, 2));
+}
+
 export function deformLabel(scale: number): string {
-  return `${spellNumber(scale === 0 ? 0 : roundSig(scale, 2))}x`;
+  return `${deformScale(scale)}x`;
 }
 
 /** Positions moved by `scale` times their displacement, into `out` when given. */

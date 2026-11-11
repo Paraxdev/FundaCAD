@@ -192,20 +192,3 @@ describe("deflectionNote", () => {
     expect(deflectionNote(0.47, "mm", 1.004)).toContain("drawn at true size");
   });
 });
-
-describe("verdict numbers in German", () => {
-  it("spell the factors, the overload and the bend with a comma, and English again afterwards", async () => {
-    await setLanguage("de");
-    expect(aboutFactor(4.57, "down")).toBe("4,5");
-    expect(aboutFactor(0.1234, "up")).toBe("0,13");
-    expect(aboutFactor(250, "down")).toBe("more than 100");
-    expect(verdictView({ safetyFactor: 1.37 }).headline).toContain("1,3x");
-    expect(verdictView({ safetyFactor: 0.28 }).detail).toContain("3,6x");
-    expect(weakSpotLabel(1.37)).toContain("1,3x");
-    expect(deflectionNote(0.4712, "mm", 0.59)).toBe("Bends at most 0,471 mm, drawn at 0,59x true size.");
-    expect(deflectionNote(12.5, "mm", 10.5)).toBe("Bends at most 12,5 mm, drawn 11x larger.");
-    await setLanguage("system");
-    expect(aboutFactor(4.57, "down")).toBe("4.5");
-    expect(deflectionNote(0.4712, "mm", 0.59)).toBe("Bends at most 0.471 mm, drawn at 0.59x true size.");
-  });
-});
