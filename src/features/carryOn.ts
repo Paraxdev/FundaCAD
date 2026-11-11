@@ -18,9 +18,7 @@ export interface CarryTarget {
 }
 
 export type CarryCommit =
-  | { kind: "added"; id: string }
-  | { kind: "nothing"; note?: string }
-  | { kind: "stayed"; why: string };
+  { kind: "added"; id: string } | { kind: "nothing"; note?: string } | { kind: "stayed"; why: string };
 
 export interface CarrySource {
   /** The localized reason a commit must not go ahead now, else null. */
