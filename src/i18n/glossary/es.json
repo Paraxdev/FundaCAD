@@ -79,6 +79,46 @@
       "note": "a small round place on the body"
     },
     {
+      "en": "Safety factor",
+      "text": "factor de seguridad",
+      "note": "how many times the load the part carries before it yields"
+    },
+    {
+      "en": "Peak stress",
+      "text": "tensión máxima",
+      "note": "the highest stress anywhere in the body"
+    },
+    {
+      "en": "Deflection",
+      "text": "flecha",
+      "note": "how far the body bends under the load"
+    },
+    {
+      "en": "Mesh",
+      "text": "malla",
+      "note": "the small elements the body is cut into for the study, not the imported triangle mesh"
+    },
+    {
+      "en": "Inside corner",
+      "text": "esquina interior",
+      "note": "a sharp concave edge where stress piles up"
+    },
+    {
+      "en": "Thin wall",
+      "text": "pared delgada",
+      "note": "a wall thinner than the mesh can resolve"
+    },
+    {
+      "en": "Yield",
+      "text": "límite elástico",
+      "note": "the stress where the material starts to deform for good"
+    },
+    {
+      "en": "Reaction",
+      "text": "reacción",
+      "note": "the force a support pushes back with"
+    },
+    {
       "en": "Mesh detail",
       "text": "Detalle de malla"
     },

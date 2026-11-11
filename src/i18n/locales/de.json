@@ -67,7 +67,7 @@
   "guide.openFirst": "Öffnen Sie zuerst {control}",
   "guide.stop": "Beenden",
   "guide.title": "Anleitung",
-  "history.closeStressFirst": "Schließen Sie zuerst die Spannungsanalyse, dann machen Sie rückgängig.",
+  "history.closeStressFirst": "Schließen Sie zuerst „Spannung“, dann machen Sie rückgängig.",
   "keyCapture.cancel": "Abbrechen",
   "keyCapture.clear": "Löschen",
   "keyCapture.hint": "Esc bricht ab. Mit der Tabulatortaste gelangen Sie zu den Schaltflächen.",

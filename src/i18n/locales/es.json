@@ -67,7 +67,7 @@
   "guide.openFirst": "Abra primero {control}",
   "guide.stop": "Detener",
   "guide.title": "Guía",
-  "history.closeStressFirst": "Cierre primero el análisis de tensión y luego deshaga.",
+  "history.closeStressFirst": "Cierre primero «Tensión» y luego deshaga.",
   "keyCapture.cancel": "Cancelar",
   "keyCapture.clear": "Borrar",
   "keyCapture.hint": "Esc cancela. La tecla Tab pasa a los botones.",

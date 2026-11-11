@@ -67,7 +67,7 @@
   "guide.openFirst": "先に {control} を開いてください",
   "guide.stop": "終了",
   "guide.title": "ガイド",
-  "history.closeStressFirst": "先に応力解析を閉じてから、元に戻してください。",
+  "history.closeStressFirst": "先に「応力」を閉じてから、元に戻してください。",
   "keyCapture.cancel": "キャンセル",
   "keyCapture.clear": "クリア",
   "keyCapture.hint": "Esc で取り消します。Tab でボタンに移動します。",

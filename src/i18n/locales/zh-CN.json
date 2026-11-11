@@ -67,7 +67,7 @@
   "guide.openFirst": "请先打开 {control}",
   "guide.stop": "停止",
   "guide.title": "引导",
-  "history.closeStressFirst": "请先关闭应力分析，再撤销。",
+  "history.closeStressFirst": "请先关闭“应力”，再撤销。",
   "keyCapture.cancel": "取消",
   "keyCapture.clear": "清除",
   "keyCapture.hint": "按 Esc 取消。按 Tab 键移到按钮。",
