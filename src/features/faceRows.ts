@@ -18,6 +18,6 @@ export function awaitFaceRows(
       return faces ? take(faces) : "The model is still building";
     },
     end,
-    { keepsOnRewind: true, keepsOnCommand: true, batch },
+    { keepsOnRewind: true, keepsOnCommand: true, ...(batch ? { batch } : {}) },
   );
 }
