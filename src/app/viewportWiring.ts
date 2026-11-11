@@ -3,7 +3,7 @@ import { setPrompt } from "../ui/prompt";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isEditableTarget } from "../ui/focus";
 import { contextMenu, dismissContextMenu } from "../ui/menu";
-import { featureMeta } from "../ui/featureMeta";
+import { featureEnglish } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
 import { TIE_BAND_PX, ambiguousCandidates } from "../viewport/edgeTies";
 import { areaFilterLabel, outlineInBox } from "../viewport/areaSelect";
@@ -60,7 +60,7 @@ export function installViewportWiring(e: Engine): void {
       const f = e.store.document.features.find((x) => x.id === id);
       if (!f) return null;
       const named = (f as { name?: string }).name;
-      return named || featureMeta(f).label;
+      return named || featureEnglish(f);
     };
     const rows = cands.map((c) => {
       const index = bodies.findIndex((b) => b.id === c.edge.body);

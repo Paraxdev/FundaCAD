@@ -7,7 +7,7 @@ import { useUiStore } from "../stores/ui";
 import { announce } from "../ui/announce";
 import { buildLine, failureKey } from "../ui/buildAnnouncement";
 import { busyLine } from "../ui/buildProgress";
-import { stepName } from "../ui/featureMeta";
+import { stepEnglish } from "../ui/featureMeta";
 import { onWorkspaceChange, WORKSPACES } from "../ui/workspace";
 
 /** Work quicker than this only says its result, so a short rebuild is not "Rebuilding" then "Built". */
@@ -17,7 +17,7 @@ export function installAnnouncements(e: { store: DocumentStore }): () => void {
   const store = e.store;
   const nameOf = (id: string) => {
     const f = store.document.features.find((x) => x.id === id);
-    return f ? stepName(f) : null;
+    return f ? stepEnglish(f) : null;
   };
 
   let building = false;

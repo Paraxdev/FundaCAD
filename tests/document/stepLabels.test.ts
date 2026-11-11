@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deletedWhat, stepLabel } from "../../src/document/stepLabels";
+import { stepLabel as late, stepText } from "../../src/document/stepLabels";
 import type { CadDocument, Feature } from "../../src/types";
 
 const f = (id: string, type: string, extra: object = {}) => ({ id, type, ...extra }) as unknown as Feature;
 const doc = (features: Feature[], parameters: Record<string, number> = {}): CadDocument =>
   ({ parameters, features }) as unknown as CadDocument;
+const stepLabel = (a: CadDocument, b: CadDocument) => stepText(late(a, b));
 const copy = (d: CadDocument): CadDocument => structuredClone(d);
 
 const box = f("a", "box", { w: 40.5, d: 22.25, h: 7 });
@@ -12,16 +13,6 @@ const fillet1 = f("b", "fillet", { radius: 1.5 });
 const extrude = f("c", "extrude", { distance: 12.75 });
 const fillet2 = f("d", "fillet", { radius: 2.25 });
 const base = doc([box, fillet1, extrude, fillet2]);
-
-describe("deletedWhat", () => {
-  it("names one step, counts several, and counts none as zero", () => {
-    expect(deletedWhat(base.features, ["c"])).toBe("Extrude 1");
-    expect(deletedWhat(base.features, ["d"])).toBe("Fillet 2");
-    expect(deletedWhat(base.features, ["b", "d", "c"])).toBe("3 steps");
-    expect(deletedWhat(base.features, ["b", "d"])).toBe("2 steps");
-    expect(deletedWhat(base.features, ["zz"])).toBe("0 steps");
-  });
-});
 
 describe("stepLabel", () => {
   it("names one added step by its place after the step", () => {

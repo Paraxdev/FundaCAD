@@ -13,7 +13,7 @@ import { contextMenu, type CtxItem } from "./menu";
 import { useContextMenuStore } from "../stores/contextMenu";
 import { isInspectorEditable } from "../document/numFields";
 import { allCommands } from "./commands";
-import { featureMeta } from "./featureMeta";
+import { featureEnglish } from "./featureMeta";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
 import { t } from "../i18n";
@@ -191,7 +191,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     };
     const ownerId = featureForFace(hit.faceId);
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
-    const ownerLabel = owner ? featureMeta(owner).label : "";
+    const ownerLabel = owner ? featureEnglish(owner) : "";
     const items: CtxItem[] = [
       {
         label: "Press/Pull face",

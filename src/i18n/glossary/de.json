@@ -463,6 +463,294 @@
     {
       "en": "profile",
       "text": "Profil"
+    },
+    {
+      "en": "Distance",
+      "text": "Abstand"
+    },
+    {
+      "en": "Taper",
+      "text": "Verjüngung",
+      "note": "the angle a side leans in while it extrudes"
+    },
+    {
+      "en": "Thickness",
+      "text": "Dicke"
+    },
+    {
+      "en": "Diameter",
+      "text": "Durchmesser"
+    },
+    {
+      "en": "Depth",
+      "text": "Tiefe"
+    },
+    {
+      "en": "Angle",
+      "text": "Winkel"
+    },
+    {
+      "en": "Pitch",
+      "text": "Steigung",
+      "note": "the climb of a thread per turn"
+    },
+    {
+      "en": "Count",
+      "text": "Anzahl"
+    },
+    {
+      "en": "Radius",
+      "text": "Radius"
+    },
+    {
+      "en": "Height",
+      "text": "Höhe"
+    },
+    {
+      "en": "Width",
+      "text": "Breite"
+    },
+    {
+      "en": "Length",
+      "text": "Länge"
+    },
+    {
+      "en": "Spacing",
+      "text": "Schrittweite",
+      "note": "the gap between the copies of a pattern, not Distance"
+    },
+    {
+      "en": "Tolerance",
+      "text": "Toleranz"
+    },
+    {
+      "en": "Offset value",
+      "text": "Versatz",
+      "note": "the Offset row, a distance; the Offset tool keeps its own verb"
+    },
+    {
+      "en": "New body",
+      "text": "Neuer Körper",
+      "note": "uses the word chosen for body"
+    },
+    {
+      "en": "Join",
+      "text": "Verbinden",
+      "note": "the operation that adds to a body"
+    },
+    {
+      "en": "Cut",
+      "text": "Ausschneiden",
+      "note": "the operation that removes from a body"
+    },
+    {
+      "en": "Through all",
+      "text": "Durch alles"
+    },
+    {
+      "en": "Up to face",
+      "text": "Bis Fläche"
+    },
+    {
+      "en": "Up to plane",
+      "text": "Bis Ebene"
+    },
+    {
+      "en": "Up to point",
+      "text": "Bis Punkt"
+    },
+    {
+      "en": "Operation",
+      "text": "Operation",
+      "note": "the row that picks New body, Join or Cut"
+    },
+    {
+      "en": "Counterbore",
+      "text": "Flachsenkung",
+      "note": "a flat bottomed widening of a hole"
+    },
+    {
+      "en": "Countersink",
+      "text": "Kegelsenkung",
+      "note": "a cone shaped widening of a hole"
+    },
+    {
+      "en": "Heat-set insert",
+      "text": "Einschmelzmutter",
+      "note": "a threaded insert pressed in with heat for printed parts"
+    },
+    {
+      "en": "Clearance",
+      "text": "Durchgangsbohrung",
+      "note": "a hole a screw passes through"
+    },
+    {
+      "en": "Tap drill",
+      "text": "Kernloch",
+      "note": "the hole drilled before a thread is cut"
+    },
+    {
+      "en": "Blind",
+      "text": "Sackloch",
+      "note": "a hole that stops inside the part"
+    },
+    {
+      "en": "Chord length",
+      "text": "Sehnenlänge"
+    },
+    {
+      "en": "Continuity",
+      "text": "Stetigkeit",
+      "note": "how smoothly a fillet meets its faces: G1, G2, G3"
+    },
+    {
+      "en": "Drive",
+      "text": "Antrieb",
+      "note": "what moves a draft or press/pull"
+    },
+    {
+      "en": "Hole type",
+      "text": "Bohrungstyp"
+    },
+    {
+      "en": "Wall side",
+      "text": "Wandseite"
+    },
+    {
+      "en": "Keep originals",
+      "text": "Originale behalten"
+    },
+    {
+      "en": "Emboss",
+      "text": "Prägen",
+      "note": "text raised from a face"
+    },
+    {
+      "en": "Engrave",
+      "text": "Gravieren",
+      "note": "text cut into a face"
+    },
+    {
+      "en": "Tapped",
+      "text": "Mit Gewinde",
+      "note": "a hole that carries a thread"
+    },
+    {
+      "en": "Drill point",
+      "text": "Bohrspitze"
+    },
+    {
+      "en": "Centered",
+      "text": "Zentriert"
+    },
+    {
+      "en": "Two sides",
+      "text": "Zwei Seiten"
+    },
+    {
+      "en": "Axis",
+      "text": "Achse"
+    },
+    {
+      "en": "Hand",
+      "text": "Drehsinn",
+      "note": "the winding of a thread, Right or Left"
+    },
+    {
+      "en": "Right",
+      "text": "Rechts"
+    },
+    {
+      "en": "Left",
+      "text": "Links"
+    },
+    {
+      "en": "Flip direction",
+      "text": "Richtung umkehren"
+    },
+    {
+      "en": "Fit",
+      "text": "Passung",
+      "note": "how tight a thread or hole fits: Close, Normal, Loose"
+    },
+    {
+      "en": "Inside",
+      "text": "Innen"
+    },
+    {
+      "en": "Outside",
+      "text": "Außen"
+    },
+    {
+      "en": "Tangent faces",
+      "text": "Tangentiale Flächen"
+    },
+    {
+      "en": "Tangent edges",
+      "text": "Tangentenkanten"
+    },
+    {
+      "en": "Delete Face",
+      "text": "Fläche löschen"
+    },
+    {
+      "en": "Divide Face",
+      "text": "Fläche teilen"
+    },
+    {
+      "en": "Box",
+      "text": "Quader"
+    },
+    {
+      "en": "Cylinder",
+      "text": "Zylinder"
+    },
+    {
+      "en": "Cone",
+      "text": "Kegel"
+    },
+    {
+      "en": "Sphere",
+      "text": "Kugel"
+    },
+    {
+      "en": "Torus",
+      "text": "Torus"
+    },
+    {
+      "en": "Duplicate",
+      "text": "Duplizieren"
+    },
+    {
+      "en": "Remove Body",
+      "text": "Körper entfernen"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "Dünne Extrusion"
+    },
+    {
+      "en": "Features",
+      "text": "Features",
+      "note": "no plain German word, as in the Feature tree"
+    },
+    {
+      "en": "Curve",
+      "text": "Kurve"
+    },
+    {
+      "en": "Plugin",
+      "text": "Plug-in"
+    },
+    {
+      "en": "Object",
+      "text": "Objekt",
+      "note": "an item the Mirror tool can take, a body or a sketch entity"
+    },
+    {
+      "en": "Parameter",
+      "text": "Parameter",
+      "note": "a named value of the Parameters list, typed into a value box"
     }
   ]
 }

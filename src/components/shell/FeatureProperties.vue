@@ -29,7 +29,9 @@ import { resolveEntities, resolveRealEntities, toSketchEntity } from "../../sket
 import { entityDims } from "../../sketch/entityDims";
 import { applyDrivingDimsDirect, dimAnchor, upsertDrivingDim } from "../../sketch/directDims";
 import { toast } from "../../ui/toast";
+import { t, type MessageKey } from "../../i18n";
 import {
+  exprProblem,
   featureNumFields,
   featureValueRule,
   featureWithTarget,
@@ -144,7 +146,7 @@ function measure(raw: string, showing: UnitDef | null, dim: Dim): Measured | str
   const m = tryParseMeasure(raw, showing, {});
   if (!m) return null;
   if (m.unit && m.unit.dim !== dim) {
-    return `${m.unit.label} is not ${dim === "angle" ? "an angle" : "a length"}`;
+    return t("field.problem.wrongUnit", { unit: m.unit.label, dim });
   }
   return m;
 }
@@ -152,18 +154,29 @@ function measure(raw: string, showing: UnitDef | null, dim: Dim): Measured | str
 // Sketch: editable per-entity dimensions. Editing entity i writes back only that entity, leaving the others and their
 // parameter references untouched.
 
-/** Capitalised for the row label, entity.type is lowercase JSON. */
-const TYPE_NAME: Record<string, string> = {
-  line: "Line",
-  arc: "Arc",
-  circle: "Circle",
-  rectangle: "Rectangle",
-  slot: "Slot",
-  polygon: "Polygon",
-  bspline: "Curve",
-  spline: "Curve",
-  point: "Point",
+const TYPE_NAME: Record<string, MessageKey> = {
+  line: "tool.line",
+  arc: "tool.arc",
+  circle: "tool.circle",
+  rectangle: "tool.rectangle",
+  slot: "tool.slot",
+  polygon: "tool.polygon",
+  bspline: "field.curve",
+  spline: "field.curve",
+  point: "tool.point",
 };
+
+// entityDims keeps its English labels for its other readers, so the row's word comes from here.
+const DIM_NAME: Record<string, MessageKey> = {
+  width: "field.width",
+  height: "field.height",
+  diameter: "field.diameter",
+  radius: "field.radius",
+  length: "field.length",
+};
+
+// Typing stays English in every language, so the examples are never translated.
+const HINT_EXAMPLES = '2mm, 1 inch, 1/2"';
 
 const sketchRows = useDocValue((doc) => {
   const f = asFeature(feature.value, "sketch");
@@ -176,6 +189,15 @@ const sketchRows = useDocValue((doc) => {
   resolved.forEach((e, i) => {
     if (dimsOf[i]!.length) perType.set(e.type, (perType.get(e.type) ?? 0) + 1);
   });
+  const rowLabel = (
+    ambiguous: boolean,
+    entity: MessageKey | undefined,
+    n: number,
+    d: { field: string; label: string },
+  ) => {
+    const dim = DIM_NAME[d.field] ? t(DIM_NAME[d.field]!) : d.label;
+    return ambiguous ? t("field.entityDim", { entity: entity ? t(entity) : "", n, dim }) : dim;
+  };
   const out: {
     key: string;
     label: string;
@@ -192,13 +214,13 @@ const sketchRows = useDocValue((doc) => {
     const ambiguous = (perType.get(e.type) ?? 0) > 1;
     const n = (seen.get(e.type) ?? 0) + 1;
     seen.set(e.type, n);
-    const prefix = ambiguous ? `${TYPE_NAME[e.type] ?? e.type} ${n} ` : "";
+    const entity = TYPE_NAME[e.type];
     for (const d of dims) {
       const key = `${i}:${d.field}`;
       const u = unitOf(key, "length");
       out.push({
         key,
-        label: `${prefix}${d.label}`,
+        label: rowLabel(ambiguous, entity, n, d),
         unit: u?.id ?? null,
         units: u ? unitChoices(u) : undefined,
         value: d.valueMm,
@@ -214,7 +236,7 @@ const sketchRows = useDocValue((doc) => {
 function parseSketchDim(key: string, raw: string): number {
   const m = measure(raw, unitOf(key, "length"), "length");
   if (typeof m === "string") throw new Error(m);
-  if (!m) throw new Error("not a value");
+  if (!m) throw new Error(t("field.problem.notValue"));
   return m.value;
 }
 
@@ -244,7 +266,7 @@ function commitSketchDim(row: { index: number; field: string }, value: number) {
         dimAnchor(resolved, driven, driven[driven.length - 1]!),
       );
       if (!solved) {
-        toast(`Could not satisfy this ${row.field} with the sketch's other constraints`);
+        toast(t("field.problem.unsolvable", { dim: row.field }));
         return;
       }
       store.updateFeature(f.id, { entities: solved.entities, constraints: driven } as Partial<Feature>);
@@ -294,8 +316,8 @@ const toggleRows = useDocValue(() => {
   if (!f) return [];
   const values = f as unknown as Record<string, unknown>;
   return toggleFieldsFor(f.type)
-    .filter((t) => fieldApplies(f.type, t.field, values))
-    .map((t) => ({ ...t, current: toggleValue(f, t) }));
+    .filter((x) => fieldApplies(f.type, x.field, values))
+    .map((x) => ({ ...x, current: toggleValue(f, x) }));
 });
 
 // Written straight onto the feature: no expression path and no unit, so updateFeature is the whole commit.
@@ -448,13 +470,14 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
 <template>
   <div v-if="buildNote" class="param-note" role="note">{{ buildNote }}</div>
   <template v-if="placeholder === null">
-    <FieldRow v-if="repeatedLabels.length" layout="param" label="Features" :for="null">{{
+    <FieldRow v-if="repeatedLabels.length" layout="param" :label="t('field.features')" :for="null">{{
       repeatedLabels.join(", ")
     }}</FieldRow>
     <SelectionTargetRow v-for="t in targetRows" :key="`s:${t.field}`" :feature-id="featureId" :target="t" />
     <ChoiceRow
       v-for="c in choiceRows"
       :key="`c:${c.field}`"
+      :field="c.field"
       :label="c.label"
       :value="c.current"
       :options="c.options"
@@ -464,6 +487,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
     <FileRow
       v-for="r in fileRows"
       :key="`f:${r.field}`"
+      :field="r.field"
       :label="r.label"
       :value="r.current"
       :filters="r.filters"
@@ -473,6 +497,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
     <ToggleRow
       v-for="t in toggleRows"
       :key="`t:${t.field}`"
+      :field="t.field"
       :label="t.label"
       :value="t.current"
       :commit="(v) => setOption(t.field, v)"
@@ -485,7 +510,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
       :value="r.value"
       :unit="r.unit"
       :units="r.units"
-      hint='a value with any unit (2mm, 1 inch, 1/2")'
+      :hint="t('field.hint.unit', { examples: HINT_EXAMPLES })"
       :parse="(raw) => parseSketchDim(r.key, raw)"
       @commit="(v) => commitSketchDim(r, v)"
       @update:unit="(id) => adopt(r.key, unitById(id))"
@@ -501,10 +526,12 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
       :units="r.units"
       :row-class="r.rowClass"
       :row-title="r.rowTitle"
-      hint='a value with any unit (2mm, 1 inch, 1/2"), a parameter, or an expression'
+      :hint="t('field.hint.expression', { examples: HINT_EXAMPLES })"
       :parse="(raw) => parseField(r, raw)"
       :validate="(v) => validateField(r, v)"
-      :expression="(raw) => typedExprProblem(raw) ?? store.setTargetExpr(r.target, storedExpr(raw), r.kind)"
+      :expression="
+        (raw) => typedExprProblem(raw) ?? exprProblem(store.setTargetExpr(r.target, storedExpr(raw), r.kind))
+      "
       :preview="(v) => previewField(r, v)"
       :preview-end="endPreview"
       :problem="rowProblem(r.key)"

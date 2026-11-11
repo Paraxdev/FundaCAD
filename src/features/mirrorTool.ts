@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
@@ -274,9 +275,11 @@ export class MirrorTool {
 
   private update(refusal?: string): void {
     const f = this.fields;
-    const objects = countLabel(f.objects.length, "body", "bodies");
+    const objects = countLabel(f.objects.length, "body");
     this.onListRow = focusOnMenuRow();
-    setPrompt(`${refusal ? `${refusal} · ` : ""}${nextPick(f, "plane", this.onListRow)} · ${objects} · Esc to cancel`);
+    setPrompt(
+      `${refusal ? `${refusal} · ` : ""}${nextPick(f, "plane", this.onListRow)} · ${objects} · ${t("mirror.escCancel")}`,
+    );
     showMirrorPanel({
       id: this.panelId,
       fields: [

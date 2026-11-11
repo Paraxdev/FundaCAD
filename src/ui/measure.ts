@@ -20,8 +20,8 @@ export interface UnitDef {
   /** everything that may be TYPED for it, lower-cased. Order does not matter;
    *  the scanner sorts by length so "mm" can never be eaten by "m". */
   aliases: string[];
-  /** what a screen reader says, `short` when units are not spoken in full */
-  spoken: { short: string; one: string; many: string };
+  /** what a screen reader says when units are not spoken in full, the full words are `units.measure.spoken` */
+  spokenShort: string;
   /** offered in the unit picker, the rest are input-only, so "thou" parses
    *  without putting a unit nobody asked for in front of everyone. */
   common?: boolean;
@@ -31,7 +31,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "mm",
     label: "mm",
-    spoken: { short: "mm", one: "millimetre", many: "millimetres" },
+    spokenShort: "mm",
     dim: "length",
     factor: 1,
     common: true,
@@ -40,7 +40,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "cm",
     label: "cm",
-    spoken: { short: "cm", one: "centimetre", many: "centimetres" },
+    spokenShort: "cm",
     dim: "length",
     factor: 10,
     common: true,
@@ -49,7 +49,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "m",
     label: "m",
-    spoken: { short: "m", one: "metre", many: "metres" },
+    spokenShort: "m",
     dim: "length",
     factor: 1000,
     common: true,
@@ -58,7 +58,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "in",
     label: "in",
-    spoken: { short: "in", one: "inch", many: "inches" },
+    spokenShort: "in",
     dim: "length",
     factor: 25.4,
     common: true,
@@ -67,7 +67,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "ft",
     label: "ft",
-    spoken: { short: "ft", one: "foot", many: "feet" },
+    spokenShort: "ft",
     dim: "length",
     factor: 304.8,
     common: true,
@@ -76,7 +76,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "um",
     label: "µm",
-    spoken: { short: "µm", one: "micrometre", many: "micrometres" },
+    spokenShort: "µm",
     dim: "length",
     factor: 0.001,
     aliases: ["um", "µm", "micron", "microns", "micrometer", "micrometers"],
@@ -84,7 +84,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "thou",
     label: "thou",
-    spoken: { short: "thou", one: "thou", many: "thou" },
+    spokenShort: "thou",
     dim: "length",
     factor: 0.0254,
     aliases: ["thou", "mil", "mils"],
@@ -92,7 +92,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "deg",
     label: "°",
-    spoken: { short: "deg", one: "degree", many: "degrees" },
+    spokenShort: "deg",
     dim: "angle",
     factor: 1,
     common: true,
@@ -101,7 +101,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "rad",
     label: "rad",
-    spoken: { short: "rad", one: "radian", many: "radians" },
+    spokenShort: "rad",
     dim: "angle",
     factor: 180 / Math.PI,
     common: true,
@@ -121,8 +121,9 @@ const SPOKEN_CAPTIONS: Record<string, string> = {
 
 /** A measure id or a caption as a screen reader says it, text it does not know comes back as written. */
 export function spokenUnit(unit: string, full: boolean, one = false): string {
-  const measure = BY_ID.get(unit)?.spoken;
-  if (measure) return full ? (one ? measure.one : measure.many) : measure.short;
+  const measure = BY_ID.get(unit);
+  if (measure)
+    return full ? t("units.measure.spoken", { unit: measure.id, one: one ? "yes" : "no" }) : measure.spokenShort;
   const caption = Object.hasOwn(SPOKEN_CAPTIONS, unit) ? SPOKEN_CAPTIONS[unit] : null;
   return caption && full ? t("units.caption.spoken", { unit: caption, one: one ? "yes" : "no" }) : unit;
 }

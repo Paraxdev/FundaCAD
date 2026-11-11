@@ -1,0 +1,15 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "bx", "type": "box", "name": "Block", "length": 40, "width": 30, "height": 20 },
+    { "id": "ho", "type": "hole", "face": { "by": "nearest", "kind": "face", "point": [3.5, -4.25, 10] },
+      "points": [[3.5, -4.25, 10]], "holeType": "counterbore", "standard": "custom", "diameter": 5, "extent": "through",
+      "cbDiameter": 9.5, "cbDepth": 3.25 },
+    { "id": "pat", "type": "patternCircular", "count": 3, "angle": 270, "axis": "Z", "features": ["ho"] },
+    { "id": "s", "type": "sketch", "plane": "XY",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 46, "height": 31, "x": 83.5, "y": 21.25 }] },
+    { "id": "ex", "type": "extrude", "sketch": "s", "distance": 18, "operation": "new", "thin": true, "side": "twoSides",
+      "thickness": 3.5, "thickness2": 2.25, "twoSided": true, "distance2": 6 }
+  ]
+}

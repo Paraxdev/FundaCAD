@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import FieldRow from "../ui/FieldRow.vue";
 import NumberField from "../ui/NumberField.vue";
 import { valueProblem } from "../../document/numFields";
+import { t } from "../../i18n";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import { distinctNames } from "../../sketch/sketchNames";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -91,7 +92,7 @@ function parse(r: Row) {
 }
 
 function validate(r: Row) {
-  return (v: number) => (r.kind === "angle" ? null : valueProblem("Length", { positive: true }, v));
+  return (v: number) => (r.kind === "angle" ? null : valueProblem(t("field.length"), { positive: true }, v));
 }
 
 let refocus: { key: string; at: number } | null = null;

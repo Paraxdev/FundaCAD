@@ -2,6 +2,7 @@
 // wins. Any advisory with a reason lights the chip, not a list of codes, so a new engine advisory shows at once.
 
 import { featureTypeOwner } from "../document/missingPlugins";
+import { t } from "../i18n";
 
 /** Structural, so a test or a cached partial build need not construct a whole RebuildResult. */
 export interface NoteSources {
@@ -55,7 +56,5 @@ export function featurePlaceholders(src: PlaceholderSources): Map<string, string
 /** What a placeholder chip and its properties say about a feature of `type`. */
 export function placeholderNote(type: string): string {
   const owner = featureTypeOwner(type);
-  if (owner)
-    return `Not included: it needs the "${owner.name}" plugin, which is not running here. It is kept and saved with the file.`;
-  return "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file. A newer FundaCAD or a plugin can build it.";
+  return owner ? t("feature.note.needsPlugin", { plugin: owner.name }) : t("feature.note.unknownType");
 }

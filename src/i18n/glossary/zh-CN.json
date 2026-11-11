@@ -455,6 +455,293 @@
     {
       "en": "profile",
       "text": "轮廓"
+    },
+    {
+      "en": "Distance",
+      "text": "距离"
+    },
+    {
+      "en": "Taper",
+      "text": "锥度",
+      "note": "the angle a side leans in while it extrudes"
+    },
+    {
+      "en": "Thickness",
+      "text": "厚度"
+    },
+    {
+      "en": "Diameter",
+      "text": "直径"
+    },
+    {
+      "en": "Depth",
+      "text": "深度"
+    },
+    {
+      "en": "Angle",
+      "text": "角度"
+    },
+    {
+      "en": "Pitch",
+      "text": "螺距",
+      "note": "the climb of a thread per turn"
+    },
+    {
+      "en": "Count",
+      "text": "数量"
+    },
+    {
+      "en": "Radius",
+      "text": "半径"
+    },
+    {
+      "en": "Height",
+      "text": "高度"
+    },
+    {
+      "en": "Width",
+      "text": "宽度"
+    },
+    {
+      "en": "Length",
+      "text": "长度"
+    },
+    {
+      "en": "Spacing",
+      "text": "间距",
+      "note": "the gap between the copies of a pattern, not Distance"
+    },
+    {
+      "en": "Tolerance",
+      "text": "公差"
+    },
+    {
+      "en": "Offset value",
+      "text": "偏移量",
+      "note": "the Offset row, a distance; the Offset tool keeps its own verb"
+    },
+    {
+      "en": "New body",
+      "text": "新建实体",
+      "note": "uses the word chosen for body"
+    },
+    {
+      "en": "Join",
+      "text": "合并",
+      "note": "the operation that adds to a body"
+    },
+    {
+      "en": "Cut",
+      "text": "切除",
+      "note": "the operation that removes from a body"
+    },
+    {
+      "en": "Through all",
+      "text": "贯穿"
+    },
+    {
+      "en": "Up to face",
+      "text": "到面"
+    },
+    {
+      "en": "Up to plane",
+      "text": "到平面"
+    },
+    {
+      "en": "Up to point",
+      "text": "到点"
+    },
+    {
+      "en": "Operation",
+      "text": "操作",
+      "note": "the row that picks New body, Join or Cut"
+    },
+    {
+      "en": "Counterbore",
+      "text": "沉头孔",
+      "note": "a flat bottomed widening of a hole"
+    },
+    {
+      "en": "Countersink",
+      "text": "锥形沉孔",
+      "note": "a cone shaped widening of a hole"
+    },
+    {
+      "en": "Heat-set insert",
+      "text": "热熔螺母",
+      "note": "a threaded insert pressed in with heat for printed parts"
+    },
+    {
+      "en": "Clearance",
+      "text": "通孔",
+      "note": "a hole a screw passes through"
+    },
+    {
+      "en": "Tap drill",
+      "text": "底孔",
+      "note": "the hole drilled before a thread is cut"
+    },
+    {
+      "en": "Blind",
+      "text": "盲孔",
+      "note": "a hole that stops inside the part"
+    },
+    {
+      "en": "Chord length",
+      "text": "弦长"
+    },
+    {
+      "en": "Continuity",
+      "text": "连续性",
+      "note": "how smoothly a fillet meets its faces: G1, G2, G3"
+    },
+    {
+      "en": "Drive",
+      "text": "驱动",
+      "note": "what moves a draft or press/pull"
+    },
+    {
+      "en": "Hole type",
+      "text": "孔类型"
+    },
+    {
+      "en": "Wall side",
+      "text": "壁侧"
+    },
+    {
+      "en": "Keep originals",
+      "text": "保留原件"
+    },
+    {
+      "en": "Emboss",
+      "text": "浮雕",
+      "note": "text raised from a face"
+    },
+    {
+      "en": "Engrave",
+      "text": "雕刻",
+      "note": "text cut into a face"
+    },
+    {
+      "en": "Tapped",
+      "text": "带螺纹",
+      "note": "a hole that carries a thread"
+    },
+    {
+      "en": "Drill point",
+      "text": "钻尖"
+    },
+    {
+      "en": "Centered",
+      "text": "居中"
+    },
+    {
+      "en": "Two sides",
+      "text": "两侧"
+    },
+    {
+      "en": "Axis",
+      "text": "轴"
+    },
+    {
+      "en": "Hand",
+      "text": "旋向",
+      "note": "the winding of a thread, Right or Left"
+    },
+    {
+      "en": "Right",
+      "text": "右"
+    },
+    {
+      "en": "Left",
+      "text": "左"
+    },
+    {
+      "en": "Flip direction",
+      "text": "反转方向"
+    },
+    {
+      "en": "Fit",
+      "text": "配合",
+      "note": "how tight a thread or hole fits: Close, Normal, Loose"
+    },
+    {
+      "en": "Inside",
+      "text": "内侧"
+    },
+    {
+      "en": "Outside",
+      "text": "外侧"
+    },
+    {
+      "en": "Tangent faces",
+      "text": "相切面"
+    },
+    {
+      "en": "Tangent edges",
+      "text": "相切边"
+    },
+    {
+      "en": "Delete Face",
+      "text": "删除面"
+    },
+    {
+      "en": "Divide Face",
+      "text": "分割面"
+    },
+    {
+      "en": "Box",
+      "text": "长方体"
+    },
+    {
+      "en": "Cylinder",
+      "text": "圆柱体"
+    },
+    {
+      "en": "Cone",
+      "text": "圆锥体"
+    },
+    {
+      "en": "Sphere",
+      "text": "球体"
+    },
+    {
+      "en": "Torus",
+      "text": "圆环体"
+    },
+    {
+      "en": "Duplicate",
+      "text": "复制"
+    },
+    {
+      "en": "Remove Body",
+      "text": "移除实体"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "薄壁拉伸"
+    },
+    {
+      "en": "Features",
+      "text": "特征"
+    },
+    {
+      "en": "Curve",
+      "text": "曲线"
+    },
+    {
+      "en": "Plugin",
+      "text": "插件"
+    },
+    {
+      "en": "Object",
+      "text": "对象",
+      "note": "an item the Mirror tool can take, a body or a sketch entity"
+    },
+    {
+      "en": "Parameter",
+      "text": "参数",
+      "note": "a named value of the Parameters list, typed into a value box"
     }
   ]
 }

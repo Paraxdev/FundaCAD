@@ -455,6 +455,293 @@
     {
       "en": "profile",
       "text": "プロファイル"
+    },
+    {
+      "en": "Distance",
+      "text": "距離"
+    },
+    {
+      "en": "Taper",
+      "text": "テーパー",
+      "note": "the angle a side leans in while it extrudes"
+    },
+    {
+      "en": "Thickness",
+      "text": "厚さ"
+    },
+    {
+      "en": "Diameter",
+      "text": "直径"
+    },
+    {
+      "en": "Depth",
+      "text": "深さ"
+    },
+    {
+      "en": "Angle",
+      "text": "角度"
+    },
+    {
+      "en": "Pitch",
+      "text": "ピッチ",
+      "note": "the climb of a thread per turn"
+    },
+    {
+      "en": "Count",
+      "text": "個数"
+    },
+    {
+      "en": "Radius",
+      "text": "半径"
+    },
+    {
+      "en": "Height",
+      "text": "高さ"
+    },
+    {
+      "en": "Width",
+      "text": "幅"
+    },
+    {
+      "en": "Length",
+      "text": "長さ"
+    },
+    {
+      "en": "Spacing",
+      "text": "間隔",
+      "note": "the gap between the copies of a pattern, not Distance"
+    },
+    {
+      "en": "Tolerance",
+      "text": "公差"
+    },
+    {
+      "en": "Offset value",
+      "text": "オフセット量",
+      "note": "the Offset row, a distance; the Offset tool keeps its own verb"
+    },
+    {
+      "en": "New body",
+      "text": "新しいボディ",
+      "note": "uses the word chosen for body"
+    },
+    {
+      "en": "Join",
+      "text": "結合",
+      "note": "the operation that adds to a body"
+    },
+    {
+      "en": "Cut",
+      "text": "切り取り",
+      "note": "the operation that removes from a body"
+    },
+    {
+      "en": "Through all",
+      "text": "貫通"
+    },
+    {
+      "en": "Up to face",
+      "text": "面まで"
+    },
+    {
+      "en": "Up to plane",
+      "text": "平面まで"
+    },
+    {
+      "en": "Up to point",
+      "text": "点まで"
+    },
+    {
+      "en": "Operation",
+      "text": "操作",
+      "note": "the row that picks New body, Join or Cut"
+    },
+    {
+      "en": "Counterbore",
+      "text": "座ぐり",
+      "note": "a flat bottomed widening of a hole"
+    },
+    {
+      "en": "Countersink",
+      "text": "皿穴",
+      "note": "a cone shaped widening of a hole"
+    },
+    {
+      "en": "Heat-set insert",
+      "text": "ヒートセットインサート",
+      "note": "a threaded insert pressed in with heat for printed parts"
+    },
+    {
+      "en": "Clearance",
+      "text": "通し穴",
+      "note": "a hole a screw passes through"
+    },
+    {
+      "en": "Tap drill",
+      "text": "下穴",
+      "note": "the hole drilled before a thread is cut"
+    },
+    {
+      "en": "Blind",
+      "text": "止まり穴",
+      "note": "a hole that stops inside the part"
+    },
+    {
+      "en": "Chord length",
+      "text": "弦の長さ"
+    },
+    {
+      "en": "Continuity",
+      "text": "連続性",
+      "note": "how smoothly a fillet meets its faces: G1, G2, G3"
+    },
+    {
+      "en": "Drive",
+      "text": "駆動",
+      "note": "what moves a draft or press/pull"
+    },
+    {
+      "en": "Hole type",
+      "text": "穴の種類"
+    },
+    {
+      "en": "Wall side",
+      "text": "壁の側"
+    },
+    {
+      "en": "Keep originals",
+      "text": "元を残す"
+    },
+    {
+      "en": "Emboss",
+      "text": "エンボス",
+      "note": "text raised from a face"
+    },
+    {
+      "en": "Engrave",
+      "text": "彫刻",
+      "note": "text cut into a face"
+    },
+    {
+      "en": "Tapped",
+      "text": "ねじ切り付き",
+      "note": "a hole that carries a thread"
+    },
+    {
+      "en": "Drill point",
+      "text": "ドリル先端"
+    },
+    {
+      "en": "Centered",
+      "text": "中央"
+    },
+    {
+      "en": "Two sides",
+      "text": "両側"
+    },
+    {
+      "en": "Axis",
+      "text": "軸"
+    },
+    {
+      "en": "Hand",
+      "text": "巻き方向",
+      "note": "the winding of a thread, Right or Left"
+    },
+    {
+      "en": "Right",
+      "text": "右"
+    },
+    {
+      "en": "Left",
+      "text": "左"
+    },
+    {
+      "en": "Flip direction",
+      "text": "向きを反転"
+    },
+    {
+      "en": "Fit",
+      "text": "はめあい",
+      "note": "how tight a thread or hole fits: Close, Normal, Loose"
+    },
+    {
+      "en": "Inside",
+      "text": "内側"
+    },
+    {
+      "en": "Outside",
+      "text": "外側"
+    },
+    {
+      "en": "Tangent faces",
+      "text": "接する面"
+    },
+    {
+      "en": "Tangent edges",
+      "text": "接するエッジ"
+    },
+    {
+      "en": "Delete Face",
+      "text": "面を削除"
+    },
+    {
+      "en": "Divide Face",
+      "text": "面を分割"
+    },
+    {
+      "en": "Box",
+      "text": "ボックス"
+    },
+    {
+      "en": "Cylinder",
+      "text": "円柱"
+    },
+    {
+      "en": "Cone",
+      "text": "円錐"
+    },
+    {
+      "en": "Sphere",
+      "text": "球"
+    },
+    {
+      "en": "Torus",
+      "text": "トーラス"
+    },
+    {
+      "en": "Duplicate",
+      "text": "複製"
+    },
+    {
+      "en": "Remove Body",
+      "text": "ボディを除去"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "薄肉押し出し"
+    },
+    {
+      "en": "Features",
+      "text": "フィーチャ"
+    },
+    {
+      "en": "Curve",
+      "text": "曲線"
+    },
+    {
+      "en": "Plugin",
+      "text": "プラグイン"
+    },
+    {
+      "en": "Object",
+      "text": "オブジェクト",
+      "note": "an item the Mirror tool can take, a body or a sketch entity"
+    },
+    {
+      "en": "Parameter",
+      "text": "パラメーター",
+      "note": "a named value of the Parameters list, typed into a value box"
     }
   ]
 }
