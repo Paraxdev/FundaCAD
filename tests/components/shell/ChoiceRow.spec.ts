@@ -39,4 +39,13 @@ describe("ChoiceRow", () => {
     });
     expect(w.get(".param-row").attributes("title")).toBe("How far it goes");
   });
+
+  it("renders its field as data-field on the row, and none without one", () => {
+    const withField = mount(ChoiceRow, {
+      props: { label: "Mode", field: "holeType", value: "blind", options, commit: () => {} },
+    });
+    expect(withField.get(".param-row").attributes("data-field")).toBe("holeType");
+    const without = mount(ChoiceRow, { props: { label: "Mode", value: "blind", options, commit: () => {} } });
+    expect(without.get(".param-row").attributes("data-field")).toBeUndefined();
+  });
 });

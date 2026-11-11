@@ -11,6 +11,8 @@ import { toast } from "../../ui/toast";
 
 const props = defineProps<{
   label: string;
+  /** The value's key, rendered as data-field so a row can be found by it. */
+  field?: string | undefined;
   value: string;
   commit: (value: string) => void;
   filters?: { name: string; extensions: string[] }[] | undefined;
@@ -41,6 +43,7 @@ async function browse() {
     v-slot="{ labelId }"
     layout="param"
     :label="label"
+    :data-field="field"
     :for="null"
     control-class="param-file"
     :title="value || rowTitle"

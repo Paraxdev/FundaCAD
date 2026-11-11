@@ -455,6 +455,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
     <ChoiceRow
       v-for="c in choiceRows"
       :key="`c:${c.field}`"
+      :field="c.field"
       :label="c.label"
       :value="c.current"
       :options="c.options"
@@ -464,6 +465,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
     <FileRow
       v-for="r in fileRows"
       :key="`f:${r.field}`"
+      :field="r.field"
       :label="r.label"
       :value="r.current"
       :filters="r.filters"
@@ -473,6 +475,7 @@ function validateField(row: { label: string; rule: ValueRule }, v: number): stri
     <ToggleRow
       v-for="t in toggleRows"
       :key="`t:${t.field}`"
+      :field="t.field"
       :label="t.label"
       :value="t.current"
       :commit="(v) => setOption(t.field, v)"

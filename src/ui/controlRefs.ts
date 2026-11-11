@@ -146,11 +146,18 @@ export function regionOf(el: Element): string {
 
 const GENERATED_ID = /^(v-|\d)|-\d{3,}$/;
 
+// The unit chip is also a Select, and a file row's clear button is a button: both keep their own refs.
+const PROP_CONTROL = ".select-trigger, .ui-switch, .file-pick";
+
 export function refOf(el: HTMLElement): string {
   const d = el.dataset;
   if (el instanceof HTMLInputElement) {
     const f = el.closest<HTMLElement>(".dim-field[data-field]");
     if (f) return `field:${f.dataset.field}`;
+    const p = el.closest<HTMLElement>(".param-row[data-field]");
+    if (p) return `prop:${p.dataset.field}`;
+  }
+  if (el.matches(PROP_CONTROL)) {
     const p = el.closest<HTMLElement>(".param-row[data-field]");
     if (p) return `prop:${p.dataset.field}`;
   }
