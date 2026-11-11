@@ -55,7 +55,11 @@ export function shortcutLabel(s: Shortcut, tr: Translate = t): string {
   const say = SAY.get(sayKey(s.action, s.context));
   if (say) return say(tr);
   // A plugin's label may be a getter, read it from the plugin's own object since a cached copy holds an old language.
-  return overrides.find((o) => o.action === s.action)?.label ?? s.label;
+  const own = overrides.find((o) => o.action === s.action)?.label;
+  if (own !== undefined) return own;
+  // A plugin keymap may move a core action to another context, its name still lives under the old one.
+  for (const [k, moved] of SAY) if (k.startsWith(`${s.action}|`)) return moved(tr);
+  return s.label;
 }
 
 const line =

@@ -61,4 +61,12 @@ describe("a plugin row's name after a language switch", () => {
     await setLanguage("de");
     expect(shortcutLabel(rows.find((r) => r.action === "fillet")!)).toBe(de["tool.fillet"]);
   });
+
+  it("a core action a plugin moves to another context keeps its name in the new language", async () => {
+    setShortcutOverrides([{ action: "fillet", key: "j", context: "global" }]);
+    const moved = activeShortcuts().find((r) => r.action === "fillet" && r.context === "global")!;
+    expect(shortcutLabel(moved)).toBe(en["tool.fillet"]);
+    await setLanguage("de");
+    expect(shortcutLabel(moved)).toBe(de["tool.fillet"]);
+  });
 });
