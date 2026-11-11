@@ -9,6 +9,7 @@
   "carry.nothingMade": "Depth is 0, nothing made",
   "carry.prompt": "click a face to push it, an edge to round it",
   "carry.refused": "Refused: {reason}",
+  "carry.slow": "The build took too long, pick the face or edge again",
   "carry.wait": "The preview is still building, click again in a moment",
   "command.accessibilitySettings": "Accessibility Settings…",
   "command.browseGeometry": "Browse Faces and Edges",

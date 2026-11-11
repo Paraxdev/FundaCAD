@@ -81,7 +81,10 @@ export function installCarryOn(e: CarryEngine): void {
           window.removeEventListener("keydown", onKey, true);
         });
       }, 0);
-      const limit = setTimeout(end, CARRY_LIMIT_MS);
+      const limit = setTimeout(() => {
+        end();
+        refuseAloud(e, t("carry.slow"));
+      }, CARRY_LIMIT_MS);
       undo.push(() => (clearTimeout(arm), clearTimeout(limit)));
 
       // onSessionBuild replays the state on screen, which is the model before the commit: only a build seen starting

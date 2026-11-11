@@ -9,6 +9,7 @@
   "carry.nothingMade": "Profondeur 0, rien n'a été créé",
   "carry.prompt": "cliquez sur une face pour la pousser, sur une arête pour l'arrondir",
   "carry.refused": "Refusé : {reason}",
+  "carry.slow": "La reconstruction a pris trop de temps, choisissez à nouveau la face ou l'arête",
   "carry.wait": "L'aperçu est encore en cours de calcul, cliquez à nouveau dans un instant",
   "command.accessibilitySettings": "Paramètres d'accessibilité…",
   "command.browseGeometry": "Parcourir les faces et les arêtes",

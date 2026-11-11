@@ -9,6 +9,7 @@
   "carry.nothingMade": "La profundidad es 0, no se ha creado nada",
   "carry.prompt": "haga clic en una cara para empujarla, en una arista para redondearla",
   "carry.refused": "Rechazado: {reason}",
+  "carry.slow": "La reconstrucción tardó demasiado, elija de nuevo la cara o la arista",
   "carry.wait": "La vista previa aún se está generando, vuelva a hacer clic en un momento",
   "command.accessibilitySettings": "Ajustes de accesibilidad…",
   "command.browseGeometry": "Recorrer caras y aristas",

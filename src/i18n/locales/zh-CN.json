@@ -9,6 +9,7 @@
   "carry.nothingMade": "深度为 0，未创建任何内容",
   "carry.prompt": "点击面以推拉，点击边以倒圆",
   "carry.refused": "已拒绝：{reason}",
+  "carry.slow": "重建耗时过长，请重新选择面或边",
   "carry.wait": "预览仍在生成，请稍后再点击",
   "command.accessibilitySettings": "无障碍设置…",
   "command.browseGeometry": "浏览面和边",

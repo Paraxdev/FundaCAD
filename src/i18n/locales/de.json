@@ -9,6 +9,7 @@
   "carry.nothingMade": "Tiefe ist 0, nichts erstellt",
   "carry.prompt": "klicken Sie auf eine Fläche, um sie zu verschieben, auf eine Kante, um sie zu runden",
   "carry.refused": "Abgelehnt: {reason}",
+  "carry.slow": "Der Aufbau hat zu lange gedauert, wählen Sie die Fläche oder Kante erneut",
   "carry.wait": "Die Vorschau wird noch berechnet, klicken Sie gleich noch einmal",
   "command.accessibilitySettings": "Einstellungen für Barrierefreiheit…",
   "command.browseGeometry": "Flächen und Kanten durchgehen",

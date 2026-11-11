@@ -9,6 +9,7 @@
   "carry.nothingMade": "深さが 0 のため、何も作成されませんでした",
   "carry.prompt": "面をクリックして押し出し、エッジをクリックして丸めます",
   "carry.refused": "拒否されました: {reason}",
+  "carry.slow": "再構築に時間がかかりすぎました。面またはエッジをもう一度選んでください",
   "carry.wait": "プレビューを作成中です。少し待ってからもう一度クリックしてください",
   "command.accessibilitySettings": "アクセシビリティの設定…",
   "command.browseGeometry": "面とエッジを順に調べる",

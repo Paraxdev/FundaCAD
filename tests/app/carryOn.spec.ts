@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installCarryOn, type CarryEngine } from "../../src/app/carryOn";
 import type { CarryHost, CarryTarget } from "../../src/features/carryOn";
 import type { RebuildState } from "../../src/document/store";
+import { t } from "../../src/i18n";
 
 const said = vi.hoisted(() => [] as unknown[][]);
 vi.mock("../../src/ui/announce", async (importOriginal) => ({
@@ -260,6 +261,7 @@ describe("what drops a carry", () => {
     vi.advanceTimersByTime(9_999);
     built(held.store);
     expect(held.calls).toHaveLength(2);
+    expect(held.status).toEqual([]);
 
     const over = rig();
     const removed = vi.spyOn(over.canvas, "removeEventListener");
@@ -269,6 +271,7 @@ describe("what drops a carry", () => {
     expect(removed).toHaveBeenCalledWith("pointerdown", expect.any(Function), true);
     built(over.store);
     expect(over.calls).toEqual([]);
+    expect(over.status).toEqual([t("carry.slow")]);
   });
 
   it("a second carry replaces the first, and each acts on its own target", () => {
