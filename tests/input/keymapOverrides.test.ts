@@ -8,7 +8,7 @@ import {
   shortcutConflicts,
   shortcutHudGroups,
 } from "../../src/input/shortcuts";
-import { setPointerBindings } from "../../src/viewport/navigator/bindings";
+import { DEFAULT_BINDINGS, setPointerBindings } from "../../src/viewport/navigator/bindings";
 
 afterEach(() => {
   setShortcutOverrides([]);
@@ -108,5 +108,29 @@ describe("the sheet's mouse rows", () => {
       { button: "right", click: "menu" },
     ]);
     expect(mouse()[0]).toEqual({ key: "Middle drag", label: "Orbit", changed: true });
+  });
+
+  it("mark only the rows that differ from the default, not a copy that matches it", () => {
+    const mouse = () =>
+      shortcutHudGroups()
+        .find((g) => g.id === "mouse")!
+        .rows.slice(0, 4);
+    const stock = [
+      { key: "Shift+right drag", label: "Pan" },
+      { key: "Right drag", label: "Orbit" },
+      { key: "Middle drag", label: "Pan" },
+      { key: "Right click", label: "The context menu" },
+    ];
+    setPointerBindings(DEFAULT_BINDINGS.map((b) => ({ ...b })));
+    expect(mouse()).toEqual(stock);
+    setPointerBindings([
+      { button: "right", alt: true, drag: "gesture", click: "menu" },
+      ...DEFAULT_BINDINGS.map((b) => ({ ...b })),
+    ]);
+    expect(
+      shortcutHudGroups()
+        .find((g) => g.id === "mouse")!
+        .rows.slice(0, 5),
+    ).toEqual([{ key: "Alt+right drag", label: "The radial menu", changed: true }, ...stock]);
   });
 });

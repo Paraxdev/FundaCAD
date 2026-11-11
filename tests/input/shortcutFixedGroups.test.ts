@@ -76,7 +76,7 @@ describe("the fixed groups in German", () => {
       { key: "Shift+Mitte ziehen", label: de["shortcuts.mouse.pan"], changed: true },
       { key: "Shift+Alt+rechts ziehen", label: de["shortcuts.mouse.orbit"], changed: true },
       { key: "Mitte ziehen", label: de["shortcuts.mouse.radial"], changed: true },
-      { key: "Rechts klicken", label: de["shortcuts.mouse.context"], changed: true },
+      { key: "Rechts klicken", label: de["shortcuts.mouse.context"] },
       { key: "Mitte klicken", label: de["shortcuts.mouse.context"], changed: true },
       { key: de["shortcuts.mouse.wheel"], label: de["shortcuts.mouse.zoom"] },
       { key: `Ctrl+${de["shortcuts.mouse.wheel"]}`, label: de["shortcuts.mouse.panWheel"] },

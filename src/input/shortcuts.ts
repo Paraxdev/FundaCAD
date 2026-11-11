@@ -552,7 +552,8 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set(), tr: Tra
     key: formatShortcut(a),
     label: tr("shortcuts.conflict", { first: shortcutLabel(a, tr), second: shortcutLabel(b, tr) }),
   }));
-  const custom = pointerBindings() !== DEFAULT_BINDINGS;
+  const entryId = (e: BindingEntry) => `${e.button}|${e.mods.join("+")}|${e.kind}|${e.what}`;
+  const stock = new Set(bindingEntries(DEFAULT_BINDINGS).map(entryId));
   const left = (kind: BindingEntry["kind"], mods: string[] = []) => gestureKey({ button: "left", mods, kind }, tr);
   return [
     ...(clashes.length ? [{ id: "conflicts", name: tr("shortcuts.group.conflicts"), rows: clashes }] : []),
@@ -564,7 +565,7 @@ export function shortcutHudGroups(skip: ReadonlySet<string> = new Set(), tr: Tra
         ...bindingEntries(pointerBindings()).map((e) => ({
           key: gestureKey(e, tr),
           label: tr(MOUSE_WHAT[e.what]),
-          ...(custom ? { changed: true } : {}),
+          ...(stock.has(entryId(e)) ? {} : { changed: true }),
         })),
         { key: tr("shortcuts.mouse.wheel"), label: tr("shortcuts.mouse.zoom") },
         { key: `Ctrl+${tr("shortcuts.mouse.wheel")}`, label: tr("shortcuts.mouse.panWheel") },
