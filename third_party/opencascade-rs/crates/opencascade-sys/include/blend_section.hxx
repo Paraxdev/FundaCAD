@@ -2481,8 +2481,9 @@ inline Opt<TopoDS_Shape> corner_pyramid(const ChamferEnd *const *c, double fuzz)
   return out;
 }
 
-// OCCT's plate through the setback meets of four or more convex chamfers strays off them (a pyramid apex at 8.41 built
-// 325.98 to 369.83 by frame and edge order, the flat cap 314.27). The cap needs the meets coplanar and inside faces.
+// OCCT's plate through the setback meets of four convex chamfers strays off them (a pyramid apex at 8.41 built 325.98
+// to 369.83 by frame and edge order, the flat cap 314.27). The cap needs the meets coplanar and inside faces. At eight
+// OCCT keeps about 72 % of the spike above the meets, so the cap is no model of its corner there.
 inline Opt<TopoDS_Shape> corner_cap(const std::vector<const ChamferEnd *> &c, double fuzz) {
   size_t n = c.size();
   std::vector<gp_Pnt> meet;
@@ -2638,7 +2639,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
       if (here.size() < 3) continue;
       Opt<TopoDS_Shape> pyramid;
       if (here.size() == 3 && meeting(a.at) == 3) pyramid = corner_pyramid(here.data(), by);
-      else if (here.size() >= 4 && meeting(a.at) == static_cast<int>(here.size())) pyramid = corner_cap(here, by);
+      else if (here.size() == 4 && meeting(a.at) == 4) pyramid = corner_cap(here, by);
       if (pyramid.has) {
         if (!pyramid.val.IsNull()) out.cut.push_back(pyramid.val);
       } else if (!sizing()) {

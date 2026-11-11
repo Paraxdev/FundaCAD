@@ -1031,6 +1031,54 @@ fn chamfers_at_an_apex_whose_setback_meets_are_not_coplanar_keep_occts_plate() {
     assert_eq!(got, vec![(0, 1), (0, 1)]);
 }
 
+/// The 20 high pyramid on a regular octagon of apothem 10, four triangular prisms turned 45 degrees apart and
+/// intersected, then `blend`.
+fn octagonal_pyramid(blend: Value) -> Rebuild {
+    let mut features = vec![];
+    for k in 0..4 {
+        let a = PI / 4.0 * k as f64;
+        let plane = json!({"origin": [0, 0, 0], "normal": [a.sin(), -a.cos(), 0], "xdir": [a.cos(), a.sin(), 0]});
+        let tri = [(-10.0, 0.0), (10.0, 0.0), (0.0, 20.0)];
+        let lines: Vec<Value> = (0..3)
+            .map(|i| {
+                let (p, q) = (tri[i], tri[(i + 1) % 3]);
+                json!({"type": "line", "x1": p.0, "y1": p.1, "x2": q.0, "y2": q.1})
+            })
+            .collect();
+        features.push(json!({"id": format!("s{k}"), "type": "sketch", "plane": plane, "entities": lines}));
+        features.push(json!({"id": format!("e{k}"), "type": "extrude", "sketch": format!("s{k}"), "distance": 30,
+            "symmetric": true, "operation": if k == 0 { "new" } else { "intersect" }}));
+    }
+    features.push(blend);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+/// Eight chamfers at an apex: OCCT's corner there takes about 28 % of the spike above the setback meets, not all of
+/// it, so the flat cap (1828.44 at 2) is no model of it and the build stays OCCT's.
+#[test]
+fn eight_chamfers_meeting_at_an_octagonal_pyramid_apex_keep_occts_corner() {
+    use fundacad_geom::features::blend::ops;
+    let d = 2.0;
+    let r = 10.0 / (PI / 8.0).cos() / 2.0;
+    let edges: Vec<Value> = (0..8)
+        .map(|k| {
+            let a = PI / 8.0 + PI / 4.0 * k as f64;
+            json!({"kind": "edge", "by": "nearest", "body": "body1", "point": [r * a.cos(), r * a.sin(), 10.0]})
+        })
+        .collect();
+    let bare = octagonal_pyramid(json!({"id": "n", "type": "move", "dx": 0.0}));
+    let body = bare.bodies[0].shape.clone();
+    let top = edges_at(&body, [0.0, 0.0, 20.0], true);
+    let (occt, _) = ops::chamfer(&body, &top, &[d; 8], &[d; 8]).expect("OCCT builds it");
+    let occt = kernel::volume_precise(&occt).abs();
+    let built = octagonal_pyramid(json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d}));
+    let (errors, _, v, _, faces) = with_faces(&built);
+    // OCCT's volume here moves by a few mm3 with edge order and frame (1963.09 to 1966.34), the cap is 135 under.
+    let near = |a: f64, b: f64| (a - b).abs() < 10.0;
+    let got = (top.len(), near(occt, 1966.34), errors, near(v, occt), v, faces, curved_faces(&built));
+    assert_eq!(got, (8, true, 0, true, v, Some(18), 1));
+}
+
 /// The 20 high pyramid before any blend, tilted and moved, and its apex.
 fn bare_pyramid(notch: bool) -> (Shape, [f64; 3]) {
     let r = pyramid(notch, json!({"id": "n", "type": "move", "dx": 0.0}));
