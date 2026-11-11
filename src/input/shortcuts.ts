@@ -53,7 +53,9 @@ function row(key: string, action: string, context: Shortcut["context"], say: Say
 /** The name of a row in the language of `tr`, whether the row is the table's own or a copy of it. */
 export function shortcutLabel(s: Shortcut, tr: Translate = t): string {
   const say = SAY.get(sayKey(s.action, s.context));
-  return say ? say(tr) : s.label;
+  if (say) return say(tr);
+  // A plugin's label may be a getter, read it from the plugin's own object since a cached copy holds an old language.
+  return overrides.find((o) => o.action === s.action)?.label ?? s.label;
 }
 
 const line =
@@ -205,7 +207,7 @@ export interface ShortcutOverride {
 export const ALT_REFUSAL = "Alt is read by the tools, pick a key without it";
 
 /** The refusal in the chosen language; the English text is plugin API, so only that one is translated. */
-export function refusalLabel(refused: string, tr: typeof t = t): string {
+export function refusalLabel(refused: string, tr: Translate = t): string {
   return refused === ALT_REFUSAL ? tr("shortcuts.problem.alt") : refused;
 }
 
