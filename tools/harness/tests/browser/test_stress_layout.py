@@ -58,10 +58,12 @@ READ = """([boxes, material]) => {
   const run = panel.querySelector('.stress-run');
   const body = panel.querySelector('.stress-setup');
   // Measured after scrolling the box into view, a box clipped out of the scrolled body reads the same left but not a real one.
+  // Both after the last scroll, since a shelf can leave the body shorter than a stacked row and scroll it between the two.
   const seen = (e) => { e.scrollIntoView({ block: 'nearest' }); return e; };
   const row = (c) => {
     const k = seen(c.closest('.stress-field')).querySelector('.measure-k');
-    const kb = box(k), cb = box(seen(c));
+    seen(c);
+    const kb = box(k), cb = box(c);
     return { l: Math.round(cb.l * 10) / 10, one_line: cb.t < kb.b && cb.b > kb.t };
   };
   // A word is cut when its own range spans two lines.
