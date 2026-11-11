@@ -66,7 +66,14 @@ describe("docs/I18N.md", () => {
 describe("the manual's Language section", () => {
   it("shows only lines FundaCAD has, each one a language file could hold", () => {
     const keys = [...manual.matchAll(/^ {2}"([^"]+)": "/gm)].map((m) => m[1]!);
-    expect([keys.length, keys.filter((k) => !Object.hasOwn(en, k)), badExamples(manual)]).toEqual([3, [], []]);
+    const core = keys.filter((k) => !k.includes(":"));
+    const plugin = keys.filter((k) => k.includes(":"));
+    expect([core.length, core.filter((k) => !Object.hasOwn(en, k)), plugin, badExamples(manual)]).toEqual([
+      3,
+      [],
+      ["FundaCAD.Printing:menu.file.send"],
+      [],
+    ]);
   });
 });
 
