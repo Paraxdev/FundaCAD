@@ -1167,7 +1167,8 @@ export interface ResolveDiag {
   feature_id?: string;
   // edgeOpFailed: `failed` names the edges to paint red. sealedVoid: a cut closed a
   // cavity inside the body (legal, so not an error; the other fields are neutral).
-  kind: "edge" | "face" | "boolean" | "edgeOpFailed" | "sealedVoid" | "separateFaces";
+  // partialCut: a cut retried on its tool in slices may have left part of it uncut.
+  kind: "edge" | "face" | "boolean" | "edgeOpFailed" | "sealedVoid" | "separateFaces" | "partialCut";
   resolved: number; // how many entities matched (0 for a skipped boolean)
   confidence: number; // 0..1, margin to the runner-up candidate (1 = lone clear pick)
   lossy: boolean; // a marginal / drift-path match was taken (or a feature was skipped)

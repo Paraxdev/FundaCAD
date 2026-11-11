@@ -99,10 +99,10 @@ fn in_slices(solid: &Shape, n: usize, rank: usize) -> Vec<Shape> {
 }
 
 /// `_retried_in_slices`, only where the alternative was to raise. A long swept tool nearly parallel to the face
-/// it meets makes OCCT hand the argument back as done, or fuse into a disjoint lump, while two or four slabs work.
-/// A fuse takes `accept` as its test, a cut is tried across each axis (see `sliced_cut`). `Ok(None)` is a true
-/// miss, an `Err` is the kernel refusing every slicing and says nothing about reach. The flag says a cut's slicings
-/// disagreed on how much it removes with nothing to confirm the largest.
+/// it meets makes OCCT hand the argument back as done, or fuse into a disjoint lump, while the tool in slabs works.
+/// A fuse tries two then four slabs across the longest axis with `accept` as its test, a cut two slabs across each
+/// axis (see `sliced_cut`). `Ok(None)` is a true miss, an `Err` is the kernel refusing every slicing and says nothing
+/// about reach. The flag says a cut's slicings disagreed on how much it removes with nothing to confirm the largest.
 fn retried_in_slices(
     shape: &Shape,
     tool: &Shape,
