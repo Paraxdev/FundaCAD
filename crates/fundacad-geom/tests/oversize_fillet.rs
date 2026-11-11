@@ -6,6 +6,7 @@ use std::f64::consts::PI;
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
 use fundacad_geom::kernel::{self, Kind};
+use opencascade::primitives::Shape;
 use serde_json::{json, Value};
 
 fn build(raw: &Value) -> Rebuild {
@@ -855,7 +856,7 @@ fn chamfers_meeting_at_an_apex_of_four_edges_or_with_a_concave_one_are_refused()
         (with_faces(&r), tip(&r))
     };
     let got = vec![run(false, dt, json!(apex)), run(true, dt, notched())];
-    let want = vec![((1, vec![], 2666.67, None, Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
+    let want = vec![((1, vec![], 2666.67, Some(8.41), Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
     assert_eq!(got, want);
 }
 
@@ -928,4 +929,80 @@ fn a_dragged_chamfer_refused_at_a_corner_offers_only_the_size_a_step_under_it() 
     ];
     let want = vec![(1, vec![], 1039.23, Some(1.99)), (1, vec![], 4500.0, None), (0, vec![], 4251.17, None)];
     assert_eq!(got, want);
+}
+
+/// Where four chamfers meet, OCCT closes the apex with one filling patch that from about 8.5 of the 9.13 where the
+/// side faces close bulges out through them, its volume going 266, 37, 87, 3, 136 and said ok. Such a build is
+/// refused with a size whose result stays inside, which builds clean (9.0 built 139.86 and 9.12 137.19 silently).
+#[test]
+fn chamfers_whose_apex_patch_leaves_the_pyramid_are_refused_with_a_size_that_stays_inside() {
+    let dt = 20.0 / 4.8f64.sqrt();
+    let apex: Vec<Value> =
+        [(-5.0, -5.0), (5.0, -5.0), (5.0, 5.0), (-5.0, 5.0)].iter().map(|&(x, y)| on_pyramid(x, y, 10.0)).collect();
+    let equal = |d: f64| json!({"id": "c", "type": "chamfer", "edges": apex, "distance": d});
+    let run = |d: f64| {
+        let r = pyramid(false, equal(d));
+        let (errors, _, v, _, faces) = with_faces(&r);
+        (errors, v, messages(&r).first().and_then(|m| offered(m)), faces)
+    };
+    let built = [8.0, 8.2].map(run);
+    assert_eq!(built, [(0, 528.45, None, Some(10)), (0, 475.47, None, Some(10))]);
+    let refused = [9.0, 9.12, dt].map(run);
+    for (d, got) in [9.0, 9.12, dt].iter().zip(&refused) {
+        assert_eq!((got.0, got.1, got.3), (1, 2666.67, Some(5)), "at {d}");
+        let size = got.2.unwrap_or(0.0);
+        assert!((8.2..8.5).contains(&size), "offered {size} at {d}");
+        assert_eq!(run(size).0, 0, "{size} builds");
+        assert_eq!(run(size).3, Some(10));
+    }
+}
+
+/// The 20 high pyramid before any blend, tilted and moved, and its apex.
+fn bare_pyramid(notch: bool) -> (Shape, [f64; 3]) {
+    let r = pyramid(notch, json!({"id": "n", "type": "move", "dx": 0.0}));
+    (r.bodies[0].shape.clone(), [13.0, -17.0, 20.0 * 0.75f64.sqrt() + 4.0])
+}
+
+/// The edges of `shape` that do, or do not, reach `p`.
+fn edges_at(shape: &Shape, p: [f64; 3], reaching: bool) -> Vec<Shape> {
+    let reaches = |e: &Shape| {
+        kernel::subshapes(e, Kind::Vertex)
+            .iter()
+            .filter_map(kernel::bbox)
+            .any(|b| (0..3).all(|k| (b[k] - p[k]).abs() < 1e-3))
+    };
+    kernel::subshapes(shape, Kind::Edge).into_iter().filter(|e| reaches(e) == reaching).collect()
+}
+
+#[test]
+fn a_corner_patch_that_bulges_out_of_the_body_is_told_from_one_that_stays_inside() {
+    use fundacad_geom::features::blend::{apex, ops};
+    let (body, apex_at) = bare_pyramid(false);
+    let top = edges_at(&body, apex_at, true);
+    assert_eq!(top.len(), 4);
+    let leaves = [7.0, 8.0, 8.2, 8.5, 8.8, 9.0, 9.12].map(|d| {
+        let (out, _) = ops::chamfer(&body, &top, &[d; 4], &[d; 4]).unwrap();
+        apex::leaves_body(&body, &out)
+    });
+    assert_eq!(leaves, [false, false, false, true, true, true, true]);
+    assert!(!apex::leaves_body(&body, &body));
+}
+
+#[test]
+fn only_four_convex_edges_meeting_at_a_vertex_are_an_apex() {
+    use fundacad_geom::features::blend::apex;
+    let (body, at) = bare_pyramid(false);
+    let (notched, _) = bare_pyramid(true);
+    let top = edges_at(&body, at, true);
+    let notched_top = edges_at(&notched, at, true);
+    let got = (
+        apex::convex_apex(&body, &top),
+        apex::convex_apex(&body, &top[..3]),
+        apex::convex_apex(&body, &edges_at(&body, at, false)),
+        notched_top.len(),
+        apex::convex_apex(&notched, &notched_top),
+    );
+    let found = got.0.expect("the apex");
+    assert!((0..3).all(|k| (found[k] - at[k]).abs() < 1e-3));
+    assert_eq!((got.1, got.2, got.3, got.4), (None, None, 6, None));
 }

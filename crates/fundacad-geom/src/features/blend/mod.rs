@@ -1,6 +1,7 @@
 //! Fillets and chamfers, blends.py. One kernel call on the whole group first, on a copy. When that refuses the
 //! edges go one at a time in canonical order, and one that still refuses fails saying whether a smaller size builds.
 
+pub mod apex;
 pub mod eval;
 pub mod ops;
 pub mod overlap;
@@ -80,6 +81,8 @@ pub enum Misfit {
     /// It would carve away the face line the blend on a neighbouring edge
     /// rests on.
     Overlap,
+    /// The patch that closes a corner where four or more chamfers meet would bulge out of the body.
+    Corner,
 }
 
 impl Misfit {
@@ -112,6 +115,7 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
         Misfit::Mixed => "it would run off a face on part of the edge only",
         Misfit::Split => "it would cut the body in pieces",
         Misfit::Overlap => &neighbour,
+        Misfit::Corner => "the patch that closes the corner where the chamfers meet would bulge out through the faces",
     };
     let head = format!(
         "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
@@ -121,7 +125,7 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
     // At the limit the ball ends exactly on a face's edge and the kernel leaves a sliver face, so the offer stays
     // a hair below it. A split's or an overlap's limit is a size that built, already on this grid.
     let shown = |v: f64| {
-        let v = if matches!(why, Misfit::Split | Misfit::Overlap) { v + 1e-6 } else { v - 1e-4 };
+        let v = if matches!(why, Misfit::Split | Misfit::Overlap | Misfit::Corner) { v + 1e-6 } else { v - 1e-4 };
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
         (v * step).floor() / step
     };
@@ -985,11 +989,13 @@ fn blend_edges(
             let found = (!draft).then(|| smooth_size(blend_size, &builds_smooth));
             uneven_error(label, &body_name, blend_size, rippled.get(), found)
         };
+        let apex = (label == "Chamfer").then(|| apex::convex_apex(&body_shape, &edges)).flatten();
         let kernel_builds = |size: f64| {
             use crate::kernel::{count, Kind};
             ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
                 op(&b, &es, size).is_ok_and(|out| {
                     !overlap::folds_over_itself(&b, &out, size)
+                        && (apex.is_none() || !apex::leaves_body(&b, &out))
                         && smooth_at(&out, size)
                         && still_sharp(&out, &es).is_empty()
                         && keeps_voids(&b, &out)
@@ -999,7 +1005,8 @@ fn blend_edges(
             })
         };
         // Where four or more chosen edges meet, OCCT builds sizes under the limit off its own volume trend (a tilted
-        // pyramid's apex at 9.12 of 9.13 built 137.19, plain OCCT on it untilted 432.11), so no size is offered.
+        // pyramid's apex at 9.12 of 9.13 built 137.19, plain OCCT on it untilted 432.11), so a size is offered only
+        // where `kernel_builds` has checked that the corner stays inside the body.
         let meeting = |at: [f64; 3]| {
             let at = DVec3::from(at);
             edges.iter().filter(|e| vertex_points(e).iter().any(|&v| DVec3::from(v).distance(at) < 1e-3)).count()
@@ -1008,7 +1015,7 @@ fn blend_edges(
         // these chamfers, often stops only at the asked size, so the offer is the largest size OCCT builds.
         let refused = |(why, fits, at): (Misfit, Fits, [f64; 3])| {
             let fits = match fits {
-                Fits::Unknown if label == "Chamfer" && meeting(at) < 4 => {
+                Fits::Unknown if label == "Chamfer" && (apex.is_some() || meeting(at) < 4) => {
                     kernel_size(blend_size, draft, &kernel_builds).map_or(fits, Fits::UpTo)
                 }
                 _ => fits,
@@ -1063,6 +1070,11 @@ fn blend_edges(
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None => return Err(uneven()),
+            }
+        } else if let Some(at) = apex.filter(|_| apex::leaves_body(&work, &new_shape)) {
+            match try_section(&body_shape, &edges) {
+                Some(built) => built,
+                None => return Err(refused((Misfit::Corner, Fits::Unknown, at))),
             }
         } else {
             new_shape
