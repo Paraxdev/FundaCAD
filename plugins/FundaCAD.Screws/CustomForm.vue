@@ -452,7 +452,8 @@ watch(
           flex: stacked ? '1 1 140px' : '1 1 100%',
           gap: '8px',
           marginTop: stacked ? 0 : '10px',
-          minWidth: 0,
+          // Too narrow for Save beside the preview, the row wraps below it instead of running past the panel edge.
+          minWidth: 'min-content',
         }"
       >
         <Button
