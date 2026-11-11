@@ -474,7 +474,7 @@
   "tool.fillet": "Congé",
   "tool.fix": "Fixer",
   "tool.gridHoles": "Perçages en grille",
-  "tool.group.constraints": "Contraintes",
+  "tool.group.constraints": "Contraintes géométriques",
   "tool.group.construct": "Construire",
   "tool.group.create": "Créer",
   "tool.group.insert": "Insérer",
