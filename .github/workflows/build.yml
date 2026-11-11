@@ -15,6 +15,10 @@
 # release, though nothing sends people there. The retired Python engine is
 # frozen on the `legacy` branch, which publishes nothing.
 #
+# A push whose Rust inputs match a green run reuses that run's engine and skips
+# rust-geom's builds and tests, see rust-key. A manual run (Run workflow)
+# always builds everything.
+#
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
 name: build
@@ -1823,6 +1827,49 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # The key of everything the Rust jobs read: every tracked file but the
+  # frontend's own (TypeScript, Vue, styles, prose, its language files, the
+  # browser tests, the other CI jobs). A file not listed here counts as Rust input, so a wrong
+  # guess costs a full run and never skips one. The ISO week is in the key, so
+  # a moving stable toolchain is still built and tested at least once a week,
+  # and a manual run always builds everything.
+  rust-key:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      hit: ${{ steps.look.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Key the Rust inputs
+        id: key
+        shell: bash
+        run: |
+          # Frontend files the Rust tests read all the same; tests/build/rustKey.test.ts
+          # fails when a Rust source names one that is missing here.
+          read='src/types.ts src/document/migrate.ts tools/harness/fixtures'
+          sum=$( {
+            git ls-tree -r HEAD | grep -v -E $'\t(\\.github/workflows|docs|manual|e2e|tools/harness|tests/build|src/i18n|src/assets)/|\tplugins/[^/]+/locales/|\t(package|package-lock)\\.json$|\tscripts/[^/]+-allow\\.json$|\\.(ts|tsx|mts|vue|scss|css|md|mjs)$'
+            git ls-tree -r HEAD -- $read
+            # Of the workflows, only these two jobs build and test Rust.
+            awk '/^  [a-z][a-z0-9-]*:\r?$/ { on = $1 ~ /^rust-(key|geom):/ } on' .github/workflows/build.yml
+          } | sha256sum | cut -c1-40)
+          echo "key=rust-geom-green-v1-$(date -u +%G-W%V)-$sum" >> "$GITHUB_OUTPUT"
+
+      - name: Look for a green rust-geom of the same inputs
+        id: look
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rust-geom-green
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
   # The geometry engine (crates/, docs/ENGINE.md) and the app shell around
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
   # which is long on a cold runner and short once target/OCCT is cached, so the
@@ -1834,8 +1881,11 @@ jobs:
     # changed recompiles. Only the owner's own pushes and manual runs go there,
     # everyone else gets GitHub's runner; the runner's job-started hook refuses
     # anything else too, since a fork pull request could edit this file.
-    # vars.FAST_RUNNER off falls back to GitHub.
-    runs-on: ${{ (github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04' }}
+    # vars.FAST_RUNNER off falls back to GitHub. When rust-key found a green run
+    # of the same Rust inputs, this job only hands that run's engine on, from
+    # GitHub's runner, so a frontend change never waits for the self hosted one.
+    needs: rust-key
+    runs-on: ${{ needs.rust-key.outputs.hit == 'true' && 'ubuntu-22.04' || ((github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04') }}
     timeout-minutes: 240
     permissions:
       contents: read
@@ -1844,7 +1894,8 @@ jobs:
     # in panics.
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      SELF_HOSTED: ${{ github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true' }}
+      SELF_HOSTED: ${{ needs.rust-key.outputs.hit != 'true' && github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true' }}
+      GREEN: ${{ needs.rust-key.outputs.hit == 'true' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -1853,7 +1904,7 @@ jobs:
           persist-credentials: false
 
       - name: Free disk space
-        if: env.SELF_HOSTED != 'true'
+        if: env.SELF_HOSTED != 'true' && env.GREEN != 'true'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
@@ -1861,19 +1912,22 @@ jobs:
       # src-tauri links the tauri crate, which needs the webkit2gtk stack and
       # libudev; cmake builds OpenCASCADE.
       - name: Install Linux system dependencies
+        if: env.GREEN != 'true'
         uses: ./.github/actions/linux-deps
 
       - name: Install cmake
+        if: env.GREEN != 'true'
         run: sudo apt-get install -y cmake
 
       - name: Install Rust
+        if: env.GREEN != 'true'
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
           targets: wasm32-wasip2
 
       - name: Cache Cargo
-        if: env.SELF_HOSTED != 'true'
+        if: env.SELF_HOSTED != 'true' && env.GREEN != 'true'
         uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
@@ -1884,7 +1938,7 @@ jobs:
       # The same kernel and key as bundle's, so the two jobs share it. Keep
       # it after rust-cache, see bundle.
       - name: Cache the static OpenCASCADE build
-        if: env.SELF_HOSTED != 'true'
+        if: env.SELF_HOSTED != 'true' && env.GREEN != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -1903,18 +1957,22 @@ jobs:
       # without it, and the MCP suites drive the built engine binary, so both
       # are built first or those tests pass without testing anything.
       - name: Build the plugin components
+        if: env.GREEN != 'true'
         run: python3 scripts/build-plugin-wasm.py
 
       - name: Build the workspace binaries
+        if: env.GREEN != 'true'
         run: cargo build --locked --workspace --features fundacad-engine/ws
 
       - name: Rust workspace tests
+        if: env.GREEN != 'true'
         run: cargo test --locked --workspace --features fundacad-engine/ws
 
       # Text outlines come from the system's fonts, and the text goldens were
       # frozen with Windows' Arial and Times New Roman. A case whose font is
       # not installed is skipped rather than compared with a stand in.
       - name: Install the fonts the text goldens were frozen with
+        if: env.GREEN != 'true'
         run: |
           echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
           sudo apt-get install -y ttf-mscorefonts-installer
@@ -1925,6 +1983,7 @@ jobs:
       # crates/fundacad-mcp/tests/parity_golden.rs, run by the step above. Every
       # golden runs even after one fails, so a red build names them all.
       - name: Golden parity checks
+        if: env.GREEN != 'true'
         shell: bash
         run: |
           fail=0
@@ -1941,6 +2000,7 @@ jobs:
       # the app does after a restart. The goldens whose documents run plugin
       # features, where state that is not in the shape has to survive the disk.
       - name: Golden parity checks, warm cache
+        if: env.GREEN != 'true'
         shell: bash
         run: |
           fail=0
@@ -1955,10 +2015,19 @@ jobs:
       # rebuilds there. Links the kernel this job already built, and a `dist`
       # stands in for the frontend, which the Tauri context embeds.
       - name: App shell tests (unit + container seam)
+        if: env.GREEN != 'true'
         working-directory: src-tauri
         run: |
           mkdir -p ../dist
           cargo test --locked --tests --workspace
+
+      - name: Fetch the engine of the green run
+        if: env.GREEN == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rust-geom-green
+          key: ${{ needs.rust-key.outputs.key }}
+          fail-on-cache-miss: true
 
       - name: Upload the engine for the e2e job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1966,7 +2035,7 @@ jobs:
           name: fundacad-engine-linux
           retention-days: 1
           if-no-files-found: error
-          path: target/debug/fundacad-engine
+          path: ${{ env.GREEN == 'true' && 'rust-geom-green/fundacad-engine' || 'target/debug/fundacad-engine' }}
 
       # The shipped engine is an optimised GCC build, which the debug build above
       # is not: undefined behaviour in the C++ shims has shown up only there. The
@@ -1974,9 +2043,11 @@ jobs:
       # that differs or a rebuild that hangs only once optimised fails here. A
       # release build finds plugins only through FUNDACAD_PLUGIN_DIR.
       - name: Build the release engine
+        if: env.GREEN != 'true'
         run: cargo build --locked --release -p fundacad-cli
 
       - name: Golden parity checks, release build
+        if: env.GREEN != 'true'
         shell: bash
         env:
           FUNDACAD_PLUGIN_DIR: plugins
@@ -1990,6 +2061,20 @@ jobs:
             [ $code -ne 0 ] && { echo "::error::$g fails on the release build"; tail -n 20 golden.err; fail=1; }
           done
           exit $fail
+
+      # Saved last, so only inputs that passed every step above are skipped later.
+      - name: Remember this green run's engine
+        if: env.GREEN != 'true'
+        run: |
+          mkdir -p rust-geom-green
+          cp target/debug/fundacad-engine rust-geom-green/
+
+      - name: Save the green run for the same inputs
+        if: env.GREEN != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rust-geom-green
+          key: ${{ needs.rust-key.outputs.key }}
 
       # The warm target dir gains a test binary per change; a week is kept.
       - name: Prune the warm target dir
