@@ -102,7 +102,7 @@ fn in_slices(solid: &Shape, n: usize, rank: usize) -> Vec<Shape> {
 /// it meets makes OCCT hand the argument back as done, or fuse into a disjoint lump, while the tool in slabs works.
 /// A fuse tries two then four slabs across the longest axis with `accept` as its test, a cut two slabs across each
 /// axis (see `sliced_cut`). `Ok(None)` is a true miss, an `Err` is the kernel refusing every slicing and says nothing
-/// about reach. The flag says a cut's slicings disagreed on how much it removes with nothing to confirm the largest.
+/// about reach. The flag says no second slicing confirmed how much a cut removes.
 fn retried_in_slices(
     shape: &Shape,
     tool: &Shape,
@@ -138,7 +138,7 @@ struct SlicedCut {
 /// A long helical tool sliced along its own axis comes back as long helices the kernel still cuts half-way and
 /// reports as done, so for a cut the slicings across each axis are compared by the volume they remove. A cut cannot
 /// remove too much, so the largest is kept. It is only trusted once a second slicing agrees; with none agreeing after
-/// two or more ran, it is `doubtful`.
+/// two or more ran, or after the kernel refused another, it is `doubtful`.
 fn sliced_cut(
     shape: &Shape,
     attempts: impl IntoIterator<Item = Vec<Shape>>,
@@ -173,7 +173,9 @@ fn sliced_cut(
         }
     }
     match (best, refused) {
-        (Some((shape, pieces, _)), _) => Ok(Some(SlicedCut { shape, pieces, doubtful: ran >= 2 && !agreed })),
+        (Some((shape, pieces, _)), refused) => {
+            Ok(Some(SlicedCut { shape, pieces, doubtful: !agreed && (ran >= 2 || refused.is_some()) }))
+        }
         (None, Some(e)) if ran == 0 => Err(e),
         _ => Ok(None),
     }
@@ -449,7 +451,7 @@ pub fn combine(
                         "resolved": 0,
                         "confidence": 0.0,
                         "lossy": false,
-                        "reason": "This cut may have left part of its tool uncut: the ways of splitting it for the kernel removed different amounts and none was confirmed. Check the result, or cut a shorter length at a time.",
+                        "reason": "This cut may have left part of its tool uncut: no second way of splitting it for the kernel confirmed how much it removed. Check the result, or cut a shorter length at a time.",
                         "code": "partialCut",
                     }));
                 }

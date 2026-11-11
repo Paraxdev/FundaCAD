@@ -140,3 +140,22 @@ fn a_slicing_that_cannot_be_made_does_not_stop_the_next_axis() {
     let (got, drawn) = run(vec![taking(30.0), vec![body()], taking(45.0)]);
     assert_eq!((kept(got), drawn), (Some((648.0, true)), 3));
 }
+
+#[test]
+fn a_lone_slicing_beside_one_the_kernel_refused_is_doubtful_until_another_agrees() {
+    let tried = Cell::new(0);
+    let refuse_first = |a: &Shape, p: &Shape| {
+        tried.set(tried.get() + 1);
+        if tried.get() <= 1 {
+            Err(KernelError("BOPAlgo_ImpossibleResult".into()))
+        } else {
+            lower(a, p)
+        }
+    };
+    let outcome = |attempts: Vec<Vec<Shape>>| {
+        tried.set(0);
+        kept(sliced_cut(&body(), attempts, &refuse_first, &vol).unwrap())
+    };
+    assert_eq!(outcome(vec![taking(42.0), taking(42.0)]), Some((651.0, true)));
+    assert_eq!(outcome(vec![taking(42.0), taking(42.0), taking(42.0)]), Some((651.0, false)));
+}
