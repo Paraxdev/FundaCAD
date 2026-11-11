@@ -21,7 +21,13 @@ afterEach(async () => {
 
 type Mesh = StressReply["mesh"];
 
-const mesh = (over: Partial<Mesh> = {}): Mesh => ({ nodes: 3100, elements: 12000, size: 2.2, minDihedral: 9.6, ...over });
+const mesh = (over: Partial<Mesh> = {}): Mesh => ({
+  nodes: 3100,
+  elements: 12000,
+  size: 2.2,
+  minDihedral: 9.6,
+  ...over,
+});
 const THREE_PASSES = [
   { elements: 4000, maxVonMises: 14.2 },
   { elements: 8000, maxVonMises: 13.1 },
@@ -123,7 +129,8 @@ describe("the result in German", () => {
   it("names what a one pass run did, and has no detail row for a stop it does not know", async () => {
     await setLanguage("de");
     const one = [THREE_PASSES[0]!];
-    const detail = (stop: string | undefined, passes = one) => meshDetail(mesh({ passes, ...(stop === undefined ? {} : { stop }) }))[1]?.v ?? null;
+    const detail = (stop: string | undefined, passes = one) =>
+      meshDetail(mesh({ passes, ...(stop === undefined ? {} : { stop }) }))[1]?.v ?? null;
     expect([
       detail("off"),
       detail("settled"),
@@ -150,7 +157,9 @@ describe("the result in German", () => {
     await setLanguage("de");
     const rows = (m: Partial<Mesh>) => meshDetail(mesh(m))[0]!.v;
     expect(rows({ finest: 2.2, passes: THREE_PASSES })).toBe("12000 Elemente, 2,2 mm");
-    expect(rows({ finest: 2.19, passes: THREE_PASSES })).toBe("12000 Elemente, 2,2 mm, 2,19 mm an der Spitze, 3 Durchläufe");
+    expect(rows({ finest: 2.19, passes: THREE_PASSES })).toBe(
+      "12000 Elemente, 2,2 mm, 2,19 mm an der Spitze, 3 Durchläufe",
+    );
     expect(rows({ finest: 0.45, passes: THREE_PASSES.slice(0, 1) })).toBe("12000 Elemente, 2,2 mm");
   });
 
@@ -170,7 +179,16 @@ describe("the result in German", () => {
 
   it("writes a support without a known kind as its number alone", async () => {
     await setLanguage("de");
-    const v = formatStressResult(reply({ reactions: [[1, 2, 3], [4, 5, 6]] }), "mm", ["slider"]);
+    const v = formatStressResult(
+      reply({
+        reactions: [
+          [1, 2, 3],
+          [4, 5, 6],
+        ],
+      }),
+      "mm",
+      ["slider"],
+    );
     expect(plain(v.details).filter((d) => d.k.startsWith("Halterung"))).toEqual([
       { k: "Halterung 1, gleitend", v: "1; 2; 3 N" },
       { k: "Halterung 2", v: "4; 5; 6 N" },
@@ -180,10 +198,16 @@ describe("the result in German", () => {
   it("spells the bend in the display unit", async () => {
     setUnit("in");
     await setLanguage("de");
-    const v = read(formatStressResult(reply({ maxDisplacement: { value: 25.4, at: [25.4, -12.7, 50.8], vector: [0, 0, 1] } }), "in"));
+    const v = read(
+      formatStressResult(reply({ maxDisplacement: { value: 25.4, at: [25.4, -12.7, 50.8], vector: [0, 0, 1] } }), "in"),
+    );
     expect([v.rows[2], v.peaks[1]]).toEqual([
       { k: "Max. Durchbiegung", v: "1 in" },
-      { label: "Max. Durchbiegung", where: "x 1; y -0,5; z 2 in", spoken: "Max. Durchbiegung, 1 in, bei x 1; y -0,5; z 2 in" },
+      {
+        label: "Max. Durchbiegung",
+        where: "x 1; y -0,5; z 2 in",
+        spoken: "Max. Durchbiegung, 1 in, bei x 1; y -0,5; z 2 in",
+      },
     ]);
   });
 });
@@ -253,7 +277,9 @@ describe("a view built in English and read after a switch", () => {
     for (const code of ["de", "fr", "es", "ja", "zh-CN"]) {
       await setLanguage(code);
       const v = read(full());
-      const text = [...v.rows, ...v.details].flatMap((r) => [r.k, r.v]).concat(v.peaks.flatMap((p) => [p.label, p.spoken]));
+      const text = [...v.rows, ...v.details]
+        .flatMap((r) => [r.k, r.v])
+        .concat(v.peaks.flatMap((p) => [p.label, p.spoken]));
       await setLanguage("en");
       const english = read(full());
       const englishText = [...english.rows, ...english.details].flatMap((r) => [r.k, r.v]);

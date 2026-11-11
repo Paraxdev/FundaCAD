@@ -7,7 +7,8 @@ type Glossary = { terms: { en: string; text: string }[] };
 const locales = import.meta.glob<Lines>("../../src/i18n/locales/*.json", { import: "default", eager: true });
 const glossaries = import.meta.glob<Glossary>("../../src/i18n/glossary/*.json", { import: "default", eager: true });
 const codeOf = (path: string) => path.replace(/^.*\/(.+)\.json$/, "$1");
-const byCode = <V>(files: Record<string, V>) => Object.fromEntries(Object.entries(files).map(([p, v]) => [codeOf(p), v]));
+const byCode = <V>(files: Record<string, V>) =>
+  Object.fromEntries(Object.entries(files).map(([p, v]) => [codeOf(p), v]));
 
 function stressWordProblems(files: Record<string, Lines>, glossary: Record<string, Glossary>): string[] {
   return Object.entries(files).flatMap(([code, lines]) => {

@@ -430,11 +430,12 @@ describe("StressPanel", () => {
 
   it("scrolls each new refusal into view, from the results and on the setup, and not without one", async () => {
     const seen: string[] = [];
-    const spy = vi
-      .spyOn(HTMLElement.prototype, "scrollIntoView")
-      .mockImplementation(function (this: HTMLElement, arg?: boolean | ScrollIntoViewOptions) {
-        seen.push(`${this.textContent} ${JSON.stringify(arg)}`);
-      });
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (
+      this: HTMLElement,
+      arg?: boolean | ScrollIntoViewOptions,
+    ) {
+      seen.push(`${this.textContent} ${JSON.stringify(arg)}`);
+    });
     try {
       const { p } = await withResult();
       p.stressFinished({ result: view() });

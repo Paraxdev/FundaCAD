@@ -244,4 +244,3 @@ export function rig(opts: { hasBody?: boolean; engine?: boolean } = {}) {
     open: () => openListeners.forEach((f) => f()),
   };
 }
-
