@@ -728,6 +728,15 @@
     {
       "en": "Thin extrude",
       "text": "Dünne Extrusion"
+    },
+    {
+      "en": "Features",
+      "text": "Features",
+      "note": "no plain German word, as in the Feature tree"
+    },
+    {
+      "en": "Curve",
+      "text": "Kurve"
     }
   ]
 }

@@ -720,6 +720,14 @@
     {
       "en": "Thin extrude",
       "text": "薄肉押し出し"
+    },
+    {
+      "en": "Features",
+      "text": "フィーチャ"
+    },
+    {
+      "en": "Curve",
+      "text": "曲線"
     }
   ]
 }

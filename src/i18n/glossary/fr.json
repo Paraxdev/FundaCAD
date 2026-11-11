@@ -716,6 +716,14 @@
     {
       "en": "Thin extrude",
       "text": "Extrusion mince"
+    },
+    {
+      "en": "Features",
+      "text": "Fonctions"
+    },
+    {
+      "en": "Curve",
+      "text": "Courbe"
     }
   ]
 }

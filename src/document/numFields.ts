@@ -357,9 +357,9 @@ export function featureValueRule(type: string, field: string): ValueRule {
 }
 
 export function valueProblem(label: string, rule: ValueRule, v: number): string | null {
-  if (rule.integer && Math.abs(v - Math.round(v)) > 1e-9) return `${label} must be a whole number`;
-  if (rule.positive && !(v > 0)) return `${label} must be more than 0`;
-  if (rule.atLeast !== undefined && v < rule.atLeast) return `${label} must be at least ${rule.atLeast}`;
+  if (rule.integer && Math.abs(v - Math.round(v)) > 1e-9) return t("field.problem.whole", { label });
+  if (rule.positive && !(v > 0)) return t("field.problem.positive", { label });
+  if (rule.atLeast !== undefined && v < rule.atLeast) return t("field.problem.atLeast", { label, min: rule.atLeast });
   return null;
 }
 

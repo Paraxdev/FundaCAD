@@ -720,6 +720,14 @@
     {
       "en": "Thin extrude",
       "text": "薄壁拉伸"
+    },
+    {
+      "en": "Features",
+      "text": "特征"
+    },
+    {
+      "en": "Curve",
+      "text": "曲线"
     }
   ]
 }

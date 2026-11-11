@@ -723,6 +723,14 @@
     {
       "en": "Thin extrude",
       "text": "Extrusión delgada"
+    },
+    {
+      "en": "Features",
+      "text": "Operaciones"
+    },
+    {
+      "en": "Curve",
+      "text": "Curva"
     }
   ]
 }
