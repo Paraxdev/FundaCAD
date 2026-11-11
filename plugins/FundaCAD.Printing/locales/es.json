@@ -1,6 +1,10 @@
 {
+  "group.print": "Imprimir",
   "menu.file.camera": "Cámara…",
   "menu.file.exportPrint": "Exportar para imprimir (3MF)…",
   "menu.file.openSlicer": "Abrir en OrcaSlicer…",
-  "menu.file.send": "Enviar a la impresora…"
+  "menu.file.send": "Enviar a la impresora…",
+  "tool.export": "Imprimir proyecto",
+  "tool.openSlicer": "Abrir en OrcaSlicer",
+  "tool.send": "Enviar a la impresora"
 }

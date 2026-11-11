@@ -12,5 +12,27 @@
   "featureTypes": [
     "organic"
   ],
-  "geometryWasm": "geometry.wasm"
+  "geometryWasm": "geometry.wasm",
+  "translations": {
+    "de": {
+      "name": "Knotenkörper",
+      "summary": "Runde, organische Körper aus Knoten mit Größe: Knoten im Raum setzen, zu Ketten verbinden, und jede Kette wird zu einem glatten Glied, das mit dem Rest verschmilzt. Jede Größe und Position ist ein Wert, den Sie an einen Parameter binden können."
+    },
+    "es": {
+      "name": "Cuerpos de nodos",
+      "summary": "Sólidos redondeados y orgánicos a partir de nodos con tamaño: coloque nodos en 3D, enlácelos en cadenas y cada cadena se convierte en una extremidad suave que se fusiona con el resto. Cada tamaño y posición es un valor que puede vincular a un parámetro."
+    },
+    "fr": {
+      "name": "Corps à nœuds",
+      "summary": "Solides arrondis et organiques à partir de nœuds dimensionnés : placez des nœuds en 3D, reliez-les en chaînes, et chaque chaîne devient un membre lisse qui fusionne avec le reste. Chaque taille et chaque position est une valeur que vous pouvez lier à un paramètre."
+    },
+    "ja": {
+      "name": "ノードボディ",
+      "summary": "サイズを持つノードから、丸みのある有機的なソリッドを作ります。ノードを3Dに置いてつなぐと、各チェーンがなめらかな枝になり、ほかの形状と融合します。サイズと位置はどれもパラメーターに結び付けられる値です。"
+    },
+    "zh-CN": {
+      "name": "节点实体",
+      "summary": "用带尺寸的节点生成圆润的有机实体:在三维中放置节点,把它们连成链,每条链都会变成与其余部分融合的光滑分支。每个尺寸和位置都是可以绑定到参数的值。"
+    }
+  }
 }

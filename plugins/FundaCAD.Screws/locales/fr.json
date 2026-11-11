@@ -1,3 +1,5 @@
 {
-  "context.fastenerSpecs": "Caractéristiques de la fixation..."
+  "context.fastenerSpecs": "Caractéristiques de la fixation...",
+  "tool.fasteners": "Fixations",
+  "tool.standardThread": "Filetage standard"
 }

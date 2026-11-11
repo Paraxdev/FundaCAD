@@ -64,7 +64,10 @@ export async function activate(e: Engine): Promise<() => void> {
     tools: [
       {
         id: "standardThread",
-        label: "Standard Thread",
+        get label() {
+          return t("tool.standardThread");
+        },
+        refName: "Standard Thread",
         iconName: "thread",
         consumes: ["face"],
         source: "selection",
@@ -77,8 +80,22 @@ export async function activate(e: Engine): Promise<() => void> {
       {
         group: "INSERT",
         items: [
-          { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
-          { action: "standardThread", label: "Standard Thread", iconName: "thread" },
+          {
+            action: "fasteners",
+            get label() {
+              return t("tool.fasteners");
+            },
+            refName: "Fasteners",
+            iconName: "fasteners",
+          },
+          {
+            action: "standardThread",
+            get label() {
+              return t("tool.standardThread");
+            },
+            refName: "Standard Thread",
+            iconName: "thread",
+          },
         ],
       },
     ],

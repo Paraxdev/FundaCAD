@@ -1,0 +1,13 @@
+{
+  "group.print": "Imprimer",
+  "tool.bedFit": "Contrôle d'adaptation au plateau",
+  "tool.counterboreBridge": "Pont de lamage",
+  "tool.elephantFootChamfer": "Chanfrein anti-pied d'éléphant",
+  "tool.printability": "Imprimabilité",
+  "tool.roofBridge": "Pont de toit",
+  "tool.sacrificialLayer": "Couche sacrificielle",
+  "tool.teardrop": "Goutte",
+  "tool.threadRibs": "Nervures formant le filet",
+  "tool.verticalFillet": "Congé d'arêtes verticales",
+  "tool.zipTieChannel": "Canal pour collier de serrage"
+}

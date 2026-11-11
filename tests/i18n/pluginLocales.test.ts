@@ -70,6 +70,12 @@ describe("the shipped plugins' language files", () => {
     expect(pluginProblems(plugin)).toEqual([]);
   });
 
+  it("have a manifest translation for every shipped language besides English", () => {
+    expect(plugins.length).toBe(13);
+    for (const p of plugins)
+      expect([p.id, [...p.translated].sort()]).toEqual([p.id, ["de", "es", "fr", "ja", "zh-CN"]]);
+  });
+
   it("agree on every shared group name in every language", () => {
     expect(groupDisagreements(plugins)).toEqual([]);
   });

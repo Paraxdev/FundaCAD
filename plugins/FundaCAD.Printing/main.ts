@@ -52,12 +52,36 @@ export async function activate(e: Engine): Promise<() => void> {
     ribbon: [
       {
         group: "PRINT",
+        get label() {
+          return t("group.print");
+        },
         // Where PRINT sat in the app's own collapse order: below MODIFY, above INSPECT.
         priority: 50,
         items: [
-          { action: "print-export", label: "Print Project", iconName: "print" },
-          { action: "print-orca", label: "Open in OrcaSlicer", iconName: "slicer" },
-          { action: "print-send", label: "Send to Printer", iconName: "printerSend" },
+          {
+            action: "print-export",
+            get label() {
+              return t("tool.export");
+            },
+            refName: "Print Project",
+            iconName: "print",
+          },
+          {
+            action: "print-orca",
+            get label() {
+              return t("tool.openSlicer");
+            },
+            refName: "Open in OrcaSlicer",
+            iconName: "slicer",
+          },
+          {
+            action: "print-send",
+            get label() {
+              return t("tool.send");
+            },
+            refName: "Send to Printer",
+            iconName: "printerSend",
+          },
         ],
       },
     ],

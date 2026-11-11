@@ -1,3 +1,5 @@
 {
-  "context.fastenerSpecs": "紧固件规格..."
+  "context.fastenerSpecs": "紧固件规格...",
+  "tool.fasteners": "紧固件",
+  "tool.standardThread": "标准螺纹"
 }

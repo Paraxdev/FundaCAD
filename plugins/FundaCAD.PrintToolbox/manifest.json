@@ -20,5 +20,27 @@
     "elephantFootChamfer",
     "verticalFillet"
   ],
-  "geometryWasm": "geometry.wasm"
+  "geometryWasm": "geometry.wasm",
+  "translations": {
+    "de": {
+      "name": "3D-Druck-Werkzeugkasten",
+      "summary": "Druckgerechte Löcher ohne Stützen: Tropfen- und Flachdachlöcher, überbrückte Senkungen und Opferschichten, die Sie nach dem Druck aufbohren."
+    },
+    "es": {
+      "name": "Herramientas de impresión 3D",
+      "summary": "Agujeros aptos para imprimir sin soportes: agujeros en gota y de techo plano, avellanados con puente y capas de sacrificio que se taladran después de imprimir."
+    },
+    "fr": {
+      "name": "Boîte à outils d'impression 3D",
+      "summary": "Des trous adaptés à l'impression sans supports : trous en goutte et à toit plat, lamages avec pont, et couches sacrificielles que l'on perce après l'impression."
+    },
+    "ja": {
+      "name": "3Dプリントツールボックス",
+      "summary": "サポートなしで印刷できる穴: ティアドロップ穴、平らな天井の穴、ブリッジ付き座ぐり、印刷後に開ける犠牲レイヤー。"
+    },
+    "zh-CN": {
+      "name": "3D 打印工具箱",
+      "summary": "无需支撑的打印友好孔:泪滴孔和平顶孔、带桥接的沉孔,以及打印后再钻掉的牺牲层。"
+    }
+  }
 }
