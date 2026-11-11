@@ -7,10 +7,12 @@ import { PressPullTool } from "../../src/features/pressPullTool";
 import {
   endCommandedPick,
   endRewoundPick,
+  offerPicks,
   resetTreePicks,
   routeTreeClick,
   treePickWaiting,
 } from "../../src/ui/treePick";
+import { t } from "../../src/i18n";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { PressPullFaces } from "../../src/viewport/faceAnalysis";
@@ -187,6 +189,29 @@ describe("Press/Pull takes a face row", () => {
       1,
       "That row is an edge, this step needs a face",
       "pick",
+      true,
+    ]);
+    tool.cancel();
+  });
+
+  it("two face rows offered at once both join one push, and the next click carries on from it", () => {
+    const { tool } = begin();
+    const after = vi.fn();
+    tool.carry = { route: vi.fn(), after };
+    const said: string[] = [];
+    const d = { ...hints(), say: (text: string) => void said.push(text) };
+    offerPicks(
+      [
+        { pick: { kind: "face", faceId: SLANT }, name: "Flat face 7" },
+        { pick: { kind: "face", faceId: OTHER }, name: "Flat face 9" },
+      ],
+      d,
+    );
+    expect(seen(tool)).toMatchObject({ phase: "drag", faces: [face(SLANT), face(OTHER)], faceIds: [SLANT, OTHER] });
+    expect([after.mock.calls, d.said, said, treePickWaiting()]).toEqual([
+      [],
+      [],
+      [t("pick.doneRun", { n: 2, done: "other" })],
       true,
     ]);
     tool.cancel();

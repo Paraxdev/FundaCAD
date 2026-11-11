@@ -7,7 +7,7 @@ import type { DocumentStore, RebuildState, SketchBinding } from "../document/sto
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
 import { carryTaker, carryWords, pickOfHit, type CarryCommit, type CarryHost } from "./carryOn";
-import { awaitTreePick } from "../ui/treePick";
+import { awaitTreePick, type TreePickAnswer } from "../ui/treePick";
 import { PARALLEL_COS, planarPushFaces, type PushFaces } from "./pushOutline";
 import { sweepPolylines } from "./sweepOutline";
 import { ToolOutline } from "./toolOutline";
@@ -210,6 +210,7 @@ export class PressPullTool {
   private unsubBuild: (() => void) | null = null;
   private outline: ToolOutline | null = null;
   private rigid: PushFaces | null = null;
+  private rowRun = false;
   private unsubTint: (() => void) | null = null;
   /** What the kernel said about each push sent this gesture. */
   private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
@@ -256,8 +257,9 @@ export class PressPullTool {
       this.releaseRows = awaitFaceRows(
         this.viewport,
         "a face",
-        (faces) => (this.takeFaces(faces), true),
+        (faces) => this.takeRow(faces),
         () => this.cancel(),
+        (run) => this.takeRowRun(run),
       );
       setPrompt("Click a face · Ctrl-click adds more");
     }
@@ -265,6 +267,30 @@ export class PressPullTool {
 
   private takeFaces(f: PressPullFaces) {
     this.beginDrag(f.selectors, f.faceIds, f.anchor, f.normal, f.bodyId, f.round ?? f.lead);
+  }
+
+  private takeRow(f: PressPullFaces): TreePickAnswer {
+    if (this.phase !== "drag") return (this.takeFaces(f), true);
+    const id = f.faceIds[0]!;
+    if (f.bodyId !== this.bodyId) return "That face is on another body, one push moves faces of one body";
+    if (!this.faceIds.includes(id))
+      this.addFace({ selector: f.selectors[0]!, faceId: id, anchor: f.anchor, normal: f.normal });
+    return true;
+  }
+
+  // Rows offered together join one push as Ctrl-clicks would, so the row and carry sessions change hands after the run.
+  private takeRowRun(run: () => void) {
+    const waiting = this.phase === "pick";
+    this.rowRun = waiting;
+    try {
+      run();
+    } finally {
+      this.rowRun = false;
+      if (waiting && this.active && this.phase === "drag") {
+        this.dropRows();
+        this.armCarry();
+      }
+    }
   }
 
   private dropRows() {
@@ -393,33 +419,7 @@ export class PressPullTool {
       if (hit && hit.bodyId === this.bodyId) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const was = this.boxShape();
-        const curved = this.curve !== null;
-        this.faces.push(hit.selector);
-        this.faceIds.push(hit.faceId);
-        // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
-        this.axisAsk++;
-        this.holeAxis = null;
-        this.curve = null;
-        this.curveRound = null;
-        this.dim.setOptionHidden("direction", true);
-        if (this.direction === "axis") this.setDirection("normal");
-        if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
-        if (this.round && !this.inTangentRun()) this.dropRound();
-        if (this.resizing) {
-          this.mode = "auto";
-          this.taper = 0;
-        } else {
-          // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
-          this.anchor.copy(hit.anchor);
-          this.faceAnchor.copy(hit.anchor);
-          this.faceNormal.copy(hit.normal).normalize();
-          this.axis.copy(this.faceNormal);
-        }
-        this.rigid = this.resizing ? null : planarPushFaces(this.viewport, this.faceIds, this.faceNormal);
-        if (was !== this.boxShape()) this.showBox();
-        else this.syncToggle();
-        this.refreshPreview(true);
+        this.addFace(hit);
       }
       return;
     }
@@ -496,6 +496,40 @@ export class PressPullTool {
     }
   }
 
+  private addFace(hit: { selector: Selector; faceId: number; anchor: THREE.Vector3; normal: THREE.Vector3 }) {
+    const was = this.boxShape();
+    const curved = this.curve !== null;
+    const before = this.faceNormal.clone();
+    this.faces.push(hit.selector);
+    this.faceIds.push(hit.faceId);
+    // The faces share one arrow from here, and the engine's answer about the first face's axis no longer applies.
+    this.axisAsk++;
+    this.holeAxis = null;
+    this.curve = null;
+    this.curveRound = null;
+    this.dim.setOptionHidden("direction", true);
+    if (this.direction === "axis") this.setDirection("normal");
+    if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
+    if (this.round && !this.inTangentRun()) this.dropRound();
+    if (this.resizing) {
+      this.mode = "auto";
+      this.taper = 0;
+    } else {
+      // The arrow moves to the face just picked: the drag is measured along it, each face moves along its own.
+      this.anchor.copy(hit.anchor);
+      this.faceAnchor.copy(hit.anchor);
+      this.faceNormal.copy(hit.normal).normalize();
+      this.axis.copy(this.faceNormal);
+    }
+    // The model on screen may be a landed preview with the earlier faces moved, so only the new face is read off it.
+    const added = this.resizing || !this.rigid ? null : planarPushFaces(this.viewport, [hit.faceId], before);
+    this.rigid = added &&
+      this.rigid && { rings: [...this.rigid.rings, ...added.rings], marks: [...this.rigid.marks, ...added.marks] };
+    if (was !== this.boxShape()) this.showBox();
+    else this.syncToggle();
+    this.refreshPreview(true);
+  }
+
   private beginDrag(
     faces: Selector[],
     faceIds: number[],
@@ -504,8 +538,10 @@ export class PressPullTool {
     bodyId: string | null = null,
     round: RoundFace | null = null,
   ) {
-    this.dropRows();
-    this.armCarry();
+    if (!this.rowRun) {
+      this.dropRows();
+      this.armCarry();
+    }
     this.faces = faces;
     this.faceIds = faceIds;
     this.upTo = null;

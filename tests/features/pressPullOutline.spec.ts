@@ -91,10 +91,12 @@ interface Internals {
 // The 4 edges of a face in mixed order and direction, as the model lists them
 const edgesOf = (ids: readonly number[]) =>
   ids.flatMap((id) => {
-    const l = loop(id);
+    const l = loop(id, moved[id] ?? 0);
     return [2, 0, 3, 1].map((i) => ({ points: i % 2 ? [l[(i + 1) % 4]!, l[i]!] : [l[i]!, l[(i + 1) % 4]!] }));
   });
 
+// How far the viewport's model has each face moved, as it shows a preview that landed
+let moved: Record<number, number> = {};
 let scene: THREE.Object3D[] = [];
 let listeners: ((s: RebuildState) => void)[] = [];
 const tools: PressPullTool[] = [];
@@ -102,6 +104,7 @@ const tools: PressPullTool[] = [];
 function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = edgesOf) {
   scene = [];
   listeners = [];
+  moved = {};
   const selectOnlyFaces = vi.fn();
   const stands: { at: P; id: number }[] = [];
   const canvas = document.createElement("canvas");
@@ -131,7 +134,7 @@ function rig(selected: number[], edges: (ids: readonly number[]) => unknown[] = 
     roundFaceAt: (id: number) => (id === ROUND ? bore : null),
     edgesOfFaces: edges,
     faceTriangles: (id: number) => {
-      const [a, b, c, d] = loop(id).map((p) => new THREE.Vector3(...p)) as [
+      const [a, b, c, d] = loop(id, moved[id] ?? 0).map((p) => new THREE.Vector3(...p)) as [
         THREE.Vector3,
         THREE.Vector3,
         THREE.Vector3,
@@ -270,6 +273,16 @@ describe("Press/Pull outline", () => {
     expect(keys(r.outline()!)).toEqual(keys([...box(10, 3.5), ...box(12, 3.5)]));
   });
 
+  it("keeps the first face's ring at its own place when a face is Ctrl clicked in after a preview landed", () => {
+    const r = rig([10]);
+    r.push(2.5);
+    r.land(2.5);
+    moved[10] = 2.5;
+    r.ctrlAdd(13);
+    r.push(2.5);
+    expect(keys(r.outline()!)).toEqual(keys([...box(10, 2.5), ...box(13, 2.5)]));
+  });
+
   it("draws nothing once a Ctrl clicked face faces another way, the push is no longer one rigid sweep", () => {
     const r = rig([10]);
     r.push(3.5);
@@ -356,6 +369,18 @@ describe("Press/Pull keeps the pushed faces tinted", () => {
 
   it("tints a face Ctrl clicked in along with the first", () => {
     const r = rig([10]);
+    r.ctrlAdd(13);
+    r.stands.push({ at: where(10, 2.5), id: 60 }, { at: where(13, 2.5), id: 61 });
+    r.push(2.5);
+    r.land(2.5);
+    expect(r.selectOnlyFaces.mock.calls).toEqual([[[60, 61]]]);
+  });
+
+  it("finds the first face again when a face is Ctrl clicked in after a preview landed", () => {
+    const r = rig([10]);
+    r.push(2.5);
+    r.land(2.5);
+    moved[10] = 2.5;
     r.ctrlAdd(13);
     r.stands.push({ at: where(10, 2.5), id: 60 }, { at: where(13, 2.5), id: 61 });
     r.push(2.5);
