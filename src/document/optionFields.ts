@@ -3,6 +3,7 @@
 
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { HOLE_SIZES, holeFieldApplies } from "../features/holeStandards";
+import { t, type MessageKey } from "../i18n";
 import { contributedFeature } from "../plugins/contrib";
 import { mirrorPlaneName } from "./mirrorPlane";
 import { mechanismFieldApplies, NO_DRIVE } from "./mechanism";
@@ -186,224 +187,246 @@ function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean
   }
 }
 
+// The row name is a getter so an open panel follows a change of language.
+function choice(
+  field: string,
+  key: MessageKey,
+  options: ChoiceOption[],
+  fallback: string,
+  title?: string,
+): ChoiceField {
+  return {
+    field,
+    get label() {
+      return t(key);
+    },
+    options,
+    fallback,
+    ...(title === undefined ? {} : { title }),
+  };
+}
+
+function toggle(field: string, key: MessageKey, fallback: boolean): ToggleField {
+  return {
+    field,
+    get label() {
+      return t(key);
+    },
+    fallback,
+  };
+}
+
+const operation = (options: ChoiceOption[], fallback: string) =>
+  choice("operation", "field.operation", options, fallback);
+
 // No row for a sketch or datum `plane`: it is a PlaneSpec, and a dropdown offering only the three world planes would
 // silently discard a placed plane the moment it was used.
 export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> = {
   // The commands never ask which boolean, so this row is the only place to change it without recreating the feature.
-  boolean: [{ field: "operation", label: "Operation", options: BOOLEAN_KINDS, fallback: "union" }],
+  boolean: [operation(BOOLEAN_KINDS, "union")],
   extrude: [
-    { field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" },
-    { field: "startType", label: "Start", options: EXTRUDE_STARTS, fallback: "sketch" },
-    { field: "startPlane", label: "Start plane", options: PLANES, fallback: "XY" },
-    { field: "startPoint", label: "Start point", options: [], fallback: "" },
-    { field: "endType", label: "End", options: EXTRUDE_ENDS, fallback: "distance", title: END_TITLE },
-    { field: "upToPlane", label: "Up to plane", options: PLANES, fallback: "XY" },
-    { field: "upToPoint", label: "Up to point", options: [], fallback: "" },
-    { field: "endType2", label: "End 2", options: EXTRUDE_ENDS, fallback: "distance", title: END_TITLE },
-    { field: "upToPlane2", label: "Up to plane 2", options: PLANES, fallback: "XY" },
-    { field: "upToPoint2", label: "Up to point 2", options: [], fallback: "" },
-    { field: "side", label: "Wall side", options: THIN_SIDES, fallback: "center", title: THIN_SIDE_TITLE },
+    operation(BOOLEAN_OPS, "new"),
+    choice("startType", "field.start", EXTRUDE_STARTS, "sketch"),
+    choice("startPlane", "field.startPlane", PLANES, "XY"),
+    choice("startPoint", "field.startPoint", [], ""),
+    choice("endType", "field.end", EXTRUDE_ENDS, "distance", END_TITLE),
+    choice("upToPlane", "field.upToPlane", PLANES, "XY"),
+    choice("upToPoint", "field.upToPoint", [], ""),
+    choice("endType2", "field.end2", EXTRUDE_ENDS, "distance", END_TITLE),
+    choice("upToPlane2", "field.upToPlane2", PLANES, "XY"),
+    choice("upToPoint2", "field.upToPoint2", [], ""),
+    choice("side", "field.wallSide", THIN_SIDES, "center", THIN_SIDE_TITLE),
   ],
-  revolve: [
-    { field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" },
-    { field: "axis", label: "Axis", options: AXES, fallback: "Z" },
-  ],
+  revolve: [operation(BOOLEAN_OPS, "new"), choice("axis", "field.axis", AXES, "Z")],
   thread: [
-    {
-      field: "hand",
-      label: "Hand",
-      options: [
+    choice(
+      "hand",
+      "field.hand",
+      [
         { value: "right", label: "Right" },
         { value: "left", label: "Left" },
       ],
-      fallback: "right",
-    },
-    {
-      field: "operation",
-      label: "Operation",
-      options: BOOLEAN_OPS.filter((o) => o.value === "cut" || o.value === "join"),
-      fallback: "cut",
-    },
+      "right",
+    ),
+    operation(
+      BOOLEAN_OPS.filter((o) => o.value === "cut" || o.value === "join"),
+      "cut",
+    ),
   ],
   textOnFace: [
-    {
-      field: "operation",
-      label: "Operation",
-      options: [
+    operation(
+      [
         { value: "join", label: "Emboss" },
         { value: "cut", label: "Engrave" },
       ],
-      fallback: "join",
-    },
-    {
-      field: "align",
-      label: "Align",
-      options: [
+      "join",
+    ),
+    choice(
+      "align",
+      "field.align",
+      [
         { value: "left", label: "Left" },
         { value: "center", label: "Centre" },
         { value: "right", label: "Right" },
       ],
-      fallback: "center",
-    },
+      "center",
+    ),
   ],
-  loft: [{ field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" }],
+  loft: [operation(BOOLEAN_OPS, "new")],
   sweep: [
-    {
-      field: "operation",
-      label: "Operation",
-      // The builder has no sweep intersect.
-      options: BOOLEAN_OPS.filter((o) => o.value !== "intersect"),
-      fallback: "new",
-    },
+    // The builder has no sweep intersect.
+    operation(
+      BOOLEAN_OPS.filter((o) => o.value !== "intersect"),
+      "new",
+    ),
   ],
   thicken: [
-    {
-      field: "operation",
-      label: "Operation",
-      options: BOOLEAN_OPS.filter((o) => o.value === "new" || o.value === "join"),
-      fallback: "join",
-    },
+    operation(
+      BOOLEAN_OPS.filter((o) => o.value === "new" || o.value === "join"),
+      "join",
+    ),
   ],
-  mirror: [{ field: "plane", label: "Plane", options: PLANES, fallback: "XY" }],
-  draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
-  patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
-  patternCircular: [{ field: "axis", label: "Axis", options: AXES, fallback: "Z" }],
+  mirror: [choice("plane", "field.plane", PLANES, "XY")],
+  draft: [choice("axis", "field.pullAxis", AXES, "Z")],
+  patternLinear: [choice("axis", "field.direction", AXES, "X")],
+  patternCircular: [choice("axis", "field.axis", AXES, "Z")],
   // Options come from mechanismDriveChoice in FeatureProperties; this entry only puts the row there.
   mechanism: [
-    {
-      field: "drive",
-      label: "Drive",
-      fallback: NO_DRIVE,
-      options: [{ value: NO_DRIVE, label: "None" }],
-      title:
-        "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
-    },
+    choice(
+      "drive",
+      "field.drive",
+      [{ value: NO_DRIVE, label: "None" }],
+      NO_DRIVE,
+      "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
+    ),
   ],
   // press-pull's operation is read off the sign of `distance` by the builder, so a dropdown over it would offer states
   // the rebuild cannot produce. `mode` is the explicit choice.
   "press-pull": [
-    {
-      field: "mode",
-      label: "Operation",
-      fallback: "auto",
-      options: [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
-      title:
-        "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
-    },
-    {
-      field: "direction",
-      label: "Direction",
-      fallback: "normal",
-      options: [
+    choice(
+      "mode",
+      "field.operation",
+      [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
+      "auto",
+      "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
+    ),
+    choice(
+      "direction",
+      "field.direction",
+      [
         { value: "normal", label: "Along normal" },
         { value: "axis", label: "Along axis" },
       ],
-      title:
-        "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
-    },
+      "normal",
+      "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
+    ),
   ],
   fillet: [
-    {
-      field: "sizeType",
-      label: "Size Type",
-      fallback: "radius",
-      options: [
+    choice(
+      "sizeType",
+      "field.sizeType",
+      [
         { value: "radius", label: "Radius" },
         { value: "chord", label: "Chord Length" },
       ],
-      title: "Chord Length sizes the round by the width across it rather than its radius",
-    },
-    {
-      field: "continuity",
-      label: "Continuity",
-      fallback: "G1",
-      options: [
+      "radius",
+      "Chord Length sizes the round by the width across it rather than its radius",
+    ),
+    choice(
+      "continuity",
+      "field.continuity",
+      [
         { value: "G1", label: "G1" },
         { value: "G2", label: "G2" },
         { value: "G3", label: "G3" },
       ],
-      title:
-        "G1 is a circular round; G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either. G2 and G3 need both faces flat across the edge",
-    },
+      "G1",
+      "G1 is a circular round; G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either. G2 and G3 need both faces flat across the edge",
+    ),
   ],
   chamfer: [
-    {
-      field: "chamferType",
-      label: "Type",
-      fallback: "equal",
-      options: [
+    choice(
+      "chamferType",
+      "field.type",
+      [
         { value: "equal", label: "Equal Distance" },
         { value: "twoDistance", label: "Two-Distance" },
       ],
-    },
+      "equal",
+    ),
   ],
   hole: [
-    {
-      field: "holeType",
-      label: "Hole type",
-      fallback: "simple",
-      options: [
+    choice(
+      "holeType",
+      "field.holeType",
+      [
         { value: "simple", label: "Simple" },
         { value: "counterbore", label: "Counterbore" },
         { value: "countersink", label: "Countersink" },
         { value: "insert", label: "Heat-set insert" },
       ],
-      title: "Heat-set insert sizes the bore for a brass insert of the chosen size",
-    },
-    {
-      field: "standard",
-      label: "Standard",
-      fallback: "clearance",
-      options: [
+      "simple",
+      "Heat-set insert sizes the bore for a brass insert of the chosen size",
+    ),
+    choice(
+      "standard",
+      "field.standard",
+      [
         { value: "clearance", label: "Clearance" },
         { value: "tap", label: "Tap drill" },
         { value: "custom", label: "Custom" },
       ],
-      title: "Clearance is ISO 273, Tap drill the coarse pitch drill; Custom keeps the diameter you type",
-    },
-    { field: "size", label: "Size", fallback: "M3", options: HOLE_SIZES.map((s) => ({ value: s, label: s })) },
-    {
-      field: "fit",
-      label: "Fit",
-      fallback: "normal",
-      options: [
+      "clearance",
+      "Clearance is ISO 273, Tap drill the coarse pitch drill; Custom keeps the diameter you type",
+    ),
+    choice(
+      "size",
+      "field.size",
+      HOLE_SIZES.map((s) => ({ value: s, label: s })),
+      "M3",
+    ),
+    choice(
+      "fit",
+      "field.fit",
+      [
         { value: "close", label: "Close" },
         { value: "normal", label: "Normal" },
         { value: "loose", label: "Loose" },
       ],
-    },
-    {
-      field: "extent",
-      label: "Extent",
-      fallback: "blind",
-      options: [
+      "normal",
+    ),
+    choice(
+      "extent",
+      "field.extent",
+      [
         { value: "blind", label: "Blind" },
         { value: "through", label: "Through all" },
       ],
-    },
+      "blind",
+    ),
   ],
 };
 
 export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> = {
   // Tool bodies are consumed by default, as the operation means; on when one body cuts several times, a bolt through
   // three plates.
-  boolean: [{ field: "keepOriginals", label: "Keep originals", fallback: false }],
+  boolean: [toggle("keepOriginals", "field.keepOriginals", false)],
   // Both ways off the sketch plane, `distance` each way, for an extrude on a datum plane inside a body.
   extrude: [
-    { field: "symmetric", label: "Symmetric", fallback: false },
-    { field: "twoSided", label: "Two sided", fallback: false },
+    toggle("symmetric", "field.symmetric", false),
+    toggle("twoSided", "field.twoSided", false),
     // A wall along the sketch's curves, which is also how an open sketch extrudes.
-    { field: "thin", label: "Thin", fallback: false },
+    toggle("thin", "field.thin", false),
   ],
-  thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
-  fillet: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
-  chamfer: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
-  "press-pull": [{ field: "followTangent", label: "Tangent faces follow", fallback: true }],
-  offsetFace: [{ field: "followTangent", label: "Tangent faces follow", fallback: true }],
+  thicken: [toggle("symmetric", "field.symmetric", false)],
+  fillet: [toggle("tangentEdges", "field.includeTangentEdges", true)],
+  chamfer: [toggle("tangentEdges", "field.includeTangentEdges", true)],
+  "press-pull": [toggle("followTangent", "field.tangentFacesFollow", true)],
+  offsetFace: [toggle("followTangent", "field.tangentFacesFollow", true)],
   hole: [
-    { field: "drillPoint", label: "Drill point", fallback: false },
-    { field: "flip", label: "Flip direction", fallback: false },
-    { field: "tapped", label: "Tapped", fallback: false },
+    toggle("drillPoint", "field.drillPoint", false),
+    toggle("flip", "field.flipDirection", false),
+    toggle("tapped", "field.tapped", false),
   ],
 };
 
@@ -434,7 +457,7 @@ export function fieldLabel(
   field: string,
   values: Record<string, unknown>,
 ): { text: string; title?: string } | null {
-  if (type === "fillet" && field === "radius" && values.sizeType === "chord") return { text: "Chord Length" };
+  if (type === "fillet" && field === "radius" && values.sizeType === "chord") return { text: t("field.chordLength") };
   return contributedFeature(type)?.fieldLabel?.(field, values) ?? null;
 }
 

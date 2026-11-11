@@ -3,143 +3,147 @@
 
 import type { CadDocument, Feature, ParamTarget, ParamUnit, SketchEntity, SketchPattern } from "../types";
 import { isDimConstraint } from "../sketch/id";
+import { t, type MessageKey } from "../i18n";
 import { contributedFeature } from "../plugins/contrib";
 import { asFeature } from "../types";
 
 // Drives display unit conversion, suffixes and parameter unit coercion. ui/units.ts re-exports it.
 export type FieldKind = "length" | "angle" | "count";
 
-// Application-owned feature types only: a plugin's fields are whatever its code reads. Call `featureNumFields()`.
-export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string, FieldKind][]>> = {
+type KeyedField = [field: string, label: MessageKey, kind: FieldKind];
+
+// Application-owned feature types only: a plugin's fields are whatever its code reads. The label column is a key, call
+// `featureNumFields()` for the rows in the language.
+export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], KeyedField[]>> = {
   extrude: [
-    ["distance", "Distance", "length"],
-    ["taper", "Taper", "angle"],
-    ["startOffset", "Start offset", "length"],
-    ["endOffset", "End offset", "length"],
-    ["distance2", "Distance 2", "length"],
-    ["taper2", "Taper 2", "angle"],
-    ["endOffset2", "End offset 2", "length"],
-    ["thickness", "Thickness", "length"],
-    ["thickness2", "Thickness 2", "length"],
+    ["distance", "field.distance", "length"],
+    ["taper", "field.taper", "angle"],
+    ["startOffset", "field.startOffset", "length"],
+    ["endOffset", "field.endOffset", "length"],
+    ["distance2", "field.distance2", "length"],
+    ["taper2", "field.taper2", "angle"],
+    ["endOffset2", "field.endOffset2", "length"],
+    ["thickness", "field.thickness", "length"],
+    ["thickness2", "field.thickness2", "length"],
   ],
   // "count" is this file's kind for real-valued unitless fields like profile, not an integer claim; INTEGER_FIELDS
   // marks those.
   fillet: [
-    ["radius", "Radius", "length"],
-    ["profile", "Profile", "count"],
+    ["radius", "field.radius", "length"],
+    ["profile", "field.profile", "count"],
   ],
   chamfer: [
-    ["distance", "Distance", "length"],
-    ["distance2", "Distance 2", "length"],
+    ["distance", "field.distance", "length"],
+    ["distance2", "field.distance2", "length"],
   ],
   "press-pull": [
-    ["distance", "Distance", "length"],
-    ["taper", "Taper", "angle"],
-    ["upToOffset", "Up to offset", "length"],
+    ["distance", "field.distance", "length"],
+    ["taper", "field.taper", "angle"],
+    ["upToOffset", "field.upToOffset", "length"],
   ],
   // Pitch is the climb per full turn, so a thread pitch is typed off its spec. Empty means the flat revolve.
   revolve: [
-    ["angle", "Angle", "angle"],
-    ["pitch", "Pitch", "length"],
+    ["angle", "field.angle", "angle"],
+    ["pitch", "field.pitch", "length"],
   ],
   datumPlane: [
-    ["offset", "Offset", "length"],
-    ["tiltX", "Tilt X", "angle"],
-    ["tiltY", "Tilt Y", "angle"],
-    ["spin", "Spin", "angle"],
-    ["shiftX", "Shift X", "length"],
-    ["shiftY", "Shift Y", "length"],
+    ["offset", "field.offset", "length"],
+    ["tiltX", "field.tiltX", "angle"],
+    ["tiltY", "field.tiltY", "angle"],
+    ["spin", "field.spin", "angle"],
+    ["shiftX", "field.shiftX", "length"],
+    ["shiftY", "field.shiftY", "length"],
   ],
   box: [
-    ["length", "Length", "length"],
-    ["width", "Width", "length"],
-    ["height", "Height", "length"],
+    ["length", "field.length", "length"],
+    ["width", "field.width", "length"],
+    ["height", "field.height", "length"],
   ],
   cylinder: [
-    ["radius", "Radius", "length"],
-    ["height", "Height", "length"],
+    ["radius", "field.radius", "length"],
+    ["height", "field.height", "length"],
   ],
   cone: [
-    ["bottomRadius", "Bottom radius", "length"],
-    ["topRadius", "Top radius", "length"],
-    ["height", "Height", "length"],
+    ["bottomRadius", "field.bottomRadius", "length"],
+    ["topRadius", "field.topRadius", "length"],
+    ["height", "field.height", "length"],
   ],
-  sphere: [["radius", "Radius", "length"]],
+  sphere: [["radius", "field.radius", "length"]],
   torus: [
-    ["majorRadius", "Ring radius", "length"],
-    ["minorRadius", "Tube radius", "length"],
+    ["majorRadius", "field.ringRadius", "length"],
+    ["minorRadius", "field.tubeRadius", "length"],
   ],
-  shell: [["thickness", "Thickness", "length"]],
-  offsetFace: [["distance", "Distance", "length"]],
-  thicken: [["thickness", "Thickness", "length"]],
-  draft: [["angle", "Angle", "angle"]],
+  shell: [["thickness", "field.thickness", "length"]],
+  offsetFace: [["distance", "field.distance", "length"]],
+  thicken: [["thickness", "field.thickness", "length"]],
+  draft: [["angle", "field.angle", "angle"]],
   thread: [
-    ["pitch", "Pitch", "length"],
-    ["starts", "Starts", "count"],
-    ["offset", "Offset", "length"],
-    ["length", "Length", "length"],
-    ["clearance", "Print clearance", "length"],
+    ["pitch", "field.pitch", "length"],
+    ["starts", "field.starts", "count"],
+    ["offset", "field.offset", "length"],
+    ["length", "field.length", "length"],
+    ["clearance", "field.printClearance", "length"],
   ],
   textOnFace: [
-    ["height", "Height", "length"],
-    ["depth", "Depth", "length"],
-    ["angle", "Angle", "angle"],
+    ["height", "field.height", "length"],
+    ["depth", "field.depth", "length"],
+    ["angle", "field.angle", "angle"],
   ],
   hole: [
-    ["diameter", "Diameter", "length"],
-    ["depth", "Depth", "length"],
-    ["cbDiameter", "Counterbore diameter", "length"],
-    ["cbDepth", "Counterbore depth", "length"],
-    ["csDiameter", "Countersink diameter", "length"],
-    ["csAngle", "Countersink angle", "angle"],
-    ["leadIn", "Lead-in", "length"],
+    ["diameter", "field.diameter", "length"],
+    ["depth", "field.depth", "length"],
+    ["cbDiameter", "field.counterboreDiameter", "length"],
+    ["cbDepth", "field.counterboreDepth", "length"],
+    ["csDiameter", "field.countersinkDiameter", "length"],
+    ["csAngle", "field.countersinkAngle", "angle"],
+    ["leadIn", "field.leadIn", "length"],
   ],
   patternRect: [
-    ["countX", "Count X", "count"],
-    ["countY", "Count Y", "count"],
-    ["spacingX", "Spacing X", "length"],
-    ["spacingY", "Spacing Y", "length"],
+    ["countX", "field.countX", "count"],
+    ["countY", "field.countY", "count"],
+    ["spacingX", "field.spacingX", "length"],
+    ["spacingY", "field.spacingY", "length"],
   ],
   patternLinear: [
-    ["count", "Count", "count"],
-    ["spacing", "Spacing", "length"],
+    ["count", "field.count", "count"],
+    ["spacing", "field.spacing", "length"],
   ],
   patternCircular: [
-    ["count", "Count", "count"],
-    ["angle", "Angle", "angle"],
+    ["count", "field.count", "count"],
+    ["angle", "field.angle", "angle"],
   ],
-  simplifyMesh: [["tolerance", "Angle tol", "angle"]],
-  cleanUp: [["tolerance", "Tolerance", "length"]],
+  simplifyMesh: [["tolerance", "field.angleTol", "angle"]],
+  cleanUp: [["tolerance", "field.tolerance", "length"]],
   scale: [
-    ["factor", "Factor", "count"],
-    ["sx", "X factor", "count"],
-    ["sy", "Y factor", "count"],
-    ["sz", "Z factor", "count"],
+    ["factor", "field.factor", "count"],
+    ["sx", "field.xFactor", "count"],
+    ["sy", "field.yFactor", "count"],
+    ["sz", "field.zFactor", "count"],
   ],
   move: [
-    ["dx", "Move X", "length"],
-    ["dy", "Move Y", "length"],
-    ["dz", "Move Z", "length"],
-    ["rx", "Rotate X", "angle"],
-    ["ry", "Rotate Y", "angle"],
-    ["rz", "Rotate Z", "angle"],
+    ["dx", "field.moveX", "length"],
+    ["dy", "field.moveY", "length"],
+    ["dz", "field.moveZ", "length"],
+    ["rx", "field.rotateX", "angle"],
+    ["ry", "field.rotateY", "angle"],
+    ["rz", "field.rotateZ", "angle"],
   ],
   joint: [
-    ["offset", "Offset", "length"],
-    ["angle", "Angle", "angle"],
+    ["offset", "field.offset", "length"],
+    ["angle", "field.angle", "angle"],
   ],
   // Only the drive value the joint reads shows (document/mechanism.ts).
   mechanism: [
-    ["offset", "Drive offset", "length"],
-    ["angle", "Drive angle", "angle"],
+    ["offset", "field.driveOffset", "length"],
+    ["angle", "field.driveAngle", "angle"],
   ],
   duplicate: [
-    ["dx", "Move X", "length"],
-    ["dy", "Move Y", "length"],
-    ["dz", "Move Z", "length"],
-    ["rx", "Rotate X", "angle"],
-    ["ry", "Rotate Y", "angle"],
-    ["rz", "Rotate Z", "angle"],
+    ["dx", "field.moveX", "length"],
+    ["dy", "field.moveY", "length"],
+    ["dz", "field.moveZ", "length"],
+    ["rx", "field.rotateX", "angle"],
+    ["ry", "field.rotateY", "angle"],
+    ["rz", "field.rotateZ", "angle"],
   ],
 };
 
@@ -155,23 +159,24 @@ export function featureNumFields(
   values?: Record<string, unknown>,
 ): readonly [string, string, FieldKind][] {
   const base = typeNumFields(type, values);
-  const common = values ? presentCommonFields(values) : [];
+  const common = values ? presentCommonFields(values).map(spoken) : [];
   return common.length ? [...base, ...common] : base;
 }
 
+const spoken = ([field, key, kind]: KeyedField): [string, string, FieldKind] => [field, t(key), kind];
+
 // Only on the datum plane forms that read them: `t` is a 0..1 fraction along the edge, `angle` the turn about it.
-const DATUM_REF_FIELDS: [string, string, FieldKind][] = [
-  ["t", "Position", "count"],
-  ["angle", "Angle", "angle"],
+const DATUM_REF_FIELDS: KeyedField[] = [
+  ["t", "field.position", "count"],
+  ["angle", "field.angle", "angle"],
 ];
 
 function typeNumFields(type: string, values?: Record<string, unknown>): readonly [string, string, FieldKind][] {
   const own = FEATURE_NUM_FIELDS[type as Feature["type"]];
   if (own && type === "datumPlane" && values) {
-    const extra = DATUM_REF_FIELDS.filter(([field]) => values[field] !== undefined);
-    return extra.length ? [...own, ...extra] : own;
+    return [...own, ...DATUM_REF_FIELDS.filter(([field]) => values[field] !== undefined)].map(spoken);
   }
-  if (own) return own;
+  if (own) return own.map(spoken);
   const contributed = contributedFeature(type)?.numFields;
   if (contributed) return typeof contributed === "function" ? contributed(values ?? {}) : contributed;
   return values ? rawNumFields(values) : [];
@@ -212,9 +217,9 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 // The build skips a feature while `activeWhen` is 0 (engine `is_inactive`). Listed only when present: the parameter
 // engine writes every resolving target, so an always-resolving row would undo "Remove condition".
-export const COMMON_NUM_FIELDS: [string, string, FieldKind][] = [["activeWhen", "Active when", "count"]];
+export const COMMON_NUM_FIELDS: KeyedField[] = [["activeWhen", "field.activeWhen", "count"]];
 
-export function presentCommonFields(values: Record<string, unknown>): [string, string, FieldKind][] {
+export function presentCommonFields(values: Record<string, unknown>): KeyedField[] {
   return COMMON_NUM_FIELDS.filter(([field]) => values[field] !== undefined);
 }
 
