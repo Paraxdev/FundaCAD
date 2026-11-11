@@ -55,6 +55,7 @@ export function createPluginText(view: PluginLinesView) {
     let byCode: Map<string, Lines> | undefined;
     let englishLines: Lines = new Map();
     const parsed = new Map<string, MessageNode[] | null>();
+    const allowedArgs = new Map<string, Set<string> | null>();
     let seen: Lines | undefined;
 
     function load(): Map<string, Lines> {
@@ -108,23 +109,27 @@ export function createPluginText(view: PluginLinesView) {
         const nodes = src === undefined ? null : compiled(src);
         return nodes ? formatMessage(pseudoNodes(nodes), args, "en") : key;
       }
-      const base = a.code.split("-")[0]!;
-      const sources: [string | undefined, boolean][] = [
-        [dropIn.get(prefix + key), false],
-        [files.get(a.code)?.get(key), false],
-        [base === a.code ? undefined : files.get(base)?.get(key), false],
-        [englishLines.get(key), true],
-      ];
-      const allowed = englishLines.has(key) ? argNames(compiled(englishLines.get(key)!) ?? []) : null;
-      for (const [src, isEnglish] of sources) {
-        if (src === undefined) continue;
-        const nodes = compiled(src);
-        if (!nodes) continue;
-        // A user's line is only text checked, the argument check needs the plugin's English.
-        if (allowed && [...argNames(nodes)].some((n) => !allowed.has(n))) continue;
-        return formatMessage(nodes, args, a.bcp47, undefined, isEnglish ? "en" : a.bcp47);
+      let allowed = allowedArgs.get(key);
+      if (allowed === undefined) {
+        const src = englishLines.get(key);
+        allowed = src === undefined ? null : argNames(compiled(src) ?? []);
+        allowedArgs.set(key, allowed);
       }
-      return key;
+      const translated = (src: string | undefined): string | undefined => {
+        const nodes = src === undefined ? null : compiled(src);
+        // A user's line is only text checked, the argument check needs the plugin's English.
+        if (!nodes || (allowed && [...argNames(nodes)].some((n) => !allowed.has(n)))) return undefined;
+        return formatMessage(nodes, args, a.bcp47);
+      };
+      const base = a.code.split("-")[0]!;
+      const shown =
+        translated(dropIn.get(prefix + key)) ??
+        translated(files.get(a.code)?.get(key)) ??
+        (base === a.code ? undefined : translated(files.get(base)?.get(key)));
+      if (shown !== undefined) return shown;
+      const src = englishLines.get(key);
+      const nodes = src === undefined ? null : compiled(src);
+      return nodes ? formatMessage(nodes, args, a.bcp47, undefined, "en") : key;
     }
 
     return { t: lookup, tEnglish: englishLine };
