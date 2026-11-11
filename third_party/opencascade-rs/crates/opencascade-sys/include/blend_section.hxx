@@ -11,6 +11,7 @@
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <ElSLib.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -2480,6 +2481,78 @@ inline Opt<TopoDS_Shape> corner_pyramid(const ChamferEnd *const *c, double fuzz)
   return out;
 }
 
+// OCCT's plate through the setback meets of four or more convex chamfers strays off them (a pyramid apex at 8.41 built
+// 325.98 to 369.83 by frame and edge order, the flat cap 314.27). The cap needs the meets coplanar and inside faces.
+inline Opt<TopoDS_Shape> corner_cap(const std::vector<const ChamferEnd *> &c, double fuzz) {
+  size_t n = c.size();
+  std::vector<gp_Pnt> meet;
+  std::vector<gp_Vec> nrm(n);
+  std::vector<gp_Pnt> on(n);
+  for (size_t i = 0; i < n; ++i)
+    for (size_t j = i + 1; j < n; ++j) {
+      const ChamferEnd &a = *c[i], &b = *c[j];
+      int ia = -1, ib = -1, shared = 0;
+      for (int p = 0; p < 2; ++p)
+        for (int q = 0; q < 2; ++q)
+          if (a.faces[p].IsSame(b.faces[q])) ia = p, ib = q, ++shared;
+      if (shared == 0) continue;
+      BRepAdaptor_Surface face(a.faces[ia]);
+      if (shared != 1 || face.GetType() != GeomAbs_Plane) return {};
+      gp_Vec u = a.into, v = b.into, w(b.Q[ib], a.Q[ia]);
+      double uu = u.Dot(u), uv = u.Dot(v), vv = v.Dot(v), den = uu * vv - uv * uv;
+      if (den < 1e-12 * uu * vv) return {};
+      double s = (uv * v.Dot(w) - vv * u.Dot(w)) / den, t = (uu * v.Dot(w) - uv * u.Dot(w)) / den;
+      gp_Pnt pa = a.Q[ia].Translated(u.Multiplied(s)), pb = b.Q[ib].Translated(v.Multiplied(t));
+      if (s <= 0 || t <= 0 || pa.Distance(pb) > fuzz) return {};
+      gp_Pnt m(0.5 * (pa.XYZ() + pb.XYZ()));
+      double pu, pv;
+      ElSLib::Parameters(face.Plane(), m, pu, pv);
+      if (BRepClass_FaceClassifier(a.faces[ia], gp_Pnt2d(pu, pv), fuzz).State() != TopAbs_IN) {
+        if (sizing()) return {};
+        throw Unmitred(a.at);
+      }
+      meet.push_back(m);
+    }
+  if (meet.size() != n) return {};
+  for (size_t k = 0; k < n; ++k) {
+    const ChamferEnd &a = *c[k];
+    nrm[k] = gp_Vec(a.Q[0], a.Q[1]).Crossed(a.into);
+    if (nrm[k].Magnitude() < 1e-12) return {};
+    nrm[k].Normalize();
+    if (nrm[k].Dot(gp_Vec(a.Q[0], a.at)) > 0) nrm[k].Reverse();
+    on[k] = a.Q[0];
+  }
+  gp_XYZ mid(0, 0, 0);
+  for (const gp_Pnt &p : meet) mid += p.XYZ();
+  gp_Pnt centre(mid / static_cast<double>(n));
+  gp_Vec m(0, 0, 0);
+  for (size_t i = 0; i < n; ++i)
+    for (size_t j = i + 1; j < n; ++j) {
+      gp_Vec x = gp_Vec(centre, meet[i]).Crossed(gp_Vec(centre, meet[j]));
+      if (x.Magnitude() > m.Magnitude()) m = x;
+    }
+  if (m.Magnitude() < 1e-12) return {};
+  m.Normalize();
+  const gp_Pnt &tip = c[0]->at;
+  if (m.Dot(gp_Vec(centre, tip)) < 0) m.Reverse();
+  for (const gp_Pnt &p : meet) {
+    if (std::abs(m.Dot(gp_Vec(centre, p))) > fuzz) return {};
+    for (size_t k = 0; k < n; ++k)
+      if (nrm[k].Dot(gp_Vec(on[k], p)) < -fuzz) return {};
+  }
+  double h = m.Dot(gp_Vec(centre, tip));
+  if (h < -fuzz) return {};
+  if (h < fuzz) return TopoDS_Shape();
+  double reach = 0;
+  for (const gp_Pnt &p : meet) reach = std::max(reach, tip.Distance(p));
+  double R = 4 * reach + 10 * fuzz, e = std::max(0.02 * reach, 0.01);
+  TopoDS_Shape out = slab(centre, m, tip, R);
+  for (size_t k = 0; k < n; ++k)
+    out = boolean(Op::Common, out, {slab(on[k].Translated(nrm[k].Multiplied(-e)), nrm[k], tip, R)}, 0.0);
+  if (volume(out) < 1e-9) return {};
+  return out;
+}
+
 struct RoundTools {
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
@@ -2565,6 +2638,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
       if (here.size() < 3) continue;
       Opt<TopoDS_Shape> pyramid;
       if (here.size() == 3 && meeting(a.at) == 3) pyramid = corner_pyramid(here.data(), by);
+      else if (here.size() >= 4 && meeting(a.at) == static_cast<int>(here.size())) pyramid = corner_cap(here, by);
       if (pyramid.has) {
         if (!pyramid.val.IsNull()) out.cut.push_back(pyramid.val);
       } else if (!sizing()) {

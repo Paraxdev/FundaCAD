@@ -992,21 +992,27 @@ fn blend_edges(
         let apex = (label == "Chamfer").then(|| apex::convex_apex(&body_shape, &edges)).flatten();
         let kernel_builds = |size: f64| {
             use crate::kernel::{count, Kind};
-            ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
-                op(&b, &es, size).is_ok_and(|out| {
-                    !overlap::folds_over_itself(&b, &out, size)
-                        && (apex.is_none() || !apex::leaves_body(&b, &out))
-                        && smooth_at(&out, size)
-                        && still_sharp(&out, &es).is_empty()
-                        && keeps_voids(&b, &out)
-                        && count(&out, Kind::Solid) == count(&b, Kind::Solid)
-                        && crate::soundness::of(&out).fault().is_none()
+            let capped = apex.is_some()
+                && section.is_some_and(|sec| {
+                    sec(&body_shape, &edges, size).is_ok_and(|out| {
+                        still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
+                    })
+                });
+            capped
+                || ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
+                    op(&b, &es, size).is_ok_and(|out| {
+                        !overlap::folds_over_itself(&b, &out, size)
+                            && (apex.is_none() || !apex::leaves_body(&b, &out))
+                            && smooth_at(&out, size)
+                            && still_sharp(&out, &es).is_empty()
+                            && keeps_voids(&b, &out)
+                            && count(&out, Kind::Solid) == count(&b, Kind::Solid)
+                            && crate::soundness::of(&out).fault().is_none()
+                    })
                 })
-            })
         };
-        // Where four or more chosen edges meet, OCCT builds sizes under the limit off its own volume trend (a tilted
-        // pyramid's apex at 9.12 of 9.13 built 137.19, plain OCCT on it untilted 432.11), so a size is offered only
-        // where `kernel_builds` has checked that the corner stays inside the body.
+        // Where four or more chosen edges meet off a convex apex OCCT builds sizes under the limit off its own volume
+        // trend (a tilted pyramid's apex at 9.12 of 9.13 built 137.19), so no size is offered there.
         let meeting = |at: [f64; 3]| {
             let at = DVec3::from(at);
             edges.iter().filter(|e| vertex_points(e).iter().any(|&v| DVec3::from(v).distance(at) < 1e-3)).count()
@@ -1022,6 +1028,15 @@ fn blend_edges(
             };
             misfit_error(label, &body_name, blend_size, why, fits, at)
         };
+        // OCCT's plate at a convex apex of four or more chamfers strays off its flat setback meets by frame and edge
+        // order, the section build caps it flat when they are coplanar.
+        if apex.is_some() {
+            checkpoint()?;
+            if let Some(built) = try_section(&body_shape, &edges) {
+                staged.push((index, built));
+                continue;
+            }
+        }
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -1072,10 +1087,7 @@ fn blend_edges(
                 None => return Err(uneven()),
             }
         } else if let Some(at) = apex.filter(|_| apex::leaves_body(&work, &new_shape)) {
-            match try_section(&body_shape, &edges) {
-                Some(built) => built,
-                None => return Err(refused((Misfit::Corner, Fits::Unknown, at))),
-            }
+            return Err(refused((Misfit::Corner, Fits::Unknown, at)));
         } else {
             new_shape
         };

@@ -807,6 +807,11 @@ fn chamfers_where_a_curved_chamfer_meets_two_straight_ones_at_a_corner_are_refus
 /// The 20 high square pyramid on a 20 x 20 base, tilted 30 degrees about X and moved off the origin, `notch`
 /// cutting away the quadrant under one apex edge so the apex has three convex edges and a concave one.
 fn pyramid(notch: bool, blend: Value) -> Rebuild {
+    pyramid_moved(notch, 10.0, json!({"id": "m", "type": "move", "rx": 30, "dx": 13, "dy": -7, "dz": 4}), blend)
+}
+
+/// The pyramid on a 20 x `2 * wide` base.
+fn pyramid_moved(notch: bool, wide: f64, moved: Value, blend: Value) -> Rebuild {
     let solid = |id: &str, plane: &str, p: &[(f64, f64)], distance: f64, operation: &str| {
         let n = p.len();
         let lines: Vec<Value> = (0..n)
@@ -821,14 +826,14 @@ fn pyramid(notch: bool, blend: Value) -> Rebuild {
                 "symmetric": true, "operation": operation}),
         ]
     };
-    let tri = [(-10.0, 0.0), (10.0, 0.0), (0.0, 20.0)];
+    let tri = |w: f64| [(-w, 0.0), (w, 0.0), (0.0, 20.0)];
     let mut features = vec![];
-    features.extend(solid("1", "XZ", &tri, 10.0, "new"));
-    features.extend(solid("2", "YZ", &tri, 10.0, "intersect"));
+    features.extend(solid("1", "XZ", &tri(10.0), wide, "new"));
+    features.extend(solid("2", "YZ", &tri(wide), 10.0, "intersect"));
     if notch {
         features.extend(solid("3", "XY", &rect(-30.0, -30.0, 30.0, 30.0), 40.0, "cut"));
     }
-    features.push(json!({"id": "m", "type": "move", "rx": 30, "dx": 13, "dy": -7, "dz": 4}));
+    features.push(moved);
     features.push(blend);
     build(&json!({"parameters": {}, "features": features}))
 }
@@ -839,9 +844,9 @@ fn on_pyramid(x: f64, y: f64, z: f64) -> Value {
     json!({"kind": "edge", "by": "nearest", "body": "body1", "point": [x + 13.0, y * c - z * s - 7.0, y * s + z * c + 4.0]})
 }
 
-/// At 20 / sqrt(4.8) each side face's setback lines meet on its base edge, OCCT fails and the section build takes
-/// the apex, which has a corner patch only for exactly three convex chamfers: four built 666.67 and three with the
-/// notch's concave edge 705.99, no refusal. The other side, three ends at a square corner, builds in
+/// At 20 / sqrt(4.8) each side face's setback lines meet on its base edge, OCCT fails and the section build has no
+/// cap for meets off their faces, nor for three convex chamfers with the notch's concave edge (once 666.67 and 705.99
+/// built, no refusal). The four convex ones offer the size the flat cap builds. The other side, three ends at a square corner, builds in
 /// two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_triangle.
 #[test]
 fn chamfers_meeting_at_an_apex_of_four_edges_or_with_a_concave_one_are_refused() {
@@ -856,7 +861,7 @@ fn chamfers_meeting_at_an_apex_of_four_edges_or_with_a_concave_one_are_refused()
         (with_faces(&r), tip(&r))
     };
     let got = vec![run(false, dt, json!(apex)), run(true, dt, notched())];
-    let want = vec![((1, vec![], 2666.67, Some(8.41), Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
+    let want = vec![((1, vec![], 2666.67, Some(9.11), Some(5)), true), ((1, vec![], 2000.0, None, Some(7)), true)];
     assert_eq!(got, want);
 }
 
@@ -931,30 +936,99 @@ fn a_dragged_chamfer_refused_at_a_corner_offers_only_the_size_a_step_under_it() 
     assert_eq!(got, want);
 }
 
-/// Where four chamfers meet, OCCT closes the apex with one filling patch that from about 8.5 of the 9.13 where the
-/// side faces close bulges out through them, its volume going 266, 37, 87, 3, 136 and said ok. Such a build is
-/// refused with a size whose result stays inside, which builds clean (9.0 built 139.86 and 9.12 137.19 silently).
+/// OCCT closes a corner of four chamfers with one plate through the setback meets that strays off them by frame and
+/// edge order, 8.41 built 325.98 to 369.83 with no word. The section build caps it on the meets' plane, so the volume
+/// is that of the pyramid cut by the four chamfer planes and that plane (OCP, independent of FundaCAD).
 #[test]
-fn chamfers_whose_apex_patch_leaves_the_pyramid_are_refused_with_a_size_that_stays_inside() {
-    let dt = 20.0 / 4.8f64.sqrt();
-    let apex: Vec<Value> =
-        [(-5.0, -5.0), (5.0, -5.0), (5.0, 5.0), (-5.0, 5.0)].iter().map(|&(x, y)| on_pyramid(x, y, 10.0)).collect();
-    let equal = |d: f64| json!({"id": "c", "type": "chamfer", "edges": apex, "distance": d});
+fn chamfers_meeting_at_a_pyramid_apex_cap_it_flat_on_the_setback_meets_in_any_frame_and_order() {
+    let (s, c) = (0.5, 0.75f64.sqrt());
+    let tilted = |x: f64, y: f64, z: f64| [x + 13.0, y * c - z * s - 7.0, y * s + z * c + 4.0];
+    let turned = |x: f64, y: f64, z: f64| [x * c - y * s - 6.0, x * s + y * c + 9.0, z - 3.0];
+    let frames: [(Value, &dyn Fn(f64, f64, f64) -> [f64; 3]); 2] = [
+        (json!({"id": "m", "type": "move", "rx": 30, "dx": 13, "dy": -7, "dz": 4}), &tilted),
+        (json!({"id": "m", "type": "move", "rz": 30, "dx": -6, "dy": 9, "dz": -3}), &turned),
+    ];
+    let model = [(3.0, 2281.99), (8.0, 492.06), (8.41, 314.27), (9.0, 56.39)];
+    let mut got = vec![];
+    for (moved, at) in &frames {
+        for reversed in [false, true] {
+            let mut edges: Vec<Value> = [(-5.0, -5.0), (5.0, -5.0), (5.0, 5.0), (-5.0, 5.0)]
+                .iter()
+                .map(|&(x, y)| json!({"kind": "edge", "by": "nearest", "body": "body1", "point": at(x, y, 10.0)}))
+                .collect();
+            if reversed {
+                edges.reverse();
+            }
+            for (d, _) in model {
+                let blend = json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d});
+                let r = pyramid_moved(false, 10.0, moved.clone(), blend);
+                let (errors, _, v, _, faces) = with_faces(&r);
+                got.push((errors, v, faces, curved_faces(&r)));
+            }
+        }
+    }
+    let want: Vec<_> = (0..4).flat_map(|_| model.map(|(_, v)| (0, v, Some(10), 0))).collect();
+    assert_eq!(got, want);
+    let (moved, at) = &frames[1];
+    let edges: Vec<Value> = [(-5.0, 5.0), (5.0, 5.0), (5.0, -5.0), (-5.0, -5.0)]
+        .iter()
+        .map(|&(x, y)| json!({"kind": "edge", "by": "nearest", "body": "body1", "point": at(x, y, 10.0)}))
+        .collect();
     let run = |d: f64| {
-        let r = pyramid(false, equal(d));
+        let r = pyramid_moved(
+            false,
+            10.0,
+            moved.clone(),
+            json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d}),
+        );
         let (errors, _, v, _, faces) = with_faces(&r);
         (errors, v, messages(&r).first().and_then(|m| offered(m)), faces)
     };
-    let built = [8.0, 8.2].map(run);
-    assert_eq!(built, [(0, 528.45, None, Some(10)), (0, 475.47, None, Some(10))]);
-    let refused = [9.0, 9.12, dt].map(run);
-    for (d, got) in [9.0, 9.12, dt].iter().zip(&refused) {
-        assert_eq!((got.0, got.1, got.3), (1, 2666.67, Some(5)), "at {d}");
-        let size = got.2.unwrap_or(0.0);
-        assert!((8.2..8.5).contains(&size), "offered {size} at {d}");
-        assert_eq!(run(size).0, 0, "{size} builds");
-        assert_eq!(run(size).3, Some(10));
+    let dt = 20.0 / 4.8f64.sqrt();
+    // Within about 0.05 of the closing size the result is a plate under 0.1 thick and the refusal point moves with
+    // the frame, so each offer is checked against the model at the size offered.
+    let near = [(9.08, 21.34), (9.09, 16.96), (9.1, 12.58), (9.11, 8.2)];
+    for d in [dt, 9.5, 9.12] {
+        let (errors, v, size, faces) = run(d);
+        assert_eq!((errors, v, faces), (1, 2666.67, Some(5)), "at {d}");
+        let size = size.expect("a size offered");
+        let (_, want) = near.iter().copied().find(|&(s, _)| (s - size).abs() < 1e-9).expect("an offer near the limit");
+        assert_eq!(run(size), (0, want, None, Some(10)), "offered {size} at {d}");
     }
+}
+
+fn curved_faces(r: &Rebuild) -> usize {
+    r.bodies
+        .first()
+        .map_or(0, |b| kernel::subshapes(&b.shape, Kind::Face).iter().filter(|f| !kernel::face_is_planar(f)).count())
+}
+
+/// On a 20 x 30 base the setback meets sit at 20 - 2.15 d on the long sides and 20 - 1.60 d on the short ones, so no
+/// plane caps them and OCCT's plate stays the corner, checked only for leaving the body.
+#[test]
+fn chamfers_at_an_apex_whose_setback_meets_are_not_coplanar_keep_occts_plate() {
+    let moved = json!({"id": "m", "type": "move", "rx": 30, "dx": 13, "dy": -7, "dz": 4});
+    let (s, c) = (0.5, 0.75f64.sqrt());
+    let edges: Vec<Value> = [(-5.0, -7.5), (5.0, -7.5), (5.0, 7.5), (-5.0, 7.5)]
+        .iter()
+        .map(|&(x, y)| {
+            let p = [x + 13.0, y * c - 10.0 * s - 7.0, y * s + 10.0 * c + 4.0];
+            json!({"kind": "edge", "by": "nearest", "body": "body1", "point": p})
+        })
+        .collect();
+    let got: Vec<_> = [2.0, 4.0]
+        .iter()
+        .map(|&d| {
+            let r = pyramid_moved(
+                false,
+                15.0,
+                moved.clone(),
+                json!({"id": "c", "type": "chamfer", "edges": edges, "distance": d}),
+            );
+            (with_faces(&r).0, curved_faces(&r))
+        })
+        .collect();
+    assert_eq!(got, vec![(0, 1), (0, 1)]);
 }
 
 /// The 20 high pyramid before any blend, tilted and moved, and its apex.
