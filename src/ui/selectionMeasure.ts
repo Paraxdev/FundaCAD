@@ -2,6 +2,9 @@
 
 import { shallowRef } from "vue";
 import { spellNumber } from "./measure";
+import { t } from "../i18n";
+import type { EntityKind } from "../features/toolCapabilities";
+import { countLine } from "./selectionTools";
 import { fmtLength } from "./units";
 
 export type Pt3 = readonly [number, number, number];
@@ -78,17 +81,20 @@ export function roundFacePrompt(round: RoundSize): string {
 
 /** "3 faces", "2 edges · 300.74 mm". One face or edge goes through describePick once its facts are known. */
 export function describeSelection(input: {
+  kind: EntityKind;
   count: number;
-  noun: string;
-  plural: string;
   edges?: readonly (readonly Pt3[])[];
+  bodyHint?: boolean;
 }): string {
-  if (input.count <= 0) return "";
-  const parts = [`${input.count} ${input.count === 1 ? input.noun : input.plural}`];
-  if (input.edges?.length) {
-    parts.push(fmtLength(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
+  const { kind, count } = input;
+  if (count <= 0) return "";
+  if (kind === "body" && input.bodyHint) return t("readout.bodiesAuto", { n: count });
+  if (kind === "edge" && input.edges?.length) {
+    const length = fmtLength(input.edges.reduce((s, e) => s + polylineLength(e), 0));
     const d = input.edges.length === 1 ? circleDiameter(input.edges[0]!) : null;
-    if (d !== null) parts.push(`⌀${fmtLength(d)}`);
+    return d === null
+      ? t("readout.edges", { n: count, length })
+      : t("readout.edgesCircle", { n: count, length, diameter: fmtLength(d) });
   }
-  return parts.join(" · ");
+  return countLine(kind, count);
 }
