@@ -20,7 +20,7 @@ With a flat face selected, E works as Press/Pull on that face.
 
 Once the depth is set, because you dragged the arrow and let go or typed a value, the next click on a face or an edge finishes the extrude and carries on. A face starts Press/Pull on it, an edge starts Fillet on it. The face is found again on the finished solid, so a click on the new top face pushes that new face. If the face or edge is not on the result, the extrude is still made and the status says to pick it again.
 
-While the depth still follows the pointer, a click sets it and finishes the extrude, nothing more. Hover lights the face or edge a click would take. A refused preview refuses the click as well, the step stays open and the status says why. Ctrl+Z takes the extrude back in one go and closes the tool that started from it. The brackets and Enter on the 3D view, or a row in the Geometry list, do the same as a click. Enter and Accept finish without starting anything, and editing an extrude from History never carries on.
+While the depth still follows the pointer, a click sets it and finishes the extrude, nothing more. Hover lights the face or edge a click would take. A refused preview refuses the click as well, the step stays open and the status says why. Ctrl+Z takes the extrude back in one go and closes the tool that started from it. The brackets and Enter on the 3D view, or a row in the Geometry list, do the same as a click, but the list only shows faces and edges the model had before the extrude. To go on from a new face by keyboard, press Enter in the value box first, then step to it. Enter and Accept finish without starting anything, and editing an extrude from History never carries on.
 
 ## Start and end
 

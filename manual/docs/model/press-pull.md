@@ -18,7 +18,7 @@ Press T, then click the face to stop at, and the face moves up to it. Once you t
 
 ## Carry on
 
-A click on a face or an edge finishes the push and carries on. A face starts Press/Pull on it, an edge starts Fillet on it, and the face or edge is found again on the finished solid. Hover lights what a click would take. If the push is still at zero, it adds nothing and the click just switches to that face. A refused push refuses the click, the step stays open and the status says why. Ctrl+Z takes the push back in one go and closes the tool that started from it. Ctrl+click still adds a face to the push, and a click on empty space or on a face being pushed still finishes it. The brackets and Enter on the 3D view, or a row in the Geometry list, do the same as a click.
+A click on a face or an edge finishes the push and carries on. A face starts Press/Pull on it, an edge starts Fillet on it, and the face or edge is found again on the finished solid. Hover lights what a click would take. If the push is still at zero, it adds nothing and the click just switches to that face. A refused push refuses the click, the step stays open and the status says why. Ctrl+Z takes the push back in one go and closes the tool that started from it. Ctrl+click still adds a face to the push, and a click on empty space or on a face being pushed still finishes it. The brackets and Enter on the 3D view, or a row in the Geometry list, do the same as a click, but the list only shows faces and edges the model had before the push. To go on from a new face by keyboard, press Enter in the value box first, then step to it.
 
 While a push is open, the body is drawn solid with an outline of what the push adds, or in the error colour what it cuts out.
 
