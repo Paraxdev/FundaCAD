@@ -1046,17 +1046,16 @@
 .float-group .btn.grid-btn:not(.is-on) {
   --btn-hover: var(--raised);
 }
-// As wide as the icon tiles: a long reading shrinks to fit (useFitText), and only one still too wide at its smallest
-// size widens the tile.
+// As wide as the icon tiles. The reading is already at the --fs-micro floor and cannot shrink, so the padding is
+// thin enough for five characters (0.5µm) and only a longer reading widens the tile.
 .float-group .btn.grid-btn {
-  --grid-label-scale: 1;
   width: auto;
   min-width: 40px;
   min-height: 0;
   height: 32px;
-  padding: 0 var(--s-1);
+  padding: 0 var(--s-0);
   border-radius: calc(var(--float-radius) - 4px);
-  font: 600 calc(var(--fs-micro) * var(--grid-label-scale)) / 1 var(--mono);
+  font: 600 var(--fs-micro) / 1 var(--mono);
   font-variant-numeric: tabular-nums;
 }
 // A number never breaks mid value, not even under comfortable text.
