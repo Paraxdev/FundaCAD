@@ -815,9 +815,11 @@ fn kernel_size(size: f64, quick: bool, builds: &dyn Fn(f64) -> bool) -> Option<f
     if quick {
         return None;
     }
-    let start = std::time::Instant::now();
     let (mut lo, mut hi, mut best) = (0.0, top, None);
-    while start.elapsed() < KERNEL_SIZE_BUDGET && checkpoint().is_ok() {
+    for _ in 0..KERNEL_SIZE_STEPS {
+        if checkpoint().is_err() {
+            break;
+        }
         let mid = on_grid(0.5 * (lo + hi));
         if mid <= lo || mid >= hi {
             break;
@@ -831,7 +833,9 @@ fn kernel_size(size: f64, quick: bool, builds: &dyn Fn(f64) -> bool) -> Option<f
     best
 }
 
-const KERNEL_SIZE_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+/// Builds the bisection may try, by count and not by time, so the size offered is the same on a slow or busy
+/// machine. Fourteen halvings reach the 0.01 grid under 163.84.
+const KERNEL_SIZE_STEPS: usize = 14;
 
 /// A blend over an edge whose faces turn tangent that came out rippled, or did not build. `found` is `None` when
 /// no smaller size was tried, and `Some(None)` when none tried built smooth.
