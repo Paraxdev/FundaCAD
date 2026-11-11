@@ -202,6 +202,26 @@ describe("the shortcuts window chrome in German", () => {
     expect(await find("fillet")).toEqual([english("tool.fillet"), english("shortcuts.action.sketchFillet")]);
   });
 
+  it("finds a whole group by its German or English name, other groups only by their rows", async () => {
+    const find = async (q: string) => {
+      search().value = q;
+      search().dispatchEvent(new Event("input", { bubbles: true }));
+      await nextTick();
+      return $$(".pref-card .pref-title").map((t) => t.textContent);
+    };
+    const mouse = shortcutHudGroups().find((g) => g.id === "mouse")!.rows.length;
+    expect(mouse).toBeGreaterThan(4);
+    expect(await find("maus")).toEqual([line("shortcuts.group.mouse")]);
+    expect($$(".sc-row")).toHaveLength(mouse);
+    expect(await find("Mouse")).toEqual([line("shortcuts.group.mouse")]);
+    expect($$(".sc-row")).toHaveLength(mouse);
+    const always = shortcutHudGroups().find((g) => g.id === "always")!.rows.length;
+    expect(await find("immer")).toEqual([line("shortcuts.group.mouse"), line("shortcuts.group.always")]);
+    const labels = $$(".sc-row .sc-label").map((l) => l.textContent);
+    expect(labels).toHaveLength(always + 1);
+    expect(labels[0]).toBe(line("shortcuts.mouse.boxSelect"));
+  });
+
   it("gives the wide class by group id", () => {
     const card = (title: string) => $$(".pref-card").find((c) => c.querySelector(".pref-title")?.textContent === title);
     expect(shortcutHudGroups().map((g) => g.id)).toEqual(["model", "sketch", "global", "mouse", "focus", "always"]);

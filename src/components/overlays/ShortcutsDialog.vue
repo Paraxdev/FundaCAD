@@ -42,10 +42,12 @@ const close = () => {
 const modals = useModalStore();
 let ownDepth = 0;
 
+type Group = HudGroup & { alias: string };
+
 interface Page {
   id: string;
   label: string;
-  groups: HudGroup[];
+  groups: Group[];
 }
 
 const tick = ref(0);
@@ -64,9 +66,10 @@ const pages = computed<Page[]>(() => {
   ];
   const english = build(tEnglish);
   // The English name stays searchable beside the shown one, the groups of both builds have the same shape.
-  const withAlias = (groups: HudGroup[], i: number): HudGroup[] =>
+  const withAlias = (groups: HudGroup[], i: number): Group[] =>
     groups.map((g, gi) => ({
       ...g,
+      alias: english[i]![gi]?.name ?? "",
       rows: g.rows.map((r, ri) => ({
         ...r,
         alias: `${english[i]![gi]?.rows[ri]?.label ?? ""} ${english[i]![gi]?.rows[ri]?.key ?? ""}`,
@@ -95,7 +98,13 @@ const shown = computed<Page[]>(() => {
   return pages.value
     .map((p) => ({
       ...p,
-      groups: p.groups.map((g) => ({ ...g, rows: g.rows.filter((r) => matches(r, q)) })).filter((g) => g.rows.length),
+      groups: p.groups
+        .map((g) =>
+          matches({ label: g.name, key: "", alias: g.alias }, q)
+            ? g
+            : { ...g, rows: g.rows.filter((r) => matches(r, q)) },
+        )
+        .filter((g) => g.rows.length),
     }))
     .filter((p) => p.groups.length);
 });
