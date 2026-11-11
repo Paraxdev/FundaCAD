@@ -755,10 +755,10 @@ function fmtForce(f: Vec3): string {
 
 export type StressRamp = "perceptual" | "rainbow" | "greyscale";
 
-export const STRESS_RAMPS: readonly { value: StressRamp; label: string }[] = [
-  { value: "perceptual", label: "Perceptual" },
-  { value: "rainbow", label: "Rainbow" },
-  { value: "greyscale", label: "Greyscale" },
+export const STRESS_RAMPS: readonly { value: StressRamp; readonly label: string }[] = [
+  option("perceptual", "stress.legend.perceptual"),
+  option("rainbow", "stress.legend.rainbow"),
+  option("greyscale", "stress.legend.greyscale"),
 ];
 
 const hex = (h: string): Vec3 => [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255) as Vec3;
