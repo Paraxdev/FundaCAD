@@ -512,6 +512,9 @@
   "tool.union": "Unir",
   "tool.vertical": "Vertical",
   "tool.zebra": "Zébrure",
+  "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} centimètre carré} other {{amount} centimètres carrés}}} in {{n, plural, one {{amount} pouce carré} other {{amount} pouces carrés}}} other {{n, plural, one {{amount} millimètre carré} other {{amount} millimètres carrés}}}}",
+  "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centimètre} other {{amount} centimètres}}} in {{n, plural, one {{amount} pouce} other {{amount} pouces}}} other {{n, plural, one {{amount} millimètre} other {{amount} millimètres}}}}",
+  "units.spoken.minus": "moins {amount}",
   "view.command": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}",
   "view.named": "{view, select, front {Vue de face} back {Vue arrière} left {Vue de gauche} right {Vue de droite} top {Vue de dessus} bottom {Vue de dessous} other {Vue isométrique}}"
 }

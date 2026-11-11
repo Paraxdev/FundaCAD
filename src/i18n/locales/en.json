@@ -512,6 +512,9 @@
   "tool.union": "Union",
   "tool.vertical": "Vertical",
   "tool.zebra": "Zebra",
+  "units.spoken.area": "{unit, select, cm {{n, plural, one {{amount} square centimetre} other {{amount} square centimetres}}} in {{n, plural, one {{amount} square inch} other {{amount} square inches}}} other {{n, plural, one {{amount} square millimetre} other {{amount} square millimetres}}}}",
+  "units.spoken.length": "{unit, select, cm {{n, plural, one {{amount} centimetre} other {{amount} centimetres}}} in {{n, plural, one {{amount} inch} other {{amount} inches}}} other {{n, plural, one {{amount} millimetre} other {{amount} millimetres}}}}",
+  "units.spoken.minus": "minus {amount}",
   "view.command": "{view, select, front {Front View} back {Back View} left {Left View} right {Right View} top {Top View} bottom {Bottom View} other {Isometric View}}",
   "view.named": "{view, select, front {Front view} back {Back view} left {Left view} right {Right view} top {Top view} bottom {Bottom view} other {Isometric view}}"
 }

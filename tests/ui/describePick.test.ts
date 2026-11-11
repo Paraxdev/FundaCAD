@@ -621,7 +621,7 @@ describe("describePick in a comma language", () => {
       hint: "60,5 by 40,25 mm, facing up, Extrude 1",
       readout: "1 face · flat · 60,5 by 40,25 mm · facing up",
       spoken:
-        "Flat face 4, 60,5 by 40,25 millimetres, 2435,125 square millimetres, facing up, at height 37,5 millimetres, Body1, from Extrude 1",
+        "Flat face 4, 60,5 by 40,25 Millimeter, 2435,125 Quadratmillimeter, facing up, at height 37,5 Millimeter, Body1, from Extrude 1",
     });
   });
 
@@ -632,7 +632,7 @@ describe("describePick in a comma language", () => {
       label: "Hole 7",
       hint: "diameter 0,413 in, 0,807 in long, Hole 1",
       readout: "1 face · hole · ⌀0,413 in · 0,807 in long",
-      spoken: "Hole 7, diameter 0,413 inches, 0,807 inches long, axis up, Body1, from Hole 1",
+      spoken: "Hole 7, diameter 0,413 Zoll, 0,807 Zoll long, axis up, Body1, from Hole 1",
     });
   });
 

@@ -512,6 +512,9 @@
   "tool.union": "結合",
   "tool.vertical": "垂直",
   "tool.zebra": "ゼブラ",
+  "units.spoken.area": "{unit, select, cm {{amount} 平方センチメートル} in {{amount} 平方インチ} other {{amount} 平方ミリメートル}}",
+  "units.spoken.length": "{unit, select, cm {{amount} センチメートル} in {{amount} インチ} other {{amount} ミリメートル}}",
+  "units.spoken.minus": "マイナス {amount}",
   "view.command": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}",
   "view.named": "{view, select, front {正面図} back {背面図} left {左側面図} right {右側面図} top {平面図} bottom {底面図} other {等角図}}"
 }
