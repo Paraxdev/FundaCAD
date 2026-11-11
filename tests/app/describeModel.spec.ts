@@ -292,7 +292,7 @@ describe("describeSelectionAloud", () => {
     describeSelectionAloud(f.e);
     expect(vi.mocked(announce).mock.calls[0]![0]).toBe(
       "Plateの 2 面、20 × 10 × 7.25 ミリメートル、中心 マイナス 20, 1, 4.125 ミリメートル。" +
-        "Plateの 1 辺、4 × 0 × 0 ミリメートル、中心 7, 2, 3 ミリメートル",
+        "Plateの 1 エッジ、4 × 0 × 0 ミリメートル、中心 7, 2, 3 ミリメートル",
     );
   });
 

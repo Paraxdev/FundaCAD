@@ -147,6 +147,20 @@ describe("the facts of a pick, on screen and aloud", () => {
     expect(describePick(between).hint).toBe("12.5 mm, faces 2, 5 and 9");
   });
 
+  it("calls an edge by the glossary's one word in ja, as the refusal does", async () => {
+    await setLanguage("ja");
+    const w = describePick(between);
+    const lines = [
+      w.label,
+      w.readout,
+      w.spoken,
+      t("rail.count.edge", { n: 3 }),
+      t("pick.refused", { row: "edge", wanted: "face" }),
+    ];
+    for (const line of lines) expect(line).toContain("エッジ");
+    for (const line of lines) expect(line).not.toContain("辺");
+  });
+
   it("keeps the English words of a tilted face, whole", () => {
     const w = describePick({
       kind: "face",
