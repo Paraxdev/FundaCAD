@@ -86,6 +86,11 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
       waiting = delta;
       return say(ctl.waitsOnTool() ?? `Listing ${list.kind}`);
     }
+    const held = ctl.rowsHeld();
+    if (held) {
+      list.setLit(false);
+      return say(held);
+    }
     const row = ctl.step(delta);
     if (!row) {
       list.setLit(false);

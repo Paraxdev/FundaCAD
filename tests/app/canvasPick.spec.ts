@@ -204,6 +204,22 @@ describe("stepping", () => {
     expect(lastSaid()).toContain("No faces");
   });
 
+  it("says the list waits on the open tool from the first step once its preview moved the listed body", async () => {
+    const r = await ready();
+    const real = r.store.buildState;
+    const held = (over: object) =>
+      Object.defineProperty(r.store, "buildState", {
+        configurable: true,
+        get: () => ({ ...real, previewBuilt: [{ id: "x9", type: "press-pull" }], ...over }),
+      });
+    held({ result: result([{ id: "body1", etag: "e7" }]) });
+    key("]");
+    expect([lastSaid(), r.list.litRow]).toEqual([t("geometry.list.waitsOnTool"), null]);
+    held({});
+    key("]");
+    expect(r.list.litRow?.key).toBe("f:body1:0");
+  });
+
   it("refuses in words while the model is building and leaves the cursor", async () => {
     const r = await ready();
     key("]");
