@@ -83,7 +83,7 @@ function rig(opts: { editing?: boolean } = {}) {
       ],
       parameters: {},
     },
-    buildState: { building: false, result: null as unknown },
+    buildState: { building: false, result: null } as { building: boolean; result: unknown; previewBuilt?: unknown },
     hasPreview: false,
     previewError: null as string | null,
   };
@@ -304,7 +304,7 @@ describe("Extrude engine preview", () => {
       r.begin();
       r.depth(5);
       vi.advanceTimersByTime(150);
-      r.state.buildState = { building: false, result: { mesh: { positions: [1, 2, 3] } } };
+      r.state.buildState = { building: false, result: { mesh: { positions: [1, 2, 3] } }, previewBuilt: [feat(5)] };
       r.depth(-4);
       vi.advanceTimersByTime(150);
       expect(r.calls.setPreview.map((c) => (c[0] as { operation: string }).operation)).toEqual(["new", "new"]);
@@ -313,6 +313,25 @@ describe("Extrude engine preview", () => {
       r.depth(5);
       vi.advanceTimersByTime(150);
       expect((r.calls.setPreview.at(-1)![0] as { operation: string }).operation).toBe("join");
+    });
+
+    it("follows the model's own build landing or being undone while the tool is open, never its preview's", () => {
+      const r = rig();
+      const ops = () => r.calls.setPreview.map((c) => (c[0] as { operation: string }).operation);
+      r.state.buildState = { building: true, result: null };
+      r.begin();
+      r.depth(6.5);
+      vi.advanceTimersByTime(150);
+      r.state.buildState = { building: false, result: { mesh: { positions: [1, 2, 3] } }, previewBuilt: null };
+      r.depth(7.5);
+      vi.advanceTimersByTime(150);
+      r.state.buildState = { building: false, result: { mesh: { positions: [] } }, previewBuilt: null };
+      r.depth(8.5);
+      vi.advanceTimersByTime(150);
+      r.state.buildState = { building: false, result: { mesh: { positions: [4, 5, 6] } }, previewBuilt: [feat(8.5)] };
+      r.depth(9.5);
+      vi.advanceTimersByTime(150);
+      expect(ops()).toEqual(["new", "join", "new", "new"]);
     });
   });
 

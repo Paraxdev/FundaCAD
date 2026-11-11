@@ -121,7 +121,7 @@ export class ExtrudeTool {
   private pushedKey = "";
   private previewTimer: number | null = null;
   /** Read before the first preview lands, since the preview body would make an empty model look solid. */
-  private solidAtStart: boolean | null = null;
+  private settledSolid: boolean | null = null;
 
   private boundMove: (e: PointerEvent) => void;
   private boundDown: (e: PointerEvent) => void;
@@ -970,10 +970,18 @@ export class ExtrudeTool {
   private plannedOperation(): Op {
     return plannedOperation({
       savedOperation: this.editId ? this.editOp : this.pinnedOp,
-      hasSolid: (this.solidAtStart ??= (this.store.buildState.result?.mesh.positions.length ?? 0) > 0),
+      hasSolid: this.committedSolid(),
       entersSolid: this.entersSolid(),
       allGlyphs: this.selected.length > 0 && this.selected.every((wr) => wr.entityId !== undefined),
     });
+  }
+
+  // A landed preview holds the extruded body itself, so only a settled build of the model says whether one exists
+  private committedSolid(): boolean {
+    const s = this.store.buildState;
+    const solid = (s.result?.mesh.positions.length ?? 0) > 0;
+    if (!s.building && !s.previewBuilt) this.settledSolid = solid;
+    return this.settledSolid ?? solid;
   }
 
   /** The operation on the prompt line, following the drag across zero. Gated on the depth's sign and the area count,
@@ -985,7 +993,8 @@ export class ExtrudeTool {
   private refreshPrompt() {
     if (this.phase !== "drag") return;
     const carry = this.carriesOn();
-    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}${this.symmetric ? "s" : ""}${carry ? "c" : ""}`;
+    const solid = this.committedSolid() ? "b" : "";
+    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}${this.symmetric ? "s" : ""}${carry ? "c" : ""}${solid}`;
     if (key === this.promptKey) return;
     this.promptKey = key;
     const op = this.plannedOperation();
@@ -1189,7 +1198,7 @@ export class ExtrudeTool {
     this.outline?.dispose();
     this.outline = null;
     this.entersMemo.clear();
-    this.solidAtStart = null;
+    this.settledSolid = null;
     // A cancel or commit can leave a floating preview up; an edit's goes with endEditPreview.
     this.clearPreviewTimer();
     if (this.previewOn && !this.editId) this.store.setPreview(null);
