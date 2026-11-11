@@ -57,7 +57,7 @@
   "dim.negative": "负 {amount}",
   "dim.stepHint": "上下方向键每次改变 {step}，按住 Shift 每次改变 {fine}，Page Up 和 Page Down 每次改变 {big}",
   "geometry.commands.pickWaiting": "工具正在等待选择，请在 3D 视图中用 ] 和 [ 逐项移动",
-  "geometry.list.waitsOnTool": "工具完成后列表会显示出来",
+  "geometry.list.waitsOnTool": "请先按 Enter 完成工具，完成后列表会显示出来",
   "guide.counter": "第 {step, number} 步，共 {of, number} 步",
   "guide.keysLabel": "键盘操作：",
   "guide.next": "下一步",

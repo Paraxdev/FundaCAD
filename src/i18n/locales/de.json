@@ -57,7 +57,7 @@
   "dim.negative": "minus {amount}",
   "dim.stepHint": "Pfeil nach oben und unten ändern den Wert um {step}, mit Umschalt um {fine}, Bild auf und Bild ab um {big}",
   "geometry.commands.pickWaiting": "Das Werkzeug wartet auf eine Auswahl, gehen Sie in der 3D-Ansicht mit ] und [ dorthin",
-  "geometry.list.waitsOnTool": "Die Liste füllt sich, sobald das Werkzeug fertig ist",
+  "geometry.list.waitsOnTool": "Drücken Sie zuerst Enter, um das Werkzeug abzuschließen, danach füllt sich die Liste",
   "guide.counter": "Schritt {step, number} von {of, number}",
   "guide.keysLabel": "Mit Tasten:",
   "guide.next": "Weiter",

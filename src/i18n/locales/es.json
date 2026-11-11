@@ -57,7 +57,7 @@
   "dim.negative": "menos {amount}",
   "dim.stepHint": "Flecha arriba y abajo lo cambian en {step}, con Mayús en {fine}, Re Pág y Av Pág en {big}",
   "geometry.commands.pickWaiting": "La herramienta espera una selección, llegue a ella con ] y [ en la vista 3D",
-  "geometry.list.waitsOnTool": "La lista se completa cuando termina la herramienta",
+  "geometry.list.waitsOnTool": "Pulse Intro para terminar primero la herramienta, la lista se completa cuando termina",
   "guide.counter": "Paso {step, number} de {of, number}",
   "guide.keysLabel": "Con el teclado:",
   "guide.next": "Siguiente",

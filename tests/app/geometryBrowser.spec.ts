@@ -1318,7 +1318,7 @@ describe("a tool waiting for a pick", () => {
     const old = r.list.rows[0]!;
     await r.build(result([{ id: "body1", etag: "e1c" }]));
     const back = previewOnScreen(r.store);
-    expect(r.browser.offer([old])).toBe(t("geometry.list.waitsOnTool"));
+    expect(r.browser.offer([old])).toBe("Press Enter to finish the tool first, the list fills in once it is done");
     expect(r.browser.pickRows([old], { additive: false })).toBe(t("geometry.list.waitsOnTool"));
     back();
     const changed = r.browser.offer([old]);
@@ -1472,7 +1472,7 @@ describe("a tool waiting for a pick", () => {
     r.browser.setKind("edges");
     expect({ state: r.list.state, error: r.list.error }).toEqual({
       state: "loading",
-      error: "The list fills in once the tool is done",
+      error: "Press Enter to finish the tool first, the list fills in once it is done",
     });
 
     r.store.setPreview(null);
@@ -1505,7 +1505,7 @@ describe("a tool waiting for a pick", () => {
     expect(r.store.buildState.previewBuilt).toHaveLength(1);
     expect({ state: r.list.state, error: r.list.error }).toEqual({
       state: "loading",
-      error: "The list fills in once the tool is done",
+      error: "Press Enter to finish the tool first, the list fills in once it is done",
     });
   });
 

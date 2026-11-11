@@ -57,7 +57,7 @@
   "dim.negative": "マイナス {amount}",
   "dim.stepHint": "上下矢印キーで {step} ずつ、Shift を押しながらで {fine} ずつ、Page Up と Page Down で {big} ずつ変わります",
   "geometry.commands.pickWaiting": "ツールが選択を待っています。3Dビューで ] と [ を使って移動してください",
-  "geometry.list.waitsOnTool": "ツールが終わるとリストが表示されます",
+  "geometry.list.waitsOnTool": "先に Enter を押してツールを終えてください。終わるとリストが表示されます",
   "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
   "guide.next": "次へ",
