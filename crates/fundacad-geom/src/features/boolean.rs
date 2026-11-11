@@ -61,14 +61,17 @@ fn overlap(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {
         && a[5] >= b[2] - tol
 }
 
-/// `_in_slices`: `solid` chopped into `n` slabs across its longest axis, so the kernel meets short intersection
-/// curves instead of one long one. Fewer pieces come back when a plane misses, the caller only needs two.
-fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
+/// `_in_slices`: `solid` chopped into `n` slabs across its `rank`th longest axis (0 is the longest), so the kernel
+/// meets short intersection curves instead of one long one. Fewer pieces come back when a plane misses, the caller
+/// only needs two.
+fn in_slices(solid: &Shape, n: usize, rank: usize) -> Vec<Shape> {
     let Some(bb) = kernel::bbox(solid) else {
         return Vec::new();
     };
     let span = [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]];
-    let axis = (0..3).max_by(|&a, &b| span[a].total_cmp(&span[b])).unwrap_or(0);
+    let mut axes = [0usize, 1, 2];
+    axes.sort_by(|&a, &b| span[b].total_cmp(&span[a]));
+    let axis = axes[rank.min(2)];
     let mut normal = DVec3::ZERO;
     normal[axis] = 1.0;
     let xdir = if axis == 0 { DVec3::Y } else { DVec3::X };
@@ -97,23 +100,83 @@ fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
 
 /// `_retried_in_slices`, only where the alternative was to raise. A long swept tool nearly parallel to the face
 /// it meets makes OCCT hand the argument back as done, or fuse into a disjoint lump, while two or four slabs work.
-/// Without `accept` any volume change counts, a fuse needs its own test. `Ok(None)` is a true miss, an `Err` is
-/// the kernel refusing every slicing and says nothing about reach.
+/// A fuse takes `accept` as its test, a cut is tried across each axis (see `sliced_cut`). `Ok(None)` is a true
+/// miss, an `Err` is the kernel refusing every slicing and says nothing about reach. The flag says a cut's slicings
+/// disagreed on how much it removes with nothing to confirm the largest.
 fn retried_in_slices(
     shape: &Shape,
     tool: &Shape,
     kind: BoolKind,
     accept: Option<&dyn Fn(&Shape) -> bool>,
-) -> KResult<Option<Shape>> {
-    let changed = |s: &Shape| (vol(s) - vol(shape)).abs() > noop_eps(vol(shape));
-    let got =
-        sliced(shape, [2usize, 4].into_iter().map(|n| in_slices(tool, n)), accept.unwrap_or(&changed), &|a, b| {
-            kernel::serial_bool(a, &[b], kind)
-        })?;
-    Ok(got.map(|(out, pieces)| {
+) -> KResult<Option<(Shape, bool)>> {
+    let boolean = |a: &Shape, b: &Shape| kernel::serial_bool(a, &[b], kind);
+    let got = match (kind, accept) {
+        (BoolKind::Cut, None) => sliced_cut(shape, (0..3).map(|rank| in_slices(tool, 2, rank)), &boolean, &vol)?
+            .map(|c| (c.shape, c.pieces, c.doubtful)),
+        _ => {
+            let changed = |s: &Shape| (vol(s) - vol(shape)).abs() > noop_eps(vol(shape));
+            let attempts = [2usize, 4].into_iter().map(|n| in_slices(tool, n, 0));
+            sliced(shape, attempts, accept.unwrap_or(&changed), &boolean)?.map(|(s, n)| (s, n, false))
+        }
+    };
+    Ok(got.map(|(out, pieces, doubtful)| {
         kernel::note_fallback(kind, kernel::Rung::Slices(pieces));
-        out
+        (out, doubtful)
     }))
+}
+
+/// How far two slicings may differ in what they cut, as a share of the larger, and still be the same cut. Seam
+/// noise between whole cuts is under 0.5 %, the partial ones seen lose 25 % or more.
+const SLICINGS_AGREE: f64 = 0.02;
+
+struct SlicedCut {
+    shape: Shape,
+    pieces: usize,
+    doubtful: bool,
+}
+
+/// A long helical tool sliced along its own axis comes back as long helices the kernel still cuts half-way and
+/// reports as done, so for a cut the slicings across each axis are compared by the volume they remove. A cut cannot
+/// remove too much, so the largest is kept. It is only trusted once a second slicing agrees; with none agreeing after
+/// two or more ran, it is `doubtful`.
+fn sliced_cut(
+    shape: &Shape,
+    attempts: impl IntoIterator<Item = Vec<Shape>>,
+    boolean: &dyn Fn(&Shape, &Shape) -> KResult<Shape>,
+    volume: &dyn Fn(&Shape) -> f64,
+) -> KResult<Option<SlicedCut>> {
+    let before = volume(shape);
+    let mut best: Option<(Shape, usize, f64)> = None;
+    let (mut ran, mut agreed) = (0, false);
+    let mut refused = None;
+    for pieces in attempts {
+        if pieces.len() < 2 {
+            break;
+        }
+        let out = match pieces.iter().try_fold(shape.clone(), |out, piece| boolean(&out, piece)) {
+            Ok(out) => out,
+            Err(e) => {
+                refused = Some(e);
+                continue;
+            }
+        };
+        ran += 1;
+        let removed = before - volume(&out);
+        if let Some((_, _, top)) = &best {
+            if (removed - top).abs() <= SLICINGS_AGREE * removed.max(*top) {
+                agreed = true;
+                break;
+            }
+        }
+        if removed > noop_eps(before) && best.as_ref().is_none_or(|(_, _, top)| removed > *top) {
+            best = Some((out, pieces.len(), removed));
+        }
+    }
+    match (best, refused) {
+        (Some((shape, pieces, _)), _) => Ok(Some(SlicedCut { shape, pieces, doubtful: ran >= 2 && !agreed })),
+        (None, Some(e)) if ran == 0 => Err(e),
+        _ => Ok(None),
+    }
 }
 
 /// `retried_in_slices` with the slicing and the boolean handed in, and the
@@ -260,7 +323,10 @@ pub fn combine(
                 for &i in &hits[1..] {
                     base = kernel::serial_bool(&base, &[ctx.bodies[i].shape()], BoolKind::Fuse).ok()?;
                 }
-                retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly)).ok().flatten()
+                retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly))
+                    .ok()
+                    .flatten()
+                    .map(|(fixed, _)| fixed)
             };
             if merged_vol < hit_vol - noop_eps(hit_vol) {
                 // Less than was there before. A union cannot remove material, so the fuse came back wrong, usually because
@@ -347,12 +413,14 @@ pub fn combine(
                 // back, and slicing the tool repairs it, so try that before blaming the caller.
                 let mut healed = false;
                 let mut refused = None;
+                let mut doubtful = false;
                 for (i, shape, measured) in &mut results {
                     match retried_in_slices(ctx.bodies[*i].shape(), &solid, BoolKind::Cut, None) {
-                        Ok(Some(fixed)) => {
+                        Ok(Some((fixed, unsure))) => {
                             *shape = fixed;
                             *measured = None;
                             healed = true;
+                            doubtful |= unsure;
                         }
                         Ok(None) => {}
                         Err(e) => refused = Some(e),
@@ -373,6 +441,17 @@ pub fn combine(
                         .take(2)
                         .count();
                     return Err(Fail::msg(cut_missed(extrude, unseen, recorded)));
+                }
+                if doubtful {
+                    ctx.diagnostics.push(json!({
+                        "feature_id": feature_id,
+                        "kind": "partialCut",
+                        "resolved": 0,
+                        "confidence": 0.0,
+                        "lossy": false,
+                        "reason": "This cut may have left part of its tool uncut: the ways of splitting it for the kernel removed different amounts and none was confirmed. Check the result, or cut a shorter length at a time.",
+                        "code": "partialCut",
+                    }));
                 }
             }
             let cut_ids = results.iter().map(|(i, _, _)| ctx.bodies[*i].id.clone()).collect();
@@ -536,30 +615,5 @@ fn truthy(v: &serde_json::Value) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::kernel::KernelError;
-
-    #[test]
-    fn a_sliced_retry_the_kernel_refuses_is_not_a_miss() {
-        let body = kernel::make_box(10.0, 10.0, 10.0).unwrap();
-        let halves = || vec![body.clone(), body.clone()];
-        let refuse = |_: &Shape, _: &Shape| Err(KernelError("BOPAlgo_ImpossibleResult".into()));
-        let untouched = |a: &Shape, _: &Shape| Ok(a.clone());
-        let got = sliced(&body, [halves(), halves()], &|_| true, &refuse);
-        assert_eq!(got.err().map(|e| e.0).as_deref(), Some("BOPAlgo_ImpossibleResult"));
-        // A slicing that ran and changed nothing is the tool not reaching,
-        // whatever an earlier one came to.
-        let asked = std::cell::Cell::new(0);
-        let refused_once = |a: &Shape, b: &Shape| {
-            asked.set(asked.get() + 1);
-            if asked.get() == 1 {
-                refuse(a, b)
-            } else {
-                untouched(a, b)
-            }
-        };
-        assert!(matches!(sliced(&body, [halves(), halves()], &|_| false, &refused_once), Ok(None)));
-        assert!(matches!(sliced(&body, [halves(), halves()], &|_| true, &untouched), Ok(Some(_))));
-    }
-}
+#[path = "boolean_tests.rs"]
+mod tests;
