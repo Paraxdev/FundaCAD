@@ -158,15 +158,20 @@ export interface ToolStep {
   button: "left" | "right";
 }
 
-/** A tool standing on the rail itself, found by its English name when its label is in another language. */
+/** A tool standing on the rail itself, found by its English name when its label is in another language. A selection's
+ *  rail offers a tool the model rail folds into a family as `offer:<action>`, with no English name of its own. */
 function directTool(rail: Walk, name: string, entries: RailEntry[]): string | null {
   const want = matchName(name);
+  const tools = entries.flatMap((e) => (e.kind === "tool" ? [e] : e.items));
   for (const pass of ["exact", "prefix"] as const) {
-    for (const e of entries) {
-      if (e.kind !== "tool" || !e.english) continue;
+    for (const e of tools) {
+      if (!e.english) continue;
       const en = matchName(e.english);
       if (!(pass === "exact" ? en === want : en.startsWith(want))) continue;
-      if (rail.controls.some((c) => c.ref === `action:${e.action}`)) return `action:${e.action}`;
+      const ref = [`action:${e.action}`, `action:offer:${e.action}`].find((r) =>
+        rail.controls.some((c) => c.ref === r),
+      );
+      if (ref) return ref;
     }
   }
   return null;

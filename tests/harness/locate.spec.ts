@@ -229,6 +229,17 @@ describe("toolPath by English name", () => {
     document.querySelector('[data-action="sketch"]')!.remove();
     expect(() => toolPath(walk(), "Sketch", "model", de)).toThrow(/no tool "Sketch"/);
   });
+
+  it("clicks the selection rail's offer of a family tool by its English name", () => {
+    const rail = document.querySelector("#toolrail")!;
+    rail.querySelector('[data-family="cat:CREATE"]')!.remove();
+    rail.insertAdjacentHTML(
+      "afterbegin",
+      '<button class="rail-btn" data-action="offer:extrude" aria-label="Extrusion"></button>',
+    );
+    expect(toolPath(walk(), "Extrude", "model", de)).toEqual([{ ref: "action:offer:extrude", button: "left" }]);
+    expect(toolPath(walk(), "Extrusion", "model", de)).toEqual([{ ref: "action:offer:extrude", button: "left" }]);
+  });
 });
 
 describe("covered", () => {
