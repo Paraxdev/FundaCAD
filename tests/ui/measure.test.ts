@@ -18,6 +18,7 @@ import {
   roundForDisplay,
   measureError,
   normalise,
+  groupsBySpace,
   parseMeasure,
   toUnit,
   tryParseMeasure,
@@ -743,6 +744,13 @@ describe("two bare numbers with only a space between are refused, not joined", (
     expect(() => normalise("12 3456")).not.toThrow(/without the space/);
   });
 
+  it("quotes the whole number in the hint, every group and the decimals, and only that refusal groups by space", () => {
+    expect(() => normalise("12 500.5")).toThrow('write "12500.5" without the space');
+    expect(() => normalise("1 000 000")).toThrow('write "1000000" without the space');
+    expect(() => normalise("1 000 mm")).toThrow('write "1000" without the space');
+    expect(["1 000", "12 500.5", "1 5", "abc", "1000"].map(groupsBySpace)).toEqual([true, true, false, false, false]);
+  });
+
   it("keeps mixed fractions, compounds, x products, units after a space and spaces around operators", () => {
     expect(
       exprs(["1 1/2", "3 1/4 in", "1m 20cm", "1 m 20 cm", "10 x 5", "10 mm", "2 * (3 + 4)", "(2 + 3) * 4"]),
@@ -762,6 +770,7 @@ describe("two bare numbers with only a space between are refused, not joined", (
       expect(() => normalise(t), t).toThrow(ExprError);
     }
     expect(() => normalise("1 000")).toThrow('write "1000" without the space');
+    expect(() => normalise("12 500,5")).toThrow('write "12500,5" without the space');
     expect(exprs(["1,5", "10x2,5", "10 x 2,5", "1 + 5", "10 mm", "1,5 mm"])).toEqual([
       "1.5",
       "10*2.5",
@@ -780,7 +789,7 @@ describe("two bare numbers with only a space between are refused, not joined", (
       expect(normalise(`12${sp}mm`).expr, sp).toBe("12");
     }
     await setLanguage("fr");
-    expect(() => normalise("12\u202F500,5")).toThrow('write "12500" without the space');
+    expect(() => normalise("12\u202F500,5")).toThrow('write "12500,5" without the space');
     expect(normalise("2\u00A0+\u00A01,5").expr).toBe("2+1.5");
   });
 });
