@@ -116,7 +116,7 @@ fn a_body_that_reaches_no_other_is_not_listed() {
 
 fn inspected(r: &Rebuild) -> Value {
     let body = &r.bodies[0];
-    let asked = [InspectBody { id: json!(body.id), name: json!(body.name), shape: Some(&body.shape) }];
+    let asked = [InspectBody::built(body)];
     inspect::inspect_bodies(&asked, false, 0, 0).expect("inspected").remove(0)
 }
 

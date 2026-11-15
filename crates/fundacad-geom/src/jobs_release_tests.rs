@@ -19,7 +19,12 @@ fn fill(shapes: &[&opencascade::primitives::Shape]) {
     let bodies: Vec<InspectBody<'_>> = shapes
         .iter()
         .enumerate()
-        .map(|(i, s)| InspectBody { id: json!(format!("body{}", i + 1)), name: json!(null), shape: Some(*s) })
+        .map(|(i, s)| InspectBody {
+            id: json!(format!("body{}", i + 1)),
+            name: json!(null),
+            shape: Some(*s),
+            identity: None,
+        })
         .collect();
     inspect_bodies(&bodies, false, 10, 10).unwrap();
 }

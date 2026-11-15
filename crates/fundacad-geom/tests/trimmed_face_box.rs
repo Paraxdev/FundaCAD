@@ -24,7 +24,7 @@ fn corners(bbox: &Value) -> [f64; 6] {
 /// which have to be the same box. `inspect` rounds to a micrometre.
 fn exact_box(shape: &Shape) -> [f64; 6] {
     let built = kernel::bbox(shape).expect("a box");
-    let body = inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(shape) };
+    let body = inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(shape), identity: None };
     let reported = corners(&inspect::inspect_bodies(&[body], false, 400, 800).expect("inspects")[0]["bbox"]);
     for k in 0..6 {
         assert!((built[k] - reported[k]).abs() < 1e-6, "build {built:?}, inspect {reported:?}");

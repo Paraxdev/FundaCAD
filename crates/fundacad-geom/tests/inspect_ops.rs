@@ -128,7 +128,7 @@ fn every_selector_inspect_hands_back_finds_its_own_entity() {
         Shape::cylinder_radius_height(10.0, 4.0).subtract(&Shape::cylinder_radius_height(5.0, 4.0)).into(),
     ];
     for shape in &shapes {
-        let body = inspect::InspectBody { id: json!("b1"), name: json!("Body1"), shape: Some(shape) };
+        let body = inspect::InspectBody { id: json!("b1"), name: json!("Body1"), shape: Some(shape), identity: None };
         let rep = inspect::inspect_bodies(&[body], true, 400, 800).unwrap();
         let faces = sa::items(shape, ItemKind::Face);
         for f in rep[0]["faces"].as_array().unwrap() {
@@ -150,7 +150,7 @@ fn every_selector_inspect_hands_back_finds_its_own_entity() {
 #[test]
 fn a_body_that_did_not_build_is_reported_empty() {
     let rep = inspect::inspect_bodies(
-        &[inspect::InspectBody { id: json!("b1"), name: json!("Body1"), shape: None }],
+        &[inspect::InspectBody { id: json!("b1"), name: json!("Body1"), shape: None, identity: None }],
         true,
         400,
         800,
@@ -267,8 +267,10 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
     let turned = kernel::translated(&kernel::rotated(&cyl, [90.0, 0.0, 0.0]).unwrap(), [7.0, 3.0, 1.0]).unwrap();
     let tilted = kernel::rotated(&cyl, [30.0, 20.0, 0.0]).unwrap();
     let shapes = [&cyl, &turned, &tilted];
-    let bodies: Vec<inspect::InspectBody> =
-        shapes.iter().map(|s| inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(*s) }).collect();
+    let bodies: Vec<inspect::InspectBody> = shapes
+        .iter()
+        .map(|s| inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(*s), identity: None })
+        .collect();
     for _ in 0..2 {
         let rep = inspect::inspect_bodies_at(&bodies, inspect::Level::Summary, 400, 800).unwrap();
         for (r, s) in rep.iter().zip(shapes) {
@@ -295,7 +297,7 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
         )
         .unwrap();
         let plain = inspect::inspect_bodies(
-            &[inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(&want) }],
+            &[inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(&want), identity: None }],
             false,
             400,
             800,
@@ -339,7 +341,7 @@ fn the_volume_of_a_lofted_spline_body_is_the_precise_one() {
     let (quick, precise) = (kernel::volume(shape).abs(), kernel::volume_precise(shape).abs());
     assert!((precise - quick).abs() > 1e-5 * precise, "this body no longer shows the gap: {quick} against {precise}");
     let rep = inspect::inspect_bodies(
-        &[inspect::InspectBody { id: json!("b1"), name: json!("Tub"), shape: Some(shape) }],
+        &[inspect::InspectBody { id: json!("b1"), name: json!("Tub"), shape: Some(shape), identity: None }],
         false,
         400,
         800,
