@@ -82,3 +82,24 @@ def test_an_unknown_name_in_the_extrude_value_box_names_it(s):
     assert 'no parameter named "widht"' in typed["problem"], typed
     s.press("Escape")
     assert s.history(raw=True)["count"] == 1
+
+
+SET_LANGUAGE = "async (c) => (await import('/src/i18n/index.ts')).setLanguage(c)"
+PROBLEM = "() => document.querySelector('.dim-problem')?.textContent ?? null"
+
+
+def test_digits_a_space_groups_are_refused_in_german_with_the_whole_number_and_enter_keeps_the_box(s):
+    s.page.evaluate(SET_LANGUAGE, "de")
+    try:
+        s.pick_face("top")
+        s.tool("Extrusion")
+        typed = s.type("D", "12 500,5").data
+        assert 'write "12500,5" without the space' in typed["problem"], typed
+        s.press("Enter")
+        s.settle()
+        assert 'write "12500,5" without the space' in (s.page.evaluate(PROBLEM) or ""), "Enter closed the box"
+        s.press("Escape")
+        assert s.history(raw=True)["count"] == 1
+    finally:
+        s.press("Escape")
+        s.page.evaluate(SET_LANGUAGE, "system")
