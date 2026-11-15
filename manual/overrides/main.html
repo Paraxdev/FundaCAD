@@ -21,16 +21,18 @@
 
 {% block extrahead %}
   {#- The theme would pick the first palette whose media matches the system, so a first visit is given dark as its
-      choice. A choice stored under this version's own path, from before the site shared one, is carried over with
-      its index looked up again, since the palette order changed. -#}
+      choice. A light or dark choice stored under this version's own path, from before the site shared one, is carried
+      over with its index looked up again. The old site stored its system entry on every first visit, so that one is
+      no choice. -#}
   {%- set dark = config.theme.palette | first %}
   <script>
     if (!__md_get("__palette")) {
       var own = new URL("{{ base_url }}", location)
       if (!own.pathname.endsWith("/")) own = new URL(own.pathname + "/", location)
       var old = __md_get("__palette", localStorage, own)
-      if (old && old.color) old.index = {{ config.theme.palette | map(attribute="media") | list | tojson }}.indexOf(old.color.media)
-      __md_set("__palette", old && old.color ? old : {index: 0, color: {media: {{ dark.media | tojson }}, scheme: "slate", primary: "indigo", accent: "indigo"}})
+      var kept = old && old.color && old.color.media !== "(prefers-color-scheme)" ? {{ config.theme.palette | map(attribute="media") | list | tojson }}.indexOf(old.color.media) : -1
+      if (kept >= 0) old.index = kept
+      __md_set("__palette", kept >= 0 ? old : {index: 0, color: {media: {{ dark.media | tojson }}, scheme: {{ dark.scheme | tojson }}, primary: {{ (dark.primary or "indigo") | tojson }}, accent: {{ (dark.accent or "indigo") | tojson }}}})
     }
   </script>
 
