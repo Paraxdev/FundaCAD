@@ -6,6 +6,7 @@ const sel = vi.hoisted(() => ({
   readout: null as unknown as { value: string },
   speech: null as unknown as { value: { text: string; verbose?: boolean } | null },
   toolOwns: null as unknown as { value: boolean },
+  toolWorks: null as unknown as { value: boolean },
   lit: null as unknown as { value: boolean },
 }));
 vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
@@ -23,6 +24,7 @@ describe("the selection readout", () => {
     sel.readout = ref("");
     sel.speech = shallowRef(null);
     sel.toolOwns = ref(false);
+    sel.toolWorks = ref(false);
     sel.lit = ref(false);
   });
 
@@ -70,6 +72,7 @@ describe("the selection readout", () => {
   it("shows and says nothing while a tool owns the screen, its prompt speaks instead", async () => {
     const w = mount(SelectionReadout);
     sel.toolOwns.value = true;
+    sel.toolWorks.value = true;
     sel.readout.value = "1 face";
     sel.speech.value = { text: "Flat face 4" };
     await nextTick();
@@ -80,6 +83,7 @@ describe("the selection readout", () => {
   it("shows the lit row's readout under a tool and drops it with the light, still saying nothing", async () => {
     const w = mount(SelectionReadout);
     sel.toolOwns.value = true;
+    sel.toolWorks.value = true;
     sel.readout.value = "Flat face 3 · 41.5 by 22 mm";
     sel.speech.value = { text: "Flat face 3" };
     await nextTick();
@@ -96,12 +100,28 @@ describe("the selection readout", () => {
   it("keeps a lit row with no words off the screen, and a lit row without a tool still shows", async () => {
     const w = mount(SelectionReadout);
     sel.toolOwns.value = true;
+    sel.toolWorks.value = true;
     sel.lit.value = true;
     await nextTick();
     expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
     sel.toolOwns.value = false;
+    sel.toolWorks.value = false;
     sel.readout.value = "Edge 7 · 18.2 mm";
     await nextTick();
     expect(w.get("[data-testid=selection-readout]").text()).toBe("Edge 7 · 18.2 mm");
+  });
+
+  it("hides the readout under a dialog but says nothing new when it closes", async () => {
+    const w = mount(SelectionReadout);
+    sel.readout.value = "1 face";
+    sel.speech.value = { text: "Flat face 4" };
+    await nextTick();
+    expect(announce).toHaveBeenCalledTimes(1);
+    sel.toolOwns.value = true;
+    await nextTick();
+    expect(w.find("[data-testid=selection-readout]").exists()).toBe(false);
+    sel.toolOwns.value = false;
+    await nextTick();
+    expect(announce).toHaveBeenCalledTimes(1);
   });
 });

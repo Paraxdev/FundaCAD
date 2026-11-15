@@ -7,8 +7,9 @@ import { announce } from "../../ui/announce";
 
 const sel = useSelectionOffers(useEngine(), { words: true });
 
+// A dialog hides the readout but is no tool: closing one must not say the unchanged selection again.
 watch(
-  () => (sel.toolOwns.value ? null : sel.speech.value),
+  () => (sel.toolWorks.value ? null : sel.speech.value),
   (said) => {
     if (!said) return;
     announce(said.text, "polite", {

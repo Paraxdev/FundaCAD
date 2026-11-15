@@ -163,8 +163,8 @@ export function createSelectionWords(e: Engine) {
   });
 
   /** Called every frame, it costs nothing until the selection or the build changed. */
-  function update(signature: string, toolOwns: boolean, escaped: boolean) {
-    if (toolOwns) {
+  function update(signature: string, toolWorks: boolean, escaped: boolean) {
+    if (toolWorks) {
       // The tool's prompt speaks. Whatever stays selected when it ends is said whole.
       supersede();
       said = [];

@@ -129,6 +129,7 @@ export function rig(
     setStatus: vi.fn(),
     toolBusy: vi.fn(() => false),
     toolOwnsScreen: vi.fn(() => false),
+    toolAtWork: () => host.toolOwnsScreen(),
     dropBodyGizmo: vi.fn(),
     handleAction: vi.fn(),
   };
