@@ -10,6 +10,8 @@ pub mod smooth;
 use fundacad_core::schema::{Chamfer, Fillet, OneOrMany, Selector};
 use glam::DVec3;
 use opencascade::primitives::Shape;
+use opencascade::progress::ProgressRange;
+use opencascade::shape_io::BrepWriteOptions;
 use serde_json::{json, Map, Value};
 
 use crate::builder::{py_g, Ctx, FResult, Fail};
@@ -837,6 +839,44 @@ fn kernel_size(size: f64, quick: bool, builds: &dyn Fn(f64) -> bool) -> Option<f
 /// machine. Fourteen halvings reach the 0.01 grid under 163.84.
 const KERNEL_SIZE_STEPS: usize = 14;
 
+/// The sizes full builds offered, so a rebuild that runs an unchanged refused chamfer again does not search again.
+static KERNEL_OFFERS: std::sync::Mutex<Vec<KernelOffer>> = std::sync::Mutex::new(Vec::new());
+const KERNEL_OFFERS_HELD: usize = 32;
+
+struct KernelOffer {
+    key: String,
+    size: u64,
+    body: String,
+    fits: Option<f64>,
+}
+
+/// `kernel_size`, looked up first for a full build by `key`, the size asked and the body's shape.
+fn kernel_offer(key: &str, size: f64, draft: bool, body: &Shape, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
+    let Some(digest) = (!draft).then(|| shape_digest(body)).flatten() else {
+        return kernel_size(size, draft, builds);
+    };
+    let held = |o: &KernelOffer| o.key == key && o.size == size.to_bits() && o.body == digest;
+    if let Some(fits) = KERNEL_OFFERS.lock().ok().and_then(|v| v.iter().find(|o| held(o)).map(|o| o.fits)) {
+        return fits;
+    }
+    let fits = kernel_size(size, false, builds);
+    if checkpoint().is_ok() {
+        if let Ok(mut v) = KERNEL_OFFERS.lock() {
+            if v.len() >= KERNEL_OFFERS_HELD {
+                v.remove(0);
+            }
+            v.push(KernelOffer { key: key.to_owned(), size: size.to_bits(), body: digest, fits });
+        }
+    }
+    fits
+}
+
+fn shape_digest(s: &Shape) -> Option<String> {
+    let options = BrepWriteOptions { with_triangles: false, with_normals: false, version: 0 };
+    let bytes = s.to_brep_bytes(options, &ProgressRange::detached()).ok()?;
+    Some(crate::cache::keys::hash_hex(&[&bytes]))
+}
+
 /// A blend over an edge whose faces turn tangent that came out rippled, or did not build. `found` is `None` when
 /// no smaller size was tried, and `Some(None)` when none tried built smooth.
 fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option<Option<f64>>) -> Fail {
@@ -1028,7 +1068,7 @@ fn blend_edges(
         let refused = |(why, fits, at): (Misfit, Fits, [f64; 3])| {
             let fits = match fits {
                 Fits::Unknown if label == "Chamfer" && (apex.is_some() || meeting(at) < 4) => {
-                    kernel_size(blend_size, draft, &kernel_builds).map_or(fits, Fits::UpTo)
+                    kernel_offer(&fell_back, blend_size, draft, &body_shape, &kernel_builds).map_or(fits, Fits::UpTo)
                 }
                 _ => fits,
             };
