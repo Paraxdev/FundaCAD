@@ -1,0 +1,22 @@
+/* The Dev banner: a quiet line in the page's own colours rather than the theme's warning bar. The theme pins the
+   banner's box to its light scheme, so the colours are taken on body, where the page's scheme sets them. */
+body {
+  --fc-banner-bg: var(--md-default-fg-color--lightest);
+  --fc-banner-fg: var(--md-default-fg-color--light);
+  --fc-banner-link: var(--md-default-fg-color);
+}
+
+[data-md-component="outdated"] .md-banner {
+  background-color: var(--fc-banner-bg);
+  color: var(--fc-banner-fg);
+}
+
+[data-md-component="outdated"] .md-banner__inner {
+  margin-block: 0;
+  padding-block: 0.3rem;
+  font-size: 0.7rem;
+}
+
+[data-md-component="outdated"] .md-banner a {
+  color: var(--fc-banner-link);
+}

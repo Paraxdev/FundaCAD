@@ -51,7 +51,7 @@ class Motion(unittest.TestCase):
 class Baseline(unittest.TestCase):
     def test_each_entry_names_a_mode_and_allows_at_least_one_node(self):
         allowed = json.loads(axe_site.BASELINE.read_text(encoding="utf-8"))
-        schemes = {scheme for scheme, _, _ in axe_site.MODES}
+        schemes = {mode[0] for mode in axe_site.MODES}
         for key, rules in allowed.items():
             self.assertIn(key.split(": ", 1)[0], schemes, key)
             self.assertTrue(rules and all(n > 0 for n in rules.values()), key)

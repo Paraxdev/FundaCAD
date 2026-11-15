@@ -12,14 +12,29 @@
   {%- endif -%}
 {% endblock %}
 
-{#- The theme shows this banner on every version but the default one, so only on the dev manual. -#}
+{#- The theme shows this banner on every version but the default one, so only on the dev manual. stylesheets/banner.css
+    keeps it quiet. -#}
 {% block outdated %}
   This is the manual for FundaCAD Dev, the build with the newest changes.
-  <a href="{{ base_url }}/../beta/"><strong>Open the beta manual</strong></a>
+  <a href="{{ base_url }}/../beta/">Open the beta manual</a>
 {% endblock %}
 
-{#- Link previews on Reddit, Discord, Mastodon and X read these, the theme writes none. -#}
 {% block extrahead %}
+  {#- The theme would pick the first palette whose media matches the system, so a first visit is given dark as its
+      choice. A choice stored under this version's own path, from before the site shared one, is carried over with
+      its index looked up again, since the palette order changed. -#}
+  {%- set dark = config.theme.palette | first %}
+  <script>
+    if (!__md_get("__palette")) {
+      var own = new URL("{{ base_url }}", location)
+      if (!own.pathname.endsWith("/")) own = new URL(own.pathname + "/", location)
+      var old = __md_get("__palette", localStorage, own)
+      if (old && old.color) old.index = {{ config.theme.palette | map(attribute="media") | list | tojson }}.indexOf(old.color.media)
+      __md_set("__palette", old && old.color ? old : {index: 0, color: {media: {{ dark.media | tojson }}, scheme: "slate", primary: "indigo", accent: "indigo"}})
+    }
+  </script>
+
+  {#- Link previews on Reddit, Discord, Mastodon and X read these, the theme writes none. #}
   {%- set title = home_title if not page or page.url == "" else (page.title | striptags) ~ " - " ~ config.site_name -%}
   {%- set description = page.meta.description if page and page.meta and page.meta.description else config.site_description -%}
   <meta property="og:type" content="website">

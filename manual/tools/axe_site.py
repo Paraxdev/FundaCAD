@@ -3,8 +3,9 @@
     python manual/tools/axe_site.py manual/site [--chrome /usr/bin/google-chrome] [--lower]
 
 Each page must stay within manual/tools/axe-baseline.json, which only shrinks: --lower writes what is found. It also
-checks that the palette follows the system's light or dark setting, and that an animation plays or rests as the
-system's motion setting says and its button turns it the other way.
+checks that the site starts dark on a light or a dark system, that a light choice made on the first page holds on
+every page, and that an animation plays or rests as the system's motion setting says and its button turns it the
+other way.
 """
 
 from __future__ import annotations
@@ -24,8 +25,11 @@ sys.path.insert(0, str(REPO / "tools" / "harness" / "src"))
 from fundacad_harness.a11y import AXE_TAGS, counts, load_axe, lowered, over_baseline  # noqa: E402
 
 BASELINE = Path(__file__).with_name("axe-baseline.json")
-# (colour scheme, motion setting, the palette the theme should pick for it)
-MODES = (("light", "no-preference", "default"), ("dark", "reduce", "slate"))
+# (colour scheme, motion setting, toggle clicks on the first page, the palette every page should then show)
+MODES = (("light", "no-preference", 1, "default"), ("dark", "reduce", 0, "slate"))
+FIRST_PALETTE = "slate"
+TOGGLE = "form[data-md-component=palette] label:not([hidden])"
+SHOWN = "() => document.body.getAttribute('data-md-color-scheme')"
 
 SEARCH_KEY = "the theme's search"
 # Zensical's search sits in an open shadow root on a bare div at the end of body. It is the theme's and the same on
@@ -93,7 +97,7 @@ def walk(site: Path, chrome: str | None) -> tuple[dict[str, dict[str, int]], lis
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(executable_path=chrome) if chrome else pw.chromium.launch()
-            for scheme, motion, palette in MODES:
+            for scheme, motion, clicks, palette in MODES:
                 context = browser.new_context(
                     color_scheme=scheme, reduced_motion=motion, viewport={"width": 1280, "height": 900}
                 )
@@ -101,15 +105,23 @@ def walk(site: Path, chrome: str | None) -> tuple[dict[str, dict[str, int]], lis
                 for i, url in enumerate(page_urls(site)):
                     key = f"{scheme}: {url}"
                     page.goto(base + url, wait_until="load")
+                    if i == 0:
+                        first = page.evaluate(SHOWN)
+                        if first != FIRST_PALETTE:
+                            problems.append(f"{key}: a first visit shows {first!r}, the site starts {FIRST_PALETTE!r}")
+                        for _ in range(clicks):
+                            page.click(TOGGLE)
+                        if clicks:
+                            page.goto(base + url, wait_until="load")
                     result = axe(page)
                     runs = [(key, result["page"])] + ([(f"{scheme}: {SEARCH_KEY}", result["search"])] if i == 0 else [])
                     for k, violations in runs:
                         if violations:
                             found[k] = counts(violations)
                             details[k] = violations
-                    shown = page.evaluate("() => document.body.getAttribute('data-md-color-scheme')")
+                    shown = page.evaluate(SHOWN)
                     if shown != palette:
-                        problems.append(f"{key}: the palette is {shown!r}, a {scheme} system wants {palette!r}")
+                        problems.append(f"{key}: the palette is {shown!r}, expected {palette!r}")
                     state = page.evaluate(MOTION)
                     playing = motion == "no-preference"
                     problems += motion_problems(state, playing, key)
