@@ -95,12 +95,12 @@ describe("DimInput", () => {
     dim.dispose();
   });
 
-  it("Enter on digits a space groups refuses with the hint instead of entering the value typed before", () => {
+  it("Enter on two numbers only a space parts refuses with the hint instead of entering the value typed before", () => {
     const dim = new DimInput();
     const commit = vi.fn();
     dim.show([{ name: "len", label: "L" }], commit);
     const said: (string | null)[] = [];
-    for (const text of ["1 000", "12 500.5"]) {
+    for (const text of ["1 000", "12 500.5", "1 5"]) {
       type("len", text.slice(0, text.indexOf(" ")));
       type("len", text);
       enter("len");
@@ -110,6 +110,7 @@ describe("DimInput", () => {
     expect(said).toEqual([
       'L: write "1000" without the space, a space does not group digits',
       'L: write "12500.5" without the space, a space does not group digits',
+      'L: put an operator between "1" and "5"',
     ]);
     type("len", "1000");
     enter("len");

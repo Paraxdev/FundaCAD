@@ -18,7 +18,7 @@ import {
   roundForDisplay,
   measureError,
   normalise,
-  groupsBySpace,
+  joinsNumbers,
   parseMeasure,
   toUnit,
   tryParseMeasure,
@@ -744,11 +744,22 @@ describe("two bare numbers with only a space between are refused, not joined", (
     expect(() => normalise("12 3456")).not.toThrow(/without the space/);
   });
 
-  it("quotes the whole number in the hint, every group and the decimals, and only that refusal groups by space", () => {
+  it("quotes the whole number in the hint, every group and the decimals, and only joined numbers refuse as such", () => {
     expect(() => normalise("12 500.5")).toThrow('write "12500.5" without the space');
     expect(() => normalise("1 000 000")).toThrow('write "1000000" without the space');
+    expect(() => normalise("1 000 000")).toThrow('write "1000000" without the space');
+    expect(() => normalise("1 000 000")).toThrow('write "1000000" without the space');
+    expect(() => normalise("1\t000\t000")).toThrow('write "1000000" without the space');
     expect(() => normalise("1 000 mm")).toThrow('write "1000" without the space');
-    expect(["1 000", "12 500.5", "1 5", "abc", "1000"].map(groupsBySpace)).toEqual([true, true, false, false, false]);
+    expect(["1 000", "12 500.5", "1 5", "2mm 3", "abc", "1000", "1 +"].map(joinsNumbers)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
   });
 
   it("keeps mixed fractions, compounds, x products, units after a space and spaces around operators", () => {

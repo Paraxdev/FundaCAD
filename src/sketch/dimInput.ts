@@ -25,7 +25,7 @@ import { storedExpr, typedExprProblem } from "../ui/measure";
 import { getUnit, niceStep, parseField } from "../ui/units";
 import {
   commonUnits,
-  groupsBySpace,
+  joinsNumbers,
   measureError,
   roundForDisplay,
   spellNumber,
@@ -1663,14 +1663,14 @@ export class DimInput {
   }
 
   /** On Enter or the confirm button a field whose text is no value commits its last typed valid value, still marked;
-   *  with none, with digits a space groups, or on any other confirm, it refuses. */
+   *  with none, with two numbers only a space parts, or on any other confirm, it refuses. */
   private commit(explicit = true): boolean {
     let marked: string | null = null;
     for (const f of this.fields) {
       const problem = this.fieldProblem(f);
       if (!problem) continue;
       marked ??= problem;
-      if (explicit && f.lastGood !== null && !groupsBySpace(this.numberText(f))) continue;
+      if (explicit && f.lastGood !== null && !joinsNumbers(this.numberText(f))) continue;
       this.setTypedProblem(problem);
       announce(problem, "assertive");
       f.input.focus();

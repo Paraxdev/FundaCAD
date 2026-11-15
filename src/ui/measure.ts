@@ -226,16 +226,16 @@ function refuseThousandsComma(src: string, m: RegExpExecArray): void {
   }
 }
 
-/** "1 000", digits grouped by a space. Its hint says how to write the number, so a box refuses it rather than fall back
- *  to the value typed before. */
-export class SpaceGroupError extends ExprError {}
+/** "1 000" or "1 5", two numbers with only a space between. Its hint names both on screen, so a box refuses it rather
+ *  than fall back to the value typed before. */
+export class JoinedNumbersError extends ExprError {}
 
-export function groupsBySpace(raw: string): boolean {
+export function joinsNumbers(raw: string): boolean {
   try {
     normalise(raw);
     return false;
   } catch (e) {
-    return e instanceof SpaceGroupError;
+    return e instanceof JoinedNumbersError;
   }
 }
 
@@ -297,18 +297,18 @@ export function normalise(raw: string): Normalised {
       const u = matchUnitAt(src, j);
       // Two numbers with only a space between are not one number, "1 5" is not 15 and "1 .500" not 1.5.
       if (!pendingJoin && /\s/.test(src[i - 1] ?? "") && /[A-Za-z0-9_.]$/.test(out)) {
-        const groups = /^\d{3}(?: \d{3})*(?:\.\d+)?(?![\d.])/.exec(src.slice(i))?.[0];
+        const groups = /^\d{3}(?:\s\d{3})*(?:\.\d+)?(?![\d.])/.exec(src.slice(i))?.[0];
         const digits = groups && /\d+$/.exec(out)?.[0];
         if (digits) {
-          const whole = `${digits}${groups.replace(/ /g, "")}`;
-          throw new SpaceGroupError(
+          const whole = `${digits}${groups.replace(/\s/g, "")}`;
+          throw new JoinedNumbersError(
             `write "${decimalMark() === "," ? whole.replace(".", ",") : whole}" without the space, a space does not group digits`,
           );
         }
-        throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
+        throw new JoinedNumbersError(`put an operator between "${out}" and "${src.slice(i)}"`);
       }
       // A bare number right after a unit group (`2"5`, `2mm 3`) is half finished; joining it would invent a number.
-      if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
+      if (!u && pendingJoin) throw new JoinedNumbersError(`put an operator between "${out}" and "${src.slice(i)}"`);
       if (u) {
         // Two unit groups with nothing between them is a compound: 2'5", 1m 20cm.
         if (pendingJoin) {
