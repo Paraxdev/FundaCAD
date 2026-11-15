@@ -36,6 +36,13 @@ for (const p of pins(files)) {
   }
   if (!ok) bad++;
   console.log(`${ok ? "ok  " : "BAD "} ${key} (${p.where})`);
+  // dtolnay/rust-toolchain rebuilds its toolchain branches on every master commit, which drops the pinned commit.
+  if (!ok && BRANCH_PINS[p.repo] === p.ref) {
+    try {
+      const head = api(`repos/${p.repo}/commits/${p.ref}`, ".sha");
+      console.log(`     ${p.ref} is now ${head}, read ${p.repo}/compare/${p.sha}...${head} and pin that`);
+    } catch {}
+  }
 }
 console.log(`${seen.size} pins, ${bad} wrong`);
 process.exit(bad ? 1 : 0);
