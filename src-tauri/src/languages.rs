@@ -1,5 +1,5 @@
-//! Own language files in `app_data_dir()/languages/<code>.json`. Each one is untrusted text: the page checks every
-//! line, this side only guards the read.
+//! Own language files in `app_data_dir()/languages/<code>.json`, or `<code>.json.txt` as Notepad saves it. Each one
+//! is untrusted text: the page checks every line, this side only guards the read.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -34,7 +34,21 @@ pub fn is_language_code(code: &str) -> bool {
     language && next.is_none()
 }
 
-/// The codes of the `<code>.json` plain files in `dir`, sorted, at most 100. A `dir` that is a link reads as empty.
+/// `name` without one trailing `.txt` in any case, which Notepad adds on a plain save while Explorer hides it. The
+/// page takes a picked `pl.json.txt` as `pl.json` by the same rule.
+fn without_txt(name: &str) -> Option<&str> {
+    let stem = name.len().checked_sub(4).filter(|&n| name.is_char_boundary(n))?;
+    name[stem..].eq_ignore_ascii_case(".txt").then(|| &name[..stem])
+}
+
+/// The language a file in the folder is for: `pl` for `pl.json` and for `pl.json.txt`.
+fn code_of(name: &str) -> Option<&str> {
+    let code = without_txt(name).unwrap_or(name).strip_suffix(".json")?;
+    is_language_code(code).then_some(code)
+}
+
+/// The codes of the `<code>.json` and `<code>.json.txt` plain files in `dir`, sorted, at most 100. A `dir` that is a
+/// link reads as empty.
 pub fn list(dir: &Path) -> Vec<String> {
     if !is_plain_dir(dir) {
         return Vec::new();
@@ -45,19 +59,17 @@ pub fn list(dir: &Path) -> Vec<String> {
     let mut codes: Vec<String> = entries
         .flatten()
         .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
-        .filter_map(|entry| {
-            let name = entry.file_name();
-            let code = name.to_str()?.strip_suffix(".json")?;
-            is_language_code(code).then(|| code.to_owned())
-        })
+        .filter_map(|entry| code_of(entry.file_name().to_str()?).map(str::to_owned))
         .collect();
     codes.sort();
+    codes.dedup();
     codes.truncate(MAX_FILES);
     codes
 }
 
-/// The text of `<code>.json` in `dir`, `None` when there is none. The code is checked before the disk is touched.
-/// A file too large or not UTF-8 gives an error starting `too-large:` or `not-utf8:`, which the page names to the user.
+/// The text of `<code>.json` in `dir`, else of `<code>.json.txt`, `None` when there is neither. The code is checked
+/// before the disk is touched. A file too large or not UTF-8 gives an error starting `too-large:` or `not-utf8:`,
+/// which the page names to the user.
 pub fn read(dir: &Path, code: &str) -> Result<Option<String>, String> {
     if !is_language_code(code) {
         return Err(format!("not a language code: {code:?}"));
@@ -65,8 +77,26 @@ pub fn read(dir: &Path, code: &str) -> Result<Option<String>, String> {
     if !is_plain_dir(dir) {
         return Ok(None);
     }
-    let name = format!("{code}.json");
-    let file = match open_no_link(&dir.join(&name)) {
+    match read_file(dir, &format!("{code}.json"))? {
+        Some(text) => Ok(Some(text)),
+        None => saved_as_txt(dir, code).map_or(Ok(None), |name| read_file(dir, &name)),
+    }
+}
+
+/// The `<code>.json.txt` file in `dir`, found by listing, since a case sensitive disk may hold it as `.TXT`.
+fn saved_as_txt(dir: &Path, code: &str) -> Option<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| without_txt(name).is_some() && code_of(name) == Some(code))
+        .collect();
+    names.sort();
+    names.into_iter().next()
+}
+
+fn read_file(dir: &Path, name: &str) -> Result<Option<String>, String> {
+    let file = match open_no_link(&dir.join(name)) {
         Ok(file) => file,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("{name}: {e}")),

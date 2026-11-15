@@ -142,6 +142,34 @@ fn only_plain_files_named_by_a_code_are_listed() {
 }
 
 #[test]
+fn a_file_notepad_saved_as_json_txt_lists_and_reads_as_its_code() {
+    let root = scratch("list-txt");
+    let dir = languages(&root);
+    put(&dir, "pl.json.txt", r#"{"menu.file":"Plik"}"#);
+    put(&dir, "de.json.TXT", "{}");
+    put(&dir, "fr.json.txt", vec![b' '; MAX_BYTES as usize + 1]);
+    for name in ["notes.txt", "it.json.txt.txt", "EN.json.txt", "pt_BR.json.txt", ".json.txt", "nl.txt", "es.txt.json"]
+    {
+        put(&dir, name, "{}");
+    }
+    assert_eq!(list(&dir), ["de", "fr", "pl"]);
+    assert_eq!(read(&dir, "pl").unwrap().as_deref(), Some(r#"{"menu.file":"Plik"}"#));
+    assert_eq!(read(&dir, "de").unwrap().as_deref(), Some("{}"));
+    assert!(read(&dir, "fr").unwrap_err().starts_with("too-large: fr.json.txt "));
+    assert_eq!(read(&dir, "it").unwrap(), None);
+}
+
+#[test]
+fn a_json_beside_its_json_txt_lists_once_and_is_the_one_read() {
+    let root = scratch("list-both");
+    let dir = languages(&root);
+    put(&dir, "pl.json", r#"{"menu.file":"Plik"}"#);
+    put(&dir, "pl.json.txt", r#"{"menu.file":"Stary"}"#);
+    assert_eq!(list(&dir), ["pl"]);
+    assert_eq!(read(&dir, "pl").unwrap().as_deref(), Some(r#"{"menu.file":"Plik"}"#));
+}
+
+#[test]
 fn at_most_a_hundred_codes_are_listed() {
     let root = scratch("list-cap");
     let dir = languages(&root);
