@@ -232,8 +232,7 @@ fn id_of(b: &Value) -> String {
 }
 
 fn inspect(bodies: &[&BuiltBody], level: Level) -> Result<Vec<Value>, String> {
-    let live: Vec<InspectBody<'_>> =
-        bodies.iter().map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) }).collect();
+    let live: Vec<InspectBody<'_>> = bodies.iter().map(|b| InspectBody::built(b)).collect();
     inspect_bodies_at(&live, level, MAX_FACES, MAX_EDGES)
         .map_err(|e| format!("Could not measure the bodies: {}", crate::inspect::fail_text(&e)))
 }
