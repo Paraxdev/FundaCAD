@@ -1860,7 +1860,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (toolBusy()) return false;
     const rests = restsOn ? { restsOn } : {};
     const p = new THREE.Vector3(...at.point);
-    const wr = overlay.regions.find((r) => worldPointInRegion(p, r.plane, r.region));
+    const wr = overlay.regions.find((r) => r.sketchId === at.sketch && worldPointInRegion(p, r.plane, r.region));
     if (!wr) return extrude.start(committed, { ...rests, sketch: at.sketch, at: [at.point] });
     overlay.clearRegionSelection();
     overlay.toggleRegionSelection(wr, false);
