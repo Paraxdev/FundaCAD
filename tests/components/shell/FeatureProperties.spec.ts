@@ -243,6 +243,14 @@ describe("FeatureProperties", () => {
     ]);
   });
 
+  it("reads Profile 0 on a plain Round fillet, which leaves the field out", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "f1", type: "fillet", radius: 2 } as unknown as Feature],
+    });
+    expect(rows(render(fake, "f1")).find(([label]) => label === "Profile")).toEqual(["Profile", "", "0"]);
+  });
+
   it("writes a sketch dimension back through the ONE entity it belongs to", async () => {
     const fake = makeEngine({ parameters: {}, features: [CIRCLE(6)] });
     const w = render(fake, "s1");

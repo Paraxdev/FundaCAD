@@ -206,6 +206,16 @@ export function fieldHolder(
   return { holder, key: parts[parts.length - 1]! };
 }
 
+// The value a field means while it is left out. A fillet's profile is left out at 0, the plain Round, as the Fillet tool
+// writes it, and the engine builds an absent profile and 0 the same.
+const ABSENT_FIELD_VALUES: Partial<Record<Feature["type"], Record<string, number>>> = {
+  fillet: { profile: 0 },
+};
+
+export function absentFieldValue(type: string, field: string): number | undefined {
+  return ABSENT_FIELD_VALUES[type as Feature["type"]]?.[field];
+}
+
 export function readField(root: Record<string, unknown>, path: string): unknown {
   const at = fieldHolder(root, path);
   return at ? at.holder[at.key] : undefined;
@@ -482,12 +492,14 @@ export function writeTarget(doc: CadDocument, target: ParamTarget, value: number
   const rt = resolveTarget(doc, target);
   if (!rt) return null;
   const v = coerceForField(rt.field, value);
-  if (rt.holder[rt.field] === v) return null;
-  // Replaced, never patched: the rebuild protocol ships only features whose object changed.
   const i = doc.features.findIndex((f) => f.id === targetFeatureId(target));
   if (i < 0) return null;
+  const leftOut = target.kind === "feature" && absentFieldValue(doc.features[i]!.type, target.field) === v;
+  if (rt.holder[rt.field] === v || (leftOut && rt.holder[rt.field] === undefined)) return null;
+  // Replaced, never patched: the rebuild protocol ships only features whose object changed.
   doc.features[i] = structuredClone(doc.features[i]!);
   const fresh = resolveTarget(doc, target)!;
-  fresh.holder[fresh.field] = v;
+  if (leftOut) delete fresh.holder[fresh.field];
+  else fresh.holder[fresh.field] = v;
   return rt.sketch !== undefined ? { sketch: rt.sketch } : {};
 }
