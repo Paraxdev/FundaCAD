@@ -198,7 +198,9 @@ fn shown_fits(why: Misfit, k: f64) -> f64 {
 
 /// Stop here when the job was cancelled. The builder drops whatever a
 /// cancelled feature returns, so the failure only has to end the work.
+/// Reaching one also tells the stall watchdog the blend is still moving.
 fn checkpoint() -> FResult {
+    crate::heartbeat::beat();
     if crate::cancel::requested() {
         return Err(Fail::msg("cancelled"));
     }
@@ -651,6 +653,7 @@ pub(crate) fn sequential_blend(
                 still.push((orig, fp, failed_on));
                 continue;
             }
+            crate::heartbeat::beat();
             let Some(target) = crate::bench::phase("blend_rematch", || {
                 rematch_edge(&current, &fp, max_mid_dist, tol_pos).filter(|t| still_on(&orig, t, on_curve))
             }) else {

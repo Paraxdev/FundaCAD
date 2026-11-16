@@ -216,7 +216,8 @@ fn section_with(
     let es = kernel::compound(edges);
     let mut status = 0;
     let mut message = String::new();
-    let progress = crate::cancel::progress();
+    // Sizing a refused chamfer on a plate of 200 holes takes tens of seconds, its cancel checks keep the job alive.
+    let progress = crate::cancel::progress_beating();
     let range = progress.start();
     let out = crate::bench::phase("blend_section", || {
         ffi::blend_section(
