@@ -615,6 +615,13 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A chamfer too large for a plate full of holes is refused with the size that fits.**
+  Chamfering the top of a plate with about two hundred holes at a size that does not
+  fit took close to a minute to work out the size to offer, long enough that the engine
+  was restarted as stalled and no offer came. The search now looks first at the rims
+  that run into each other, finishes in about two thirds of the time, and keeps the
+  engine alive while it works.
+
 - **A chamfer on the rim of a round hole cuts the rim.** Where a hole's rim chamfer
   needed the slower build that follows the edge, its cut was turned into the hole
   instead of onto the rim, so the chamfer failed there and a refused chamfer offered a

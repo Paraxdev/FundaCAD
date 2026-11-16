@@ -1,6 +1,8 @@
 //! A chamfer on the rims of a plate full of holes.
 
 use std::f64::consts::PI;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -69,4 +71,40 @@ fn a_section_chamfer_on_a_hole_rim_cuts_the_rim() {
         );
         assert_eq!(kernel::count(&out, Kind::Face), kernel::count(&body, Kind::Face) + 1, "at {s} one chamfer face");
     }
+}
+
+#[test]
+fn the_section_build_beats_the_job_heartbeat_while_it_works() {
+    let (body, rim) = one_hole();
+    let beats = Arc::new(AtomicUsize::new(0));
+    let count = beats.clone();
+    let _hook = fundacad_geom::heartbeat::install(Some(Arc::new(move || {
+        count.fetch_add(1, Ordering::Relaxed);
+    })));
+    ops::section(&body, &rim, true, &[0.5], None, 0.5, 1, false, 0.0).expect("the rim chamfers");
+    assert!(beats.load(Ordering::Relaxed) > 0, "no beat");
+}
+
+/// The size a refusal offers, from its "It fits up to Xmm".
+fn offered(message: &str) -> Option<f64> {
+    let rest = message.split("fits up to ").nth(1)?;
+    rest.split("mm").next()?.parse().ok()
+}
+
+#[test]
+fn a_chamfer_too_large_for_a_grid_of_holes_offers_the_size_that_keeps_the_rims_apart() {
+    let holes: Vec<(f64, f64)> =
+        (0..3).flat_map(|i| (0..3).map(move |j| (5.0 + 7.0 * f64::from(i), 5.0 + 7.0 * f64::from(j)))).collect();
+    let refused = build(&plate(100.0, &holes, Some(1.5)));
+    let message = refused.errors.first().map(|e| e.message.as_str()).unwrap_or_else(|| panic!("1.5 built"));
+    // The rims are 2 apart, so each chamfer may take 1.
+    assert_eq!(offered(message), Some(1.0), "{message}");
+
+    let bare = kernel::volume(&build(&plate(100.0, &holes, None)).bodies[0].shape);
+    let at = build(&plate(100.0, &holes, Some(1.0)));
+    assert!(at.errors.is_empty(), "the offered 1mm does not build: {:?}", at.errors);
+    // Four outer edges of 100 that overlap s^3/3 at each corner, and nine rims.
+    let expected = 4.0 * 100.0 / 2.0 - 4.0 / 3.0 + 9.0 * rim_cut(1.0);
+    let removed = bare - kernel::volume(&at.bodies[0].shape);
+    assert!((removed - expected).abs() < 1.0, "removed {removed}, expected {expected}");
 }
