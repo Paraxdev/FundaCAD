@@ -228,15 +228,33 @@ describe("an edge row while Fillet waits", () => {
       const over = offer(edgeRow(1), "Line edge 2 of Slant");
       expect(over.said).toEqual([]);
       expect(over.refused).toEqual([t("pick.overCap")]);
-      expect([tool.memberRows().length, cap.asked]).toEqual([2, [[kind === "fillet" ? "Fillet" : "Chamfer", 3]]]);
+      expect([tool.memberRows().length, cap.asked]).toEqual([2, []]);
       expect(offer(edgeRow(0), "Line edge 1 of Slant")).toEqual(doneSaid("Line edge 1 of Slant", "takenOut"));
       expect(offer(edgeRow(1), "Line edge 2 of Slant")).toEqual(doneSaid("Line edge 2 of Slant", "added"));
-      expect([tool.memberRows().length, cap.asked.length]).toEqual([2, 1]);
+      expect([tool.memberRows().length, cap.asked]).toEqual([2, []]);
     } finally {
       cap.value = 5000;
       tool.cancel();
     }
   });
+
+  it.each(["fillet", "chamfer"] as const)(
+    "%s refuses a first row whose chain is over the edge cap once, in words, and closes",
+    (kind) => {
+      const { tool, offer } = rig(CHAIN, 0.5);
+      cap.value = 2;
+      cap.asked.length = 0;
+      try {
+        tool.start(kind, () => {});
+        const over = offer(chainRow(1), "Line edge 2 of Rail");
+        expect(over).toEqual({ said: [], refused: [t("pick.overCap")] });
+        expect([tool.memberRows(), cap.asked, treePickWaiting()]).toEqual([[], [], false]);
+      } finally {
+        cap.value = 5000;
+        tool.cancel();
+      }
+    },
+  );
 
   it("refuses a face row in words and keeps the members", () => {
     const { tool, click, hints } = rig();

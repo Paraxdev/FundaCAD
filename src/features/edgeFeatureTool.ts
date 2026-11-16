@@ -387,7 +387,7 @@ export class EdgeFeatureTool {
       const sel = edgeSelectorFrom({ points: edge.points, body: edge.body });
       if (!sel) return treePickRefusal(pick, "edge");
       const { mid, tan } = midAndTangent(edge.points);
-      if (!this.beginDrag([sel], mid, tan, edge, { scope })) return t("pick.overCap");
+      if (!this.beginDrag([sel], mid, tan, edge, { scope, quiet: true })) return t("pick.overCap");
       return { done: "added", edges: this.ghosts.length - before };
     }
     const mid = polylineMid(edge.points);
@@ -396,7 +396,6 @@ export class EdgeFeatureTool {
     const member = mid ? this.ghosts.find((g) => here.has(g.mid)) : undefined;
     const over = member ? 0 : this.addPicked(edge, scope);
     if (member) this.removeWithChain(member);
-    if (over) this.refuseOverCap(over);
     this.afterMembershipChange();
     if (over) return t("pick.overCap");
     return { done: member ? "takenOut" : "added", edges: Math.abs(this.ghosts.length - before) };
@@ -1321,13 +1320,13 @@ export class EdgeFeatureTool {
   }
 
   /** A null `anchor` stands the handle on the most recently picked edge. False when the members passed EDGE_CAP, the
-   *  tool is then closed. */
+   *  tool is then closed, with the refusal dialog unless `quiet`, for a caller that words the refusal itself. */
   private beginDrag(
     edges: Selector[],
     anchor: THREE.Vector3 | null,
     tangent: THREE.Vector3 | null,
     chainSource?: EdgeRef,
-    opts?: { fromZero?: boolean; scope?: PickScope; lines?: readonly (EdgeRef | undefined)[] },
+    opts?: { fromZero?: boolean; scope?: PickScope; lines?: readonly (EdgeRef | undefined)[]; quiet?: boolean },
   ): boolean {
     // Each member's tangent chain is expanded unless the gesture is single scoped; unmatched selectors still commit,
     // just without a visual.
@@ -1341,7 +1340,7 @@ export class EdgeFeatureTool {
     }
     if (over) {
       this.cancel();
-      this.refuseOverCap(over);
+      if (!opts?.quiet) this.refuseOverCap(over);
       return false;
     }
     if (anchor) {
