@@ -28,7 +28,15 @@ import type { Viewport } from "../viewport/viewport";
 import type { Engine } from "./engine";
 import { featurePick } from "./featurePick";
 import { writeFeatureRows } from "./featureRows";
-import { BASE_PLANES, offerDeps, refuseAloud, routePlaneRow, sketchOnPlane, type PlanePick } from "./planePick";
+import {
+  BASE_PLANES,
+  dropRefusals,
+  offerDeps,
+  refuseAloud,
+  routePlaneRow,
+  sketchOnPlane,
+  type PlanePick,
+} from "./planePick";
 import { offerPicks, treePickWaiting, type NamedPick, type TreePick } from "../ui/treePick";
 
 export interface GeometryBrowserHost {
@@ -445,6 +453,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     setBody,
     setKind(kind: GeometryKind) {
       if (kind === list.kind) return;
+      dropRefusals();
       if (list.kind === "planes") putOutLight();
       if (kind === "planes") stopAsking();
       list.setKind(kind);

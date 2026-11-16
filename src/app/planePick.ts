@@ -35,7 +35,7 @@ function busyHint(e: PlaneRowHost): string | null {
 }
 
 // Left up beside the next prompt, a refusal reads as if the row just taken had failed too.
-function dropRefusals() {
+export function dropRefusals() {
   for (const text of refusals) dismissToastsSaying(text);
   refusals.clear();
 }
