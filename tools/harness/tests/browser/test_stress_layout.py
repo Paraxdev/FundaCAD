@@ -2,7 +2,8 @@
 select at one x, in the shipped face and Comfortable text, and a wider fallback face cuts no word and keeps one x for the
 rows beside their labels. The Stress panel with History open stays inside a small window with its Run button in view, in
 English, German, French and Spanish, and under a History of ten, fourteen and twenty-four features, opened before or after
-it, with History whole again once Stress closes. The e2e job runs the light cases, e2e-heavy the rest."""
+it, with History whole again once Stress closes. Where the shelf under History is short, at 1024x600 in Spanish and 990
+wide, the panel takes the full height column left of History. The e2e job runs the light cases, e2e-heavy the rest."""
 
 import pytest
 from test_a11y import show_stress
@@ -285,7 +286,7 @@ SHELF_CASES = [
     *[((900, h), 100, 10, "comfortable", "en") for h in (730, 735, 740)],
 ]
 # Windows where History cut to its least still leaves the shelf short of the panel's least. At 990 wide the column left
-# of History is 173px, under the panel's 180px min-width, and the shelf as short as that column.
+# of History is 173px, enough for the panel's 160px min-width, at 900 wide it is under 100px.
 LEAST_CASES = [
     *[((900, h), 100, 14, "wide", "en") for h in (398, 404, 407)],
     *[((900, h), 100, 14, "comfortable", "en") for h in (407, 413, 419)],
@@ -300,7 +301,13 @@ COLUMN_BOTTOM = """() => {
   const panel = document.querySelector('.stress-panel').getBoundingClientRect();
   const run = document.querySelector('.stress-panel .stress-run').getBoundingClientRect();
   const layer = document.getElementById('float-layer').getBoundingClientRect();
-  return { panel_b: panel.bottom, panel_w: panel.width / z, run_b: run.bottom, column_b: layer.bottom - 14 * z, window_b: innerHeight };
+  const history = document.getElementById('timeline').getBoundingClientRect();
+  const step = document.querySelector('.stress-panel .stress-setup');
+  return {
+    panel_t: panel.top, panel_r: panel.right, panel_b: panel.bottom, panel_w: panel.width / z, run_b: run.bottom,
+    column_b: layer.bottom - 14 * z, window_b: innerHeight, history_l: history.left, history_b: history.bottom,
+    over: step.scrollWidth - step.clientWidth,
+  };
 }"""
 
 
@@ -342,9 +349,54 @@ def test_stress_panel_ends_inside_its_column_and_the_window_under_a_cut_history(
     assert got["panel_b"] <= got["window_b"] + 1 and got["run_b"] <= got["panel_b"] + 1, got
 
 
-# The column left of History is under the panel's min-width there, at 900 wide under 100px where its rows wrap far past
-# the window.
+# At 990 wide the panel takes the full height column left of History, at 900 wide, where that column would wrap its rows
+# far past the window, it keeps its shelf. Either way no row reaches past its edge and Run stays in view.
 @pytest.mark.parametrize("case", [shelf(c, False) for c in LEAST_CASES])
-def test_stress_panel_keeps_its_shelf_when_history_is_cut_to_its_least(shelved, case):
+def test_stress_panel_takes_the_column_left_of_history_where_it_holds_the_panels_least(shelved, case):
     got = shelved[case]
-    assert got["panel_w"] >= 180 and got["panel_b"] <= got["window_b"] + 1, got
+    if case[0][0] == 990:
+        assert got["panel_r"] <= got["history_l"] + 1 and got["panel_t"] < got["history_b"], got
+        assert got["panel_b"] >= got["column_b"] - 1, got
+    else:
+        assert got["panel_w"] >= 180 and got["panel_t"] >= got["history_b"], got
+    assert got["over"] <= 0, got
+    assert got["panel_b"] <= got["window_b"] + 1 and got["run_b"] <= got["panel_b"] + 1, got
+
+
+# History and the panel beside it, in window pixels.
+BESIDE_HISTORY = """() => {
+  const box = (r) => ({ l: r.left, t: r.top, r: r.right, b: r.bottom });
+  const z = Number(document.documentElement.style.zoom) || 1;
+  const step = document.querySelector('.stress-panel .stress-setup');
+  return {
+    panel: box(document.querySelector('.stress-panel').getBoundingClientRect()),
+    history: box(document.getElementById('timeline').getBoundingClientRect()),
+    column_b: document.getElementById('float-layer').getBoundingClientRect().bottom - 14 * z,
+    over: step.scrollWidth - step.clientWidth,
+  };
+}"""
+THEME_IDS = {"light": "solarized-light", "dark": "fundacad"}
+
+
+# At 1024x600 the shelf under History is too short for the panel's rows, so it takes the column left of History at full
+# height, in Comfortable text too, where History is wider and that column 172px.
+def test_stress_panel_takes_the_full_height_column_left_of_history_at_1024x600_in_spanish():
+    s = Session(viewport=NARROW)
+    try:
+        s.open_file(TEN)
+        s.panel("History", open=True)
+        show_stress(s)
+        pick(s, ".stress-material", "Custom")
+        s.page.evaluate("async (c) => (await import('/src/i18n/index.ts')).setLanguage(c)", "es")
+        for text in SHIPPED:
+            show_text(s, *TEXTS[text])
+            s.page.evaluate("() => window.dispatchEvent(new Event('resize'))")
+            for theme, id_ in THEME_IDS.items():
+                s.page.evaluate("async (t) => (await import('/src/ui/theme.ts')).setTheme(t)", id_)
+                settled(s)
+                got = s.page.evaluate(BESIDE_HISTORY)
+                assert got["panel"]["r"] <= got["history"]["l"] + 1 and got["panel"]["t"] < got["history"]["b"], (text, got)
+                assert got["panel"]["b"] >= got["column_b"] - 1 and got["over"] <= 0, (text, got)
+                s.page.screenshot(path=str(out_dir() / f"stress_column_1024x600_es_{text}_{theme}.png"))
+    finally:
+        s.close()

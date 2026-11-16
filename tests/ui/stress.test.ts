@@ -17,6 +17,7 @@ import {
   newLoad,
   newSetup,
   panelMessage,
+  pinLabelLeft,
   probeLabel,
   setupFromStudy,
   rampColor,
@@ -681,5 +682,33 @@ describe("stress readouts in German", () => {
 
     await setLanguage("system");
     expect(formatStressResult(reply, "mm").rows[1]).toEqual({ k: "Peak stress", v: "31.25 MPa" });
+  });
+});
+
+describe("pinLabelLeft", () => {
+  const view = { left: 0, right: 1400 };
+  const panel = { left: 1000, right: 1340 };
+
+  it("puts the readout right of its point while nothing covers that side", () => {
+    expect(pinLabelLeft(500, 200, view, [panel])).toBe(508);
+  });
+
+  it("turns the readout left of its point when a panel would hide its end", () => {
+    expect(pinLabelLeft(900, 200, view, [panel])).toBe(692);
+  });
+
+  it("keeps the readout against the panel when neither side has room", () => {
+    const history = { left: 700, right: 880 };
+    expect(pinLabelLeft(900, 200, view, [panel, history])).toBe(888);
+  });
+
+  it("moves the readout off a panel that covers the point, to the panel's nearer edge", () => {
+    expect(pinLabelLeft(1050, 200, view, [panel])).toBe(792);
+    expect(pinLabelLeft(1300, 40, view, [panel])).toBe(1348);
+  });
+
+  it("keeps the readout inside the view at its right edge", () => {
+    expect(pinLabelLeft(1390, 200, view, [])).toBe(1182);
+    expect(pinLabelLeft(5, 200, { left: 0, right: 150 }, [])).toBe(0);
   });
 });
