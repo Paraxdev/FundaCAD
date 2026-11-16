@@ -40,6 +40,8 @@ import {
   reparented,
   withElementRemoved,
 } from "../../../src/document/elements";
+import { setLanguage } from "../../../src/i18n";
+import de from "../../../src/i18n/locales/de.json";
 import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
@@ -1629,6 +1631,51 @@ describe("Items tree by keys", () => {
     focusOn(w.get(".empty-state"));
     press("ArrowUp", { altKey: true });
     expect(announce).not.toHaveBeenCalled();
+    w.unmount();
+  });
+});
+
+describe("BrowserPane in another language", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+  afterEach(async () => {
+    await setLanguage("system");
+  });
+
+  const folders = (w: VueWrapper) =>
+    panel(w)
+      .filter((r) => r.kind === "folder")
+      .map((r) => r.text);
+  const empties = (w: VueWrapper) => w.findAll(".empty-state").map((e) => e.text());
+
+  it("reads its heading, folders, rows and empty states in German, keeps what is folded, and reads English again", async () => {
+    const w = render(makeEngine({ parameters: {}, features: [] }));
+    await setLanguage("de");
+    await nextTick();
+    expect(w.get("h2.float-card-title").text()).toBe("Elemente");
+    expect(folders(w)).toEqual(["Ursprung", "Körper", "Skizzen"]);
+    expect(
+      panel(w)
+        .filter((r) => r.kind === "row")
+        .map((r) => r.text),
+    ).toEqual(["XY-Ebene", "XZ-Ebene", "YZ-Ebene"]);
+    expect(empties(w)).toEqual(["Noch keine Körper", "Noch keine Skizzen"]);
+    expect(w.text()).toContain(de["items.tab.geometry"]);
+
+    await folderNamed(w, "Skizzen")!.find(".tree-caret").trigger("click");
+    expect(empties(w)).toEqual(["Noch keine Körper"]);
+
+    await setLanguage("en");
+    await nextTick();
+    expect(w.get("h2.float-card-title").text()).toBe("Items");
+    expect(folders(w)).toEqual(["Origin", "Bodies", "Sketches"]);
+    expect(
+      panel(w)
+        .filter((r) => r.kind === "row")
+        .map((r) => r.text),
+    ).toEqual(["XY plane", "XZ plane", "YZ plane"]);
+    expect(empties(w)).toEqual(["No bodies yet"]);
     w.unmount();
   });
 });

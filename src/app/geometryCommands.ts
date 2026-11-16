@@ -91,7 +91,7 @@ export function createGeometryCommands(e: Pick<Engine, "geometryBrowser" | "setS
       ctl.setKind(kind);
       ctl.startStepping();
       if (list.state !== "loading") return select(delta);
-      say(`Listing ${kind}`);
+      say(t("geometry.list.listingShort", { kind }));
       waitForList(kind, delta);
     },
   };

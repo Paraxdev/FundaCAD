@@ -742,6 +742,80 @@
       "en": "Parameter",
       "text": "参数",
       "note": "a named value of the Parameters list, typed into a value box"
+    },
+    {
+      "en": "Rollback",
+      "text": "回滚",
+      "note": "the History marker and slider that holds the model at an earlier step; the verb roll back is zurückrollen, retroceder, revenir, 巻き戻す, 回退"
+    },
+    {
+      "en": "rolled back (a step past the Rollback marker)",
+      "text": "已回滚",
+      "note": "spoken state of a step the model is not built up to"
+    },
+    {
+      "en": "Related to Selection",
+      "text": "与所选内容相关",
+      "note": "the History filter chip"
+    },
+    {
+      "en": "switched off (a step whose Active when condition is 0)",
+      "text": "已关闭",
+      "note": "kept apart from suppressed: French uses désactiver for suppress, so a step switched off by its condition is inactive"
+    },
+    {
+      "en": "Re-pick face",
+      "text": "重新选择面"
+    },
+    {
+      "en": "Unlink (a feature from its linked file)",
+      "text": "取消链接",
+      "note": "linked file is verknüpfte Datei, archivo vinculado, fichier lié, リンク先のファイル, 链接文件"
+    },
+    {
+      "en": "meshing",
+      "text": "网格化",
+      "note": "the build progress word, same Netz, malla, maillage, メッシュ, 网格 as the mesh import lines"
+    },
+    {
+      "en": "checkpoint (a saved build state)",
+      "text": "检查点"
+    },
+    {
+      "en": "History",
+      "text": "历史",
+      "note": "the panel that lists the timeline steps"
+    },
+    {
+      "en": "Items",
+      "text": "项目",
+      "note": "the panel that lists bodies, sketches and planes"
+    },
+    {
+      "en": "Origin",
+      "text": "原点",
+      "note": "the folder with the three base planes"
+    },
+    {
+      "en": "element (a folder of bodies in Items)",
+      "text": "分组",
+      "note": "not the word for Items, which already names the whole panel"
+    },
+    {
+      "en": "Joint",
+      "text": "关节"
+    },
+    {
+      "en": "Mechanism",
+      "text": "机构"
+    },
+    {
+      "en": "Geometry (the Items page that lists faces, edges and planes)",
+      "text": "几何"
+    },
+    {
+      "en": "Visibility",
+      "text": "可见性"
     }
   ]
 }

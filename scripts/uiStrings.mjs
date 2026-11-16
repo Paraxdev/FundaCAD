@@ -23,6 +23,8 @@ const UI_ATTRS = new Set([
   "cancel-label",
   "off-label",
   "on-label",
+  "unit-tip",
+  "unitTip",
 ]);
 const UI_PROPS = new Set([
   "label",
@@ -48,6 +50,7 @@ const UI_PROPS = new Set([
   "cancelLabel",
   "okLabel",
   "body",
+  "unitTip",
 ]);
 const UI_SINKS = new Set([
   "toast",

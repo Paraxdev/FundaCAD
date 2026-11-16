@@ -751,6 +751,80 @@
       "en": "Parameter",
       "text": "Parameter",
       "note": "a named value of the Parameters list, typed into a value box"
+    },
+    {
+      "en": "Rollback",
+      "text": "Rollback",
+      "note": "the History marker and slider that holds the model at an earlier step; the verb roll back is zurückrollen, retroceder, revenir, 巻き戻す, 回退"
+    },
+    {
+      "en": "rolled back (a step past the Rollback marker)",
+      "text": "zurückgerollt",
+      "note": "spoken state of a step the model is not built up to"
+    },
+    {
+      "en": "Related to Selection",
+      "text": "Zur Auswahl gehörig",
+      "note": "the History filter chip"
+    },
+    {
+      "en": "switched off (a step whose Active when condition is 0)",
+      "text": "ausgeschaltet",
+      "note": "kept apart from suppressed: French uses désactiver for suppress, so a step switched off by its condition is inactive"
+    },
+    {
+      "en": "Re-pick face",
+      "text": "Fläche neu wählen"
+    },
+    {
+      "en": "Unlink (a feature from its linked file)",
+      "text": "Verknüpfung lösen",
+      "note": "linked file is verknüpfte Datei, archivo vinculado, fichier lié, リンク先のファイル, 链接文件"
+    },
+    {
+      "en": "meshing",
+      "text": "Vernetzung",
+      "note": "the build progress word, same Netz, malla, maillage, メッシュ, 网格 as the mesh import lines"
+    },
+    {
+      "en": "checkpoint (a saved build state)",
+      "text": "Zwischenstand"
+    },
+    {
+      "en": "History",
+      "text": "Verlauf",
+      "note": "the panel that lists the timeline steps"
+    },
+    {
+      "en": "Items",
+      "text": "Elemente",
+      "note": "the panel that lists bodies, sketches and planes"
+    },
+    {
+      "en": "Origin",
+      "text": "Ursprung",
+      "note": "the folder with the three base planes"
+    },
+    {
+      "en": "element (a folder of bodies in Items)",
+      "text": "Gruppe",
+      "note": "not the word for Items, which already names the whole panel"
+    },
+    {
+      "en": "Joint",
+      "text": "Gelenk"
+    },
+    {
+      "en": "Mechanism",
+      "text": "Mechanismus"
+    },
+    {
+      "en": "Geometry (the Items page that lists faces, edges and planes)",
+      "text": "Geometrie"
+    },
+    {
+      "en": "Visibility",
+      "text": "Sichtbarkeit"
     }
   ]
 }

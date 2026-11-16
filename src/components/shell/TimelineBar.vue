@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { chordsOf } from "../../input/platform";
+import { t } from "../../i18n";
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
@@ -97,6 +98,7 @@ const related = computed<Set<string> | null>(() => {
   for (const r of engine.overlay.selectedRegions()) seeds.add(r.sketchId);
   return seeds.size ? relatedFeatureIds(store.document.features, seeds) : null;
 });
+const relatedTip = computed(() => t(relatedOn.value ? "history.related.on" : "history.related.off"));
 const filtering = computed(() => relatedOn.value && related.value !== null);
 
 /** The chips as drawn, which a Shift-click run is measured over. */
@@ -194,10 +196,10 @@ onUnmounted(() => {
 
 const chip = computed(() =>
   busy.value.waiting
-    ? { label: "waiting…", pct: 0 }
+    ? { label: t("history.build.waiting"), pct: 0 }
     : buildProgress(
         progress.value,
-        features.value.map((f) => f.english),
+        features.value.map((f) => f.shown),
       ),
 );
 const line = computed(() => busyLine(busy.value));
@@ -229,15 +231,17 @@ function chipTitle(f: { id: string; type: string; name?: string; shown?: string;
   const placeholder = placeholders.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
-    (f.type === "import" && f.name && f.shown !== f.name ? `\nFile: ${f.name}` : "") +
-    (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
+    (f.type === "import" && f.name && f.shown !== f.name ? `\n${t("history.chip.file", { name: f.name })}` : "") +
+    (f.inactive ? `\n${t("history.chip.off")}` : "") +
     (placeholder !== undefined ? `\n${placeholderNote(placeholder)}` : "") +
     // A plain word, not a warning sign: the OS tooltip font may lack the symbol. Failed and Note never both apply, notes
     // skips a failed feature.
-    (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
-    (placeholder !== undefined
-      ? "\nclick to select · right-click for more"
-      : "\nclick to select · double-click to edit, Esc to go back · right-click for more")
+    (err
+      ? `\n${t("history.chip.failed", { message: err })}`
+      : note
+        ? `\n${t("history.chip.note", { message: note })}`
+        : "") +
+    `\n${t(placeholder !== undefined ? "history.chip.hintPlain" : "history.chip.hintEdit")}`
   );
 }
 
@@ -248,18 +252,17 @@ const chipStates = computed(() =>
     const note = notes.value.get(f.id);
     const placeholder = placeholders.value.get(f.id);
     const kind = metaFor(f).label;
-    return [
+    const facts = [
       f.shown.toLowerCase().includes(kind.toLowerCase()) ? "" : kind,
-      `step ${i + 1} of ${features.value.length}`,
-      f.type === "import" && f.name && f.shown !== f.name ? `file: ${f.name}` : "",
-      err ? `failed: ${err}` : note ? `warning: ${note}` : "",
-      f.inactive ? "switched off" : suppressed.value.has(f.id) ? "suppressed" : "",
+      t("history.state.place", { n: i + 1, total: features.value.length }),
+      f.type === "import" && f.name && f.shown !== f.name ? t("history.state.file", { name: f.name }) : "",
+      err ? t("history.state.failed", { message: err }) : note ? t("history.state.warning", { message: note }) : "",
+      f.inactive ? t("history.state.off") : suppressed.value.has(f.id) ? t("history.state.suppressed") : "",
       placeholder !== undefined ? placeholderNote(placeholder) : "",
-      i >= rollback.value ? "rolled back" : "",
-      isPicked(f.id) ? "selected" : "",
-    ]
-      .filter(Boolean)
-      .join(", ");
+      i >= rollback.value ? t("history.state.rolledBack") : "",
+      isPicked(f.id) ? t("history.state.selected") : "",
+    ].filter(Boolean);
+    return facts.reduce((before, after) => t("pick.list.more", { before, after }));
   }),
 );
 
@@ -272,7 +275,7 @@ function busyElsewhere(): boolean {
 function onChipClick(id: string, ev: MouseEvent) {
   const f = treePickWaiting() ? store.document.features.find((x) => x.id === id) : undefined;
   if (f) {
-    routeTreeClick(featurePick(engine, f), { busyHint: () => null, hint: (t) => engine.setStatus(t, "") });
+    routeTreeClick(featurePick(engine, f), { busyHint: () => null, hint: (text) => engine.setStatus(text, "") });
     return;
   }
   if (busyElsewhere()) return;
@@ -363,10 +366,10 @@ function reorderStep(i: number, delta: -1 | 1) {
   let j = i + delta;
   while (j >= 0 && j < list.length && filtering.value && !related.value?.has(list[j]!.id)) j += delta;
   const to = list[j];
-  if (!to) return announce(`${f.english} is already the ${delta < 0 ? "first" : "last"} step`);
+  if (!to) return announce(t("history.move.edge", { name: f.shown, where: delta < 0 ? "first" : "last" }));
   refocus = { id: f.id, at: performance.now() };
   store.moveFeature(f.id, j);
-  announce(`Moved ${f.english} ${delta < 0 ? "before" : "after"} ${to.english}`);
+  announce(t("history.move.done", { name: f.shown, other: to.shown, where: delta < 0 ? "before" : "after" }));
 }
 let menuKeyAt = -Infinity;
 function claim(e: KeyboardEvent) {
@@ -413,15 +416,16 @@ function onChipContextmenu(e: MouseEvent, id: string, i: number) {
 // The viewport keeps focus where it was on a press, so a clicked chip would go on taking the arrows meant for the model.
 function onDocPointerdown(e: PointerEvent) {
   const a = document.activeElement;
-  const t = track.value;
-  if (!(a instanceof HTMLElement) || !t || a.parentElement?.parentElement !== t || !a.matches(".timeline-node")) return;
-  if (!(e.target instanceof Node && t.contains(e.target))) a.blur();
+  const strip = track.value;
+  if (!(a instanceof HTMLElement) || !strip || a.parentElement?.parentElement !== strip) return;
+  if (!a.matches(".timeline-node")) return;
+  if (!(e.target instanceof Node && strip.contains(e.target))) a.blur();
 }
 
 function onRenameKey(e: KeyboardEvent) {
   if (e.key !== "F2" || renamingId.value || !selection.featureId || several.value) return;
-  const t = e.target as HTMLElement | null;
-  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const target = e.target as HTMLElement | null;
+  if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
   if (!features.value.some((f) => f.id === selection.featureId)) return;
   e.preventDefault();
   startRename(selection.featureId);
@@ -538,9 +542,9 @@ function onMarkerDown(e: PointerEvent) {
 const markerFocus = ref(false);
 function rollbackText(k: number) {
   const f = features.value;
-  if (!f.length) return "no steps";
-  if (k <= 0) return `at the start, before ${f[0]!.english}`;
-  return `after ${f[Math.min(k, f.length) - 1]!.english}, step ${k} of ${f.length}`;
+  if (!f.length) return t("history.rollback.none");
+  if (k <= 0) return t("history.rollback.start", { name: f[0]!.shown });
+  return t("history.rollback.after", { name: f[Math.min(k, f.length) - 1]!.shown, n: k, total: f.length });
 }
 function onRollbackKey(e: KeyboardEvent) {
   if (e.defaultPrevented) e.stopPropagation();
@@ -572,34 +576,39 @@ function openMenu(e: MouseEvent, id: string, i: number, fromKeys = false) {
   }
   // Re-pick only when this feature's last build reported an ambiguous saved reference, offering it on a healthy one
   // invites overwriting working references.
-  const repick = timeline.canRepick(id) ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }] : [];
+  const repick = timeline.canRepick(id)
+    ? [{ label: t("history.menu.repick"), onClick: () => timeline.repick(id) }]
+    : [];
   contextMenu(e.clientX, e.clientY, [
     ...repick,
-    ...(placeholders.value.has(id) ? [] : [{ label: "Edit", onClick: () => timeline.edit(id) }]),
-    { label: "Rename", shortcut: "F2", onClick: () => startRename(id, fromKeys) },
+    ...(placeholders.value.has(id) ? [] : [{ label: t("history.menu.edit"), onClick: () => timeline.edit(id) }]),
+    { label: t("history.menu.rename"), shortcut: "F2", onClick: () => startRename(id, fromKeys) },
     ...(linkedPath(id)
       ? [
           {
-            label: "Update from linked file",
+            label: t("history.menu.updateLink"),
             onClick: () => void import("../../io/fundaLinks").then((m) => m.refreshLink(store, engine.geometry, id)),
           },
-          { label: "Unlink", onClick: () => void import("../../io/fundaLinks").then((m) => m.unlink(store, id)) },
+          {
+            label: t("history.menu.unlink"),
+            onClick: () => void import("../../io/fundaLinks").then((m) => m.unlink(store, id)),
+          },
         ]
       : []),
-    ...(hasOwnName(id) ? [{ label: "Reset name", onClick: () => store.renameFeature(id, "") }] : []),
+    ...(hasOwnName(id) ? [{ label: t("history.menu.resetName"), onClick: () => store.renameFeature(id, "") }] : []),
     {
-      label: suppressed.value.has(id) ? "Unsuppress" : "Suppress",
+      label: t(suppressed.value.has(id) ? "history.menu.unsuppress" : "history.menu.suppress"),
       onClick: () => store.toggleSuppress(id),
     },
     // A sketch's values are edited in the sketch, not in the rows under its
     // chip, so it is offered only the removal of a condition the MCP wrote.
     ...(features.value[i]?.hasCondition
-      ? [{ label: "Remove condition", onClick: () => store.removeFeatureField(id, "activeWhen") }]
+      ? [{ label: t("history.menu.removeCondition"), onClick: () => store.removeFeatureField(id, "activeWhen") }]
       : features.value[i]?.type === "sketch"
         ? []
         : [
             {
-              label: "Add condition",
+              label: t("history.menu.addCondition"),
               onClick: () => {
                 store.updateFeature(id, { activeWhen: 1 } as unknown as Partial<Feature>);
                 timeline.select(id);
@@ -607,10 +616,10 @@ function openMenu(e: MouseEvent, id: string, i: number, fromKeys = false) {
             },
           ]),
     // setRollback(k) builds features[0..k-1], so k = i is the model just before this step and k = i + 1 just after (FI-7).
-    { label: "Roll back before this", onClick: () => store.setRollback(i) },
-    { label: "Roll to here", onClick: () => store.setRollback(i + 1) },
+    { label: t("history.menu.rollBefore"), onClick: () => store.setRollback(i) },
+    { label: t("history.menu.rollHere"), onClick: () => store.setRollback(i + 1) },
     { separator: true, label: "" },
-    { label: "Delete", danger: true, onClick: () => deleteRows(engine, [id]) },
+    { label: t("history.menu.delete"), danger: true, onClick: () => deleteRows(engine, [id]) },
   ]);
 }
 
@@ -619,12 +628,15 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
   const n = ids.length;
   const allOff = ids.every((x) => suppressed.value.has(x));
   contextMenu(e.clientX, e.clientY, [
-    { label: "Edit (select one feature)", disabled: true },
-    { label: "Rename (select one feature)", disabled: true },
-    { label: allOff ? `Unsuppress these ${n}` : `Suppress these ${n}`, onClick: () => toggleSuppressRows(store, ids) },
-    { label: "Roll back before this (select one feature)", disabled: true },
+    { label: t("history.menu.editOne"), disabled: true },
+    { label: t("history.menu.renameOne"), disabled: true },
+    {
+      label: t("history.menu.suppressMany", { off: allOff ? "yes" : "no", n }),
+      onClick: () => toggleSuppressRows(store, ids),
+    },
+    { label: t("history.menu.rollBeforeOne"), disabled: true },
     { separator: true, label: "" },
-    { label: `Delete these ${n}`, danger: true, onClick: () => deleteRows(engine, ids) },
+    { label: t("history.menu.deleteMany", { n }), danger: true, onClick: () => deleteRows(engine, ids) },
   ]);
 }
 </script>
@@ -632,7 +644,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
 <template>
   <section id="timeline" class="timeline-shell float-card" aria-labelledby="history-heading">
     <div class="float-card-head">
-      <h2 id="history-heading" class="float-card-title">History</h2>
+      <h2 id="history-heading" class="float-card-title">{{ t("history.title") }}</h2>
       <Chip
         v-if="related"
         as="button"
@@ -640,15 +652,11 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         :class="{ on: relatedOn }"
         :variant="relatedOn ? 'accent' : 'neutral'"
         data-testid="history-related"
-        :tip="
-          relatedOn
-            ? 'Showing what relates to the selection, click to show everything'
-            : 'Show only what relates to the selection'
-        "
-        :aria-label="`Related to Selection, ${related.size}`"
+        :tip="relatedTip"
+        :aria-label="t('history.related.label', { n: related.size })"
         :aria-pressed="relatedOn"
         @click="toggleRelated()"
-        >Related to Selection · {{ related.size }}</Chip
+        >{{ t("history.related.chip", { n: related.size }) }}</Chip
       >
       <Chip
         as="button"
@@ -656,8 +664,8 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         icon="warning"
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
-        tip="Failing features, click to jump to the next one"
-        :aria-label="`${errors.size} failing feature${errors.size === 1 ? '' : 's'}, click to jump to the next one`"
+        :tip="t('history.errors.tip')"
+        :aria-label="t('history.errors.label', { n: errors.size })"
         @click="jumpToNextError()"
         >{{ errors.size }}</Chip
       >
@@ -667,7 +675,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         size="md"
         variant="plain"
         :icon-size="14"
-        tip="Hide the history"
+        :tip="t('history.hide')"
         :keys="chordsOf('history')"
         @click="shellStore.setHistory(false)"
       />
@@ -679,7 +687,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         icon="skipStart"
         size="sm"
         variant="plain"
-        tip="Roll back to the start"
+        :tip="t('history.transport.start')"
         :disabled="editing || docRollback <= 0"
         @click="store.setRollback(0)"
       />
@@ -688,7 +696,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         icon="stepBack"
         size="sm"
         variant="plain"
-        tip="Step one feature back"
+        :tip="t('history.transport.back')"
         :disabled="editing || docRollback <= 0"
         @click="store.setRollback(Math.max(0, docRollback - 1))"
       />
@@ -697,7 +705,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         icon="stepForward"
         size="sm"
         variant="plain"
-        tip="Step one feature forward"
+        :tip="t('history.transport.forward')"
         :disabled="editing || docRollback >= features.length"
         @click="store.setRollback(Math.min(features.length, docRollback + 1))"
       />
@@ -706,7 +714,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         icon="skipEnd"
         size="sm"
         variant="plain"
-        tip="Roll forward to the end"
+        :tip="t('history.transport.end')"
         :disabled="editing || docRollback >= features.length"
         @click="store.setRollback(features.length)"
       />
@@ -715,14 +723,14 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
     <Slider
       v-if="features.length"
       class="tl-rollback sr-only"
-      label="Rollback"
+      :label="t('history.rollback')"
       :model-value="rollback"
       :min="0"
       :max="features.length"
       commit="end"
       :value-text="rollbackText"
       :disabled="editing"
-      disabled-reason="Finish or cancel the edit to move the rollback"
+      :disabled-reason="t('history.rollback.locked')"
       @update:model-value="(v: number) => store.setRollback(v)"
       @keydown="onRollbackKey"
       @focusin="markerFocus = true"
@@ -733,10 +741,10 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
         ref="track"
         class="timeline-track"
         :role="showEmpty ? undefined : 'list'"
-        :aria-label="showEmpty ? undefined : 'Steps'"
+        :aria-label="showEmpty ? undefined : t('history.steps')"
       >
         <div v-if="showEmpty" class="timeline-empty">
-          Your modeling history will appear here. Start with a Sketch, or drop a STEP, STL or 3MF file.
+          {{ t("history.empty", { sketch: t("tool.sketch") }) }}
         </div>
         <template v-else>
           <template v-for="(f, i) in features" :key="f.id">
@@ -748,7 +756,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                 'is-end': filtering && features.slice(i).every((g) => !related?.has(g.id)),
                 dragging: dragGap !== null,
               }"
-              title="Drag to roll the model back / forward"
+              :title="t('history.marker.drag')"
               @pointerdown="onMarkerDown"
               ><span class="marker-grip"></span
             ></div>
@@ -801,7 +809,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
                     size="sm"
                     commit="change"
                     select-on-focus
-                    label="Rename"
+                    :label="t('history.rename.label')"
                     :model-value="f.name || metaFor(f).label"
                     :placeholder="metaFor(f).label"
                     spellcheck="false"
@@ -832,7 +840,7 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
             class="timeline-marker"
             aria-hidden="true"
             :class="{ dragging: dragGap !== null }"
-            title="Drag to roll the model back / forward"
+            :title="t('history.marker.drag')"
             @pointerdown="onMarkerDown"
             ><span class="marker-grip"></span
           ></div>
@@ -844,9 +852,9 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
               class="t-op-cancel"
               variant="ghost"
               size="sm"
-              :tip="`Stop ${op.label}`"
+              :tip="t('history.op.stop', { label: op.label })"
               @click="store.cancelRunningOp(op.key)"
-              >Cancel</Button
+              >{{ t("history.cancel") }}</Button
             >
           </div>
           <div v-if="building" role="listitem" class="timeline-node building">
@@ -880,13 +888,9 @@ function openMultiMenu(e: MouseEvent, ids: string[]) {
       variant="danger"
       size="sm"
       :disabled="cancelling"
-      :tip="
-        busy.waiting
-          ? 'Withdraw this request, the job it waits on carries on'
-          : busy.label || 'Stop the running operation'
-      "
+      :tip="busy.waiting ? t('history.busy.withdraw') : busy.label || t('history.busy.stop')"
       @click="cancelBusy()"
-      >Cancel</Button
+      >{{ t("history.cancel") }}</Button
     >
   </section>
 </template>

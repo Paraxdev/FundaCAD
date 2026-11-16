@@ -151,6 +151,14 @@ describe("text in a template", () => {
     ]);
   });
 
+  it("finds a unit chip's tip, bound or static, and in a script option", () => {
+    expect(tpl(`<NumberField :unit-tip="many ? 'Change unit' : t('field.unitTip.fixed')" unit-tip="Unit" />`)).toEqual([
+      "src/components/A.vue:6 template :unit-tip= Change unit",
+      "src/components/A.vue:6 template unit-tip= Unit",
+    ]);
+    expect(ts(`uiNumberInput({ unit: "mm", unitTip: "Unit" });`)).toEqual(["src/ui/panel.ts:1 script unitTip: Unit"]);
+  });
+
   it("reads a template literal in a bound attribute with its holes as an ellipsis", () => {
     expect(tpl('<i :title="`Face ${n} of ${count}`" :alt="`${a}.${b}`" />')).toEqual([
       "src/components/A.vue:6 template :title= Face … of …",
