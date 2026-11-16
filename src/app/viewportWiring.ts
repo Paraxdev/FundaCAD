@@ -14,11 +14,10 @@ import { edgeNudgePlacement } from "../features/edgeNudge";
 import { faceNudgePlacement } from "../features/faceNudge";
 import { regionNudgePlacement } from "../features/regionNudge";
 import type { NudgePlacement } from "../features/selectionNudge";
-import { regionBeatsSurface } from "../sketch/regionOverSurface";
-import { regionArea } from "../sketch/region";
 import type { WorldRegion } from "../sketch/overlay";
 import type { Engine } from "./engine";
 import { speakCameraWhenSettled } from "./cameraSpeech";
+import { createProfileAt } from "./profileAt";
 import type { Selector } from "../types";
 import { onThemeChange } from "../ui/theme";
 import { hitPx } from "../input/pointerKind";
@@ -157,36 +156,7 @@ export function installViewportWiring(e: Engine): void {
     if (s.result && !s.building) dismissContextMenu();
   });
 
-  // A face's area only changes with a rebuild, and hover asks on every move.
-  const faceAreas = new Map<number, number>();
-  e.store.onBuild(() => faceAreas.clear());
-  const regionAt = (x: number, y: number) => {
-    // A cut answer that landed under a tool or dialog applies before an area from the old split is offered.
-    if (e.overlay.splitStale) {
-      e.overlay.update(e.store.document);
-      e.viewport.requestRender();
-    }
-    const ray = e.viewport.rayFrom(x, y).ray;
-    const wr = e.overlay.committedRegionAtRay(ray);
-    if (!wr) return null;
-    const onPlane = ray.intersectPlane(wr.plane.plane, new THREE.Vector3());
-    const surface = e.viewport.surfaceHitAt(x, y);
-    if (!onPlane || !surface) return wr;
-    let faceArea = 0;
-    if (surface.faceId !== null) {
-      faceArea = faceAreas.get(surface.faceId) ?? e.viewport.faceArea(surface.faceId);
-      faceAreas.set(surface.faceId, faceArea);
-    }
-    return regionBeatsSurface({
-      regionDist: onPlane.distanceTo(ray.origin),
-      surfaceDist: surface.distance,
-      modelScale: e.viewport.modelDiagonal() ?? 0,
-      regionArea: regionArea(wr.region),
-      faceArea,
-    })
-      ? wr
-      : null;
-  };
+  const regionAt = createProfileAt(e);
   // A visible sketch's areas are pickable outside sketch mode, so Extrude can use them.
   e.viewport.regionHoverAt = (x, y) => {
     if (e.sketch.active || e.toolBusy()) {

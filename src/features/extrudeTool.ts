@@ -9,7 +9,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
-import { carryTaker, carryWords, pickOfHit, type CarryCommit, type CarryHost } from "./carryOn";
+import { carryPress, carryPressTarget, carryTaker, carryWords, type CarryCommit, type CarryHost } from "./carryOn";
 import { awaitTreePick } from "../ui/treePick";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { isBoxButtonKey, isMenuKey, isRailButton, keyTargetFree } from "../ui/focus";
@@ -56,8 +56,9 @@ const PINNED_CYCLE: readonly Op[] = ["new", "join", "cut"];
 
 export class ExtrudeTool {
   active = false;
-  /** Set by the app (app/carryOn.ts): the next face or edge pick finishes this extrude and goes on. */
+  /** Set by the app (app/carryOn.ts): the next face, edge or profile pick finishes this extrude and goes on. */
   carry: CarryHost | null = null;
+  private restsOn: string | null = null;
   private phase: Phase = "pick";
   private selected: WorldRegion[] = [];
   private lit: WorldRegion | null = null; // the profile the key walk stands on, only in the pick phase
@@ -141,21 +142,26 @@ export class ExtrudeTool {
 
   /** `opts.grabAt` is the direct entry (features/regionNudge.ts): arm from the pre-selection and start scrubbing in the
    *  same pointerdown. `opts.sketch` is a hidden, usually consumed, sketch shown for the gesture with every area
-   *  selected, so a second extrude of it is a new feature. False when it has no closed area. */
-  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number }; sketch?: string }): boolean {
+   *  selected, so a second extrude of it is a new feature; with `at` only the areas there are, and the operation is
+   *  read as usual. False when it has no closed area there. `restsOn` is the step the carry on just wrote. */
+  start(
+    onDone: (id: string | null) => void,
+    opts?: { grabAt?: { x: number; y: number }; sketch?: string; at?: [number, number, number][]; restsOn?: string },
+  ): boolean {
     if (this.active) return false;
     if (opts?.sketch) {
       this.forcedSketchId = opts.sketch;
       this.overlay.update(this.store.document);
-      const points = this.overlay.regionPointsForSketch(opts.sketch);
-      if (!points.length) {
+      const points = opts.at ?? this.overlay.regionPointsForSketch(opts.sketch);
+      if (points.length) this.overlay.selectRegionsByPoints(points);
+      if (!points.length || !this.overlay.selectedRegions().length) {
         this.forcedSketchId = null;
+        this.overlay.clearRegionSelection();
         this.overlay.update(this.store.document);
         this.pinnedOp = null;
         return false;
       }
-      this.overlay.selectRegionsByPoints(points);
-      this.pinnedOp = "new";
+      this.pinnedOp = opts.at ? null : "new";
     }
     // Read the pre-selection first: a handle whose regions have gone must not arm an unasked pick phase that holds
     // toolBusy() until noticed.
@@ -164,6 +170,7 @@ export class ExtrudeTool {
     this.active = true;
     this.phase = "pick";
     this.onDone = onDone;
+    this.restsOn = opts?.restsOn ?? null;
     this.symmetric = false;
     this.dropPickingHold();
     this.viewport.suspendPicking = true;
@@ -418,8 +425,10 @@ export class ExtrudeTool {
     }
     this.pressCommit = true;
     try {
-      const hit = this.carriesOn() ? pickOfHit(this.viewport.pickEntity(e.clientX, e.clientY)) : null;
-      if (!hit || this.carry!.route(hit) === "row") this.commit();
+      const carried =
+        this.carriesOn() &&
+        carryPress(this, this.carry!, this.viewport, e.clientX, e.clientY, (wr) => this.overlay.isRegionSelected(wr));
+      if (!carried) this.commit();
     } finally {
       this.pressCommit = false;
     }
@@ -1009,7 +1018,7 @@ export class ExtrudeTool {
     this.shownCarry = carry;
     const word = OP_WORD[op];
     const sym = this.symmetric ? " · both ways (Alt+S)" : " · Alt+S symmetric";
-    const on = carry ? ` · ${carryWords.prompt()}` : "";
+    const on = carry ? ` · ${carryWords.promptProfile()}` : "";
     setPrompt(
       this.editId
         ? `${word} · Ctrl-click areas · drag or type a value · Up or Down steps${sym} · click to apply · Esc`
@@ -1106,6 +1115,11 @@ export class ExtrudeTool {
     );
   }
 
+  /** A tool command carries on too, refused in words while the depth is not set. */
+  get carryOffered(): boolean {
+    return !!this.carry && !this.editId && this.phase === "drag";
+  }
+
   carryBlocked(): string | null {
     if (!this.carriesOn()) return carryWords.depthFirst();
     if (!this.dim.accepts("distance") || !this.dim.accepts("taper")) return carryWords.badValue();
@@ -1141,9 +1155,18 @@ export class ExtrudeTool {
   }
 
   private lightCarry(x: number, y: number, onHandle: boolean) {
-    const lit = !onHandle && this.carriesOn() ? this.viewport.pickEntity(x, y) : null;
+    const next =
+      !onHandle && this.carriesOn()
+        ? carryPressTarget(this.viewport, this.carry!, x, y, (wr) => this.overlay.isRegionSelected(wr))
+        : null;
+    const lit = next && !next.profile ? next.hit : null;
     if (lit || this.carryLit) this.viewport.hoverEntity(lit ?? null);
     this.carryLit = !!lit;
+    if (this.overlay.setHoverRegion(next?.wr ?? null)) this.viewport.requestRender();
+  }
+
+  dependsOn(): readonly string[] {
+    return this.restsOn ? [this.restsOn] : [];
   }
 
   cancel() {
@@ -1217,6 +1240,7 @@ export class ExtrudeTool {
     if (this.pressCommit) this.holdPickingThroughPress();
     else this.viewport.suspendPicking = false;
     this.active = false;
+    this.restsOn = null;
     this.symmetric = false;
     this.selected = [];
     this.lit = null;

@@ -1,20 +1,63 @@
-// Carry on: after Extrude or Press/Pull commits for a face or edge pick, waits for the commit's build, finds the pick
-// again on the result and starts the next tool on it.
+// Carry on: after Extrude or Press/Pull commits for a face, edge or profile pick or a tool command, waits for the
+// commit's build, finds the pick again on the result and starts the next tool on it.
 
 import { t } from "../i18n";
 import type { RebuildState } from "../document/store";
-import type { CarryHost, CarryTarget } from "../features/carryOn";
+import { carryTo, type CarryHost, type CarrySource, type CarryTarget } from "../features/carryOn";
+import type { WorldRegion } from "../sketch/overlay";
+import type { SketchTool } from "../sketch/sketchMode";
 import { routeTreeClick } from "../ui/treePick";
+import { SKETCH_TOOLS } from "./actionTables";
 import type { Engine } from "./engine";
-import { refuseAloud, treeClickDeps } from "./planePick";
+import { BUSY_TOOL_HINT, refuseAloud, treeClickDeps } from "./planePick";
+import { createProfileAt } from "./profileAt";
 
 const CARRY_LIMIT_MS = 10_000;
 const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock"]);
 
+type CarryTool = CarrySource & { active: boolean; carry: CarryHost | null; readonly carryOffered: boolean };
+
 export type CarryEngine = Pick<
   Engine,
-  "store" | "viewport" | "starters" | "toolBusy" | "toolOwnsScreen" | "dropBodyGizmo" | "setStatus" | "sketch"
-> & { tools: { extrude: { carry: CarryHost | null }; pressPull: { carry: CarryHost | null } } };
+  | "store"
+  | "viewport"
+  | "overlay"
+  | "starters"
+  | "toolBusy"
+  | "toolOwnsScreen"
+  | "dropBodyGizmo"
+  | "setStatus"
+  | "sketch"
+> & { tools: { extrude: CarryTool; pressPull: CarryTool } };
+
+type Starters = CarryEngine["starters"];
+
+/** The tool commands a set value carries on into, each started resting on the step just written. */
+const NEXT_TOOL: Record<string, (s: Starters, restsOn: string | null) => void> = {
+  fillet: (s, id) => s.startFilletOn(id),
+  chamfer: (s, id) => s.startChamferOn(id),
+  presspull: (s, id) => s.startPressPullOn(id),
+  extrude: (s, id) => s.startExtrude(id),
+  sketch: (s) => s.startSketch(),
+};
+
+const nextTool = (action: string) =>
+  NEXT_TOOL[action] ?? (SKETCH_TOOLS.has(action) ? (s: Starters) => s.startSketch(action as SketchTool) : null);
+
+/** A tool command while Extrude or Press/Pull is open: once its value is set the step is written and the command runs
+ *  on the result, as a pick carries on. True when the command was taken or refused aloud. */
+export function carryCommand(e: Pick<CarryEngine, "tools" | "setStatus">, action: string): boolean {
+  if (!nextTool(action)) return false;
+  const tool = [e.tools.extrude, e.tools.pressPull].find((x) => x.active);
+  if (!tool?.carry) return false;
+  if (!tool.carryOffered) {
+    refuseAloud(e, BUSY_TOOL_HINT);
+    return true;
+  }
+  const done = carryTo(tool, tool.carry, { kind: "action", action });
+  if (done !== true) refuseAloud(e, done);
+  return true;
+}
 
 export function installCarryOn(e: CarryEngine): void {
   let drop: (() => void) | null = null;
@@ -38,6 +81,16 @@ export function installCarryOn(e: CarryEngine): void {
     if (id && !e.store.document.features.some((f) => f.id === id)) return;
     if (e.toolOwnsScreen()) return;
     const vp = e.viewport;
+    if (target.kind === "action") {
+      if (e.toolBusy()) e.dropBodyGizmo();
+      nextTool(target.action)?.(e.starters, id);
+      return;
+    }
+    if (target.kind === "profile") {
+      if (e.toolBusy()) e.dropBodyGizmo();
+      if (!e.starters.startExtrudeOn(id, target)) refuseAloud(e, t("carry.lost", { kind: "profile" }));
+      return;
+    }
     if (target.kind === "face") {
       const face = vp.faceIdNear(target.point);
       if (face == null) return refuseAloud(e, t("carry.lost", { kind: "face" }));
@@ -53,8 +106,11 @@ export function installCarryOn(e: CarryEngine): void {
     e.starters.startFilletOn(id);
   };
 
+  let profileAt: ((x: number, y: number) => WorldRegion | null) | null = null;
   const host: CarryHost = {
     route: (pick) => routeTreeClick(pick, treeClickDeps(e)),
+    profileAt: (x, y) => (profileAt ??= createProfileAt(e, { refresh: false }))(x, y),
+    refuse: (why) => refuseAloud(e, why),
     after(done, target) {
       drop?.();
       afterPress = null;

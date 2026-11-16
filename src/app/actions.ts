@@ -29,6 +29,7 @@ import { changeInterfaceSize } from "../ui/interfaceSize";
 import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
 import { speakCameraWhenSettled } from "./cameraSpeech";
+import { carryCommand } from "./carryOn";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
 const VIEWS: ReadonlySet<string> = new Set(STANDARD_VIEWS);
@@ -106,6 +107,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (!KEEPS_PICK.has(action) && !action.startsWith("view-step-")) useGeometryBrowserStore().setLit(false);
     // A contributed action is never repeated: the core cannot tell whether running it twice is safe.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
+    if (carryCommand(e, action)) return;
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
       else {

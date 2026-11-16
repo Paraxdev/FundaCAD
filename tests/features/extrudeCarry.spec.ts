@@ -1,5 +1,6 @@
-// Extrude carries on: once its depth is set, a click on a face or an edge finishes it as one feature and hands the pick
-// on. While the depth follows the pointer, in an edit, on empty space or on a refused preview nothing carries.
+// Extrude carries on: once its depth is set, a click on a face, an edge or another profile finishes it as one feature
+// and hands the pick on. While the depth follows the pointer, in an edit, on empty space or on a refused preview nothing
+// carries.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
@@ -40,6 +41,20 @@ const EDGE_POINTS = [
   [14, 1, 9],
 ];
 const faceHit = { kind: "face", faceId: 4, selector: {}, point: [15, 3, 3] };
+const flat = new SketchPlane({ origin: [0, 0, 0], normal: [0, 0, 1], xdir: [1, 0, 0] });
+const otherProfile = {
+  sketchId: "f2",
+  region: {
+    sketchId: "f2",
+    loop: rectCorners(9, 2, 8, 8),
+    holes: [],
+    centroid: new THREE.Vector2(9, 2),
+    interior: new THREE.Vector2(9, 2),
+  },
+  plane: flat,
+  centroid3D: flat.to3D(9, 2),
+  interior3D: flat.to3D(9, 2),
+};
 const edgeHit = { kind: "edge", edge: { id: "e7", body: "body1", points: EDGE_POINTS }, selector: {} };
 
 const tools: ExtrudeTool[] = [];
@@ -68,12 +83,13 @@ function rig(opts: { editing?: boolean } = {}) {
     selectedRegions: () => [wr],
     toggleRegionSelection: vi.fn(),
     selectRegionsByPoints: vi.fn(),
-    setHoverRegion: vi.fn(),
+    setHoverRegion: vi.fn(() => true),
     clearRegionSelection: () => {},
+    isRegionSelected: (w: unknown) => w === wr,
   };
   const canvas = document.createElement("canvas");
   document.body.append(canvas);
-  const under = { hit: null as unknown };
+  const under = { hit: null as unknown, profile: null as unknown };
   const lit: unknown[] = [];
   const viewport = lenient({
     suspendPicking: false,
@@ -120,7 +136,8 @@ function rig(opts: { editing?: boolean } = {}) {
   const hints: string[] = [];
   const after = vi.fn();
   const route = vi.fn((pick) => routeTreeClick(pick, { busyHint: () => null, hint: (m) => void hints.push(m) }));
-  const host: CarryHost = { route, after };
+  const profileAt = vi.fn(() => under.profile as never);
+  const host: CarryHost = { route, after, profileAt, refuse: (m) => void hints.push(m) };
   const tool = new ExtrudeTool(viewport, overlay as never, store);
   tools.push(tool);
   Object.assign(tool, { positionDim: () => {}, hitGizmo: () => false, hitTaper: () => false });
@@ -148,7 +165,26 @@ function rig(opts: { editing?: boolean } = {}) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   };
   const begin = () => (opts.editing ? tool.startEdit("e1", vi.fn()) : tool.start(vi.fn()));
-  return { tool, t, state, calls, hints, host, route, after, under, lit, pointer, settle, type, begin, depth };
+  return {
+    tool,
+    t,
+    state,
+    calls,
+    hints,
+    host,
+    route,
+    after,
+    under,
+    lit,
+    pointer,
+    settle,
+    type,
+    begin,
+    depth,
+    wr,
+    overlay,
+    profileAt,
+  };
 }
 
 beforeEach(() => {
@@ -335,6 +371,110 @@ describe("Extrude carries on to the next pick", () => {
   });
 });
 
+describe("Extrude carries on to the next profile", () => {
+  it("a click inside another sketch's profile over a face writes one extrude and hands the profile on, not the face", () => {
+    const r = rig();
+    r.begin();
+    r.settle(12);
+    r.under.hit = faceHit;
+    r.under.profile = otherProfile;
+    r.pointer("pointerdown");
+    expect(r.calls.added).toEqual([expect.objectContaining({ id: "f9", type: "extrude", distance: 12 })]);
+    expect(r.route).not.toHaveBeenCalled();
+    expect(r.after).toHaveBeenCalledTimes(1);
+    const [done, target] = r.after.mock.calls[0]!;
+    expect(done).toEqual({ kind: "added", id: "f9" });
+    expect(target).toMatchObject({ kind: "profile", sketch: "f2" });
+    const [x, y, z] = target.point as number[];
+    expect([x, y, z].map((v) => +v!.toFixed(6))).toEqual([9, 2, 0]);
+    expect(r.tool.active).toBe(false);
+  });
+
+  it("a profile with nothing behind it carries on the same way", () => {
+    const r = rig();
+    r.begin();
+    r.settle(12);
+    r.under.hit = null;
+    r.under.profile = otherProfile;
+    r.pointer("pointerdown");
+    expect(r.calls.added).toHaveLength(1);
+    expect(r.after).toHaveBeenCalledWith({ kind: "added", id: "f9" }, expect.objectContaining({ kind: "profile" }));
+  });
+
+  it("a click on its own profile goes on to the face under it as before", () => {
+    const r = rig();
+    r.begin();
+    r.settle(12);
+    r.under.hit = faceHit;
+    r.under.profile = r.wr;
+    r.pointer("pointerdown");
+    expect(r.after).toHaveBeenCalledWith({ kind: "added", id: "f9" }, { kind: "face", point: LARGE_CENTRE });
+  });
+
+  it("an edge in front of a profile is still the edge, the profile is not asked", () => {
+    const r = rig();
+    r.begin();
+    r.settle(12);
+    r.under.hit = edgeHit;
+    r.under.profile = otherProfile;
+    r.pointer("pointerdown");
+    expect(r.profileAt).not.toHaveBeenCalled();
+    expect(r.after).toHaveBeenCalledWith({ kind: "added", id: "f9" }, { kind: "edge", point: [14, 1, 6] });
+  });
+
+  it("while the depth follows the pointer a click on a profile only commits", () => {
+    const r = rig();
+    r.begin();
+    r.depth(8);
+    r.under.profile = otherProfile;
+    r.pointer("pointerdown");
+    expect(r.calls.added).toEqual([expect.objectContaining({ distance: 8 })]);
+    expect(r.after).not.toHaveBeenCalled();
+  });
+
+  it("a refused preview refuses a profile click aloud and keeps the step open", () => {
+    const r = rig();
+    r.begin();
+    r.settle(12);
+    r.state.previewError = "kernel said no";
+    r.under.profile = otherProfile;
+    r.pointer("pointerdown");
+    expect(r.calls.added).toEqual([]);
+    expect(r.after).not.toHaveBeenCalled();
+    expect(r.hints).toEqual([carryWords.refused("kernel said no")]);
+    expect(r.tool.active).toBe(true);
+  });
+
+  it("lights the profile a click would carry to instead of the face behind it", () => {
+    const r = rig();
+    r.begin();
+    r.settle(12);
+    r.under.hit = faceHit;
+    r.under.profile = otherProfile;
+    r.pointer("pointermove", 310, 210);
+    expect(r.overlay.setHoverRegion).toHaveBeenLastCalledWith(otherProfile);
+    expect(r.lit).toEqual([]);
+  });
+
+  it("offers a tool command the carry only in the drag phase of a new extrude", () => {
+    const r = rig();
+    r.tool.start(vi.fn());
+    expect(r.tool.carryOffered).toBe(true);
+    r.tool.cancel();
+    const e = rig({ editing: true });
+    e.begin();
+    expect(e.tool.carryOffered).toBe(false);
+  });
+
+  it("rests on the step a carry wrote, and lets go of it when it ends", () => {
+    const r = rig();
+    r.tool.start(vi.fn(), { restsOn: "f3" });
+    expect(r.tool.dependsOn()).toEqual(["f3"]);
+    r.tool.cancel();
+    expect(r.tool.dependsOn()).toEqual([]);
+  });
+});
+
 describe("the session of an open Extrude", () => {
   it("opens with the drag phase and ends with the tool", () => {
     const r = rig();
@@ -393,14 +533,14 @@ describe("hover and prompt while the depth is set", () => {
     const r = rig();
     r.begin();
     r.depth(8);
-    expect(prompts.filter((p) => p?.includes(carryWords.prompt()))).toEqual([]);
+    expect(prompts.filter((p) => p?.includes(carryWords.promptProfile()))).toEqual([]);
     r.settle(8);
-    expect(prompts.at(-1)).toContain(carryWords.prompt());
+    expect(prompts.at(-1)).toContain(carryWords.promptProfile());
     r.tool.cancel();
     const e = rig({ editing: true });
     prompts.length = 0;
     e.begin();
     e.settle(11);
-    expect(prompts.filter((p) => p?.includes(carryWords.prompt()))).toEqual([]);
+    expect(prompts.filter((p) => p?.includes(carryWords.promptProfile()))).toEqual([]);
   });
 });

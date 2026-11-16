@@ -2,8 +2,9 @@
 // the picked face or edge again on the result and starts Press/Pull or Fillet on it, or drops the carry.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installCarryOn, type CarryEngine } from "../../src/app/carryOn";
-import type { CarryHost, CarryTarget } from "../../src/features/carryOn";
+import { carryCommand, installCarryOn, type CarryEngine } from "../../src/app/carryOn";
+import { BUSY_TOOL_HINT } from "../../src/app/planePick";
+import { carryWords, type CarryCommit, type CarryHost, type CarryTarget } from "../../src/features/carryOn";
 import type { RebuildState } from "../../src/document/store";
 import { t } from "../../src/i18n";
 
@@ -15,6 +16,7 @@ vi.mock("../../src/ui/announce", async (importOriginal) => ({
 
 const FACE: CarryTarget = { kind: "face", point: [12.5, -3.25, 7.75] };
 const EDGE: CarryTarget = { kind: "edge", point: [4.5, 9.25, -2] };
+const PROFILE: CarryTarget = { kind: "profile", point: [10, 0.5, 2.5], sketch: "s2" };
 const OLD = { bodies: [] } as unknown as NonNullable<RebuildState["result"]>;
 const NEW = { bodies: [{ id: "body1" }] } as unknown as NonNullable<RebuildState["result"]>;
 const PREVIEW = [{ id: "pv", type: "press-pull" }] as unknown as NonNullable<RebuildState["previewBuilt"]>;
@@ -56,7 +58,16 @@ class FakeStore {
   }
 }
 
-function rig(o: { face?: number | null; edge?: object | null } = {}) {
+// A closed tool with a set value, opened by a test; its commit writes f7.
+const openTool = () => ({
+  carry: null as CarryHost | null,
+  active: false,
+  carryOffered: true,
+  carryBlocked: vi.fn((): string | null => null),
+  commitForCarry: vi.fn((): CarryCommit => ({ kind: "added", id: "f7" })),
+});
+
+function rig(o: { face?: number | null; edge?: object | null; profile?: boolean } = {}) {
   const store = new FakeStore();
   const canvas = document.createElement("canvas");
   const calls: string[] = [];
@@ -74,8 +85,15 @@ function rig(o: { face?: number | null; edge?: object | null } = {}) {
     starters: {
       startPressPullOn: vi.fn((id: string | null) => void calls.push(`pressPull ${id}`)),
       startFilletOn: vi.fn((id: string | null) => void calls.push(`fillet ${id}`)),
+      startChamferOn: vi.fn((id: string | null) => void calls.push(`chamfer ${id}`)),
+      startExtrude: vi.fn((id: string | null) => void calls.push(`extrude ${id}`)),
+      startSketch: vi.fn((tool?: string) => void calls.push(tool ? `sketch ${tool}` : "sketch")),
+      startExtrudeOn: vi.fn((id: string | null, at: { sketch: string }) => {
+        calls.push(`extrude ${id} on ${at.sketch}`);
+        return o.profile !== false;
+      }),
     },
-    tools: { extrude: { carry: null as CarryHost | null }, pressPull: { carry: null as CarryHost | null } },
+    tools: { extrude: openTool(), pressPull: openTool() },
     toolBusy: () => busy.any || busy.owns,
     toolOwnsScreen: () => busy.owns,
     dropBodyGizmo: vi.fn(() => void calls.push("dropGizmo")),
@@ -134,6 +152,22 @@ describe("after a step was added", () => {
     expect(r.e.viewport.edgeLineByMid).toHaveBeenCalledWith(EDGE.point);
     expect(r.calls).toEqual(['picks [{"kind":"edge","edge":{"id":"edge-9"}}]', "fillet f7"]);
     expect(r.e.starters.startPressPullOn).not.toHaveBeenCalled();
+  });
+
+  it("starts Extrude on the profile at the target point, resting on the step", () => {
+    const r = rig();
+    r.host.after({ kind: "added", id: "f7" }, PROFILE);
+    built(r.store);
+    expect(r.e.starters.startExtrudeOn).toHaveBeenCalledWith("f7", PROFILE);
+    expect(r.calls).toEqual(["extrude f7 on s2"]);
+    expect(r.e.starters.startPressPullOn).not.toHaveBeenCalled();
+  });
+
+  it("says the profile is not on the result when no area lies at its point", () => {
+    const r = rig({ profile: false });
+    r.host.after({ kind: "added", id: "f7" }, PROFILE);
+    built(r.store);
+    expect(r.status).toEqual([t("carry.lost", { kind: "profile" })]);
   });
 
   it("acts once, a later build starts nothing more and the build listener is gone", () => {
@@ -343,5 +377,71 @@ describe("what drops a carry", () => {
     expect(r.calls).toEqual([]);
     built(r.store);
     expect(r.calls).toEqual(['picks [{"kind":"face","faceId":14}]', "pressPull f7"]);
+  });
+});
+
+describe("a tool command while a step is open", () => {
+  const open = (r: ReturnType<typeof rig>, over: Partial<typeof r.e.tools.extrude> = {}) =>
+    Object.assign(r.e.tools.extrude, { active: true }, over);
+
+  it("writes the open extrude, then starts Fillet on the result resting on it", () => {
+    const r = rig();
+    open(r);
+    expect(carryCommand(r.e as unknown as CarryEngine, "fillet")).toBe(true);
+    expect(r.e.tools.extrude.commitForCarry).toHaveBeenCalledTimes(1);
+    expect(r.calls).toEqual([]);
+    built(r.store);
+    expect(r.calls).toEqual(["fillet f7"]);
+    expect(r.status).toEqual([]);
+  });
+
+  it.each([
+    ["chamfer", "chamfer f7"],
+    ["presspull", "pressPull f7"],
+    ["extrude", "extrude f7"],
+    ["sketch", "sketch"],
+    ["rectangle", "sketch rectangle"],
+  ])("%s carries on the same way", (action, call) => {
+    const r = rig();
+    open(r);
+    expect(carryCommand(r.e as unknown as CarryEngine, action)).toBe(true);
+    built(r.store);
+    expect(r.calls).toEqual([call]);
+  });
+
+  it("a push open in Press/Pull carries on too", () => {
+    const r = rig();
+    Object.assign(r.e.tools.pressPull, { active: true });
+    expect(carryCommand(r.e as unknown as CarryEngine, "fillet")).toBe(true);
+    expect(r.e.tools.pressPull.commitForCarry).toHaveBeenCalledTimes(1);
+    built(r.store);
+    expect(r.calls).toEqual(["fillet f7"]);
+  });
+
+  it("says why while the depth is not set, and writes nothing", () => {
+    const r = rig();
+    open(r, { carryBlocked: vi.fn(() => carryWords.depthFirst()) });
+    expect(carryCommand(r.e as unknown as CarryEngine, "fillet")).toBe(true);
+    expect(r.e.tools.extrude.commitForCarry).not.toHaveBeenCalled();
+    expect(r.status).toEqual([carryWords.depthFirst()]);
+    built(r.store);
+    expect(r.calls).toEqual([]);
+  });
+
+  it("says to finish the tool when it offers no carry, as in an edit", () => {
+    const r = rig();
+    open(r, { carryOffered: false });
+    expect(carryCommand(r.e as unknown as CarryEngine, "chamfer")).toBe(true);
+    expect(r.e.tools.extrude.commitForCarry).not.toHaveBeenCalled();
+    expect(r.status).toEqual([BUSY_TOOL_HINT]);
+  });
+
+  it("leaves the command alone with no step open, or for a command that starts no tool", () => {
+    const r = rig();
+    expect(carryCommand(r.e as unknown as CarryEngine, "fillet")).toBe(false);
+    open(r);
+    expect(carryCommand(r.e as unknown as CarryEngine, "iso")).toBe(false);
+    expect(r.e.tools.extrude.commitForCarry).not.toHaveBeenCalled();
+    expect(r.status).toEqual([]);
   });
 });

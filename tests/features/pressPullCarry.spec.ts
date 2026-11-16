@@ -120,7 +120,7 @@ function rig() {
   const hints: string[] = [];
   const after = vi.fn();
   const route = vi.fn((pick) => routeTreeClick(pick, { busyHint: () => null, hint: (m) => void hints.push(m) }));
-  const host: CarryHost = { route, after };
+  const host: CarryHost = { route, after, profileAt: () => null, refuse: (m) => void hints.push(m) };
   const tool = new PressPullTool(vp as unknown as Viewport, store as unknown as DocumentStore);
   tools.push(tool);
   Object.assign(tool, { hitGizmo: () => false, hitTaper: () => false });
