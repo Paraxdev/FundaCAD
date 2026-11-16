@@ -1717,8 +1717,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
 
   if (axis) {
     Frame f0 = frame(t0);
-    sides[0]->normal_on_edge_cached = f0.n1;
-    sides[1]->normal_on_edge_cached = f0.n2;
+    set_frame(f0);
     Section sec = section(f0.P, f0.T, sides, s, chamfer, size, size2, cont, profile, &*axis, margin);
     BRepBuilderAPI_MakeFace face(sec.wire, true);
     if (face.IsDone()) {

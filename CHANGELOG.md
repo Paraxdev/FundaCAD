@@ -615,6 +615,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A chamfer on the rim of a round hole cuts the rim.** Where a hole's rim chamfer
+  needed the slower build that follows the edge, its cut was turned into the hole
+  instead of onto the rim, so the chamfer failed there and a refused chamfer offered a
+  size a hair under the one that fits. It now cuts the rim, and the offer is the size
+  that fits.
+
 - **The Capsule holder's threads no longer ask you to check their seams.** Every helical
   cut that had to be cut in pieces showed a note to check the seams, even where the cut
   is whole. A cut that two different ways of splitting agree on is now quiet, and one
