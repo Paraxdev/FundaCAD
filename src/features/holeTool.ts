@@ -615,7 +615,7 @@ export class HoleTool {
     } else {
       this.store.addFeature(feature, undefined, bindings);
     }
-    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Hole");
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, t("tool.hole"));
     this.onDone?.(feature.id);
   }
 

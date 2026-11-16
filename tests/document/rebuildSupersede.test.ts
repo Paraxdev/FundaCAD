@@ -3,6 +3,7 @@
 // when the test says so stands in for a fillet that takes seconds.
 import { describe, it, expect } from "vitest";
 import { DocumentStore } from "../../src/document/store";
+import { setLanguage } from "../../src/i18n";
 import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
@@ -170,6 +171,26 @@ describe("a commit the kernel had not answered for", () => {
     expect(store.buildState.result?.bodies?.[0]?.id).toBe("committed");
     expect(warnings).toEqual(["Fillet 60 mm was refused, nothing changed: too large"]);
     expect(store.canRedo).toBe(true);
+  });
+
+  it("says so in one sentence in the chosen language, around the engine's own reason", async () => {
+    const { store, jobs } = await editing();
+    const warnings: string[] = [];
+    store.onWarning = (m) => warnings.push(m);
+    store.endEditPreview(false);
+    store.replaceFeature("f1", fillet(60));
+    store.verifyCommit("f1", "Verrundung 60 mm");
+    await flush();
+    const refused = result("partial");
+    refused.featureErrors = [{ feature_id: "f1", message: "too large" }];
+    try {
+      await setLanguage("de");
+      jobs[2]!.settle({ ok: true, result: refused });
+      await flush();
+      expect(warnings).toEqual(["Verrundung 60 mm wurde abgelehnt, es wurde nichts geändert: too large"]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("is undone when the rebuild refuses it while an import reads its file", async () => {

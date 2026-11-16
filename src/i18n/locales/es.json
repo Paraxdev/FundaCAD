@@ -183,6 +183,7 @@
   "field.problem.laterFails": "{name} falla con este valor: {message}",
   "field.problem.notValue": "no es un valor",
   "field.problem.positive": "{label} debe ser mayor que 0",
+  "field.problem.refused": "Operación rechazada ({what}), no se ha cambiado nada: {reason}",
   "field.problem.unknownName": "«{name}» no es un número ni un parámetro",
   "field.problem.unsolvable": "No se pudo cumplir {dim, select, width {esta anchura} height {esta altura} diameter {este diámetro} radius {este radio} length {esta longitud} other {{dim}}} con las otras restricciones del boceto",
   "field.problem.whole": "{label} debe ser un número entero",

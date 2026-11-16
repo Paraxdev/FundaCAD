@@ -183,6 +183,7 @@
   "field.problem.laterFails": "{name} fails with this value: {message}",
   "field.problem.notValue": "not a value",
   "field.problem.positive": "{label} must be more than 0",
+  "field.problem.refused": "{what} was refused, nothing changed: {reason}",
   "field.problem.unknownName": "unknown parameter \"{name}\"",
   "field.problem.unsolvable": "Could not satisfy this {dim, select, width {width} height {height} diameter {diameter} radius {radius} length {length} other {{dim}}} with the sketch's other constraints",
   "field.problem.whole": "{label} must be a whole number",

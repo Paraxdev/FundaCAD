@@ -1431,7 +1431,7 @@ export class PressPullTool {
         ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
         : null;
     this.store.addFeature(feature, undefined, this.bindings(feature));
-    if (read.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
+    if (read.unverified) this.store.verifyCommit(feature.id, t("tool.pressPull"));
     this.cleanup();
     this.onDone?.(feature.id);
     return { id: feature.id, reselect };
