@@ -352,6 +352,19 @@ describe("offsetChain keeps a spline drawn nearly along its neighbour", () => {
       const { chain, lone } = offsets(rise, 3);
       for (const p of [chain.points[0]!, chain.points.at(-1)!]) expect(distToPoly(lone, p)).toBeLessThan(0.02);
     });
+    it(`keeps a point drawn close to the free end of an open chain, ${rise}`, () => {
+      const ents: ResolvedEntity[] = [
+        spline("s", [
+          [52, 20],
+          [51.97, 19.85],
+          [50, 10],
+          [40, rise],
+          [30, 0],
+        ]),
+        L("l1", [30, 0], [0, 0]),
+      ];
+      expect(copyOf(ents, offsetChain(ents, 0, 1)!).points.length).toBe(5);
+    });
     it(`extends outward without bending the copy, ${rise}`, () => {
       for (const d of [-0.3, -1, -3]) {
         const { chain, lone } = offsets(rise, d);

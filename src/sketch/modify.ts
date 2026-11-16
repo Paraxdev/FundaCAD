@@ -623,9 +623,9 @@ function trimmedPoly(o: PolyOff): THREE.Vector2[] | null {
   if (o.through) {
     const near = (cut: THREE.Vector2, pt: THREE.Vector2, next: THREE.Vector2) =>
       cut.distanceTo(pt) < 0.05 * pt.distanceTo(next);
-    if (out.length > 3 && near(out[0]!, out[1]!, out[2]!)) out.splice(1, 1);
+    if (o.from && out.length > 3 && near(out[0]!, out[1]!, out[2]!)) out.splice(1, 1);
     const m = out.length;
-    if (m > 3 && near(out[m - 1]!, out[m - 2]!, out[m - 3]!)) out.splice(m - 2, 1);
+    if (o.to && m > 3 && near(out[m - 1]!, out[m - 2]!, out[m - 3]!)) out.splice(m - 2, 1);
   }
   return out.length >= 2 ? out : null;
 }
