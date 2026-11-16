@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { setLanguage } from "../../src/i18n";
+import { setUnit } from "../../src/ui/units";
 import {
   MAX_DIAGONAL_FRACTION,
   MIN_EDGE_VALUE,
@@ -241,6 +242,25 @@ describe("blendRefusalReason", () => {
     } finally {
       await setLanguage("system");
     }
+  });
+
+  it("never names an inch size past the one that fits", () => {
+    setUnit("in");
+    try {
+      // 5 mm is 0.19685 in, which rounds up to 0.197 in, past the limit
+      expect(blendRefusalReason("chamfer", 1, { ...fits, message: fits.message.replace("9.99", "5") })).toBe(
+        "Distance too large for the faces around this edge, it fits up to 0.196 in",
+      );
+      // 9.99 mm is 0.39331 in, which already rounds down
+      expect(blendRefusalReason("chamfer", 1, fits)).toBe(
+        "Distance too large for the faces around this edge, it fits up to 0.393 in",
+      );
+    } finally {
+      setUnit("mm");
+    }
+    expect(blendRefusalReason("chamfer", 1, { ...fits, message: fits.message.replace("9.99", "4.99") })).toBe(
+      "Distance too large for the faces around this edge, it fits up to 4.99 mm",
+    );
   });
 
   it("passes an unrecognised refusal through without the body prefix", () => {

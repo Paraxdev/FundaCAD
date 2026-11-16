@@ -2,7 +2,8 @@
 // no feature at the origin between, so changing your mind costs a mouse move rather than a restart.
 
 import { t } from "../i18n";
-import { fmtLength, snap } from "../ui/units";
+import { roundForDisplay } from "../ui/measure";
+import { fmtLength, fromDisplay, snap, toDisplay } from "../ui/units";
 
 export type EdgeTreatment = "fillet" | "chamfer";
 
@@ -119,11 +120,26 @@ export function commitDecision(o: {
 // The engine offers the largest size that builds only in its message, as "It fits up to 4.99mm".
 const FITS_UP_TO = /fits up to (\d+(?:\.\d+)?(?:e[-+]?\d+)?)mm/i;
 
+// The engine rounds its size down in mm, the display rounds to the nearest digit, which in inches can name a size just
+// past the one that fits.
+function shownAtMost(mm: number): number {
+  const d = toDisplay(mm);
+  const shown = roundForDisplay(d);
+  if (shown <= d) return mm;
+  const dp = d >= 1 ? 2 : Math.min(6, 2 + Math.ceil(-Math.log10(d)));
+  return fromDisplay(shown - Math.pow(10, -dp));
+}
+
 function tooLarge(kind: EdgeTreatment, n: number, message: string): string {
   const fits = FITS_UP_TO.exec(message);
   const size = fits ? Number(fits[1]) : NaN;
   const named = Number.isFinite(size) && size > 0;
-  return t("pick.blendTooLarge", { kind, n, fits: named ? "yes" : "no", size: named ? fmtLength(size) : "" });
+  return t("pick.blendTooLarge", {
+    kind,
+    n,
+    fits: named ? "yes" : "no",
+    size: named ? fmtLength(shownAtMost(size)) : "",
+  });
 }
 
 /** `code` is the engine's category (errors.py); the message is only read for older wording that carried no code, and
