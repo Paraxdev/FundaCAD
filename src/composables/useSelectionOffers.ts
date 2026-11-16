@@ -6,7 +6,6 @@ import { describePick } from "../ui/describePick";
 import { useSelectionStore } from "../stores/selection";
 import {
   appearanceOffers,
-  primaryCount,
   primaryKind,
   toolbarOffers,
   selectionCountText,
@@ -79,12 +78,17 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     if (words.line.value) return words.line.value;
     const k = kind.value;
     if (!k) return words.planeCount.value > 1 ? t("readout.planes", { n: words.planeCount.value }) : "";
+    // A run of pieces is one face to the person who picked it.
+    const all = {
+      ...counts.value,
+      ...(counts.value.face ? { face: words.faceRowCount.value || counts.value.face } : {}),
+    };
     return describeSelection({
       kind: k,
-      // A run of pieces is one face to the person who picked it.
-      count: (k === "face" && words.faceRowCount.value) || primaryCount(counts.value),
+      count: all[k] ?? 0,
       ...(k === "edge" ? { edges: words.edges.value } : {}),
       bodyHint: k === "body" && engine.viewport.policy === "auto",
+      others: all,
     });
   });
   const speech = computed(() => words?.speech.value ?? null);
