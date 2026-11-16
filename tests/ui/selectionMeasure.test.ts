@@ -98,6 +98,20 @@ describe("selection measure", () => {
     expect(text).toMatch(/^1 edge · 6\.\d+ cm · ⌀2 cm$/);
   });
 
+  it("names every kind of a mixed selection, the edges last beside their length", async () => {
+    const line: Pt3[] = [
+      [0, 0, 0],
+      [40, 0, 0],
+    ];
+    const faceAndEdge = { count: 1, kind: "edge" as const, edges: [line], others: { face: 1, edge: 1 } };
+    expect(describeSelection(faceAndEdge)).toBe("1 face · 1 edge · 40 mm");
+    expect(describeSelection({ count: 2, kind: "face", others: { body: 1, face: 2, "sketch-region": 3 } })).toBe(
+      "1 body · 3 profiles · 2 faces",
+    );
+    await setLanguage("de");
+    expect(describeSelection(faceAndEdge)).toBe("1 Fläche · 1 Kante · 40 mm");
+  });
+
   it("counts faces, and nothing for none", () => {
     expect(describeSelection({ count: 3, kind: "face" })).toBe("3 faces");
     expect(describeSelection({ count: 1, kind: "face" })).toBe("1 face");

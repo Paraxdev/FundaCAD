@@ -3,8 +3,8 @@
 import { shallowRef } from "vue";
 import { spellNumber } from "./measure";
 import { t } from "../i18n";
-import type { EntityKind } from "../features/toolCapabilities";
-import { countLine } from "./selectionTools";
+import type { EntityKind, SelectionCounts } from "../features/toolCapabilities";
+import { countLine, KIND_RANK } from "./selectionTools";
 import { fmtLength } from "./units";
 
 export type Pt3 = readonly [number, number, number];
@@ -79,8 +79,24 @@ export function roundFacePrompt(round: RoundSize): string {
   );
 }
 
-/** "3 faces", "2 edges · 300.74 mm". One face or edge goes through describePick once its facts are known. */
+/** "3 faces", "2 edges · 300.74 mm", "1 face · 1 edge · 40 mm". One face or edge goes through describePick once its
+ *  facts are known. `others` counts the kinds picked beside `kind`. */
 export function describeSelection(input: {
+  kind: EntityKind;
+  count: number;
+  edges?: readonly (readonly Pt3[])[];
+  bodyHint?: boolean;
+  others?: SelectionCounts;
+}): string {
+  const others = input.others ?? {};
+  // The primary kind ranks first and is named last, beside its measures.
+  const also = KIND_RANK.filter((k) => k !== input.kind && (others[k] ?? 0) > 0)
+    .reverse()
+    .map((k) => countLine(k, others[k]!));
+  return [...also, primaryLine(input)].filter(Boolean).join(" · ");
+}
+
+function primaryLine(input: {
   kind: EntityKind;
   count: number;
   edges?: readonly (readonly Pt3[])[];
