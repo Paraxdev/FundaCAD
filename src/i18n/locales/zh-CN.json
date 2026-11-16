@@ -378,6 +378,8 @@
   "prefs.language.machineYours": "{name} ({machine}，您的文件)",
   "prefs.language.more": "{n, plural, other {另有 # 行}}",
   "prefs.language.open": "打开文件夹",
+  "prefs.language.parts": "目前只翻译了部分内容。",
+  "prefs.language.partsLink": "在手册中查看是哪些部分",
   "prefs.language.reload": "重新加载",
   "prefs.language.remove": "移除您的行",
   "prefs.language.safeMode": "安全模式不会读取您的语言文件。",

@@ -16,6 +16,12 @@ import es from "../../../src/i18n/locales/es.json";
 import fr from "../../../src/i18n/locales/fr.json";
 import ja from "../../../src/i18n/locales/ja.json";
 
+const opened = vi.hoisted(() => [] as string[]);
+vi.mock("../../../src/ui/welcome", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/welcome")>()),
+  openExternal: async (url: string) => void opened.push(url),
+}));
+
 enableAutoUnmount(afterEach);
 
 type Lines = Record<string, string>;
@@ -121,6 +127,27 @@ describe("the Language card", () => {
       [null, null],
       [line(es, "prefs.language.hint", "es"), "prefs-language-hint"],
       [null, null],
+    ]);
+  });
+
+  it("says only some parts are translated under a machine translated language, and links the manual's list, not under English", async () => {
+    await render();
+    const shown = () => [
+      text(".prefs-language-parts")
+        ?.replace(text(".prefs-language-parts-link") ?? "", "")
+        .trim() ?? null,
+      text(".prefs-language-parts-link"),
+    ];
+    const english = shown();
+    await pick("de");
+    const german = shown();
+    document.querySelector<HTMLElement>(".prefs-language-parts-link")!.click();
+    await pick("en");
+    expect([english, german, shown(), opened]).toEqual([
+      [null, null],
+      [line(de, "prefs.language.parts", "de"), line(de, "prefs.language.partsLink", "de")],
+      [null, null],
+      [expect.stringMatching(/^https:\/\/fundacad\.dev\/(dev|beta)\/reference\/preferences\/#language$/)],
     ]);
   });
 
