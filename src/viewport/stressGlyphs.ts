@@ -6,6 +6,8 @@ import type { Vec3 } from "../types";
 import type { Viewport } from "./viewport";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { pageZoom } from "../ui/interfaceSize";
+import { underZoom } from "../ui/anchor";
+import type { Box } from "../ui/promptPlacement";
 import {
   AXES,
   forceDragLabel,
@@ -15,6 +17,7 @@ import {
   GRAVITY_MARK_COLOR,
   LOAD_MARK_COLOR,
   PINNED_MARK_COLOR,
+  pinLabelLeft,
   roundSig,
   sameTarget,
   snapDrag,
@@ -591,10 +594,12 @@ export class StressGlyphs {
     for (const o of this.orbs) if (this.layOrb(o)) changed = true;
     if (this.preview && this.layOrb(this.preview)) changed = true;
     const z = pageZoom();
+    const covers = this.probes.length ? labelCovers(z) : [];
+    const area = { left: 0, right: window.innerWidth / z };
+    const spots: { label: HTMLElement; left: number; top: number }[] = [];
     for (const p of this.probes) {
       const at = this.host.stressOverlayPoint(p.tri, p.weights);
       p.mesh.visible = !!at;
-      p.label.style.display = at ? "" : "none";
       if (!at) continue;
       const v = new THREE.Vector3(...at);
       const k = this.host.pixelWorldSize(v);
@@ -604,8 +609,16 @@ export class StressGlyphs {
         changed = true;
       }
       const s = this.host.projectToScreen(v);
-      p.label.style.left = `${s.x / z + 8}px`;
-      p.label.style.top = `${s.y / z - 8}px`;
+      const r = p.label.getBoundingClientRect();
+      const top = s.y / z - 8;
+      const bottom = top + r.height / z;
+      const beside = covers.filter((c) => c.top < bottom && c.bottom > top);
+      spots.push({ label: p.label, left: pinLabelLeft(s.x / z, r.width / z, area, beside), top });
+    }
+    for (const p of this.probes) p.label.style.display = spots.some((o) => o.label === p.label) ? "" : "none";
+    for (const o of spots) {
+      o.label.style.left = `${o.left}px`;
+      o.label.style.top = `${o.top}px`;
     }
     if (changed) this.host.requestRender();
   }
@@ -913,6 +926,15 @@ export class StressGlyphs {
     this.label.style.top = `${y / z + 14}px`;
   }
 }
+
+/** What hides a readout in the view: the panels and the cards either side, in CSS px under the root zoom. */
+function labelCovers(z: number): Box[] {
+  return [...document.querySelectorAll(LABEL_COVERS)]
+    .map((e) => underZoom(e.getBoundingClientRect(), z))
+    .filter((r) => r.right > r.left);
+}
+const LABEL_COVERS =
+  "#float-layer .float-left-stack > *, #float-layer .tool-rail, #float-layer .float-right > *, .measure-panel";
 
 function sameSpot(a: SpotGlyph, b: SpotGlyph): boolean {
   return a.index === b.index && sameTarget(a.target, b.target);

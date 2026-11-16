@@ -299,7 +299,7 @@ your layer from what is actually on screen:
 | z | Layer |
 |---|---|
 | 17 | `.sketch-dim-leaders`, `calc(var(--z-panel) - 2)`, the sketch dimension leaders, under the panel |
-| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel |
+| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel, so a pinned readout turns to the side of its point no panel or card covers |
 | 19 | `.measure-panel` (`--z-panel`), every floating panel |
 | 20 | `#float-layer` (`--z-float`), the cards and rail |
 | 200 | `.float-popover` (`--z-popover`) |

@@ -1129,6 +1129,28 @@ export function probeLabel(p: { vonMises: number; deflection: number | null }, u
   return p.deflection === null ? vm : listJoin([vm, `${spellRounded(toDisplay(p.deflection))} ${unit}`]);
 }
 
+/** Where a readout pinned to the point at `x` starts: `gap` right of it, else `gap` left of it, else as near as the
+ *  free span allows. The span runs between the `covers` either side of the point inside `area`, a cover over the
+ *  point closing the side it is nearer, so no panel or card hides the readout. */
+export function pinLabelLeft(
+  x: number,
+  width: number,
+  area: { left: number; right: number },
+  covers: readonly { left: number; right: number }[],
+  gap = 8,
+): number {
+  let lo = area.left;
+  let hi = area.right;
+  for (const c of covers) {
+    if (c.right <= x || (c.left < x && c.right - x < x - c.left)) lo = Math.max(lo, c.right + gap);
+    else hi = Math.min(hi, c.left - gap);
+  }
+  const fits = (left: number) => left >= lo && left + width <= hi;
+  if (fits(x + gap)) return x + gap;
+  if (fits(x - gap - width)) return x - gap - width;
+  return Math.max(lo, Math.min(x + gap, hi - width));
+}
+
 /** An engine refusal in the panel's words. The engine names a support or a
  *  load for MCP callers too, as "support 1 (supports[0].faces[1])"; the panel
  *  calls the same row "Support 1", so the request path is dropped. */
