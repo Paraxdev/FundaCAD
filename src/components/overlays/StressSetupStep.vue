@@ -108,23 +108,25 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <div class="stress-item-head">
         <span class="stress-swatch" :style="{ background: supportColor(x.type) }" />
         <span class="stress-item-name">{{ t("stress.setup.support", { i: i + 1 }) }}</span>
-        <Select
-          :model-value="x.type"
-          :options="SUPPORT_KINDS"
-          :label="t('stress.setup.supportType', { i: i + 1 })"
-          class="stress-support-type"
-          :title="supportHint(x.type)"
-          @update:model-value="engine.ui.panels.setStressSupportType(x.id, $event)"
-        />
-        <IconButton
-          class="stress-remove-support"
-          icon="close"
-          :tip="t('stress.setup.removeSupport', { i: i + 1 })"
-          size="sm"
-          variant="danger"
-          :icon-size="14"
-          @click="engine.ui.panels.removeStressSupport(x.id)"
-        />
+        <span class="stress-item-controls">
+          <Select
+            :model-value="x.type"
+            :options="SUPPORT_KINDS"
+            :label="t('stress.setup.supportType', { i: i + 1 })"
+            class="stress-support-type"
+            :title="supportHint(x.type)"
+            @update:model-value="engine.ui.panels.setStressSupportType(x.id, $event)"
+          />
+          <IconButton
+            class="stress-remove-support"
+            icon="close"
+            :tip="t('stress.setup.removeSupport', { i: i + 1 })"
+            size="sm"
+            variant="danger"
+            :icon-size="14"
+            @click="engine.ui.panels.removeStressSupport(x.id)"
+          />
+        </span>
       </div>
       <div class="stress-faces">
         <div class="stress-count-line">
@@ -199,22 +201,24 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
       <div class="stress-item-head">
         <span class="stress-swatch" :style="{ background: loadColor }" />
         <span class="stress-item-name">{{ t("stress.setup.load", { i: i + 1 }) }}</span>
-        <Select
-          v-model="l.kind"
-          :options="loadKinds"
-          :label="t('stress.setup.loadKind', { i: i + 1 })"
-          class="stress-load-kind"
-        />
-        <!-- Down to no load at all: a body under its own weight alone is a study. -->
-        <IconButton
-          class="stress-remove-load"
-          icon="close"
-          :tip="t('stress.setup.removeLoad', { i: i + 1 })"
-          size="sm"
-          variant="danger"
-          :icon-size="14"
-          @click="engine.ui.panels.removeStressLoad(l.id)"
-        />
+        <span class="stress-item-controls">
+          <Select
+            v-model="l.kind"
+            :options="loadKinds"
+            :label="t('stress.setup.loadKind', { i: i + 1 })"
+            class="stress-load-kind"
+          />
+          <!-- Down to no load at all: a body under its own weight alone is a study. -->
+          <IconButton
+            class="stress-remove-load"
+            icon="close"
+            :tip="t('stress.setup.removeLoad', { i: i + 1 })"
+            size="sm"
+            variant="danger"
+            :icon-size="14"
+            @click="engine.ui.panels.removeStressLoad(l.id)"
+          />
+        </span>
       </div>
       <div class="stress-faces">
         <div class="stress-count-line">

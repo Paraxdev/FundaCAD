@@ -1128,7 +1128,9 @@ defineEmits<{ close: [] }>();
   `min-height` set shrinks and the rows around it stay in view. The in-view chips (`.dim-input`, `.sketch-dims`,
   `.snap-tag`, `.prompt` and the like) draw over a panel they meet, so a form with its
   actions at the panel's foot keeps `--prompt-clear` free below them.
-  The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`.
+  The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`. The Stress panel's least is
+  160px, so at 1024x600 with History open it keeps the full height column left of History rather than a short shelf; its
+  rows, tabs and buttons wrap in that column and the quarter ticks of its colour scale give way.
 
 | Class | Recipe |
 |---|---|
