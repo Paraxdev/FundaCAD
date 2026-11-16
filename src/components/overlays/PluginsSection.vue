@@ -2,6 +2,7 @@
 // Built-in capabilities only toggle, an installed plugin needs consent first. Origin shows for anything not from our
 // releases, and what a plugin asked for and did not both come off plugins/manifest.ts, so neither half goes stale.
 
+import { t } from "../../i18n";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { describeGrants, sandboxNote } from "../../plugins/manifest";
 import { pluginName, pluginSummary } from "../../plugins/pluginNames";
@@ -64,7 +65,7 @@ onUnmounted(() => offPlugins?.());
 function toggle(id: string, run: boolean, name: string) {
   setPluginEnabled(id, run).catch((err: unknown) =>
     toast(
-      `Could not switch ${name} ${run ? "on" : "off"}, FundaCAD could not apply the change. ${plainError(err, SEE_CONSOLE)}`,
+      t(run ? "plugins.toast.onFailed" : "plugins.toast.offFailed", { name, detail: plainError(err, SEE_CONSOLE) }),
       {
         kind: "error",
         detail: err,
@@ -122,13 +123,13 @@ const settingsOpen = (id: string) => expanded.value.has(id) || (!!query.value.tr
 async function resetAll(id: string) {
   const name = nameOf(id);
   const ok = await confirmDanger(
-    `Reset ${name} settings?`,
-    "Reset",
-    "Every setting of this plugin goes back to its default.",
+    t("plugins.reset.title", { name }),
+    t("plugins.reset.action"),
+    t("plugins.reset.body"),
   );
   if (!ok) return;
   for (const s of sectionsOf(id)) s.settings?.reset();
-  toast(`${name} settings are back to their defaults.`);
+  toast(t("plugins.reset.done", { name }));
 }
 
 const hasDeclared = (id: string) => sectionsOf(id).some((s) => s.settings);
@@ -174,11 +175,11 @@ const notYet = computed(() => suggested.value.filter((p) => !record(p.manifest.i
 /** Where a row came from, for anything we did not publish. Ours says nothing, a label on every row goes unread. */
 function whereFrom(rec: InstalledPlugin): string {
   if (rec.official) return "";
-  if (!rec.source.startsWith("https://")) return "Installed from a file on this computer.";
+  if (!rec.source.startsWith("https://")) return t("plugins.from.file");
   try {
-    return `Installed from ${new URL(rec.source).host}.`;
+    return t("plugins.from.host", { host: new URL(rec.source).host });
   } catch {
-    return "Installed from somewhere this app can no longer read.";
+    return t("plugins.from.unknown");
   }
 }
 
@@ -199,13 +200,20 @@ async function accept(plugin: OfficialPlugin, done: "installed" | "updated" = "i
     await installPlugin(plugin);
     showing.value = "";
     await refresh();
-    toast(`${pluginName(plugin.manifest)} is ${done}.`);
+    toast(
+      t(done === "updated" ? "plugins.toast.updated" : "plugins.toast.installed", {
+        name: pluginName(plugin.manifest),
+      }),
+    );
   } catch (err) {
     // A refusal names itself, so its own sentence is kept: "install failed" cannot be told from a flat network.
-    toast(`Could not install ${pluginName(plugin.manifest)}. ${plainError(err, SEE_CONSOLE)}`, {
-      kind: "error",
-      detail: err,
-    });
+    toast(
+      t("plugins.toast.installFailed", { name: pluginName(plugin.manifest), detail: plainError(err, SEE_CONSOLE) }),
+      {
+        kind: "error",
+        detail: err,
+      },
+    );
   } finally {
     busy.value = "";
   }
@@ -218,7 +226,7 @@ async function read(from: () => Promise<Candidate | null>) {
   try {
     candidate.value = await from();
   } catch (err) {
-    toast(`Could not read that plugin. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
+    toast(t("plugins.toast.readFailed", { detail: plainError(err, SEE_CONSOLE) }), { kind: "error", detail: err });
   } finally {
     reading.value = false;
   }
@@ -243,9 +251,9 @@ async function acceptCandidate(c: Candidate) {
     candidate.value = null;
     url.value = "";
     await refresh();
-    toast(`${pluginName(c.manifest)} is installed.`);
+    toast(t("plugins.toast.installed", { name: pluginName(c.manifest) }));
   } catch (err) {
-    toast(`Could not install ${pluginName(c.manifest)}. ${plainError(err, SEE_CONSOLE)}`, {
+    toast(t("plugins.toast.installFailed", { name: pluginName(c.manifest), detail: plainError(err, SEE_CONSOLE) }), {
       kind: "error",
       detail: err,
     });
@@ -255,20 +263,23 @@ async function acceptCandidate(c: Candidate) {
 }
 
 async function drop(id: string, name: string) {
-  const fate = !sectionsOf(id).length
-    ? ""
+  const body = !sectionsOf(id).length
+    ? t("plugins.remove.body")
     : forget.value[id]
-      ? " Its settings are forgotten too."
-      : " Its settings stay, in case you install it again.";
-  if (!(await confirmDanger(`Remove ${name}?`, "Remove", `Its files are deleted from this computer.${fate}`))) return;
+      ? t("plugins.remove.bodyForget")
+      : t("plugins.remove.bodyKeep");
+  if (!(await confirmDanger(t("plugins.remove.title", { name }), t("plugins.remove"), body))) return;
   busy.value = id;
   try {
     await removePlugin(id);
     if (forget.value[id]) removePluginSettings(id);
     await refresh();
-    toast(`${name} is removed.`);
+    toast(t("plugins.toast.removed", { name }));
   } catch (err) {
-    toast(`Could not remove ${name}. ${plainError(err, SEE_CONSOLE)}`, { kind: "error", detail: err });
+    toast(t("plugins.toast.removeFailed", { name, detail: plainError(err, SEE_CONSOLE) }), {
+      kind: "error",
+      detail: err,
+    });
   } finally {
     busy.value = "";
   }
@@ -276,8 +287,8 @@ async function drop(id: string, name: string) {
 </script>
 
 <template>
-  <div class="sm-section">Installed plugins</div>
-  <div class="sm-hint"> Each gets what it asked for and nothing else. Off stops one without removing it. </div>
+  <div class="sm-section">{{ t("plugins.title") }}</div>
+  <div class="sm-hint">{{ t("plugins.installedHint") }}</div>
 
   <TextField
     v-if="sections.length"
@@ -285,13 +296,13 @@ async function drop(id: string, name: string) {
     class="plug-search"
     type="search"
     spellcheck="false"
-    placeholder="Search plugin settings"
-    label="Search plugin settings"
+    :placeholder="t('plugins.search')"
+    :label="t('plugins.search')"
     data-plugin-settings-search
   />
 
   <div v-if="rows.length === 0 && fromSource.length === 0" class="sm-hint">
-    {{ query.trim() ? "No plugin setting matches that." : "Nothing installed yet." }}
+    {{ query.trim() ? t("plugins.noMatch") : t("plugins.none") }}
   </div>
   <div
     v-for="{ rec, manifest, update: u } in rows"
@@ -315,33 +326,33 @@ async function drop(id: string, name: string) {
           data-plugin-settings-toggle
           @click="toggleSettings(rec.id)"
         >
-          Settings
+          {{ t("plugins.settings") }}
         </Button>
         <Checkbox
           :id="`prefs-plugin-${rec.id}`"
           :model-value="on[rec.id] !== false"
           :labelledby="`prefs-plugin-${rec.id}-name`"
-          :tip="`Run ${manifest ? pluginName(manifest) : rec.id}`"
-          :title="on[rec.id] === false ? 'Switched off' : 'Running'"
+          :tip="t('plugins.run', { name: manifest ? pluginName(manifest) : rec.id })"
+          :title="on[rec.id] === false ? t('plugins.state.off') : t('plugins.state.on')"
           @update:model-value="toggle(rec.id, $event, manifest ? pluginName(manifest) : rec.id)"
         />
         <Button :disabled="busy === rec.id" @click="drop(rec.id, manifest ? pluginName(manifest) : rec.id)">
-          {{ busy === rec.id ? "Removing…" : "Remove" }}
+          {{ busy === rec.id ? t("plugins.removing") : t("plugins.remove") }}
         </Button>
       </div>
     </div>
 
     <div class="plug-state">
-      Version {{ rec.version }}.
+      {{ t("plugins.version", { version: rec.version }) }}
       <span v-if="whereFrom(rec)"> {{ whereFrom(rec) }}</span>
       <Button variant="ghost" size="sm" @click="showing = showing === rec.id ? '' : rec.id">
-        {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
+        {{ showing === rec.id ? t("plugins.uses.hide") : t("plugins.uses.show") }}
       </Button>
       <Checkbox
         v-if="sectionsOf(rec.id).length"
         :model-value="!!forget[rec.id]"
         class="plug-forget"
-        label="Remove forgets its settings"
+        :label="t('plugins.forget')"
         @update:model-value="forget[rec.id] = $event"
       />
     </div>
@@ -356,52 +367,50 @@ async function drop(id: string, name: string) {
         :query="query"
       />
       <div v-if="hasDeclared(rec.id) && !query.trim()" class="plug-actions">
-        <Button data-plugin-settings-reset @click="resetAll(rec.id)">Reset to defaults</Button>
+        <Button data-plugin-settings-reset @click="resetAll(rec.id)">{{ t("plugins.reset") }}</Button>
       </div>
     </div>
 
     <div v-if="u" class="plug-update" data-plugin-update>
       <span>{{ u.reason }}</span>
       <Button v-if="showing !== `update:${rec.id}`" variant="primary" :disabled="busy === rec.id" @click="update(u)">
-        {{ busy === rec.id ? "Updating…" : "Update" }}
+        {{ busy === rec.id ? t("plugins.updating") : t("plugins.update") }}
       </Button>
     </div>
 
     <div v-if="u && showing === `update:${rec.id}`" class="plug-consent">
       <div class="plug-can">
-        <div class="plug-listhead">Version {{ u.offer.manifest.version }} will be able to</div>
+        <div class="plug-listhead">{{ t("plugins.update.can", { version: u.offer.manifest.version }) }}</div>
         <ul>
           <li v-for="line in describeGrants(u.offer.manifest).can" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="plug-cannot">
-        <div class="plug-listhead">It will not be able to</div>
+        <div class="plug-listhead">{{ t("plugins.update.cannot") }}</div>
         <ul>
           <li v-for="line in describeGrants(u.offer.manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="sm-hint">{{ sandboxNote(u.offer.manifest) }}</div>
       <div class="plug-actions">
-        <Button :disabled="busy === rec.id" @click="showing = ''">Cancel</Button>
+        <Button :disabled="busy === rec.id" @click="showing = ''">{{ t("plugins.cancel") }}</Button>
         <Button variant="primary" :disabled="busy === rec.id" @click="accept(u.offer, 'updated')">
-          {{ busy === rec.id ? "Updating…" : "Update" }}
+          {{ busy === rec.id ? t("plugins.updating") : t("plugins.update") }}
         </Button>
       </div>
     </div>
 
-    <div v-if="!manifest" class="sm-hint">
-      This app cannot read what this plugin agreed to. Remove it and install it again.
-    </div>
+    <div v-if="!manifest" class="sm-hint">{{ t("plugins.unreadable") }}</div>
 
     <div v-if="showing === rec.id && manifest" class="plug-consent">
       <div class="plug-can">
-        <div class="plug-listhead">It can</div>
+        <div class="plug-listhead">{{ t("plugins.itCan") }}</div>
         <ul>
           <li v-for="line in describeGrants(manifest).can" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="plug-cannot">
-        <div class="plug-listhead">It cannot</div>
+        <div class="plug-listhead">{{ t("plugins.itCannot") }}</div>
         <ul>
           <li v-for="line in describeGrants(manifest).cannot" :key="line">{{ line }}</li>
         </ul>
@@ -425,11 +434,11 @@ async function drop(id: string, name: string) {
           data-plugin-settings-toggle
           @click="toggleSettings(id)"
         >
-          Settings
+          {{ t("plugins.settings") }}
         </Button>
       </div>
     </div>
-    <div class="plug-state">Running from source, not installed.</div>
+    <div class="plug-state">{{ t("plugins.fromSource") }}</div>
     <div v-if="settingsOpen(id)" class="plug-settings" :data-plugin-settings="id">
       <PluginSettingsForm
         v-for="s in sectionsOf(id)"
@@ -440,13 +449,13 @@ async function drop(id: string, name: string) {
         :query="query"
       />
       <div v-if="hasDeclared(id) && !query.trim()" class="plug-actions">
-        <Button data-plugin-settings-reset @click="resetAll(id)">Reset to defaults</Button>
+        <Button data-plugin-settings-reset @click="resetAll(id)">{{ t("plugins.reset") }}</Button>
       </div>
     </div>
   </div>
 
-  <div class="sm-section">Add a plugin</div>
-  <div class="sm-hint">Read and described first, installed only after you say so.</div>
+  <div class="sm-section">{{ t("plugins.add.title") }}</div>
+  <div class="sm-hint">{{ t("plugins.add.hint") }}</div>
 
   <div class="plug-row" data-plugin-add>
     <div class="plug-add">
@@ -456,14 +465,14 @@ async function drop(id: string, name: string) {
         type="url"
         spellcheck="false"
         placeholder="https://…"
-        label="Plugin address"
+        :label="t('plugins.add.address')"
         :disabled="reading"
         @keydown.enter="readUrl()"
       />
       <Button :disabled="reading || !url.trim()" @click="readUrl()">
-        {{ reading ? "Reading…" : "Read it" }}
+        {{ reading ? t("plugins.add.reading") : t("plugins.add.read") }}
       </Button>
-      <Button :disabled="reading" @click="readFile()">Choose a file</Button>
+      <Button :disabled="reading" @click="readFile()">{{ t("plugins.add.file") }}</Button>
     </div>
   </div>
 
@@ -476,34 +485,36 @@ async function drop(id: string, name: string) {
     </div>
     <div class="plug-consent">
       <div class="plug-origin">
-        <template v-if="candidate.official">
-          Version {{ candidate.manifest.version }}, published by FundaCAD.
-        </template>
-        <template v-else> Version {{ candidate.manifest.version }}, from {{ candidate.origin }}, unchecked. </template>
+        <template v-if="candidate.official">{{
+          t("plugins.candidate.official", { version: candidate.manifest.version })
+        }}</template>
+        <template v-else>{{
+          t("plugins.candidate.unchecked", { version: candidate.manifest.version, origin: candidate.origin })
+        }}</template>
       </div>
       <div class="plug-can">
-        <div class="plug-listhead">{{ pluginName(candidate.manifest) }} will be able to</div>
+        <div class="plug-listhead">{{ t("plugins.willCan", { name: pluginName(candidate.manifest) }) }}</div>
         <ul>
           <li v-for="line in describeGrants(candidate.manifest).can" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="plug-cannot">
-        <div class="plug-listhead">It will not be able to</div>
+        <div class="plug-listhead">{{ t("plugins.update.cannot") }}</div>
         <ul>
           <li v-for="line in describeGrants(candidate.manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="sm-hint">{{ sandboxNote(candidate.manifest) }}</div>
       <div class="plug-actions">
-        <Button :disabled="busy === candidate.manifest.id" @click="candidate = null">Cancel</Button>
+        <Button :disabled="busy === candidate.manifest.id" @click="candidate = null">{{ t("plugins.cancel") }}</Button>
         <Button variant="primary" :disabled="busy === candidate.manifest.id" @click="acceptCandidate(candidate)">
-          {{ busy === candidate.manifest.id ? "Installing…" : "Install" }}
+          {{ busy === candidate.manifest.id ? t("plugins.installing") : t("plugins.install") }}
         </Button>
       </div>
     </div>
   </div>
 
-  <div v-if="notYet.length" class="sm-section">Made by FundaCAD</div>
+  <div v-if="notYet.length" class="sm-section">{{ t("plugins.madeBy") }}</div>
 
   <div v-for="p in notYet" :key="p.manifest.id" class="plug-row" :data-plugin="p.manifest.id">
     <div class="plug-head">
@@ -511,27 +522,29 @@ async function drop(id: string, name: string) {
         <div class="plug-name">{{ pluginName(p.manifest) }}</div>
         <div class="plug-summary">{{ pluginSummary(p.manifest) }}</div>
       </div>
-      <Button v-if="showing !== p.manifest.id" variant="primary" @click="showing = p.manifest.id">Install</Button>
+      <Button v-if="showing !== p.manifest.id" variant="primary" @click="showing = p.manifest.id">{{
+        t("plugins.install")
+      }}</Button>
     </div>
 
     <div v-if="showing === p.manifest.id" class="plug-consent">
       <div class="plug-can">
-        <div class="plug-listhead">{{ pluginName(p.manifest) }} will be able to</div>
+        <div class="plug-listhead">{{ t("plugins.willCan", { name: pluginName(p.manifest) }) }}</div>
         <ul>
           <li v-for="line in describeGrants(p.manifest).can" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="plug-cannot">
-        <div class="plug-listhead">It will not be able to</div>
+        <div class="plug-listhead">{{ t("plugins.update.cannot") }}</div>
         <ul>
           <li v-for="line in describeGrants(p.manifest).cannot" :key="line">{{ line }}</li>
         </ul>
       </div>
       <div class="sm-hint">{{ sandboxNote(p.manifest) }}</div>
       <div class="plug-actions">
-        <Button :disabled="busy === p.manifest.id" @click="showing = ''">Cancel</Button>
+        <Button :disabled="busy === p.manifest.id" @click="showing = ''">{{ t("plugins.cancel") }}</Button>
         <Button variant="primary" :disabled="busy === p.manifest.id" @click="accept(p)">
-          {{ busy === p.manifest.id ? "Installing…" : "Install" }}
+          {{ busy === p.manifest.id ? t("plugins.installing") : t("plugins.install") }}
         </Button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 // Plugins offered an update: a newer version, or a same-version bundle the retired Python engine installed with no
 // component this engine runs, which a version check alone would call up to date forever.
 
+import { t } from "../i18n";
 import { promiseCovers, sameId } from "./manifest";
 import { installedManifest, type InstalledPlugin, type OfficialPlugin } from "./index";
 
@@ -34,11 +35,11 @@ export function updateFor(rec: InstalledPlugin, offered: readonly OfficialPlugin
     return {
       offer,
       covered,
-      reason: `This copy was made for the previous engine and has no component for FundaCAD 1.0, so what it adds does not build. Version ${version} has one.`,
+      reason: t("plugins.update.stale", { version }),
     };
   }
   if (compareVersions(version, rec.version) > 0) {
-    return { offer, covered, reason: `Version ${version} is available.` };
+    return { offer, covered, reason: t("plugins.update.available", { version }) };
   }
   return null;
 }

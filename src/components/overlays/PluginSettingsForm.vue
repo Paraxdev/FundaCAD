@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "../../i18n";
 import { computed, onUnmounted, ref, shallowRef, watch, type Component } from "vue";
 import { settingMatches, type PluginSettings, type SettingProp } from "../../plugins/settings";
 import { keyCombo, numberField } from "../../plugins/settingsInput";
@@ -216,7 +217,7 @@ const isDefault = (p: SettingProp) => {
                 :model-value="String(values[p.key] ?? '')"
                 @update:model-value="store(p, $event)"
               />
-              <Button v-if="isTauri()" @click="pickFile(p)">Choose</Button>
+              <Button v-if="isTauri()" @click="pickFile(p)">{{ t("plugins.choose") }}</Button>
             </template>
 
             <IconButton
@@ -227,8 +228,8 @@ const isDefault = (p: SettingProp) => {
               size="sm"
               :icon-size="14"
               :disabled="isDefault(p)"
-              :tip="`Reset ${p.label} to its default`"
-              :aria-label="`Reset ${p.label}`"
+              :tip="t('plugins.resetTip', { label: p.label ?? p.key })"
+              :aria-label="t('plugins.resetLabel', { label: p.label ?? p.key })"
               data-setting-reset
               @click="reset(p)"
             />
