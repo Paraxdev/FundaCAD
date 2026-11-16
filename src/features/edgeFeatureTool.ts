@@ -69,6 +69,7 @@ import { onThemeChange } from "../ui/theme";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
+import { edgeNameOf } from "../ui/geometryRows";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -106,6 +107,8 @@ interface GhostEdge {
   points: Vec3[];
   slot: GhostSlot;
   chain: number;
+  /** The Geometry list's name for the edge, "Straight edge 2". */
+  name: string;
   /** the faces' largest curvature across this edge, per mm of radius and of chord, as the engine reports it */
   curvature?: readonly [number, number];
   /** drawn in the error red when not hovered */
@@ -590,7 +593,7 @@ export class EdgeFeatureTool {
       if (same) same.sels.push(sel);
       else if (line) {
         color ??= edgeSelectColor();
-        this.addGhost(sel, line.points as Vec3[], undefined, line.curvature, color);
+        this.addGhost(sel, line, undefined, color);
         const added = this.ghosts[this.ghosts.length - 1];
         if (added?.points === line.points) byPoints.set(line.points, added);
       } else this.unmatchedSels.push(sel);
@@ -623,14 +626,8 @@ export class EdgeFeatureTool {
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
   private memberSeq = 0; // one id per member, stable for the panel's row keys
 
-  private addGhost(
-    sel: Selector,
-    points: Vec3[],
-    chain?: number,
-    curvature?: readonly [number, number],
-    color = edgeSelectColor(),
-    picked = true,
-  ) {
+  private addGhost(sel: Selector, line: EdgeRef, chain?: number, color = edgeSelectColor(), picked = true) {
+    const points = line.points as Vec3[];
     const mid = polylineMid(points);
     if (!mid) return; // an edge always has points; nothing to ghost otherwise
     this.ghostLines ??= new GhostLines(this.viewport);
@@ -642,7 +639,8 @@ export class EdgeFeatureTool {
       points,
       slot,
       chain: chain ?? ++this.chainCounter,
-      ...(curvature ? { curvature } : {}),
+      name: edgeNameOf(line),
+      ...(line.curvature ? { curvature: line.curvature } : {}),
       failed: false,
       picked,
     });
@@ -664,7 +662,7 @@ export class EdgeFeatureTool {
   memberRows(): EdgeMemberRow[] {
     const rows: EdgeMemberRow[] = this.ghosts.map((g) => ({
       key: `m${g.id}`,
-      label: `Edge ${g.id}`,
+      label: g.name,
       resolved: true,
     }));
     this.unmatchedSels.forEach((_, i) => {
@@ -769,7 +767,7 @@ export class EdgeFeatureTool {
     if (g && this.phase === "drag") {
       const n = this.memberCount();
       setPrompt(
-        `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · click Edge ${g.id} to remove it · Enter · Esc`,
+        `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · click ${g.name} to remove it · Enter · Esc`,
       );
     } else if (prev && this.phase === "drag") this.promptForPhase();
     this.viewport.requestRender();
@@ -822,7 +820,7 @@ export class EdgeFeatureTool {
     const chainId = ++this.chainCounter;
     const color = edgeSelectColor();
     for (const { sel, l } of fresh) {
-      this.addGhost(sel, l.points as Vec3[], chainId, l.curvature, color, l.points === line.points);
+      this.addGhost(sel, l, chainId, color, l.points === line.points);
     }
     this.ghostLines?.sync();
     return 0;

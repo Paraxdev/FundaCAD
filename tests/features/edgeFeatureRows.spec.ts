@@ -142,10 +142,10 @@ describe("an edge row while Fillet waits", () => {
     tool.start("fillet", () => {});
     expect(tool.memberRows()).toEqual([]);
     expect(click(edgeRow(0))).toBe("taken");
-    expect(tool.memberRows().map((m) => m.label)).toEqual(["Edge 1"]);
+    expect(tool.memberRows().map((m) => m.label)).toEqual(["Straight edge 1"]);
     expect(click(edgeRow(2))).toBe("taken");
     expect(click(edgeRow(1))).toBe("taken");
-    expect(tool.memberRows().map((m) => m.label)).toEqual(["Edge 1", "Edge 2", "Edge 3"]);
+    expect(tool.memberRows().map((m) => m.label)).toEqual(["Straight edge 1", "Straight edge 3", "Straight edge 2"]);
     expect(treePickWaiting()).toBe(true);
     tool.cancel();
   });

@@ -194,7 +194,7 @@ describe("an undo while a fillet is open", () => {
     expect(t.previews.at(-1)).toBeNull();
     t.land(null);
     expect(t.tool.active).toBe(true);
-    expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Edge 1"]);
+    expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Straight edge 1"]);
     expect(prompt()).toBe("Undo removed 1 edge from the fillet");
     expect([edgesOf(t.previews.at(-1))].flat()).toEqual([sel(A)]);
   });
