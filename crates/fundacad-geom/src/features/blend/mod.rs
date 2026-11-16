@@ -1142,12 +1142,15 @@ fn blend_edges(
                 }
                 // The section build sizes a chamfer by its overlaps and splits alone, so a corner it cannot mitre
                 // refuses the size it found. That size is offered only once the whole chamfer builds there, else
-                // the largest OCCT builds is.
+                // the largest OCCT builds under it is, as the section refuses every size above it.
                 Fits::UpTo(k) if label == "Chamfer" && !draft => {
                     let v = shown_fits(why, k);
                     let whole = |size: f64| kernel_builds(size) || (apex.is_none() && section_builds(size));
-                    let find =
-                        || if v > 0.0 && whole(v) { Some(v) } else { kernel_size(blend_size, false, &kernel_builds) };
+                    let find = || match v > 0.0 {
+                        true if whole(v) => Some(v),
+                        true => kernel_size(v, false, &kernel_builds),
+                        false => kernel_size(blend_size, false, &kernel_builds),
+                    };
                     held_offer(&format!("{fell_back}|{v}"), blend_size, &body_shape, &find)
                         .map_or(Fits::Unknown, Fits::Built)
                 }
