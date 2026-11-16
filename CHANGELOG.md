@@ -615,6 +615,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **The Capsule holder's threads no longer ask you to check their seams.** Every helical
+  cut that had to be cut in pieces showed a note to check the seams, even where the cut
+  is whole. A cut that two different ways of splitting agree on is now quiet, and one
+  that nothing confirmed still shows the note.
+
 - **The size a refused chamfer offers builds.** A two distance chamfer that did not fit
   offered only its first distance, and that size was refused again, a chamfer dragged
   too large could offer a size the finished chamfer refused, and some chamfers offered

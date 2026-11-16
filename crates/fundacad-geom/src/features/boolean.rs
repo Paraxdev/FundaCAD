@@ -102,7 +102,8 @@ fn in_slices(solid: &Shape, n: usize, rank: usize) -> Vec<Shape> {
 /// it meets makes OCCT hand the argument back as done, or fuse into a disjoint lump, while the tool in slabs works.
 /// A fuse tries two then four slabs across the longest axis with `accept` as its test, a cut two slabs across each
 /// axis (see `sliced_cut`). `Ok(None)` is a true miss, an `Err` is the kernel refusing every slicing and says nothing
-/// about reach. The flag says no second slicing confirmed how much a cut removes.
+/// about reach. The flag says no second slicing confirmed how much a cut removes. A cut a second slicing confirmed
+/// is the whole cut, so only the others are noted as a fallback to check.
 fn retried_in_slices(
     shape: &Shape,
     tool: &Shape,
@@ -112,15 +113,17 @@ fn retried_in_slices(
     let boolean = |a: &Shape, b: &Shape| kernel::serial_bool(a, &[b], kind);
     let got = match (kind, accept) {
         (BoolKind::Cut, None) => sliced_cut(shape, (0..3).map(|rank| in_slices(tool, 2, rank)), &boolean, &vol)?
-            .map(|c| (c.shape, c.pieces, c.doubtful)),
+            .map(|c| (c.shape, c.pieces, c.doubtful, c.confirmed)),
         _ => {
             let changed = |s: &Shape| (vol(s) - vol(shape)).abs() > noop_eps(vol(shape));
             let attempts = [2usize, 4].into_iter().map(|n| in_slices(tool, n, 0));
-            sliced(shape, attempts, accept.unwrap_or(&changed), &boolean)?.map(|(s, n)| (s, n, false))
+            sliced(shape, attempts, accept.unwrap_or(&changed), &boolean)?.map(|(s, n)| (s, n, false, false))
         }
     };
-    Ok(got.map(|(out, pieces, doubtful)| {
-        kernel::note_fallback(kind, kernel::Rung::Slices(pieces));
+    Ok(got.map(|(out, pieces, doubtful, confirmed)| {
+        if !confirmed {
+            kernel::note_fallback(kind, kernel::Rung::Slices(pieces));
+        }
         (out, doubtful)
     }))
 }
@@ -133,6 +136,7 @@ struct SlicedCut {
     shape: Shape,
     pieces: usize,
     doubtful: bool,
+    confirmed: bool,
 }
 
 /// A long helical tool sliced along its own axis comes back as long helices the kernel still cuts half-way and
@@ -174,9 +178,12 @@ fn sliced_cut(
         }
     }
     match (best, refused) {
-        (Some((shape, pieces, _)), refused) => {
-            Ok(Some(SlicedCut { shape, pieces, doubtful: !agreed && (ran >= 2 || refused.is_some()) }))
-        }
+        (Some((shape, pieces, _)), refused) => Ok(Some(SlicedCut {
+            shape,
+            pieces,
+            doubtful: !agreed && (ran >= 2 || refused.is_some()),
+            confirmed: agreed,
+        })),
         (None, Some(e)) if ran == 0 => Err(e),
         _ => Ok(None),
     }
