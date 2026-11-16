@@ -68,6 +68,7 @@
   "feature.divideFace": "分割面",
   "feature.duplicate": "复制",
   "feature.import": "导入",
+  "feature.note.blendOverrun": "{kind, select, chamfer {此倒角} other {此圆角}}超出了其边旁边的一个面，因此切掉了那个角，而不是贴合两个面{fits, select, yes {。贴合两个面时最大可为 {size}} other {}}",
   "feature.note.needsPlugin": "未包含：它需要插件“{plugin}”，但该插件未在此运行。它会保留并随文件一起保存。",
   "feature.note.unknownType": "未包含：此版本的 FundaCAD 不认识这种特征类型。它会保留并随文件一起保存。更新版本的 FundaCAD 或某个插件可以构建它。",
   "feature.numbered": "{name} {n, number}",

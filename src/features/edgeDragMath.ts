@@ -130,16 +130,16 @@ function shownAtMost(mm: number): number {
   return fromDisplay(shown - Math.pow(10, -dp));
 }
 
-function tooLarge(kind: EdgeTreatment, n: number, message: string): string {
+/** The size the engine's message says a blend fits up to, written as lengths are shown, or null when it names none. */
+export function blendFitsUpTo(message: string): string | null {
   const fits = FITS_UP_TO.exec(message);
   const size = fits ? Number(fits[1]) : NaN;
-  const named = Number.isFinite(size) && size > 0;
-  return t("pick.blendTooLarge", {
-    kind,
-    n,
-    fits: named ? "yes" : "no",
-    size: named ? fmtLength(shownAtMost(size)) : "",
-  });
+  return Number.isFinite(size) && size > 0 ? fmtLength(shownAtMost(size)) : null;
+}
+
+function tooLarge(kind: EdgeTreatment, n: number, message: string): string {
+  const size = blendFitsUpTo(message);
+  return t("pick.blendTooLarge", { kind, n, fits: size ? "yes" : "no", size: size ?? "" });
 }
 
 /** `code` is the engine's category (errors.py); the message is only read for older wording that carried no code, and

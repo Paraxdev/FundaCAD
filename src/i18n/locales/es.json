@@ -68,6 +68,7 @@
   "feature.divideFace": "Dividir cara",
   "feature.duplicate": "Duplicar",
   "feature.import": "Importación",
+  "feature.note.blendOverrun": "{kind, select, chamfer {El chaflán} other {El redondeo}} sobrepasa una cara junto a su arista, así que corta esa esquina en lugar de apoyarse en ambas caras{fits, select, yes {. Apoyado en ambas cabe como máximo {size}} other {}}",
   "feature.note.needsPlugin": "No incluido: necesita el complemento «{plugin}», que no se está ejecutando aquí. Se conserva y se guarda con el archivo.",
   "feature.note.unknownType": "No incluido: esta versión de FundaCAD no conoce este tipo de operación. Se conserva y se guarda con el archivo. Una versión más reciente de FundaCAD o un complemento puede construirla.",
   "feature.numbered": "{name} {n, number}",

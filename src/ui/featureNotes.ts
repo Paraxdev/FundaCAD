@@ -2,6 +2,7 @@
 // wins. Any advisory with a reason lights the chip, not a list of codes, so a new engine advisory shows at once.
 
 import { featureTypeOwner } from "../document/missingPlugins";
+import { blendFitsUpTo } from "../features/edgeDragMath";
 import { t } from "../i18n";
 
 /** Structural, so a test or a cached partial build need not construct a whole RebuildResult. */
@@ -9,7 +10,7 @@ export interface NoteSources {
   featureErrors?: { feature_id?: string }[] | undefined;
   /** The legacy single error field. Null is accepted since the build state holds null between builds. */
   errorFeatureId?: string | null | undefined;
-  diagnostics?: { feature_id?: string; reason?: string }[] | undefined;
+  diagnostics?: { feature_id?: string; reason?: string; code?: string }[] | undefined;
 }
 
 /** One advisory per feature. Failed features are absent, as is a diagnostic with no `reason`; the first reason wins. */
@@ -22,9 +23,19 @@ export function featureNotes(src: NoteSources): Map<string, string> {
   for (const d of src.diagnostics ?? []) {
     const id = d.feature_id;
     if (!id || !d.reason || failed.has(id) || notes.has(id)) continue;
-    notes.set(id, d.reason);
+    notes.set(id, advisoryNote(d.code, d.reason));
   }
   return notes;
+}
+
+// The advisories the app words itself, so their note follows the chosen language. Any other shows the engine's reason.
+function advisoryNote(code: string | undefined, reason: string): string {
+  if (code === "blendOverrun") {
+    const size = blendFitsUpTo(reason);
+    const kind = /\bchamfer\b/i.test(reason) ? "chamfer" : "fillet";
+    return t("feature.note.blendOverrun", { kind, fits: size ? "yes" : "no", size: size ?? "" });
+  }
+  return reason;
 }
 
 export interface FailureSources {
