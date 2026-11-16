@@ -692,7 +692,7 @@
   "prefs.contrast.more": "Mehr",
   "prefs.contrast.standard": "Standard",
   "prefs.contrast.system": "System folgen",
-  "prefs.contrast.systemNow": "Im Moment verlangt das System {level, select, more {mehr} other {Standard}}-Kontrast.",
+  "prefs.contrast.systemNow": "Im Moment verlangt das System {level, select, more {mehr Kontrast} other {normalen Kontrast}}.",
   "prefs.contrast.title": "Kontrast",
   "prefs.done": "Fertig",
   "prefs.env.bright": "Heller Raum",
