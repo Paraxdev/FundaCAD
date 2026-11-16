@@ -124,6 +124,7 @@ describe("box drag wiring", () => {
       scene: {
         scene: anything,
         renderer: anything,
+        originTiles: { drawn: false },
         post: { render: vi.fn(() => r.order.push("draw")) },
       },
     });

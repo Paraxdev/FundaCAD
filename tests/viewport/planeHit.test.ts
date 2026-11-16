@@ -223,7 +223,7 @@ describe("hit area on screen", () => {
     ]);
   });
 
-  it("matches the drawn tile under the pointer through OriginTiles.pick, and nothing once hidden", () => {
+  it("matches the drawn tile under the pointer through OriginTiles.pick, and nothing once hidden, lit or not", () => {
     const { t, frame, screen } = tilesAt([1, -1.5, 1.1]);
     // Toward each tile's far corner, where no other tile is drawn over it from this side.
     const AXES: Record<Plane3, [number, number]> = { XY: [0, 1], XZ: [0, 2], YZ: [1, 2] };
@@ -238,6 +238,8 @@ describe("hit area on screen", () => {
     PLANES.forEach((k, i) => expect(t.pick(own[i]!.x, own[i]!.y, frame, HIT_MIN_PX)?.plane).toBe(k));
     t.setShown(false);
     expect(t.pick(own[0]!.x, own[0]!.y, frame, HIT_MIN_PX)).toBe(null);
+    t.hover("XY");
+    expect([t.drawn, t.pick(own[0]!.x, own[0]!.y, frame, HIT_MIN_PX)]).toEqual([true, null]);
     t.dispose();
   });
 });
