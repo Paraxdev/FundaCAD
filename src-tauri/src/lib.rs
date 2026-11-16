@@ -16,6 +16,7 @@ mod launch;
 pub mod launch_args;
 pub mod library;
 mod log_file;
+pub mod mcp_switch;
 pub mod os_a11y_prefs;
 pub mod plugins;
 pub mod recovery;
@@ -486,6 +487,8 @@ pub fn run() {
 
     let builder = builder.invoke_handler(tauri::generate_handler![
         engine::mcp_server,
+        engine::mcp_enabled,
+        engine::mcp_set_enabled,
         engine::engine_attach,
         engine::engine_send,
         restart_for_update,

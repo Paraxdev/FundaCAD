@@ -7,13 +7,23 @@ import { createPinia, setActivePinia } from "pinia";
 
 const tauri = vi.hoisted(() => ({
   server: "C:\\Program Files\\FundaCAD\\fundacad.exe" as string | null,
+  mcp: true,
+  saveFails: null as string | null,
+  saved: [] as boolean[],
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: async (cmd: string) => {
+  invoke: async (cmd: string, args?: { enabled: boolean }) => {
     if (cmd === "mcp_server") {
       if (tauri.server === null) throw "fundacad.exe is missing";
       return tauri.server;
+    }
+    if (cmd === "mcp_enabled") return tauri.mcp;
+    if (cmd === "mcp_set_enabled") {
+      if (tauri.saveFails !== null) throw tauri.saveFails;
+      tauri.saved.push(args!.enabled);
+      tauri.mcp = args!.enabled;
+      return null;
     }
     throw new Error(`unexpected ${cmd}`);
   },
@@ -24,6 +34,8 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import type { LiveState } from "../../../src/live/liveSession";
 import { liveEditingMode, setLiveEditingMode } from "../../../src/ui/liveEditing";
+import { mcpEnabled } from "../../../src/live/mcpSwitch";
+import { dismissErrorNotice, errorNotice } from "../../../src/ui/errorNotice";
 
 enableAutoUnmount(afterEach);
 
@@ -76,6 +88,9 @@ const inTauri = (on: boolean) => {
 beforeEach(() => {
   setActivePinia(createPinia());
   setLiveEditingMode("edit");
+  tauri.mcp = true;
+  tauri.saveFails = null;
+  tauri.saved = [];
   tauri.server = "C:\\Program Files\\FundaCAD\\fundacad.exe";
   inTauri(true);
 });
@@ -150,5 +165,53 @@ describe("how to connect it", () => {
     const w = await mounted();
     expect(w.find("#prefs-mcp-config").exists()).toBe(false);
     expect(w.get("#prefs-mcp-unavailable").text()).toContain("fundacad.exe is missing");
+  });
+});
+
+describe("the MCP switch", () => {
+  const box = (w: Awaited<ReturnType<typeof mounted>>) => w.get<HTMLInputElement>("#prefs-mcp-on input");
+
+  it("shows what the app was started with", async () => {
+    tauri.mcp = false;
+    const w = await mounted();
+    expect(box(w).element.checked).toBe(false);
+    expect(w.get("#prefs-mcp-status").text()).toContain("Turned off");
+    expect(w.get("#prefs-live").attributes("aria-disabled")).toBe("true");
+  });
+
+  it("is saved by the app, and greys the sharing setting while off", async () => {
+    const w = await mounted(makeEngine({ sharing: true, guests: ["Claude Code"], lastEdit: null }));
+    expect(box(w).element.checked).toBe(true);
+    expect(w.get("#prefs-live").attributes("aria-disabled")).toBeUndefined();
+
+    await box(w).trigger("change");
+    await flushPromises();
+    expect(tauri.saved).toEqual([false]);
+    expect(mcpEnabled()).toBe(false);
+    expect(box(w).element.checked).toBe(false);
+    expect(w.get("#prefs-mcp-status").text()).toContain("Turned off");
+    expect(w.get("#prefs-live").attributes("aria-disabled")).toBe("true");
+
+    await box(w).trigger("change");
+    await flushPromises();
+    expect(tauri.saved).toEqual([false, true]);
+    expect(w.get("#prefs-mcp-status").text()).toBe("Claude Code is connected and can edit.");
+  });
+
+  it("stays as it was and says why when the app cannot save it", async () => {
+    tauri.saveFails = "Access is denied. (os error 5)";
+    const w = await mounted();
+    await box(w).trigger("change");
+    await flushPromises();
+    expect(box(w).element.checked).toBe(true);
+    expect(mcpEnabled()).toBe(true);
+    expect(errorNotice()?.message).toContain("Access is denied");
+    dismissErrorNotice();
+  });
+
+  it("is not offered in a browser, which has no port to close", async () => {
+    inTauri(false);
+    const w = await mounted();
+    expect(w.find("#prefs-mcp-on").exists()).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ mod launch_args;
 mod library;
 mod log_file;
 mod log_redact;
+mod mcp_switch;
 mod plugins;
 mod recovery;
 mod safe_mode;

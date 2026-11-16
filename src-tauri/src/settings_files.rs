@@ -37,7 +37,7 @@ pub fn check_json(path: &Path) -> Option<PathBuf> {
 
 /// Check each settings file and return where the unreadable ones went.
 pub fn check_settings(app_data: &Path, plugins_root: &Path, record: &str) -> Vec<PathBuf> {
-    let mut files = vec![app_data.join("launch-approvals.json")];
+    let mut files = vec![app_data.join("launch-approvals.json"), app_data.join(crate::mcp_switch::FILE)];
     if let Ok(entries) = std::fs::read_dir(plugins_root) {
         files.extend(entries.flatten().map(|e| e.path().join(record)));
     }
