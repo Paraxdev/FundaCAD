@@ -738,7 +738,7 @@
   "plugins.toast.removed": "{name} wurde entfernt.",
   "plugins.toast.startFailed": "Das Plug-in {name} konnte nicht gestartet werden: {why}",
   "plugins.toast.updated": "{name} ist aktualisiert.",
-  "plugins.unreadable": "Diese App kann nicht lesen, wozu sich dieses Plug-in verpflichtet hat. Entfernen Sie es und installieren Sie es erneut.",
+  "plugins.unreadable": "Diese App kann die Berechtigungen dieses Plug-ins nicht lesen. Entfernen Sie es und installieren Sie es erneut.",
   "plugins.update": "Aktualisieren",
   "plugins.update.available": "Version {version} ist verfügbar.",
   "plugins.update.can": "Version {version} kann",

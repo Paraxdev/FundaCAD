@@ -738,7 +738,7 @@
   "plugins.toast.removed": "{name} を削除しました。",
   "plugins.toast.startFailed": "プラグイン {name} を開始できませんでした。{why}",
   "plugins.toast.updated": "{name} をアップデートしました。",
-  "plugins.unreadable": "このアプリは、このプラグインが約束した内容を読み取れません。削除してからもう一度インストールしてください。",
+  "plugins.unreadable": "このアプリは、このプラグインに許可した内容を読み取れません。削除してからもう一度インストールしてください。",
   "plugins.update": "アップデート",
   "plugins.update.available": "バージョン {version} が利用できます。",
   "plugins.update.can": "バージョン {version} は次のことができます",

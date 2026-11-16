@@ -738,7 +738,7 @@
   "plugins.toast.removed": "{name} se ha quitado.",
   "plugins.toast.startFailed": "El complemento {name} no pudo iniciarse: {why}",
   "plugins.toast.updated": "El complemento {name} se ha actualizado.",
-  "plugins.unreadable": "Esta aplicación no puede leer a lo que se comprometió este complemento. Quítelo e instálelo de nuevo.",
+  "plugins.unreadable": "Esta aplicación no puede leer los permisos concedidos a este complemento. Quítelo e instálelo de nuevo.",
   "plugins.update": "Actualizar",
   "plugins.update.available": "La versión {version} está disponible.",
   "plugins.update.can": "La versión {version} podrá",

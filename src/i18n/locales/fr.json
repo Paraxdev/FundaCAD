@@ -738,7 +738,7 @@
   "plugins.toast.removed": "{name} a été retirée.",
   "plugins.toast.startFailed": "L'extension {name} n'a pas pu démarrer : {why}",
   "plugins.toast.updated": "L'extension {name} a été mise à jour.",
-  "plugins.unreadable": "Cette application ne peut pas lire ce à quoi cette extension s'est engagée. Retirez-la et installez-la de nouveau.",
+  "plugins.unreadable": "Cette application ne peut pas lire les autorisations accordées à cette extension. Retirez-la et installez-la de nouveau.",
   "plugins.update": "Mettre à jour",
   "plugins.update.available": "La version {version} est disponible.",
   "plugins.update.can": "La version {version} pourra",

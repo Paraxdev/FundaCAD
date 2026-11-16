@@ -738,7 +738,7 @@
   "plugins.toast.removed": "已移除 {name}。",
   "plugins.toast.startFailed": "插件 {name} 无法启动：{why}",
   "plugins.toast.updated": "已更新 {name}。",
-  "plugins.unreadable": "此应用无法读取该插件所承诺的内容。请先移除它，然后重新安装。",
+  "plugins.unreadable": "此应用无法读取已授予该插件的权限。请先移除它，然后重新安装。",
   "plugins.update": "更新",
   "plugins.update.available": "版本 {version} 可用。",
   "plugins.update.can": "版本 {version} 将能够",
