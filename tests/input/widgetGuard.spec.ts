@@ -118,10 +118,17 @@ describe("isMenuKey", () => {
   it.each([
     ["a listbox row", LIST],
     ["a menu row", MENU],
-    ["the Geometry list's status line", NOTE],
   ])("gives %s its moving, running and typing keys, never Escape, Delete or an F key", (_name, html) => {
     expect(OWN.map((k) => heardOn(html, k))).toEqual(OWN.map(() => true));
     expect(NOT_OWN.map((k) => heardOn(html, k))).toEqual(NOT_OWN.map(() => false));
+  });
+
+  it("gives the Geometry list's status line only Enter and Space, so letters and arrows reach the sketch and tools", () => {
+    const ONLY = ["Enter", " "];
+    const PASS = ["f", "l", "[", "]", "ArrowUp", "ArrowLeft", "Home", "End", "Tab", "Escape"];
+    expect(ONLY.map((k) => heardOn(NOTE, k))).toEqual([true, true]);
+    expect(PASS.map((k) => heardOn(NOTE, k))).toEqual(PASS.map(() => false));
+    expect(heardOn(NOTE, "Enter", { ctrlKey: true })).toBe(false);
   });
 
   it.each([{ ctrlKey: true }, { altKey: true }, { metaKey: true }])("leaves %o chords to the tool", (mod) => {
