@@ -36,6 +36,7 @@ import type { LiveState } from "../../../src/live/liveSession";
 import { liveEditingMode, setLiveEditingMode } from "../../../src/ui/liveEditing";
 import { mcpEnabled } from "../../../src/live/mcpSwitch";
 import { dismissErrorNotice, errorNotice } from "../../../src/ui/errorNotice";
+import { setLanguage } from "../../../src/i18n";
 
 enableAutoUnmount(afterEach);
 
@@ -165,6 +166,19 @@ describe("how to connect it", () => {
     const w = await mounted();
     expect(w.find("#prefs-mcp-config").exists()).toBe(false);
     expect(w.get("#prefs-mcp-unavailable").text()).toContain("fundacad.exe is missing");
+  });
+
+  it("says outside the desktop app that it needs it, in the language picked after it opened", async () => {
+    inTauri(false);
+    const w = await mounted();
+    expect(w.get("#prefs-mcp-unavailable").text()).toContain("desktop app");
+    try {
+      await setLanguage("de");
+      await flushPromises();
+      expect(w.get("#prefs-mcp-unavailable").text()).toContain("Desktop-App");
+    } finally {
+      await setLanguage("system");
+    }
   });
 });
 

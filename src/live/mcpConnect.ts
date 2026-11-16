@@ -74,12 +74,17 @@ export function mcpSetupFor(host: McpHost, server: string): { text: string; hint
   }
 }
 
+/** Thrown outside the desktop app, where there is no executable to name. */
+export class McpNotDesktop extends Error {
+  constructor() {
+    super(t("prefs.mcp.notDesktop"));
+  }
+}
+
 /** This executable's path. Throws with a sentence a person can read in a plain
  *  browser session. */
 export async function mcpServerPath(): Promise<string> {
-  if (!("__TAURI_INTERNALS__" in globalThis)) {
-    throw new Error(t("prefs.mcp.notDesktop"));
-  }
+  if (!("__TAURI_INTERNALS__" in globalThis)) throw new McpNotDesktop();
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<string>("mcp_server");
 }

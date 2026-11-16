@@ -3,7 +3,7 @@ import { computed, inject, onMounted, onUnmounted, ref } from "vue";
 import { ENGINE } from "../../app/engineKey";
 import { t } from "../../i18n";
 import type { LiveState } from "../../live/liveSession";
-import { asMcpHost, MCP_HOSTS, mcpServerPath, mcpSetupFor, type McpHost } from "../../live/mcpConnect";
+import { asMcpHost, MCP_HOSTS, McpNotDesktop, mcpServerPath, mcpSetupFor, type McpHost } from "../../live/mcpConnect";
 import { loadMcpSwitch, mcpEnabled, mcpSwitchShown, onMcpChange, setMcpEnabled } from "../../live/mcpSwitch";
 import { asLiveEditingMode, liveEditingMode, onLiveEditingChange, setLiveEditingMode } from "../../ui/liveEditing";
 import { toast } from "../../ui/toast";
@@ -21,7 +21,9 @@ const saving = ref(false);
 const state = ref<LiveState>(engine?.live.snapshot ?? { sharing: false, guests: [], lastEdit: null });
 const host = ref<McpHost>("claude-code");
 const server = ref("");
-const unavailable = ref("");
+const unavailableWhy = ref("");
+const notDesktop = ref(false);
+const unavailable = computed(() => (notDesktop.value ? t("prefs.mcp.notDesktop") : unavailableWhy.value));
 
 const stops: (() => void)[] = [];
 onMounted(async () => {
@@ -43,7 +45,8 @@ onMounted(async () => {
   try {
     server.value = await mcpServerPath();
   } catch (err) {
-    unavailable.value = err instanceof Error ? err.message : String(err);
+    if (err instanceof McpNotDesktop) notDesktop.value = true;
+    else unavailableWhy.value = err instanceof Error ? err.message : String(err);
   }
 });
 onUnmounted(() => {
