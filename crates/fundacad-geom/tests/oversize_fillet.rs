@@ -107,7 +107,27 @@ fn rounds_a_hair_past_meeting_are_refused_and_the_offered_size_builds_the_ball()
 }
 
 fn warnings<'a>(r: &'a Rebuild, feature: &str) -> Vec<&'a str> {
-    r.diagnostics.iter().filter(|d| d["feature_id"] == json!(feature)).filter_map(|d| d["message"].as_str()).collect()
+    r.diagnostics
+        .iter()
+        .filter(|d| d["feature_id"] == json!(feature) && d["code"] == "blendOverrun")
+        .filter_map(|d| d["reason"].as_str())
+        .collect()
+}
+
+/// The app's History chip reads an advisory's `reason`, so the overrun note is one like every other.
+#[test]
+fn a_lone_round_larger_than_its_face_warns_as_an_advisory_the_history_chip_reads() {
+    let r = box_fillet(45.0, json!({"kind": "edge", "by": "nearest", "point": [30, 20, 0], "body": "body1"}));
+    let d = r
+        .diagnostics
+        .iter()
+        .find(|d| d["feature_id"] == "f" && d["code"] == "blendOverrun")
+        .unwrap_or_else(|| panic!("no blendOverrun advisory: {:?}", r.diagnostics));
+    assert_eq!(d["kind"], "blendOverrun", "{d}");
+    assert_eq!(d["lossy"], false, "{d}");
+    assert!(d.get("message").is_none(), "{d}");
+    let reason = d["reason"].as_str().unwrap_or_else(|| panic!("no reason: {d}"));
+    assert!(reason.contains("runs past") && reason.contains("fits up to 39.99mm"), "{reason}");
 }
 
 /// A lone round past the 40 mm face is no fillet: r = 100 on one Z edge left
