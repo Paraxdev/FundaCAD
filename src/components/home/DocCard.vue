@@ -4,7 +4,7 @@ import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
 import { t } from "../../i18n";
-import { ago } from "../../ui/timeAgo";
+import { ago, agoKind } from "../../ui/timeAgo";
 import { folderPath, type HomeEntry } from "../../ui/homeList";
 import type { ThumbQueue } from "../../ui/thumbQueue";
 
@@ -13,8 +13,8 @@ const emit = defineEmits<{ open: []; menu: [ev: MouseEvent]; versions: [] }>();
 
 const when = computed(() => {
   const e = props.entry;
-  if (e.editedAt != null) return t("home.card.edited", { when: ago(e.editedAt) });
-  return e.openedAt != null ? t("home.card.opened", { when: ago(e.openedAt) }) : "";
+  if (e.editedAt != null) return t("home.card.edited", { when: ago(e.editedAt), kind: agoKind(e.editedAt) });
+  return e.openedAt != null ? t("home.card.opened", { when: ago(e.openedAt), kind: agoKind(e.openedAt) }) : "";
 });
 
 const badge = computed(() => {

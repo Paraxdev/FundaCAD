@@ -12,3 +12,13 @@ export function ago(time: number, now: number = Date.now()): string {
   // A month name, as 11/10/2026 reads as two different days depending on the reader.
   return new Date(time).toLocaleDateString(activeLanguage().bcp47, { day: "numeric", month: "short", year: "numeric" });
 }
+
+export type AgoKind = "now" | "ago" | "date";
+
+/** Which of its three shapes ago() gives, so a line around it can word each one, like "am" before a German date. */
+export function agoKind(time: number, now: number = Date.now()): AgoKind {
+  const s = Math.max(0, Math.round((now - time) / 1000));
+  if (s < 60) return "now";
+  const h = Math.round(Math.round(s / 60) / 60);
+  return Math.floor(h / 24) < 7 ? "ago" : "date";
+}
