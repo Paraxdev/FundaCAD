@@ -364,3 +364,60 @@ describe("RenderEnvironment readouts in German", () => {
     de.unmount();
   });
 });
+
+describe("RenderEnvironment in German and Japanese", () => {
+  afterEach(() => setLanguage("system"));
+
+  const labelsOf = (attr: string) =>
+    [...document.querySelectorAll(`[role=radio][${attr}]`)].map((o) => o.textContent?.replace(/\s+/g, " ").trim());
+  const heads = () => [...document.querySelectorAll(".rd-head")].map((h) => h.textContent?.trim());
+
+  it("follows a switch made while the panel is open, lists and headings alike", async () => {
+    const w = mountEnv();
+    await flushPromises();
+    expect(labelsOf("data-background")).toEqual(["Theme", "Dark", "Mid grey", "Light"]);
+    expect(labelsOf("data-ground")).toEqual(["None", "Shadow catcher"]);
+    expect(labelsOf("data-denoise")).toEqual(["Off", "Standard", "High quality"]);
+    expect(labelsOf("data-tracer")).toEqual(["Auto", "Native", "WebGPU"]);
+    expect(heads()).toContain("Key light");
+
+    await setLanguage("de");
+    await flushPromises();
+    expect(labelsOf("data-background")).toEqual(["Design", "Dunkel", "Mittelgrau", "Hell"]);
+    expect(labelsOf("data-ground")).toEqual(["Keiner", "Schattenfänger"]);
+    expect(labelsOf("data-denoise")).toEqual(["Aus", "Standard", "Hohe Qualität"]);
+    expect(labelsOf("data-tracer")).toEqual(["Automatisch", "Nativ", "WebGPU"]);
+    expect(heads()).toContain("Hauptlicht");
+    expect(w.get("[data-key-light=reset]").text()).toBe("Zurücksetzen");
+
+    await setLanguage("ja");
+    await flushPromises();
+    expect(labelsOf("data-background")).toEqual(["テーマ", "ダーク", "ミディアムグレー", "ライト"]);
+    expect(labelsOf("data-ground")).toEqual(["なし", "シャドウキャッチャー"]);
+    expect(labelsOf("data-denoise")).toEqual(["オフ", "標準", "高品質"]);
+    expect(labelsOf("data-tracer")).toEqual(["自動", "ネイティブ", "WebGPU"]);
+    expect(heads()).toContain("キーライト");
+    w.unmount();
+  });
+
+  it("keeps the ids the harness and the prefs use whatever the language", async () => {
+    await setLanguage("ja");
+    const w = mountEnv();
+    await flushPromises();
+    expect(w.find('[data-background="grey"]').exists()).toBe(true);
+    expect(w.find('[data-ground="shadow"]').exists()).toBe(true);
+    await w.get('[data-denoise="standard"]').trigger("click");
+    expect(renderPrefs().denoise).toBe("standard");
+    w.unmount();
+  });
+
+  it("names a tile in the language", async () => {
+    await setLanguage("de");
+    const w = mountEnv();
+    await flushPromises();
+    const softbox = ENVIRONMENTS_LIST[1]!;
+    expect(w.get('[data-environment="softbox"]').attributes("aria-label")).toBe(`${softbox.label}, ${softbox.note}`);
+    expect(softbox.note).not.toBe("One big light, product shot");
+    w.unmount();
+  });
+});

@@ -2,6 +2,7 @@
 // theme never relayouts. Uploads are inline custom properties on <html>, so the built-in theme is just their absence.
 // System, the first run choice, stands for a shipped palette picked from the OS appearance (osTheme.ts).
 
+import { t, type MessageKey } from "../i18n";
 import { contrastFailures, parseColor, type PairResult } from "./contrast";
 import { onOsAppearanceChange, osAppearance, type OsAppearance } from "./osTheme";
 import { readSetting } from "./storedSetting";
@@ -28,7 +29,14 @@ export interface ShippedTheme extends Theme {
   palette: Record<string, string>;
 }
 
-export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD Noir", mode: "dark", custom: false };
+export const BUILTIN_THEME: Theme = {
+  id: "fundacad",
+  get label() {
+    return t("prefs.theme.name.noir");
+  },
+  mode: "dark",
+  custom: false,
+};
 
 /** Not a palette: it stands for the shipped palette the OS appearance calls for, see systemThemeFor. */
 export const SYSTEM_THEME_ID = "system";
@@ -84,7 +92,7 @@ export const NOIR_PALETTE: Readonly<Record<string, string>> = {
 
 function noirTint(
   id: string,
-  label: string,
+  label: MessageKey,
   accent: { accent: string; accentHot: string; onAccent: string },
 ): ShippedTheme {
   const rgb = accent.accent
@@ -94,7 +102,9 @@ function noirTint(
     .join(", ");
   return {
     id,
-    label,
+    get label() {
+      return t(label);
+    },
     mode: "dark",
     custom: false,
     palette: {
@@ -115,7 +125,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   {
     // Noir's violet on paper: the same accent hue, deepened until it reads as text and as a ring on white.
     id: "fundacad-light",
-    label: "FundaCAD Light",
+    get label() {
+      return t("prefs.theme.name.light");
+    },
     mode: "light",
     custom: false,
     palette: {
@@ -160,7 +172,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   {
     // 7:1 text on every surface, 4.5:1 lines, control edges, signals and focus ring. Cyan accent, as yellow is warn.
     id: "high-contrast-dark",
-    label: "High Contrast Dark",
+    get label() {
+      return t("prefs.theme.name.highContrastDark");
+    },
     mode: "dark",
     custom: false,
     palette: {
@@ -194,7 +208,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   },
   {
     id: "high-contrast-light",
-    label: "High Contrast Light",
+    get label() {
+      return t("prefs.theme.name.highContrastLight");
+    },
     mode: "light",
     custom: false,
     palette: {
@@ -239,7 +255,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   },
   {
     id: "dracula",
-    label: "Dracula",
+    get label() {
+      return t("prefs.theme.name.dracula");
+    },
     mode: "dark",
     custom: false,
     palette: {
@@ -269,7 +287,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
   },
   {
     id: "solarized-light",
-    label: "Solarized Light",
+    get label() {
+      return t("prefs.theme.name.solarizedLight");
+    },
     mode: "light",
     custom: false,
     palette: {
@@ -317,7 +337,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
     // error clears ~6:1 contrast as it is drawn as text. The axes trade green for yellow, stepped dark, light and
     // mid: closest pair ΔE2000 23 in deuteranopia and 13 in greyscale, where Noir's red and green give 8 and 1.
     id: "colorblind-safe",
-    label: "Colour-Blind Safe",
+    get label() {
+      return t("prefs.theme.name.colourBlindSafe");
+    },
     mode: "dark",
     custom: false,
     palette: {
@@ -359,17 +381,17 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--sketch-fill": "#3d8fe0",
     },
   },
-  noirTint("noir-blue", "Noir Blue", {
+  noirTint("noir-blue", "prefs.theme.name.noirBlue", {
     accent: "#3fa9f5",
     accentHot: "#7ecbff",
     onAccent: "#001522",
   }),
-  noirTint("noir-red", "Noir Red", {
+  noirTint("noir-red", "prefs.theme.name.noirRed", {
     accent: "#ff4d6d",
     accentHot: "#ff8098",
     onAccent: "#2a0008",
   }),
-  noirTint("noir-orange", "Noir Orange", {
+  noirTint("noir-orange", "prefs.theme.name.noirOrange", {
     accent: "#ff8a3d",
     accentHot: "#ffb374",
     onAccent: "#2b1200",
@@ -481,7 +503,14 @@ function resolve(id: string): string {
 /** Grouped with the palette it stands for right now. */
 function systemEntry(): Theme {
   const mode = findTheme(systemThemeFor(osAppearance()))?.mode ?? "dark";
-  return { id: SYSTEM_THEME_ID, label: "System", mode, custom: false };
+  return {
+    id: SYSTEM_THEME_ID,
+    get label() {
+      return t("prefs.theme.system");
+    },
+    mode,
+    custom: false,
+  };
 }
 
 export function themes(): Theme[] {
@@ -647,26 +676,26 @@ export type UploadResult = { ok: true; theme: CustomTheme; failing: PairResult[]
 
 /** Validate a parsed palette file and add it to the library without switching to it, even when it fails contrast.
  *  `fallbackLabel` is the file name, used when the file names no label. */
-export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"): UploadResult {
+export function addCustomTheme(source: unknown, fallbackLabel = t("prefs.theme.customFallback")): UploadResult {
   if (!source || typeof source !== "object") {
-    return { ok: false, error: "That file is not a theme (expected a JSON object of colour tokens)." };
+    return { ok: false, error: t("prefs.theme.notTheme") };
   }
   const src = source as Record<string, unknown>;
   const palette = extractPalette(src);
   if (Object.keys(palette).length === 0) {
     return {
       ok: false,
-      error: 'No usable colours found. A theme is a JSON object like { "--bg": "#141414", "--accent": "#f0982d" }.',
+      error: t("prefs.theme.noColours", { example: '{ "--bg": "#141414", "--accent": "#f0982d" }' }),
     };
   }
   if (library.length >= MAX_CUSTOM) {
-    return { ok: false, error: `The theme library is full (${MAX_CUSTOM}). Remove one before adding another.` };
+    return { ok: false, error: t("prefs.theme.libraryFull", { max: MAX_CUSTOM }) };
   }
   const rawLabel =
     (typeof src.label === "string" && src.label.trim()) ||
     (typeof src.name === "string" && src.name.trim()) ||
     fallbackLabel.replace(/\.[^.]+$/, "").trim() ||
-    "Custom theme";
+    t("prefs.theme.customFallback");
   const theme: CustomTheme = {
     id: uniqueId(rawLabel),
     label: rawLabel,
