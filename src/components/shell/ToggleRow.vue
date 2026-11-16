@@ -15,7 +15,14 @@ defineProps<{
 </script>
 
 <template>
-  <FieldRow v-slot="{ id }" layout="param" :label="label" :data-field="field" :title="rowTitle">
+  <FieldRow
+    v-slot="{ id }"
+    class="param-row-switch"
+    layout="param"
+    :label="label"
+    :data-field="field"
+    :title="rowTitle"
+  >
     <Switch :id="id" :model-value="value" :label="label" @update:model-value="commit" />
   </FieldRow>
 </template>
