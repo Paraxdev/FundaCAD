@@ -328,6 +328,8 @@
   "palette.placeholder": "Rechercher des commandes…",
   "palette.search": "Rechercher des commandes",
   "palette.title": "Palette de commandes",
+  "pick.blendThen": "{then, select, type {saisissez {field, select, distance {une distance plus petite} other {un rayon plus petit}}} keep {{size} est conservé} other {faites glisser moins loin}}",
+  "pick.blendTooLarge": "{kind, select, chamfer {Distance trop grande} other {Rayon trop grand}} pour les faces autour de {n, plural, one {cette arête} other {ces arêtes}}{fits, select, yes {, {size} au maximum} other {}}",
   "pick.done": "{done, select, added {Ajouté} takenOut {Retiré} mirrorPlane {Plan de symétrie} other {Choisi}} : {name}",
   "pick.doneChain": "{done, select, added {Ajouté} takenOut {Retiré} other {Choisi}} avec sa chaîne tangente : {name}, {n, plural, one {# arête} other {# arêtes}}",
   "pick.doneRun": "{done, select, added {Lignes ajoutées} takenOut {Lignes retirées} other {Lignes choisies}} : {n}",

@@ -328,6 +328,8 @@
   "palette.placeholder": "Search commands…",
   "palette.search": "Search commands",
   "palette.title": "Command palette",
+  "pick.blendThen": "{then, select, type {type a smaller {field, select, distance {distance} other {radius}}} keep {keeping {size}} other {drag smaller}}",
+  "pick.blendTooLarge": "{kind, select, chamfer {Distance} other {Radius}} too large for the faces around {n, plural, one {this edge} other {these edges}}{fits, select, yes {, it fits up to {size}} other {}}",
   "pick.done": "{name} {done, select, added {added} takenOut {taken out} mirrorPlane {is the mirror plane} other {picked}}",
   "pick.doneChain": "{name} {done, select, added {added} takenOut {taken out} other {picked}} with its tangent chain, {n, plural, one {# edge} other {# edges}}",
   "pick.doneRun": "{n, plural, one {# row} other {# rows}} {done, select, added {added} takenOut {taken out} other {picked}}",

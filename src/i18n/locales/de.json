@@ -328,6 +328,8 @@
   "palette.placeholder": "Befehle suchen…",
   "palette.search": "Befehle suchen",
   "palette.title": "Befehlspalette",
+  "pick.blendThen": "{then, select, type {geben Sie einen kleineren {field, select, distance {Abstand} other {Radius}} ein} keep {es bleibt bei {size}} other {ziehen Sie kleiner}}",
+  "pick.blendTooLarge": "{kind, select, chamfer {Abstand} other {Radius}} zu groß für die Flächen an {n, plural, one {dieser Kante} other {diesen Kanten}}{fits, select, yes {, es passen höchstens {size}} other {}}",
   "pick.done": "{name} {done, select, added {hinzugefügt} takenOut {entfernt} mirrorPlane {ist die Spiegelebene} other {gewählt}}",
   "pick.doneChain": "{name} mit tangentialer Kette {done, select, added {hinzugefügt} takenOut {entfernt} other {gewählt}}, {n, plural, one {# Kante} other {# Kanten}}",
   "pick.doneRun": "{n, plural, one {# Zeile} other {# Zeilen}} {done, select, added {hinzugefügt} takenOut {entfernt} other {gewählt}}",

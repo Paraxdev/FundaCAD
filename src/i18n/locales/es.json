@@ -328,6 +328,8 @@
   "palette.placeholder": "Buscar comandos…",
   "palette.search": "Buscar comandos",
   "palette.title": "Paleta de comandos",
+  "pick.blendThen": "{then, select, type {escriba {field, select, distance {una distancia menor} other {un radio menor}}} keep {se mantiene {size}} other {arrastre menos}}",
+  "pick.blendTooLarge": "{kind, select, chamfer {Distancia demasiado grande} other {Radio demasiado grande}} para las caras alrededor de {n, plural, one {esta arista} other {estas aristas}}{fits, select, yes {, cabe como máximo {size}} other {}}",
   "pick.done": "{done, select, added {Añadido} takenOut {Quitado} mirrorPlane {Plano de simetría} other {Elegido}}: {name}",
   "pick.doneChain": "{done, select, added {Añadido} takenOut {Quitado} other {Elegido}} con su cadena tangente: {name}, {n, plural, one {# arista} other {# aristas}}",
   "pick.doneRun": "{done, select, added {Filas añadidas} takenOut {Filas quitadas} other {Filas elegidas}}: {n}",

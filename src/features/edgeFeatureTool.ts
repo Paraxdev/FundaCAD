@@ -1045,12 +1045,9 @@ export class EdgeFeatureTool {
       return;
     }
     if (this.refusalShown) {
-      const then = this.dim.isUserDriven(this.field.name)
-        ? `type a smaller ${this.field.name}`
-        : this.shown !== null
-          ? `keeping ${fmtLength(this.shown)}`
-          : "drag smaller";
-      setPrompt(`${this.refusalShown} · ${then} · Esc`);
+      const then = this.dim.isUserDriven(this.field.name) ? "type" : this.shown !== null ? "keep" : "drag";
+      const size = this.shown !== null ? fmtLength(this.shown) : "";
+      setPrompt(`${this.refusalShown} · ${t("pick.blendThen", { then, field: this.field.name, size })} · Esc`);
       return;
     }
     // The profile is mentioned only on a fillet, with its number only off the circular default.

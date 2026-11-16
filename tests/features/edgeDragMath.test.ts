@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   MAX_DIAGONAL_FRACTION,
   MIN_EDGE_VALUE,
@@ -213,6 +214,33 @@ describe("blendRefusalReason", () => {
   it("never tells someone to go smaller when size is not the problem", () => {
     const r = blendRefusalReason("fillet", 1, { code: "edgeAlreadySmooth", message: "can't fillet here" });
     expect(r).not.toMatch(/smaller|too large/i);
+  });
+
+  const fits = {
+    code: "blendTooLarge",
+    message:
+      "Chamfer failed on body1: at 25mm the chamfer does not fit the edge through (0, -10, 15), it runs past a face. " +
+      "It fits up to 9.99mm, so try that or a smaller value.",
+  };
+
+  it("names the size the engine offers", () => {
+    expect(blendRefusalReason("chamfer", 1, fits)).toBe(
+      "Distance too large for the faces around this edge, it fits up to 9.99 mm",
+    );
+    expect(blendRefusalReason("fillet", 2, { ...fits, message: fits.message.replace("9.99", "0.125") })).toBe(
+      "Radius too large for the faces around these edges, it fits up to 0.125 mm",
+    );
+  });
+
+  it("names the size with a decimal comma in German", async () => {
+    await setLanguage("de");
+    try {
+      expect(blendRefusalReason("chamfer", 1, fits)).toBe(
+        "Abstand zu groß für die Flächen an dieser Kante, es passen höchstens 9,99 mm",
+      );
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("passes an unrecognised refusal through without the body prefix", () => {

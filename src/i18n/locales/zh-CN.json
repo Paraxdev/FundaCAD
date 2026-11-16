@@ -328,6 +328,8 @@
   "palette.placeholder": "搜索命令…",
   "palette.search": "搜索命令",
   "palette.title": "命令面板",
+  "pick.blendThen": "{then, select, type {请输入更小的{field, select, distance {距离} other {半径}}} keep {保持 {size}} other {请拖得更小}}",
+  "pick.blendTooLarge": "{kind, select, chamfer {距离} other {半径}}对{n, plural, =1 {这条边} other {这些边}}周围的面来说过大{fits, select, yes {，最大可为 {size}} other {}}",
   "pick.done": "{done, select, added {已添加{name}} takenOut {已移除{name}} mirrorPlane {{name}已设为镜像平面} other {已选择{name}}}",
   "pick.doneChain": "{done, select, added {已添加{name}及其相切链} takenOut {已移除{name}及其相切链} other {已选择{name}及其相切链}}，共 {n} 条边",
   "pick.doneRun": "{done, select, added {已添加 {n} 行} takenOut {已移除 {n} 行} other {已选择 {n} 行}}",

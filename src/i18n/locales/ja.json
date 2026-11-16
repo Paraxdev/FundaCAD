@@ -328,6 +328,8 @@
   "palette.placeholder": "コマンドを検索…",
   "palette.search": "コマンドを検索",
   "palette.title": "コマンドパレット",
+  "pick.blendThen": "{then, select, type {より小さい{field, select, distance {距離} other {半径}}を入力してください} keep {{size} のままです} other {もっと小さくドラッグしてください}}",
+  "pick.blendTooLarge": "{kind, select, chamfer {距離} other {半径}}が{n, plural, =1 {このエッジ} other {これらのエッジ}}の周りの面に対して大きすぎます{fits, select, yes {。収まるのは最大 {size} です} other {}}",
   "pick.done": "{done, select, added {{name}を追加しました} takenOut {{name}を外しました} mirrorPlane {{name}をミラー面にしました} other {{name}を選びました}}",
   "pick.doneChain": "{done, select, added {{name}と接線チェーンを追加しました} takenOut {{name}と接線チェーンを外しました} other {{name}と接線チェーンを選びました}}（エッジ{n}本）",
   "pick.doneRun": "{done, select, added {{n}行を追加しました} takenOut {{n}行を外しました} other {{n}行を選びました}}",
