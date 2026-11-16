@@ -782,6 +782,8 @@ impl State<'_> {
 /// Called after every replayed feature, with its wall time.
 pub trait Tap {
     fn after_feature(&mut self, index: usize, state: &State<'_>, elapsed: Duration);
+    /// A resume from a snapshot that did not keep its sketches built them again.
+    fn sketches_rebuilt(&mut self, _sketches: &HashMap<String, SketchEntry>) {}
 }
 
 pub struct NoTap;
@@ -1165,6 +1167,7 @@ pub fn rebuild_from(
                     }
                 }
                 ctx.diagnostics.truncate(kept);
+                tap.sketches_rebuilt(&ctx.sketches);
             }
         } else {
             ctx.ids = BodyIds::new(recorded.clone());
