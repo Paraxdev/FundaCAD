@@ -17,12 +17,12 @@ const editId = useId();
 
 // useDocValue, not a computed: store.document keeps its identity across an in-place mutate, so a computed would see an
 // equal value and skip the update (see app/useDoc.ts).
-const count = useDocValue((doc) => {
+const entries = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
-  return f ? readTarget(f, props.target).length : 0;
+  return f ? readTarget(f, props.target) : [];
 });
 
-const summary = computed(() => describeTarget(props.target, count.value));
+const summary = computed(() => describeTarget(props.target, entries.value));
 
 /** True while the editor is open on this row, so the button says so instead of offering a second one. */
 const editing = computed(
@@ -45,7 +45,7 @@ function edit() {
 
 <template>
   <FieldRow v-slot="{ labelId }" layout="param" :label="target.label" :for="null" control-class="target-value">
-    <span :id="countId" class="target-count" :class="{ 'target-empty': count === 0 }">{{ summary }}</span>
+    <span :id="countId" class="target-count" :class="{ 'target-empty': entries.length === 0 }">{{ summary }}</span>
     <Button
       :id="editId"
       class="target-edit"

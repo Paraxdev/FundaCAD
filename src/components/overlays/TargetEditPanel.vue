@@ -91,7 +91,12 @@ const title = computed(() => {
 
 const summary = computed(() => {
   const t = field.value;
-  return t ? describeTarget(t, rows.value.length) : "";
+  return t
+    ? describeTarget(
+        t,
+        rows.value.map((r) => r.entry),
+      )
+    : "";
 });
 </script>
 

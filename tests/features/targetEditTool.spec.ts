@@ -171,6 +171,12 @@ describe("TargetEditTool", () => {
     ]);
   });
 
+  it("names a row for every edge by what it covers, not as an edge missing from the build", () => {
+    const fillet = { id: "f", type: "fillet", edges: { kind: "edge", by: "all" }, radius: 1 } as unknown as Feature;
+    const h = harness(fillet, FEATURE_TARGETS.fillet![0]!);
+    expect(h.tool.rows().map((r) => [r.label, r.resolved])).toEqual([["Every edge", true]]);
+  });
+
   it("a face the viewport cannot place keeps its number off the row, a body row keeps its body label", () => {
     const h = harness(shell(SAVED), shellField);
     h.vp.localFaceOf = () => null;
