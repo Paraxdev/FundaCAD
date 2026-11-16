@@ -1,19 +1,29 @@
-// Carry on: after Extrude or Press/Pull commits for a face or edge pick, waits for the commit's build, finds the pick
-// again on the result and starts the next tool on it.
+// Carry on: after Extrude or Press/Pull commits for a face, edge or profile pick, waits for the commit's build, finds the
+// pick again on the result and starts the next tool on it.
 
 import { t } from "../i18n";
 import type { RebuildState } from "../document/store";
 import type { CarryHost, CarryTarget } from "../features/carryOn";
+import type { WorldRegion } from "../sketch/overlay";
 import { routeTreeClick } from "../ui/treePick";
 import type { Engine } from "./engine";
 import { refuseAloud, treeClickDeps } from "./planePick";
+import { createProfileAt } from "./profileAt";
 
 const CARRY_LIMIT_MS = 10_000;
 const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock"]);
 
 export type CarryEngine = Pick<
   Engine,
-  "store" | "viewport" | "starters" | "toolBusy" | "toolOwnsScreen" | "dropBodyGizmo" | "setStatus" | "sketch"
+  | "store"
+  | "viewport"
+  | "overlay"
+  | "starters"
+  | "toolBusy"
+  | "toolOwnsScreen"
+  | "dropBodyGizmo"
+  | "setStatus"
+  | "sketch"
 > & { tools: { extrude: { carry: CarryHost | null }; pressPull: { carry: CarryHost | null } } };
 
 export function installCarryOn(e: CarryEngine): void {
@@ -38,6 +48,11 @@ export function installCarryOn(e: CarryEngine): void {
     if (id && !e.store.document.features.some((f) => f.id === id)) return;
     if (e.toolOwnsScreen()) return;
     const vp = e.viewport;
+    if (target.kind === "profile") {
+      if (e.toolBusy()) e.dropBodyGizmo();
+      if (!e.starters.startExtrudeOn(id, target)) refuseAloud(e, t("carry.lost", { kind: "profile" }));
+      return;
+    }
     if (target.kind === "face") {
       const face = vp.faceIdNear(target.point);
       if (face == null) return refuseAloud(e, t("carry.lost", { kind: "face" }));
@@ -53,8 +68,11 @@ export function installCarryOn(e: CarryEngine): void {
     e.starters.startFilletOn(id);
   };
 
+  let profileAt: ((x: number, y: number) => WorldRegion | null) | null = null;
   const host: CarryHost = {
     route: (pick) => routeTreeClick(pick, treeClickDeps(e)),
+    profileAt: (x, y) => (profileAt ??= createProfileAt(e, { refresh: false }))(x, y),
+    refuse: (why) => refuseAloud(e, why),
     after(done, target) {
       drop?.();
       afterPress = null;

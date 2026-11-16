@@ -54,6 +54,7 @@ import type {
 import { asFeature } from "../types";
 import { dismissToast, toast } from "../ui/toast";
 import { resolveRealEntities } from "../sketch/resolve";
+import { worldPointInRegion } from "../sketch/regionSelect";
 import { defaultReach, gapReport, type GapReport } from "../sketch/looseEnds";
 import { edgeMatchSelectorFrom, edgeSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
@@ -1850,6 +1851,19 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     extrude.start(committed);
   }
 
+  /** Extrude on the profile a carry on picked, found again by its point once the step it rests on is built. A sketch
+   *  that step consumed is shown for it, as a reopened extrude shows its own. False when no area lies there. */
+  function startExtrudeOn(restsOn: string | null, at: { point: Vec3; sketch: string }): boolean {
+    if (toolBusy()) return false;
+    const rests = restsOn ? { restsOn } : {};
+    const p = new THREE.Vector3(...at.point);
+    const wr = overlay.regions.find((r) => worldPointInRegion(p, r.plane, r.region));
+    if (!wr) return extrude.start(committed, { ...rests, sketch: at.sketch, at: [at.point] });
+    overlay.clearRegionSelection();
+    overlay.toggleRegionSelection(wr, false);
+    return extrude.start(committed, rests);
+  }
+
   /** The sketch Extrude last named a gap in: pressing it again there while the toast shows makes the wall. */
   let gapAsked: { sketch: string; until: number; toast: number | null } | null = null;
   const GAP_ASK_MS = 9000;
@@ -1963,6 +1977,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startMechanism,
     startPattern,
     startExtrude,
+    startExtrudeOn,
     grabRegionHandle,
     grabExtrudeEdit,
     repickReference,

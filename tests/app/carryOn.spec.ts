@@ -15,6 +15,7 @@ vi.mock("../../src/ui/announce", async (importOriginal) => ({
 
 const FACE: CarryTarget = { kind: "face", point: [12.5, -3.25, 7.75] };
 const EDGE: CarryTarget = { kind: "edge", point: [4.5, 9.25, -2] };
+const PROFILE: CarryTarget = { kind: "profile", point: [10, 0.5, 2.5], sketch: "s2" };
 const OLD = { bodies: [] } as unknown as NonNullable<RebuildState["result"]>;
 const NEW = { bodies: [{ id: "body1" }] } as unknown as NonNullable<RebuildState["result"]>;
 const PREVIEW = [{ id: "pv", type: "press-pull" }] as unknown as NonNullable<RebuildState["previewBuilt"]>;
@@ -56,7 +57,7 @@ class FakeStore {
   }
 }
 
-function rig(o: { face?: number | null; edge?: object | null } = {}) {
+function rig(o: { face?: number | null; edge?: object | null; profile?: boolean } = {}) {
   const store = new FakeStore();
   const canvas = document.createElement("canvas");
   const calls: string[] = [];
@@ -74,6 +75,10 @@ function rig(o: { face?: number | null; edge?: object | null } = {}) {
     starters: {
       startPressPullOn: vi.fn((id: string | null) => void calls.push(`pressPull ${id}`)),
       startFilletOn: vi.fn((id: string | null) => void calls.push(`fillet ${id}`)),
+      startExtrudeOn: vi.fn((id: string | null, at: { sketch: string }) => {
+        calls.push(`extrude ${id} on ${at.sketch}`);
+        return o.profile !== false;
+      }),
     },
     tools: { extrude: { carry: null as CarryHost | null }, pressPull: { carry: null as CarryHost | null } },
     toolBusy: () => busy.any || busy.owns,
@@ -134,6 +139,22 @@ describe("after a step was added", () => {
     expect(r.e.viewport.edgeLineByMid).toHaveBeenCalledWith(EDGE.point);
     expect(r.calls).toEqual(['picks [{"kind":"edge","edge":{"id":"edge-9"}}]', "fillet f7"]);
     expect(r.e.starters.startPressPullOn).not.toHaveBeenCalled();
+  });
+
+  it("starts Extrude on the profile at the target point, resting on the step", () => {
+    const r = rig();
+    r.host.after({ kind: "added", id: "f7" }, PROFILE);
+    built(r.store);
+    expect(r.e.starters.startExtrudeOn).toHaveBeenCalledWith("f7", PROFILE);
+    expect(r.calls).toEqual(["extrude f7 on s2"]);
+    expect(r.e.starters.startPressPullOn).not.toHaveBeenCalled();
+  });
+
+  it("says the profile is not on the result when no area lies at its point", () => {
+    const r = rig({ profile: false });
+    r.host.after({ kind: "added", id: "f7" }, PROFILE);
+    built(r.store);
+    expect(r.status).toEqual([t("carry.lost", { kind: "profile" })]);
   });
 
   it("acts once, a later build starts nothing more and the build listener is gone", () => {

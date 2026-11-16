@@ -197,7 +197,7 @@ describe("Press/Pull takes a face row", () => {
   it("two face rows offered at once both join one push, and the next click carries on from it", () => {
     const { tool } = begin();
     const after = vi.fn();
-    tool.carry = { route: vi.fn(), after };
+    tool.carry = { route: vi.fn(), after, profileAt: () => null, refuse: vi.fn() };
     const said: string[] = [];
     const d = { ...hints(), say: (text: string) => void said.push(text) };
     offerPicks(
