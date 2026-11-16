@@ -109,10 +109,16 @@ class WarmTarget(unittest.TestCase):
         self.put("target/debug/deps/new_test-2", age_days=1)
         self.put("target/debug/incremental/old/s", age_days=10)
         self.put("target/OCCT/lib/libTKernel.a", age_days=30)
+        self.put("target/OCCT/build/deps/occt-1", age_days=30)
+        self.put("target/OCCT/build/a/b/fingerprint/f", age_days=30)
+        self.put("target/OCCT/incremental/s", age_days=30)
         self.run_script("prune", "7")
         self.assertEqual(
             self.files(),
             [
+                "target/OCCT/build/a/b/fingerprint/f",
+                "target/OCCT/build/deps/occt-1",
+                "target/OCCT/incremental/s",
                 "target/OCCT/lib/libTKernel.a",
                 "target/debug/build/linked/b2/fingerprint/f",
                 "target/debug/build/linked/b2/out/libshim.a",

@@ -22,16 +22,21 @@ prune() {
   mins=$(($1 * 1440))
   for root in $ROOTS; do
     [ -d "$root" ] || continue
-    find "$root" -path '*/deps/*' -type f -mmin +"$mins" -delete 2>/dev/null || true
-    # From cargo 1.100 each unit builds in build/<pkg>/<hash>, its out/ holding build script output that a
-    # fresh fingerprint still vouches for, so only a whole unit neither written nor read in that time goes. A
-    # fresh unit is never written again, so read times keep a dependency every run links.
-    for unit in "$root"/*/build/*/*/; do
-      if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" -type f \( -mmin -"$mins" -o -amin -"$mins" \) -print -quit)" ]; then
-        rm -rf "$unit"
-      fi
+    # A cache restore gives target/OCCT its old mtimes, so prune never walks it. (-delete implies -depth,
+    # which turns -prune off, hence the loop.)
+    for dir in "$root"/*/; do
+      case "$dir" in "$root/OCCT/") continue ;; esac
+      find "$dir" -path '*/deps/*' -type f -mmin +"$mins" -delete 2>/dev/null || true
+      # From cargo 1.100 each unit builds in build/<pkg>/<hash>, its out/ holding build script output that a
+      # fresh fingerprint still vouches for, so only a whole unit neither written nor read in that time goes. A
+      # fresh unit is never written again, so read times keep a dependency every run links.
+      for unit in "$dir"build/*/*/; do
+        if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" -type f \( -mmin -"$mins" -o -amin -"$mins" \) -print -quit)" ]; then
+          rm -rf "$unit"
+        fi
+      done
+      find "$dir" -path '*/incremental/*' -mmin +"$mins" -delete 2>/dev/null || true
     done
-    find "$root" -path '*/incremental/*' -mmin +"$mins" -delete 2>/dev/null || true
   done
 }
 
