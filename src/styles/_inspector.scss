@@ -18,6 +18,13 @@
   font-size: var(--fs-small);
   color: var(--text-dim);
 }
+// A switch needs no more than its column, so its label wraps beside it and the switch moves under only when a word of
+// the label cannot fit. The width is the label's basis, its longest word, and it still grows into the spare room.
+.param-row-switch > label {
+  width: min-content;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
 /* The unit sits beside the number, not in the label: "Radius mm | 5in" reads as a
    contradiction. */
 .param-value {

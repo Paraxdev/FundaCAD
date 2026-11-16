@@ -31,6 +31,7 @@ import { applyDrivingDimsDirect, dimAnchor, upsertDrivingDim } from "../../sketc
 import { toast } from "../../ui/toast";
 import { t, type MessageKey } from "../../i18n";
 import {
+  absentFieldValue,
   exprProblem,
   featureNumFields,
   featureValueRule,
@@ -359,7 +360,7 @@ const featureRows = useDocValue(() => {
   return fields
     .filter(([field]) => fieldApplies(f.type, field, values))
     .map(([field, label, kind]) => {
-      const cur = readField(values, field) as Num | undefined;
+      const cur = (readField(values, field) ?? absentFieldValue(f.type, field)) as Num | undefined;
       const target: ParamTarget = { kind: "feature", feature: f.id, field };
       const bound = store.boundExpr(target);
       const u = unitOf(field, kind);

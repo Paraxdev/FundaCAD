@@ -758,6 +758,11 @@ export class EdgeFeatureTool {
     return !!mid && !this.viewport.edgeLineByMid(mid, this.base);
   }
 
+  /** A face on screen the model before the feature has no face for, the blend's own round or flat. */
+  private resultOnlyFaceAt(clientX: number, clientY: number): boolean {
+    return !!this.base && this.viewport.freshFaceAt(clientX, clientY, this.base);
+  }
+
   private hoverGhost(g: GhostEdge | null) {
     if (g === this.hoveredGhost) return;
     const prev = this.hoveredGhost;
@@ -1040,12 +1045,9 @@ export class EdgeFeatureTool {
       return;
     }
     if (this.refusalShown) {
-      const then = this.dim.isUserDriven(this.field.name)
-        ? `type a smaller ${this.field.name}`
-        : this.shown !== null
-          ? `keeping ${fmtLength(this.shown)}`
-          : "drag smaller";
-      setPrompt(`${this.refusalShown} · ${then} · Esc`);
+      const then = this.dim.isUserDriven(this.field.name) ? "type" : this.shown !== null ? "keep" : "drag";
+      const size = this.shown !== null ? fmtLength(this.shown) : "";
+      setPrompt(`${this.refusalShown} · ${t("pick.blendThen", { then, field: this.field.name, size })} · Esc`);
       return;
     }
     // The profile is mentioned only on a fillet, with its number only off the circular default.
@@ -1287,6 +1289,7 @@ export class EdgeFeatureTool {
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     if (this.resultOnlyEdgeAt(e.clientX, e.clientY)) setPrompt(rimPrompt(this.kind));
+    else if (this.resultOnlyFaceAt(e.clientX, e.clientY)) setPrompt(rimPrompt(this.kind, "face"));
     else if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
     else this.promptForPhase();
     this.dim.focus();
