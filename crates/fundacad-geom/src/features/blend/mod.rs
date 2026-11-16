@@ -1153,12 +1153,7 @@ fn blend_edges(
         ctx.set_shape(index, shape);
     }
     for message in overruns.into_inner() {
-        ctx.diagnostics.push(json!({
-            "feature_id": fid,
-            "kind": "edge",
-            "lossy": false,
-            "message": message,
-        }));
+        ctx.advise(fid, "blendOverrun", message);
     }
     Ok(())
 }
