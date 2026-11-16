@@ -5,7 +5,7 @@ with everything else and leaves the cursor and the window size in window pixels.
 import pytest
 from test_sketch_keys import to_items_plane
 
-pytestmark = [pytest.mark.browser]
+pytestmark = [pytest.mark.browser, pytest.mark.smoke]
 
 OFFSET = "tools/harness/fixtures/offset_box.json"
 STEPS = (100, 110, 125, 150, 175, 200)
@@ -20,10 +20,10 @@ BOX = """sel => {
   return { left: round(r.left), top: round(r.top), right: round(r.right), bottom: round(r.bottom),
            scrolls: el.scrollHeight > el.clientHeight + 1, w: innerWidth, h: innerHeight };
 }"""
-SHOWN = """el => new Promise((done) => {
+HIDDEN = """el => new Promise((done) => {
   const io = new IntersectionObserver(([e]) => {
     io.disconnect();
-    done(Math.round(e.intersectionRatio * 1000) / 1000);
+    done(Math.round((e.boundingClientRect.height - e.intersectionRect.height) * devicePixelRatio * 100) / 100);
   });
   io.observe(el);
 })"""
@@ -76,10 +76,11 @@ def test_a_menu_longer_than_the_window_ends_inside_it_with_its_last_row_on_scree
     last = s.page.locator(".ui-menu [role^=menuitem]").last
     last.focus()
     frames(s)
-    shown = last.evaluate(SHOWN)
+    hidden = last.evaluate(HIDDEN)
     assert rows["scrolls"], f"at {pct} percent the View menu fits the window, so it tests no cap: {rows}"
     assert inside(menu) and inside(rows), f"at {pct} percent the View menu runs out of the window: {menu}, rows {rows}"
-    assert shown >= 0.99, f"at {pct} percent the window shows {shown} of the View menu's last row"
+    # Chromium ends a scroller on whole device pixels, so its last row can sit up to one under the clip edge.
+    assert hidden <= 1, f"at {pct} percent the window hides {hidden} device pixels of the View menu's last row"
 
 
 @pytest.mark.parametrize("pct", [110, 175])
