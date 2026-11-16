@@ -5,7 +5,7 @@
 **Languages**
 - FundaCAD speaks German, French, Spanish, Chinese and Japanese, machine translated. Pick one in Preferences, Appearance, Language, and it applies at once.
 - Translated so far: Home, the menu bar, the command palette, the tool rail, Keyboard Shortcuts, Items and History, a step's properties, Undo and Redo, the selection readout, Stress, Preferences, Plugins, the render settings and update notices. The Language card links to the manual's full list.
-- The command palette and Keyboard Shortcuts still find everything by its English name.
+- The command palette and Keyboard Shortcuts find everything by its translated or its English name.
 - In German, French and Spanish, value boxes and expressions show and take a decimal comma. Saved files open the same in every language.
 - Your own language file can correct any line or add a language. A file Notepad saved as .json.txt is read too, and a refused file names the line and column where it broke.
 
