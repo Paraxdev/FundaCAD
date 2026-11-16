@@ -1,6 +1,8 @@
 """The command palette's search box keeps the text keys a text field has: Ctrl+A selects what was typed, and Ctrl+Z
 undoes typing there rather than a step of the model."""
 
+from contextlib import contextmanager
+
 import pytest
 
 from fundacad_harness import Session
@@ -24,27 +26,30 @@ def s():
         session.close()
 
 
-def open_palette(s: Session) -> None:
+@contextmanager
+def palette(s: Session):
     s.page.keyboard.press("Control+K")
     s.page.locator(FIELD).wait_for(timeout=5000)
+    try:
+        yield
+    finally:
+        s.page.keyboard.press("Escape")
 
 
 def test_ctrl_a_selects_the_typed_text_so_typing_replaces_it(s):
-    open_palette(s)
-    s.page.keyboard.type("abc")
-    s.page.keyboard.press("Control+A")
-    s.page.keyboard.type("x")
-    assert s.page.locator(FIELD).input_value() == "x"
-    s.page.keyboard.press("Escape")
+    with palette(s):
+        s.page.keyboard.type("abc")
+        s.page.keyboard.press("Control+A")
+        s.page.keyboard.type("x")
+        assert s.page.locator(FIELD).input_value() == "x"
 
 
 def test_ctrl_z_in_the_search_box_leaves_the_model_alone(s):
     s.page.evaluate(WIDER)
     s.settle()
     assert s.page.evaluate(WIDTH) == 21.5
-    open_palette(s)
-    s.page.keyboard.type("fil")
-    s.page.keyboard.press("Control+Z")
-    s.page.wait_for_timeout(500)
-    assert s.page.evaluate(WIDTH) == 21.5
-    s.page.keyboard.press("Escape")
+    with palette(s):
+        s.page.keyboard.type("fil")
+        s.page.keyboard.press("Control+Z")
+        s.page.wait_for_timeout(500)
+        assert s.page.evaluate(WIDTH) == 21.5
