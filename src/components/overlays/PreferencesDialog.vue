@@ -319,7 +319,7 @@ const TOUCHPAD_SCROLL = [
   { value: "pan", label: "Pans" },
 ];
 
-const HOME_BACKGROUND_OPTIONS = HOME_BACKGROUNDS.map((b) => ({ value: b.id, label: b.label }));
+const HOME_BACKGROUND_OPTIONS = computed(() => HOME_BACKGROUNDS.map((b) => ({ value: b.id, label: b.label })));
 
 const themeOptions = computed(() => themeList.value.map((t) => ({ value: t.id, label: t.label })));
 const packOptions = computed(() => iconPacks().map((p) => ({ value: p.id, label: p.label })));

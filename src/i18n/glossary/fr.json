@@ -812,6 +812,38 @@
     {
       "en": "Visibility",
       "text": "Visibilité"
+    },
+    {
+      "en": "Home",
+      "text": "Accueil",
+      "note": "the start screen with recent documents and examples, File, Home"
+    },
+    {
+      "en": "safe mode",
+      "text": "mode sans échec",
+      "note": "the start without plugins and saved preferences"
+    },
+    {
+      "en": "Version",
+      "text": "version"
+    },
+    {
+      "en": "Branch",
+      "text": "branche",
+      "note": "a line of versions in a document"
+    },
+    {
+      "en": "Restore (a version)",
+      "text": "Restaurer"
+    },
+    {
+      "en": "Blank",
+      "text": "Vide",
+      "note": "the Home card that starts an empty document"
+    },
+    {
+      "en": "example",
+      "text": "exemple"
     }
   ]
 }

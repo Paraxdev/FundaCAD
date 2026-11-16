@@ -816,6 +816,38 @@
     {
       "en": "Visibility",
       "text": "可见性"
+    },
+    {
+      "en": "Home",
+      "text": "主页",
+      "note": "the start screen with recent documents and examples, File, Home"
+    },
+    {
+      "en": "safe mode",
+      "text": "安全模式",
+      "note": "the start without plugins and saved preferences"
+    },
+    {
+      "en": "Version",
+      "text": "版本"
+    },
+    {
+      "en": "Branch",
+      "text": "分支",
+      "note": "a line of versions in a document"
+    },
+    {
+      "en": "Restore (a version)",
+      "text": "恢复"
+    },
+    {
+      "en": "Blank",
+      "text": "空白",
+      "note": "the Home card that starts an empty document"
+    },
+    {
+      "en": "example",
+      "text": "示例"
     }
   ]
 }
