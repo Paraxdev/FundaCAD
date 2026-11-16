@@ -114,7 +114,7 @@ describe("Mirror waiting for its plane", () => {
     expect(panel()).toEqual({ values: ["1 body", "Nothing picked"], ready: false });
 
     expect(key("Enter").defaultPrevented).toBe(true);
-    expect(panel()).toEqual({ values: ["1 body", "Flat face"], ready: true });
+    expect(panel()).toEqual({ values: ["1 body", "Flat face 1"], ready: true });
     expect(addFeatures).not.toHaveBeenCalled();
     expect(done).not.toHaveBeenCalled();
     expect(r.list.litRow).toBeNull();
@@ -140,7 +140,7 @@ describe("Mirror waiting for its plane", () => {
     expect(r.list.litRow?.key).toBe("f:body1:1");
     key("[");
     expect(key("Enter").defaultPrevented).toBe(true);
-    expect(panel()).toEqual({ values: ["1 body", "Flat face"], ready: true });
+    expect(panel()).toEqual({ values: ["1 body", "Flat face 1"], ready: true });
     expect(addFeatures).not.toHaveBeenCalled();
   });
 
