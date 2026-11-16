@@ -870,7 +870,7 @@
   "prefs.theme.hint": "System folgt den Hell-, Dunkel- und Kontrasteinstellungen Ihres Computers.",
   "prefs.theme.invalidJson": "Diese Datei enthält kein gültiges JSON.",
   "prefs.theme.libraryFull": "Die Designsammlung ist voll ({max, number}). Entfernen Sie eines, bevor Sie ein weiteres hinzufügen.",
-  "prefs.theme.name.colourBlindSafe": "Farbenblindheitssicher",
+  "prefs.theme.name.colourBlindSafe": "Für Farbsehschwäche geeignet",
   "prefs.theme.name.dracula": "Dracula",
   "prefs.theme.name.highContrastDark": "Hoher Kontrast, dunkel",
   "prefs.theme.name.highContrastLight": "Hoher Kontrast, hell",
