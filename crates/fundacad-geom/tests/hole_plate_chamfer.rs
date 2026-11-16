@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
-use fundacad_geom::features::blend::ops;
+use fundacad_geom::features::blend::{ops, Fits, SectionErr};
 use fundacad_geom::kernel::{self, Kind};
 use opencascade::primitives::Shape;
 use serde_json::{json, Value};
@@ -91,10 +91,19 @@ fn offered(message: &str) -> Option<f64> {
     rest.split("mm").next()?.parse().ok()
 }
 
+fn grid() -> Vec<(f64, f64)> {
+    (0..3).flat_map(|i| (0..3).map(move |j| (5.0 + 7.0 * f64::from(i), 5.0 + 7.0 * f64::from(j)))).collect()
+}
+
+/// What a 1mm chamfer on the grid plate's top edges takes: four outer edges of 100 that overlap s^3/3 at each
+/// corner, and nine rims.
+fn grid_cut() -> f64 {
+    4.0 * 100.0 / 2.0 - 4.0 / 3.0 + 9.0 * rim_cut(1.0)
+}
+
 #[test]
 fn a_chamfer_too_large_for_a_grid_of_holes_offers_the_size_that_keeps_the_rims_apart() {
-    let holes: Vec<(f64, f64)> =
-        (0..3).flat_map(|i| (0..3).map(move |j| (5.0 + 7.0 * f64::from(i), 5.0 + 7.0 * f64::from(j)))).collect();
+    let holes = grid();
     let refused = build(&plate(100.0, &holes, Some(1.5)));
     let message = refused.errors.first().map(|e| e.message.as_str()).unwrap_or_else(|| panic!("1.5 built"));
     // The rims are 2 apart, so each chamfer may take 1.
@@ -103,8 +112,27 @@ fn a_chamfer_too_large_for_a_grid_of_holes_offers_the_size_that_keeps_the_rims_a
     let bare = kernel::volume(&build(&plate(100.0, &holes, None)).bodies[0].shape);
     let at = build(&plate(100.0, &holes, Some(1.0)));
     assert!(at.errors.is_empty(), "the offered 1mm does not build: {:?}", at.errors);
-    // Four outer edges of 100 that overlap s^3/3 at each corner, and nine rims.
-    let expected = 4.0 * 100.0 / 2.0 - 4.0 / 3.0 + 9.0 * rim_cut(1.0);
     let removed = bare - kernel::volume(&at.bodies[0].shape);
-    assert!((removed - expected).abs() < 1.0, "removed {removed}, expected {expected}");
+    assert!((removed - grid_cut()).abs() < 1.0, "removed {removed}, expected {}", grid_cut());
+}
+
+#[test]
+fn a_refused_section_chamfer_hands_back_the_body_it_built_at_the_size_it_offers() {
+    let body = build(&plate(100.0, &grid(), None)).bodies[0].shape.clone();
+    let top: Vec<Shape> = kernel::subshapes(&body, Kind::Edge)
+        .into_iter()
+        .filter(|e| kernel::bbox(e).is_some_and(|b| (b[2] - 10.0).abs() < 1e-6 && (b[5] - 10.0).abs() < 1e-6))
+        .collect();
+    assert_eq!(top.len(), 13, "four outer edges and nine rims");
+    let sizes = vec![1.5; top.len()];
+    match ops::section(&body, &top, true, &sizes, None, 1.5, 1, false, 0.0).err() {
+        Some(SectionErr::TooLarge { fits: Fits::UpTo(k), .. }) => assert!((k - 1.0).abs() < 1e-9, "offers {k}"),
+        other => panic!("1.5 was not refused with a size: {other:?}"),
+    }
+    assert!(ops::take_fitted(&body, &top[1..], 1.0).is_none(), "another selection's body");
+    assert!(ops::section(&body, &top, true, &sizes, None, 1.5, 1, false, 0.0).is_err(), "refused again");
+    let built = ops::take_fitted(&body, &top, 1.0).expect("the body built at 1mm");
+    assert!(ops::take_fitted(&body, &top, 1.0).is_none(), "handed back once");
+    let removed = kernel::volume(&body) - kernel::volume(&built);
+    assert!((removed - grid_cut()).abs() < 1.0, "removed {removed}, expected {}", grid_cut());
 }

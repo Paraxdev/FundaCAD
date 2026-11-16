@@ -17,12 +17,34 @@ pub struct Overrun {
     pub at: [f64; 3],
 }
 
+/// The body the last refused section build on this thread built at the size it offers.
+struct Fitted {
+    body: Shape,
+    edges: Vec<Shape>,
+    size: f64,
+    least: f64,
+    built: Shape,
+}
+
 thread_local! {
     static OVERRUN: std::cell::Cell<Option<Overrun>> = const { std::cell::Cell::new(None) };
+    static FITTED: std::cell::Cell<Option<Fitted>> = const { std::cell::Cell::new(None) };
 }
 
 pub fn take_overrun() -> Option<Overrun> {
     OVERRUN.with(std::cell::Cell::take)
+}
+
+/// What a section build of `edges` on `body` at `size` gives, when the refusal just before it built that very size
+/// while searching for the size to offer. Building it again takes seconds on a plate full of holes. One that folds
+/// is left to a real build, which tries again without the one-shot cut.
+pub fn take_fitted(body: &Shape, edges: &[Shape], size: f64) -> Option<Shape> {
+    let f = FITTED.with(std::cell::Cell::take)?;
+    let same = f.body.is_same(body)
+        && f.edges.len() == edges.len()
+        && f.edges.iter().zip(edges).all(|(a, b)| a.is_same(b))
+        && (f.size - size).abs() <= 1e-9 * size.max(1.0);
+    (same && !super::overlap::folds_over_itself(body, &f.built, f.least)).then_some(f.built)
 }
 
 fn overrun_of(message: &str) -> Option<Overrun> {
@@ -213,6 +235,7 @@ fn section_with(
     profile: f64,
     one_shot: bool,
 ) -> Result<Shape, SectionErr> {
+    FITTED.with(std::cell::Cell::take);
     let es = kernel::compound(edges);
     let mut status = 0;
     let mut message = String::new();
@@ -250,6 +273,14 @@ fn section_with(
         3 => Err(SectionErr::Cancelled),
         4 => {
             let n: Vec<f64> = message.split(' ').filter_map(|w| w.parse().ok()).collect();
+            if let (Some(&fits), false) = (n.get(1), out.is_null()) {
+                let built = Shape::from_raw(out);
+                if fits > 0.0 && !kernel::is_null(&built) {
+                    let least = sizes.iter().copied().fold(f64::INFINITY, f64::min) / unit * fits;
+                    let fitted = Fitted { body: shape.clone(), edges: edges.to_vec(), size: fits, least, built };
+                    FITTED.with(|c| c.set(Some(fitted)));
+                }
+            }
             match n.as_slice() {
                 [why, fits, x, y, z] => Err(SectionErr::TooLarge {
                     why: Misfit::from_code(*why as i32),
