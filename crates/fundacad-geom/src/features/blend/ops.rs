@@ -47,6 +47,21 @@ pub fn take_fitted(body: &Shape, edges: &[Shape], size: f64) -> Option<Shape> {
     (same && !super::overlap::folds_over_itself(body, &f.built, f.least)).then_some(f.built)
 }
 
+/// Keeps a refused build's body to the blend that made it. The builder hands the same body to the next feature, so
+/// a body left over could answer for a fillet where a chamfer was built.
+pub struct FittedScope(());
+
+pub fn fitted_scope() -> FittedScope {
+    FITTED.with(std::cell::Cell::take);
+    FittedScope(())
+}
+
+impl Drop for FittedScope {
+    fn drop(&mut self) {
+        FITTED.with(std::cell::Cell::take);
+    }
+}
+
 fn overrun_of(message: &str) -> Option<Overrun> {
     let rest = message.strip_prefix("overrun ")?;
     let n: Vec<f64> = rest.split(' ').filter_map(|w| w.parse().ok()).collect();

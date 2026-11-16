@@ -1003,6 +1003,7 @@ fn blend_edges(
         return Err(Fail::msg(format!("{label}: size must be greater than 0 (got {})", py_g(blend_size))));
     }
     let pair = move |v: f64| second.map(|d2| second_distance(blend_size, d2, v));
+    let _fitted = ops::fitted_scope();
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
     let overruns: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
