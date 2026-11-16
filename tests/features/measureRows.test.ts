@@ -88,8 +88,8 @@ describe("measureRows in a comma language", () => {
   it("reads one pick with a decimal comma and joins the position with semicolons", async () => {
     await setLanguage("de");
     expect(measureRows(a, undefined, null)).toEqual([
-      { k: "Area", v: "12,375 mm²" },
-      { k: "At", v: "12,5; -3,25; 40" },
+      { k: "Flächeninhalt", v: "12,375 mm²" },
+      { k: "Position", v: "12,5; -3,25; 40" },
     ]);
   });
 
@@ -106,7 +106,7 @@ describe("measureRows in a comma language", () => {
     expect(measureRows(a, b, near)).toEqual([
       { k: "Distance", v: "0,0984 in" },
       { k: "ΔX ΔY ΔZ", v: "0,0197; -0,0925; 0,197" },
-      { k: "Centers", v: "1,46 in" },
+      { k: "Centres", v: "1,46 in" },
       { k: "Angle", v: "90°" },
     ]);
   });

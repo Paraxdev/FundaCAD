@@ -2,6 +2,7 @@
 // Each handle drives one field of document/datumPose.ts, so a tilted plane stays parametric, never a baked normal.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { PlaneDef, PlaneSpec } from "../types";
 import { DimInput, type DimDocument, type DimFieldDef } from "../sketch/dimInput";
@@ -114,10 +115,10 @@ export class DatumPoseTool {
 
     const fields: DimFieldDef[] = (
       [
-        { name: "offset", label: "Offset", kind: "length" },
-        { name: "tiltX", label: "Tilt X", kind: "angle" },
-        { name: "tiltY", label: "Tilt Y", kind: "angle" },
-        { name: "spin", label: "Spin", kind: "angle" },
+        { name: "offset", label: t("field.offset"), kind: "length" },
+        { name: "tiltX", label: t("field.tiltX"), kind: "angle" },
+        { name: "tiltY", label: t("field.tiltY"), kind: "angle" },
+        { name: "spin", label: t("field.spin"), kind: "angle" },
       ] as const
     )
       .filter((f) => !this.isLocked(f.name))
@@ -138,9 +139,7 @@ export class DatumPoseTool {
       );
     }
     this.dim.updateFromCursor({ ...this.pose });
-    setPrompt(
-      "Drag the arrow to offset, a ring to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc",
-    );
+    setPrompt(t("tool.datumPose.prompt"));
     this.refresh();
     this.gesture.frame();
   }

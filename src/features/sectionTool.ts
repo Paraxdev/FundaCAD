@@ -2,6 +2,7 @@
 // the offset box and the F and G keys; confirming keeps the cut on as a view state the Viewport keeps through rebuilds.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { Plane3, PlaneDef, SectionView, Vec3 } from "../types";
 import { SECTION_GHOSTS, sameSectionView } from "../document/sectionView";
@@ -12,14 +13,14 @@ import { toolChar } from "../input/shortcuts";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, HANDLE_UP, type DragHandle } from "./manipulator";
-import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget } from "./facePlanePick";
+import { curvedFaceRow, facePlaneOfRow, pickPlaneTarget } from "./facePlanePick";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { SketchPlane } from "../sketch/plane";
 import {
   GHOST_DEFAULT,
   clipPlaneAt,
   ghostAlpha,
-  ghostLabel,
+  ghostName,
   nextGhostLevel,
   sectionAnchor,
   sectionCentre,
@@ -272,7 +273,7 @@ export class SectionTool {
         let def: PlaneDef | null = null;
         if (pick.kind === "face") {
           const face = facePlaneOfRow(this.viewport, pick.faceId);
-          if (face?.kind !== "planar") return CURVED_FACE_ROW;
+          if (face?.kind !== "planar") return curvedFaceRow();
           def = face.def;
         } else if (pick.kind === "datumPlane") def = pick.def;
         else if (pick.kind === "basePlane") def = baseDef(pick.plane);
@@ -283,7 +284,7 @@ export class SectionTool {
       },
       () => this.stop(),
     );
-    setPrompt("Click a face or plane to cut along · Esc");
+    setPrompt(t("tool.section.pick"));
     this.setPhase("aiming");
   }
 
@@ -357,7 +358,9 @@ export class SectionTool {
     this.handle = nameHandle(createDragHandle(), "section");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
-    this.dim.show([{ name: "offset", label: "Offset", icon: "offsetPlane", kind: "length" }], () => this.confirm());
+    this.dim.show([{ name: "offset", label: t("field.offset"), icon: "offsetPlane", kind: "length" }], () =>
+      this.confirm(),
+    );
     this.dim.restoresOnUndo(
       "offset",
       () => this.offset,
@@ -514,10 +517,10 @@ export class SectionTool {
   }
 
   private prompt() {
-    const keys = singleKeysOn()
-      ? ` · F flips the kept side · G changes how the cut half shows (${ghostLabel(this.ghost)})`
-      : "";
-    this.editPrompt = `Drag the handle or type an offset${keys} · Enter or Esc keeps the cut`;
+    this.editPrompt = t("tool.section.edit", {
+      keys: singleKeysOn() ? "yes" : "no",
+      ghost: ghostName(this.ghost),
+    });
     setPrompt(this.editPrompt);
   }
 

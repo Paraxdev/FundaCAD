@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { PlaneDef, ViewOverride } from "../types";
-import { CURVED_FACE_ROW } from "../features/facePlanePick";
+import { curvedFaceRow } from "../features/facePlanePick";
 import { treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 
 // up is normal x xdir, the in-plane up of the face; straight up when xdir runs along the normal.
@@ -20,7 +20,7 @@ export function overrideRowAnswer(
 ): TreePickAnswer {
   if (pick.kind !== "face") return treePickRefusal(pick, "modelFlatFace");
   const plane = planeOf(pick.faceId);
-  if (!plane) return CURVED_FACE_ROW;
+  if (!plane) return curvedFaceRow();
   take(viewOverrideOf(plane));
   return true;
 }

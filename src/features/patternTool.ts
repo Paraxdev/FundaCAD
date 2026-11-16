@@ -2,6 +2,7 @@
 // Features mode repeats the faces `features` own, not whole bodies. C moves a circular axis between origin and middle.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import { featureValueRule } from "../document/numFields";
@@ -55,7 +56,7 @@ export class PatternTool {
   private bodies: string[] = [];
   private features: string[] = []; // features mode when non-empty
   private faceIds: number[] = []; // the above features' own faces, resolved once at start()
-  private promptPrefix = ""; // "Pattern Hole1: " in features mode, "" in body mode
+  private promptSources = ""; // "Hole1" in features mode, "" in body mode
   private centroid = new THREE.Vector3(); // where the bodies (or the patterned faces) are
   private anchor = new THREE.Vector3(); // where the gizmo sits (see placeGizmo)
   private axis = 0; // index into AXES
@@ -106,7 +107,7 @@ export class PatternTool {
     this.bodies = bodies;
     this.features = features ?? [];
     this.faceIds = this.features.length ? this.repeatedFaces() : [];
-    this.promptPrefix = this.features.length ? `Pattern ${this.sourceLabels()}: ` : "";
+    this.promptSources = this.features.length ? this.sourceLabels() : "";
     this.onDone = onDone;
     this.count = kind === "rect" ? START_GRID : START_COUNT;
     this.countY = START_GRID;
@@ -138,7 +139,7 @@ export class PatternTool {
           if (pick.kind === "face") return this.askAxis(this.viewport.faceSelectorOf(pick.faceId), true);
           if (pick.kind !== "edge") return treePickRefusal(pick, "axisFaceOrEdge");
           const ref = edgeSelectorFrom({ points: pick.edge.points as Vec3[], body: pick.edge.body });
-          return ref ? this.askAxis(ref, true) : "That edge has no length";
+          return ref ? this.askAxis(ref, true) : t("tool.pattern.edgeNoLength");
         },
         () => this.cancel(),
         { keepsOnRewind: true, keepsOnCommand: true },
@@ -149,11 +150,11 @@ export class PatternTool {
     this.dim.show(
       kind === "rect"
         ? [
-            { name: "spacingX", label: "Spacing X", icon: "distance", tag: "X", kind: "length" },
-            { name: "spacingY", label: "Spacing Y", icon: "distance", tag: "Y", kind: "length" },
+            { name: "spacingX", label: t("field.spacingX"), icon: "distance", tag: "X", kind: "length" },
+            { name: "spacingY", label: t("field.spacingY"), icon: "distance", tag: "Y", kind: "length" },
             {
               name: "countX",
-              label: "Copies X",
+              label: t("tool.pattern.copiesX"),
               icon: "items",
               tag: "X",
               kind: "count",
@@ -161,7 +162,7 @@ export class PatternTool {
             },
             {
               name: "countY",
-              label: "Copies Y",
+              label: t("tool.pattern.copiesY"),
               icon: "items",
               tag: "Y",
               kind: "count",
@@ -170,20 +171,20 @@ export class PatternTool {
           ]
         : kind === "linear"
           ? [
-              { name: "spacing", label: "Spacing", icon: "distance", kind: "length" },
+              { name: "spacing", label: t("field.spacing"), icon: "distance", kind: "length" },
               {
                 name: "count",
-                label: "Copies",
+                label: t("tool.pattern.copies"),
                 icon: "items",
                 kind: "count",
                 ...featureValueRule("patternLinear", "count"),
               },
             ]
           : [
-              { name: "angle", label: "Angle", icon: "angle", kind: "angle" },
+              { name: "angle", label: t("field.angle"), icon: "angle", kind: "angle" },
               {
                 name: "count",
-                label: "Copies",
+                label: t("tool.pattern.copies"),
                 icon: "items",
                 kind: "count",
                 ...featureValueRule("patternCircular", "count"),
@@ -531,29 +532,22 @@ export class PatternTool {
         : describePattern(this.kind, this.count, this.value, this.axisName());
     if (body === this.promptKey) return;
     this.promptKey = body;
-    const keys = singleKeysOn();
-    const count = keys ? "[ ]" : "Up and Down";
-    if (this.kind === "rect") {
+    const common = {
+      lead: this.promptSources ? "yes" : "no",
+      sources: this.promptSources,
+      body,
+      keys: singleKeysOn() ? "single" : "plain",
+    };
+    if (this.kind === "rect") setPrompt(t("tool.pattern.promptRect", common));
+    else if (this.kind === "linear") setPrompt(t("tool.pattern.promptLinear", common));
+    else
       setPrompt(
-        `${this.promptPrefix}${body} · drag the X or Y arrow · ${count} X count · Enter or click to apply · Esc`,
+        t("tool.pattern.promptCircular", {
+          ...common,
+          note: this.pickNote,
+          where: this.place === "picked" ? "picked" : this.place === "centre" ? "centre" : "origin",
+        }),
       );
-      return;
-    }
-    if (this.kind === "linear") {
-      setPrompt(
-        `${this.promptPrefix}${body} · drag an arrow · ${keys ? "[ and ]" : count} change the count · Enter or click to apply · Esc`,
-      );
-      return;
-    }
-    const where =
-      this.place === "picked"
-        ? "the picked axis"
-        : this.place === "centre"
-          ? "through the part's middle"
-          : "through the origin";
-    setPrompt(
-      `${this.promptPrefix}${this.pickNote}${body}, ${where} · click an edge or face to turn about it${keys ? " · C origin or middle" : ""} · ${count} count · Enter or click off the part to apply · Esc`,
-    );
   }
 
   private buildGizmo() {
@@ -780,7 +774,7 @@ export class PatternTool {
     this.promptKey = "";
     this.features = [];
     this.faceIds = [];
-    this.promptPrefix = "";
+    this.promptSources = "";
     setPrompt(null);
   }
 }

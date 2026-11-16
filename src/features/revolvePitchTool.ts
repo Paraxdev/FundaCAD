@@ -2,6 +2,7 @@
 // (screwMath.pitchFromRise); the curved one sets the sweep and stops where turns would collide (clampDragAngle).
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay } from "../sketch/overlay";
@@ -158,8 +159,8 @@ export class RevolvePitchTool {
     this.buildArc();
     this.dim.show(
       [
-        { name: "pitch", label: "Pitch", kind: "length" },
-        { name: "angle", label: "Angle", kind: "angle" },
+        { name: "pitch", label: t("field.pitch"), kind: "length" },
+        { name: "angle", label: t("field.angle"), kind: "angle" },
       ],
       () => this.commit(),
       () => this.cancel(),
@@ -177,11 +178,7 @@ export class RevolvePitchTool {
     }
     // Shown, not seeded: seeding locks a field against cursor tracking, and the box read 0 through the whole drag.
     this.dim.updateFromCursor({ pitch: this.pitch, angle: this.angle });
-    setPrompt(
-      "Drag the straight arrow to set how far one turn climbs, the curved one to " +
-        "set how far it turns in all, so ten times round is 3600 degrees. " +
-        "Either value can be typed. Enter applies, Esc cancels.",
-    );
+    setPrompt(t("tool.revolvePitch.prompt"));
     this.refresh();
     this.gesture.frame();
     return true;

@@ -37,9 +37,9 @@ describe("fixed decimal readouts in German", () => {
 
   it("pattern descriptions use the comma and leave whole numbers alone", async () => {
     await setLanguage("de");
-    expect(describePattern("linear", 4, 12.34, "X")).toBe("4 copies, 12,34 mm apart along X");
-    expect(describePattern("circular", 5, 72.5, "Z")).toBe("5 copies over 72,5° about Z");
-    expect(describePattern("linear", 3, 40, "Y")).toBe("3 copies, 40 mm apart along Y");
+    expect(describePattern("linear", 4, 12.34, "X")).toBe("4 Kopien, 12,34 mm Abstand entlang X");
+    expect(describePattern("circular", 5, 72.5, "Z")).toBe("5 Kopien über 72,5° um Z");
+    expect(describePattern("linear", 3, 40, "Y")).toBe("3 Kopien, 40 mm Abstand entlang Y");
     await setLanguage("system");
     expect(describePattern("linear", 4, 12.34, "X")).toBe("4 copies, 12.34 mm apart along X");
   });

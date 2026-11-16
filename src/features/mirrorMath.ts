@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Feature, Plane3, PlaneDef } from "../types";
 import { SketchPlane } from "../sketch/plane";
 import type { FacePlanePick } from "./facePlanePick";
@@ -32,8 +33,6 @@ export function reflectionMatrix(def: PlaneDef): THREE.Matrix4 {
   );
 }
 
-export const FACE_DATUM_NAME = "Mirror plane";
-
 /** The features one Mirror commit adds. The plane is always `{ name }`, the form the engine takes with `bodies`. A
  *  face becomes a datum plane first, which follows the face through upstream edits and stays editable. */
 export function mirrorFeatures(nextId: () => string, bodies: readonly string[], pick: MirrorPlanePick): Feature[] {
@@ -46,7 +45,7 @@ export function mirrorFeatures(nextId: () => string, bodies: readonly string[], 
     plane: pick.face.def,
     offset: 0,
     face: pick.face.selector,
-    name: FACE_DATUM_NAME,
+    name: t("tool.mirror.plane"),
   };
   return [datum, mirror(datum.id)];
 }

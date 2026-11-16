@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { Viewport } from "../viewport/viewport";
 import type { PickRef } from "../viewport/picking";
+import { t, onLanguageChange } from "../i18n";
 import { setPrompt } from "../ui/prompt";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { polylineMid } from "../viewport/edgeMatch";
@@ -25,6 +26,8 @@ export class MeasureTool {
   private probes: Probe[] = [];
   private onDone: (() => void) | null = null;
   private releaseRows: (() => void) | null = null;
+  private unlisten: (() => void) | null = null;
+  private onSecond = false;
   private boundDown: (e: PointerEvent) => void;
   private boundMove: (e: PointerEvent) => void;
   private boundKey: (e: KeyboardEvent) => void;
@@ -40,6 +43,7 @@ export class MeasureTool {
     this.active = true;
     this.onDone = onDone ?? null;
     this.probes = [];
+    this.onSecond = false;
     this.viewport.suspendPicking = true;
     this.viewport.clearSelection();
     const el = this.viewport.domElement;
@@ -49,13 +53,21 @@ export class MeasureTool {
     this.releaseRows = awaitTreePick(
       (pick) => {
         if (pick.kind !== "face" && pick.kind !== "edge") return treePickRefusal(pick, "faceOrEdge");
-        return this.addProbe(this.toProbe(pick)) || "Nothing to measure there";
+        return this.addProbe(this.toProbe(pick)) || t("tool.measure.nothing");
       },
       () => this.stop(),
       { keepsOnRewind: true, keepsOnCommand: true },
     );
     this.update();
-    setPrompt("Click a face or edge, then a second one · Esc");
+    this.showPrompt();
+    this.unlisten = onLanguageChange(() => {
+      this.update();
+      this.showPrompt();
+    });
+  }
+
+  private showPrompt() {
+    setPrompt(this.onSecond ? t("tool.measure.second") : t("tool.measure.first"));
   }
 
   /** Right-click "Measure from here": start() plus one click on `hit`. */
@@ -67,7 +79,8 @@ export class MeasureTool {
     this.probes.push(probe);
     this.highlight();
     this.update();
-    setPrompt("Click a second face or edge · Esc");
+    this.onSecond = true;
+    this.showPrompt();
   }
 
   private onMove(e: PointerEvent) {
@@ -127,9 +140,9 @@ export class MeasureTool {
       const tris = this.viewport.faceTriangles(p.faceId);
       const segs: [THREE.Vector3, THREE.Vector3][] = [];
       const pts: THREE.Vector3[] = [];
-      for (const t of tris) {
-        segs.push([t.a, t.b], [t.b, t.c], [t.c, t.a]);
-        pts.push(t.a, t.b, t.c);
+      for (const tri of tris) {
+        segs.push([tri.a, tri.b], [tri.b, tri.c], [tri.c, tri.a]);
+        pts.push(tri.a, tri.b, tri.c);
       }
       return { tris, segs, pts };
     }
@@ -152,8 +165,8 @@ export class MeasureTool {
 
     const ptsVsTris = (pts: THREE.Vector3[], tris: THREE.Triangle[], flip: boolean) => {
       for (const p of pts) {
-        for (const t of tris) {
-          t.closestPointToPoint(p, tmp);
+        for (const tri of tris) {
+          tri.closestPointToPoint(p, tmp);
           const d = p.distanceTo(tmp);
           if (d < best.d) {
             best = flip ? { d, pa: tmp.clone(), pb: p.clone() } : { d, pa: p.clone(), pb: tmp.clone() };
@@ -191,6 +204,8 @@ export class MeasureTool {
     if (!this.active) return;
     this.releaseRows?.();
     this.releaseRows = null;
+    this.unlisten?.();
+    this.unlisten = null;
     const el = this.viewport.domElement;
     el.removeEventListener("pointerdown", this.boundDown, true);
     el.removeEventListener("pointermove", this.boundMove, true);

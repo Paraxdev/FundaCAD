@@ -2,6 +2,7 @@
 // from the build's datumMarks under the mechanism id, and the handle starts from the mark's value, not 0.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, Vec3 } from "../types";
@@ -114,8 +115,8 @@ export class MechanismTool {
     this.dim.show(
       [
         field === "offset"
-          ? { name: "offset", label: "Drive offset", kind: "length" }
-          : { name: "angle", label: "Drive angle", kind: "angle" },
+          ? { name: "offset", label: t("field.driveOffset"), kind: "length" }
+          : { name: "angle", label: t("field.driveAngle"), kind: "angle" },
       ],
       () => this.commit(),
       () => this.cancel(),
@@ -129,11 +130,7 @@ export class MechanismTool {
       },
     );
     this.dim.updateFromCursor({ [field]: this.value });
-    setPrompt(
-      field === "offset"
-        ? "Drag the arrow to slide the drive joint, the linkage follows. The value can be typed. Enter applies, Esc cancels."
-        : "Drag the dial to turn the drive joint, the linkage follows. The value can be typed. Enter applies, Esc cancels.",
-    );
+    setPrompt(field === "offset" ? t("tool.mechanism.slide") : t("tool.mechanism.turn"));
     this.gesture.frame();
     return true;
   }

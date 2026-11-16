@@ -2,6 +2,7 @@
 // The `move` feature turns about the world origin, so the pivot correction lives in transformGizmo.composeMove.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import { featureValueRule } from "../document/numFields";
@@ -74,8 +75,7 @@ export const GIZMO_REACH_PX = SCALE_AT + SCALE_BOX;
 type Grab = { kind: "axis" | "ring" | "origin" | "size" | "plane"; index: number } | null;
 
 function idlePrompt(canResize: boolean): string {
-  const resize = canResize ? " a cube to resize," : "";
-  return `Drag an arrow to slide, a square to slide in a plane, a ring to turn,${resize} the centre to move what those act about · Enter · Esc`;
+  return t("tool.move.idle", { resize: canResize ? "yes" : "no" });
 }
 
 function planeAxes(normal: number): [number, number] {
@@ -204,13 +204,13 @@ export class MoveTool {
     if (this.gizmo) this.placeGizmo(this.gizmo);
     this.dim.show(
       [
-        { name: "move", label: "Move", icon: "move", kind: "length" },
-        { name: "turn", label: "Angle", icon: "rotate", kind: "angle" },
+        { name: "move", label: t("tool.move"), icon: "move", kind: "length" },
+        { name: "turn", label: t("field.angle"), icon: "rotate", kind: "angle" },
         ...(target.handles.cubes.length
           ? [
               {
                 name: "size",
-                label: "Scale",
+                label: t("tool.scale"),
                 icon: "scale",
                 kind: "count" as const,
                 ...featureValueRule("scale", "factor"),
@@ -222,9 +222,9 @@ export class MoveTool {
       () => this.cancel(),
       target.canCopy
         ? {
-            label: "Copy",
+            label: t("tool.copy"),
             icon: "copy",
-            title: "Leave the original where it is and move a copy",
+            title: t("tool.move.copyTip"),
             initial: this.copy,
             onChange: (on) => {
               this.copy = on;
@@ -265,7 +265,7 @@ export class MoveTool {
   private showStep(label: string) {
     if (label === this.stepLabel) return;
     this.stepLabel = label;
-    setPrompt(`Step ${label} · Shift for finer`);
+    setPrompt(t("tool.move.step", { step: label }));
   }
 
   private comp(i: number): number {
@@ -521,10 +521,10 @@ export class MoveTool {
       return v !== null && Math.abs(v - (name === "size" ? 1 : 0)) > 1e-9;
     };
     const kind = this.last?.kind;
-    if (typed("move") && kind === "size") return "A cube scales, type its factor in Scale";
-    if (typed("move") && kind !== "axis") return "Click an arrow for the distance to run along";
-    if (typed("turn") && kind !== "ring") return "Click a ring for the angle to turn about";
-    if (typed("size") && kind !== "size") return "Click a cube for the scale to stretch along";
+    if (typed("move") && kind === "size") return t("tool.move.needScale");
+    if (typed("move") && kind !== "axis") return t("tool.move.needArrow");
+    if (typed("turn") && kind !== "ring") return t("tool.move.needRing");
+    if (typed("size") && kind !== "size") return t("tool.move.needCube");
     return null;
   }
 

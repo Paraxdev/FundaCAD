@@ -1,6 +1,7 @@
 // The Measure readout as a pure function of the picks, kept apart from measureTool.ts so a headless test reaches it.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import { getUnit, toDisplay } from "../ui/units";
 import { listJoin, spellRounded } from "../ui/measure";
 
@@ -35,17 +36,17 @@ export function measureRows(
   const push = (k: string, v: string) => rows.push({ k, v });
 
   if (!a) {
-    push("", "Pick a face or edge");
+    push("", t("tool.measure.pickOne"));
   } else if (!b || !near) {
-    if (a.kind === "face") push("Area", A(a.area));
-    else push("Length", L(a.length));
-    push("At", xyz(a.point));
+    if (a.kind === "face") push(t("tool.measure.area"), A(a.area));
+    else push(t("field.length"), L(a.length));
+    push(t("tool.measure.at"), xyz(a.point));
   } else {
     const delta = near.pb.clone().sub(near.pa);
-    push("Distance", L(near.d));
+    push(t("field.distance"), L(near.d));
     push("ΔX ΔY ΔZ", xyz(delta));
-    push("Centers", L(a.point.distanceTo(b.point)));
-    push("Angle", `${spellRounded(THREE.MathUtils.radToDeg(a.dir.angleTo(b.dir)))}°`);
+    push(t("tool.measure.centers"), L(a.point.distanceTo(b.point)));
+    push(t("field.angle"), `${spellRounded(THREE.MathUtils.radToDeg(a.dir.angleTo(b.dir)))}°`);
   }
   return rows;
 }

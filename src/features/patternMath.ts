@@ -2,6 +2,7 @@
 // _pattern_circular), and a ghost that disagrees with the build is worse than none because it is believed.
 
 import type { Axis3 } from "../types";
+import { t } from "../i18n";
 import { spellNumber } from "../ui/measure";
 
 /** 1 is legal mid-gesture, on the way to 2, but not to commit. */
@@ -46,15 +47,11 @@ export function circularAngles(count: number, totalAngle: number): number[] {
 
 export function describePattern(kind: "linear" | "circular", count: number, value: number, axis: Axis3): string {
   const n = clampCount(count);
-  const copies = `${n} ${n === 1 ? "copy" : "copies"}`;
-  if (kind === "linear") {
-    return `${copies}, ${fmt(value)} mm apart along ${axis}`;
-  }
-  return `${copies} over ${fmt(value)}° about ${axis}`;
+  return t(kind === "linear" ? "tool.pattern.linear" : "tool.pattern.circular", { n, value: fmt(value), axis });
 }
 
 export function describeRect(nx: number, ny: number, sx: number, sy: number): string {
-  return `${clampCount(nx)} by ${clampCount(ny)} copies, ${fmt(sx)} by ${fmt(sy)} mm apart`;
+  return t("tool.pattern.rect", { nx: clampCount(nx), ny: clampCount(ny), sx: fmt(sx), sy: fmt(sy) });
 }
 
 function fmt(v: number): string {

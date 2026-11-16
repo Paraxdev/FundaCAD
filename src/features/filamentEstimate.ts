@@ -1,6 +1,8 @@
 // Filament estimate for the Properties panel: solid volume at 100% infill, otherwise an approximate shell (area
 // times wall thickness) plus the infill fraction of the rest. An estimate, not a toolpath.
 
+import { t } from "../i18n";
+
 export interface MaterialPreset {
   id: string;
   label: string;
@@ -14,7 +16,13 @@ export const MATERIAL_PRESETS: readonly MaterialPreset[] = [
   { id: "abs", label: "ABS", density: 1.04 },
   { id: "asa", label: "ASA", density: 1.07 },
   { id: "tpu", label: "TPU", density: 1.21 },
-  { id: "nylon", label: "Nylon", density: 1.14 },
+  {
+    id: "nylon",
+    get label() {
+      return t("filament.nylon");
+    },
+    density: 1.14,
+  },
 ];
 
 export const CUSTOM_MATERIAL_ID = "custom";

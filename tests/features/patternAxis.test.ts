@@ -56,7 +56,7 @@ describe("patternAxis", () => {
     await setLanguage("de");
     const de = describeAxis(line, undefined);
     await setLanguage("system");
-    expect({ en, de }).toEqual({ en: "line through (20.46, -7.5, 3)", de: "line through (20,46; -7,5; 3)" });
+    expect({ en, de }).toEqual({ en: "line through (20.46, -7.5, 3)", de: "Linie durch (20,46; -7,5; 3)" });
   });
 });
 

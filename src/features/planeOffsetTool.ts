@@ -1,6 +1,7 @@
 // Offset Plane: drag an arrow along the source normal or type a value; commit returns the PlaneDef to sketch on.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { PlaneDef } from "../types";
 import type { SketchPlane } from "../sketch/plane";
@@ -63,7 +64,7 @@ export class PlaneOffsetTool {
     this.buildGizmo();
     this.buildGhost();
     this.dim.show(
-      [{ name: "offset", label: "Offset", kind: "length" }],
+      [{ name: "offset", label: t("field.offset"), kind: "length" }],
       () => this.commit(),
       () => this.cancel(),
     );
@@ -78,7 +79,7 @@ export class PlaneOffsetTool {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ offset: 0 });
-    setPrompt("Drag or type an offset · Enter to sketch on it · Esc");
+    setPrompt(t("tool.planeOffset.prompt"));
     this.gesture.frame();
     this.updateGhost();
   }
