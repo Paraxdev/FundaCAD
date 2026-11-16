@@ -3098,9 +3098,13 @@ export class Viewport {
     return this.planesOnTop;
   }
 
-  /** Brighten the plane under the cursor during plane-pick (null = none). */
+  /** Brighten the plane under the cursor during plane-pick (null = none). With the tiles hidden, the lit one is
+   *  drawn alone. */
   hoverPlane(kind: Plane3 | null) {
-    this.scene.originTiles.hover(kind);
+    const tiles = this.scene.originTiles;
+    const wasDrawn = tiles.drawn;
+    tiles.hover(kind);
+    if (!wasDrawn && tiles.drawn) tiles.applyTheme(this.groundHex());
     this.requestRender();
   }
 
@@ -4739,15 +4743,12 @@ export class Viewport {
           if (this.scene.grid.group.visible) this.reportGridStep(this.scene.grid.step);
         }
         // Origin arrows keep a constant screen size, measured at the origin where they are drawn.
+        const tilesDrawn = this.scene.originTiles.drawn;
         if (this.overlayDrawn("origin")) {
-          this.scene.triad.update(
-            this.pixelWorldSize(WORLD_ORIGIN),
-            this.modelDiagonal(),
-            triadMinScale(this.planesOnTop),
-          );
-          this.scene.triad.drawOver(this.planesOnTop ? TILE_ORDER.rim : null);
+          this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal(), triadMinScale(tilesDrawn));
+          this.scene.triad.drawOver(tilesDrawn ? TILE_ORDER.rim : null);
         }
-        if (this.planesOnTop) this.syncOriginTiles();
+        if (tilesDrawn) this.syncOriginTiles();
         // Focus on whatever the view is centred on, every frame since a wheel changes the orbit distance.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
         this.contactShadow.sync({

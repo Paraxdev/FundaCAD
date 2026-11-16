@@ -396,7 +396,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
 
   function lightPlane(row: GeometryRow | null) {
     const p = row?.plane;
-    // Origin tiles draw only in a plane pick, and a pick owns them while it waits.
+    // While a tool runs it owns the origin tiles, so the list only lights one, drawn alone if the others are hidden.
     if (!heldBlocked()) e.viewport.showAllPlanes(p?.kind === "basePlane");
     e.viewport.hoverPlane(p?.kind === "basePlane" ? p.plane : null);
     e.viewport.hoverDatum(p?.kind === "datumPlane" ? p.id : null);
