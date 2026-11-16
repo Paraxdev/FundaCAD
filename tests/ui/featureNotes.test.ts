@@ -144,14 +144,28 @@ describe("an oversize blend's note", () => {
   it("lights the chip and names the size that rests on both faces", () => {
     expect(note(reason("fillet")).get("e3")).toBe(
       "The fillet runs past a face beside its edge, so it cuts that corner off instead of resting on both faces. " +
-        "One that rests on both fits up to 4.99 mm",
+        "One that rests on both fits up to 4.99 mm.",
     );
   });
 
   it("says chamfer for a chamfer, and leaves the size out when the engine names none", () => {
     expect(note(reason("chamfer", "")).get("e3")).toBe(
-      "The chamfer runs past a face beside its edge, so it cuts that corner off instead of resting on both faces",
+      "The chamfer runs past a face beside its edge, so it cuts that corner off instead of resting on both faces.",
     );
+  });
+
+  it("reads the kind from the engine's sentence, not from a body named Chamfer", () => {
+    expect(note(reason("fillet").replace("body1", "Chamfer")).get("e3")).toMatch(/^The fillet runs past/);
+  });
+
+  it("replaces an earlier lossy match's note for the same feature", () => {
+    const notes = featureNotes({
+      diagnostics: [
+        { feature_id: "e3", lossy: true, reason: "edge picked from a drifted match" },
+        { feature_id: "e3", code: "blendOverrun", reason: reason("fillet") },
+      ],
+    });
+    expect(notes.get("e3")).toMatch(/^The fillet runs past/);
   });
 
   it("follows the chosen language and its decimal mark", async () => {
@@ -165,7 +179,7 @@ describe("an oversize blend's note", () => {
   it("never names a size in inches past the one that fits", () => {
     setUnit("in");
     // 9.99 mm is 0.3933 in, shown to the nearest digit it would read 0.394 in
-    expect(note(reason("fillet", " A fillet that rests on both fits up to 9.99mm.")).get("e3")).toMatch(/0\.393 in$/);
+    expect(note(reason("fillet", " A fillet that rests on both fits up to 9.99mm.")).get("e3")).toMatch(/0\.393 in\.$/);
   });
 
   it("shows the engine's own reason for an advisory the app does not word", () => {

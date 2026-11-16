@@ -54,7 +54,7 @@ def test_the_chip_and_the_properties_name_the_size_that_rests_on_both_faces(s):
     chip = s.page.locator(CHIP)
     expect(chip).to_have_class(re.compile(r"\bwarn\b"))
     note = "The fillet runs past a face beside its edge, so it cuts that corner off instead of resting on both faces. "
-    note += "One that rests on both fits up to 39.99 mm"
+    note += "One that rests on both fits up to 39.99 mm."
     assert f"Note: {note}" in chip.get_attribute("title")
     assert f"warning: {note}" in s.page.evaluate(STATE, "f")
     chip.click()

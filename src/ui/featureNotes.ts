@@ -10,20 +10,25 @@ export interface NoteSources {
   featureErrors?: { feature_id?: string }[] | undefined;
   /** The legacy single error field. Null is accepted since the build state holds null between builds. */
   errorFeatureId?: string | null | undefined;
-  diagnostics?: { feature_id?: string; reason?: string; code?: string }[] | undefined;
+  diagnostics?: { feature_id?: string; reason?: string; code?: string; lossy?: boolean }[] | undefined;
 }
 
-/** One advisory per feature. Failed features are absent, as is a diagnostic with no `reason`; the first reason wins. */
+/** One advisory per feature. Failed features are absent, as is a diagnostic with no `reason`. The first reason wins,
+ *  except that a coded advisory replaces a lossy match's note, since it says what the feature built. */
 export function featureNotes(src: NoteSources): Map<string, string> {
   const failed = new Set<string>();
   for (const e of src.featureErrors ?? []) if (e.feature_id) failed.add(e.feature_id);
   if (src.errorFeatureId) failed.add(src.errorFeatureId);
 
   const notes = new Map<string, string>();
+  const fromLossy = new Set<string>();
   for (const d of src.diagnostics ?? []) {
     const id = d.feature_id;
-    if (!id || !d.reason || failed.has(id) || notes.has(id)) continue;
+    if (!id || !d.reason || failed.has(id)) continue;
+    if (notes.has(id) && !(d.code && fromLossy.has(id))) continue;
     notes.set(id, advisoryNote(d.code, d.reason));
+    if (d.lossy && !d.code) fromLossy.add(id);
+    else fromLossy.delete(id);
   }
   return notes;
 }
@@ -32,7 +37,7 @@ export function featureNotes(src: NoteSources): Map<string, string> {
 function advisoryNote(code: string | undefined, reason: string): string {
   if (code === "blendOverrun") {
     const size = blendFitsUpTo(reason);
-    const kind = /\bchamfer\b/i.test(reason) ? "chamfer" : "fillet";
+    const kind = /mm the chamfer runs past/i.test(reason) ? "chamfer" : "fillet";
     return t("feature.note.blendOverrun", { kind, fits: size ? "yes" : "no", size: size ?? "" });
   }
   return reason;

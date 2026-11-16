@@ -68,7 +68,7 @@
   "feature.divideFace": "Fläche teilen",
   "feature.duplicate": "Duplizieren",
   "feature.import": "Import",
-  "feature.note.blendOverrun": "{kind, select, chamfer {Die Fase} other {Die Verrundung}} läuft über eine Fläche neben ihrer Kante hinaus und schneidet diese Ecke ab, statt auf beiden Flächen aufzuliegen{fits, select, yes {. Auf beiden aufliegend passen höchstens {size}} other {}}",
+  "feature.note.blendOverrun": "{kind, select, chamfer {Die Fase} other {Die Verrundung}} läuft über eine Fläche neben ihrer Kante hinaus und schneidet diese Ecke ab, statt auf beiden Flächen aufzuliegen{fits, select, yes {. Auf beiden aufliegend passen höchstens {size}} other {}}.",
   "feature.note.needsPlugin": "Nicht enthalten: Es braucht das Plug-in „{plugin}“, das hier nicht läuft. Es bleibt erhalten und wird mit der Datei gespeichert.",
   "feature.note.unknownType": "Nicht enthalten: Diese Version von FundaCAD kennt diese Art von Feature nicht. Es bleibt erhalten und wird mit der Datei gespeichert. Eine neuere FundaCAD-Version oder ein Plug-in kann es erstellen.",
   "feature.numbered": "{name} {n, number}",
