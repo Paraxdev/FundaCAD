@@ -315,6 +315,13 @@ Open a fixture document with `s.open_file(...)` rather than building one in page
 asserts on readout text, and put the port in `tools/harness/examples/` with a test in
 `tests/browser/`. The old script stays until the port has been green in CI for a while.
 
+## In CI
+
+Every push runs the tests marked `smoke` in build.yml's `e2e` job, the `smoke and heavy` ones in
+`e2e-heavy` and the `a11y` ones in `e2e-a11y`. The rest of `tests/browser/` runs once a night on dev
+in `harness-nightly.yml`, with the engine of the newest dev build that kept one. Mark a test `smoke`
+when every push should run it.
+
 ## Troubleshooting
 
 - `no engine found`: build one with `cargo build -p fundacad-cli`, or set `FUNDACAD_ENGINE_CMD`.
