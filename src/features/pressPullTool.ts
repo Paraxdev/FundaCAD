@@ -6,7 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState, SketchBinding } from "../document/store";
 import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
-import { carryTaker, carryWords, pickOfHit, type CarryCommit, type CarryHost } from "./carryOn";
+import { carryPress, carryPressTarget, carryTaker, carryWords, type CarryCommit, type CarryHost } from "./carryOn";
 import { awaitTreePick, type TreePickAnswer } from "../ui/treePick";
 import { PARALLEL_COS, planarPushFaces, type PushFaces } from "./pushOutline";
 import { sweepPolylines } from "./sweepOutline";
@@ -147,6 +147,7 @@ export class PressPullTool {
   carry: CarryHost | null = null;
   private releaseCarryRows: (() => void) | null = null;
   private carryLit = false;
+  private profileLit = false;
   private bodyId: string | null = null;
   private anchor = new THREE.Vector3(); // gizmo origin = the clicked point on the face
   private axis = new THREE.Vector3(0, 0, 1); // drag axis (unit) = face outward normal, or the outward radial on a round face
@@ -469,12 +470,20 @@ export class PressPullTool {
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
-    // A clean click on another face or an edge finishes the push and goes on from there, T is the way to stop at a
-    // face; empty space or one of its own faces just commits.
-    const hit = this.carriesOn() ? pickOfHit(this.viewport.pickEntity(e.clientX, e.clientY)) : null;
-    const own = hit?.kind === "face" && this.faceIds.includes(hit.faceId);
-    if (hit && !own && this.carry!.route(hit) !== "row") return;
-    this.commit();
+    // A clean click on an edge, a profile or another face finishes the push and goes on from there, T is the way to
+    // stop at a face; empty space or one of its own faces just commits.
+    const carried =
+      this.carriesOn() &&
+      carryPress(
+        this,
+        this.carry!,
+        this.viewport,
+        e.clientX,
+        e.clientY,
+        () => false,
+        (id) => this.faceIds.includes(id),
+      );
+    if (!carried) this.commit();
   }
 
   private onKey(e: KeyboardEvent) {
@@ -932,7 +941,7 @@ export class PressPullTool {
       );
     }
     if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Up or Down steps · Esc");
-    const on = this.carry ? ` · click to commit · ${carryWords.prompt()}` : " · click to commit";
+    const on = this.carry ? ` · click to commit · ${carryWords.promptProfile()}` : " · click to commit";
     if (this.faces.length > 1) {
       return setPrompt(
         `${this.faces.length} faces · drag or type a distance · Up or Down steps · T stops at a face${on} · Esc`,
@@ -1466,12 +1475,17 @@ export class PressPullTool {
     this.releaseCarryRows = null;
     if (this.carryLit) this.viewport.hoverEntity(null);
     this.carryLit = false;
+    if (this.profileLit) this.carry?.lightProfile(null);
+    this.profileLit = false;
   }
 
   private lightCarry(x: number, y: number, onHandle: boolean) {
-    const lit = !onHandle && this.carriesOn() ? this.viewport.pickEntity(x, y) : null;
+    const next = !onHandle && this.carriesOn() ? carryPressTarget(this.viewport, this.carry!, x, y, () => false) : null;
+    const lit = next && !next.profile ? next.hit : null;
     if (lit || this.carryLit) this.viewport.hoverEntity(lit ?? null);
     this.carryLit = !!lit;
+    if (next?.wr || this.profileLit) this.carry?.lightProfile(next?.wr ?? null);
+    this.profileLit = !!next?.wr;
   }
 
   private bindings(feature: Feature): SketchBinding[] {

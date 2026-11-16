@@ -110,6 +110,9 @@ export function installCarryOn(e: CarryEngine): void {
   const host: CarryHost = {
     route: (pick) => routeTreeClick(pick, treeClickDeps(e)),
     profileAt: (x, y) => (profileAt ??= createProfileAt(e, { refresh: false }))(x, y),
+    lightProfile: (wr) => {
+      if (e.overlay.setHoverRegion(wr)) e.viewport.requestRender();
+    },
     refuse: (why) => refuseAloud(e, why),
     after(done, target) {
       drop?.();

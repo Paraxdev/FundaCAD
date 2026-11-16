@@ -7,7 +7,6 @@
   "carry.depthFirst": "Set the depth first, drag and let go or type it",
   "carry.lost": "{kind, select, face {The face} profile {The profile} other {The edge}} you picked is not on the result, pick it again",
   "carry.nothingMade": "Depth is 0, nothing made",
-  "carry.prompt": "click a face to push it, an edge to round it",
   "carry.promptProfile": "click a profile to extrude it, a face to push it, an edge to round it",
   "carry.refused": "Refused: {reason}",
   "carry.slow": "The build took too long, pick the face or edge again",

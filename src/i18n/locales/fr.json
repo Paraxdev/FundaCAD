@@ -7,7 +7,6 @@
   "carry.depthFirst": "Fixez d'abord la profondeur, faites glisser puis relâchez, ou saisissez-la",
   "carry.lost": "{kind, select, face {La face choisie} profile {Le profil choisi} other {L'arête choisie}} n'est pas dans le résultat, choisissez-{kind, select, profile {le} other {la}} à nouveau",
   "carry.nothingMade": "Profondeur 0, rien n'a été créé",
-  "carry.prompt": "cliquez sur une face pour la pousser, sur une arête pour l'arrondir",
   "carry.promptProfile": "cliquez sur un profil pour l'extruder, sur une face pour la pousser, sur une arête pour l'arrondir",
   "carry.refused": "Refusé : {reason}",
   "carry.slow": "La reconstruction a pris trop de temps, choisissez à nouveau la face ou l'arête",
