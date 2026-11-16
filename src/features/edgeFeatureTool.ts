@@ -1317,8 +1317,9 @@ export class EdgeFeatureTool {
     }
   }
 
-  /** A null `anchor` stands the handle on the most recently picked edge. False when the members passed EDGE_CAP, the
-   *  tool is then closed, with the refusal dialog unless `quiet`, for a caller that words the refusal itself. */
+  /** A null `anchor` stands the handle on the most recently picked edge. False when the members passed EDGE_CAP. The
+   *  tool is then closed with the refusal dialog, or with `quiet` left open and silent, for a caller that words the
+   *  refusal itself. Only a `chainSource` pick may be quiet, it adds nothing when over the cap. */
   private beginDrag(
     edges: Selector[],
     anchor: THREE.Vector3 | null,
@@ -1337,8 +1338,9 @@ export class EdgeFeatureTool {
       if (scope === "chain") over = this.expandChains();
     }
     if (over) {
+      if (opts?.quiet) return false;
       this.cancel();
-      if (!opts?.quiet) this.refuseOverCap(over);
+      this.refuseOverCap(over);
       return false;
     }
     if (anchor) {

@@ -239,7 +239,7 @@ describe("an edge row while Fillet waits", () => {
   });
 
   it.each(["fillet", "chamfer"] as const)(
-    "%s refuses a first row whose chain is over the edge cap once, in words, and closes",
+    "%s refuses a first row whose chain is over the edge cap once, in words, and keeps waiting for a row",
     (kind) => {
       const { tool, offer } = rig(CHAIN, 0.5);
       cap.value = 2;
@@ -248,7 +248,10 @@ describe("an edge row while Fillet waits", () => {
         tool.start(kind, () => {});
         const over = offer(chainRow(1), "Line edge 2 of Rail");
         expect(over).toEqual({ said: [], refused: [t("pick.overCap")] });
-        expect([tool.memberRows(), cap.asked, treePickWaiting()]).toEqual([[], [], false]);
+        expect([tool.memberRows(), cap.asked, treePickWaiting()]).toEqual([[], [], true]);
+        cap.value = 5000;
+        expect(offer(chainRow(1), "Line edge 2 of Rail").said).not.toEqual([]);
+        expect(tool.memberRows().length).toBeGreaterThan(0);
       } finally {
         cap.value = 5000;
         tool.cancel();
