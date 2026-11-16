@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import { createDragHandle, nameHandle, HANDLE_UP, handleScale, leanOutOfView, type DragHandle } from "./manipulator";
+import { capturePointer } from "./canvasGesture";
 
 // Dimmer than an armed handle since it is an offer, but 0.55 was dim enough to miss against a lit face, the
 // selection toolbar and the Z axis through the same pixels.
@@ -134,6 +135,7 @@ export class SelectionNudge {
     // Unmount first, or the tool's identical handle z-fights. Not hide(): `want` survives, so the offer returns when
     // the tool ends, and a rebuild meanwhile is safe since setModel keeps the selection and replaces `want`.
     this.unmount();
+    capturePointer(this.viewport.domElement, e);
     grab(e.clientX, e.clientY);
   }
 

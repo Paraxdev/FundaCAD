@@ -141,4 +141,27 @@ describe("CanvasGesture", () => {
     frames.forEach((f) => f());
     expect(passes).toBe(0);
   });
+
+  it("captures the pointer on a press the tool claims, so the release comes back to it", () => {
+    // A long drag lets go over the value box or a panel; without the capture the tool never hears the release.
+    const el = makeEl();
+    const captured: number[] = [];
+    el.setPointerCapture = (id: number) => void captured.push(id);
+    let claim = false;
+    const g = new CanvasGesture(el, {
+      move: () => {},
+      down: (e) => {
+        if (claim) e.preventDefault();
+      },
+      key: () => {},
+    });
+    g.attach();
+    const press = (id: number) =>
+      el.dispatchEvent(Object.assign(new Event("pointerdown", { cancelable: true }), { pointerId: id }));
+    press(1);
+    claim = true;
+    press(2);
+    expect(captured).toEqual([2]);
+    g.detach();
+  });
 });
