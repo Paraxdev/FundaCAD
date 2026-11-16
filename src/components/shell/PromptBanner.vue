@@ -7,7 +7,7 @@ import { keyHint } from "../../input/shortcuts";
 import { sketchToolName } from "../../ui/railDefs";
 import { runningTool } from "../../ui/runningTool";
 import { COLUMNS, LEFT_CARDS, RIGHT_CARDS, cardRects, centreShift, promptInsets } from "../../ui/promptPlacement";
-import { announce } from "../../ui/announce";
+import { announce, cancelAnnouncement } from "../../ui/announce";
 import { underZoom } from "../../ui/anchor";
 import { pageZoom } from "../../ui/interfaceSize";
 
@@ -37,6 +37,8 @@ watch(
   ([label, text]) => {
     if (!text) {
       spokenTitle = null;
+      // A prompt still inside its debounce belongs to a tool that has just ended, its result is spoken instead.
+      cancelAnnouncement("prompt");
       return;
     }
     const fresh = !!label && label !== spokenTitle;

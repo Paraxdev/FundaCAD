@@ -3,7 +3,7 @@ import { nextTick, reactive } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
-vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
 
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
