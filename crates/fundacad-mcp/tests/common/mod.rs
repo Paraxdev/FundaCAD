@@ -141,17 +141,18 @@ pub fn is_error(result: &rmcp::model::CallToolResult) -> bool {
     result.is_error.unwrap_or(false)
 }
 
-/// The built `fundacad-mcp` binary, beside the test binary.
 pub fn mcp_binary() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
-    profile.join(if cfg!(windows) { "fundacad-mcp.exe" } else { "fundacad-mcp" })
+    PathBuf::from(env!("CARGO_BIN_EXE_fundacad-mcp"))
+}
+
+/// `target/<profile>`, where the workspace's binaries and examples are. Taken from the server binary, since
+/// cargo 1.100 runs test binaries from `build/<pkg>/<hash>/out`, no longer from `target/<profile>/deps`.
+pub fn profile_dir() -> PathBuf {
+    mcp_binary().parent().expect("target/<profile>").to_path_buf()
 }
 
 pub fn engine_binary() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
-    profile.join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
+    profile_dir().join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
 }
 
 /// A session file nothing can find. NO TEST MAY FIND THE RUNNING APP: a server that attached would push every

@@ -14,9 +14,8 @@ use serde_json::{json, Value};
 const UI: [&str; 5] = ["ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
 
 fn fake() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
-    let fake = profile.join("examples").join(if cfg!(windows) { "fake_harness.exe" } else { "fake_harness" });
+    let fake =
+        common::profile_dir().join("examples").join(if cfg!(windows) { "fake_harness.exe" } else { "fake_harness" });
     assert!(fake.is_file(), "build the example first: {}", fake.display());
     fake
 }

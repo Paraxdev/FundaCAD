@@ -27,11 +27,10 @@ fn with_override<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
     out
 }
 
-/// Worked out from the test binary in `target/<profile>/deps`, not the code under test, since an expectation
-/// that searched the same way would agree with a broken search.
+/// Worked out from where cargo put the server binary, not the code under test, since an expectation that
+/// searched the same way would agree with a broken search.
 fn built_engine() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
+    let profile = Path::new(env!("CARGO_BIN_EXE_fundacad-mcp")).parent().expect("target/<profile>");
     profile.join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
 }
 
