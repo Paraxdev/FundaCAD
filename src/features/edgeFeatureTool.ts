@@ -61,8 +61,9 @@ import { blendEditCommit } from "./blendEdit";
 import { BlendEditGhost } from "./blendEditGhost";
 import { boxBindings } from "./boxBindings";
 import { pointOnEdge } from "./edgeNudge";
-import { blendClickTarget, missPrompt, rimPrompt, screenPolylineDist } from "./blendPick";
+import { blendClickTarget, missPrompt, rimPrompt, screenPolylineNearest } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
+import { EDGE_DEPTH_FRACTION } from "../viewport/picking";
 import { hitPx } from "../input/pointerKind";
 import { edgeHoverColor, edgeSelectColor } from "../viewport/highlight";
 import { onThemeChange } from "../ui/theme";
@@ -706,16 +707,21 @@ export class EdgeFeatureTool {
 
   /** Within the model edge grab radius, measured along the projected polyline's segments since Line2 raycast is
    *  finicky with tool owned materials. */
-  private ghostAt(clientX: number, clientY: number): { g: GhostEdge; dist: number } | null {
-    let best: { g: GhostEdge; dist: number } | null = null;
+  /** `at` is the member's point nearest the pointer, in world space. */
+  private ghostAt(clientX: number, clientY: number): { g: GhostEdge; dist: number; at: THREE.Vector3 } | null {
+    let best: { g: GhostEdge; dist: number; seg: number; t: number } | null = null;
     // Sized for the pointer in use, the same as the model edge pick it competes with.
     const grab = hitPx(EDGE_GRAB_PX);
     for (const g of this.ghosts) {
       const pts = g.points.map((p) => this.viewport.projectToScreen(new THREE.Vector3(p[0], p[1], p[2])));
-      const dist = screenPolylineDist(pts, { x: clientX, y: clientY });
-      if (dist <= grab && (!best || dist < best.dist)) best = { g, dist };
+      const near = screenPolylineNearest(pts, { x: clientX, y: clientY });
+      if (near.dist <= grab && (!best || near.dist < best.dist)) best = { g, ...near };
     }
-    return best;
+    if (!best) return null;
+    const a = best.g.points[best.seg]!;
+    const b = best.g.points[best.seg + 1] ?? a;
+    const at = new THREE.Vector3(...a).lerp(new THREE.Vector3(...b), best.t);
+    return { g: best.g, dist: best.dist, at };
   }
 
   private clickTarget(
@@ -724,10 +730,19 @@ export class EdgeFeatureTool {
   ): { kind: "member"; g: GhostEdge } | { kind: "edge"; hit: NonNullable<ReturnType<Viewport["pickEdgeAt"]>> } | null {
     const ghost = this.ghostAt(clientX, clientY);
     const hit = this.pickBase(clientX, clientY);
-    const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, hitPx(EDGE_GRAB_PX));
+    const behind = !!ghost && !!hit && this.deeper(ghost.at, hit.point);
+    const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, hitPx(EDGE_GRAB_PX), behind);
     if (t === "member" && ghost) return { kind: "member", g: ghost.g };
     if (t === "edge" && hit) return { kind: "edge", hit };
     return null;
+  }
+
+  /** Past the slack picking allows a back edge, which absorbs tessellation error. */
+  private deeper(far: THREE.Vector3, near: THREE.Vector3): boolean {
+    const view = this.viewport.camera.matrixWorldInverse;
+    const depth = (p: THREE.Vector3) => -p.clone().applyMatrix4(view).z;
+    const slack = Math.max(1e-6, (this.modelDiagonal() ?? 0) * EDGE_DEPTH_FRACTION);
+    return depth(far) > depth(near) + slack;
   }
 
   private hoveredGhost: GhostEdge | null = null;
