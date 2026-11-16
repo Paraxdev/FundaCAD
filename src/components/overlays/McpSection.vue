@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref } from "vue";
 import { ENGINE } from "../../app/engineKey";
+import { t } from "../../i18n";
 import type { LiveState } from "../../live/liveSession";
 import { asMcpHost, MCP_HOSTS, mcpServerPath, mcpSetupFor, type McpHost } from "../../live/mcpConnect";
+import { loadMcpSwitch, mcpEnabled, mcpSwitchShown, onMcpChange, setMcpEnabled } from "../../live/mcpSwitch";
 import { asLiveEditingMode, liveEditingMode, onLiveEditingChange, setLiveEditingMode } from "../../ui/liveEditing";
 import { toast } from "../../ui/toast";
 import Button from "../ui/Button.vue";
+import Checkbox from "../ui/Checkbox.vue";
 import Select from "../ui/Select.vue";
 
 // Injected rather than useEngine(): the section still has to render its
@@ -13,6 +16,8 @@ import Select from "../ui/Select.vue";
 const engine = inject(ENGINE, null);
 
 const live = ref(liveEditingMode());
+const mcpOn = ref(mcpEnabled() !== false);
+const saving = ref(false);
 const state = ref<LiveState>(engine?.live.snapshot ?? { sharing: false, guests: [], lastEdit: null });
 const host = ref<McpHost>("claude-code");
 const server = ref("");
@@ -24,7 +29,11 @@ onMounted(async () => {
     onLiveEditingChange(() => {
       live.value = liveEditingMode();
     }),
+    onMcpChange(() => {
+      mcpOn.value = mcpEnabled() !== false;
+    }),
   );
+  void loadMcpSwitch();
   if (engine)
     stops.push(
       engine.live.subscribe((s) => {
@@ -53,6 +62,17 @@ function onLive(id: string) {
   if (v) setLiveEditingMode(v);
 }
 
+async function onMcp(on: boolean) {
+  saving.value = true;
+  try {
+    await setMcpEnabled(on);
+  } catch (err) {
+    toast(t("prefs.mcp.saveFailed", { reason: err instanceof Error ? err.message : String(err) }), { kind: "error" });
+  } finally {
+    saving.value = false;
+  }
+}
+
 function onHost(id: string) {
   const v = asMcpHost(id);
   if (v) host.value = v;
@@ -61,6 +81,7 @@ function onHost(id: string) {
 const setup = computed(() => (server.value ? mcpSetupFor(host.value, server.value) : null));
 
 const status = computed(() => {
+  if (!mcpOn.value) return t("prefs.mcp.statusOff");
   if (live.value === "off") return "Not shared. An assistant works on a copy of its own.";
   const guests = state.value.guests;
   if (!state.value.sharing || guests.length === 0) return "Shared, no assistant is connected.";
@@ -80,6 +101,18 @@ async function copy(text: string) {
 
 <template>
   <div class="sm-section">AI assistants (MCP)</div>
+  <div v-if="mcpSwitchShown()" class="pref-card">
+    <Checkbox
+      id="prefs-mcp-on"
+      aria-describedby="prefs-mcp-on-hint"
+      class="pref-head pref-check"
+      :model-value="mcpOn"
+      :disabled="saving"
+      @update:model-value="onMcp"
+      ><span class="pref-title">{{ t("prefs.mcp.on") }}</span></Checkbox
+    >
+    <p id="prefs-mcp-on-hint" class="pref-hint">{{ t("prefs.mcp.onHint") }}</p>
+  </div>
   <label class="prefs-row">
     <span class="prefs-label">Live document</span>
     <Select
@@ -87,6 +120,8 @@ async function copy(text: string) {
       label="Live document"
       :model-value="live"
       :options="LIVE_OPTIONS"
+      :disabled="!mcpOn"
+      :disabled-reason="mcpOn ? undefined : t('prefs.mcp.offReason')"
       @update:model-value="onLive"
     />
   </label>

@@ -75,7 +75,7 @@ fn the_engine_worker_is_told_the_containers_blob_store() {
         &mut cmd,
         Some(Path::new("/data/blobs")),
         Some(Path::new("/data/plugins")),
-        "tok",
+        Some("tok"),
     );
     let env: BTreeMap<String, Option<String>> = cmd
         .get_envs()
@@ -86,7 +86,7 @@ fn the_engine_worker_is_told_the_containers_blob_store() {
     assert_eq!(env["FUNDACAD_LIVE_TOKEN"].as_deref(), Some("tok"));
 
     let mut bare = Command::new("fundacad");
-    fundacad_lib::engine::configure_env(&mut bare, None, None, "tok");
+    fundacad_lib::engine::configure_env(&mut bare, None, None, Some("tok"));
     assert!(
         !bare.get_envs().any(|(k, _)| k == "FUNDACAD_BLOB_DIR" || k == "FUNDACAD_PLUGIN_DIR"),
         "an unresolved directory leaves the engine's own default"

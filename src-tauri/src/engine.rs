@@ -39,9 +39,11 @@ struct Inner {
     /// and how long that job then has.
     cancels: Mutex<HashMap<String, (String, Duration)>>,
     stopping: AtomicBool,
-    /// The generation last ended on purpose by a cancel, which is no crash.
-    cancel_killed: AtomicU64,
-    /// Where `session.json` goes, None without an app data directory.
+    /// The generation last ended on purpose, by a cancel or the MCP switch, which is no crash.
+    ended_on_purpose: AtomicU64,
+    /// The Preferences MCP switch. Off, the worker gets no live token, so it opens no port and runs no live door.
+    mcp: AtomicBool,
+    /// Where `session.json` and `mcp.json` go, None without an app data directory.
     session_dir: Option<PathBuf>,
     /// The engine's own temp folder, None without a usable app cache directory, and then the engine runs unrestricted.
     temp: Option<PathBuf>,
@@ -182,6 +184,12 @@ impl Engine {
             // Left by an earlier run; the app runs once, so no other engine is writing there.
             let _ = std::fs::remove_dir_all(root);
         }
+        let session_dir = app.path().app_data_dir().ok();
+        let mcp = session_dir.as_deref().is_none_or(crate::mcp_switch::enabled);
+        if let (false, Some(dir)) = (mcp, &session_dir) {
+            // Left by a run that ended without its cleanup, it would point an assistant at a port that is gone.
+            crate::session_file::remove_from(dir);
+        }
         let inner = Arc::new(Inner {
             app: app.clone(),
             worker: Mutex::new(None),
@@ -191,8 +199,9 @@ impl Engine {
             in_flight: Mutex::new(HashMap::new()),
             cancels: Mutex::new(HashMap::new()),
             stopping: AtomicBool::new(false),
-            cancel_killed: AtomicU64::new(0),
-            session_dir: app.path().app_data_dir().ok(),
+            ended_on_purpose: AtomicU64::new(0),
+            mcp: AtomicBool::new(mcp),
+            session_dir,
             temp,
             export_root,
             staged: Mutex::new(HashMap::new()),
@@ -215,6 +224,25 @@ impl Engine {
         if let Some(mut w) = lock(&self.0.worker).take() {
             let _ = w.child.kill();
             let _ = w.child.wait();
+        }
+    }
+
+    pub fn mcp(&self) -> bool {
+        self.0.mcp.load(Ordering::SeqCst)
+    }
+
+    /// A change restarts the worker, which then starts with or without its live door, so a guest on the old one is
+    /// dropped and nothing of it lingers in the process.
+    pub fn set_mcp(&self, on: bool) {
+        if self.0.mcp.swap(on, Ordering::SeqCst) == on {
+            return;
+        }
+        if let (false, Some(dir)) = (on, &self.0.session_dir) {
+            crate::session_file::remove_from(dir);
+        }
+        if let Some(w) = lock(&self.0.worker).as_mut() {
+            self.0.ended_on_purpose.store(w.generation, Ordering::SeqCst);
+            let _ = w.child.kill();
         }
     }
 }
@@ -255,7 +283,7 @@ fn supervise(inner: Arc<Inner>) {
                 let code = status.and_then(|s| s.code());
                 let how = status.map(|s| s.to_string()).unwrap_or(cause);
                 eprintln!("[engine] worker ended: {how}");
-                if planned || inner.cancel_killed.load(Ordering::SeqCst) == generation {
+                if planned || inner.ended_on_purpose.load(Ordering::SeqCst) == generation {
                     delay = Duration::ZERO;
                 } else {
                     let detail = crash_report(&inner, &how, code, &unanswered);
@@ -290,22 +318,23 @@ fn random_token() -> String {
 }
 
 /// The blob store is passed because container.rs reads and writes the same directory, and the plugin root because Rust
-/// unpacks bundles into it.
-pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&Path>, live_token: &str) {
+/// unpacks bundles into it. No live token, with MCP off, is set empty rather than left unset, since one inherited from
+/// the shell would open the door.
+pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&Path>, live_token: Option<&str>) {
     if let Some(dir) = blobs {
         cmd.env("FUNDACAD_BLOB_DIR", dir);
     }
     if let Some(dir) = plugins {
         cmd.env("FUNDACAD_PLUGIN_DIR", dir);
     }
-    cmd.env(LIVE_TOKEN_ENV, live_token);
+    cmd.env(LIVE_TOKEN_ENV, live_token.unwrap_or(""));
 }
 
 fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let exe = std::env::current_exe()?;
     let mut cmd = Command::new(exe);
     cmd.arg("--engine").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let token = random_token();
+    let token = inner.mcp.load(Ordering::SeqCst).then(random_token);
     let safe = crate::safe_mode_active(&inner.app);
     if safe {
         // Empty rather than unset: one inherited from the shell would load them.
@@ -315,7 +344,7 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         &mut cmd,
         crate::container::blob_dir(&inner.app).ok().as_deref(),
         if safe { None } else { crate::plugins::plugins_root(&inner.app).ok() }.as_deref(),
-        &token,
+        token.as_deref(),
     );
     let env = std::env::var(fundacad_engine::sandbox::ENV).ok();
     let reduced = fundacad_engine::sandbox::worker_env(&mut cmd, inner.temp.as_deref(), env.as_deref());
@@ -333,9 +362,11 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         std::thread::spawn(move || {
             let mut announced = false;
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                // Written once the port answers, so the file never names a port
-                // nobody is listening on yet.
-                if let (Some(dir), Some(port)) = (&session_dir, announced_port(&mut announced, &line)) {
+                // Written once the port answers, so the file never names a port nobody is listening on yet. A worker
+                // given no token opened none, so a document's line that reads like the announcement is only text.
+                if let (Some(dir), Some(token), Some(port)) =
+                    (&session_dir, &token, announced_port(&mut announced, &line))
+                {
                     let (token, pid, export_dir) = (token.clone(), std::process::id(), export_dir.clone());
                     let info = crate::session_file::SessionInfo { port, token, pid, export_dir };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
@@ -544,7 +575,7 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
         deliver(&inner, &Message::Text(envelope::cancelled(&Value::String(target.clone()))));
         lock(&inner.in_flight).remove(&target);
         if let Some(w) = lock(&inner.worker).as_mut().filter(|w| w.generation == generation) {
-            inner.cancel_killed.store(generation, Ordering::SeqCst);
+            inner.ended_on_purpose.store(generation, Ordering::SeqCst);
             let _ = w.child.kill();
         }
     });
@@ -555,6 +586,20 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
 #[tauri::command]
 pub fn mcp_server() -> Result<String, String> {
     std::env::current_exe().map(|path| path.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn mcp_enabled(state: tauri::State<'_, Engine>) -> bool {
+    state.mcp()
+}
+
+/// Saved before it applies, so the switch a person sees is the one the next start reads.
+#[tauri::command]
+pub fn mcp_set_enabled(state: tauri::State<'_, Engine>, enabled: bool) -> Result<(), String> {
+    let dir = state.0.session_dir.as_deref().ok_or("the app has no data folder to keep the setting in")?;
+    crate::mcp_switch::set(dir, enabled).map_err(|e| e.to_string())?;
+    state.set_mcp(enabled);
+    Ok(())
 }
 
 /// The requests a `doc_end` ends: every one of `doc`, or every one in flight when it names none.

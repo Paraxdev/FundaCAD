@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **AI assistants can be turned off.** Preferences, AI assistants (MCP) has a
+  Let AI assistants reach this window box. Off, no assistant can see or edit
+  the open document, and nothing waits for one in the background. It is on
+  unless you turn it off, and Reset settings leaves it as it is.
+
 - **Ctrl+1 to Ctrl+7 pick a view, and a screen reader hears where the model is
   seen from.** Front, Back, Left, Right, Top, Bottom and Isometric (Cmd on
   macOS) go by the key's place on the digit row, so an AZERTY keyboard uses the

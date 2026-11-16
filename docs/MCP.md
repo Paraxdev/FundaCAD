@@ -13,6 +13,8 @@ builds link it into `fundacad`; start the same application executable with
 
 **Preferences, AI assistants (MCP)** is the whole of it:
 
+- **Let AI assistants reach this window** is the off switch (see
+  [The window's half](#the-windows-half)).
 - **Live document** decides what an assistant may do with the document that is
   open (see [The window's half](#the-windows-half)).
 - **Status** says whether the document is shared and which assistant, if any, is
@@ -250,6 +252,14 @@ documents directly; what makes the reach into the OPEN document acceptable is
 that it is visible and revocable, not that it is small.
 
 ### The window's half
+
+**Let AI assistants reach this window** is on by default. Off, the engine worker
+is started with an empty live token, so it opens no port, runs no live session
+thread and the app writes no `session.json`; an assistant falls back to a
+private copy. The shell keeps it as `mcp.json` in its app data directory
+(`src-tauri/src/mcp_switch.rs`), since the worker starts before the page loads,
+and a change restarts the worker. Reset settings leaves it, as it leaves a
+plugin's switch.
 
 Sharing is the **Live document** setting in Preferences, AI assistants (MCP):
 

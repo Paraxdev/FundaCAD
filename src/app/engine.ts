@@ -101,6 +101,7 @@ import { wireDocumentSwap } from "./documentSwap";
 import { createGeometryBrowser, type GeometryBrowser } from "./geometryBrowser";
 import { watchOutOfDate } from "./staleModel";
 import { LiveSessionHost } from "../live/liveSession";
+import { loadMcpSwitch, mcpEnabled, onMcpChange } from "../live/mcpSwitch";
 import { GuideSession } from "../ui/guide/guideSession";
 import { resolveTarget, takeSnapshot } from "../ui/guide/probe";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
@@ -283,11 +284,13 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   );
   e.live.attachGuide(e.guide);
   const syncLive = () => {
-    if (liveSharingEnabled()) e.live.start();
+    if (mcpEnabled() === true && liveSharingEnabled()) e.live.start();
     else void e.live.stop();
   };
   syncLive();
   onLiveEditingChange(syncLive);
+  onMcpChange(syncLive);
+  void loadMcpSwitch();
 
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group, "sketches");
