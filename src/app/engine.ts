@@ -342,6 +342,10 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     if (e.sketch.active) e.sketch.redraw();
     else e.overlay.update(e.store.document);
   });
+  // Snap labels and dimension labels are built on a redraw, so an open sketch takes a language switch at once.
+  onLanguageChange(() => {
+    if (e.sketch.active) e.sketch.redraw();
+  });
 
   e.tools = {
     extrude: new ExtrudeTool(e.viewport, e.overlay, e.store),

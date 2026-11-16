@@ -89,7 +89,9 @@ describe("dimTitle", () => {
   it("shows the formula with the decimal comma in German and a point again in English", async () => {
     await setLanguage("de");
     try {
-      expect(dimTitle({ fx: true, expr: "max(width*1.5;2.25)" })).toBe("= max(width*1,5;2,25) · click to edit");
+      expect(dimTitle({ fx: true, expr: "max(width*1.5;2.25)" })).toBe(
+        "= max(width*1,5;2,25) · klicken zum Bearbeiten",
+      );
     } finally {
       await setLanguage("system");
     }

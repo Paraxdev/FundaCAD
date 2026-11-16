@@ -37,6 +37,7 @@ import { pageZoom } from "../ui/interfaceSize";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 import { plainError } from "../ui/plainError";
+import { t } from "../i18n";
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface DimHost {
@@ -213,7 +214,7 @@ export class DimFlow {
     const r = resolveDim(this.dimPicks, this.dimOptions());
     this.dimPlan = isDimError(r) ? null : r;
     if (this.dimPicks.map(targetKey).join("+") !== before) {
-      toast("What this dimension pointed at is gone, so the dimension was cancelled");
+      toast(t("sketch.dim.targetGone"));
       this.cancelDim();
       return;
     }
@@ -338,7 +339,7 @@ export class DimFlow {
         () => this.commitDim(),
         () => this.cancelDim(),
       );
-      if (discarded) toast("This is a different dimension now, retype the value");
+      if (discarded) toast(t("sketch.dim.retype"));
     }
     this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
     this.positionDimBox(ev);
@@ -362,7 +363,7 @@ export class DimFlow {
     if (raw !== "") {
       const r = this.host.evalDimInput(raw, kind, null);
       if ("error" in r) {
-        toast(`Dimension not created, ${plainError(r.error, "that value is not valid")}`, { detail: r.error });
+        toast(t("sketch.dim.notCreated", { why: plainError(r.error, t("sketch.dim.badValue")) }), { detail: r.error });
         this.host.dim().focus(); // leave the box open on the bad value
         return;
       }

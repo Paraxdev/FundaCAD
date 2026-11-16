@@ -141,6 +141,7 @@ import { announce } from "../ui/announce";
 import { constraintRows } from "./relations";
 import { constraintDimName, dimKey, entityDimName, entityLabeller } from "./sketchNames";
 import { toast } from "../ui/toast";
+import { t } from "../i18n";
 import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
@@ -465,7 +466,13 @@ export class SketchMode {
     this.dims.onLabelMenu = (e, del) => {
       // Disabled rather than absent on an entity dim: no constraint to remove, but a dead right-click looks broken.
       contextMenu(e.clientX, e.clientY, [
-        { label: "Delete dimension", danger: true, disabled: !del, shortcut: "Del", onClick: () => del?.() },
+        {
+          label: t("sketch.menu.deleteDimension"),
+          danger: true,
+          disabled: !del,
+          shortcut: "Del",
+          onClick: () => del?.(),
+        },
       ]);
     };
     this.dims.onLight = (ids) => this.setRelationHover(ids);
@@ -1082,9 +1089,9 @@ export class SketchMode {
       const gap = gapReport(this.entities, this.constraints, snap);
       setPrompt(nothingToTiePrompt(le, gap));
       if (gap.kind === "gap" && !this.solverDead) {
-        toast(`Tie the ${gap.open} open ends across the ${spellNumber(Number(gap.gapMm.toPrecision(2)))} mm gap?`, {
+        toast(t("sketch.mode.tieGap", { n: gap.open, gap: spellNumber(Number(gap.gapMm.toPrecision(2))) }), {
           action: {
-            label: "Close gap",
+            label: t("sketch.mode.closeGap"),
             onClick: () => {
               if (this.active) void this.tieLooseEnds(gap.reach);
             },
@@ -1115,8 +1122,8 @@ export class SketchMode {
     const rest = after.open + after.untied;
     setPrompt(
       ties.length
-        ? `Tied ${ties.length} loose end${ties.length === 1 ? "" : "s"}${rest ? `, ${rest} left` : ""}`
-        : `Tying these ends would over constrain the sketch${reachMm ? ", draw a line to close the gap" : ""}`,
+        ? t("sketch.mode.tied", { n: ties.length, rest })
+        : t("sketch.mode.tieWouldOverConstrain", { reach: reachMm ? "yes" : "no" }),
     );
     return after;
   }
@@ -1196,7 +1203,7 @@ export class SketchMode {
     // Announce only when something held the view: with the lock off, turning away is ordinary.
     if (!wasLocked || this.releaseAnnounced) return;
     this.releaseAnnounced = true;
-    toast("View unlocked. Drawing still lands on the sketch plane. Look At turns the view back to face it.");
+    toast(t("sketch.mode.viewUnlocked"));
   }
 
   /** Called by anything that puts the camera back on the plane, so a released session recovers without
@@ -1279,11 +1286,11 @@ export class SketchMode {
     const drivenable = isPlacedDim(c);
     const driven = drivenable && (this.referenceMode || forceDriven);
     if (this.referenceMode && !drivenable) {
-      toast("Lengths and diameters can't be reference dimensions yet, made this one driving");
+      toast(t("sketch.mode.referenceNotYet"));
     }
     // Said out loud, or it reads as the Reference toggle being ignored.
     if (driven && forceDriven && !this.referenceMode) {
-      toast("Both sides are projected geometry and can't move, so this is a reference dimension");
+      toast(t("sketch.mode.referenceProjected"));
     }
     const out = driven ? ({ ...c, driven: true } as SketchConstraint) : c;
     this.setDrivingDimension(out);
@@ -1331,7 +1338,7 @@ export class SketchMode {
   private deleteConstraint(cIndex: number) {
     if (cIndex < 0 || cIndex >= this.constraints.length) return;
     const name = constraintRows(this.entities, this.constraints, this.conflictIdx, this.overIdx)[cIndex]?.spoken;
-    if (name) announce(`Deleted ${name}`, "polite", { key: "sketch-constraint" });
+    if (name) announce(t("sketch.mode.deleted", { name }), "polite", { key: "sketch-constraint" });
     this.constraints.splice(cIndex, 1);
     this.conflictIdx.clear(); // indices shift; the next solve repopulates
     this.overIdx.clear();
@@ -1376,23 +1383,13 @@ export class SketchMode {
   private applyDrivingDimsDirectly() {
     if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
       this.axisDimToast = true;
-      toast(
-        "Constraints are not working right now, so horizontal and vertical distances between two shapes wait until they are",
-        {
-          timeout: 12000,
-        },
-      );
+      toast(t("sketch.mode.solverAxisWait"), { timeout: 12000 });
     }
     if (!applyDrivingDimsDirect(this.entities, this.constraints)) return;
     this.entityVersion++; // guards any in-flight solve against this write
     if (!this.directDimToast) {
       this.directDimToast = true;
-      toast(
-        "Constraints are not working right now, so this value changes the shape once and is not kept as a live dimension",
-        {
-          timeout: 12000,
-        },
-      );
+      toast(t("sketch.mode.solverDirect"), { timeout: 12000 });
     }
     this.refreshActive();
     this.onState?.();
@@ -1467,7 +1464,7 @@ export class SketchMode {
       return {
         key: dimKey(ownsSide ? sideKey : null, con && "id" in con ? con.id : undefined, d.cIndex),
         name: side
-          ? entityDimName(side.field === "width" ? "Width" : "Height", subject)
+          ? entityDimName(t(side.field === "width" ? "sketch.dim.width" : "sketch.dim.height"), subject)
           : constraintDimName(face?.name ?? "Dimension", labels),
         entities: [...new Set(operands.map((o) => o.split("~")[0] ?? o))],
         anchor: d.labelPos,
@@ -1805,7 +1802,7 @@ export class SketchMode {
     // After Project, which picks in 3D and does not care which way the plane faces.
     if (this.planeTooEdgeOn()) {
       e.preventDefault();
-      setPrompt("The sketch plane is edge-on, turn the view to draw on it");
+      setPrompt(t("sketch.mode.edgeOn"));
       return;
     }
     // The raw point: a snap would pull it off a circle's rim.
@@ -2045,7 +2042,7 @@ export class SketchMode {
     } else if (tangent) {
       const m = tangentArcMid(this.arcStart, tangent.dir, p);
       if (!m) {
-        toast("That point is straight ahead, a tangent arc needs it off to one side");
+        toast(t("sketch.mode.tangentArcStraight"));
         return;
       }
       this.arcEnd = p.clone();
@@ -2213,7 +2210,7 @@ export class SketchMode {
     const r = deletePole(e, sp.k, this.constraints);
     this.selectedPole = null;
     if (!r) {
-      toast(`A degree ${bsplineDegree(e)} spline keeps at least ${bsplineMinPoles(e)} control points`);
+      toast(t("sketch.mode.minPoles", { degree: bsplineDegree(e), n: bsplineMinPoles(e) }));
       return true;
     }
     this.entities = this.entities.map((x) => (x.id === e.id ? r.entity : x));
@@ -2343,21 +2340,21 @@ export class SketchMode {
 
   /** dim fields per multi-click tool (and phase, for slot); Enter commits at the cursor */
   private showMultiDimFields() {
-    const t = this.tool;
+    const tool = this.tool;
     const defs =
-      t === "circle2"
-        ? [{ name: "diameter", label: "Diameter", icon: "diameter", positive: true }]
-        : t === "polygon"
+      tool === "circle2"
+        ? [{ name: "diameter", label: t("sketch.dim.diameter"), icon: "diameter", positive: true }]
+        : tool === "polygon"
           ? [
               { name: "radius", label: "R", positive: true },
               { name: "sides", label: "N", kind: "count" as const, integer: true, atLeast: 3 },
             ]
-          : t === "centerRectangle"
+          : tool === "centerRectangle"
             ? [
                 { name: "width", label: "W", positive: true },
                 { name: "height", label: "H", positive: true },
               ]
-            : t === "rectangle3"
+            : tool === "rectangle3"
               ? // W is live from the first click (it is the edge being drawn); H
                 // only means anything once that edge exists, and typing into it
                 // early would be typing into a field with no geometry behind it.
@@ -2367,7 +2364,7 @@ export class SketchMode {
                     { name: "width", label: "W", positive: true },
                     { name: "height", label: "H", positive: true },
                   ]
-              : t === "slot"
+              : tool === "slot"
                 ? this.clickPts.length === 1
                   ? [{ name: "length", label: "L", positive: true }]
                   : [{ name: "width", label: "W", positive: true }]
@@ -2381,7 +2378,7 @@ export class SketchMode {
       undefined,
       () => this.previewAtCursor(),
     );
-    if (t === "polygon") this.dim.updateFromCursor({ sides: this.polygonSides });
+    if (tool === "polygon") this.dim.updateFromCursor({ sides: this.polygonSides });
   }
 
   private multiClickAt(p: THREE.Vector2) {
@@ -2615,8 +2612,8 @@ export class SketchMode {
 
   private patternPickPrompt(): string {
     const n = this.selected.size;
-    if (!n) return "Click the curves or profile to pattern · Esc";
-    return `${n} picked · click more to add · ${this.tool === "patternCircular" ? "click the centre" : "click where the pattern starts"} · Esc`;
+    if (!n) return t("sketch.mode.patternPickFirst");
+    return t("sketch.mode.patternPick", { n, circular: this.tool === "patternCircular" ? "yes" : "no" });
   }
 
   private entitiesAlongLoop(loop: readonly THREE.Vector2[]): string[] {
@@ -3434,10 +3431,10 @@ export class SketchMode {
             { name: "height", label: "H", positive: true },
           ]
         : this.tool === "circle"
-          ? [{ name: "diameter", label: "Diameter", icon: "diameter", positive: true }]
+          ? [{ name: "diameter", label: t("sketch.dim.diameter"), icon: "diameter", positive: true }]
           : [
               { name: "length", label: "L" },
-              { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
+              { name: "angle", label: t("sketch.dim.angle"), icon: "angle", kind: "angle" as const },
             ];
     this.dim.show(
       defs,
@@ -3603,11 +3600,11 @@ export class SketchMode {
       p,
       kind: "center" as SnapKind,
       priority: 70,
-      label: "Face Center",
+      label: t("sketch.snap.faceCenter"),
     }));
     const { corners, sides } = boundaryAnchors(this.footprintEdges);
-    for (const p of corners) out.push({ p, kind: "endpoint", priority: 76, label: "Face Corner" });
-    for (const p of sides) out.push({ p, kind: "midpoint", priority: 72, label: "Edge Midpoint" });
+    for (const p of corners) out.push({ p, kind: "endpoint", priority: 76, label: t("sketch.snap.faceCorner") });
+    for (const p of sides) out.push({ p, kind: "midpoint", priority: 72, label: t("sketch.snap.edgeMidpoint") });
     return out;
   }
 
@@ -3702,7 +3699,7 @@ export class SketchMode {
       // Nothing under the cursor or selected: offer Exit Sketching, so a near miss followed by an idle Escape cannot fall
       // through escapeLayers and close the sketch without warning.
       e.preventDefault();
-      contextMenu(e.clientX, e.clientY, [{ label: "Exit Sketching", onClick: () => this.finish(true) }]);
+      contextMenu(e.clientX, e.clientY, [{ label: t("rail.exitSketching"), onClick: () => this.finish(true) }]);
       return;
     }
     e.preventDefault();
@@ -3715,13 +3712,13 @@ export class SketchMode {
       ...(linked
         ? [
             {
-              label: linked > 1 ? `Break Link (${linked})` : "Break Link",
+              label: t("sketch.menu.breakLink", { n: linked }),
               onClick: () => this.modifyFlow.breakSelectedLinks(),
             },
           ]
         : []),
       ...(chosen.some((x) => x.type === "spline")
-        ? [{ label: "Edit as Control Points", onClick: () => this.convertSelectedSplines() }]
+        ? [{ label: t("sketch.menu.editAsControlPoints"), onClick: () => this.convertSelectedSplines() }]
         : []),
       ...(bsplines.length
         ? [
@@ -3730,16 +3727,16 @@ export class SketchMode {
               onClick: () => this.reshapeSelectedBsplines({ degree: c.degree }),
             })),
             bsplines.every((x) => x.closed)
-              ? { label: "Open Curve", onClick: () => this.reshapeSelectedBsplines({ closed: false }) }
+              ? { label: t("sketch.menu.openCurve"), onClick: () => this.reshapeSelectedBsplines({ closed: false }) }
               : {
-                  label: "Close Curve",
+                  label: t("sketch.menu.closeCurve"),
                   disabled: bsplines.some((x) => x.poles.length < 3),
                   onClick: () => this.reshapeSelectedBsplines({ closed: true }),
                 },
             ...(this.selectedPole && bsplines.some((x) => x.id === this.selectedPole?.id)
               ? [
                   {
-                    label: "Delete Control Point",
+                    label: t("sketch.menu.deleteControlPoint"),
                     onClick: () => {
                       this.deleteSelectedPole();
                     },
@@ -3753,12 +3750,12 @@ export class SketchMode {
         ? [...constraintItems.map((o) => ({ label: o.label, onClick: o.apply })), { separator: true, label: "" }]
         : []),
       {
-        label: "Construction",
+        label: t("rail.construction"),
         checked: allConstruction(chosen, this.selected),
         onClick: () => this.toggleSelectedConstruction(),
       },
       { separator: true, label: "" },
-      { label: n > 1 ? `Delete ${n} entities` : "Delete", danger: true, onClick: () => this.deleteSelected() },
+      { label: t("sketch.menu.delete", { n }), danger: true, onClick: () => this.deleteSelected() },
     ];
     contextMenu(e.clientX, e.clientY, items);
   }
@@ -3772,42 +3769,38 @@ export class SketchMode {
     const isDia = plan?.kind === "diameter";
     const items: CtxItem[] = [
       {
-        label: "Pick Circle/Arc Tangent",
+        label: t("sketch.menu.pickTangent"),
         checked: this.dimFlow.tangentArmed,
         onClick: () => {
           const armed = this.dimFlow.toggleTangent();
-          setPrompt(
-            armed ? "Tangent pick armed, click a circle or arc to measure to its EDGE" : "Tangent pick cleared",
-          );
+          setPrompt(t(armed ? "sketch.menu.tangentArmed" : "sketch.menu.tangentCleared"));
         },
       },
       {
-        label: "Reflex angle",
+        label: t("sketch.menu.reflex"),
         checked: this.dimFlow.reflex,
         disabled: plan?.kind !== "angle",
         onClick: () => {
           const on = this.dimFlow.toggleReflex();
-          setPrompt(
-            on ? "Reflex angle: measures the outside of the wedge" : "Angle: measures the wedge the cursor is in",
-          );
+          setPrompt(t(on ? "sketch.menu.reflexOn" : "sketch.menu.reflexOff"));
         },
       },
       { separator: true, label: "" },
       {
-        label: "Radius",
+        label: t("sketch.menu.radius"),
         checked: lone && !isDia,
         disabled: !lone,
         onClick: () => this.setDimRoundPref("radius"),
       },
       {
-        label: "Diameter",
+        label: t("sketch.menu.diameter"),
         checked: lone && isDia,
         disabled: !lone,
         onClick: () => this.setDimRoundPref("diameter"),
       },
       { separator: true, label: "" },
       {
-        label: "Driven (reference)",
+        label: t("sketch.menu.driven"),
         checked: this.referenceMode,
         onClick: () => {
           this.setReferenceDim(!this.referenceMode);
@@ -3822,7 +3815,7 @@ export class SketchMode {
           if (this.dimFlow.plan) this.dimFlow.commitDim();
         },
       },
-      { label: "Cancel", onClick: () => this.dimFlow.cancelDim() },
+      { label: t("sketch.menu.cancel"), onClick: () => this.dimFlow.cancelDim() },
     ];
     contextMenu(e.clientX, e.clientY, items);
   }
@@ -3980,11 +3973,7 @@ export class SketchMode {
       return true;
     });
     if (droppedCount > 0) {
-      setPrompt(
-        droppedCount === 1
-          ? "A pattern was removed: its source entity no longer exists"
-          : `${droppedCount} patterns were removed: their source entities no longer exist`,
-      );
+      setPrompt(t("sketch.mode.patternsRemoved", { n: droppedCount }));
     }
   }
 
@@ -4055,7 +4044,7 @@ export class SketchMode {
     if (!this.active) return false;
     const prev = this.history.undo(this.snapshot());
     if (!prev) {
-      setPrompt("Nothing left to undo in this sketch");
+      setPrompt(t("sketch.mode.nothingToUndo"));
       this.keyDraw.historyMoved();
       return true;
     }
@@ -4067,7 +4056,7 @@ export class SketchMode {
     if (!this.active) return false;
     const next = this.history.redo(this.snapshot());
     if (!next) {
-      setPrompt("Nothing to redo in this sketch");
+      setPrompt(t("sketch.mode.nothingToRedo"));
       this.keyDraw.historyMoved();
       return true;
     }
@@ -4132,11 +4121,7 @@ export class SketchMode {
             // Keep the anchor on the fixed point, or the next search grabs another point.
             if (!this.dragRefusedToast) {
               this.dragRefusedToast = true;
-              toast(
-                r.dragRefused === "projected"
-                  ? PROJECTED_FIXED_MSG
-                  : "That point is fixed, delete its Fix constraint to move it",
-              );
+              toast(r.dragRefused === "projected" ? PROJECTED_FIXED_MSG : t("sketch.mode.pointFixed"));
             }
           } else if (this.dragFrom) {
             this.dragFrom.set(d.toX, d.toY); // track grabbed pt
@@ -4179,12 +4164,10 @@ export class SketchMode {
       this.conflict = false;
       if (!this.solverDeadToast) {
         this.solverDeadToast = true;
-        toast(
-          err instanceof SolverUnavailable
-            ? err.message
-            : "Sketch constraints stopped working, you can keep drawing without them. Restarting FundaCAD may bring them back.",
-          { kind: "error", timeout: 12000 },
-        );
+        toast(err instanceof SolverUnavailable ? err.message : t("sketch.mode.solverStopped"), {
+          kind: "error",
+          timeout: 12000,
+        });
       }
       // The dimension that was in flight when the solver died still has to
       // land, or the very first one a user types is the one that vanishes.
@@ -4517,7 +4500,7 @@ export class SketchMode {
   /** Arc tool: switch the tangent arc mode (A again while the arc tool is armed). */
   setTangentArc(on: boolean) {
     this.tangentArc = on;
-    setPrompt(on ? "Tangent arc, start on the end of a line or arc, then click where it ends. A turns it off" : null);
+    setPrompt(on ? t("sketch.mode.tangentArc") : null);
   }
 
   /** preview while drawing an arc: chord after 1st click, arc after 2nd */

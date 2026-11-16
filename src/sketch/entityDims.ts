@@ -11,6 +11,7 @@ import { paramOnSeg } from "./geom2d";
 import { crossingOf, measuredAngleDeg, wedgeRays } from "./angleWedge";
 import type { AngleRay } from "../types";
 import { poleRef } from "./bspline";
+import { t } from "../i18n";
 
 export type { DimField };
 type V = THREE.Vector2;
@@ -18,7 +19,7 @@ const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
 export interface EntityDim {
   field: DimField;
-  label: string; // "Width" / "Height" / "Diameter" / "Length"
+  label: string;
   labelPos: V; // where the value text sits (on the dimension line)
   valueMm: number;
   write: (mm: number) => void; // mutate the entity in place
@@ -283,16 +284,16 @@ export function staggeredDefaults(ents: ResolvedEntity[]): Map<string, DimPlace>
 export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] {
   if (e.type === "rectangle") {
     const [c0, c1, , c3] = rectCorners(e.x, e.y, e.width, e.height, e.angle);
-    const t = ((e.angle ?? 0) * Math.PI) / 180;
+    const rad = ((e.angle ?? 0) * Math.PI) / 180;
     // Outward normals of the bottom and left edges; angle 0 keeps the exact axis vectors.
-    const wDir = e.angle ? v(Math.sin(t), -Math.cos(t)) : v(0, -1);
-    const hDir = e.angle ? v(-Math.cos(t), -Math.sin(t)) : v(-1, 0);
+    const wDir = e.angle ? v(Math.sin(rad), -Math.cos(rad)) : v(0, -1);
+    const hDir = e.angle ? v(-Math.cos(rad), -Math.sin(rad)) : v(-1, 0);
     const w = linear(c0!, c1!, wDir, e.width, linearOverride(e, "width", wDir, defaults));
     const h = linear(c0!, c3!, hDir, e.height, linearOverride(e, "height", hDir, defaults));
     return [
       {
         field: "width",
-        label: "Width",
+        label: t("sketch.dim.width"),
         valueMm: e.width,
         labelPos: w.labelPos,
         lines: w.lines,
@@ -303,7 +304,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
       },
       {
         field: "height",
-        label: "Height",
+        label: t("sketch.dim.height"),
         valueMm: e.height,
         labelPos: h.labelPos,
         lines: h.lines,
@@ -319,7 +320,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
     return [
       {
         field: "diameter",
-        label: "Diameter",
+        label: t("sketch.dim.diameter"),
         valueMm: e.radius * 2,
         labelPos: d.labelPos,
         lines: d.lines,
@@ -348,7 +349,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
     return [
       {
         field: "radius",
-        label: "Radius",
+        label: t("sketch.dim.radius"),
         valueMm: rr,
         labelPos: v(e.x + c.x * dist, e.y + c.y * dist),
         lines: [[v(e.x, e.y), v(e.x + c.x * end, e.y + c.y * end)]],
@@ -375,7 +376,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
     return [
       {
         field: "length",
-        label: "Length",
+        label: t("sketch.dim.length"),
         valueMm: len,
         labelPos: ll.labelPos,
         lines: ll.lines,
@@ -387,7 +388,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
       },
       {
         field: "width",
-        label: "Width",
+        label: t("sketch.dim.width"),
         valueMm: e.width,
         labelPos: wl.labelPos,
         lines: wl.lines,
@@ -408,7 +409,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
   return [
     {
       field: "length",
-      label: "Length",
+      label: t("sketch.dim.length"),
       valueMm: len,
       labelPos: l.labelPos,
       lines: l.lines,

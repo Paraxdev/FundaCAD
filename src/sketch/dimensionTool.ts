@@ -16,10 +16,11 @@ import {
   rimGapPoints,
   type Round,
 } from "./entityDims";
-import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
+import { pickEntity } from "./modify";
 import { rectCorners } from "./region";
 import { distToSeg, signedAngleDeg } from "./geom2d";
 import { wedgeAt } from "./angleWedge";
+import { t } from "../i18n";
 
 type V = THREE.Vector2;
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -100,11 +101,6 @@ export const MEASURE_EPS = 1e-6;
 /** Screen bounds on a frozen label: the floor keeps it out of the geometry, the ceiling on screen at extreme zoom. */
 export const MIN_PLACE_PX = 18;
 export const MAX_PLACE_PX = 600;
-
-const PROJECTED_PAIR_MSG = `${PROJECTED_FIXED_MSG}, pick a second entity to dimension to it`;
-const CONCENTRIC_MSG =
-  "These circles are concentric, centre distance is 0. Dimension each diameter, or " +
-  "right-click → Pick Circle/Arc Tangent before each pick for the radial gap (wall thickness).";
 
 const segLen = (s: Seg) => Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
 
@@ -264,17 +260,16 @@ interface RoundOp {
 type Operand = PointOp | LineOp | RoundOp;
 
 /** Exported because SketchMode raises it for TEXT, which `pickEntity` never returns (no entitySegments). */
-export const unsupportedMessage = (kind: string): string =>
-  `A ${kind} can't be dimensioned yet, pick a line, arc, circle or rectangle edge.`;
+export const unsupportedMessage = (kind: string): string => t("sketch.dim.error.unsupported", { kind });
 
 const unsupported = (e: ResolvedEntity): DimError => ({
   error: "unsupported",
   message: unsupportedMessage(e.type),
 });
 
-const degenerate = (what: string): DimError => ({
+const degenerate = (what: "arc" | "circle" | "line" | "edge"): DimError => ({
   error: "degenerate",
-  message: `That ${what} measures 0, nothing to drive.`,
+  message: t("sketch.dim.error.zero", { what }),
 });
 
 /** A pick reduced to a point (id and `p` index) or a line operand. `p0` is the line's start point, corner k for a
@@ -374,7 +369,7 @@ function p2pPlan(a: PointOp, b: PointOp, forceDriven: boolean, hint: string): Di
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "Distance",
+    label: t("sketch.dim.distance"),
     tag: "D",
     fieldKind: "length",
     value: a.pos.distanceTo(b.pos),
@@ -442,7 +437,7 @@ function p2lPlan(
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "Distance",
+    label: t("sketch.dim.distance"),
     tag: "D",
     fieldKind: "length",
     value: perpDist(pt.pos, ln.seg),
@@ -469,13 +464,13 @@ function p2lPlan(
 function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint: string): DimResolution {
   // Two picks can name one circle (its rim and its centre); without this the radial gap branch reports the wrong thing.
   if (a.eid === b.eid) {
-    return { error: "same-entity", message: "That is one circle picked twice, pick a second entity to measure to." };
+    return { error: "same-entity", message: t("sketch.dim.error.sameCircle") };
   }
   const d = Math.hypot(b.c.x - a.c.x, b.c.y - a.c.y);
   if (d < MEASURE_EPS) {
     const gap = Math.abs(b.c.r - a.c.r);
     if (gap < MEASURE_EPS) {
-      return { error: "degenerate", message: "These two rims are the same circle, the radial gap measures 0." };
+      return { error: "degenerate", message: t("sketch.dim.error.sameRim") };
     }
     const inner = a.c.r <= b.c.r ? a : b;
     const outer = a.c.r <= b.c.r ? b : a;
@@ -485,14 +480,14 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
     return buildPlan({
       kind: "distance",
       field: "gap",
-      label: "Gap",
+      label: t("sketch.dim.gap"),
       fieldKind: "length",
       value: gap,
       anchors: pts,
       labelAnchor: mid(pts.a, pts.b),
       forceDriven,
       implyConcentric: { c1: innerId, c2: outerId },
-      hint: `Radial gap (wall thickness): type a value · click to place${drivenHint}`,
+      hint: t("sketch.dim.hint.radialGap") + drivenHint,
       make: (value, place) => ({
         type: "radialGap",
         inner: innerId,
@@ -509,15 +504,13 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
   if (Math.abs(d - sum) < MEASURE_EPS || Math.abs(d - diff) < MEASURE_EPS) {
     return {
       error: "degenerate",
-      message: "These two rims touch, the edge-to-edge distance measures 0, nothing to drive.",
+      message: t("sketch.dim.error.rimsTouch"),
     };
   }
   if (d > diff && d < sum) {
     return {
       error: "overlapping",
-      message:
-        "These two circles overlap, there is no edge-to-edge clearance to dimension. " +
-        "Dimension their centres, or each diameter.",
+      message: t("sketch.dim.error.overlap"),
     };
   }
   const nested = d < diff;
@@ -529,14 +522,14 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "Distance",
+    label: t("sketch.dim.distance"),
     tag: "D",
     fieldKind: "length",
     value: gap,
     anchors: pts,
     labelAnchor: mid(pts.a, pts.b),
     forceDriven,
-    hint: `${nested ? "Minimum radial clearance" : "Edge-to-edge clearance"}: type a value · click to place${drivenHint}`,
+    hint: t("sketch.dim.hint.clearance", { nested: nested ? "yes" : "no" }) + drivenHint,
     make: (value, place) => ({
       type: "c2cDistance",
       c1: id1,
@@ -555,22 +548,20 @@ function roundLinePlan(rd: RoundOp, ln: LineOp, forceDriven: boolean, drivenHint
   if (!pts) {
     return {
       error: "point-on-line",
-      message: "That circle's centre lies on the line, there is no edge-to-edge distance to dimension.",
+      message: t("sketch.dim.error.centreOnLine"),
     };
   }
   const gap = perpDist(rd.c, ln.seg) - rd.c.r;
   if (gap < -MEASURE_EPS) {
     return {
       error: "crossing",
-      message:
-        "That line crosses the circle, there is no edge-to-edge distance to dimension. " +
-        "Dimension the centre to the line instead.",
+      message: t("sketch.dim.error.lineCrosses"),
     };
   }
   if (gap < MEASURE_EPS) {
     return {
       error: "degenerate",
-      message: "That line is tangent to the circle, the edge-to-edge distance measures 0, nothing to drive.",
+      message: t("sketch.dim.error.lineTangent"),
     };
   }
   const cid = rd.eid,
@@ -578,14 +569,14 @@ function roundLinePlan(rd: RoundOp, ln: LineOp, forceDriven: boolean, drivenHint
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "Distance",
+    label: t("sketch.dim.distance"),
     tag: "D",
     fieldKind: "length",
     value: gap,
     anchors: pts,
     labelAnchor: mid(pts.a, pts.b),
     forceDriven,
-    hint: `Edge-to-line distance: type a value · click to place${drivenHint}`,
+    hint: t("sketch.dim.hint.edgeToLine") + drivenHint,
     make: (value, place) => ({
       type: "c2lDistance",
       circle: cid,
@@ -602,16 +593,14 @@ function pointRoundPlan(pt: PointOp, rd: RoundOp, forceDriven: boolean, drivenHi
   if (d < MEASURE_EPS) {
     return {
       error: "coincident-points",
-      message:
-        "That point sits at the circle's centre, the distance to its edge IS its radius, " +
-        "so dimension the radius instead.",
+      message: t("sketch.dim.error.pointAtCentre"),
     };
   }
   const gap = Math.abs(d - rd.c.r);
   if (gap < MEASURE_EPS) {
     return {
       error: "degenerate",
-      message: "That point lies on the circle, the distance to the edge measures 0, nothing to drive.",
+      message: t("sketch.dim.error.pointOnCircle"),
     };
   }
   const pts = pointRimPoints(pt.pos, rd.c);
@@ -622,14 +611,14 @@ function pointRoundPlan(pt: PointOp, rd: RoundOp, forceDriven: boolean, drivenHi
   return buildPlan({
     kind: "distance",
     field: "distance",
-    label: "Distance",
+    label: t("sketch.dim.distance"),
     tag: "D",
     fieldKind: "length",
     value: gap,
     anchors: pts,
     labelAnchor: mid(pts.a, pts.b),
     forceDriven,
-    hint: `Point-to-edge distance: type a value · click to place${drivenHint}`,
+    hint: t("sketch.dim.hint.pointToEdge") + drivenHint,
     make: (value, place) => ({
       type: "p2cDistance",
       e: eid,
@@ -650,28 +639,27 @@ export function resolveDim(picks: DimTarget[], opts: DimOptions = {}): DimResolu
   return resolvePair(t1, t2, opts.reflex === true);
 }
 
-function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
-  const e = t.e;
-  if (t.kind === "edge") {
-    const len = t.a.distanceTo(t.b);
+function resolveSingle(pick: DimTarget, opts: DimOptions): DimResolution {
+  const e = pick.e;
+  if (pick.kind === "edge") {
+    const len = pick.a.distanceTo(pick.b);
     if (len < MEASURE_EPS) return degenerate("edge");
     // a rectangle edge's length IS the distance between its two corners
-    const a: PointOp = { kind: "point", eid: e.id, p: t.k, pos: t.a, round: false, fixed: false };
-    const b: PointOp = { kind: "point", eid: e.id, p: (t.k + 1) % 4, pos: t.b, round: false, fixed: false };
-    return p2pPlan(a, b, false, "Rectangle edge: type a length, or pick a second entity · click to place");
+    const a: PointOp = { kind: "point", eid: e.id, p: pick.k, pos: pick.a, round: false, fixed: false };
+    const b: PointOp = { kind: "point", eid: e.id, p: (pick.k + 1) % 4, pos: pick.b, round: false, fixed: false };
+    return p2pPlan(a, b, false, t("sketch.dim.hint.rectEdge"));
   }
-  if (t.kind === "point") {
+  if (pick.kind === "point") {
     return {
       error: "need-second",
       keepPicks: true,
-      message:
-        e.type === "projected" ? PROJECTED_PAIR_MSG : "Pick a second point, or a line, for the distance between them",
+      message: t(e.type === "projected" ? "sketch.dim.error.projectedPair" : "sketch.dim.pickSecond"),
     };
   }
   // whole-entity pick
   if (e.type === "projected") {
     // fixed reference geometry has no driving dim of its own but is a valid pair operand, so stay armed
-    return { error: "projected-single", keepPicks: true, message: PROJECTED_PAIR_MSG };
+    return { error: "projected-single", keepPicks: true, message: t("sketch.dim.error.projectedPair") };
   }
   const ls = asLineSeg(e);
   if (ls) {
@@ -687,7 +675,7 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
     return buildPlan({
       kind: "length",
       field: "length",
-      label: "Length",
+      label: t("sketch.dim.length"),
       tag: "L",
       fieldKind: "length",
       value: len,
@@ -695,7 +683,7 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
       anchors: { a, b },
       // the aligned `distance` renders through the line's badge and drops `place`
       labelAnchor: anchor,
-      hint: "Line: type a length, or pick a second entity · click to place",
+      hint: t("sketch.dim.hint.line"),
       make: (value, place, cursor) => {
         const mode = modeOf(place ?? cursor);
         return mode === "aligned" ? { type: "distance", line: eid, value } : axisDim(mode, pa, pb, value, place);
@@ -705,17 +693,17 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
   if (e.type === "circle") {
     if (e.radius < MEASURE_EPS) return degenerate("circle");
     const eid = e.id;
-    if (opts.roundPref === "radius") return roundValuePlan(eid, e.radius, v(e.x, e.y), "Circle");
+    if (opts.roundPref === "radius") return roundValuePlan(eid, e.radius, v(e.x, e.y), "circle");
     return buildPlan({
       kind: "diameter",
       field: "diameter",
-      label: "Diameter",
+      label: t("sketch.dim.diameter"),
       icon: "diameter",
       fieldKind: "length",
       value: e.radius * 2,
       anchors: { a: v(e.x - e.radius, e.y), b: v(e.x + e.radius, e.y) },
       labelAnchor: null, // `diameter` renders through entityDims, no place slot
-      hint: "Circle: type a diameter, or pick a second entity · click to place",
+      hint: t("sketch.dim.hint.circleDiameter"),
       make: (value) => ({ type: "diameter", circle: eid, value }),
     });
   }
@@ -728,33 +716,33 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
       return buildPlan({
         kind: "diameter",
         field: "diameter",
-        label: "Diameter",
+        label: t("sketch.dim.diameter"),
         icon: "diameter",
         fieldKind: "length",
         value: rd.r * 2,
         anchors: { a: v(rd.x - rd.r, rd.y), b: v(rd.x + rd.r, rd.y) },
         labelAnchor: c,
-        hint: "Arc: type a diameter, or pick a second entity · click to place",
+        hint: t("sketch.dim.hint.arcDiameter"),
         make: (value, place) => ({ type: "diameter", circle: eid, value, ...(place ? { place } : {}) }),
       });
     }
-    return roundValuePlan(eid, rd.r, c, "Arc");
+    return roundValuePlan(eid, rd.r, c, "arc");
   }
   return unsupported(e);
 }
 
 /** shared by an arc (its default) and a circle whose override asked for a radius */
-function roundValuePlan(eid: string, r: number, c: V, what: string): DimPlan {
+function roundValuePlan(eid: string, r: number, c: V, what: "circle" | "arc"): DimPlan {
   return buildPlan({
     kind: "radius",
     field: "radius",
-    label: "Radius",
+    label: t("sketch.dim.radius"),
     tag: "R",
     fieldKind: "length",
     value: r,
     anchors: { a: c, b: v(c.x + r * Math.SQRT1_2, c.y + r * Math.SQRT1_2) },
     labelAnchor: c,
-    hint: `${what}: type a radius, or pick a second entity · click to place`,
+    hint: t("sketch.dim.hint.radius", { what }),
     make: (value, place) => ({ type: "radius", e: eid, value, ...(place ? { place } : {}) }),
   });
 }
@@ -768,7 +756,7 @@ function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolutio
     b = o2;
   // Both operands fixed means nothing can move, so make a driven dim instead of an unsatisfiable one.
   const forceDriven = a.fixed && b.fixed;
-  const drivenHint = forceDriven ? " · reference geometry, created as a driven dimension" : "";
+  const drivenHint = forceDriven ? ` · ${t("sketch.dim.hint.driven")}` : "";
   // rim (tangent) rows: at least one operand contributes its edge
   if (a.kind === "round" || b.kind === "round") {
     const rd = a.kind === "round" ? a : (b as RoundOp);
@@ -779,7 +767,7 @@ function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolutio
       // the round's own centre picked alongside its rim: that is its radius
       return {
         error: "same-entity",
-        message: "That is the circle's own centre and rim, dimension its radius instead.",
+        message: t("sketch.dim.error.centreAndRim"),
       };
     }
     return pointRoundPlan(other, rd, forceDriven, drivenHint);
@@ -798,13 +786,13 @@ function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolutio
         );
       }
       return a.round && b.round
-        ? { error: "concentric", message: CONCENTRIC_MSG }
+        ? { error: "concentric", message: t("sketch.dim.error.concentric") }
         : {
             error: "coincident-points",
-            message: "Those two points are coincident, the distance measures 0, nothing to drive.",
+            message: t("sketch.dim.error.samePoint"),
           };
     }
-    return p2pPlan(a, b, forceDriven, `Distance: type a value · click to place${drivenHint}`);
+    return p2pPlan(a, b, forceDriven, t("sketch.dim.hint.distance") + drivenHint);
   }
   if (a.kind === "point" || b.kind === "point") {
     const pt = a.kind === "point" ? a : (b as PointOp);
@@ -813,10 +801,10 @@ function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolutio
     if (perpDist(pt.pos, ln.seg) < MEASURE_EPS) {
       return {
         error: "point-on-line",
-        message: "That point lies on the line, the distance measures 0, nothing to drive.",
+        message: t("sketch.dim.error.pointOnLine"),
       };
     }
-    return p2lPlan(pt, ln, forceDriven, `Distance to line: type a value · click to place${drivenHint}`);
+    return p2lPlan(pt, ln, forceDriven, t("sketch.dim.hint.distanceToLine") + drivenHint);
   }
   return lineLine(a, b, forceDriven, drivenHint, reflex);
 }
@@ -840,7 +828,7 @@ function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: stri
     return buildPlan({
       kind: "angle",
       field: "angle",
-      label: "Angle",
+      label: t("sketch.dim.angle"),
       icon: "angle",
       fieldKind: "angle",
       value: signedAngleDeg(s1, s2),
@@ -848,7 +836,7 @@ function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: stri
       anchors: null,
       labelAnchor: anchor,
       forceDriven,
-      hint: `Angle: type the included angle · click to place, right-click for the reflex angle${drivenHint}`,
+      hint: t("sketch.dim.hint.angle") + drivenHint,
       make: (value, place, cursor) => {
         const w = wedgeOf(place ?? cursor);
         if (!w) return { type: "angle", l1: id1, l2: id2, value, ...(place ? { place } : {}) };
@@ -876,8 +864,8 @@ function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: stri
     fixed: pl.fixed,
   };
   if (perpDist(pt.pos, ll.seg) < MEASURE_EPS) {
-    return { error: "point-on-line", message: "Those lines are collinear, the distance measures 0, nothing to drive." };
+    return { error: "point-on-line", message: t("sketch.dim.error.collinear") };
   }
   const pair = pl.eid === ll.eid ? undefined : { l1: pl.opId, l2: ll.opId };
-  return p2lPlan(pt, ll, forceDriven, `Parallel lines: type the distance · click to place${drivenHint}`, pair);
+  return p2lPlan(pt, ll, forceDriven, t("sketch.dim.hint.parallel") + drivenHint, pair);
 }

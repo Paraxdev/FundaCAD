@@ -1500,3 +1500,37 @@ describe("DimInput boxes in a comma language", () => {
     expect(got[3]!.distance).toBe(1);
   });
 });
+
+describe("DimInput reads its buttons and key help in the chosen language", () => {
+  afterEach(() => setLanguage("system"));
+
+  const help = () => document.getElementById(root().getAttribute("aria-describedby")!.split(" ").pop()!)!;
+  const name = (cls: string) => root().querySelector(cls)!.getAttribute("aria-label");
+
+  it("names Confirm, Cancel and the keys again on the next showing after a switch", async () => {
+    dim.show(
+      [{ name: "r", label: "R" }],
+      () => {},
+      () => {},
+    );
+    expect([name(".dim-ok"), name(".dim-no")]).toEqual(["Confirm", "Cancel"]);
+    dim.hide();
+
+    await setLanguage("de");
+    dim.show(
+      [{ name: "r", label: "R" }],
+      () => {},
+      () => {},
+    );
+    expect([name(".dim-ok"), name(".dim-no")]).toEqual(["Bestätigen", "Abbrechen"]);
+    expect(help().textContent).toBe(
+      "Enter übernimmt, Esc bricht ab, Tab springt weiter, Alt+Pfeil nach unten öffnet die Liste des Felds",
+    );
+    dim.hide();
+
+    await setLanguage("ja");
+    dim.show([{ name: "n", label: "N", kind: "count" }], () => {});
+    expect(name(".dim-ok")).toBe("確定");
+    expect(help().textContent).toBe("Enter で適用、Esc でキャンセル、Tab で次へ");
+  });
+});

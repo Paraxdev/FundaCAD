@@ -183,8 +183,6 @@ let boxCount = 0;
 let chipCount = 0;
 let hintCount = 0;
 const STEP_KEYS: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, PageUp: 10, PageDown: -10 };
-const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
-const LIST_HELP = "Alt+Down opens the field's list";
 
 let sparing = 0;
 
@@ -640,12 +638,12 @@ export class DimInput {
       for (const o of opts) group.appendChild(this.optionElement(o));
       this.root.appendChild(group);
     }
-    const ok = boxIconButton({ icon: "check", tip: "Confirm", keys: "Enter", iconSize: 15 }, "Confirm");
+    const ok = boxIconButton({ icon: "check", tip: t("dim.confirm"), keys: "Enter", iconSize: 15 }, t("dim.confirm"));
     ok.classList.add("dim-ok", "dim-end");
     this.onEndPress(ok, () => this.commit());
     this.root.appendChild(ok);
     if (this.onCancel) {
-      const no = boxIconButton({ icon: "close", tip: "Cancel", keys: "Esc", iconSize: 15 }, "Cancel");
+      const no = boxIconButton({ icon: "close", tip: t("dim.cancel"), keys: "Esc", iconSize: 15 }, t("dim.cancel"));
       no.classList.add("dim-no");
       this.onEndPress(no, () => this.onCancel?.());
       this.root.appendChild(no);
@@ -654,7 +652,7 @@ export class DimInput {
     const help = document.createElement("span");
     help.id = this.helpId;
     help.hidden = true;
-    help.textContent = this.fields.some((f) => f.chip || f.def.choices) ? `${BOX_HELP}, ${LIST_HELP}` : BOX_HELP;
+    help.textContent = t(this.fields.some((f) => f.chip || f.def.choices) ? "dim.helpList" : "dim.help");
     this.root.appendChild(help);
     this.nameGroup();
     // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
