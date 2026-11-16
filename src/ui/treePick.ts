@@ -5,7 +5,8 @@ import { t } from "../i18n";
 import type { Plane3, PlaneDef, Vec3 } from "../types";
 import type { EdgeRef } from "../viewport/edgeLines";
 
-/** What a row stands for, resolved at click time so a taker needs nothing else. */
+/** What a row stands for, resolved at click time so a taker needs nothing else. A face from the Geometry list carries
+ *  that list's name for it, "Flat face 6". */
 export type TreePick =
   | { kind: "basePlane"; plane: Plane3 }
   | { kind: "datumPlane"; id: string; def: PlaneDef }
@@ -15,7 +16,7 @@ export type TreePick =
   | { kind: "bodies"; ids: readonly string[] }
   | { kind: "sketch"; id: string }
   | { kind: "feature"; id: string }
-  | { kind: "face"; faceId: number }
+  | { kind: "face"; faceId: number; name?: string }
   | { kind: "edge"; edge: EdgeRef };
 
 /** What a taker did with a pick it took, so the words come in the person's language. */

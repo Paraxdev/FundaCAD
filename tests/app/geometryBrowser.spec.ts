@@ -20,7 +20,7 @@ import {
 import { t } from "../../src/i18n";
 import { awaitTreePick, resetTreePicks, type TreePick, type TreePickAnswer } from "../../src/ui/treePick";
 
-const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
+const { announce, dismissSaying } = vi.hoisted(() => ({ announce: vi.fn(), dismissSaying: vi.fn() }));
 vi.mock("../../src/ui/announce", async (actual) => ({
   ...(await actual<typeof import("../../src/ui/announce")>()),
   announce,
@@ -29,7 +29,7 @@ vi.mock("../../src/ui/toast", () => ({
   toast: () => {},
   dismissToast: () => {},
   hintToast: () => {},
-  dismissToastsSaying: () => {},
+  dismissToastsSaying: dismissSaying,
 }));
 
 beforeEach(() => {
@@ -1250,7 +1250,7 @@ describe("a tool waiting for a pick", () => {
   it("gets a face row as that face, and nothing is selected", async () => {
     const r = await waiting();
     expect(r.browser.pickRows([r.list.rows[1]!], { additive: false })).toBeNull();
-    expect(r.taken).toEqual([{ kind: "face", faceId: 8 }]);
+    expect(r.taken).toEqual([{ kind: "face", faceId: 8, name: "Flat face 2" }]);
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
     expect(r.host.setStatus).not.toHaveBeenCalled();
   });
@@ -1277,7 +1277,7 @@ describe("a tool waiting for a pick", () => {
     await settle();
     announce.mockClear();
     expect(r.browser.offer([r.list.rows[1]!])).toBeNull();
-    expect(r.taken).toEqual([{ kind: "face", faceId: 8 }]);
+    expect(r.taken).toEqual([{ kind: "face", faceId: 8, name: "Flat face 2" }]);
     expect(announce.mock.calls).toEqual([
       ["Flat face 2 of Bracket picked", "polite", { key: "selection", delay: SELECTION_SPEECH_DELAY }],
     ]);
@@ -1313,12 +1313,27 @@ describe("a tool waiting for a pick", () => {
     expect(r.taken).toHaveLength(1);
   });
 
+  it("puts a refusal away when the list changes kind, and keeps it for a kind it already shows", async () => {
+    const refusal = "That row is an edge, this step needs a face";
+    const r = await waiting([refusal]);
+    dismissSaying.mockClear();
+    r.browser.offer([r.list.rows[2]!]);
+    expect(r.host.setStatus).toHaveBeenCalledWith(refusal, "", { silent: true });
+    r.browser.setKind(r.list.kind);
+    expect(dismissSaying).not.toHaveBeenCalled();
+    r.browser.setKind("edges");
+    expect(dismissSaying.mock.calls.map(([said]) => said)).toContain(refusal);
+    const dropped = dismissSaying.mock.calls.length;
+    r.browser.setKind("faces");
+    expect(dismissSaying).toHaveBeenCalledTimes(dropped);
+  });
+
   it("says a stale row waits on the open tool while its preview holds the list, else that the row changed", async () => {
     const r = await waiting();
     const old = r.list.rows[0]!;
     await r.build(result([{ id: "body1", etag: "e1c" }]));
     const back = previewOnScreen(r.store);
-    expect(r.browser.offer([old])).toBe("Press Enter to finish the tool first, the list fills in once it is done");
+    expect(r.browser.offer([old])).toBe(t("geometry.list.waitsOnTool"));
     expect(r.browser.pickRows([old], { additive: false })).toBe(t("geometry.list.waitsOnTool"));
     back();
     const changed = r.browser.offer([old]);
@@ -1472,7 +1487,7 @@ describe("a tool waiting for a pick", () => {
     r.browser.setKind("edges");
     expect({ state: r.list.state, error: r.list.error }).toEqual({
       state: "loading",
-      error: "Press Enter to finish the tool first, the list fills in once it is done",
+      error: t("geometry.list.waitsOnTool"),
     });
 
     r.store.setPreview(null);
@@ -1505,7 +1520,7 @@ describe("a tool waiting for a pick", () => {
     expect(r.store.buildState.previewBuilt).toHaveLength(1);
     expect({ state: r.list.state, error: r.list.error }).toEqual({
       state: "loading",
-      error: "Press Enter to finish the tool first, the list fills in once it is done",
+      error: t("geometry.list.waitsOnTool"),
     });
   });
 
@@ -1534,7 +1549,7 @@ describe("a tool waiting for a pick", () => {
     expect(r.taken).toEqual([]);
     await land(r.asks.at(-1)!, topology("body1", 3, [[0], [1], [2]]));
     expect(r.browser.pickRows([r.list.rows[0]!], { additive: false })).toBeNull();
-    expect(r.taken).toEqual([{ kind: "face", faceId: 7 }]);
+    expect(r.taken).toEqual([{ kind: "face", faceId: 7, name: "Flat face 1" }]);
   });
 });
 

@@ -45,6 +45,7 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
 export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {}) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
+  const toolWorks = ref(false);
   const pickWaits = ref(false);
   const words = opts.words ? createSelectionWords(engine) : null;
   const geometry = useGeometryBrowserStore();
@@ -97,8 +98,9 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
       counts.value = next.counts;
     }
     toolOwns.value = engine.toolOwnsScreen();
+    toolWorks.value = engine.toolAtWork();
     pickWaits.value = treePickWaiting();
-    words?.update(signature, toolOwns.value, escaped);
+    words?.update(signature, toolWorks.value, escaped);
     escaped = false;
     return Object.keys(next.counts).length > 0;
   }
@@ -197,6 +199,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     speech,
     lit,
     toolOwns,
+    toolWorks,
     run,
     look,
     clear,

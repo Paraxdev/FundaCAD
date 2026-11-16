@@ -29,7 +29,7 @@ import { edge, land, result, rig, settle, topology } from "./geometryBrowserRig"
 import { menuName } from "../../src/ui/menu";
 import { rowName, row as menuRow } from "./menuRows";
 
-vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {}, dismissToastsSaying: () => {} }));
 vi.mock("../../src/ui/announce", async (actual) => ({
   ...(await actual<typeof import("../../src/ui/announce")>()),
   announce: vi.fn(),

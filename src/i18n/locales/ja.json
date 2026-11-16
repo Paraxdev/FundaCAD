@@ -239,7 +239,7 @@
   "field.yFactor": "Y 倍率",
   "field.zFactor": "Z 倍率",
   "geometry.commands.pickWaiting": "ツールが選択を待っています。3Dビューで ] と [ を使って移動してください",
-  "geometry.list.waitsOnTool": "先に Enter を押してツールを終えてください。終わるとリストが表示されます",
+  "geometry.list.waitsOnTool": "先にツールを終えてください。終わるとリストが表示されます",
   "guide.counter": "ステップ {step, number}（全 {of, number}）",
   "guide.keysLabel": "キー操作：",
   "guide.next": "次へ",

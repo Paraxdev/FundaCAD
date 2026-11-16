@@ -201,7 +201,7 @@ describe("a fillet opened from the edge handle on a box", () => {
     t.click(midOnScreen(C));
     t.tool.removeMemberByKey("m2");
     t.click(midOnScreen(D));
-    expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Edge 1", "Edge 3", "Edge 4"]);
+    expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Straight edge 1", "Straight edge 3", "Straight edge 4"]);
   });
 
   it("names the member under the pointer as the one a click removes", () => {
@@ -211,7 +211,7 @@ describe("a fillet opened from the edge handle on a box", () => {
     t.click(midOnScreen(B));
     const at = midOnScreen(B);
     t.move(at);
-    expect(prompt()).toBe("Fillet, 2 edges · click Edge 2 to remove it · Enter · Esc");
+    expect(prompt()).toBe("Fillet, 2 edges · click Straight edge 2 to remove it · Enter · Esc");
     t.move({ x: 300, y: 300 });
     expect(prompt()).toMatch(/^Fillet, 2 edges · drag or type/);
   });
@@ -271,7 +271,7 @@ describe("a fillet edited from History", () => {
     open = t.tool;
     expect(t.tool.startEdit("f9", () => {})).toBe(true);
     t.rollback();
-    expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Edge 1"]);
+    expect(t.tool.memberRows().map((r) => r.label)).toEqual(["Straight edge 1"]);
     t.click(midOnScreen(B));
     t.tool.removeMemberByKey("m2");
     t.enter();

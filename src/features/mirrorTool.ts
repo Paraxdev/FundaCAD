@@ -254,7 +254,7 @@ export class MirrorTool {
     if (pick.kind === "face") {
       const face = facePlaneOfRow(this.viewport, pick.faceId);
       if (face?.kind !== "planar") return PLANE_REFUSED;
-      this.set(pickLine(this.fields, { kind: "face", face }, null));
+      this.set(pickLine(this.fields, { kind: "face", face, ...(pick.name ? { name: pick.name } : {}) }, null));
       return PLANE_TAKEN;
     }
     return treePickRefusal(pick, "bodyPlaneOrFlatFace");
@@ -263,7 +263,7 @@ export class MirrorTool {
   private planeLabel(p: MirrorPlanePick | null): string {
     if (!p) return "Nothing picked";
     if (p.kind === "base") return `${p.plane} plane`;
-    if (p.kind === "face") return "Flat face";
+    if (p.kind === "face") return p.name ?? "Flat face";
     const f = this.store.document.features.find((x) => x.id === p.id);
     return f ? featureLabel(f) : p.id;
   }

@@ -2,7 +2,7 @@
 
 import type { Engine } from "./engine";
 import type { Plane3 } from "../types";
-import { announce } from "../ui/announce";
+import { announce, cancelAnnouncement } from "../ui/announce";
 import { dismissToastsSaying } from "../ui/toast";
 import { routeTreeClick, type OfferDeps, type TreeClickDeps, type TreeClickRoute, type TreePick } from "../ui/treePick";
 
@@ -34,9 +34,13 @@ function busyHint(e: PlaneRowHost): string | null {
   return BUSY_TOOL_HINT;
 }
 
-// Left up beside the next prompt, a refusal reads as if the row just taken had failed too.
-function dropRefusals() {
-  for (const text of refusals) dismissToastsSaying(text);
+// Left up beside the next prompt, a refusal reads as if the row just taken had failed too. The spoken copy is put away
+// by its words, the key is shared with the selection readout.
+export function dropRefusals() {
+  for (const text of refusals) {
+    dismissToastsSaying(text);
+    cancelAnnouncement("selection", text);
+  }
   refusals.clear();
 }
 

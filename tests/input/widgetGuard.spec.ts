@@ -111,6 +111,7 @@ describe("isMenuKey", () => {
   };
   const LIST = `<div role="listbox"><div role="option" tabindex="0"><span data-t>Face 3</span></div></div>`;
   const MENU = `<div class="ui-menu"><button data-t>Copy</button></div>`;
+  const NOTE = `<div class="geometry-note"><p class="empty-state" role="status" tabindex="-1" data-t>Listing the faces.</p></div>`;
   const OWN = ["Enter", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Tab", "f", "[", "]"];
   const NOT_OWN = ["Escape", "Delete", "Backspace", "F2", "PageDown"];
 
@@ -120,6 +121,14 @@ describe("isMenuKey", () => {
   ])("gives %s its moving, running and typing keys, never Escape, Delete or an F key", (_name, html) => {
     expect(OWN.map((k) => heardOn(html, k))).toEqual(OWN.map(() => true));
     expect(NOT_OWN.map((k) => heardOn(html, k))).toEqual(NOT_OWN.map(() => false));
+  });
+
+  it("gives the Geometry list's status line only Enter and Space, so letters and arrows reach the sketch and tools", () => {
+    const ONLY = ["Enter", " "];
+    const PASS = ["f", "l", "[", "]", "ArrowUp", "ArrowLeft", "Home", "End", "Tab", "Escape"];
+    expect(ONLY.map((k) => heardOn(NOTE, k))).toEqual([true, true]);
+    expect(PASS.map((k) => heardOn(NOTE, k))).toEqual(PASS.map(() => false));
+    expect(heardOn(NOTE, "Enter", { ctrlKey: true })).toBe(false);
   });
 
   it.each([{ ctrlKey: true }, { altKey: true }, { metaKey: true }])("leaves %o chords to the tool", (mod) => {

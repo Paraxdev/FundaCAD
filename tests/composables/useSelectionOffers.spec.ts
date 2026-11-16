@@ -58,6 +58,7 @@ function setup(first?: Parameters<typeof rig>[0]) {
     geometryBrowser: r.browser,
     overlay: { selectedRegions: () => regions, clearRegionSelection: vi.fn() },
     toolOwnsScreen: () => owned.tool,
+    toolAtWork: () => owned.tool,
   } as unknown as Engine;
   let sel!: ReturnType<typeof useSelectionOffers>;
   const wrapper = mount(

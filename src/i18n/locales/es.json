@@ -239,7 +239,7 @@
   "field.yFactor": "Factor Y",
   "field.zFactor": "Factor Z",
   "geometry.commands.pickWaiting": "La herramienta espera una selección, llegue a ella con ] y [ en la vista 3D",
-  "geometry.list.waitsOnTool": "Pulse Intro para terminar primero la herramienta, la lista se completa cuando termina",
+  "geometry.list.waitsOnTool": "Termine primero la herramienta, la lista se completa cuando termina",
   "guide.counter": "Paso {step, number} de {of, number}",
   "guide.keysLabel": "Con el teclado:",
   "guide.next": "Siguiente",

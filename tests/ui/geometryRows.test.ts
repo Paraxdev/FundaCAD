@@ -1,6 +1,7 @@
 // Rows the Geometry list shows, from plain numbers: what one reply and a body's meta make, and which rows a filter keeps.
 import { describe, expect, it } from "vitest";
 import {
+  edgeNameOf,
   edgeRows,
   faceKeyOf,
   faceRows,
@@ -11,6 +12,7 @@ import {
   type BodyMeta,
   type GeometryRow,
 } from "../../src/ui/geometryRows";
+import { describePick } from "../../src/ui/describePick";
 import { circleDiameter } from "../../src/ui/selectionMeasure";
 import type { Feature, PlaneDef, TopologyFace, TopologyReply, Vec3 } from "../../src/types";
 
@@ -274,6 +276,22 @@ describe("edgeRows", () => {
   const circle = (slot: number, r: number) => ({ slot, points: ring(r, 0, Math.PI * 2, 48) });
   const arc = (slot: number, r: number) => ({ slot, points: ring(r, 0.3, 1.7, 12) });
   const FACES3 = meta(9, { faceOwners: ["ex1", "ex1", "ex1", "fil1"] });
+
+  it("names an edge as its row does, by its place and shape", () => {
+    const wavy = {
+      slot: 7,
+      points: [
+        [14, -3, 5],
+        [24, 0, 6],
+        [34, -6, 9],
+        [44, 1, 15],
+      ] as [number, number, number][],
+    };
+    const edges = [straight(4), circle(1, 12), arc(2, 9), wavy];
+    expect(edges.map(edgeNameOf)).toEqual(["Straight edge 5", "Round edge 2", "Round edge 3", "Curved edge 8"]);
+    const rows = edgeRows(edges, 8, undefined, meta(9), ownerName);
+    expect(edges.map(edgeNameOf)).toEqual(rows.map((r) => describePick(r.facts).label));
+  });
 
   it("makes no rows from no edges", () => {
     expect(edgeRows([], 0, undefined, meta(0), ownerName)).toEqual([]);

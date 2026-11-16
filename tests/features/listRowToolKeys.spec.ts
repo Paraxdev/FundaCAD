@@ -44,6 +44,14 @@ function listRow(): HTMLElement {
   return box.querySelector("span")!;
 }
 
+function statusLine(): HTMLElement {
+  const note = document.createElement("div");
+  note.className = "geometry-note";
+  note.innerHTML = `<p tabindex="-1" role="status">Listing the faces.</p>`;
+  document.body.append(note);
+  return note.querySelector("p")!;
+}
+
 function press(target: EventTarget, key: string): KeyboardEvent {
   const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
   target.dispatchEvent(e);
@@ -200,6 +208,13 @@ describe("a list row's keys while a tool runs", () => {
     expect(calls(heard)).toEqual({ commit: 1, cancel: 1 });
   });
 
+  it("Fillet: Enter and Space on the Geometry list's status line commit nothing", () => {
+    const heard = fillet();
+    const note = statusLine();
+    for (const key of ["Enter", " "]) press(note, key);
+    expect(calls(heard)).toEqual({ commit: 0, cancel: 0 });
+  });
+
   it("Mirror: Enter on a row commits nothing, on the page it commits, Escape on a row cancels", () => {
     const heard = mirror();
     const row = listRow();
@@ -298,6 +313,16 @@ describe("a list row's keys while a tool runs", () => {
     press(document.body, "Tab");
     press(document.body, "l");
     expect(calls(heard)).toEqual({ enter: 1, switchField: 1, cancel: 0, setTool: 1 });
+  });
+
+  it("a sketch: Enter on the Geometry list's status line reaches nothing, a letter or Tab still does", () => {
+    const heard = sketch();
+    const note = statusLine();
+    for (const key of ["Enter", " "]) press(note, key);
+    expect(calls(heard)).toEqual({ enter: 0, switchField: 0, cancel: 0, setTool: 0 });
+    press(note, "l");
+    press(note, "Tab");
+    expect(calls(heard)).toEqual({ enter: 0, switchField: 1, cancel: 0, setTool: 1 });
   });
 
   it("a sketch: Escape on a row still cancels", () => {

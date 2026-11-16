@@ -222,7 +222,7 @@
   { "path": "src/features/draftTool.ts", "kind": "script", "count": 10, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/edgeCountGate.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/edgeDragMath.ts", "kind": "script", "count": 4, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/features/edgeFeatureTool.ts", "kind": "script", "count": 18, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/features/edgeFeatureTool.ts", "kind": "script", "count": 17, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/extrudeOperation.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/extrudeTool.ts", "kind": "script", "count": 11, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/faceOffsetTool.ts", "kind": "script", "count": 13, "reason": "raw text before localisation, a codemod lane converts it" },

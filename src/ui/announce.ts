@@ -164,7 +164,7 @@ const channels: Record<AnnouncePriority, Channel> = {
   // Each assertive line interrupts, so an error a failing handler raises every few frames is said once, not on a loop.
   assertive: new Channel("assertive", ASSERTIVE_QUIET_REPEAT_MS),
 };
-const waiting = new Map<string, ReturnType<typeof setTimeout>>();
+const waiting = new Map<string, { timer: ReturnType<typeof setTimeout>; line: string }>();
 const history: Announcement[] = [];
 
 function remember(text: string, priority: AnnouncePriority) {
@@ -180,24 +180,28 @@ export function announce(text: string, priority: AnnouncePriority = "polite", op
   if (key !== undefined && delay !== undefined && delay > 0) {
     // Its last sentence may be past its pause yet still waiting for a frame, and would be said after this change.
     cancelAnnouncement(key);
-    waiting.set(
-      key,
-      setTimeout(() => {
-        waiting.delete(key);
-        channels[priority].push(line, key);
-      }, delay),
-    );
+    const timer = setTimeout(() => {
+      waiting.delete(key);
+      channels[priority].push(line, key);
+    }, delay);
+    waiting.set(key, { timer, line });
     return;
   }
   channels[priority].push(line, key);
 }
 
-/** Drops a keyed announcement still waiting, as when the hover it described has ended. */
-export function cancelAnnouncement(key: string): void {
+/** Drops a keyed announcement still waiting, as when the hover it described has ended. With `text`, only one saying
+ *  that, for a key several sources share. */
+export function cancelAnnouncement(key: string, text?: string): void {
+  const line = text === undefined ? undefined : spoken(text);
   const was = waiting.get(key);
-  if (was !== undefined) clearTimeout(was);
-  waiting.delete(key);
-  for (const c of Object.values(channels)) c.pending = c.pending.filter((p) => p.key !== key);
+  if (was !== undefined && (line === undefined || was.line === line)) {
+    clearTimeout(was.timer);
+    waiting.delete(key);
+  }
+  for (const c of Object.values(channels)) {
+    c.pending = c.pending.filter((p) => p.key !== key || (line !== undefined && p.text !== line));
+  }
 }
 
 /** Called by Announcer.vue once its regions exist; anything said before that is spoken then. */
