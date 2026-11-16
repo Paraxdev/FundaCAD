@@ -375,6 +375,7 @@
   "prefs.language.hint": "Los idiomas traducidos automáticamente pueden sonar extraños. Su propio archivo puede corregir cualquier línea.",
   "prefs.language.inUse": "{n, plural, =0 {Ninguna línea de su archivo está en uso.} one {# línea de su archivo está en uso.} other {# líneas de su archivo están en uso.}}",
   "prefs.language.load": "Cargar archivo…",
+  "prefs.language.machineYours": "{name} ({machine}, su archivo)",
   "prefs.language.more": "{n, plural, one {y # línea más} other {y # líneas más}}",
   "prefs.language.open": "Abrir carpeta",
   "prefs.language.reload": "Recargar",

@@ -14,7 +14,8 @@ export const DROP_IN_PREFIX = "fundacad.language.dropin.";
 const START_LIMIT_MS = 2000;
 
 /** The lines the catalog itself shows, so an English table without them fails vue-tsc. */
-export type CoreKey = "prefs.language.system" | "prefs.language.systemYours" | "prefs.language.yours";
+export type CoreKey =
+  "prefs.language.system" | "prefs.language.systemYours" | "prefs.language.yours" | "prefs.language.machineYours";
 
 export interface DropInSource {
   kind: "folder" | "browser" | "none";
@@ -48,10 +49,13 @@ export interface LanguageChoice {
 }
 
 // These lines tell the user that their own file is in use and what it changed, so that file cannot rewrite them.
-const LOCKED = /^prefs\.language\.(system|systemYours|yours|inUse|skipped|skip|more|remove|safeMode|error\..+)$/;
+const LOCKED =
+  /^prefs\.language\.(system|systemYours|yours|machineYours|inUse|skipped|skip|more|remove|safeMode|error\..+)$/;
 
-// A dropped in line cannot hold a control character, so this marks where the name lands in the formatted label.
+// A dropped in line cannot hold a control character, so these mark where the name and the machine translated label
+// land in the formatted label.
 const NAME_MARK = "\u0000";
+const MACHINE_MARK = "\u0001";
 
 export interface DropInStatus {
   lines: number;
@@ -337,10 +341,17 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     if (setting.value === "system" && code !== active.value.code) void activate(code);
   });
 
-  function yours(value: string, name: string, lang: string): LanguageChoice {
-    const runs = lookup("prefs.language.yours", { name: NAME_MARK }).split(NAME_MARK);
-    const parts = runs.flatMap((text, i) => [...(i ? [{ text: name, lang }] : []), ...(text ? [{ text }] : [])]);
-    return { value, label: runs.join(name), parts };
+  function yours(value: string, lang: string, name: string, machine?: string): LanguageChoice {
+    const line = machine
+      ? lookup("prefs.language.machineYours", { name: NAME_MARK, machine: MACHINE_MARK })
+      : lookup("prefs.language.yours", { name: NAME_MARK });
+    const parts = line
+      .split(/(\u0000|\u0001)/)
+      .filter(Boolean)
+      .map((run) =>
+        run === NAME_MARK ? { text: name, lang } : run === MACHINE_MARK ? { text: machine!, lang } : { text: run },
+      );
+    return { value, label: parts.map((p) => p.text).join(""), parts };
   }
 
   // A shipped language the user's file changes says so too, or its label would hide that the file is in use.
@@ -349,12 +360,12 @@ export function createCatalog<K extends string>(deps: CatalogDeps<K>) {
     const systemLanguage = systemCode();
     const systemName = languageOf(systemLanguage)?.native ?? "English";
     const shipped = deps.languages.map((l) => {
-      const name = l.machine ? `${l.native} (${l.machine})` : l.native;
-      return hasFile(l.code) ? yours(l.code, name, l.bcp47) : { value: l.code, label: name, lang: l.bcp47 };
+      if (hasFile(l.code)) return yours(l.code, l.bcp47, l.native, l.machine);
+      return { value: l.code, label: l.machine ? `${l.native} (${l.machine})` : l.native, lang: l.bcp47 };
     });
     const own = dropInCodes.value
       .filter((code) => !languageOf(code))
-      .map((code) => yours(code, languageName(code), code));
+      .map((code) => yours(code, code, languageName(code)));
     const pseudoChoice = deps.dev
       ? [{ value: PSEUDO, label: PSEUDO_LANGUAGE.native, lang: PSEUDO_LANGUAGE.bcp47 }]
       : [];

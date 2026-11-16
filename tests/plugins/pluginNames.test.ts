@@ -24,6 +24,7 @@ vi.mock("../../src/i18n", async () => {
       "prefs.language.system": "System",
       "prefs.language.systemYours": "System",
       "prefs.language.yours": "Yours",
+      "prefs.language.machineYours": "Yours",
     },
     languages: [
       { code: "en", native: "English", bcp47: "en", followsSystem: true },

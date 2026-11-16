@@ -15,6 +15,7 @@ const english = {
   "prefs.language.system": "System ({name})",
   "prefs.language.systemYours": "System, {name} (your file)",
   "prefs.language.yours": "{name} (your file)",
+  "prefs.language.machineYours": "{name} ({machine}, your file)",
   "stress.load.force": "Force {value} N on {faces}",
   "stress.setup.faces": "{n, plural, =0 {No faces} one {# face} other {# faces}}",
   "stress.setup.title": "Set up the study",
@@ -22,6 +23,7 @@ const english = {
 type Key = keyof typeof english;
 
 const de = {
+  "prefs.language.machineYours": "{name} ({machine}, Ihre Datei)",
   "stress.load.force": "Kraft {value} N auf {faces}",
   "stress.setup.faces": "{n, plural, =0 {Keine Flächen} one {# Fläche} other {# Flächen}}",
   "stress.setup.title": "Studie einrichten",
@@ -455,8 +457,13 @@ describe("the choices", () => {
       { value: "en", label: "English", lang: "en" },
       {
         value: "de",
-        label: "Deutsch (maschinell übersetzt) (your file)",
-        parts: [{ text: "Deutsch (maschinell übersetzt)", lang: "de-DE" }, { text: " (your file)" }],
+        label: "Deutsch (maschinell übersetzt, your file)",
+        parts: [
+          { text: "Deutsch", lang: "de-DE" },
+          { text: " (" },
+          { text: "maschinell übersetzt", lang: "de-DE" },
+          { text: ", your file)" },
+        ],
       },
       { value: "fr", label: "Français (traduction automatique)", lang: "fr" },
       {
@@ -466,6 +473,13 @@ describe("the choices", () => {
       },
       { value: "pl", label: "polski (your file)", parts: [{ text: "polski", lang: "pl" }, { text: " (your file)" }] },
     ]);
+  });
+
+  it("join a machine translated language's label and your file in one parenthesis, in the chosen language", async () => {
+    const { c } = make({}, { "fundacad.language.dropin.de": "{}" });
+    await c.init();
+    await c.setLanguage("de");
+    expect(c.choices().find((o) => o.value === "de")?.label).toBe("Deutsch (maschinell übersetzt, Ihre Datei)");
   });
 
   it("say your file in the chosen language, and offer pseudo last in a dev build", async () => {

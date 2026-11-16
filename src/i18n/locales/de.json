@@ -375,6 +375,7 @@
   "prefs.language.hint": "Maschinell übersetzte Sprachen können holprig klingen. Mit Ihrer eigenen Datei können Sie jede Zeile korrigieren.",
   "prefs.language.inUse": "{n, plural, =0 {Keine Zeile Ihrer Datei wird verwendet.} one {# Zeile Ihrer Datei wird verwendet.} other {# Zeilen Ihrer Datei werden verwendet.}}",
   "prefs.language.load": "Datei laden…",
+  "prefs.language.machineYours": "{name} ({machine}, Ihre Datei)",
   "prefs.language.more": "{n, plural, one {und # weitere Zeile} other {und # weitere Zeilen}}",
   "prefs.language.open": "Ordner öffnen",
   "prefs.language.reload": "Neu laden",

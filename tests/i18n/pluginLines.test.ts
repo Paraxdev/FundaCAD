@@ -10,6 +10,7 @@ const core = {
   "prefs.language.system": "System ({name})",
   "prefs.language.systemYours": "System, {name} (your file)",
   "prefs.language.yours": "{name} (your file)",
+  "prefs.language.machineYours": "{name} ({machine}, your file)",
   "tool.extrude": "Extrude",
 };
 type CoreKey = keyof typeof core;

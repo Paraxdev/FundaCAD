@@ -272,12 +272,17 @@ describe("the user's own file in the browser", () => {
     const before = text(".select-value");
     await load(json("de.json", { "prefs.language.title": "Meine Sprache" }));
     await vi.waitFor(() => expect(text(".pref-title")).toBe("Meine Sprache"));
-    const name = document.querySelector(".select-value [lang]");
-    expect([before, text(".select-value"), name?.getAttribute("lang"), name?.textContent]).toEqual([
+    const named = [...document.querySelectorAll(".select-value [lang]")].map((e) => [
+      e.getAttribute("lang"),
+      e.textContent,
+    ]);
+    expect([before, text(".select-value"), named]).toEqual([
       "Deutsch (maschinell übersetzt)",
-      line(de, "prefs.language.yours", "de", { name: "Deutsch (maschinell übersetzt)" }),
-      "de",
-      "Deutsch (maschinell übersetzt)",
+      "Deutsch (maschinell übersetzt, Ihre Datei)",
+      [
+        ["de", "Deutsch"],
+        ["de", "maschinell übersetzt"],
+      ],
     ]);
   });
 

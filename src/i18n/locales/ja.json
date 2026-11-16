@@ -375,6 +375,7 @@
   "prefs.language.hint": "機械翻訳された言語は不自然な表現になる場合があります。独自のファイルで任意の行を修正できます。",
   "prefs.language.inUse": "{n, plural, =0 {独自のファイルの行は使用されていません。} other {独自のファイルの # 行が使用されています。}}",
   "prefs.language.load": "ファイルを読み込む…",
+  "prefs.language.machineYours": "{name} ({machine}、独自のファイル)",
   "prefs.language.more": "{n, plural, other {ほか # 行}}",
   "prefs.language.open": "フォルダーを開く",
   "prefs.language.reload": "再読み込み",
