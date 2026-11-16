@@ -4,6 +4,7 @@
 import { parseManifest, promiseOf, sameId, type PluginManifest } from "./manifest";
 import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
+import { t } from "../i18n";
 import { toast } from "../ui/toast";
 import type { RunOutcome } from "./runner/host";
 import { nativeDialog } from "../io/nativeDialog";
@@ -70,10 +71,12 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
 
 /** Plugins whose job moved into the app, removed from disk on sight so a stale bundle cannot start its companion.
  *  FundaCAD.MCP was the Python MCP server, and the app ships fundacad-mcp now. */
-export const RETIRED_PLUGINS: readonly { id: string; note: string }[] = [
+export const RETIRED_PLUGINS: readonly { readonly id: string; readonly note: string }[] = [
   {
     id: "FundaCAD.MCP",
-    note: "The MCP server is part of FundaCAD now, so its plugin was removed. Preferences, AI assistants has the new connection settings.",
+    get note() {
+      return t("plugins.retired.mcp");
+    },
   },
 ];
 
@@ -245,12 +248,12 @@ export interface RawInspected {
 /** Answers "who am I trusting" on the install screen. Rust already refused any authority that does not mean what it
  *  reads. */
 export function originOf(source: string, from: "url" | "file"): string {
-  if (from === "file") return "a file on this computer";
+  if (from === "file") return t("plugins.origin.file");
   try {
     return new URL(source).host;
   } catch {
     // Unreachable, Rust refused it first. Degrades to the least reassuring true thing rather than throwing.
-    return "an unknown place";
+    return t("plugins.origin.unknown");
   }
 }
 
@@ -259,7 +262,7 @@ export function candidateFrom(raw: RawInspected, from: "url" | "file"): Candidat
   const parsed = parseManifest(raw.manifest);
   if (!parsed.ok) {
     // Refused rather than shown with the bad parts hidden: a manifest this app cannot fully read, it cannot describe.
-    throw new Error(`that bundle is not installable: ${parsed.why}`);
+    throw new Error(t("plugins.notInstallable", { why: parsed.why }));
   }
   return {
     manifest: parsed.manifest,
@@ -307,7 +310,7 @@ export async function pickBundle(): Promise<string | null> {
   const picked = await open({
     multiple: false,
     directory: false,
-    filters: [{ name: "Plugin bundle", extensions: ["zip"] }],
+    filters: [{ name: t("plugins.bundleFilter"), extensions: ["zip"] }],
   });
   return typeof picked === "string" ? picked : null;
 }

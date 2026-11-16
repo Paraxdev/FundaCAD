@@ -1,8 +1,8 @@
 """Preferences with Deutsch picked, then each other shipped language picked from the Appearance tab while the dialog
 stays open, every tab walked at the narrowest window and a wide one: the tabs, pane titles, group titles and control
 labels read German and French, no English line from the app's own strings is left in any language, no label is cut and
-every control stays reachable, and a shot of each goes to the size output folder. The Plugins pane is not part of this
-check, it keeps its English until its own pass."""
+every control stays reachable, and a shot of each goes to the size output folder. The Plugins pane is walked too, its
+own wording is checked in test_plugins_language.py."""
 
 import json
 from pathlib import Path
@@ -25,8 +25,7 @@ LANGUAGES = {
 # 800x600 is the Tauri minimum.
 SIZES = [(800, 600), (1280, 800)]
 TABS = ["appearance", "viewport", "navigation", "access", "updates", "mcp", "plugins", "experimental"]
-# Checked for cut labels and English lines, Plugins stays English until its own pass.
-CHECKED = [t for t in TABS if t != "plugins"]
+CHECKED = TABS
 
 LOCALES = Path(__file__).resolve().parents[4] / "src" / "i18n" / "locales"
 
@@ -39,11 +38,11 @@ def english_lines(lang: str) -> set[str]:
     """The English text of every Preferences line the language has translated, so a line still showing it was missed.
     A text that another key of the language really spells the same way is no miss."""
     en, tr = load("en"), load(lang)
-    own = {k: v for k, v in en.items() if k.startswith(("prefs.", "whatsNew.")) and "{" not in v}
+    own = {k: v for k, v in en.items() if k.startswith(("prefs.", "whatsNew.", "plugins.")) and "{" not in v}
     return {v for k, v in own.items() if tr.get(k) != v} - set(tr.values())
 
 
-# Lines the app shows on purpose in English: Dialog's Close, the Plugins pane and names that are not translated.
+# Lines the app shows on purpose in English: Dialog's Close and names that are not translated.
 DELIBERATE = {"Close"}
 
 EXPECTED = {

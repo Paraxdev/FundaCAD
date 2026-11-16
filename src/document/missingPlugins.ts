@@ -1,6 +1,7 @@
 // Features needing a plugin that is not here. The file still opens and keeps every value; this is the document-level
 // summary, while the engine's plugin_geometry.unregistered turns each feature's row red.
 
+import { t } from "../i18n";
 import { contributedFeatureTypes } from "../plugins/contrib";
 import { shippedPlugins } from "../plugins/shipped";
 import { isCoreFeatureType, type CadDocument, type Feature } from "../types";
@@ -22,8 +23,8 @@ export interface MissingPlugin {
 function declaredOwners(): Map<string, { id: string; name: string }> {
   const out = new Map<string, { id: string; name: string }>();
   for (const p of shippedPlugins()) {
-    for (const t of p.manifest.featureTypes ?? []) {
-      if (!out.has(t)) out.set(t, { id: p.manifest.id, name: p.manifest.name });
+    for (const type of p.manifest.featureTypes ?? []) {
+      if (!out.has(type)) out.set(type, { id: p.manifest.id, name: p.manifest.name });
     }
   }
   return out;
@@ -72,10 +73,5 @@ export function missingPlugins(doc: Pick<CadDocument, "features">): MissingPlugi
 
 // Reassurance first ("your file is safe"), then what to do. A type no shipped plugin declares is openNotice.ts's job.
 export function missingPluginMessage(m: MissingPlugin & { id: string }): string {
-  const what = m.count === 1 ? "One feature in this document is" : `${m.count} features in this document are`;
-  const keep = "Their settings are kept and will build again once it is back; saving will not drop them.";
-  const fix = m.installable
-    ? `Turn "${m.name}" back on in Plugins to build them.`
-    : `Install "${m.name}" to build them.`;
-  return `${what} built by "${m.name}", which is not running. ${fix} ${keep}`;
+  return t(m.installable ? "missingPlugins.turnOn" : "missingPlugins.install", { n: m.count, name: m.name });
 }

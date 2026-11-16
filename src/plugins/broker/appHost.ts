@@ -1,6 +1,7 @@
 // The broker's host for the open document. Edits go through the store, so a plugin's change is one undo step and
 // reruns the parameter cascade and rebuild. File ops need a NativeBridge and refuse by name without one.
 
+import { t } from "../../i18n";
 import { storedSettings } from "../settings";
 import type { CadDocument, Feature } from "../../types";
 import type { DocumentStore } from "../../document/store";
@@ -100,8 +101,8 @@ export function appHost(opts: AppHostOptions): BrokerHost {
 
   /** Capped here as well as in Rust, so a megabyte of "purpose" never goes on an IPC message. */
   const words = (v: unknown, fallback: string): string => {
-    const t = typeof v === "string" ? v.trim() : "";
-    return (t || fallback).slice(0, 200);
+    const text = typeof v === "string" ? v.trim() : "";
+    return (text || fallback).slice(0, 200);
   };
 
   const features = (): Feature[] => store.document.features ?? [];
@@ -183,7 +184,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           return clone(store.toObject());
 
         case "doc_new":
-          if (!(await (opts.mayDiscard ?? askStore(store))("Discard unsaved changes and start a new document?"))) {
+          if (!(await (opts.mayDiscard ?? askStore(store))(t("plugins.host.discard")))) {
             throw new HostRefused(`${op}: the user kept the unsaved changes, so no new document was started`);
           }
           sameDocument(op);
