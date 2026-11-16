@@ -136,6 +136,21 @@ describe("announce", () => {
     expect(m.recentAnnouncements()).toEqual([]);
   });
 
+  it("cancelAnnouncement with a text drops only a waiting message saying it, under a shared key", () => {
+    attach();
+    m.announce("Face 3", "polite", { key: "sel", delay: 300 });
+    m.cancelAnnouncement("sel", "Edge 2");
+    vi.advanceTimersByTime(400);
+    frame();
+    expect(m.recentAnnouncements().map((a) => a.text)).toEqual(["Face 3"]);
+
+    m.announce("Edge 2", "polite", { key: "sel", delay: 300 });
+    m.cancelAnnouncement("sel", "Edge 2");
+    vi.advanceTimersByTime(400);
+    frame();
+    expect(m.recentAnnouncements().map((a) => a.text)).toEqual(["Face 3"]);
+  });
+
   it("holds what is said before the regions mount and speaks it once they do", () => {
     m.announce("Opened plate.funda");
     vi.advanceTimersByTime(200);
