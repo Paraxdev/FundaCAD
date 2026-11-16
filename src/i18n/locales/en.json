@@ -343,6 +343,7 @@
   "pick.fact.pieces": "in {n, plural, one {# piece} other {# pieces}}",
   "pick.fact.radius": "{as, select, readout {R{size}} other {radius {size}}}",
   "pick.fact.size": "{w} by {h}",
+  "pick.fromBlend": "That {what, select, face {face} other {edge}} comes from this {kind, select, chamfer {chamfer} other {fillet}}, click an edge of the model before it",
   "pick.head.edge": "{type, select, straight {1 edge · straight} round {1 edge · round} curved {1 edge · curved} other {1 edge}}",
   "pick.head.face": "{type, select, flat {1 face · flat} round {1 face · round} hole {1 face · hole} cylinder {1 face · cylinder} cone {1 face · cone} sphere {1 face · sphere} torus {1 face · torus} curved {1 face · curved} other {1 face}}",
   "pick.list.last": "{before} and {last}",

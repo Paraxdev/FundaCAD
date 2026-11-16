@@ -215,7 +215,7 @@
   { "path": "src/document/store.ts", "kind": "script", "count": 12, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/document/versions.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/blendEdit.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "src/features/blendPick.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/features/blendPick.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/booleanOps.ts", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/datumPlaneEdit.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/datumPoseTool.ts", "kind": "script", "count": 5, "reason": "raw text before localisation, a codemod lane converts it" },

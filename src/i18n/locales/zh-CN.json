@@ -343,6 +343,7 @@
   "pick.fact.pieces": "分为 {n} 块",
   "pick.fact.radius": "{as, select, readout {R{size}} other {半径 {size}}}",
   "pick.fact.size": "{w} 乘 {h}",
+  "pick.fromBlend": "{what, select, face {该面} other {该边}}来自{kind, select, chamfer {此倒角} other {此圆角}}，请点击它之前的模型上的边",
   "pick.head.edge": "{type, select, straight {1 条边 · 直} round {1 条边 · 圆弧} curved {1 条边 · 曲线} other {1 条边}}",
   "pick.head.face": "{type, select, flat {1 个面 · 平面} round {1 个面 · 圆弧面} hole {1 个面 · 孔} cylinder {1 个面 · 圆柱面} cone {1 个面 · 圆锥面} sphere {1 个面 · 球面} torus {1 个面 · 圆环面} curved {1 个面 · 曲面} other {1 个面}}",
   "pick.list.last": "{before}和{last}",

@@ -758,6 +758,11 @@ export class EdgeFeatureTool {
     return !!mid && !this.viewport.edgeLineByMid(mid, this.base);
   }
 
+  /** A face on screen the model before the feature has no face for, the blend's own round or flat. */
+  private resultOnlyFaceAt(clientX: number, clientY: number): boolean {
+    return !!this.base && this.viewport.freshFaceAt(clientX, clientY, this.base);
+  }
+
   private hoverGhost(g: GhostEdge | null) {
     if (g === this.hoveredGhost) return;
     const prev = this.hoveredGhost;
@@ -1287,6 +1292,7 @@ export class EdgeFeatureTool {
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     if (this.resultOnlyEdgeAt(e.clientX, e.clientY)) setPrompt(rimPrompt(this.kind));
+    else if (this.resultOnlyFaceAt(e.clientX, e.clientY)) setPrompt(rimPrompt(this.kind, "face"));
     else if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
     else this.promptForPhase();
     this.dim.focus();

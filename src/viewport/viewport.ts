@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { MeshBVH } from "three-mesh-bvh";
 import { createScene, environmentKey, environmentRoomFor, isHdrHeld, type SceneBundle } from "./scene";
 import { createCameraRig, type CameraRig, type StandardView, type ProjectionMode } from "./cameras";
 import {
@@ -56,7 +57,7 @@ import {
 import { barycentric, displacedPositions, stressColors, type StressRamp } from "../ui/stress";
 import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods, type PickRef } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
-import { flushRaycastIndex } from "./raycastIndex";
+import { buildRaycastIndex, flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
 import { clipSelectionOverlays, selectionGlowWarmup } from "./selectionGlow";
 import { linkProgramsAhead } from "./linkPrograms";
@@ -238,6 +239,9 @@ function devTracerSwitch(): { kind: TracerKind; prefer?: string; call?: Call } |
 
 /** Pixel radii of the extra rays `probe` casts for a finger. */
 const PROBE_RINGS_PX = [8, 16];
+// Two meshes of one curved face tilt their facets apart by up to the coarsest angular tolerance, 0.5 rad, so a
+// face counts as fresh only past 30 degrees: a blend on a square edge turns 45 degrees from both faces it joins.
+const FRESH_FACE_COS = Math.cos((30 * Math.PI) / 180);
 /** How long the camera has to stay still for a gesture to count as over. */
 const MOTION_SETTLE_MS = 300;
 /** A frame that spent this long merging edges is a build, not a frame of the edge level. */
@@ -3746,6 +3750,52 @@ export class Viewport {
     this.surfaceRaycaster.ray.copy(this.rayFrom(clientX, clientY).ray);
     const kept = this.keptHit(this.surfaceRaycaster);
     return kept ? { distance: kept.distance, faceId: kept.cap ? null : faceIdOfHit(kept.hit) } : null;
+  }
+
+  /** Whether the face under (x, y) is one `view`, a held model, has no face for: somewhere on it the nearest surface
+   *  of the held model faces another way. A blend's round or flat does, a face it only trimmed does not. */
+  freshFaceAt(clientX: number, clientY: number, view: ModelView): boolean {
+    if (!this.model) return false;
+    const hit = this.faceHit(this.rayFrom(clientX, clientY));
+    const owner = hit?.object.userData.owner as BodyMesh | undefined;
+    if (!hit || !owner || view.bodies.includes(owner)) return false;
+    const held = visibleBodyMeshes(view);
+    if (!held.length) return false;
+    flushRaycastIndex();
+    const facets = faceTrianglesOf(this.model, faceIdOfHit(hit), 64);
+    const mid = new THREE.Vector3();
+    const own = new THREE.Vector3();
+    const local = new THREE.Vector3();
+    const near = new THREE.Vector3();
+    const tri = new THREE.Triangle();
+    const toLocal = new THREE.Matrix4();
+    const found = { point: new THREE.Vector3(), distance: Infinity, faceIndex: 0 };
+    for (const f of facets) {
+      f.getMidpoint(mid);
+      f.getNormal(own);
+      let best = Infinity;
+      for (const mesh of held) {
+        const geo = mesh.geometry;
+        if (!geo.boundsTree) buildRaycastIndex(geo);
+        const tree = geo.boundsTree as MeshBVH | undefined;
+        if (!tree) continue;
+        local.copy(mid).applyMatrix4(toLocal.copy(mesh.matrixWorld).invert());
+        found.distance = Infinity;
+        if (!tree.closestPointToPoint(local, found)) continue;
+        const d = found.point.applyMatrix4(mesh.matrixWorld).distanceTo(mid);
+        if (d >= best) continue;
+        best = d;
+        const pos = geo.getAttribute("position");
+        const index = geo.getIndex()!;
+        const at = (k: number) =>
+          new THREE.Vector3()
+            .fromBufferAttribute(pos, index.getX(found.faceIndex * 3 + k))
+            .applyMatrix4(mesh.matrixWorld);
+        tri.set(at(0), at(1), at(2)).getNormal(near);
+      }
+      if (best < Infinity && own.dot(near) < FRESH_FACE_COS) return true;
+    }
+    return false;
   }
 
   /** The faceId under (x, y), without touching the hover highlight. */

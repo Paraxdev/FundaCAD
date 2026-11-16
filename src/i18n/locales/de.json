@@ -343,6 +343,7 @@
   "pick.fact.pieces": "in {n, plural, one {# Teil} other {# Teilen}}",
   "pick.fact.radius": "{as, select, readout {R{size}} other {Radius {size}}}",
   "pick.fact.size": "{w} mal {h}",
+  "pick.fromBlend": "{what, select, face {Diese Fläche} other {Diese Kante}} stammt von {kind, select, chamfer {dieser Fase} other {dieser Verrundung}}, klicken Sie eine Kante des Modells davor an",
   "pick.head.edge": "{type, select, straight {1 Kante · gerade} round {1 Kante · rund} curved {1 Kante · gekrümmt} other {1 Kante}}",
   "pick.head.face": "{type, select, flat {1 Fläche · eben} round {1 Fläche · rund} hole {1 Fläche · Bohrung} cylinder {1 Fläche · Zylinder} cone {1 Fläche · Kegel} sphere {1 Fläche · Kugel} torus {1 Fläche · Torus} curved {1 Fläche · gekrümmt} other {1 Fläche}}",
   "pick.list.last": "{before} und {last}",

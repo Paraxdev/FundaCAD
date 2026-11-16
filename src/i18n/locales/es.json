@@ -343,6 +343,7 @@
   "pick.fact.pieces": "en {n, plural, one {# pieza} other {# piezas}}",
   "pick.fact.radius": "{as, select, readout {R{size}} other {radio {size}}}",
   "pick.fact.size": "{w} por {h}",
+  "pick.fromBlend": "{what, select, face {Esa cara} other {Esa arista}} viene de {kind, select, chamfer {este chaflán} other {este redondeo}}, haga clic en una arista del modelo anterior",
   "pick.head.edge": "{type, select, straight {1 arista · recta} round {1 arista · redonda} curved {1 arista · curva} other {1 arista}}",
   "pick.head.face": "{type, select, flat {1 cara · plana} round {1 cara · redonda} hole {1 cara · agujero} cylinder {1 cara · cilindro} cone {1 cara · cono} sphere {1 cara · esfera} torus {1 cara · toro} curved {1 cara · curva} other {1 cara}}",
   "pick.list.last": "{before} y {last}",

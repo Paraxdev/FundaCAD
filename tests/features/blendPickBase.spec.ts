@@ -36,6 +36,8 @@ const B_TRIMMED = line("b2", [10, -8, 10], [10, 10, 10], 1);
 const RESULT_LINES = [RIM, B_TRIMMED, C, D];
 
 const screen = (p: readonly number[]) => ({ x: 300 + p[0]! * 10, y: 300 - p[1]! * 10 });
+/** Where the fake viewport has a face the blend made, clear of every edge line. */
+const ROUND = { x: 600, y: 300 };
 const midOnScreen = (l: EdgeRef) => {
   const [a, b] = l.points as P[];
   return screen([(a![0] + b![0]) / 2, (a![1] + b![1]) / 2]);
@@ -85,6 +87,7 @@ function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
     visibleEdgeLines: (view?: unknown) => (view === BASE ? baseLines : RESULT_LINES),
     edgeLineByMid: (mid: P, view?: unknown) => byMid(view === BASE ? baseLines : RESULT_LINES, mid),
     edgeLineForSelector: (point: P) => byMid(baseLines, point),
+    freshFaceAt: (x: number, y: number, view?: unknown) => view === BASE && Math.hypot(x - ROUND.x, y - ROUND.y) < 30,
     rayFrom: () => new THREE.Raycaster(new THREE.Vector3(0, 0, 500), new THREE.Vector3(0, 0, -1)),
   });
   const added: Feature[] = [];
@@ -224,6 +227,17 @@ describe("a fillet opened from the edge handle on a box", () => {
     expect(prompt()).toBe("That edge comes from this chamfer, click an edge of the model before it · Esc");
     expect(t.tool.memberRows()).toHaveLength(1);
     expect(rimPrompt("fillet")).toBe("That edge comes from this fillet, click an edge of the model before it · Esc");
+  });
+
+  it("refuses a click on the blend's own face in words and adds nothing", () => {
+    const t = rig();
+    open = t.tool;
+    t.openFromHandle("chamfer");
+    t.click(ROUND);
+    expect(prompt()).toBe("That face comes from this chamfer, click an edge of the model before it · Esc");
+    expect(t.tool.memberRows()).toHaveLength(1);
+    t.click({ x: 300, y: 300 });
+    expect(prompt()).toMatch(/^No edge there, 1 edge kept/);
   });
 
   it("keeps the No edge there prompt for a real miss", () => {

@@ -343,6 +343,7 @@
   "pick.fact.pieces": "{n, plural, other {# つ}}に分割",
   "pick.fact.radius": "{as, select, readout {R{size}} other {半径 {size}}}",
   "pick.fact.size": "{w} × {h}",
+  "pick.fromBlend": "{what, select, face {その面} other {そのエッジ}}は{kind, select, chamfer {この面取り} other {このフィレット}}で作られたものです。その前のモデルのエッジをクリックしてください",
   "pick.head.edge": "{type, select, straight {1 エッジ · 直線} round {1 エッジ · 円弧} curved {1 エッジ · 曲線} other {1 エッジ}}",
   "pick.head.face": "{type, select, flat {1 面 · 平面} round {1 面 · 円弧面} hole {1 面 · 穴} cylinder {1 面 · 円柱} cone {1 面 · 円錐} sphere {1 面 · 球} torus {1 面 · トーラス} curved {1 面 · 曲面} other {1 面}}",
   "pick.list.last": "{before}と{last}",

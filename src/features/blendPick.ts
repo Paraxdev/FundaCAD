@@ -1,6 +1,8 @@
 // A Fillet or Chamfer click with members: on a member it drops it, on another edge it adds it, elsewhere nothing.
 // A miss must not commit, a near miss on the third of four corners made a part with two.
 
+import { t } from "../i18n";
+
 export interface ScreenPt {
   x: number;
   y: number;
@@ -45,7 +47,7 @@ export function missPrompt(kind: "fillet" | "chamfer", members: number): string 
   return `No edge there, ${kept} · click an edge to add it · Enter or ✓ to ${kind} · Esc`;
 }
 
-/** A click on an edge only the blend's result has, its rim or a seam it made. */
-export function rimPrompt(kind: "fillet" | "chamfer"): string {
-  return `That edge comes from this ${kind}, click an edge of the model before it · Esc`;
+/** A click on an edge or a face only the blend's result has: its rim, a seam it made, or its own round or flat. */
+export function rimPrompt(kind: "fillet" | "chamfer", what: "edge" | "face" = "edge"): string {
+  return `${t("pick.fromBlend", { what, kind })} · Esc`;
 }
