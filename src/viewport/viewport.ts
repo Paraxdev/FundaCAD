@@ -242,6 +242,10 @@ const PROBE_RINGS_PX = [8, 16];
 // Two meshes of one curved face tilt their facets apart by up to the coarsest angular tolerance, 0.5 rad, so a
 // face counts as fresh only past 30 degrees: a blend on a square edge turns 45 degrees from both faces it joins.
 const FRESH_FACE_COS = Math.cos((30 * Math.PI) / 180);
+// A blend between faces at a shallow angle turns too little for that, but it sinks below the faces it joins and its
+// facets lie nearest both, where a face it trimmed lies on one. At shipping quality two meshes of one curved face sit
+// up to 0.004 of its radius apart, under this share of the model's size while that radius is under a quarter of it.
+const FRESH_FACE_SINK = 1e-3;
 /** How long the camera has to stay still for a gesture to count as over. */
 const MOTION_SETTLE_MS = 300;
 /** A frame that spent this long merging edges is a build, not a frame of the edge level. */
@@ -3770,10 +3774,13 @@ export class Viewport {
     const tri = new THREE.Triangle();
     const toLocal = new THREE.Matrix4();
     const found = { point: new THREE.Vector3(), distance: Infinity, faceIndex: 0 };
+    const nearest = new Set<number>();
+    let sink = 0;
     for (const f of facets) {
       f.getMidpoint(mid);
       f.getNormal(own);
       let best = Infinity;
+      let face = 0;
       for (const mesh of held) {
         const geo = mesh.geometry;
         if (!geo.boundsTree) buildRaycastIndex(geo);
@@ -3785,6 +3792,7 @@ export class Viewport {
         const d = found.point.applyMatrix4(mesh.matrixWorld).distanceTo(mid);
         if (d >= best) continue;
         best = d;
+        face = (mesh.userData.owner as BodyMesh).faceIds[found.faceIndex] ?? 0;
         const pos = geo.getAttribute("position");
         const index = geo.getIndex()!;
         const at = (k: number) =>
@@ -3793,9 +3801,14 @@ export class Viewport {
             .applyMatrix4(mesh.matrixWorld);
         tri.set(at(0), at(1), at(2)).getNormal(near);
       }
-      if (best < Infinity && own.dot(near) < FRESH_FACE_COS) return true;
+      if (best === Infinity) continue;
+      if (own.dot(near) < FRESH_FACE_COS) return true;
+      nearest.add(face);
+      sink = Math.max(sink, best);
     }
-    return false;
+    const size = new THREE.Box3();
+    for (const mesh of held) size.expandByObject(mesh);
+    return nearest.size > 1 && sink > FRESH_FACE_SINK * size.getSize(new THREE.Vector3()).length();
   }
 
   /** The faceId under (x, y), without touching the hover highlight. */
