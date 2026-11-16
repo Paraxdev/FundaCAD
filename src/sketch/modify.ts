@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
 import type { OffsetPair, SketchConstraint } from "../types";
 import { entitySegments, polygonPoints } from "./region";
+import { splinePolyline } from "./spline";
 import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
 import { coincKey } from "./sketchSolve";
@@ -581,6 +582,8 @@ type Off =
       a: THREE.Vector2;
       b: THREE.Vector2;
       pts: THREE.Vector2[];
+      /** The points are a plain spline's, which draws a curve through them rather than the chord. */
+      through?: boolean;
       from?: PolyHit;
       to?: PolyHit;
     };
@@ -617,12 +620,38 @@ function trimmedPoly(o: PolyOff): THREE.Vector2[] | null {
   return out.length >= 2 ? out : null;
 }
 
+/** What a neighbour meets: the curve a plain spline draws through its points, else the samples themselves. `per` is
+ *  how many of its segments make one segment of `pts`, which turns a hit's place back into a place along `pts`. */
+function hitLine(o: PolyOff): { line: THREE.Vector2[]; per: number } {
+  if (!o.through || o.pts.length < 3) return { line: o.pts, per: 1 };
+  const line = splinePolyline(o.pts);
+  return { line, per: (line.length - 1) / (o.pts.length - 1) };
+}
+
+const onPts = (h: PolyHit, per: number): PolyHit => ({ p: h.p, s: h.s / per });
+
 /** Whether two segments that do not share a vertex cross. */
 function selfCrosses(pts: THREE.Vector2[]): boolean {
   for (let i = 0; i + 1 < pts.length; i++)
     for (let j = i + 2; j + 1 < pts.length; j++)
       if (segIntersect(pts[i]!, pts[i + 1]!, pts[j]!, pts[j + 1]!)) return true;
   return false;
+}
+
+/** How often a curve's drawn line meets the others anywhere but at its own two ends, where its joins are. A join of
+ *  nearly parallel segments computes its meeting a hair off the shared end, hence the tolerance. */
+function crossingsAway(curve: ResolvedEntity, others: ResolvedEntity[]): number {
+  const segs = entitySegments(curve);
+  if (!segs.length) return 0;
+  const ends = [segs[0]![0], segs[segs.length - 1]![1]];
+  let n = 0;
+  for (const o of others)
+    for (const [c, d] of entitySegments(o))
+      for (const [a, b] of segs) {
+        const x = segIntersect(a, b, c, d);
+        if (x && ends.every((e) => e.distanceTo(x) > 1e-4)) n++;
+      }
+  return n;
 }
 
 /** Where a line or arc offset meets a polyline's end: on a segment (a trim) or on the extension of the end segment. */
@@ -645,22 +674,22 @@ function locusHits(o: LocusOff, pts: THREE.Vector2[], atStart: boolean): PolyHit
 
 /** Where the end of one polyline meets the start of the next: a crossing of any two segments, else the two end
  *  segments extended. */
-function polyHits(p0: PolyOff, p1: PolyOff): { h0: PolyHit; h1: PolyHit }[] {
+function polyHits(p0: THREE.Vector2[], p1: THREE.Vector2[]): { h0: PolyHit; h1: PolyHit }[] {
   const out: { h0: PolyHit; h1: PolyHit }[] = [];
-  const n0 = p0.pts.length,
-    n1 = p1.pts.length;
+  const n0 = p0.length,
+    n1 = p1.length;
   const at = (a: THREE.Vector2[], k: number, p: THREE.Vector2): PolyHit => ({
     p,
     s: k + paramOnSeg(a[k]!, a[k + 1]!, p),
   });
   for (let k = 0; k + 1 < n0; k++)
     for (let m = 0; m + 1 < n1; m++) {
-      const p = segIntersect(p0.pts[k]!, p0.pts[k + 1]!, p1.pts[m]!, p1.pts[m + 1]!);
-      if (p) out.push({ h0: at(p0.pts, k, p), h1: at(p1.pts, m, p) });
+      const p = segIntersect(p0[k]!, p0[k + 1]!, p1[m]!, p1[m + 1]!);
+      if (p) out.push({ h0: at(p0, k, p), h1: at(p1, m, p) });
     }
   if (!out.length) {
-    const p = lineIntersect(p0.pts[n0 - 2]!, p0.pts[n0 - 1]!, p1.pts[0]!, p1.pts[1]!);
-    if (p) out.push({ h0: at(p0.pts, n0 - 2, p), h1: at(p1.pts, 0, p) });
+    const p = lineIntersect(p0[n0 - 2]!, p0[n0 - 1]!, p1[0]!, p1[1]!);
+    if (p) out.push({ h0: at(p0, n0 - 2, p), h1: at(p1, 0, p) });
   }
   return out;
 }
@@ -773,7 +802,7 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
         const q = shiftAlongChord(p, along[k - 1] ?? p, along[k + 1] ?? p, dist);
         return v(q.x, q.y);
       });
-      return { kind: "poly", src: m.e.id, a: pts[0]!, b: pts[pts.length - 1]!, pts };
+      return { kind: "poly", src: m.e.id, a: pts[0]!, b: pts[pts.length - 1]!, pts, through: m.e.type === "spline" };
     }
     const g = arcGeom(m.e);
     if (!g) return null;
@@ -797,7 +826,10 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
       return best && best.p.distanceTo(corner) <= MITER_LIMIT * Math.abs(dist) + 1e-9 ? best : undefined;
     };
     if (s0.kind === "poly" && s1.kind === "poly") {
-      const best = take(polyHits(s0, s1).map((h) => ({ ...h, p: h.h0.p })));
+      const l0 = hitLine(s0),
+        l1 = hitLine(s1);
+      const hits = polyHits(l0.line, l1.line).map((h) => ({ h0: onPts(h.h0, l0.per), h1: onPts(h.h1, l1.per) }));
+      const best = take(hits.map((h) => ({ ...h, p: h.h0.p })));
       if (!best) return false;
       s0.to = best.h0;
       s1.from = best.h1;
@@ -805,14 +837,16 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
       return true;
     }
     if (s0.kind === "poly" && s1.kind !== "poly") {
-      const best = take(locusHits(s1, s0.pts, false));
+      const l0 = hitLine(s0);
+      const best = take(locusHits(s1, l0.line, false).map((h) => onPts(h, l0.per)));
       if (!best) return false;
       s0.to = best;
       s0.b = s1.a = best.p;
       return true;
     }
     if (s1.kind === "poly" && s0.kind !== "poly") {
-      const best = take(locusHits(s0, s1.pts, true));
+      const l1 = hitLine(s1);
+      const best = take(locusHits(s0, l1.line, true).map((h) => onPts(h, l1.per)));
       if (!best) return false;
       s1.from = best;
       s0.b = s1.a = best.p;
@@ -870,6 +904,7 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
 
   const pairs: OffsetPair[] = [];
   const copies: ResolvedEntity[] = [];
+  const curved: { copy: ResolvedEntity; src: ResolvedEntity }[] = [];
   for (const o of offs) {
     const srcEnt = ents.find((x) => x.id === o.src) ?? {};
     if (o.kind === "line") {
@@ -879,7 +914,7 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     } else if (o.kind === "poly") {
       // the solver ties no offset to a spline, only its two ends follow the neighbours
       const pts = trimmedPoly(o);
-      if (!pts || selfCrosses(pts)) return refused;
+      if (!pts || selfCrosses(o.through ? splinePolyline(pts) : pts)) return refused;
       const src = srcEnt as SplineE | BsplineE;
       if (src.type === "bspline") {
         const deg = bsplineDegree(src);
@@ -901,6 +936,7 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
           ...constr(src),
         });
       }
+      curved.push({ copy: copies[copies.length - 1]!, src });
     } else {
       const arc = arcFromEnds(o.C, o.R, o.a, o.b, o.ccw, srcEnt);
       if (!arc) continue; // swept to nothing
@@ -909,6 +945,13 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     }
   }
   if (!copies.length) return null;
+  // a source profile that already crosses itself may keep that crossing, the offset must add none
+  const chain = path.map((m) => m.e);
+  const others = <T>(all: T[], one: T) => all.filter((e) => e !== one);
+  if (
+    curved.some(({ copy, src }) => crossingsAway(copy, others(copies, copy)) > crossingsAway(src, others(chain, src)))
+  )
+    return refused;
   return { entities: [...ents, ...copies], pairs, linked: true };
 }
 

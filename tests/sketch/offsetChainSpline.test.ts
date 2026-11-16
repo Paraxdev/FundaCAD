@@ -8,7 +8,8 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 
 import { solveKeepingAxes } from "../../src/sketch/sketchSolve";
 import { bsplinePolyline } from "../../src/sketch/bspline";
-import { offsetChain, type OffsetResult } from "../../src/sketch/modify";
+import { splinePolyline } from "../../src/sketch/spline";
+import { offsetChain, offsetEntity, type OffsetResult } from "../../src/sketch/modify";
 import { distToSeg } from "../../src/sketch/geom2d";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
@@ -273,6 +274,46 @@ describe("offsetChain never hands back an open profile around a spline", () => {
       expect(r.refused).toBeUndefined();
       // the far corner of this thin loop is butted by the miter limit, the spline's own joints are what matters
       expect(touching(copiesOf(ents, r)).slice(0, 5)).toEqual([1, 1, 1, 1, 1]);
+    });
+  }
+});
+
+describe("offsetChain joins a spline of few points on its drawn curve", () => {
+  // A three point spline bows well past the chord through its points, so a neighbour meets the chord far from the curve.
+  const hook = (): ResolvedEntity[] => [
+    L("l1", [0, 0], [30, 0]),
+    spline("s", [
+      [30, 0],
+      [42, 10],
+      [30, 20],
+    ]),
+    L("l2", [30, 20], [0, 20]),
+  ];
+
+  type SplineE = Extract<ResolvedEntity, { type: "spline" }>;
+  const copyOf = (ents: ResolvedEntity[], r: OffsetResult) =>
+    copiesOf(ents, r).find((c) => c.type === "spline") as SplineE;
+  const drawnCopies = (d: number) => {
+    const ents = hook();
+    const r = offsetChain(ents, 1, d)!;
+    expect(r.refused).toBeUndefined();
+    const chain = copyOf(ents, r);
+    const lone = copyOf(ents, offsetEntity(ents, 1, d)!);
+    return { chain, drawnChain: splinePolyline(chain.points, 256), drawnLone: splinePolyline(lone.points, 256) };
+  };
+
+  for (const d of [1, 2, 4]) {
+    it(`trims the copy where its neighbours meet the spline's own offset, ${d}`, () => {
+      const { chain, drawnLone } = drawnCopies(d);
+      for (const p of [chain.points[0]!, chain.points.at(-1)!]) expect(distToPoly(drawnLone, p)).toBeLessThan(0.02);
+      for (const p of splinePolyline(chain.points, 64)) expect(distToPoly(drawnLone, p)).toBeLessThan(0.15);
+    });
+  }
+
+  for (const d of [-1, -2, -4]) {
+    it(`extends the copy past the spline's own offset without bending it, ${d}`, () => {
+      const { drawnChain, drawnLone } = drawnCopies(d);
+      for (const p of drawnLone.filter((_p, k) => k % 4 === 0)) expect(distToPoly(drawnChain, p)).toBeLessThan(0.05);
     });
   }
 });
