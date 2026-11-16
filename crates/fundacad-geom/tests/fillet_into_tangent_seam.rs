@@ -75,10 +75,20 @@ fn chain_points(base: &Shape) -> Vec<[f64; 3]> {
 
 /// The size a refusal offers, the number before "mm" in its last sentence that offers one.
 fn offered(message: &str) -> Option<f64> {
-    let at = message.rfind("mm, so try")?;
-    let head = &message[..at];
-    let start = head.rfind(|c: char| !(c.is_ascii_digit() || c == '.'))? + 1;
-    head[start..].parse().ok()
+    offered_pair(message).map(|(size, _)| size)
+}
+
+/// The size a refusal offers, and the second distance it names with it.
+fn offered_pair(message: &str) -> Option<(f64, Option<f64>)> {
+    let head = &message[..message.rfind("mm, so try")?];
+    let number = |s: &str| {
+        let start = s.rfind(|c: char| !(c.is_ascii_digit() || c == '.'))? + 1;
+        s[start..].parse().ok()
+    };
+    match head.split_once("mm with distance 2 at ") {
+        Some((size, second)) => Some((number(size)?, Some(second.parse().ok()?))),
+        None => Some((number(head)?, None)),
+    }
 }
 
 /// Rests a ball of radius `r` on mesh nodes of the curved faces near the corner that lie off `base`, so on the new
@@ -229,8 +239,7 @@ fn a_corner_round_too_large_for_its_top_rounds_offers_a_size_that_builds_smooth(
     check(&[("G1", 3.0, 3.0, false), ("G2", 5.0, 3.85, false), ("G3", 5.0, 3.85, false)]);
 }
 
-/// A smaller size is tried with the second distance scaled with it, so the size a refusal offers builds with the
-/// second distance scaled the same way.
+/// A smaller size is tried with the second distance scaled with it, and a refusal names both, so that pair builds.
 #[test]
 fn a_two_distance_chamfer_into_the_seam_builds_or_offers_a_size_that_builds() {
     let mut wrong = Vec::new();
@@ -250,11 +259,11 @@ fn a_two_distance_chamfer_into_the_seam_builds_or_offers_a_size_that_builds() {
             }
             continue;
         };
-        let Some(fits) = offered(&e.message) else {
-            wrong.push(format!("{cont} top {top}: refused with no size: {}", e.message));
+        let Some((fits, Some(second))) = offered_pair(&e.message) else {
+            wrong.push(format!("{cont} top {top}: refused with no pair: {}", e.message));
             continue;
         };
-        let again = chamfer(fits, d2 * fits / d);
+        let again = chamfer(fits, second);
         if !again.errors.is_empty() || !ops::is_valid(&again.bodies[0].shape) {
             wrong.push(format!("{cont} top {top}: offered {fits}mm, which does not build: {:?}", again.errors));
         }

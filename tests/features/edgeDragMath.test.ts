@@ -263,6 +263,21 @@ describe("blendRefusalReason", () => {
     );
   });
 
+  it("names both distances a two distance chamfer fits up to", async () => {
+    const pair = { ...fits, message: fits.message.replace("9.99mm,", "3.99mm with distance 2 at 9.97mm,") };
+    expect(blendRefusalReason("chamfer", 1, pair)).toBe(
+      "Distance too large for the faces around this edge, it fits up to 3.99 mm with distance 2 at 9.97 mm",
+    );
+    await setLanguage("de");
+    try {
+      expect(blendRefusalReason("chamfer", 1, pair)).toBe(
+        "Abstand zu groß für die Flächen an dieser Kante, es passen höchstens 3,99 mm mit Abstand 2 bei 9,97 mm",
+      );
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   it("passes an unrecognised refusal through without the body prefix", () => {
     expect(blendRefusalReason("fillet", 1, { code: null, message: "Fillet failed on Body1: something odd" })).toBe(
       "something odd",
