@@ -2,6 +2,8 @@
 // exists and says so through an init script that runs before any of ours, the
 // same script that swaps localStorage for an in memory one.
 
+import { t } from "../i18n";
+
 export type SafeModeReason = "failedStarts" | "crashes" | "flag" | "env";
 
 export interface SafeModeInfo {
@@ -23,6 +25,7 @@ export function safeMode(): SafeModeInfo | null {
   return typeof window === "undefined" ? null : (window.__FUNDACAD_SAFE_MODE__ ?? null);
 }
 
+/** English, for the problem report. */
 export function safeModeWhy(info: SafeModeInfo): string {
   switch (info.reason) {
     case "flag":
@@ -38,13 +41,29 @@ export function safeModeWhy(info: SafeModeInfo): string {
   }
 }
 
+/** The banner's reason, in the language. */
+export function safeModeReason(info: SafeModeInfo): string {
+  switch (info.reason) {
+    case "flag":
+      return t("safeMode.why.flag");
+    case "env":
+      return t("safeMode.why.env");
+    case "crashes":
+      return t("safeMode.why.crashes", { n: info.crashes ?? 0 });
+    default:
+      return info.chosen
+        ? t("safeMode.why.chosen", { n: info.failedStarts })
+        : t("safeMode.why.failedStarts", { n: info.failedStarts });
+  }
+}
+
 /** What a restart cannot undo for the person, or null. */
 export function safeModeLeaveNote(info: SafeModeInfo): string | null {
   switch (info.reason) {
     case "flag":
-      return "A shortcut or launcher that adds --safe-mode starts it again, take the switch out of it.";
+      return t("safeMode.leave.flag");
     case "env":
-      return "Remove FUNDACAD_SAFE_MODE from your shell profile or launcher, or the next start is safe again.";
+      return t("safeMode.leave.env");
     default:
       return null;
   }

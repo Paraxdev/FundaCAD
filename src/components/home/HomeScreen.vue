@@ -27,7 +27,8 @@ import {
   type HomeEntry,
   type SortMode,
 } from "../../ui/homeList";
-import { TEMPLATES } from "../../templates";
+import { t, type MessageKey } from "../../i18n";
+import { TEMPLATES, exampleCard } from "../../templates";
 import { readSetting } from "../../ui/storedSetting";
 import { thumbQueueFor } from "../../ui/thumbQueue";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
@@ -107,10 +108,10 @@ const recents = ref(getRecentFiles());
 const stats = ref(new Map<string, FileStat>());
 const query = ref("");
 const SORT_KEY = "fundacad.home.sort";
-const SORTS: { value: SortMode; label: string }[] = [
-  { value: "opened", label: "Last opened" },
-  { value: "edited", label: "Last edited" },
-  { value: "name", label: "Name" },
+const SORTS: { value: SortMode; key: MessageKey }[] = [
+  { value: "opened", key: "home.sort.opened" },
+  { value: "edited", key: "home.sort.edited" },
+  { value: "name", key: "home.sort.name" },
 ];
 const stored = readSetting(SORT_KEY);
 const sort = ref<SortMode>(SORTS.some((s) => s.value === stored) ? (stored as SortMode) : "opened");
@@ -131,7 +132,12 @@ const loading = ref<string | null>(null);
 const inFolder = computed(() => view.value !== "recent");
 const listing = computed(() => (inFolder.value ? (listings.value.get(view.value) ?? null) : null));
 
-const sorts = computed(() => (inFolder.value ? SORTS.filter((s) => s.value !== "opened") : SORTS));
+const sorts = computed(() =>
+  (inFolder.value ? SORTS.filter((s) => s.value !== "opened") : SORTS).map((s) => ({
+    value: s.value,
+    label: t(s.key),
+  })),
+);
 const shownSort = computed<SortMode>({
   get: () => (inFolder.value ? folderSort(sort.value) : sort.value),
   set: (v) => {
@@ -145,7 +151,10 @@ const all = computed(() => {
   return l && !(l instanceof Error) ? folderEntries(l.files, recents.value, cb.currentPath()) : [];
 });
 const entries = computed(() => sortEntries(filterEntries(all.value, query.value), shownSort.value));
-const examples = computed(() => TEMPLATES.filter((t) => matchesQuery(t.name, query.value)));
+// The English name still finds a card, as the palette finds a tool.
+const examples = computed(() =>
+  TEMPLATES.filter((e) => matchesQuery(exampleCard(e).name, query.value) || matchesQuery(e.name, query.value)),
+);
 const fresh = computed(() => !inFolder.value && !recents.value.length);
 const unreadable = ref(new Set<string>());
 
@@ -189,7 +198,7 @@ function dropFolder(dir: string): void {
 }
 
 function folderMenu(dir: string, ev: MouseEvent): void {
-  contextMenu(ev.clientX, ev.clientY, [{ label: "Remove from Home", onClick: () => dropFolder(dir) }]);
+  contextMenu(ev.clientX, ev.clientY, [{ label: t("home.folderMenu.remove"), onClick: () => dropFolder(dir) }]);
 }
 
 /** Only once Home has closed is the new document the one on screen, a refused discard leaves it up. */
@@ -207,9 +216,9 @@ function forget(path: string): void {
 async function openEntry(entry: HomeEntry): Promise<void> {
   if (entry.open) return close();
   if (entry.missing) {
-    const pick = await choose(`${entry.name} was not found.`, [
-      { value: "remove", label: "Remove from list", hint: "nothing is deleted" },
-      { value: "cancel", label: "Cancel" },
+    const pick = await choose(t("home.missing.title", { name: entry.name }), [
+      { value: "remove", label: t("home.missing.remove"), hint: t("home.missing.removeHint") },
+      { value: "cancel", label: t("home.missing.cancel") },
     ]);
     if (pick === "remove") forget(entry.path);
     return;
@@ -254,27 +263,27 @@ async function versionAction(path: string, act: (path: string) => Promise<boolea
 
 function entryMenu(entry: HomeEntry, ev: MouseEvent): void {
   contextMenu(ev.clientX, ev.clientY, [
-    { label: "Open", onClick: () => void openEntry(entry) },
+    { label: t("home.menu.open"), onClick: () => void openEntry(entry) },
     ...(entry.missing
       ? []
       : [
           {
-            label: "Versions",
+            label: t("home.menu.versions"),
             onClick: () => {
               drawer.value = entry;
             },
           },
         ]),
-    ...(inFolder.value ? [] : [{ label: "Remove from list", onClick: () => forget(entry.path) }]),
+    ...(inFolder.value ? [] : [{ label: t("home.menu.remove"), onClick: () => forget(entry.path) }]),
     { separator: true, label: "" },
-    { label: "Copy path", onClick: () => void navigator.clipboard?.writeText(entry.path).catch(() => {}) },
+    { label: t("home.menu.copyPath"), onClick: () => void navigator.clipboard?.writeText(entry.path).catch(() => {}) },
   ]);
 }
 
 const viewOptions = computed(() => [
-  { value: "recent", label: "Recent" },
+  { value: "recent", label: t("home.view.recent") },
   ...folders.value.map((f) => ({ value: f.path, label: folderName(f.path) })),
-  { value: "add", label: "Add folder…" },
+  { value: "add", label: t("home.view.addFolder") },
 ]);
 
 function onViewSelect(next: string): void {
@@ -336,7 +345,7 @@ onUnmounted(() => {
     :style="homeBackgroundStyle(background, imageUrl)"
     role="dialog"
     aria-modal="true"
-    aria-label="Home"
+    :aria-label="t('home.title')"
   >
     <aside class="home-side">
       <img :src="logoUrl" alt="FundaCAD" class="home-logo" />
@@ -356,12 +365,12 @@ onUnmounted(() => {
         <NewStrip @blank="startNew(() => cb.newDocument())" @open="cb.openDoc()" />
         <div class="home-head-actions">
           <Button variant="ghost" size="sm" class="home-a11y" @click="dialogs.openPreferences('access')">
-            Accessibility
+            {{ t("home.accessibility") }}
           </Button>
           <IconButton
             class="modal-close"
             icon="close"
-            tip="Back to the document"
+            :tip="t('home.close')"
             size="md"
             variant="plain"
             :icon-size="15"
@@ -375,34 +384,34 @@ onUnmounted(() => {
           class="home-view-select"
           :model-value="view"
           :options="viewOptions"
-          label="Show"
+          :label="t('home.view.label')"
           @update:model-value="onViewSelect"
         />
         <TextField
           v-model="query"
           class="home-search"
           type="search"
-          placeholder="Search documents"
-          label="Search documents"
+          :placeholder="t('home.search')"
+          :label="t('home.search')"
           spellcheck="false"
         />
-        <Select v-model="shownSort" class="home-sort" :options="sorts" label="Sort by" />
+        <Select v-model="shownSort" class="home-sort" :options="sorts" :label="t('home.sort.label')" />
       </div>
 
       <p v-if="listing && !(listing instanceof Error) && listing.truncated" class="home-note">
-        Showing the first 2000 documents
+        {{ t("home.folder.truncated", { n: 2000 }) }}
       </p>
       <div class="home-scroll">
         <WhatsNewCard />
         <WelcomeBlock v-if="fresh && !query && !welcomeHidden" @close="welcomeHidden = true" />
         <template v-if="fresh && examples.length">
-          <h2 class="home-section">Start here</h2>
+          <h2 class="home-section">{{ t("home.startHere") }}</h2>
           <div class="home-grid home-examples">
             <ExampleCard
-              v-for="t in examples"
-              :key="t.id"
-              :example="t"
-              @open="startNew(() => cb.newFromTemplate(t.id))"
+              v-for="ex in examples"
+              :key="ex.id"
+              :example="ex"
+              @open="startNew(() => cb.newFromTemplate(ex.id))"
             />
           </div>
         </template>
@@ -419,22 +428,24 @@ onUnmounted(() => {
           />
         </div>
         <template v-else-if="lib && all.length">
-          <p v-if="!examples.length" class="home-empty">No documents match</p>
+          <p v-if="!examples.length" class="home-empty">{{ t("home.empty.noMatch") }}</p>
         </template>
-        <p v-else-if="listing instanceof Error" class="home-empty">{{ folderName(view) }} could not be read.</p>
-        <p v-else-if="inFolder && listing" class="home-empty">No documents in this folder.</p>
-        <p v-else-if="inFolder" class="home-empty">Looking for documents…</p>
-        <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
-        <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
+        <p v-else-if="listing instanceof Error" class="home-empty">
+          {{ t("home.empty.folderUnreadable", { folder: folderName(view) }) }}
+        </p>
+        <p v-else-if="inFolder && listing" class="home-empty">{{ t("home.empty.folder") }}</p>
+        <p v-else-if="inFolder" class="home-empty">{{ t("home.empty.looking") }}</p>
+        <p v-else-if="lib" class="home-empty">{{ t("home.empty.recent") }}</p>
+        <p v-else class="home-empty">{{ t("home.empty.browser") }}</p>
 
         <template v-if="!fresh && examples.length">
-          <h2 class="home-section">Examples</h2>
+          <h2 class="home-section">{{ t("home.examples") }}</h2>
           <div class="home-grid home-examples">
             <ExampleCard
-              v-for="t in examples"
-              :key="t.id"
-              :example="t"
-              @open="startNew(() => cb.newFromTemplate(t.id))"
+              v-for="ex in examples"
+              :key="ex.id"
+              :example="ex"
+              @open="startNew(() => cb.newFromTemplate(ex.id))"
             />
           </div>
         </template>
@@ -453,8 +464,10 @@ onUnmounted(() => {
       />
 
       <div class="home-foot">
-        <Checkbox v-model="showOnStartup" class="home-startup" label="Show Home on startup" />
-        <Button variant="ghost" size="sm" class="home-report" @click="openReportDialog()">Report a problem</Button>
+        <Checkbox v-model="showOnStartup" class="home-startup" :label="t('home.showOnStartup')" />
+        <Button variant="ghost" size="sm" class="home-report" @click="openReportDialog()">{{
+          t("home.report")
+        }}</Button>
       </div>
     </div>
   </div>

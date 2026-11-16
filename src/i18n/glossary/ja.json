@@ -816,6 +816,38 @@
     {
       "en": "Visibility",
       "text": "表示"
+    },
+    {
+      "en": "Home",
+      "text": "ホーム",
+      "note": "the start screen with recent documents and examples, File, Home"
+    },
+    {
+      "en": "safe mode",
+      "text": "セーフモード",
+      "note": "the start without plugins and saved preferences"
+    },
+    {
+      "en": "Version",
+      "text": "バージョン"
+    },
+    {
+      "en": "Branch",
+      "text": "ブランチ",
+      "note": "a line of versions in a document"
+    },
+    {
+      "en": "Restore (a version)",
+      "text": "復元"
+    },
+    {
+      "en": "Blank",
+      "text": "空白",
+      "note": "the Home card that starts an empty document"
+    },
+    {
+      "en": "example",
+      "text": "サンプル"
     }
   ]
 }

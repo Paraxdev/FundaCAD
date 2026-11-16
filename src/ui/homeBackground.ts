@@ -1,14 +1,31 @@
 // Home's backdrop: the theme's paper, the dimmed workspace, or the user's picture. The picture is in IndexedDB on
 // desktop too: the Tauri fs scope reaches no app data folder, and WebView2 keeps IndexedDB there anyway.
 
+import { t } from "../i18n";
 import { readSetting } from "./storedSetting";
 
 export type HomeBackground = "paper" | "workspace" | "image";
 
-export const HOME_BACKGROUNDS: readonly { id: HomeBackground; label: string }[] = [
-  { id: "paper", label: "Paper" },
-  { id: "workspace", label: "Workspace" },
-  { id: "image", label: "Your own image" },
+// Labels are getters, so a list read after a language switch reads the new language.
+export const HOME_BACKGROUNDS: readonly { readonly id: HomeBackground; readonly label: string }[] = [
+  {
+    id: "paper",
+    get label() {
+      return t("home.background.paper");
+    },
+  },
+  {
+    id: "workspace",
+    get label() {
+      return t("home.background.workspace");
+    },
+  },
+  {
+    id: "image",
+    get label() {
+      return t("home.background.image");
+    },
+  },
 ];
 
 const KEY = "fundacad.homeBackground";
@@ -124,20 +141,22 @@ export type StoreResult = { ok: true } | { ok: false; error: string };
 
 export async function storeHomeImage(image: Blob): Promise<StoreResult> {
   if (!(HOME_IMAGE_TYPES as readonly string[]).includes(image.type)) {
-    return { ok: false, error: "Pick a PNG or JPEG picture." };
+    return { ok: false, error: t("home.background.error.type") };
   }
-  if (image.size > MAX_HOME_IMAGE_BYTES) return { ok: false, error: "That picture is over 25 MB." };
+  if (image.size > MAX_HOME_IMAGE_BYTES) {
+    return { ok: false, error: t("home.background.error.size", { mb: MAX_HOME_IMAGE_BYTES / (1024 * 1024) }) };
+  }
   if (typeof createImageBitmap === "function") {
     try {
       (await createImageBitmap(image)).close();
     } catch {
-      return { ok: false, error: "That file could not be read as a picture." };
+      return { ok: false, error: t("home.background.error.unreadable") };
     }
   }
   try {
     await imageStore().put(image);
   } catch {
-    return { ok: false, error: "The picture could not be saved." };
+    return { ok: false, error: t("home.background.error.notSaved") };
   }
   notify();
   return { ok: true };

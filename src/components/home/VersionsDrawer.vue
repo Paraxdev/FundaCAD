@@ -7,6 +7,7 @@ import IconButton from "../ui/IconButton.vue";
 import ListRow from "../ui/ListRow.vue";
 import { focusReturn } from "../ui/focusables";
 import type { DocSummary } from "../../io/library";
+import { t } from "../../i18n";
 import { ago } from "../../ui/timeAgo";
 import { branchLog, branchNames } from "../../ui/homeVersions";
 
@@ -25,13 +26,16 @@ const picked = ref<string | null>(null);
 const branches = computed(() => (summary.value ? branchNames(summary.value) : []));
 const shown = computed(() => picked.value ?? summary.value?.current ?? null);
 const rows = computed(() => (summary.value && shown.value ? branchLog(summary.value, shown.value) : []));
-const titled = (v: { message: string; time: number }) => `${v.message || "Untitled version"}, ${ago(v.time)}`;
+const titled = (v: { message: string; time: number }) =>
+  t("home.versions.named", { name: v.message || t("home.versions.untitled"), when: ago(v.time) });
 // Plain saves share a message and ago() rounds the time, so a name that repeats also says where its row sits.
 const named = computed(() => {
   const counts = new Map<string, number>();
   for (const v of rows.value) counts.set(titled(v), (counts.get(titled(v)) ?? 0) + 1);
   const n = rows.value.length;
-  return rows.value.map((v, i) => (counts.get(titled(v))! > 1 ? `${titled(v)}, ${i + 1} of ${n}` : titled(v)));
+  return rows.value.map((v, i) =>
+    counts.get(titled(v))! > 1 ? t("home.versions.place", { name: titled(v), i: i + 1, n }) : titled(v),
+  );
 });
 
 const root = ref<HTMLElement | null>(null);
@@ -53,13 +57,13 @@ onBeforeUnmount(() => back.restore((n) => !!root.value?.contains(n)));
 </script>
 
 <template>
-  <aside ref="root" class="home-drawer" role="region" :aria-label="`Versions of ${name}`">
+  <aside ref="root" class="home-drawer" role="region" :aria-label="t('home.versions.region', { name })">
     <div class="home-drawer-head">
       <h2 ref="heading" class="home-drawer-title" tabindex="-1" data-focus-landing>{{ name }}</h2>
       <IconButton
         class="home-drawer-close"
         icon="close"
-        tip="Close versions"
+        :tip="t('home.versions.close')"
         size="sm"
         variant="plain"
         :icon-size="13"
@@ -67,60 +71,57 @@ onBeforeUnmount(() => back.restore((n) => !!root.value?.contains(n)));
       />
     </div>
 
-    <p v-if="state === 'loading'" class="home-drawer-note">Reading versions…</p>
-    <p v-else-if="state === 'old'" class="home-drawer-note">Open the document to see its versions.</p>
-    <p v-else-if="state === 'failed'" class="home-drawer-note">The versions could not be read.</p>
-    <p v-else-if="!summary?.versions.length" class="home-drawer-note">No versions saved in this document.</p>
+    <p v-if="state === 'loading'" class="home-drawer-note">{{ t("home.versions.loading") }}</p>
+    <p v-else-if="state === 'old'" class="home-drawer-note">{{ t("home.versions.old") }}</p>
+    <p v-else-if="state === 'failed'" class="home-drawer-note">{{ t("home.versions.failed") }}</p>
+    <p v-else-if="!summary?.versions.length" class="home-drawer-note">{{ t("home.versions.none") }}</p>
     <template v-else>
-      <div class="home-drawer-section">Branches</div>
+      <div class="home-drawer-section">{{ t("home.versions.branches") }}</div>
       <div v-for="b in branches" :key="b" class="home-branch">
         <ListRow
           class="home-branch-name"
           :label="b"
           :selected="b === shown"
-          :title="`Show the versions on ${b}`"
+          :title="t('home.versions.showBranch', { branch: b })"
           @click="picked = b"
         >
           <template v-if="b === summary!.current" #trailing>
-            <Chip class="home-branch-current">current</Chip>
+            <Chip class="home-branch-current">{{ t("home.versions.current") }}</Chip>
           </template>
         </ListRow>
         <Button
           size="sm"
           class="home-drawer-act home-branch-open"
-          :title="`Open the document on ${b}`"
-          :aria-label="`Open the document on ${b}`"
+          :title="t('home.versions.openBranchTip', { branch: b })"
+          :aria-label="t('home.versions.openBranchTip', { branch: b })"
           @click="emit('branch', b)"
-          >Open</Button
+          >{{ t("home.versions.openBranch") }}</Button
         >
       </div>
 
-      <div class="home-drawer-section">Versions on {{ shown }}</div>
-      <p class="home-drawer-hint"
-        >Restore brings a version back into the document, {{ fmtKeys("Ctrl+Z") }} undoes it. Open copy starts a new
-        document from it.</p
-      >
+      <div class="home-drawer-section">{{ t("home.versions.on", { branch: shown ?? "" }) }}</div>
+      <p class="home-drawer-hint">{{ t("home.versions.hint", { keys: fmtKeys("Ctrl+Z") }) }}</p>
       <div v-for="(v, i) in rows" :key="v.id" class="home-version">
         <div class="home-version-text">
-          <span class="home-version-msg">{{ v.message || "Untitled version" }}</span>
+          <span class="home-version-msg">{{ v.message || t("home.versions.untitled") }}</span>
           <span class="home-version-time">{{ ago(v.time) }}</span>
         </div>
         <div class="home-version-acts">
           <Button
             size="sm"
             class="home-drawer-act home-version-restore"
-            title="Bring this version back into the document"
-            :aria-label="`Restore ${named[i]}`"
+            :title="t('home.versions.restoreTip')"
+            :aria-label="t('home.versions.restoreLabel', { version: named[i] ?? '' })"
             @click="emit('restore', v.id)"
-            >Restore</Button
+            >{{ t("home.versions.restore") }}</Button
           >
           <Button
             size="sm"
             class="home-drawer-act home-version-copy"
-            title="Start a new untitled document from this version"
-            :aria-label="`Open copy of ${named[i]}`"
+            :title="t('home.versions.copyTip')"
+            :aria-label="t('home.versions.copyLabel', { version: named[i] ?? '' })"
             @click="emit('copy', v.id)"
-            >Open copy</Button
+            >{{ t("home.versions.copy") }}</Button
           >
         </div>
       </div>

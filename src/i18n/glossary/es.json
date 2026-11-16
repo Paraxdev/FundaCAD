@@ -815,6 +815,38 @@
     {
       "en": "Visibility",
       "text": "Visibilidad"
+    },
+    {
+      "en": "Home",
+      "text": "Inicio",
+      "note": "the start screen with recent documents and examples, File, Home"
+    },
+    {
+      "en": "safe mode",
+      "text": "modo seguro",
+      "note": "the start without plugins and saved preferences"
+    },
+    {
+      "en": "Version",
+      "text": "versión"
+    },
+    {
+      "en": "Branch",
+      "text": "rama",
+      "note": "a line of versions in a document"
+    },
+    {
+      "en": "Restore (a version)",
+      "text": "Restaurar"
+    },
+    {
+      "en": "Blank",
+      "text": "En blanco",
+      "note": "the Home card that starts an empty document"
+    },
+    {
+      "en": "example",
+      "text": "ejemplo"
     }
   ]
 }

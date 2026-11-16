@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, templateText } from "../../src/templates";
+import { TEMPLATES, exampleCard, exampleLines, templateText } from "../../src/templates";
+import { setLanguage, tEnglish } from "../../src/i18n";
 import { documentShapeProblem } from "../../src/document/documentShape";
 import { migrateDocument } from "../../src/document/migrate";
 import { commitParamExpr, recompute } from "../../src/params/engine";
@@ -23,6 +24,25 @@ describe("built-in templates", () => {
       "plate",
       "pinned-lever",
     ]);
+  });
+
+  it("each have card words in the language, the name read in English being the document name", async () => {
+    for (const t of TEMPLATES) {
+      const keys = exampleLines(t.id)!;
+      expect(keys).toBeDefined();
+      expect(tEnglish(keys.name)).toBe(t.name);
+      expect(exampleCard(t)).toEqual({ name: t.name, caption: tEnglish(keys.caption), hint: tEnglish(keys.hint) });
+    }
+    await setLanguage("de");
+    try {
+      expect(exampleCard(TEMPLATES[0]!)).toEqual({
+        name: "Wandhalter",
+        caption: "Sehen, wo er sich biegt",
+        hint: expect.stringContaining("Spannung"),
+      });
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   for (const t of TEMPLATES) {
