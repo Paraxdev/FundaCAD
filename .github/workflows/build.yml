@@ -143,6 +143,10 @@ jobs:
       - name: Wayland smoke script tests
         run: python3 tests/build/test_wayland_smoke.py
 
+      # The disk keeping rust-geom does on the self hosted runner, against a fake checkout.
+      - name: Warm target dir tests
+        run: python3 tests/build/test_warm_target.py
+
       # The checks of the UI Automation walk the Windows bundle leg runs, against
       # fake trees, in pwsh on Linux.
       - name: UI Automation walk tests
@@ -1946,6 +1950,18 @@ jobs:
             !target/OCCT/build
           key: occt-static-v2-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
+      # A new stable rebuilds every unit beside the old toolchain's, which the
+      # week long prune keeps: cargo 1.100's new layout took the runner's disk
+      # from 55G to 11G free in four days. The runner's own logs share that
+      # disk, so a full one fails the next job before its first step.
+      - name: Start the warm target dir over on a new toolchain
+        if: env.SELF_HOSTED == 'true' && env.GREEN != 'true'
+        run: sh scripts/warm-target.sh toolchain
+
+      - name: Keep room on the warm disk
+        if: env.SELF_HOSTED == 'true' && env.GREEN != 'true'
+        run: sh scripts/warm-target.sh floor 30
+
       # The whole workspace, not the kernel crate alone: the engine's request
       # loop, its transports and the protocol have tests of their own, and the
       # WebSocket transport is behind a feature, so without it the server the
@@ -2042,6 +2058,11 @@ jobs:
       # same goldens again on a release build, each under a clock, so a result
       # that differs or a rebuild that hangs only once optimised fails here. A
       # release build finds plugins only through FUNDACAD_PLUGIN_DIR.
+      # Tier 2 at most, since the steps after it still need the debug engine.
+      - name: Keep room for the release build
+        if: env.SELF_HOSTED == 'true' && env.GREEN != 'true'
+        run: sh scripts/warm-target.sh floor 15 2
+
       - name: Build the release engine
         if: env.GREEN != 'true'
         run: cargo build --locked --release -p fundacad-cli
@@ -2079,15 +2100,4 @@ jobs:
       # The warm target dir gains a test binary per change; a week is kept.
       - name: Prune the warm target dir
         if: always() && env.SELF_HOSTED == 'true'
-        run: |
-          find target src-tauri/target -path '*/deps/*' -type f -mtime +7 -delete 2>/dev/null || true
-          # From cargo 1.100 each unit builds in build/<pkg>/<hash>, its out/ holding build script output that a
-          # fresh fingerprint still vouches for, so only a whole unit neither written nor read for a week goes. A
-          # fresh unit is never written again, so read times keep a dependency every run links.
-          for unit in target/*/build/*/*/ src-tauri/target/*/build/*/*/; do
-            if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" -type f \( -mtime -7 -o -atime -7 \) -print -quit)" ]; then
-              rm -rf "$unit"
-            fi
-          done
-          find target src-tauri/target -path '*/incremental/*' -mtime +7 -delete 2>/dev/null || true
-          df -h . | tail -n 1
+        run: sh scripts/warm-target.sh prune 7
