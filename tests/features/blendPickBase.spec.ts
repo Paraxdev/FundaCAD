@@ -6,7 +6,7 @@ import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { EdgeFeatureTool } from "../../src/features/edgeFeatureTool";
 import { rimPrompt } from "../../src/features/blendPick";
-import { screenPolylineDist } from "../../src/features/blendPick";
+import { screenPolylineNearest } from "../../src/features/blendPick";
 import { edgeSelectorFrom } from "../../src/viewport/edgeMatch";
 import { usePromptStore } from "../../src/stores/prompt";
 import type { DocumentStore } from "../../src/document/store";
@@ -54,10 +54,12 @@ function rig(features: Feature[] = [], baseLines: EdgeRef[] = BASE_LINES) {
   const scene = new Set<THREE.Object3D>();
   const diff: { gone: unknown[]; fresh: EdgeRef[] } = { gone: [], fresh: [] };
   const pickIn = (lines: EdgeRef[], x: number, y: number) => {
-    let best: { edge: EdgeRef; rankPx: number } | null = null;
+    let best: { edge: EdgeRef; rankPx: number; point: THREE.Vector3 } | null = null;
     for (const l of lines) {
-      const d = screenPolylineDist((l.points as P[]).map(screen), { x, y });
-      if (d <= 8 && (!best || d < best.rankPx)) best = { edge: l, rankPx: d };
+      const near = screenPolylineNearest((l.points as P[]).map(screen), { x, y });
+      if (near.dist > 8 || (best && near.dist >= best.rankPx)) continue;
+      const [a, b] = l.points as P[];
+      best = { edge: l, rankPx: near.dist, point: new THREE.Vector3(...a!).lerp(new THREE.Vector3(...b!), near.t) };
     }
     return best && { ...best, selector: sel(best.edge) };
   };
