@@ -1115,6 +1115,11 @@ export class ExtrudeTool {
     );
   }
 
+  /** A tool command carries on too, refused in words while the depth is not set. */
+  get carryOffered(): boolean {
+    return !!this.carry && !this.editId && this.phase === "drag";
+  }
+
   carryBlocked(): string | null {
     if (!this.carriesOn()) return carryWords.depthFirst();
     if (!this.dim.accepts("distance") || !this.dim.accepts("taper")) return carryWords.badValue();

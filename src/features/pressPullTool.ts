@@ -1413,6 +1413,11 @@ export class PressPullTool {
     return !!this.carry && this.phase === "drag" && !this.pickingTarget;
   }
 
+  /** A tool command carries on too, refused in words while the push is not set. */
+  get carryOffered(): boolean {
+    return this.carriesOn();
+  }
+
   carryBlocked(): string | null {
     if (!this.dim.accepts("distance") || !this.dim.accepts("taper")) return carryWords.badValue();
     return this.whyNotCarry(this.readCommit());

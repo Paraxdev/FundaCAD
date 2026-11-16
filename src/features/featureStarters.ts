@@ -148,6 +148,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   /** Fillet on the edge the carry on just selected, closed when the step it rests on is undone. */
   const startFilletOn = (restsOn: string | null) => startEdgeFeature("fillet", restsOn ? { restsOn } : undefined);
   const startChamfer = () => startEdgeFeature("chamfer");
+  const startChamferOn = (restsOn: string | null) => startEdgeFeature("chamfer", restsOn ? { restsOn } : undefined);
   /** The edge selection handle was pressed (features/edgeNudge.ts): arm the same tool already holding the arrow. It
    *  opens on fillet, the arrow's own direction, since asking first would put a decision before the gesture; a
    *  chamfer is one drag back through zero, or one Tab, away. */
@@ -1786,8 +1787,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     patternTool.start(kind, ids, committed);
   }
 
-  function startExtrude() {
+  /** `restsOn` is the step a carry on just wrote, whose undo closes the tool this opens. */
+  function startExtrude(restsOn: string | null = null) {
     if (toolBusy()) return;
+    const rests = restsOn ? { restsOn } : undefined;
     // A selected face is preferred and Press/Pulled, so a visible sketch never hijacks extruding a face.
     const sel = viewport.selectedFacesForPressPull();
     if (sel) {
@@ -1798,7 +1801,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return wr.plane.plane.distanceToPoint(sel.anchor) <= 0.01; // face on/behind the sketch plane
       });
       if (!underSketch) {
-        pressPull.start(committed);
+        pressPull.start(committed, rests);
         return;
       }
     }
@@ -1848,7 +1851,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       );
       return;
     }
-    extrude.start(committed);
+    extrude.start(committed, rests);
   }
 
   /** Extrude on the profile a carry on picked, found again by its point once the step it rests on is built. A sketch
@@ -1941,6 +1944,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startFillet,
     startFilletOn,
     startChamfer,
+    startChamferOn,
     grabEdgeHandle,
     grabFaceHandle,
     startPressPull,

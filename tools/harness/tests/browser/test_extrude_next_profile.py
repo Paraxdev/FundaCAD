@@ -1,7 +1,8 @@
 """With an extrude open and its depth set, a click inside the next sketch profile keeps the extrude and starts Extrude on
 that profile, whether the plate lies behind the profile or not. The profile wins over the face behind it, so no
 Press/Pull starts. Esc backs the new step out, Ctrl+Z takes back one step and closes it, and once the new extrude is
-written one Ctrl+Z takes back only that."""
+written one Ctrl+Z takes back only that. A tool run from the command search (Ctrl+F) carries on the same way, and says
+why while the depth is not set."""
 
 import pytest
 from fundacad_harness import Session
@@ -151,3 +152,39 @@ def test_one_ctrl_z_after_the_next_extrude_is_written_takes_back_only_that_one(s
     s.settle()
     assert state(s)["types"] == [*before, "extrude"]
     assert s.page_errors() == []
+
+
+@pytest.mark.parametrize(
+    "command,started",
+    [
+        ("Fillet", "() => window.edgeFeature.active && window.edgeFeature.kind === 'fillet'"),
+        ("Chamfer", "() => window.edgeFeature.active && window.edgeFeature.kind === 'chamfer'"),
+        ("Press/Pull", "() => window.pressPull.active"),
+    ],
+)
+def test_a_tool_from_the_command_search_keeps_the_extrude_and_starts(s, command, started):
+    sketches(s, ("s1", -10))
+    open_extrude(s)
+    before = state(s)["types"]
+    s.command(command)
+    s.page.wait_for_function(started, timeout=20000)
+    s.settle()
+    st = state(s)
+    assert st["extrude"] is False and st["types"] == [*before, "extrude"], st
+    assert s.page_errors() == []
+
+
+def test_fillet_from_the_command_search_says_why_while_the_depth_is_not_set(s):
+    sketches(s, ("s1", -10))
+    s.click("feature:s1")
+    s.settle()
+    s.tool("Extrude")
+    s.settle()
+    s.click_at(world=(-10, 0, s.top))
+    s.settle()
+    before = state(s)["types"]
+    s.command("Fillet")
+    s.settle()
+    st = state(s)
+    assert st["extrude"] is True and st["fillet"] is None and st["types"] == before, st
+    assert "Set the depth first" in s.status(), s.status()

@@ -456,6 +456,16 @@ describe("Extrude carries on to the next profile", () => {
     expect(r.lit).toEqual([]);
   });
 
+  it("offers a tool command the carry only in the drag phase of a new extrude", () => {
+    const r = rig();
+    r.tool.start(vi.fn());
+    expect(r.tool.carryOffered).toBe(true);
+    r.tool.cancel();
+    const e = rig({ editing: true });
+    e.begin();
+    expect(e.tool.carryOffered).toBe(false);
+  });
+
   it("rests on the step a carry wrote, and lets go of it when it ends", () => {
     const r = rig();
     r.tool.start(vi.fn(), { restsOn: "f3" });

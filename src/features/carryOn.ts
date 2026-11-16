@@ -1,4 +1,5 @@
-// Carry on: the next face, edge or profile pick finishes the open Extrude or Press/Pull and starts the next tool on it.
+// Carry on: the next face, edge or profile pick, or the next tool command, finishes the open Extrude or Press/Pull and
+// starts the next tool.
 
 import * as THREE from "three";
 import { t } from "../i18n";
@@ -12,8 +13,11 @@ import type { Viewport } from "../viewport/viewport";
 export type CarryKind = "face" | "edge";
 
 /** A kind and a world point, never an id: preview ids differ from the committed ones, and face ids belong to one
- *  tessellation. A profile names its sketch too, which the commit may hide. */
-export type CarryTarget = { kind: CarryKind; point: Vec3 } | { kind: "profile"; point: Vec3; sketch: string };
+ *  tessellation. A profile names its sketch too, which the commit may hide. An action is a tool command. */
+export type CarryTarget =
+  | { kind: CarryKind; point: Vec3 }
+  | { kind: "profile"; point: Vec3; sketch: string }
+  | { kind: "action"; action: string };
 
 export type CarryCommit =
   { kind: "added"; id: string } | { kind: "nothing"; note?: string } | { kind: "stayed"; why: string };
