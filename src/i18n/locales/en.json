@@ -239,7 +239,7 @@
   "field.yFactor": "Y factor",
   "field.zFactor": "Z factor",
   "geometry.commands.pickWaiting": "The tool is waiting for a pick, step to it with ] and [ on the 3D view",
-  "geometry.list.waitsOnTool": "Press Enter to finish the tool first, the list fills in once it is done",
+  "geometry.list.waitsOnTool": "Finish the tool first, the list fills in once it is done",
   "guide.counter": "Step {step, number} of {of, number}",
   "guide.keysLabel": "With keys:",
   "guide.next": "Next",

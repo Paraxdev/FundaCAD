@@ -17,7 +17,8 @@ export function isEditableTarget(t: EventTarget | null): boolean {
   );
 }
 
-const MENU_ROWS = '.ui-menu, [role="listbox"]';
+// The Geometry list's status line takes focus when it has no rows, and Enter there must not finish the open tool.
+const MENU_ROWS = '.ui-menu, [role="listbox"], .geometry-note';
 const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
 
 /** A key a focused menu or list row moves, runs or types ahead with. Window capture listeners hear it before the row

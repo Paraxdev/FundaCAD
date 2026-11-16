@@ -111,12 +111,14 @@ describe("isMenuKey", () => {
   };
   const LIST = `<div role="listbox"><div role="option" tabindex="0"><span data-t>Face 3</span></div></div>`;
   const MENU = `<div class="ui-menu"><button data-t>Copy</button></div>`;
+  const NOTE = `<div class="geometry-note"><p class="empty-state" role="status" tabindex="-1" data-t>Listing the faces.</p></div>`;
   const OWN = ["Enter", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Tab", "f", "[", "]"];
   const NOT_OWN = ["Escape", "Delete", "Backspace", "F2", "PageDown"];
 
   it.each([
     ["a listbox row", LIST],
     ["a menu row", MENU],
+    ["the Geometry list's status line", NOTE],
   ])("gives %s its moving, running and typing keys, never Escape, Delete or an F key", (_name, html) => {
     expect(OWN.map((k) => heardOn(html, k))).toEqual(OWN.map(() => true));
     expect(NOT_OWN.map((k) => heardOn(html, k))).toEqual(NOT_OWN.map(() => false));

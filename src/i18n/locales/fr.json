@@ -239,7 +239,7 @@
   "field.yFactor": "Facteur Y",
   "field.zFactor": "Facteur Z",
   "geometry.commands.pickWaiting": "L'outil attend un choix, allez-y avec ] et [ dans la vue 3D",
-  "geometry.list.waitsOnTool": "Appuyez d’abord sur Entrée pour terminer l’outil, la liste se remplit une fois l’outil terminé",
+  "geometry.list.waitsOnTool": "Terminez d’abord l’outil, la liste se remplit une fois l’outil terminé",
   "guide.counter": "Étape {step, number} sur {of, number}",
   "guide.keysLabel": "Au clavier :",
   "guide.next": "Suivant",
