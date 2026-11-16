@@ -1,5 +1,6 @@
 // Pure helpers for the Browser panel (components/shell/BrowserPane.vue), unit-tested without a DOM.
 
+import { t } from "../i18n";
 import type { CtxItem } from "./menu";
 import { contributedBodyMenu } from "../plugins/contrib";
 import { ancestryOf, childrenByParent, type ElementDef } from "../document/elements";
@@ -82,7 +83,7 @@ export function buildAssemblyGroups(
       const key = `n:${featureId}/${index}`;
       let next = byKey.get(key);
       if (!next) {
-        next = { key, label: nodes[index]!.name || "Part", children: [], bodies: [], total: 0 };
+        next = { key, label: nodes[index]!.name || t("items.tree.part"), children: [], bodies: [], total: 0 };
         byKey.set(key, next);
         siblings.push(next);
       }
@@ -215,10 +216,10 @@ export function elementMoveMenu(
   from: string | undefined,
   act: { toNew: () => void; to: (element: string | null) => void },
 ): CtxItem {
-  const rows: CtxItem[] = [{ label: "New element…", onClick: act.toNew }];
+  const rows: CtxItem[] = [{ label: t("items.move.newElement"), onClick: act.toNew }];
   if (elements.length) {
     rows.push({ separator: true, label: "" });
-    rows.push({ label: "Top level", disabled: from === undefined, onClick: () => act.to(null) });
+    rows.push({ label: t("items.move.topLevel"), disabled: from === undefined, onClick: () => act.to(null) });
     for (const e of elements) {
       rows.push({
         label: elementPath(elements, e.id),
@@ -227,7 +228,7 @@ export function elementMoveMenu(
       });
     }
   }
-  return { label: ids.length > 1 ? `Move ${ids.length} bodies to` : "Move to", children: rows };
+  return { label: ids.length > 1 ? t("items.move.bodiesTo", { n: ids.length }) : t("items.move.to"), children: rows };
 }
 
 /** Shared like elementMoveMenu. No "New material…" row: a modal would cover the model the user pointed at. */
@@ -246,25 +247,28 @@ export function materialMenu(
     disabled: m.id === current,
     onClick: () => apply(m.id),
   }));
-  rows.push({ label: "None", disabled: current === undefined, onClick: () => apply(null) });
+  rows.push({ label: t("items.material.none"), disabled: current === undefined, onClick: () => apply(null) });
   if (faces?.count) {
     rows.push({ separator: true, label: "" });
     rows.push({
-      label: `Clear ${faces.count} dressed ${faces.count === 1 ? "face" : "faces"}`,
+      label: t("items.material.clearFaces", { n: faces.count }),
       onClick: faces.clear,
     });
   }
-  return { label: ids.length > 1 ? `Material for ${ids.length} bodies` : "Material", children: rows };
+  return {
+    label: ids.length > 1 ? t("items.material.forBodies", { n: ids.length }) : t("items.material.title"),
+    children: rows,
+  };
 }
 
 /** Where an imported assembly's parts take their colours from, for a file that
  *  styles a part's body one colour and its faces another. */
 export function importColorMenu(current: ImportColorSource, apply: (source: ImportColorSource) => void): CtxItem {
   return {
-    label: "Imported colors",
+    label: t("items.importColors.title"),
     children: [
-      { label: "From bodies", disabled: current === "bodies", onClick: () => apply("bodies") },
-      { label: "From faces", disabled: current === "faces", onClick: () => apply("faces") },
+      { label: t("items.importColors.bodies"), disabled: current === "bodies", onClick: () => apply("bodies") },
+      { label: t("items.importColors.faces"), disabled: current === "faces", onClick: () => apply("faces") },
     ],
   };
 }

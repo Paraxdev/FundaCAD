@@ -122,8 +122,7 @@ export function softCancelOp(geometry: Pick<GeometryBackend, "cancel" | "softCan
 
 // A reply at 10,004 faces measured 1.47 MB.
 const CACHED_REPLIES = 4;
-const ROW_CHANGED = "That row has changed, the list is catching up";
-const FAILED = "The engine could not list this body's faces.";
+const rowChangedLine = () => t("geometry.browser.rowChanged");
 
 export function createGeometryBrowser(e: GeometryBrowserHost) {
   const list = useGeometryBrowserStore();
@@ -195,7 +194,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // Edge rows stand without the op, face rows do not.
   function showFailure() {
     if (list.kind === "faces") list.setRows([]);
-    list.setState("error", FAILED);
+    list.setState("error", t("geometry.browser.failed"));
   }
 
   function showWithReply(body: Body, key: string, reply: TopologyReply) {
@@ -279,10 +278,13 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // A hidden body takes the list to another, which a screen reader would not hear.
   function sayBodyLeft(was: { id: string; name: string }, next: string | null) {
     const hidden = e.store.buildState.result?.bodies?.some((b) => b.id === was.id);
-    const left = hidden ? `${was.name} hidden` : `${was.name} is gone`;
-    announce(next ? `${left}, the list shows ${next}` : `${left}, no body left to list`, "polite", {
-      key: "geometry-body",
+    const line = t("geometry.browser.bodyLeft", {
+      name: was.name,
+      why: hidden ? "hidden" : "gone",
+      next: next ?? "",
+      shows: next ? "yes" : "no",
     });
+    announce(line, "polite", { key: "geometry-body" });
   }
 
   function selectionOwner(among: readonly { id: string }[]): string | null {
@@ -334,7 +336,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
   // An open tool's preview holds the rows of the model before it, which never catch up while it stays open
   const waitsOnTool = () =>
     (e.store.buildState.previewBuilt?.length ?? 0) > 0 ? t("geometry.list.waitsOnTool") : null;
-  const rowChanged = () => waitsOnTool() ?? ROW_CHANGED;
+  const rowChanged = () => waitsOnTool() ?? rowChangedLine();
 
   function offerRows(rows: readonly GeometryRow[]): string | null {
     const offers: NamedPick[] = [];
@@ -352,14 +354,14 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     return null;
   }
 
-  const STILL_BUILDING = "The model is still building";
+  const stillBuilding = () => t("geometry.browser.stillBuilding");
   // A tool's preview holds the rows until the tool ends, a plain build only until it lands.
   const heldWhy = (s: RebuildState) =>
-    (s.previewBuilt?.length ?? 0) > 0 ? t("geometry.list.waitsOnTool") : s.building ? STILL_BUILDING : null;
+    (s.previewBuilt?.length ?? 0) > 0 ? t("geometry.list.waitsOnTool") : s.building ? stillBuilding() : null;
 
   function heldBlocked(): string | null {
-    if (e.sketch.active) return "Finish the sketch first";
-    return e.toolOwnsScreen() ? "Finish the tool first" : null;
+    if (e.sketch.active) return t("geometry.browser.finishSketch");
+    return e.toolOwnsScreen() ? t("geometry.browser.finishTool") : null;
   }
 
   /** Why a row cannot be picked now, in words, or null when it can. */
@@ -368,13 +370,13 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     if (held) return held;
     // The Move gizmo a body selection raises suspends picking too, but picking a row drops it first.
     const unsettled = e.toolBusy() ? e.viewport.modelUnsettled : e.viewport.picksSuspended;
-    return unsettled ? STILL_BUILDING : null;
+    return unsettled ? stillBuilding() : null;
   }
 
   /** A step may run while a tool waits for a row, only a build in progress or a sketch stops it. */
   function stepBlocked(): string | null {
     if (!treePickWaiting() || e.sketch.active) return pickBlocked();
-    return e.viewport.modelUnsettled ? STILL_BUILDING : null;
+    return e.viewport.modelUnsettled ? stillBuilding() : null;
   }
 
   // Resolved at the moment of acting, so a datum goes where it stands now. Null for one the document has lost.
@@ -556,7 +558,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
       }
       const pick = planePickOf(row);
       if (!pick) {
-        refuseAloud(e, ROW_CHANGED);
+        refuseAloud(e, rowChangedLine());
         return true;
       }
       if (routePlaneRow(e, pick) !== "row") return true;

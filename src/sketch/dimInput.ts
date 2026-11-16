@@ -514,7 +514,7 @@ export class DimInput {
         inputMode: "text",
         unit: unit?.id,
         units: unit ? commonUnits(unit.dim).map((u) => u.id) : undefined,
-        unitTip: "Change unit",
+        unitTip: t("dim.unitTip"),
       });
       // NumberField's input and chip sit in the box's own flat row, the .ui-field well would repaint it.
       const input = num.input;

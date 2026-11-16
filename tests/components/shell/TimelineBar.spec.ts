@@ -1278,8 +1278,9 @@ describe("the chips follow the language", () => {
     expect(names(m.w)).toEqual([ja["tool.extrude"], ja["tool.fillet"], "Soft edge", ja["feature.thinExtrude"]]);
   });
 
-  it("announces a move with the English name in any language, the sentence being English", async () => {
-    const m = mountBar({ features: FEATURES, attach: true });
+  it("announces a move in the language, with the shown names", async () => {
+    // A copy, a move reorders the list it is given in place.
+    const m = mountBar({ features: [...FEATURES], attach: true });
     onTestFinished(async () => {
       m.w.unmount();
       await setLanguage("system");
@@ -1290,6 +1291,31 @@ describe("the chips follow the language", () => {
     vi.mocked(announce).mockClear();
     await m.chip("f1").trigger("keydown", { key: "ArrowRight", altKey: true });
     const said = vi.mocked(announce).mock.calls.map((c) => c[0]);
-    expect(said.filter((s) => /Moved/.test(s))).toEqual(["Moved Fillet after Soft edge"]);
+    expect(said.filter((s) => /verschoben/.test(s))).toEqual([`${de["tool.fillet"]} nach Soft edge verschoben`]);
+  });
+
+  it("reads its title, a step's place and the empty hint in German, and English again after a switch back", async () => {
+    const m = mountBar({ features: FEATURES, rollback: 2 });
+    const empty = mountBar({ features: [] });
+    onTestFinished(async () => {
+      m.w.unmount();
+      empty.w.unmount();
+      await setLanguage("system");
+    });
+    const title = () => m.w.get("#history-heading").text();
+    const state = (id: string) => m.chip(id).get(".t-state").text();
+    await setLanguage("de");
+    await nextTick();
+    expect(title()).toBe("Verlauf");
+    expect(state("f1")).toBe("Schritt 2 von 4");
+    expect(state("f2")).toBe(`${de["tool.fillet"]}, Schritt 3 von 4, zurückgerollt`);
+    expect(m.w.get(".tl-rollback").text()).toContain(de["history.rollback"]);
+    expect(empty.w.get(".timeline-empty").text()).toContain("Ihr Modellierverlauf erscheint hier");
+    await setLanguage("en");
+    await nextTick();
+    expect(title()).toBe("History");
+    expect(state("f1")).toBe("step 2 of 4");
+    expect(state("f2")).toBe("Fillet, step 3 of 4, rolled back");
+    expect(empty.w.get(".timeline-empty").text()).not.toContain("Ihr");
   });
 });

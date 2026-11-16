@@ -6,7 +6,8 @@ import Icon from "./Icon.vue";
 import IconButton from "../ui/IconButton.vue";
 import TreeItem from "../ui/TreeItem.vue";
 import { TREE, type TreeItemActions } from "../ui/treeContext";
-import { EYE_HELP, eyeName, keyClick, stateWords, useKeyRename } from "./treeRowKeys";
+import { t } from "../../i18n";
+import { eyeHelp, eyeName, keyClick, stateWords, useKeyRename } from "./treeRowKeys";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { rowIndent } from "../../ui/browserTree";
@@ -63,9 +64,9 @@ const inTree = inject(TREE, null) !== null;
 const hasEye = computed(() => !!(props.toggleVis || props.eyeDown));
 const state = computed(() =>
   stateWords([
-    props.error && "failed",
-    hasEye.value && props.visible === false && "hidden",
-    props.suppressed && "suppressed",
+    props.error && t("items.state.failed"),
+    hasEye.value && props.visible === false && t("items.state.hidden"),
+    props.suppressed && t("items.state.suppressed"),
   ]),
 );
 
@@ -116,10 +117,14 @@ function onDblClick(e: MouseEvent) {
 
 function menuItems(): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
-  if (props.toggleVis) items.push({ label: props.visible === false ? "Show" : "Hide", onClick: props.toggleVis });
-  if (props.edit) items.push({ label: "Edit", onClick: props.edit });
-  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start() });
-  if (props.remove) items.push({ label: "Delete", onClick: props.remove });
+  if (props.toggleVis)
+    items.push({
+      label: props.visible === false ? t("items.row.show") : t("items.row.hide"),
+      onClick: props.toggleVis,
+    });
+  if (props.edit) items.push({ label: t("items.row.edit"), onClick: props.edit });
+  if (props.rename) items.push({ label: t("items.row.rename"), onClick: () => keyRename.start() });
+  if (props.remove) items.push({ label: t("items.row.delete"), onClick: props.remove });
   return items;
 }
 function openMenu(e: MouseEvent) {
@@ -242,7 +247,7 @@ function onDrop(e: DragEvent) {
       size="sm"
       :icon="visible === false ? 'hidden' : 'visible'"
       :icon-size="13"
-      :tip="fmtKeys(EYE_HELP)"
+      :tip="fmtKeys(eyeHelp())"
       :aria-label="eyeName(visible, label)"
       :aria-describedby="helpId"
       :tabindex="inTree ? -1 : undefined"
@@ -251,6 +256,6 @@ function onDrop(e: DragEvent) {
       @click.stop="onEyeClick"
       @dblclick.stop
     />
-    <span v-if="hasEye" :id="helpId" class="sr-only">{{ fmtKeys(EYE_HELP) }}</span>
+    <span v-if="hasEye" :id="helpId" class="sr-only">{{ fmtKeys(eyeHelp()) }}</span>
   </TreeItem>
 </template>

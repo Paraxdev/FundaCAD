@@ -7,7 +7,8 @@ import Icon from "./Icon.vue";
 import IconButton from "../ui/IconButton.vue";
 import TreeItem from "../ui/TreeItem.vue";
 import { TREE, type TreeItemActions } from "../ui/treeContext";
-import { EYE_HELP, eyeName, keyClick, stateWords, useKeyRename } from "./treeRowKeys";
+import { t } from "../../i18n";
+import { eyeHelp, eyeName, keyClick, stateWords, useKeyRename } from "./treeRowKeys";
 import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { folderIndent } from "../../ui/browserTree";
@@ -61,9 +62,13 @@ const inTree = inject(TREE, null) !== null;
 const hasEye = computed(() => !!(props.toggleVis || props.eyeDown));
 const state = computed(() =>
   stateWords([
-    props.count > 0 && `${props.count} ${props.count === 1 ? "item" : "items"}`,
-    hasEye.value && props.visible === false && "hidden",
+    props.count > 0 && t("items.state.count", { n: props.count }),
+    hasEye.value && props.visible === false && t("items.state.hidden"),
   ]),
+);
+
+const caretTip = computed(() =>
+  t("items.folder.caret", { collapsed: props.collapsed ? "yes" : "no", label: props.label }),
 );
 
 // Only nested heads carry an inline padding, so a top-level folder keeps
@@ -108,9 +113,13 @@ watch(
 
 function menuItems(): CtxItem[] {
   const items: CtxItem[] = [...(props.extraMenu ?? [])];
-  if (props.toggleVis) items.push({ label: props.visible === false ? "Show" : "Hide", onClick: props.toggleVis });
-  if (props.rename) items.push({ label: "Rename", onClick: () => keyRename.start() });
-  if (props.remove) items.push({ label: "Delete", danger: true, onClick: props.remove });
+  if (props.toggleVis)
+    items.push({
+      label: props.visible === false ? t("items.row.show") : t("items.row.hide"),
+      onClick: props.toggleVis,
+    });
+  if (props.rename) items.push({ label: t("items.row.rename"), onClick: () => keyRename.start() });
+  if (props.remove) items.push({ label: t("items.row.delete"), danger: true, onClick: props.remove });
   return items;
 }
 function openMenu(e: MouseEvent) {
@@ -219,7 +228,7 @@ function onDrop(e: DragEvent) {
       size="sm"
       :icon="collapsed ? 'caretRight' : 'caretDown'"
       :icon-size="11"
-      :tip="`${collapsed ? 'Expand' : 'Collapse'} ${label}`"
+      :tip="caretTip"
       :aria-expanded="!collapsed"
       :tabindex="inTree ? -1 : undefined"
       @click="onCaretClick"
@@ -238,7 +247,7 @@ function onDrop(e: DragEvent) {
       size="sm"
       :icon="visible === false ? 'hidden' : 'visible'"
       :icon-size="13"
-      :tip="fmtKeys(EYE_HELP)"
+      :tip="fmtKeys(eyeHelp())"
       :aria-label="eyeName(visible, label)"
       :aria-describedby="helpId"
       :tabindex="inTree ? -1 : undefined"
@@ -246,6 +255,6 @@ function onDrop(e: DragEvent) {
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
     />
-    <span v-if="hasEye" :id="helpId" class="sr-only">{{ fmtKeys(EYE_HELP) }}</span>
+    <span v-if="hasEye" :id="helpId" class="sr-only">{{ fmtKeys(eyeHelp()) }}</span>
   </TreeItem>
 </template>

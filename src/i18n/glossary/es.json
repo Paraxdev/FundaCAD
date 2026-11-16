@@ -745,6 +745,76 @@
       "en": "Parameter",
       "text": "parámetro",
       "note": "a named value of the Parameters list, typed into a value box"
+    },
+    {
+      "en": "Rollback",
+      "text": "Retroceso",
+      "note": "the History marker and slider that holds the model at an earlier step; the verb roll back is zurückrollen, retroceder, revenir, 巻き戻す, 回退"
+    },
+    {
+      "en": "rolled back (a step past the Rollback marker)",
+      "text": "retrocedido",
+      "note": "spoken state of a step the model is not built up to"
+    },
+    {
+      "en": "Related to Selection",
+      "text": "Relacionado con la selección",
+      "note": "the History filter chip"
+    },
+    {
+      "en": "switched off (a step whose Active when condition is 0)",
+      "text": "desactivado",
+      "note": "kept apart from suppressed: French uses désactiver for suppress, so a step switched off by its condition is inactive"
+    },
+    {
+      "en": "Re-pick face",
+      "text": "Volver a elegir la cara"
+    },
+    {
+      "en": "Unlink (a feature from its linked file)",
+      "text": "Desvincular",
+      "note": "linked file is verknüpfte Datei, archivo vinculado, fichier lié, リンク先のファイル, 链接文件"
+    },
+    {
+      "en": "meshing",
+      "text": "generando malla",
+      "note": "the build progress word, same Netz, malla, maillage, メッシュ, 网格 as the mesh import lines"
+    },
+    {
+      "en": "checkpoint (a saved build state)",
+      "text": "punto de control"
+    },
+    {
+      "en": "History",
+      "text": "Historial",
+      "note": "the panel that lists the timeline steps"
+    },
+    {
+      "en": "Items",
+      "text": "Elementos",
+      "note": "the panel that lists bodies, sketches and planes"
+    },
+    {
+      "en": "Origin",
+      "text": "Origen",
+      "note": "the folder with the three base planes"
+    },
+    {
+      "en": "element (a folder of bodies in Items)",
+      "text": "grupo",
+      "note": "not the word for Items, which already names the whole panel"
+    },
+    {
+      "en": "Mechanism",
+      "text": "Mecanismo"
+    },
+    {
+      "en": "Geometry (the Items page that lists faces, edges and planes)",
+      "text": "Geometría"
+    },
+    {
+      "en": "Visibility",
+      "text": "Visibilidad"
     }
   ]
 }

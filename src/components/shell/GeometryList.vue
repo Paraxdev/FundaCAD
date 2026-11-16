@@ -24,38 +24,39 @@ import ListRow from "../ui/ListRow.vue";
 import NumberField from "../ui/NumberField.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
+import { decimalMark, t } from "../../i18n";
 
 const engine = useEngine();
 const ctl = engine.geometryBrowser;
 const list = useGeometryBrowserStore();
 const selection = useSelectionStore();
 
-const KINDS: { value: GeometryKind; label: string }[] = [
-  { value: "faces", label: "Faces" },
-  { value: "edges", label: "Edges" },
-  { value: "planes", label: "Planes" },
-];
-const FACE_TYPES: { value: GeometryRowType | "any"; label: string }[] = [
-  { value: "any", label: "Any" },
-  { value: "flat", label: "Flat" },
-  { value: "cylinder", label: "Cylinder" },
-  { value: "curved", label: "Curved" },
-];
-const EDGE_TYPES: { value: GeometryRowType | "any"; label: string }[] = [
-  { value: "any", label: "Any" },
-  { value: "straight", label: "Straight" },
-  { value: "round", label: "Round" },
-  { value: "curved", label: "Curved" },
-];
-const FACINGS: { value: FacingWord | "any"; label: string }[] = [
-  { value: "any", label: "Any" },
-  { value: "up", label: "Up" },
-  { value: "down", label: "Down" },
-  { value: "front", label: "Front" },
-  { value: "back", label: "Back" },
-  { value: "left", label: "Left" },
-  { value: "right", label: "Right" },
-];
+const KINDS = computed<{ value: GeometryKind; label: string }[]>(() => [
+  { value: "faces", label: t("geometry.list.kind.faces") },
+  { value: "edges", label: t("geometry.list.kind.edges") },
+  { value: "planes", label: t("geometry.list.kind.planes") },
+]);
+const FACE_TYPES = computed<{ value: GeometryRowType | "any"; label: string }[]>(() => [
+  { value: "any", label: t("geometry.list.any") },
+  { value: "flat", label: t("geometry.list.type.flat") },
+  { value: "cylinder", label: t("geometry.list.type.cylinder") },
+  { value: "curved", label: t("geometry.list.type.curvedFace") },
+]);
+const EDGE_TYPES = computed<{ value: GeometryRowType | "any"; label: string }[]>(() => [
+  { value: "any", label: t("geometry.list.any") },
+  { value: "straight", label: t("geometry.list.type.straight") },
+  { value: "round", label: t("geometry.list.type.round") },
+  { value: "curved", label: t("geometry.list.type.curvedEdge") },
+]);
+const FACINGS = computed<{ value: FacingWord | "any"; label: string }[]>(() => [
+  { value: "any", label: t("geometry.list.any") },
+  { value: "up", label: t("geometry.list.facing.up") },
+  { value: "down", label: t("geometry.list.facing.down") },
+  { value: "front", label: t("geometry.list.facing.front") },
+  { value: "back", label: t("geometry.list.facing.back") },
+  { value: "left", label: t("geometry.list.facing.left") },
+  { value: "right", label: t("geometry.list.facing.right") },
+]);
 
 const unit = ref(getUnit());
 const offUnit = onUnitChange(() => (unit.value = getUnit()));
@@ -69,10 +70,8 @@ const facesLeft = computed(() => (faces.value ? list.truncated : null));
 const noun = computed<string>(() => list.kind);
 const bodyName = computed(() => list.bodies.find((b) => b.id === list.bodyId)?.name ?? "");
 const bodyOptions = computed(() => list.bodies.map((b) => ({ value: b.id, label: b.name })));
-const listName = computed(() => (planes.value ? "Planes" : `${faces.value ? "Faces" : "Edges"} of ${bodyName.value}`));
-const listKeys = computed(
-  () => `Enter ${planes.value ? "starts a sketch" : "picks"}, Esc clears the selection, F6 goes to the 3D view.`,
-);
+const listName = computed(() => t("geometry.list.name", { kind: list.kind, body: bodyName.value }));
+const listKeys = computed(() => t("geometry.list.keys", { planes: planes.value ? "yes" : "no" }));
 
 const options = computed(() => {
   // describePick reads the display unit from outside Vue.
@@ -84,27 +83,36 @@ const options = computed(() => {
 });
 
 const firstShown = computed(() => list.page * GEOMETRY_PAGE_SIZE + 1);
-const count = (n: number) => n.toLocaleString("en-US");
+// A comma grouped count reads as a decimal in a decimal comma language, so those get none.
+const count = (n: number) => (decimalMark() === "." ? n.toLocaleString("en-US") : String(n));
 const range = computed(() => {
   const last = firstShown.value + options.value.length - 1;
-  return `${count(firstShown.value)} to ${count(last)} of ${count(list.filtered.length)}`;
+  return t("geometry.list.range", {
+    first: count(firstShown.value),
+    last: count(last),
+    total: count(list.filtered.length),
+  });
 });
 
 const failed = computed(() => list.state === "error");
 const filteredOut = computed(() => list.rows.length > 0 && list.filtered.length === 0);
 const blank = computed(() => {
-  if (planes.value) return filteredOut.value ? "No planes match." : null;
-  if (list.bodyId === null) return "No body to list yet.";
-  if (list.rows.length > 0) return filteredOut.value ? `No ${noun.value} match.` : null;
+  if (planes.value) return filteredOut.value ? t("geometry.list.noMatch", { kind: "planes" }) : null;
+  if (list.bodyId === null) return t("geometry.list.noBody");
+  if (list.rows.length > 0) return filteredOut.value ? t("geometry.list.noMatch", { kind: noun.value }) : null;
   if (failed.value) return null;
-  if (list.state === "ready") return `This body has no ${noun.value}.`;
-  return list.error ? `${list.error}.` : `Listing the ${noun.value}.`;
+  if (list.state === "ready") return t("geometry.list.none", { kind: noun.value });
+  return list.error
+    ? t("geometry.list.waiting", { reason: list.error })
+    : t("geometry.list.listing", { kind: noun.value });
 });
 
 function sayCount() {
   const n = list.filtered.length;
-  const words = n === 1 ? noun.value.slice(0, -1) : noun.value;
-  announce(`${n === 0 ? "No" : count(n)} ${words}`, "polite", { key: "geometry-filter", delay: 250 });
+  announce(t("geometry.list.count", { kind: noun.value, n, count: count(n) }), "polite", {
+    key: "geometry-filter",
+    delay: 250,
+  });
 }
 
 const sizeError = ref<string | null>(null);
@@ -267,7 +275,7 @@ function onListKeys(e: KeyboardEvent) {
   e.preventDefault();
   e.stopPropagation();
   if (guarded && list.selected.some((k) => k.startsWith("f:"))) {
-    announce("Delete works in the 3D view. F6 goes there.", "polite", { key: "geometry-delete" });
+    announce(t("geometry.list.deleteInView"), "polite", { key: "geometry-delete" });
   }
   if (place !== null) moveCursor(place);
 }
@@ -276,7 +284,7 @@ function onListKeys(e: KeyboardEvent) {
 function onUnmatchedLetter(e: KeyboardEvent) {
   if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.key.length !== 1 || e.key === " ") return;
   if (!(e.target instanceof Element) || !e.target.closest("[role=option]")) return;
-  announce(`No row starts with ${e.key.toUpperCase()}. F6 goes to the 3D view.`, "polite", { key: "geometry-letter" });
+  announce(t("geometry.list.noLetter", { letter: e.key.toUpperCase() }), "polite", { key: "geometry-letter" });
 }
 
 // The viewport keeps focus put on a press, so a row would go on taking the arrows meant for the model.
@@ -309,7 +317,7 @@ onUnmounted(() => {
 <template>
   <div class="geometry-page" data-keeps-delete>
     <div class="geometry-filters">
-      <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Body">
+      <FieldRow v-if="!planes" v-slot="{ id, labelId }" :label="t('geometry.list.body')">
         <Select
           :id="id"
           size="sm"
@@ -317,19 +325,19 @@ onUnmounted(() => {
           :model-value="list.bodyId ?? ''"
           :options="bodyOptions"
           :disabled="bodyOptions.length === 0"
-          disabled-reason="No body to list yet"
+          :disabled-reason="t('geometry.list.noBodyReason')"
           @update:model-value="ctl.setBody"
         />
       </FieldRow>
       <Segmented
-        label="What to list"
+        :label="t('geometry.list.what')"
         size="sm"
         :model-value="list.kind"
         :options="KINDS"
         @update:model-value="setKind"
       />
       <div class="geometry-filter-pair">
-        <FieldRow v-if="!planes" v-slot="{ id, labelId }" label="Type" layout="stacked">
+        <FieldRow v-if="!planes" v-slot="{ id, labelId }" :label="t('geometry.list.type')" layout="stacked">
           <Select
             :id="id"
             size="sm"
@@ -339,7 +347,7 @@ onUnmounted(() => {
             @update:model-value="setFilter({ type: $event === 'any' ? null : $event })"
           />
         </FieldRow>
-        <FieldRow v-if="faces || planes" v-slot="{ id, labelId }" label="Facing" layout="stacked">
+        <FieldRow v-if="faces || planes" v-slot="{ id, labelId }" :label="t('geometry.list.facing')" layout="stacked">
           <Select
             :id="id"
             size="sm"
@@ -353,7 +361,7 @@ onUnmounted(() => {
       <FieldRow
         v-if="!planes"
         v-slot="{ id, labelId, describedby }"
-        label="Size at least"
+        :label="t('geometry.list.minSize')"
         :error="sizeError ?? undefined"
       >
         <NumberField
@@ -380,11 +388,13 @@ onUnmounted(() => {
     >
       <div v-if="failed" class="geometry-note" role="alert">
         <p class="empty-state" tabindex="-1">{{ list.error }}</p>
-        <Button size="sm" @click="ctl.retry()">Try again</Button>
+        <Button size="sm" @click="ctl.retry()">{{ t("geometry.list.retry") }}</Button>
       </div>
       <div v-if="blank" class="geometry-note">
         <p class="empty-state" role="status" tabindex="-1">{{ blank }}</p>
-        <Button v-if="filteredOut" size="sm" @click="setFilter(NO_FILTERS)">Clear filters</Button>
+        <Button v-if="filteredOut" size="sm" @click="setFilter(NO_FILTERS)">{{
+          t("geometry.list.clearFilters")
+        }}</Button>
       </div>
       <Listbox
         v-if="options.length"
@@ -419,24 +429,26 @@ onUnmounted(() => {
       </Listbox>
     </div>
     <div v-if="list.filtered.length || facesLeft" class="geometry-pager">
-      <p v-if="facesLeft" class="geometry-range">{{ count(facesLeft) }} more faces are not listed.</p>
+      <p v-if="facesLeft" class="geometry-range">{{
+        t("geometry.list.moreFaces", { n: facesLeft, count: count(facesLeft) })
+      }}</p>
       <span v-if="list.filtered.length" class="geometry-range">{{ range }}</span>
       <template v-if="list.pageCount > 1">
         <Button
           size="sm"
-          :aria-label="`Previous page of ${noun}`"
+          :aria-label="t('geometry.list.prevPage', { kind: noun })"
           :disabled="list.page === 0"
-          disabled-reason="This is the first page"
+          :disabled-reason="t('geometry.list.firstPage')"
           @click="turnPage(-1)"
-          >Previous</Button
+          >{{ t("geometry.list.prev") }}</Button
         >
         <Button
           size="sm"
-          :aria-label="`Next page of ${noun}`"
+          :aria-label="t('geometry.list.nextPage', { kind: noun })"
           :disabled="list.page >= list.pageCount - 1"
-          disabled-reason="This is the last page"
+          :disabled-reason="t('geometry.list.lastPage')"
           @click="turnPage(1)"
-          >Next</Button
+          >{{ t("geometry.list.next") }}</Button
         >
       </template>
     </div>
