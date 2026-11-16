@@ -11,7 +11,15 @@ import { setPrompt } from "../ui/prompt";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 import { edgeSelectorFrom, polylineMid } from "../viewport/edgeMatch";
 import { trackedFace } from "./holeFace";
-import { pointOf, readTarget, sameEntry, writeTarget, type TargetEntry, type TargetField } from "./selectionTargets";
+import {
+  pointOf,
+  readTarget,
+  sameEntry,
+  spanLabel,
+  writeTarget,
+  type TargetEntry,
+  type TargetField,
+} from "./selectionTargets";
 
 // `resolved` is false for an entry this build does not show; it is kept and drawn greyed,
 // so a set of four never reads as three.
@@ -72,7 +80,7 @@ export class TargetEditTool {
     if (!t) return [];
     return this.entries.map((entry) => {
       const found = this.locate(entry);
-      return { entry, label: this.labelFor(entry, found), resolved: found !== null };
+      return { entry, label: this.labelFor(entry, found), resolved: found !== null || spanLabel(entry) !== null };
     });
   }
 
@@ -374,7 +382,8 @@ export class TargetEditTool {
     if (found?.kind === "edge") {
       return ofBody(`Edge ${found.edge.slot + 1}`, found.edge.body && this.bodyLabel(found.edge.body));
     }
-    return t.kind === "body" ? "" : `${t.kind === "edge" ? "Edge" : "Face"} not on this build`;
+    if (t.kind === "body") return "";
+    return spanLabel(entry) ?? `${t.kind === "edge" ? "Edge" : "Face"} not on this build`;
   }
 
   private bodyLabel(id: string): string | undefined {

@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
   FEATURE_TARGETS,
   describeTarget,
+  spanLabel,
   pointOf,
   readTarget,
   sameEntry,
@@ -19,10 +20,14 @@ import {
   type TargetField,
 } from "../../src/features/selectionTargets";
 import { FEATURE_META } from "../../src/ui/featureMeta";
+import { setLanguage } from "../../src/i18n";
 import type { Feature, Selector } from "../../src/types";
 
 const at = (x: number, y: number, z: number): Selector => ({ kind: "edge", by: "nearest", point: [x, y, z] });
 const faceAt = (x: number, y: number, z: number): Selector => ({ kind: "face", by: "nearest", point: [x, y, z] });
+
+const picks = (n: number): Selector[] => Array.from({ length: n }, (_, i) => at(i, 0, 0));
+const areas = (n: number): [number, number, number][] => Array.from({ length: n }, (_, i) => [i, 0, 0]);
 
 const field = (type: string, name: string): TargetField => targetsOf(type).find((t) => t.field === name)!;
 
@@ -234,19 +239,52 @@ describe("identity", () => {
 
 describe("what the row says", () => {
   it("counts, and agrees with itself about the plural", () => {
-    expect(describeTarget(field("fillet", "edges"), 1)).toBe("1 edge");
-    expect(describeTarget(field("fillet", "edges"), 4)).toBe("4 edges");
-    expect(describeTarget(field("boolean", "tools"), 2)).toBe("2 bodies");
+    expect(describeTarget(field("fillet", "edges"), picks(1))).toBe("1 edge");
+    expect(describeTarget(field("fillet", "edges"), picks(4))).toBe("4 edges");
+    expect(describeTarget(field("boolean", "tools"), ["body1", "body2"])).toBe("2 bodies");
+  });
+
+  it("says a blend on every edge covers every edge, not 1 edge", () => {
+    const edges = field("fillet", "edges");
+    expect(describeTarget(edges, [{ kind: "edge", by: "all", body: "body1" }])).toBe("every edge");
+    expect(describeTarget(field("chamfer", "edges"), [{ kind: "edge", by: "all" }])).toBe("every edge");
+    expect(describeTarget(edges, [...picks(2), { kind: "edge", by: "all" }])).toBe("every edge");
+  });
+
+  it("words the other selectors that reach many edges beside the picked ones", () => {
+    const edges = field("fillet", "edges");
+    const chain = { kind: "edge", by: "tangentChain", seed: {} } as unknown as Selector;
+    const ofFace = { kind: "edge", by: "ofFace", face: faceAt(0, 0, 5) } as unknown as Selector;
+    expect(describeTarget(edges, [{ kind: "edge", by: "axis", axis: "Z" }])).toBe("every edge along Z");
+    expect(describeTarget(edges, [...picks(2), chain, chain])).toBe("2 edges, 2 tangent chains");
+    expect(describeTarget(edges, [ofFace])).toBe("the edges of 1 face");
+  });
+
+  it("says every edge in the chosen language", async () => {
+    await setLanguage("de");
+    try {
+      expect(describeTarget(field("fillet", "edges"), [{ kind: "edge", by: "all" }])).toBe("jede Kante");
+      expect(spanLabel({ kind: "edge", by: "axis", axis: "Y" })).toBe("Jede Kante entlang Y");
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("labels an editor row for a selector with no single spot by what it covers", () => {
+    expect(spanLabel({ kind: "edge", by: "all" })).toBe("Every edge");
+    expect(spanLabel({ kind: "edge", by: "axis", axis: "X" })).toBe("Every edge along X");
+    expect(spanLabel(at(1, 2, 3))).toBeNull();
+    expect(spanLabel("body1")).toBeNull();
   });
 
   it("says what empty MEANS where empty means something", () => {
     // "0 faces" and "sealed hollow" are opposite answers, and a count alone
     // cannot tell them apart, which is the whole reason whenEmpty exists.
-    expect(describeTarget(field("shell", "faces"), 0)).toBe("sealed hollow");
-    expect(describeTarget(field("thicken", "faces"), 0)).toBe("the whole body");
-    expect(describeTarget(field("move", "bodies"), 0)).toBe("the active body");
+    expect(describeTarget(field("shell", "faces"), [])).toBe("sealed hollow");
+    expect(describeTarget(field("thicken", "faces"), [])).toBe("the whole body");
+    expect(describeTarget(field("move", "bodies"), [])).toBe("the active body");
     // ...and says so plainly where it does not.
-    expect(describeTarget(field("fillet", "edges"), 0)).toBe("nothing selected");
+    expect(describeTarget(field("fillet", "edges"), [])).toBe("nothing selected");
   });
 });
 
@@ -259,14 +297,14 @@ describe("profile targets", () => {
 
   it("counts profile areas in the word the picker uses", () => {
     const t = targetsOf("extrude")[0]!;
-    expect(describeTarget(t, 1)).toBe("1 area");
-    expect(describeTarget(t, 3)).toBe("3 areas");
+    expect(describeTarget(t, areas(1))).toBe("1 area");
+    expect(describeTarget(t, areas(3))).toBe("3 areas");
   });
 
   it("says what an extrude with no areas actually does", () => {
     // Not "0 areas": an extrude that names none takes the WHOLE sketch, which
     // is the opposite statement.
-    expect(describeTarget(targetsOf("extrude")[0]!, 0)).toBe("the whole sketch");
+    expect(describeTarget(targetsOf("extrude")[0]!, [])).toBe("the whole sketch");
   });
 
   it("reads the plural field, and falls back to the legacy singular", () => {
@@ -308,7 +346,7 @@ describe("profile targets", () => {
       region: [4, 4, 0],
     } as unknown as Feature;
     expect(readTarget(one, t)).toHaveLength(1);
-    expect(describeTarget(t, readTarget(one, t).length)).toBe("1 area");
+    expect(describeTarget(t, readTarget(one, t))).toBe("1 area");
   });
 
   it("compares profile points by position, like a picked selector", () => {

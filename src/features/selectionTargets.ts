@@ -4,6 +4,7 @@
 import type { Feature, FeatureType, Selector } from "../types";
 import { contributedFeature } from "../plugins/contrib";
 import { fieldApplies } from "../document/optionFields";
+import { t } from "../i18n";
 
 /** "area" is a closed sketch region, the word the extrude prompts already use. */
 export type TargetKind = "edge" | "face" | "body" | "area";
@@ -232,11 +233,43 @@ const PLURAL: Record<TargetKind, string> = {
   area: "areas",
 };
 
-/** What the row says in place of a count: "4 edges", "1 body", or the field's
- *  own words for empty. */
-export function describeTarget(t: TargetField, count: number): string {
-  if (count === 0) return t.whenEmpty ?? "nothing selected";
-  return `${count} ${count === 1 ? t.kind : PLURAL[t.kind]}`;
+/** What the row says: "4 edges", "every edge", "2 edges, 1 tangent chain", or the field's own words for empty. An entry
+ *  covering many edges is worded, not counted, since only the engine knows how many it reaches. */
+export function describeTarget(target: TargetField, entries: readonly TargetEntry[]): string {
+  if (entries.length === 0) return target.whenEmpty ?? "nothing selected";
+  const spans = new Map<string, number>();
+  let picks = 0;
+  for (const entry of entries) {
+    const span = spanOf(entry);
+    if (span === "all") return t("target.span.all");
+    if (span) spans.set(span, (spans.get(span) ?? 0) + 1);
+    else picks++;
+  }
+  const parts = picks ? [`${picks} ${picks === 1 ? target.kind : PLURAL[target.kind]}`] : [];
+  for (const [span, n] of spans) parts.push(spanWords(span, n));
+  return parts.join(", ");
+}
+
+/** An entry's own row in the editor, for the forms that name no single spot to find on screen. */
+export function spanLabel(entry: TargetEntry): string | null {
+  const span = spanOf(entry);
+  if (span === "all") return t("target.row.all");
+  if (span === "tangentChain") return t("target.row.chain");
+  if (span === "ofFace") return t("target.row.faceEdges");
+  return span ? t("target.row.along", { axis: span }) : null;
+}
+
+/** "all", "tangentChain", "ofFace", the axis letter of the edges along it, or null for an entry naming one entity. */
+function spanOf(entry: TargetEntry): string | null {
+  if (typeof entry === "string" || Array.isArray(entry)) return null;
+  if (entry.by === "all" || entry.by === "tangentChain" || entry.by === "ofFace") return entry.by;
+  return entry.by === "axis" ? entry.axis : null;
+}
+
+function spanWords(span: string, n: number): string {
+  if (span === "tangentChain") return t("target.span.chains", { n });
+  if (span === "ofFace") return t("target.span.faceEdges", { n });
+  return t("target.span.along", { axis: span });
 }
 
 /** Identity, so a click toggles rather than duplicates. Body ids by value, picked selectors by point (all that is

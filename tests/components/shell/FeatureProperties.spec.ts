@@ -473,6 +473,21 @@ describe("FeatureProperties", () => {
     expect(rows(render(fake, "f1"))).toContainEqual(["Edges", "", "2 edges"]);
   });
 
+  it("says a chamfer on every edge covers every edge, where the one selector read as 1 edge", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [
+        {
+          id: "c1",
+          type: "chamfer",
+          distance: 1,
+          edges: { kind: "edge", by: "all", body: "body1" },
+        } as unknown as Feature,
+      ],
+    });
+    expect(rows(render(fake, "c1"))).toContainEqual(["Edges", "", "every edge"]);
+  });
+
   it("opens the selection editor from Edit, and refuses a second one while it is open on this row", async () => {
     const fake = makeEngine({ parameters: {}, features: [FILLET_ROW()] });
     const started: string[] = [];

@@ -17,7 +17,7 @@ function fakeTool(rows: { label: string; resolved: boolean }[]) {
     active: true,
     editingId: "f1",
     field: { field: "faces", label: "Faces", kind: "face", shape: "set", arity: "many" },
-    rows: vi.fn(() => rows),
+    rows: vi.fn(() => rows.map((r, i) => ({ entry: { kind: "face", by: "nearest", point: [i, 0, 0] }, ...r }))),
     onChange: (fn: () => void) => (listeners.add(fn), () => listeners.delete(fn)),
     emit: () => listeners.forEach((fn) => fn()),
     hoverAt: vi.fn(),
