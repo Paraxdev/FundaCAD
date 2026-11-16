@@ -132,7 +132,7 @@ describe("walkWords in a comma language", () => {
     await setLanguage("de");
     expect([english, walkWords({ ...flat, holes: 2 }, 0, 3, true)]).toEqual([
       "Profile 1 of 3, area 14.625 mm², 2 holes, picked.",
-      "Profile 1 of 3, area 14,625 mm², 2 holes, picked.",
+      "Profil 1 von 3, Fläche 14,625 mm², 2 Löcher, ausgewählt.",
     ]);
   });
 });

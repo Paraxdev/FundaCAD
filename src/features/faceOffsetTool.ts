@@ -1,6 +1,7 @@
 // Offset Face (a lone round face is resized), Thicken and Shell share one gesture by `mode`, an arrow scrubbed along
 // the picked faces' normal. A real surface offset needs OCCT, so the preview is engine driven.
 
+import { t } from "../i18n";
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
@@ -36,7 +37,17 @@ type Phase = "pick" | "drag";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-const LABEL: Record<FaceOffsetMode, string> = { offsetFace: "Offset Face", thicken: "Thicken", shell: "Shell" };
+const LABEL: Record<FaceOffsetMode, string> = {
+  get offsetFace() {
+    return t("tool.offsetFace");
+  },
+  get thicken() {
+    return t("tool.thicken");
+  },
+  get shell() {
+    return t("tool.shell");
+  },
+};
 
 /** A drag or a keystroke waits this long for the value to hold still before the engine is asked. */
 const PREVIEW_DEBOUNCE_MS = 150;
@@ -144,7 +155,7 @@ export class FaceOffsetTool {
         (faces) => (this.takeFaces(faces), true),
         () => this.cancel(),
       );
-      setPrompt(`Click a face to ${LABEL[mode].toLowerCase()} · Ctrl-click adds more`);
+      setPrompt(t("tool.offsetFace.pick", { mode }));
     }
   }
 
@@ -224,7 +235,7 @@ export class FaceOffsetTool {
         e.preventDefault();
         e.stopImmediatePropagation();
         if (this.onPreviewOnlyFace(hit)) {
-          setPrompt("That's inside the opening, not a face to add · Esc");
+          setPrompt(t("tool.offsetFace.inside"));
           return;
         }
         this.faces.push(hit.selector);
@@ -294,22 +305,31 @@ export class FaceOffsetTool {
     if (this.phase !== "drag") return;
     if (this.outcomes.refusal) {
       const held = this.held;
-      const then = this.dim.isUserDriven("distance")
-        ? `type another ${this.quantity}`
-        : held !== null && Math.abs(held) >= MIN_OFFSET
-          ? `keeping ${this.sizeText(held)}`
-          : "drag back";
-      setPrompt(`Refused, ${then} · Esc`);
+      const keeping = held !== null && Math.abs(held) >= MIN_OFFSET;
+      const then = this.dim.isUserDriven("distance") ? "type" : keeping ? "keep" : "back";
+      setPrompt(
+        t("tool.sizeEdit.refused", {
+          then,
+          q: this.quantity,
+          size: keeping ? this.sizeText(held) : "",
+        }),
+      );
       return;
     }
     const moves = this.followMoves();
     if (moves > 0) {
-      setPrompt(`Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`);
+      setPrompt(t("tool.sizeEdit.follows", { n: moves }));
       return;
     }
-    const n = this.faces.length > 1 ? `${this.faces.length} faces, ` : "";
-    const sym = this.mode === "thicken" ? ` · S = symmetric${this.symmetric ? " (on)" : ""}` : "";
-    setPrompt(`${n}drag or type a ${this.quantity}${sym} · click to commit · Esc`);
+    const sym = this.mode !== "thicken" ? "none" : this.symmetric ? "on" : "off";
+    setPrompt(
+      t("tool.offsetFace.prompt", {
+        many: this.faces.length > 1 ? "yes" : "no",
+        n: this.faces.length,
+        q: this.quantity,
+        sym,
+      }),
+    );
   }
 
   private beginDrag(
@@ -384,9 +404,9 @@ export class FaceOffsetTool {
 
   private totalToggle(): DimToggleDef {
     return {
-      label: "Total",
+      label: t("tool.offsetFace.total"),
       icon: "thicknessTotal",
-      title: "Read and type the whole thickness to the opposite face instead of the change",
+      title: t("tool.offsetFace.totalTip"),
       initial: this.total,
       onChange: (on: boolean) => {
         this.total = on;
@@ -397,10 +417,9 @@ export class FaceOffsetTool {
 
   private followToggle(): DimToggleDef {
     return {
-      label: "Tangent faces follow",
+      label: t("field.tangentFacesFollow"),
       icon: "tangent",
-      title:
-        "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
+      title: t("tool.pressPull.followTip"),
       initial: this.follow,
       onChange: (on) => {
         this.follow = on;
@@ -433,7 +452,7 @@ export class FaceOffsetTool {
   }
 
   private fieldLabel(): { label: string; icon?: string } {
-    if (this.round) return this.full ? { label: "Diameter", icon: "diameter" } : { label: "R" };
+    if (this.round) return this.full ? { label: t("field.diameter"), icon: "diameter" } : { label: "R" };
     return { label: this.mode === "shell" ? "T" : "D" };
   }
 
@@ -445,7 +464,7 @@ export class FaceOffsetTool {
   }
 
   private negativeSize(): string {
-    return `a ${this.quantity} can't be negative`;
+    return t("tool.sizeEdit.negative", { q: this.quantity });
   }
 
   /** Typing a size is absolute, so a minus sign is a mistake to say at once. */
@@ -738,7 +757,7 @@ export class FaceOffsetTool {
     const raw = this.dim.getValue("distance");
     const typed = this.dim.isUserDriven("distance");
     if (raw == null && typed) {
-      setPrompt("That number can't be read · Esc");
+      setPrompt(t("tool.sizeEdit.unreadable"));
       return;
     }
     if (typed && raw != null && this.round && raw < 0) {
@@ -754,7 +773,7 @@ export class FaceOffsetTool {
     }
     if (this.neutral) {
       // keep the tool alive: silently cancelling reads as "nothing happened"
-      setPrompt(this.round ? `The ${this.quantity} is unchanged` : "Nothing to commit yet");
+      setPrompt(this.round ? t("tool.sizeEdit.unchanged", { q: this.quantity }) : t("tool.sizeEdit.nothing"));
       return;
     }
     const k = featureKey(this.buildFeature());

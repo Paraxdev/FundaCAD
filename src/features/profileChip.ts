@@ -1,5 +1,6 @@
 // The fillet's section shape as a chip in the heads-up row beside the radius, where the row cannot cover it.
 
+import { t } from "../i18n";
 import {
   onActivate,
   setExpanded,
@@ -26,13 +27,51 @@ import {
 
 const SVG = "http://www.w3.org/2000/svg";
 
-const PRESETS: { label: string; value: number }[] = [
-  { label: "Flat", value: -0.9 },
-  { label: "Soft", value: -0.5 },
-  { label: "Round", value: 0 },
-  { label: "Full", value: 0.5 },
-  { label: "Tight", value: 0.9 },
+const PRESETS: { readonly label: string; value: number }[] = [
+  {
+    get label() {
+      return t("fillet.profile.flat");
+    },
+    value: -0.9,
+  },
+  {
+    get label() {
+      return t("fillet.profile.soft");
+    },
+    value: -0.5,
+  },
+  {
+    get label() {
+      return t("fillet.profile.round");
+    },
+    value: 0,
+  },
+  {
+    get label() {
+      return t("fillet.profile.full");
+    },
+    value: 0.5,
+  },
+  {
+    get label() {
+      return t("fillet.profile.tight");
+    },
+    value: 0.9,
+  },
 ];
+
+// describeProfile answers in fixed English words, which only pick the line to show.
+const WORD_KEY = {
+  circular: "fillet.profile.word.circular",
+  "nearly sharp": "fillet.profile.word.nearlySharp",
+  fuller: "fillet.profile.word.fuller",
+  "nearly a chamfer": "fillet.profile.word.nearlyChamfer",
+  flatter: "fillet.profile.word.flatter",
+} as const;
+
+function profileWord(p: number): string {
+  return t(WORD_KEY[describeProfile(p) as keyof typeof WORD_KEY]);
+}
 
 /** Pixels of scrub for the whole range, Shift is four times finer. */
 const SCRUB_PX = 260;
@@ -88,7 +127,7 @@ function hold(e: Event) {
 }
 
 function name(p: number): string {
-  return `Profile ${formatProfile(p)}, ${describeProfile(p)}`;
+  return t("fillet.profile.name", { value: formatProfile(p), word: profileWord(p) });
 }
 
 export class ProfileChip {
@@ -142,10 +181,10 @@ export class ProfileChip {
 
   private render() {
     this.chipGlyph.set(this.value);
-    this.readout.textContent = this.value === 0 ? "Round" : formatProfile(this.value);
+    this.readout.textContent = this.value === 0 ? t("fillet.profile.round") : formatProfile(this.value);
     this.chip.classList.toggle("on", this.value !== 0);
     this.chip.setAttribute("aria-label", name(this.value));
-    this.chip.title = `${name(this.value)}. Drag sideways or scroll to change, click for presets`;
+    this.chip.title = t("fillet.profile.chipTip", { name: name(this.value) });
     this.panelSync?.();
   }
 
@@ -218,18 +257,18 @@ export class ProfileChip {
     panel.className = "profile-panel";
     panel.id = `profile-panel-${++panels}`;
     panel.setAttribute("role", "group");
-    panel.setAttribute("aria-label", "Profile");
+    panel.setAttribute("aria-label", t("field.profile"));
 
     const head = document.createElement("div");
     head.className = "profile-panel-head";
     const title = document.createElement("span");
     title.className = "profile-panel-title";
-    title.textContent = "Profile";
+    title.textContent = t("field.profile");
     const word = document.createElement("span");
     word.className = "profile-panel-value";
     word.id = `${panel.id}-word`;
     // Text, not decimal: a phone's decimal keypad has no minus key.
-    const num = uiNumberInput({ tip: "Profile value", size: "sm", inputMode: "text", widthCh: 6 });
+    const num = uiNumberInput({ tip: t("fillet.profile.valueTip"), size: "sm", inputMode: "text", widthCh: 6 });
     num.root.classList.add("profile-number");
     num.input.setAttribute("aria-describedby", word.id);
     head.append(title, num.root, word);
@@ -241,7 +280,10 @@ export class ProfileChip {
         return;
       }
       if (!text || !Number.isFinite(v)) {
-        setInvalid(num, `Type a profile from ${formatProfile(PROFILE_MIN)} to ${formatProfile(PROFILE_MAX)}`);
+        setInvalid(
+          num,
+          t("fillet.profile.range", { min: formatProfile(PROFILE_MIN), max: formatProfile(PROFILE_MAX) }),
+        );
         return;
       }
       setInvalid(num, null);
@@ -261,7 +303,7 @@ export class ProfileChip {
     const presets = document.createElement("div");
     presets.className = "profile-presets";
     const buttons = PRESETS.map((p) => {
-      const tip = `${p.label}, profile ${formatProfile(p.value)}`;
+      const tip = t("fillet.profile.presetTip", { label: p.label, value: formatProfile(p.value) });
       const b = uiButton({ variant: "tile", label: p.label, pressed: false, tip });
       b.classList.add("profile-preset");
       const g = glyph(28);
@@ -277,10 +319,10 @@ export class ProfileChip {
       min: -1,
       max: 1,
       step: SLIDER_STEP,
-      tip: "Profile",
+      tip: t("field.profile"),
       valueText: (t) => {
         const p = snapProfile(fromTrack(t));
-        return `${formatProfile(p)}, ${describeProfile(p)}`;
+        return `${formatProfile(p)}, ${profileWord(p)}`;
       },
       onValue: (t) => this.change(fromTrack(t)),
     });
@@ -291,7 +333,11 @@ export class ProfileChip {
     const ends = document.createElement("div");
     ends.className = "profile-track-ends";
     ends.setAttribute("aria-hidden", "true");
-    ends.innerHTML = "<span>chord</span><span>circle</span><span>sharp</span>";
+    for (const key of ["fillet.profile.endChord", "fillet.profile.endCircle", "fillet.profile.endSharp"] as const) {
+      const end = document.createElement("span");
+      end.textContent = t(key);
+      ends.appendChild(end);
+    }
 
     // The slider and the field take focus and their own drag; a press anywhere else keeps the radius field's.
     panel.addEventListener("pointerdown", (e) => {
@@ -305,7 +351,7 @@ export class ProfileChip {
     setExpanded(this.chip, true, panel.id);
 
     this.panelSync = () => {
-      word.textContent = describeProfile(this.value);
+      word.textContent = profileWord(this.value);
       if (document.activeElement !== num.input) {
         num.input.value = formatProfile(this.value);
         setInvalid(num, null);

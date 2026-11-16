@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import ListRow from "../ui/ListRow.vue";
+import { t } from "../../i18n";
 import Button from "../ui/Button.vue";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { useSketchRelationsStore } from "../../stores/sketchRelations";
@@ -9,7 +10,7 @@ const palette = useSketchPaletteStore();
 const rel = useSketchRelationsStore();
 
 const listId = "palette-shapes-list";
-const label = computed(() => `Shapes (${rel.shapeCount})`);
+const label = computed(() => t("sketchPalette.shapes", { n: rel.shapeCount }));
 
 function toggle() {
   palette.shapesOpen = !palette.shapesOpen;
@@ -55,7 +56,7 @@ watch(
     class="palette-btn palette-section-gap"
     :aria-expanded="palette.shapesOpen"
     :aria-controls="palette.shapesOpen ? listId : undefined"
-    tip="Which shapes can still move"
+    :tip="t('sketchPalette.shapesTip')"
     @click="toggle"
     >{{ label }}</Button
   >
@@ -72,5 +73,5 @@ watch(
       <ListRow :label="s.label" :hint="s.hint || undefined" :aria-label="s.spoken" @click="rel.hooks?.select([s.id])" />
     </li>
   </ul>
-  <p v-else-if="palette.shapesOpen" :id="listId" class="rel-empty">Nothing is drawn yet.</p>
+  <p v-else-if="palette.shapesOpen" :id="listId" class="rel-empty">{{ t("sketchPalette.shapesEmpty") }}</p>
 </template>

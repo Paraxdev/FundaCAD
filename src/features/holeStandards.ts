@@ -1,6 +1,7 @@
 // Standard hole sizes and the dimensions a hole type and size default to, mirroring the engine's hole_feature.py.
 // Both test files pin the same numbers.
 
+import { t } from "../i18n";
 import type { Feature, HoleFit, HoleStandard, HoleType } from "../types";
 import { plainNumber } from "../ui/units";
 
@@ -215,7 +216,7 @@ export function parseHoleSize(text: string): { size: HoleSize } | { diameter: nu
 
 /** What the size box says when `parseHoleSize` could not read its text. */
 export function badHoleSizeText(text: string): string {
-  return `Size: "${text.trim()}" is not a size, use ${HOLE_SIZES[0]} to ${HOLE_SIZES[HOLE_SIZES.length - 1]} or a diameter in mm`;
+  return t("tool.hole.badSize", { text: text.trim(), min: HOLE_SIZES[0], max: HOLE_SIZES.at(-1)! });
 }
 
 /** A complete hole of this type and size: every dimension written out, so the

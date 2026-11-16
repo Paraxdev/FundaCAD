@@ -1,6 +1,7 @@
 // Interactive Extrude: pick profile areas (Ctrl-click adds, Enter confirms) and drag the depth along the normal. The
 // operation is decided, never asked (extrudeOperation.ts); the prompt names it and Properties edits it afterwards.
 
+import { t } from "../i18n";
 import * as THREE from "three";
 import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
@@ -184,7 +185,7 @@ export class ExtrudeTool {
       this.beginDrag();
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt("Click a profile · Ctrl-click adds areas · Tab walks them · Enter");
+      setPrompt(t("tool.extrude.pick"));
     }
     return true;
   }
@@ -267,7 +268,7 @@ export class ExtrudeTool {
         this.viewport.domElement.style.cursor = "grabbing";
       }
     } else {
-      setPrompt("Its areas are gone, click a profile · Esc");
+      setPrompt(t("tool.extrude.areasGone"));
     }
     return true;
   }
@@ -415,7 +416,7 @@ export class ExtrudeTool {
         this.disposeTaperHandle();
         this.outline?.hide();
         this.releaseCarry();
-        setPrompt("Click a profile area · Esc");
+        setPrompt(t("tool.extrude.pickArea"));
         this.held.sync(this.pending);
         return;
       }
@@ -530,7 +531,7 @@ export class ExtrudeTool {
       const unit = units[i]!;
       this.lit = unit.members[0]!;
       this.overlay.setHoverRegion(this.lit);
-      this.surface.mount(undefined, "Extrude");
+      this.surface.mount(undefined, t("tool.extrude"));
       this.surface.setStop(true);
       this.surface.focus();
       announce(walkWords(unit, i, units.length, this.overlay.isRegionSelected(this.lit)));
@@ -542,7 +543,7 @@ export class ExtrudeTool {
       this.lit = null;
       if (e.key === " ") {
         take();
-        announce("No profile is lit, Tab lights one.");
+        announce(t("tool.extrude.noneLit"));
         return true;
       }
     }
@@ -554,14 +555,18 @@ export class ExtrudeTool {
       const i = units.findIndex((u) => u.members.includes(this.lit!));
       const picked = units.filter((u) => this.overlay.isRegionSelected(u.members[0]!)).length;
       announce(
-        `${walkWords(units[i]!, i, units.length, this.overlay.isRegionSelected(this.lit))} ${picked} of ${units.length} picked.`,
+        t("tool.extrude.pickedOf", {
+          walk: walkWords(units[i]!, i, units.length, this.overlay.isRegionSelected(this.lit)),
+          picked,
+          total: units.length,
+        }),
       );
       return true;
     }
     if (e.key === "Enter" && !this.selected.length) {
       take();
       if (!this.lit) {
-        announce("No profile is lit, Tab lights one.");
+        announce(t("tool.extrude.noneLit"));
         return true;
       }
       this.overlay.toggleRegionSelection(this.lit, false);
@@ -599,14 +604,14 @@ export class ExtrudeTool {
           label: "D",
           step: (fine) => gizmoMoveStep(this.viewport.pixelWorldSize(this.anchor()), fine),
         },
-        { name: "taper", label: "Angle", icon: "angle", kind: "angle", step: taperStep },
+        { name: "taper", label: t("field.angle"), icon: "angle", kind: "angle", step: taperStep },
       ],
       () => this.commit(),
       () => this.cancel(),
       {
-        label: "Symmetric",
+        label: t("field.symmetric"),
         icon: "symmetric",
-        title: "Sweep both ways off the sketch plane, this depth each way (Alt+S)",
+        title: t("tool.extrude.symmetricTip"),
         initial: this.symmetric,
         onChange: (on) => this.setSymmetric(on),
       },
@@ -1017,14 +1022,17 @@ export class ExtrudeTool {
     this.shownSym = this.symmetric;
     this.shownCarry = carry;
     const word = OP_WORD[op];
-    const sym = this.symmetric ? " · both ways (Alt+S)" : " · Alt+S symmetric";
-    const on = carry ? ` · ${carryWords.promptProfile()}` : "";
+    const args = {
+      op: word,
+      sym: this.symmetric ? "yes" : "no",
+      carry: carry ? "yes" : "no",
+      profile: carry ? carryWords.promptProfile() : "",
+    };
     setPrompt(
-      this.editId
-        ? `${word} · Ctrl-click areas · drag or type a value · Up or Down steps${sym} · click to apply · Esc`
-        : this.pinnedOp
-          ? `${word} · Alt+O operation · drag or type a depth · Up or Down steps${sym} · side handle tapers · click to commit${on} · Esc`
-          : `${word} · drag or type a depth, negative cuts · Up or Down steps${sym} · side handle tapers · click to commit${on} · Esc`,
+      t(
+        this.editId ? "tool.extrude.promptEdit" : this.pinnedOp ? "tool.extrude.promptPinned" : "tool.extrude.prompt",
+        args,
+      ),
     );
   }
 
@@ -1058,7 +1066,7 @@ export class ExtrudeTool {
     if (read.kind === "empty") return this.cancel();
     if (read.kind === "zero") return; // ignore zero
     if (read.kind === "refused") {
-      setPrompt(`Extrude refused: ${read.reason} · drag back or Esc`);
+      setPrompt(t("tool.extrude.refused", { reason: read.reason }));
       this.depthHandle?.paint({ refused: true });
       this.viewport.requestRender();
       return;
@@ -1100,7 +1108,7 @@ export class ExtrudeTool {
     } else {
       this.store.addFeature(feature, undefined, bindings);
     }
-    if (read.unverified) this.store.verifyCommit(id, "Extrude");
+    if (read.unverified) this.store.verifyCommit(id, t("tool.extrude"));
     this.overlay.clearRegionSelection();
     this.cleanup();
     this.onDone?.(id);

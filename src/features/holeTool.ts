@@ -1,6 +1,7 @@
 // Interactive Hole: click a flat face, then spots on it to add holes (click one again to remove it). The box sets the
 // size and depth and steps the type, the rest are rows. The preview is the engine's real cut, so a bad hole says why.
 
+import { t } from "../i18n";
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
@@ -35,10 +36,18 @@ type HoleFeature = Extract<Feature, { type: "hole" }>;
 const SETTLE_MS = 120;
 const FREE_GAP = 12; // --float-gap
 const TYPE_LABEL: Record<HoleType, string> = {
-  simple: "Simple",
-  counterbore: "Counterbore",
-  countersink: "Countersink",
-  insert: "Insert",
+  get simple() {
+    return t("field.option.simple");
+  },
+  get counterbore() {
+    return t("field.option.counterbore");
+  },
+  get countersink() {
+    return t("field.option.countersink");
+  },
+  get insert() {
+    return t("tool.hole.insert");
+  },
 };
 const TYPE_ICON: Record<HoleType, string> = {
   simple: "holeSimple",
@@ -119,10 +128,10 @@ export class HoleTool {
     this.releaseRows = awaitFaceRows(
       this.viewport,
       "flatFace",
-      (faces) => this.takeFace(faces) || "That face is curved, a hole needs a flat face",
+      (faces) => this.takeFace(faces) || t("tool.hole.curved"),
       () => this.cancel(),
     );
-    setPrompt("Click a flat face where the hole goes · Esc");
+    setPrompt(t("tool.hole.pick"));
   }
 
   private takeFace(f: PressPullFaces): boolean {
@@ -240,7 +249,7 @@ export class HoleTool {
     e.stopImmediatePropagation();
     const plane = this.viewport.planarFace(hit.faceId);
     if (!plane) {
-      setPrompt("That face is curved, a hole needs a flat face · Esc");
+      setPrompt(t("tool.hole.curvedEsc"));
       return;
     }
     this.begin(hit.anchor, plane.normal, plane.origin, hit.bodyId, hit.faceId);
@@ -306,8 +315,8 @@ export class HoleTool {
     this.viewport.clearHover();
     this.dim.show(
       [
-        { name: "size", label: "Size", icon: "diameter", kind: "count", free: true },
-        { name: "depth", label: "Depth", icon: "depth", kind: "length", positive: true, words: THROUGH },
+        { name: "size", label: t("field.size"), icon: "diameter", kind: "count", free: true },
+        { name: "depth", label: t("field.depth"), icon: "depth", kind: "length", positive: true, words: THROUGH },
         // Offset from the face centre (this.center) along its own xdir/ydir, so
         // a hole can be placed exactly without pixel-hunting for the click spot.
         { name: "x", label: "X", kind: "length" },
@@ -318,14 +327,14 @@ export class HoleTool {
       [
         {
           name: "type",
-          title: "Hole type: simple, counterbore, countersink or heat-set insert",
-          segments: HOLE_TYPES.map((t) => ({ id: t, label: TYPE_LABEL[t], icon: TYPE_ICON[t] })),
+          title: t("tool.hole.typeTip"),
+          segments: HOLE_TYPES.map((h) => ({ id: h, label: TYPE_LABEL[h], icon: TYPE_ICON[h] })),
           chosen: this.holeType,
           onChoose: (id) => this.setType(id as HoleType),
         },
         {
           name: "center",
-          label: "Move the hole to the centre of the face",
+          label: t("tool.hole.centre"),
           icon: "faceCenter",
           onPress: () => this.centerFirstPoint(),
         },
@@ -391,7 +400,7 @@ export class HoleTool {
       return badHoleSizeText(this.dim.getRaw("size"));
     }
     const depthText = this.dim.getRaw("depth");
-    if (this.holeType === "insert" && THROUGH.test(depthText)) return "Depth: an insert hole cannot go through";
+    if (this.holeType === "insert" && THROUGH.test(depthText)) return t("tool.hole.insertDepth");
     return null;
   }
 
@@ -502,10 +511,7 @@ export class HoleTool {
     this.drawMarkers();
     const n = this.points.length;
     const what = this.diameter != null ? `⌀${this.diameter}` : this.size;
-    setPrompt(
-      `${TYPE_LABEL[this.holeType]} ${what} · ${n} hole${n === 1 ? "" : "s"} · click the face to add, ` +
-        'click a hole to remove · depth or "through" · Enter to commit · Esc',
-    );
+    setPrompt(t("tool.hole.prompt", { type: TYPE_LABEL[this.holeType], what, n }));
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {
       this.previewTimer = 0;
@@ -577,7 +583,7 @@ export class HoleTool {
   private commit() {
     if (this.phase !== "place") return this.cancel();
     if (!this.points.length) {
-      setPrompt("Click the face to place a hole first · Esc");
+      setPrompt(t("tool.hole.placeFirst"));
       return;
     }
     // An Enter within a frame of the last key comes before tick() has read the box.
@@ -591,7 +597,7 @@ export class HoleTool {
     }
     const verdict = previewVerdict(this.store);
     if (verdict.kind === "refused") {
-      setPrompt(`Hole refused: ${verdict.reason} · change it or Esc`);
+      setPrompt(t("tool.hole.refused", { reason: verdict.reason }));
       return;
     }
     // The preview built this very face, so its extent is the one to keep.

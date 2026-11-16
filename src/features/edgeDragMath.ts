@@ -37,7 +37,7 @@ export function otherTreatment(kind: EdgeTreatment): EdgeTreatment {
 }
 
 export function treatmentLabel(kind: EdgeTreatment): string {
-  return kind === "fillet" ? "Fillet" : "Chamfer";
+  return t(kind === "fillet" ? "tool.fillet" : "tool.chamfer");
 }
 
 /** mm, the same cap on both sides since an overrunning chamfer is no more buildable than a fillet. Infinity when
@@ -166,19 +166,18 @@ export function blendRefusalReason(
   edgeCount: number,
   refusal: { code: string | null; message: string },
 ): string {
-  const these = edgeCount === 1 ? "this edge" : "these edges";
-  const These = edgeCount === 1 ? "This edge is" : "These edges are";
+  const n = edgeCount;
   switch (refusal.code) {
     case "blendTooLarge":
       return tooLarge(kind, edgeCount, refusal.message);
     case "blendHasNoEnd":
-      return `No ${kind} size works on ${these}, the blend has nowhere to end`;
+      return t("tool.fillet.noEnd", { kind, n });
     case "edgeAlreadySmooth":
-      return `${These} already smooth, there is no corner to ${kind === "fillet" ? "round" : "cut"}`;
+      return t("tool.fillet.smooth", { kind, n });
     case "edgeIsSeam":
-      return `${These} a seam, not a corner, pick where the face meets its neighbours`;
+      return t("tool.fillet.seam", { kind, n });
     case "blendFoldsOver":
-      return `At this size the ${kind} folds back over the model`;
+      return t("tool.fillet.foldsOver", { kind });
   }
   if (/smaller (length )?value/i.test(refusal.message)) return tooLarge(kind, edgeCount, refusal.message);
   return refusal.message.replace(/^(Fillet|Chamfer) failed on [^:]+:\s*/, "");

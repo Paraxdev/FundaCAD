@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
 import Icon from "./Icon.vue";
+import { t } from "../../i18n";
 import IconButton from "../ui/IconButton.vue";
 import ListRow from "../ui/ListRow.vue";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
@@ -14,9 +15,9 @@ const list = ref<HTMLElement | null>(null);
 
 // An implied relation has no record behind it, so there is nothing to delete.
 function rowTip(r: RelationRow): string | undefined {
-  if (r.implied) return "Held by position: these endpoints are the same point";
-  if (r.state === "conflict") return "Conflicting: the sketch cannot satisfy this";
-  if (r.state === "over") return "Redundant: something else already says this";
+  if (r.implied) return t("sketchPalette.rel.implied");
+  if (r.state === "conflict") return t("sketchPalette.rel.conflict");
+  if (r.state === "over") return t("sketchPalette.rel.over");
   return undefined;
 }
 
@@ -95,11 +96,8 @@ watch(
 
 <template>
   <div ref="summary" class="rel-summary" :class="{ conflict: rel.conflict }" tabindex="-1">{{ rel.summary }}</div>
-  <p v-if="!rel.rows.length" class="rel-empty">
-    Nothing is constrained yet. Draw with the grid on, or use the constraint tools, and what holds the sketch appears
-    here.
-  </p>
-  <ul v-else ref="list" class="rel-list" data-keeps-delete aria-description="Delete removes a constraint">
+  <p v-if="!rel.rows.length" class="rel-empty">{{ t("sketchPalette.rel.empty") }}</p>
+  <ul v-else ref="list" class="rel-list" data-keeps-delete :aria-description="t('sketchPalette.rel.listHint')">
     <li
       v-for="(r, i) in rel.rows"
       :key="r.key"
@@ -128,7 +126,7 @@ watch(
         size="sm"
         icon="close"
         :icon-size="12"
-        :tip="`Delete ${r.spoken}`"
+        :tip="t('sketchPalette.rel.delete', { name: r.spoken })"
         @click="remove(r.index, i)"
       />
     </li>

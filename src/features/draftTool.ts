@@ -1,6 +1,7 @@
 // Interactive Draft: drag a face's handle to swing it to a taper, read as an angle about the neutral line
 // (draftMath.ts). OCCT's BRepOffsetAPI_DraftAngle re-solves the walls around it, so the preview is engine driven.
 
+import { t } from "../i18n";
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
@@ -90,7 +91,7 @@ export class DraftTool {
         (faces) => (this.takeFaces(faces), true),
         () => this.cancel(),
       );
-      setPrompt("Click a face to draft · Ctrl-click adds more");
+      setPrompt(t("tool.draft.pick"));
     }
   }
 
@@ -191,9 +192,14 @@ export class DraftTool {
   }
 
   private prompt() {
-    const n = this.faces.length > 1 ? `${this.faces.length} faces, ` : "";
     setPrompt(
-      `${n}drag or type an angle (max ${MAX_DRAFT_DEG}°) · pull along ${this.pull}${singleKeysOn() ? ", X cycles" : ""} · click to commit · Esc`,
+      t("tool.draft.prompt", {
+        many: this.faces.length > 1 ? "yes" : "no",
+        n: this.faces.length,
+        max: MAX_DRAFT_DEG,
+        axis: this.pull,
+        cycle: singleKeysOn() ? "yes" : "no",
+      }),
     );
   }
 
@@ -227,7 +233,7 @@ export class DraftTool {
     this.viewport.clearHover();
     this.buildGizmo();
     this.dim.show(
-      [{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }],
+      [{ name: "angle", label: t("field.angle"), icon: "angle", kind: "angle" }],
       () => this.commit(true),
       () => this.cancel(),
     );
@@ -270,10 +276,10 @@ export class DraftTool {
           this.commit();
           return;
         }
-        setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
+        setPrompt(t("tool.draft.refused", { reason: refusal }));
       } else if (refusal !== this.refusalShown) {
         this.refusalShown = refusal;
-        if (refusal) setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
+        if (refusal) setPrompt(t("tool.draft.refused", { reason: refusal }));
         else if (!this.commitPending) this.prompt();
       }
       const s = this.viewport.projectToScreen(this.anchor);
@@ -324,7 +330,7 @@ export class DraftTool {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("angle");
     if (v == null && this.dim.isUserDriven("angle")) {
-      setPrompt("That number can't be read · Esc");
+      setPrompt(t("tool.sizeEdit.unreadable"));
       return;
     }
     let sentNow = false;
@@ -338,17 +344,17 @@ export class DraftTool {
     }
     if (Math.abs(this.angle) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"
-      setPrompt("Nothing to commit yet");
+      setPrompt(t("tool.sizeEdit.nothing"));
       return;
     }
     const verdict = previewVerdict(this.store);
     if (verdict.kind === "refused") {
-      setPrompt(`Draft refused: ${verdict.reason} · drag back or Esc`);
+      setPrompt(t("tool.draft.refused", { reason: verdict.reason }));
       return;
     }
     if (typed && (sentNow || verdict.kind === "wait")) {
       this.commitPending = true;
-      setPrompt("Checking the draft · it commits when the kernel answers · Esc");
+      setPrompt(t("tool.draft.checking"));
       return;
     }
     const feature = this.buildFeature();
@@ -357,7 +363,7 @@ export class DraftTool {
     ]);
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
     this.store.addFeature(feature, undefined, bindings);
-    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, `Draft ${this.angle}°`);
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, t("tool.draft.verify", { angle: this.angle }));
     this.cleanup();
     this.onDone?.(feature.id);
   }

@@ -109,7 +109,7 @@ function commit(r: Row, mm: number | null) {
 
 function expression(r: Row, raw: string): string | null {
   committed(r.key);
-  return itemOf(r.key)?.commitExpr?.(raw) ?? "Not editable";
+  return itemOf(r.key)?.commitExpr?.(raw) ?? t("sketchPalette.dim.notEditable");
 }
 
 // A rebuild redraws the badges and may swap the list's elements, keep focus on the row the user committed.
@@ -138,7 +138,7 @@ function focusOut(r: Row, e: FocusEvent) {
 </script>
 
 <template>
-  <p v-if="!rows.length" class="dim-empty">No dimensions yet.</p>
+  <p v-if="!rows.length" class="dim-empty">{{ t("sketchPalette.dim.empty") }}</p>
   <ul v-else ref="list" class="dim-list">
     <li
       v-for="r in rows"
@@ -163,7 +163,7 @@ function focusOut(r: Row, e: FocusEvent) {
           :validate="validate(r)"
           :expression="(raw: string) => expression(r, raw)"
           :disabled="r.driven"
-          disabled-reason="A reference dimension measures, it does not drive"
+          :disabled-reason="t('sketchPalette.dim.referenceTip')"
           @update:model-value="commit(r, $event)"
           @error="err[r.key] = $event ?? undefined"
         />

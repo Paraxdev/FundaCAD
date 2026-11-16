@@ -111,9 +111,32 @@ type PushRead =
 const Y_AXIS = HANDLE_UP;
 
 const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
-  { id: "radius", label: "R", word: "Radius" },
-  { id: "diameter", label: "Diameter", icon: "diameter", word: "Diameter" },
-  { id: "offset", label: "Offset", word: "Offset" },
+  {
+    id: "radius",
+    label: "R",
+    get word() {
+      return t("field.radius");
+    },
+  },
+  {
+    id: "diameter",
+    get label() {
+      return t("field.diameter");
+    },
+    icon: "diameter",
+    get word() {
+      return t("field.diameter");
+    },
+  },
+  {
+    id: "offset",
+    get label() {
+      return t("field.offset");
+    },
+    get word() {
+      return t("field.offset");
+    },
+  },
 ];
 
 const CURVED = ["cylinder", "sphere", "cone", "torus"] as const;
@@ -127,11 +150,21 @@ const MODE_ICON: Record<PressPullMode, string> = {
   intersect: "booleanIntersect",
 };
 const MODE_LABEL: Record<PressPullMode, string> = {
-  auto: "Auto",
-  join: "Join",
-  cut: "Cut",
-  new: "New",
-  intersect: "Intersect",
+  get auto() {
+    return t("field.option.auto");
+  },
+  get join() {
+    return t("field.option.join");
+  },
+  get cut() {
+    return t("field.option.cut");
+  },
+  get new() {
+    return t("tool.pressPull.modeNew");
+  },
+  get intersect() {
+    return t("field.option.intersect");
+  },
 };
 
 export class PressPullTool {
@@ -263,7 +296,7 @@ export class PressPullTool {
         () => this.cancel(),
         (run) => this.takeRowRun(run),
       );
-      setPrompt("Click a face · Ctrl-click adds more");
+      setPrompt(t("tool.pressPull.pickFace"));
     }
   }
 
@@ -310,7 +343,7 @@ export class PressPullTool {
     this.enginePreviewOn = false;
     this.viewport.clearPressPullGhost();
     this.outline?.hide();
-    setPrompt("Click the face to stop at · Esc");
+    setPrompt(t("tool.pressPull.pickStop"));
     this.releaseRows = awaitFaceRows(
       this.viewport,
       "face",
@@ -330,7 +363,7 @@ export class PressPullTool {
 
   private takeStop(f: PressPullFaces) {
     const id = f.faceIds[0]!;
-    if (this.faceIds.includes(id)) return "That is the face being pushed, pick the face to stop at";
+    if (this.faceIds.includes(id)) return t("tool.pressPull.stopSelf");
     this.upTo = upToFace({ selector: f.selectors[0]!, bodyId: f.bodyId }, this.viewport.planarFace(id));
     this.commitUpTo();
     return true;
@@ -411,7 +444,7 @@ export class PressPullTool {
         this.upTo = upToFace(hit, this.viewport.planarFace(hit.faceId));
         this.commitUpTo();
       } else {
-        setPrompt("Click the face to stop at · Esc");
+        setPrompt(t("tool.pressPull.pickStop"));
       }
       return;
     }
@@ -607,7 +640,8 @@ export class PressPullTool {
         ...(this.round ? { choices: this.quantityChoices() } : {}),
       },
     ];
-    if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle", step: taperStep });
+    if (!this.resizing)
+      defs.push({ name: "taper", label: t("field.angle"), icon: "angle", kind: "angle", step: taperStep });
     this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
     const options: DimOption[] = [
       ...(this.toggleKind === "mode" ? [this.modeOption()] : this.toggleKind === "follow" ? [this.followToggle()] : []),
@@ -648,7 +682,7 @@ export class PressPullTool {
   }
 
   private fieldLabel(): { label: string; icon?: string } {
-    if (!this.round) return { label: this.slant ? "Offset" : "D" };
+    if (!this.round) return { label: this.slant ? t("field.offset") : "D" };
     const { label, icon } = QUANTITIES.find((q) => q.id === this.quantity)!;
     return icon ? { label, icon } : { label };
   }
@@ -703,7 +737,7 @@ export class PressPullTool {
   }
 
   private negativeSize(): string {
-    return `a ${this.quantity} can't be negative`;
+    return t("tool.sizeEdit.negative", { q: this.quantity });
   }
 
   /** Typing a size is absolute, so a minus sign is a mistake to say at once. */
@@ -886,13 +920,13 @@ export class PressPullTool {
     return lost ? Math.max(1, t.run.length - 1, t.faces) : 0;
   }
 
-  /** A size for the prompt, said the way the field reads it. */
-  private sizeText(value: number): string {
+  /** A size for the prompt, said the way the field reads it, or null while the push asks the face to go. */
+  private sizeText(value: number): string | null {
     const r = this.round;
     const signed = `${value < 0 ? "-" : "+"}${fmtLength(Math.abs(value))}`;
     if (!r) return this.slant ? signed : fmtLength(Math.abs(value));
     const d = radialDrag(r.radius, value, r.solidInside, this.full);
-    if (d.mode === "remove") return "it removed";
+    if (d.mode === "remove") return null;
     if (this.quantity === "offset") return signed;
     return this.quantity === "diameter" ? `⌀${fmtLength(d.diameter)}` : `R${fmtLength(d.radius)}`;
   }
@@ -900,8 +934,9 @@ export class PressPullTool {
   /** Where a full round stops resizing and goes, said the way the field reads it. */
   private removalText(r: RoundFace): string {
     const at = r.radius * COLLAPSE_FRACTION;
-    if (this.quantity === "offset") return `below ${fmtLength(at - r.radius)}`;
-    return this.quantity === "diameter" ? `under ⌀${fmtLength(2 * at)}` : `under R${fmtLength(at)}`;
+    const size =
+      this.quantity === "offset" ? fmtLength(at - r.radius) : fmtLength(this.quantity === "diameter" ? 2 * at : at);
+    return t("tool.pressPull.removal", { q: this.quantity, size });
   }
 
   private promptNow() {
@@ -909,45 +944,37 @@ export class PressPullTool {
     const r = this.round;
     if (this.outcomes.refusal) {
       const shown = this.shown;
-      const then = this.dim.isUserDriven("distance")
-        ? `type another ${r ? this.quantity : "distance"}`
-        : shown !== null && Math.abs(shown) >= MIN_PUSH
-          ? `keeping ${this.sizeText(shown)}`
-          : "drag back";
-      setPrompt(`Refused, ${then} · Esc`);
+      const keeping = shown !== null && Math.abs(shown) >= MIN_PUSH;
+      const size = keeping ? this.sizeText(shown) : null;
+      const then = this.dim.isUserDriven("distance") ? "type" : !keeping ? "back" : size === null ? "removed" : "keep";
+      setPrompt(t("tool.sizeEdit.refused", { then, q: r ? this.quantity : "distance", size: size ?? "" }));
       return;
     }
     if (r) {
-      const ask = this.quantity === "offset" ? "how far it moves, + is bigger" : `a ${this.quantity}`;
+      const q = this.quantity;
       const unusable = this.typedUnusable();
       if (unusable) {
-        const why = unusable.reason;
-        return setPrompt(
-          why ? `${why[0]!.toUpperCase()}${why.slice(1)} · type another ${this.quantity} · Esc` : `Type ${ask} · Esc`,
-        );
+        return setPrompt(unusable.reason ? t("tool.sizeEdit.retype", { q }) : t("tool.pressPull.type", { q }));
       }
       // Nothing to ghost once the drag asks for the face to go; the readout dropping to 0 and this line say so.
-      if (this.removing) return setPrompt("Enter removes this face · drag back to keep it · Esc");
+      if (this.removing) return setPrompt(t("tool.pressPull.removing"));
       const moves = this.followMoves();
-      if (moves > 0) {
-        return setPrompt(
-          `Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`,
-        );
-      }
+      if (moves > 0) return setPrompt(t("tool.sizeEdit.follows", { n: moves }));
       return setPrompt(
-        this.full
-          ? `Drag or type ${ask} · Up or Down steps · ${this.removalText(r)} removes it · Esc`
-          : `Drag or type ${ask} · Up or Down steps · Esc`,
+        t("tool.pressPull.dragRound", {
+          q,
+          full: this.full ? "yes" : "no",
+          removal: this.full ? this.removalText(r) : "",
+        }),
       );
     }
-    if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Up or Down steps · Esc");
-    const on = this.carry ? ` · click to commit · ${carryWords.promptProfile()}` : " · click to commit";
+    if (this.slant) return setPrompt(t("tool.pressPull.dragSlant"));
+    const carry = this.carry ? "yes" : "no";
+    const profile = this.carry ? carryWords.promptProfile() : "";
     if (this.faces.length > 1) {
-      return setPrompt(
-        `${this.faces.length} faces · drag or type a distance · Up or Down steps · T stops at a face${on} · Esc`,
-      );
+      return setPrompt(t("tool.pressPull.many", { n: this.faces.length, carry, profile }));
     }
-    setPrompt(`Drag or type a value, negative cuts · Up or Down steps · T stops at a face${on} · Esc`);
+    setPrompt(t("tool.pressPull.one", { carry, profile }));
   }
 
   /** Through the engine for every push, since neighbours slope and re-trim in ways no ghost can draw. `hold` keeps
@@ -1130,8 +1157,7 @@ export class PressPullTool {
   private modeOption(): DimSegmentedDef {
     return {
       name: "mode",
-      title:
-        "Auto grows or shrinks the face; Join, Cut, New body and Intersect extrude it and combine with any body it reaches",
+      title: t("tool.pressPull.modeTip"),
       segments: MODES.map((m) => ({ id: m, label: MODE_LABEL[m], icon: MODE_ICON[m] })),
       chosen: this.mode,
       onChoose: (id) => {
@@ -1143,10 +1169,9 @@ export class PressPullTool {
 
   private followToggle(): DimToggleDef {
     return {
-      label: "Tangent faces follow",
+      label: t("field.tangentFacesFollow"),
       icon: "tangent",
-      title:
-        "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
+      title: t("tool.pressPull.followTip"),
       initial: this.follow,
       onChange: (on) => {
         this.follow = on;
@@ -1197,8 +1222,7 @@ export class PressPullTool {
   private directionOption(): DimSegmentedDef {
     return {
       name: "direction",
-      title:
-        "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face",
+      title: t("tool.pressPull.directionTip"),
       segments: [
         { id: "normal", label: DIRECTION_LABEL.normal, icon: "offsetFace" },
         { id: "axis", label: DIRECTION_LABEL.axis, icon: "datumAxis" },
@@ -1382,15 +1406,11 @@ export class PressPullTool {
   private commit() {
     if (this.phase !== "drag") return this.cancel();
     const read = this.readCommit();
-    if (read.kind === "unreadable") return setPrompt("That number can't be read · Esc");
+    if (read.kind === "unreadable") return setPrompt(t("tool.sizeEdit.unreadable"));
     if (read.kind === "negative") return void this.dim.flag(this.negativeSize());
     if (read.kind === "neutral") {
       // keep the tool alive: silently cancelling here read as "nothing happened"
-      return setPrompt(
-        this.round
-          ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged`
-          : "Nothing to commit yet",
-      );
+      return setPrompt(this.round ? t("tool.sizeEdit.unchanged", { q: this.quantity }) : t("tool.sizeEdit.nothing"));
     }
     if (read.kind === "stay") return this.promptNow();
     if (read.kind === "cancel") return this.cancel();

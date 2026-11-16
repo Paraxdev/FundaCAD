@@ -4,6 +4,7 @@ import SketchShapesList from "./SketchShapesList.vue";
 import SketchRelationsList from "./SketchRelationsList.vue";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
+import { t } from "../../i18n";
 import { useSketchPaletteStore, PALETTE_TOGGLES } from "../../stores/sketchPalette";
 import { useSketchRelationsStore } from "../../stores/sketchRelations";
 
@@ -20,30 +21,30 @@ const rel = useSketchRelationsStore();
     aria-labelledby="palette-heading"
     data-keeps-delete
   >
-    <h2 id="palette-heading" class="palette-title">Sketch palette</h2>
-    <div class="palette-section">Options</div>
-    <Button block class="palette-btn" tip="Square the view to the sketch plane" @click="palette.lookAt()"
-      >Look At</Button
-    >
+    <h2 id="palette-heading" class="palette-title">{{ t("sketchPalette.title") }}</h2>
+    <div class="palette-section">{{ t("sketchPalette.options") }}</div>
+    <Button block class="palette-btn" :tip="t('sketchPalette.lookAtTip')" @click="palette.lookAt()">{{
+      t("sketchPalette.lookAt")
+    }}</Button>
     <Checkbox
-      v-for="t in PALETTE_TOGGLES"
-      :key="t.key"
+      v-for="def in PALETTE_TOGGLES"
+      :key="def.key"
       class="palette-row"
-      :label="t.label"
-      :model-value="palette.state[t.key]"
-      @update:model-value="(on: boolean) => palette.set(t.key, on)"
+      :label="def.label"
+      :model-value="palette.state[def.key]"
+      @update:model-value="(on: boolean) => palette.set(def.key, on)"
     />
 
     <SketchShapesList v-if="rel.visible" />
 
     <template v-if="palette.state.dimensions">
-      <div class="palette-section palette-section-gap">Dimensions</div>
+      <div class="palette-section palette-section-gap">{{ t("sketchPalette.dimensions") }}</div>
       <SketchDimensionsList />
     </template>
 
     <!-- Relations answer what holds this sketch, the canvas glyphs what holds this line. It follows Show Constraints. -->
     <template v-if="rel.visible">
-      <div class="palette-section palette-section-gap">Relations</div>
+      <div class="palette-section palette-section-gap">{{ t("sketchPalette.relations") }}</div>
       <SketchRelationsList />
     </template>
   </aside>
