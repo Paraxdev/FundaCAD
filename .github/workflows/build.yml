@@ -2085,7 +2085,7 @@ jobs:
           # fresh fingerprint still vouches for, so only a whole unit neither written nor read for a week goes. A
           # fresh unit is never written again, so read times keep a dependency every run links.
           for unit in target/*/build/*/*/ src-tauri/target/*/build/*/*/; do
-            if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" \( -mtime -7 -o -atime -7 \) -print -quit)" ]; then
+            if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" -type f \( -mtime -7 -o -atime -7 \) -print -quit)" ]; then
               rm -rf "$unit"
             fi
           done
