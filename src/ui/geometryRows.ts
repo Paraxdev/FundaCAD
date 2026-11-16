@@ -218,14 +218,14 @@ const EDGE_TYPE: Record<EdgeFacts["curve"], GeometryRowType> = {
   curve: "curved",
 };
 
-/** `edgeFaces` is one per wire edge. If its length is not `wireCount` the op and the viewport walked different wires,
- *  so only the facts it gives are dropped and the rows stay. */
 /** The name the list gives an edge row, so a tool's member rows read as the list does. */
 export function edgeNameOf(ref: WireEdge): string {
   const { curve } = edgeCurve(ref.points);
   return describePick({ kind: "edge", number: ref.slot + 1, curve, length: 0 }).label;
 }
 
+/** `edgeFaces` is one per wire edge. If its length is not `wireCount` the op and the viewport walked different wires,
+ *  so only the facts it gives are dropped and the rows stay. */
 export function edgeRows(
   refs: readonly WireEdge[],
   wireCount: number,
