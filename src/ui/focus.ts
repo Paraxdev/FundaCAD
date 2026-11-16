@@ -1,9 +1,10 @@
 // Inputs that take no typed text, so a focused one must not swallow the sketch keys.
 const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "button", "color", "submit", "reset"]);
 
-/** The base Select's button, whose typed letters search its list as a select's do. */
+/** The base Select's button, whose typed letters search its list as a select's do. A Combobox's text field shares the
+ *  role but holds text, so Ctrl+A and Ctrl+Z stay its own. */
 export const isSelectTrigger = (t: EventTarget | null) =>
-  t instanceof HTMLElement && t.getAttribute("role") === "combobox";
+  t instanceof HTMLElement && !(t instanceof HTMLInputElement) && t.getAttribute("role") === "combobox";
 
 /** Text inputs, textareas, selects, Select triggers and contentEditable, so typing "T" in a field does not start the
  *  Text tool. */
