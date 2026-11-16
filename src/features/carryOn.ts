@@ -33,6 +33,8 @@ export interface CarryHost {
   after(done: Exclude<CarryCommit, { kind: "stayed" }>, target: CarryTarget): void;
   /** The profile a click there picks, decided against the face behind it as an idle click decides. */
   profileAt(clientX: number, clientY: number): WorldRegion | null;
+  /** Lights the profile a press would carry to, null puts it out. */
+  lightProfile(wr: WorldRegion | null): void;
   refuse(why: string): void;
 }
 
@@ -43,7 +45,6 @@ export const carryWords = {
   depthFirst: () => t("carry.depthFirst"),
   nothingMade: () => t("carry.nothingMade"),
   refused: (reason: string) => t("carry.refused", { reason }),
-  prompt: () => t("carry.prompt"),
   promptProfile: () => t("carry.promptProfile"),
 };
 
@@ -121,7 +122,8 @@ export function carryPressTarget(
   return { hit, profile: { kind: "profile", point: [at.x, at.y, at.z], sketch: wr.sketchId }, wr };
 }
 
-/** True when the press carried on or was refused aloud, false when it is a plain commit. */
+/** True when the press carried on or was refused aloud, false when it is a plain commit. A face `ownFace` says the
+ *  open tool pushes is no target either, a press there just commits. */
 export function carryPress(
   source: CarrySource,
   host: CarryHost,
@@ -129,11 +131,13 @@ export function carryPress(
   x: number,
   y: number,
   own: (wr: WorldRegion) => boolean,
+  ownFace: (faceId: number) => boolean = () => false,
 ): boolean {
   const next = carryPressTarget(vp, host, x, y, own);
   if (!next.profile) {
     const pick = pickOfHit(next.hit);
-    return !!pick && host.route(pick) !== "row";
+    if (!pick || (pick.kind === "face" && ownFace(pick.faceId))) return false;
+    return host.route(pick) !== "row";
   }
   const done = carryTo(source, host, next.profile);
   if (done !== true) host.refuse(done);

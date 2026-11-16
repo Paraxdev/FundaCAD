@@ -7,7 +7,6 @@
   "carry.depthFirst": "Legen Sie zuerst die Tiefe fest, ziehen und loslassen oder eintippen",
   "carry.lost": "{kind, select, face {Die gewählte Fläche} profile {Das gewählte Profil} other {Die gewählte Kante}} ist nicht im Ergebnis, wählen Sie {kind, select, profile {es} other {sie}} erneut",
   "carry.nothingMade": "Tiefe ist 0, nichts erstellt",
-  "carry.prompt": "klicken Sie auf eine Fläche, um sie zu verschieben, auf eine Kante, um sie zu runden",
   "carry.promptProfile": "klicken Sie auf ein Profil, um es zu extrudieren, auf eine Fläche, um sie zu verschieben, auf eine Kante, um sie zu runden",
   "carry.refused": "Abgelehnt: {reason}",
   "carry.slow": "Der Aufbau hat zu lange gedauert, wählen Sie die Fläche oder Kante erneut",

@@ -137,7 +137,7 @@ function rig(opts: { editing?: boolean } = {}) {
   const after = vi.fn();
   const route = vi.fn((pick) => routeTreeClick(pick, { busyHint: () => null, hint: (m) => void hints.push(m) }));
   const profileAt = vi.fn(() => under.profile as never);
-  const host: CarryHost = { route, after, profileAt, refuse: (m) => void hints.push(m) };
+  const host: CarryHost = { route, after, profileAt, lightProfile: () => {}, refuse: (m) => void hints.push(m) };
   const tool = new ExtrudeTool(viewport, overlay as never, store);
   tools.push(tool);
   Object.assign(tool, { positionDim: () => {}, hitGizmo: () => false, hitTaper: () => false });

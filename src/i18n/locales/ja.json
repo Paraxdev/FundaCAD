@@ -7,7 +7,6 @@
   "carry.depthFirst": "先に深さを決めてください。ドラッグして離すか、入力します",
   "carry.lost": "{kind, select, face {選んだ面} profile {選んだプロファイル} other {選んだエッジ}}は結果にありません。もう一度選んでください",
   "carry.nothingMade": "深さが 0 のため、何も作成されませんでした",
-  "carry.prompt": "面をクリックして押し出し、エッジをクリックして丸めます",
   "carry.promptProfile": "プロファイルをクリックして押し出し形状を作り、面をクリックして押し出し、エッジをクリックして丸めます",
   "carry.refused": "拒否されました: {reason}",
   "carry.slow": "再構築に時間がかかりすぎました。面またはエッジをもう一度選んでください",

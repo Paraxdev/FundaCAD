@@ -1,11 +1,13 @@
-// Press/Pull carries on: a clean click on another face or an edge finishes the push and hands the pick on, T is the way
-// to stop at a face. Empty space, its own face and a refused or unanswered preview keep the old behaviour.
+// Press/Pull carries on: a clean click on an edge, a profile or another face finishes the push and hands the pick on, T
+// is the way to stop at a face. Empty space, its own face and a refused or unanswered preview keep the old behaviour.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { PressPullTool } from "../../src/features/pressPullTool";
 import { carryWords, type CarryHost } from "../../src/features/carryOn";
+import { SketchPlane } from "../../src/sketch/plane";
+import { rectCorners } from "../../src/sketch/region";
 import { resetTreePicks, routeTreeClick, treePickWaiting } from "../../src/ui/treePick";
 import type { DocumentStore, RebuildState } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
@@ -40,6 +42,20 @@ const EDGE_POINTS = [
   [14, 1, 5],
   [14, 1, 9],
 ];
+const flat = new SketchPlane({ origin: [0, 0, 0], normal: [0, 0, 1], xdir: [1, 0, 0] });
+const profile = {
+  sketchId: "s2",
+  region: {
+    sketchId: "s2",
+    loop: rectCorners(9, 2, 8, 8),
+    holes: [],
+    centroid: new THREE.Vector2(9, 2),
+    interior: new THREE.Vector2(9, 2),
+  },
+  plane: flat,
+  centroid3D: flat.to3D(9, 2),
+  interior3D: flat.to3D(9, 2),
+};
 const faceHit = (id: number) => ({ kind: "face", faceId: id });
 const edgeHit = { kind: "edge", edge: { id: "e7", body: "body1", points: EDGE_POINTS } };
 
@@ -66,7 +82,7 @@ const frame = () => {
 function rig() {
   const canvas = document.createElement("canvas");
   document.body.append(canvas);
-  const under = { hit: null as unknown, stop: null as unknown };
+  const under = { hit: null as unknown, stop: null as unknown, profile: null as unknown };
   const lit: unknown[] = [];
   const vp = {
     suspendPicking: false,
@@ -81,6 +97,7 @@ function rig() {
     clearHover: () => {},
     hoverFaceAt: () => null,
     pickEntity: () => under.hit,
+    rayFrom: () => ({ ray: new THREE.Ray(new THREE.Vector3(9, 2, 60), new THREE.Vector3(0, 0, -1)) }),
     hoverEntity: (hit: unknown) => void lit.push(hit),
     pickFaceForPressPull: () => under.stop,
     selectedFacesForPressPull: () => pushedFaces(),
@@ -120,7 +137,9 @@ function rig() {
   const hints: string[] = [];
   const after = vi.fn();
   const route = vi.fn((pick) => routeTreeClick(pick, { busyHint: () => null, hint: (m) => void hints.push(m) }));
-  const host: CarryHost = { route, after, profileAt: () => null, refuse: (m) => void hints.push(m) };
+  const profileAt = vi.fn(() => under.profile as never);
+  const lightProfile = vi.fn();
+  const host: CarryHost = { route, after, profileAt, lightProfile, refuse: (m) => void hints.push(m) };
   const tool = new PressPullTool(vp as unknown as Viewport, store as unknown as DocumentStore);
   tools.push(tool);
   Object.assign(tool, { hitGizmo: () => false, hitTaper: () => false });
@@ -164,6 +183,8 @@ function rig() {
     after,
     under,
     lit,
+    profileAt,
+    lightProfile,
     pointer,
     click,
     type,
@@ -316,6 +337,58 @@ describe("a click after the push is set carries on", () => {
   });
 });
 
+describe("a click on a sketch profile", () => {
+  it("over a face writes the push once and hands the profile on, not the face", () => {
+    const r = rig();
+    pushed(r, "7.25");
+    r.under.hit = faceHit(NEXT);
+    r.under.profile = profile;
+    r.click();
+    expect(r.calls.added).toEqual([PUSH_7]);
+    expect(r.route).not.toHaveBeenCalled();
+    expect(r.after).toHaveBeenCalledWith(
+      { kind: "added", id: "p1" },
+      { kind: "profile", point: [9, 2, 0], sketch: "s2" },
+    );
+    expect(r.tool.active).toBe(false);
+  });
+
+  it("with an edge in front of it is the edge, the profile is not asked", () => {
+    const r = rig();
+    pushed(r, "7.25");
+    r.under.hit = edgeHit;
+    r.under.profile = profile;
+    r.click();
+    expect(r.profileAt).not.toHaveBeenCalled();
+    expect(r.after).toHaveBeenCalledWith({ kind: "added", id: "p1" }, { kind: "edge", point: [14, 1, 6] });
+  });
+
+  it("with a refused push gives the kernel's reason and keeps the step open", () => {
+    const r = rig();
+    r.begin();
+    r.type("7.25");
+    r.answer("Press/Pull failed: the wall is too thin");
+    r.under.profile = profile;
+    r.click();
+    expect(r.calls.added).toEqual([]);
+    expect(r.hints).toEqual([carryWords.refused("the wall is too thin")]);
+    expect(r.after).not.toHaveBeenCalled();
+    expect(r.tool.active).toBe(true);
+  });
+
+  it("lights while the pointer is over it instead of the face behind it, and goes out when the step ends", () => {
+    const r = rig();
+    r.begin();
+    r.under.hit = faceHit(NEXT);
+    r.under.profile = profile;
+    r.pointer("pointermove", 310, 210);
+    expect(r.lightProfile).toHaveBeenLastCalledWith(profile);
+    expect(r.lit).toEqual([]);
+    r.tool.cancel();
+    expect(r.lightProfile).toHaveBeenLastCalledWith(null);
+  });
+});
+
 describe("a click that cannot finish the push", () => {
   it("while the engine has not answered yet is refused, commits nothing and works once it has", () => {
     const r = rig();
@@ -458,6 +531,6 @@ describe("hover and prompt", () => {
   it("say that T stops at a face and a click goes on", () => {
     const r = rig();
     r.begin();
-    expect(prompts.at(-1)).toContain(`T stops at a face · click to commit · ${carryWords.prompt()} · Esc`);
+    expect(prompts.at(-1)).toContain(`T stops at a face · click to commit · ${carryWords.promptProfile()} · Esc`);
   });
 });

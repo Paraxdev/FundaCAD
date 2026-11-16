@@ -160,7 +160,7 @@ describe("carryWords", () => {
       carryWords.wait(),
       carryWords.badValue(),
       carryWords.refused("depth 0.3 is under 0.5"),
-      carryWords.prompt(),
+      carryWords.promptProfile(),
     ];
     expect(new Set(lines).size).toBe(4);
     expect(lines.every((l) => l.length > 0 && !l.includes("carry."))).toBe(true);

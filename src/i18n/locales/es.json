@@ -7,7 +7,6 @@
   "carry.depthFirst": "Fije primero la profundidad, arrastre y suelte o escríbala",
   "carry.lost": "{kind, select, face {La cara elegida} profile {El perfil elegido} other {La arista elegida}} no está en el resultado, {kind, select, profile {elíjalo} other {elíjala}} de nuevo",
   "carry.nothingMade": "La profundidad es 0, no se ha creado nada",
-  "carry.prompt": "haga clic en una cara para empujarla, en una arista para redondearla",
   "carry.promptProfile": "haga clic en un perfil para extruirlo, en una cara para empujarla, en una arista para redondearla",
   "carry.refused": "Rechazado: {reason}",
   "carry.slow": "La reconstrucción tardó demasiado, elija de nuevo la cara o la arista",
