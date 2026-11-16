@@ -30,6 +30,7 @@ import {
   onThemeChange,
   removeCustomTheme,
   setTheme,
+  SYSTEM_THEME_ID,
   themes,
 } from "../../ui/theme";
 import { t } from "../../i18n";
@@ -165,14 +166,14 @@ onUnmounted(() => {
 
 // A plugin's settings are under its own row in Plugins, not a category here.
 const categories = computed(() => [
-  { value: "appearance", label: "Appearance" },
-  { value: "viewport", label: "Viewport" },
-  { value: "navigation", label: "Navigation" },
-  { value: "access", label: "Accessibility" },
-  { value: "updates", label: "Updates" },
-  { value: "mcp", label: "AI assistants" },
-  { value: "plugins", label: "Plugins" },
-  { value: "experimental", label: "Experimental" },
+  { value: "appearance", label: t("prefs.tab.appearance") },
+  { value: "viewport", label: t("prefs.tab.viewport") },
+  { value: "navigation", label: t("prefs.tab.navigation") },
+  { value: "access", label: t("prefs.tab.access") },
+  { value: "updates", label: t("prefs.tab.updates") },
+  { value: "mcp", label: t("prefs.tab.mcp") },
+  { value: "plugins", label: t("prefs.tab.plugins") },
+  { value: "experimental", label: t("prefs.tab.experimental") },
 ]);
 const known = (id: string | null) => categories.value.find((c) => c.value === id)?.value;
 const category = ref(pluginFocus.value ? "plugins" : (known(dialogs.prefsCategory) ?? "appearance"));
@@ -211,17 +212,17 @@ watch(
   },
 );
 
-const ANIMATIONS = [
-  { value: "system", label: "Follow system" },
-  { value: "on", label: "On" },
-  { value: "off", label: "Off" },
-];
-const VERBOSITY = [
-  { value: "off", label: "Off" },
-  { value: "errors", label: "Errors" },
-  { value: "normal", label: "Normal" },
-  { value: "verbose", label: "Verbose" },
-];
+const ANIMATIONS = computed(() => [
+  { value: "system", label: t("prefs.animations.system") },
+  { value: "on", label: t("prefs.animations.on") },
+  { value: "off", label: t("prefs.animations.off") },
+]);
+const VERBOSITY = computed(() => [
+  { value: "off", label: t("prefs.verbosity.off") },
+  { value: "errors", label: t("prefs.verbosity.errors") },
+  { value: "normal", label: t("prefs.verbosity.normal") },
+  { value: "verbose", label: t("prefs.verbosity.verbose") },
+]);
 const a11yChanged = computed(
   () =>
     a11y.value.contrast !== DEFAULT_A11Y.contrast ||
@@ -247,13 +248,13 @@ function pickVerbosity(id: string) {
 }
 async function onResetA11y() {
   const ok = await confirmDanger(
-    "Reset accessibility settings?",
-    "Reset",
-    "Every choice on this page goes back to its default, Hover delay too.",
+    t("prefs.access.resetTitle"),
+    t("prefs.access.resetAction"),
+    t("prefs.access.resetBody"),
   );
   if (!ok) return;
   resetA11yPrefs();
-  toast("Accessibility settings are back to their defaults.");
+  toast(t("prefs.access.resetDone"));
 }
 
 const presetNote = ref("");
@@ -263,8 +264,7 @@ async function screenReaderPreset() {
   // Emptied for a tick first, so a second press changes the live region and is spoken again.
   presetNote.value = "";
   await nextTick();
-  presetNote.value =
-    "Announcements set to Verbose, Single key shortcuts turned off, Solid panels on and Notification time set to Until dismissed.";
+  presetNote.value = t("prefs.access.presetNote");
 }
 
 // Note: Slider puts fallthrough attributes on its wrapper and repeats aria-valuetext in its output,
@@ -287,43 +287,50 @@ const UNITS = [
   { value: "cm", label: "cm" },
   { value: "in", label: "in" },
 ];
-const BACKGROUNDS = [
-  { value: "theme", label: "Theme" },
-  { value: "dark", label: "Dark" },
-  { value: "grey", label: "Grey" },
-  { value: "light", label: "Light" },
-];
-const TRACERS = [
-  { value: "auto", label: "Auto" },
-  { value: "native", label: "Native" },
-  { value: "webgpu", label: "WebGPU" },
-];
-const TANGENT = [
-  { value: "show", label: "Show" },
-  { value: "faint", label: "Faint" },
-  { value: "hide", label: "Hide" },
-];
+const BACKGROUNDS = computed(() => [
+  { value: "theme", label: t("prefs.background.theme") },
+  { value: "dark", label: t("prefs.background.dark") },
+  { value: "grey", label: t("prefs.background.grey") },
+  { value: "light", label: t("prefs.background.light") },
+]);
+const TRACERS = computed(() => [
+  { value: "auto", label: t("prefs.tracer.auto") },
+  { value: "native", label: t("prefs.tracer.native") },
+  { value: "webgpu", label: t("prefs.tracer.webgpu") },
+]);
+const TANGENT = computed(() => [
+  { value: "show", label: t("prefs.tangent.show") },
+  { value: "faint", label: t("prefs.tangent.faint") },
+  { value: "hide", label: t("prefs.tangent.hide") },
+]);
 
-const WHEEL_DEVICES = [
-  { value: "auto", label: "Automatic" },
-  { value: "touchpad", label: "Touchpad" },
-  { value: "mouse", label: "Mouse" },
-];
-const ORBIT_PIVOTS = [
-  { value: "auto", label: "Under cursor" },
-  { value: "origin", label: "Origin" },
-  { value: "selection", label: "Selection" },
-];
-const TOUCHPAD_SCROLL = [
-  { value: "orbit", label: "Orbits" },
-  { value: "pan", label: "Pans" },
-];
+const WHEEL_DEVICES = computed(() => [
+  { value: "auto", label: t("prefs.scrolling.auto") },
+  { value: "touchpad", label: t("prefs.scrolling.touchpad") },
+  { value: "mouse", label: t("prefs.scrolling.mouse") },
+]);
+const ORBIT_PIVOTS = computed(() => [
+  { value: "auto", label: t("prefs.orbitPivot.auto") },
+  { value: "origin", label: t("prefs.orbitPivot.origin") },
+  { value: "selection", label: t("prefs.orbitPivot.selection") },
+]);
+const TOUCHPAD_SCROLL = computed(() => [
+  { value: "orbit", label: t("prefs.twoFinger.orbit") },
+  { value: "pan", label: t("prefs.twoFinger.pan") },
+]);
 
 const HOME_BACKGROUND_OPTIONS = computed(() => HOME_BACKGROUNDS.map((b) => ({ value: b.id, label: b.label })));
 
-const themeOptions = computed(() => themeList.value.map((t) => ({ value: t.id, label: t.label })));
+// Only the System entry is a built-in line, the other theme names are the palettes' own and stay as they are.
+const themeOptions = computed(() =>
+  themeList.value.map((x) => ({ value: x.id, label: x.id === SYSTEM_THEME_ID ? t("prefs.theme.system") : x.label })),
+);
 const packOptions = computed(() => iconPacks().map((p) => ({ value: p.id, label: p.label })));
-const environmentOptions = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, hint: e.note }));
+const motionState = computed(() => (reducesMotion.value ? "off" : "on"));
+const wheelSeen = computed(() => (nav.value.wheelDevice !== "auto" ? "none" : (detectedWheel.value ?? "unseen")));
+const environmentOptions = computed(() =>
+  ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, hint: e.note })),
+);
 
 // Every write goes through the module's own gate, so a choice that no longer
 // matches anything is refused at the same place a corrupt stored value is.
@@ -351,7 +358,7 @@ async function onUpload(ev: Event) {
   try {
     parsed = JSON.parse(await file.text());
   } catch {
-    themeError.value = "That file is not valid JSON.";
+    themeError.value = t("prefs.theme.invalidJson");
     return;
   }
   const res = addCustomTheme(parsed, file.name);
@@ -367,7 +374,7 @@ async function onUpload(ev: Event) {
   if (!shortfall) return;
   // The status line empties for a tick first, so the same file uploaded again is spoken again.
   await nextTick();
-  themeWarning.value = `${res.theme.label} is added, but ${shortfall}`;
+  themeWarning.value = t("prefs.theme.added", { name: res.theme.label, shortfall });
 }
 
 async function onRemoveTheme() {
@@ -376,12 +383,16 @@ async function onRemoveTheme() {
   const gone = themeList.value.find((t) => t.custom && t.id === theme.value);
   if (!gone) return;
   if (
-    !(await confirmDanger(`Remove the theme ${gone.label}?`, "Remove", "Its colours are deleted from this computer."))
+    !(await confirmDanger(
+      t("prefs.theme.removeTitle", { name: gone.label }),
+      t("prefs.theme.remove"),
+      t("prefs.theme.removeBody"),
+    ))
   )
     return;
   // Removing the active palette falls back to the built-in one in the module, whose onThemeChange refreshes both refs.
   removeCustomTheme(gone.id);
-  toast(`Removed the theme ${gone.label}.`);
+  toast(t("prefs.theme.removeDone", { name: gone.label }));
 }
 function onPack(id: string) {
   const v = asIconPackId(id);
@@ -482,7 +493,7 @@ function onClassicCamera(on: boolean) {
   <!-- Escape, the modal gate and focus are the frame's: it gates global shortcuts, since single letter tool keys would
        fire under a screen full of text sized targets. -->
   <Dialog
-    title="Preferences"
+    :title="t('prefs.title')"
     panel-class="prefs-panel"
     :body="false"
     initial-focus=".prefs-cats [role=tab][aria-selected=true]"
@@ -494,7 +505,7 @@ function onClassicCamera(on: boolean) {
         :tabs="categories"
         variant="bar"
         orientation="vertical"
-        label="Preference categories"
+        :label="t('prefs.categories')"
         :panels="panesId"
         class="prefs-nav prefs-cats"
         @click="revealPane"
@@ -507,24 +518,22 @@ function onClassicCamera(on: boolean) {
       <div ref="panes" class="prefs-panes">
         <!-- v-show, so a control keeps its id whichever category is open. -->
         <section v-show="category === 'appearance'" v-bind="pane('appearance')" class="prefs-pane">
-          <h3 class="prefs-pane-title" tabindex="-1">Appearance</h3>
+          <h3 class="prefs-pane-title" tabindex="-1">{{ t("prefs.tab.appearance") }}</h3>
           <div class="prefs-grid">
             <LanguageCard />
             <div class="pref-card wide">
               <div class="pref-head">
-                <label class="pref-title" for="prefs-theme">Theme</label>
+                <label class="pref-title" for="prefs-theme">{{ t("prefs.theme.title") }}</label>
                 <Select
                   id="prefs-theme"
-                  label="Theme"
+                  :label="t('prefs.theme.title')"
                   aria-describedby="prefs-theme-hint"
                   :model-value="theme"
                   :options="themeOptions"
                   @update:model-value="onTheme"
                 />
               </div>
-              <p id="prefs-theme-hint" class="pref-hint"
-                >System follows your computer's light, dark and contrast settings.</p
-              >
+              <p id="prefs-theme-hint" class="pref-hint">{{ t("prefs.theme.hint") }}</p>
               <div class="prefs-actions">
                 <input
                   ref="fileInput"
@@ -534,18 +543,18 @@ function onClassicCamera(on: boolean) {
                   accept="application/json,.json"
                   @change="onUpload"
                 />
-                <Button @click="pickThemeFile">Upload theme…</Button>
-                <Button v-if="activeIsCustom" @click="onRemoveTheme">Remove</Button>
+                <Button @click="pickThemeFile">{{ t("prefs.theme.upload") }}</Button>
+                <Button v-if="activeIsCustom" @click="onRemoveTheme">{{ t("prefs.theme.remove") }}</Button>
               </div>
               <p id="prefs-theme-error" class="pref-hint prefs-theme-error" role="alert">{{ themeError }}</p>
               <p id="prefs-theme-warning" class="pref-hint prefs-theme-warning" role="status">{{ themeWarning }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <label class="pref-title" for="prefs-iconpack">Icons</label>
+                <label class="pref-title" for="prefs-iconpack">{{ t("prefs.icons.title") }}</label>
                 <Select
                   id="prefs-iconpack"
-                  label="Icons"
+                  :label="t('prefs.icons.title')"
                   :model-value="pack"
                   :options="packOptions"
                   @update:model-value="onPack"
@@ -554,27 +563,25 @@ function onClassicCamera(on: boolean) {
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Units</span>
+                <span class="pref-title">{{ t("prefs.units.title") }}</span>
                 <Segmented
                   id="prefs-unit"
                   aria-describedby="prefs-unit-hint"
-                  label="Units"
+                  :label="t('prefs.units.title')"
                   :model-value="unit"
                   :options="UNITS"
                   @update:model-value="pickUnit"
                 />
               </div>
-              <p id="prefs-unit-hint" class="pref-hint"
-                >Geometry is always stored in millimetres, this is display only.</p
-              >
+              <p id="prefs-unit-hint" class="pref-hint">{{ t("prefs.units.hint") }}</p>
             </div>
             <div class="pref-card wide">
               <div class="pref-head">
-                <span class="pref-title">Home background</span>
+                <span class="pref-title">{{ t("prefs.homeBackground.title") }}</span>
                 <Segmented
                   id="prefs-home-background"
                   aria-describedby="prefs-home-background-hint"
-                  label="Home background"
+                  :label="t('prefs.homeBackground.title')"
                   :model-value="homeBg"
                   :options="HOME_BACKGROUND_OPTIONS"
                   @pointerdown="notePointer(true)"
@@ -582,11 +589,9 @@ function onClassicCamera(on: boolean) {
                   @update:model-value="pickHomeBackground"
                 />
               </div>
-              <p id="prefs-home-background-hint" class="pref-hint"
-                >What Home sits on. Workspace shows your model dimmed behind it.</p
-              >
+              <p id="prefs-home-background-hint" class="pref-hint">{{ t("prefs.homeBackground.hint") }}</p>
               <div v-if="homeBg === 'image'" class="prefs-actions">
-                <Button @click="homeImageInput?.click()">Choose image…</Button>
+                <Button @click="homeImageInput?.click()">{{ t("prefs.homeBackground.choose") }}</Button>
               </div>
               <input
                 ref="homeImageInput"
@@ -602,31 +607,28 @@ function onClassicCamera(on: boolean) {
         </section>
 
         <section v-show="category === 'viewport'" v-bind="pane('viewport')" class="prefs-pane">
-          <h3 class="prefs-pane-title" tabindex="-1">Viewport</h3>
+          <h3 class="prefs-pane-title" tabindex="-1">{{ t("prefs.tab.viewport") }}</h3>
           <div class="prefs-grid">
             <div class="pref-card">
               <div class="pref-head">
-                <label class="pref-title" for="prefs-environment">Reflections</label>
+                <label class="pref-title" for="prefs-environment">{{ t("prefs.reflections.title") }}</label>
                 <Select
                   id="prefs-environment"
-                  label="Reflections"
+                  :label="t('prefs.reflections.title')"
                   :model-value="render.environment"
                   :options="environmentOptions"
                   aria-describedby="prefs-environment-hint"
                   @update:model-value="onEnvironment"
                 />
               </div>
-              <p id="prefs-environment-hint" class="pref-hint">
-                A metal is almost entirely reflection, so with none it renders nearly black. Flat is the clearer way to
-                read shape.
-              </p>
+              <p id="prefs-environment-hint" class="pref-hint">{{ t("prefs.reflections.hint") }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Background</span>
+                <span class="pref-title">{{ t("prefs.background.title") }}</span>
                 <Segmented
                   id="prefs-background"
-                  label="Background"
+                  :label="t('prefs.background.title')"
                   :model-value="render.background"
                   :options="BACKGROUNDS"
                   @update:model-value="pickBackground"
@@ -637,7 +639,7 @@ function onClassicCamera(on: boolean) {
               <Slider
                 id="prefs-brightness"
                 v-range-hint="'prefs-brightness-hint'"
-                label="Environment brightness"
+                :label="t('prefs.brightness.title')"
                 unit="%"
                 show-value
                 :min="BRIGHTNESS_PCT.min"
@@ -646,32 +648,27 @@ function onClassicCamera(on: boolean) {
                 :model-value="Math.round(render.brightness * 100)"
                 @update:model-value="onBrightness"
               />
-              <p id="prefs-brightness-hint" class="pref-hint">
-                How strongly the environment lights the model and shows in its reflections, an imported HDR included.
-              </p>
+              <p id="prefs-brightness-hint" class="pref-hint">{{ t("prefs.brightness.hint") }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Tangent edges</span>
+                <span class="pref-title">{{ t("prefs.tangent.title") }}</span>
                 <Segmented
                   id="prefs-tangent-edges"
                   aria-describedby="prefs-tangent-edges-hint"
-                  label="Tangent edges"
+                  :label="t('prefs.tangent.title')"
                   :model-value="render.tangentEdges"
                   :options="TANGENT"
                   @update:model-value="pickTangent"
                 />
               </div>
-              <p id="prefs-tangent-edges-hint" class="pref-hint">
-                Where two faces meet smoothly, like the borders of a fillet, there is no corner to see, only a line
-                across one continuous surface.
-              </p>
+              <p id="prefs-tangent-edges-hint" class="pref-hint">{{ t("prefs.tangent.hint") }}</p>
             </div>
             <div class="pref-card">
               <Slider
                 id="prefs-bloom"
                 v-range-hint="'prefs-bloom-hint'"
-                label="Bloom"
+                :label="t('prefs.bloom.title')"
                 unit="%"
                 show-value
                 :min="0"
@@ -680,26 +677,21 @@ function onClassicCamera(on: boolean) {
                 :model-value="Math.round(render.bloom * 100)"
                 @update:model-value="onBloom"
               />
-              <p id="prefs-bloom-hint" class="pref-hint">
-                Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
-              </p>
+              <p id="prefs-bloom-hint" class="pref-hint">{{ t("prefs.bloom.hint") }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Path tracer</span>
+                <span class="pref-title">{{ t("prefs.tracer.title") }}</span>
                 <Segmented
                   id="prefs-tracer"
                   aria-describedby="prefs-tracer-hint"
-                  label="Path tracer"
+                  :label="t('prefs.tracer.title')"
                   :model-value="render.tracer"
                   :options="TRACERS"
                   @update:model-value="pickTracer"
                 />
               </div>
-              <p id="prefs-tracer-hint" class="pref-hint">
-                Where Path traced runs. Native traces in the app itself, WebGPU in the viewport's web view; Auto picks
-                the faster one this computer has. If the one picked is missing, the other is used.
-              </p>
+              <p id="prefs-tracer-hint" class="pref-hint">{{ t("prefs.tracer.hint") }}</p>
               <DenoiserRow hint-class="pref-hint" button-class="btn btn-md" />
             </div>
             <div class="pref-card">
@@ -709,36 +701,30 @@ function onClassicCamera(on: boolean) {
                 :model-value="performanceModeOn(render)"
                 :disabled="render.potatoMode"
                 @update:model-value="onPerformanceMode"
-                ><span class="pref-title">Performance mode</span></Checkbox
+                ><span class="pref-title">{{ t("prefs.performance.title") }}</span></Checkbox
               >
-              <p class="pref-hint">
-                Drops glass refraction, the high pixel ratio and the emitter shadows for a lighter render. Weak GPUs get
-                it automatically; turn it on if the viewport stutters or a laptop runs hot.
-              </p>
+              <p class="pref-hint">{{ t("prefs.performance.hint") }}</p>
               <Checkbox
                 id="prefs-potato-mode"
                 class="pref-head pref-sub pref-check"
-                tip="Lowest quality, for slow or virtual machines"
+                :tip="t('prefs.potato.tip')"
                 :model-value="render.potatoMode"
                 @update:model-value="onPotatoMode"
-                ><span class="pref-title">Potato mode</span></Checkbox
+                ><span class="pref-title">{{ t("prefs.potato.title") }}</span></Checkbox
               >
-              <p class="pref-hint">
-                Lowest quality, for slow or virtual machines. Flat shading, thin edges, half resolution, no glass blur
-                and no effects or camera animations. Includes performance mode.
-              </p>
+              <p class="pref-hint">{{ t("prefs.potato.hint") }}</p>
             </div>
           </div>
         </section>
 
         <section v-show="category === 'navigation'" v-bind="pane('navigation')" class="prefs-pane">
-          <h3 class="prefs-pane-title" tabindex="-1">Navigation</h3>
+          <h3 class="prefs-pane-title" tabindex="-1">{{ t("prefs.tab.navigation") }}</h3>
           <div class="prefs-grid">
             <div class="pref-card">
               <Slider
                 id="prefs-smoothing"
                 v-range-hint="'prefs-smoothing-hint'"
-                label="Smoothing"
+                :label="t('prefs.smoothing.title')"
                 unit="ms"
                 show-value
                 :min="0"
@@ -747,28 +733,21 @@ function onClassicCamera(on: boolean) {
                 :model-value="Math.round(nav.smoothTime * 1000)"
                 @update:model-value="onSmoothing"
               />
-              <p id="prefs-smoothing-hint" class="pref-hint">
-                How long a zoom or a drag takes to catch up with the hand. 0 follows the mouse exactly; whatever it is
-                set to, the point under the cursor stays under it on every frame.
-              </p>
+              <p id="prefs-smoothing-hint" class="pref-hint">{{ t("prefs.smoothing.hint") }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Orbit pivot</span>
+                <span class="pref-title">{{ t("prefs.orbitPivot.title") }}</span>
                 <Segmented
                   id="prefs-orbit-pivot"
                   aria-describedby="prefs-orbit-pivot-hint"
-                  label="Orbit pivot"
+                  :label="t('prefs.orbitPivot.title')"
                   :model-value="nav.orbitPivot"
                   :options="ORBIT_PIVOTS"
                   @update:model-value="pickOrbitPivot"
                 />
               </div>
-              <p id="prefs-orbit-pivot-hint" class="pref-hint">
-                What a drag turns the view about. Under cursor takes the model point you press on, Origin always turns
-                about the world origin, and Selection about the centre of what is selected (under the cursor while
-                nothing is). The arrow keys turn about the same point, 15° a press, 5° with Shift.
-              </p>
+              <p id="prefs-orbit-pivot-hint" class="pref-hint">{{ t("prefs.orbitPivot.hint") }}</p>
             </div>
             <div class="pref-card">
               <Checkbox
@@ -776,50 +755,37 @@ function onClassicCamera(on: boolean) {
                 class="pref-head pref-check"
                 :model-value="nav.inertia"
                 @update:model-value="onInertia"
-                ><span class="pref-title">Orbit inertia</span></Checkbox
+                ><span class="pref-title">{{ t("prefs.inertia.title") }}</span></Checkbox
               >
-              <p class="pref-hint">
-                A flicked orbit keeps turning for a moment after the button comes up, about the same point.
-              </p>
+              <p class="pref-hint">{{ t("prefs.inertia.hint") }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Scrolling</span>
+                <span class="pref-title">{{ t("prefs.scrolling.title") }}</span>
                 <Segmented
                   id="prefs-wheel-device"
                   aria-describedby="prefs-wheel-device-hint"
-                  label="Scrolling"
+                  :label="t('prefs.scrolling.title')"
                   :model-value="nav.wheelDevice"
                   :options="WHEEL_DEVICES"
                   @update:model-value="pickWheelDevice"
                 />
               </div>
-              <p id="prefs-wheel-device-hint" class="pref-hint">
-                A mouse wheel zooms and, with Ctrl held, pans up and down; a touchpad's two fingers turn or move the
-                view and a pinch zooms. Automatic tells them apart each time you scroll<template
-                  v-if="nav.wheelDevice === 'auto' && detectedWheel"
-                  >, and took the last one for a {{ detectedWheel }}</template
-                ><template v-else-if="nav.wheelDevice === 'auto'"
-                  >, and has not seen a scroll over the model yet</template
-                >. Pick one if it guesses wrong. On Mouse a pinch pans too, as Ctrl with a wheel does.
-              </p>
+              <p id="prefs-wheel-device-hint" class="pref-hint">{{ t("prefs.scrolling.hint", { seen: wheelSeen }) }}</p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <span class="pref-title">Two-finger scroll</span>
+                <span class="pref-title">{{ t("prefs.twoFinger.title") }}</span>
                 <Segmented
                   id="prefs-touchpad-scroll"
                   aria-describedby="prefs-touchpad-scroll-hint"
-                  label="Two-finger scroll"
+                  :label="t('prefs.twoFinger.title')"
                   :model-value="nav.touchpadScroll"
                   :options="TOUCHPAD_SCROLL"
                   @update:model-value="pickTouchpadScroll"
                 />
               </div>
-              <p id="prefs-touchpad-scroll-hint" class="pref-hint">
-                On a touchpad, what two fingers scrolling do to the view. Shift with the scroll does the other, and a
-                pinch zooms toward the pointer.
-              </p>
+              <p id="prefs-touchpad-scroll-hint" class="pref-hint">{{ t("prefs.twoFinger.hint") }}</p>
             </div>
             <div class="pref-card">
               <Checkbox
@@ -827,55 +793,47 @@ function onClassicCamera(on: boolean) {
                 class="pref-head pref-check"
                 :model-value="classicCamera"
                 @update:model-value="onClassicCamera"
-                ><span class="pref-title">Classic camera</span></Checkbox
+                ><span class="pref-title">{{ t("prefs.classic.title") }}</span></Checkbox
               >
-              <p class="pref-hint">
-                The camera from before this release, kept for one release in case the new one gets in your way. Takes
-                effect after a restart.
-              </p>
+              <p class="pref-hint">{{ t("prefs.classic.hint") }}</p>
             </div>
           </div>
         </section>
 
         <section v-show="category === 'access'" v-bind="pane('access')" class="prefs-pane">
-          <h3 class="prefs-pane-title" tabindex="-1">Accessibility</h3>
+          <h3 class="prefs-pane-title" tabindex="-1">{{ t("prefs.tab.access") }}</h3>
           <div class="prefs-a11y-actions">
-            <Button data-a11y-preset aria-describedby="prefs-a11y-actions-hint" @click="screenReaderPreset"
-              >Screen reader preset</Button
-            >
+            <Button data-a11y-preset aria-describedby="prefs-a11y-actions-hint" @click="screenReaderPreset">{{
+              t("prefs.access.preset")
+            }}</Button>
             <Button
               :disabled="!a11yChanged"
               data-a11y-reset
               aria-describedby="prefs-a11y-actions-hint"
               @click="onResetA11y"
-              >Reset to defaults</Button
+              >{{ t("prefs.access.reset") }}</Button
             >
             <span id="prefs-a11y-preset-status" class="prefs-a11y-status" role="status">{{ presetNote }}</span>
-            <p id="prefs-a11y-actions-hint" class="pref-hint">
-              Screen reader preset sets Announcements to Verbose and Notification time to Until dismissed, and turns
-              Single key shortcuts off and Solid panels on, the setup that suits NVDA, VoiceOver and other screen
-              readers. Reset to defaults clears every choice below, so Contrast and Animations follow the system again.
-            </p>
+            <p id="prefs-a11y-actions-hint" class="pref-hint">{{ t("prefs.access.hint") }}</p>
             <Button variant="ghost" size="sm" data-a11y-manual @click="void openExternal(ACCESSIBILITY_PAGE)">{{
               t("prefs.accessibility.manualLink")
             }}</Button>
           </div>
 
           <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-vision">
-            <h4 id="prefs-a11y-vision" class="prefs-group-title">Vision</h4>
+            <h4 id="prefs-a11y-vision" class="prefs-group-title">{{ t("prefs.group.vision") }}</h4>
             <div class="prefs-grid">
               <div class="pref-card">
                 <div class="pref-head">
-                  <span class="pref-title">Theme</span>
-                  <Button data-a11y-appearance aria-describedby="prefs-a11y-theme-hint" @click="showPane('appearance')"
-                    >Open Appearance</Button
+                  <span class="pref-title">{{ t("prefs.access.theme.title") }}</span>
+                  <Button
+                    data-a11y-appearance
+                    aria-describedby="prefs-a11y-theme-hint"
+                    @click="showPane('appearance')"
+                    >{{ t("prefs.access.theme.open") }}</Button
                   >
                 </div>
-                <p id="prefs-a11y-theme-hint" class="pref-hint">
-                  Themes are picked under Appearance. High Contrast Dark and High Contrast Light make text and edges
-                  stand out most. Colour-Blind Safe draws the axes, planes and gizmos in colours that stay easy to tell
-                  apart. FundaCAD Light and Solarized Light are light themes.
-                </p>
+                <p id="prefs-a11y-theme-hint" class="pref-hint">{{ t("prefs.access.theme.hint") }}</p>
               </div>
               <A11yContrastRows />
               <A11ySizeRows />
@@ -883,24 +841,21 @@ function onClassicCamera(on: boolean) {
           </div>
 
           <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-speech">
-            <h4 id="prefs-a11y-speech" class="prefs-group-title">Speech</h4>
+            <h4 id="prefs-a11y-speech" class="prefs-group-title">{{ t("prefs.group.speech") }}</h4>
             <div class="prefs-grid">
               <div class="pref-card wide">
                 <div class="pref-head pref-wrap">
-                  <span class="pref-title">Announcements</span>
+                  <span class="pref-title">{{ t("prefs.verbosity.title") }}</span>
                   <Segmented
                     id="prefs-verbosity"
-                    label="Announcements"
+                    :label="t('prefs.verbosity.title')"
                     aria-describedby="prefs-verbosity-hint"
                     :model-value="a11y.verbosity"
                     :options="VERBOSITY"
                     @update:model-value="pickVerbosity"
                   />
                 </div>
-                <p id="prefs-verbosity-hint" class="pref-hint">
-                  How much the app tells a screen reader: nothing, errors only, prompts and results, or every change as
-                  well.
-                </p>
+                <p id="prefs-verbosity-hint" class="pref-hint">{{ t("prefs.verbosity.hint") }}</p>
               </div>
               <div class="pref-card">
                 <Checkbox
@@ -909,23 +864,21 @@ function onClassicCamera(on: boolean) {
                   class="pref-head pref-check"
                   :model-value="a11y.unitsInFull"
                   @update:model-value="(on: boolean) => setA11yPref('unitsInFull', on)"
-                  ><span class="pref-title">Units spoken in full</span></Checkbox
+                  ><span class="pref-title">{{ t("prefs.unitsFull.title") }}</span></Checkbox
                 >
-                <p id="prefs-units-in-full-hint" class="pref-hint">
-                  Fields tell a screen reader their unit as a word, millimetres instead of mm.
-                </p>
+                <p id="prefs-units-in-full-hint" class="pref-hint">{{ t("prefs.unitsFull.hint") }}</p>
               </div>
             </div>
           </div>
 
           <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-input">
-            <h4 id="prefs-a11y-input" class="prefs-group-title">Keyboard and pointer</h4>
+            <h4 id="prefs-a11y-input" class="prefs-group-title">{{ t("prefs.group.input") }}</h4>
             <div class="prefs-grid">
               <div class="pref-card">
                 <Slider
                   id="prefs-hover-dwell"
                   v-range-hint="'prefs-hover-dwell-hint'"
-                  label="Hover delay"
+                  :label="t('prefs.hover.title')"
                   unit="ms"
                   show-value
                   :min="MIN_DWELL_MS"
@@ -934,10 +887,7 @@ function onClassicCamera(on: boolean) {
                   :model-value="dwell"
                   @update:model-value="setHoverDwellMs"
                 />
-                <p id="prefs-hover-dwell-hint" class="pref-hint">
-                  How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
-                  selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
-                </p>
+                <p id="prefs-hover-dwell-hint" class="pref-hint">{{ t("prefs.hover.hint") }}</p>
               </div>
               <NoticeTimeRow />
               <div class="pref-card">
@@ -947,27 +897,23 @@ function onClassicCamera(on: boolean) {
                   class="pref-head pref-check"
                   :model-value="a11y.singleKeys"
                   @update:model-value="(on: boolean) => setA11yPref('singleKeys', on)"
-                  ><span class="pref-title">Single key shortcuts</span></Checkbox
+                  ><span class="pref-title">{{ t("prefs.singleKeys.title") }}</span></Checkbox
                 >
-                <p id="prefs-single-keys-hint" class="pref-hint">
-                  Letter, digit and symbol keys on their own start tools and views, such as E for Extrude. Turn this off
-                  when voice control or screen reader browse mode types letters. Ctrl or Cmd chords, Escape, Delete, the
-                  F keys, the arrows and the command palette keep working.
-                </p>
+                <p id="prefs-single-keys-hint" class="pref-hint">{{ t("prefs.singleKeys.hint") }}</p>
               </div>
               <LargerTargetsRow />
             </div>
           </div>
 
           <div class="prefs-group" role="group" aria-labelledby="prefs-a11y-motion">
-            <h4 id="prefs-a11y-motion" class="prefs-group-title">Motion</h4>
+            <h4 id="prefs-a11y-motion" class="prefs-group-title">{{ t("prefs.group.motion") }}</h4>
             <div class="prefs-grid">
               <div class="pref-card">
                 <div class="pref-head">
-                  <span class="pref-title">Animations</span>
+                  <span class="pref-title">{{ t("prefs.animations.title") }}</span>
                   <Segmented
                     id="prefs-motion"
-                    label="Animations"
+                    :label="t('prefs.animations.title')"
                     aria-describedby="prefs-motion-hint"
                     :model-value="a11y.animations"
                     :options="ANIMATIONS"
@@ -975,12 +921,10 @@ function onClassicCamera(on: boolean) {
                   />
                 </div>
                 <p id="prefs-motion-hint" class="pref-hint">
-                  Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
-                  to where they end. Follow system takes Animation effects on Windows, Reduce motion on macOS or Reduce
-                  animation on GNOME, and changes the moment the system does.
-                  <template v-if="a11y.animations === 'system'"
-                    >Right now the system has animations {{ reducesMotion ? "off" : "on" }}.</template
-                  >
+                  {{ t("prefs.animations.hint") }}
+                  <template v-if="a11y.animations === 'system'">{{
+                    t("prefs.animations.systemNow", { state: motionState })
+                  }}</template>
                 </p>
               </div>
             </div>
@@ -1011,7 +955,7 @@ function onClassicCamera(on: boolean) {
     </div>
 
     <template #footer>
-      <Button variant="primary" @click="close()">Done</Button>
+      <Button variant="primary" @click="close()">{{ t("prefs.done") }}</Button>
     </template>
   </Dialog>
 </template>

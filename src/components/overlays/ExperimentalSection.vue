@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { fieldNumber, spellNumber } from "../../ui/measure";
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { t } from "../../i18n";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
 import { claimEscape } from "../../ui/escapeClaim";
@@ -59,23 +60,24 @@ onUnmounted(() => {
 });
 
 const locked = experimentalLocked();
-const LOCKED_REASON = "Safe mode keeps every limit at its default";
+const LOCKED_REASON = computed(() => t("prefs.experimental.lockedReason"));
 
 async function onReset(g: ExperimentalGroup) {
   const asked = await confirmDanger(
-    `Reset the ${g.title} limits?`,
-    "Reset",
-    `Every ${g.title} limit goes back to its default.`,
+    t("prefs.experimental.resetTitle", { group: g.title }),
+    t("prefs.experimental.resetAction"),
+    t("prefs.experimental.resetBody", { group: g.title }),
   );
   if (!asked) return;
   resetExperimentalGroup(g.id);
-  toast(`${g.title} limits are back to their defaults.`);
+  toast(t("prefs.experimental.resetDone", { group: g.title }));
 }
 
 const changed = (k: keyof ExperimentalPrefs) => prefs.value[k] !== DEFAULT_EXPERIMENTAL[k];
 const groupChanged = (g: ExperimentalGroup) => g.keys.some(changed);
 const changedId = (k: keyof ExperimentalPrefs) => `prefs-x-${k}-changed`;
-const widthLabel = (w: EnvWidth) => (w === "gpu" ? `GPU maximum (${hdrTextureMax()})` : String(w));
+const widthLabel = (w: EnvWidth) =>
+  w === "gpu" ? t("prefs.experimental.envWidth.gpu", { n: hdrTextureMax() }) : String(w);
 const widthOptions = () =>
   ENV_WIDTHS.map((w) => ({ value: w, label: widthLabel(w), attrs: { "data-env-width": String(w) } }));
 
@@ -88,66 +90,70 @@ interface Field {
   scale: number;
   hint: string;
 }
-const FIELDS: Field[] = [
+const FIELDS = computed<Field[]>(() => [
   {
     key: "sampleCap",
-    title: "Samples per pixel",
-    unit: "samples",
+    title: t("prefs.experimental.sampleCap.title"),
+    unit: t("prefs.experimental.sampleCap.unit"),
     step: 1,
     scale: 1,
-    hint: "Where Path traced stops refining. More is cleaner and takes longer.",
+    hint: t("prefs.experimental.sampleCap.hint"),
   },
   {
     key: "batterySampleCap",
-    title: "Samples on battery",
-    unit: "samples",
+    title: t("prefs.experimental.batterySampleCap.title"),
+    unit: t("prefs.experimental.batterySampleCap.unit"),
     step: 1,
     scale: 1,
-    hint: "The same, while a laptop runs on its battery.",
+    hint: t("prefs.experimental.batterySampleCap.hint"),
   },
   {
     key: "bounces",
-    title: "Bounces",
-    unit: "bounces",
+    title: t("prefs.experimental.bounces.title"),
+    unit: t("prefs.experimental.bounces.unit"),
     step: 1,
     scale: 1,
-    hint: "How many times light reflects or passes through glass, in both tracers.",
+    hint: t("prefs.experimental.bounces.hint"),
   },
   {
     key: "firefly",
-    title: "Firefly clamp",
-    unit: "luminance",
+    title: t("prefs.experimental.firefly.title"),
+    unit: t("prefs.experimental.firefly.unit"),
     step: 1,
     scale: 1,
-    hint: "How bright an indirect light sample may be before it is turned down, in the native tracer. 0 turns the clamp off, which is unbiased and speckled.",
+    hint: t("prefs.experimental.firefly.hint"),
   },
   {
     key: "traceScale",
-    title: "Trace resolution",
-    unit: "of the screen",
+    title: t("prefs.experimental.traceScale.title"),
+    unit: t("prefs.experimental.traceScale.unit"),
     step: 0.05,
     scale: 1,
-    hint: "The viewport trace against the screen's pixels, up to 1, the view's own size. Empty is Auto, 0.75 or 0.5 by the screen and the battery.",
+    hint: t("prefs.experimental.traceScale.hint"),
   },
   {
     key: "pictureMegapixels",
-    title: "Largest traced picture",
-    unit: "megapixels",
+    title: t("prefs.experimental.pictureMegapixels.title"),
+    unit: t("prefs.experimental.pictureMegapixels.unit"),
     step: 1,
     scale: 1,
-    hint: "Save picture is scaled down past this. The GPU's own buffer and texture sizes still apply.",
+    hint: t("prefs.experimental.pictureMegapixels.hint"),
   },
   {
     key: "triangleBudget",
-    title: "Most triangles traced",
-    unit: "million",
+    title: t("prefs.experimental.triangleBudget.title"),
+    unit: t("prefs.experimental.triangleBudget.unit"),
     step: 0.5,
     scale: 1e6,
-    hint: "Path traced refuses a model with more. What the GPU can bind is still checked.",
+    hint: t("prefs.experimental.triangleBudget.hint"),
   },
-];
+]);
 
-const fieldsOf = (g: ExperimentalGroup) => FIELDS.filter((f) => g.keys.includes(f.key));
+const fieldsOf = (g: ExperimentalGroup) => FIELDS.value.filter((f) => g.keys.includes(f.key));
+const defaultLine = (f: Field) =>
+  t("prefs.experimental.default", {
+    value: autoAtZero(f) ? t("prefs.experimental.auto") : spellNumber(defaultShown(f)),
+  });
 
 const shown = (f: Field) => +(prefs.value[f.key] / f.scale).toFixed(f.key === "pictureMegapixels" ? 1 : 3);
 /** Trace resolution's 0 is Auto, shown as an empty box. */
@@ -162,13 +168,11 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
 </script>
 
 <template>
-  <h3 class="prefs-pane-title" tabindex="-1">Experimental</h3>
-  <p class="pref-warning" role="note" data-experimental-warning>
-    These settings can make FundaCAD unstable or crash it. Use them at your own risk.
-  </p>
-  <p v-if="locked" class="pref-hint prefs-x-locked" role="note" data-experimental-locked>
-    Safe mode runs with every limit at its default. Restart normally to change them.
-  </p>
+  <h3 class="prefs-pane-title" tabindex="-1">{{ t("prefs.tab.experimental") }}</h3>
+  <p class="pref-warning" role="note" data-experimental-warning>{{ t("prefs.experimental.warning") }}</p>
+  <p v-if="locked" class="pref-hint prefs-x-locked" role="note" data-experimental-locked>{{
+    t("prefs.experimental.locked")
+  }}</p>
   <div
     v-for="g in EXPERIMENTAL_GROUPS"
     :key="g.id"
@@ -186,21 +190,21 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
         :aria-describedby="`prefs-x-group-${g.id}`"
         :data-experimental-reset="g.id"
         @click="onReset(g)"
-        >Reset to defaults</Button
+        >{{ t("prefs.experimental.reset") }}</Button
       >
     </div>
     <div class="prefs-grid">
       <div v-if="g.keys.includes('envWidth')" class="pref-card wide">
         <div class="pref-head">
           <span class="pref-title-row">
-            <span class="pref-title">HDR environment size</span>
-            <Chip v-if="changed('envWidth')" :id="changedId('envWidth')" variant="accent" data-experimental-changed
-              >Changed</Chip
-            >
+            <span class="pref-title">{{ t("prefs.experimental.envWidth.title") }}</span>
+            <Chip v-if="changed('envWidth')" :id="changedId('envWidth')" variant="accent" data-experimental-changed>{{
+              t("prefs.experimental.changed")
+            }}</Chip>
           </span>
           <Segmented
             id="prefs-env-width"
-            label="HDR environment size"
+            :label="t('prefs.experimental.envWidth.title')"
             :model-value="prefs.envWidth"
             :options="widthOptions()"
             :disabled="locked"
@@ -209,16 +213,15 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
             @update:model-value="pickWidth"
           />
         </div>
-        <p class="pref-hint">
-          The width an imported HDR is kept at, for lighting and inside saved documents; the lighting reads half of it.
-          Larger needs more memory and makes documents bigger. Applies to the next import. Default 2048.
-        </p>
+        <p class="pref-hint">{{ t("prefs.experimental.envWidth.hint") }}</p>
       </div>
       <div v-for="f in fieldsOf(g)" :key="f.key" class="pref-card">
         <div class="pref-head">
           <span class="pref-title-row">
             <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
-            <Chip v-if="changed(f.key)" :id="changedId(f.key)" variant="accent" data-experimental-changed>Changed</Chip>
+            <Chip v-if="changed(f.key)" :id="changedId(f.key)" variant="accent" data-experimental-changed>{{
+              t("prefs.experimental.changed")
+            }}</Chip>
           </span>
           <span
             class="pref-number"
@@ -235,7 +238,7 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
               :max="max(f)"
               :step="f.step"
               :nullable="autoAtZero(f)"
-              :placeholder="autoAtZero(f) ? 'Auto' : undefined"
+              :placeholder="autoAtZero(f) ? t('prefs.experimental.auto') : undefined"
               :caption="f.unit"
               :width-ch="9"
               :disabled="locked"
@@ -246,7 +249,7 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
             />
           </span>
         </div>
-        <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : spellNumber(defaultShown(f)) }}. </p>
+        <p class="pref-hint"> {{ f.hint }} {{ defaultLine(f) }} </p>
       </div>
     </div>
   </div>

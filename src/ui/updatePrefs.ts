@@ -1,14 +1,30 @@
 // Whether the app checks for updates by itself, how often, and when it last did. Help > Check for Updates ignores all
 // of it.
 
+import { t } from "../i18n";
 import { readSetting } from "./storedSetting";
 
 export type UpdatePeriod = "launch" | "daily" | "weekly";
 
-export const UPDATE_PERIODS: readonly { id: UpdatePeriod; label: string }[] = [
-  { id: "launch", label: "Every launch" },
-  { id: "daily", label: "Daily" },
-  { id: "weekly", label: "Weekly" },
+export const UPDATE_PERIODS: readonly { readonly id: UpdatePeriod; readonly label: string }[] = [
+  {
+    id: "launch",
+    get label() {
+      return t("prefs.updates.period.launch");
+    },
+  },
+  {
+    id: "daily",
+    get label() {
+      return t("prefs.updates.period.daily");
+    },
+  },
+  {
+    id: "weekly",
+    get label() {
+      return t("prefs.updates.period.weekly");
+    },
+  },
 ];
 
 export const PERIOD_MS: Record<UpdatePeriod, number> = {
