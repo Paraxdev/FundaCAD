@@ -2082,9 +2082,12 @@ jobs:
         run: |
           find target src-tauri/target -path '*/deps/*' -type f -mtime +7 -delete 2>/dev/null || true
           # From cargo 1.100 each unit builds in build/<pkg>/<hash>, its out/ holding build script output that a
-          # fresh fingerprint still vouches for, so only a whole unit untouched for a week goes.
+          # fresh fingerprint still vouches for, so only a whole unit neither written nor read for a week goes. A
+          # fresh unit is never written again, so read times keep a dependency every run links.
           for unit in target/*/build/*/*/ src-tauri/target/*/build/*/*/; do
-            if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" -mtime -7 -print -quit)" ]; then rm -rf "$unit"; fi
+            if [ -d "$unit/fingerprint" ] && [ -z "$(find "$unit" \( -mtime -7 -o -atime -7 \) -print -quit)" ]; then
+              rm -rf "$unit"
+            fi
           done
           find target src-tauri/target -path '*/incremental/*' -mtime +7 -delete 2>/dev/null || true
           df -h . | tail -n 1
