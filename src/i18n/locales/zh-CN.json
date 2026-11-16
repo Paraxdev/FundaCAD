@@ -375,6 +375,7 @@
   "prefs.language.hint": "机器翻译的语言读起来可能不太自然。您可以用自己的文件更正任何一行。",
   "prefs.language.inUse": "{n, plural, =0 {您的文件没有行在使用。} other {您的文件有 # 行在使用。}}",
   "prefs.language.load": "加载文件…",
+  "prefs.language.machineYours": "{name} ({machine}，您的文件)",
   "prefs.language.more": "{n, plural, other {另有 # 行}}",
   "prefs.language.open": "打开文件夹",
   "prefs.language.reload": "重新加载",

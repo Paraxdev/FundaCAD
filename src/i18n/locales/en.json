@@ -375,6 +375,7 @@
   "prefs.language.hint": "Machine translated languages may read oddly. Your own file can correct any line.",
   "prefs.language.inUse": "{n, plural, =0 {No line of your file is in use.} one {# line of your file is in use.} other {# lines of your file are in use.}}",
   "prefs.language.load": "Load file…",
+  "prefs.language.machineYours": "{name} ({machine}, your file)",
   "prefs.language.more": "{n, plural, one {and # more line} other {and # more lines}}",
   "prefs.language.open": "Open folder",
   "prefs.language.reload": "Reload",
