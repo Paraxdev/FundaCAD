@@ -21,6 +21,7 @@ import {
 import type { DropInFileError } from "../../i18n/catalog";
 import { MAX_LINE_CHARS, MAX_OVERRIDE_BYTES, shownKey } from "../../i18n/overrides";
 import { safeMode } from "../../ui/safeMode";
+import { LANGUAGE_PAGE, openExternal } from "../../ui/welcome";
 
 const SHOWN_SKIPS = 5;
 
@@ -110,6 +111,12 @@ async function reload() {
       />
     </div>
     <p v-if="machine" id="prefs-language-hint" class="pref-hint">{{ t("prefs.language.hint") }}</p>
+    <p v-if="machine" class="pref-hint prefs-language-parts">
+      {{ t("prefs.language.parts") }}
+      <Button variant="ghost" size="sm" class="prefs-language-parts-link" @click="void openExternal(LANGUAGE_PAGE)">{{
+        t("prefs.language.partsLink")
+      }}</Button>
+    </p>
     <div v-if="source === 'folder' || locked" class="prefs-actions">
       <Button
         class="prefs-language-open"

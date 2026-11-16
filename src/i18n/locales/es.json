@@ -378,6 +378,8 @@
   "prefs.language.machineYours": "{name} ({machine}, su archivo)",
   "prefs.language.more": "{n, plural, one {y # línea más} other {y # líneas más}}",
   "prefs.language.open": "Abrir carpeta",
+  "prefs.language.parts": "Por ahora solo se han traducido algunas partes.",
+  "prefs.language.partsLink": "Ver cuáles en el manual",
   "prefs.language.reload": "Recargar",
   "prefs.language.remove": "Quitar sus líneas",
   "prefs.language.safeMode": "El modo seguro no lee sus archivos de idioma.",

@@ -378,6 +378,8 @@
   "prefs.language.machineYours": "{name} ({machine}, Ihre Datei)",
   "prefs.language.more": "{n, plural, one {und # weitere Zeile} other {und # weitere Zeilen}}",
   "prefs.language.open": "Ordner öffnen",
+  "prefs.language.parts": "Bisher ist nur ein Teil übersetzt.",
+  "prefs.language.partsLink": "Im Handbuch nachlesen, welche",
   "prefs.language.reload": "Neu laden",
   "prefs.language.remove": "Ihre Zeilen entfernen",
   "prefs.language.safeMode": "Im abgesicherten Modus werden Ihre Sprachdateien nicht gelesen.",

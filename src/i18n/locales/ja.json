@@ -378,6 +378,8 @@
   "prefs.language.machineYours": "{name} ({machine}、独自のファイル)",
   "prefs.language.more": "{n, plural, other {ほか # 行}}",
   "prefs.language.open": "フォルダーを開く",
+  "prefs.language.parts": "今のところ、翻訳されているのは一部だけです。",
+  "prefs.language.partsLink": "翻訳済みの部分をマニュアルで確認する",
   "prefs.language.reload": "再読み込み",
   "prefs.language.remove": "独自の行を削除",
   "prefs.language.safeMode": "セーフモードでは独自の言語ファイルを読み込みません。",
