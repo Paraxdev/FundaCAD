@@ -2,7 +2,7 @@
 // wins. Any advisory with a reason lights the chip, not a list of codes, so a new engine advisory shows at once.
 
 import { featureTypeOwner } from "../document/missingPlugins";
-import { blendFitsUpTo } from "../features/edgeDragMath";
+import { blendFitsArgs } from "../features/edgeDragMath";
 import { t } from "../i18n";
 
 /** Structural, so a test or a cached partial build need not construct a whole RebuildResult. */
@@ -36,9 +36,8 @@ export function featureNotes(src: NoteSources): Map<string, string> {
 // The advisories the app words itself, so their note follows the chosen language. Any other shows the engine's reason.
 function advisoryNote(code: string | undefined, reason: string): string {
   if (code === "blendOverrun") {
-    const size = blendFitsUpTo(reason);
     const kind = /mm the chamfer runs past/i.test(reason) ? "chamfer" : "fillet";
-    return t("feature.note.blendOverrun", { kind, fits: size ? "yes" : "no", size: size ?? "" });
+    return t("feature.note.blendOverrun", { kind, ...blendFitsArgs(reason) });
   }
   return reason;
 }

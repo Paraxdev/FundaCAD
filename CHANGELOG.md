@@ -615,6 +615,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **The size a refused chamfer offers builds.** A two distance chamfer that did not fit
+  offered only its first distance, and that size was refused again, a chamfer dragged
+  too large could offer a size the finished chamfer refused, and some chamfers offered
+  a size another corner refused. The offer now names both distances a two distance
+  chamfer takes, and every offered size builds.
+
 - **An Interference check no longer shows up in the next document.** A check
   still running when you opened another document reopened the panel there with
   the old pairs. Its result is now dropped.

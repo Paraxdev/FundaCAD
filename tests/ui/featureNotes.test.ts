@@ -154,6 +154,14 @@ describe("an oversize blend's note", () => {
     );
   });
 
+  it("names the second distance a two distance chamfer that rests on both takes", () => {
+    const pair = " A chamfer that rests on both fits up to 3.99mm with distance 2 at 9.97mm.";
+    expect(note(reason("chamfer", pair)).get("e3")).toBe(
+      "The chamfer runs past a face beside its edge, so it cuts that corner off instead of resting on both faces. " +
+        "One that rests on both fits up to 3.99 mm with distance 2 at 9.97 mm.",
+    );
+  });
+
   it("reads the kind from the engine's sentence, not from a body named Chamfer", () => {
     expect(note(reason("fillet").replace("body1", "Chamfer")).get("e3")).toMatch(/^The fillet runs past/);
   });
