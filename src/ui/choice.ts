@@ -1,6 +1,7 @@
 // Small one-shot modal chooser, resolves to the picked value or null on Esc or a backdrop click. Facade over
 // stores/modals.ts. A second chooser queues behind the first instead of stacking two key traps.
 
+import { t } from "../i18n";
 import { useModalStore, type ChoiceOption } from "../stores/modals";
 
 export type { ChoiceOption };
@@ -59,7 +60,7 @@ export async function confirmDanger(
   const answer = await choose(
     title,
     [
-      { value: "cancel", label: "Cancel" },
+      { value: "cancel", label: t("common.cancel") },
       { value: "go", label: action, danger: true },
     ],
     signal,

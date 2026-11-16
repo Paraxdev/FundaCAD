@@ -78,7 +78,7 @@ function tauriWindow(theme: string | Error): WindowHandlers {
       },
     }),
   }));
-  vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+  vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, addEventListener: () => {} });
   return handlers;
 }
 
@@ -154,7 +154,7 @@ describe("following the OS", () => {
         },
       }),
     }));
-    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, addEventListener: () => {} });
     const { theme, changes } = await boot({});
     await vi.waitFor(() => expect(theme.resolvedTheme()).toBe("fundacad-light"));
     expect(changes).toHaveBeenCalledTimes(1);

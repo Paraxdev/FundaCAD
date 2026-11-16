@@ -48,6 +48,7 @@ import {
   saveEnvironmentAs,
 } from "../../ui/environmentImport";
 import type { EnvEntry } from "../../ui/environmentLibrary";
+import { t } from "../../i18n";
 import { onHdrRegistered } from "../../viewport/hdrRegistry";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
 import { formatTurn } from "../../viewport/rotateDial";
@@ -60,11 +61,12 @@ const engine = useEngine();
 const prefs = ref({ ...renderPrefs() });
 const ws = ref(workspace());
 const ground = computed(() => prefs.value[groundKey(ws.value)]);
-const GROUND_CHOICES: readonly { id: Ground; label: string }[] = [
-  { id: "none", label: "None" },
-  { id: "shadow", label: "Shadow catcher" },
-];
-const QUALITY_LABELS: Record<RealtimeQualityPref, string> = { auto: "Auto", standard: "Standard", high: "High" };
+const GROUND_CHOICES = computed<readonly { id: Ground; label: string }[]>(() => [
+  { id: "none", label: t("render.ground.none") },
+  { id: "shadow", label: t("render.ground.shadow") },
+]);
+const qualityLabel = (q: RealtimeQualityPref) =>
+  q === "auto" ? t("render.quality.auto") : q === "high" ? t("render.quality.high") : t("render.quality.standard");
 // Dev builds only until High looks different from Standard.
 const showQuality = import.meta.env.DEV;
 const highReason = ref<string | null>(highRefusal(engine.viewport.qualityTier()));
@@ -132,7 +134,7 @@ const fail = (err: unknown) => {
 };
 
 const importFile = async (file: File) => {
-  notice.value = `Reading ${file.name}...`;
+  notice.value = t("render.reading", { name: file.name });
   let note: string | null = null;
   const refused = await importEnvironmentFile(engine.store, file, { onNote: (n) => (note = n) });
   notice.value = refused ?? note;
@@ -178,18 +180,18 @@ const finishNaming = async () => {
     fail(err);
   }
 };
-const saveName = () => (hdrLabel.value ?? "My environment").replace(/\.(hdr|exr)$/i, "");
+const saveName = () => (hdrLabel.value ?? t("render.myEnvironment")).replace(/\.(hdr|exr)$/i, "");
 const removeSaved = async (entry: EnvEntry, then?: () => void) => {
   const ok = await confirmDanger(
-    `Delete ${entry.name}?`,
-    "Delete",
-    "This saved environment is deleted from this computer.",
+    t("render.delete.title", { name: entry.name }),
+    t("render.delete.action"),
+    t("render.delete.body"),
   );
   if (!ok) return;
   then?.();
   try {
     await deleteSavedEnvironment(entry.id);
-    toast(`Deleted the environment ${entry.name}.`);
+    toast(t("render.delete.done", { name: entry.name }));
   } catch (err) {
     fail(err);
   }
@@ -198,7 +200,7 @@ const removeSaved = async (entry: EnvEntry, then?: () => void) => {
 type SavedItem = { value: string; label: string; entry: EnvEntry | null };
 const savedItems = computed<SavedItem[]>(() => [
   ...(hdrHash.value && !activeSaved.value
-    ? [{ value: "hdr", label: hdrLabel.value ?? "Imported HDR", entry: null }]
+    ? [{ value: "hdr", label: hdrLabel.value ?? t("render.hdr.imported"), entry: null }]
     : []),
   ...saved.value.map((s) => ({ value: `saved:${s.id}`, label: s.name, entry: s })),
 ]);
@@ -224,12 +226,12 @@ const toggleBehind = () => {
   setRenderPref("envBackground", !prefs.value.envBackground);
 };
 
-const BACKGROUNDS: { id: Background; label: string }[] = [
-  { id: "theme", label: "Theme" },
-  { id: "dark", label: "Dark" },
-  { id: "grey", label: "Mid grey" },
-  { id: "light", label: "Light" },
-];
+const BACKGROUNDS = computed<{ id: Background; label: string }[]>(() => [
+  { id: "theme", label: t("prefs.background.theme") },
+  { id: "dark", label: t("prefs.background.dark") },
+  { id: "grey", label: t("render.background.grey") },
+  { id: "light", label: t("prefs.background.light") },
+]);
 
 const pickEnv = (id: Environment) => {
   chooseBuiltInEnvironment(engine.store, id);
@@ -238,16 +240,16 @@ const STUDIO_ITEMS = computed(() => ENVIRONMENTS_LIST.map((e) => ({ value: e.id,
 const studioValue = computed(
   () => STUDIO_ITEMS.value.find((it) => it.value === prefs.value.environment)?.value ?? null,
 );
-const DENOISES: { id: Denoise; label: string }[] = [
-  { id: "off", label: "Off" },
-  { id: "standard", label: "Standard" },
-  { id: "high", label: "High quality" },
-];
-const TRACERS: { id: TracerPref; label: string }[] = [
-  { id: "auto", label: "Auto" },
-  { id: "native", label: "Native" },
-  { id: "webgpu", label: "WebGPU" },
-];
+const DENOISES = computed<{ id: Denoise; label: string }[]>(() => [
+  { id: "off", label: t("render.denoise.off") },
+  { id: "standard", label: t("render.denoise.standard") },
+  { id: "high", label: t("render.denoise.high") },
+]);
+const TRACERS = computed<{ id: TracerPref; label: string }[]>(() => [
+  { id: "auto", label: t("prefs.tracer.auto") },
+  { id: "native", label: t("prefs.tracer.native") },
+  { id: "webgpu", label: t("prefs.tracer.webgpu") },
+]);
 const aimKey = () => {
   const tool = engine.tools.lightAim;
   if (tool.active) {
@@ -267,16 +269,26 @@ const resetKey = () => {
   setRenderPref("keyElevation", DEFAULT_KEY.elevation);
 };
 
-const BACKDROP_CHOICES = BACKGROUNDS.map((b) => ({ value: b.id, label: b.label, attrs: { "data-background": b.id } }));
-const FLOOR_CHOICES = GROUND_CHOICES.map((g) => ({ value: g.id, label: g.label, attrs: { "data-ground": g.id } }));
-const DENOISE_CHOICES = DENOISES.map((d) => ({ value: d.id, label: d.label, attrs: { "data-denoise": d.id } }));
-const TRACER_CHOICES = TRACERS.map((t) => ({ value: t.id, label: t.label, attrs: { "data-tracer": t.id } }));
+const BACKDROP_CHOICES = computed(() =>
+  BACKGROUNDS.value.map((b) => ({ value: b.id, label: b.label, attrs: { "data-background": b.id } })),
+);
+const FLOOR_CHOICES = computed(() =>
+  GROUND_CHOICES.value.map((g) => ({ value: g.id, label: g.label, attrs: { "data-ground": g.id } })),
+);
+const DENOISE_CHOICES = computed(() =>
+  DENOISES.value.map((d) => ({ value: d.id, label: d.label, attrs: { "data-denoise": d.id } })),
+);
+const TRACER_CHOICES = computed(() =>
+  TRACERS.value.map((c) => ({ value: c.id, label: c.label, attrs: { "data-tracer": c.id } })),
+);
+const evText = (value: number) =>
+  t("render.exposure.value", { value: `${value > 0 ? "+" : ""}${spellFixed(value, 2)}` });
 const qualityChoices = computed(() =>
   REALTIME_QUALITY_PREFS.map((q) => {
     const refused = q === "high" ? highReason.value : null;
     return {
       value: q,
-      label: QUALITY_LABELS[q],
+      label: qualityLabel(q),
       disabled: refused !== null,
       tip: refused ?? undefined,
       attrs: { "data-realtime-quality": q },
@@ -288,10 +300,10 @@ const qualityChoices = computed(() =>
 <template>
   <div class="rd-scroll">
     <section class="rd-section">
-      <h3 class="rd-head">Studio</h3>
+      <h3 class="rd-head">{{ t("render.studio.title") }}</h3>
       <Listbox
         class="rd-grid"
-        label="Environment"
+        :label="t('render.environment.label')"
         :items="STUDIO_ITEMS"
         :model-value="studioValue"
         @update:model-value="(v) => typeof v === 'string' && pickEnv(v)"
@@ -302,7 +314,7 @@ const qualityChoices = computed(() =>
             v-bind="attrs"
             class="rd-tile"
             :class="{ 'is-selected': selected }"
-            :aria-label="`${e.label}, ${e.note}`"
+            :aria-label="t('render.studio.tile', { label: e.label, note: e.note })"
             :aria-describedby="`${howtoId}-studio`"
             :data-environment="e.id"
             :title="e.note"
@@ -314,19 +326,16 @@ const qualityChoices = computed(() =>
           </button>
         </template>
       </Listbox>
-      <span :id="`${howtoId}-studio`" class="sr-only">Space or Enter lights the model with it.</span>
-      <p class="sm-hint">
-        Every one of these is built in the renderer out of a few lit panels, so none of them is a file to download. A
-        metal is almost entirely reflection, which is why the choice changes so much.
-      </p>
+      <span :id="`${howtoId}-studio`" class="sr-only">{{ t("render.studio.howto") }}</span>
+      <p class="sm-hint">{{ t("render.studio.hint") }}</p>
     </section>
 
     <section class="rd-section" data-env-custom>
-      <h3 class="rd-head">Your environments</h3>
+      <h3 class="rd-head">{{ t("render.custom.title") }}</h3>
       <Listbox
         v-if="savedItems.length"
         class="rd-grid"
-        label="Saved environments"
+        :label="t('render.saved.label')"
         :items="savedItems"
         :model-value="savedValue"
         @update:model-value="pickSavedValue"
@@ -351,7 +360,7 @@ const qualityChoices = computed(() =>
             v-else
             v-bind="attrs"
             class="rd-tile is-selected"
-            :aria-label="`${label}, imported, not saved yet`"
+            :aria-label="t('render.saved.importedAria', { name: label })"
             data-environment="hdr"
             :title="label"
           >
@@ -361,30 +370,28 @@ const qualityChoices = computed(() =>
               :style="hdrPicture ? thumbStyle(hdrPicture) : undefined"
             ></span>
             <span class="rd-tile-name">{{ label }}</span>
-            <span class="rd-sub">Imported, not saved yet</span>
+            <span class="rd-sub">{{ t("render.saved.imported") }}</span>
           </button>
         </template>
       </Listbox>
-      <span :id="`${howtoId}-saved`" class="sr-only"
-        >Space or Enter lights the model with it, F2 renames it, Delete removes it.</span
-      >
-      <div class="rd-chips" role="group" aria-label="Your environments">
-        <Button size="sm" data-env-import @click="fileInput?.click()">Import HDR...</Button>
-        <Button size="sm" data-env-save @click="startNaming(null, saveName())">Save as...</Button>
+      <span :id="`${howtoId}-saved`" class="sr-only">{{ t("render.saved.howto") }}</span>
+      <div class="rd-chips" role="group" :aria-label="t('render.custom.title')">
+        <Button size="sm" data-env-import @click="fileInput?.click()">{{ t("render.import") }}</Button>
+        <Button size="sm" data-env-save @click="startNaming(null, saveName())">{{ t("render.saveAs") }}</Button>
         <template v-if="activeEntry">
           <Button
             size="sm"
-            :aria-label="`Rename ${activeEntry.name}`"
+            :aria-label="t('render.rename.aria', { name: activeEntry.name })"
             :data-rename="activeEntry.name"
             @click="startNaming(activeEntry.id, activeEntry.name)"
-            >Rename</Button
+            >{{ t("render.rename.action") }}</Button
           >
           <Button
             size="sm"
-            :aria-label="`Delete ${activeEntry.name}`"
+            :aria-label="t('render.delete.aria', { name: activeEntry.name })"
             :data-delete="activeEntry.name"
             @click="void removeSaved(activeEntry)"
-            >Delete</Button
+            >{{ t("render.delete.action") }}</Button
           >
         </template>
         <input ref="fileInput" type="file" accept=".hdr,.exr" hidden data-env-file @change="onFilePicked" />
@@ -396,7 +403,7 @@ const qualityChoices = computed(() =>
         class="rd-name"
         size="sm"
         select-on-focus
-        :label="naming.id ? 'Environment name' : 'Name for this environment'"
+        :label="naming.id ? t('render.name.rename') : t('render.name.new')"
         maxlength="60"
         data-env-name
         @keydown.enter.prevent="onNameEnter"
@@ -408,7 +415,7 @@ const qualityChoices = computed(() =>
         <Slider
           id="rd-env-rotation"
           class="prefs-row"
-          label="Rotation"
+          :label="t('render.rotation')"
           :min="-180"
           :max="180"
           :step="5"
@@ -420,34 +427,31 @@ const qualityChoices = computed(() =>
         <Slider
           id="rd-env-exposure"
           class="prefs-row"
-          label="Exposure"
+          :label="t('render.exposure')"
           :min="MIN_EXPOSURE"
           :max="MAX_EXPOSURE"
           :step="0.25"
           :model-value="prefs.envExposure"
           @update:model-value="setRenderPref('envExposure', $event)"
         >
-          <template #value="{ value }">{{ value > 0 ? "+" : "" }}{{ spellFixed(value, 2) }} EV</template>
+          <template #value="{ value }">{{ evText(value) }}</template>
         </Slider>
-        <div class="rd-chips" role="group" aria-label="Panorama behind the model">
+        <div class="rd-chips" role="group" :aria-label="t('render.behind.group')">
           <Button size="sm" data-env-behind :pressed="prefs.envBackground" @click="toggleBehind">{{
-            prefs.envBackground ? "Shown behind the model" : "Backdrop colour behind"
+            prefs.envBackground ? t("render.behind.shown") : t("render.behind.colour")
           }}</Button>
         </div>
-        <div class="sm-hint">Exposure evens out how bright the file itself is, in stops.</div>
+        <div class="sm-hint">{{ t("render.exposure.hint") }}</div>
       </template>
-      <p class="sm-hint">
-        Import an .hdr or .exr panorama, or drop one on the window. Save as keeps the whole look under a name. A
-        document lit by one of these carries it, so it opens with the same light elsewhere.
-      </p>
+      <p class="sm-hint">{{ t("render.custom.hint") }}</p>
     </section>
 
     <section class="rd-section" data-env-brightness>
-      <h3 class="rd-head">Environment brightness</h3>
+      <h3 class="rd-head">{{ t("prefs.brightness.title") }}</h3>
       <Slider
         id="rd-brightness"
         class="prefs-row"
-        label="Amount"
+        :label="t('render.amount')"
         :min="MIN_BRIGHTNESS"
         :max="MAX_BRIGHTNESS"
         :step="0.05"
@@ -456,50 +460,45 @@ const qualityChoices = computed(() =>
       >
         <template #value="{ value }">{{ spellFixed(value, 2) }}x</template>
       </Slider>
-      <div class="sm-hint">
-        How strongly the environment lights the model and shows in its reflections, an imported HDR included.
-      </div>
+      <div class="sm-hint">{{ t("prefs.brightness.hint") }}</div>
     </section>
 
     <section class="rd-section" data-ground>
-      <h3 class="rd-head">Backdrop and floor</h3>
+      <h3 class="rd-head">{{ t("render.ground.title") }}</h3>
       <div class="prefs-row rd-chip-row">
-        <span class="prefs-label">Backdrop</span>
+        <span class="prefs-label">{{ t("render.backdrop") }}</span>
         <Segmented
           class="rd-chips"
           variant="chips"
           size="sm"
-          label="Backdrop colour"
+          :label="t('render.backdrop.label')"
           :options="BACKDROP_CHOICES"
           :model-value="prefs.background"
           @update:model-value="setRenderPref('background', $event)"
         />
       </div>
       <div class="prefs-row rd-chip-row">
-        <span class="prefs-label">Floor</span>
+        <span class="prefs-label">{{ t("render.floor") }}</span>
         <Segmented
           class="rd-chips"
           variant="chips"
           size="sm"
-          label="Floor under the model"
+          :label="t('render.floor.label')"
           :options="FLOOR_CHOICES"
           :model-value="ground"
           @update:model-value="setRenderPref(groundKey(ws), $event)"
         />
       </div>
-      <div class="sm-hint">
-        The colour behind the model, and an invisible floor under it that shows only the model's shadow. The floor is
-        off on the lightweight render.
-      </div>
+      <div class="sm-hint">{{ t("render.ground.hint") }}</div>
     </section>
 
     <section v-if="showQuality" class="rd-section">
-      <h3 class="rd-head">Realtime quality</h3>
+      <h3 class="rd-head">{{ t("render.quality.title") }}</h3>
       <Segmented
         class="rd-chips"
         variant="chips"
         size="sm"
-        label="Realtime quality"
+        :label="t('render.quality.title')"
         :options="qualityChoices"
         :model-value="prefs.realtimeQuality"
         @update:model-value="setRenderPref('realtimeQuality', $event)"
@@ -507,30 +506,34 @@ const qualityChoices = computed(() =>
     </section>
 
     <section class="rd-section" data-key-light-section>
-      <h3 class="rd-head">Key light</h3>
+      <h3 class="rd-head">{{ t("render.keyLight.title") }}</h3>
       <template v-if="hdrHash">
-        <div class="sm-hint" data-key-light="hdr">
-          An imported HDR lights the scene on its own, with no key light added. Pick a built in room to aim one.
-        </div>
+        <div class="sm-hint" data-key-light="hdr">{{ t("render.keyLight.hdr") }}</div>
       </template>
       <template v-else>
-        <div class="rd-chips" role="group" aria-label="Key light">
-          <Button size="sm" data-key-light="aim" :pressed="aiming" @click="aimKey">Aim</Button>
-          <Button size="sm" data-key-light="reset" @click="resetKey">Reset</Button>
+        <div class="rd-chips" role="group" :aria-label="t('render.keyLight.title')">
+          <Button size="sm" data-key-light="aim" :pressed="aiming" @click="aimKey">{{
+            t("render.keyLight.aim")
+          }}</Button>
+          <Button size="sm" data-key-light="reset" @click="resetKey">{{ t("render.keyLight.reset") }}</Button>
         </div>
         <div class="sm-hint" data-key-light="angles">
-          From {{ formatTurn(prefs.keyAzimuth) }} round, {{ formatTurn(prefs.keyElevation) }} up. Aim drags a sun on the
-          model to swing the light that casts the shadows.
+          {{
+            t("render.keyLight.angles", {
+              azimuth: formatTurn(prefs.keyAzimuth),
+              elevation: formatTurn(prefs.keyElevation),
+            })
+          }}
         </div>
       </template>
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Bloom</h3>
+      <h3 class="rd-head">{{ t("prefs.bloom.title") }}</h3>
       <Slider
         id="rd-bloom"
         class="prefs-row"
-        label="Amount"
+        :label="t('render.amount')"
         :min="0"
         :max="1"
         :step="0.05"
@@ -538,89 +541,74 @@ const qualityChoices = computed(() =>
         :data-bloom="prefs.bloom"
         @update:model-value="setRenderPref('bloom', $event)"
       />
-      <div class="sm-hint">
-        Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
-      </div>
+      <div class="sm-hint">{{ t("prefs.bloom.hint") }}</div>
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Shadows</h3>
+      <h3 class="rd-head">{{ t("render.shadows.title") }}</h3>
       <Checkbox
         class="rd-check"
         data-shadows="mode"
-        label="Cast shadows"
+        :label="t('render.shadows.cast')"
         :model-value="prefs.shadows"
         @update:model-value="setRenderPref('shadows', $event)"
       />
-      <div class="sm-hint">
-        Ground every part with a real cast shadow from the key light, not just the soft light an emissive part throws.
-        Off on the lightweight render{{ hdrHash ? ", and with an imported HDR, which has no key light" : "" }}.
-      </div>
+      <div class="sm-hint">{{ hdrHash ? t("render.shadows.hintHdr") : t("render.shadows.hint") }}</div>
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Denoise</h3>
+      <h3 class="rd-head">{{ t("render.denoise.title") }}</h3>
       <Segmented
         class="rd-chips"
         variant="chips"
         size="sm"
-        label="Denoise"
+        :label="t('render.denoise.title')"
         :options="DENOISE_CHOICES"
         :model-value="prefs.denoise"
         @update:model-value="setRenderPref('denoise', $event)"
       />
-      <div class="sm-hint">
-        Path traced cleans the grain out of the finished picture. High quality takes a few seconds longer.
-      </div>
+      <div class="sm-hint">{{ t("render.denoise.hint") }}</div>
       <DenoiserRow hint-class="sm-hint" size="sm" />
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Tracer</h3>
+      <h3 class="rd-head">{{ t("render.tracer.title") }}</h3>
       <Segmented
         class="rd-chips"
         variant="chips"
         size="sm"
-        label="Path tracer"
+        :label="t('prefs.tracer.title')"
         :options="TRACER_CHOICES"
         :model-value="prefs.tracer"
         @update:model-value="setRenderPref('tracer', $event)"
       />
-      <div class="sm-hint">
-        Where Path traced runs: in the app itself or in the web view. Auto picks the faster one this computer has.
-      </div>
+      <div class="sm-hint">{{ t("render.tracer.hint") }}</div>
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Performance</h3>
+      <h3 class="rd-head">{{ t("render.performance.title") }}</h3>
       <Checkbox
         class="rd-check"
         data-perf="mode"
-        label="Performance mode"
+        :label="t('prefs.performance.title')"
         :model-value="performanceModeOn(prefs)"
         :disabled="prefs.potatoMode"
-        disabled-reason="Potato mode includes performance mode"
+        :disabled-reason="t('render.performance.potatoReason')"
         @update:model-value="setRenderPref('performanceMode', $event)"
       />
-      <div class="sm-hint">
-        Drop the heavy effects, glass refraction, a high pixel ratio and the extra emitter lights, for a lighter render.
-        On automatically on a weak GPU; turn it on by hand if the viewport stutters or a laptop runs hot.
-      </div>
+      <div class="sm-hint">{{ t("render.performance.hint") }}</div>
     </section>
 
-    <section class="rd-section" title="Lowest quality, for slow or virtual machines">
-      <h3 class="rd-head">Potato mode</h3>
+    <section class="rd-section" :title="t('prefs.potato.tip')">
+      <h3 class="rd-head">{{ t("prefs.potato.title") }}</h3>
       <Checkbox
         class="rd-check"
         data-potato="mode"
-        label="Potato mode"
+        :label="t('prefs.potato.title')"
         :model-value="prefs.potatoMode"
         @update:model-value="setRenderPref('potatoMode', $event)"
       />
-      <div class="sm-hint">
-        Lowest quality, for slow or virtual machines. Flat shading, thin edges, half resolution, no glass blur and no
-        effects or camera animations. Includes performance mode.
-      </div>
+      <div class="sm-hint">{{ t("prefs.potato.hint") }}</div>
     </section>
     <RenderSections tab="environment" />
   </div>

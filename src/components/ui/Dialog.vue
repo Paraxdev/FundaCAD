@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, onUnmounted, useId, useTemplateRef } from "vue";
 import Icon from "../shell/Icon.vue";
 import { inertOthers, useModalGate } from "../../composables/useModalGate";
+import { t } from "../../i18n";
 import { useModalStore } from "../../stores/modals";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { focusables, focusReturn } from "./focusables";
@@ -125,7 +126,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             <slot name="title">{{ title }}</slot>
           </h2>
           <!-- The e2e scripts click .modal-close to dismiss Home and dialogs. -->
-          <button type="button" class="modal-close" aria-label="Close" title="Close" @click="emit('close')">
+          <button
+            type="button"
+            class="modal-close"
+            :aria-label="t('common.close')"
+            :title="t('common.close')"
+            @click="emit('close')"
+          >
             <Icon name="close" :size="15" />
           </button>
         </div>
