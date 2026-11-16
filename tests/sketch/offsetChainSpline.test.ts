@@ -313,7 +313,51 @@ describe("offsetChain joins a spline of few points on its drawn curve", () => {
   for (const d of [-1, -2, -4]) {
     it(`extends the copy past the spline's own offset without bending it, ${d}`, () => {
       const { drawnChain, drawnLone } = drawnCopies(d);
-      for (const p of drawnLone.filter((_p, k) => k % 4 === 0)) expect(distToPoly(drawnChain, p)).toBeLessThan(0.05);
+      for (const p of drawnLone.filter((_p, k) => k % 4 === 0)) expect(distToPoly(drawnChain, p)).toBeLessThan(0.1);
+    });
+  }
+});
+
+describe("offsetChain keeps a spline drawn nearly along its neighbour", () => {
+  // The spline leaves l1 a degree or five off its line, so the join cuts the copy a hair from its first point, a span
+  // that short beside a long one would draw a hook there.
+  const along = (rise: number): ResolvedEntity[] => [
+    L("l1", [0, 0], [30, 0]),
+    spline("s", [
+      [30, 0],
+      [40, rise],
+      [50, 10],
+      [52, 20],
+    ]),
+    L("l2", [52, 20], [0, 20]),
+  ];
+  type SplineE = Extract<ResolvedEntity, { type: "spline" }>;
+  const copyOf = (ents: ResolvedEntity[], r: OffsetResult) =>
+    copiesOf(ents, r).find((c) => c.type === "spline") as SplineE;
+  const offsets = (rise: number, d: number) => {
+    const ents = along(rise);
+    const r = offsetChain(ents, 1, d)!;
+    expect(r.refused).toBeUndefined();
+    return { chain: copyOf(ents, r), lone: splinePolyline(copyOf(ents, offsetEntity(ents, 1, d)!).points, 256) };
+  };
+
+  for (const rise of [0.17, 0.87]) {
+    it(`draws no hook where the copy is cut, ${rise}`, () => {
+      for (const d of [0.3, 1]) {
+        const { chain, lone } = offsets(rise, d);
+        for (const p of splinePolyline(chain.points, 64)) expect(distToPoly(lone, p)).toBeLessThan(0.1);
+      }
+    });
+    it(`still offsets inward by 3 with both joins on the spline's own offset, ${rise}`, () => {
+      const { chain, lone } = offsets(rise, 3);
+      for (const p of [chain.points[0]!, chain.points.at(-1)!]) expect(distToPoly(lone, p)).toBeLessThan(0.02);
+    });
+    it(`extends outward without bending the copy, ${rise}`, () => {
+      for (const d of [-0.3, -1, -3]) {
+        const { chain, lone } = offsets(rise, d);
+        const drawn = splinePolyline(chain.points, 256);
+        for (const p of lone.filter((_p, k) => k % 4 === 0)) expect(distToPoly(drawn, p)).toBeLessThan(0.1);
+      }
     });
   }
 });

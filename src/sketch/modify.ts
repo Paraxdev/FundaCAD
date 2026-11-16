@@ -610,13 +610,23 @@ function arcFromEnds(
   return ccw ? arcFromSpan(C, R, aS, delta, src) : arcFromSpan(C, R, aE, delta, src);
 }
 
-/** An offset polyline after its neighbours cut or extend it; null when the cuts overlap or leave under two points. */
+/** An offset polyline after its neighbours cut or extend it; null when the cuts overlap or leave under two points.
+ *  A plain spline's cut that lands within a twentieth of a span of the next point takes that point's place, since a
+ *  span that short beside a long one makes the drawn curve overshoot into a hook at the join. Above that, dropping the
+ *  point bends the copy more than the short span does. */
 function trimmedPoly(o: PolyOff): THREE.Vector2[] | null {
   const n = o.pts.length;
   if (o.from && o.to && o.from.s >= o.to.s - 1e-9) return null;
   const mid = o.pts.filter((_p, j) => (o.from ? j > o.from.s : j > 0) && (o.to ? j < o.to.s : j < n - 1));
   const all = [o.from?.p ?? o.pts[0]!, ...mid, o.to?.p ?? o.pts[n - 1]!];
   const out = all.filter((p, k) => k === 0 || p.distanceTo(all[k - 1]!) > 1e-9);
+  if (o.through) {
+    const near = (cut: THREE.Vector2, pt: THREE.Vector2, next: THREE.Vector2) =>
+      cut.distanceTo(pt) < 0.05 * pt.distanceTo(next);
+    if (out.length > 3 && near(out[0]!, out[1]!, out[2]!)) out.splice(1, 1);
+    const m = out.length;
+    if (m > 3 && near(out[m - 1]!, out[m - 2]!, out[m - 3]!)) out.splice(m - 2, 1);
+  }
   return out.length >= 2 ? out : null;
 }
 
