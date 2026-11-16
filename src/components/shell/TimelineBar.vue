@@ -7,7 +7,7 @@ import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { pickedFeatureCount, useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
-import { featureMeta, stepEnglish, stepName } from "../../ui/featureMeta";
+import { featureMeta, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
@@ -56,7 +56,6 @@ const features = useDocValue((doc) =>
       type: f.type,
       name: (f as { name?: string }).name ?? "",
       shown: stepName(f as Parameters<typeof stepName>[0]),
-      english: stepEnglish(f as Parameters<typeof stepEnglish>[0]),
       hasCondition: activeWhen !== undefined,
       inactive: activeWhen === 0,
     };
