@@ -6,7 +6,7 @@ import type { FacePlanePick } from "./facePlanePick";
 export type MirrorPlanePick =
   | { kind: "base"; plane: Plane3 }
   | { kind: "datum"; id: string; def: PlaneDef }
-  | { kind: "face"; face: FacePlanePick };
+  | { kind: "face"; face: FacePlanePick; name?: string };
 
 export function basePlaneDef(p: Plane3): PlaneDef {
   const sp = new SketchPlane(p);

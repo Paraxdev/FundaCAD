@@ -461,6 +461,18 @@ describe("Items rows", () => {
     expect(r.log.selected).toEqual(["body3"]);
   });
 
+  it("names the face the list gave in the plane row, and a face without a name by its kind alone", () => {
+    const r = rig();
+    r.tool.start(["body3"], r.done);
+    expect(row({ kind: "face", faceId: 23, name: "Flat face 6" }).route).toBe("taken");
+    expect(summary()!.values).toEqual(["1 body", "Flat face 6"]);
+    expect(row({ kind: "face", faceId: 14 }).route).toBe("taken");
+    expect(summary()!.values).toEqual(["1 body", "Flat face"]);
+    expect(row({ kind: "face", faceId: 14, name: "Flat face 3" }).route).toBe("taken");
+    expect(row({ kind: "basePlane", plane: "XZ" }).route).toBe("taken");
+    expect(summary()!.values).toEqual(["1 body", "XZ plane"]);
+  });
+
   it("ready with focus on a Geometry row, the prompt says F6 leads to the Enter that mirrors", () => {
     const r = rig();
     const list = document.createElement("div");

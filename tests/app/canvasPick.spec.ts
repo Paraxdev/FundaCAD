@@ -56,6 +56,7 @@ function key(k: string, init: KeyboardEventInit & { altGraph?: boolean } = {}, t
 }
 
 const face = (faceId: number) => ({ kind: "face", faceId });
+const listed = (faceId: number) => ({ ...face(faceId), name: `Flat face ${faceId + 1}` });
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -707,7 +708,7 @@ describe("a tool waiting for a pick", () => {
     vi.mocked(announce).mockClear();
     const ev = key("Enter");
     expect(ev.defaultPrevented).toBe(true);
-    expect(r.taken).toEqual([face(1)]);
+    expect(r.taken).toEqual([listed(1)]);
     expect(r.viewport.applyPicks).not.toHaveBeenCalled();
     expect(r.list.litRow).toBeNull();
     expect(r.list.cursor).toBe("f:body1:1");
@@ -723,7 +724,7 @@ describe("a tool waiting for a pick", () => {
     const r = await waiting();
     key("[");
     expect(key(" ").defaultPrevented).toBe(true);
-    expect(r.taken).toEqual([face(2)]);
+    expect(r.taken).toEqual([listed(2)]);
     expect(r.list.litRow).toBeNull();
   });
 
@@ -732,7 +733,7 @@ describe("a tool waiting for a pick", () => {
     key("]");
     expect(key(k).defaultPrevented).toBe(true);
     for (let i = 0; i < 3; i++) expect(key(k, { repeat: true }).defaultPrevented).toBe(true);
-    expect(r.taken).toEqual([face(0)]);
+    expect(r.taken).toEqual([listed(0)]);
     expect(r.heard).toEqual([]);
     key(k);
     expect(r.heard).toEqual([k]);
@@ -758,7 +759,7 @@ describe("a tool waiting for a pick", () => {
     expect(r.heard).toEqual([]);
     expect(key("Enter").defaultPrevented).toBe(false);
     expect(r.heard).toEqual(["Enter"]);
-    expect(r.taken).toEqual([face(0)]);
+    expect(r.taken).toEqual([listed(0)]);
   });
 
   it("with no light the tool's own Enter is heard from the start", async () => {
@@ -853,7 +854,7 @@ describe("a tool waiting for a pick", () => {
     it("Enter on the body with single key shortcuts on offers the row", async () => {
       const r = await litUnder(() => {});
       key("Enter", {}, document.body);
-      expect(r.taken).toEqual([face(0)]);
+      expect(r.taken).toEqual([listed(0)]);
     });
 
     it("a tool that takes no rows keeps the keys down", async () => {

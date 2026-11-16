@@ -315,7 +315,7 @@ export function createGeometryBrowser(e: GeometryBrowserHost) {
     if (row.kind === "plane") return planePickOf(row);
     if (row.kind !== "edge") {
       const ref = refOf(row);
-      return ref?.kind === "face" ? { kind: "face", faceId: ref.faceId } : null;
+      return ref?.kind === "face" ? { kind: "face", faceId: ref.faceId, name: describePick(row.facts).label } : null;
     }
     const body = lastResult?.bodies?.find((b) => b.id === row.bodyId);
     const edge = edgeRefs.get(row.index);
