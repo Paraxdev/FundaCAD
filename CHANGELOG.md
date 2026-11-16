@@ -610,6 +610,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **The Capsule holder's threads no longer ask you to check their seams.** Every helical
+  cut that had to be cut in pieces showed a note to check the seams, even where the cut
+  is whole. A cut that two different ways of splitting agree on is now quiet, and one
+  that nothing confirmed still shows the note.
+
 - **An Interference check no longer shows up in the next document.** A check
   still running when you opened another document reopened the panel there with
   the old pairs. Its result is now dropped.

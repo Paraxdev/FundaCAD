@@ -113,6 +113,14 @@ fn a_slicing_the_kernel_refuses_does_not_hide_one_that_ran() {
 }
 
 #[test]
+fn only_a_cut_a_second_slicing_agreed_with_is_confirmed() {
+    let confirmed = |attempts| run(attempts).0.map(|c| (c.doubtful, c.confirmed));
+    assert_eq!(confirmed(vec![taking(30.0), taking(30.0)]), Some((false, true)));
+    assert_eq!(confirmed(vec![vec![body()], taking(30.0), vec![body()]]), Some((false, false)));
+    assert_eq!(confirmed(vec![taking(30.0), taking(45.0)]), Some((true, false)));
+}
+
+#[test]
 fn a_tool_is_sliced_across_the_axis_asked_for() {
     let tool = kernel::make_box(5.0, 3.0, 9.0).unwrap();
     let across = |rank| {

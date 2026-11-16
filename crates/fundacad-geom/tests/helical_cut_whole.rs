@@ -73,6 +73,10 @@ fn warned(r: &Rebuild) -> Vec<Value> {
     r.diagnostics.iter().filter(|d| d["code"] == "partialCut").cloned().collect()
 }
 
+fn fell_back(r: &Rebuild) -> Vec<Value> {
+    r.diagnostics.iter().filter(|d| d["code"] == "booleanFallback").cloned().collect()
+}
+
 /// What the helical cut left on a body beyond the per-turn reference, in mm3.
 fn left_uncut(name: &str, body: &str) -> f64 {
     let doc = fixture(name);
@@ -102,6 +106,8 @@ fn a_helical_cut_wider_than_tall_stays_whole_and_unwarned() {
     let doc = fixture("d20");
     let built = build(&doc);
     assert_eq!(warned(&built), Vec::<Value>::new());
+    // A cut two slicings agree on is whole, so the example as it opens shows no fallback to check.
+    assert_eq!(fell_back(&built), Vec::<Value>::new());
     let left = left_uncut("d20", "Cap");
     assert!(left.abs() < 1.0, "{left:.2} mm3 left uncut");
     for body in ["Cap", "Tube"] {
