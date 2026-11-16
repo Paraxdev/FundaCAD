@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { setLanguage } from "../../src/i18n";
-import { BOOLEAN_COMMANDS, BOOLEAN_LABEL } from "../../src/features/booleanOps";
+import { BOOLEAN_COMMANDS, BOOLEAN_LABEL, booleanEnglish } from "../../src/features/booleanOps";
 import { MATERIAL_PRESETS } from "../../src/features/filamentEstimate";
 import { curvedFaceRow } from "../../src/features/facePlanePick";
 import { describeAxis } from "../../src/features/patternAxis";
@@ -58,16 +58,17 @@ describe("tool lines in German", () => {
     expect(ghostName(0)).toBe("ausgeblendet");
     expect(BOOLEAN_COMMANDS.map((c) => c.label)).toContain("Vereinigen");
     expect(BOOLEAN_LABEL.union).toBe("Vereinigen");
+    expect(booleanEnglish("union")).toBe("Union");
     expect(MATERIAL_PRESETS.find((m) => m.id === "nylon")!.label).toBe("Nylon");
   });
 
-  it("names the datum made from a mirror face in German", () => {
+  it("writes the datum made from a mirror face in English, since a document holds no translated text", () => {
     let n = 0;
     const out = mirrorFeatures(() => `n${++n}`, ["b1"], {
       kind: "face",
       face: { def: { origin: [0, 0, 0], normal: [0, 0, 1], xDir: [1, 0, 0] }, selector: { kind: "face" } } as never,
     });
-    expect((out[0] as { name?: string }).name).toBe("Spiegelebene");
+    expect((out[0] as { name?: string }).name).toBe("Mirror plane");
   });
 });
 

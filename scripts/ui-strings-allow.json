@@ -181,6 +181,7 @@
   { "path": "src/features/featureStarters.ts", "kind": "script", "count": 131, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/holeStandards.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/holeTool.ts", "kind": "script", "count": 12, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "src/features/mirrorMath.ts", "kind": "script", "count": 1, "reason": "the name written into the document for a datum made from a mirror face, documents hold no translated text" },
   { "path": "src/features/pressPullAxis.ts", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/pressPullTool.ts", "kind": "script", "count": 22, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "src/features/profileChip.ts", "kind": "script", "count": 9, "reason": "raw text before localisation, a codemod lane converts it" },

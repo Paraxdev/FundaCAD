@@ -17,7 +17,7 @@ import {
   planeThroughPoints,
   unit,
 } from "./planeMath";
-import { BOOLEAN_LABEL, type BooleanOp } from "./booleanOps";
+import { booleanEnglish, type BooleanOp } from "./booleanOps";
 import type { ExtrudeTool } from "./extrudeTool";
 import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
@@ -866,7 +866,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
     if (bodies.length < 2) {
-      setStatus(`${BOOLEAN_LABEL[op]} needs two bodies`, "");
+      setStatus(`${booleanEnglish(op)} needs two bodies`, "");
       return;
     }
     const pre = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
@@ -877,7 +877,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
 
-    const verb = BOOLEAN_LABEL[op].toLowerCase();
+    const verb = booleanEnglish(op).toLowerCase();
     // Asked even with one candidate left, so the gesture is the same whatever the body count and one click never
     // removes a body.
     const withTarget = (target: string) => {

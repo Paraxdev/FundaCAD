@@ -14,7 +14,7 @@ import { useContextMenuStore } from "../stores/contextMenu";
 import { isInspectorEditable } from "../document/numFields";
 import { allCommands } from "./commands";
 import { featureEnglish } from "./featureMeta";
-import { BOOLEAN_COMMANDS } from "../features/booleanOps";
+import { BOOLEAN_COMMANDS, booleanEnglish } from "../features/booleanOps";
 import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
 import { t } from "../i18n";
 import type { Feature, PlaneDef } from "../types";
@@ -327,7 +327,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Chamfer…", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => handleAction("chamfer")) },
       // All three booleans, not one dialog entry, so a right-clicked body is one click from the boolean you want.
       ...BOOLEAN_COMMANDS.map((c) => ({
-        label: `${c.label} with…`,
+        label: `${booleanEnglish(c.op)} with…`,
         shortcut: keyHint(c.action),
         onClick: unlessBusy(() => handleAction(c.action)),
       })),
