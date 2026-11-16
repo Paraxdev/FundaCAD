@@ -31,6 +31,7 @@ function fakeEngine(): Engine {
     store: { canUndo: false, canRedo: false },
     viewport: { getSelectedFaceIds: () => [] },
     starters: { startFillet: () => {} },
+    tools: { extrude: { active: false }, pressPull: { active: false } },
     selectedFeature: null,
     lastAction: null,
     ui: {},
