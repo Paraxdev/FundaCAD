@@ -67,7 +67,7 @@ describe("a menu command or a sketch tool key and a waiting pick", () => {
       viewport: { getSelectedBodies: () => [] },
       starters: { startSketch: vi.fn() },
       setStatus: vi.fn(),
-      tools: { section: { picking: false } },
+      tools: { section: { picking: false }, extrude: { active: false }, pressPull: { active: false } },
       lastAction: null,
     }) as unknown as Engine;
 
