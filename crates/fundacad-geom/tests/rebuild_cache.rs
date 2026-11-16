@@ -301,10 +301,12 @@ fn only_a_build_this_process_made_is_held_and_a_disk_resume_stays_in_ram() {
     assert!(reopened.held(&base).is_none(), "a checkpoint on disk is not held");
     warm(&mut reopened, &base);
     assert_eq!(reopened.stats.source, Source::Disk);
+    assert_eq!(reopened.stats.sketches_rebuilt, 2, "a checkpoint keeps no sketches");
     assert_eq!(reopened.held(&base).map(|b| b.len()), Some(2));
     let (got, replayed) = warm(&mut reopened, &base);
     assert_eq!(reopened.stats.source, Source::Ram, "read the checkpoint back again");
     assert!(replayed.is_empty(), "replayed {replayed:?}");
+    assert_eq!(reopened.stats.sketches_rebuilt, 0, "built the sketches the disk resume built again");
     assert_eq!(got, cold(&base));
 }
 

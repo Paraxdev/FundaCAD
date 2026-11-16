@@ -15,7 +15,7 @@ use fundacad_core::CadDocument;
 use fundacad_protocol::MeshResult;
 use serde_json::{json, Map, Value};
 
-use crate::builder::{self, Cancelled, Rebuild, Snapshot, State, Tap, Watch};
+use crate::builder::{self, Cancelled, Rebuild, SketchEntry, Snapshot, State, Tap, Watch};
 use crate::import::blobstore::{self, BlobStore};
 use crate::mesh::{self, MeshBody};
 use checkpoint::{Modified, Persist};
@@ -45,6 +45,8 @@ pub struct CacheStats {
     /// The slowest replayed feature, as its index and time.
     pub slowest: Option<(usize, Duration)>,
     pub mesh_time: Duration,
+    /// Sketches the resume built again because its snapshot came from disk without them.
+    pub sketches_rebuilt: usize,
 }
 
 pub struct RebuildCache {
@@ -76,9 +78,14 @@ struct CacheTap<'a> {
     replayed: Vec<usize>,
     slowest: Option<(usize, Duration)>,
     persist: Option<Persist<'a>>,
+    sketches: Option<HashMap<String, SketchEntry>>,
 }
 
 impl Tap for CacheTap<'_> {
+    fn sketches_rebuilt(&mut self, sketches: &HashMap<String, SketchEntry>) {
+        self.sketches = Some(sketches.clone());
+    }
+
     fn after_feature(&mut self, index: usize, state: &State<'_>, elapsed: Duration) {
         self.replayed.push(index);
         if self.slowest.is_none_or(|(_, t)| elapsed > t) {
@@ -285,6 +292,7 @@ impl RebuildCache {
                 written: 0,
                 last_saved: None,
             }),
+            sketches: None,
         };
         let built = builder::rebuild_from(doc, raw, watch, resume, &mut tap);
         let elapsed = began.elapsed();
@@ -320,8 +328,15 @@ impl RebuildCache {
             ring.push(Some(snap));
         }
         ring.resize_with(n, || None);
-        if let Some((at, snap)) = restored {
+        let sketches = tap.sketches.take();
+        let sketches_rebuilt = sketches.as_ref().map_or(0, HashMap::len);
+        if let Some((at, mut snap)) = restored {
             if let Some(slot @ None) = at.checked_sub(1).and_then(|i| ring.get_mut(i)) {
+                // Building a 2,000 line sketch again took 0.5 s of every later resume from this slot.
+                if let Some(sketches) = sketches {
+                    snap.sketches = sketches;
+                    snap.replay_sketches = false;
+                }
                 *slot = Some(snap);
             }
         }
@@ -359,6 +374,7 @@ impl RebuildCache {
             copy,
             replay: elapsed,
             slowest,
+            sketches_rebuilt,
             ..CacheStats::default()
         };
         Ok(r)
