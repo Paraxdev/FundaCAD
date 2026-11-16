@@ -77,7 +77,7 @@ beforeEach(() => {
   Object.assign(h, { events: [], toasts: [], answers: [], found: true, downgrade: false, stable: false });
   Object.assign(h, { build: null, checks: [] });
   h.checkFails = false;
-  vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+  vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, addEventListener: () => {} });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 afterEach(() => {

@@ -50,11 +50,11 @@ onUnmounted(() => {
   for (const stop of stops) stop();
 });
 
-const LIVE_OPTIONS = [
-  { value: "off", label: "Do not share" },
-  { value: "read", label: "Share, read only" },
-  { value: "edit", label: "Share, and allow edits" },
-];
+const LIVE_OPTIONS = computed(() => [
+  { value: "off", label: t("prefs.mcp.live.off") },
+  { value: "read", label: t("prefs.mcp.live.read") },
+  { value: "edit", label: t("prefs.mcp.live.edit") },
+]);
 const hostOptions = computed(() => MCP_HOSTS.map((h) => ({ value: h.id, label: h.label })));
 
 function onLive(id: string) {
@@ -82,25 +82,27 @@ const setup = computed(() => (server.value ? mcpSetupFor(host.value, server.valu
 
 const status = computed(() => {
   if (!mcpOn.value) return t("prefs.mcp.statusOff");
-  if (live.value === "off") return "Not shared. An assistant works on a copy of its own.";
+  if (live.value === "off") return t("prefs.mcp.statusNotShared");
   const guests = state.value.guests;
-  if (!state.value.sharing || guests.length === 0) return "Shared, no assistant is connected.";
-  const who = guests.length === 1 ? guests[0] : `${guests.length} assistants`;
-  return live.value === "edit" ? `${who} is connected and can edit.` : `${who} is connected, read only.`;
+  if (!state.value.sharing || guests.length === 0) return t("prefs.mcp.statusNoGuest");
+  const mode = live.value === "edit" ? "edit" : "read";
+  return guests.length === 1
+    ? t("prefs.mcp.statusOne", { name: guests[0]!, mode })
+    : t("prefs.mcp.statusMany", { n: guests.length, mode });
 });
 
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text);
-    toast("Copied.");
+    toast(t("prefs.mcp.copied"));
   } catch {
-    toast("Could not copy. Select the text and copy it.", { kind: "error" });
+    toast(t("prefs.mcp.copyFailed"), { kind: "error" });
   }
 }
 </script>
 
 <template>
-  <div class="sm-section">AI assistants (MCP)</div>
+  <div class="sm-section">{{ t("prefs.mcp.title") }}</div>
   <div v-if="mcpSwitchShown()" class="pref-card">
     <Checkbox
       id="prefs-mcp-on"
@@ -114,10 +116,10 @@ async function copy(text: string) {
     <p id="prefs-mcp-on-hint" class="pref-hint">{{ t("prefs.mcp.onHint") }}</p>
   </div>
   <label class="prefs-row">
-    <span class="prefs-label">Live document</span>
+    <span class="prefs-label">{{ t("prefs.mcp.live") }}</span>
     <Select
       id="prefs-live"
-      label="Live document"
+      :label="t('prefs.mcp.live')"
       :model-value="live"
       :options="LIVE_OPTIONS"
       :disabled="!mcpOn"
@@ -125,25 +127,22 @@ async function copy(text: string) {
       @update:model-value="onLive"
     />
   </label>
-  <div class="sm-hint">
-    An assistant works on the open document rather than on a copy. Each edit is one undo, and the title bar says who is
-    connected.
-  </div>
+  <div class="sm-hint">{{ t("prefs.mcp.liveHint") }}</div>
   <div class="prefs-row">
-    <span class="prefs-label">Status</span>
+    <span class="prefs-label">{{ t("prefs.mcp.status") }}</span>
     <span id="prefs-mcp-status" class="mcp-status" :class="{ on: state.sharing && state.guests.length > 0 }">
       {{ status }}
     </span>
   </div>
 
-  <div class="sm-section">How to connect it</div>
+  <div class="sm-section">{{ t("prefs.mcp.how") }}</div>
   <div v-if="unavailable" id="prefs-mcp-unavailable" class="sm-hint">{{ unavailable }}</div>
   <template v-else-if="setup">
     <label class="prefs-row">
-      <span class="prefs-label">Assistant</span>
+      <span class="prefs-label">{{ t("prefs.mcp.assistant") }}</span>
       <Select
         id="prefs-mcp-host"
-        label="Assistant"
+        :label="t('prefs.mcp.assistant')"
         :model-value="host"
         :options="hostOptions"
         @update:model-value="onHost"
@@ -152,12 +151,9 @@ async function copy(text: string) {
     <div class="mcp-setup">
       <div class="sm-hint">{{ setup.hint }}</div>
       <pre id="prefs-mcp-config" class="mcp-config">{{ setup.text }}</pre>
-      <Button id="prefs-mcp-copy" @click="copy(setup.text)">Copy</Button>
+      <Button id="prefs-mcp-copy" @click="copy(setup.text)">{{ t("prefs.mcp.copy") }}</Button>
     </div>
-    <div id="prefs-mcp-scope" class="sm-hint">
-      It reads and writes files in your folders, never in hidden folders, in your home folder itself or at a drive root.
-      To keep it to some folders only, add --allow-path and a folder after --mcp, once per folder.
-    </div>
+    <div id="prefs-mcp-scope" class="sm-hint">{{ t("prefs.mcp.scope") }}</div>
   </template>
-  <div v-else class="sm-hint">Looking for the MCP server…</div>
+  <div v-else class="sm-hint">{{ t("prefs.mcp.looking") }}</div>
 </template>

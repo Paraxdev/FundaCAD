@@ -1,6 +1,7 @@
 // The What's new card on Home after an update, fed by the release notes bundled at build time.
 
 import { getRecentFiles } from "../io/recentFiles";
+import { t } from "../i18n";
 import { RELEASE_TAG } from "../plugins";
 import { useWhatsNewStore } from "../stores/whatsNew";
 import { toast } from "./toast";
@@ -124,5 +125,6 @@ export async function startWhatsNew(home: WhatsNewHome, dev: boolean = import.me
   if (decision === "nothing") return;
   if (decision === "record") return writeSeen(hash);
   useWhatsNewStore().show(await appVersion(), notes, () => writeSeen(hash));
-  if (!home.isOpen()) toast("FundaCAD was updated.", { action: { label: "What's new", onClick: () => home.open() } });
+  if (!home.isOpen())
+    toast(t("whatsNew.updated"), { action: { label: t("whatsNew.open"), onClick: () => home.open() } });
 }

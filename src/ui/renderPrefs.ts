@@ -1,6 +1,7 @@
 // How the viewport is lit and what it is drawn against. Sanitised per field, so a garbage `background` does not cost
 // the lighting. No Three import: this is what the user asked for, not part of the renderer.
 
+import { t } from "../i18n";
 import { readSetting } from "./storedSetting";
 import { DEFAULT_KEY } from "../viewport/keyLight";
 import { DEFAULT_OVERLAYS, asOverlays, type OverlayState } from "../viewport/overlayKinds";
@@ -27,44 +28,68 @@ export function hdrHashOf(env: EnvironmentChoice): string | null {
  *  would cost six PMREM passes to open a tab. */
 export const ENVIRONMENTS_LIST: readonly {
   id: Environment;
-  label: string;
-  note: string;
+  readonly label: string;
+  readonly note: string;
   swatch: string;
 }[] = [
   {
     id: "studio",
-    label: "Studio",
-    note: "Neutral room, even light",
+    get label() {
+      return t("prefs.env.studio");
+    },
+    get note() {
+      return t("prefs.env.studio.note");
+    },
     swatch: "radial-gradient(circle at 35% 28%, #f4f6f8 0%, #9aa3ad 45%, #3d4249 100%)",
   },
   {
     id: "softbox",
-    label: "Soft box",
-    note: "One big light, product shot",
+    get label() {
+      return t("prefs.env.softbox");
+    },
+    get note() {
+      return t("prefs.env.softbox.note");
+    },
     swatch: "radial-gradient(circle at 28% 22%, #ffffff 0%, #7d858e 38%, #14171b 100%)",
   },
   {
     id: "warm",
-    label: "Warm key",
-    note: "Warm light, cool shade",
+    get label() {
+      return t("prefs.env.warm");
+    },
+    get note() {
+      return t("prefs.env.warm.note");
+    },
     swatch: "radial-gradient(circle at 68% 26%, #ffd9a0 0%, #b98a55 42%, #2b3550 100%)",
   },
   {
     id: "dusk",
-    label: "Dusk",
-    note: "Dark, with a bright rim",
+    get label() {
+      return t("prefs.env.dusk");
+    },
+    get note() {
+      return t("prefs.env.dusk.note");
+    },
     swatch: "radial-gradient(circle at 50% 86%, #d8e8ff 0%, #2a3550 26%, #0a0c12 70%)",
   },
   {
     id: "bright",
-    label: "Bright room",
-    note: "High key, white walls",
+    get label() {
+      return t("prefs.env.bright");
+    },
+    get note() {
+      return t("prefs.env.bright.note");
+    },
     swatch: "radial-gradient(circle at 45% 30%, #ffffff 0%, #e6eaef 55%, #b9c0c8 100%)",
   },
   {
     id: "none",
-    label: "Flat",
-    note: "No reflections, easiest to read",
+    get label() {
+      return t("prefs.env.flat");
+    },
+    get note() {
+      return t("prefs.env.flat.note");
+    },
     swatch: "linear-gradient(160deg, #6a727b 0%, #4a5058 100%)",
   },
 ];

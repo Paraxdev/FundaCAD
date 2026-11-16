@@ -1,6 +1,7 @@
 // Limits the app keeps for stability, raisable from Preferences, Experimental. The defaults are the limits as they
 // always were, so nothing changes for someone who never opens the tab.
 
+import { t } from "../i18n";
 import { readSetting } from "./storedSetting";
 import { safeMode } from "./safeMode";
 
@@ -51,18 +52,32 @@ export type ExperimentalGroupId = "pathTraced" | "environment" | "modelSize";
 
 export interface ExperimentalGroup {
   id: ExperimentalGroupId;
-  title: string;
+  readonly title: string;
   keys: readonly (keyof ExperimentalPrefs)[];
 }
 
 export const EXPERIMENTAL_GROUPS: readonly ExperimentalGroup[] = [
   {
     id: "pathTraced",
-    title: "Path traced",
+    get title() {
+      return t("prefs.experimental.group.pathTraced");
+    },
     keys: ["sampleCap", "batterySampleCap", "bounces", "firefly", "traceScale", "pictureMegapixels"],
   },
-  { id: "environment", title: "Environment", keys: ["envWidth"] },
-  { id: "modelSize", title: "Model size", keys: ["triangleBudget"] },
+  {
+    id: "environment",
+    get title() {
+      return t("prefs.experimental.group.environment");
+    },
+    keys: ["envWidth"],
+  },
+  {
+    id: "modelSize",
+    get title() {
+      return t("prefs.experimental.group.modelSize");
+    },
+    keys: ["triangleBudget"],
+  },
 ];
 
 const KEY = "fundacad.experimental";

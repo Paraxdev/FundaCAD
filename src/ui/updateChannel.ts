@@ -2,15 +2,31 @@
 // endpoint of the next check. Development is FundaCAD Dev, a separate install, so it is never stored here.
 
 import { productName } from "../app/channel";
+import { t } from "../i18n";
 import { REPO_URL } from "./reportText";
 import { readSetting } from "./storedSetting";
 
 export type UpdateChannel = "stable" | "beta" | "development";
 
-export const UPDATE_CHANNELS: readonly { id: UpdateChannel; label: string }[] = [
-  { id: "stable", label: "Stable" },
-  { id: "beta", label: "Beta" },
-  { id: "development", label: "Development" },
+export const UPDATE_CHANNELS: readonly { readonly id: UpdateChannel; readonly label: string }[] = [
+  {
+    id: "stable",
+    get label() {
+      return t("prefs.updates.channel.stable");
+    },
+  },
+  {
+    id: "beta",
+    get label() {
+      return t("prefs.updates.channel.beta");
+    },
+  },
+  {
+    id: "development",
+    get label() {
+      return t("prefs.updates.channel.development");
+    },
+  },
 ];
 
 const CHANNEL_KEY = "fundacad.updates.channel";
@@ -30,7 +46,7 @@ export function channelAction(build: UpdateChannel, picked: UpdateChannel): "swi
 }
 
 export function besideTitle(picked: UpdateChannel): string {
-  return `Install ${productName(picked)} beside this app`;
+  return t("prefs.updates.channel.besideTitle", { name: productName(picked) });
 }
 
 /** No stable release has a tag of its own yet, so Stable opens the latest. */
@@ -43,9 +59,10 @@ export function channelOptions(
   seen: boolean,
 ): { value: UpdateChannel; label: string; hint?: string; disabled?: boolean }[] {
   return UPDATE_CHANNELS.map(({ id, label }) => {
-    if (id === "stable" && !seen) return { value: id, label, hint: "No stable release yet", disabled: true };
+    if (id === "stable" && !seen)
+      return { value: id, label, hint: t("prefs.updates.channel.noStable"), disabled: true };
     if (channelAction(build, id) === "beside")
-      return { value: id, label, hint: `Installs ${productName(id)} beside this app` };
+      return { value: id, label, hint: t("prefs.updates.channel.installsBeside", { name: productName(id) }) };
     return { value: id, label };
   });
 }

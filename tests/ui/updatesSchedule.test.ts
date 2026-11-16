@@ -45,7 +45,7 @@ beforeEach(() => {
   Object.assign(h, { calls: 0, fail: false, supported: true });
   vi.useFakeTimers();
   vi.setSystemTime(T0);
-  vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+  vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, addEventListener: () => {} });
 });
 afterEach(() => {
   vi.useRealTimers();

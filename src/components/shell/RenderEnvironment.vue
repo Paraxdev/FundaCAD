@@ -234,8 +234,10 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
 const pickEnv = (id: Environment) => {
   chooseBuiltInEnvironment(engine.store, id);
 };
-const STUDIO_ITEMS = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, e }));
-const studioValue = computed(() => STUDIO_ITEMS.find((it) => it.value === prefs.value.environment)?.value ?? null);
+const STUDIO_ITEMS = computed(() => ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, e })));
+const studioValue = computed(
+  () => STUDIO_ITEMS.value.find((it) => it.value === prefs.value.environment)?.value ?? null,
+);
 const DENOISES: { id: Denoise; label: string }[] = [
   { id: "off", label: "Off" },
   { id: "standard", label: "Standard" },
