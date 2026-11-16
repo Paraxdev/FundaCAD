@@ -1165,6 +1165,10 @@
   width: max-content;
   translate: var(--span-shift, 0px) 0;
 }
+/* Hidden, not removed, so it keeps its size for the next measure. */
+#viewport .fps[data-no-room] {
+  visibility: hidden;
+}
 
 /* The name beside a sketch snap marker. */
 .snap-tag {

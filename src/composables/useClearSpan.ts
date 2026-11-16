@@ -4,7 +4,8 @@ import { underZoom } from "../ui/anchor";
 import { pageZoom } from "../ui/interfaceSize";
 
 /** Sets --span-left, --span-right and --span-shift so `el`, laid out as the prompt is, keeps to the stretch of its own
- *  row no floating card covers and lines up with the prompt on the middle of the view as far as that stretch allows. */
+ *  row no floating card covers and lines up with the prompt on the middle of the view as far as that stretch allows.
+ *  While no stretch is wide enough `el` carries data-no-room, so it can hide rather than sit under a card. */
 export function useClearSpan(el: Readonly<Ref<HTMLElement | null>>) {
   let frame = 0;
   let ro: ResizeObserver | null = null;
@@ -38,6 +39,9 @@ export function useClearSpan(el: Readonly<Ref<HTMLElement | null>>) {
     put(me, "--span-left", insets.left);
     put(me, "--span-right", insets.right);
     put(me, "--span-shift", centreShift(box.right - box.left, insets, width));
+    const clear = promptInsets(box, mine, cards, gap, 0);
+    const room = box.right - box.left - clear.left - clear.right >= width;
+    if (room === me.hasAttribute("data-no-room")) me.toggleAttribute("data-no-room", !room);
   };
 
   const schedule = () => {
