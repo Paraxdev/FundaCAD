@@ -54,6 +54,30 @@ body {
   outline-offset: 1px;
 }
 
+// A native details whose summary leads with a caretRight Icon in place of the browser's triangle, turned down while
+// open as a collapsible Card's caret.
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  list-style: none;
+  cursor: pointer;
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure > summary:hover {
+  color: var(--accent-hot);
+}
+.disclosure-caret {
+  flex: none;
+  color: var(--text-dim);
+  transition: transform var(--t-fast) var(--ease);
+}
+.disclosure[open] > summary > .disclosure-caret {
+  transform: rotate(90deg);
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;

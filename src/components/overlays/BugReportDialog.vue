@@ -20,6 +20,7 @@ import { systemInfo, type SystemInfo } from "../../ui/systemInfo";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
 import Dialog from "../ui/Dialog.vue";
+import Icon from "../shell/Icon.vue";
 import TextField from "../ui/TextField.vue";
 
 const dialogs = useDialogStore();
@@ -159,8 +160,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       The document is too big to paste ({{ formatSize(tooBig) }}). Attach the .funda file to the issue yourself, inside
       a .zip.
     </div>
-    <details class="bug-preview">
-      <summary>What will be sent</summary>
+    <details class="bug-preview disclosure">
+      <summary><Icon class="disclosure-caret" name="caretRight" :size="10" />What will be sent</summary>
       <div class="bug-note">
         Your words, then technical notes for whoever fixes it: the version, your system, the last steps and errors.
       </div>

@@ -611,6 +611,9 @@ one; a name that is not there renders nothing. The common actions:
 
 There is no `trash`, `settings`, `info`, `error`, `eye` or `chevron` icon.
 
+A native `<details>` takes `class="disclosure"` and leads its `<summary>` with a 10px `caretRight` as
+`.disclosure-caret`, turned down while open, never the browser's triangle.
+
 | Size | Use |
 |---|---|
 | 12 to 15 | Inline in rows, close crosses, title bar buttons (15) |
