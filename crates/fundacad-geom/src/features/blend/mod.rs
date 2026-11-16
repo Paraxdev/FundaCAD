@@ -1003,6 +1003,7 @@ fn blend_edges(
         return Err(Fail::msg(format!("{label}: size must be greater than 0 (got {})", py_g(blend_size))));
     }
     let pair = move |v: f64| second.map(|d2| second_distance(blend_size, d2, v));
+    let _fitted = ops::fitted_scope();
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
     let overruns: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
@@ -1096,9 +1097,11 @@ fn blend_edges(
         let one_edge_at = |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
         let section_builds = |size: f64| {
             section.is_some_and(|sec| {
-                sec(&body_shape, &edges, size).is_ok_and(|out| {
-                    still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
-                })
+                ops::take_fitted(&body_shape, &edges, size)
+                    .map_or_else(|| sec(&body_shape, &edges, size), Ok)
+                    .is_ok_and(|out| {
+                        still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
+                    })
             })
         };
         // Whether a size really builds smooth, by the kernel or else the section build, each on a fresh copy.

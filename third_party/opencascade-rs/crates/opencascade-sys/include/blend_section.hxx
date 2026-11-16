@@ -89,6 +89,7 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -2227,6 +2228,12 @@ inline bool &sizing() {
   return on;
 }
 
+// Whether the fit search let a corner pass that a real build refuses, since the last reset on this thread.
+inline bool &lenient() {
+  static thread_local bool on = false;
+  return on;
+}
+
 struct Sizing {
   bool was = sizing();
   Sizing() { sizing() = true; }
@@ -2410,8 +2417,9 @@ inline Opt<TopoDS_Shape> mitre(const ChamferEnd &a, const ChamferEnd &b, double 
   if (b.into.Dot(inA) > -1e-6 || a.into.Dot(inB) > -1e-6) return {};
   double half = std::sin(0.5 * a.into.Angle(b.into));
   if (half < 0.1) {
-    if (sizing()) return {};
-    throw Unmitred(a.at);
+    if (!sizing()) throw Unmitred(a.at);
+    lenient() = true;
+    return {};
   }
   double reach = 0;
   for (int k = 0; k < 2; ++k) reach = std::max({reach, a.at.Distance(a.Q[k]), b.at.Distance(b.Q[k])});
@@ -2519,8 +2527,9 @@ inline Opt<TopoDS_Shape> corner_cap(const std::vector<const ChamferEnd *> &c, do
       double pu, pv;
       ElSLib::Parameters(face.Plane(), m, pu, pv);
       if (BRepClass_FaceClassifier(a.faces[ia], gp_Pnt2d(pu, pv), fuzz).State() != TopAbs_IN) {
-        if (sizing()) return {};
-        throw Unmitred(a.at);
+        if (!sizing()) throw Unmitred(a.at);
+        lenient() = true;
+        return {};
       }
       meet.push_back(m);
     }
@@ -2635,8 +2644,9 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
           Opt<TopoDS_Shape> m = mitre(a, b, by);
           if (!m.has) continue;
           if (meeting(a.at) != 2) {
-            if (sizing()) continue;
-            throw Unmitred(a.at);
+            if (!sizing()) throw Unmitred(a.at);
+            lenient() = true;
+            continue;
           }
           out.cut.push_back(m.val);
         }
@@ -2659,11 +2669,13 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
         if (!pyramid.val.IsNull()) out.cut.push_back(pyramid.val);
       } else if (!sizing()) {
         throw Unmitred(a.at);
+      } else {
+        lenient() = true;
       }
     }
   // Only straight chamfers leave ends, so a corner of three convex chamfers with a curved one gets no patch above:
   // a D shaped block at 4/10 built 2004.27 where OCCT, just short of it, builds 1770.88.
-  if (chamfer && !sizing())
+  if (chamfer)
     for (const std::pair<TopoDS_Shape, double> &c : out.convex) {
       TopoDS_Vertex vs[2];
       TopExp::Vertices(TopoDS::Edge(c.first), vs[0], vs[1]);
@@ -2680,7 +2692,10 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
         }
         for (const std::vector<ChamferEnd> &own : ends)
           for (const ChamferEnd &b : own) straight += b.at.Distance(p) < by;
-        if (convex >= 3 && straight < convex) throw Unmitred(p);
+        if (convex >= 3 && straight < convex) {
+          if (!sizing()) throw Unmitred(p);
+          lenient() = true;
+        }
       }
     }
   last_overrun() = first;
@@ -2766,11 +2781,20 @@ struct PiecesOnly {
 inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer, double size2,
                           int cont, const std::vector<double> &sz, double unit, bool draft, double profile,
                           bool one_shot, double first_secs, bool overlap = false,
-                          std::vector<size_t> blame = {}) {
+                          std::vector<size_t> blame = {}, TopoDS_Shape *fitted = nullptr) {
   using clock = std::chrono::steady_clock;
   auto started = clock::now();
   double budget = draft ? std::max(1.0, 2 * first_secs) : std::max(10.0, 3 * first_secs);
   auto out_of_time = [&]() { return std::chrono::duration<double>(clock::now() - started).count() > budget; };
+  // The largest size built in full as a real build would, which the search ends on unless a corner it lets pass
+  // refuses it, so the caller need not build it again.
+  std::mutex kept_lock;
+  long kept_r = 0;
+  TopoDS_Shape kept;
+  auto fit = [&](long r) {
+    if (fitted && r == kept_r) *fitted = kept;
+    return grid_size(r) / unit;
+  };
   auto builds = [&](long r, bool quick) {
     PiecesOnly mode(quick);
     Sizing judged;
@@ -2781,9 +2805,13 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
     // Scaled so that asking for v itself builds with the very same sizes.
     std::vector<double> sk;
     for (double x : sz) sk.push_back(x / unit * v);
+    lenient() = false;
     try {
-      blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, cont, sk, draft, profile,
-                   one_shot);
+      TopoDS_Shape out = blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, cont, sk,
+                                      draft, profile, one_shot);
+      // A two distance chamfer's corners are judged before any build, which the search skips.
+      std::lock_guard<std::mutex> hold(kept_lock);
+      if (!quick && fitted && !lenient() && std::isnan(size2) && r > kept_r) kept_r = r, kept = out;
     } catch (const Cancelled &) {
       throw;
     } catch (const SectionError &) {
@@ -2845,6 +2873,7 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
         ec.push_back(cp.ModifiedShape(es[i]));
         sk.push_back(sz[i] / unit * v);
       }
+      blamed().clear();
       try {
         round_tools(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, cont, sk, draft, profile,
                     edges_tol(ec));
@@ -2903,8 +2932,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
     both(lo, lo - 1, false, at, under);
   else
     at = builds(lo, false);
-  if (at) return grid_size(lo) / unit;
-  if (under) return grid_size(lo - 1) / unit;
+  if (at) return fit(lo);
+  if (under) return fit(lo - 1);
   if (!whole) return FITS_UNKNOWN;
   hi = lo - 1;
   lo = 0;
@@ -2928,8 +2957,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
     hi = b > 0 ? b : a;
     if (b == 0) break;
   }
-  if (!search(lo, hi, false)) return lo > 0 ? grid_size(lo) / unit : FITS_UNKNOWN;
-  return lo > 0 ? grid_size(lo) / unit : FITS_NONE;
+  if (!search(lo, hi, false)) return lo > 0 ? fit(lo) : FITS_UNKNOWN;
+  return lo > 0 ? fit(lo) : FITS_NONE;
 }
 
 } // namespace secblend
@@ -2939,7 +2968,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
 // 1 SectionBlendError (message is its sentence), 2 any other exception (its class),
 // 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
 // "why fits x y z": fits the largest size in mm of `unit` that does, -1 when
-// none does, -2 when the search ran out of time, x y z a point on the edge).
+// none does, -2 when the search ran out of time, x y z a point on the edge;
+// the shape returned is then the body built at fits, when the search built it).
 // Built, the message may be "overrun fits x y z": a round there runs past one
 // of its faces, and fits is the largest size at which it rests on both.
 // `unit` is the size asked for, which `sizes` and `size2` scale with.
@@ -2953,6 +2983,7 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
   std::vector<TopoDS_Shape> es;
   for (TopoDS_Iterator it(edges); it.More(); it.Next()) es.push_back(it.Value());
   std::vector<double> sz(sizes.begin(), sizes.end());
+  TopoDS_Shape fitted;
   try {
     bool bad = false;
     for (double x : sz) bad = bad || !(x > 0);
@@ -2995,7 +3026,7 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
         e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
       }
       e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, cont, sz, unit, draft, profile,
-                                     one_shot, secs, e.why == secblend::Misfit::Overlap, secblend::blamed());
+                                     one_shot, secs, e.why == secblend::Misfit::Overlap, secblend::blamed(), &fitted);
       throw;
     }
   } catch (const secblend::Cancelled &) {
@@ -3007,6 +3038,7 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     std::snprintf(buf, sizeof buf, "%d %.17g %.17g %.17g %.17g", static_cast<int>(e.why),
                   e.fits > 0 ? e.fits * unit : e.fits, e.at.X(), e.at.Y(), e.at.Z());
     message = buf;
+    if (e.fits > 0 && !fitted.IsNull()) return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(fitted));
   } catch (const secblend::SectionError &e) {
     status = 1;
     message = e.msg;
