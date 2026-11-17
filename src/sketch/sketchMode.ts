@@ -279,6 +279,11 @@ export class SketchMode {
     return this.plane;
   }
 
+  /** The drawn extent in sketch mm, construction and text left out, null before anything is drawn. */
+  drawnBounds(): { minx: number; miny: number; maxx: number; maxy: number } | null {
+    return profileBounds(this.entities);
+  }
+
   /** The model's outline on this sketch's plane in sketch 2D, for aiming the view and snapping. Areas split along the
    *  engine's cut lines instead (overlay.footprintFor). Empty on a datum plane. */
 

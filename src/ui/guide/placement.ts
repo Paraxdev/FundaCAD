@@ -28,14 +28,12 @@ export const intersects = (a: Box, b: Box) =>
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** The bubble beside the target, right first, then left, below and above, inside a
- *  16 px gutter and never over the target or an `avoid` rect such as an open dialog. */
-export function placeBubble(
-  target: Box,
-  view: { width: number; height: number },
-  size: { width: number; height: number },
-  avoid: Box[] = [],
-): Placed {
+type Size = { width: number; height: number };
+
+const clearOf = (box: Box, rects: Box[]) => !rects.some((r) => intersects(box, r));
+
+/** The spots beside a target that fit inside the gutter, right first, then left, below and above. */
+function besideSpots(target: Box, view: Size, size: Size): Placed[] {
   const ring = ringRect(target);
   const maxLeft = view.width - GUTTER - size.width;
   const maxTop = view.height - GUTTER - size.height;
@@ -47,22 +45,33 @@ export function placeBubble(
     ["below", midX, ring.top + ring.height + GAP],
     ["above", midX, ring.top - GAP - size.height],
   ];
-  const blocked = [ring, ...avoid];
-  let fallback: Placed | null = null;
-  for (const [side, x, y] of tries) {
+  return tries.flatMap(([side, x, y]): Placed[] => {
     const along = side === "right" || side === "left";
     const fits = along ? x >= GUTTER && x <= maxLeft : y >= GUTTER && y <= maxTop;
-    const box: Placed = {
-      side,
-      left: along ? x : clamp(x, GUTTER, Math.max(GUTTER, maxLeft)),
-      top: along ? clamp(y, GUTTER, Math.max(GUTTER, maxTop)) : y,
-      width: size.width,
-      height: size.height,
-    };
-    if (!fits) continue;
-    if (!blocked.some((b) => intersects(box, b))) return box;
-    fallback ??= box;
-  }
+    if (!fits) return [];
+    return [
+      {
+        side,
+        left: along ? x : clamp(x, GUTTER, Math.max(GUTTER, maxLeft)),
+        top: along ? clamp(y, GUTTER, Math.max(GUTTER, maxTop)) : y,
+        width: size.width,
+        height: size.height,
+      },
+    ];
+  });
+}
+
+/** The bubble beside the target, right first, then left, below and above, inside a
+ *  16 px gutter and never over the target or an `avoid` rect such as an open dialog. */
+export function placeBubble(target: Box, view: Size, size: Size, avoid: Box[] = []): Placed {
+  const ring = ringRect(target);
+  const maxLeft = view.width - GUTTER - size.width;
+  const maxTop = view.height - GUTTER - size.height;
+  const midX = ring.left + ring.width / 2 - size.width / 2;
+  const spots = besideSpots(target, view, size);
+  const clear = spots.find((b) => clearOf(b, [ring, ...avoid]));
+  if (clear) return clear;
+  const fallback = spots[0];
   if (fallback && !intersects(fallback, ring)) return fallback;
   return {
     side: "below",
@@ -73,11 +82,14 @@ export function placeBubble(
   };
 }
 
-/** A bubble with nothing to point at: the top centre, or beside an `avoid` rect that covers it. */
+/** A bubble with nothing to point at. It sits at the top centre unless that covers `work`, the open sketch, then
+ *  beside the sketch. It never covers an `avoid` rect such as an open dialog, and keeps off `chrome`, the rail,
+ *  cards and view controls, where it can. */
 export function placeCaption(
-  view: { width: number; height: number },
-  size: { width: number; height: number },
+  view: Size,
+  size: Size,
   avoid: Box[] = [],
+  keep: { work?: Box | null; chrome?: Box[] } = {},
 ): Placed {
   const top: Placed = {
     side: "below",
@@ -86,6 +98,11 @@ export function placeCaption(
     width: size.width,
     height: size.height,
   };
+  const work = keep.work ?? null;
+  const must = work ? [ringRect(work), ...avoid] : avoid;
+  const spots = [top, ...(work ? besideSpots(work, view, size) : [])];
+  const spot = spots.find((b) => clearOf(b, [...must, ...(keep.chrome ?? [])])) ?? spots.find((b) => clearOf(b, must));
+  if (spot) return spot;
   const over = avoid.find((b) => intersects(top, b));
   return over ? placeBubble(over, view, size, avoid) : top;
 }
