@@ -4,6 +4,7 @@
 import { shallowRef } from "vue";
 import { setPrompt, toast } from "fundacad";
 import type { Engine, Feature, Selector } from "fundacad";
+import { t } from "./lines";
 import {
   PRINT_CLEARANCE,
   formatOffBy,
@@ -155,7 +156,7 @@ export class StandardThreadTool {
     if (this.tryPicked(false)) return;
     this.picking = true;
     this.e.viewport.setSelectionMode("faces");
-    setPrompt("Standard Thread: click a round face, a shaft or a bore · Esc to cancel");
+    setPrompt(t("thread.prompt"));
     document.addEventListener("keydown", this.onKey, true);
     this.e.viewport.domElement.addEventListener("pointerup", this.onPointerUp);
   }
@@ -177,7 +178,7 @@ export class StandardThreadTool {
     const sel = this.e.viewport.selectedFacesForPressPull();
     const round = sel?.round;
     if (!sel || !round || sel.faceIds.length !== 1 || !sel.selectors[0]) {
-      if (complain && sel) setPrompt("Standard Thread: that face is not round, pick a shaft or a bore · Esc to cancel");
+      if (complain && sel) setPrompt(t("thread.notRound"));
       return false;
     }
     const s = sel.selectors[0];
@@ -185,7 +186,7 @@ export class StandardThreadTool {
     const a = round.cylinder.axis;
     const d = draftForFace(face, 2 * round.radius, round.solidInside, [a[0], a[1], a[2]]);
     if (!d) {
-      toast("No standard thread is near that diameter.");
+      toast(t("thread.noneNear"));
       return false;
     }
     this.stopPicking();

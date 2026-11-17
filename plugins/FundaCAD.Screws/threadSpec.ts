@@ -2,6 +2,7 @@
 
 import THREADS from "./catalogue/threads.json";
 import { spellFixed } from "fundacad";
+import { t } from "./lines";
 
 export type ThreadSystem = "iso" | "unc" | "unf" | "tr" | "acme";
 export type FaceIs = "nominal" | "tap";
@@ -169,9 +170,14 @@ export function nearestThread(
 }
 
 export function formatOffBy(n: NearestThread): string {
-  const how = n.faceIs === "tap" ? "tap drill" : "nominal";
-  if (Math.abs(n.offBy) < 0.0005) return `${n.choice.designation}, on ${how}`;
-  return `${n.choice.designation}, ${spellFixed(Math.abs(n.offBy), 2)} mm ${n.offBy < 0 ? "under" : "over"} ${how}`;
+  const how = n.faceIs === "tap" ? "tap" : "nominal";
+  if (Math.abs(n.offBy) < 0.0005) return t("thread.offOn", { designation: n.choice.designation, how });
+  return t("thread.offBy", {
+    designation: n.choice.designation,
+    amount: spellFixed(Math.abs(n.offBy), 2),
+    direction: n.offBy < 0 ? "under" : "over",
+    how,
+  });
 }
 
 interface Groove {

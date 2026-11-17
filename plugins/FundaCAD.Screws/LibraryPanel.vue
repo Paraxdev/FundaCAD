@@ -6,6 +6,7 @@ import { Button, Chip, FieldRow, FloatingPanel, ListRow, Segmented, Select, Text
 import { openTextFile, saveTextFile, toast, useEngine } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
 import CustomForm from "./CustomForm.vue";
+import { label, t } from "./lines";
 import {
   DRIVE_PREFIX,
   catalogueSize,
@@ -21,6 +22,7 @@ import {
 } from "./catalogue";
 import {
   NO_FILTERS,
+  categoryLabel,
   facets,
   filterEntries,
   groupEntries,
@@ -59,7 +61,7 @@ const groups = computed(() =>
 const options = computed(() => facets(entries.value));
 
 function driveLabel(d: string): string {
-  return PARTS.drive[d]?.label ?? d;
+  return label(PARTS.drive[d]?.label ?? d);
 }
 
 function defaultChoice(e: ListEntry): ItemChoice {
@@ -197,7 +199,7 @@ function onSave(s: FastenerSpec) {
     selection.value = { source: "custom", id: item.id };
   }
   editing.value = null;
-  toast(`Saved ${s.name}`, { kind: "info" });
+  toast(t("toast.saved", { name: s.name }), { kind: "info" });
 }
 
 function remove(id: string) {
@@ -207,42 +209,49 @@ function remove(id: string) {
 async function exportMine() {
   if (!userLibrary.value.length) return;
   await saveTextFile("fasteners.json", exportLibrary(userLibrary.value), {
-    name: "Fastener library",
+    name: t("panel.library"),
     extensions: ["json"],
   });
 }
 
 async function importMine() {
-  const text = await openTextFile({ name: "Fastener library", extensions: ["json"] });
+  const text = await openTextFile({ name: t("panel.library"), extensions: ["json"] });
   if (text === null) return;
   const { specs, problems } = parseLibraryFile(text);
   for (const s of specs) addUserFastener(s);
   if (problems.length)
-    toast(`Imported ${specs.length}, skipped ${problems.length}: ${problems.join(" | ")}`, { kind: "error" });
-  else toast(`Imported ${specs.length} fastener${specs.length === 1 ? "" : "s"}`, { kind: "info" });
+    toast(
+      t("toast.importSkipped", { imported: specs.length, skipped: problems.length, problems: problems.join(" | ") }),
+      { kind: "error" },
+    );
+  else toast(t("toast.imported", { count: specs.length }), { kind: "info" });
 }
 
 const FILL = { width: "100%" };
 const GROW = { flex: "1 1 0", minWidth: "0" };
 
 const tabOptions = computed(() => [
-  { value: "catalogue" as const, label: "Catalogue", attrs: { class: "scr-tab-catalogue" } },
-  { value: "custom" as const, label: `My fasteners (${userLibrary.value.length})`, attrs: { class: "scr-tab-custom" } },
+  { value: "catalogue" as const, label: t("panel.catalogue"), attrs: { class: "scr-tab-catalogue" } },
+  {
+    value: "custom" as const,
+    label: t("panel.tabCustom", { count: userLibrary.value.length }),
+    attrs: { class: "scr-tab-custom" },
+  },
 ]);
 
-const any = (label: string, values: readonly string[], text: (v: string) => string = (v) => v) => [
-  { value: "", label },
+const any = (all: string, values: readonly string[], text: (v: string) => string = (v) => v) => [
+  { value: "", label: all },
   ...values.map((v) => ({ value: v, label: text(v) })),
 ];
-const categoryOptions = computed(() => any("All kinds", options.value.categories));
-const systemOptions = [
-  { value: "", label: "Metric and inch" },
-  { value: "metric", label: "Metric" },
-  { value: "inch", label: "Inch" },
-];
-const standardOptions = computed(() => any("Any standard", options.value.standards));
-const driveOptions = computed(() => any("Any drive", options.value.drives, driveLabel));
-const headOptions = computed(() => any("Any head", options.value.heads));
+const categoryOptions = computed(() => any(t("filter.allKinds"), options.value.categories, categoryLabel));
+const systemOptions = computed(() => [
+  { value: "", label: t("option.metricAndInch") },
+  { value: "metric", label: t("option.metric") },
+  { value: "inch", label: t("option.inch") },
+]);
+const standardOptions = computed(() => any(t("filter.anyStandard"), options.value.standards));
+const driveOptions = computed(() => any(t("filter.anyDrive"), options.value.drives, driveLabel));
+const headOptions = computed(() => any(t("filter.anyHead"), options.value.heads, label));
 
 const lengthOptions = computed(() =>
   lengths.value.map((l) => ({ value: String(l), label: formatLength(l, spec.value?.units ?? "mm") })),
@@ -251,19 +260,22 @@ const driveChoices = computed(() =>
   drives.value.map((d) => ({ value: d, label: `${driveLabel(d)} (${DRIVE_PREFIX[d] ?? d})` })),
 );
 const pitchOptions = computed(() => pitches.value.map((p) => ({ value: String(p.pitch), label: p.label })));
-const modelledOptions = [
-  { value: "simple", label: "Simplified" },
-  { value: "modelled", label: "Modelled helix" },
-];
-const handOptions = [
-  { value: "right", label: "Right" },
-  { value: "left", label: "Left" },
-];
+const modelledOptions = computed(() => [
+  { value: "simple", label: t("option.simplified") },
+  { value: "modelled", label: t("option.modelledHelix") },
+]);
+const handOptions = computed(() => [
+  { value: "right", label: t("option.right") },
+  { value: "left", label: t("option.left") },
+]);
 
 function lengthHint(e: ListEntry): string {
   const unit = e.system === "inch" ? "in" : "mm";
   if (e.lengths.length > 1)
-    return `L ${formatLength(e.lengths[0]!, unit)} to ${formatLength(e.lengths[e.lengths.length - 1]!, unit)}`;
+    return t("panel.rangeLength", {
+      from: formatLength(e.lengths[0]!, unit),
+      to: formatLength(e.lengths[e.lengths.length - 1]!, unit),
+    });
   return e.source === "custom" ? e.size : "";
 }
 
@@ -299,7 +311,7 @@ onBeforeUnmount(stopWatching);
 <template>
   <FloatingPanel
     :open="open"
-    title="Fasteners"
+    :title="t('panel.title')"
     close-on-esc
     panel-class="scr-panel measure-panel-column"
     @close="open = false"
@@ -320,7 +332,7 @@ onBeforeUnmount(stopWatching);
           marginBottom: '8px',
         }"
       >
-        <div class="measure-title" aria-hidden="true" :style="{ margin: 0 }">Fasteners</div>
+        <div class="measure-title" aria-hidden="true" :style="{ margin: 0 }">{{ t("panel.title") }}</div>
         <div
           :style="{
             display: 'flex',
@@ -329,14 +341,14 @@ onBeforeUnmount(stopWatching);
             flexBasis: stacked ? '100%' : 'auto',
           }"
         >
-          <Segmented v-model="tab" label="Fastener library" size="sm" :options="tabOptions" />
+          <Segmented v-model="tab" :label="t('panel.library')" size="sm" :options="tabOptions" />
         </div>
-        <span v-if="!stacked" class="measure-hint" :style="{ margin: '0 0 0 auto' }"
-          >{{ TOTAL.toLocaleString() }} standard items</span
-        >
-        <Button class="scr-close" :style="stacked ? { order: 1, marginLeft: 'auto' } : {}" @click="open = false"
-          >Close</Button
-        >
+        <span v-if="!stacked" class="measure-hint" :style="{ margin: '0 0 0 auto' }">{{
+          t("panel.count", { count: TOTAL })
+        }}</span>
+        <Button class="scr-close" :style="stacked ? { order: 1, marginLeft: 'auto' } : {}" @click="open = false">{{
+          t("action.close")
+        }}</Button>
       </div>
 
       <div
@@ -354,8 +366,8 @@ onBeforeUnmount(stopWatching);
             class="scr-search"
             type="search"
             size="sm"
-            label="Search fasteners"
-            placeholder="Search: M3, M4x20, socket, ISO 7380, #10"
+            :label="t('panel.search')"
+            :placeholder="t('panel.searchPlaceholder')"
             :style="FILL"
           />
           <div :style="{ display: 'flex', gap: '4px', margin: '6px 0' }">
@@ -363,7 +375,7 @@ onBeforeUnmount(stopWatching);
               v-model="filters.category"
               class="scr-filter-category"
               size="sm"
-              label="Kind"
+              :label="t('field.kind')"
               :options="categoryOptions"
               :style="GROW"
             />
@@ -371,7 +383,7 @@ onBeforeUnmount(stopWatching);
               v-model="filters.system"
               class="scr-filter-system"
               size="sm"
-              label="Unit system"
+              :label="t('field.unitSystem')"
               :options="systemOptions"
               :style="GROW"
             />
@@ -381,7 +393,7 @@ onBeforeUnmount(stopWatching);
               v-model="filters.standard"
               class="scr-filter-standard"
               size="sm"
-              label="Standard"
+              :label="t('field.standard')"
               :options="standardOptions"
               :style="GROW"
             />
@@ -389,7 +401,7 @@ onBeforeUnmount(stopWatching);
               v-model="filters.drive"
               class="scr-filter-drive"
               size="sm"
-              label="Drive"
+              :label="t('field.drive')"
               :options="driveOptions"
               :style="GROW"
             />
@@ -397,7 +409,7 @@ onBeforeUnmount(stopWatching);
               v-model="filters.head"
               class="scr-filter-head"
               size="sm"
-              label="Head"
+              :label="t('field.head')"
               :options="headOptions"
               :style="GROW"
             />
@@ -406,9 +418,7 @@ onBeforeUnmount(stopWatching);
             class="scr-list"
             :style="{ maxHeight: stacked ? '28vh' : '56vh', overflow: 'auto', paddingRight: '4px' }"
           >
-            <div v-if="!shown.length" class="measure-hint"
-              >Nothing matches. Clear a filter, or add your own under My fasteners.</div
-            >
+            <div v-if="!shown.length" class="measure-hint">{{ t("panel.noMatches") }}</div>
             <template v-for="g in groups" :key="g.category">
               <div
                 :style="{
@@ -418,7 +428,7 @@ onBeforeUnmount(stopWatching);
                   textTransform: 'uppercase',
                   color: 'var(--text-mute)',
                 }"
-                >{{ g.category }}</div
+                >{{ categoryLabel(g.category) }}</div
               >
               <div v-for="fam in g.families" :key="fam.title + fam.standard" :style="{ marginBottom: '4px' }">
                 <div :style="{ fontWeight: 600, padding: '2px 6px' }">
@@ -445,7 +455,13 @@ onBeforeUnmount(stopWatching);
                   @dragend="onDragEnd"
                 >
                   <template #trailing>
-                    <Chip v-if="e.source === 'custom'" class="scr-badge" variant="accent" size="xs" label="Custom" />
+                    <Chip
+                      v-if="e.source === 'custom'"
+                      class="scr-badge"
+                      variant="accent"
+                      size="xs"
+                      :label="t('panel.custom')"
+                    />
                     <span :style="{ color: 'var(--text-mute)', fontSize: 'var(--fs-micro)' }">{{
                       e.drives.map(driveLabel).join(", ")
                     }}</span>
@@ -454,7 +470,7 @@ onBeforeUnmount(stopWatching);
               </div>
             </template>
           </div>
-          <div class="measure-hint scr-count">{{ shown.length }} sizes shown</div>
+          <div class="measure-hint scr-count">{{ t("panel.sizesShown", { count: shown.length }) }}</div>
         </div>
 
         <div v-if="spec" class="scr-detail">
@@ -465,59 +481,59 @@ onBeforeUnmount(stopWatching);
             <FastenerPreview :spec="spec" :width="250" :height="200" @measured="volume = $event" />
             <div :style="{ flex: '1 1 150px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }">
               <template v-if="choice">
-                <FieldRow v-if="lengths.length > 1" v-slot="{ id }" layout="stacked" label="Length">
+                <FieldRow v-if="lengths.length > 1" v-slot="{ id }" layout="stacked" :label="t('field.length')">
                   <Select
                     :id="id"
                     class="scr-length"
                     size="sm"
-                    label="Length"
+                    :label="t('field.length')"
                     :style="FILL"
                     :options="lengthOptions"
                     :model-value="String(choice.length ?? '')"
                     @update:model-value="setChoice({ length: Number($event) })"
                   />
                 </FieldRow>
-                <FieldRow v-if="drives.length > 1" v-slot="{ id }" layout="stacked" label="Drive">
+                <FieldRow v-if="drives.length > 1" v-slot="{ id }" layout="stacked" :label="t('field.drive')">
                   <Select
                     :id="id"
                     class="scr-drive"
                     size="sm"
-                    label="Drive"
+                    :label="t('field.drive')"
                     :style="FILL"
                     :options="driveChoices"
                     :model-value="choice.drive ?? ''"
                     @update:model-value="setChoice({ drive: $event })"
                   />
                 </FieldRow>
-                <FieldRow v-if="pitches.length > 1" v-slot="{ id }" layout="stacked" label="Pitch">
+                <FieldRow v-if="pitches.length > 1" v-slot="{ id }" layout="stacked" :label="t('field.pitch')">
                   <Select
                     :id="id"
                     class="scr-pitch"
                     size="sm"
-                    label="Pitch"
+                    :label="t('field.pitch')"
                     :style="FILL"
                     :options="pitchOptions"
                     :model-value="String(choice.pitch ?? pitches[0]!.pitch)"
                     @update:model-value="setChoice({ pitch: Number($event) })"
                   />
                 </FieldRow>
-                <FieldRow v-slot="{ id }" layout="stacked" label="Thread">
+                <FieldRow v-slot="{ id }" layout="stacked" :label="t('field.thread')">
                   <Select
                     :id="id"
                     class="scr-modelled"
                     size="sm"
-                    label="Thread"
+                    :label="t('field.thread')"
                     :style="FILL"
                     :options="modelledOptions"
                     :model-value="choice.modelled ? 'modelled' : 'simple'"
                     @update:model-value="setChoice({ modelled: $event === 'modelled' })"
                   />
                 </FieldRow>
-                <FieldRow v-slot="{ id }" layout="stacked" label="Hand">
+                <FieldRow v-slot="{ id }" layout="stacked" :label="t('field.hand')">
                   <Select
                     :id="id"
                     size="sm"
-                    label="Hand"
+                    :label="t('field.hand')"
                     :style="FILL"
                     :options="handOptions"
                     :model-value="choice.hand ?? 'right'"
@@ -532,15 +548,15 @@ onBeforeUnmount(stopWatching);
                 :style="{ marginTop: '6px' }"
                 @click="insert"
               >
-                {{ busy ? "Inserting..." : hasFace ? "Insert on selected face" : "Insert at origin" }}
+                {{ busy ? t("panel.insertBusy") : hasFace ? t("panel.insertOnFace") : t("panel.insertAtOrigin") }}
               </Button>
-              <div class="measure-hint" :style="{ margin: 0 }">Or drag a row onto a face.</div>
-              <Button v-if="selection?.source !== 'custom'" class="scr-make-custom" @click="startNew(spec)"
-                >Make a custom one from this</Button
-              >
+              <div class="measure-hint" :style="{ margin: 0 }">{{ t("panel.dragHint") }}</div>
+              <Button v-if="selection?.source !== 'custom'" class="scr-make-custom" @click="startNew(spec)">{{
+                t("panel.makeCustom")
+              }}</Button>
               <template v-else>
-                <Button @click="startEdit(selection.id)">Edit</Button>
-                <Button @click="remove(selection.id)">Delete</Button>
+                <Button @click="startEdit(selection.id)">{{ t("action.edit") }}</Button>
+                <Button @click="remove(selection.id)">{{ t("action.delete") }}</Button>
               </template>
             </div>
           </div>
@@ -551,7 +567,7 @@ onBeforeUnmount(stopWatching);
             </div>
           </div>
         </div>
-        <div v-else class="measure-hint">Pick a size on the left to see it and its specs.</div>
+        <div v-else class="measure-hint">{{ t("panel.pickSize") }}</div>
       </div>
 
       <div v-else :style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }">
@@ -566,12 +582,14 @@ onBeforeUnmount(stopWatching);
         />
         <template v-else>
           <div :style="{ display: 'flex', gap: '8px', marginBottom: '8px' }">
-            <Button variant="primary" class="scr-new" @click="startNew(null)">New fastener</Button>
-            <Button class="scr-import" @click="importMine">Import JSON</Button>
-            <Button class="scr-export" :disabled="!userLibrary.length" @click="exportMine">Export JSON</Button>
+            <Button variant="primary" class="scr-new" @click="startNew(null)">{{ t("panel.new") }}</Button>
+            <Button class="scr-import" @click="importMine">{{ t("panel.import") }}</Button>
+            <Button class="scr-export" :disabled="!userLibrary.length" @click="exportMine">{{
+              t("panel.export")
+            }}</Button>
           </div>
           <div v-if="!userLibrary.length" class="measure-hint">
-            Nothing here yet. Make a new one, or pick a catalogue item and choose Make a custom one from this.
+            {{ t("panel.noneYet", { makeCustom: t("panel.makeCustom") }) }}
           </div>
           <template v-for="(it, i) in userLibrary" :key="it.id">
             <div v-if="i" class="measure-divider"></div>
@@ -579,21 +597,28 @@ onBeforeUnmount(stopWatching);
               class="scr-custom-row"
               :style="{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 0' }"
             >
-              <Chip class="scr-badge" variant="accent" size="xs" label="Custom" />
+              <Chip class="scr-badge" variant="accent" size="xs" :label="t('panel.custom')" />
               <span :style="{ fontWeight: 600 }">{{ it.spec.name }}</span>
               <span class="measure-hint" :style="{ margin: 0 }">{{ it.spec.notes }}</span>
               <span :style="{ marginLeft: 'auto', display: 'flex', gap: '6px' }">
                 <Button
                   size="sm"
-                  :aria-label="`Show ${it.spec.name}`"
+                  :aria-label="t('panel.showNamed', { name: it.spec.name })"
                   @click="
                     selection = { source: 'custom', id: it.id };
                     tab = 'catalogue';
                   "
-                  >Show</Button
+                  >{{ t("action.show") }}</Button
                 >
-                <Button size="sm" :aria-label="`Edit ${it.spec.name}`" @click="startEdit(it.id)">Edit</Button>
-                <Button size="sm" :aria-label="`Delete ${it.spec.name}`" @click="remove(it.id)">Delete</Button>
+                <Button
+                  size="sm"
+                  :aria-label="t('panel.editNamed', { name: it.spec.name })"
+                  @click="startEdit(it.id)"
+                  >{{ t("action.edit") }}</Button
+                >
+                <Button size="sm" :aria-label="t('panel.deleteNamed', { name: it.spec.name })" @click="remove(it.id)">{{
+                  t("action.delete")
+                }}</Button>
               </span>
             </div>
           </template>

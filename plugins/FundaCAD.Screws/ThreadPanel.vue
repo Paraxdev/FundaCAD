@@ -3,23 +3,24 @@ import { computed } from "vue";
 import { readAs, spellNumber } from "fundacad";
 import { Button, FieldRow, FloatingPanel, NumberField, Select, Switch } from "fundacad/ui";
 import { choicesFor, choiceOf, nearestIn, offByText, threadDraft, threadTool, type ThreadDraft } from "./threadTool";
+import { t } from "./lines";
 import type { ThreadSystem } from "./threadSpec";
 
 const readLength = readAs("length");
 
-const SYSTEMS: { value: ThreadSystem; label: string }[] = [
-  { value: "iso", label: "ISO metric" },
+const SYSTEMS = computed<{ value: ThreadSystem; label: string }[]>(() => [
+  { value: "iso", label: t("thread.systemIso") },
   { value: "unc", label: "UNC" },
   { value: "unf", label: "UNF" },
-  { value: "tr", label: "Trapezoidal Tr" },
+  { value: "tr", label: t("thread.systemTr") },
   { value: "acme", label: "ACME" },
-];
+]);
 
 const d = computed(() => threadDraft.value);
 const choices = computed(() => (d.value ? choicesFor(d.value.system) : []));
 const choice = computed(() => (d.value ? choiceOf(d.value) : null));
 const offBy = computed(() => (d.value ? offByText(d.value) : ""));
-const threadTitle = computed(() => `Standard Thread, ${d.value?.external ? "shaft" : "bore"}`);
+const threadTitle = computed(() => (d.value?.external ? t("thread.titleShaft") : t("thread.titleBore")));
 const lead = computed(() => (choice.value && d.value ? +(choice.value.pitch * d.value.starts).toFixed(4) : 0));
 
 function set(patch: Partial<ThreadDraft>) {
@@ -38,13 +39,21 @@ function setSystem(system: ThreadSystem) {
 
 const sizeOptions = computed(() => choices.value.map((c) => ({ value: c.designation, label: c.designation })));
 const faceOptions = computed(() => [
-  { value: "tap", label: `Tap drill${choice.value ? `, ${spellNumber(choice.value.tap)} mm` : ""}` },
-  { value: "nominal", label: `Nominal${choice.value ? `, ${spellNumber(+choice.value.d.toFixed(3))} mm` : ""}` },
+  {
+    value: "tap",
+    label: choice.value ? t("thread.faceTapMm", { mm: spellNumber(choice.value.tap) }) : t("thread.faceTap"),
+  },
+  {
+    value: "nominal",
+    label: choice.value
+      ? t("thread.faceNominalMm", { mm: spellNumber(+choice.value.d.toFixed(3)) })
+      : t("thread.faceNominal"),
+  },
 ]);
-const HANDS = [
-  { value: "right", label: "Right" },
-  { value: "left", label: "Left" },
-];
+const HANDS = computed(() => [
+  { value: "right", label: t("option.right") },
+  { value: "left", label: t("option.left") },
+]);
 const STARTS = [1, 2, 3, 4].map((n) => ({ value: String(n), label: String(n) }));
 
 // Inline because a downloaded plugin cannot ship a stylesheet (scripts/build-plugin-code.mjs).
@@ -57,10 +66,10 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
   <FloatingPanel :open="!!d" :title="threadTitle" close-on-esc @close="threadTool?.cancel()">
     <div v-if="d" :style="PANEL" data-testid="thread-panel">
       <div class="measure-title" aria-hidden="true">{{ threadTitle }}</div>
-      <FieldRow v-slot="{ id }" label="System">
+      <FieldRow v-slot="{ id }" :label="t('field.system')">
         <Select
           :id="id"
-          label="System"
+          :label="t('field.system')"
           size="sm"
           testid="thread-system"
           :style="FIELD"
@@ -69,10 +78,10 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
           @update:model-value="setSystem"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" label="Size">
+      <FieldRow v-slot="{ id }" :label="t('field.size')">
         <Select
           :id="id"
-          label="Size"
+          :label="t('field.size')"
           size="sm"
           testid="thread-size"
           :style="FIELD"
@@ -82,15 +91,10 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
         />
       </FieldRow>
       <div v-if="offBy" class="measure-hint" data-testid="thread-offby">{{ offBy }}</div>
-      <FieldRow
-        v-if="!d.external"
-        v-slot="{ id }"
-        label="Bore drawn at"
-        title="A bore drawn at tap drill size is cut, one drawn at the nominal size gets the thread joined into it"
-      >
+      <FieldRow v-if="!d.external" v-slot="{ id }" :label="t('field.boreDrawnAt')" :title="t('thread.boreTip')">
         <Select
           :id="id"
-          label="Bore drawn at"
+          :label="t('field.boreDrawnAt')"
           size="sm"
           testid="thread-faceis"
           :style="FIELD"
@@ -99,10 +103,10 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
           @update:model-value="set({ faceIs: $event as 'tap' | 'nominal' })"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" label="Hand">
+      <FieldRow v-slot="{ id }" :label="t('field.hand')">
         <Select
           :id="id"
-          label="Hand"
+          :label="t('field.hand')"
           size="sm"
           testid="thread-hand"
           :style="FIELD"
@@ -111,10 +115,10 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
           @update:model-value="set({ hand: $event as 'right' | 'left' })"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" label="Starts">
+      <FieldRow v-slot="{ id }" :label="t('field.starts')">
         <Select
           :id="id"
-          label="Starts"
+          :label="t('field.starts')"
           size="sm"
           testid="thread-starts"
           :style="FIELD"
@@ -123,27 +127,22 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
           @update:model-value="set({ starts: Number($event) })"
         />
       </FieldRow>
-      <div v-if="choice" class="measure-hint"
-        >Pitch {{ spellNumber(+choice.pitch.toFixed(4)) }} mm, lead {{ spellNumber(lead) }} mm</div
-      >
-      <FieldRow v-slot="{ id }" label="Print fit">
+      <div v-if="choice" class="measure-hint">{{
+        t("thread.pitchLead", { pitch: spellNumber(+choice.pitch.toFixed(4)), lead: spellNumber(lead) })
+      }}</div>
+      <FieldRow v-slot="{ id }" :label="t('field.printFit')">
         <Switch
           :id="id"
-          label="Print fit"
+          :label="t('field.printFit')"
           data-testid="thread-printfit"
           :model-value="d.printFit"
           @update:model-value="set({ printFit: $event })"
         />
       </FieldRow>
-      <FieldRow
-        v-if="d.printFit"
-        v-slot="{ id }"
-        label="Clearance"
-        title="Radial clearance, so a printed thread turns into its mate"
-      >
+      <FieldRow v-if="d.printFit" v-slot="{ id }" :label="t('field.clearance')" :title="t('field.clearanceTip')">
         <NumberField
           :id="id"
-          label="Clearance"
+          :label="t('field.clearance')"
           unit="mm"
           size="sm"
           :style="FIELD"
@@ -158,9 +157,9 @@ const ACTIONS = { display: "flex", justifyContent: "flex-end", gap: "6px", margi
         />
       </FieldRow>
       <div :style="ACTIONS">
-        <Button data-testid="thread-cancel" @click="threadTool?.cancel()">Cancel</Button>
+        <Button data-testid="thread-cancel" @click="threadTool?.cancel()">{{ t("action.cancel") }}</Button>
         <Button variant="primary" data-testid="thread-apply" :disabled="!choice" @click="threadTool?.apply()">{{
-          d.editing ? "Update" : "Add"
+          d.editing ? t("action.update") : t("action.add")
         }}</Button>
       </div>
     </div>

@@ -2,6 +2,7 @@
 // JSON file.
 
 import { readSetting } from "fundacad";
+import { t } from "./lines";
 import { specProblems, type FastenerSpec } from "./spec";
 
 export const LIBRARY_KEY = "fundacad.screws.library";
@@ -56,19 +57,24 @@ export function parseLibraryFile(text: string): { specs: FastenerSpec[]; problem
   try {
     parsed = JSON.parse(text);
   } catch {
-    return { specs: [], problems: ["the file is not JSON"] };
+    return { specs: [], problems: [t("file.notJson")] };
   }
   const obj = parsed as { format?: unknown; fasteners?: unknown };
   if (!obj || obj.format !== FILE_FORMAT || !Array.isArray(obj.fasteners)) {
-    return { specs: [], problems: ["the file is not a fastener library"] };
+    return { specs: [], problems: [t("file.notLibrary")] };
   }
   const specs: FastenerSpec[] = [];
   const problems: string[] = [];
   obj.fasteners.forEach((raw, i) => {
     const spec = raw as FastenerSpec;
-    const found = raw && typeof raw === "object" ? specProblems(spec) : ["not a fastener"];
+    const found = raw && typeof raw === "object" ? specProblems(spec) : [t("file.notFastener")];
     if (found.length)
-      problems.push(`${(spec && typeof spec.name === "string" && spec.name) || `entry ${i + 1}`}: ${found.join("; ")}`);
+      problems.push(
+        t("file.problem", {
+          name: (spec && typeof spec.name === "string" && spec.name) || t("file.entry", { n: i + 1 }),
+          problems: found.join("; "),
+        }),
+      );
     else specs.push(spec);
   });
   return { specs, problems };
