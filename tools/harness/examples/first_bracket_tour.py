@@ -74,6 +74,8 @@ def follow(s, want):
         if g["on"] == want:
             return s.click(want)
         s.click(g["on"])
+        # A flyout animates open, so a second click before the ring moves would close it again.
+        until(s, lambda: s.guide(raw=True)["on"] != g["on"], seconds=2)
     raise AssertionError(f"the ring never reached {want}: {s.guide(raw=True)}")
 
 
