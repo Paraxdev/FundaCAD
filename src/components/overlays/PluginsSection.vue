@@ -31,7 +31,7 @@ import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/r
 import { updateFor } from "../../plugins/updates";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
-import { plainError, SEE_CONSOLE } from "../../ui/plainError";
+import { plainError, seeConsole } from "../../ui/plainError";
 
 const suggested = ref<OfficialPlugin[]>(officialPlugins());
 
@@ -65,7 +65,7 @@ onUnmounted(() => offPlugins?.());
 function toggle(id: string, run: boolean, name: string) {
   setPluginEnabled(id, run).catch((err: unknown) =>
     toast(
-      t(run ? "plugins.toast.onFailed" : "plugins.toast.offFailed", { name, detail: plainError(err, SEE_CONSOLE) }),
+      t(run ? "plugins.toast.onFailed" : "plugins.toast.offFailed", { name, detail: plainError(err, seeConsole()) }),
       {
         kind: "error",
         detail: err,
@@ -208,7 +208,7 @@ async function accept(plugin: OfficialPlugin, done: "installed" | "updated" = "i
   } catch (err) {
     // A refusal names itself, so its own sentence is kept: "install failed" cannot be told from a flat network.
     toast(
-      t("plugins.toast.installFailed", { name: pluginName(plugin.manifest), detail: plainError(err, SEE_CONSOLE) }),
+      t("plugins.toast.installFailed", { name: pluginName(plugin.manifest), detail: plainError(err, seeConsole()) }),
       {
         kind: "error",
         detail: err,
@@ -226,7 +226,7 @@ async function read(from: () => Promise<Candidate | null>) {
   try {
     candidate.value = await from();
   } catch (err) {
-    toast(t("plugins.toast.readFailed", { detail: plainError(err, SEE_CONSOLE) }), { kind: "error", detail: err });
+    toast(t("plugins.toast.readFailed", { detail: plainError(err, seeConsole()) }), { kind: "error", detail: err });
   } finally {
     reading.value = false;
   }
@@ -253,7 +253,7 @@ async function acceptCandidate(c: Candidate) {
     await refresh();
     toast(t("plugins.toast.installed", { name: pluginName(c.manifest) }));
   } catch (err) {
-    toast(t("plugins.toast.installFailed", { name: pluginName(c.manifest), detail: plainError(err, SEE_CONSOLE) }), {
+    toast(t("plugins.toast.installFailed", { name: pluginName(c.manifest), detail: plainError(err, seeConsole()) }), {
       kind: "error",
       detail: err,
     });
@@ -276,7 +276,7 @@ async function drop(id: string, name: string) {
     await refresh();
     toast(t("plugins.toast.removed", { name }));
   } catch (err) {
-    toast(t("plugins.toast.removeFailed", { name, detail: plainError(err, SEE_CONSOLE) }), {
+    toast(t("plugins.toast.removeFailed", { name, detail: plainError(err, seeConsole()) }), {
       kind: "error",
       detail: err,
     });
