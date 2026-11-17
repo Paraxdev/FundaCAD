@@ -74,6 +74,10 @@ describe("snap", () => {
     expect(snap(v(-3, 0), [...cands, ...origin], screen, 1, 10).origin).toBe(true);
     expect(snap(v(10.2, 0), [...cands, ...origin], screen, 1, 10).origin).toBeFalsy();
   });
+  it("says so too when the cursor is diagonally near the origin, past its point reach", () => {
+    const r = snap(v(8, 8), originCandidate(new SketchPlane("XY")), screen, 0, 10);
+    expect([r.point.x, r.point.y, r.kind, r.origin]).toEqual([0, 0, "center", true]);
+  });
   it("falls back to the grid when no candidate is near", () => {
     const r = snap(v(4.9, 5.1), [], screen, 5, 10);
     expect(r.kind).toBe("grid");

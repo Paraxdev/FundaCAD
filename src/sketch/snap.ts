@@ -151,6 +151,7 @@ export function snap(
         guides: [],
         label: snapLabel(alignX.c),
         ref: alignX.c.ref,
+        origin: alignX.c.origin,
       };
     }
     const guides: SnapGuide[] = [];
