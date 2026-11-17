@@ -25,6 +25,13 @@ const FORMS: readonly Form[] = [
   { key: "engine.tooLargeRefused" },
   { key: "field.problem.unknownName", texts: ["name"] },
   { key: "field.problem.invalidNumber", texts: ["number"] },
+  { key: "field.problem.selfReference", texts: ["name"] },
+  { key: "field.problem.circular" },
+  { key: "field.problem.circularVia", texts: ["chain"] },
+  { key: "field.problem.unitless" },
+  { key: "field.problem.noFiniteValue" },
+  { key: "field.problem.invalidExpression" },
+  { key: "field.problem.targetGone" },
   { key: "expr.tooLong", numbers: ["max"] },
   { key: "expr.tooDeep", numbers: ["max"] },
   { key: "expr.qualifiedName" },
@@ -79,14 +86,20 @@ function compile(form: Form): Pattern {
   return { form, re: new RegExp(`^${source}$`), order };
 }
 
-/** The line in the chosen language when the app wrote it in English for the build state, any other line as it is. */
-export function shownLine(line: string): string {
+/** The key and arguments of a line the app wrote in English, null for any other line. */
+export function englishLine(line: string): { key: MessageKey; args: MessageArgs } | null {
   for (const { form, re, order } of (patterns ??= FORMS.map(compile))) {
     const m = re.exec(line);
     if (!m) continue;
     const args: MessageArgs = { ...form.fixed };
     order.forEach(({ name, text }, i) => (args[name] = text ? m[i + 1]! : Number(m[i + 1]!.replace(/,/g, ""))));
-    return t(form.key, args);
+    return { key: form.key, args };
   }
-  return line;
+  return null;
+}
+
+/** The line in the chosen language when the app wrote it in English for the build state, any other line as it is. */
+export function shownLine(line: string): string {
+  const said = englishLine(line);
+  return said ? t(said.key, said.args) : line;
 }

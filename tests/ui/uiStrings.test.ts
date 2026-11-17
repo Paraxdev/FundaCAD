@@ -269,6 +269,22 @@ describe("message keys in use", () => {
       "versions.error.saveFirst",
     ]);
   });
+
+  it("counts only a keyed error's first argument and its lines, not text beside them that looks like a key", () => {
+    const code = [
+      `throw new WordedError("plugins.notInstallable", { why: "see.the.log" }, { lines: { why: "plugins.manifest.noName" } });`,
+      `throw new ExprRefusal("expr.unexpected", { token: "a.b" });`,
+      `throw new OnshapeError("error.tab", { name: "part.one" }, { status: 404 });`,
+      `throw new TracerRefused("render.trace.selfCheckWrong");`,
+      `throw new Error("the.file.json");`,
+    ].join("\n");
+    expect([...usedKeys({ "src/a.ts": code })].sort()).toEqual([
+      "error.tab",
+      "expr.unexpected",
+      "plugins.manifest.noName",
+      "plugins.notInstallable",
+    ]);
+  });
 });
 
 describe("the allowlist", () => {

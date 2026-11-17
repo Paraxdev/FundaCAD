@@ -1577,7 +1577,9 @@ export class Geometry implements GeometryBackend {
         undefined,
         scope,
       );
-      if (!msg.ok) throw new Error(msg.error?.message ?? "the engine refused the bytes");
+      if (!msg.ok) {
+        throw msg.error?.message != null ? new Error(msg.error.message) : new WordedError("engine.blobRefused");
+      }
       if (msg.result.stored) return hash;
       offset += piece.length;
     } while (offset < total);
