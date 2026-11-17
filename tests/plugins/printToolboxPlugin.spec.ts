@@ -157,7 +157,11 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
   });
 
   it("describes the features it leaves in the history", () => {
-    expect(featureMeta({ type: "teardropHole" })).toEqual({ icon: "printTeardrop", label: "Teardrop" });
+    expect(featureMeta({ type: "teardropHole" })).toEqual({
+      icon: "printTeardrop",
+      label: "Teardrop",
+      refName: "Teardrop",
+    });
     expect(choiceFieldsFor("teardropHole").map((c) => c.field)).toEqual(["buildDir", "roof"]);
     expect(fieldApplies("teardropHole", "flatHeight", { roof: "pointed" })).toBe(false);
     expect(targetsOf("sacrificialLayer").map((t) => t.field)).toEqual(["faces"]);
@@ -292,7 +296,11 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     expect(printabilityPanel.value).toBeNull();
     expect(engine.state.marks.at(-1)).toEqual({ marks: null, layer: "printability" });
     expect(engine.state.listeners).toBe(0);
-    expect(featureMeta({ type: "teardropHole" })).not.toEqual({ icon: "printTeardrop", label: "Teardrop" });
+    expect(featureMeta({ type: "teardropHole" })).not.toEqual({
+      icon: "printTeardrop",
+      label: "Teardrop",
+      refName: "Teardrop",
+    });
     engine.state.faces = [{ point: [0, 0, 0], faceId: 1 }];
     press("Enter");
     expect(engine.state.added).toHaveLength(0);

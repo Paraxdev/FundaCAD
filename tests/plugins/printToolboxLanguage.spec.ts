@@ -119,7 +119,7 @@ describe("print toolbox in Japanese", () => {
     const names = (id: string) => id;
     expect(findingText(finding({}), names)).toBe("オーバーハング、132 mm²、傾き 60°");
     expect(findingText(finding({ kind: "meshHole", value: 4 }), names)).toBe("メッシュに開いたエッジが 4 本あります");
-    expect(findingPlace(finding({}), reply.bodies, names).hint).toBe("面 4、ベッドから 5 mm 上から");
+    expect(findingPlace(finding({}), reply.bodies, names).hint).toBe("面 4、ベッドの 5 mm 上から");
   });
 
   it("joins sentences the Japanese way", () => {
@@ -135,5 +135,80 @@ describe("print toolbox in Japanese", () => {
     expect(findingText(finding({}), (id) => id)).toBe("Overhang, 132 mm² leaning 60°");
     expect(toolLabel("print-printability")).toBe("Printability");
     expect(toolLabel("print-printability", true)).toBe("Printability");
+  });
+});
+
+const headed = (over: Partial<PrintabilityReply>): PrintabilityReply => ({
+  ...reply,
+  header: "engine English",
+  bodies: [
+    { id: "body1", name: "Block", up: [0, 0, 1], bed: -5, bedFace: 3, openEdges: 0, solids: 1, insideOut: false },
+    { id: "body2", name: "Lid", up: [0, 0, 1], bed: -5, bedFace: null, openEdges: 0, solids: 1, insideOut: false },
+  ],
+  findings: [],
+  ...over,
+});
+
+describe("the printability header", () => {
+  const labels = new Map([["body1", "Block"]]);
+  const header = (over: Partial<PrintabilityReply> = {}) => formatPrintabilityResult(headed(over), labels).header;
+  const flat = { settings: { ...reply.settings, up: null, layFlat: true } };
+  const down = { settings: { ...reply.settings, up: "-Z" } };
+
+  it("is built from the reply's data, in English as the engine said it", () => {
+    expect(header()).toBe("+Z up as modelled, bed at z = -5");
+    expect(header(down)).toBe("-Z up as modelled, bed at z = 5");
+    expect(header({ ...flat })).toBe(
+      "Laid flat as the export would do it (Block on face 4, Lid as modelled, no flat face), each on its own bed, coordinates stay the model's",
+    );
+  });
+
+  it("is empty when the engine sent none or built nothing", () => {
+    expect(header({ header: "" })).toBe("");
+    expect(header({ bodies: [] })).toBe("");
+  });
+
+  it("reads German with a decimal comma and follows a switch", async () => {
+    await setLanguage("de");
+    const view = formatPrintabilityResult(headed({ bodies: [{ ...headed({}).bodies[0]!, bed: -2.5 }] }), labels);
+    expect(view.header).toBe("+Z oben wie modelliert, Bauplatte bei z = -2,5");
+    expect(header(flat)).toContain("Block auf Fläche 4, Lid wie modelliert, keine ebene Fläche");
+    await setLanguage("ja");
+    expect(view.header).toBe("+Z を上向き (モデルのまま)、ベッドは z = -2.5");
+    expect(header(flat)).toContain("Block は面 4、Lid はモデルのまま、平らな面なし");
+  });
+});
+
+describe("the engine's notes on a finding", () => {
+  const sideways = "partly bridged, a sideways hole: teardropHole or roofBridge fixes it";
+
+  it("read in the language, each one mapped on its own", async () => {
+    await setLanguage("de");
+    const f = finding({ note: sideways });
+    expect(findingText(f, (id) => id)).toBe(
+      "Überhang, 132 mm², 60° geneigt, teilweise überbrückt, ein seitlich liegendes Loch: das Werkzeug Tropfenform oder Dachbrücke behebt es",
+    );
+    await setLanguage("ja");
+    expect(findingText(f, (id) => id)).toContain(
+      "一部ブリッジ済み、横向きの穴: ティアドロップ または ルーフブリッジ ツールで解決できます",
+    );
+  });
+
+  it("shows a note it does not know as the engine wrote it", async () => {
+    await setLanguage("de");
+    expect(findingText(finding({ note: "partly bridged, something new" }), (id) => id)).toBe(
+      "Überhang, 132 mm², 60° geneigt, teilweise überbrückt, something new",
+    );
+  });
+
+  it("names a fused partner in the dative in German", async () => {
+    await setLanguage("de");
+    const fused = finding({ kind: "fused", value: 0.05, other: null });
+    expect(findingText(fused, (id) => id)).toBe(
+      "0,05 mm von einem anderen Körper entfernt, wird verschmolzen gedruckt",
+    );
+    expect(findingText({ ...fused, value: 0 }, (id) => id)).toBe(
+      "Kontakt mit einem anderen Körper, wird verschmolzen gedruckt",
+    );
   });
 });

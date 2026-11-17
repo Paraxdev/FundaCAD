@@ -167,8 +167,9 @@ export async function activate(e: Engine): Promise<() => void> {
       meta: {
         icon: tool.icon,
         get label() {
-          return tool.label;
+          return toolLabel(tool.id);
         },
+        refName: toolLabel(tool.id, true),
       },
       // Read on every draw, so the row names follow the language.
       numFields: () => tool.numFields,

@@ -65,7 +65,7 @@ describe("fixed decimal readouts in German", () => {
   it("the bed message and the screw spec rows use the comma", async () => {
     await setLanguage("de");
     expect(bedFitMessage([100.4, 300.7, 100], [220, 220, 220])).toBe(
-      "Too big for the 220 x 220 x 220 mm bed (model is 100,4 x 300,7 x 100,0 mm); scale to 73,2% to fit",
+      "Zu groß für die Bauplatte mit 220 x 220 x 220 mm (Modell: 100,4 x 300,7 x 100,0 mm), auf 73,2 % skalieren, damit es passt",
     );
     const rows = specRows(expand({ familyId: "iso4762", size: "M3", length: 10 }), { size: "M3", volume: 200 });
     expect(rows.find((r) => r.label.trim() === "Pitch")).toEqual({ label: "  Pitch", value: "0,5 mm" });

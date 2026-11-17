@@ -9,7 +9,7 @@ import type {
   PrintabilityReply,
   PrintabilityUp,
 } from "fundacad";
-import { t } from "./lines";
+import { t, toolLabel } from "./lines";
 
 export interface PrintabilitySetup {
   /** mm whatever the display unit: these are nozzle-sized numbers, and the
@@ -226,8 +226,41 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
     default:
       text = String(f.kind);
   }
-  // The note is the engine's own English.
-  return f.note ? join([text, f.note]) : text;
+  return f.note ? join([text, ...noteParts(f.note)]) : text;
+}
+
+// The engine writes its notes in English and joins several with ", ", see printcheck/mod.rs and op.rs. A note it has
+// not told us about shows as it came.
+const NOTES: Record<string, () => string> = {
+  "partly bridged": () => t("note.partlyBridged"),
+  "a sideways hole: teardropHole or roofBridge fixes it": () =>
+    t("note.sidewaysHole", { teardrop: toolLabel("print-teardrop"), roofBridge: toolLabel("print-roof-bridge") }),
+};
+
+export const ENGINE_NOTES: readonly string[] = Object.keys(NOTES);
+
+function noteParts(note: string): string[] {
+  return note.split(", ").map((part) => NOTES[part]?.() ?? part);
+}
+
+/** The header the engine put on the reply, rebuilt from the reply's own data so it follows the language. The engine
+ *  sends no header when it has nothing to say, and one with no bodies has no bed to name. */
+function headerText(r: PrintabilityReply, nameOf: (id: string) => string): string {
+  if (!r.header || !r.bodies.length) return "";
+  if (r.settings.layFlat) {
+    const list = r.bodies.map((b) =>
+      typeof b.bedFace === "number"
+        ? t("header.onFace", { name: nameOf(b.id), n: b.bedFace + 1 })
+        : t("header.noFlatFace", { name: nameOf(b.id) }),
+    );
+    return t("header.layFlat", { list: join(list) });
+  }
+  const up = r.settings.up;
+  if (!up) return "";
+  // The bed is measured along the up axis, so a down axis reads back as the coordinate it sits at.
+  const bed = Math.min(...r.bodies.map((b) => b.bed)) * (up.startsWith("-") ? -1 : 1);
+  const value = numberText(Math.round(bed * 1000) / 1000 + 0);
+  return t("header.upAsModelled", { up, axis: up.slice(1).toLowerCase(), value });
 }
 
 /** Where a finding sits, by face number (what the Geometry tab shows) and height above its body's bed. `hint` starts
@@ -316,7 +349,9 @@ export function formatPrintabilityResult(
     e.feature_id ? t("result.engineError", { id: e.feature_id, message: e.message }) : e.message,
   );
   return {
-    header: r.header,
+    get header() {
+      return headerText(r, nameOf);
+    },
     groups: [...groups.values()],
     findings: r.findings,
     kinds: KIND_ORDER.filter((k) => kinds.has(k)),
