@@ -138,11 +138,6 @@ READ = """() => {
   };
 }"""
 
-# A blocked Path traced tile names its reason from src/ui/viewMode.ts, a helper outside the shell that still reads
-# English, so its tooltip is taken off the tile and left out of the English check.
-HELPER = """() => document.querySelector('#viewcontrols [data-view-mode="pathtraced"][aria-disabled="true"]')
-  ?.getAttribute("title") ?? null"""
-
 TEXTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => e.textContent.replace(/\\s+/g, " ").trim())"""
 
 
@@ -177,7 +172,6 @@ def seen():
             close_settings(s)
             settled(s)
             got = s.page.evaluate(READ)
-            got["helper"] = s.page.evaluate(HELPER)
             got["text"] = s.page.evaluate(READ_TEXT, f"{BAR}, #home-btn, #context-tab, #workspace-toggle")
             got["cut"] = cut(s, BAR) + cut(s, "#titlebar")
 
@@ -262,8 +256,7 @@ def test_no_english_line_is_left(seen, lang):
     left = [phrase for phrase in want["english"] if any(phrase in line for line in got["text"])]
     assert left == [], left
     if lang == "ja":
-        lines = [line for line in got["text"] if not (got["helper"] and got["helper"] in line)]
-        assert english_lines(lines) == [], english_lines(lines)
+        assert english_lines(got["text"]) == [], english_lines(got["text"])
 
 
 @pytest.mark.parametrize("lang", list(EXPECTED))
