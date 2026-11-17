@@ -235,7 +235,7 @@ describe("Dimensions list commits", () => {
     await setLanguage("de");
     try {
       await type(w, 0, "width = 12");
-      expect(rowsOf(w)[0]!.get(".ui-field-hint").text()).toBe("„width“ gibt es bereits");
+      expect(rowsOf(w)[0]!.get(".ui-field-hint").text()).toBe("„width“ existiert bereits");
     } finally {
       await setLanguage("system");
     }

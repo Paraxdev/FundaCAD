@@ -92,11 +92,11 @@ describe("the parameter engine's refusals", () => {
     [
       "1a",
       "names are letters, digits and _ (not starting with a digit)",
-      "Namen bestehen aus Buchstaben, Ziffern und _ und beginnen nicht mit einer Ziffer",
+      "Namen bestehen aus den Buchstaben A bis Z ohne Umlaute, Ziffern und _ und beginnen nicht mit einer Ziffer",
     ],
     ["sin", '"sin" is a reserved name', "„sin“ ist ein reservierter Name"],
     ["constructor", '"constructor" is a reserved name', "„constructor“ ist ein reservierter Name"],
-    ["a", '"a" already exists', "„a“ gibt es bereits"],
+    ["a", '"a" already exists', "„a“ existiert bereits"],
     ["d3", "dN names are reserved for model parameters", "Namen der Form dN sind für Modellparameter reserviert"],
   ])("refuses the name %s in English and reads it in German", async (name, english, german) => {
     expect(validateName(doc.paramDefs!, name)).toBe(english);
@@ -148,6 +148,24 @@ describe("the sketch dimension editor's refusals", () => {
     expect(evalDim(raw, store)).toEqual({ error: english });
     expect(plainError(english, "")).toBe(german);
     await setLanguage("system");
+    expect(await shown(english)).toEqual([english, german]);
+  });
+
+  it("refuses an expression on an entity that is gone in English and reads it in German", async () => {
+    const mode = Object.create(SketchMode.prototype) as {
+      commitEntityDimExpr(index: number, field: string, raw: string): string | null;
+    };
+    Object.assign(mode, { entities: [] });
+    await setLanguage("de");
+    expect(mode.commitEntityDimExpr(0, "length", "width")).toBe("no entity");
+    await setLanguage("system");
+    expect(await shown("no entity")).toEqual(["no entity", "kein Element"]);
+  });
+
+  it.each([
+    ["not editable", "nicht bearbeitbar"],
+    ["this dimension can't hold an expression yet", "diese Bemaßung kann noch keinen Ausdruck aufnehmen"],
+  ])("reads %s in German", async (english, german) => {
     expect(await shown(english)).toEqual([english, german]);
   });
 });

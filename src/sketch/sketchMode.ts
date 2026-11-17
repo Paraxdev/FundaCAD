@@ -1493,7 +1493,7 @@ export class SketchMode {
         onDelete: () => this.deleteConstraint(d.cIndex),
         commitExpr: (raw: string) => {
           const c = this.constraints[d.cIndex];
-          if (!c || !isDimConstraint(c)) return "not editable";
+          if (!c || !isDimConstraint(c)) return tEnglish("field.problem.notEditable");
           if (!c.id) c.id = newConstraintId();
           return this.commitExprInput(`c:${c.id}`, d.kind === "angle" ? "angle" : "length", raw, (v) => {
             this.writeDimValue(c, v);
@@ -1655,11 +1655,11 @@ export class SketchMode {
    *  constraint; rigid fields bind as entity targets. Derived dims take numbers only. */
   private commitEntityDimExpr(index: number, field: DimField, raw: string): string | null {
     const e = this.entities[index];
-    if (!e) return "no entity";
+    if (!e) return tEnglish("field.problem.noEntity");
     const driving = drivingDimFor(e, field, 0);
     if (driving) return this.commitConvertedDim(e, field, driving, raw);
     const bindable = RIGID_ENTITY_NUM_FIELDS[e.type]?.some(([f]) => f === field);
-    if (!bindable) return "this dimension can't hold an expression yet";
+    if (!bindable) return tEnglish("field.problem.noExpressionHere");
     return this.commitExprInput(`e:${e.id}:${field}`, "length", raw, (v) => {
       entityDims(e)
         .find((d) => d.field === field)
