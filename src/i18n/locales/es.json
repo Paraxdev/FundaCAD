@@ -292,7 +292,7 @@
   "field.tiltY": "Inclinación Y",
   "field.tip.continuity": "G1 es un redondeo circular; G2 se funde con las caras sin salto de curvatura, G3 también sin salto en su variación. G2 y G3 necesitan que ambas caras sean planas a ambos lados de la arista",
   "field.tip.direction": "A lo largo del eje desliza el extremo de un agujero por el agujero, de modo que queda más o menos profundo y el extremo conserva su forma",
-  "field.tip.drive": "La articulación que mueve el valor de accionamiento: una de giro gira según el ángulo de accionamiento, una deslizante se desplaza según el desfase de accionamiento",
+  "field.tip.drive": "La junta que mueve el valor de accionamiento: una de giro gira según el ángulo de accionamiento, una deslizante se desplaza según el desfase de accionamiento",
   "field.tip.end": "Hasta un destino ignora la distancia y avanza hacia el destino; el desfase final pasa más allá, uno negativo se queda corto",
   "field.tip.holeType": "Inserto térmico dimensiona el taladro para un inserto de latón del tamaño elegido",
   "field.tip.pressPullMode": "Automático agranda o reduce la cara según el signo de la distancia; los demás la extruyen y combinan como una extrusión",

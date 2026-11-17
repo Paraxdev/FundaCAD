@@ -292,7 +292,7 @@
   "field.tiltY": "Inclinaison Y",
   "field.tip.continuity": "G1 est un congé circulaire ; G2 se raccorde aux faces sans saut de courbure, G3 sans saut de sa variation non plus. G2 et G3 exigent deux faces planes de part et d'autre de l'arête",
   "field.tip.direction": "Le long de l'axe fait glisser le fond d'un perçage dans le perçage, qui devient plus ou moins profond et garde la forme de son fond",
-  "field.tip.drive": "L'articulation que déplace la valeur d'entraînement : un pivot tourne de l'angle d'entraînement, une glissière glisse du décalage d'entraînement",
+  "field.tip.drive": "La liaison que déplace la valeur d'entraînement : un pivot tourne de l'angle d'entraînement, une glissière glisse du décalage d'entraînement",
   "field.tip.end": "Jusqu'à une cible ignore la distance et va vers la cible ; le décalage de fin dépasse la cible, un décalage négatif s'arrête avant",
   "field.tip.holeType": "Insert à chaud dimensionne l'alésage pour un insert en laiton de la taille choisie",
   "field.tip.pressPullMode": "Automatique agrandit ou réduit la face selon le signe de la distance ; les autres l'extrudent et combinent comme une extrusion",
