@@ -130,6 +130,14 @@ describe("the key rows with the plugin active", () => {
       "Warnung: E wird bereits von Extrusion verwendet, dieses hat Vorrang",
     );
   });
+
+  it("name the radial row that holds a key in the language set after the keymap was staged in English", async () => {
+    setShortcutOverrides(keymapFor(navState.cfg));
+    await setLanguage("de");
+    const p = checkShortcut({ action: "extrude", key: "w" });
+    expect(p && "conflict" in p ? p.conflict.label : null).toBe("Radial menu");
+    expect(problemText(p!)).toBe("W wird bereits von Radialmenü verwendet");
+  });
 });
 
 describe("the shortcut problems", () => {

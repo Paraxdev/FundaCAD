@@ -8,6 +8,7 @@ import {
   allCommands,
   checkShortcut,
   formatShortcut,
+  shortcutLabel,
   type Shortcut,
   type ShortcutOverride,
 } from "fundacad";
@@ -20,7 +21,6 @@ import {
   bindingRows as bindingRowsOf,
   keymapFor,
   problemText,
-  shortcutLabel,
   tableFor,
   type RadialContext,
 } from "./navigation";

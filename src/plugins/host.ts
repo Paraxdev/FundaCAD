@@ -79,6 +79,7 @@ export {
   describeShortcutProblem,
   formatShortcut,
   keyHint,
+  shortcutLabel,
 } from "../input/shortcuts";
 export type { Shortcut, ShortcutOverride, ShortcutProblem } from "../input/shortcuts";
 export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
