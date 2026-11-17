@@ -17,6 +17,7 @@ import {
   finishWords,
   type FinishGloss,
   type FinishKind,
+  type LibraryProblem,
   type MaterialDef,
   type SurfaceSpec,
 } from "../../document/materials";
@@ -517,10 +518,27 @@ function onDragStart(e: DragEvent, m: MaterialDef) {
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
 }
 
+// The shape a hand written library takes, the same in every language.
+const LIBRARY_SHAPE = '{"materials": [...]}';
+
+function problemText(p: LibraryProblem): string {
+  switch (p.kind) {
+    case "notJson":
+      return t("render.mat.import.problem.notJson");
+    case "noList":
+      return t("render.mat.import.problem.noList", { shape: LIBRARY_SHAPE });
+    case "skipped":
+      return t("render.mat.import.problem.skipped", { dropped: p.dropped, total: p.total });
+    case "empty":
+      return t("render.mat.import.problem.empty");
+  }
+}
+
 async function doImport() {
   const res = await importMaterialLibrary(store);
   if (!res) return; // cancelled
-  const { added, updated, problem } = res;
+  const { added, updated } = res;
+  const problem = res.problem && problemText(res.problem);
   const usable = added || updated;
   const line = usable
     ? problem

@@ -57,7 +57,8 @@ const PORT_KEYS: Partial<Record<string, MessageKey>> = {
 const portLabel = (port: string) => {
   const key = PORT_KEYS[port];
   return key ? t(key) : port;
-}; // input ports per type, and the output type each node produces (for wiring rules)
+};
+// input ports per type, and the output type each node produces (for wiring rules)
 const INPUTS: Record<NodeType, string[]> = {
   noise: [],
   scratches: [],

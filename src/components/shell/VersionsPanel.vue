@@ -8,7 +8,7 @@ import { useDocValue, useMetaValue } from "../../app/useDoc";
 import { diffTrees, log, snapshotOf, versionById, type Version, type VersionDiff } from "../../document/versions";
 import { featureMeta } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
-import { plainError, SEE_CONSOLE } from "../../ui/plainError";
+import { plainError, seeConsole } from "../../ui/plainError";
 import { ago } from "../../ui/timeAgo";
 import { t } from "../../i18n";
 import Icon from "./Icon.vue";
@@ -74,7 +74,7 @@ function restore(v: Version) {
   try {
     store.restoreVersion(v.id);
   } catch (e) {
-    toast(t("versions.toast.restoreFailed", { name: v.message, detail: plainError(e, SEE_CONSOLE) }), {
+    toast(t("versions.toast.restoreFailed", { name: v.message, detail: plainError(e, seeConsole()) }), {
       kind: "error",
       detail: e,
     });

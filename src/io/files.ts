@@ -44,7 +44,14 @@ import {
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import { importFeatures } from "./importSketches";
-import { asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary } from "../document/materials";
+import {
+  asHex,
+  materialsForColors,
+  nodeColors,
+  parseLibrary,
+  serializeLibrary,
+  type LibraryProblem,
+} from "../document/materials";
 import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
@@ -1307,7 +1314,7 @@ export async function exportMaterialLibrary(store: DocumentStore) {
  *  replace would silently unassign every body wearing a material the file lacks. */
 export async function importMaterialLibrary(
   store: DocumentStore,
-): Promise<{ added: number; updated: number; problem: string | null } | null> {
+): Promise<{ added: number; updated: number; problem: LibraryProblem | null } | null> {
   let text: string | null = null;
   if (isTauri()) {
     const { open } = await nativeDialog();
@@ -1327,8 +1334,9 @@ export async function importMaterialLibrary(
   }
   if (text === null) return null;
   const { materials, problem } = parseLibrary(text);
+  if (problem?.kind === "notJson") console.warn(`Material library is not JSON: ${problem.detail}`);
   if (!materials.length) {
-    return { added: 0, updated: 0, problem: problem ?? "there were no materials in it" };
+    return { added: 0, updated: 0, problem: problem ?? { kind: "empty" } };
   }
   return { ...store.importMaterials(materials), problem };
 }

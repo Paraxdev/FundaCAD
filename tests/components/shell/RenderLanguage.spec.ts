@@ -18,6 +18,17 @@ vi.mock("../../../src/viewport/materialPreview", () => ({
   onPreviewsChanged: () => () => {},
 }));
 
+const importMaterialLibrary = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/io/files", async (orig) => ({
+  ...(await orig<typeof import("../../../src/io/files")>()),
+  importMaterialLibrary,
+}));
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/ui/toast", async (orig) => ({
+  ...(await orig<typeof import("../../../src/ui/toast")>()),
+  toast,
+}));
+
 const LIBRARY: MaterialDef[] = [
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 },
   { id: "m-gold", name: "Gold", color: "#d4af37", metalness: 1, roughness: 0.3 },
@@ -102,6 +113,41 @@ describe("the Render dock in another language", () => {
     expect(texts("[data-surface]")).toEqual(["なし", "ノイズ", "傷", "ヘアライン", "摩耗", "縞"]);
     expect(texts("[data-advanced] .prefs-label")).toEqual(["詳細設定", "シーン", "異方性", "散乱（mm）"]);
     expect(w.get('.rd-tile[data-material="m-gold"] .rd-sub').text()).toMatch(/メタリック/);
+  });
+
+  it("says what was wrong with an imported library in the language, never in English", async () => {
+    await switchTo("de");
+    w = mount(RenderDock, { global: { provide: { [ENGINE as symbol]: engine } } });
+    await flushPromises();
+    const importButton = w.findAll(".btn").find((b) => b.text() === "Importieren…")!;
+    const lastToast = () => toast.mock.calls.at(-1)?.[0];
+
+    importMaterialLibrary.mockResolvedValueOnce({
+      added: 1,
+      updated: 0,
+      problem: { kind: "skipped", dropped: 2, total: 3 },
+    });
+    await importButton.trigger("click");
+    await flushPromises();
+    expect(lastToast()).toBe(
+      "Materialien: 1 hinzugefügt, 0 aktualisiert, 2 von 3 hatten keine verwendbare Farbe und wurden übersprungen",
+    );
+
+    importMaterialLibrary.mockResolvedValueOnce({ added: 0, updated: 0, problem: { kind: "notJson", detail: "x" } });
+    await importButton.trigger("click");
+    await flushPromises();
+    expect(lastToast()).toBe("Materialien: nichts Verwendbares darin, nicht als JSON lesbar");
+
+    await switchTo("ja");
+    importMaterialLibrary.mockResolvedValueOnce({ added: 0, updated: 0, problem: { kind: "noList" } });
+    await w
+      .findAll(".btn")
+      .find((b) => b.text() === "インポート…")!
+      .trigger("click");
+    await flushPromises();
+    expect(lastToast()).toBe(
+      '材料：使用できるものがありません、材料が含まれていません（リストまたは {"materials": [...]} の形式が必要です）',
+    );
   });
 });
 

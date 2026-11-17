@@ -480,12 +480,19 @@ export interface MaterialLibraryFile {
 
 // Never throws: a broken file gives the readable materials plus a sentence. A bare `[…]` is accepted too, as a
 // spreadsheet export or hand-written file would be.
-export function parseLibrary(json: string): { materials: MaterialDef[]; problem: string | null } {
+/** What went wrong reading a library file, for the caller to word in the language. */
+export type LibraryProblem =
+  | { kind: "notJson"; detail: string }
+  | { kind: "noList" }
+  | { kind: "skipped"; dropped: number; total: number }
+  | { kind: "empty" };
+
+export function parseLibrary(json: string): { materials: MaterialDef[]; problem: LibraryProblem | null } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch (e) {
-    return { materials: [], problem: `not readable as JSON: ${(e as Error).message}` };
+    return { materials: [], problem: { kind: "notJson", detail: (e as Error).message } };
   }
   const rows = Array.isArray(parsed)
     ? parsed
@@ -493,7 +500,7 @@ export function parseLibrary(json: string): { materials: MaterialDef[]; problem:
       ? (parsed as { materials: unknown[] }).materials
       : null;
   if (!rows) {
-    return { materials: [], problem: 'no materials in it, expected a list or {"materials": [...]}' };
+    return { materials: [], problem: { kind: "noList" } };
   }
   const out: MaterialDef[] = [];
   const taken = new Set<string>();
@@ -508,9 +515,7 @@ export function parseLibrary(json: string): { materials: MaterialDef[]; problem:
     taken.add(m.id);
     out.push(m);
   });
-  const problem = dropped
-    ? `${dropped} of ${rows.length} had no usable colour and ${dropped === 1 ? "was" : "were"} skipped`
-    : null;
+  const problem: LibraryProblem | null = dropped ? { kind: "skipped", dropped, total: rows.length } : null;
   return { materials: out, problem };
 }
 

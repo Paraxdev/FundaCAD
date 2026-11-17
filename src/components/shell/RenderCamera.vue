@@ -15,7 +15,7 @@ import { announce, cancelAnnouncement } from "../../ui/announce";
 import { claimEscape } from "../../ui/escapeClaim";
 import type { DocumentSession } from "../../document/session";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
-import { plainError, SEE_CONSOLE } from "../../ui/plainError";
+import { plainError, seeConsole } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
 import {
   APERTURE_STOPS,
@@ -167,7 +167,7 @@ async function render(session: Pick<DocumentSession, "alive">): Promise<string |
         announce(t("render.progress.cancelled"), "polite", { key: RENDER_KEY });
       } else {
         cancelAnnouncement(RENDER_KEY);
-        toast(t("render.camera.failed", { reason: plainError(e, SEE_CONSOLE) }), { kind: "error", detail: e });
+        toast(t("render.camera.failed", { reason: plainError(e, seeConsole()) }), { kind: "error", detail: e });
       }
       return null;
     } finally {
