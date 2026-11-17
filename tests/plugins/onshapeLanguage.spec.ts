@@ -139,6 +139,7 @@ describe("the Onshape import errors follow the language", () => {
     retryAfter: null,
     text,
     path: null,
+    len: null,
   });
   const client = (status: number, body: string | null = null) =>
     onshapeClient({
