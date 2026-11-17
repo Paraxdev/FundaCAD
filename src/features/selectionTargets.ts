@@ -4,7 +4,7 @@
 import type { Feature, FeatureType, Selector } from "../types";
 import { contributedFeature } from "../plugins/contrib";
 import { fieldApplies } from "../document/optionFields";
-import { t } from "../i18n";
+import { t, type MessageKey } from "../i18n";
 
 /** "area" is a closed sketch region, the word the extrude prompts already use. */
 export type TargetKind = "edge" | "face" | "body" | "area";
@@ -30,140 +30,128 @@ export interface TargetField {
   ownBody?: boolean;
 }
 
+type Keyed = Omit<TargetField, "label" | "whenEmpty">;
+
+// Getters, so a row read after a language switch speaks the new language.
+function row(labelKey: MessageKey, rest: Keyed, emptyKey?: MessageKey): TargetField {
+  const out: TargetField = {
+    ...rest,
+    get label() {
+      return t(labelKey);
+    },
+  };
+  if (emptyKey) Object.defineProperty(out, "whenEmpty", { get: () => t(emptyKey), enumerable: true });
+  return out;
+}
+
+const BODIES: Keyed = { field: "bodies", kind: "body", shape: "bodyId", arity: "many" };
+
 /** Empty is the usual case and means every shown body it reaches, so hiding a body changes what it builds. Naming
  *  the bodies ends that, the remedy the engine's own refusal offers. */
-const ACTS_ON: TargetField = {
-  field: "targets",
-  label: "Bodies acted on",
-  kind: "body",
-  shape: "bodyId",
-  arity: "many",
-  whenEmpty: "every shown body it reaches",
-};
+const ACTS_ON = row(
+  "selectionTarget.actsOn",
+  { field: "targets", kind: "body", shape: "bodyId", arity: "many" },
+  "selectionTarget.empty.everyShownBody",
+);
+
+const EDGES = (): TargetField[] => [
+  row("selectionTarget.edges", { field: "edges", kind: "edge", shape: "selector", arity: "many" }),
+];
+const ONE_FACE = (): TargetField[] => [
+  row("selectionTarget.face", { field: "face", kind: "face", shape: "selector", arity: "one" }),
+];
+const BODIES_OR_ACTIVE = (): TargetField[] => [
+  row("selectionTarget.bodies", BODIES, "selectionTarget.empty.activeBody"),
+];
 
 /** The app's own inventory; targetsOf() also asks the plugins and is what consumers call. Declaration order is row
  *  order: what is kept before what is consumed, what is operated on before what it is operated with. */
 export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]>> = {
-  fillet: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
-  chamfer: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
+  fillet: EDGES(),
+  chamfer: EDGES(),
   "press-pull": [
-    { field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" },
-    {
-      field: "upTo",
-      label: "Up to face",
+    ...ONE_FACE(),
+    row(
+      "selectionTarget.upToFace",
+      { field: "upTo", kind: "face", shape: "selector", arity: "one", tracked: true },
+      "selectionTarget.empty.distance",
+    ),
+    ACTS_ON,
+  ],
+  deleteFace: ONE_FACE(),
+  // Shell's empty set is a sealed hollow, a legitimate and quite different part.
+  shell: [
+    row(
+      "selectionTarget.facesToOpen",
+      { field: "faces", kind: "face", shape: "selector", arity: "many", ownBody: true },
+      "selectionTarget.empty.sealed",
+    ),
+  ],
+  offsetFace: [row("selectionTarget.faces", { field: "faces", kind: "face", shape: "selector", arity: "many" })],
+  thicken: [
+    row(
+      "selectionTarget.faces",
+      { field: "faces", kind: "face", shape: "selector", arity: "many" },
+      "selectionTarget.empty.wholeBody",
+    ),
+    ACTS_ON,
+  ],
+  draft: [
+    row("selectionTarget.faces", { field: "faces", kind: "face", shape: "selector", arity: "many", ownBody: true }),
+  ],
+  hole: ONE_FACE(),
+  textOnFace: ONE_FACE(),
+  // Two body targets with opposite fates, labelled by fate: which body is kept is the whole meaning of a Subtract.
+  boolean: [
+    row("selectionTarget.bodyKept", { field: "target", kind: "body", shape: "bodyId", arity: "one" }),
+    row("selectionTarget.bodiesUsed", { field: "tools", kind: "body", shape: "bodyId", arity: "many" }),
+  ],
+  move: BODIES_OR_ACTIVE(),
+  mirror: BODIES_OR_ACTIVE(),
+  removeBody: [row("selectionTarget.bodies", BODIES)],
+  // The body that holds still while the rest of the linkage moves about it.
+  mechanism: [row("selectionTarget.ground", { field: "ground", kind: "body", shape: "bodyId", arity: "one" })],
+  patternRect: BODIES_OR_ACTIVE(),
+  patternLinear: BODIES_OR_ACTIVE(),
+  patternCircular: BODIES_OR_ACTIVE(),
+  split: [row("selectionTarget.bodies", { ...BODIES, alsoReads: "body" }, "selectionTarget.empty.activeBody")],
+  separate: [row("selectionTarget.bodies", { ...BODIES, alsoReads: "body" }, "selectionTarget.empty.activeBody")],
+  // Empty is legal and means the whole sketch, a different statement from no areas.
+  extrude: [
+    row(
+      "selectionTarget.profile",
+      { field: "regions", kind: "area", shape: "regionPoint", arity: "many", alsoReads: "region" },
+      "selectionTarget.empty.wholeSketch",
+    ),
+    row("selectionTarget.startFace", {
+      field: "startFace",
       kind: "face",
       shape: "selector",
       arity: "one",
-      whenEmpty: "the distance",
       tracked: true,
-    },
-    ACTS_ON,
-  ],
-  deleteFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
-  // Shell's empty set is a sealed hollow, a legitimate and quite different part.
-  shell: [
-    {
-      field: "faces",
-      label: "Faces to open",
+    }),
+    row("selectionTarget.upToFace", {
+      field: "upToFace",
       kind: "face",
       shape: "selector",
-      arity: "many",
-      whenEmpty: "sealed hollow",
-      ownBody: true,
-    },
-  ],
-  offsetFace: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
-  thicken: [
-    {
-      field: "faces",
-      label: "Faces",
+      arity: "one",
+      tracked: true,
+    }),
+    row("selectionTarget.upToFace2", {
+      field: "upToFace2",
       kind: "face",
       shape: "selector",
-      arity: "many",
-      whenEmpty: "the whole body",
-    },
-    ACTS_ON,
-  ],
-  draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many", ownBody: true }],
-  hole: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
-  textOnFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
-  // Two body targets with opposite fates, labelled by fate: which body is kept is the whole meaning of a Subtract.
-  boolean: [
-    { field: "target", label: "Body kept", kind: "body", shape: "bodyId", arity: "one" },
-    { field: "tools", label: "Bodies used", kind: "body", shape: "bodyId", arity: "many" },
-  ],
-  move: [
-    {
-      field: "bodies",
-      label: "Bodies",
-      kind: "body",
-      shape: "bodyId",
-      arity: "many",
-      whenEmpty: "the active body",
-    },
-  ],
-  mirror: [
-    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
-  ],
-  removeBody: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many" }],
-  // The body that holds still while the rest of the linkage moves about it.
-  mechanism: [{ field: "ground", label: "Ground", kind: "body", shape: "bodyId", arity: "one" }],
-  patternRect: [
-    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
-  ],
-  patternLinear: [
-    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
-  ],
-  patternCircular: [
-    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
-  ],
-  split: [
-    {
-      field: "bodies",
-      label: "Bodies",
-      kind: "body",
-      shape: "bodyId",
-      arity: "many",
-      whenEmpty: "the active body",
-      alsoReads: "body",
-    },
-  ],
-  separate: [
-    {
-      field: "bodies",
-      label: "Bodies",
-      kind: "body",
-      shape: "bodyId",
-      arity: "many",
-      whenEmpty: "the active body",
-      alsoReads: "body",
-    },
-  ],
-  // Empty is legal and means the whole sketch, a different statement from no areas.
-  extrude: [
-    {
-      field: "regions",
-      label: "Profile",
-      kind: "area",
-      shape: "regionPoint",
-      arity: "many",
-      whenEmpty: "the whole sketch",
-      alsoReads: "region",
-    },
-    { field: "startFace", label: "Start face", kind: "face", shape: "selector", arity: "one", tracked: true },
-    { field: "upToFace", label: "Up to face", kind: "face", shape: "selector", arity: "one", tracked: true },
-    { field: "upToFace2", label: "Up to face 2", kind: "face", shape: "selector", arity: "one", tracked: true },
+      arity: "one",
+      tracked: true,
+    }),
     ACTS_ON,
   ],
   revolve: [
-    {
-      field: "regions",
-      label: "Profile",
-      kind: "area",
-      shape: "regionPoint",
-      arity: "many",
-      whenEmpty: "the whole sketch",
-    },
+    row(
+      "selectionTarget.profile",
+      { field: "regions", kind: "area", shape: "regionPoint", arity: "many" },
+      "selectionTarget.empty.wholeSketch",
+    ),
     ACTS_ON,
   ],
   sweep: [ACTS_ON],
@@ -225,18 +213,10 @@ export function writeTarget(t: TargetField, entries: readonly TargetEntry[]): Pa
   return patch as Partial<Feature>;
 }
 
-/** Spelled, not derived: "2 bodys" is the sort of thing that ships. */
-const PLURAL: Record<TargetKind, string> = {
-  edge: "edges",
-  face: "faces",
-  body: "bodies",
-  area: "areas",
-};
-
 /** What the row says: "4 edges", "every edge", "2 edges, 1 tangent chain", or the field's own words for empty. An entry
  *  covering many edges is worded, not counted, since only the engine knows how many it reaches. */
 export function describeTarget(target: TargetField, entries: readonly TargetEntry[]): string {
-  if (entries.length === 0) return target.whenEmpty ?? "nothing selected";
+  if (entries.length === 0) return target.whenEmpty ?? t("selectionTarget.empty.nothing");
   const spans = new Map<string, number>();
   let picks = 0;
   for (const entry of entries) {
@@ -245,7 +225,7 @@ export function describeTarget(target: TargetField, entries: readonly TargetEntr
     if (span) spans.set(span, (spans.get(span) ?? 0) + 1);
     else picks++;
   }
-  const parts = picks ? [`${picks} ${picks === 1 ? target.kind : PLURAL[target.kind]}`] : [];
+  const parts = picks ? [t("selectionTarget.count", { kind: target.kind, n: picks })] : [];
   for (const [span, n] of spans) parts.push(spanWords(span, n));
   return parts.join(", ");
 }

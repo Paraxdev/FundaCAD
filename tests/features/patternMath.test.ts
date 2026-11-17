@@ -1,12 +1,14 @@
 // Where a pattern's copies go. The ghosts the tool draws and the solids the
 // kernel builds both come from here, so anything this gets wrong is a preview
 // that lies, the worst kind of wrong, because it is believed.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setUnit } from "../../src/ui/units";
 import {
   axisVector,
   circularAngles,
   clampCount,
   describePattern,
+  describeRect,
   isFullCircle,
   linearOffsets,
   MAX_DRAG_COUNT,
@@ -144,5 +146,16 @@ describe("describePattern", () => {
     // The prompt has to agree with the ghosts, and the ghosts are drawn from the
     // clamped count.
     expect(describePattern("linear", 0, 10, "X")).toContain("1 copy");
+  });
+
+  describe("in an inch document", () => {
+    afterEach(() => setUnit("mm"));
+
+    it("spells the spacing in inches", () => {
+      setUnit("in");
+      expect(describePattern("linear", 4, 25.4, "X")).toBe("4 copies, 1 in apart along X");
+      expect(describeRect(2, 3, 25.4, 50.8)).toBe("2 by 3 copies, 1 in by 2 in apart");
+      expect(describePattern("circular", 6, 360, "Z")).toBe("6 copies over 360° about Z");
+    });
   });
 });
