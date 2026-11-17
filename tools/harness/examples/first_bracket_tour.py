@@ -9,7 +9,6 @@ import tempfile
 from pathlib import Path
 
 from fundacad_harness import Session
-from fundacad_harness.errors import Occluded
 
 TOUR = "first-bracket"
 STEPS = 14
@@ -19,6 +18,7 @@ L = [(0, 0), (50, 0), (50, ARM), (ARM, ARM), (ARM, 50), (0, 50)]
 # Short of the first corner, so six lines make no closed area yet.
 SHORT = (0, 8)
 
+HOLES = "() => window.store.document.features.filter((f) => f.type === 'hole')"
 INSPECT = "() => window.geometry.session('inspect', { document: window.store.document })"
 EXTRUDES = "() => window.store.document.features.filter((f) => f.type === 'extrude').map((f) => ({ id: f.id, distance: f.distance }))"
 
@@ -34,9 +34,9 @@ def inside_corner(box, arm=ARM):
     return f"near={lo[0] + arm:g},{(lo[1] + hi[1]) / 2:g},{lo[2] + arm:g}"
 
 
-def on_back(box, z):
-    """A point on the back of the upright arm, the face at the box's low X, halfway through its depth."""
-    return (box["min"][0], (box["min"][1] + box["max"][1]) / 2, z)
+def on_inside(box, z, arm=ARM):
+    """A point on the inside face of the upright arm, the one that faces the other arm, halfway through its depth."""
+    return (box["min"][0] + arm, (box["min"][1] + box["max"][1]) / 2, z)
 
 
 def until(s, cond, seconds=8.0):
@@ -134,15 +134,12 @@ def run(s):
     follow(s, "pick:hole")
 
     expect_step(s, 11)
-    try:
-        s.pick_face("left")
-    except Occluded:
-        # The default view looks at the inside of the L, the back of the upright arm faces away from it.
-        s.view("left")
-        s.pick_face("left")
-    s.click_at(world=on_back(box, 42))
+    s.pick_face("near={:g},{:g},{:g}".format(*on_inside(box, 30)))
+    s.click_at(world=on_inside(box, 42))
     s.press("Enter")
-    s.view("iso")
+    holes = until(s, lambda: s.page.evaluate(HOLES))
+    assert len(holes) == 1 and len(holes[0]["points"]) == 2, holes
+    assert all(abs(p[0] - (box["min"][0] + ARM)) < 0.01 for p in holes[0]["points"]), holes
 
     extrude = s.page.evaluate(EXTRUDES)
     assert [e["distance"] for e in extrude] == [25], extrude
@@ -164,6 +161,12 @@ def run(s):
     s.menu("File/Export…")
 
     expect_step(s, 14)
+    # Escape closes the dialog and leaves the guide up, then Next works with the dialog open again.
+    s.press("Escape")
+    assert until(s, lambda: s.page.locator(".modal-panel").count() == 0), "Escape did not close Export"
+    assert s.tour(raw=True) == {"id": TOUR, "step": 14, "of": STEPS, "ended": None}, s.tour()
+    s.menu("File/Export…")
+    assert s.page.locator(".modal-panel").count() == 1
     s.click("#guide-next")
     assert s.tour(raw=True) == {"id": TOUR, "step": 14, "of": STEPS, "ended": "finished"}, s.tour()
     s.wait_for("Guide finished")

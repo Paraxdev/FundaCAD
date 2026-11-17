@@ -32,5 +32,5 @@ def test_the_inside_corner_is_one_arm_in_from_the_low_corner_halfway_through(wal
     assert walk.inside_corner({"min": [10, 0, 2], "max": [60, 30, 52]}, arm=4) == "near=14,15,6"
 
 
-def test_a_point_on_the_back_sits_on_the_low_x_face(walk):
-    assert walk.on_back(BOX, 42) == (0, -12.5, 42)
+def test_a_point_on_the_inside_face_sits_one_arm_in_from_the_low_x_face(walk):
+    assert walk.on_inside(BOX, 42) == (5, -12.5, 42)
