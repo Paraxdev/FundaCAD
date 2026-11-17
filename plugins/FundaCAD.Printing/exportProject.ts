@@ -2,7 +2,7 @@
 // 3MF. This plugin's exporter in the geometry engine (geometry/register.py) writes it, reached through `exportWith`.
 
 import { t } from "./lines";
-import { contributedPalette, listModal, reportError, saveDialog, stripDocumentExt, toast } from "fundacad";
+import { contributedPalette, listJoin, listModal, reportError, saveDialog, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -104,14 +104,15 @@ async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
         usedSlots.add(slot);
       }
     }
-    const empty = [...usedSlots].filter((s) => !filaments[s]?.present).sort();
+    const empty = [...usedSlots].filter((s) => !filaments[s]?.present).sort((a, b) => a - b);
     if (!empty.length && !unassigned) return;
-    const parts: string[] = [];
-    if (empty.length) {
-      parts.push(t("export.warnSlots", { n: empty.length, list: empty.map((s) => s + 1).join(", ") }));
-    }
-    if (unassigned) parts.push(t("export.warnBodies", { n: unassigned }));
-    toast(t("export.warnLead", { parts: parts.join(t("export.warnSeparator")) }), { kind: "warning" });
+    const list = listJoin(empty.map((s) => String(s + 1)));
+    const message = !unassigned
+      ? t("export.warnSlots", { n: empty.length, list })
+      : empty.length
+        ? t("export.warnBoth", { slots: empty.length, list, bodies: unassigned })
+        : t("export.warnBodies", { n: unassigned });
+    toast(message, { kind: "warning" });
   } catch {
     // printer offline/slow/unconfigured, the check is best-effort by design
   }

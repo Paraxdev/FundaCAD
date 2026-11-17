@@ -1,7 +1,7 @@
 // Facade over ./printStatus.ts, rendered by ./PrintStatusPill.vue. Pass null to hide.
 import { usePrintStatusStore } from "./printStatus";
 
-export function setPrinterStatusText(text: string | null) {
+export function setPrinterStatusText(text: string | (() => string) | null) {
   usePrintStatusStore().text = text;
 }
 

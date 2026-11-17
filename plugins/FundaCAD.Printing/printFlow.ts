@@ -150,8 +150,8 @@ async function startMonitoring(id: string) {
       const percent = Math.round(s.progress * 100);
       setPrinterStatusText(
         s.state === "paused"
-          ? t("status.paused", { file: s.filename, percent })
-          : t("status.printing", { file: s.filename, percent }),
+          ? () => t("status.paused", { file: s.filename, percent })
+          : () => t("status.printing", { file: s.filename, percent }),
       );
     } else {
       setPrinterStatusText(null);

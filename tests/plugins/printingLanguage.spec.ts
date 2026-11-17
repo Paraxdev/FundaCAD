@@ -76,7 +76,7 @@ describe("the filament mapping dialog follows the language", () => {
     await setLanguage("de");
     const root = await mapping();
     expect(nameOf(root.querySelector("[role=dialog]")!)).toBe("An Drucker senden, Filamentzuordnung");
-    expect(nameOf(root.querySelector("ul")!)).toBe("Filamentplätze");
+    expect(nameOf(root.querySelector("ul")!)).toBe("Filament-Slots");
     expect(nameOf(root.querySelector("[role=group]")!)).toBe("Startoptionen");
     const picks = [...root.querySelectorAll<HTMLElement>("[role=combobox]")].map((el) => nameOf(el));
     expect(picks).toEqual([
@@ -138,28 +138,50 @@ describe("the Printing sentences follow the language", () => {
   it("says the progress with the language's percent", async () => {
     expect(t("status.printing", { file: "part.gcode", percent: 40 })).toBe("Printing part.gcode, 40%");
     await setLanguage("de");
-    expect(t("status.printing", { file: "part.gcode", percent: 40 })).toBe("Druckt part.gcode, 40 %");
+    expect(t("status.printing", { file: "part.gcode", percent: 40 })).toBe("Druck läuft: part.gcode, 40 %");
     await setLanguage("ja");
     expect(t("status.paused", { file: "part.gcode", percent: 40 })).toBe("一時停止中 part.gcode、40%");
+  });
+
+  it("words a running job's status again after a switch, the file name as the printer gave it", async () => {
+    const status = usePrintStatusStore();
+    status.text = () => t("status.printing", { file: "part.gcode", percent: 40 });
+    mount(PrintStatusPill, { attachTo: document.body });
+    await flushPromises();
+    expect(document.body.querySelector("[role=status]")?.textContent).toContain("Printing part.gcode, 40%");
+    await setLanguage("de");
+    await flushPromises();
+    expect(document.body.querySelector("[role=status]")?.textContent).toContain("Druck läuft: part.gcode, 40 %");
   });
 
   it("picks the plural for slots and bodies", async () => {
     const one = { n: 1, list: "2" };
     const two = { n: 2, list: "1, 3" };
-    expect(t("export.warnSlots", one)).toBe("slot 2 has no filament loaded on the printer");
-    expect(t("export.warnSlots", two)).toBe("slots 1, 3 have no filament loaded on the printer");
-    expect(t("export.warnBodies", { n: 1 })).toBe("1 body is unassigned (defaulting to slot 1)");
+    const both = { slots: 2, list: "1; 3", bodies: 1 };
+    expect(t("export.warnSlots", one)).toBe("Exported, but slot 2 has no filament loaded on the printer.");
+    expect(t("export.warnSlots", two)).toBe("Exported, but slots 1, 3 have no filament loaded on the printer.");
+    expect(t("export.warnBodies", { n: 1 })).toBe("Exported, but 1 body is unassigned (defaulting to slot 1).");
+    expect(t("export.warnBoth", both)).toBe(
+      "Exported, but slots 1; 3 have no filament loaded on the printer; 1 body is unassigned (defaulting to slot 1).",
+    );
     await setLanguage("de");
-    expect(t("export.warnSlots", one)).toBe("Platz 2 hat kein Filament im Drucker geladen");
-    expect(t("export.warnSlots", two)).toBe("Plätze 1, 3 haben kein Filament im Drucker geladen");
-    expect(t("sync.overwriteHint", { n: 3 })).toBe("3 Plätze");
+    expect(t("export.warnSlots", one)).toBe("Exportiert, aber Slot 2 hat kein Filament im Drucker geladen.");
+    expect(t("export.warnSlots", two)).toBe("Exportiert, aber Slots 1, 3 haben kein Filament im Drucker geladen.");
+    expect(t("export.warnBoth", both)).toBe(
+      "Exportiert, aber Slots 1; 3 haben kein Filament im Drucker geladen; 1 Körper ist nicht zugewiesen (Standard ist Slot 1).",
+    );
+    expect(t("sync.overwriteHint", { n: 3 })).toBe("3 Slots");
+    await setLanguage("fr");
+    expect(t("export.warnBoth", both)).toBe(
+      "Exporté, mais les emplacements 1; 3 n'ont aucun filament chargé dans l'imprimante ; 1 corps n'est pas affecté (emplacement 1 par défaut).",
+    );
     await setLanguage("ja");
     expect(t("sync.overwriteHint", { n: 3 })).toBe("3 スロット");
   });
 
   it("keeps what the printer said as it came inside the plugin's own sentence", async () => {
     await setLanguage("de");
-    expect(t("toast.nozzle", { message: "Nozzle diameter differs" })).toBe("Düsenkonflikt, Nozzle diameter differs");
+    expect(t("toast.nozzle", { message: "Nozzle diameter differs" })).toBe("Düse passt nicht, Nozzle diameter differs");
     expect(t("error.unreachable", { message: "connection refused" })).toBe(
       "Der Drucker ist nicht erreichbar: connection refused",
     );

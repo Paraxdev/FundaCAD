@@ -117,7 +117,7 @@ const ENGLISH = [
 ] as const;
 
 const GERMAN = [
-  "Projekt drucken",
+  "Druckprojekt exportieren",
   "In OrcaSlicer öffnen",
   "An den Drucker senden",
   "Schichtlinien",

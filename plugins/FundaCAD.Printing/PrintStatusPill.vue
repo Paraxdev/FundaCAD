@@ -37,7 +37,7 @@ const PILL = {
       aria-live="off"
       :style="[PILL, print.onClick ? { pointerEvents: 'auto' } : {}]"
     >
-      <span>{{ print.text }}</span>
+      <span>{{ typeof print.text === "function" ? print.text() : print.text }}</span>
       <Button v-if="print.onClick" size="sm" variant="ghost" @click="print.onClick()">{{
         t("pill.showCamera")
       }}</Button>

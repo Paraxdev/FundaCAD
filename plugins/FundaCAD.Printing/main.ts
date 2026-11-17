@@ -111,8 +111,14 @@ export async function activate(e: Engine): Promise<() => void> {
   };
 }
 
+/** The palette keeps the English default name, so a sync compares the same text in every language. */
+function shownName(name: string): string {
+  const m = /^Toolhead (\d+)$/.exec(name);
+  return m ? t("toolhead.name", { n: Number(m[1]) }) : name;
+}
+
 /** The `filaments` service: probe, read, and the confirmed sync. */
-function filamentSource() {
+export function filamentSource() {
   return {
     async probe(): Promise<boolean> {
       if (!("__TAURI_INTERNALS__" in window)) return false;
@@ -142,7 +148,7 @@ function filamentSource() {
       const proposed = filaments.map((f) =>
         f.present
           ? {
-              name: `${f.vendor} ${f.material}`.trim() || t("toolhead.name", { n: f.index + 1 }),
+              name: `${f.vendor} ${f.material}`.trim() || `Toolhead ${f.index + 1}`,
               color: f.color,
               material: f.material,
             }
@@ -158,7 +164,11 @@ function filamentSource() {
         const diff = proposed
           .map((p, i) =>
             p && (cur[i]?.name !== p.name || cur[i]?.color !== p.color)
-              ? t("sync.slotLine", { n: i + 1, old: cur[i]?.name ?? t("sync.emptySlot"), new: p.name })
+              ? t("sync.slotLine", {
+                  n: i + 1,
+                  old: cur[i] ? shownName(cur[i].name) : t("sync.emptySlot"),
+                  new: shownName(p.name),
+                })
               : null,
           )
           .filter(Boolean) as string[];
