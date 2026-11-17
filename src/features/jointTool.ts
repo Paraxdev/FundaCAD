@@ -2,6 +2,7 @@
 // (angle); the value boxes stay authoritative. A joint is a rigid relocate, so the preview is live.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Vec3 } from "../types";
@@ -117,8 +118,8 @@ export class JointTool {
     this.viewport.addToScene(this.dial);
     this.dim.show(
       [
-        { name: "offset", label: "Offset", kind: "length" },
-        { name: "angle", label: "Angle", kind: "angle" },
+        { name: "offset", label: t("field.offset"), kind: "length" },
+        { name: "angle", label: t("field.angle"), kind: "angle" },
       ],
       () => this.commit(),
       () => this.cancel(),
@@ -134,9 +135,7 @@ export class JointTool {
       );
     }
     this.dim.updateFromCursor({ offset: this.offset, angle: this.angle });
-    setPrompt(
-      "Drag the arrow to slide the joined body along the mate axis, the dial to turn it about the axis. Either can be typed. Enter applies, Esc cancels.",
-    );
+    setPrompt(t("tool.joint.prompt"));
     this.gesture.frame();
     return true;
   }

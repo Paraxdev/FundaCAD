@@ -2,6 +2,7 @@
 // around planeMath. The selector is what lets a datum follow its face when anything upstream moves.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { Plane3, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
 import { planeFromPickedFace, type FacePlaneKind } from "./planeMath";
@@ -30,7 +31,10 @@ type FaceHit = Pick<
   "faceId" | "anchor" | "normal" | "bodyId"
 >;
 
+/** The same words as curvedFaceRow(), for the callers that have not moved to it. */
 export const CURVED_FACE_ROW = "That face is curved, pick a flat face or a plane";
+
+export const curvedFaceRow = (): string => t("tool.curvedFace");
 
 /** A Geometry list row has no click, so the face's middle stands in for it. Null when the face is neither flat nor
  *  round, or the model is not built. */

@@ -2,6 +2,7 @@
 // Writes keyAzimuth and keyElevation, snapped like a datum tilt.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import { DimInput, type DimDocument } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
@@ -82,8 +83,8 @@ export class LightAimTool {
     this.viewport.addToScene(this.stalk.group);
     this.dim.show(
       [
-        { name: "azimuth", label: "Azimuth", kind: "angle" },
-        { name: "elevation", label: "Elevation", kind: "angle" },
+        { name: "azimuth", label: t("tool.lightAim.azimuth"), kind: "angle" },
+        { name: "elevation", label: t("tool.lightAim.elevation"), kind: "angle" },
       ],
       () => this.finish(),
       () => this.cancel(),
@@ -99,7 +100,7 @@ export class LightAimTool {
       (el) => setRenderPref("keyElevation", el),
     );
     this.dim.updateFromCursor({ ...this.before });
-    setPrompt("Drag the sun to aim the key light · 5° steps, Shift 1°, Alt free · type exact angles · Enter · Esc");
+    setPrompt(t("tool.lightAim.prompt"));
     this.gesture.frame();
   }
 

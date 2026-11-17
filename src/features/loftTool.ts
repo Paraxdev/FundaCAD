@@ -2,6 +2,7 @@
 // stored as {sketch, anchor}, since a preview rebuild re-detects regions and a held WorldRegion would go stale.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { DocumentStore } from "../document/store";
@@ -94,10 +95,10 @@ export class LoftTool {
     const n = this.profiles.length;
     if (n >= 2) {
       this.store.setPreview(this.buildFeature());
-      setPrompt(`Loft, ${n} profiles · click to add or drop · Enter · Esc`);
+      setPrompt(t("tool.loft.count", { n }));
     } else {
       this.store.setPreview(null);
-      setPrompt(n === 1 ? "Click a second profile · Esc" : "Click the first profile · Esc");
+      setPrompt(n === 1 ? t("tool.loft.second") : t("tool.loft.first"));
     }
   }
 
@@ -112,7 +113,7 @@ export class LoftTool {
 
   private commit() {
     if (this.profiles.length < 2) {
-      setPrompt("Loft needs two profiles · click another · Esc");
+      setPrompt(t("tool.loft.needTwo"));
       return;
     }
     this.store.setPreview(null);

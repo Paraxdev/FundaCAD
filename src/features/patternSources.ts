@@ -2,7 +2,8 @@
 // can choose features mode and say why not before the first commit bounces.
 
 import type { Feature, RebuildResult } from "../types";
-import { featureEnglish, featureMeta } from "../ui/featureMeta";
+import { t } from "../i18n";
+import { featureMeta } from "../ui/featureMeta";
 
 type BuildBodies = RebuildResult["bodies"];
 
@@ -15,9 +16,6 @@ export interface PatternSources {
   ids: string[]; // patternable, deduplicated, in timeline order
   refused: PatternRefusal[]; // deduplicated, in candidate order
 }
-
-const PATTERNABLE =
-  "Only a feature that cuts or joins material can be patterned: a hole, or an extrude, revolve, sweep or loft set to cut or join. To repeat a whole body, pattern the body instead.";
 
 /** Types that can ever have a cut or join to repeat; an extrude set to "new" is still refused, see hasCutOrJoin. */
 function isPatternableType(type: string): boolean {
@@ -68,12 +66,13 @@ export function featureLabel(f: Feature): string {
 }
 
 function refusalReason(f: Feature): string {
-  const label = (f as { name?: string }).name?.trim() || featureEnglish(f as { type: string; operation?: unknown });
+  const label = featureLabel(f);
+  const why = t("tool.pattern.patternable");
   if (!isPatternableType(f.type)) {
-    const kind = featureEnglish(f as { type: string; operation?: unknown }).toLowerCase();
-    return `Pattern: ${label} is a ${kind}, which cannot be patterned. ${PATTERNABLE}`;
+    const kind = featureMeta(f as { type: string; operation?: unknown }).label;
+    return t("tool.pattern.refuseType", { label, kind, why });
   }
-  return `Pattern: ${label} has no cut or join to repeat, it made a new body, is switched off, or did not build. ${PATTERNABLE}`;
+  return t("tool.pattern.refuseEmpty", { label, why });
 }
 
 /** A candidate id absent from `features` (stale) is dropped silently. */

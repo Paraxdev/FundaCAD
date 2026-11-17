@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, Selector, Vec3 } from "../types";
@@ -78,13 +79,13 @@ export class TextOnFaceTool {
       "face",
       (f) => {
         const [selector] = f.selectors;
-        if (!selector || f.faceIds.length !== 1) return "Pick one face to put text on";
+        if (!selector || f.faceIds.length !== 1) return t("tool.textOnFace.pickOne");
         void this.resolve(selector, f.bodyId, f.anchor, this.viewport.projectToScreen(f.anchor));
         return true;
       },
       () => this.cancel(),
     );
-    setPrompt("Click a flat, round or conical face to put text on · Esc");
+    setPrompt(t("tool.textOnFace.pick"));
   }
 
   private dropRows() {
@@ -141,15 +142,15 @@ export class TextOnFaceTool {
     const reply = await this.store.faceAnchor(sel, bodyId, p);
     if (!this.active || ticket !== this.ticket) return;
     if (!reply) {
-      toast("Text could not be placed on that face. Try another face.");
+      toast(t("tool.textOnFace.placeFailed"));
       return;
     }
     if ("reason" in reply) {
-      setPrompt(`Text cannot go there, ${reply.reason} · Esc`);
+      setPrompt(t("tool.textOnFace.cannotGo", { reason: reply.reason }));
       return;
     }
     if (reply.surface === "sphere" || reply.surface === "other") {
-      setPrompt("That face is not flat, round or conical. Text needs a plane, a cylinder or a cone · Esc");
+      setPrompt(t("tool.textOnFace.notRound"));
       if (this.anchor) this.placeMarker(new THREE.Vector3(...this.anchor.point));
       return;
     }
@@ -177,8 +178,8 @@ export class TextOnFaceTool {
       () => this.commit(),
       () => this.cancel(),
       {
-        label: "Engrave",
-        title: "Cut the letters into the face instead of standing them up",
+        label: t("field.option.engrave"),
+        title: t("tool.textOnFace.engraveTip"),
         initial: this.engrave,
         onChange: (on) => {
           this.engrave = on;
@@ -227,8 +228,7 @@ export class TextOnFaceTool {
 
   private prompt() {
     setPrompt(
-      `${this.engrave ? "Engrave" : "Emboss"} "${this.values.text.trim()}" · click or drag on the face to move it · ` +
-        "Add or Ctrl+Enter to commit · Esc",
+      t("tool.textOnFace.prompt", { mode: this.engrave ? "engrave" : "emboss", text: this.values.text.trim() }),
     );
   }
 
@@ -297,7 +297,7 @@ export class TextOnFaceTool {
     if (this.phase !== "type") return this.cancel();
     const features = this.buildFeatures();
     if (!features) {
-      toast("Type some text to put on the face.");
+      toast(t("tool.textOnFace.typeSome"));
       return;
     }
     const text = features[0]! as Feature & { depth: number };

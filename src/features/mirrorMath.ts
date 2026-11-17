@@ -32,6 +32,7 @@ export function reflectionMatrix(def: PlaneDef): THREE.Matrix4 {
   );
 }
 
+/** Written into the document, which holds no translated text (docs/I18N.md, Values are not labels). */
 export const FACE_DATUM_NAME = "Mirror plane";
 
 /** The features one Mirror commit adds. The plane is always `{ name }`, the form the engine takes with `bodies`. A

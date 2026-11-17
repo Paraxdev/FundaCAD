@@ -4,6 +4,7 @@
 import type { Axis3, Selector, Vec3 } from "../types";
 import { axisVector } from "./patternMath";
 import { patternAxisDatum } from "../document/optionFields";
+import { t } from "../i18n";
 import { listJoin, spellNumber } from "../ui/measure";
 
 export type AxisPlace = "origin" | "centre" | "picked";
@@ -54,16 +55,16 @@ export function axisLine(place: AxisPlace, named: Axis3, centre: Vec3, picked: P
 
 /** The pattern's stored axis as words, for the prompt and the properties row. */
 export function describeAxis(axis: unknown, axisRef: unknown, datumName?: (id: string) => string | undefined): string {
-  if (axisRef) return "picked on the model";
-  if (axis === "X" || axis === "Y" || axis === "Z") return `${axis} through the origin`;
+  if (axisRef) return t("tool.pattern.axisPicked");
+  if (axis === "X" || axis === "Y" || axis === "Z") return t("tool.pattern.axisOrigin", { axis });
   const datum = patternAxisDatum(axis);
   if (datum != null) return datumName?.(datum) ?? datum;
   const line = axis as Partial<AxisLineValue> | null;
   if (line && Array.isArray(line.origin) && Array.isArray(line.dir)) {
     const o = listJoin(line.origin.map((v) => spellNumber(+v.toFixed(2))));
-    return `line through (${o})`;
+    return t("tool.pattern.axisLine", { point: o });
   }
-  return "Z through the origin";
+  return t("tool.pattern.axisOrigin", { axis: "Z" });
 }
 
 function round6(v: Vec3): Vec3 {

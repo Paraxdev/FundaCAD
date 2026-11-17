@@ -311,7 +311,7 @@ describe("numbering", () => {
 });
 
 describe("the English sentences that name a feature", () => {
-  it("keep the English name in German: the pattern refusal, the sketch conflict, the failure toast, the face menu", async () => {
+  it("keep the English name in German: the sketch conflict, the failure toast, the face menu", async () => {
     await setLanguage("de");
     const features = [
       { id: "s1", type: "sketch" },
@@ -321,9 +321,8 @@ describe("the English sentences that name a feature", () => {
 
     const refused = patternSources(features, ["f1", "m1"]).refused;
     expect(refused.map((r) => r.id)).toEqual(["f1", "m1"]);
-    expect(refused[0]!.reason).toMatch(/^Pattern: Fillet is a fillet, which cannot be patterned\./);
-    expect(refused[1]!.reason).toMatch(/^Pattern: Sweep has no cut or join/);
-    expect(refused.map((r) => r.reason).join(" ")).not.toContain(line(de, "tool.fillet"));
+    expect(refused[0]!.reason).toMatch(new RegExp(`^Muster: .+ ist vom Typ ${line(de, "tool.fillet")} und kann nicht`));
+    expect(refused[1]!.reason).toMatch(/^Muster: .+ hat nichts Ausgeschnittenes/);
 
     expect(sketchConflictText("s1", features)).toBe(
       "The dimensions in Sketch 1 conflict, so the sketch was left as it was",

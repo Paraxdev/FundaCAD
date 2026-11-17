@@ -1,5 +1,6 @@
 // Edits the edges, faces or bodies a feature acts on, opened from its Properties row.
 
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { EdgeRef } from "../viewport/edgeLines";
 import type { DocumentStore } from "../document/store";
@@ -29,7 +30,6 @@ export interface TargetRow {
   resolved: boolean;
 }
 
-const STILL_BUILDING = "The model is still building";
 // An edge row counts only if the rolled back model has an edge this close, a row listed before the roll back has none.
 const SAME_EDGE = 0.01;
 
@@ -117,7 +117,7 @@ export class TargetEditTool {
         batch: (run) => this.takeRun(run),
       },
     );
-    setPrompt("Rolling back to edit…");
+    setPrompt(t("tool.target.rollingBack"));
 
     // A committed fillet has eaten its own edges, so roll back to just before the
     // feature to put them on screen again, as edgeFeatureTool does to reopen a blend.
@@ -231,48 +231,48 @@ export class TargetEditTool {
   }
 
   private takeRow(pick: TreePick): TreePickAnswer {
-    const t = this.target;
-    if (!t || this.awaitingRollback) return STILL_BUILDING;
-    if (t.kind === "body") return this.takeBodyRow(pick, t);
-    if (t.kind === "face") return this.takeFaceRow(pick, t);
+    const target = this.target;
+    if (!target || this.awaitingRollback) return t("tool.stillBuilding");
+    if (target.kind === "body") return this.takeBodyRow(pick, target);
+    if (target.kind === "face") return this.takeFaceRow(pick, target);
     if (pick.kind !== "edge") return treePickRefusal(pick, "edge");
     const sel = edgeSelectorFrom(pick.edge);
     const mid = polylineMid(pick.edge.points);
     const there = mid && this.viewport.edgeLineByMid(mid);
     const at = there && polylineMid(there.points);
     if (!sel || !mid || !at || Math.hypot(at[0] - mid[0], at[1] - mid[1], at[2] - mid[2]) > SAME_EDGE) {
-      return "That edge is not on the model this feature edits";
+      return t("tool.target.edgeNotOnModel");
     }
-    this.toggle(sel, t);
+    this.toggle(sel, target);
     return true;
   }
 
   // The Geometry list follows the roll back, so a face row numbers a face of the model this feature edits.
-  private takeFaceRow(pick: TreePick, t: TargetField): TreePickAnswer {
+  private takeFaceRow(pick: TreePick, target: TargetField): TreePickAnswer {
     if (pick.kind !== "face") return treePickRefusal(pick, "face");
-    if (t.tracked) {
+    if (target.tracked) {
       const at = this.viewport.facesForPressPull([pick.faceId]);
-      if (!at) return STILL_BUILDING;
+      if (!at) return t("tool.stillBuilding");
       const { anchor: a, normal: n } = at;
-      this.toggle(trackedFace([a.x, a.y, a.z], [n.x, n.y, n.z], at.bodyId), t);
+      this.toggle(trackedFace([a.x, a.y, a.z], [n.x, n.y, n.z], at.bodyId), target);
       return true;
     }
     const { body, ...plain } = this.viewport.faceSelectorOf(pick.faceId) as Selector & { body?: string };
-    this.toggle(t.ownBody && body ? { ...plain, body } : plain, t);
+    this.toggle(target.ownBody && body ? { ...plain, body } : plain, target);
     return true;
   }
 
-  private takeBodyRow(pick: TreePick, t: TargetField): TreePickAnswer {
+  private takeBodyRow(pick: TreePick, target: TargetField): TreePickAnswer {
     if (pick.kind !== "body" && pick.kind !== "bodies") return treePickRefusal(pick, "body");
     const ids = pick.kind === "body" ? [pick.id] : pick.ids;
-    if (t.arity === "one" && ids.length !== 1) return "This takes one body";
+    if (target.arity === "one" && ids.length !== 1) return t("tool.target.oneBody");
     const built = this.store.buildState.result?.bodies ?? [];
     if (!ids.length || !ids.every((id) => built.some((b) => b.id === id))) {
-      return "That body is not in the model this feature edits";
+      return t("tool.target.bodyNotInModel");
     }
     const missing = ids.filter((id) => !this.entries.includes(id));
     // A folder row adds what is missing, and takes them all out only when all are in.
-    for (const id of missing.length ? missing : ids) this.toggle(id, t);
+    for (const id of missing.length ? missing : ids) this.toggle(id, target);
     return true;
   }
 
@@ -371,19 +371,25 @@ export class TargetEditTool {
   }
 
   private labelFor(entry: TargetEntry, found: Found | null): string {
-    const t = this.target;
-    if (!t) return "";
-    if (t.kind === "body" && typeof entry === "string") return this.bodyLabel(entry) ?? entry;
+    const target = this.target;
+    if (!target) return "";
+    if (target.kind === "body" && typeof entry === "string") return this.bodyLabel(entry) ?? entry;
     if (found?.kind === "face") {
       const n = this.viewport.localFaceOf(found.faceId);
       const body = this.viewport.faceIdToBodyId(found.faceId);
-      return ofBody(n === null ? "Face" : `Face ${n + 1}`, body && this.bodyLabel(body));
+      return ofBody(
+        n === null ? t("tool.target.face") : t("pick.name.face", { type: "other", n: n + 1 }),
+        body && this.bodyLabel(body),
+      );
     }
     if (found?.kind === "edge") {
-      return ofBody(`Edge ${found.edge.slot + 1}`, found.edge.body && this.bodyLabel(found.edge.body));
+      return ofBody(
+        t("pick.name.edge", { type: "other", n: found.edge.slot + 1 }),
+        found.edge.body && this.bodyLabel(found.edge.body),
+      );
     }
-    if (t.kind === "body") return "";
-    return spanLabel(entry) ?? `${t.kind === "edge" ? "Edge" : "Face"} not on this build`;
+    if (target.kind === "body") return "";
+    return spanLabel(entry) ?? t("tool.target.notOnBuild", { kind: target.kind });
   }
 
   private bodyLabel(id: string): string | undefined {
@@ -392,11 +398,10 @@ export class TargetEditTool {
   }
 
   private setPrompt() {
-    const t = this.target;
-    if (!t) return;
+    const target = this.target;
+    if (!target) return;
     const n = this.entries.length;
-    const noun = n === 1 ? t.kind : `${t.kind}s`;
-    setPrompt(`${n} ${noun} · click one to add or remove · later features are hidden while editing · Enter · Esc`);
+    setPrompt(t("tool.target.prompt", { n, kind: target.kind }));
   }
 
   private onKey(e: KeyboardEvent) {
@@ -421,7 +426,8 @@ export function editingTarget(tool: TargetEditTool): { id: string; field: string
 
 type Found = { kind: "edge"; edge: EdgeRef } | { kind: "face"; faceId: number } | { kind: "body"; id: string };
 
-const ofBody = (what: string, body: string | undefined | null) => (body ? `${what} of ${body}` : what);
+const ofBody = (what: string, body: string | undefined | null) =>
+  body ? t("tool.target.ofBody", { what, body }) : what;
 
 function selectorOf(entry: TargetEntry): Selector | null {
   if (typeof entry === "string" || Array.isArray(entry)) return null;

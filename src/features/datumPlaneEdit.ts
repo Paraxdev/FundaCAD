@@ -9,6 +9,8 @@ import { placeDatum, poseFromPlaced, poseOf, POSE_FIELDS, type DatumPose, type P
 import type { DatumPoseTool } from "./datumPoseTool";
 import type { MoveTarget } from "./moveTarget";
 import { toast } from "../ui/toast";
+import { t } from "../i18n";
+import { listJoin } from "../ui/measure";
 
 type Datum = Extract<Feature, { type: "datumPlane" }>;
 
@@ -30,6 +32,23 @@ function datum(store: DocumentStore, id: string): Datum | null {
 /** A handle must not write these, the parameter would put them straight back. */
 export function lockedPoseFields(store: DocumentStore, id: string): Set<PoseField> {
   return new Set(POSE_FIELDS.filter((field) => store.isParamBound({ kind: "feature", feature: id, field })));
+}
+
+function poseFieldLabel(field: PoseField): string {
+  switch (field) {
+    case "offset":
+      return t("field.offset");
+    case "shiftX":
+      return t("field.shiftX");
+    case "shiftY":
+      return t("field.shiftY");
+    case "tiltX":
+      return t("field.tiltX");
+    case "tiltY":
+      return t("field.tiltY");
+    case "spin":
+      return t("field.spin");
+  }
 }
 
 const kindOf = (field: PoseField) => FEATURE_NUM_FIELDS.datumPlane?.find(([f]) => f === field)?.[2] ?? "length";
@@ -170,7 +189,10 @@ export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | n
       const { written, refused } = writeDatumPose(deps.store, id, poseAfter(r.matrix));
       if (refused.length)
         toast(
-          `${refused.join(", ")} ${refused.length > 1 ? "are" : "is"} driven by an expression, so ${refused.length > 1 ? "they were" : "it was"} left alone`,
+          t("tool.datumPose.driven", {
+            n: refused.length,
+            fields: listJoin(refused.map((field) => poseFieldLabel(field))),
+          }),
         );
       return { id, rebuild: written };
     },

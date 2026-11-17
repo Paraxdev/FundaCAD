@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { t } from "../../src/i18n";
-import { MirrorTool, PLANE_REFUSED } from "../../src/features/mirrorTool";
+import { MirrorTool, planeRefused } from "../../src/features/mirrorTool";
 import { basePlaneDef, reflectionMatrix } from "../../src/features/mirrorMath";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import { usePromptStore } from "../../src/stores/prompt";
@@ -302,10 +302,10 @@ describe("picking", () => {
     r.tool.start(["body2"], r.done);
     expect(click(r.canvas, 160)).toBe(true);
     expect(summary()!.values[1]).toBe("Nothing picked");
-    expect(prompt()!.startsWith(PLANE_REFUSED)).toBe(true);
+    expect(prompt()!.startsWith(planeRefused())).toBe(true);
     expect(prompt()).toContain("Pick the mirror plane");
     click(r.canvas, 120);
-    expect(prompt()!.includes(PLANE_REFUSED)).toBe(false);
+    expect(prompt()!.includes(planeRefused())).toBe(false);
   });
 
   it("a round face is refused and a flat one beside it is taken", () => {
@@ -313,7 +313,7 @@ describe("picking", () => {
     r.tool.start(["body1"], r.done);
     expect(click(r.canvas, 180)).toBe(true);
     expect(summary()!.values[1]).toBe("Nothing picked");
-    expect(prompt()!.startsWith(PLANE_REFUSED)).toBe(true);
+    expect(prompt()!.startsWith(planeRefused())).toBe(true);
     expect(r.log.ghost).toBeNull();
     click(r.canvas, 170);
     expect(summary()).toEqual({ active: "objects", values: ["1 body", "Flat face"], plane: null, ready: true });
@@ -435,7 +435,7 @@ describe("Items rows", () => {
     const r = rig();
     r.tool.start(["body1"], r.done);
     const curved = offered({ kind: "face", faceId: 15 }, "Curved face 1 of Box 2");
-    expect(curved).toEqual({ said: [], hints: [PLANE_REFUSED] });
+    expect(curved).toEqual({ said: [], hints: [planeRefused()] });
     expect(treePickWaiting()).toBe(true);
   });
 
@@ -545,7 +545,7 @@ describe("Items rows", () => {
     r.tool.start(["body1"], r.done);
     const empty = row({ kind: "face", faceId: 15 });
     expect(empty.route).toBe("refused");
-    expect(empty.hints).toEqual([PLANE_REFUSED]);
+    expect(empty.hints).toEqual([planeRefused()]);
     expect(row({ kind: "face", faceId: 16 }).route).toBe("refused");
     expect(summary()).toEqual({ active: "line", values: ["1 body", "Nothing picked"], plane: null, ready: false });
     expect(treePickWaiting()).toBe(true);

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { awaitTreePick, treePickRefusal, type TreePickAnswer, type TreePickWant } from "../ui/treePick";
 import type { Viewport } from "../viewport/viewport";
 import type { PressPullFaces } from "../viewport/faceAnalysis";
@@ -15,7 +16,7 @@ export function awaitFaceRows(
     (pick) => {
       if (pick.kind !== "face") return treePickRefusal(pick, wanted);
       const faces = viewport.facesForPressPull([pick.faceId]);
-      return faces ? take(faces) : "The model is still building";
+      return faces ? take(faces) : t("tool.stillBuilding");
     },
     end,
     { keepsOnRewind: true, keepsOnCommand: true, ...(batch ? { batch } : {}) },

@@ -1,6 +1,7 @@
 // Where the section's cutting plane sits, and how faintly the half cut away is still drawn.
 
 import type { PlaneDef, Vec3 } from "../types";
+import { t } from "../i18n";
 
 /** Unit normal plus d in n·x + d = 0; everything on the +n side is kept. */
 export interface ClipPlane {
@@ -61,7 +62,16 @@ export function nextGhostLevel(level: number): number {
   return (i + 1) % GHOST_LEVELS.length;
 }
 
-/** What the prompt line calls the current rung. */
+/** The rung as the prompt line words it, in the chosen language. */
+export function ghostName(level: number): string {
+  const a = ghostAlpha(level);
+  if (a === 0) return t("tool.section.ghostHidden");
+  if (a <= 0.06) return t("tool.section.ghostFaint");
+  if (a <= 0.14) return t("tool.section.ghostSoft");
+  return t("tool.section.ghostStrong");
+}
+
+/** The rung's stored name, which is not translated. */
 export function ghostLabel(level: number): string {
   const a = ghostAlpha(level);
   if (a === 0) return "hidden";

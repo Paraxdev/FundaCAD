@@ -2,6 +2,7 @@
 // and whole sketches (with or without bodies) from the model.
 
 import * as THREE from "three";
+import { t } from "../i18n";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { CadDocument, Feature, PlaneDef, PlaneSpec } from "../types";
@@ -227,7 +228,7 @@ export function sketchFeatureTarget(
       store.editAndAdd((d) => {
         detached = applySketchMove(d, sketchIds, resolved, r.matrix);
       }, features);
-      if (detached.length) toast("Moved off the face or plane it was attached to, the sketch no longer follows it");
+      if (detached.length) toast(t("tool.sketchMove.detached"));
       return { id: features[features.length - 1]?.id ?? sketchIds[0] ?? null, rebuild: true };
     },
     end: (restore) => {

@@ -9,7 +9,7 @@ import { focusOnMenuRow, isEditableTarget } from "../ui/focus";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer, type TreePickDone } from "../ui/treePick";
 import { CanvasGesture } from "./canvasGesture";
 import { freshIds } from "./moveTarget";
-import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
+import { curvedFaceRow, facePlaneOfRow, pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
 import { featureLabel } from "./patternSources";
 import { showMirrorPanel } from "./mirrorPanel";
 import { mirrorLineColor } from "./mirrorColors";
@@ -32,7 +32,7 @@ import {
 } from "./mirrorFields";
 
 const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
-export const PLANE_REFUSED = CURVED_FACE_ROW;
+export const planeRefused = curvedFaceRow;
 const PLANE_TAKEN: TreePickDone = { done: "mirrorPlane" };
 
 type PlaneAt = (viewport: Viewport, x: number, y: number) => PlanePickTarget;
@@ -195,7 +195,7 @@ export class MirrorTool {
       e.stopImmediatePropagation();
       const plane = this.planeOf(t);
       if (plane) this.set(pickLine(this.fields, plane, null));
-      else this.update(PLANE_REFUSED);
+      else this.update(planeRefused());
       return;
     }
     const id = this.viewport.bodyIdAt(e.clientX, e.clientY);
@@ -239,7 +239,7 @@ export class MirrorTool {
         this.fields,
         pick.ids.filter((id) => built.has(id)),
       );
-      if (f === this.fields) return "Those bodies are already picked";
+      if (f === this.fields) return t("tool.mirror.alreadyPicked");
       this.set(f);
       return true;
     }
@@ -253,7 +253,7 @@ export class MirrorTool {
     }
     if (pick.kind === "face") {
       const face = facePlaneOfRow(this.viewport, pick.faceId);
-      if (face?.kind !== "planar") return PLANE_REFUSED;
+      if (face?.kind !== "planar") return planeRefused();
       this.set(pickLine(this.fields, { kind: "face", face, ...(pick.name ? { name: pick.name } : {}) }, null));
       return PLANE_TAKEN;
     }
@@ -261,9 +261,9 @@ export class MirrorTool {
   }
 
   private planeLabel(p: MirrorPlanePick | null): string {
-    if (!p) return "Nothing picked";
-    if (p.kind === "base") return `${p.plane} plane`;
-    if (p.kind === "face") return p.name ?? "Flat face";
+    if (!p) return countLabel(0, "body");
+    if (p.kind === "base") return t("items.origin.plane", { plane: p.plane });
+    if (p.kind === "face") return p.name ?? t("tool.mirror.flatFace");
     const f = this.store.document.features.find((x) => x.id === p.id);
     return f ? featureLabel(f) : p.id;
   }
@@ -285,14 +285,14 @@ export class MirrorTool {
       fields: [
         {
           key: "objects",
-          label: "Objects",
+          label: t("tool.mirror.objects"),
           items: f.objects.map((id) => this.bodyLabel(id)),
           value: objects,
           filled: f.objects.length > 0,
         },
         {
           key: "line",
-          label: "Mirror plane",
+          label: t("tool.mirror.plane"),
           items: f.line ? [this.planeLabel(f.line)] : [],
           value: this.planeLabel(f.line),
           filled: f.line !== null,
