@@ -50,7 +50,7 @@ describe("fixed decimal readouts in German", () => {
     expect(formatProfile(-0.5)).toBe("-0,500");
     expect(formatTurn(-12.3)).toBe("-12,3°");
     expect(formatTurn(345)).toBe("345°");
-    expect(formatOffBy(nearestThread(5.98, true)!)).toBe("M6, 0,02 mm under nominal");
+    expect(formatOffBy(nearestThread(5.98, true)!)).toBe("M6, 0,02 mm unter Nennmaß");
   });
 
   it("the loose ends prompt spells the gap with a comma", async () => {
@@ -68,7 +68,7 @@ describe("fixed decimal readouts in German", () => {
       "Too big for the 220 x 220 x 220 mm bed (model is 100,4 x 300,7 x 100,0 mm); scale to 73,2% to fit",
     );
     const rows = specRows(expand({ familyId: "iso4762", size: "M3", length: 10 }), { size: "M3", volume: 200 });
-    expect(rows.find((r) => r.label.trim() === "Pitch")).toEqual({ label: "  Pitch", value: "0,5 mm" });
-    expect(rows.find((r) => r.label === "Mass (steel)")).toEqual({ label: "Mass (steel)", value: "1,57 g" });
+    expect(rows.find((r) => r.label.trim() === "Steigung")).toEqual({ label: "  Steigung", value: "0,5 mm" });
+    expect(rows.find((r) => r.label === "Masse (Stahl)")).toEqual({ label: "Masse (Stahl)", value: "1,57 g" });
   });
 });

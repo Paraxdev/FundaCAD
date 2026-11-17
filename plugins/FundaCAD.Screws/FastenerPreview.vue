@@ -9,11 +9,12 @@ import type { FastenerSpec } from "./spec";
 import { GENERATOR } from "./state";
 
 const props = defineProps<{ spec: FastenerSpec | null; width?: number; height?: number }>();
-const emit = defineEmits<{ measured: [volume: number | null]; problem: [message: string | null] }>();
+const emit = defineEmits<{ measured: [volume: number | null]; problem: [report: { message?: string } | null] }>();
 
 const engine = useEngine();
 const canvas = ref<HTMLCanvasElement | null>(null);
-const status = ref("");
+// Worded when drawn, so a language switch reaches a status already showing.
+const status = ref<(() => string) | null>(null);
 
 let renderer: THREE.WebGLRenderer | null = null;
 const scene = new THREE.Scene();
@@ -53,25 +54,24 @@ async function load(spec: FastenerSpec | null) {
   const mine = ++request;
   if (!spec) {
     clearMesh();
-    status.value = "";
+    status.value = null;
     emit("measured", null);
     render();
     return;
   }
   const generate = engine.geometry.generateShape?.bind(engine.geometry);
   if (!generate) {
-    status.value = t("preview.needsEngine");
+    status.value = () => t("preview.needsEngine");
     return;
   }
-  status.value = spec.thread?.modelled ? t("preview.cutting") : t("preview.loading");
+  status.value = spec.thread?.modelled ? () => t("preview.cutting") : () => t("preview.loading");
   const reply = await generate(GENERATOR, spec, { output: "mesh" });
   if (mine !== request) return;
   if (!reply.ok || !reply.shape.mesh) {
     clearMesh();
-    const message = reply.ok ? t("preview.noPreview") : reply.message;
-    status.value = message;
+    status.value = reply.ok ? () => t("preview.noPreview") : () => reply.message;
     emit("measured", null);
-    emit("problem", message);
+    emit("problem", reply.ok ? {} : { message: reply.message });
     render();
     return;
   }
@@ -95,7 +95,7 @@ async function load(spec: FastenerSpec | null) {
   camera.near = size / 100;
   camera.far = size * 100;
   camera.updateProjectionMatrix();
-  status.value = "";
+  status.value = null;
   emit("measured", reply.shape.volume);
   render();
 }
@@ -155,7 +155,7 @@ onMounted(() => {
   try {
     renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, alpha: true });
   } catch {
-    status.value = t("preview.noWebgl");
+    status.value = () => t("preview.noWebgl");
     return;
   }
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
         color: 'var(--text-dim)',
       }"
     >
-      {{ status }}
+      {{ status() }}
     </div>
   </div>
 </template>

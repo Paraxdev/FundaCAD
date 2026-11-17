@@ -870,6 +870,70 @@
     {
       "en": "example",
       "text": "Beispiel"
+    },
+    {
+      "en": "Across flats",
+      "text": "Schlüsselweite",
+      "note": "hex head, hex nut and hex socket size, not Breite über Flächen"
+    },
+    {
+      "en": "Tapping thread",
+      "text": "Blechschraubengewinde",
+      "note": "the thread of a self tapping screw"
+    },
+    {
+      "en": "Flat point",
+      "text": "Kegelstumpf",
+      "note": "set screw end, ISO 4026"
+    },
+    {
+      "en": "Cone point",
+      "text": "Spitze",
+      "note": "set screw end, ISO 4027"
+    },
+    {
+      "en": "Chamfered point",
+      "text": "Kegelkuppe",
+      "note": "set screw end, with a chamfer"
+    },
+    {
+      "en": "Cup point",
+      "text": "Ringschneide",
+      "note": "set screw end, ISO 4029"
+    },
+    {
+      "en": "Screw point (the end of a screw)",
+      "text": "Schraubenende"
+    },
+    {
+      "en": "Ground shoulder",
+      "text": "Passschaft",
+      "note": "not Geschliffener Schaft, Schaft is the shank"
+    },
+    {
+      "en": "Pan head",
+      "text": "Flachkopf",
+      "note": "ISO 7045 and ISO 14583"
+    },
+    {
+      "en": "Button head",
+      "text": "Linsenkopf",
+      "note": "ISO 7380"
+    },
+    {
+      "en": "Cheese head",
+      "text": "Zylinderkopf",
+      "note": "the head only, the drive is its own part"
+    },
+    {
+      "en": "Driver number",
+      "text": "Antriebsgröße",
+      "note": "the size number of a drive such as Torx T20"
+    },
+    {
+      "en": "Pitch and lead of a multi start thread",
+      "text": "Teilung P, Steigung Ph",
+      "note": "DIN 202 wording for a thread with several starts"
     }
   ]
 }

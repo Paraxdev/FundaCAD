@@ -337,7 +337,10 @@ export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: num
     for (const [field, english] of def?.fields ?? [])
       rows.push({ label: `  ${label(english)}`, value: num(part[field], u) });
     if (partName === "head" && typeof part["angle"] === "number")
-      rows.push({ label: `  ${t("field.countersinkAngle")}`, value: t("spec.angleValue", { angle: part["angle"] }) });
+      rows.push({
+        label: `  ${t("field.countersinkAngle")}`,
+        value: t("spec.angleValue", { angle: spellNumber(part["angle"]) }),
+      });
   }
   const thread = spec.thread;
   if (thread) {

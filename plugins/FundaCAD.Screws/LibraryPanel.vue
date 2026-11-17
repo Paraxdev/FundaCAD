@@ -6,7 +6,7 @@ import { Button, Chip, FieldRow, FloatingPanel, ListRow, Segmented, Select, Text
 import { openTextFile, saveTextFile, toast, useEngine } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
 import CustomForm from "./CustomForm.vue";
-import { label, t } from "./lines";
+import { label, pageLanguage, t } from "./lines";
 import {
   DRIVE_PREFIX,
   catalogueSize,
@@ -344,7 +344,7 @@ onBeforeUnmount(stopWatching);
           <Segmented v-model="tab" :label="t('panel.library')" size="sm" :options="tabOptions" />
         </div>
         <span v-if="!stacked" class="measure-hint" :style="{ margin: '0 0 0 auto' }">{{
-          t("panel.count", { count: TOTAL })
+          t("panel.count", { count: TOTAL.toLocaleString(pageLanguage() || undefined) })
         }}</span>
         <Button class="scr-close" :style="stacked ? { order: 1, marginLeft: 'auto' } : {}" @click="open = false">{{
           t("action.close")

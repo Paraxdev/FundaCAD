@@ -93,10 +93,10 @@ function writeField(p: PartName, field: string, v: number | null) {
 }
 
 // A refused optional field leaves nothing in the spec to object to, so its refusal holds Save itself.
-const refused = reactive<Record<string, string | null>>({});
+const refused = reactive<Record<string, { name: () => string; why: string } | null>>({});
 
-function refuse(p: PartName, f: string, name: string, why: string | null) {
-  refused[f] = why && t("form.refusal", { label: name, why });
+function refuse(p: PartName, f: string, name: () => string, why: string | null) {
+  refused[f] = why ? { name, why } : null;
   if (why) writeField(p, f, null);
 }
 
@@ -140,9 +140,9 @@ const spec = computed<FastenerSpec>(() => {
 
 const problems = computed(() => [
   ...specProblems(spec.value),
-  ...Object.values(refused).filter((why): why is string => !!why),
+  ...Object.values(refused).flatMap((r) => (r ? [t("form.refusal", { label: r.name(), why: r.why })] : [])),
 ]);
-const previewProblem = ref<string | null>(null);
+const previewProblem = ref<{ message?: string } | null>(null);
 const previewSpec = computed(() => (problems.value.length ? null : spec.value));
 
 const kindOptions = computed(() => Object.entries(KINDS).map(([value, k]) => ({ value, label: label(k.label) })));
@@ -173,7 +173,11 @@ const heading = {
 };
 
 const allProblems = computed(() =>
-  problems.value.length ? problems.value : previewProblem.value ? [previewProblem.value] : [],
+  problems.value.length
+    ? problems.value
+    : previewProblem.value
+      ? [previewProblem.value.message ?? t("preview.noPreview")]
+      : [],
 );
 
 // Spoken once per change and only after the person has used the form, never for what it opens with.
@@ -331,7 +335,7 @@ watch(
             placeholder="90"
             :model-value="numberOr(part('head')['angle'])"
             @update:model-value="writeField('head', 'angle', $event)"
-            @error="refuse('head', 'angle', t('field.countersinkAngle'), $event)"
+            @error="refuse('head', 'angle', () => t('field.countersinkAngle'), $event)"
             @vue:unmounted="refused['angle'] = null"
           />
         </FieldRow>
@@ -344,6 +348,7 @@ watch(
         >
           <NumberField
             :id="id"
+            class="scr-drive-number"
             :label="t('field.driverNumber')"
             unitless
             size="sm"
@@ -354,7 +359,7 @@ watch(
             :step="1"
             :model-value="numberOr(part('drive')['number'])"
             @update:model-value="writeField('drive', 'number', $event)"
-            @error="refuse('drive', 'number', t('field.driverNumberName'), $event)"
+            @error="refuse('drive', 'number', () => t('field.driverNumberName'), $event)"
             @vue:unmounted="refused['number'] = null"
           />
         </FieldRow>

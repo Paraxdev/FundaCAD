@@ -688,7 +688,7 @@ describe("the custom fastener form", () => {
     expect(field(".scr-len-length").closest(".param-row")!.textContent).toContain("Length");
     expect(byLabel("Countersink angle").value).toBe("");
     expect(byLabel("Countersink angle").placeholder).toBe("90");
-    expect(byLabel("Driver number").value).toBe("");
+    expect(field(".scr-drive-number").value).toBe("");
   });
 
   it("reads a decimal comma in a part field, as typed, and saves it", async () => {
@@ -702,9 +702,9 @@ describe("the custom fastener form", () => {
   describe("by the language, as every other box reads", () => {
     afterEach(() => setLanguage("system"));
 
-    async function driver(text: string, name = "Driver number") {
-      const { byLabel, problems, saved } = await form();
-      const input = byLabel(name);
+    async function driver(text: string) {
+      const { field, problems, saved } = await form();
+      const input = field(".scr-drive-number");
       type(input, text);
       await flushPromises();
       const number = (await saved())?.drive?.["number"] ?? null;
@@ -713,17 +713,13 @@ describe("the custom fastener form", () => {
 
     it("in German reads 1,500 and 0.250 as decimals and refuses 1.500, in English reads 1.500 and refuses 1,500", async () => {
       await setLanguage("de");
-      const de = [
-        await driver("1,500", "Größennummer"),
-        await driver("0.250", "Größennummer"),
-        await driver("1.500", "Größennummer"),
-      ];
+      const de = [await driver("1,500"), await driver("0.250"), await driver("1.500")];
       await setLanguage("system");
       const en = [await driver("1.500"), await driver("1,500")];
       const read = (number: number) => ({ number, invalid: null, problems: [] });
       const refused = (why: RegExp) => ({ number: null, invalid: "true", problems: [expect.stringMatching(why)] });
       expect({ de, en }).toEqual({
-        de: [read(1.5), read(0.25), refused(/^Größennummer: "1\.500" is ambiguous/)],
+        de: [read(1.5), read(0.25), refused(/^Antriebsgröße: "1\.500" is ambiguous/)],
         en: [read(1.5), refused(/^Driver number: "1,500" is ambiguous/)],
       });
     });
