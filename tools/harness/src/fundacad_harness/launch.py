@@ -282,8 +282,9 @@ def check_geometry_wasm(cmd: list[str], repo: Path) -> None:
         return
     missing = missing_geometry_wasm(repo)
     if missing:
-        raise LaunchError(f"no geometry.wasm built for {', '.join(missing)} in {repo / 'plugins'}, which a release"
-                          f" engine reads plugins from, run python scripts/build-plugin-wasm.py in {repo}")
+        raise LaunchError(f"no geometry.wasm built for {', '.join(missing)} in {repo / 'plugins'}, where a release"
+                          f" engine built from {repo} reads them, run python scripts/build-plugin-wasm.py there; an engine"
+                          " built from another checkout loads none of these plugins")
 
 
 def start_engine(cmd: list[str], repo: Path, work: Path, vite_port: int, timeout: float = 60) -> tuple[Proc, int, str]:
