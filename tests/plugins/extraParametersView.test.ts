@@ -103,7 +103,7 @@ describe("Extra Parameters: what the section lists", () => {
       await setLanguage("de");
       expect([parseChoices("Small = 1.500; Large = 30"), parseChoices("Small = 2,5, Large = 30")]).toEqual([
         '"1.500" is ambiguous, write a comma for decimals or leave the point out',
-        '"Small = 2,5, Large = 30" is two choices, put ; between them',
+        "„Small = 2,5, Large = 30“ sind zwei Auswahlen, setzen Sie ; dazwischen",
       ]);
     });
 

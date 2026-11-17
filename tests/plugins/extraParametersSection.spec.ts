@@ -222,7 +222,7 @@ describe("the Parameters section in German", () => {
     const de = await render(slanted);
     expect([calc(de.w).attributes("title"), calc(de.w).find(".sr-only").text()]).toEqual([
       "= max(gap * 2,5;0,75)",
-      ", calculated from max(gap * 2,5;0,75)",
+      ", berechnet aus max(gap * 2,5;0,75)",
     ]);
     de.w.unmount();
   });

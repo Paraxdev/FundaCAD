@@ -2,6 +2,7 @@
 
 import { controlProblem, decimalMark, listJoin, plainNumber, spellNumber, typedExprProblem } from "fundacad";
 import type { CadDocument, ParamControl, ParamDef } from "fundacad";
+import { t } from "./lines";
 
 export interface TuneRow {
   name: string;
@@ -85,12 +86,14 @@ export function parseChoices(text: string): { label: string; value: number }[] |
     const eq = part.lastIndexOf("=");
     const number = part.slice(eq + 1).trim();
     const value = plainNumber(number);
-    if (value === null) return typedExprProblem(number) ?? `"${part}" needs a number, like Large = 30`;
+    if (value === null) {
+      return typedExprProblem(number) ?? t("choices.needsNumber", { part, example: t("choices.example") });
+    }
     const label = eq >= 0 ? part.slice(0, eq).trim() : "";
-    if (label.includes("=")) return `"${part}" is two choices, put ${choiceSeparator()} between them`;
+    if (label.includes("=")) return t("choices.twoChoices", { part, sep: choiceSeparator() });
     out.push({ label: label || String(value), value });
   }
-  return out.length ? out : "list at least one choice";
+  return out.length ? out : t("choices.atLeastOne");
 }
 
 /** A bare number choice keeps its point text as its label, shown with the language's mark. */
