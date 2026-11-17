@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { ALL_HANDLES, setPrompt } from "fundacad";
 import type { Engine, Feature, Frame, MoveCommit, MoveResult, MoveTarget } from "fundacad";
+import { t } from "./lines";
 import * as panel from "./panel";
 import {
   NODE_TYPE,
@@ -25,8 +26,6 @@ const PREVIEW_DEBOUNCE_MS = 120;
 const DOT_PX = 6;
 const HIT_PX = 12;
 const DRAG_PX = 4;
-const PROMPT =
-  "Click to place a node · Alt-drag a node to pull a linked one out · Shift-click to link · Del removes · Enter · Esc";
 
 const NODE_COLOR = 0x3fb6a8;
 const PICKED_COLOR = 0xffb347;
@@ -134,7 +133,7 @@ export class NodeTool {
       commit: () => this.commit(),
       cancel: () => this.cancel(),
     });
-    setPrompt(PROMPT);
+    setPrompt(t("tool.prompt"));
     this.redraw();
     this.frame();
   }
@@ -272,8 +271,8 @@ export class NodeTool {
     const n = this.node(id);
     if (!n || field === "id") return null;
     const v = Number(raw.trim());
-    if (raw.trim() === "" || !Number.isFinite(v)) return "Type a number";
-    if ((field === "sx" || field === "sy" || field === "sz") && !(v > 0)) return "A radius must be greater than 0";
+    if (raw.trim() === "" || !Number.isFinite(v)) return t("check.number");
+    if ((field === "sx" || field === "sy" || field === "sz") && !(v > 0)) return t("check.radiusPositive");
     (n as unknown as Record<string, unknown>)[field] = v;
     this.reopenGizmo();
     this.changed();

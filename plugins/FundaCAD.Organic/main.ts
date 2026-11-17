@@ -63,7 +63,13 @@ export async function activate(e: Engine): Promise<() => void> {
     features: [
       {
         type: NODE_TYPE,
-        meta: { icon: "node-body", label: "Node body" },
+        meta: {
+          icon: "node-body",
+          get label() {
+            return t("feature.nodeBody");
+          },
+          refName: "Node body",
+        },
         choiceFields: NODE_CHOICE_FIELDS,
         numFields: nodeNumFields,
         targets: NODE_TARGETS,
