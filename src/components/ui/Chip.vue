@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { t } from "../../i18n";
 import { ariaKeys } from "../../input/platform";
 import Icon from "../shell/Icon.vue";
 import IconButton from "./IconButton.vue";
@@ -42,7 +43,7 @@ const text = computed(() => tipText(props.tip, props.keys));
 const split = computed(() => props.as === "button" && props.removable);
 const rootTag = computed(() => (split.value ? "span" : props.as));
 const rootIsButton = computed(() => rootTag.value === "button");
-const removeTip = computed(() => (props.label ? `Remove ${props.label}` : "Remove"));
+const removeTip = computed(() => (props.label ? t("ui.removeNamed", { name: props.label }) : t("ui.remove")));
 </script>
 
 <template>

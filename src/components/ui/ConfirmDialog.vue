@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends string">
 import { computed, ref, useId, useTemplateRef, watch } from "vue";
+import { t } from "../../i18n";
 import Dialog from "./Dialog.vue";
 import { useDisabled } from "./useDisabled";
 import { useRovingFocus } from "./useRovingFocus";
@@ -21,10 +22,10 @@ const props = withDefaults(
     multi?: boolean;
     /** Multi: the fewest ticks the confirm accepts. */
     min?: number;
-    confirmLabel?: string;
-    cancelLabel?: string;
+    confirmLabel?: string | undefined;
+    cancelLabel?: string | undefined;
   }>(),
-  { message: undefined, danger: false, multi: false, min: 1, confirmLabel: "OK", cancelLabel: "Cancel" },
+  { message: undefined, danger: false, multi: false, min: 1, confirmLabel: undefined, cancelLabel: undefined },
 );
 const emit = defineEmits<{ pick: [T]; confirm: [T[]]; cancel: [] }>();
 
@@ -93,7 +94,9 @@ const confirm = ok.guard(() => emit("confirm", picked.value));
         </button>
       </div>
       <template v-else>
-        <button type="button" class="btn ui-confirm-cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
+        <button type="button" class="btn ui-confirm-cancel" @click="emit('cancel')">{{
+          cancelLabel ?? t("common.cancel")
+        }}</button>
         <button
           type="button"
           class="btn btn-primary ui-confirm-ok"
@@ -101,7 +104,7 @@ const confirm = ok.guard(() => emit("confirm", picked.value));
           v-bind="ok.bind.value"
           @click="confirm"
         >
-          {{ confirmLabel }}
+          {{ confirmLabel ?? t("common.ok") }}
         </button>
       </template>
     </template>

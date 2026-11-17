@@ -2,6 +2,7 @@
 // The measure-panel popup shell worn by Properties, Interference, Overhang, Parameters, Stress and plugin panels.
 
 import { computed, onUnmounted, ref, useId, useSlots, watch } from "vue";
+import { t } from "../../i18n";
 import Icon from "../shell/Icon.vue";
 import { panelStack } from "../../ui/panelStack";
 
@@ -24,7 +25,7 @@ const slots = useSlots();
 const titleId = useId();
 const shownTitle = computed(() => !!props.title && !props.titleHidden);
 // An untitled panel, as from a plugin, still needs a name to be a region in the landmarks list.
-const name = computed(() => props.title || "Panel");
+const name = computed(() => props.title || t("ui.panel"));
 const hasHead = computed(() => shownTitle.value || props.closable || !!slots["head-actions"]);
 
 // Capture phase and no stopPropagation: the panels are non-modal, so Escape also reaches the global handler.
@@ -83,8 +84,8 @@ onUnmounted(() => {
           v-if="closable"
           type="button"
           class="float-card-close ui-panel-close"
-          aria-label="Close"
-          title="Close"
+          :aria-label="t('common.close')"
+          :title="t('common.close')"
           @click="emit('close')"
         >
           <Icon name="close" :size="14" />

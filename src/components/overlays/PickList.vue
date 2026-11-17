@@ -3,6 +3,7 @@
 // A pickable row is a ListRow beside its Remove button, never around it: a button may not nest in a button.
 
 import { computed } from "vue";
+import { t } from "../../i18n";
 import { distinctNames } from "../../ui/pickNames";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
@@ -35,11 +36,11 @@ defineEmits<{
       <Button
         class="tgt-clear"
         size="sm"
-        tip="Remove every entry"
+        :tip="t('ui.pickList.clearAllTip')"
         :disabled="rows.length === 0"
         @click.stop="$emit('clear')"
       >
-        Clear all
+        {{ t("ui.pickList.clearAll") }}
       </Button>
     </div>
 
@@ -61,7 +62,7 @@ defineEmits<{
         <IconButton
           class="tgt-remove"
           icon="minus"
-          :tip="`Remove ${names[i]}`"
+          :tip="t('ui.removeNamed', { name: names[i] ?? r.label })"
           size="sm"
           variant="danger"
           @click.stop="$emit('remove', i)"

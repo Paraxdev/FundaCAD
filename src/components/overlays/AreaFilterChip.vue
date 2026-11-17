@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import Icon from "../shell/Icon.vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { pageZoom } from "../../ui/interfaceSize";
 import { areaFilterIcon, type AreaFilter, type AreaMode } from "../../viewport/areaSelect";
 
@@ -19,12 +20,9 @@ const at = ref<{ x: number; y: number } | null>(null);
 const filter = shallowRef<AreaFilter>("all");
 const mode = shallowRef<AreaMode>("window");
 
-const label = computed(() => {
-  const f = filter.value;
-  return { all: "Everything", faces: "Faces", profiles: "Sketch profiles", edges: "Edges", bodies: "Bodies" }[f];
-});
+const label = computed(() => t("areaSelect.filter", { filter: filter.value }));
 
-const verdict = computed(() => (mode.value === "window" ? "fully inside" : "touched"));
+const verdict = computed(() => t("areaSelect.mode", { mode: mode.value }));
 
 function refresh(): boolean {
   const drag = engine.viewport.areaDragState;

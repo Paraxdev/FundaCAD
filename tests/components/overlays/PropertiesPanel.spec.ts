@@ -135,7 +135,7 @@ describe("PropertiesPanel", () => {
     });
     await flushPromises();
     const decimals = () =>
-      [...text().matchAll(/\((\d+[.,]\d+) g\/cm³\)|Filament, (\d+[.,]\d+)mm/g)].map((m) => m[1] ?? m[2] ?? "");
+      [...text().matchAll(/\((\d+[.,]\d+) g\/cm³\)|Filament, (\d+[.,]\d+) ?mm/g)].map((m) => m[1] ?? m[2] ?? "");
     const english = decimals();
     expect(english.length).toBeGreaterThan(1);
     expect(english.every((v) => v.includes("."))).toBe(true);

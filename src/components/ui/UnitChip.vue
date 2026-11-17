@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { t } from "../../i18n";
 import Select from "./Select.vue";
 import { unitById } from "../../ui/measure";
 
@@ -34,8 +35,8 @@ const choices = computed(() => (props.options ?? []).map((id) => ({ value: id, l
     size="sm"
     :model-value="unit"
     :options="choices"
-    :label="label ?? tip ?? 'Unit'"
-    :tip="tip ?? 'Unit'"
+    :label="label ?? tip ?? t('ui.unit')"
+    :tip="tip ?? t('ui.unit')"
     :keys="keys"
     :disabled="disabled"
     :disabled-reason="disabledReason"
