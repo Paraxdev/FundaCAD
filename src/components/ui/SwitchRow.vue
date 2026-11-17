@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { t } from "../../i18n";
 import Icon from "../shell/Icon.vue";
 import Switch from "./Switch.vue";
 import { fmtKeys } from "../../input/platform";
@@ -39,7 +40,7 @@ const title = computed(() => (props.disabled && props.disabledReason ? props.dis
     </span>
     <span v-if="$slots.hint" class="ui-switch-row-hint"><slot name="hint" /></span>
     <span v-if="layout === 'float'" class="ui-switch-row-state ft-state" aria-hidden="true">{{
-      modelValue ? "On" : "Off"
+      modelValue ? t("ui.switch.on") : t("ui.switch.off")
     }}</span>
     <Switch
       :model-value="modelValue"

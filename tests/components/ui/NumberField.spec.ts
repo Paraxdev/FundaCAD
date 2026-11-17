@@ -805,13 +805,13 @@ describe("NumberField in a comma language", () => {
   it("names a limit with a comma, with a unit and with a caption", async () => {
     const mm = await render({ modelValue: 12.375, unit: "mm", min: 0.5 });
     await commit(mm.input, "0,25");
-    expect(mm.input.attributes("title")).toMatch(/At least 0,5 mm/);
+    expect(mm.input.attributes("title")).toMatch(/Mindestens 0,5 mm/);
     const inches = await render({ modelValue: 25.4, unit: "in", max: 38.1 });
     await commit(inches.input, "2");
-    expect(inches.input.attributes("title")).toMatch(/At most 1,5 in/);
+    expect(inches.input.attributes("title")).toMatch(/Höchstens 1,5 in/);
     const layers = await render({ modelValue: 3.5, caption: "layers", max: 7.5 });
     await commit(layers.input, "9");
-    expect(layers.input.attributes("title")).toMatch(/At most 7,5 layers/);
+    expect(layers.input.attributes("title")).toMatch(/Höchstens 7,5 layers/);
     expect([mm, inches, layers].map((f) => emitted(f.w))).toEqual([[], [], []]);
   });
 

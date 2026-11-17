@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, mergeProps, useAttrs, useTemplateRef, watch } from "vue";
+import { t } from "../../i18n";
 import UnitChip from "./UnitChip.vue";
 import { useCommitField } from "./useCommitField";
 import { useDisabled } from "./useDisabled";
@@ -103,9 +104,9 @@ function read(raw: string): number | null {
   const v = props.parse ? props.parse(raw, unitDef.value) : parseMeasure(raw, unitDef.value).value;
   if (v === null) {
     if (props.expression) return null;
-    throw new Error("Not a number");
+    throw new Error(t("ui.number.notNumber"));
   }
-  if (!Number.isFinite(v)) throw new Error("Not a number");
+  if (!Number.isFinite(v)) throw new Error(t("ui.number.notNumber"));
   return v;
 }
 
@@ -116,12 +117,14 @@ function check(raw: string): { value: number | null; error: string | null; expr?
   try {
     v = read(raw);
   } catch (e) {
-    return { value: null, error: e instanceof Error && e.message ? e.message : "Not a value" };
+    return { value: null, error: e instanceof Error && e.message ? e.message : t("ui.number.notValue") };
   }
   if (v === null) return { value: null, error: null, expr: true };
   if (props.limits !== "arrows") {
-    if (props.min !== undefined && v < props.min) return { value: v, error: `At least ${caption(props.min)}` };
-    if (props.max !== undefined && v > props.max) return { value: v, error: `At most ${caption(props.max)}` };
+    if (props.min !== undefined && v < props.min)
+      return { value: v, error: t("ui.number.atLeast", { value: caption(props.min) }) };
+    if (props.max !== undefined && v > props.max)
+      return { value: v, error: t("ui.number.atMost", { value: caption(props.max) }) };
   }
   return { value: v, error: props.validate?.(v) ?? null };
 }
@@ -244,7 +247,7 @@ function onKeydown(e: KeyboardEvent) {
       v-if="shownUnit"
       :unit="shownUnit"
       :options="unit ? units : undefined"
-      :label="label && `${label} unit`"
+      :label="label && t('ui.number.unitLabel', { label })"
       :tip="unitTip"
       :disabled="disabled"
       spoken-elsewhere

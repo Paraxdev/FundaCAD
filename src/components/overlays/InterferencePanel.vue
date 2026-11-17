@@ -3,6 +3,8 @@
 
 import { ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
+import { spellNumber } from "../../ui/measure";
 import { usePanelsStore } from "../../stores/panels";
 import Panel from "../ui/Panel.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -60,7 +62,7 @@ function close() {
 <template>
   <Panel :open="!!panels.interference" :title="panels.interference?.title" close-on-esc @close="close">
     <template v-if="panels.interference">
-      <ul class="clash-list" aria-label="Clashes">
+      <ul class="clash-list" :aria-label="t('interference.clashes')">
         <li v-for="c in panels.interference.clashes" :key="c.key">
           <ListRow
             class="clash-row"
@@ -78,9 +80,7 @@ function close() {
       </ul>
       <div v-if="!panels.interference.clashes.length" class="measure-row">
         <span class="measure-v">{{
-          panels.interference.unchecked.length
-            ? "No overlap among the pairs that were checked"
-            : "No overlapping bodies"
+          panels.interference.unchecked.length ? t("interference.noneChecked") : t("interference.none")
         }}</span>
       </div>
       <div
@@ -89,12 +89,17 @@ function close() {
         class="measure-hint"
         style="color: var(--accent-hot)"
       >
-        Not checked: {{ u }}
+        {{ t("interference.notChecked", { what: u }) }}
       </div>
 
       <div class="measure-divider" />
       <div class="measure-row">
-        <Checkbox v-model="clearanceOn" class="measure-k" label="Clearance mode" @update:model-value="recheck" />
+        <Checkbox
+          v-model="clearanceOn"
+          class="measure-k"
+          :label="t('interference.clearanceMode')"
+          @update:model-value="recheck"
+        />
         <NumberField
           v-if="clearanceOn"
           class="measure-v"
@@ -104,15 +109,15 @@ function close() {
           :min="0.01"
           :max="50"
           :step="0.01"
-          label="Clearance"
-          tip="Clearance"
+          :label="t('interference.clearance')"
+          :tip="t('interference.clearance')"
           :model-value="threshold"
           @update:model-value="setThreshold"
         />
       </div>
 
       <template v-if="clearanceOn">
-        <ul class="clash-list" aria-label="Close pairs">
+        <ul class="clash-list" :aria-label="t('interference.closePairs')">
           <li v-for="c in panels.interference.clearances" :key="c.key">
             <ListRow
               class="clash-row"
@@ -129,7 +134,7 @@ function close() {
           </li>
         </ul>
         <div v-if="!panels.interference.clearances.length" class="measure-row">
-          <span class="measure-v">No pairs closer than {{ threshold }} mm</span>
+          <span class="measure-v">{{ t("interference.noneCloser", { amount: spellNumber(threshold) }) }}</span>
         </div>
       </template>
 
@@ -139,8 +144,8 @@ function close() {
       <div class="measure-hint">
         {{
           panels.interference.clashes.length || panels.interference.clearances.length
-            ? "Hover or Tab to a row to light the pair, click keeps it · Esc to close"
-            : "Esc to close"
+            ? t("interference.hintRows")
+            : t("interference.hintClose")
         }}
       </div>
     </template>

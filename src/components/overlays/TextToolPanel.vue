@@ -2,6 +2,7 @@
 // DimInput is numeric only, so the sketch Text tool gets its own panel.
 
 import { computed, onMounted, onUnmounted, reactive, useId, useTemplateRef } from "vue";
+import { t } from "../../i18n";
 import Button from "../ui/Button.vue";
 import Checkbox from "../ui/Checkbox.vue";
 import IconButton from "../ui/IconButton.vue";
@@ -33,14 +34,14 @@ const ta = useTemplateRef<InstanceType<typeof TextField>>("ta");
 const id = useId();
 
 const fonts = computed(() => [
-  { value: "", label: "Default font" },
+  { value: "", label: t("textTool.defaultFont") },
   ...props.req.fonts.map((f) => ({ value: f, label: f })),
 ]);
-const aligns: { value: TextValues["align"]; label: string }[] = [
-  { value: "left", label: "Left" },
-  { value: "center", label: "Center" },
-  { value: "right", label: "Right" },
-];
+const aligns = computed<{ value: TextValues["align"]; label: string }[]>(() => [
+  { value: "left", label: t("textTool.align.left") },
+  { value: "center", label: t("textTool.align.center") },
+  { value: "right", label: t("textTool.align.right") },
+]);
 
 // Every edit feeds the live preview.
 function set<K extends keyof TextForm>(key: K, value: TextForm[K]) {
@@ -105,8 +106,8 @@ onUnmounted(() => {
         :model-value="form.text"
         multiline
         rows="2"
-        placeholder="Text…"
-        label="Text"
+        :placeholder="t('textTool.placeholder')"
+        :label="t('textTool.text')"
         @update:model-value="set('text', $event)"
         @keydown.enter.ctrl.prevent="commit"
         @keydown.enter.meta.prevent="commit"
@@ -116,13 +117,13 @@ onUnmounted(() => {
         :model-value="form.font"
         :options="fonts"
         size="sm"
-        label="Font"
-        tip="Font"
+        :label="t('textTool.font')"
+        :tip="t('textTool.font')"
         @update:model-value="set('font', $event)"
       />
 
       <div class="text-tool-row">
-        <label :id="`${id}-height-label`" class="text-tool-label" :for="`${id}-height`">Size</label>
+        <label :id="`${id}-height-label`" class="text-tool-label" :for="`${id}-height`">{{ t("textTool.size") }}</label>
         <TextField
           :id="`${id}-height`"
           :labelledby="`${id}-height-label`"
@@ -133,7 +134,7 @@ onUnmounted(() => {
           :error="errors.height"
           @update:model-value="set('height', $event)"
         />
-        <label :id="`${id}-angle-label`" class="text-tool-label" :for="`${id}-angle`">Angle°</label>
+        <label :id="`${id}-angle-label`" class="text-tool-label" :for="`${id}-angle`">{{ t("textTool.angle") }}</label>
         <TextField
           :id="`${id}-angle`"
           :labelledby="`${id}-angle-label`"
@@ -147,23 +148,23 @@ onUnmounted(() => {
       </div>
 
       <div class="text-tool-row">
-        <Checkbox :model-value="form.bold" tip="Bold" @update:model-value="set('bold', $event)"
-          ><span aria-hidden="true">B</span><span class="sr-only">Bold</span></Checkbox
+        <Checkbox :model-value="form.bold" :tip="t('textTool.bold')" @update:model-value="set('bold', $event)"
+          ><span aria-hidden="true">B</span><span class="sr-only">{{ t("textTool.bold") }}</span></Checkbox
         >
-        <Checkbox :model-value="form.italic" tip="Italic" @update:model-value="set('italic', $event)"
-          ><span aria-hidden="true">I</span><span class="sr-only">Italic</span></Checkbox
+        <Checkbox :model-value="form.italic" :tip="t('textTool.italic')" @update:model-value="set('italic', $event)"
+          ><span aria-hidden="true">I</span><span class="sr-only">{{ t("textTool.italic") }}</span></Checkbox
         >
         <Segmented
           :model-value="form.align"
           :options="aligns"
-          label="Alignment"
+          :label="t('textTool.alignment')"
           size="sm"
           @update:model-value="set('align', $event)"
         />
       </div>
 
       <div class="text-tool-row">
-        <label :id="`${id}-box-label`" class="text-tool-label" :for="`${id}-box`">Box width (mm)</label>
+        <label :id="`${id}-box-label`" class="text-tool-label" :for="`${id}-box`">{{ t("textTool.boxWidth") }}</label>
         <TextField
           :id="`${id}-box`"
           :labelledby="`${id}-box-label`"
@@ -171,7 +172,7 @@ onUnmounted(() => {
           :model-value="form.boxWidth"
           size="sm"
           inputmode="decimal"
-          placeholder="0 = no box"
+          :placeholder="t('textTool.noBox')"
           :error="errors.boxWidth"
           @update:model-value="set('boxWidth', $event)"
         />
@@ -200,12 +201,12 @@ onUnmounted(() => {
           @pointerdown.prevent.stop="commit"
           @click="$event.detail === 0 && commit()"
         >
-          Add
+          {{ t("textTool.add") }}
         </Button>
         <IconButton
           class="text-tool-cancel"
           icon="close"
-          tip="Cancel"
+          :tip="t('common.cancel')"
           size="md"
           variant="plain"
           @pointerdown.prevent.stop="panels.cancelText()"

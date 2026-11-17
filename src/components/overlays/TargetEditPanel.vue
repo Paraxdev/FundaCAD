@@ -6,6 +6,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import PickList from "./PickList.vue";
 import Button from "../ui/Button.vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { featureMeta } from "../../ui/featureMeta";
 import { describeTarget } from "../../features/selectionTargets";
 
@@ -90,10 +91,10 @@ const title = computed(() => {
 });
 
 const summary = computed(() => {
-  const t = field.value;
-  return t
+  const target = field.value;
+  return target
     ? describeTarget(
-        t,
+        target,
         rows.value.map((r) => r.entry),
       )
     : "";
@@ -102,7 +103,7 @@ const summary = computed(() => {
 
 <template>
   <!-- Parked in the left column, not floating: a panel following the geometry would eat the clicks it collects. -->
-  <aside v-if="open && field" class="tgt-panel" role="dialog" :aria-label="`${title} selection`">
+  <aside v-if="open && field" class="tgt-panel" role="dialog" :aria-label="t('target.panelLabel', { name: title })">
     <div class="tgt-head">
       <span class="tgt-title">{{ title }}</span>
       <span class="tgt-sub">{{ summary }}</span>
@@ -113,7 +114,7 @@ const summary = computed(() => {
       :rows="rows"
       :held="held"
       pickable
-      empty="Click geometry to add"
+      :empty="t('ui.pickList.clickToAdd')"
       @clear="clearAll"
       @remove="removeRow"
       @hover="hover"
@@ -122,8 +123,8 @@ const summary = computed(() => {
     />
 
     <div class="tgt-actions">
-      <Button class="tgt-done" variant="primary" @click="tool.commit()">Done</Button>
-      <Button class="tgt-cancel" @click="tool.cancel()">Cancel</Button>
+      <Button class="tgt-done" variant="primary" @click="tool.commit()">{{ t("target.done") }}</Button>
+      <Button class="tgt-cancel" @click="tool.cancel()">{{ t("common.cancel") }}</Button>
     </div>
   </aside>
 </template>

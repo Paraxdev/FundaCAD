@@ -2,6 +2,7 @@
 // The chosen filter lives in the store because the projection routine reads it synchronously, mid-pick.
 
 import { computed, onMounted, useTemplateRef, watch } from "vue";
+import { t } from "../../i18n";
 import Segmented from "../ui/Segmented.vue";
 import { PROJECT_CHIPS, type ProjectFilter } from "../../sketch/projectPanel";
 import { useToolPanelStore } from "../../stores/toolPanels";
@@ -37,7 +38,7 @@ watch(() => panels.projectAnchor, place, { flush: "post" });
       <Segmented
         :model-value="panels.projectFilter"
         :options="options"
-        label="Project filter"
+        :label="t('project.filter')"
         variant="chips"
         size="sm"
         @update:model-value="choose"
