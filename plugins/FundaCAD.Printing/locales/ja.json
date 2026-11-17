@@ -36,7 +36,7 @@
   "export.noBodies": "まだエクスポートするものがありません。先にボディを作成してください。",
   "export.noEngine": "カラー 3MF のエクスポートは、このジオメトリエンジンではまだ利用できません。",
   "export.warnBodies": "エクスポートしましたが、{n, plural, other {# 個のボディ}}が未割り当てです (既定ではスロット 1)。",
-  "export.warnBoth": "エクスポートしましたが、スロット {list} には、プリンターにフィラメントが装填されていません、{bodies, plural, other {# 個のボディ}}が未割り当てです (既定ではスロット 1)。",
+  "export.warnBoth": "エクスポートしましたが、スロット {list} には、プリンターにフィラメントが装填されておらず、{bodies, plural, other {# 個のボディ}}が未割り当てです (既定ではスロット 1)。",
   "export.warnSlots": "エクスポートしましたが、スロット {list} には、プリンターにフィラメントが装填されていません。",
   "export.warnTitle": "エクスポートしたプロジェクト (警告あり)",
   "filament.fallbackName": "フィラメント {n}",
