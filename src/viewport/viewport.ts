@@ -69,6 +69,7 @@ import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import { t, tEnglish } from "../i18n";
+import { WordedError } from "../ui/wordedError";
 import { awaitTreePick } from "../ui/treePick";
 import { overrideRowAnswer, viewOverrideOf } from "./viewOverride";
 import type { DocumentStore } from "../document/store";
@@ -1229,7 +1230,7 @@ export class Viewport {
         native: this.native ?? { available: false },
         faulted: this.tracerFaults,
       });
-    if (!kind) throw new Error("both tracers faulted this session");
+    if (!kind) throw new WordedError("render.trace.bothFaulted");
     this.tracerKind = kind;
     return createTracerOf(kind, dev?.prefer, dev?.call);
   }

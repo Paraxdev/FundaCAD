@@ -66,6 +66,20 @@ describe("a panorama known only by its path", () => {
       "Couldn't use sky.hdr as the environment: /in/sky.hdr was not dropped or picked in this session, so it was not read.",
     );
   });
+
+  it("is refused in the chosen language, an OS error kept as the app wrote it", async () => {
+    await setLanguage("de");
+    h.answer = "/in/sky.hdr is larger than 512 MB, too big to use as an environment.";
+    const big = await importEnvironment(null, { name: "sky.hdr", path: "/in/sky.hdr" });
+    expect(big.refused).toBe(
+      "sky.hdr konnte nicht als Umgebung verwendet werden: /in/sky.hdr ist größer als 512 MB und damit zu groß für eine Umgebung.",
+    );
+    h.answer = "/in/sky.hdr: Zugriff verweigert (os error 5)";
+    const os = await importEnvironment(null, { name: "sky.hdr", path: "/in/sky.hdr" });
+    expect(os.refused).toBe(
+      "sky.hdr konnte nicht als Umgebung verwendet werden: /in/sky.hdr: Zugriff verweigert (os error 5)",
+    );
+  });
 });
 
 describe("keptSmallerNote", () => {
