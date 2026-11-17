@@ -1,6 +1,19 @@
 // Pure apart from storage, so the tests can read every rule here.
 
-import { readSetting, type CtxItem, type PointerBinding, type SettingsSchema, type ShortcutOverride } from "fundacad";
+import {
+  SHORTCUTS,
+  bindingEntries,
+  checkShortcut,
+  formatShortcut,
+  readSetting,
+  type CtxItem,
+  type PointerBinding,
+  type SettingsSchema,
+  type Shortcut,
+  type ShortcutOverride,
+  type ShortcutProblem,
+} from "fundacad";
+import { t, tEnglish } from "./lines";
 
 export const PLUGIN_ID = "FundaCAD.Navigation";
 /** Not "fundacad.navigation": the core's own navigation preferences use it. */
@@ -17,7 +30,9 @@ export interface Preset {
 export const PRESETS: Preset[] = [
   {
     id: "right",
-    label: "Right orbits (default)",
+    get label() {
+      return t("preset.right");
+    },
     table: [
       { button: "right", shift: true, drag: "pan", click: "menu" },
       { button: "right", drag: "orbit", click: "menu" },
@@ -26,7 +41,9 @@ export const PRESETS: Preset[] = [
   },
   {
     id: "middle-shift",
-    label: "Middle orbits, Shift+middle pans",
+    get label() {
+      return t("preset.middleShift");
+    },
     table: [
       { button: "middle", shift: true, drag: "pan" },
       { button: "middle", ctrl: true, drag: "zoom" },
@@ -36,7 +53,9 @@ export const PRESETS: Preset[] = [
   },
   {
     id: "middle-ctrl",
-    label: "Middle orbits, Ctrl+middle pans",
+    get label() {
+      return t("preset.middleCtrl");
+    },
     table: [
       { button: "middle", ctrl: true, drag: "pan" },
       { button: "middle", shift: true, drag: "zoom" },
@@ -46,7 +65,9 @@ export const PRESETS: Preset[] = [
   },
   {
     id: "alt-left",
-    label: "Alt+left orbits",
+    get label() {
+      return t("preset.altLeft");
+    },
     table: [
       { button: "left", alt: true, shift: true, drag: "pan" },
       { button: "left", alt: true, ctrl: true, drag: "zoom" },
@@ -60,17 +81,52 @@ export const PRESETS: Preset[] = [
 
 export type RadialDrag = "none" | "alt-right" | "right" | "middle";
 export const RADIAL_DRAGS: { id: RadialDrag; label: string }[] = [
-  { id: "alt-right", label: "Alt+right drag" },
-  { id: "right", label: "Right drag" },
-  { id: "middle", label: "Middle drag" },
-  { id: "none", label: "No mouse trigger, the key only" },
+  {
+    id: "alt-right",
+    get label() {
+      return t("drag.altRight");
+    },
+  },
+  {
+    id: "right",
+    get label() {
+      return t("drag.right");
+    },
+  },
+  {
+    id: "middle",
+    get label() {
+      return t("drag.middle");
+    },
+  },
+  {
+    id: "none",
+    get label() {
+      return t("drag.none");
+    },
+  },
 ];
 
 export type RadialContext = "model" | "selection" | "sketch";
 export const RADIAL_CONTEXTS: { id: RadialContext; label: string }[] = [
-  { id: "model", label: "Nothing selected" },
-  { id: "selection", label: "Something selected" },
-  { id: "sketch", label: "In a sketch" },
+  {
+    id: "model",
+    get label() {
+      return t("ctx.model");
+    },
+  },
+  {
+    id: "selection",
+    get label() {
+      return t("ctx.selection");
+    },
+  },
+  {
+    id: "sketch",
+    get label() {
+      return t("ctx.sketch");
+    },
+  },
 ];
 
 /** More than this and the rest go in a "More" ring. */
@@ -178,25 +234,43 @@ export const SETTINGS: SettingsSchema = {
     {
       key: "preset",
       type: "enum",
-      label: "Mouse buttons",
-      description:
-        "The left button alone always selects. On Linux the window manager may take Alt+drag to move the window before the app sees it; the middle button presets avoid that.",
+      get label() {
+        return t("setting.preset");
+      },
+      get description() {
+        return t("setting.presetHint");
+      },
       default: DEFAULT_CONFIG.preset,
-      options: PRESETS.map((p) => ({ id: p.id, label: p.label })),
+      options: PRESETS.map((p) => ({
+        id: p.id,
+        get label() {
+          return p.label;
+        },
+      })),
     },
     {
       key: "radial",
       type: "boolean",
-      label: "Radial menu",
-      group: "Radial menu",
-      description: `A ring of commands at the cursor, chosen by what you are doing. Hold the trigger, move towards a command and let go, or tap the key and click. Its key is ${RADIAL_KEY.toUpperCase()} unless you move it below.`,
+      get label() {
+        return t("setting.radial");
+      },
+      get group() {
+        return t("group.radial");
+      },
+      get description() {
+        return t("setting.radialHint", { key: RADIAL_KEY.toUpperCase() });
+      },
       default: DEFAULT_CONFIG.radial,
     },
     {
       key: "radialDrag",
       type: "enum",
-      label: "Mouse trigger",
-      group: "Radial menu",
+      get label() {
+        return t("setting.radialDrag");
+      },
+      get group() {
+        return t("group.radial");
+      },
       default: DEFAULT_CONFIG.radialDrag,
       options: RADIAL_DRAGS,
       visibleWhen: (v) => v.radial === true,
@@ -227,10 +301,9 @@ export function tableFor(cfg: NavConfig): { table: PointerBinding[]; problem: st
     (b) => b.button === button && b.shift === undefined && b.ctrl === undefined && b.alt === undefined,
   );
   if (plain?.drag) {
-    const name = button === "right" ? "Right" : "Middle";
     return {
       table,
-      problem: `${name} drag already does ${plain.drag} in this preset, so the radial menu is on its key only`,
+      problem: t("radial.taken", { gesture: t("binding.gesture", { button, kind: "drag" }), action: plain.drag }),
     };
   }
   if (plain) plain.drag = "gesture";
@@ -245,7 +318,13 @@ export function keymapFor(cfg: NavConfig): ShortcutOverride[] {
   const mine = cfg.keys.find((k) => k.action === RADIAL_ACTION);
   return [
     ...keys,
-    { ...(mine ?? { action: RADIAL_ACTION, key: RADIAL_KEY }), context: "global", label: "Radial menu" },
+    {
+      ...(mine ?? { action: RADIAL_ACTION, key: RADIAL_KEY }),
+      context: "global",
+      get label() {
+        return t("radial.name");
+      },
+    },
   ];
 }
 
@@ -268,5 +347,72 @@ export function radialItems(
   };
   const all = ids.filter(Boolean).map(item);
   if (all.length <= RING_SLOTS) return all;
-  return [...all.slice(0, RING_SLOTS - 1), { label: "More", icon: "more", children: all.slice(RING_SLOTS - 1) }];
+  return [
+    ...all.slice(0, RING_SLOTS - 1),
+    { label: t("ring.more"), icon: "more", children: all.slice(RING_SLOTS - 1) },
+  ];
+}
+
+/** What each mouse binding of a table does, as `Right drag: orbit.` rows, one per drag and one click per button. */
+export function bindingRows(table: readonly PointerBinding[]): { key: string; label: string }[] {
+  return bindingEntries(table).map((e) => {
+    const args = { button: e.button, kind: e.kind };
+    const key = e.mods.length
+      ? t("binding.gestureHeld", { ...args, mods: e.mods.join("+") })
+      : t("binding.gesture", args);
+    const label =
+      e.what === "orbit"
+        ? t("binding.orbit")
+        : e.what === "pan"
+          ? t("binding.pan")
+          : e.what === "zoom"
+            ? t("binding.zoom")
+            : e.what === "gesture"
+              ? t("binding.radial")
+              : t("binding.context");
+    return { key, label };
+  });
+}
+
+/** A row's name as it reads now: the table copies a label when it stages its rows, so a copy can be a language behind. */
+export function shortcutLabel(s: Pick<Shortcut, "action" | "label">): string {
+  if (s.action === RADIAL_ACTION) return t("radial.name");
+  return SHORTCUTS.find((o) => o.action === s.action)?.label ?? s.label;
+}
+
+// The host words these problems in English. Both sets are closed, the spec reads the host's table for drift, and a
+// text not listed here shows as sent. A reserved name is matched on the plugin's English line of it, and the Alt
+// refusal is asked of the host, which has no export for its text.
+const altRefusal = () => (checkShortcut({ action: RADIAL_ACTION, key: "a", alt: true }) as { refused: string }).refused;
+const RESERVED_LINES = [
+  { say: () => t("reserved.undo"), english: () => tEnglish("reserved.undo") },
+  { say: () => t("reserved.redo"), english: () => tEnglish("reserved.redo") },
+  { say: () => t("reserved.save"), english: () => tEnglish("reserved.save") },
+  { say: () => t("reserved.saveAs"), english: () => tEnglish("reserved.saveAs") },
+  { say: () => t("reserved.new"), english: () => tEnglish("reserved.new") },
+  { say: () => t("reserved.open"), english: () => tEnglish("reserved.open") },
+  { say: () => t("reserved.export"), english: () => tEnglish("reserved.export") },
+  { say: () => t("reserved.find"), english: () => tEnglish("reserved.find") },
+  { say: () => t("reserved.palette"), english: () => tEnglish("reserved.palette") },
+  { say: () => t("reserved.preferences"), english: () => tEnglish("reserved.preferences") },
+  { say: () => t("reserved.items"), english: () => tEnglish("reserved.items") },
+  { say: () => t("reserved.history"), english: () => tEnglish("reserved.history") },
+  { say: () => t("reserved.console"), english: () => tEnglish("reserved.console") },
+  { say: () => t("reserved.interfaceSize"), english: () => tEnglish("reserved.interfaceSize") },
+  { say: () => t("reserved.cancel"), english: () => tEnglish("reserved.cancel") },
+  { say: () => t("reserved.boxFilter"), english: () => tEnglish("reserved.boxFilter") },
+  { say: () => t("reserved.delete"), english: () => tEnglish("reserved.delete") },
+  { say: () => t("reserved.thisSheet"), english: () => tEnglish("reserved.thisSheet") },
+];
+
+export const RESERVED_NAMES: readonly string[] = RESERVED_LINES.map((l) => l.english());
+
+export function problemText(p: ShortcutProblem): string {
+  if ("conflict" in p) {
+    return t("problem.used", { key: formatShortcut(p.conflict), label: shortcutLabel(p.conflict) });
+  }
+  if ("reserved" in p) {
+    return t("problem.taken", { name: RESERVED_LINES.find((l) => l.english() === p.reserved)?.say() ?? p.reserved });
+  }
+  return p.refused === altRefusal() ? t("problem.alt") : p.refused;
 }

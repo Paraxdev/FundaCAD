@@ -17,6 +17,7 @@ import {
 import type { ParamCheck, ParamControl, ParamDef } from "fundacad";
 import { Button, Checkbox, FloatingPanel, Icon, IconButton, NumberField, Select, TextField } from "fundacad/ui";
 import { setupOpen } from "./state";
+import { t } from "./lines";
 import { choiceSeparator, convertControl, formatChoices, nextId, parseChoices, uniqueGroups } from "./view";
 
 const store = useEngine().store;
@@ -35,19 +36,21 @@ const checks = useDocValue((doc) => {
   return (doc.paramExtras?.checks ?? []).map((c) => ({ check: c, result: results.get(c.id) }));
 });
 
-const KINDS: { value: ParamControl["kind"]; label: string }[] = [
-  { value: "number", label: "Number" },
-  { value: "slider", label: "Slider" },
-  { value: "toggle", label: "Toggle" },
-  { value: "choice", label: "Choice" },
-];
-const LEVELS: { value: ParamCheck["level"]; label: string }[] = [
-  { value: "warning", label: "Warning" },
-  { value: "error", label: "Error" },
-];
+const kinds = computed<{ value: ParamControl["kind"]; label: string }[]>(() => [
+  { value: "number", label: t("setup.kindNumber") },
+  { value: "slider", label: t("setup.kindSlider") },
+  { value: "toggle", label: t("setup.kindToggle") },
+  { value: "choice", label: t("setup.kindChoice") },
+]);
+const levels = computed<{ value: ParamCheck["level"]; label: string }[]>(() => [
+  { value: "warning", label: t("setup.levelWarning") },
+  { value: "error", label: t("setup.levelError") },
+]);
 const BOUNDS = ["min", "max", "step"] as const;
 type Bound = (typeof BOUNDS)[number];
-const BOUND_WORDS: Record<Bound, string> = { min: "minimum", max: "maximum", step: "step" };
+const boundLabel = (name: string, key: Bound) =>
+  key === "min" ? t("setup.minOf", { name }) : key === "max" ? t("setup.maxOf", { name }) : t("setup.stepOf", { name });
+const boundWord = (key: Bound) => (key === "min" ? t("setup.min") : key === "max" ? t("setup.max") : t("setup.step"));
 
 // What is wrong, as alerts on the panel: a refused edit used to be a toast, which a screen reader never reached. A
 // field's own refusal is spoken by the field as well, so it is only shown here.
@@ -104,21 +107,23 @@ function setBound(name: string, control: ParamControl, key: Bound, v: number | n
   clear();
   const next = { ...control } as Record<string, unknown>;
   if (v === null) {
-    if (control.kind === "slider" && key !== "step") return fail(`a slider needs a ${key}`);
+    if (control.kind === "slider" && key !== "step") {
+      return fail(key === "min" ? t("setup.sliderNeedsMin") : t("setup.sliderNeedsMax"));
+    }
     delete next[key];
   } else {
     next[key] = v;
   }
   const lo = next["min"] as number | undefined;
   const hi = next["max"] as number | undefined;
-  if (lo !== undefined && hi !== undefined && lo >= hi) return fail("min must be below max");
+  if (lo !== undefined && hi !== undefined && lo >= hi) return fail(t("setup.minBelowMax"));
   store.setParamMeta(name, { control: next as ParamControl });
 }
 
 const boundOf = (control: ParamControl, key: Bound): number | null =>
   control.kind === "number" || control.kind === "slider" ? (control[key] ?? null) : null;
 const boundUnit = (def: ParamDef) => (def.unit === "mm" ? "mm" : def.unit === "deg" ? "deg" : null);
-const stepProblem = (v: number) => (v <= 0 ? "step must be a positive number" : null);
+const stepProblem = (v: number) => (v <= 0 ? t("setup.stepPositive") : null);
 
 function choicesProblem(key: string, raw: string): string | null {
   const parsed = parseChoices(raw);
@@ -217,7 +222,7 @@ function exprError(expr: string): string | null {
 
 function addCheck() {
   const { expr, message, level } = newCheck.value;
-  if (!expr.trim() || !message.trim()) return fail("a check needs a rule and a message");
+  if (!expr.trim() || !message.trim()) return fail(t("setup.checkNeeds"));
   const err = exprError(expr);
   if (err) return fail(`${expr}: ${err}`);
   clear();
@@ -256,7 +261,7 @@ function removeCheck(id: string) {
 
 const empty = computed(() => params.value.length === 0);
 const groupOptions = computed(() => [
-  { value: "", label: stacked.value ? "No group" : "none" },
+  { value: "", label: stacked.value ? t("setup.noGroup") : t("setup.noGroupShort") },
   ...groups.value.map((g) => ({ value: g.id, label: g.name })),
 ]);
 const configTitle = (values: Record<string, string>) =>
@@ -288,25 +293,25 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
 <template>
   <FloatingPanel
     :open="setupOpen"
-    title="Parameter Setup"
+    :title="t('setup.title')"
     close-on-esc
     panel-class="xp-setup-panel"
     @close="setupOpen = false"
   >
-    <div class="measure-title" aria-hidden="true">Parameter Setup</div>
+    <div class="measure-title" aria-hidden="true">{{ t("setup.title") }}</div>
     <div v-for="why in shownProblems" :key="why" role="alert" :style="PROBLEM">{{ why }}</div>
     <div ref="scroller" style="max-height: 70vh; overflow: auto; padding-right: 4px; width: 680px; max-width: 100%">
-      <div v-if="empty" class="measure-hint">Add a user parameter first (Modify, Parameters).</div>
+      <div v-if="empty" class="measure-hint">{{ t("setup.empty") }}</div>
 
       <template v-else>
-        <div :style="section">Controls</div>
+        <div :style="section">{{ t("setup.controls") }}</div>
         <div :style="stacked ? BLOCKS : grid('1fr 1.1fr 2.9fr 1fr auto')">
           <template v-if="!stacked">
-            <span aria-hidden="true" style="opacity: 0.6">Name</span>
-            <span aria-hidden="true" style="opacity: 0.6">Control</span>
-            <span aria-hidden="true" style="opacity: 0.6">Range or choices</span>
-            <span aria-hidden="true" style="opacity: 0.6">Group</span>
-            <span aria-hidden="true" style="opacity: 0.6" title="Hidden from the Parameters section">Hide</span>
+            <span aria-hidden="true" style="opacity: 0.6">{{ t("setup.colName") }}</span>
+            <span aria-hidden="true" style="opacity: 0.6">{{ t("setup.colControl") }}</span>
+            <span aria-hidden="true" style="opacity: 0.6">{{ t("setup.colRange") }}</span>
+            <span aria-hidden="true" style="opacity: 0.6">{{ t("setup.colGroup") }}</span>
+            <span aria-hidden="true" style="opacity: 0.6" :title="t('setup.colHideTip')">{{ t("setup.colHide") }}</span>
           </template>
           <div v-for="(p, i) in params" :key="p.name" class="xp-param" :style="stacked ? PARAM_BLOCK : ROW">
             <span
@@ -321,21 +326,21 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
             <Select
               class="xp-kind"
               :data-param="p.name"
-              :label="`${p.name} control`"
+              :label="t('setup.controlOf', { name: p.name })"
               size="sm"
               :style="FILL"
-              :options="KINDS"
+              :options="kinds"
               :model-value="p.def.control?.kind ?? 'number'"
               @update:model-value="setKind(p.name, $event, p.def.value, p.def.control)"
             />
             <div class="xp-range" :style="{ minWidth: 0, ...lineFrom(1) }">
               <TextField
                 v-if="p.def.control?.kind === 'choice'"
-                :label="`${p.name} choices`"
+                :label="t('setup.choicesOf', { name: p.name })"
                 size="sm"
                 commit="change"
                 :style="FILL"
-                :placeholder="`Small = 10${choiceSeparator()} Large = 30`"
+                :placeholder="t('choices.placeholder', { sep: choiceSeparator() })"
                 :validate="(raw) => choicesProblem(`${p.name}.choices`, raw)"
                 :model-value="formatChoices(p.def.control.choices)"
                 @update:model-value="setChoices(p.name, $event)"
@@ -344,46 +349,53 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
                 <NumberField
                   v-for="key in BOUNDS"
                   :key="key"
-                  :label="`${p.name} ${BOUND_WORDS[key]}`"
+                  :label="boundLabel(p.name, key)"
                   :unit="boundUnit(p.def)"
                   :unitless="!boundUnit(p.def)"
                   size="sm"
                   commit="change"
                   nullable
                   :style="FILL"
-                  :placeholder="key"
+                  :placeholder="boundWord(key)"
                   :validate="key === 'step' ? stepProblem : undefined"
                   :model-value="boundOf(p.def.control, key)"
                   @update:model-value="setBound(p.name, p.def.control, key, $event)"
-                  @error="show(`${p.name}.${key}`, $event && `${p.name} ${BOUND_WORDS[key]}: ${$event}`)"
+                  @error="
+                    show(
+                      `${p.name}.${key}`,
+                      $event && t('setup.problemOf', { what: boundLabel(p.name, key), why: $event }),
+                    )
+                  "
                 />
               </div>
-              <span v-else style="opacity: 0.5">{{ p.def.control?.kind === "toggle" ? "0 or 1" : "any value" }}</span>
+              <span v-else style="opacity: 0.5">{{
+                p.def.control?.kind === "toggle" ? t("setup.zeroOrOne") : t("setup.anyValue")
+              }}</span>
             </div>
             <Select
-              :label="`${p.name} group`"
+              :label="t('setup.groupOf', { name: p.name })"
               size="sm"
               :style="FILL"
               :options="groupOptions"
               :model-value="p.def.group ?? ''"
               @update:model-value="store.setParamMeta(p.name, { group: $event || null })"
             />
-            <span :id="hideLabel(i)" class="sr-only">{{ p.name }} Hide</span>
+            <span :id="hideLabel(i)" class="sr-only">{{ t("setup.hideOf", { name: p.name }) }}</span>
             <Checkbox
               :labelledby="hideLabel(i)"
               :model-value="!!p.def.hidden"
               @update:model-value="store.setParamMeta(p.name, { hidden: $event })"
             >
-              <template v-if="stacked" #default>Hide</template>
+              <template v-if="stacked" #default>{{ t("setup.colHide") }}</template>
             </Checkbox>
           </div>
         </div>
 
-        <div :style="section">Groups</div>
+        <div :style="section">{{ t("setup.groups") }}</div>
         <div :style="grid('1fr auto')">
           <template v-for="g in groups" :key="g.id">
             <TextField
-              :label="`Name of group ${g.name}`"
+              :label="t('setup.groupName', { name: g.name })"
               size="sm"
               commit="change"
               :style="FILL"
@@ -395,26 +407,33 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :icon-size="13"
               size="sm"
               variant="plain"
-              :tip="`Delete group ${g.name}, its parameters become ungrouped`"
+              :tip="t('setup.groupDelete', { name: g.name })"
               @click="removeGroup(g.id)"
             />
           </template>
           <TextField
             v-model="newGroup"
-            label="New group name"
+            :label="t('setup.groupNew')"
             size="sm"
             :style="FILL"
-            placeholder="new group"
+            :placeholder="t('setup.groupNewPlaceholder')"
             @keydown.enter="addGroup()"
           />
-          <IconButton icon="plus" :icon-size="13" size="sm" variant="plain" tip="Add group" @click="addGroup()" />
+          <IconButton
+            icon="plus"
+            :icon-size="13"
+            size="sm"
+            variant="plain"
+            :tip="t('setup.groupAdd')"
+            @click="addGroup()"
+          />
         </div>
 
-        <div :style="section">Configurations</div>
+        <div :style="section">{{ t("setup.configs") }}</div>
         <div :style="grid(stacked ? 'auto auto minmax(0, 1fr) auto' : '1fr auto auto auto')">
           <template v-for="c in configs" :key="c.id">
             <TextField
-              :label="`Name of configuration ${c.name}`"
+              :label="t('setup.configName', { name: c.name })"
               size="sm"
               commit="change"
               :style="{ ...FILL, ...lineFrom(1) }"
@@ -422,49 +441,55 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :model-value="c.name"
               @update:model-value="renameConfig(c.id, $event)"
             />
-            <Button class="xp-apply" size="sm" :aria-label="`Apply ${c.name}`" @click="applyConfig(c.id)">Apply</Button>
+            <Button
+              class="xp-apply"
+              size="sm"
+              :aria-label="t('setup.applyOf', { name: c.name })"
+              @click="applyConfig(c.id)"
+              >{{ t("setup.apply") }}</Button
+            >
             <Button
               size="sm"
-              tip="Overwrite with the values the parameters have now"
-              :aria-label="`Update ${c.name}`"
+              :tip="t('setup.updateTip')"
+              :aria-label="t('setup.updateOf', { name: c.name })"
               @click="updateConfig(c.id, c.name)"
-              >Update</Button
+              >{{ t("setup.update") }}</Button
             >
             <IconButton
               icon="close"
               :icon-size="13"
               size="sm"
               variant="plain"
-              :tip="`Delete ${c.name}`"
+              :tip="t('setup.configDelete', { name: c.name })"
               @click="removeConfig(c.id)"
             />
           </template>
           <TextField
             v-model="newConfig"
-            label="New configuration name"
+            :label="t('setup.configNew')"
             size="sm"
             :style="{ ...FILL, ...lineFrom(1) }"
-            placeholder="save the current values as…"
+            :placeholder="t('setup.configNewPlaceholder')"
             @keydown.enter="saveConfig()"
           />
-          <Button size="sm" style="grid-column: span 3; justify-self: start" @click="saveConfig()">Save</Button>
+          <Button size="sm" style="grid-column: span 3; justify-self: start" @click="saveConfig()">{{
+            t("setup.save")
+          }}</Button>
         </div>
 
-        <div :style="section">Checks</div>
-        <div class="measure-hint" style="margin-bottom: 4px"
-          >A rule that must hold, like gap &gt;= 0.3. When it does not, the Parameters section shows its message.</div
-        >
+        <div :style="section">{{ t("setup.checks") }}</div>
+        <div class="measure-hint" style="margin-bottom: 4px">{{ t("setup.checkHint") }}</div>
         <div :style="stacked ? BLOCKS : grid('auto 1.2fr 1.6fr 0.8fr auto')">
           <div v-for="(c, i) in checks" :key="c.check.id" :style="stacked ? CHECK_BLOCK : ROW">
             <Icon
               :name="c.result?.ok ? 'check' : 'warning'"
               :size="13"
               :style="{ color: checkTone(c) }"
-              :title="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
-              :label="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
+              :title="c.result?.error ?? (c.result?.ok ? t('check.holds') : t('check.fails'))"
+              :label="c.result?.error ?? (c.result?.ok ? t('check.holds') : t('check.fails'))"
             />
             <TextField
-              :label="`Check ${i + 1} rule`"
+              :label="t('setup.checkRule', { n: i + 1 })"
               size="sm"
               commit="change"
               :style="{ ...FILL, ...lineFrom(2) }"
@@ -473,7 +498,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               @update:model-value="editCheck(c.check.id, { expr: $event.trim() })"
             />
             <TextField
-              :label="`Check ${i + 1} message`"
+              :label="t('setup.checkMessage', { n: i + 1 })"
               size="sm"
               commit="change"
               :style="{ ...FILL, ...lineFrom(2) }"
@@ -481,10 +506,10 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               @update:model-value="editCheck(c.check.id, { message: $event.trim() })"
             />
             <Select
-              :label="`Check ${i + 1} level`"
+              :label="t('setup.checkLevel', { n: i + 1 })"
               size="sm"
               :style="{ ...FILL, gridColumn: stacked ? 2 : undefined }"
-              :options="LEVELS"
+              :options="levels"
               :model-value="c.check.level"
               @update:model-value="editCheck(c.check.id, { level: $event })"
             />
@@ -493,7 +518,7 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
               :icon-size="13"
               size="sm"
               variant="plain"
-              :tip="`Delete check ${i + 1}`"
+              :tip="t('setup.checkDelete', { n: i + 1 })"
               @click="removeCheck(c.check.id)"
             />
           </div>
@@ -502,33 +527,38 @@ const PROBLEM = { color: "var(--error)", fontSize: "var(--fs-small)", margin: "0
             <TextField
               v-model="newCheck.expr"
               class="xp-new-check-expr"
-              label="New check rule"
+              :label="t('setup.checkNewRule')"
               size="sm"
               :style="{ ...FILL, ...lineFrom(2) }"
-              placeholder="gap >= 0.3"
+              :placeholder="t('setup.checkRulePlaceholder')"
             />
             <TextField
               v-model="newCheck.message"
-              label="New check message"
+              :label="t('setup.checkNewMessage')"
               size="sm"
               :style="{ ...FILL, ...lineFrom(2) }"
-              placeholder="gap below 0.3 mm fuses"
+              :placeholder="t('setup.checkMessagePlaceholder')"
               @keydown.enter="addCheck()"
             />
             <Select
               v-model="newCheck.level"
-              label="New check level"
+              :label="t('setup.checkNewLevel')"
               size="sm"
               :style="{ ...FILL, gridColumn: stacked ? 2 : undefined }"
-              :options="LEVELS"
+              :options="levels"
             />
-            <IconButton icon="plus" :icon-size="13" size="sm" variant="plain" tip="Add check" @click="addCheck()" />
+            <IconButton
+              icon="plus"
+              :icon-size="13"
+              size="sm"
+              variant="plain"
+              :tip="t('setup.checkAdd')"
+              @click="addCheck()"
+            />
           </div>
         </div>
       </template>
-      <div class="measure-hint" style="margin-top: 10px"
-        >Saved with the document · Ctrl Z undoes any change here · Esc to close</div
-      >
+      <div class="measure-hint" style="margin-top: 10px">{{ t("setup.footer") }}</div>
     </div>
   </FloatingPanel>
 </template>

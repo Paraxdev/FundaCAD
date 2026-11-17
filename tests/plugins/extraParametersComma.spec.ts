@@ -78,7 +78,16 @@ async function render() {
   return store;
 }
 
-const box = (label: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+const GERMAN: Record<string, string> = {
+  "New check rule": "Regel der neuen Prüfung",
+  "New check message": "Meldung der neuen Prüfung",
+  "Add check": "Prüfung hinzufügen",
+  "Check 1 rule": "Regel von Prüfung 1",
+  "size choices": "Auswahlmöglichkeiten von size",
+  "Name of configuration Heavy": "Name der Konfiguration Heavy",
+};
+const named = (tag: string, label: string) => `${tag}[aria-label="${label}"], ${tag}[aria-label="${GERMAN[label]}"]`;
+const box = (label: string) => document.querySelector<HTMLInputElement>(named("input", label))!;
 async function edit(input: HTMLInputElement, text: string) {
   input.focus();
   input.value = text;
@@ -90,7 +99,7 @@ async function edit(input: HTMLInputElement, text: string) {
 async function addCheck(rule: string, message: string) {
   await edit(box("New check rule"), rule);
   await edit(box("New check message"), message);
-  document.querySelector<HTMLButtonElement>('button[aria-label="Add check"]')!.click();
+  document.querySelector<HTMLButtonElement>(named("button", "Add check"))!.click();
   await flushPromises();
 }
 const checks = (s: DocumentStore) => s.document.paramExtras?.checks?.map((c) => [c.expr, c.message]);
@@ -135,7 +144,7 @@ describe("the choices box", () => {
     const taken = { stored: choices(store), value: box("size choices").value, alert: alert() };
     await edit(box("size choices"), "Small = 1.500; Large = 30");
     expect({ shown, taken, refused: { stored: choices(store), alert: alert() } }).toEqual({
-      shown: { value: "Small = 10; Large = 30", placeholder: "Small = 10; Large = 30" },
+      shown: { value: "Small = 10; Large = 30", placeholder: "Klein = 10; Groß = 30" },
       taken: {
         stored: [
           { label: "Small", value: 2.5 },
@@ -172,7 +181,7 @@ describe("the choices box", () => {
 describe("saved expressions in the setup panel", () => {
   const shown = () => [
     box("Check 1 rule").value,
-    document.querySelector<HTMLElement>('[aria-label="Name of configuration Heavy"]')!.title,
+    document.querySelector<HTMLElement>(named("*", "Name of configuration Heavy"))!.title,
     document.querySelector<HTMLElement>(".xp-param [title*='wall*1']")?.title,
   ];
 

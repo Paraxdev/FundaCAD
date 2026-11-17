@@ -59,12 +59,19 @@ export type { MenuAtOptions } from "../ui/menu";
 export type { RadialTrigger } from "../ui/radialMenu";
 export {
   DEFAULT_BINDINGS,
+  bindingEntries,
   bindingKeys,
   bindingRows,
   pointerBindings,
   validateBindings,
 } from "../viewport/navigator/bindings";
-export type { PointerBinding, PointerButton, PointerDrag, PointerGesture } from "../viewport/navigator/bindings";
+export type {
+  BindingEntry,
+  PointerBinding,
+  PointerButton,
+  PointerDrag,
+  PointerGesture,
+} from "../viewport/navigator/bindings";
 export {
   SHORTCUTS,
   activeShortcuts,

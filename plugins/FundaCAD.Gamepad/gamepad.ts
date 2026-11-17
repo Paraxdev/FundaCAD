@@ -1,6 +1,7 @@
 // No DOM or Gamepad API in here, so the suite drives it with plain arrays. ./main.ts polls and dispatches.
 
 import { definePluginSettings, readSetting, type SettingsSchema } from "fundacad";
+import { t } from "./lines";
 
 export const PLUGIN_ID = "FundaCAD.Gamepad";
 
@@ -19,12 +20,24 @@ export const BUTTON_LABELS: Record<number, string> = {
   5: "RB",
   8: "View / Back",
   9: "Menu / Start",
-  10: "Left stick click",
-  11: "Right stick click",
-  12: "D-pad up",
-  13: "D-pad down",
-  14: "D-pad left",
-  15: "D-pad right",
+  get 10() {
+    return t("button.leftStick");
+  },
+  get 11() {
+    return t("button.rightStick");
+  },
+  get 12() {
+    return t("button.dpadUp");
+  },
+  get 13() {
+    return t("button.dpadDown");
+  },
+  get 14() {
+    return t("button.dpadLeft");
+  },
+  get 15() {
+    return t("button.dpadRight");
+  },
 };
 // Gamepad API "standard" layout (Xbox, PlayStation, Steam Deck under Steam Input). Buttons 0 A, 1 B, 2 X, 3 Y, 4 LB,
 // 5 RB, 6 LT, 7 RT, 8 View, 9 Menu, 10 L3, 11 R3, 12 to 15 dpad up down left right, 16 Guide. Axes 0 left X, 1 left Y,
@@ -32,11 +45,31 @@ export const BUTTON_LABELS: Record<number, string> = {
 export const BINDABLE = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15];
 
 export const KEY_CHOICES: { value: Binding; label: string }[] = [
-  { value: "key:Enter", label: "Enter (confirm)" },
-  { value: "key:Escape", label: "Escape (cancel)" },
-  { value: "key:Delete", label: "Delete" },
+  {
+    value: "key:Enter",
+    get label() {
+      return t("key.enter");
+    },
+  },
+  {
+    value: "key:Escape",
+    get label() {
+      return t("key.escape");
+    },
+  },
+  {
+    value: "key:Delete",
+    get label() {
+      return t("key.delete");
+    },
+  },
   { value: "key:Tab", label: "Tab" },
-  { value: "key:Ctrl+K", label: "Command palette" },
+  {
+    value: "key:Ctrl+K",
+    get label() {
+      return t("key.palette");
+    },
+  },
 ];
 
 export interface GamepadConfig {
@@ -146,32 +179,56 @@ function safeRead(): string | null {
   }
 }
 
-const speed = (key: string, label: string, description: string) =>
+const speed = (key: string, label: () => string, description: () => string) =>
   ({
     key,
     type: "number",
-    label,
-    description,
+    get label() {
+      return label();
+    },
+    get description() {
+      return description();
+    },
     default: DEFAULTS[key as "panSens"],
     min: 0,
     max: 20,
     step: 0.1,
-    group: "Sticks",
+    get group() {
+      return t("group.sticks");
+    },
   }) as const;
 
 export const SETTINGS: SettingsSchema = {
   version: 1,
   props: [
-    speed("panSens", "Pan speed", "How far the left stick moves the view."),
-    speed("orbitSens", "Rotate speed", "How fast the right stick turns the view."),
-    speed("zoomSens", "Zoom speed", "How fast the triggers zoom."),
+    speed(
+      "panSens",
+      () => t("setting.panSpeed"),
+      () => t("setting.panSpeedHint"),
+    ),
+    speed(
+      "orbitSens",
+      () => t("setting.rotateSpeed"),
+      () => t("setting.rotateSpeedHint"),
+    ),
+    speed(
+      "zoomSens",
+      () => t("setting.zoomSpeed"),
+      () => t("setting.zoomSpeedHint"),
+    ),
     {
       key: "cursorSpeed",
       type: "number",
-      label: "Cursor speed",
-      group: "Sticks",
+      get label() {
+        return t("setting.cursorSpeed");
+      },
+      get group() {
+        return t("group.sticks");
+      },
       unit: "px/s",
-      description: "How fast the left stick moves the cursor while the cursor is on.",
+      get description() {
+        return t("setting.cursorSpeedHint");
+      },
       default: DEFAULTS.cursorSpeed,
       min: 50,
       max: 5000,
@@ -180,16 +237,42 @@ export const SETTINGS: SettingsSchema = {
     {
       key: "deadzone",
       type: "number",
-      label: "Stick deadzone",
-      group: "Sticks",
-      description: "How far a stick has to move before anything happens, as a share of its travel.",
+      get label() {
+        return t("setting.deadzone");
+      },
+      get group() {
+        return t("group.sticks");
+      },
+      get description() {
+        return t("setting.deadzoneHint");
+      },
       default: DEFAULTS.deadzone,
       min: 0,
       max: 0.9,
       step: 0.01,
     },
-    { key: "invertOrbitX", type: "boolean", label: "Invert rotate left and right", group: "Sticks", default: false },
-    { key: "invertOrbitY", type: "boolean", label: "Invert rotate up and down", group: "Sticks", default: false },
+    {
+      key: "invertOrbitX",
+      type: "boolean",
+      get label() {
+        return t("setting.invertX");
+      },
+      get group() {
+        return t("group.sticks");
+      },
+      default: false,
+    },
+    {
+      key: "invertOrbitY",
+      type: "boolean",
+      get label() {
+        return t("setting.invertY");
+      },
+      get group() {
+        return t("group.sticks");
+      },
+      default: false,
+    },
     {
       key: "buttons",
       type: "data",

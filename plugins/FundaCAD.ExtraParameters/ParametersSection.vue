@@ -14,6 +14,7 @@ import {
 } from "fundacad";
 import { Checkbox, FieldRow, Icon, IconButton, NumberField, Select, Slider, announce } from "fundacad/ui";
 import { setupOpen } from "./state";
+import { t } from "./lines";
 import { choiceLabel, nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
 
 const store = useEngine().store;
@@ -42,7 +43,11 @@ watch(failing, (now) => {
   if (!collapsed.value) return;
   for (const r of fresh) {
     const level = r.check.level === "error" ? "error" : "warning";
-    announce(`Check failed, ${level}: ${r.check.message}`, level === "error" ? "assertive" : "polite");
+    const message = r.check.message;
+    announce(
+      level === "error" ? t("check.failedError", { message }) : t("check.failedWarning", { message }),
+      level === "error" ? "assertive" : "polite",
+    );
   }
 });
 seen = new Set(failing.value.map((r) => r.check.id));
@@ -63,7 +68,7 @@ const readLength = readAs("length");
 const readPlain = readAs(null);
 const rowParse = (row: TuneRow) => (row.unit === "mm" ? readLength : row.unit === "°" ? readAngle : readPlain);
 const fieldUnit = (row: TuneRow) => (row.unit === "mm" ? "mm" : row.unit === "°" ? "deg" : undefined);
-const spokenUnit = (row: TuneRow) => (row.unit === "°" ? "degrees" : row.unit);
+const spokenUnit = (row: TuneRow) => (row.unit === "°" ? t("panel.degrees") : row.unit);
 const sliderText = (row: TuneRow) => (v: number) => [spellNumber(v), spokenUnit(row)].filter(Boolean).join(" ");
 const sliderStep = (row: TuneRow) =>
   row.control.kind === "slider" ? (row.control.step ?? (row.control.max - row.control.min) / 100) : 1;
@@ -74,7 +79,11 @@ function choiceOptions(row: TuneRow) {
     label: choiceLabel(c),
   }));
   if (!row.control.choices.some((c) => c.value === row.def.value)) {
-    out.push({ value: String(row.def.value), label: `${spellNumber(row.def.value)} (not listed)`, disabled: true });
+    out.push({
+      value: String(row.def.value),
+      label: t("panel.notListed", { value: spellNumber(row.def.value) }),
+      disabled: true,
+    });
   }
   return out;
 }
@@ -106,13 +115,13 @@ const rowLayout = (g: { id: string | null }) => ({
         size="sm"
         :icon="collapsed ? 'caretRight' : 'caretDown'"
         :icon-size="11"
-        :tip="`${collapsed ? 'Expand' : 'Collapse'} Parameters`"
+        :tip="collapsed ? t('panel.expand') : t('panel.collapse')"
         :aria-expanded="!collapsed"
         :aria-controls="`${uid}-body`"
         @click.stop="browser.toggle('Parameters')"
       />
       <span class="feature-icon"><Icon name="parameters" :size="14" /></span>
-      <span :id="`${uid}-head`">Parameters</span>
+      <span :id="`${uid}-head`">{{ t("panel.title") }}</span>
       <span style="flex: 1"></span>
       <Icon v-if="failing.length" name="warning" :size="13" style="margin-right: 4px; color: var(--warn)" />
       <IconButton
@@ -121,7 +130,7 @@ const rowLayout = (g: { id: string | null }) => ({
         size="sm"
         icon="properties"
         :icon-size="14"
-        tip="Parameter setup"
+        :tip="t('panel.setupTip')"
         @click.stop="setupOpen = true"
       />
       <span class="tree-count">{{ count }}</span>
@@ -132,16 +141,16 @@ const rowLayout = (g: { id: string | null }) => ({
         v-if="configs.length"
         v-slot="{ id }"
         layout="param"
-        label="Configuration"
+        :label="t('panel.configuration')"
         class="feature-row tree-child"
         :style="configStyle"
       >
         <Select
           :id="id"
           class="xp-config"
-          label="Configuration"
+          :label="t('panel.configuration')"
           size="sm"
-          placeholder="Choose…"
+          :placeholder="t('panel.choose')"
           :options="configOptions"
           :model-value="activeId"
           @update:model-value="pick"
@@ -149,8 +158,9 @@ const rowLayout = (g: { id: string | null }) => ({
         <span
           v-if="activeId && drift.length"
           style="opacity: 0.6; font-size: var(--fs-micro, 11px)"
-          :title="`Changed since it was applied: ${drift.join(', ')}`"
-          >modified<span class="sr-only">, changed since it was applied: {{ drift.join(", ") }}</span></span
+          :title="t('panel.modifiedTip', { names: drift.join(', ') })"
+          >{{ t("panel.modified")
+          }}<span class="sr-only">{{ t("panel.modifiedSpoken", { names: drift.join(", ") }) }}</span></span
         >
       </FieldRow>
 
@@ -169,9 +179,11 @@ const rowLayout = (g: { id: string | null }) => ({
         :title="r.error ? `${shownExpr(r.check.expr)}: ${r.error}` : shownExpr(r.check.expr)"
       >
         <Icon name="warning" :size="12" />
-        <span style="white-space: normal"
-          >{{ r.check.level === "error" ? "Error" : "Warning" }}: {{ r.check.message }}</span
-        >
+        <span style="white-space: normal">{{
+          r.check.level === "error"
+            ? t("check.error", { message: r.check.message })
+            : t("check.warning", { message: r.check.message })
+        }}</span>
       </div>
 
       <template v-for="g in groups" :key="g.id ?? ''">
@@ -187,7 +199,11 @@ const rowLayout = (g: { id: string | null }) => ({
             size="sm"
             :icon="browser.isCollapsed(groupKey(g.id)) ? 'caretRight' : 'caretDown'"
             :icon-size="11"
-            :tip="`${browser.isCollapsed(groupKey(g.id)) ? 'Expand' : 'Collapse'} ${g.name}`"
+            :tip="
+              browser.isCollapsed(groupKey(g.id))
+                ? t('panel.expandGroup', { name: g.name })
+                : t('panel.collapseGroup', { name: g.name })
+            "
             :aria-expanded="!browser.isCollapsed(groupKey(g.id))"
             :aria-controls="groupId(g.id)"
             @click.stop="browser.toggle(groupKey(g.id))"
@@ -216,7 +232,7 @@ const rowLayout = (g: { id: string | null }) => ({
           >
             <span v-if="!row.editable" style="opacity: 0.7" :title="`= ${shownExpr(row.def.expr)}`"
               ><span aria-hidden="true">fx </span>{{ spellNumber(shortValue(row.def.value)) }} {{ row.unit
-              }}<span class="sr-only">, calculated from {{ shownExpr(row.def.expr) }}</span></span
+              }}<span class="sr-only">{{ t("panel.calculated", { expr: shownExpr(row.def.expr) }) }}</span></span
             >
 
             <Checkbox

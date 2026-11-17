@@ -886,6 +886,11 @@
       "en": "toolhead",
       "text": "ツールヘッド",
       "note": "one print head of a multi-head printer"
+    },
+    {
+      "en": "ring slot",
+      "text": "枠",
+      "note": "a numbered place on the radial menu's ring, not the Slot feature"
     }
   ]
 }
