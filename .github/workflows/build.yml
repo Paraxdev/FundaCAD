@@ -199,6 +199,9 @@ jobs:
       - name: Manual glossary tests
         run: python tests/manual/test_glossary.py
 
+      - name: Manual keyboard page tests
+        run: python tests/manual/test_keyboard_page.py
+
       - name: Manual version build tests
         run: python tests/manual/test_versions.py
 
