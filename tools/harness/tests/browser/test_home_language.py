@@ -32,6 +32,7 @@ ENGLISH = {
     "Blank",
     "Open…",
     "FundaCAD documents",
+    "Your first bracket",
     "Wall bracket",
     "Box with a lid",
     "Capsule holder",
@@ -54,7 +55,14 @@ EXPECTED = {
         "section": "Hier beginnen",
         "welcome": "Willkommen bei FundaCAD",
         "new": ["Leer", "Öffnen…"],
-        "examples": ["Wandhalter", "Schachtel mit Deckel", "Kapselhalter", "Platte", "Hebel am Bolzen"],
+        "examples": [
+            "Ihre erste Halterung",
+            "Wandhalter",
+            "Schachtel mit Deckel",
+            "Kapselhalter",
+            "Platte",
+            "Hebel am Bolzen",
+        ],
         "a11y": "Barrierefreiheit",
         "startup": "Startseite beim Start anzeigen",
         "close": "Zurück zum Dokument",
@@ -64,7 +72,14 @@ EXPECTED = {
         "section": "Commencer ici",
         "welcome": "Bienvenue dans FundaCAD",
         "new": ["Vide", "Ouvrir…"],
-        "examples": ["Équerre murale", "Boîte avec couvercle", "Porte-capsules", "Plaque", "Levier sur axe"],
+        "examples": [
+            "Votre premier support",
+            "Équerre murale",
+            "Boîte avec couvercle",
+            "Porte-capsules",
+            "Plaque",
+            "Levier sur axe",
+        ],
         "a11y": "Accessibilité",
         "startup": "Afficher l'Accueil au démarrage",
         "close": "Retour au document",
@@ -177,7 +192,7 @@ def test_home_reads_the_language(seen, size, lang):
 def test_home_leaves_no_english_line(seen, size, lang):
     got = seen[size][lang]
     assert got["lang"] == lang, got
-    assert len(got["examples"]) == len(got["captions"]) == 5, got
+    assert len(got["examples"]) == len(got["captions"]) == 6, got
     assert sorted(ENGLISH & set(got["lines"])) == [], got["lines"]
 
 
