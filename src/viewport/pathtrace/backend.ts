@@ -8,6 +8,7 @@ import type { FrameView } from "./frameCamera";
 import type { TraceBloomSettings } from "./tracePost";
 import type { TraceHemi } from "./environment";
 import { t, tEnglish, type MessageArgs, type MessageKey } from "../../i18n";
+import { englishMessage, shownMessage } from "../../ui/wordedError";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -130,4 +131,10 @@ export interface FaultLine {
 export const faultLine = (key: MessageKey, args?: MessageArgs): FaultLine => ({
   shown: t(key, args),
   english: tEnglish(key, args),
+});
+
+/** faultLine with what was thrown as its `reason`, each line with the reason in its own language. */
+export const reasonLine = (key: MessageKey, err: unknown): FaultLine => ({
+  shown: t(key, { reason: shownMessage(err) }),
+  english: tEnglish(key, { reason: englishMessage(err) }),
 });

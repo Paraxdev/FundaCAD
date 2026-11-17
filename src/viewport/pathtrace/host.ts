@@ -3,7 +3,7 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { faultLine, TracerRefused, type FaultLine, type TraceLook, type TracerBackend } from "./backend";
+import { faultLine, reasonLine, TracerRefused, type FaultLine, type TraceLook, type TracerBackend } from "./backend";
 import { experimentalPrefs } from "../../ui/experimentalPrefs";
 import { spellFixed } from "../../ui/measure";
 import { t, tEnglish } from "../../i18n";
@@ -473,10 +473,7 @@ export class PathTraceHost {
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
-        this.fault(
-          faultLine("render.trace.couldNotStart", { reason: e instanceof Error ? e.message : String(e) }),
-          !(e instanceof TracerRefused),
-        );
+        this.fault(reasonLine("render.trace.couldNotStart", e), !(e instanceof TracerRefused));
       } finally {
         this.starting = false;
       }

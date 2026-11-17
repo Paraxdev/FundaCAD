@@ -2,7 +2,7 @@
 // localStorage holds. Panoramas are kept by hash, so two saved looks share one file.
 
 import type { EnvSettings } from "./renderPrefs";
-import { t } from "../i18n";
+import { WordedError } from "./wordedError";
 
 export type EnvTable = "entries" | "hdrs";
 
@@ -72,7 +72,7 @@ export function indexedDbKv(name = "fundacad-environments"): KvStore {
     return new Promise<T>((resolve, reject) => {
       tx.oncomplete = () => resolve(req.result as T);
       tx.onerror = () => reject(tx.error ?? req.error);
-      tx.onabort = () => reject(tx.error ?? new Error(t("render.libraryWriteCancelled")));
+      tx.onabort = () => reject(tx.error ?? new WordedError("render.libraryWriteCancelled"));
     });
   };
   return {
@@ -119,7 +119,7 @@ export function createEnvLibrary(kv: KvStore, opts: { now?: () => number; newId?
     (await kv.values<EnvEntry>("entries")).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id));
   const named = (name: string) => {
     const n = cleanEnvName(name);
-    if (!n) throw new Error("A saved environment needs a name.");
+    if (!n) throw new WordedError("render.saved.needsName");
     return n;
   };
   return {

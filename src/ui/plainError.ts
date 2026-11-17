@@ -1,6 +1,7 @@
 import { t, tEnglish } from "../i18n";
 import { shownLine } from "./englishLines";
 import { numberedName } from "./featureMeta";
+import { shownMessage, WordedError } from "./wordedError";
 import type { Feature } from "../types";
 
 // English: it closes sentences that are still written in English. A translated sentence takes seeConsole().
@@ -43,6 +44,7 @@ export function plainEnglish(err: unknown, fallback: string): string {
 /** plainEnglish for a line shown or said, in the chosen language where the app wrote it. The raw text belongs in the
  *  console detail. */
 export function plainError(err: unknown, fallback: string): string {
+  if (err instanceof WordedError) return shownMessage(err);
   const text = plainEnglish(err, "");
   return text ? shownLine(text) : fallback;
 }

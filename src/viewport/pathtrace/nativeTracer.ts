@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import {
-  faultLine,
+  reasonLine,
   TracerRefused,
   type PictureOptions,
   type TraceLook,
@@ -19,6 +19,7 @@ import { PresentSlot } from "./presentSlot";
 import { runSelfCheck, selfCheckReason } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 import type { MessageKey } from "../../i18n";
+import { WordedError } from "../../ui/wordedError";
 
 export interface NativeFrame {
   seq: number;
@@ -167,7 +168,7 @@ export class SharedBufferLink implements FrameLink {
     return new Promise((ok, fail) => {
       const timer = setTimeout(() => {
         this.waiters.delete(check);
-        fail(new Error("the app never posted the frame buffer"));
+        fail(new WordedError("render.trace.noFrameBuffer"));
       }, BUFFER_WAIT_MS);
       const check = () => {
         const b = look();
@@ -239,7 +240,7 @@ export class WebSocketLink implements FrameLink {
       });
     };
     ws.onclose = () => {
-      for (const w of this.waiting.splice(0)) w.fail(new Error("the frame socket closed"));
+      for (const w of this.waiting.splice(0)) w.fail(new WordedError("render.trace.socketClosed"));
     };
   }
 
@@ -249,13 +250,13 @@ export class WebSocketLink implements FrameLink {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`);
       ws.binaryType = "arraybuffer";
       ws.onopen = () => ok(new WebSocketLink(ws, id, call));
-      ws.onerror = () => fail(new Error("the frame socket refused the page"));
+      ws.onerror = () => fail(new WordedError("render.trace.socketRefused"));
     });
   }
 
   next(): Promise<NativeFrame> {
     return new Promise((ok, fail) => {
-      if (this.ws.readyState !== WebSocket.OPEN) return fail(new Error("the frame socket closed"));
+      if (this.ws.readyState !== WebSocket.OPEN) return fail(new WordedError("render.trace.socketClosed"));
       this.waiting.push({ ok, fail });
       this.ws.send("next");
     });
@@ -297,7 +298,7 @@ export async function connectNative(
     return { link: shared, generation: o.generation, source: o.source };
   }
   shared?.detach();
-  if (o.port == null || o.token == null) throw new Error("the app opened no frame transport");
+  if (o.port == null || o.token == null) throw new WordedError("render.trace.noTransport");
   try {
     return { link: await WebSocketLink.open(o.port, o.token, o.id, call), generation: o.generation, source: o.source };
   } catch (e) {
@@ -322,7 +323,7 @@ void main() { color = texture(img, uv); }`;
 
 export function glBlit(canvas: HTMLCanvasElement): Blit {
   const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, depth: false, premultipliedAlpha: false });
-  if (!gl) throw new Error("no WebGL2 for the native frames");
+  if (!gl) throw new WordedError("render.trace.noWebgl2");
   const shader = (type: number, src: string) => {
     const s = gl.createShader(type)!;
     gl.shaderSource(s, src);
@@ -432,9 +433,7 @@ export class NativeTracer implements TracerBackend {
   constructor(private o: NativeTracerOptions = {}) {
     this.canvas = o.canvas ?? document.createElement("canvas");
     this.slot = new PresentSlot(({ seq, coarse }) => this.showFrame(seq, coarse), o.raf, o.caf);
-    this.scene = new NativeScene(o.call ?? tauriCall, (e) =>
-      this.fault("render.trace.nativeRefusedScene", e instanceof Error ? e.message : String(e)),
-    );
+    this.scene = new NativeScene(o.call ?? tauriCall, (e) => this.fault("render.trace.nativeRefusedScene", e));
   }
 
   get name(): string {
@@ -493,7 +492,7 @@ export class NativeTracer implements TracerBackend {
         },
         (e) => {
           this.resizing--;
-          this.fault("render.trace.nativeFramesResize", String(e));
+          this.fault("render.trace.nativeFramesResize", e);
         },
       );
     }, RESIZE_SETTLE_MS);
@@ -605,7 +604,7 @@ export class NativeTracer implements TracerBackend {
       this.pending = this.disposed ? null : this.request();
     } catch (e) {
       this.pending = null;
-      this.fault("render.trace.nativeFramesStopped", e instanceof Error ? e.message : String(e));
+      this.fault("render.trace.nativeFramesStopped", e);
       throw e;
     }
     try {
@@ -728,7 +727,7 @@ export class NativeTracer implements TracerBackend {
     try {
       s = (await this.call("pt_status")) as typeof s;
     } catch (e) {
-      this.fault("render.trace.nativeStopped", e instanceof Error ? e.message : String(e));
+      this.fault("render.trace.nativeStopped", e);
       throw e;
     }
     if (s.fault) this.fault("render.trace.nativeStopped", s.fault);
@@ -746,9 +745,9 @@ export class NativeTracer implements TracerBackend {
     this.faultCb = cb;
   }
 
-  private fault(key: MessageKey, reason: string) {
+  private fault(key: MessageKey, reason: unknown) {
     if (this.disposed) return;
-    const line = faultLine(key, { reason });
+    const line = reasonLine(key, reason);
     this.faultCb?.(line.shown, line.english);
   }
 

@@ -13,6 +13,7 @@ import {
   type TracerBackend,
 } from "./backend";
 import { coverPreview, fitPreview, FrameBudget, type PreviewBackend, type PreviewTracer } from "./budget";
+import { WordedError } from "../../ui/wordedError";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
@@ -127,7 +128,7 @@ export class WebGpuTracer implements TracerBackend {
     const backend = r.backend as unknown as { isWebGPUBackend?: boolean };
     if (!backend.isWebGPUBackend) {
       r.dispose();
-      throw new Error("WebGPU backend unavailable, the renderer fell back to WebGL");
+      throw new WordedError("render.trace.noWebgpuBackend");
     }
     const hooks = r as unknown as {
       onDeviceLost: (info: { message?: string; reason?: string }) => void;
@@ -478,7 +479,7 @@ export class WebGpuTracer implements TracerBackend {
   async picture(o: PictureOptions): Promise<string> {
     const r = this.renderer;
     const t = this.tracer;
-    if (!r || !t || !this.camera) throw new Error("Path tracing is not running");
+    if (!r || !t || !this.camera) throw new WordedError("render.trace.notRunning");
     const was = {
       ratio: r.getPixelRatio(),
       size: r.getSize(new THREE.Vector2()),
@@ -502,7 +503,7 @@ export class WebGpuTracer implements TracerBackend {
         // One frame per display frame, each inside the budget, so the UI keeps
         // drawing and no dispatch runs long enough to trip the driver watchdog.
         await nextFrame();
-        if (this.disposed) throw new Error("Path tracing stopped");
+        if (this.disposed) throw new WordedError("render.trace.stopped");
         t.frameBudget = budget.budget;
         const t0 = performance.now();
         this.fitPreview();
@@ -517,7 +518,7 @@ export class WebGpuTracer implements TracerBackend {
       const pass = this.oidn;
       const clean = pass && (await pass.run()) ? pass.texture : null;
       if (o.signal?.aborted) throw cancelled();
-      if (this.disposed) throw new Error("Path tracing stopped");
+      if (this.disposed) throw new WordedError("render.trace.stopped");
       // Read in the same task as the draw: a WebGPU canvas is blank to
       // toDataURL once the frame has been presented.
       this.blit(raw, clean ?? raw, clean ? 1 : 0);

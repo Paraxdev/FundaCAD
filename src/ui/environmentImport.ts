@@ -18,6 +18,8 @@ import {
 import { hdrStoredWidth, heldHdr, registerHdr } from "../viewport/hdrRegistry";
 import { t } from "../i18n";
 import { createEnvLibrary, indexedDbKv, type EnvEntry, type EnvLibrary, type StoredHdr } from "./environmentLibrary";
+import { panoramaRefusalText } from "./panoramaRefusals";
+import { shownMessage, WordedError } from "./wordedError";
 import {
   applyEnvSettings,
   asEnvSettings,
@@ -140,8 +142,8 @@ export async function importEnvironmentBytes(
     if (note) opts.onNote?.(note);
     return null;
   } catch (err) {
-    if (err instanceof HdrRefusal) return err.message;
-    return t("render.useFailed", { name, message: err instanceof Error ? err.message : String(err) });
+    if (err instanceof HdrRefusal) return shownMessage(err);
+    return t("render.useFailed", { name, message: shownMessage(err) });
   }
 }
 
@@ -171,8 +173,7 @@ export async function importEnvironment(
   try {
     bytes = await sourceBytes(source);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { refused: t("render.useFailed", { name: source.name, message }), note: null };
+    return { refused: t("render.useFailed", { name: source.name, message: panoramaRefusalText(err) }), note: null };
   }
   let note: string | null = null;
   const refused = await importEnvironmentBytes(store, bytes, source.name, envLibrary(), {
@@ -343,7 +344,7 @@ export async function saveEnvironmentAs(
 export async function applySavedEnvironment(store: DocumentStore | null, entry: EnvEntry, library = envLibrary()) {
   const hash = hdrHashOf(entry.settings.environment);
   if (hash && !(await ensureHdrLoaded(hash, library))) {
-    throw new Error(t("render.savedGone", { name: entry.name }));
+    throw new WordedError("render.savedGone", { name: entry.name });
   }
   setActiveSaved({ id: entry.id, name: entry.name });
   applyEnvSettings(asEnvSettings(entry.settings, renderPrefs()));
