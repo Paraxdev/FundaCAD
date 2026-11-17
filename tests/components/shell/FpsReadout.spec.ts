@@ -97,4 +97,21 @@ describe("the frame rate readout", () => {
     expect(style.getPropertyValue("--span-left")).toBe("12px");
     expect(style.getPropertyValue("--span-shift")).toBe("0px");
   });
+
+  it("hides while no stretch of its row fits it, rather than sit under a card, and shows again once one does", async () => {
+    const r = rail();
+    const right = document.createElement("div");
+    right.className = "float-right";
+    right.innerHTML = "<section></section>";
+    r.layer.append(right);
+    // The pinned tile ends at 412 and the card starts at 470, leaving 424..458 for a 100 wide chip.
+    at(right.firstElementChild!, box(470, 500, 1000, 740));
+    const w = render(box(450, 712, 550, 734));
+    await frames();
+    expect(w.element.hasAttribute("data-no-room")).toBe(true);
+    at(right.firstElementChild!, box(470, 500, 1000, 700));
+    r.list.dispatchEvent(new Event("scroll"));
+    await frames();
+    expect(w.element.hasAttribute("data-no-room")).toBe(false);
+  });
 });

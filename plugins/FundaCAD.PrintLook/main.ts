@@ -4,6 +4,7 @@ import LayerLinesSection from "./LayerLinesSection.vue";
 import { FILAMENT_GROUP, FILAMENT_PRESETS } from "./presets";
 import { reliefFrom, type LookValues } from "./look";
 import { PLUGIN_ID, settings } from "./settings";
+import { t } from "./lines";
 
 const ICON =
   '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="10" x2="20" y2="10"/>' +
@@ -25,8 +26,20 @@ export async function activate(_e: Engine): Promise<() => void> {
     ribbon: [
       {
         group: "PRINT",
+        get label() {
+          return t("group.print");
+        },
         priority: 50,
-        items: [{ action: "layer-lines", label: "Layer lines", iconName: "layerLines" }],
+        items: [
+          {
+            action: "layer-lines",
+            get label() {
+              return t("tool.layerLines");
+            },
+            refName: "Layer lines",
+            iconName: "layerLines",
+          },
+        ],
       },
     ],
     icons: { layerLines: ICON },

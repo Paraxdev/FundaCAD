@@ -32,6 +32,8 @@ export function closeWelcome(): void {
 }
 
 export const MANUAL_URL = manualUrl();
+export const ACCESSIBILITY_PAGE = `${MANUAL_URL}reference/accessibility/`;
+export const LANGUAGE_PAGE = `${MANUAL_URL}reference/preferences/#language`;
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 

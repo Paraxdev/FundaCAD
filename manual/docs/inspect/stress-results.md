@@ -2,6 +2,8 @@
 
 When a run finishes, the Results tab opens. The part is coloured from low stress in dark violet to high stress in bright yellow, and drawn bent, larger than it really bends. Set up takes you back to the inputs.
 
+The results, the warnings and the verdict follow the language you picked in Preferences. A warning FundaCAD does not know yet shows in English.
+
 ![The Stress panel listing safety factor, peak stress, deflection and where the highest values are, beside the bracket shaded dark violet, lightest at the gusset's tip](../img/stress-results.png)
 
 ## The verdict

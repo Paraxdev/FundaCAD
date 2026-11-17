@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { TextOnFaceTool } from "../../src/features/textOnFaceTool";
-import { resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import {
+  offerPicks,
+  resetTreePicks,
+  routeTreeClick,
+  treePickWaiting,
+  type NamedPick,
+  type TreePick,
+} from "../../src/ui/treePick";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
@@ -204,5 +211,81 @@ describe("Text on a face takes its face from a Geometry row", () => {
     expect(routeTreeClick(face(6), hintsOf())).toBe("taken");
     await flush();
     expect([esc.asked, next.asked.length]).toEqual([[], 1]);
+  });
+});
+
+describe("Text on a face takes a row the brackets lit", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    for (const t of made.splice(0)) t.cancel();
+    resetTreePicks();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  const edgeRow = { kind: "edge", edge: { body: "body1", points: [[1, 2, 3]] } } as unknown as TreePick;
+  function offered(offers: NamedPick[]) {
+    const said: string[] = [];
+    const hints: string[] = [];
+    offerPicks(offers, { busyHint: () => null, hint: (h) => hints.push(h), say: (w) => said.push(w) });
+    return { said, hints };
+  }
+
+  it("a face starts the anchor ask for its selector and is spoken by name, once", async () => {
+    const o = open([Promise.resolve(plane("body2"))]);
+    const r = offered([{ pick: face(7), name: "Flat face 3 of Bracket" }]);
+    expect(r.said).toEqual(["Flat face 3 of Bracket picked"]);
+    expect(r.hints).toEqual([]);
+    expect(o.asked).toEqual([
+      { sel: { kind: "face", by: "nearest", point: [7, 14, 7] }, body: "body2", point: [10.5, -2.25, 7] },
+    ]);
+    await flush();
+    commit();
+    expect(o.committed[0]![0]).toMatchObject({ type: "textOnFace", body: "body2", point: [10.5, -2.25, 7] });
+  });
+
+  it("an edge is refused in words naming a face, nothing is asked and the tool still waits", () => {
+    const o = open();
+    const r = offered([{ pick: edgeRow, name: "Edge 2 of Bracket" }]);
+    expect(r.said).toEqual([]);
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toMatch(/an edge.*a face/);
+    expect([o.asked, treePickWaiting(), o.tool.active]).toEqual([[], true, true]);
+  });
+
+  it("a face then an edge speaks the face and refuses the edge in one hint", () => {
+    const o = open([Promise.resolve(plane())]);
+    const r = offered([
+      { pick: face(5), name: "Flat face 1 of Bracket" },
+      { pick: edgeRow, name: "Edge 2 of Bracket" },
+    ]);
+    expect(r.said).toEqual([]);
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toMatch(/^Flat face 1 of Bracket picked\. .*an edge.*a face/);
+    expect(o.asked).toHaveLength(1);
+  });
+
+  it("a face while the model is still building is refused with the build words and nothing is asked", () => {
+    const o = open([], false);
+    const r = offered([{ pick: face(5), name: "Flat face 1 of Bracket" }]);
+    expect(r.said).toEqual([]);
+    expect(r.hints).toHaveLength(1);
+    expect(r.hints[0]).toMatch(/building/);
+    expect([o.asked, treePickWaiting()]).toEqual([[], true]);
+  });
+
+  it("a second tool after a pick has its own session and the first one's offers do not reach it", async () => {
+    const first = open([Promise.resolve(plane())]);
+    offered([{ pick: face(4), name: "Flat face 1 of Bracket" }]);
+    await flush();
+    first.tool.cancel();
+    const second = open([Promise.resolve(plane("body2"))]);
+    const r = offered([{ pick: face(8), name: "Flat face 2 of Bracket" }]);
+    expect(r.said).toEqual(["Flat face 2 of Bracket picked"]);
+    expect([first.asked.length, second.asked.length]).toEqual([1, 1]);
   });
 });

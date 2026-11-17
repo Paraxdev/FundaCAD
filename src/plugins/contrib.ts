@@ -17,7 +17,7 @@ import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts"
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
 export type Unregister = () => void;
 
-/** `menu` matches a core menu by label. An unmatched label becomes a new menu before Help. */
+/** `menu` matches a core menu by its English name, File, Edit, View or Help, in every language. An unmatched label becomes a new menu before Help. */
 export interface MenuContribution {
   menu: string;
   items: MenuItem[];
@@ -30,11 +30,15 @@ export interface RibbonEntry {
   action: string;
   label: string;
   iconName: string;
+  /** The English name, stable whatever the language: the palette finds the tool by it and the harness locates it. */
+  refName?: string;
 }
 
 export interface RibbonContribution {
-  /** Group heading, in the ribbon's own upper-case style. */
+  /** Group heading, in the ribbon's own upper-case style. Stays the stable id, a shared group matches on it. */
   group: string;
+  /** The shown heading, a getter when it follows the language. The first running contributor that gives one wins. */
+  label?: string;
   /** Collapse priority, lower folds into the overflow first. Defaults to the bottom, so a plugin's group folds
    *  first. */
   priority?: number;
@@ -122,6 +126,8 @@ export interface ToolContribution {
   id: string;
   /** Human name, for prompts, menus and the selection toolbar. */
   label: string;
+  /** The English name, stable whatever the language. */
+  refName?: string;
   /** Resolved like every icon in the app. A plugin that draws its own mark contributes it under `icons`. */
   iconName: string;
   /** Entity kinds this tool acts on, MOST SPECIFIC FIRST, as in the core's own table. */
@@ -250,8 +256,33 @@ function changed() {
   for (const fn of listeners) fn();
 }
 
+const blank = (s: unknown) => typeof s !== "string" || !s.trim();
+
+/** Where a contribution would draw a control with no name, or null. A label computed on open is judged by the menu. */
+function emptyLabel(c: Contribution): string | null {
+  for (const m of c.menus ?? []) {
+    if (blank(m.menu)) return "a menu";
+    for (const it of m.items) {
+      if (!it.separator && typeof it.label !== "function" && blank(it.label)) return `a row of the ${m.menu} menu`;
+    }
+  }
+  for (const r of c.ribbon ?? []) {
+    if (blank(r.group)) return "a ribbon group";
+    for (const it of r.items) if (blank(it.label)) return `the ribbon button "${it.action}"`;
+  }
+  for (const t of c.tools ?? []) if (blank(t.label)) return `the tool "${t.id}"`;
+  for (const f of c.features ?? []) {
+    const rows = [...(f.choiceFields ?? []), ...(f.toggleFields ?? []), ...(f.fileFields ?? []), ...(f.targets ?? [])];
+    const nums = typeof f.numFields === "function" ? [] : (f.numFields ?? []).map(([, label]) => ({ label }));
+    if ([...rows, ...nums].some((r) => blank(r.label))) return `a row of the feature "${f.type}"`;
+  }
+  return null;
+}
+
 /** One call per plugin rather than per point, so turning a capability off cannot half succeed. Returns the removal. */
 export function contribute(plugin: string, c: Contribution): Unregister {
+  const nameless = emptyLabel(c);
+  if (nameless) throw new Error(`${plugin} gives ${nameless} an empty label, a screen reader could not name it`);
   for (const point of ["pointerBindings", "keymap"] as const) {
     if (!c[point]) continue;
     if (!grantsOf(plugin)?.includes("input.remap")) {
@@ -299,6 +330,19 @@ export function contributedMenus(): MenuContribution[] {
 
 export function contributedRibbon(): RibbonContribution[] {
   return all("ribbon").flat();
+}
+
+/** The English name a plugin gave a tool, from its ribbon button first, then its tool contribution. */
+export function contributedEnglish(action: string): string | undefined {
+  for (const r of contributedRibbon()) {
+    const it = r.items.find((i) => i.action === action && i.refName);
+    if (it) return it.refName;
+  }
+  return contributedTools().find((t) => t.id === action && t.refName)?.refName;
+}
+
+export function contributedGroupLabel(group: string): string | undefined {
+  return contributedRibbon().find((r) => r.group === group && r.label)?.label;
 }
 
 export function contributedOverlays(): { key: string; component: Component }[] {

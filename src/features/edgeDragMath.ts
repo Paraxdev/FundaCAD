@@ -1,7 +1,9 @@
 // The arithmetic of the edge drag. It is signed: one way along the handle axis is a fillet, the other a chamfer, with
 // no feature at the origin between, so changing your mind costs a mouse move rather than a restart.
 
-import { snap } from "../ui/units";
+import { t } from "../i18n";
+import { roundForDisplay } from "../ui/measure";
+import { fmtLength, fromDisplay, snap, toDisplay } from "../ui/units";
 
 export type EdgeTreatment = "fillet" | "chamfer";
 
@@ -115,7 +117,50 @@ export function commitDecision(o: {
   return { action: "commit", value: o.value, unverified: true };
 }
 
-/** `code` is the engine's category (errors.py); the message is only read for older wording that carried no code. */
+// The engine offers the largest size that builds only in its message, as "It fits up to 4.99mm", and a two distance
+// chamfer's with the second distance it takes there, as "It fits up to 3.99mm with distance 2 at 9.97mm".
+const FITS_UP_TO =
+  /fits up to (\d+(?:\.\d+)?(?:e[-+]?\d+)?)mm(?: with distance 2 at (\d+(?:\.\d+)?(?:e[-+]?\d+)?)mm)?/i;
+
+// The engine rounds its size down in mm, the display rounds to the nearest digit, which in inches can name a size just
+// past the one that fits.
+function shownAtMost(mm: number): number {
+  const d = toDisplay(mm);
+  const shown = roundForDisplay(d);
+  if (shown <= d) return mm;
+  const dp = d >= 1 ? 2 : Math.min(6, 2 + Math.ceil(-Math.log10(d)));
+  return fromDisplay(shown - Math.pow(10, -dp));
+}
+
+function shownLength(mm: string | undefined): string | null {
+  const size = mm === undefined ? NaN : Number(mm);
+  return Number.isFinite(size) && size > 0 ? fmtLength(shownAtMost(size)) : null;
+}
+
+/** The size the engine's message says a blend fits up to, written as lengths are shown, or null when it names none. */
+function blendFitsUpTo(message: string): string | null {
+  return shownLength(FITS_UP_TO.exec(message)?.[1]);
+}
+
+/** The second distance a two distance chamfer's offer names with its size, written as lengths are shown. */
+function blendFitsSecond(message: string): string | null {
+  const fits = FITS_UP_TO.exec(message);
+  return shownLength(fits?.[1]) ? shownLength(fits?.[2]) : null;
+}
+
+/** The `fits`, `size` and `size2` of the messages that name what a blend fits up to. */
+export function blendFitsArgs(message: string): { fits: "yes" | "pair" | "no"; size: string; size2: string } {
+  const size = blendFitsUpTo(message);
+  const size2 = blendFitsSecond(message);
+  return { fits: size2 ? "pair" : size ? "yes" : "no", size: size ?? "", size2: size2 ?? "" };
+}
+
+function tooLarge(kind: EdgeTreatment, n: number, message: string): string {
+  return t("pick.blendTooLarge", { kind, n, ...blendFitsArgs(message) });
+}
+
+/** `code` is the engine's category (errors.py); the message is only read for older wording that carried no code, and
+ *  for the size a too large blend fits up to. */
 export function blendRefusalReason(
   kind: EdgeTreatment,
   edgeCount: number,
@@ -123,10 +168,9 @@ export function blendRefusalReason(
 ): string {
   const these = edgeCount === 1 ? "this edge" : "these edges";
   const These = edgeCount === 1 ? "This edge is" : "These edges are";
-  const size = kind === "fillet" ? "Radius" : "Distance";
   switch (refusal.code) {
     case "blendTooLarge":
-      return `${size} too large for the faces around ${these}`;
+      return tooLarge(kind, edgeCount, refusal.message);
     case "blendHasNoEnd":
       return `No ${kind} size works on ${these}, the blend has nowhere to end`;
     case "edgeAlreadySmooth":
@@ -136,9 +180,7 @@ export function blendRefusalReason(
     case "blendFoldsOver":
       return `At this size the ${kind} folds back over the model`;
   }
-  if (/smaller (length )?value/i.test(refusal.message)) {
-    return `${size} too large for the faces around ${these}`;
-  }
+  if (/smaller (length )?value/i.test(refusal.message)) return tooLarge(kind, edgeCount, refusal.message);
   return refusal.message.replace(/^(Fillet|Chamfer) failed on [^:]+:\s*/, "");
 }
 

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type * as THREE from "three";
 import { entityLabel } from "./relations";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
@@ -281,9 +282,9 @@ export class MirrorFlow {
     const f = this.fields;
     if (!f) return;
     this.drawPreview();
-    const objects = countLabel(f.objects.length, "object", "objects");
+    const objects = countLabel(f.objects.length, "object");
     const next = nextPick(f, "line");
-    this.host.prompt(`${this.refusal ? `${this.refusal} · ` : ""}${next} · ${objects} · Esc to cancel`);
+    this.host.prompt(`${this.refusal ? `${this.refusal} · ` : ""}${next} · ${objects} · ${t("mirror.escCancel")}`);
     this.host.showPanel({
       id: this.panelId,
       fields: [

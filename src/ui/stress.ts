@@ -1,12 +1,14 @@
 // The Stress panel's pure half: material presets, setup to `stress` op options and saved study, reply to display
 // rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
+import { t, tEnglish, type MessageArgs, type MessageKey } from "../i18n";
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
 import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSpotArea } from "../geometry/client";
 import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
-import { displayRound, toDisplay, type Unit } from "./units";
+import { listJoin, spellNumber, spellRounded } from "./measure";
+import { toDisplay, type Unit } from "./units";
 import { peakPlaceOf, type VerdictInput } from "./stressVerdict";
 import { vonMisesAt } from "./stressLocate";
 
@@ -31,8 +33,15 @@ export const STRESS_MATERIALS: readonly MaterialPreset[] = [
   { name: "steel S235", E: 210000, nu: 0.3, yield: 235, density: 7.85 },
 ];
 
-/** The dropdown's last entry, E, nu, yield and density typed by the user. */
+/** The dropdown's last entry, E, nu, yield and density typed by the user. Saved as is, only its label is translated. */
 export const CUSTOM_MATERIAL = "Custom";
+
+export function materialOptions(): { value: string; label: string }[] {
+  return [
+    ...STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.name })),
+    { value: CUSTOM_MATERIAL, label: t("stress.material.custom") },
+  ];
+}
 
 /** The tints for supports and loaded faces, in the view and beside the panel's
  *  rows. Fixed keeps the blue it has always had. */
@@ -50,10 +59,32 @@ export const SUPPORT_COLORS: Record<StressSupportType, number> = {
   slider: SLIDER_MARK_COLOR,
 };
 
-export const SUPPORT_KINDS: readonly { value: StressSupportType; label: string; hint: string }[] = [
-  { value: "fixed", label: "Fixed", hint: "Held every way" },
-  { value: "pinned", label: "Pinned", hint: "A hole or a pin: held in place, free to turn about its axis" },
-  { value: "slider", label: "Slider", hint: "Held against the face, free to slide along it" },
+// Getters, so a label read in a render follows a change of language.
+function option<V extends string>(value: V, key: MessageKey): { value: V; readonly label: string } {
+  return {
+    value,
+    get label() {
+      return t(key);
+    },
+  };
+}
+
+function supportKind(value: StressSupportType, label: MessageKey, hint: MessageKey) {
+  return {
+    value,
+    get label() {
+      return t(label);
+    },
+    get hint() {
+      return t(hint);
+    },
+  };
+}
+
+export const SUPPORT_KINDS: readonly { value: StressSupportType; readonly label: string; readonly hint: string }[] = [
+  supportKind("fixed", "stress.support.fixed", "stress.support.fixedHint"),
+  supportKind("pinned", "stress.support.pinned", "stress.support.pinnedHint"),
+  supportKind("slider", "stress.support.slider", "stress.support.sliderHint"),
 ];
 
 export function cssHex(c: number): string {
@@ -65,19 +96,24 @@ export type ForceDirection = StressStudy["loads"][number]["direction"];
 export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
 
 // Z is up and the front view looks along +Y.
-export const AXIS_LABELS: Record<AxisDirection, string> = {
-  "-Z": "Down (-Z)",
-  "+Z": "Up (+Z)",
-  "+X": "Right (+X)",
-  "-X": "Left (-X)",
-  "+Y": "Back (+Y)",
-  "-Y": "Front (-Y)",
+const AXIS_KEYS: Record<AxisDirection, MessageKey> = {
+  "-Z": "stress.dir.down",
+  "+Z": "stress.dir.up",
+  "+X": "stress.dir.right",
+  "-X": "stress.dir.left",
+  "+Y": "stress.dir.back",
+  "-Y": "stress.dir.front",
 };
 
-export const FORCE_DIRECTIONS: readonly { value: ForceDirection; label: string }[] = [
-  { value: "into", label: "Into the face" },
-  ...GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] })),
-  { value: "custom", label: "Custom vector" },
+export const AXIS_LABELS: Readonly<Record<AxisDirection, string>> = Object.defineProperties(
+  {} as Record<AxisDirection, string>,
+  Object.fromEntries(GRAVITY_DIRECTIONS.map((d) => [d, { get: () => t(AXIS_KEYS[d]), enumerable: true }])),
+);
+
+export const FORCE_DIRECTIONS: readonly { value: ForceDirection; readonly label: string }[] = [
+  option("into", "stress.dir.into"),
+  ...GRAVITY_DIRECTIONS.map((d) => option(d, AXIS_KEYS[d])),
+  option("custom", "stress.dir.custom"),
 ];
 
 export const AXES: Record<AxisDirection, Vec3> = {
@@ -117,21 +153,25 @@ export function unshownFaces(set: StressFaceSet): number {
 export function faceCountLabel(set: StressFaceSet, spots: readonly StressSpot[] = []): string {
   const k = spots.length;
   if (!k) return facesLabel(set);
-  const placed = `${k} spot${k === 1 ? "" : "s"}`;
-  return set.selectors.length ? `${facesLabel(set)}, ${placed}` : placed;
+  const placed = t("stress.spots.count", { k });
+  return set.selectors.length ? t("stress.places.both", { faces: facesLabel(set), spots: placed }) : placed;
 }
 
 function facesLabel(set: StressFaceSet): string {
   const n = set.selectors.length;
-  if (!n) return "No faces yet";
-  const faces = `${n} face${n === 1 ? "" : "s"}`;
+  if (!n) return t("stress.faces.none");
   const missing = set.missing ?? 0;
   if (missing)
-    return `${faces}, ${missing === n ? (n === 1 ? "not" : "none") : `${missing} not`} found on the current model`;
+    return missing === n ? t("stress.faces.missingAll", { n }) : t("stress.faces.missingSome", { n, missing });
   const unshown = unshownFaces(set);
   if (unshown > 0)
-    return `${faces} (${unshown === n ? (n === 1 ? "not" : "none") : `${unshown} not`} shown in the view)`;
-  return faces;
+    return unshown === n ? t("stress.faces.unshownAll", { n }) : t("stress.faces.unshownSome", { n, unshown });
+  return t("stress.faces.count", { n });
+}
+
+/** The status line after a row took the faces picked in the view, `index` counted from 1. */
+export function pickedFacesStatus(row: StressSupportType | "load", index: number, faces: number): string {
+  return t("stress.status.picked", { row, i: index, n: faces });
 }
 
 export function emptyFaceSet(): StressFaceSet {
@@ -171,10 +211,10 @@ export interface StressSetup {
   refine: StressRefine;
 }
 
-export const MESH_DETAIL_CHOICES: readonly { value: StressRefine; label: string }[] = [
-  { value: "off", label: "Coarse" },
-  { value: "standard", label: "Standard" },
-  { value: "fine", label: "Fine" },
+export const MESH_DETAIL_CHOICES: readonly { value: StressRefine; readonly label: string }[] = [
+  option("off", "stress.mesh.coarse"),
+  option("standard", "stress.mesh.standard"),
+  option("fine", "stress.mesh.fine"),
 ];
 
 /** The element limit sent with Fine; the engine's default is about half. */
@@ -182,8 +222,8 @@ export const FINE_MAX_ELEMENTS = 60_000;
 
 /** The one button of a finer answer. The time is rough, so steps of 5 seconds, then whole minutes. */
 export function finerLabel(seconds: number): string {
-  if (seconds < 90) return `Run with finer detail (about ${Math.max(10, Math.round(seconds / 5) * 5)} seconds)`;
-  return `Run with finer detail (about ${Math.max(1, Math.round(seconds / 60))} min)`;
+  if (seconds < 90) return t("stress.finer.seconds", { s: Math.max(10, Math.round(seconds / 5) * 5) });
+  return t("stress.finer.minutes", { m: Math.max(1, Math.round(seconds / 60)) });
 }
 
 /** One row of the setup, by its id. */
@@ -335,39 +375,31 @@ export function intoDirection(faces: StressFaceSet, spots: readonly StressSpot[]
   return [-x / len + 0, -y / len + 0, -z / len + 0];
 }
 
+/** Why a setup cannot run, as a line and its arguments. */
+export type Refusal = { key: MessageKey; args?: MessageArgs };
+
 /** One load's unit direction, or why it has none. */
-export function forceDirection(load: StressLoadSetup): Vec3 | string {
+export function forceDirection(load: StressLoadSetup): Vec3 | Refusal {
   if (load.direction === "into") {
     // "Into the face" is read off the faces drawn in the view, so with any unplaced the direction would be a guess.
     const unplaced = unshownFaces(load.faces) + (load.faces.missing ?? 0);
-    if (unplaced > 0) {
-      return (
-        `${unplaced === 1 ? "one of its faces is" : `${unplaced} of its faces are`} not shown in the view, so ` +
-        '"into the face" cannot be worked out; set the faces again, or pick an axis or a custom vector'
-      );
-    }
-    if (load.spots?.some((s) => !s.normal)) {
-      return 'one of its spots has no direction of its own, so "into the face" cannot be worked out; place the spot again, or pick an axis or a custom vector';
-    }
-    const d = intoDirection(load.faces, load.spots);
-    return (
-      d ??
-      'its faces point different ways, so "into the face" has no single direction; pick an axis, a custom vector or a pressure'
-    );
+    if (unplaced > 0) return { key: "stress.request.dirUnshown", args: { n: unplaced } };
+    if (load.spots?.some((s) => !s.normal)) return { key: "stress.request.dirSpot" };
+    return intoDirection(load.faces, load.spots) ?? { key: "stress.request.dirMixed" };
   }
   if (load.direction === "custom") {
     const [x, y, z] = load.custom;
     const len = Math.hypot(x, y, z);
-    if (!(len > 0) || !Number.isFinite(len)) return "the custom direction is zero";
+    if (!(len > 0) || !Number.isFinite(len)) return { key: "stress.request.dirZero" };
     return [x / len, y / len, z / len];
   }
   return AXES[load.direction];
 }
 
 /** One load's force vector in N, or why it has none. */
-export function forceVector(load: StressLoadSetup): Vec3 | string {
+export function forceVector(load: StressLoadSetup): Vec3 | Refusal {
   const dir = forceDirection(load);
-  if (typeof dir === "string") return dir;
+  if (!Array.isArray(dir)) return dir;
   return [dir[0] * load.force, dir[1] * load.force, dir[2] * load.force];
 }
 
@@ -377,7 +409,21 @@ export function gravityVector(direction: AxisDirection): Vec3 {
   return [a[0] * GRAVITY + 0, a[1] * GRAVITY + 0, a[2] * GRAVITY + 0];
 }
 
-export type StressRequest = { ok: true; body: string; options: StressOptions } | { ok: false; message: string };
+export type StressRequest =
+  | { ok: true; body: string; options: StressOptions }
+  | { ok: false; message: string; key: MessageKey; args: MessageArgs };
+
+/** A support or load row; `i` is its number, 0 when it is the only one. */
+type Row = { owner: "support" | "load"; i: number };
+
+// `message` is the English line as a lower case fragment, which the request tests read; the panel shows
+// `t(key, args)`. A line opening on a name (Poisson's ratio) keeps its capital.
+function refused({ key, args = {} }: Refusal, row: Row | null = null): StressRequest {
+  const all = { ...args, ...row };
+  const line = tEnglish(key, all).replace(/\.$/, "");
+  const message = /^\w+'s /.test(line) ? line : line.charAt(0).toLowerCase() + line.slice(1);
+  return { ok: false, key, args: all, message };
+}
 
 /** A load row as a fresh panel adds it, never touched: no faces and every
  *  value its default. */
@@ -394,27 +440,16 @@ function untouchedLoad(l: StressLoadSetup): boolean {
   );
 }
 
-/** Why a face set cannot be sent as it is: faces the current model lacks. */
-function missingFaces(set: StressFaceSet, which: string): string | null {
-  const k = set.missing ?? 0;
-  if (!k) return null;
-  return `${k === 1 ? "a face" : `${k} faces`} of ${which} ${k === 1 ? "is" : "are"} not found on the current model, set the faces again`;
-}
-
 /** What a row holds or pushes on, as the engine takes it: its faces when it
  *  has any, its spots when it has any, or why it cannot be sent. */
 function areaOf(
   faces: StressFaceSet,
   spots: readonly StressSpot[] | undefined,
-  which: string,
-): { faces?: Selector[]; spots?: StressSpotArea[] } | string {
+): { faces?: Selector[]; spots?: StressSpotArea[] } | Refusal {
   const placed = spots ?? [];
-  if (!faces.selectors.length && !placed.length) {
-    return `${which} has no faces yet, place it on the body or use selected faces`;
-  }
-  const missing = missingFaces(faces, which);
-  if (missing) return missing;
-  if (placed.some((s) => !isNum(s.radius) || !(s.radius > 0))) return `a spot of ${which} needs a radius above 0`;
+  if (!faces.selectors.length && !placed.length) return { key: "stress.request.noFaces" };
+  if (faces.missing) return { key: "stress.request.missingFaces", args: { k: faces.missing } };
+  if (placed.some((s) => !isNum(s.radius) || !(s.radius > 0))) return { key: "stress.request.spotRadius" };
   return {
     ...(faces.selectors.length ? { faces: faces.selectors } : {}),
     ...(placed.length ? { spots: placed.map((s) => ({ at: [...s.at] as Vec3, radius: s.radius })) } : {}),
@@ -430,55 +465,51 @@ export function defaultSpotRadius(diagonal: number): number {
 /** The panel's setup as the `stress` op's options, or the first thing in the
  *  way, phrased for the status line. */
 export function buildStressRequest(s: StressSetup): StressRequest {
-  if (!s.body) return { ok: false, message: "pick the body to analyse" };
-  if (!s.supports.length) return { ok: false, message: "add a support" };
+  if (!s.body) return refused({ key: "stress.request.noBody" });
+  if (!s.supports.length) return refused({ key: "stress.request.noSupport" });
   const supports: NonNullable<StressOptions["supports"]> = [];
   for (const [i, x] of s.supports.entries()) {
-    const which = s.supports.length > 1 ? `support ${i + 1}` : "the support";
-    const area = areaOf(x.faces, x.spots, which);
-    if (typeof area === "string") return { ok: false, message: area };
+    const row: Row = { owner: "support", i: s.supports.length > 1 ? i + 1 : 0 };
+    const area = areaOf(x.faces, x.spots);
+    if ("key" in area) return refused(area, row);
     if (area.spots && x.type !== "fixed") {
-      return {
-        ok: false,
-        message: `${which} is ${x.type} but has a spot, and a spot holds every way, so make it fixed or remove the spot`,
-      };
+      return refused({ key: "stress.request.spotNotFixed", args: { type: x.type } }, row);
     }
     supports.push({ type: x.type, ...area });
   }
   // Its own weight is a load, so a body under gravity alone is a study, and
   // the blank row a fresh panel starts with is no load at all then.
   const rows = s.gravity.on ? s.loads.filter((l) => !untouchedLoad(l)) : s.loads;
-  if (!rows.length && !s.gravity.on) return { ok: false, message: "add a load, or turn on Own weight" };
+  if (!rows.length && !s.gravity.on) return refused({ key: "stress.request.noLoad" });
   const loads: StressOptions["loads"] = [];
   for (const l of rows) {
     const i = s.loads.indexOf(l);
-    const which = s.loads.length > 1 ? `load ${i + 1}` : "the load";
-    const area = areaOf(l.faces, l.spots, which);
-    if (typeof area === "string") return { ok: false, message: area };
+    const row: Row = { owner: "load", i: s.loads.length > 1 ? i + 1 : 0 };
+    const area = areaOf(l.faces, l.spots);
+    if ("key" in area) return refused(area, row);
     if (l.kind === "pressure") {
-      if (!Number.isFinite(l.pressure) || l.pressure === 0) return { ok: false, message: `${which} needs a pressure` };
+      if (!Number.isFinite(l.pressure) || l.pressure === 0) return refused({ key: "stress.request.noPressure" }, row);
       loads.push({ ...area, pressure: l.pressure });
       continue;
     }
-    if (!Number.isFinite(l.force) || l.force === 0) return { ok: false, message: `${which} needs a force` };
+    if (!Number.isFinite(l.force) || l.force === 0) return refused({ key: "stress.request.noForce" }, row);
     const v = forceVector(l);
-    if (typeof v === "string") return { ok: false, message: `${which}: ${v}` };
+    if (!Array.isArray(v)) return refused(v, row);
     loads.push({ ...area, force: v.map(roundForce) as Vec3 });
   }
   let material: StressMaterial;
   if (s.material === CUSTOM_MATERIAL) {
     const { E, nu, yield: y, density } = s.custom;
     // A cleared number input reads as "", which compares as 0, so check the type first.
-    if (!isNum(E) || !(E > 0)) return { ok: false, message: "the custom material needs a modulus E above 0" };
-    if (!isNum(nu) || !(nu >= 0 && nu < 0.5))
-      return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
-    if (!isNum(y) || !(y > 0)) return { ok: false, message: "the custom material needs a yield strength above 0" };
+    if (!isNum(E) || !(E > 0)) return refused({ key: "stress.request.modulus" });
+    if (!isNum(nu) || !(nu >= 0 && nu < 0.5)) return refused({ key: "stress.request.poisson" });
+    if (!isNum(y) || !(y > 0)) return refused({ key: "stress.request.yield" });
     const hasDensity = isNum(density) && density > 0;
-    if (s.gravity.on && !hasDensity) return { ok: false, message: "own weight needs the material's density in g/cm3" };
+    if (s.gravity.on && !hasDensity) return refused({ key: "stress.request.density" });
     material = { E, nu, yield: y, ...(hasDensity ? { density } : {}), name: CUSTOM_MATERIAL };
   } else {
     if (!STRESS_MATERIALS.some((m) => m.name === s.material))
-      return { ok: false, message: `unknown material ${s.material}` };
+      return refused({ key: "stress.request.material", args: { name: s.material } });
     material = s.material;
   }
   const options: StressOptions = { supports, loads, material };
@@ -534,8 +565,8 @@ const PEAK_SIZE_FALLBACK = 20;
 const PEAK_SIZE_MIN = 5;
 
 function fmtPoint(p: Vec3, unit: Unit): string {
-  const [x, y, z] = p.map((v) => displayRound(toDisplay(v)));
-  return `x ${x}, y ${y}, z ${z} ${unit}`;
+  const [x, y, z] = p.map((v) => spellRounded(toDisplay(v)));
+  return `${listJoin([`x ${x}`, `y ${y}`, `z ${z}`])} ${unit}`;
 }
 
 // A third of the drawn surface's diagonal, to the hundredth and at least 5 mm, so the point sits in a view of the part.
@@ -566,6 +597,21 @@ export function valueRange(values: readonly number[]): { min: number; max: numbe
   return min <= max ? { min, max } : { min: 0, max: 0 };
 }
 
+// Getters, so a row read in a render follows a change of language.
+function liveRow(k: MessageKey, v: () => string): PanelRow {
+  return {
+    get k() {
+      return t(k);
+    },
+    get v() {
+      return v();
+    },
+  };
+}
+
+const peakValue = (r: StressReply) => `${spellRounded(r.maxVonMises.value)} MPa`;
+const deflectionValue = (r: StressReply, unit: Unit) => `${spellRounded(toDisplay(r.maxDisplacement.value))} ${unit}`;
+
 /** `supports` are the kinds of the supports sent, in order, which is the order
  *  the engine's per-support reactions come back in. */
 export function formatStressResult(
@@ -576,49 +622,67 @@ export function formatStressResult(
 ): StressResultView {
   const sf = r.safetyFactor;
   const rows: PanelRow[] = [
-    { k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${displayRound(sf)}` : "none, no stress" },
-    { k: "Peak stress", v: `${displayRound(r.maxVonMises.value)} MPa` },
-    { k: "Max deflection", v: `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}` },
+    liveRow("stress.result.safetyFactor", () =>
+      sf !== null && Number.isFinite(sf) ? spellRounded(sf) : t("stress.result.noStress"),
+    ),
+    liveRow("stress.result.peakStress", () => peakValue(r)),
+    liveRow("stress.result.maxDeflection", () => deflectionValue(r, unit)),
   ];
   const details: PanelRow[] = [];
-  details.push({ k: "Material", v: r.material.name });
-  details.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
-  if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
-  details.push({ k: "Applied", v: fmtForce(r.applied) });
-  details.push({ k: "Reaction", v: fmtForce(r.reaction) });
+  details.push(liveRow("stress.setup.material", () => r.material.name));
+  details.push(liveRow("stress.setup.yield", () => `${spellRounded(r.material.yield)} MPa`));
+  const weight = r.weight;
+  if (weight) details.push(liveRow("stress.result.weight", () => fmtForce(weight)));
+  details.push(liveRow("stress.result.applied", () => fmtForce(r.applied)));
+  details.push(liveRow("stress.result.reaction", () => fmtForce(r.reaction)));
   // One support's reaction is the total above, so per support only with several.
   const reactions = r.reactions ?? [];
   if (reactions.length > 1) {
     for (const [i, f] of reactions.entries()) {
-      const kind = supports[i];
-      const label = kind ? SUPPORT_KINDS.find((x) => x.value === kind)?.label.toLowerCase() : undefined;
-      details.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
+      const kind = supports[i] ?? "none";
+      details.push({
+        get k() {
+          return t("stress.result.support", { i: i + 1, kind });
+        },
+        get v() {
+          return fmtForce(f);
+        },
+      });
     }
   }
-  details.push({ k: "Mesh", v: meshRow(r.mesh) });
-  const refinement = refinementRow(r.mesh);
-  if (refinement) details.push({ k: "Mesh detail", v: refinement });
+  details.push(liveRow("stress.result.mesh", () => meshRow(r.mesh)));
+  const refinement = refinementLine(r.mesh);
+  if (refinement) details.push(liveRow("stress.setup.meshDetail", refinement));
   // Fine starts on a finer mesh, so on some parts its peak reads lower than Standard's (Wall bracket 14.0 against
   // 15.2 MPa, a deep round groove 5% lower) and on others higher.
-  if (refine === "fine") details.push({ k: "Note", v: FINE_NOTE });
+  if (refine === "fine") details.push(liveRow("stress.result.note", () => t("stress.result.fineNote")));
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
   const size = peakSize(r.surface?.positions);
   // No face number: the engine's one counts the faces of a copy of the body, which nothing else in the app shows.
-  const peak = (label: string, value: string, at: Vec3): StressPeak => {
-    const where = fmtPoint(at, unit);
-    return { label, where, spoken: `${label}, ${value}, at ${where}`, at, size };
-  };
+  const peak = (label: MessageKey, value: () => string, at: Vec3): StressPeak => ({
+    get label() {
+      return t(label);
+    },
+    get where() {
+      return fmtPoint(at, unit);
+    },
+    get spoken() {
+      return t("stress.result.peakSaid", { label: t(label), value: value(), where: fmtPoint(at, unit) });
+    },
+    at,
+    size,
+  });
   return {
     rows,
     details,
     warnings,
     legend,
     peaks: [
-      peak("Peak stress", `${displayRound(r.maxVonMises.value)} MPa`, r.maxVonMises.at),
-      peak("Max deflection", `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}`, r.maxDisplacement.at),
+      peak("stress.result.peakStress", () => peakValue(r), r.maxVonMises.at),
+      peak("stress.result.maxDeflection", () => deflectionValue(r, unit), r.maxDisplacement.at),
     ],
     yields: sf !== null && sf < 1,
     verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
@@ -628,41 +692,32 @@ export function formatStressResult(
 }
 
 function meshRow(m: StressReply["mesh"]): string {
-  const row = `${m.elements} elements, ${displayRound(m.size)} mm`;
+  const size = spellRounded(m.size);
   const passes = m.passes?.length ?? 1;
-  if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
-  return `${row}, ${displayRound(m.finest)} mm at the peak, ${passes} passes`;
+  if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) {
+    return t("stress.result.meshLine", { elements: m.elements, size });
+  }
+  return t("stress.result.meshRefined", { elements: m.elements, size, finest: spellRounded(m.finest), passes });
 }
 
-const FINE_NOTE =
-  "Fine starts on a finer mesh than Standard and can read a lower peak, check the safety factor with Standard too";
+const REFINE_STOPS = ["settled", "elements", "time", "memory", "unrefinable"];
 
-const REFINE_STOPS: Record<string, string> = {
-  settled: "a finer mesh would barely move the peak",
-  elements: "stopped at the element limit",
-  time: "stopped to stay within about a minute",
-  memory: "stopped as a finer mesh needs more memory",
-  unrefinable: "nothing left to refine",
-};
-
-function refinementRow(m: StressReply["mesh"]): string | null {
-  if (m.stop === undefined) return null;
+function refinementLine(m: StressReply["mesh"]): (() => string) | null {
+  const stop = m.stop;
+  if (stop === undefined) return null;
   const passes = m.passes ?? [];
-  const why = REFINE_STOPS[m.stop];
   if (passes.length < 2) {
-    if (m.stop === "off") return "Coarse";
-    if (m.stop === "settled") return `Not needed, ${why}`;
-    return why ? why[0]!.toUpperCase() + why.slice(1) : null;
+    return REFINE_STOPS.includes(stop) || stop === "off" ? () => t("stress.result.refineOnce", { stop }) : null;
   }
   const n = passes.length - 1;
-  const moved = `${n === 1 ? "Refined once" : `Refined ${n} times`}, the peak went from ${displayRound(passes[0]!.maxVonMises)} to ${displayRound(passes[n]!.maxVonMises)} MPa`;
-  return why ? `${moved}, then ${why}` : moved;
+  const [from, to] = [passes[0]!.maxVonMises, passes[n]!.maxVonMises];
+  return () => t("stress.result.refined", { n, from: spellRounded(from), to: spellRounded(to), stop });
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
 export function legendEnds(legend: { min: number; max: number }): [string, string] {
   const min = Math.abs(legend.min) < Math.abs(legend.max) / 1000 ? 0 : legend.min;
-  return [String(displayRound(min)), String(displayRound(legend.max))];
+  return [spellRounded(min), spellRounded(legend.max)];
 }
 
 /** Labels for the colour bar at each quarter of the range, MPa, the ends as legendEnds reads them. */
@@ -670,30 +725,31 @@ export function legendTicks(legend: { min: number; max: number }): { pct: number
   const [low, high] = legendEnds(legend);
   return [0, 25, 50, 75, 100].map((pct) => ({
     pct,
-    label:
-      pct === 0 ? low : pct === 100 ? high : String(displayRound(legend.min + ((legend.max - legend.min) * pct) / 100)),
+    label: pct === 0 ? low : pct === 100 ? high : spellRounded(legend.min + ((legend.max - legend.min) * pct) / 100),
   }));
 }
 
 /** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
 export function setupSummary(s: StressSetup): string {
-  const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;
-  const parts = [n(s.supports.length, "support"), n(s.loads.length, "load")];
-  if (s.gravity.on) parts.push(`own weight ${s.gravity.direction}`);
-  parts.push(s.material);
-  return parts.join(", ");
+  return t("stress.result.ranWith", {
+    supports: s.supports.length,
+    loads: s.loads.length,
+    gravity: s.gravity.on ? "on" : "off",
+    direction: s.gravity.direction,
+    material: s.material,
+  });
 }
 
 function fmtForce(f: Vec3): string {
-  return `${displayRound(f[0])}, ${displayRound(f[1])}, ${displayRound(f[2])} N`;
+  return `${listJoin(f.map((v) => spellRounded(v)))} N`;
 }
 
 export type StressRamp = "perceptual" | "rainbow" | "greyscale";
 
-export const STRESS_RAMPS: readonly { value: StressRamp; label: string }[] = [
-  { value: "perceptual", label: "Perceptual" },
-  { value: "rainbow", label: "Rainbow" },
-  { value: "greyscale", label: "Greyscale" },
+export const STRESS_RAMPS: readonly { value: StressRamp; readonly label: string }[] = [
+  option("perceptual", "stress.legend.perceptual"),
+  option("rainbow", "stress.legend.rainbow"),
+  option("greyscale", "stress.legend.greyscale"),
 ];
 
 const hex = (h: string): Vec3 => [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255) as Vec3;
@@ -876,11 +932,21 @@ export function forceDragPatch(
   return { direction: snapped.key, custom, force: dragForce(start, px) };
 }
 
+// A select option is a plain word, so the label's message names each direction by one.
+const DRAG_WORDS: Record<ForceDirection, string> = {
+  into: "into",
+  custom: "custom",
+  "-Z": "down",
+  "+Z": "up",
+  "+X": "right",
+  "-X": "left",
+  "+Y": "back",
+  "-Y": "front",
+};
+
 /** The live label beside a dragged arrow. */
 export function forceDragLabel(patch: { direction: ForceDirection; force: number }): string {
-  const label = FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label;
-  const named = patch.direction === "custom" || !label ? "" : `, ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
-  return `${patch.force} N${named}`;
+  return t("stress.drag.label", { force: patch.force, direction: DRAG_WORDS[patch.direction] });
 }
 
 function round3(v: number): number {
@@ -984,9 +1050,13 @@ export function deformSliderMax(auto: number): number {
   return Math.max(4 * auto, 1);
 }
 
-/** The factor as the slider's label reads it. */
+/** The slider's factor to two significant figures, spelled with the language's mark. */
+export function deformScale(scale: number): string {
+  return spellNumber(scale === 0 ? 0 : roundSig(scale, 2));
+}
+
 export function deformLabel(scale: number): string {
-  return `${scale === 0 ? 0 : roundSig(scale, 2)}x`;
+  return `${deformScale(scale)}x`;
 }
 
 /** Positions moved by `scale` times their displacement, into `out` when given. */
@@ -1055,8 +1125,30 @@ export function probeValues(
 
 /** A probe's readout: stress in MPa, deflection in the display unit. */
 export function probeLabel(p: { vonMises: number; deflection: number | null }, unit: Unit): string {
-  const vm = `${displayRound(p.vonMises)} MPa`;
-  return p.deflection === null ? vm : `${vm}, ${displayRound(toDisplay(p.deflection))} ${unit}`;
+  const vm = `${spellRounded(p.vonMises)} MPa`;
+  return p.deflection === null ? vm : listJoin([vm, `${spellRounded(toDisplay(p.deflection))} ${unit}`]);
+}
+
+/** Where a readout pinned to the point at `x` starts: `gap` right of it, else `gap` left of it, else as near as the
+ *  free span allows. The span runs between the `covers` either side of the point inside `area`, a cover over the
+ *  point closing the side it is nearer, so no panel or card hides the readout. */
+export function pinLabelLeft(
+  x: number,
+  width: number,
+  area: { left: number; right: number },
+  covers: readonly { left: number; right: number }[],
+  gap = 8,
+): number {
+  let lo = area.left;
+  let hi = area.right;
+  for (const c of covers) {
+    if (c.right <= x || (c.left < x && c.right - x < x - c.left)) lo = Math.max(lo, c.right + gap);
+    else hi = Math.min(hi, c.left - gap);
+  }
+  const fits = (left: number) => left >= lo && left + width <= hi;
+  if (fits(x + gap)) return x + gap;
+  if (fits(x - gap - width)) return x - gap - width;
+  return Math.max(lo, Math.min(x + gap, hi - width));
 }
 
 /** An engine refusal in the panel's words. The engine names a support or a

@@ -110,6 +110,9 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.page_errors()` | uncaught page errors seen so far |
 | `s.screenshot(path=None, target=None)` | a PNG of the page or of one control, returns its path |
 
+`s.tool()` finds a tool by its English name in any language. `s.status(raw=True)["tool"]` and the running tool's
+aria-label give the name the user sees, so a script that compares them to "Extrude" runs in English only.
+
 `screen()` regions: titlebar, menu, toolrail, history, props, items, valuebox, dialog, context,
 render, views, status, other. Each line is a ref, a role, a label and flags such as `disabled`,
 `on`, `selected` or `= "value"`. Refs are what actions take, for example `#undo-btn`,
@@ -256,7 +259,7 @@ overlaps another item or a card, each box cut to what its clipping ancestors sho
 example through the UI. `tests/browser/test_size.py` checks 100 and 150 percent in a 1366 by 768
 window, `tests/browser/test_reach.py` walks 200 percent in 1280 by 800 and 800 by 600 (640 by 400 and
 400 by 300 CSS px) with Tab, and through both rails' toolbars with the arrows, and `tests/browser/test_text_size.py` walks the axe screens with Comfortable text
-on, and `tests/browser/test_bottom_row.py` keeps a sketch tool's hint card and the frame rate chip
+on, in English and again in Pseudo, and `tests/browser/test_bottom_row.py` keeps a sketch tool's hint card and the frame rate chip
 clear of each other and of the rails at 100, 150 and 200 percent, all in the smoke set, with shots and
 results in `FUNDACAD_SIZE_OUT` (default the temp folder's `fundacad-size`).
 
@@ -311,6 +314,13 @@ sees:
 Open a fixture document with `s.open_file(...)` rather than building one in page code, keep the
 asserts on readout text, and put the port in `tools/harness/examples/` with a test in
 `tests/browser/`. The old script stays until the port has been green in CI for a while.
+
+## In CI
+
+Every push runs the tests marked `smoke` in build.yml's `e2e` job, the `smoke and heavy` ones in
+`e2e-heavy` and the `a11y` ones in `e2e-a11y`. The rest of `tests/browser/` runs once a night on dev
+in `harness-nightly.yml`, with the engine of the newest dev build that kept one. Mark a test `smoke`
+when every push should run it.
 
 ## Troubleshooting
 

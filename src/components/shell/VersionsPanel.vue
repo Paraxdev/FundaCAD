@@ -6,7 +6,7 @@ import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useMetaValue } from "../../app/useDoc";
 import { diffTrees, log, snapshotOf, versionById, type Version, type VersionDiff } from "../../document/versions";
-import { featureMeta } from "../../ui/featureMeta";
+import { featureEnglish } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
 import { plainError, SEE_CONSOLE } from "../../ui/plainError";
 import { ago } from "../../ui/timeAgo";
@@ -135,7 +135,7 @@ function changedNames(v: Version): { kind: string; name: string }[] {
   const before = v.parent ? featuresOf(v.parent) : [];
   const label = (id: string, list: typeof here) => {
     const f = list.find((x) => x.id === id) as ({ name?: string } & (typeof here)[number]) | undefined;
-    return f ? f.name || featureMeta(f).label : id;
+    return f ? f.name || featureEnglish(f) : id;
   };
   return [
     ...d.added.map((id) => ({ kind: "added", name: label(id, here) })),

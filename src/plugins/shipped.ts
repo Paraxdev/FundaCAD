@@ -48,8 +48,3 @@ export function shippedPlugins(): ShippedPlugin[] {
 export function bundleAsset(id: string): string {
   return `plugin-${id}.zip`;
 }
-
-/** The manifest `name`, or the id when nothing ships under it, so the selection rail reads "3D Printing Toolbox". */
-export function shippedPluginName(id: string): string {
-  return shippedPlugins().find((p) => p.dir === id)?.manifest.name ?? id;
-}

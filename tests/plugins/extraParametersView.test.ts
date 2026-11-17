@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
+import { DocumentStore } from "../../src/document/store";
+import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, ParamDef } from "../../src/types";
 import { recompute } from "../../src/params/engine";
 import {
@@ -8,6 +11,7 @@ import {
   nextId,
   parseChoices,
   tuneGroups,
+  uniqueGroups,
 } from "../../plugins/FundaCAD.ExtraParameters/view";
 
 const def = (expr: string, extra: Partial<ParamDef> = {}): ParamDef => ({ expr, value: 0, unit: "count", ...extra });
@@ -74,6 +78,48 @@ describe("Extra Parameters: what the section lists", () => {
     ).toBe("Small = 10, 45");
   });
 
+  describe("a list of choices by the language", () => {
+    afterEach(() => setLanguage("system"));
+    const CHOICES = [
+      { label: "Small", value: 2.5 },
+      { label: "1.5", value: 1.5 },
+      { label: "Large", value: 30 },
+    ];
+
+    it("in German takes a decimal comma with a semicolon between choices, and shows them so", async () => {
+      await setLanguage("de");
+      expect({
+        read: [parseChoices("Small = 2,5; 1,5; Large = 30"), parseChoices("Klein = 0.250")],
+        shown: formatChoices(CHOICES),
+        back: parseChoices(formatChoices(CHOICES)),
+      }).toEqual({
+        read: [CHOICES, [{ label: "Klein", value: 0.25 }]],
+        shown: "Small = 2,5; 1,5; Large = 30",
+        back: CHOICES,
+      });
+    });
+
+    it("in German refuses 1.500 with the reason, and a comma where a semicolon belongs", async () => {
+      await setLanguage("de");
+      expect([parseChoices("Small = 1.500; Large = 30"), parseChoices("Small = 2,5, Large = 30")]).toEqual([
+        '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+        '"Small = 2,5, Large = 30" is two choices, put ; between them',
+      ]);
+    });
+
+    it("in English keeps the comma between choices and reads a point", () => {
+      expect({
+        read: [parseChoices("Small = 2.5, 1.5, Large = 30"), parseChoices("Small = 1.500")],
+        shown: formatChoices(CHOICES),
+        semicolon: parseChoices("Small = 10; Large = 30"),
+      }).toEqual({
+        read: [CHOICES, [{ label: "Small", value: 1.5 }]],
+        shown: "Small = 2.5, 1.5, Large = 30",
+        semicolon: '"Small = 10; Large = 30" is two choices, put , between them',
+      });
+    });
+  });
+
   it("keeps a range across a change of control kind, and invents a usable one for a new slider", () => {
     const slider = convertControl({ kind: "number", min: 0.3, step: 0.1 }, "slider", 0.5);
     expect(slider).toEqual({ kind: "slider", min: 0.3, max: 1, step: 0.1 });
@@ -88,5 +134,91 @@ describe("Extra Parameters: what the section lists", () => {
     expect(isPlainNumber("5 mm")).toBe(false);
     expect(isPlainNumber("across / 2")).toBe(false);
     expect(nextId("g", ["g1", "g3"])).toBe("g2");
+  });
+});
+
+describe("Extra Parameters: two groups of one id", () => {
+  const backend = {
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
+    async init() {},
+    onStatus: () => () => {},
+    connected: true,
+  } as unknown as GeometryBackend;
+  const defs = () => ({
+    fx: def("2.5", { unit: "mm", group: "g1" }),
+    gy: def("7", { unit: "mm", group: "g2" }),
+    hz: def("3", { unit: "mm", group: "g1" }),
+    free: def("9", { unit: "mm" }),
+  });
+  const shape = (d: CadDocument) => tuneGroups(d).map((g) => [g.id, g.name, g.rows.map((r) => r.name)]);
+  const opened = (d: CadDocument) => {
+    const store = new DocumentStore(backend, { parameters: {}, features: [] });
+    store.load(JSON.stringify(d));
+    return store;
+  };
+
+  it("shows each parameter once whatever the number of repeated ids", () => {
+    const g = (id: string, name: string) => ({ id, name });
+    const none = [g("g1", "Core"), g("g2", "Rings")];
+    const one = [g("g1", "Core"), g("g2", "Rings"), g("g1", "Core again")];
+    const many = [g("g1", "Core"), g("g1", "B"), g("g2", "Rings"), g("g1", "C"), g("g2", "D"), g("g1", "E")];
+    const expected = [
+      [null, "", ["free"]],
+      ["g1", "Core", ["fx", "hz"]],
+      ["g2", "Rings", ["gy"]],
+    ];
+    expect([none, one, many].map((groups) => shape(doc(defs(), groups)))).toEqual([expected, expected, expected]);
+    expect(uniqueGroups(many)).toEqual([g("g1", "Core"), g("g2", "Rings")]);
+    expect(uniqueGroups(undefined)).toEqual([]);
+  });
+
+  it("keeps the first group of an id and a document without groups as it was", () => {
+    const first = doc(defs(), [
+      { id: "g2", name: "Rings" },
+      { id: "g1", name: "Core" },
+      { id: "g1", name: "Copy" },
+    ]);
+    expect(shape(first)).toEqual([
+      [null, "", ["free"]],
+      ["g2", "Rings", ["gy"]],
+      ["g1", "Core", ["fx", "hz"]],
+    ]);
+    expect(shape(doc(defs()))).toEqual([[null, "", ["fx", "gy", "hz", "free"]]]);
+  });
+
+  it("does not carry the repeat over to a document loaded after it", () => {
+    const dup = opened(
+      doc(defs(), [
+        { id: "g1", name: "Core" },
+        { id: "g1", name: "Copy" },
+      ]),
+    );
+    expect(shape(dup.document)).toEqual([
+      [null, "", ["gy", "free"]],
+      ["g1", "Core", ["fx", "hz"]],
+    ]);
+    const next = opened(
+      doc(defs(), [
+        { id: "g2", name: "Rings" },
+        { id: "g1", name: "Other" },
+      ]),
+    );
+    expect(shape(next.document)).toEqual([
+      [null, "", ["free"]],
+      ["g2", "Rings", ["gy"]],
+      ["g1", "Other", ["fx", "hz"]],
+    ]);
+  });
+
+  it("saves the groups it was given, the second of an id included", () => {
+    const groups = [
+      { id: "g1", name: "Core" },
+      { id: "g1", name: "Copy" },
+    ];
+    const store = opened(doc(defs(), groups));
+    tuneGroups(store.document);
+    expect(JSON.parse(store.toJSON()).paramExtras).toEqual({ groups });
   });
 });

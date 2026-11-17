@@ -1,3 +1,5 @@
+import { t, type MessageKey } from "../i18n";
+
 const COMMAND = String.fromCharCode(0x2318);
 const OPTION = String.fromCharCode(0x2325);
 const CONTROL = String.fromCharCode(0x2303);
@@ -175,31 +177,36 @@ export function ariaKeys(keys: string | readonly string[] | undefined): string |
   return ok.length ? [...new Set(ok)].join(" ") : undefined;
 }
 
-const SPOKEN_MAC: Record<string, string> = { Meta: "Command", Alt: "Option" };
-const SPOKEN_NAMED: Record<string, string> = {
-  ArrowUp: "Up arrow",
-  ArrowDown: "Down arrow",
-  ArrowLeft: "Left arrow",
-  ArrowRight: "Right arrow",
-  PageUp: "Page up",
-  PageDown: "Page down",
-  ",": "comma",
-  ".": "period",
-  "/": "slash",
-  "\\": "backslash",
-  ";": "semicolon",
-  "'": "quote",
-  "[": "left bracket",
-  "]": "right bracket",
-  "`": "backtick",
-  "-": "minus",
-  "=": "equals",
-  "?": "question mark",
-  "+": "plus",
+const SPOKEN_MAC: Record<string, MessageKey> = { Meta: "keys.spoken.command", Alt: "keys.spoken.option" };
+const SPOKEN_MODIFIER: Record<string, MessageKey> = {
+  Control: "keys.spoken.control",
+  Shift: "keys.spoken.shift",
+  Alt: "keys.spoken.alt",
+};
+const SPOKEN_NAMED: Record<string, MessageKey> = {
+  ArrowUp: "keys.spoken.arrowUp",
+  ArrowDown: "keys.spoken.arrowDown",
+  ArrowLeft: "keys.spoken.arrowLeft",
+  ArrowRight: "keys.spoken.arrowRight",
+  PageUp: "keys.spoken.pageUp",
+  PageDown: "keys.spoken.pageDown",
+  ",": "keys.spoken.comma",
+  ".": "keys.spoken.period",
+  "/": "keys.spoken.slash",
+  "\\": "keys.spoken.backslash",
+  ";": "keys.spoken.semicolon",
+  "'": "keys.spoken.quote",
+  "[": "keys.spoken.leftBracket",
+  "]": "keys.spoken.rightBracket",
+  "`": "keys.spoken.backtick",
+  "-": "keys.spoken.minus",
+  "=": "keys.spoken.equals",
+  "?": "keys.spoken.questionMark",
+  "+": "keys.spoken.plus",
 };
 
 /** A keys hint as a screen reader says it: Control, Alt and Shift, or Command, Option, Control and Shift on macOS,
- *  punctuation as words (a voice at a low punctuation level skips it), alternatives joined by "or". */
+ *  punctuation as words (a voice at a low punctuation level skips it), alternatives joined by the language's "or". */
 export function spokenKeys(keys: string | readonly string[] | undefined): string {
   const list = typeof keys === "string" ? [keys] : (keys ?? []);
   return list
@@ -208,10 +215,15 @@ export function spokenKeys(keys: string | readonly string[] | undefined): string
       const c = ariaCombo(k);
       if (!c) return k.trim();
       const parts = c.endsWith("++") ? [...c.slice(0, -2).split("+"), "+"] : c.split("+");
-      return parts.map((p) => (isMac() ? SPOKEN_MAC[p] : undefined) ?? SPOKEN_NAMED[p] ?? p).join(" ");
+      return parts
+        .map((p) => {
+          const key = (isMac() ? SPOKEN_MAC[p] : undefined) ?? SPOKEN_MODIFIER[p] ?? SPOKEN_NAMED[p];
+          return key ? t(key) : p;
+        })
+        .join(" ");
     })
     .filter(Boolean)
-    .join(" or ");
+    .reduce((first, second) => (first ? t("keys.spoken.or", { first, second }) : second), "");
 }
 
 export type ZoomChord = "up" | "down" | "reset";

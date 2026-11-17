@@ -1,6 +1,6 @@
 // The pure half of the Printability panel. Nothing here touches the viewport or the store, so it is testable in node.
 
-import { displayRound } from "fundacad";
+import { numberText } from "fundacad";
 import type {
   PrintabilityCheck,
   PrintabilityFinding,
@@ -150,11 +150,11 @@ export interface PrintabilityView {
 
 // In mm like the settings they are held to; see PrintabilitySetup.
 function mm(v: number): string {
-  return `${displayRound(v)} mm`;
+  return `${numberText(v)} mm`;
 }
 
 function area(v: number): string {
-  return `${v >= 10 ? Math.round(v) : displayRound(v)} mm²`;
+  return `${v >= 10 ? Math.round(v) : numberText(v)} mm²`;
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -169,13 +169,13 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
       text = `Overhang, ${area(f.area)} leaning ${Math.round(f.value)}°`;
       break;
     case "bridge":
-      text = `Bridge ${mm(f.value)} span (over ${displayRound(f.limit)})`;
+      text = `Bridge ${mm(f.value)} span (over ${numberText(f.limit)})`;
       break;
     case "wall":
-      text = `Thin wall ${mm(f.value)} (under ${displayRound(f.limit)})`;
+      text = `Thin wall ${mm(f.value)} (under ${numberText(f.limit)})`;
       break;
     case "floor":
-      text = `Thin floor ${mm(f.value)} (under ${displayRound(f.limit)})`;
+      text = `Thin floor ${mm(f.value)} (under ${numberText(f.limit)})`;
       break;
     case "gap":
       text = `Gap ${mm(f.value)} will fuse`;

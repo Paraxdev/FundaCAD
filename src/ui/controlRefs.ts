@@ -146,11 +146,18 @@ export function regionOf(el: Element): string {
 
 const GENERATED_ID = /^(v-|\d)|-\d{3,}$/;
 
+// The unit chip is also a Select, and a file row's clear button is a button: both keep their own refs.
+const PROP_CONTROL = ".select-trigger, .ui-switch, .file-pick";
+
 export function refOf(el: HTMLElement): string {
   const d = el.dataset;
   if (el instanceof HTMLInputElement) {
     const f = el.closest<HTMLElement>(".dim-field[data-field]");
     if (f) return `field:${f.dataset.field}`;
+    const p = el.closest<HTMLElement>(".param-row[data-field]");
+    if (p) return `prop:${p.dataset.field}`;
+  }
+  if (el.matches(PROP_CONTROL)) {
     const p = el.closest<HTMLElement>(".param-row[data-field]");
     if (p) return `prop:${p.dataset.field}`;
   }
@@ -176,7 +183,8 @@ export function refOf(el: HTMLElement): string {
   if (el.matches(".menu-btn")) return `menu:${label}`;
   if (el.matches(".menu-item")) {
     // The popup is teleported out of the bar, so the open menu names its button.
-    const top = el.closest("[role=menu]")?.getAttribute("aria-label");
+    const menu = el.closest("[role=menu]");
+    const top = menu?.getAttribute("data-menu-name") ?? menu?.getAttribute("aria-label");
     return `menu:${top ?? "?"}/${label}`;
   }
   if (el.matches(".ctx-item")) return `ctx:${label}`;
@@ -294,15 +302,15 @@ export interface FamilyStep {
 }
 
 /** The family a rail tool is folded into, and the button that opens it, matched by
- *  action id first, then by label, exact before prefix. */
+ *  action id first, then by label or English name, exact before prefix. */
 export function familyOf(name: string, entries: RailEntry[]): { family: FamilyStep; pick: string } | null {
   const want = matchName(name.replace(/^pick:/, ""));
   for (const pass of ["exact", "prefix"] as const) {
     for (const e of entries) {
       if (e.kind !== "family") continue;
       const hit = e.items.find((t) => {
-        const label = matchName(t.label);
-        return t.action === want || (pass === "exact" ? label === want : label.startsWith(want));
+        const names = [t.label, t.english ?? ""].filter(Boolean).map(matchName);
+        return t.action === want || names.some((n) => (pass === "exact" ? n === want : n.startsWith(want)));
       });
       if (hit)
         return {

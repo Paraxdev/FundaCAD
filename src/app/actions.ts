@@ -3,12 +3,13 @@ import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
-import { toggleShortcutHUD } from "../input/shortcuts";
+import { STANDARD_VIEWS, toggleShortcutHUD } from "../input/shortcuts";
 import { cycleRegion, goToRegion } from "../ui/regions";
 import { choose } from "../ui/choice";
 import { endCommandedPick } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE, GO_REGIONS, GEOMETRY_STEPS } from "./actionTables";
 import { browseGeometry, createGeometryCommands } from "./geometryCommands";
+import { describeSelectionAloud, openDescribeModel } from "./describeModel";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
@@ -27,7 +28,11 @@ import { openConsole } from "../ui/logStore";
 import { changeInterfaceSize } from "../ui/interfaceSize";
 import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
+import { speakCameraWhenSettled } from "./cameraSpeech";
+import { carryCommand } from "./carryOn";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
+
+const VIEWS: ReadonlySet<string> = new Set(STANDARD_VIEWS);
 
 /** View actions leave the model alone, so a pick still waiting survives them. */
 const KEEPS_PICK = new Set([
@@ -36,7 +41,10 @@ const KEEPS_PICK = new Set([
   "iso",
   "top",
   "front",
+  "back",
+  "left",
   "right",
+  "bottom",
   "persp",
   "selmode",
   "selmode-auto",
@@ -59,6 +67,8 @@ const KEEPS_PICK = new Set([
   "next-edge",
   "previous-edge",
   "browse-geometry",
+  "describe-model",
+  "describe-selection",
 ]);
 
 /** A body selection raises Move, which toolBusy() counts, so these stand it down first or they refuse silently. */
@@ -97,6 +107,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (!KEEPS_PICK.has(action) && !action.startsWith("view-step-")) useGeometryBrowserStore().setLit(false);
     // A contributed action is never repeated: the core cannot tell whether running it twice is safe.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
+    if (carryCommand(e, action)) return;
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
       else {
@@ -126,6 +137,8 @@ export function createActions(e: Engine): (action: string) => void {
     // Before the sketch finish below, so a sketch open when the problem showed is reported open.
     if (action === "report-problem") return openReportDialog();
     if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "describe-model") return openDescribeModel(e);
+    if (action === "describe-selection") return describeSelectionAloud(e);
     if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "accessibility-settings") return void useDialogStore().openPreferences("access");
     const size = /^interface-size-(up|down|reset)$/.exec(action);
@@ -151,6 +164,14 @@ export function createActions(e: Engine): (action: string) => void {
     if (step) {
       if (isChoiceOpen() || (!e.sketch.active && e.toolBusy())) return;
       e.viewport.stepView(step[1] as "left" | "right" | "up" | "down", !!step[2]);
+      speakCameraWhenSettled(e.viewport);
+      return;
+    }
+    // A view leaves an open sketch open too, the palette and the menus included.
+    if (VIEWS.has(action)) {
+      if (isChoiceOpen()) return;
+      e.viewport.setStandardView(action as StandardView);
+      speakCameraWhenSettled(e.viewport);
       return;
     }
     // Before the finish below, or Ctrl+Z would commit the sketch and then undo it whole.
@@ -408,12 +429,7 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "reset-camera":
         e.viewport.resetCamera();
-        break;
-      case "iso":
-      case "top":
-      case "front":
-      case "right":
-        e.viewport.setStandardView(action as StandardView);
+        speakCameraWhenSettled(e.viewport);
         break;
       case "persp": {
         const mode = e.viewport.cycleProjection();

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import { readPoint, type PointRead } from "../../src/sketch/pointEntry";
 import { unitById } from "../../src/ui/measure";
 
@@ -197,5 +198,42 @@ describe("readPoint refuses a point past the limit", () => {
 
   it("marks X for a cursor left past it with nothing typed", () => {
     expect(bad(readPoint(seedOnly("2000000", "0"), U, ZERO))).toEqual({ field: "x", problem: far("X") });
+  });
+});
+
+describe("readPoint in a language with a decimal comma", () => {
+  afterEach(() => setLanguage("system"));
+  const LAST = { x: 17.5, y: -4.25 };
+
+  it("reads a lone comma in X as a decimal with Y left alone", async () => {
+    await setLanguage("de");
+    expect(readPoint(typed("20,1"), U, FROM)).toEqual({ ok: true, x: 20.1, y: 2.5 });
+    expect(readPoint(typed("20,125"), U, FROM)).toEqual({ ok: true, x: 20.125, y: 2.5 });
+  });
+
+  it("splits a pair only at a semicolon", async () => {
+    await setLanguage("de");
+    expect(readPoint(typed("20;10"), U, FROM)).toEqual({ ok: true, x: 20, y: 10 });
+    expect(readPoint(typed("20,5;-10,25"), U, FROM)).toEqual({ ok: true, x: 20.5, y: -10.25 });
+    expect(readPoint(typed("@5;3"), U, LAST)).toEqual({ ok: true, x: 22.5, y: -1.25 });
+    expect(readPoint(yOnly("1", "@5;3"), U, LAST)).toEqual({ ok: true, x: 22.5, y: -1.25 });
+  });
+
+  it("reads @5,3 as a 5.3 step in X", async () => {
+    await setLanguage("de");
+    expect(readPoint(typed("@5,3"), U, LAST)).toEqual({ ok: true, x: 22.8, y: -4.25 });
+  });
+
+  it("refuses three parts, and keeps one field's comma out of the other", async () => {
+    await setLanguage("de");
+    expect(bad(readPoint(typed("1;2;3"), U, FROM))?.field).toBe("x");
+    expect(readPoint(typed("20,5", "-7,75"), U, FROM)).toEqual({ ok: true, x: 20.5, y: -7.75 });
+  });
+
+  it("goes back to splitting at a lone comma in English", async () => {
+    await setLanguage("de");
+    await setLanguage("system");
+    expect(readPoint(typed("20,10"), U, FROM)).toEqual({ ok: true, x: 20, y: 10 });
+    expect(readPoint(typed("@5,3"), U, LAST)).toEqual({ ok: true, x: 22.5, y: -1.25 });
   });
 });

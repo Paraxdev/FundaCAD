@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   aboutFactor,
   deflectionNote,
@@ -9,7 +10,10 @@ import {
 } from "../../src/ui/stressVerdict";
 import { setUnit } from "../../src/ui/units";
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 const level = (sf: number | null) => verdictView({ safetyFactor: sf }).level;
 

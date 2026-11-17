@@ -26,6 +26,7 @@ import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
 import { MANUAL_URL } from "../../../src/ui/welcome";
 import { ago } from "../../../src/ui/timeAgo";
+import { setLanguage } from "../../../src/i18n";
 
 enableAutoUnmount(afterEach);
 
@@ -1008,6 +1009,32 @@ describe("Home on a first run", () => {
       "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
       "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
     ]);
+  });
+
+  it("reads in the chosen language, the examples and their search included", async () => {
+    await setLanguage("de");
+    try {
+      localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
+      const { cb } = open([], {}, fakeLibrary());
+      expect($(".home-welcome h2")!.textContent).toBe("Willkommen bei FundaCAD");
+      expect($(".home-section")!.textContent).toBe("Hier beginnen");
+      expect($$(".home-new-name").map((n) => n.textContent)).toEqual(["Leer", "Öffnen…"]);
+      expect($(".home-example-name")!.textContent).toBe("Wandhalter");
+      expect($(".home-example-line")!.textContent).toBe("Sehen, wo er sich biegt");
+      expect($(".home-empty")!.textContent).toBe("Dokumente, die Sie öffnen oder speichern, erscheinen hier.");
+      expect($(".modal-close")!.getAttribute("aria-label")).toBe("Zurück zum Dokument");
+      const field = document.querySelector<HTMLInputElement>(".home-search input")!;
+      expect(field.placeholder).toBe("Dokumente suchen");
+      field.value = "platte";
+      field.dispatchEvent(new Event("input"));
+      await nextTick();
+      expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Platte"]);
+      $(".home-example")!.click();
+      await flushPromises();
+      expect(cb.newFromTemplate).toHaveBeenCalledWith("plate");
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("says what Open takes in a browser tab, documents only", () => {

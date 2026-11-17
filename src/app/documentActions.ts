@@ -7,6 +7,7 @@ import {
   type OpenOutcome,
 } from "../io/files";
 import { choose } from "../ui/choice";
+import { t } from "../i18n";
 import { toast } from "../ui/toast";
 import { announce } from "../ui/announce";
 import { stepLabelFor } from "../ui/canStep";
@@ -57,9 +58,15 @@ export function needsSave(e: SaveEngine): boolean {
   return e.store.dirty || anySavableHeld(e);
 }
 
-/** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. */
-function settleForSave(e: SaveEngine): void {
+/** Three seconds covers a verifying rebuild the engine has mostly cached from the preview; a slower answer means a
+ *  stuck engine, where a longer wait gains nothing. */
+export const SAVE_VERIFY_CAP_MS = 3000;
+
+/** A held edit its tool would not enter (a kernel refusal, an unreadable value) stays held, so the user is told. After
+ *  the kernel's verdict on the commit, so a refused edit is never written; past the cap the store is written as it is. */
+async function settleForSave(e: SaveEngine): Promise<void> {
   settleHeldEdit(e);
+  await e.store.provisionalVerdict(SAVE_VERIFY_CAP_MS);
   if (anySavableHeld(e))
     toast("A drag you were holding could not be applied, so the save left it out", { kind: "warning" });
 }
@@ -301,29 +308,43 @@ export function createDocumentActions(
       // A drag not yet entered is the last step, so undo takes back only that.
       const pending = e.tools.move.pending;
       e.tools.move.cancel();
-      if (pending) return void speak("Undid Move");
+      if (pending) return void speak(t("history.stepped", { way: "undo", label: t("tool.move") }));
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "undo");
-      if (!e.sketch.undoEdit() && !e.ui.panels.undoStress()) e.store.undo();
-      if (!(saysOwnEmpty && label === null)) speak(label ? `Undid ${label}` : "Nothing to undo");
+      const inSketch = e.sketch.undoEdit();
+      const inStress = !inSketch && e.ui.panels.undoStress();
+      if (!inSketch && !inStress) e.store.undo();
+      if (saysOwnEmpty && label === null) return;
+      speak(
+        !label
+          ? t("history.nothing", { way: "undo" })
+          : t(inStress ? "stress.say.stepped" : "history.stepped", { way: "undo", label }),
+      );
     },
     doRedo() {
       closeHome();
       // A drag not yet entered is a new step, which leaves nothing to redo.
       if (e.tools.move.pending) {
         e.tools.move.settle();
-        return void speak("Nothing to redo");
+        return void speak(t("history.nothing", { way: "redo" }));
       }
       e.tools.move.cancel();
       const saysOwnEmpty = ownHistoryOpen(e);
       const label = stepLabelFor(e, "redo");
-      if (!e.sketch.redoEdit() && !e.ui.panels.redoStress()) e.store.redo();
-      if (!(saysOwnEmpty && label === null)) speak(label ? `Redid ${label}` : "Nothing to redo");
+      const inSketch = e.sketch.redoEdit();
+      const inStress = !inSketch && e.ui.panels.redoStress();
+      if (!inSketch && !inStress) e.store.redo();
+      if (saysOwnEmpty && label === null) return;
+      speak(
+        !label
+          ? t("history.nothing", { way: "redo" })
+          : t(inStress ? "stress.say.stepped" : "history.stepped", { way: "redo", label }),
+      );
     },
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {
       if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
-      if (usePanelsStore().stress) return void toast("Close Stress first, then undo.");
+      if (usePanelsStore().stress) return void toast(t("history.closeStressFirst"));
       const place = e.tools.move.pending ? "under" : e.store.markPlace(mark);
       if (place === "top") return actions.doUndo();
       toast(UNDO_REFUSED[place ?? "gone"]);

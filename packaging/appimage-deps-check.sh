@@ -79,4 +79,38 @@ fundacad_usr_writable() {
   return 0
 }
 
-fundacad_deps_check "$this_dir/usr/bin/fundacad" || exit 127
+# GTK links the AT-SPI bridge, so wherever the app starts the bridge is there. What a minimal desktop (i3, sway, a
+# container) lacks is the bus behind it, which at-spi2-core brings. Only a note: FundaCAD runs fine without it.
+# The system dirs are passed in and always looked at, since AppRun hooks may rewrite XDG_DATA_DIRS.
+fundacad_a11y_check() {
+  [ -z "${AT_SPI_BUS_ADDRESS:-}" ] || return 0
+  local dir dirs id="" like="" hint
+  dirs="${XDG_DATA_HOME:-${HOME:-}/.local/share}:${XDG_DATA_DIRS:-}"
+  for dir in "$@"; do dirs="$dirs:$dir"; done
+  local IFS=:
+  for dir in $dirs; do
+    [ -n "$dir" ] && [ -e "$dir/dbus-1/services/org.a11y.Bus.service" ] && return 0
+  done
+  unset IFS
+  if [ -r /etc/os-release ]; then
+    id=$(. /etc/os-release && echo "${ID:-}")
+    like=$(. /etc/os-release && echo "${ID_LIKE:-}")
+  fi
+  case " $id $like " in
+    *" debian "*|*" ubuntu "*) hint="sudo apt install at-spi2-core" ;;
+    *" fedora "*|*" rhel "*)   hint="sudo dnf install at-spi2-core" ;;
+    *" arch "*)                hint="sudo pacman -S at-spi2-core" ;;
+    *" suse "*|*" opensuse "*) hint="sudo zypper install at-spi2-core" ;;
+    *" void "*)                hint="sudo xbps-install at-spi2-core" ;;
+    *" gentoo "*)              hint="sudo emerge app-accessibility/at-spi2-core" ;;
+    *)                         hint="install at-spi2-core from your distribution's packages" ;;
+  esac
+  printf '%s\n' "FundaCAD: no accessibility bus found, so screen readers such as Orca cannot read FundaCAD. To use one: $hint" >&2
+  return 0
+}
+
+# AppRun sets this_dir. Without it the file was only sourced for its functions.
+if [ -n "${this_dir:-}" ]; then
+  fundacad_deps_check "$this_dir/usr/bin/fundacad" || exit 127
+  fundacad_a11y_check /usr/local/share /usr/share
+fi

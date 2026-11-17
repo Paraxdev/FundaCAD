@@ -6,6 +6,7 @@ vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
 
 import NumberField from "../../../src/components/ui/NumberField.vue";
 import { announce } from "../../../src/ui/announce";
+import { setLanguage } from "../../../src/i18n";
 import { measureError, unitById } from "../../../src/ui/measure";
 import { resetA11yPrefs, setA11yPref } from "../../../src/ui/a11yPrefs";
 
@@ -777,5 +778,64 @@ describe("NumberField refusal", () => {
       vi.advanceTimersByTime(5000);
       expect(spoken()).toEqual([]);
     });
+  });
+});
+
+describe("NumberField in a comma language", () => {
+  beforeEach(() => setLanguage("de"));
+  afterEach(() => setLanguage("system"));
+
+  it("shows the model with a comma, in its own unit", async () => {
+    expect((await render({ modelValue: 12.375, unit: "mm" })).el.value).toBe("12,375");
+    expect((await render({ modelValue: 25.4 * 1.25, unit: "in" })).el.value).toBe("1,25");
+    expect((await render({ modelValue: 3.5, caption: "layers" })).el.value).toBe("3,5");
+    expect((await render({ modelValue: -7, unit: "mm" })).el.value).toBe("-7");
+  });
+
+  it("steps from the shown text and writes the step back with a comma", async () => {
+    const { w, input, el } = await render({ modelValue: 12.375, unit: "mm" });
+    await input.trigger("keydown", { key: "ArrowUp" });
+    expect(el.value).toBe("13,375");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(emitted(w)).toEqual([[13.375]]);
+    await input.trigger("keydown", { key: "ArrowDown", shiftKey: true });
+    expect(el.value).toBe("2,375");
+  });
+
+  it("names a limit with a comma, with a unit and with a caption", async () => {
+    const mm = await render({ modelValue: 12.375, unit: "mm", min: 0.5 });
+    await commit(mm.input, "0,25");
+    expect(mm.input.attributes("title")).toMatch(/At least 0,5 mm/);
+    const inches = await render({ modelValue: 25.4, unit: "in", max: 38.1 });
+    await commit(inches.input, "2");
+    expect(inches.input.attributes("title")).toMatch(/At most 1,5 in/);
+    const layers = await render({ modelValue: 3.5, caption: "layers", max: 7.5 });
+    await commit(layers.input, "9");
+    expect(layers.input.attributes("title")).toMatch(/At most 7,5 layers/);
+    expect([mm, inches, layers].map((f) => emitted(f.w))).toEqual([[], [], []]);
+  });
+
+  it("commits nothing when the shown text is typed back, and the exact value when changed", async () => {
+    const { w, input } = await render({ modelValue: 12.375, unit: "mm" });
+    await commit(input, "12,375");
+    expect(emitted(w)).toEqual([]);
+    await commit(input, "1,500");
+    await commit(input, "12.5");
+    expect(emitted(w)).toEqual([[1.5], [12.5]]);
+  });
+
+  it("switches an idle box with the language and keeps typed text in a focused one", async () => {
+    await setLanguage("en");
+    const idle = await render({ modelValue: 12.375, unit: "mm" });
+    const typing = await render({ modelValue: 12.375, unit: "mm" });
+    typing.el.focus();
+    await typing.input.setValue("1,5 +");
+    expect([idle.el.value, typing.el.value]).toEqual(["12.375", "1,5 +"]);
+    await setLanguage("de");
+    await idle.w.vm.$nextTick();
+    expect([idle.el.value, typing.el.value]).toEqual(["12,375", "1,5 +"]);
+    await setLanguage("en");
+    await idle.w.vm.$nextTick();
+    expect(idle.el.value).toBe("12.375");
   });
 });

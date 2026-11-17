@@ -11,5 +11,27 @@
   ],
   "formerIds": [
     "spacemouse"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "3D-Maus",
+      "summary": "Steuert die Ansicht mit einer 3D-Maus."
+    },
+    "es": {
+      "name": "Ratón 3D",
+      "summary": "Navega por la vista con un ratón 3D."
+    },
+    "fr": {
+      "name": "Souris 3D",
+      "summary": "Navigue dans la vue avec une souris 3D."
+    },
+    "ja": {
+      "name": "3D マウス",
+      "summary": "3D マウスで表示を操作します。"
+    },
+    "zh-CN": {
+      "name": "3D 鼠标",
+      "summary": "使用 3D 鼠标操作视图。"
+    }
+  }
 }

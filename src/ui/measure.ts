@@ -4,6 +4,8 @@
 
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
+import { commasToPoints, pointsToCommas } from "../params/decimalForm";
+import { decimalMark, t, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
 
@@ -18,8 +20,8 @@ export interface UnitDef {
   /** everything that may be TYPED for it, lower-cased. Order does not matter;
    *  the scanner sorts by length so "mm" can never be eaten by "m". */
   aliases: string[];
-  /** what a screen reader says, `short` when units are not spoken in full */
-  spoken: { short: string; one: string; many: string };
+  /** what a screen reader says when units are not spoken in full, the full words are `units.measure.spoken` */
+  spokenShort: string;
   /** offered in the unit picker, the rest are input-only, so "thou" parses
    *  without putting a unit nobody asked for in front of everyone. */
   common?: boolean;
@@ -29,7 +31,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "mm",
     label: "mm",
-    spoken: { short: "mm", one: "millimetre", many: "millimetres" },
+    spokenShort: "mm",
     dim: "length",
     factor: 1,
     common: true,
@@ -38,7 +40,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "cm",
     label: "cm",
-    spoken: { short: "cm", one: "centimetre", many: "centimetres" },
+    spokenShort: "cm",
     dim: "length",
     factor: 10,
     common: true,
@@ -47,7 +49,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "m",
     label: "m",
-    spoken: { short: "m", one: "metre", many: "metres" },
+    spokenShort: "m",
     dim: "length",
     factor: 1000,
     common: true,
@@ -56,7 +58,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "in",
     label: "in",
-    spoken: { short: "in", one: "inch", many: "inches" },
+    spokenShort: "in",
     dim: "length",
     factor: 25.4,
     common: true,
@@ -65,7 +67,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "ft",
     label: "ft",
-    spoken: { short: "ft", one: "foot", many: "feet" },
+    spokenShort: "ft",
     dim: "length",
     factor: 304.8,
     common: true,
@@ -74,7 +76,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "um",
     label: "µm",
-    spoken: { short: "µm", one: "micrometre", many: "micrometres" },
+    spokenShort: "µm",
     dim: "length",
     factor: 0.001,
     aliases: ["um", "µm", "micron", "microns", "micrometer", "micrometers"],
@@ -82,7 +84,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "thou",
     label: "thou",
-    spoken: { short: "thou", one: "thou", many: "thou" },
+    spokenShort: "thou",
     dim: "length",
     factor: 0.0254,
     aliases: ["thou", "mil", "mils"],
@@ -90,7 +92,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "deg",
     label: "°",
-    spoken: { short: "deg", one: "degree", many: "degrees" },
+    spokenShort: "deg",
     dim: "angle",
     factor: 1,
     common: true,
@@ -99,7 +101,7 @@ export const UNITS: UnitDef[] = [
   {
     id: "rad",
     label: "rad",
-    spoken: { short: "rad", one: "radian", many: "radians" },
+    spokenShort: "rad",
     dim: "angle",
     factor: 180 / Math.PI,
     common: true,
@@ -109,21 +111,23 @@ export const UNITS: UnitDef[] = [
 
 const BY_ID = new Map(UNITS.map((u) => [u.id, u]));
 
-const SPOKEN_CAPTIONS: Record<string, { one: string; many: string }> = {
-  "%": { one: "percent", many: "percent" },
-  ms: { one: "millisecond", many: "milliseconds" },
-  MPa: { one: "megapascal", many: "megapascals" },
-  N: { one: "newton", many: "newtons" },
-  "g/cm³": { one: "gram per cubic centimetre", many: "grams per cubic centimetre" },
+const SPOKEN_CAPTIONS: Record<string, string> = {
+  "%": "percent",
+  ms: "ms",
+  MPa: "megapascal",
+  N: "newton",
+  "g/cm³": "density",
 };
 
 /** A measure id or a caption as a screen reader says it, text it does not know comes back as written. */
 export function spokenUnit(unit: string, full: boolean, one = false): string {
-  const measure = BY_ID.get(unit)?.spoken;
-  if (measure) return full ? (one ? measure.one : measure.many) : measure.short;
+  const measure = BY_ID.get(unit);
+  if (measure)
+    return full ? t("units.measure.spoken", { unit: measure.id, one: one ? "yes" : "no" }) : measure.spokenShort;
   const caption = Object.hasOwn(SPOKEN_CAPTIONS, unit) ? SPOKEN_CAPTIONS[unit] : null;
-  return caption && full ? (one ? caption.one : caption.many) : unit;
+  return caption && full ? t("units.caption.spoken", { unit: caption, one: one ? "yes" : "no" }) : unit;
 }
+
 /** Longest alias first, so "mm" is matched before "m" and "inches" before "in". */
 const ALIASES: { text: string; unit: UnitDef }[] = UNITS.flatMap((unit) =>
   unit.aliases.map((text) => ({ text, unit })),
@@ -192,20 +196,47 @@ interface Normalised {
 }
 
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
+// French typing and pasted numbers group digits with these, they read as a plain space.
+const NO_BREAK_SPACE = /[\u00A0\u2007\u2009\u202F]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
+const TWO_POINT_NUMBER = /\d+(?:\.\d+){2,}(?:[eE][+-]?\d+)?/;
 
-/** Locale minus signs and a decimal comma become ASCII. A comma is a decimal point only when it is the lone comma with
- *  no point or brackets, and never before exactly three digits, where "1,000" is refused rather than guessed. */
-export function canonicalTyping(raw: string): string {
-  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
-  if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
-  if (src.indexOf(",") !== src.lastIndexOf(",")) return src;
-  const m = DECIMAL_COMMA.exec(src);
+/** Locale minus signs and a decimal comma become ASCII. In a comma language every comma is the decimal mark, and a
+ *  lone point before exactly three digits after a nonzero whole part is refused, "1.500" could be fifteen hundred
+ *  while "0.250" reads. With a point mark a comma is one only when it is the lone comma with no point or brackets, and
+ *  never before exactly three digits, where "1,000" and "0,125" are refused rather than guessed. */
+export function canonicalTyping(raw: string, mark: DecimalMark = decimalMark()): string {
+  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").replace(NO_BREAK_SPACE, " ").trim();
+  if (mark === ",") return commasToPoints(src);
+  const m = loneComma(src);
   if (!m) return src;
+  refuseThousandsComma(src, m);
+  return src.replace(DECIMAL_COMMA, "$1.$2");
+}
+
+function loneComma(src: string): RegExpExecArray | null {
+  if (!src.includes(",") || src.includes("(") || src.includes(".")) return null;
+  if (src.indexOf(",") !== src.lastIndexOf(",")) return null;
+  return DECIMAL_COMMA.exec(src);
+}
+
+function refuseThousandsComma(src: string, m: RegExpExecArray): void {
   if (m[2]!.length === 3) {
     throw new ExprError(`"${src}" is ambiguous, write a point for decimals or leave the comma out`);
   }
-  return src.replace(DECIMAL_COMMA, "$1.$2");
+}
+
+/** "1 000" or "1 5", two numbers with only a space between. Its hint names both on screen, so a box refuses it rather
+ *  than fall back to the value typed before. */
+export class JoinedNumbersError extends ExprError {}
+
+export function joinsNumbers(raw: string): boolean {
+  try {
+    normalise(raw);
+    return false;
+  } catch (e) {
+    return e instanceof JoinedNumbersError;
+  }
 }
 
 /** A unit becomes a multiplication rather than a suffix, so feet, microns and thou, which the language has no suffix
@@ -264,8 +295,20 @@ export function normalise(raw: string): Normalised {
       let j = num.end;
       while (src[j] === " ") j++;
       const u = matchUnitAt(src, j);
+      // Two numbers with only a space between are not one number, "1 5" is not 15 and "1 .500" not 1.5.
+      if (!pendingJoin && /\s/.test(src[i - 1] ?? "") && /[A-Za-z0-9_.]$/.test(out)) {
+        const groups = /^\d{3}(?:\s\d{3})*(?:\.\d+)?(?![\d.])/.exec(src.slice(i))?.[0];
+        const digits = groups && /\d+$/.exec(out)?.[0];
+        if (digits) {
+          const whole = `${digits}${groups.replace(/\s/g, "")}`;
+          throw new JoinedNumbersError(
+            `write "${decimalMark() === "," ? whole.replace(".", ",") : whole}" without the space, a space does not group digits`,
+          );
+        }
+        throw new JoinedNumbersError(`put an operator between "${out}" and "${src.slice(i)}"`);
+      }
       // A bare number right after a unit group (`2"5`, `2mm 3`) is half finished; joining it would invent a number.
-      if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
+      if (!u && pendingJoin) throw new JoinedNumbersError(`put an operator between "${out}" and "${src.slice(i)}"`);
       if (u) {
         // Two unit groups with nothing between them is a compound: 2'5", 1m 20cm.
         if (pendingJoin) {
@@ -392,10 +435,68 @@ export function toUnit(canonical: number, unit: UnitDef | null): number {
   return roundForDisplay(canonical / (unit?.factor ?? 1));
 }
 
+/** The number as a box shows it: String(n) with the point swapped for the language's mark. */
+export function spellNumber(n: number, mark: DecimalMark = decimalMark()): string {
+  const text = String(n);
+  return mark === "," ? text.replace(".", ",") : text;
+}
+
+/** Typed expression text as the stored point grammar. A comma there is still refused by the tokenizer, except that a
+ *  lone comma before exactly three digits (1,000) throws ExprError as ambiguous, as a value box says. In a comma
+ *  language it throws for a number it will not guess, as 1.500 or 1,5,5; `typedExprProblem` says so without throwing. */
+export function storedExpr(typedRaw: string, mark: DecimalMark = decimalMark()): string {
+  const typed = typedRaw.replace(NO_BREAK_SPACE, " ");
+  if (mark !== ",") {
+    const src = typed.trim();
+    const m = loneComma(src);
+    if (m) refuseThousandsComma(src, m);
+    return typed;
+  }
+  const stored = commasToPoints(typed);
+  // The scan keeps lengths, so the same slice of the typed text is what was typed.
+  const bad = TWO_POINT_NUMBER.exec(stored);
+  if (bad) {
+    const at = bad.index;
+    throw new ExprError(`invalid number "${typed.slice(at, at + bad[0].length)}"`, at);
+  }
+  return stored;
+}
+
+/** Why storedExpr refuses typed expression text, null when it takes it. */
+export function typedExprProblem(typed: string, mark: DecimalMark = decimalMark()): string | null {
+  try {
+    storedExpr(typed, mark);
+    return null;
+  } catch (e) {
+    if (e instanceof ExprError) return e.message;
+    throw e;
+  }
+}
+
+/** Stored expression text as the language shows it, the reverse of storedExpr. */
+export function shownExpr(stored: string, mark: DecimalMark = decimalMark()): string {
+  return mark === "," ? pointsToCommas(stored) : stored;
+}
+
+/** `toFixed` with the language's mark, trailing zeros kept. */
+export function spellFixed(v: number, digits: number, mark: DecimalMark = decimalMark()): string {
+  const text = v.toFixed(digits);
+  return mark === "," ? text.replace(".", ",") : text;
+}
+
+export function spellRounded(v: number, mark?: DecimalMark): string {
+  return spellNumber(roundForDisplay(v), mark);
+}
+
+/** A comma mark cannot also separate list items, so comma languages join with a semicolon. */
+export function listJoin(parts: readonly string[], mark: DecimalMark = decimalMark()): string {
+  return parts.join(mark === "," ? "; " : ", ");
+}
+
 /** Canonical value → "3.4 mm". `space` off gives "3.4mm" for tight chrome. */
 export function formatMeasure(canonical: number, unit: UnitDef | null, space = true): string {
   const u = unit ?? BY_ID.get("mm")!;
-  const n = toUnit(canonical, u);
+  const n = spellNumber(toUnit(canonical, u));
   // Degrees read as 90° with nothing between; every other unit takes a space.
   const gap = space && u.label !== "°" ? " " : "";
   return `${n}${gap}${u.label}`;

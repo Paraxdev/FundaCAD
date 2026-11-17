@@ -384,6 +384,19 @@ function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): v
   cam.updateProjectionMatrix();
 }
 
+const PASSES_RETRY_MS = 10_000;
+
+async function importPassModules() {
+  const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass }] = await Promise.all([
+    import("three/examples/jsm/postprocessing/EffectComposer.js"),
+    import("three/examples/jsm/postprocessing/RenderPass.js"),
+    import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+    import("three/examples/jsm/postprocessing/BokehPass.js"),
+    import("three/examples/jsm/postprocessing/OutputPass.js"),
+  ]);
+  return { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass };
+}
+
 /** Direct by default: a composer's offscreen target costs a full screen copy and gives up the canvas's
  *  multisampling. The passes are a lazy dynamic import, and until they land the direct path draws. */
 
@@ -393,13 +406,9 @@ export class PostChain {
   private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
   private glowMask: GlowMask | null = null;
   private passesLoading: Promise<void> | null = null;
-  private passes: {
-    EffectComposer: typeof import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer;
-    RenderPass: typeof import("three/examples/jsm/postprocessing/RenderPass.js").RenderPass;
-    UnrealBloomPass: typeof import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass;
-    BokehPass: typeof import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass;
-    OutputPass: typeof import("three/examples/jsm/postprocessing/OutputPass.js").OutputPass;
-  } | null = null;
+  private passesFailed = false;
+  private importPasses = importPassModules;
+  private passes: Awaited<ReturnType<typeof importPassModules>> | null = null;
   private potato: PotatoDraw | null = null;
   private glassPass: GlassBackPass | null = null;
   private motionDraw: PotatoDraw | null = null;
@@ -813,20 +822,21 @@ export class PostChain {
     }
   }
 
+  /** Never rejects: until the passes land the view draws without bloom and blur, and a failed load is tried again
+   *  once PASSES_RETRY_MS has passed, not on the next frame, as every frame asks. */
   private loadPasses(): Promise<void> {
-    return (this.passesLoading ??= this.fetchPasses());
-  }
-
-  private async fetchPasses() {
-    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass }] = await Promise.all([
-      import("three/examples/jsm/postprocessing/EffectComposer.js"),
-      import("three/examples/jsm/postprocessing/RenderPass.js"),
-      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
-      import("three/examples/jsm/postprocessing/BokehPass.js"),
-      import("three/examples/jsm/postprocessing/OutputPass.js"),
-    ]);
-    this.passes = { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass };
-    this.onReady();
+    return (this.passesLoading ??= this.importPasses().then(
+      (passes) => {
+        this.passes = passes;
+        this.onReady();
+      },
+      (e: unknown) => {
+        if (!this.passesFailed)
+          console.warn("[viewport] bloom and blur could not load, the view draws without them:", e);
+        this.passesFailed = true;
+        setTimeout(() => (this.passesLoading = null), PASSES_RETRY_MS);
+      },
+    ));
   }
 
   /** Synchronous once the modules are in, so a still can build the chain on the spot. */

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { spellFixed } from "../../ui/measure";
 import { fmtKeys } from "../../input/platform";
 import RenderSections from "./RenderSections.vue";
 // Editing is live with no OK: none of it is on the undo stack, so a buffered copy would be a library the model is not
@@ -721,8 +722,8 @@ async function doImport() {
         />
         <button v-if="selected.specularColor" class="rd-chip" @click="set('specularColor', '')">Clear</button>
       </div>
-      <details class="rd-advanced" data-advanced>
-        <summary class="prefs-label">Advanced</summary>
+      <details class="rd-advanced disclosure" data-advanced>
+        <summary class="prefs-label"><Icon class="disclosure-caret" name="caretRight" :size="10" />Advanced</summary>
         <label v-for="s in ADVANCED_SLIDERS" :key="s.field" class="prefs-row">
           <span class="prefs-label">{{ s.label }}</span>
           <input
@@ -766,7 +767,7 @@ async function doImport() {
           >
         </div>
         <label class="prefs-row">
-          <span class="prefs-label">IOR {{ finishOf(selected).ior.toFixed(2) }}</span>
+          <span class="prefs-label">IOR {{ spellFixed(finishOf(selected).ior, 2) }}</span>
           <input
             class="sm-slider"
             data-field="ior"

@@ -1,5 +1,7 @@
 // The Stress tool panel. Its glass comes from .measure-panel, these rules only lay out its rows.
 
+@use "ui/field-row" as row;
+
 // A fixed narrow column, clear of the model and arrows it analyses. Only the step scrolls, so the head, the tabs and
 // the Run bar stay put however long the setup grows.
 .stress-panel {
@@ -7,9 +9,14 @@
   display: flex;
   flex-direction: column;
   width: 340px;
+  // Under the shell's 180px, so at 1024x600 in Spanish it keeps the full height column left of History.
+  min-width: 160px;
   max-width: calc(var(--win-w) - 32px);
   max-height: calc(var(--win-h) - 160px);
   overflow-wrap: anywhere;
+  // The panel and not its scrolling step, so a scrollbar coming and going cannot flip the rows. Its popups are teleported
+  // out, so the layout containment this brings holds none of them.
+  container: stress-panel / inline-size;
 }
 .stress-head {
   display: flex;
@@ -19,6 +26,15 @@
 }
 .stress-head .stress-close {
   margin: -4px -4px 0 0;
+}
+// A tab or a button too wide for a narrow column starts another line, past the edge it could not be read or clicked.
+.stress-panel .ui-tabs {
+  flex-wrap: wrap;
+}
+.stress-panel .btn.btn-sm {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 .stress-step {
   flex: 1 1 auto;
@@ -60,10 +76,10 @@
 :root[data-targets="large"] .stress-setup > .stress-more.btn.btn-sm::before {
   bottom: 0;
 }
-:root[data-pointer="touch"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
-:root[data-pointer="touch"] .stress-item-head > .stress-remove-support.icon-btn.icon-btn-sm::before,
-:root[data-targets="large"] .stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before,
-:root[data-targets="large"] .stress-item-head > .stress-remove-support.icon-btn.icon-btn-sm::before {
+:root[data-pointer="touch"] .stress-item-controls > .stress-remove-load.icon-btn.icon-btn-sm::before,
+:root[data-pointer="touch"] .stress-item-controls > .stress-remove-support.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-controls > .stress-remove-load.icon-btn.icon-btn-sm::before,
+:root[data-targets="large"] .stress-item-controls > .stress-remove-support.icon-btn.icon-btn-sm::before {
   right: -4px;
 }
 .stress-fold {
@@ -76,24 +92,47 @@
   font-size: var(--fs-small);
 }
 
-// A label at the left and its control or controls filling the rest of the line.
+// A label at the left and its control or controls filling the rest of the line, under the one wrap rule of FieldRow.
 .stress-field {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
+  @include row.wrap-row(var(--s-2), var(--s-2));
   min-height: 32px;
 }
 .stress-field > .measure-k:first-child {
+  @include row.wrap-label;
   flex: 0 0 auto;
   min-width: 72px;
 }
+// Rows that start their box at one x: a share of the row, so a long label wraps inside it instead of pushing its box.
+// 11em is the Density box with its unit in a wider face and Comfortable text (132px of 12px), so a row that fits on one line at 72px stays on it.
+.stress-keyed > .measure-k:first-child {
+  flex: 0 0 max(72px, min(40%, 100% - 11em - var(--s-2)));
+  // break-word, unlike anywhere, leaves the longest word as the least width, so a word is never cut and the
+  // box wraps under the label by the row's wrap rule once the word and the box no longer fit side by side.
+  min-width: min-content;
+  overflow-wrap: break-word;
+}
+// Below the least width at which every keyed row fits on one line, in the longest language and with a scrollbar, every
+// label takes a line of its own, so the rows never mix the two layouts. Spanish needs 202px of row in the shipped face
+// and 246px in Comfortable text, which leaves 14px and 12px of these widths for a thin scrollbar.
+@container stress-panel (width < 18em) {
+  .stress-keyed > .measure-k:first-child {
+    flex-basis: 100%;
+  }
+}
+@container stress-panel (width < 21.5em) {
+  :root[data-text="comfortable"] .stress-keyed > .measure-k:first-child {
+    flex-basis: 100%;
+  }
+}
 .stress-field .select-trigger {
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 
 .stress-item-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
   min-height: 32px;
@@ -102,7 +141,15 @@
   flex: 0 0 auto;
   font-weight: 600;
 }
-.stress-item-head .select-trigger {
+// The kind and its remove button wrap under the name together.
+.stress-item-controls {
+  display: flex;
+  flex: 1 1 8em;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.stress-item-controls .select-trigger {
   flex: 1 1 0;
   min-width: 0;
 }
@@ -155,7 +202,9 @@
 }
 .stress-gravity {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: var(--s-2);
   cursor: pointer;
@@ -221,11 +270,18 @@
 .stress-results.stale .stress-key-row {
   opacity: 0.55;
 }
-.stress-detail-row .measure-k {
-  flex: none;
-  white-space: nowrap;
+// A value that does not fit beside its label takes the line under it, so in a narrow column no word is cut.
+.stress-results .measure-row {
+  flex-wrap: wrap;
+  row-gap: var(--s-1);
 }
-.stress-detail-row .measure-v {
+.stress-results .measure-row > .measure-v,
+.stress-gravity > .measure-k {
+  flex: 1 1 0;
+  min-width: min-content;
+  overflow-wrap: break-word;
+}
+.stress-results .measure-row > .measure-v {
   text-align: right;
 }
 .stress-view-row {
@@ -246,7 +302,7 @@
   min-width: 76px;
 }
 .stress-deform {
-  flex: 1;
+  flex: 1 1 4em;
   min-width: 0;
 }
 .stress-pin {
@@ -260,9 +316,8 @@
   padding: 0;
   list-style: none;
 }
-.stress-pin .measure-v {
-  flex: 1 1 auto;
-  text-align: right;
+.stress-where .ui-list-row-label {
+  white-space: normal;
 }
 .stress-legend {
   height: 10px;
@@ -306,6 +361,16 @@
     }
   }
 }
+// In a narrow column the quarter ticks would run into their neighbours, and a long peak name would break mid word.
+@container stress-panel (width < 19em) {
+  .stress-tick:nth-child(2),
+  .stress-tick:nth-child(4) {
+    display: none;
+  }
+  .stress-where .ui-list-row {
+    padding-inline: var(--s-1);
+  }
+}
 .stress-legend-unit {
   text-align: center;
   font-size: var(--fs-micro);
@@ -321,6 +386,7 @@
 }
 .stress-look .stress-field {
   flex: 1 1 auto;
+  min-width: 0;
 }
 .stress-finer {
   margin-top: var(--s-2);

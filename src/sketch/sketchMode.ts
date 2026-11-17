@@ -166,6 +166,7 @@ import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGr
 import { INFER_TOL_DEG } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 import { InferTag, SnapTag } from "./snapTag";
+import { spellNumber, storedExpr, typedExprProblem } from "../ui/measure";
 
 /** Tools that record a point on curve relation when an end snaps onto a curve. */
 const CURVE_SNAP_TOOLS: ReadonlySet<string> = new Set(["line", "arc"]);
@@ -1081,7 +1082,7 @@ export class SketchMode {
       const gap = gapReport(this.entities, this.constraints, snap);
       setPrompt(nothingToTiePrompt(le, gap));
       if (gap.kind === "gap" && !this.solverDead) {
-        toast(`Tie the ${gap.open} open ends across the ${Number(gap.gapMm.toPrecision(2))} mm gap?`, {
+        toast(`Tie the ${gap.open} open ends across the ${spellNumber(Number(gap.gapMm.toPrecision(2)))} mm gap?`, {
           action: {
             label: "Close gap",
             onClick: () => {
@@ -1619,7 +1620,9 @@ export class SketchMode {
     if (!this.store) return { error: "no document" };
     const bound = key ? (this.docBinding(key)?.name ?? null) : null;
     const pending = key ? (this.pendingBindings.get(key)?.name ?? null) : null;
-    const c = this.store.classifyTargetExpr(bound, pending, raw, kind);
+    const refused = typedExprProblem(raw);
+    if (refused) return { error: refused };
+    const c = this.store.classifyTargetExpr(bound, pending, storedExpr(raw), kind);
     if (!c.ok) return { error: c.error };
     if (kind !== "angle" && !(c.value > 0)) return { error: "must evaluate to a positive value" };
     return { value: c.value, expr: c.expr, ...(c.name ? { name: c.name } : {}) };

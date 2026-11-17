@@ -27,6 +27,6 @@ The step's rows add Starts, Offset, Print clearance, Hand (Right or Left) and Op
 1. Click Text on Face, then click a flat, round or conical face.
 2. Type the text in the panel, and pick the font, Size and Angle there.
 3. Set the depth in the D box. Engrave cuts the letters in, off stands them up.
-4. Click or drag on the face to move the text, then press Enter or click Add.
+4. Click or drag on the face to move the text, then press Ctrl+Enter or Add.
 
 The step's rows change Height, Depth, Angle, Operation (Emboss or Engrave) and Align later.

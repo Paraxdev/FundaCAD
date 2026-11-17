@@ -5,7 +5,8 @@
 // and no WebGL, so that half stays e2e/manual territory. screenTransform's shape
 // is pinned here because it is the one piece of it that is pure.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   dimClass,
   dimTitle,
@@ -47,6 +48,15 @@ describe("isFormula", () => {
     expect(isFormula("width/2")).toBe(true);
     expect(isFormula("5+3")).toBe(true);
   });
+
+  it("reads a saved literal with three decimals as a literal in German, where typing 1.500 is refused", async () => {
+    await setLanguage("de");
+    try {
+      expect(["0.125", "1.500", "0.125*w"].map((e) => isFormula(e))).toEqual([false, false, true]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
 });
 
 describe("dimClass", () => {
@@ -76,6 +86,16 @@ describe("dimTitle", () => {
     expect(dimTitle({ fx: true, expr: "width/2" })).toBe("= width/2 · click to edit");
   });
 
+  it("shows the formula with the decimal comma in German and a point again in English", async () => {
+    await setLanguage("de");
+    try {
+      expect(dimTitle({ fx: true, expr: "max(width*1.5;2.25)" })).toBe("= max(width*1,5;2,25) · click to edit");
+    } finally {
+      await setLanguage("system");
+    }
+    expect(dimTitle({ fx: true, expr: "max(width*1.5;2.25)" })).toBe("= max(width*1.5;2.25) · click to edit");
+  });
+
   it("advertises both gestures on an ordinary dim", () => {
     expect(dimTitle({})).toBe("Click to edit, drag to move");
   });
@@ -102,5 +122,19 @@ describe("screenTransform", () => {
   // top-left corner.
   it("centres the badge on the projected point", () => {
     expect(screenTransform(120, 40.5)).toBe("translate(120px, 40.5px) translate(-50%, -50%)");
+  });
+});
+
+describe("fmtDim in a comma language", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("shows a decimal comma in a length and an angle", async () => {
+    await setLanguage("de");
+    expect([
+      fmtDim(12.375),
+      fmtDim(37.5, "angle"),
+      fmtDim(37.5, "angle", true),
+      fmtDim(0.35, "length", false, true),
+    ]).toEqual(["12,375 mm", "37,5°", "(37,5°)", "fx: 0,35 mm"]);
   });
 });

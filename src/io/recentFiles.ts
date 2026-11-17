@@ -4,6 +4,8 @@ import { readSetting } from "../ui/storedSetting";
 
 const KEY = "fundacad.recentFiles";
 const LEGACY_KEYS = ["neocad.recentFiles", "sindri.recentFiles"];
+/** Every name the list has been stored under, which a settings reset keeps. */
+export const RECENT_FILES_KEYS: readonly string[] = [KEY, ...LEGACY_KEYS];
 const MAX = 50;
 
 export interface RecentFile {

@@ -22,6 +22,7 @@ const set = (key: string, value: unknown) => settings.set(key, value);
         :min="LIMITS.layerHeight[0]"
         :max="LIMITS.layerHeight[1]"
         :step="0.01"
+        unit="mm"
         @update="set('layerHeight', $event)"
       />
       <RenderChoices

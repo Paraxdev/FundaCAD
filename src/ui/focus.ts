@@ -1,9 +1,10 @@
 // Inputs that take no typed text, so a focused one must not swallow the sketch keys.
 const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "button", "color", "submit", "reset"]);
 
-/** The base Select's button, whose typed letters search its list as a select's do. */
+/** The base Select's button, whose typed letters search its list as a select's do. A Combobox's text field shares the
+ *  role but holds text, so Ctrl+A and Ctrl+Z stay its own. */
 export const isSelectTrigger = (t: EventTarget | null) =>
-  t instanceof HTMLElement && t.getAttribute("role") === "combobox";
+  t instanceof HTMLElement && !(t instanceof HTMLInputElement) && t.getAttribute("role") === "combobox";
 
 /** Text inputs, textareas, selects, Select triggers and contentEditable, so typing "T" in a field does not start the
  *  Text tool. */
@@ -18,19 +19,24 @@ export function isEditableTarget(t: EventTarget | null): boolean {
 }
 
 const MENU_ROWS = '.ui-menu, [role="listbox"]';
+// The Geometry list's status line takes focus when it has no rows. Only Enter and Space are its own, so the open tool
+// is not finished from there while letters and arrows still reach the sketch and tools.
+const STATUS_LINE = ".geometry-note";
 const MENU_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Tab"]);
 
 /** A key a focused menu or list row moves, runs or types ahead with. Window capture listeners hear it before the row
  *  does, so a tool asks here and leaves it, the way it asks escapeClaimed() for Escape. */
 export function isMenuKey(e: KeyboardEvent): boolean {
-  if (typeof Element === "undefined" || !(e.target instanceof Element && e.target.closest(MENU_ROWS))) return false;
+  if (typeof Element === "undefined" || !(e.target instanceof Element)) return false;
   if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (e.target.closest(STATUS_LINE)) return e.key === "Enter" || e.key === " ";
+  if (!e.target.closest(MENU_ROWS)) return false;
   return MENU_KEYS.has(e.key) || (typeof e.key === "string" && e.key.length === 1);
 }
 
 /** Focus on a menu or list row, where Enter runs the row and a tool's window listener leaves it. */
 export function focusOnMenuRow(): boolean {
-  return typeof document !== "undefined" && !!document.activeElement?.closest(MENU_ROWS);
+  return typeof document !== "undefined" && !!document.activeElement?.closest(`${MENU_ROWS}, ${STATUS_LINE}`);
 }
 
 const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);

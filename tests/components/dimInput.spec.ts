@@ -12,6 +12,7 @@ import { classifyExprInput } from "../../src/params/engine";
 import type { CadDocument } from "../../src/types";
 import { icon, iconElement } from "../../src/ui/icons";
 import { escapeClaimed } from "../../src/ui/escapeClaim";
+import { setLanguage } from "../../src/i18n";
 
 /** happy-dom has no PointerEvent constructor in every version, and nothing here
  *  reads a pointer property, only the target, so a plain bubbling Event is
@@ -32,6 +33,8 @@ afterEach(() => {
 const root = () => document.querySelector<HTMLElement>(".dim-input")!;
 
 describe("DimInput focus on the frame after show", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   function showThenFocus(other: HTMLElement) {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
@@ -39,7 +42,6 @@ describe("DimInput focus on the frame after show", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
     other.focus();
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
   }
 
   it("leaves a text field that took focus meanwhile", () => {
@@ -55,7 +57,6 @@ describe("DimInput focus on the frame after show", () => {
     dim.show([{ name: "radius", label: "R" }], () => {});
     dim.seed("radius", 12);
     frames.forEach((f) => f(0));
-    vi.unstubAllGlobals();
     const input = document.activeElement as HTMLInputElement;
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
   });
@@ -63,6 +64,35 @@ describe("DimInput focus on the frame after show", () => {
   it("takes focus back from a button a press landed on", () => {
     const button = document.createElement("button");
     showThenFocus(button);
+    expect(root().contains(document.activeElement)).toBe(true);
+    button.remove();
+  });
+
+  // A slow frame after a tree row's Space raised Move: Browse Faces and Edges ran and focused a Geometry row first.
+  it("leaves a row that a key moved focus to before the frame", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    const row = document.createElement("div");
+    row.setAttribute("role", "option");
+    row.tabIndex = -1;
+    document.body.appendChild(row);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
+    row.focus();
+    frames.forEach((f) => f(0));
+    expect(document.activeElement).toBe(row);
+    row.remove();
+  });
+
+  it("still takes focus back from a pressed button that a key left in place", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    button.focus();
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "5", bubbles: true }));
+    frames.forEach((f) => f(0));
     expect(root().contains(document.activeElement)).toBe(true);
     button.remove();
   });
@@ -1115,6 +1145,32 @@ describe("DimInput reads parameter names", () => {
     expect(dim.getValue("depth")).toBe(15);
     expect(dim.exprOf("depth")).toBeNull();
   });
+
+  describe("with a decimal comma", () => {
+    it.each([
+      ["width * 1,5", 60, "width * 1.5"],
+      ["rib = width / 1,6", 25, "width / 1.6"],
+      ["max(1,5; width / 2) + 0,25", 20.25, "max(1.5; width / 2) + 0.25"],
+    ])("in German %j is %d and binds %j", async (text, value, expr) => {
+      await setLanguage("de");
+      try {
+        type(text);
+        expect(problem()).toBeNull();
+        expect(dim.getValue("depth")).toBe(value);
+        expect(dim.exprOf("depth")).toMatchObject({ expr });
+      } finally {
+        await setLanguage("system");
+      }
+    });
+
+    it("in English the same text is refused, with no expression to bind", () => {
+      type("width * 1,5");
+      enter();
+      expect(commit).not.toHaveBeenCalled();
+      expect(problem()).not.toBeNull();
+      expect(dim.exprOf("depth")).toBeNull();
+    });
+  });
 });
 
 describe("DimInput.wasTyped", () => {
@@ -1401,5 +1457,46 @@ describe("DimInput.hasField", () => {
     expect(dim.hasField("radius")).toBe(false);
     dim.show([{ name: "x", label: "X" }], () => {});
     expect([dim.hasField("radius"), dim.hasField("x")]).toEqual([false, true]);
+  });
+});
+
+describe("DimInput boxes in a comma language", () => {
+  beforeEach(() => setLanguage("de"));
+  afterEach(() => setLanguage("system"));
+
+  const input = () => root().querySelector<HTMLInputElement>("input")!;
+  const type = (text: string) => {
+    input().value = text;
+    input().dispatchEvent(new Event("input", { bubbles: true }));
+    input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  };
+
+  it("fills a seeded and a tracking box with a comma, a count whole", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    dim.seed("distance", 40.25);
+    expect(input().value).toBe("40,25");
+    dim.takeOver("distance");
+    dim.updateFromCursor({ distance: 17.375 });
+    expect(input().value).toBe("17,375");
+    expect(dim.getValue("distance")).toBe(17.375);
+    dim.dispose();
+
+    dim = new DimInput();
+    dim.show([{ name: "copies", label: "N", kind: "count" }], () => {});
+    dim.seed("copies", 5.6);
+    expect(input().value).toBe("6");
+  });
+
+  it("reads back what the box shows, with a comma or a point, and 1,000 is 1", () => {
+    const got: Record<string, number>[] = [];
+    dim.show([{ name: "distance", label: "D" }], (v) => got.push(v));
+    dim.seed("distance", 40.25);
+    type(input().value);
+    type("17,375");
+    type("17.5");
+    expect(got.map((v) => v.distance)).toEqual([40.25, 17.375, 17.5]);
+    type("1,000");
+    expect(got.length).toBe(4);
+    expect(got[3]!.distance).toBe(1);
   });
 });

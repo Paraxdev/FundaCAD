@@ -30,3 +30,7 @@ It gives Mass, estimate in grams and the filament length in metres for 1.75 mm a
 A body with an open shell, or with faces that point the wrong way, has no inside to measure. Properties then says it is not a sound solid and names what is wrong with each body.
 
 Its Volume, Center of mass and print estimate are left out. Surface area and Bounding box still show.
+
+## Properties of a step
+
+Clicking a step in the History opens its own properties, a different panel from this one. It follows the language picked in [Preferences](../reference/preferences.md), in its row names, choices, hints and notes, and it keeps its units as symbols. Typing a number works as before. A name you gave a step stays as you typed it, and the saved file is the same in every language.

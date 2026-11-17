@@ -11,8 +11,8 @@ import type { Feature, Selector } from "../../src/types";
 import {
   awaitTreePick,
   resetTreePicks,
+  offerPicks,
   routeTreeClick,
-  routeTreeRun,
   treePickWaiting,
   type TreePick,
 } from "../../src/ui/treePick";
@@ -171,6 +171,12 @@ describe("TargetEditTool", () => {
     ]);
   });
 
+  it("names a row for every edge by what it covers, not as an edge missing from the build", () => {
+    const fillet = { id: "f", type: "fillet", edges: { kind: "edge", by: "all" }, radius: 1 } as unknown as Feature;
+    const h = harness(fillet, FEATURE_TARGETS.fillet![0]!);
+    expect(h.tool.rows().map((r) => [r.label, r.resolved])).toEqual([["Every edge", true]]);
+  });
+
   it("a face the viewport cannot place keeps its number off the row, a body row keeps its body label", () => {
     const h = harness(shell(SAVED), shellField);
     h.vp.localFaceOf = () => null;
@@ -233,7 +239,11 @@ function rowRig(feature: Feature, field: TargetField, drawn: EdgeRef[], bodies: 
   if (landed) land();
   const deps = { busyHint: () => null, hint: (t: string) => hints.push(t) };
   const row = (pick: TreePick) => routeTreeClick(pick, deps);
-  const run = (picks: TreePick[]) => routeTreeRun(picks, deps);
+  const run = (picks: TreePick[]) =>
+    offerPicks(
+      picks.map((pick) => ({ pick, name: "row" })),
+      { ...deps, say: () => {} },
+    );
   const entries = () => tool.rows().map((r) => r.entry);
   return { tool, patches, ended, hints, paints, land, row, run, entries };
 }
@@ -342,7 +352,7 @@ describe("TargetEditTool rows", () => {
     h.paints.n = 0;
     h.run([{ kind: "face", faceId: 5 }, edgePick(E1), { kind: "face", faceId: 6 }]);
     expect(h.entries()).toHaveLength(1);
-    expect(h.hints).toEqual(["That row is an edge, this step needs a face"]);
+    expect(h.hints).toEqual(["row picked. That row is an edge, this step needs a face"]);
     expect(h.paints.n).toBe(1);
   });
 

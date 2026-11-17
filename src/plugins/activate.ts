@@ -6,6 +6,8 @@ import { setGrantLookup } from "./contrib";
 import { shippedPlugins } from "./shipped";
 import { onPluginChange, pluginEnabled } from "./registry";
 import { evaluatePlugin, hostModules, type PluginModule } from "./loader";
+import { t } from "../i18n";
+import { toast } from "../ui/toast";
 import type { Engine } from "../app/engine";
 
 type Activator = (e: Engine) => Promise<() => void>;
@@ -76,6 +78,9 @@ export function activatePlugins(e: Engine): () => void {
           wanted.delete(id);
           // Not fatal: a plugin that will not start must not keep the window from opening.
           console.error(`[plugins] ${id} could not start:`, err);
+          const name = shippedPlugins().find((p) => p.dir === id)?.manifest.name ?? id;
+          const why = err instanceof Error ? err.message : String(err);
+          toast(t("plugins.toast.startFailed", { name, why }), { kind: "error", detail: err, source: "plugins" });
         });
     }
     for (const id of [...wanted]) {

@@ -309,6 +309,25 @@ describe("OriginTiles", () => {
     t.dispose();
   });
 
+  it("draws a tile lit while the tiles are hidden alone and hot, and hides it again when put out", () => {
+    const t = new OriginTiles(new THREE.Scene());
+    const visible = () => PLANES.map((k) => t.planes[k].visible);
+    expect(t.drawn).toBe(false);
+    t.hover("XZ");
+    expect([t.drawn, visible(), opacities(t).XZ]).toEqual([true, [false, true, false], look("hot")]);
+    t.hover("YZ");
+    expect(visible()).toEqual([false, false, true]);
+    t.hover(null);
+    expect([t.drawn, visible()]).toEqual([false, [false, false, false]]);
+    t.hover("XY");
+    t.setShown(true);
+    t.hover("XZ");
+    expect(visible()).toEqual([true, true, true]);
+    t.setShown(false);
+    expect([t.drawn, visible()]).toEqual([false, [false, false, false]]);
+    t.dispose();
+  });
+
   it("holds the tiles to screen pixels, shrinking with a small part down to the floor", () => {
     const t = new OriginTiles(new THREE.Scene());
     const at = (pws: number | null, diag: number | null) => {
@@ -409,7 +428,10 @@ describe("OriginTiles", () => {
       size: true,
     });
     fontReady = true;
-    t.setShown(true);
+    t.setShown(false);
+    t.hover(null);
+    expect(drawn.length).toBe(3);
+    t.hover("XZ");
     expect(drawn).toEqual(["XY", "XZ", "YZ", "XY", "XZ", "YZ"]);
     t.setShown(true);
     expect(drawn.length).toBe(6);

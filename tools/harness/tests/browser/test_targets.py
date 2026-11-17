@@ -30,8 +30,9 @@ LARGE_SHORT = (
         29,
         "the History strip scrolls, so it clips a grown hit area to the step's own height",
     ),
+    # Only the Extra Parameters rows, by their own class: any other number field still has to reach 32.
     (
-        "div.feature-row.tree-child > span.ui-field.ui-number-field > input",
+        "div.param-value.xp-value > span.ui-field.ui-number-field > input",
         1,
         24,
         "the Extra Parameters number fields are text inputs, which draw no ::before, and a taller box would show",
@@ -39,7 +40,7 @@ LARGE_SHORT = (
 )
 # These grow their own box to --hit-min under a negative margin, so only its centre and width stay put.
 OWN_BOX = ("ui-slider-input",)
-# The same by name, for inputs whose path is only their generated id.
+# The same by name, for an input whose class path other number fields share.
 OWN_BOX_NAMES = ("Size at least",)
 
 _LARGE = "() => { document.documentElement.dataset.targets = 'large' }"
@@ -71,6 +72,16 @@ _CUT_BAIT = """() => {
   document.body.append(box);
 }"""
 
+# A field whose ids are Vue's generated ones, which change with what rendered before, so a path names it by class.
+_ID_BAIT = """() => {
+  const box = document.createElement('div');
+  box.id = 'id-bait';
+  box.style.cssText = 'position:fixed;z-index:2147483647;left:20px;top:300px';
+  box.innerHTML = '<div class="bait-row"><span class="bait-field" id="v-7-wrap">'
+    + '<input id="v-8" aria-label="Generated" style="width:80px;height:30px"></span></div>';
+  document.body.append(box);
+}"""
+
 
 @pytest.fixture(scope="module")
 def reports():
@@ -97,7 +108,10 @@ def reports():
         bait = probe(s.page)
         bait["scrollTop"] = s.page.evaluate("() => document.getElementById('cut-bait').scrollTop")
         s.page.evaluate("() => document.getElementById('cut-bait').remove()")
-        return {**walk(s, FLOWS, scan, fresh_page, reset_budget=RESET_BUDGET), "_bait": bait}
+        s.page.evaluate(_ID_BAIT)
+        ids = probe(s.page)
+        s.page.evaluate("() => document.getElementById('id-bait').remove()")
+        return {**walk(s, FLOWS, scan, fresh_page, reset_budget=RESET_BUDGET), "_bait": bait, "_ids": ids}
     finally:
         s.close()
 
@@ -138,6 +152,11 @@ def test_a_control_a_scroller_cuts_is_measured_scrolled_into_view_and_a_small_on
     got = {t["name"]: t["hit"][1] for t in bait["targets"] if t["name"] in ("Cut", "Small")}
     assert got.get("Cut", 0) >= MIN and 0 < got.get("Small", 0) < MIN, got
     assert bait["scrollTop"] == 0
+
+
+def test_a_control_is_named_by_its_classes_past_vues_generated_ids(reports):
+    sels = [t["sel"] for t in reports["_ids"]["targets"] if t["name"] == "Generated"]
+    assert sels == ["div.bait-row > span.bait-field > input"], sels
 
 
 @pytest.mark.parametrize("screen", SCREENS)

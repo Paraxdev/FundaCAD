@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setLanguage } from "../../../src/i18n";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import Slider from "../../../src/components/ui/Slider.vue";
@@ -173,5 +174,35 @@ describe("Slider", () => {
       slots: { value: "<template #value='{ value }'>{{ Math.round(value * 100) }}%</template>" },
     });
     expect(w.find(".ui-slider-value").text()).toBe("25%");
+  });
+});
+
+describe("Slider in a comma language", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("writes the readout and the spoken value with a comma, and with a point in English", async () => {
+    const seen = async () => {
+      const w = await render({ modelValue: 0.35, max: 1, step: 0.05, showValue: true });
+      const withUnit = await render({ modelValue: 1.25, max: 3, step: 0.25, showValue: true, unit: "mm" });
+      return [w, withUnit].map((x) => [x.find(".ui-slider-value").text(), range(x).getAttribute("aria-valuetext")]);
+    };
+    expect(await seen()).toEqual([
+      ["0.35", null],
+      ["1.25 mm", "1.25 mm"],
+    ]);
+    await setLanguage("de");
+    expect(await seen()).toEqual([
+      ["0,35", "0,35"],
+      ["1,25 mm", "1,25 mm"],
+    ]);
+  });
+
+  it("follows a drag and keeps a caller's valueText over the readout", async () => {
+    await setLanguage("de");
+    const w = await render({ modelValue: 0.1, max: 1, step: 0.05, showValue: true });
+    await drag(w, 0.65);
+    expect([w.find(".ui-slider-value").text(), range(w).getAttribute("aria-valuetext")]).toEqual(["0,65", "0,65"]);
+    const own = await render({ modelValue: 0.5, max: 1, step: 0.1, valueText: (v) => `half ${v}` });
+    expect(range(own).getAttribute("aria-valuetext")).toBe("half 0.5");
   });
 });

@@ -1,5 +1,6 @@
 // The sentences a sketch says by keys, in the display unit. Pure, so the wording is tested without a canvas.
 
+import { listJoin, spellNumber } from "../ui/measure";
 import { displayRound, fmtGridStep, toDisplay } from "../ui/units";
 import { entityLabel } from "./relations";
 import { snapLabel, type ResolvedEntity, type SnapCandidate } from "./snap";
@@ -7,7 +8,7 @@ import { snapLabel, type ResolvedEntity, type SnapCandidate } from "./snap";
 // Screen readers disagree on whether a hyphen is spoken, so a negative number is written out.
 function signedWords(v: number): string {
   if (v === 0) return "0";
-  return v < 0 ? `minus ${-v}` : `${v}`;
+  return v < 0 ? `minus ${spellNumber(-v)}` : spellNumber(v);
 }
 
 const numberWords = (mm: number) => signedWords(displayRound(Math.round(toDisplay(mm) * 1000) / 1000));
@@ -15,11 +16,11 @@ const numberWords = (mm: number) => signedWords(displayRound(Math.round(toDispla
 /** The coordinates for the tag beside the cursor, which is read by eye and so keeps the minus sign. */
 export function coordLabel(x: number, y: number): string {
   const v = (mm: number) => displayRound(Math.round(toDisplay(mm) * 1000) / 1000) || 0;
-  return `${v(x)}, ${v(y)}`;
+  return listJoin([spellNumber(v(x)), spellNumber(v(y))]);
 }
 
 export function coordWords(x: number, y: number): string {
-  return `${numberWords(x)}, ${numberWords(y)}`;
+  return listJoin([numberWords(x), numberWords(y)]);
 }
 
 function ownerKind(ents: ResolvedEntity[], id: string): ResolvedEntity["type"] | null {

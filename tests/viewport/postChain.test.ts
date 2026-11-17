@@ -1,7 +1,7 @@
 // The composer path has to draw the same background as the canvas path, keep its
 // passes while the camera moves unless the machine is on a low power tier, and
 // follow the renderer's pixel ratio.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { PostChain, SHADOW_MAP_TYPE } from "../../src/viewport/scene";
 import { composerClearColor, neutralToneMap } from "../../src/viewport/composerColor";
@@ -290,5 +290,48 @@ describe("PostChain composer frame that throws inside a pass", () => {
     expect(() => post.render(new THREE.PerspectiveCamera())).toThrow(TypeError);
     expect(scene.overrideMaterial).toBeNull();
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+});
+
+describe("PostChain passes that fail to load", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("draws on without them, warns once, and tries again only once the pause has passed", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const post = new PostChain(
+      {} as THREE.WebGLRenderer,
+      new THREE.Scene(),
+      () => false,
+      () => false,
+    );
+    const p = post as unknown as { importPasses: () => Promise<unknown>; loadPasses(): Promise<void>; passes: unknown };
+    const passes = { EffectComposer: class {} };
+    let tries = 0;
+    p.importPasses = async () => {
+      if (++tries < 3) throw new TypeError("Failed to fetch dynamically imported module");
+      return passes;
+    };
+    let ready = 0;
+    post.onReady = () => ready++;
+
+    await expect(p.loadPasses()).resolves.toBeUndefined();
+    await p.loadPasses();
+    expect(tries).toBe(1);
+    expect(p.passes).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await p.loadPasses();
+    expect(tries).toBe(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await p.loadPasses();
+    expect(tries).toBe(3);
+    expect(p.passes).toBe(passes);
+    expect(ready).toBe(1);
   });
 });

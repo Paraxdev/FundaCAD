@@ -1,0 +1,852 @@
+{
+  "language": "es",
+  "terms": [
+    {
+      "en": "Language",
+      "text": "Idioma",
+      "note": "not lengua"
+    },
+    {
+      "en": "System",
+      "text": "Sistema",
+      "note": "the setting that follows the computer's language"
+    },
+    {
+      "en": "machine translated",
+      "text": "traducción automática",
+      "note": "traducido automáticamente as an adjective"
+    },
+    {
+      "en": "file",
+      "text": "archivo",
+      "note": "not fichero"
+    },
+    {
+      "en": "folder",
+      "text": "carpeta",
+      "note": "not directorio"
+    },
+    {
+      "en": "line",
+      "text": "línea",
+      "note": "one message in a language file"
+    },
+    {
+      "en": "Stress",
+      "text": "Tensión",
+      "note": "the Stress panel"
+    },
+    {
+      "en": "Support",
+      "text": "Apoyo"
+    },
+    {
+      "en": "Fixed",
+      "text": "Fijo"
+    },
+    {
+      "en": "Pinned",
+      "text": "Articulado",
+      "note": "held in place, free to turn about its axis"
+    },
+    {
+      "en": "Slider",
+      "text": "Deslizante"
+    },
+    {
+      "en": "Load",
+      "text": "Carga"
+    },
+    {
+      "en": "Force",
+      "text": "Fuerza"
+    },
+    {
+      "en": "Pressure",
+      "text": "Presión"
+    },
+    {
+      "en": "Own weight",
+      "text": "Peso propio"
+    },
+    {
+      "en": "Face",
+      "text": "Cara"
+    },
+    {
+      "en": "Spot",
+      "text": "Punto",
+      "note": "a small round place on the body"
+    },
+    {
+      "en": "Safety factor",
+      "text": "factor de seguridad",
+      "note": "how many times the load the part carries before it yields"
+    },
+    {
+      "en": "Peak stress",
+      "text": "tensión máxima",
+      "note": "the highest stress anywhere in the body"
+    },
+    {
+      "en": "Deflection",
+      "text": "flecha",
+      "note": "how far the body bends under the load"
+    },
+    {
+      "en": "Mesh",
+      "text": "malla",
+      "note": "the small elements the body is cut into for the study, not the imported triangle mesh"
+    },
+    {
+      "en": "Inside corner",
+      "text": "esquina interior",
+      "note": "a sharp concave edge where stress piles up"
+    },
+    {
+      "en": "Thin wall",
+      "text": "pared delgada",
+      "note": "a wall thinner than the mesh can resolve"
+    },
+    {
+      "en": "Yield",
+      "text": "límite elástico",
+      "note": "the stress where the material starts to deform for good"
+    },
+    {
+      "en": "Reaction",
+      "text": "reacción",
+      "note": "the force a support pushes back with"
+    },
+    {
+      "en": "Mesh detail",
+      "text": "Detalle de malla"
+    },
+    {
+      "en": "Coarse",
+      "text": "Grueso"
+    },
+    {
+      "en": "Standard",
+      "text": "Estándar"
+    },
+    {
+      "en": "Fine",
+      "text": "Fino"
+    },
+    {
+      "en": "Material",
+      "text": "Material"
+    },
+    {
+      "en": "Custom",
+      "text": "Personalizado"
+    },
+    {
+      "en": "render",
+      "text": "renderizado"
+    },
+    {
+      "en": "picture",
+      "text": "imagen"
+    },
+    {
+      "en": "sample",
+      "text": "muestra"
+    },
+    {
+      "en": "Undo",
+      "text": "Deshacer"
+    },
+    {
+      "en": "Redo",
+      "text": "Rehacer"
+    },
+    {
+      "en": "Save",
+      "text": "Guardar"
+    },
+    {
+      "en": "Open",
+      "text": "Abrir"
+    },
+    {
+      "en": "Export",
+      "text": "Exportar"
+    },
+    {
+      "en": "Import",
+      "text": "Importar"
+    },
+    {
+      "en": "Preferences",
+      "text": "Preferencias"
+    },
+    {
+      "en": "Menu",
+      "text": "Menú"
+    },
+    {
+      "en": "Command",
+      "text": "Comando"
+    },
+    {
+      "en": "View",
+      "text": "Ver"
+    },
+    {
+      "en": "Extrude",
+      "text": "Extruir"
+    },
+    {
+      "en": "Revolve",
+      "text": "Revolución"
+    },
+    {
+      "en": "Loft",
+      "text": "Solevación"
+    },
+    {
+      "en": "Sweep",
+      "text": "Barrido"
+    },
+    {
+      "en": "Press/Pull",
+      "text": "Empujar/Tirar"
+    },
+    {
+      "en": "Fillet",
+      "text": "Redondeo"
+    },
+    {
+      "en": "Chamfer",
+      "text": "Chaflán"
+    },
+    {
+      "en": "Hole",
+      "text": "Agujero"
+    },
+    {
+      "en": "Move",
+      "text": "Mover"
+    },
+    {
+      "en": "Scale",
+      "text": "Escalar"
+    },
+    {
+      "en": "Mirror",
+      "text": "Simetría"
+    },
+    {
+      "en": "Shell",
+      "text": "Vaciado"
+    },
+    {
+      "en": "Draft",
+      "text": "Ángulo de desmoldeo"
+    },
+    {
+      "en": "Thread",
+      "text": "Rosca"
+    },
+    {
+      "en": "Pattern",
+      "text": "Patrón"
+    },
+    {
+      "en": "Plane",
+      "text": "Plano"
+    },
+    {
+      "en": "Datum",
+      "text": "Referencia"
+    },
+    {
+      "en": "Boolean",
+      "text": "Booleana"
+    },
+    {
+      "en": "Union",
+      "text": "Unir"
+    },
+    {
+      "en": "Subtract",
+      "text": "Restar"
+    },
+    {
+      "en": "Intersect",
+      "text": "Intersecar"
+    },
+    {
+      "en": "Section",
+      "text": "Sección"
+    },
+    {
+      "en": "Measure",
+      "text": "Medir"
+    },
+    {
+      "en": "Overhang",
+      "text": "Voladizo"
+    },
+    {
+      "en": "Thicken",
+      "text": "Engrosar"
+    },
+    {
+      "en": "Primitive",
+      "text": "Primitiva"
+    },
+    {
+      "en": "Midplane",
+      "text": "Plano medio"
+    },
+    {
+      "en": "Constraints",
+      "text": "Restricciones"
+    },
+    {
+      "en": "Sketch",
+      "text": "Boceto"
+    },
+    {
+      "en": "Line",
+      "text": "Línea"
+    },
+    {
+      "en": "Arc",
+      "text": "Arco"
+    },
+    {
+      "en": "Circle",
+      "text": "Círculo"
+    },
+    {
+      "en": "Polygon",
+      "text": "Polígono"
+    },
+    {
+      "en": "Slot",
+      "text": "Ranura"
+    },
+    {
+      "en": "Spline",
+      "text": "Spline"
+    },
+    {
+      "en": "Trim",
+      "text": "Recortar"
+    },
+    {
+      "en": "Extend",
+      "text": "Alargar"
+    },
+    {
+      "en": "Offset",
+      "text": "Desfasar"
+    },
+    {
+      "en": "Break",
+      "text": "Romper"
+    },
+    {
+      "en": "Constrain",
+      "text": "Restricción"
+    },
+    {
+      "en": "Dimension",
+      "text": "Cota"
+    },
+    {
+      "en": "Tangent",
+      "text": "Tangente"
+    },
+    {
+      "en": "Parallel",
+      "text": "Paralela"
+    },
+    {
+      "en": "Coincident",
+      "text": "Coincidente"
+    },
+    {
+      "en": "Concentric",
+      "text": "Concéntrico"
+    },
+    {
+      "en": "Collinear",
+      "text": "Colineal"
+    },
+    {
+      "en": "Symmetric",
+      "text": "Simétrico"
+    },
+    {
+      "en": "Midpoint",
+      "text": "Punto medio"
+    },
+    {
+      "en": "Project",
+      "text": "Proyectar"
+    },
+    {
+      "en": "Joint",
+      "text": "Junta",
+      "note": "Union is Unir"
+    },
+    {
+      "en": "Circular Pattern",
+      "text": "Patrón circular"
+    },
+    {
+      "en": "shortcut",
+      "text": "atajo"
+    },
+    {
+      "en": "reset",
+      "text": "restablecer"
+    },
+    {
+      "en": "default",
+      "text": "predeterminado"
+    },
+    {
+      "en": "conflict",
+      "text": "conflicto"
+    },
+    {
+      "en": "replace",
+      "text": "reemplazar"
+    },
+    {
+      "en": "edge",
+      "text": "arista"
+    },
+    {
+      "en": "body",
+      "text": "cuerpo"
+    },
+    {
+      "en": "base plane",
+      "text": "plano base"
+    },
+    {
+      "en": "datum plane",
+      "text": "plano de referencia"
+    },
+    {
+      "en": "datum point",
+      "text": "punto de referencia"
+    },
+    {
+      "en": "datum axis",
+      "text": "eje de referencia"
+    },
+    {
+      "en": "flat face",
+      "text": "cara plana"
+    },
+    {
+      "en": "round face",
+      "text": "cara redonda"
+    },
+    {
+      "en": "straight edge",
+      "text": "arista recta"
+    },
+    {
+      "en": "profile",
+      "text": "perfil"
+    },
+    {
+      "en": "Distance",
+      "text": "Distancia"
+    },
+    {
+      "en": "Taper",
+      "text": "Conicidad",
+      "note": "the angle a side leans in while it extrudes"
+    },
+    {
+      "en": "Thickness",
+      "text": "Espesor"
+    },
+    {
+      "en": "Diameter",
+      "text": "Diámetro"
+    },
+    {
+      "en": "Depth",
+      "text": "Profundidad"
+    },
+    {
+      "en": "Angle",
+      "text": "Ángulo"
+    },
+    {
+      "en": "Pitch",
+      "text": "Paso",
+      "note": "the climb of a thread per turn"
+    },
+    {
+      "en": "Count",
+      "text": "Cantidad"
+    },
+    {
+      "en": "Radius",
+      "text": "Radio"
+    },
+    {
+      "en": "Height",
+      "text": "Altura"
+    },
+    {
+      "en": "Width",
+      "text": "Anchura"
+    },
+    {
+      "en": "Length",
+      "text": "Longitud"
+    },
+    {
+      "en": "Spacing",
+      "text": "Separación",
+      "note": "the gap between the copies of a pattern, not Distance"
+    },
+    {
+      "en": "Tolerance",
+      "text": "Tolerancia"
+    },
+    {
+      "en": "Offset value",
+      "text": "Desfase",
+      "note": "the Offset row, a distance; the Offset tool keeps its own verb"
+    },
+    {
+      "en": "New body",
+      "text": "Cuerpo nuevo",
+      "note": "uses the word chosen for body"
+    },
+    {
+      "en": "Join",
+      "text": "Unir",
+      "note": "the operation that adds to a body"
+    },
+    {
+      "en": "Cut",
+      "text": "Cortar",
+      "note": "the operation that removes from a body"
+    },
+    {
+      "en": "Through all",
+      "text": "Pasante"
+    },
+    {
+      "en": "Up to face",
+      "text": "Hasta la cara"
+    },
+    {
+      "en": "Up to plane",
+      "text": "Hasta el plano"
+    },
+    {
+      "en": "Up to point",
+      "text": "Hasta el punto"
+    },
+    {
+      "en": "Operation",
+      "text": "Operación",
+      "note": "the row that picks New body, Join or Cut"
+    },
+    {
+      "en": "Counterbore",
+      "text": "Cajeado",
+      "note": "a flat bottomed widening of a hole"
+    },
+    {
+      "en": "Countersink",
+      "text": "Avellanado",
+      "note": "a cone shaped widening of a hole"
+    },
+    {
+      "en": "Heat-set insert",
+      "text": "Inserto térmico",
+      "note": "a threaded insert pressed in with heat for printed parts"
+    },
+    {
+      "en": "Clearance",
+      "text": "Agujero de paso",
+      "note": "a hole a screw passes through"
+    },
+    {
+      "en": "Tap drill",
+      "text": "Agujero para rosca",
+      "note": "the hole drilled before a thread is cut"
+    },
+    {
+      "en": "Blind",
+      "text": "Ciego",
+      "note": "a hole that stops inside the part"
+    },
+    {
+      "en": "Chord length",
+      "text": "Longitud de cuerda"
+    },
+    {
+      "en": "Continuity",
+      "text": "Continuidad",
+      "note": "how smoothly a fillet meets its faces: G1, G2, G3"
+    },
+    {
+      "en": "Drive",
+      "text": "Accionamiento",
+      "note": "what moves a draft or press/pull"
+    },
+    {
+      "en": "Hole type",
+      "text": "Tipo de agujero"
+    },
+    {
+      "en": "Wall side",
+      "text": "Lado de la pared"
+    },
+    {
+      "en": "Keep originals",
+      "text": "Conservar los originales"
+    },
+    {
+      "en": "Emboss",
+      "text": "Relieve",
+      "note": "text raised from a face"
+    },
+    {
+      "en": "Engrave",
+      "text": "Grabar",
+      "note": "text cut into a face"
+    },
+    {
+      "en": "Tapped",
+      "text": "Roscado",
+      "note": "a hole that carries a thread"
+    },
+    {
+      "en": "Drill point",
+      "text": "Punta de broca"
+    },
+    {
+      "en": "Centered",
+      "text": "Centrado"
+    },
+    {
+      "en": "Two sides",
+      "text": "Dos lados"
+    },
+    {
+      "en": "Axis",
+      "text": "Eje"
+    },
+    {
+      "en": "Hand",
+      "text": "Sentido",
+      "note": "the winding of a thread, Right or Left"
+    },
+    {
+      "en": "Right",
+      "text": "Derecha"
+    },
+    {
+      "en": "Left",
+      "text": "Izquierda"
+    },
+    {
+      "en": "Flip direction",
+      "text": "Invertir la dirección"
+    },
+    {
+      "en": "Fit",
+      "text": "Ajuste",
+      "note": "how tight a thread or hole fits: Close, Normal, Loose"
+    },
+    {
+      "en": "Inside",
+      "text": "Dentro"
+    },
+    {
+      "en": "Outside",
+      "text": "Fuera"
+    },
+    {
+      "en": "Tangent faces",
+      "text": "Caras tangentes"
+    },
+    {
+      "en": "Tangent edges",
+      "text": "Aristas tangentes"
+    },
+    {
+      "en": "Delete Face",
+      "text": "Eliminar cara"
+    },
+    {
+      "en": "Divide Face",
+      "text": "Dividir cara"
+    },
+    {
+      "en": "Box",
+      "text": "Caja"
+    },
+    {
+      "en": "Cylinder",
+      "text": "Cilindro"
+    },
+    {
+      "en": "Cone",
+      "text": "Cono"
+    },
+    {
+      "en": "Sphere",
+      "text": "Esfera"
+    },
+    {
+      "en": "Torus",
+      "text": "Toro"
+    },
+    {
+      "en": "Duplicate",
+      "text": "Duplicar"
+    },
+    {
+      "en": "Remove Body",
+      "text": "Quitar cuerpo"
+    },
+    {
+      "en": "Thin extrude",
+      "text": "Extrusión delgada"
+    },
+    {
+      "en": "Features",
+      "text": "Operaciones"
+    },
+    {
+      "en": "Curve",
+      "text": "Curva"
+    },
+    {
+      "en": "Plugin",
+      "text": "complemento"
+    },
+    {
+      "en": "Object",
+      "text": "objeto",
+      "note": "an item the Mirror tool can take, a body or a sketch entity"
+    },
+    {
+      "en": "Parameter",
+      "text": "parámetro",
+      "note": "a named value of the Parameters list, typed into a value box"
+    },
+    {
+      "en": "Rollback",
+      "text": "Retroceso",
+      "note": "the History marker and slider that holds the model at an earlier step; the verb roll back is zurückrollen, retroceder, revenir, 巻き戻す, 回退"
+    },
+    {
+      "en": "rolled back (a step past the Rollback marker)",
+      "text": "retrocedido",
+      "note": "spoken state of a step the model is not built up to"
+    },
+    {
+      "en": "Related to Selection",
+      "text": "Relacionado con la selección",
+      "note": "the History filter chip"
+    },
+    {
+      "en": "switched off (a step whose Active when condition is 0)",
+      "text": "desactivado",
+      "note": "kept apart from suppressed: French uses désactiver for suppress, so a step switched off by its condition is inactive"
+    },
+    {
+      "en": "Re-pick face",
+      "text": "Volver a elegir la cara"
+    },
+    {
+      "en": "Unlink (a feature from its linked file)",
+      "text": "Desvincular",
+      "note": "linked file is verknüpfte Datei, archivo vinculado, fichier lié, リンク先のファイル, 链接文件"
+    },
+    {
+      "en": "meshing",
+      "text": "generando malla",
+      "note": "the build progress word, same Netz, malla, maillage, メッシュ, 网格 as the mesh import lines"
+    },
+    {
+      "en": "checkpoint (a saved build state)",
+      "text": "punto de control"
+    },
+    {
+      "en": "History",
+      "text": "Historial",
+      "note": "the panel that lists the timeline steps"
+    },
+    {
+      "en": "Items",
+      "text": "Elementos",
+      "note": "the panel that lists bodies, sketches and planes"
+    },
+    {
+      "en": "Origin",
+      "text": "Origen",
+      "note": "the folder with the three base planes"
+    },
+    {
+      "en": "element (a folder of bodies in Items)",
+      "text": "grupo",
+      "note": "not the word for Items, which already names the whole panel"
+    },
+    {
+      "en": "Mechanism",
+      "text": "Mecanismo"
+    },
+    {
+      "en": "Geometry (the Items page that lists faces, edges and planes)",
+      "text": "Geometría"
+    },
+    {
+      "en": "Visibility",
+      "text": "Visibilidad"
+    },
+    {
+      "en": "Home",
+      "text": "Inicio",
+      "note": "the start screen with recent documents and examples, File, Home"
+    },
+    {
+      "en": "safe mode",
+      "text": "modo seguro",
+      "note": "the start without plugins and saved preferences"
+    },
+    {
+      "en": "Version",
+      "text": "versión"
+    },
+    {
+      "en": "Branch",
+      "text": "rama",
+      "note": "a line of versions in a document"
+    },
+    {
+      "en": "Restore (a version)",
+      "text": "Restaurar"
+    },
+    {
+      "en": "Blank",
+      "text": "En blanco",
+      "note": "the Home card that starts an empty document"
+    },
+    {
+      "en": "example",
+      "text": "ejemplo"
+    }
+  ]
+}

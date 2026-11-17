@@ -4,6 +4,7 @@
 import type { Axis3, Selector, Vec3 } from "../types";
 import { axisVector } from "./patternMath";
 import { patternAxisDatum } from "../document/optionFields";
+import { listJoin, spellNumber } from "../ui/measure";
 
 export type AxisPlace = "origin" | "centre" | "picked";
 
@@ -59,7 +60,7 @@ export function describeAxis(axis: unknown, axisRef: unknown, datumName?: (id: s
   if (datum != null) return datumName?.(datum) ?? datum;
   const line = axis as Partial<AxisLineValue> | null;
   if (line && Array.isArray(line.origin) && Array.isArray(line.dir)) {
-    const o = line.origin.map((v) => +v.toFixed(2)).join(", ");
+    const o = listJoin(line.origin.map((v) => spellNumber(+v.toFixed(2))));
     return `line through (${o})`;
   }
   return "Z through the origin";

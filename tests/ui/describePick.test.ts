@@ -8,10 +8,14 @@ import {
   type PickFacts,
   type PlaneFacts,
 } from "../../src/ui/describePick";
+import { setLanguage } from "../../src/i18n";
 import { setUnit, type Unit } from "../../src/ui/units";
 import type { Vec3 } from "../../src/types";
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
 // Three times unit length, so a case also proves the normal is not assumed to be unit.
@@ -598,5 +602,47 @@ describe("describeChange", () => {
     describeChange(["f:body1:3"], ["f:body1:3", "f:body1:6"], spy);
     describeChange([], ["f:body1:3", "f:body1:6", "f:body2:0"], spy);
     expect(asked).toEqual(["f:body1:6"]);
+  });
+});
+
+describe("describePick in a comma language", () => {
+  const slanted: FaceFacts = {
+    ...flat,
+    area: 2435.125,
+    size: [60.5, 40.25],
+    centroid: [113.5, -41.25, 37.5],
+  };
+  const slantedBore: FaceFacts = { ...bore, radius: 5.25, length: 20.5, centroid: [1, 2, 3] };
+
+  it("reads a flat face with a decimal comma and keeps commas between the facts", async () => {
+    await setLanguage("de");
+    expect(describePick(slanted)).toEqual({
+      label: "Ebene Fläche 4",
+      hint: "60,5 mal 40,25 mm, zeigt nach oben, Extrude 1",
+      readout: "1 Fläche · eben · 60,5 mal 40,25 mm · zeigt nach oben",
+      spoken:
+        "Ebene Fläche 4, 60,5 mal 40,25 Millimeter, 2435,125 Quadratmillimeter, zeigt nach oben, in Höhe 37,5 Millimeter, Body1, aus Extrude 1",
+    });
+  });
+
+  it("reads a bore with a decimal comma in inches", async () => {
+    await setLanguage("de");
+    setUnit("in");
+    expect(describePick(slantedBore)).toEqual({
+      label: "Bohrung 7",
+      hint: "Durchmesser 0,413 in, 0,807 in lang, Hole 1",
+      readout: "1 Fläche · Bohrung · ⌀0,413 in · 0,807 in lang",
+      spoken: "Bohrung 7, Durchmesser 0,413 Zoll, 0,807 Zoll lang, Achse senkrecht, Body1, aus Hole 1",
+    });
+  });
+
+  it("keeps the point and the comma in English", () => {
+    expect(describePick(slanted)).toEqual({
+      label: "Flat face 4",
+      hint: "60.5 by 40.25 mm, facing up, Extrude 1",
+      readout: "1 face · flat · 60.5 by 40.25 mm · facing up",
+      spoken:
+        "Flat face 4, 60.5 by 40.25 millimetres, 2435.125 square millimetres, facing up, at height 37.5 millimetres, Body1, from Extrude 1",
+    });
   });
 });

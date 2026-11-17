@@ -10,8 +10,10 @@
 // top of the failure that threw it away, is noise where the error is the useful
 // sentence. Getting that backwards paints a failed feature as a successful one.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import { featureFailures, featureNotes, featurePlaceholders, placeholderNote } from "../../src/ui/featureNotes";
+import { setUnit } from "../../src/ui/units";
 
 describe("featureNotes", () => {
   it("is empty when a build reported nothing", () => {
@@ -125,5 +127,72 @@ describe("placeholderNote", () => {
 
   it("says this version does not know a type nothing here declares", () => {
     expect(placeholderNote("futureWidget")).toContain("this version of FundaCAD does not know this feature type");
+  });
+});
+
+describe("an oversize blend's note", () => {
+  const reason = (what: string, fits = " A fillet that rests on both fits up to 4.99mm.") =>
+    `at 6mm the ${what} runs past a face beside the edge through (0, -10, 10) on body1, so it cuts that corner off ` +
+    `instead of resting on both faces.${fits.replace("fillet", what)}`;
+  const note = (r: string) => featureNotes({ diagnostics: [{ feature_id: "e3", code: "blendOverrun", reason: r }] });
+
+  afterEach(async () => {
+    setUnit("mm");
+    await setLanguage("system");
+  });
+
+  it("lights the chip and names the size that rests on both faces", () => {
+    expect(note(reason("fillet")).get("e3")).toBe(
+      "The fillet runs past a face beside its edge, so it cuts that corner off instead of resting on both faces. " +
+        "One that rests on both fits up to 4.99 mm.",
+    );
+  });
+
+  it("says chamfer for a chamfer, and leaves the size out when the engine names none", () => {
+    expect(note(reason("chamfer", "")).get("e3")).toBe(
+      "The chamfer runs past a face beside its edge, so it cuts that corner off instead of resting on both faces.",
+    );
+  });
+
+  it("names the second distance a two distance chamfer that rests on both takes", () => {
+    const pair = " A chamfer that rests on both fits up to 3.99mm with distance 2 at 9.97mm.";
+    expect(note(reason("chamfer", pair)).get("e3")).toBe(
+      "The chamfer runs past a face beside its edge, so it cuts that corner off instead of resting on both faces. " +
+        "One that rests on both fits up to 3.99 mm with distance 2 at 9.97 mm.",
+    );
+  });
+
+  it("reads the kind from the engine's sentence, not from a body named Chamfer", () => {
+    expect(note(reason("fillet").replace("body1", "Chamfer")).get("e3")).toMatch(/^The fillet runs past/);
+  });
+
+  it("replaces an earlier lossy match's note for the same feature", () => {
+    const notes = featureNotes({
+      diagnostics: [
+        { feature_id: "e3", lossy: true, reason: "edge picked from a drifted match" },
+        { feature_id: "e3", code: "blendOverrun", reason: reason("fillet") },
+      ],
+    });
+    expect(notes.get("e3")).toMatch(/^The fillet runs past/);
+  });
+
+  it("follows the chosen language and its decimal mark", async () => {
+    await setLanguage("de");
+    const text = note(reason("fillet")).get("e3");
+    expect(text).toContain("Verrundung");
+    expect(text).toContain("4,99 mm");
+    expect(text).not.toContain("runs past");
+  });
+
+  it("never names a size in inches past the one that fits", () => {
+    setUnit("in");
+    // 9.99 mm is 0.3933 in, shown to the nearest digit it would read 0.394 in
+    expect(note(reason("fillet", " A fillet that rests on both fits up to 9.99mm.")).get("e3")).toMatch(/0\.393 in\.$/);
+  });
+
+  it("shows the engine's own reason for an advisory the app does not word", () => {
+    expect(featureNotes({ diagnostics: [{ feature_id: "e3", code: "sealedVoid", reason: "as sent" }] }).get("e3")).toBe(
+      "as sent",
+    );
   });
 });

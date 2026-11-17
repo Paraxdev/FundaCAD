@@ -7,7 +7,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { SketchPlane } from "./plane";
 import type { ResolvedEntity } from "./snap";
 import { entityDims, staggeredDefaults, type DimField } from "./entityDims";
-import { dimClass, dimTitle, fmtDim, isFormula, type DimKind } from "./annotationFormat";
+import { dimClass, dimTitle, isFormula, type DimKind } from "./annotationFormat";
 import { entityDimName, entityLabeller } from "./sketchNames";
 import { useSketchAnnotationStore, type DimHooks } from "../stores/sketchAnnotations";
 
@@ -46,7 +46,6 @@ export type ExtraDim = Omit<DimLabel, "suppressEdit">;
 
 /** Resolved once at show() since nothing changes without a rebuild, leaving the component only per-frame work. */
 export interface DimItem extends DimLabel {
-  text: string;
   cls: string;
   title: string;
   fx: boolean;
@@ -149,7 +148,6 @@ function present(d: DimLabel): DimItem {
   return markRaw<DimItem>({
     ...d,
     fx,
-    text: fmtDim(d.valueMm, d.kind, d.driven, fx),
     cls: dimClass({ driven: d.driven, fx, conflict: d.conflict, over: d.over }),
     title: dimTitle({ driven: d.driven, fx, expr: d.expr }),
   });

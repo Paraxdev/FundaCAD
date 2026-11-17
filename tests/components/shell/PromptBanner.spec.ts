@@ -4,7 +4,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 const tool = vi.hoisted(() => ({ running: null as { label: string; action: string } | null }));
-vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn() }));
+vi.mock("../../../src/ui/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
 vi.mock("../../../src/ui/runningTool", () => ({ runningTool: () => tool.running }));
 vi.mock("../../../src/input/shortcuts", () => ({ keyHint: () => "E" }));
 
@@ -12,7 +12,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import PromptBanner from "../../../src/components/shell/PromptBanner.vue";
 import { setPrompt } from "../../../src/ui/prompt";
-import { announce } from "../../../src/ui/announce";
+import { announce, cancelAnnouncement } from "../../../src/ui/announce";
 
 enableAutoUnmount(afterEach);
 
@@ -27,6 +27,7 @@ describe("the prompt banner", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.mocked(announce).mockClear();
+    vi.mocked(cancelAnnouncement).mockClear();
     tool.running = null;
   });
 
@@ -74,5 +75,19 @@ describe("the prompt banner", () => {
     setPrompt("Pick a face");
     await nextTick();
     expect(vi.mocked(announce).mock.calls[0]?.[2]).toMatchObject({ key: "prompt" });
+  });
+
+  it("drops a prompt still waiting when the prompt clears, but not while one is showing", async () => {
+    render();
+    vi.mocked(cancelAnnouncement).mockClear();
+    tool.running = { label: "Mirror", action: "mirror" };
+    setPrompt("Enter to mirror, or pick more to mirror · 1 body");
+    await nextTick();
+    setPrompt("Pick what to mirror · 2 bodies");
+    await nextTick();
+    expect(vi.mocked(cancelAnnouncement)).not.toHaveBeenCalled();
+    setPrompt(null);
+    await nextTick();
+    expect(vi.mocked(cancelAnnouncement).mock.calls).toEqual([["prompt"]]);
   });
 });

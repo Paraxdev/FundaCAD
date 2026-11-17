@@ -7,6 +7,8 @@ import type { ChoiceOption } from "../../document/optionFields";
 
 defineProps<{
   label: string;
+  /** The value's key, rendered as data-field so a row can be found by it. */
+  field?: string | undefined;
   value: string;
   options: ChoiceOption[];
   commit: (value: string) => void;
@@ -15,7 +17,7 @@ defineProps<{
 </script>
 
 <template>
-  <FieldRow v-slot="{ id }" layout="param" :label="label" :title="rowTitle">
+  <FieldRow v-slot="{ id }" layout="param" :label="label" :data-field="field" :title="rowTitle">
     <Select :id="id" :model-value="value" :options="options" :label="label" @update:model-value="commit" />
   </FieldRow>
 </template>

@@ -172,8 +172,8 @@ describe("isReady and countLabel", () => {
   });
 
   it("counts nothing, one and many", () => {
-    expect(countLabel(0, "entity", "entities")).toBe("Nothing picked");
-    expect(countLabel(1, "entity", "entities")).toBe("1 entity");
-    expect(countLabel(3, "body", "bodies")).toBe("3 bodies");
+    expect(countLabel(0, "object")).toBe("Nothing picked");
+    expect(countLabel(1, "object")).toBe("1 object");
+    expect(countLabel(3, "body")).toBe("3 bodies");
   });
 });

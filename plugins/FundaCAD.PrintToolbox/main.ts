@@ -1,7 +1,7 @@
 // Adding a tool: describe it in printForm.ts, add it to PRINT_TOOLS, give it an icon below, and register its handler
 // in geometry/register.py with its type in manifest.json's featureTypes.
 
-import { announce, choose, contribute, toast } from "fundacad";
+import { announce, choose, contribute, dismissToast, toast } from "fundacad";
 import type { Engine } from "fundacad";
 import { bedFitMessage, bedSettings, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
 import { openCustomBedDialog } from "./customBedDialog";
@@ -10,6 +10,7 @@ import PrintabilityPanel from "./PrintabilityPanel.vue";
 import { createPrintabilityPanel, printabilityPanel } from "./printabilityPanel";
 import { BodyTool } from "./bodyTool";
 import { FaceTool } from "./faceTool";
+import { groupLabel, toolLabel } from "./lines";
 import { PRINT_TOOLS, type PrintTool } from "./printForm";
 
 const ID = "FundaCAD.PrintToolbox";
@@ -53,6 +54,8 @@ export async function activate(e: Engine): Promise<() => void> {
     geometry: e.geometry,
     hasBody: () => e.hasBody(),
     setStatus: (t, c) => e.setStatus(t, c),
+    toast: (t) => toast(t),
+    dismissToast,
     announce,
   });
   printabilityPanel.value = printability;
@@ -104,7 +107,10 @@ export async function activate(e: Engine): Promise<() => void> {
   const off = contribute(ID, {
     tools: PRINT_TOOLS.map((t) => ({
       id: t.id,
-      label: t.label,
+      get label() {
+        return toolLabel(t.id);
+      },
+      refName: t.label,
       iconName: t.icon,
       consumes: t.pick === "bodies" ? ["body"] : ["face"],
       source: "selection",
@@ -119,10 +125,34 @@ export async function activate(e: Engine): Promise<() => void> {
     ribbon: [
       {
         group: "PRINT",
+        get label() {
+          return groupLabel();
+        },
         items: [
-          ...PRINT_TOOLS.map((t) => ({ action: t.id, label: t.label, iconName: t.icon })),
-          { action: BED_FIT_ACTION, label: "Bed Fit Check", iconName: "printBedFit" },
-          { action: PRINTABILITY_ACTION, label: "Printability", iconName: "printPrintability" },
+          ...PRINT_TOOLS.map((t) => ({
+            action: t.id,
+            get label() {
+              return toolLabel(t.id);
+            },
+            refName: t.label,
+            iconName: t.icon,
+          })),
+          {
+            action: BED_FIT_ACTION,
+            get label() {
+              return toolLabel(BED_FIT_ACTION);
+            },
+            refName: "Bed Fit Check",
+            iconName: "printBedFit",
+          },
+          {
+            action: PRINTABILITY_ACTION,
+            get label() {
+              return toolLabel(PRINTABILITY_ACTION);
+            },
+            refName: "Printability",
+            iconName: "printPrintability",
+          },
         ],
       },
     ],

@@ -13,6 +13,8 @@ Press ? or use Help, Keyboard Shortcuts to see every key. On a Mac, use Cmd for 
 
 Reset puts one key back, Reset all a whole page, after it asks. A key marked fixed cannot be changed. A plugin with its own keys gets its own page.
 
+The window reads in the language you chose in Preferences. Key names stay as they are on the keyboard, and the English name of a command still finds it in the search.
+
 ## Keys
 
 | Key | In the model |
@@ -54,8 +56,8 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | --- | --- |
 | `]`, `[` | Step to the next or previous face, edge or plane, with a light |
 | Shift+`]`, Shift+`[` | Switch what the brackets step through: Faces, Edges or Planes |
-| Enter | Select the lit row only, or start a sketch on a lit plane |
-| Space | Add or remove the lit row |
+| Enter | Select the lit row only, or start a sketch on a lit plane. Gives it to a tool waiting for a pick |
+| Space | Add or remove the lit row. Gives it to a tool waiting for a pick |
 | Esc | Put the light out and clear the selection |
 
 | Key | Anywhere |
@@ -68,6 +70,7 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | Ctrl+Plus, Ctrl+Minus, Ctrl+0 | Interface size larger, smaller, back to 100 percent |
 | Ctrl+Alt+S, Ctrl+Alt+H | Show or hide the items and the history |
 | Home, Shift+Home | Fit view, reset camera |
+| Ctrl+1 to Ctrl+7 | Front, Back, Left, Right, Top, Bottom and Isometric view. They leave a sketch open and work from a value box |
 | F6, Shift+F6 | Next and previous region, such as the tools, Items and the 3D view |
 | Arrow keys | Turn or tilt the view 15°, 5° with Shift. With Line, Rectangle or Circle armed they move the sketch cursor instead |
 | Z, Shift+Z | Next and previous view mode |
@@ -75,6 +78,8 @@ Reset puts one key back, Reset all a whole page, after it asks. A key marked fix
 | Del | Delete the selected face or feature |
 | Esc | Cancel the tool or clear the selection |
 | Tab | While box selecting, choose what the box takes. With a sketch cursor moved by arrows, the next snap. In Extrude, the next profile |
+
+Ctrl+1 to Ctrl+7 go by the key's place on the digit row, so an AZERTY keyboard uses the same keys. Where a digit key types a plus or minus, such as 6 on French AZERTY, Ctrl with that key changes the interface size instead. Pick that view from the Views button, Look in the right-click menu or the command palette, or [give the view another key](#change-a-key).
 
 ## Drawing by keys
 
@@ -93,11 +98,25 @@ Next Face, Previous Face, Next Edge, Previous Edge and Browse Faces and Edges ha
 
 Show Last Message in the command palette says the newest message again and shows it again, for a message that went by too fast. It has no key.
 
+Describe Model and Describe Selection read the model and the selection as text, see [the view as text](../model/picking.md#the-view-as-text). They are in the View menu and the command palette, and have no key until you give them one.
+
 Show Console in the command palette opens the console and puts focus on its heading. The console shortcut does the same, except inside a text box, where they open it without taking focus. Closing the console puts focus back where it was. A screen reader says Error, Warning or Info before each line.
+
+## Value box keys
+
+In the distance and angle boxes of Extrude and Press/Pull, and the size box of Fillet and Chamfer:
+
+| Key | What it does |
+| --- | --- |
+| Up, Down | Steps the number up or down, by the arrow's step at this zoom, or 1° for an angle |
+| Shift+Up, Shift+Down | A finer step |
+| Page Up, Page Down | Ten steps |
+
+An empty box steps from 0. A box that holds a parameter name or an expression is left as typed, and a step past what the box takes is refused and said. Ctrl+Z takes a step back.
 
 ## Mouse
 
-![A part turning in the viewport as the right button is dragged](../img/orbit.gif)
+![A part turning in the viewport as the right button is dragged](../img/orbit-still.png){ .fc-motion }
 
 | Mouse | What it does |
 | --- | --- |

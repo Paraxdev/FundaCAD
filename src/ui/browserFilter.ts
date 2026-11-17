@@ -1,6 +1,7 @@
 // The panel renders a flat node list, so a filter picks which sections show rather than walking a tree.
 // No "Images" filter: the app has no reference image feature, and a filter that always shows nothing looks broken.
 
+import { t } from "../i18n";
 import { readSetting } from "./storedSetting";
 
 export type BrowserFilter = "all" | "bodies" | "planes" | "sketches";
@@ -8,11 +9,32 @@ export type BrowserFilter = "all" | "bodies" | "planes" | "sketches";
 /** `origin` and `planes` are separate sections one filter shows together, since Origin is not a construction plane. */
 export type BrowserSection = "origin" | "planes" | "palette" | "bodies" | "sketches";
 
-export const BROWSER_FILTERS: { id: BrowserFilter; label: string }[] = [
-  { id: "all", label: "All items" },
-  { id: "bodies", label: "Bodies" },
-  { id: "planes", label: "Planes and axes" },
-  { id: "sketches", label: "Sketches" },
+// Labels are getters, so a list read after a language switch reads the new language.
+export const BROWSER_FILTERS: readonly { readonly id: BrowserFilter; readonly label: string }[] = [
+  {
+    id: "all",
+    get label() {
+      return t("items.filter.all");
+    },
+  },
+  {
+    id: "bodies",
+    get label() {
+      return t("items.filter.bodies");
+    },
+  },
+  {
+    id: "planes",
+    get label() {
+      return t("items.filter.planes");
+    },
+  },
+  {
+    id: "sketches",
+    get label() {
+      return t("items.filter.sketches");
+    },
+  },
 ];
 
 /** null shows every section. Listing what a filter shows, not what it hides, keeps a new section hidden by default. */

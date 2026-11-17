@@ -9,7 +9,9 @@ import { useSelectionOffers } from "../../src/composables/useSelectionOffers";
 import { SessionEnded } from "../../src/document/session";
 import { useSelectionStore } from "../../src/stores/selection";
 import { describePick } from "../../src/ui/describePick";
+import { awaitTreePick, resetTreePicks } from "../../src/ui/treePick";
 import { exactRound } from "../../src/ui/selectionMeasure";
+import { setLanguage } from "../../src/i18n";
 import { setUnit } from "../../src/ui/units";
 import { edge, land, result, rig, settle, topology } from "../app/geometryBrowserRig";
 
@@ -35,6 +37,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  resetTreePicks();
+  return setLanguage("system");
 });
 
 function setup(first?: Parameters<typeof rig>[0]) {
@@ -54,6 +58,7 @@ function setup(first?: Parameters<typeof rig>[0]) {
     geometryBrowser: r.browser,
     overlay: { selectedRegions: () => regions, clearRegionSelection: vi.fn() },
     toolOwnsScreen: () => owned.tool,
+    toolAtWork: () => owned.tool,
   } as unknown as Engine;
   let sel!: ReturnType<typeof useSelectionOffers>;
   const wrapper = mount(
@@ -267,6 +272,27 @@ describe("the readout of edges and bodies", () => {
     r.regions.push({ interior3D: { x: 3.5 } }, { interior3D: { x: -8.25 } });
     await r.settled();
     expect(r.sel.speech.value?.text).toBe("2 bodies, 2 profiles selected");
+  });
+});
+
+describe("the readout follows the language", () => {
+  it("rewrites its count on a switch with no new selection, edges and bodies too", async () => {
+    const r = setup(result([{ id: "body1", etag: "e1", faceCount: 9 }]));
+    await r.build();
+    r.selection.faces = [1, 4, 7];
+    await r.settled();
+    expect(r.sel.readout.value).toBe("3 faces");
+    await setLanguage("de");
+    expect(r.sel.readout.value).toBe("3 Flächen");
+    await setLanguage("ja");
+    expect(r.sel.readout.value).toBe("3 面");
+    await setLanguage("en");
+    expect(r.sel.readout.value).toBe("3 faces");
+    r.selection.faces = [];
+    r.selection.bodies = ["body1", "body2"];
+    await setLanguage("de");
+    await r.settled();
+    expect(r.sel.readout.value).toMatch(/^2 Körper/);
   });
 });
 
@@ -895,6 +921,30 @@ describe("the readout and the canvas keys' light", () => {
     expect(t.sel.readout.value).not.toBe(selected);
     t.list.setLit(false);
     expect(t.sel.readout.value).toBe(selected);
+  });
+
+  it("reports the cursor row lit for the readout under a tool only while a pick waits", async () => {
+    const t = await listed();
+    t.owned.tool = true;
+    const release = awaitTreePick(() => true as const, vi.fn());
+    await t.settled();
+    expect(t.sel.lit.value).toBe(false);
+    t.list.setCursor("f:body1:2");
+    expect(t.sel.lit.value).toBe(false);
+    t.list.setLit(true);
+    expect(t.sel.lit.value).toBe(true);
+    expect(t.sel.readout.value).toBe(describePick(t.list.rows[2]!.facts).readout);
+    t.list.setLit(false);
+    expect(t.sel.lit.value).toBe(false);
+
+    release();
+    t.list.setLit(true);
+    await t.settled();
+    expect(t.sel.lit.value).toBe(false);
+    expect(t.sel.toolOwns.value).toBe(true);
+    awaitTreePick(() => true as const, vi.fn());
+    await t.settled();
+    expect(t.sel.lit.value).toBe(true);
   });
 
   it("does not take the readout for a row that is only the cursor", async () => {

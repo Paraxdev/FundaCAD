@@ -54,6 +54,7 @@ import type {
 import { asFeature } from "../types";
 import { dismissToast, toast } from "../ui/toast";
 import { resolveRealEntities } from "../sketch/resolve";
+import { worldPointInRegion } from "../sketch/regionSelect";
 import { defaultReach, gapReport, type GapReport } from "../sketch/looseEnds";
 import { edgeMatchSelectorFrom, edgeSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
@@ -63,6 +64,7 @@ import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } f
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
 import { thinExtrudeOf } from "./thinExtrude";
+import { spellNumber } from "../ui/measure";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -143,7 +145,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   };
   const startFillet = () => startEdgeFeature("fillet");
+  /** Fillet on the edge the carry on just selected, closed when the step it rests on is undone. */
+  const startFilletOn = (restsOn: string | null) => startEdgeFeature("fillet", restsOn ? { restsOn } : undefined);
   const startChamfer = () => startEdgeFeature("chamfer");
+  const startChamferOn = (restsOn: string | null) => startEdgeFeature("chamfer", restsOn ? { restsOn } : undefined);
   /** The edge selection handle was pressed (features/edgeNudge.ts): arm the same tool already holding the arrow. It
    *  opens on fillet, the arrow's own direction, since asking first would put a decision before the gesture; a
    *  chamfer is one drag back through zero, or one Tab, away. */
@@ -152,6 +157,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   const startPressPull = () => {
     if (toolBusy()) return;
     pressPull.start(committed);
+  };
+  const startPressPullOn = (restsOn: string | null) => {
+    if (toolBusy()) return;
+    pressPull.start(committed, restsOn ? { restsOn } : undefined);
   };
   /** The same hand-off for a selected face's arrow (features/faceNudge.ts); a face has one drag, so no default. */
   const grabFaceHandle = (x: number, y: number) => {
@@ -230,8 +239,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           return true;
         }
         const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
-        if (!spec || opts.roundFace)
-          return treePickRefusal(pick, opts.roundFace ? "a round face" : "a plane or a face");
+        if (!spec || opts.roundFace) return treePickRefusal(pick, opts.roundFace ? "roundFace" : "planeOrFace");
         cleanup();
         deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
         return true;
@@ -693,7 +701,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a datum point row, or a point in the view");
+        if (pick.kind !== "datumPoint") return treePickRefusal(pick, "datumPoint");
         take(pick.point, { datum: pick.id });
         return true;
       },
@@ -927,7 +935,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "body") return treePickRefusal(pick, "one body");
+        if (pick.kind !== "body") return treePickRefusal(pick, "oneBody");
         if (exclude.includes(pick.id)) return "That body is already part of this operation, pick another";
         cleanup();
         requestAnimationFrame(() => onPick(pick.id));
@@ -1091,12 +1099,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     // A sketch row names a profile only when that sketch shows exactly one.
     const releaseTree = awaitTreePick(
       (pick) => {
-        if (pick.kind !== "sketch") return treePickRefusal(pick, "a sketch profile");
+        if (pick.kind !== "sketch") return treePickRefusal(pick, "sketchProfile");
         const mine = overlay.regions.filter((r) => r.sketchId === pick.id);
         const only = mine.length === 1 ? mine[0] : undefined;
         if (!only) {
           return mine.length
-            ? `That sketch has ${mine.length} profiles, click the one you mean in the view`
+            ? `That sketch has ${mine.length} profiles, this step takes a sketch with one closed profile`
             : `That sketch shows no closed profile${offerTie(pick.id)}`;
         }
         cleanup();
@@ -1223,7 +1231,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           requestAnimationFrame(() => onPick(line, sel));
           return true;
         }
-        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis or a straight edge");
+        if (pick.kind !== "datumAxis") return treePickRefusal(pick, "axisOrStraightEdge");
         cleanup();
         requestAnimationFrame(() => onPick({ origin: pick.origin, dir: pick.dir }));
         return true;
@@ -1373,7 +1381,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (e.key === "Escape") cancel();
     };
     const releaseTree = awaitTreePick((pick) => {
-      if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+      if (pick.kind !== "face") return treePickRefusal(pick, "face");
       cleanup();
       const n = viewport.planarFace(pick.faceId)?.normal;
       const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
@@ -1431,10 +1439,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (e.key === "Escape") cancel();
     };
     const releaseTree = awaitTreePick((pick) => {
-      if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+      if (pick.kind !== "edge") return treePickRefusal(pick, "edge");
       const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
       const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
-      if (!sel) return treePickRefusal(pick, "an edge");
+      if (!sel) return treePickRefusal(pick, "edge");
       cleanup();
       requestAnimationFrame(() => onPick(sel, pts));
       return true;
@@ -1645,7 +1653,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           } else if (pick.kind === "edge") {
             body = pick.edge.body;
             sel = edgeSelectorFrom({ points: pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3), body });
-          } else return treePickRefusal(pick, "a face or an edge");
+          } else return treePickRefusal(pick, "faceOrEdge");
           if (!body || !sel) return `That ${pick.kind} is on no part, pick a face or an edge on a part`;
           if (body === exclude) return "That is on the part already picked, pick a face or an edge on the other part";
           cleanup();
@@ -1779,8 +1787,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     patternTool.start(kind, ids, committed);
   }
 
-  function startExtrude() {
+  /** `restsOn` is the step a carry on just wrote, whose undo closes the tool this opens. */
+  function startExtrude(restsOn: string | null = null) {
     if (toolBusy()) return;
+    const rests = restsOn ? { restsOn } : undefined;
     // A selected face is preferred and Press/Pulled, so a visible sketch never hijacks extruding a face.
     const sel = viewport.selectedFacesForPressPull();
     if (sel) {
@@ -1791,7 +1801,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return wr.plane.plane.distanceToPoint(sel.anchor) <= 0.01; // face on/behind the sketch plane
       });
       if (!underSketch) {
-        pressPull.start(committed);
+        pressPull.start(committed, rests);
         return;
       }
     }
@@ -1841,7 +1851,20 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       );
       return;
     }
-    extrude.start(committed);
+    extrude.start(committed, rests);
+  }
+
+  /** Extrude on the profile a carry on picked, found again by its point once the step it rests on is built. A sketch
+   *  that step consumed is shown for it, as a reopened extrude shows its own. False when no area lies there. */
+  function startExtrudeOn(restsOn: string | null, at: { point: Vec3; sketch: string }): boolean {
+    if (toolBusy()) return false;
+    const rests = restsOn ? { restsOn } : {};
+    const p = new THREE.Vector3(...at.point);
+    const wr = overlay.regions.find((r) => r.sketchId === at.sketch && worldPointInRegion(p, r.plane, r.region));
+    if (!wr) return extrude.start(committed, { ...rests, sketch: at.sketch, at: [at.point] });
+    overlay.clearRegionSelection();
+    overlay.toggleRegionSelection(wr, false);
+    return extrude.start(committed, rests);
   }
 
   /** The sketch Extrude last named a gap in: pressing it again there while the toast shows makes the wall. */
@@ -1858,7 +1881,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return gapReport(ents, sk.constraints ?? [], defaultReach(ents));
   }
 
-  const gapMm = (v: number) => `${Number(v.toPrecision(2))} mm`;
+  const gapMm = (v: number) => `${spellNumber(Number(v.toPrecision(2)))} mm`;
 
   function toastTie(sketchId: string, message: string, label: string, reach?: number, timeout?: number): number | null {
     const sk = asFeature(
@@ -1919,10 +1942,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   return {
     pickPlane: pickPlaneInteractive,
     startFillet,
+    startFilletOn,
     startChamfer,
+    startChamferOn,
     grabEdgeHandle,
     grabFaceHandle,
     startPressPull,
+    startPressPullOn,
     startSketch,
     offsetPlane,
     createDatumPlane,
@@ -1955,6 +1981,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startMechanism,
     startPattern,
     startExtrude,
+    startExtrudeOn,
     grabRegionHandle,
     grabExtrudeEdit,
     repickReference,

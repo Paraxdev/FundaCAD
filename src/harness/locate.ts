@@ -158,6 +158,25 @@ export interface ToolStep {
   button: "left" | "right";
 }
 
+/** A tool standing on the rail itself, found by its English name when its label is in another language. A selection's
+ *  rail offers a tool the model rail folds into a family as `offer:<action>`, with no English name of its own. */
+function directTool(rail: Walk, name: string, entries: RailEntry[]): string | null {
+  const want = matchName(name);
+  const tools = entries.flatMap((e) => (e.kind === "tool" ? [e] : e.items));
+  for (const pass of ["exact", "prefix"] as const) {
+    for (const e of tools) {
+      if (!e.english) continue;
+      const en = matchName(e.english);
+      if (!(pass === "exact" ? en === want : en.startsWith(want))) continue;
+      const ref = [`action:${e.action}`, `action:offer:${e.action}`].find((r) =>
+        rail.controls.some((c) => c.ref === r),
+      );
+      if (ref) return ref;
+    }
+  }
+  return null;
+}
+
 /** The clicks that reach a rail tool: its category or variant family first
  *  when the tool is folded inside one. */
 export function toolPath(walk: Walk, label: string, mode: string, defs?: RailEntry[]): ToolStep[] {
@@ -167,6 +186,8 @@ export function toolPath(walk: Walk, label: string, mode: string, defs?: RailEnt
   } catch (err) {
     if (!(err instanceof HarnessError) || err.kind !== "NotFound") throw err;
     const entries = defs ?? (mode === "sketch" ? sketchRail() : modelRail());
+    const direct = directTool(rail, label, entries);
+    if (direct) return [{ ref: direct, button: "left" }];
     const hit = familyOf(label, entries);
     if (hit) return [hit.family, { ref: hit.pick, button: "left" }];
     const families = rail.controls.filter((c) => c.ref.startsWith("family:"));

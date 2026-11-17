@@ -15,6 +15,7 @@ import {
   sharpnessLabel,
   textureFieldApplies,
 } from "./textureForm";
+import { t } from "./lines";
 
 const ID = "FundaCAD.Texture";
 
@@ -45,7 +46,10 @@ export async function activate(e: Engine): Promise<() => void> {
     tools: [
       {
         id: "texture",
-        label: "Texture",
+        get label() {
+          return t("tool.texture");
+        },
+        refName: "Texture",
         iconName: "texture",
         // Faces first: the tool's preference when a selection holds both, and the mode the panel opens in.
         consumes: ["face", "body"],
@@ -59,7 +63,21 @@ export async function activate(e: Engine): Promise<() => void> {
     actions: { texture: start },
 
     // The application's MODIFY group, beside the operations that change a surface rather than add one.
-    ribbon: [{ group: "MODIFY", items: [{ action: "texture", label: "Texture", iconName: "texture" }] }],
+    ribbon: [
+      {
+        group: "MODIFY",
+        items: [
+          {
+            action: "texture",
+            get label() {
+              return t("tool.texture");
+            },
+            refName: "Texture",
+            iconName: "texture",
+          },
+        ],
+      },
+    ],
 
     icons: { texture: TEXTURE_ICON },
 

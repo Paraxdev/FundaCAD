@@ -87,11 +87,14 @@ fn has_component(dir: &Path) -> bool {
 /// A directory with no readable record is not reported as installed: nobody has a record of agreeing to it.
 #[tauri::command]
 pub fn plugin_list(app: AppHandle) -> Result<Vec<Installed>, String> {
-    let root = plugins_root(&app)?;
-    bundle::settle_set_aside(&root);
+    Ok(list_in(&plugins_root(&app)?))
+}
+
+pub fn list_in(root: &Path) -> Vec<Installed> {
+    bundle::settle_set_aside(root);
     let mut out = Vec::new();
-    let Ok(entries) = std::fs::read_dir(&root) else {
-        return Ok(out);
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return out;
     };
     for entry in entries.flatten() {
         // Dot dirs are staging, inspect and set aside copies, never an install of their own.
@@ -105,7 +108,7 @@ pub fn plugin_list(app: AppHandle) -> Result<Vec<Installed>, String> {
         }
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(out)
+    out
 }
 
 /// Shared by the URL and file installs. Nothing is written into the plugin's directory until the unpacked manifest
@@ -434,6 +437,20 @@ pub fn write_disabled(root: &Path, ids: &[String]) -> Result<(), String> {
     let tmp = root.join(format!("{DISABLED}.tmp"));
     std::fs::write(&tmp, text).map_err(|e| format!("{}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Reset settings with "Also turn off plugins": every installed id joins the ones already off, written before the
+/// engine starts, as the page's own `plugin_set_disabled` only lands once it loads. Returns how many are installed.
+pub fn disable_all(root: &Path) -> Result<usize, String> {
+    let installed: Vec<String> = list_in(root).into_iter().map(|p| p.id).collect();
+    let count = installed.len();
+    let mut ids = std::fs::read_to_string(root.join(DISABLED))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
+        .unwrap_or_default();
+    ids.extend(installed);
+    write_disabled(root, &ids)?;
+    Ok(count)
 }
 
 #[tauri::command]

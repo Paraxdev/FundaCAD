@@ -37,7 +37,12 @@ fn near(p: [f64; 3]) -> Value {
 /// Errors, warnings, face count and volume to 0.01 mm^3.
 fn outcome(r: &Rebuild) -> (Vec<String>, Vec<String>, Option<usize>, f64) {
     let errors = r.errors.iter().map(|e| e.message.clone()).collect();
-    let warned = r.diagnostics.iter().filter_map(|d| d["message"].as_str().map(str::to_owned)).collect();
+    let warned = r
+        .diagnostics
+        .iter()
+        .filter(|d| d["code"] == "blendOverrun")
+        .filter_map(|d| d["reason"].as_str().map(str::to_owned))
+        .collect();
     let faces = r.bodies.first().map(|b| kernel::count(&b.shape, Kind::Face));
     let volume = r.bodies.first().map_or(0.0, |b| kernel::volume_precise(&b.shape).abs());
     (errors, warned, faces, (volume * 100.0).round() / 100.0)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEditableTarget, isPageSelectAll } from "../../src/ui/focus";
+import { isEditableTarget, isPageSelectAll, isSelectTrigger } from "../../src/ui/focus";
 
 const input = (type: string) => {
   const el = document.createElement("input");
@@ -42,5 +42,15 @@ describe("isEditableTarget", () => {
     const e = new KeyboardEvent("keydown", { key: "a", ctrlKey: true });
     Object.defineProperty(e, "target", { value: trigger });
     expect(isPageSelectAll(e)).toBe(true);
+  });
+
+  it("leaves Ctrl+A to a Combobox's text field, which shares the role but holds text", () => {
+    const field = input("text");
+    field.setAttribute("role", "combobox");
+    const e = new KeyboardEvent("keydown", { key: "a", ctrlKey: true });
+    Object.defineProperty(e, "target", { value: field });
+    expect(isEditableTarget(field)).toBe(true);
+    expect(isSelectTrigger(field)).toBe(false);
+    expect(isPageSelectAll(e)).toBe(false);
   });
 });

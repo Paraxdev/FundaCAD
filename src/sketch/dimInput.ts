@@ -2,6 +2,8 @@
 // Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
 import { announce } from "../ui/announce";
+import { a11yPrefs } from "../ui/a11yPrefs";
+import { t } from "../i18n";
 import {
   onActivate,
   setChipUnit,
@@ -13,14 +15,26 @@ import {
   type UiIconButtonOptions,
 } from "../components/ui/dom";
 import { iconElement } from "../ui/icons";
-import { isEditableTarget, isHistoryKey, isMenuKey } from "../ui/focus";
+import { isEditableTarget, isHistoryKey, isLiveFocusTarget, isMenuKey } from "../ui/focus";
 import { claimEscape } from "../ui/escapeClaim";
 import { regionStep } from "../ui/regions";
 import { underZoom } from "../ui/anchor";
 import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
-import { getUnit, parseField } from "../ui/units";
-import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
+import { storedExpr, typedExprProblem } from "../ui/measure";
+import { getUnit, niceStep, parseField } from "../ui/units";
+import {
+  commonUnits,
+  joinsNumbers,
+  measureError,
+  roundForDisplay,
+  spellNumber,
+  spokenUnit,
+  toUnit,
+  tryParseMeasure,
+  unitById,
+  type UnitDef,
+} from "../ui/measure";
 import { valueProblem, type FieldKind, type ValueRule } from "../document/numFields";
 import { splitNameValue, type ExprInput } from "../params/engine";
 import { replayedPress } from "../viewport/navigator/input";
@@ -44,6 +58,9 @@ export interface DimFieldDef extends ValueRule {
   words?: RegExp;
   /** What the field reads, picked from a menu on its name; `label` and `icon` are the chosen one's. */
   choices?: DimChoices;
+  /** In mm or degrees, what Up and Down change a plain number by, the finer step with Shift. Page Up and Page Down
+   *  take ten steps. */
+  step?: (fine: boolean) => number;
 }
 
 export interface DimChoice {
@@ -138,6 +155,12 @@ interface Field {
   edit?: FieldEdit;
   /** Reads the tool's value behind this field, returning what puts it back, see `restoresOnUndo`. */
   capture?: () => () => void;
+  /** Names the step keys, for a field with a `step`. */
+  stepHint: HTMLElement | null;
+  /** In mm or degrees, taken when the field gains focus so a zoom does not move them from the steps its hint names. */
+  baseSteps?: { coarse: number; fine: number };
+  /** The base steps niced in the unit shown, again whenever the unit changes. */
+  steps?: { coarse: number; fine: number };
 }
 
 interface FieldEdit {
@@ -158,8 +181,23 @@ const isHistoryInput = (t: string) => t === "historyUndo" || t === "historyRedo"
 const shownBoxes = new Set<DimInput>();
 let boxCount = 0;
 let chipCount = 0;
+let hintCount = 0;
+const STEP_KEYS: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, PageUp: 10, PageDown: -10 };
 const BOX_HELP = "Enter applies, Escape cancels, Tab moves on";
 const LIST_HELP = "Alt+Down opens the field's list";
+
+let sparing = 0;
+
+/** For a box nobody asked for, the Move gizmo a body selection raises: it shows without taking focus from the text
+ *  field being typed in, or the rest of the typing lands in the box. */
+export function sparingFieldFocus(raise: () => void): void {
+  sparing++;
+  try {
+    raise();
+  } finally {
+    sparing--;
+  }
+}
 
 /** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
 export function typedDimBox(): { confirm(): boolean } | null {
@@ -170,6 +208,31 @@ export function typedDimBox(): { confirm(): boolean } | null {
 function initialUnit(kind: DimFieldDef["kind"]): UnitDef | null {
   if (kind === "count") return null;
   return unitById(kind === "angle" ? "deg" : getUnit());
+}
+
+/** The value a whole number of steps away, on the step's lattice: a value between steps lands on the next one. */
+export function stepValue(value: number, step: number, by: number): number {
+  const k = value / step;
+  const n = by > 0 ? Math.floor(k + 1e-6) + by : Math.ceil(k - 1e-6) + by;
+  return roundForDisplay(n * step);
+}
+
+/** A value as a screen reader says it, minus in words since voices can drop the sign. */
+function spokenValue(n: number, unit: UnitDef | null): string {
+  const a = Math.abs(n);
+  const amount = unit ? `${spellNumber(a)} ${spokenUnit(unit.id, a11yPrefs().unitsInFull, a === 1)}` : spellNumber(a);
+  return n < 0 ? t("dim.negative", { amount }) : amount;
+}
+
+/** Replaces the field's text as one edit the browser's own undo takes back, as a paste does. */
+function replaceText(input: HTMLInputElement, text: string) {
+  input.select();
+  // A test DOM has no editing commands, there the edit is played as its two events.
+  if (typeof document.execCommand === "function" && document.execCommand("insertText", false, text)) return;
+  const init = { inputType: "insertReplacementText", data: text, bubbles: true };
+  if (!input.dispatchEvent(new InputEvent("beforeinput", { ...init, cancelable: true }))) return;
+  input.value = text;
+  input.dispatchEvent(new InputEvent("input", init));
 }
 
 /** The chip's name carries the unit, and the field's input is described by it, so a reader hears name, value, unit. */
@@ -451,7 +514,7 @@ export class DimInput {
         inputMode: "text",
         unit: unit?.id,
         units: unit ? commonUnits(unit.dim).map((u) => u.id) : undefined,
-        unitTip: "Change unit",
+        unitTip: t("dim.unitTip"),
       });
       // NumberField's input and chip sit in the box's own flat row, the .ui-field well would repaint it.
       const input = num.input;
@@ -466,6 +529,7 @@ export class DimInput {
         choice: def.choices?.chosen ?? null,
         userDriven: false,
         lastGood: null,
+        stepHint: null,
       };
       this.paintName(field);
       if (def.choices) this.wireAnchor(tag, field, (keys) => this.openChoiceMenu(field, keys));
@@ -477,13 +541,21 @@ export class DimInput {
         chip.id = `dim-unit-${++chipCount}`;
         chip.tabIndex = -1;
         paintChip(chip, field.unit);
-        input.setAttribute("aria-describedby", chip.id);
         this.wireAnchor(chip, field, (keys) => this.openUnitMenu(field, keys));
         wrap.appendChild(chip);
         field.chip = chip;
       }
 
       this.root.appendChild(wrap);
+      if (def.step) {
+        const hint = document.createElement("span");
+        hint.id = `dim-steps-${++hintCount}`;
+        hint.hidden = true;
+        this.root.appendChild(hint);
+        field.stepHint = hint;
+        input.addEventListener("focus", () => this.takeSteps(field));
+      }
+      this.describe(field, null);
 
       input.addEventListener("keydown", (e) => this.onKey(e, field));
       // Registered ahead of the input listener below, which tells the tool: an undo back to the text before the first
@@ -589,10 +661,22 @@ export class DimInput {
     // so focus again next frame too or typing and Tab go nowhere. A field that took focus by then, such as a rename in
     // the Items tree after a selection raised Move, keeps it: losing it would close that field. The box's own field
     // still goes through focus(), since a value seeded after show lost its selection and typing would append to it.
-    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes.
-    this.focus();
+    // Keys can beat that frame on a slow one or in a screen reader's burst, and then they already say where focus goes,
+    // as when a key moved it out of the box, like Browse Faces and Edges landing on a Geometry row.
+    const at = document.activeElement;
+    if (!(sparing && at && isEditableTarget(at) && !this.ownsField(at) && isLiveFocusTarget(at))) this.focus();
+    let keyed = false;
+    let keyMoved = false;
+    const onKey = () => (keyed = true);
+    const onFocusIn = (e: FocusEvent) => {
+      if (keyed && !this.ownsTarget(e.target)) keyMoved = true;
+    };
+    window.addEventListener("keydown", onKey, true);
+    document.addEventListener("focusin", onFocusIn, true);
     requestAnimationFrame(() => {
-      if (this.walked || this.typedNames.size) return;
+      window.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      if (this.walked || this.typedNames.size || keyMoved) return;
       const now = document.activeElement;
       if (this.ownsField(now) || !isEditableTarget(now)) this.focus();
     });
@@ -828,7 +912,9 @@ export class DimInput {
     if (!doc || !text || this.parseMeasure(f) !== null) return null;
     const err = measureError(text, f.unit);
     if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
-    return doc.classifyTargetExpr(null, null, text, f.def.kind ?? "length");
+    const refused = typedExprProblem(text);
+    if (refused) return { ok: false, error: refused };
+    return doc.classifyTargetExpr(null, null, storedExpr(text), f.def.kind ?? "length");
   }
 
   /** The typed parameter expression a tool binds the feature field to, with the new name of a `name = expr`; null for
@@ -1006,9 +1092,66 @@ export class DimInput {
       e.preventDefault();
       if (field.chip) this.openUnitMenu(field, true);
       else this.openChoiceMenu(field, true);
+    } else if (
+      e.key in STEP_KEYS &&
+      !(e.altKey || e.ctrlKey || e.metaKey) &&
+      this.stepField(field, STEP_KEYS[e.key]!, e.shiftKey)
+    ) {
+      e.preventDefault();
     }
     // Escape is otherwise handled by the owning tool's capture-phase keydown listener.
-    e.stopPropagation(); // never let drawing shortcuts fire while typing
+    // Drawing shortcuts never fire while typing. Ctrl and Cmd chords go on to the window, which leaves a text field's
+    // own chords alone, or the command search, saving and the console stay shut while a selection's Move has focus.
+    if (!(e.ctrlKey || e.metaKey)) e.stopPropagation();
+  }
+
+  private takeSteps(f: Field) {
+    const step = f.def.step;
+    if (!step || !f.stepHint) return;
+    f.baseSteps = { coarse: step(false), fine: step(true) };
+    this.niceSteps(f);
+  }
+
+  /** In the unit shown, so an inch field steps by 0.02 in rather than by 0.5 mm. */
+  private niceSteps(f: Field) {
+    if (!f.baseSteps || !f.stepHint) return;
+    const factor = f.unit?.factor ?? 1;
+    const coarse = niceStep(f.baseSteps.coarse / factor);
+    const fine = niceStep(f.baseSteps.fine / factor);
+    f.steps = { coarse, fine };
+    f.stepHint.textContent = t("dim.stepHint", {
+      step: spokenValue(coarse, f.unit),
+      fine: spokenValue(fine, f.unit),
+      big: spokenValue(roundForDisplay(coarse * 10), f.unit),
+    });
+  }
+
+  /** Moves a plain number, or an empty field from 0, as typing the new number would. A parameter expression is never
+   *  replaced, and a step out of the field's range is refused and said. False when the key is not taken. */
+  private stepField(f: Field, by: number, fine: boolean): boolean {
+    if (!f.def.step || f.def.free) return false;
+    if (!f.steps) this.takeSteps(f);
+    const raw = this.numberText(f).trim();
+    const value = raw ? this.parseMeasure(f) : 0;
+    if (value === null || !f.steps) return false;
+    const factor = f.unit?.factor ?? 1;
+    const next = stepValue(value / factor, fine ? f.steps.fine : f.steps.coarse, by);
+    // A typed prefix picks the field's choice (r2.5, ⌀5, +0.5), so the step keeps it and changes the number alone.
+    const shown = f.input.value;
+    const typed = this.numberText(f);
+    const head = shown.endsWith(typed) ? shown.slice(0, shown.length - typed.length) : "";
+    const text = (next < 0 ? head.replace(/\+\s*$/, "") : head) + spellNumber(next);
+    const read = f.def.choices?.read?.(text);
+    const problem =
+      this.rangeProblem(f.def, next * factor) ??
+      (read && read.choice !== f.choice ? valueProblem(f.def.label, { atLeast: 0 }, next) : null);
+    if (problem) {
+      announce(problem, "assertive", { key: "dim-step" });
+      return true;
+    }
+    replaceText(f.input, text);
+    announce(spokenValue(next, f.unit), "polite", { key: "dim-step" });
+    return true;
   }
 
   /** The shown fields in order, the tool's extra controls, one stop per shown option (the chosen segment of a group,
@@ -1094,6 +1237,7 @@ export class DimInput {
     if (!m?.unit || m.unit === f.unit) return;
     f.unit = m.unit;
     if (f.chip) paintChip(f.chip, m.unit);
+    this.niceSteps(f);
   }
 
   private adoptTypedChoice(f: Field) {
@@ -1115,7 +1259,8 @@ export class DimInput {
           const current = tryParseMeasure(this.numberText(f), f.unit);
           f.unit = u;
           if (f.chip) paintChip(f.chip, u);
-          if (current) f.input.value = String(toUnit(current.value, u));
+          this.niceSteps(f);
+          if (current) f.input.value = spellNumber(toUnit(current.value, u));
           this.sizeToContent(f);
           f.input.focus();
         },
@@ -1294,7 +1439,7 @@ export class DimInput {
     for (const f of this.fields) {
       const v = values[f.def.name];
       if (!f.userDriven && v != null) {
-        f.input.value = String(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
+        f.input.value = spellNumber(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
         this.sizeToContent(f);
         // Keep the live value selected while it tracks the cursor, so typing replaces it instead of appending.
         if (document.activeElement === f.input) f.input.select();
@@ -1306,7 +1451,7 @@ export class DimInput {
   seed(name: string, value: number) {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
-    f.input.value = String(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
+    f.input.value = spellNumber(f.def.kind === "count" ? Math.round(value) : toUnit(value, f.unit));
     f.lastGood = null;
     f.userDriven = true;
     this.sizeToContent(f);
@@ -1373,12 +1518,17 @@ export class DimInput {
     this.markInvalid(typed.length ? typed : shown);
   }
 
+  /** The unit, then the problem, then the step keys. */
+  private describe(f: Field, problemId: string | null) {
+    const ids = [f.chip?.id, problemId, f.stepHint?.id].filter(Boolean).join(" ");
+    if (ids) f.input.setAttribute("aria-describedby", ids);
+    else f.input.removeAttribute("aria-describedby");
+  }
+
   private markInvalid(bad: Field[]) {
     for (const f of this.fields) {
       const on = bad.includes(f) && this.problem;
-      const describedBy = [f.chip?.id, on ? this.problem!.id : ""].filter(Boolean).join(" ");
-      if (describedBy) f.input.setAttribute("aria-describedby", describedBy);
-      else f.input.removeAttribute("aria-describedby");
+      this.describe(f, on ? this.problem!.id : null);
       if (on) {
         f.input.setAttribute("aria-invalid", "true");
         f.input.setAttribute("aria-errormessage", this.problem!.id);
@@ -1513,14 +1663,14 @@ export class DimInput {
   }
 
   /** On Enter or the confirm button a field whose text is no value commits its last typed valid value, still marked;
-   *  with none, or on any other confirm, it refuses. */
+   *  with none, with two numbers only a space parts, or on any other confirm, it refuses. */
   private commit(explicit = true): boolean {
     let marked: string | null = null;
     for (const f of this.fields) {
       const problem = this.fieldProblem(f);
       if (!problem) continue;
       marked ??= problem;
-      if (explicit && f.lastGood !== null) continue;
+      if (explicit && f.lastGood !== null && !joinsNumbers(this.numberText(f))) continue;
       this.setTypedProblem(problem);
       announce(problem, "assertive");
       f.input.focus();

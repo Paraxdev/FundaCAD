@@ -22,8 +22,9 @@
     <!-- Before main.ts on purpose: boot.ts reports to Rust that the page
          loaded, and must not be able to fail because main.ts did. Vue is
          imported only by main.ts, so this separation still means what its
-         comment says it means. -->
+         comment says it means. entry.ts loads main.ts once a Reset settings
+         start has cleared the old settings. -->
     <script type="module" src="/src/boot.ts"></script>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/entry.ts"></script>
   </body>
 </html>

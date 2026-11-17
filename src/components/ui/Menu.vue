@@ -29,12 +29,24 @@ const props = withDefaults(
     align?: "start" | "center";
     gap?: number;
     label?: string | undefined;
+    /** The English name a ref reads, since `label` follows the language. */
+    name?: string | undefined;
     /** "first" focuses the first enabled item on open. */
     focus?: "first" | "none";
     /** Set by MenuItem on the menu it opens. */
     submenu?: boolean;
   }>(),
-  { anchor: null, at: null, side: "bottom", align: "start", gap: 4, label: undefined, focus: "first", submenu: false },
+  {
+    anchor: null,
+    at: null,
+    side: "bottom",
+    align: "start",
+    gap: 4,
+    label: undefined,
+    name: undefined,
+    focus: "first",
+    submenu: false,
+  },
 );
 const emit = defineEmits<{ close: [] }>();
 
@@ -270,6 +282,7 @@ defineExpose({ place });
       :class="{ 'ui-submenu': submenu, 'has-checks': ctx.hasChecks.value }"
       role="menu"
       :aria-label="label"
+      :data-menu-name="name"
       :style="{ left: `${pos.left}px`, top: `${pos.top}px`, visibility: placed ? undefined : 'hidden' }"
       @keydown="onKeydown"
       @pointerenter="parent?.cancelSubClose()"

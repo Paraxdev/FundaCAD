@@ -8,9 +8,12 @@ import { isEditableTarget, isLiveFocusTarget, isSelectTrigger, widgetOwnsKey } f
 export function installKeymap(onAction: (a: string) => void, context: () => "model" | "sketch"): () => void {
   const onKey = (e: KeyboardEvent) => {
     if (widgetOwnsKey(e)) return;
-    // A Select trigger holds no text to undo, so its Ctrl combos reach the keymap as a button's do.
-    const selectCombo = (e.ctrlKey || e.metaKey) && isSelectTrigger(e.target);
-    if (isEditableTarget(e.target) && !selectCombo) {
+    // A Select trigger holds no text to undo, so its Ctrl combos reach the keymap as a button's do. Ctrl with a digit
+    // row key types nothing in a field either, so the view keys work from a value box.
+    const ctrl = e.ctrlKey || e.metaKey;
+    const selectCombo = ctrl && isSelectTrigger(e.target);
+    const digitCombo = ctrl && !e.altKey && /^Digit\d$/.test(e.code);
+    if (isEditableTarget(e.target) && !selectCombo && !digitCombo) {
       // A ghost field (ui/focus.ts): blur it and fall through, or it swallows this shortcut and every later one.
       if (e.target instanceof HTMLElement && !isLiveFocusTarget(e.target)) e.target.blur();
       else return;

@@ -15,5 +15,27 @@
   "shapeGenerators": [
     "fastener"
   ],
-  "geometryWasm": "geometry.wasm"
+  "geometryWasm": "geometry.wasm",
+  "translations": {
+    "de": {
+      "name": "Verbindungselemente",
+      "summary": "Eine Bibliothek mit genormten Schrauben, Muttern, Unterlegscheiben und Gewindeeinsätzen, metrisch und zöllig, dazu Ihre eigenen. Sehen Sie sich eines in der Vorschau an, lesen Sie seine Daten und fügen Sie es als Volumenkörper in das Modell ein."
+    },
+    "es": {
+      "name": "Elementos de fijación",
+      "summary": "Una biblioteca de tornillos, pernos, tuercas, arandelas e insertos roscados estándar, métricos y en pulgadas, con los suyos propios. Previsualice uno, lea sus datos e insértelo en el modelo como un sólido."
+    },
+    "fr": {
+      "name": "Fixations",
+      "summary": "Une bibliothèque de vis, boulons, écrous, rondelles et inserts filetés standard, métriques et en pouces, avec les vôtres. Prévisualisez-en un, lisez ses caractéristiques et placez-le dans le modèle comme un corps solide."
+    },
+    "ja": {
+      "name": "締結部品",
+      "summary": "規格のねじ、ボルト、ナット、ワッシャー、ヒートセットインサートのライブラリです。メートルとインチに対応し、独自の部品も追加できます。プレビューして仕様を確認し、ソリッドボディとしてモデルに挿入します。"
+    },
+    "zh-CN": {
+      "name": "紧固件",
+      "summary": "标准螺钉、螺栓、螺母、垫圈和热熔嵌件库，含公制和英制，也可添加您自己的。可预览、查看规格，并作为实体插入模型。"
+    }
+  }
 }

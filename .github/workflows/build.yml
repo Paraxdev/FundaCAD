@@ -15,6 +15,10 @@
 # release, though nothing sends people there. The retired Python engine is
 # frozen on the `legacy` branch, which publishes nothing.
 #
+# A push whose Rust inputs match a green run reuses that run's engine and skips
+# rust-geom's builds and tests, see rust-key. A manual run (Run workflow)
+# always builds everything.
+#
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
 name: build
@@ -85,8 +89,16 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Parses with vue and typescript, so after npm ci.
+      - name: UI strings
+        run: node scripts/check-ui-strings.mjs
+
+      # A missing English line fails here, minutes before the bundle legs would.
+      - name: Types (vue-tsc)
+        run: npm run typecheck
+
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: stable
           components: rustfmt
@@ -118,16 +130,26 @@ jobs:
       - name: Version release tests
         run: python3 tests/build/test_version_release.py
 
-      # The checks of the AT-SPI dump the bundle leg runs, against fake trees. Not a
-      # gate until it has run green here, like the walks they check.
+      # The checks of the AT-SPI dump the bundle leg runs, against fake trees. These
+      # three gate, though the real walks and smokes they check do not yet.
       - name: AT-SPI dump tests
-        continue-on-error: true
         run: python3 tests/build/test_atspi_dump.py
 
+      # The AppImage's note on a missing accessibility bus, against fake data dirs.
+      - name: AppImage deps check tests
+        run: python3 tests/build/test_appimage_deps_check.py
+
+      # The checks of the Wayland smoke both Linux legs run, against a fake cage.
+      - name: Wayland smoke script tests
+        run: python3 tests/build/test_wayland_smoke.py
+
+      # The disk keeping rust-geom does on the self hosted runner, against a fake checkout.
+      - name: Warm target dir tests
+        run: python3 tests/build/test_warm_target.py
+
       # The checks of the UI Automation walk the Windows bundle leg runs, against
-      # fake trees, in pwsh on Linux. Not a gate until it has run green here.
+      # fake trees, in pwsh on Linux.
       - name: UI Automation walk tests
-        continue-on-error: true
         shell: pwsh
         run: ./tests/build/test_uia_walk.ps1
 
@@ -179,6 +201,9 @@ jobs:
 
       - name: Manual version build tests
         run: python tests/manual/test_versions.py
+
+      - name: Manual axe walk tests
+        run: python tests/manual/test_axe_site.py
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
@@ -312,7 +337,7 @@ jobs:
 
       # wasm32-wasip2 for the plugin geometry components packed below.
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: stable
           targets: wasm32-wasip2
@@ -588,7 +613,7 @@ jobs:
             echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log" "$XDG_DATA_HOME/dev.fundacad.app/logs/fundacad.log" || true; exit 1
           fi
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
-            python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+            python3 scripts/bundle-smoke.py --wait-shared 120 --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
       # The AppImage no longer forces X11, so its native Wayland window gets the
       # Flatpak's headless cage smoke. Not a gate until it has run green on dev.
@@ -599,22 +624,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo timeout -k 10 300 apt-get install -y -qq cage
+          # cage 0.1.4 on 22.04 exits at start when it finds no Xwayland binary.
+          sudo timeout -k 10 300 apt-get install -y -qq cage xwayland
           img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
           if [ -z "$img" ]; then echo "::error::no AppImage to start"; exit 1; fi
           fuse=()
           if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
             fuse=(--appimage-extract-and-run)
           fi
-          XDG_DATA_HOME="$RUNNER_TEMP/wayland-data" sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
-            dbus-run-session -- "$img" "${fuse[@]}"
+          data="$RUNNER_TEMP/wayland-data"
+          XDG_DATA_HOME="$data" SMOKE_APP_LOG="$data/dev.fundacad.app/logs/fundacad.log" \
+            sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" "$img" "${fuse[@]}"
 
       - name: Upload the AppImage Wayland smoke log
         if: always() && matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wayland-smoke-appimage
-          path: ${{ runner.temp }}/wayland-smoke/app.log
+          path: |
+            ${{ runner.temp }}/wayland-smoke/app.log
+            ${{ runner.temp }}/wayland-smoke/fundacad.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -839,15 +868,26 @@ jobs:
         shell: bash
         run: |
           sudo timeout -k 10 300 apt-get install -y -qq cage
-          sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
-            dbus-run-session -- flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
+          # A desktop session names its portal backend and a bare runner does not, so the
+          # portal offers no Settings and GTK warns about it on every start.
+          mkdir -p ~/.config/xdg-desktop-portal
+          printf '[preferred]\ndefault=gtk\n' > ~/.config/xdg-desktop-portal/portals.conf
+          # bwrap puts the sandbox in a session of its own, out of reach of the smoke's group kill.
+          trap 'flatpak kill dev.fundacad.app 2>/dev/null || true' EXIT
+          # The page stalls on this runner's software output, so the app starts again with
+          # the DMABUF renderer off, which needs the time of two starts.
+          SMOKE_SECONDS=40 SMOKE_APP_LOG="$HOME/.var/app/dev.fundacad.app/data/dev.fundacad.app/logs/fundacad.log" \
+            sh scripts/wayland-smoke.sh "$RUNNER_TEMP/wayland-smoke" \
+            flatpak run --env=WAYLAND_DEBUG=client dev.fundacad.app
 
       - name: Upload the Wayland smoke log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wayland-smoke-flatpak
-          path: ${{ runner.temp }}/wayland-smoke/app.log
+          path: |
+            ${{ runner.temp }}/wayland-smoke/app.log
+            ${{ runner.temp }}/wayland-smoke/fundacad.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -1410,7 +1450,7 @@ jobs:
   e2e:
     needs: rust-geom
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -1601,27 +1641,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Accessibility smoke (axe and aria snapshots)
-        timeout-minutes: 25
-        env:
-          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
-          FUNDACAD_CHROME: /usr/bin/google-chrome
-          FUNDACAD_HARNESS_KEEP: "1"
-          FUNDACAD_A11Y_OUT: ${{ runner.temp }}/a11y/out
-          TMPDIR: ${{ runner.temp }}/a11y/harness
-        run: |
-          mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
-          python -m pytest tools/harness/tests -m a11y -q --durations=25
-
-      - name: Accessibility smoke report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: a11y-smoke
-          path: ${{ runner.temp }}/a11y
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
@@ -1686,6 +1705,69 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # The axe and aria smoke took up to 21 minutes, about 34 on a slow runner, and pushed e2e into its limit, so it runs
+  # beside it. Like e2e, a failure turns the run red but does not hold back promote.sh.
+  e2e-a11y:
+    needs: rust-geom
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        uses: ./.github/actions/linux-deps
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm i --no-save playwright-core@1.56.0
+
+      - name: Fetch the engine rust-geom built
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fundacad-engine-linux
+          path: engine-bin
+
+      # The axe baseline was counted in e2e after this install, so the Render screen sees the same adapters.
+      - name: Install a software Vulkan driver
+        run: sudo timeout -k 10 600 apt-get install -y mesa-vulkan-drivers
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the agent harness
+        run: pip install -e "tools/harness[test]"
+
+      - name: Accessibility smoke (axe and aria snapshots)
+        timeout-minutes: 45
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          FUNDACAD_A11Y_OUT: ${{ runner.temp }}/a11y/out
+          TMPDIR: ${{ runner.temp }}/a11y/harness
+        run: |
+          chmod +x engine-bin/fundacad-engine
+          mkdir -p "$TMPDIR" "$FUNDACAD_A11Y_OUT"
+          python -m pytest tools/harness/tests -m a11y -q --durations=25
+
+      - name: Accessibility smoke report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: a11y-smoke
+          path: ${{ runner.temp }}/a11y
+          if-no-files-found: ignore
+          retention-days: 7
+
   # The native tracer on Metal. A macOS app always traces natively, since its
   # WKWebView has no WebGPU, and the macos-15 runner is an Apple Silicon VM
   # with the same Apple Paravirtual device a Mac VM user has. Every image test
@@ -1703,7 +1785,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: stable
 
@@ -1749,6 +1831,49 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # The key of everything the Rust jobs read: every tracked file but the
+  # frontend's own (TypeScript, Vue, styles, prose, its language files, the
+  # browser tests, the other CI jobs). A file not listed here counts as Rust input, so a wrong
+  # guess costs a full run and never skips one. The ISO week is in the key, so
+  # a moving stable toolchain is still built and tested at least once a week,
+  # and a manual run always builds everything.
+  rust-key:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      hit: ${{ steps.look.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Key the Rust inputs
+        id: key
+        shell: bash
+        run: |
+          # Frontend files the Rust tests read all the same; tests/build/rustKey.test.ts
+          # fails when a Rust source names one that is missing here.
+          read='src/types.ts src/document/migrate.ts tools/harness/fixtures'
+          sum=$( {
+            git ls-tree -r HEAD | grep -v -E $'\t(\\.github/workflows|docs|manual|e2e|tools/harness|tests/build|src/i18n|src/assets)/|\tplugins/[^/]+/locales/|\t(package|package-lock)\\.json$|\tscripts/[^/]+-allow\\.json$|\\.(ts|tsx|mts|vue|scss|css|md|mjs)$'
+            git ls-tree -r HEAD -- $read
+            # Of the workflows, only these two jobs build and test Rust.
+            awk '/^  [a-z][a-z0-9-]*:\r?$/ { on = $1 ~ /^rust-(key|geom):/ } on' .github/workflows/build.yml
+          } | sha256sum | cut -c1-40)
+          echo "key=rust-geom-green-v1-$(date -u +%G-W%V)-$sum" >> "$GITHUB_OUTPUT"
+
+      - name: Look for a green rust-geom of the same inputs
+        id: look
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rust-geom-green
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
   # The geometry engine (crates/, docs/ENGINE.md) and the app shell around
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
   # which is long on a cold runner and short once target/OCCT is cached, so the
@@ -1760,8 +1885,11 @@ jobs:
     # changed recompiles. Only the owner's own pushes and manual runs go there,
     # everyone else gets GitHub's runner; the runner's job-started hook refuses
     # anything else too, since a fork pull request could edit this file.
-    # vars.FAST_RUNNER off falls back to GitHub.
-    runs-on: ${{ (github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04' }}
+    # vars.FAST_RUNNER off falls back to GitHub. When rust-key found a green run
+    # of the same Rust inputs, this job only hands that run's engine on, from
+    # GitHub's runner, so a frontend change never waits for the self hosted one.
+    needs: rust-key
+    runs-on: ${{ needs.rust-key.outputs.hit == 'true' && 'ubuntu-22.04' || ((github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04') }}
     timeout-minutes: 240
     permissions:
       contents: read
@@ -1770,7 +1898,8 @@ jobs:
     # in panics.
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      SELF_HOSTED: ${{ github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true' }}
+      SELF_HOSTED: ${{ needs.rust-key.outputs.hit != 'true' && github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true' }}
+      GREEN: ${{ needs.rust-key.outputs.hit == 'true' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -1779,7 +1908,7 @@ jobs:
           persist-credentials: false
 
       - name: Free disk space
-        if: env.SELF_HOSTED != 'true'
+        if: env.SELF_HOSTED != 'true' && env.GREEN != 'true'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
@@ -1787,19 +1916,22 @@ jobs:
       # src-tauri links the tauri crate, which needs the webkit2gtk stack and
       # libudev; cmake builds OpenCASCADE.
       - name: Install Linux system dependencies
+        if: env.GREEN != 'true'
         uses: ./.github/actions/linux-deps
 
       - name: Install cmake
+        if: env.GREEN != 'true'
         run: sudo apt-get install -y cmake
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        if: env.GREEN != 'true'
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: stable
           targets: wasm32-wasip2
 
       - name: Cache Cargo
-        if: env.SELF_HOSTED != 'true'
+        if: env.SELF_HOSTED != 'true' && env.GREEN != 'true'
         uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
@@ -1810,13 +1942,25 @@ jobs:
       # The same kernel and key as bundle's, so the two jobs share it. Keep
       # it after rust-cache, see bundle.
       - name: Cache the static OpenCASCADE build
-        if: env.SELF_HOSTED != 'true'
+        if: env.SELF_HOSTED != 'true' && env.GREEN != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             target/OCCT
             !target/OCCT/build
           key: occt-static-v2-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
+
+      # A new stable rebuilds every unit beside the old toolchain's, which the
+      # week long prune keeps: cargo 1.100's new layout took the runner's disk
+      # from 55G to 11G free in four days. The runner's own logs share that
+      # disk, so a full one fails the next job before its first step.
+      - name: Start the warm target dir over on a new toolchain
+        if: env.SELF_HOSTED == 'true' && env.GREEN != 'true'
+        run: sh scripts/warm-target.sh toolchain
+
+      - name: Keep room on the warm disk
+        if: env.SELF_HOSTED == 'true' && env.GREEN != 'true'
+        run: sh scripts/warm-target.sh floor 30
 
       # The whole workspace, not the kernel crate alone: the engine's request
       # loop, its transports and the protocol have tests of their own, and the
@@ -1829,18 +1973,22 @@ jobs:
       # without it, and the MCP suites drive the built engine binary, so both
       # are built first or those tests pass without testing anything.
       - name: Build the plugin components
+        if: env.GREEN != 'true'
         run: python3 scripts/build-plugin-wasm.py
 
       - name: Build the workspace binaries
+        if: env.GREEN != 'true'
         run: cargo build --locked --workspace --features fundacad-engine/ws
 
       - name: Rust workspace tests
+        if: env.GREEN != 'true'
         run: cargo test --locked --workspace --features fundacad-engine/ws
 
       # Text outlines come from the system's fonts, and the text goldens were
       # frozen with Windows' Arial and Times New Roman. A case whose font is
       # not installed is skipped rather than compared with a stand in.
       - name: Install the fonts the text goldens were frozen with
+        if: env.GREEN != 'true'
         run: |
           echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
           sudo apt-get install -y ttf-mscorefonts-installer
@@ -1851,6 +1999,7 @@ jobs:
       # crates/fundacad-mcp/tests/parity_golden.rs, run by the step above. Every
       # golden runs even after one fails, so a red build names them all.
       - name: Golden parity checks
+        if: env.GREEN != 'true'
         shell: bash
         run: |
           fail=0
@@ -1867,6 +2016,7 @@ jobs:
       # the app does after a restart. The goldens whose documents run plugin
       # features, where state that is not in the shape has to survive the disk.
       - name: Golden parity checks, warm cache
+        if: env.GREEN != 'true'
         shell: bash
         run: |
           fail=0
@@ -1881,10 +2031,19 @@ jobs:
       # rebuilds there. Links the kernel this job already built, and a `dist`
       # stands in for the frontend, which the Tauri context embeds.
       - name: App shell tests (unit + container seam)
+        if: env.GREEN != 'true'
         working-directory: src-tauri
         run: |
           mkdir -p ../dist
           cargo test --locked --tests --workspace
+
+      - name: Fetch the engine of the green run
+        if: env.GREEN == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rust-geom-green
+          key: ${{ needs.rust-key.outputs.key }}
+          fail-on-cache-miss: true
 
       - name: Upload the engine for the e2e job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1892,17 +2051,24 @@ jobs:
           name: fundacad-engine-linux
           retention-days: 1
           if-no-files-found: error
-          path: target/debug/fundacad-engine
+          path: ${{ env.GREEN == 'true' && 'rust-geom-green/fundacad-engine' || 'target/debug/fundacad-engine' }}
 
       # The shipped engine is an optimised GCC build, which the debug build above
       # is not: undefined behaviour in the C++ shims has shown up only there. The
       # same goldens again on a release build, each under a clock, so a result
       # that differs or a rebuild that hangs only once optimised fails here. A
       # release build finds plugins only through FUNDACAD_PLUGIN_DIR.
+      # Tier 2 at most, since the steps after it still need the debug engine.
+      - name: Keep room for the release build
+        if: env.SELF_HOSTED == 'true' && env.GREEN != 'true'
+        run: sh scripts/warm-target.sh floor 15 2
+
       - name: Build the release engine
+        if: env.GREEN != 'true'
         run: cargo build --locked --release -p fundacad-cli
 
       - name: Golden parity checks, release build
+        if: env.GREEN != 'true'
         shell: bash
         env:
           FUNDACAD_PLUGIN_DIR: plugins
@@ -1917,10 +2083,21 @@ jobs:
           done
           exit $fail
 
+      # Saved last, so only inputs that passed every step above are skipped later.
+      - name: Remember this green run's engine
+        if: env.GREEN != 'true'
+        run: |
+          mkdir -p rust-geom-green
+          cp target/debug/fundacad-engine rust-geom-green/
+
+      - name: Save the green run for the same inputs
+        if: env.GREEN != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rust-geom-green
+          key: ${{ needs.rust-key.outputs.key }}
+
       # The warm target dir gains a test binary per change; a week is kept.
       - name: Prune the warm target dir
         if: always() && env.SELF_HOSTED == 'true'
-        run: |
-          find target src-tauri/target -path '*/deps/*' -type f -mtime +7 -delete 2>/dev/null || true
-          find target src-tauri/target -path '*/incremental/*' -mtime +7 -delete 2>/dev/null || true
-          df -h . | tail -n 1
+        run: sh scripts/warm-target.sh prune 7

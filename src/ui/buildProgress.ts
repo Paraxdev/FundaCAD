@@ -1,6 +1,7 @@
 import type { EngineWait } from "../geometry/client";
 import type { BusyState, RunningOp } from "../document/store";
 import { BUILD_PHASE } from "../geometry/buildPhase";
+import { t } from "../i18n";
 
 // The timeline's pure helpers, kept apart so they test without a DOM.
 
@@ -19,51 +20,53 @@ export function buildProgress(r: BuildReport, steps: readonly string[]): { label
   const total = steps.length;
   switch (r.phase) {
     case BUILD_PHASE.preparing:
-      return { label: "preparing…", pct: 0 };
+      return { label: t("history.build.preparing"), pct: 0 };
     case BUILD_PHASE.feature: {
       const at = r.progress ?? -1;
-      if (at < 0) return { label: "building…", pct: 0 };
+      if (at < 0) return { label: t("history.build.building"), pct: 0 };
       const n = Math.min(at + 1, total);
       return {
-        label: `${steps[at] ?? "building"} ${n}/${total}`,
+        label: t("history.build.step", { name: steps[at] ?? t("history.build.fallback"), n, total }),
         pct: total === 0 ? 0 : Math.round((n / total) * 100),
       };
     }
     case BUILD_PHASE.saving:
-      return { label: "saving a checkpoint…", pct: 0 };
+      return { label: t("history.build.saving"), pct: 0 };
     case BUILD_PHASE.meshing: {
-      if (r.meshed === null || r.meshTotal === null || r.meshTotal <= 0) return { label: "meshing…", pct: 0 };
+      if (r.meshed === null || r.meshTotal === null || r.meshTotal <= 0) {
+        return { label: t("history.build.meshing"), pct: 0 };
+      }
       const done = Math.min(r.meshed, r.meshTotal);
       const pct = Math.round((done / r.meshTotal) * 100);
-      return { label: r.meshTotal === 1 ? "meshing 1 part" : `meshing ${done}/${r.meshTotal} parts`, pct };
+      const one = r.meshTotal === 1 ? "yes" : "no";
+      return { label: t("history.build.parts", { one, done, total: r.meshTotal }), pct };
     }
     case BUILD_PHASE.assembling:
-      return { label: "collecting the result…", pct: 0 };
+      return { label: t("history.build.collecting"), pct: 0 };
     case BUILD_PHASE.applying:
-      return { label: "applying to the view…", pct: 100 };
+      return { label: t("history.build.applying"), pct: 100 };
     default:
-      return { label: "building…", pct: 0 };
+      return { label: t("history.build.building"), pct: 0 };
   }
 }
 
 const WAIT_DOING: Record<string, string> = {
-  import: "importing a file",
-  rebuild: "building a model",
-  computeAll: "building a model",
-  export: "exporting",
-  exportWith: "exporting",
-  inspect: "measuring a model",
+  import: "import",
+  rebuild: "build",
+  computeAll: "build",
+  export: "export",
+  exportWith: "export",
+  inspect: "measure",
 };
 
 /** What a request of ours queued behind another client's job is waiting for. */
 export function waitLabel(w: EngineWait): string {
-  const who =
-    w.who === "assistant"
-      ? w.name?.trim().slice(0, 40) || "an AI assistant"
-      : w.who === "app"
-        ? "the app"
-        : "another session";
-  return `Waiting: ${who} is ${WAIT_DOING[w.op] ?? "working"}`;
+  const name = w.who === "assistant" ? w.name?.trim().slice(0, 40) : undefined;
+  return t("history.build.waitingOn", {
+    who: name ? "named" : w.who === "assistant" ? "assistant" : w.who === "app" ? "app" : "other",
+    name: name ?? "",
+    doing: WAIT_DOING[w.op] ?? "other",
+  });
 }
 
 /** `pct` null means an indeterminate bar; an op that reports no stages gets no bar. */

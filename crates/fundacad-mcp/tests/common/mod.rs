@@ -141,17 +141,18 @@ pub fn is_error(result: &rmcp::model::CallToolResult) -> bool {
     result.is_error.unwrap_or(false)
 }
 
-/// The built `fundacad-mcp` binary, beside the test binary.
 pub fn mcp_binary() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
-    profile.join(if cfg!(windows) { "fundacad-mcp.exe" } else { "fundacad-mcp" })
+    PathBuf::from(env!("CARGO_BIN_EXE_fundacad-mcp"))
+}
+
+/// `target/<profile>`, where the workspace's binaries and examples are. Taken from the server binary, since
+/// cargo 1.100 runs test binaries from `build/<pkg>/<hash>/out`, no longer from `target/<profile>/deps`.
+pub fn profile_dir() -> PathBuf {
+    mcp_binary().parent().expect("target/<profile>").to_path_buf()
 }
 
 pub fn engine_binary() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
-    profile.join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
+    profile_dir().join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
 }
 
 /// A session file nothing can find. NO TEST MAY FIND THE RUNNING APP: a server that attached would push every
@@ -304,6 +305,12 @@ impl RealEngine {
     // free_port releases its port before the engine binds it, so a test starting beside this one can take it
     // first and the engine exits without listening; a fresh port is tried then.
     pub fn start() -> RealEngine {
+        RealEngine::start_with_grace(0.0)
+    }
+
+    /// `grace` is how long the engine counts as still starting while no window has published; the other
+    /// suites start it at 0 so a missing window answers at once.
+    pub fn start_with_grace(grace: f64) -> RealEngine {
         for _ in 0..5 {
             let port = free_port();
             let token = format!("live-test-{port}");
@@ -313,6 +320,7 @@ impl RealEngine {
             cmd.arg("--ws")
                 .env("FUNDACAD_ENGINE_PORT", port.to_string())
                 .env("FUNDACAD_ENGINE_TOKEN", &token)
+                .env("FUNDACAD_ENGINE_START_GRACE_S", grace.to_string())
                 .env_remove("SINDRI_ENGINE_PORT")
                 .env_remove("SINDRI_ENGINE_TOKEN")
                 .stdout(Stdio::piped())

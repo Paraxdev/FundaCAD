@@ -8,5 +8,27 @@
   "grants": [
     "input.remap",
     "document.read"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Maus und Tasten",
+      "summary": "Legen Sie fest, welche Maustaste die Ansicht dreht und verschiebt, fügen Sie ein Radialmenü hinzu und verschieben Sie Tastenkürzel."
+    },
+    "es": {
+      "name": "Ratón y teclas",
+      "summary": "Elija qué botón del ratón orbita y desplaza, añada un menú radial y cambie los atajos de teclado."
+    },
+    "fr": {
+      "name": "Souris et touches",
+      "summary": "Choisissez le bouton de la souris qui oriente et déplace la vue, ajoutez un menu radial et déplacez les raccourcis clavier."
+    },
+    "ja": {
+      "name": "マウスとキー",
+      "summary": "視点を回転・移動するマウスボタンの選択、ラジアルメニューの追加、キーボードショートカットの移動ができます。"
+    },
+    "zh-CN": {
+      "name": "鼠标和按键",
+      "summary": "选择用哪个鼠标键旋转和平移,添加环形菜单,并调整键盘快捷键。"
+    }
+  }
 }

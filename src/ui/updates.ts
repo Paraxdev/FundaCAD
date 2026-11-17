@@ -2,6 +2,7 @@
 // gates out deb, rpm, Flatpak and browser dev, where the updater cannot replace the install.
 
 import type { Update } from "@tauri-apps/plugin-updater";
+import { t } from "../i18n";
 import { PRODUCT_NAME, sourceforgeUrl, versionLabel } from "../app/channel";
 import { choose } from "./choice";
 import { toast } from "./toast";
@@ -45,13 +46,15 @@ export async function appVersion(): Promise<string> {
 /** Help → About: the one place to read off which version is running. */
 export async function showAbout(): Promise<void> {
   const { listModal } = await import("./choice");
-  await listModal(`About ${PRODUCT_NAME}`, [`Version ${await appVersion()}`]);
+  await listModal(t("menu.help.about", { name: PRODUCT_NAME }), [
+    t("updates.version", { version: await appVersion() }),
+  ]);
 }
 
 /** "sketch": an open sketch holds edits Save cannot write; "stop": the user kept the unsaved work. */
 export type BeforeInstall = () => Promise<"go" | "sketch" | "stop">;
 
-const RESTART_LABEL = "Restart & update";
+const restartLabel = () => t("updates.restart");
 
 /** The returned action downloads once, so a press after a refusal goes straight to the checks. */
 export function updateAction(
@@ -62,7 +65,7 @@ export function updateAction(
   const run = async (): Promise<void> => {
     try {
       if (!downloaded) {
-        toast("Downloading the update…");
+        toast(t("updates.downloading"));
         downloaded = update.download();
       }
       await downloaded;
@@ -73,15 +76,15 @@ export function updateAction(
     // After the download, when nothing more can change, and before the install, which on Windows may end the app.
     const verdict = await beforeInstall();
     if (verdict === "sketch") {
-      toast(`Update not installed, finish the sketch first. ${RESTART_LABEL} installs it.`, {
+      toast(t("updates.sketchOpen", { action: restartLabel() }), {
         kind: "warning",
         timeout: 15000,
-        action: { label: RESTART_LABEL, onClick: () => void run() },
+        action: { label: restartLabel(), onClick: () => void run() },
       });
       return;
     }
     if (verdict === "stop") {
-      toast("Update not installed. Help > Check for Updates… installs it later.", { kind: "warning" });
+      toast(t("updates.kept", { help: t("menu.help"), check: t("menu.help.checkUpdates") }), { kind: "warning" });
       return;
     }
     try {
@@ -97,20 +100,20 @@ export function updateAction(
   return run;
 }
 
-const MIRROR_ACTION = {
-  label: "Open SourceForge",
+const mirrorAction = () => ({
+  label: t("updates.openSourceforge"),
   onClick: () => {
     const url = sourceforgeUrl(updateChannel());
-    openExternal(url).catch(() => toast(`Open ${url} in a browser.`, { timeout: 30000 }));
+    openExternal(url).catch(() => toast(t("prefs.updates.openLink", { url }), { timeout: 30000 }));
   },
-};
+});
 
 function failed(err: unknown): void {
   console.error("[updates] install failed:", err);
   const why = err instanceof Error ? err.message : String(err);
-  toast(`Could not update (${why}). Download the newest build from SourceForge.`, {
+  toast(t("updates.failed", { why }), {
     kind: "error",
-    action: MIRROR_ACTION,
+    action: mirrorAction(),
   });
 }
 
@@ -135,18 +138,18 @@ async function checkChannel(): Promise<{ update: Update; downgrade: boolean } | 
   return { update: new Update(meta), downgrade };
 }
 
-const OLDER_LABEL = "Install older version";
+const olderLabel = () => t("updates.installOlder");
 const channelLabel = () => UPDATE_CHANNELS.find((c) => c.id === updateChannel())?.label ?? "";
 
 async function confirmOlder(update: Update): Promise<boolean> {
   const pick = await choose(
-    `${channelLabel()} ${versionLabel(update.version)} is older than this version`,
+    t("updates.olderTitle", { channel: channelLabel(), version: versionLabel(update.version) }),
     [
-      { value: "install", label: OLDER_LABEL },
-      { value: "cancel", label: "Cancel" },
+      { value: "install", label: olderLabel() },
+      { value: "cancel", label: t("common.cancel") },
     ],
     undefined,
-    `It replaces ${PRODUCT_NAME} ${versionLabel(update.currentVersion)} on this computer. Your files and settings stay.`,
+    t("updates.olderBody", { product: PRODUCT_NAME, version: versionLabel(update.currentVersion) }),
   );
   return pick === "install";
 }
@@ -155,13 +158,7 @@ async function confirmOlder(update: Update): Promise<boolean> {
  *  automatic check offers a found update as a toast and is otherwise silent. Resolves true when the feed was reached. */
 export async function checkForUpdates(interactive: boolean, beforeInstall: BeforeInstall): Promise<boolean> {
   if (!(await updatesSupported())) {
-    if (interactive)
-      toast(
-        "This install does not update itself. Install the newer file from the GitHub releases page or the SourceForge mirror over it.",
-        {
-          timeout: 8000,
-        },
-      );
+    if (interactive) toast(t("updates.selfUpdateOff"), { timeout: 8000 });
     return false;
   }
   let found;
@@ -173,15 +170,15 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
       // Most often a build published without a signing key has no latest.json, a 404 that reads as a network fault,
       // so the message says what to do instead of guessing from the error text.
       const why = err instanceof Error ? err.message : String(err);
-      toast(`Could not check for updates (${why}). Download the newest build from GitHub or SourceForge.`, {
+      toast(t("updates.checkFailed", { why }), {
         kind: "error",
-        action: MIRROR_ACTION,
+        action: mirrorAction(),
       });
     }
     return false;
   }
   if (!found) {
-    if (interactive) toast(`${PRODUCT_NAME} ${await appVersion()} is up to date.`);
+    if (interactive) toast(t("updates.upToDate", { product: PRODUCT_NAME, version: await appVersion() }));
     return true;
   }
   const { update, downgrade } = found;
@@ -192,22 +189,22 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
     };
     if (interactive) await runOnceConfirmed();
     else
-      toast(`${channelLabel()} ${versionLabel(update.version)} is available, older than this version.`, {
+      toast(t("updates.olderAvailable", { channel: channelLabel(), version: versionLabel(update.version) }), {
         timeout: 30000,
-        action: { label: OLDER_LABEL, onClick: () => void runOnceConfirmed() },
+        action: { label: olderLabel(), onClick: () => void runOnceConfirmed() },
       });
     return true;
   }
   if (!interactive) {
-    toast(`${PRODUCT_NAME} ${versionLabel(update.version)} is available.`, {
+    toast(t("updates.available", { product: PRODUCT_NAME, version: versionLabel(update.version) }), {
       timeout: 30000,
-      action: { label: RESTART_LABEL, onClick: () => void run() },
+      action: { label: restartLabel(), onClick: () => void run() },
     });
     return true;
   }
-  const pick = await choose(`Update ${versionLabel(update.version)} is available`, [
-    { value: "install", label: RESTART_LABEL },
-    { value: "later", label: "Later" },
+  const pick = await choose(t("updates.availableTitle", { version: versionLabel(update.version) }), [
+    { value: "install", label: restartLabel() },
+    { value: "later", label: t("updates.later") },
   ]);
   if (pick === "install") await run();
   return true;

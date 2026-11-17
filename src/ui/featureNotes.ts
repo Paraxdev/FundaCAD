@@ -2,28 +2,44 @@
 // wins. Any advisory with a reason lights the chip, not a list of codes, so a new engine advisory shows at once.
 
 import { featureTypeOwner } from "../document/missingPlugins";
+import { blendFitsArgs } from "../features/edgeDragMath";
+import { t } from "../i18n";
 
 /** Structural, so a test or a cached partial build need not construct a whole RebuildResult. */
 export interface NoteSources {
   featureErrors?: { feature_id?: string }[] | undefined;
   /** The legacy single error field. Null is accepted since the build state holds null between builds. */
   errorFeatureId?: string | null | undefined;
-  diagnostics?: { feature_id?: string; reason?: string }[] | undefined;
+  diagnostics?: { feature_id?: string; reason?: string; code?: string; lossy?: boolean }[] | undefined;
 }
 
-/** One advisory per feature. Failed features are absent, as is a diagnostic with no `reason`; the first reason wins. */
+/** One advisory per feature. Failed features are absent, as is a diagnostic with no `reason`. The first reason wins,
+ *  except that a coded advisory replaces a lossy match's note, since it says what the feature built. */
 export function featureNotes(src: NoteSources): Map<string, string> {
   const failed = new Set<string>();
   for (const e of src.featureErrors ?? []) if (e.feature_id) failed.add(e.feature_id);
   if (src.errorFeatureId) failed.add(src.errorFeatureId);
 
   const notes = new Map<string, string>();
+  const fromLossy = new Set<string>();
   for (const d of src.diagnostics ?? []) {
     const id = d.feature_id;
-    if (!id || !d.reason || failed.has(id) || notes.has(id)) continue;
-    notes.set(id, d.reason);
+    if (!id || !d.reason || failed.has(id)) continue;
+    if (notes.has(id) && !(d.code && fromLossy.has(id))) continue;
+    notes.set(id, advisoryNote(d.code, d.reason));
+    if (d.lossy && !d.code) fromLossy.add(id);
+    else fromLossy.delete(id);
   }
   return notes;
+}
+
+// The advisories the app words itself, so their note follows the chosen language. Any other shows the engine's reason.
+function advisoryNote(code: string | undefined, reason: string): string {
+  if (code === "blendOverrun") {
+    const kind = /mm the chamfer runs past/i.test(reason) ? "chamfer" : "fillet";
+    return t("feature.note.blendOverrun", { kind, ...blendFitsArgs(reason) });
+  }
+  return reason;
 }
 
 export interface FailureSources {
@@ -55,7 +71,5 @@ export function featurePlaceholders(src: PlaceholderSources): Map<string, string
 /** What a placeholder chip and its properties say about a feature of `type`. */
 export function placeholderNote(type: string): string {
   const owner = featureTypeOwner(type);
-  if (owner)
-    return `Not included: it needs the "${owner.name}" plugin, which is not running here. It is kept and saved with the file.`;
-  return "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file. A newer FundaCAD or a plugin can build it.";
+  return owner ? t("feature.note.needsPlugin", { plugin: owner.name }) : t("feature.note.unknownType");
 }

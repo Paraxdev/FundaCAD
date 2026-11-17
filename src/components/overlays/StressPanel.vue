@@ -18,6 +18,7 @@ import { buildStressRequest } from "../../ui/stress";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { isEditableTarget } from "../../ui/focus";
 import { announce } from "../../ui/announce";
+import { t } from "../../i18n";
 
 type Step = "setup" | "results";
 
@@ -25,7 +26,7 @@ const engine = useEngine();
 const panels = usePanelsStore();
 watch(
   () => panels.stress?.running,
-  (running) => running && announce("Analysing", "polite", { key: "stress" }),
+  (running) => running && announce(t("stress.frame.busy"), "polite", { key: "stress" }),
 );
 
 const bodies = ref<{ id: string; name: string }[]>([]);
@@ -72,12 +73,12 @@ watch(step, (now) => {
 });
 
 const tabs = computed(() => [
-  { value: "setup" as const, label: "Set up" },
+  { value: "setup" as const, label: t("stress.frame.tabSetup") },
   {
     value: "results" as const,
-    label: "Results",
+    label: t("stress.frame.tabResults"),
     disabled: !result.value,
-    title: result.value ? undefined : "Run the analysis to see results",
+    title: result.value ? undefined : t("stress.frame.tabResultsTip"),
   },
 ]);
 
@@ -102,21 +103,21 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
 </script>
 
 <template>
-  <FloatingPanel :open="!!panels.stress" title="Stress" panel-class="stress-panel" @close="close">
+  <FloatingPanel :open="!!panels.stress" :title="t('stress.frame.title')" panel-class="stress-panel" @close="close">
     <template v-if="panels.stress && setup">
       <div class="stress-head">
-        <div class="measure-title" aria-hidden="true">Stress</div>
+        <div class="measure-title" aria-hidden="true">{{ t("stress.frame.title") }}</div>
         <IconButton
           class="stress-close"
           icon="close"
-          tip="Close Stress"
+          :tip="t('stress.frame.close')"
           size="sm"
           variant="plain"
           :icon-size="14"
           @click="close"
         />
       </div>
-      <Tabs v-model="step" label="Stress steps" :tabs="tabs" :panels="steps" />
+      <Tabs v-model="step" :label="t('stress.frame.steps')" :tabs="tabs" :panels="steps" />
 
       <KeepAlive>
         <StressResultsStep
@@ -128,24 +129,24 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       </KeepAlive>
 
       <div class="measure-hint">
-        <template v-if="panels.stress.probe">Hover the body to read it, click to pin, Esc to stop.</template>
-        <template v-else-if="panels.stress.placing && panels.stress.placeAs === 'spot'"
-          >Click the body to place a spot, Shift click for more, Esc to stop.</template
-        >
-        <template v-else-if="panels.stress.placing"
-          >Click a face to add all of it, Shift click for more, Esc to stop.</template
-        >
-        <template v-else-if="step === 'results' && result">Results are linear and approximate.</template>
-        <template v-else-if="ready">Ready, press Run.</template>
-        <template v-else>Give each support and load its faces, then Run.</template>
+        <template v-if="panels.stress.probe">{{ t("stress.frame.hintProbe") }}</template>
+        <template v-else-if="panels.stress.placing && panels.stress.placeAs === 'spot'">{{
+          t("stress.frame.hintSpot")
+        }}</template>
+        <template v-else-if="panels.stress.placing">{{ t("stress.frame.hintFace") }}</template>
+        <template v-else-if="step === 'results' && result">{{ t("stress.frame.hintResults") }}</template>
+        <template v-else-if="ready">{{ t("stress.frame.hintReady") }}</template>
+        <template v-else>{{ t("stress.frame.hintSetup") }}</template>
       </div>
 
       <div v-if="step === 'setup'" class="stress-foot">
         <template v-if="panels.stress.running">
-          <span class="stress-busy">Analysing…</span>
-          <Button class="stress-cancel" @click="engine.ui.panels.cancelStress()">Cancel</Button>
+          <span class="stress-busy">{{ t("stress.frame.busy") }}</span>
+          <Button class="stress-cancel" @click="engine.ui.panels.cancelStress()">{{ t("stress.frame.cancel") }}</Button>
         </template>
-        <Button v-else variant="primary" class="stress-run" @click="engine.ui.panels.runStress()">Run</Button>
+        <Button v-else variant="primary" class="stress-run" @click="engine.ui.panels.runStress()">{{
+          t("stress.frame.run")
+        }}</Button>
       </div>
     </template>
   </FloatingPanel>

@@ -6,20 +6,19 @@ import { describePick } from "../ui/describePick";
 import { useSelectionStore } from "../stores/selection";
 import {
   appearanceOffers,
-  primaryCount,
   primaryKind,
   toolbarOffers,
-  KIND_LABEL,
+  selectionCountText,
   type AppearanceOffer,
   type ToolOffer,
 } from "../ui/selectionTools";
 import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
-import { shippedPluginName } from "../plugins/shipped";
+import { shippedPluginName } from "../plugins/pluginNames";
+import { t } from "../i18n";
 import { describeSelection } from "../ui/selectionMeasure";
-
-const pluralOf = (k: keyof typeof KIND_LABEL) => (k === "body" ? "bodies" : `${KIND_LABEL[k]}s`);
+import { treePickWaiting } from "../ui/treePick";
 
 export interface PluginToolGroup {
   pluginId: string;
@@ -45,6 +44,8 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
 export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {}) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
+  const toolWorks = ref(false);
+  const pickWaits = ref(false);
   const words = opts.words ? createSelectionWords(engine) : null;
   const geometry = useGeometryBrowserStore();
   let signature = "";
@@ -68,11 +69,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     }));
   });
   const looks = computed(() => appearanceOffers(counts.value));
-  const summary = computed(() => {
-    const k = kind.value;
-    if (!k) return "";
-    return describeSelection({ count: primaryCount(counts.value), noun: KIND_LABEL[k], plural: pluralOf(k) });
-  });
+  const summary = computed(() => selectionCountText(counts.value));
   // A body selection gives no hint that a second click or a pause reaches the face or edge under the cursor
   // (viewport/clickIntent.ts), so the readout spells it out. Speech leaves that out, it is no use without a pointer.
   const readout = computed(() => {
@@ -80,19 +77,23 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     if (geometry.litRow) return describePick(geometry.litRow.facts).readout;
     if (words.line.value) return words.line.value;
     const k = kind.value;
-    if (!k) return words.planeCount.value > 1 ? `${words.planeCount.value} planes` : "";
-    const base = describeSelection({
-      // A run of pieces is one face to the person who picked it.
-      count: (k === "face" && words.faceRowCount.value) || primaryCount(counts.value),
-      noun: KIND_LABEL[k],
-      plural: pluralOf(k),
+    if (!k) return words.planeCount.value > 1 ? t("readout.planes", { n: words.planeCount.value }) : "";
+    // A run of pieces is one face to the person who picked it.
+    const all = {
+      ...counts.value,
+      ...(counts.value.face ? { face: words.faceRowCount.value || counts.value.face } : {}),
+    };
+    return describeSelection({
+      kind: k,
+      count: all[k] ?? 0,
       ...(k === "edge" ? { edges: words.edges.value } : {}),
+      bodyHint: k === "body" && engine.viewport.policy === "auto",
+      others: all,
     });
-    return k === "body" && engine.viewport.policy === "auto"
-      ? `${base} · click again for a face, or pause over it`
-      : base;
   });
   const speech = computed(() => words?.speech.value ?? null);
+  // A tool's own prompt speaks for the screen, so only a row the brackets lit for its waiting pick shows under it.
+  const lit = computed(() => geometry.litRow !== null && pickWaits.value);
 
   function refresh(): boolean {
     const next = readCounts(engine);
@@ -101,7 +102,9 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
       counts.value = next.counts;
     }
     toolOwns.value = engine.toolOwnsScreen();
-    words?.update(signature, toolOwns.value, escaped);
+    toolWorks.value = engine.toolAtWork();
+    pickWaits.value = treePickWaiting();
+    words?.update(signature, toolWorks.value, escaped);
     escaped = false;
     return Object.keys(next.counts).length > 0;
   }
@@ -120,7 +123,7 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
   // A screen reader's click on a row may send no pointer or key release.
   if (words)
     watch(
-      () => [useSelectionStore().rows, useGeometryBrowserStore().selected],
+      () => [useSelectionStore().rows, useGeometryBrowserStore().selected, geometry.litRow],
       () => wake(),
     );
 
@@ -198,7 +201,9 @@ export function useSelectionOffers(engine: Engine, opts: { words?: boolean } = {
     summary,
     readout,
     speech,
+    lit,
     toolOwns,
+    toolWorks,
     run,
     look,
     clear,

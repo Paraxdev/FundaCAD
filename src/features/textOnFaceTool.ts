@@ -75,7 +75,7 @@ export class TextOnFaceTool {
       });
     this.releaseRows = awaitFaceRows(
       this.viewport,
-      "a face",
+      "face",
       (f) => {
         const [selector] = f.selectors;
         if (!selector || f.faceIds.length !== 1) return "Pick one face to put text on";
@@ -228,7 +228,7 @@ export class TextOnFaceTool {
   private prompt() {
     setPrompt(
       `${this.engrave ? "Engrave" : "Emboss"} "${this.values.text.trim()}" · click or drag on the face to move it · ` +
-        "Add or Enter to commit · Esc",
+        "Add or Ctrl+Enter to commit · Esc",
     );
   }
 

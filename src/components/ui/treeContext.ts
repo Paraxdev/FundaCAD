@@ -93,11 +93,15 @@ export function typeAheadIndex(items: readonly TreeMeta[], from: number, text: s
 }
 
 /** Runs `raise` and hands focus back to the tree a keyboard user was in, now and after the next frame, where a raised
- *  field such as the Move box focuses itself a second time. A row reached by the pointer lets the field have it. */
+ *  field such as the Move box focuses itself a second time. A row reached by the pointer lets the field have it. A key
+ *  that moved focus out of the tree before that frame already said where it goes, so the frame leaves it there. */
 export function keepTreeKeyFocus(raise: () => void): void {
   const at = typeof document === "undefined" ? null : document.activeElement;
   const tree =
     at instanceof HTMLElement && at.matches(TREE_ITEM_SELECTOR) ? at.closest<HTMLElement>("[data-tree-keys]") : null;
+  // Registered before `raise`, so it runs ahead of the raised field's own frame focus, which is not a key's doing.
+  let inFrame = false;
+  if (tree) requestAnimationFrame(() => (inFrame = true));
   raise();
   if (!tree) return;
   // The arrows may have moved on before the frame, so the row to return to is the tree's Tab stop, not the first one.
@@ -106,5 +110,17 @@ export function keepTreeKeyFocus(raise: () => void): void {
     tree.querySelector<HTMLElement>(`${TREE_ITEM_SELECTOR}[tabindex="0"]`)?.focus();
   };
   back();
-  requestAnimationFrame(back);
+  let keyed = false;
+  let keyMoved = false;
+  const onKey = () => (keyed = true);
+  const onFocusIn = (e: FocusEvent) => {
+    if (keyed && !inFrame && !tree.contains(e.target as Node | null)) keyMoved = true;
+  };
+  window.addEventListener("keydown", onKey, true);
+  document.addEventListener("focusin", onFocusIn, true);
+  requestAnimationFrame(() => {
+    window.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("focusin", onFocusIn, true);
+    if (!keyMoved) back();
+  });
 }

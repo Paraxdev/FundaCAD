@@ -1,6 +1,7 @@
 // Text, classes and tooltips of the sketch dim badges and constraint glyphs, computed once per sketch rebuild.
 // Badge position changes every camera frame and is written by a rAF loop; screenTransform is its testable part.
 
+import { shownExpr, spellNumber } from "../ui/measure";
 import { displayValue, fmtLength, isPlainNumber } from "../ui/units";
 import type { ConstraintDiagnosis } from "./glyphs";
 
@@ -13,13 +14,14 @@ export function fmtDim(
   driven?: boolean | undefined,
   fx?: boolean | undefined,
 ): string {
-  const s = kind === "angle" ? `${displayValue(mm, "angle")}°` : fmtLength(mm);
+  const s = kind === "angle" ? `${spellNumber(displayValue(mm, "angle"))}°` : fmtLength(mm);
   return driven ? `(${s})` : fx ? `fx: ${s}` : s;
 }
 
 /** A real formula, not a bare literal, earns the `fx:` prefix, and a click reopens the expression. */
 export function isFormula(expr?: string | undefined): boolean {
-  return !!expr && !isPlainNumber(expr);
+  // Saved text, so read in point form: "0.125" is a literal in every language.
+  return !!expr && !isPlainNumber(expr, ".");
 }
 
 /** Conflict wins over over-defined, as in diagnosisOf() in glyphs.ts, so the two layers agree on red vs amber.
@@ -44,7 +46,7 @@ export function dimTitle(d: {
   expr?: string | undefined;
 }): string {
   if (d.driven) return "Reference dimension (measured, not driving)";
-  return d.fx ? `= ${d.expr} · click to edit` : "Click to edit, drag to move";
+  return d.fx ? `= ${shownExpr(d.expr ?? "")} · click to edit` : "Click to edit, drag to move";
 }
 
 export function glyphClass(st: ConstraintDiagnosis | null): string {

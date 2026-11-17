@@ -58,6 +58,7 @@ function rig() {
   const viewport = {
     domElement: canvas,
     suspendPicking: false,
+    pixelWorldSize: () => 0.1,
     // every probe lands in material, both ways: the guess would be Cut
     pointInSolid: () => true,
     requestRender: vi.fn(),

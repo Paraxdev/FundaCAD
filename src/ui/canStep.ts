@@ -1,5 +1,6 @@
 import type { DocumentStore } from "../document/store";
 import type { SketchMode } from "../sketch/sketchMode";
+import { t } from "../i18n";
 import { usePanelsStore } from "../stores/panels";
 
 /** An open sketch, then an open Stress panel, keep their own undo in front of the model's. */
@@ -13,18 +14,20 @@ export function canStep(e: { sketch: SketchMode; store: DocumentStore }, way: "u
 /** The step Undo or Redo would take, in the order `canStep` asks; null when there is none. A sketch has no names for its
  *  steps, so it says what kind of step it is. */
 export function stepLabelFor(e: { sketch: SketchMode; store: DocumentStore }, way: "undo" | "redo"): string | null {
-  if (e.sketch.active) return canStep(e, way) ? "sketch edit" : null;
+  if (e.sketch.active) return canStep(e, way) ? sketchStepName() : null;
   const stress = usePanelsStore().stress;
   if (stress) return way === "undo" ? stress.undoLabel : stress.redoLabel;
   return way === "undo" ? e.store.undoLabel : e.store.redoLabel;
 }
 
+export const sketchStepName = (): string => t("step.sketchEdit");
+
 const MENU_NAME_MAX = 32;
 
 /** "Undo Fillet 2" for a menu row or tooltip, or the bare verb when there is no step. A long name is clipped so a row
  *  keeps its width; the spoken line keeps the whole name. */
-export function stepMenuText(verb: "Undo" | "Redo", label: string | null): string {
-  if (!label) return verb;
-  const name = label.length > MENU_NAME_MAX ? `${label.slice(0, MENU_NAME_MAX)}…` : label;
-  return `${verb} ${name}`;
+export function stepMenuText(way: "undo" | "redo", step: string | null): string {
+  if (!step) return t(way === "undo" ? "step.undo" : "step.redo");
+  const name = step.length > MENU_NAME_MAX ? `${step.slice(0, MENU_NAME_MAX)}…` : step;
+  return t(way === "undo" ? "step.undoNamed" : "step.redoNamed", { step: name });
 }

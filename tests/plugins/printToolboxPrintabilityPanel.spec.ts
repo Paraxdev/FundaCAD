@@ -115,12 +115,12 @@ describe("PrintabilityPanel", () => {
     expect((q(".printability-overhang input") as HTMLInputElement).value).toBe("45");
     expect((q(".printability-gap input") as HTMLInputElement).value).toBe("0.2");
     expect((q(".printability-bridge input") as HTMLInputElement).value).toBe("10");
-    expect((q(".printability-up") as HTMLSelectElement).value).toBe("+Z");
+    expect(q(".printability-up")!.textContent).toBe("+Z, as modelled");
     const nozzle = q(".printability-nozzle input") as HTMLInputElement;
     nozzle.value = "0.6";
     nozzle.dispatchEvent(new Event("input"));
     expect(p.data.value!.setup.nozzle).toBe(0.6);
-    (q(".printability-check-wall") as HTMLInputElement).click();
+    (q(".printability-check-wall input") as HTMLInputElement).click();
     expect(p.data.value!.setup.checks.wall).toBe(false);
     q(".printability-run")!.click();
     expect(ctl.run).toHaveBeenCalledOnce();
@@ -131,10 +131,10 @@ describe("PrintabilityPanel", () => {
     const { p } = await mounted();
     p.show();
     await flushPromises();
-    (q(".printability-layflat") as HTMLInputElement).click();
+    (q(".printability-layflat input") as HTMLInputElement).click();
     await flushPromises();
     expect(p.data.value!.setup.layFlat).toBe(true);
-    expect((q(".printability-up") as HTMLSelectElement).disabled).toBe(true);
+    expect(q(".printability-up")!.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("says which bodies a Check covers", async () => {
@@ -174,10 +174,10 @@ describe("PrintabilityPanel", () => {
       "Overhang, 132 mm² leaning 90°",
       "Bridge 14 mm span (over 10)",
     ]);
-    expect(q(".printability-note")?.textContent).toBe("Open shell, 4 open edges");
+    expect(q(".printability-note")?.textContent).toBe("Warning: Open shell, 4 open edges");
     expect(qa(".printability-clean")).toHaveLength(1);
     expect(qa(".printability-legend-item").map((e) => e.textContent)).toEqual(["Overhang", "Bridge"]);
-    expect(q(".printability-warning")?.textContent).toBe("f3: fillet failed");
+    expect(q(".printability-warning")?.textContent).toBe("Warning: f3: fillet failed");
     expect(q(".printability-panel")!.textContent).not.toMatch(/ - |\u2014/);
   });
 
@@ -253,7 +253,7 @@ describe("PrintabilityPanel", () => {
     p.show();
     p.finished({ error: "face 7 of body1 is not flat" });
     await flushPromises();
-    expect(q(".printability-error")?.textContent).toBe("face 7 of body1 is not flat");
+    expect(q(".printability-error")?.textContent).toBe("Error: face 7 of body1 is not flat");
     p.finished({ result: formatPrintabilityResult({ ...reply, bodies: [], findings: [], errors: [] }) });
     p.setStale();
     await flushPromises();

@@ -175,14 +175,17 @@ Reply `result` is one of:
   A diagnostic may carry a machine-readable **`code`** beside its human `reason`:
   `ambiguousReference` (the selector matched several candidates), `referenceNotFound`
   (it matched nothing), `planeTilted` (a face-anchored plane's face is no longer
-  parallel, so the plane kept its cached placement) and `sealedVoid` (a Cut closed a
-  cavity inside a body instead of reaching its surface). Adding a code is a pure addition,
+  parallel, so the plane kept its cached placement), `sealedVoid` (a Cut closed a
+  cavity inside a body instead of reaching its surface) and `partialCut` (a Cut the
+  kernel only made with its tool in slices, where no second slicing confirmed how much
+  it removed, so part of the tool may be left uncut). Adding a code is a pure addition,
   an unrecognised one must read as "unclassified", and the prose match on `ambiguous
   nearest pick` is still honoured, so an engine older than the field keeps its repair
   affordance. The first two are repairable by picking a face; `planeTilted` is not,
   because the candidate filter is taken against the cached normal and re-picking the
   same tilted face reproduces the same diagnostic; neither is `sealedVoid`, which
-  describes a RESULT rather than a resolution and has no reference to re-pick.
+  describes a RESULT rather than a resolution and has no reference to re-pick, nor
+  `partialCut`, for the same reason.
 
   An advisory (`lossy: false`) says in its `reason` what a feature left behind, on the
   feature that did it and once, not on every feature after it. Its `code` is
@@ -1043,8 +1046,9 @@ losing the socket gives it up.
 
 // a guest reading. Also its heartbeat, which is why the name is on a READ.
 { "op": "session_state", "id": "...", "name": "an assistant" }
-// -> { "attached": true, "revision": 12, "title": "...", "status": { ... },
+// -> { "attached": true, "starting": false, "revision": 12, "title": "...", "status": { ... },
 //      "document": { ... }, "guests": [...] }
+// `starting` is true until a window first hosts or 30 s pass, so a guest can wait for a page still loading.
 
 // a guest offering an edit
 { "op": "session_propose", "id": "...", "document": { ... }, "baseRevision": 12,
@@ -1070,7 +1074,8 @@ losing the socket gives it up.
 ```
 
 Commands are `highlight` (`target` is one of `ui`, a control id; `model`, a selector;
-`region`, viewport fractions `{x, y, w, h}`), `clear`, and `wait` (`until`, a list of
+`region`, viewport fractions `{x, y, w, h}`; an optional `keys`, the step in words for keys
+alone, capped like `caption`), `clear`, and `wait` (`until`, a list of
 `next`, `tool`, `feature`, `selection`, `value`, with optional `tool` and `field`).
 The engine keeps the newest step (a highlight or a clear) and the newest wait, never a
 backlog: a window too old to take them shows up as no `ack` rather than as a full queue.

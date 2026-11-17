@@ -1,0 +1,13 @@
+{
+  "group.print": "印刷",
+  "tool.bedFit": "ベッド適合チェック",
+  "tool.counterboreBridge": "座ぐりブリッジ",
+  "tool.elephantFootChamfer": "エレファントフット面取り",
+  "tool.printability": "印刷適性",
+  "tool.roofBridge": "ルーフブリッジ",
+  "tool.sacrificialLayer": "犠牲レイヤー",
+  "tool.teardrop": "ティアドロップ",
+  "tool.threadRibs": "ねじ形成リブ",
+  "tool.verticalFillet": "垂直エッジのフィレット",
+  "tool.zipTieChannel": "結束バンド用溝"
+}

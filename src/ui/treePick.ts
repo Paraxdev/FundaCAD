@@ -1,10 +1,12 @@
 // Offers an Items or Geometry row to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
 // would start a sketch, abandoning Offset Plane, Split and the rest. The row's own action runs only when nothing waits.
 
+import { t } from "../i18n";
 import type { Plane3, PlaneDef, Vec3 } from "../types";
 import type { EdgeRef } from "../viewport/edgeLines";
 
-/** What a row stands for, resolved at click time so a taker needs nothing else. */
+/** What a row stands for, resolved at click time so a taker needs nothing else. A face from the Geometry list carries
+ *  that list's name for it, "Flat face 6". */
 export type TreePick =
   | { kind: "basePlane"; plane: Plane3 }
   | { kind: "datumPlane"; id: string; def: PlaneDef }
@@ -14,11 +16,18 @@ export type TreePick =
   | { kind: "bodies"; ids: readonly string[] }
   | { kind: "sketch"; id: string }
   | { kind: "feature"; id: string }
-  | { kind: "face"; faceId: number }
+  | { kind: "face"; faceId: number; name?: string }
   | { kind: "edge"; edge: EdgeRef };
 
-/** `true` when the pick was taken, otherwise the short hint saying why not. */
-export type TreePickAnswer = true | string;
+/** What a taker did with a pick it took, so the words come in the person's language. */
+export interface TreePickDone {
+  done: "added" | "takenOut" | "mirrorPlane";
+  /** Edges one pick added or took out, more than one when its tangent chain came along. */
+  edges?: number;
+}
+
+/** `true` or a `done` when the pick was taken, otherwise the short hint saying why not. */
+export type TreePickAnswer = true | string | TreePickDone;
 export type TreePickTaker = (pick: TreePick) => TreePickAnswer;
 
 interface PickSession {
@@ -30,6 +39,13 @@ interface PickSession {
 }
 
 let session: PickSession | null = null;
+const begun = new Set<() => void>();
+
+/** `fn` runs each time a pick session begins, until the returned stop runs. */
+export function onPickSessionBegin(fn: () => void): () => void {
+  begun.add(fn);
+  return () => begun.delete(fn);
+}
 
 /** Rows go to `taker` until the returned release runs. `end` is the pick's cleanup, run when anything else ends the
  *  session, so a taker never outlives its tool. `keepsOnRewind` is for a tool that stays open through an undo or a
@@ -49,6 +65,7 @@ export function awaitTreePick(
     batch: opts.batch ?? null,
   };
   session = mine;
+  for (const fn of begun) fn();
   return () => {
     if (session === mine) session = null;
   };
@@ -81,22 +98,25 @@ export function pickHoldsEdits(): boolean {
   return session !== null && !session.keepsOnCommand;
 }
 
-const NOUN: Record<TreePick["kind"], string> = {
-  basePlane: "a base plane",
-  datumPlane: "a datum plane",
-  datumPoint: "a datum point",
-  datumAxis: "a datum axis",
-  body: "a body",
-  bodies: "a folder of bodies",
-  sketch: "a sketch",
-  feature: "a feature",
-  face: "a face",
-  edge: "an edge",
-};
+export type TreePickWant =
+  | "face"
+  | "flatFace"
+  | "roundFace"
+  | "modelFlatFace"
+  | "edge"
+  | "faceOrEdge"
+  | "axisFaceOrEdge"
+  | "planeOrFace"
+  | "planeOrFlatFace"
+  | "bodyPlaneOrFlatFace"
+  | "body"
+  | "oneBody"
+  | "datumPoint"
+  | "sketchProfile"
+  | "axisOrStraightEdge";
 
-/** The hint for a row a step cannot take: what the row is and what the step wants. */
-export function treePickRefusal(pick: TreePick, wanted: string): string {
-  return `That row is ${NOUN[pick.kind]}, this step needs ${wanted}`;
+export function treePickRefusal(pick: TreePick, wanted: TreePickWant): string {
+  return t("pick.refused", { row: pick.kind, wanted });
 }
 
 export interface TreeClickDeps {
@@ -112,7 +132,7 @@ export type TreeClickRoute = "row" | "taken" | "refused";
 export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRoute {
   if (session) {
     const answer = session.taker(pick);
-    if (answer === true) {
+    if (typeof answer !== "string") {
       deps.taken?.();
       return "taken";
     }
@@ -127,13 +147,54 @@ export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRo
   return "row";
 }
 
-/** Offers each pick in turn, as clicks would, until one is not taken or the session ends. */
-export function routeTreeRun(picks: readonly TreePick[], deps: TreeClickDeps): void {
+export interface NamedPick {
+  pick: TreePick;
+  /** What the pick is called aloud, "Flat face 6 of Bracket". Read only when one pick is taken, a run says a count. */
+  readonly name: string;
+}
+
+export interface OfferDeps extends TreeClickDeps {
+  say: (text: string) => void;
+}
+
+type DoneWord = TreePickDone["done"] | "other";
+
+function takenWords(taken: readonly NamedPick[], words: readonly DoneWord[], edges: number): string {
+  if (taken.length > 1) {
+    return t("pick.doneRun", { n: taken.length, done: words.every((w) => w === words[0]) ? words[0]! : "other" });
+  }
+  const name = taken[0]!.name;
+  return edges > 1
+    ? t("pick.doneChain", { name, done: words[0]!, n: edges })
+    : t("pick.done", { name, done: words[0]! });
+}
+
+/** Offers each pick in turn, as clicks would, until one is refused or the session ends, and says what was taken.
+ *  A refusal goes out with the taken words in one hint, so neither cancels the other. */
+export function offerPicks(offers: readonly NamedPick[], deps: OfferDeps): void {
+  const took: NamedPick[] = [];
+  const words: DoneWord[] = [];
+  let edges = 0;
+  let refusal = null as string | null;
   const run = () => {
-    for (const p of picks) if (!session || routeTreeClick(p, deps) !== "taken") break;
+    for (const o of offers) {
+      if (!session) return;
+      const answer = session.taker(o.pick);
+      if (typeof answer === "string") {
+        refusal = answer;
+        return;
+      }
+      took.push(o);
+      words.push(answer === true ? "other" : answer.done);
+      edges = answer === true ? 0 : (answer.edges ?? 0);
+    }
   };
   if (session?.batch) session.batch(run);
   else run();
+  if (took.length) deps.taken?.();
+  const taken = took.length ? takenWords(took, words, edges) : null;
+  if (refusal !== null) deps.hint(taken === null ? refusal : t("pick.takenThenRefused", { taken, refusal }));
+  else if (taken !== null) deps.say(taken);
 }
 
 export function resetTreePicks() {

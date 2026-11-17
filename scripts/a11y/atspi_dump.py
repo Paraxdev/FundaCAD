@@ -15,7 +15,8 @@ import sys
 import time
 
 NAMED_ROLES = ("push button", "toggle button", "push button menu", "menu item")
-DOCUMENT_ROLES = ("document web",)
+# WebKitGTK on Ubuntu 22.04 names the page root "document text", other builds "document web".
+DOCUMENT_ROLES = ("document web", "document text")
 
 
 def node(role, name="", states=("showing", "visible"), children=()):
@@ -54,7 +55,7 @@ def problems(apps):
     for app in apps:
         visit(app, [])
     if not documents:
-        found.append("no document web node, the page never reached the accessibility bus")
+        found.append("no web document node, the page never reached the accessibility bus")
     return found
 
 

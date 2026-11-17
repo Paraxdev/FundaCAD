@@ -12,5 +12,27 @@
   "formerIds": [
     "multi-material",
     "multiColor"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Mehrmaterial",
+      "summary": "Filamentplätze pro Körper und pro Texturfarbe, dazu die Zuordnung der Werkzeugköpfe, die ein mehrfarbiger Druck braucht."
+    },
+    "es": {
+      "name": "Multimaterial",
+      "summary": "Ranuras de filamento por cuerpo y por color de textura, y la asignación de cabezales que necesita una impresión multicolor."
+    },
+    "fr": {
+      "name": "Multi-matériaux",
+      "summary": "Emplacements de filament par corps et par couleur de texture, et l'attribution des têtes d'outil dont une impression multicolore a besoin."
+    },
+    "ja": {
+      "name": "マルチマテリアル",
+      "summary": "ボディごと、テクスチャ色ごとのフィラメントスロットと、マルチカラー印刷に必要なツールヘッドの割り当て。"
+    },
+    "zh-CN": {
+      "name": "多材料",
+      "summary": "按实体和纹理颜色设置耗材槽位,以及多色打印所需的工具头分配。"
+    }
+  }
 }

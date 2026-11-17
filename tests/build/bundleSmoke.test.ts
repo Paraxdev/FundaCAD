@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import workflow from "../../.github/workflows/build.yml?raw";
+import installSmoke from "../../scripts/package-install-smoke.sh?raw";
 
 type Step = { name: string; text: string };
 
@@ -129,5 +130,47 @@ describe("the deb-install job", () => {
     expect(text).toMatch(/fail-fast: false/);
     const release = /^ {4}needs: (.*)$/m.exec(job(workflow, "release"))?.[1] ?? "";
     expect(release).not.toContain("deb-install");
+  });
+
+  it("leaves each image on its own mirror, since the runner's Azure one stalled three of four Ubuntu installs", () => {
+    const code = (t: string) => t.replace(/\r/g, "").replace(/^\s*#.*$/gm, "");
+    expect(code(text)).not.toMatch(/azure\.archive|UBUNTU_MIRROR/);
+    expect(code(installSmoke)).not.toMatch(/azure\.archive|UBUNTU_MIRROR|sources\.list/);
+  });
+});
+
+describe("the package install script's apt", () => {
+  const script = installSmoke.replace(/\r/g, "");
+  const deb = /^deb\)\n([\s\S]*?)^ {2};;/m.exec(script)?.[1] ?? "";
+  // A call, not a comment or a message that names one.
+  const aptCall = /^(?!\s*#)[^"\n]*\bapt-get (update|install)\b.*$/gm;
+  const firstApt = deb.search(aptCall);
+
+  it("retries and times out every fetch, set up before the first apt call", () => {
+    const conf = deb.indexOf("/etc/apt/apt.conf.d/");
+    expect(conf).toBeGreaterThanOrEqual(0);
+    expect(conf).toBeLessThan(firstApt);
+    expect(deb).toMatch(/Acquire::Retries "\d+";/);
+    expect(deb).toMatch(/Acquire::http::Timeout "\d+";/);
+  });
+
+  it("counts an index that failed to download as a failed update, which apt otherwise lets pass", () => {
+    expect(deb).toContain('APT::Update::Error-Mode "any";');
+  });
+
+  it("puts every apt call on a clock that fits the job's 20 minutes", () => {
+    const calls = [...deb.matchAll(aptCall)].map((m) => m[0]);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const call of calls) expect(call, call).toMatch(/timeout -k \d+ \d+ apt-get/);
+    const secs = (verb: string) => Number(new RegExp(`timeout -k \\d+ (\\d+) apt-get ${verb}`).exec(deb)?.[1]);
+    expect(3 * secs("update") + 2 * 15 + secs("install")).toBeLessThan(15 * 60);
+  });
+
+  it("shows where a failed or stalled install stopped, which -qq hides", () => {
+    const failed =
+      /if ! timeout [^\n]*apt-get install[^\n]*; then\n([\s\S]*?)\n {4}exit 1\n {2}fi/.exec(deb)?.[1] ?? "";
+    expect(failed).toContain("/var/log/apt/term.log");
+    expect(failed).toContain("/var/log/dpkg.log");
+    expect(failed).toContain("/var/cache/apt/archives/partial");
   });
 });

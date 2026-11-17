@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The fields asked for follow the kind and part types, from catalogue/fields.json, the list the geometry checks against.
 
-import { computed, reactive, ref } from "vue";
-import { NumberField } from "fundacad/ui";
+import { computed, reactive, ref, watch } from "vue";
+import { Button, FieldRow, NumberField, Select, TextField, announce } from "fundacad/ui";
+import { plainNumber, typedExprProblem } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
 import {
   HANDS,
@@ -73,9 +74,9 @@ function part(p: PartName): Record<string, unknown> {
 
 // The form's numbers are in its own units, and a written unit would fold to mm whatever those are, so a plain number
 // is all that reads.
-function plainNumber(raw: string): number {
-  const x = Number(raw.trim().replace(",", "."));
-  if (!Number.isFinite(x)) throw new Error("Not a number");
+function readNumber(raw: string): number {
+  const x = plainNumber(raw);
+  if (x === null) throw new Error(typedExprProblem(raw) ?? "Not a number");
   return x;
 }
 
@@ -106,13 +107,13 @@ function writeTpi(v: number | null) {
   part("thread")["pitch"] = v && v > 0 ? +(1 / v).toFixed(8) : undefined;
 }
 
-function onKind(ev: Event) {
-  draft["kind"] = (ev.target as HTMLSelectElement).value;
+function onKind(value: string) {
+  draft["kind"] = value;
   ensureParts();
 }
 
-function onUnits(ev: Event) {
-  draft["units"] = (ev.target as HTMLSelectElement).value;
+function onUnits(value: string) {
+  draft["units"] = value;
   const t = part("thread");
   if (t && (t["type"] === "metric" || t["type"] === "unified")) t["type"] = inch.value ? "unified" : "metric";
 }
@@ -142,16 +143,51 @@ const problems = computed(() => [
 const previewProblem = ref<string | null>(null);
 const previewSpec = computed(() => (problems.value.length ? null : spec.value));
 
-const field = { width: "100%", boxSizing: "border-box" as const };
-const label = { display: "grid", gridTemplateColumns: "150px 1fr", alignItems: "center", gap: "8px", margin: "3px 0" };
+const kindOptions = Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }));
+const unitOptions = [
+  { value: "mm", label: "Millimetres" },
+  { value: "in", label: "Inches" },
+];
+const handOptions = HANDS.map((h) => ({ value: h, label: h === "right" ? "Right" : "Left" }));
+const threadOptions = [
+  { value: "simple", label: "Simplified" },
+  { value: "modelled", label: "Modelled helix" },
+];
+const titled = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
+const typeOptions = (p: PartName) => Object.entries(PARTS[p]).map(([value, def]) => ({ value, label: def.label }));
+
+// A plugin ships no stylesheet, so the layout is written here.
+const LABEL_WIDTH = "150px";
+const FILL = { width: "100%" };
 const heading = {
   margin: "10px 0 4px",
   fontWeight: 600,
-  fontSize: "var(--fs-micro, 11px)",
+  fontSize: "var(--fs-micro)",
   textTransform: "uppercase" as const,
   letterSpacing: "0.05em",
-  color: "var(--text-dim, #aaa1b5)",
+  color: "var(--text-dim)",
 };
+
+const allProblems = computed(() =>
+  problems.value.length ? problems.value : previewProblem.value ? [previewProblem.value] : [],
+);
+
+// Spoken once per change and only after the person has used the form, never for what it opens with.
+let touched = false;
+const touch = () => {
+  touched = true;
+};
+watch(
+  () => allProblems.value.join("|"),
+  () => {
+    if (!touched) return;
+    const [first, ...more] = allProblems.value;
+    const line = first
+      ? `${first}${more.length ? `, and ${more.length} more` : ""}`
+      : "Everything needed to build it is there";
+    announce(line, first ? "assertive" : "polite", { key: "screws-form-problems", delay: 500 });
+  },
+);
 </script>
 
 <template>
@@ -164,181 +200,220 @@ const heading = {
       gap: '16px',
       minHeight: 0,
     }"
+    @pointerdown.capture="touch"
+    @input.capture="touch"
+    @keydown.capture="touch"
   >
     <div :style="{ minHeight: '140px', overflow: 'auto', paddingRight: '6px' }">
-      <label :style="label"
-        ><span>Name</span
-        ><input
-          class="measure-number scr-name"
-          :style="field"
-          :value="draft['name']"
+      <FieldRow v-slot="{ id }" layout="param" label="Name" :label-width="LABEL_WIDTH">
+        <TextField
+          :id="id"
+          class="scr-name"
+          size="sm"
+          label="Name"
           placeholder="M4 thumb screw, long"
-          @input="draft['name'] = ($event.target as HTMLInputElement).value"
-      /></label>
-      <label :style="label">
-        <span>Kind</span>
-        <select class="measure-select scr-kind" :style="field" :value="draft['kind']" @change="onKind">
-          <option v-for="(k, id) in KINDS" :key="id" :value="id">{{ k.label }}</option>
-        </select>
-      </label>
-      <label :style="label">
-        <span>Units</span>
-        <select class="measure-select scr-units" :style="field" :value="draft['units']" @change="onUnits">
-          <option value="mm">Millimetres</option>
-          <option value="in">Inches</option>
-        </select>
-      </label>
-      <label :style="label"
-        ><span>Standard (optional)</span
-        ><input
-          class="measure-number"
-          :style="field"
-          :value="draft['standard']"
-          @input="draft['standard'] = ($event.target as HTMLInputElement).value"
-      /></label>
+          :model-value="String(draft['name'] ?? '')"
+          @update:model-value="draft['name'] = $event"
+        />
+      </FieldRow>
+      <FieldRow v-slot="{ id }" layout="param" label="Kind" :label-width="LABEL_WIDTH">
+        <Select
+          :id="id"
+          class="scr-kind"
+          size="sm"
+          label="Kind"
+          :options="kindOptions"
+          :model-value="String(draft['kind'])"
+          @update:model-value="onKind"
+        />
+      </FieldRow>
+      <FieldRow v-slot="{ id }" layout="param" label="Units" :label-width="LABEL_WIDTH">
+        <Select
+          :id="id"
+          class="scr-units"
+          size="sm"
+          label="Units"
+          :options="unitOptions"
+          :model-value="String(draft['units'])"
+          @update:model-value="onUnits"
+        />
+      </FieldRow>
+      <FieldRow v-slot="{ id }" layout="param" label="Standard (optional)" :label-width="LABEL_WIDTH">
+        <TextField
+          :id="id"
+          size="sm"
+          label="Standard (optional)"
+          :model-value="String(draft['standard'] ?? '')"
+          @update:model-value="draft['standard'] = $event"
+        />
+      </FieldRow>
 
       <template v-for="p in parts" :key="p">
-        <div :style="heading">{{ p }}</div>
-        <label :style="label">
-          <span>Type</span>
-          <select
-            class="measure-select"
+        <h3 :style="heading">{{ p }}</h3>
+        <FieldRow v-slot="{ id }" layout="param" label="Type" :label-width="LABEL_WIDTH">
+          <Select
+            :id="id"
             :class="`scr-${p}-type`"
-            :style="field"
-            :value="part(p)['type']"
-            @change="part(p)['type'] = ($event.target as HTMLSelectElement).value"
-          >
-            <option v-for="(def, id) in PARTS[p]" :key="id" :value="id">{{ def.label }}</option>
-          </select>
-        </label>
+            size="sm"
+            :label="`${titled(p)} type`"
+            :options="typeOptions(p)"
+            :model-value="String(part(p)['type'])"
+            @update:model-value="part(p)['type'] = $event"
+          />
+        </FieldRow>
         <template v-for="[f, text] in PARTS[p][String(part(p)['type'])]?.fields ?? []" :key="f">
-          <label v-if="p === 'thread' && f === 'pitch' && inch" :style="label">
-            <span>Threads per inch</span>
+          <FieldRow
+            v-if="p === 'thread' && f === 'pitch' && inch"
+            v-slot="{ id }"
+            layout="param"
+            label="Threads per inch"
+            :label-width="LABEL_WIDTH"
+          >
             <NumberField
+              :id="id"
               class="scr-tpi"
               label="Threads per inch"
+              caption="TPI"
               size="sm"
               commit="live"
               limits="arrows"
               nullable
-              :parse="plainNumber"
+              :parse="readNumber"
               :min="0"
-              :style="field"
               :model-value="tpi"
               @update:model-value="writeTpi"
               @error="$event && writeTpi(null)"
             />
-          </label>
-          <label v-else :style="label">
-            <span>{{ text }} ({{ inch ? "in" : "mm" }})</span>
+          </FieldRow>
+          <FieldRow v-else v-slot="{ id }" layout="param" :label="text" :label-width="LABEL_WIDTH">
             <NumberField
+              :id="id"
               :class="`scr-${p}-${f}`"
-              :label="`${text} (${inch ? 'in' : 'mm'})`"
+              :label="text"
+              :unit="inch ? undefined : 'mm'"
+              :caption="inch ? 'in' : undefined"
               size="sm"
               commit="live"
               limits="arrows"
               nullable
-              :parse="plainNumber"
+              :parse="readNumber"
               :min="0"
-              :style="field"
               :model-value="numberOr(part(p)[f])"
               @update:model-value="writeField(p, f, $event)"
               @error="$event && writeField(p, f, null)"
             />
-          </label>
+          </FieldRow>
         </template>
-        <label v-if="p === 'head' && part('head')['type'] === 'countersunk'" :style="label">
-          <span>Countersink angle (deg)</span>
+        <FieldRow
+          v-if="p === 'head' && part('head')['type'] === 'countersunk'"
+          v-slot="{ id }"
+          layout="param"
+          label="Countersink angle"
+          :label-width="LABEL_WIDTH"
+        >
           <NumberField
-            label="Countersink angle (deg)"
+            :id="id"
+            label="Countersink angle"
+            unit="deg"
             size="sm"
             commit="live"
             nullable
-            :parse="plainNumber"
+            :parse="readNumber"
             :min="1"
             :max="179"
             :step-from="90"
             placeholder="90"
-            :style="field"
             :model-value="numberOr(part('head')['angle'])"
             @update:model-value="writeField('head', 'angle', $event)"
             @error="refuse('head', 'angle', 'Countersink angle', $event)"
             @vue:unmounted="refused['angle'] = null"
           />
-        </label>
-        <label
+        </FieldRow>
+        <FieldRow
           v-if="p === 'drive' && ['phillips', 'pozidriv', 'torx'].includes(String(part('drive')['type']))"
-          :style="label"
+          v-slot="{ id }"
+          layout="param"
+          label="Driver number (optional)"
+          :label-width="LABEL_WIDTH"
         >
-          <span>Driver number (optional)</span>
           <NumberField
+            :id="id"
             label="Driver number (optional)"
+            unitless
             size="sm"
             commit="live"
             nullable
-            :parse="plainNumber"
+            :parse="readNumber"
             :min="0"
             :step="1"
-            :style="field"
             :model-value="numberOr(part('drive')['number'])"
             @update:model-value="writeField('drive', 'number', $event)"
             @error="refuse('drive', 'number', 'Driver number', $event)"
             @vue:unmounted="refused['number'] = null"
           />
-        </label>
+        </FieldRow>
         <template v-if="p === 'thread'">
-          <label :style="label">
-            <span>Hand</span>
-            <select
-              class="measure-select"
-              :style="field"
-              :value="part('thread')['hand'] ?? 'right'"
-              @change="part('thread')['hand'] = ($event.target as HTMLSelectElement).value"
-            >
-              <option v-for="h in HANDS" :key="h" :value="h">{{ h === "right" ? "Right" : "Left" }}</option>
-            </select>
-          </label>
-          <label :style="label">
-            <span>Thread</span>
-            <select
-              class="measure-select"
-              :style="field"
-              :value="part('thread')['modelled'] ? 'modelled' : 'simple'"
-              @change="part('thread')['modelled'] = ($event.target as HTMLSelectElement).value === 'modelled'"
-            >
-              <option value="simple">Simplified</option>
-              <option value="modelled">Modelled helix</option>
-            </select>
-          </label>
+          <FieldRow v-slot="{ id }" layout="param" label="Hand" :label-width="LABEL_WIDTH">
+            <Select
+              :id="id"
+              size="sm"
+              label="Hand"
+              :options="handOptions"
+              :model-value="String(part('thread')['hand'] ?? 'right')"
+              @update:model-value="part('thread')['hand'] = $event"
+            />
+          </FieldRow>
+          <FieldRow v-slot="{ id }" layout="param" label="Thread" :label-width="LABEL_WIDTH">
+            <Select
+              :id="id"
+              size="sm"
+              label="Thread"
+              :options="threadOptions"
+              :model-value="part('thread')['modelled'] ? 'modelled' : 'simple'"
+              @update:model-value="part('thread')['modelled'] = $event === 'modelled'"
+            />
+          </FieldRow>
         </template>
       </template>
 
-      <div v-if="KINDS[kind].fields.length" :style="heading">Lengths</div>
-      <label v-for="[path, text] in KINDS[kind].fields" :key="path" :style="label">
-        <span>{{ text }} ({{ inch ? "in" : "mm" }})</span>
+      <h3 v-if="KINDS[kind].fields.length" :style="heading">Lengths</h3>
+      <FieldRow
+        v-for="[path, text] in KINDS[kind].fields"
+        :key="path"
+        v-slot="{ id }"
+        layout="param"
+        :label="text"
+        :label-width="LABEL_WIDTH"
+      >
         <NumberField
+          :id="id"
           :class="`scr-len-${path.replace('.', '-')}`"
-          :label="`${text} (${inch ? 'in' : 'mm'})`"
+          :label="text"
+          :unit="inch ? undefined : 'mm'"
+          :caption="inch ? 'in' : undefined"
           size="sm"
           commit="live"
           limits="arrows"
           nullable
-          :parse="plainNumber"
+          :parse="readNumber"
           :min="0"
-          :style="field"
           :model-value="numberOr(getPath(draft, path))"
           @update:model-value="writePath(path, $event)"
           @error="$event && writePath(path, null)"
         />
-      </label>
+      </FieldRow>
 
-      <div :style="heading">Notes</div>
-      <textarea
-        class="measure-number"
-        :style="{ ...field, minHeight: '48px', textAlign: 'left' }"
-        :value="String(draft['notes'] ?? '')"
-        @input="draft['notes'] = ($event.target as HTMLTextAreaElement).value"
-      />
+      <FieldRow v-slot="{ id }" layout="stacked" label="Notes">
+        <TextField
+          :id="id"
+          multiline
+          rows="3"
+          label="Notes"
+          :style="FILL"
+          :model-value="String(draft['notes'] ?? '')"
+          @update:model-value="draft['notes'] = $event"
+        />
+      </FieldRow>
     </div>
 
     <div
@@ -359,19 +434,15 @@ const heading = {
         @problem="previewProblem = $event"
       />
       <div :style="{ flex: '1 1 100%', minWidth: 0, order: stacked ? -1 : 0, marginBottom: stacked ? '8px' : 0 }">
-        <ul
-          v-if="problems.length || previewProblem"
+        <div
+          v-if="allProblems.length"
           class="scr-problems"
-          :style="{
-            margin: stacked ? 0 : '8px 0 0',
-            paddingLeft: '16px',
-            color: 'var(--warn, #ffab2e)',
-            fontSize: 'var(--fs-small, 12px)',
-          }"
+          :style="{ margin: stacked ? 0 : '8px 0 0', color: 'var(--warn)', fontSize: 'var(--fs-small)' }"
         >
-          <li v-for="msg in problems" :key="msg">{{ msg }}</li>
-          <li v-if="!problems.length && previewProblem">{{ previewProblem }}</li>
-        </ul>
+          <ul :style="{ margin: 0, paddingLeft: '16px' }">
+            <li v-for="msg in allProblems" :key="msg">{{ msg }}</li>
+          </ul>
+        </div>
         <div v-else class="measure-hint">Everything needed to build it is there.</div>
       </div>
       <div
@@ -381,18 +452,20 @@ const heading = {
           flex: stacked ? '1 1 140px' : '1 1 100%',
           gap: '8px',
           marginTop: stacked ? 0 : '10px',
-          minWidth: 0,
+          // Too narrow for Save beside the preview, the row wraps below it instead of running past the panel edge.
+          minWidth: 'min-content',
         }"
       >
-        <button
-          type="button"
-          class="btn scr-save"
-          :disabled="problems.length > 0 || !!previewProblem"
+        <Button
+          variant="primary"
+          class="scr-save"
+          :disabled="allProblems.length > 0"
+          disabled-reason="Fix what is listed first"
           @click="emit('save', spec)"
         >
           {{ editing ? "Save changes" : "Add to my fasteners" }}
-        </button>
-        <button type="button" class="btn" @click="emit('cancel')">Cancel</button>
+        </Button>
+        <Button class="scr-cancel" @click="emit('cancel')">Cancel</Button>
       </div>
     </div>
   </div>

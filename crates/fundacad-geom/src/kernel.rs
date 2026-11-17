@@ -1052,3 +1052,8 @@ pub fn screw_sweep(
 pub fn point_inside(s: &Shape, p: [f64; 3], tol: f64) -> bool {
     opencascade_sys::plugin_ops::po_classify(s.raw(), p[0], p[1], p[2], tol) == 0
 }
+
+/// True when `p` lies off the solid `s` by more than `tol`, a point on its skin is not outside.
+pub fn point_outside(s: &Shape, p: [f64; 3], tol: f64) -> bool {
+    opencascade_sys::plugin_ops::po_classify(s.raw(), p[0], p[1], p[2], tol) == 2
+}

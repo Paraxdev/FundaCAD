@@ -62,6 +62,14 @@ class PatchConfig(unittest.TestCase):
         self.assertEqual(after["nav"], before["nav"])
         self.assertEqual(after["site_url"], before["site_url"] + "beta/")
 
+    # The theme stores the light or dark choice under extra.scope, so every version shares the site root's one.
+    def test_every_version_keeps_the_site_wide_theme_choice(self):
+        text = (REPO / "manual" / "zensical.toml").read_text(encoding="utf-8")
+        for name in ("beta", "dev"):
+            extra = tomllib.loads(bv.patch_config(text, name, SITE, "beta"))["project"]["extra"]
+            self.assertEqual(extra["scope"], "/")
+            self.assertEqual(extra["version"]["provider"], "mike")
+
 
 class RootFiles(unittest.TestCase):
     def test_versions_json_is_in_mike_format_in_the_given_order(self):

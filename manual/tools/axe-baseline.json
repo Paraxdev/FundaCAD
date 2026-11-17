@@ -1,0 +1,12 @@
+{
+  "dark: the theme's search": {
+    "aria-required-attr": 1,
+    "button-name": 2,
+    "scrollable-region-focusable": 1
+  },
+  "light: the theme's search": {
+    "aria-required-attr": 1,
+    "button-name": 2,
+    "scrollable-region-focusable": 1
+  }
+}

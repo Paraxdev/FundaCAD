@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ListRow from "../ui/ListRow.vue";
 import type { HomeFolder } from "../../io/homeFolders";
+import { t } from "../../i18n";
 import { folderName } from "../../ui/homeList";
 
 defineProps<{ folders: readonly HomeFolder[]; view: string; loading: string | null; canAdd: boolean }>();
@@ -9,9 +10,14 @@ const emit = defineEmits<{ view: [view: string]; add: []; menu: [path: string, e
 
 <template>
   <nav class="home-nav">
-    <ListRow class="home-recent-row" label="Recent" :selected="view === 'recent'" @click="emit('view', 'recent')" />
+    <ListRow
+      class="home-recent-row"
+      :label="t('home.nav.recent')"
+      :selected="view === 'recent'"
+      @click="emit('view', 'recent')"
+    />
     <template v-if="canAdd">
-      <div class="home-nav-section">Folders</div>
+      <div class="home-nav-section">{{ t("home.nav.folders") }}</div>
       <ListRow
         v-for="f in folders"
         :key="f.path"
@@ -24,7 +30,7 @@ const emit = defineEmits<{ view: [view: string]; add: []; menu: [path: string, e
         @click="emit('view', f.path)"
         @contextmenu.prevent.stop="emit('menu', f.path, $event)"
       />
-      <ListRow class="home-add-folder" icon="plus" label="Add folder…" @click="emit('add')" />
+      <ListRow class="home-add-folder" icon="plus" :label="t('home.nav.addFolder')" @click="emit('add')" />
     </template>
   </nav>
 </template>

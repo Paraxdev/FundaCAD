@@ -15,6 +15,7 @@ import { createActions } from "../../src/app/actions";
 import { contribute, resetContributions } from "../../src/plugins/contrib";
 import { setPluginEnabled } from "../../src/plugins/registry";
 import type { Engine } from "../../src/app/engine";
+import { menuName, type MenuDef } from "../../src/ui/menu";
 
 afterEach(() => resetContributions());
 
@@ -30,13 +31,14 @@ function fakeEngine(): Engine {
     store: { canUndo: false, canRedo: false },
     viewport: { getSelectedFaceIds: () => [] },
     starters: { startFillet: () => {} },
+    tools: { extrude: { active: false }, pressPull: { active: false } },
     selectedFeature: null,
     lastAction: null,
     ui: {},
   } as unknown as Engine;
 }
 
-const labels = (menus: { label: string }[]) => menus.map((m) => m.label);
+const labels = (menus: MenuDef[]) => menus.map(menuName);
 
 describe("the menubar", () => {
   it("has the core menus, View among them, with nothing contributed", () => {
@@ -47,10 +49,10 @@ describe("the menubar", () => {
     contribute("A.One", {
       menus: [{ menu: "File", items: [{ separator: true, label: "" }, { label: "Send it" }] }],
     });
-    const file = buildMenubar(fakeEngine()).find((m) => m.label === "File")!;
+    const file = buildMenubar(fakeEngine()).find((m) => menuName(m) === "File")!;
     expect(file.items.at(-1)!.label).toBe("Send it");
     // ...after the app's own rows, not instead of them
-    expect(file.items.some((i) => i.label === "Export…")).toBe(true);
+    expect(file.items.some((i) => i.refName === "Export…")).toBe(true);
   });
 
   it("creates a menu that does not exist, where it asked to be", () => {
@@ -99,7 +101,7 @@ describe("the menubar", () => {
     buildMenubar(fakeEngine());
     buildMenubar(fakeEngine());
     expect(items).toHaveLength(1);
-    const file = buildMenubar(fakeEngine()).find((m) => m.label === "File")!;
+    const file = buildMenubar(fakeEngine()).find((m) => menuName(m) === "File")!;
     expect(file.items.filter((i) => i.label === "Send it")).toHaveLength(1);
   });
 });

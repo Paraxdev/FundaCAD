@@ -145,7 +145,7 @@ describe("Larger click targets", () => {
   it("keeps the grown areas at a scroller's far edges inside it", () => {
     const large = (sel: string, prop: string) => valueOf(css, `:root[data-targets="large"] ${sel}`, prop);
     expect(large(".stress-setup > .stress-more.btn.btn-sm::before", "bottom")).toBe("0");
-    expect(large(".stress-item-head > .stress-remove-load.icon-btn.icon-btn-sm::before", "right")).toBe("-4px");
+    expect(large(".stress-item-controls > .stress-remove-load.icon-btn.icon-btn-sm::before", "right")).toBe("-4px");
     expect(large("#timeline .timeline-track > .timeline-marker.is-end .marker-grip::after", "bottom")).toBe("-9px");
   });
 

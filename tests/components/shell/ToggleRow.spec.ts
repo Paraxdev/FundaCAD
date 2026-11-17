@@ -43,4 +43,13 @@ describe("ToggleRow", () => {
     const w = mount(ToggleRow, { props: { label: "Flip", value: false, commit: () => {}, rowTitle: "Flips it" } });
     expect(w.get(".param-row").attributes("title")).toBe("Flips it");
   });
+
+  it("renders its field as data-field on the row, and none without one", () => {
+    const withField = mount(ToggleRow, {
+      props: { label: "Drill point", field: "drillPoint", value: true, commit: () => {} },
+    });
+    expect(withField.get(".param-row").attributes("data-field")).toBe("drillPoint");
+    const without = mount(ToggleRow, { props: { label: "Drill point", value: true, commit: () => {} } });
+    expect(without.get(".param-row").attributes("data-field")).toBeUndefined();
+  });
 });

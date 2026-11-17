@@ -140,7 +140,7 @@ export class FaceOffsetTool {
     else {
       this.releaseRows = awaitFaceRows(
         this.viewport,
-        "a face",
+        "face",
         (faces) => (this.takeFaces(faces), true),
         () => this.cancel(),
       );
@@ -251,12 +251,6 @@ export class FaceOffsetTool {
     if (this.downOnGizmo) {
       e.preventDefault();
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
-      // Captured so the release still lands here when it happens over the value box.
-      try {
-        this.viewport.domElement.setPointerCapture(e.pointerId);
-      } catch {
-        /* capture optional */
-      }
       this.grabbing = true;
       this.grabValue = this.value;
       this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);

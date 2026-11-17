@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { walkStep, walkUnits, walkWords } from "../../src/features/profileWalk";
 import { circleLoop, rectCorners, type Region } from "../../src/sketch/region";
+import { setLanguage } from "../../src/i18n";
 import { setUnit } from "../../src/ui/units";
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -15,7 +16,10 @@ const plate = (x: number, y: number, w: number, h: number, hole?: { cx: number; 
   region(rectCorners(x, y, w, h), hole ? [circleLoop(hole.cx, hole.cy, hole.r)] : [], v(x + 1, y + 1));
 const wr = (r: Region, groupId?: string) => (groupId === undefined ? { region: r } : { region: r, groupId });
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 describe("walkUnits", () => {
   it("is empty for no regions", () => {
@@ -118,5 +122,17 @@ describe("walkWords", () => {
     setUnit("in");
     const flat = walkUnits([wr(plate(0, 0, 25.4, 50.8))])[0]!;
     expect(walkWords(flat, 0, 1, false)).toContain("2 in²");
+  });
+});
+
+describe("walkWords in a comma language", () => {
+  it("says the area with a decimal comma and keeps commas between the parts", async () => {
+    const flat = walkUnits([wr(plate(0, 0, 4.5, 3.25))])[0]!;
+    const english = walkWords({ ...flat, holes: 2 }, 0, 3, true);
+    await setLanguage("de");
+    expect([english, walkWords({ ...flat, holes: 2 }, 0, 3, true)]).toEqual([
+      "Profile 1 of 3, area 14.625 mm², 2 holes, picked.",
+      "Profile 1 of 3, area 14,625 mm², 2 holes, picked.",
+    ]);
   });
 });

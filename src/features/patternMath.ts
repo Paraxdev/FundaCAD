@@ -2,6 +2,7 @@
 // _pattern_circular), and a ghost that disagrees with the build is worse than none because it is believed.
 
 import type { Axis3 } from "../types";
+import { spellNumber } from "../ui/measure";
 
 /** 1 is legal mid-gesture, on the way to 2, but not to commit. */
 export const MIN_COUNT = 1;
@@ -59,5 +60,5 @@ export function describeRect(nx: number, ny: number, sx: number, sy: number): st
 function fmt(v: number): string {
   if (!Number.isFinite(v)) return "0";
   const r = Math.round(v * 100) / 100;
-  return Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return spellNumber(r);
 }

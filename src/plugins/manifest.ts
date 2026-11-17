@@ -1,6 +1,10 @@
 // The grant vocabulary and how it is worded for the person deciding. Pure and Vue-free. An unknown grant is refused,
 // and consent is recorded against `promiseOf()`, so a version asking for more has to ask again.
 
+import { t, type MessageKey } from "../i18n";
+import { LANGUAGE_CODE } from "../i18n/languages";
+import { checkLine } from "../i18n/overrides";
+
 /** Everything a plugin can ask for. Closed set, deliberately small. */
 export const GRANTS = [
   "document.read",
@@ -26,43 +30,50 @@ export type PluginKind = (typeof PLUGIN_KINDS)[number];
 
 interface GrantCopy {
   /** shown under "It can" */
-  can: string;
+  can: MessageKey;
   /** shown under "It cannot" when the plugin did NOT ask for it. Absent where the line teaches nothing, like "cannot
    *  add a panel". */
-  cannot?: string;
+  cannot?: MessageKey;
 }
 
 const COPY: Record<Grant, GrantCopy> = {
-  "document.read": { can: "Read the document you have open" },
+  "document.read": { can: "plugins.grant.document.read.can" },
   "document.write": {
-    can: "Change the document you have open",
-    cannot: "Change your document",
+    can: "plugins.grant.document.write.can",
+    cannot: "plugins.grant.document.write.cannot",
   },
-  "document.history": { can: "See your edit history" },
-  "geometry.build": { can: "Use the geometry engine to build and measure shapes" },
-  "files.read": { can: "Read files you pick for it" },
-  "files.write": { can: "Save files where you tell it to" },
+  "document.history": { can: "plugins.grant.document.history.can" },
+  "geometry.build": { can: "plugins.grant.geometry.build.can" },
+  "files.read": { can: "plugins.grant.files.read.can" },
+  "files.write": { can: "plugins.grant.files.write.can" },
   // `can` is filled in with the hosts: "can use the internet" is not a decision anybody can make.
-  network: { can: "Connect to the internet", cannot: "Use the internet" },
+  network: { can: "plugins.grant.network.can", cannot: "plugins.grant.network.cannot" },
   // No host list: reach is bounded to private and link-local addresses (src-tauri/src/plugins/localnet.rs).
   "network.local": {
-    can: "Talk to devices on your local network",
-    cannot: "Reach devices on your local network",
+    can: "plugins.grant.network.local.can",
+    cannot: "plugins.grant.network.local.cannot",
   },
   "device.input": {
-    can: "Read the 3D mouse or other input device you have plugged in",
-    cannot: "Read any device you plug in",
+    can: "plugins.grant.device.input.can",
+    cannot: "plugins.grant.device.input.cannot",
   },
   "input.remap": {
-    can: "Change what your mouse buttons and keys do",
-    cannot: "Change what your mouse buttons and keys do",
+    can: "plugins.grant.input.remap",
+    cannot: "plugins.grant.input.remap",
   },
-  "ui.panel": { can: "Add a panel to the window" },
+  "ui.panel": { can: "plugins.grant.ui.panel.can" },
   "process.spawn": {
-    can: "Start other programs on your computer",
-    cannot: "Start other programs on your computer",
+    can: "plugins.grant.process.spawn",
+    cannot: "plugins.grant.process.spawn",
   },
 };
+
+export const MAX_TRANSLATIONS = 64;
+
+export interface ManifestText {
+  name?: string;
+  summary?: string;
+}
 
 export interface PluginManifest {
   /** `Publisher.Name`. See the ID pattern below for why it has two halves. */
@@ -87,6 +98,8 @@ export interface PluginManifest {
   /** The bundle path of the WebAssembly component the Rust engine runs, "" for
    *  a plugin with no geometry or a bundle built for the Python engine only. */
   geometryWasm: string;
+  /** The name and summary per language code. Outside `promiseOf()`, text only, a bad entry is dropped. */
+  translations: ReadonlyMap<string, ManifestText>;
 }
 
 export type ParseResult = { ok: true; manifest: PluginManifest } | { ok: false; why: string };
@@ -109,6 +122,21 @@ const isKind = (v: unknown): v is PluginKind => (PLUGIN_KINDS as readonly unknow
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
+function parseTranslations(raw: unknown): Map<string, ManifestText> {
+  const out = new Map<string, ManifestText>();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [code, entry] of Object.entries(raw)) {
+    if (out.size >= MAX_TRANSLATIONS) break;
+    if (!LANGUAGE_CODE.test(code) || !entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const text: ManifestText = {};
+    const { name, summary } = entry as Record<string, unknown>;
+    if (typeof name === "string" && checkLine(name) === null) text.name = name;
+    if (typeof summary === "string" && checkLine(summary) === null) text.summary = summary;
+    if (text.name !== undefined || text.summary !== undefined) out.set(code, text);
+  }
+  return out;
+}
+
 /** Every rejection names its reason, so a publisher knows which line to fix. */
 export function parseManifest(raw: unknown): ParseResult {
   if (!raw || typeof raw !== "object") return { ok: false, why: "not an object" };
@@ -118,6 +146,7 @@ export function parseManifest(raw: unknown): ParseResult {
   if (!ID.test(id)) return { ok: false, why: `not a plugin id: ${JSON.stringify(r.id)}` };
   const name = str(r.name);
   if (!name) return { ok: false, why: "no name" };
+  if (!name.trim()) return { ok: false, why: "the name is empty, a screen reader would read the plugin as nothing" };
   const version = str(r.version);
   if (!version) return { ok: false, why: "no version" };
   if (!isKind(r.kind)) return { ok: false, why: `not a plugin kind: ${JSON.stringify(r.kind)}` };
@@ -150,14 +179,14 @@ export function parseManifest(raw: unknown): ParseResult {
   const typesRaw = r.featureTypes === undefined ? [] : r.featureTypes;
   if (!Array.isArray(typesRaw)) return { ok: false, why: "featureTypes must be a list" };
   const featureTypes: string[] = [];
-  for (const t of typesRaw) {
-    if (typeof t !== "string" || !t) {
-      return { ok: false, why: `not a feature type: ${JSON.stringify(t)}` };
+  for (const type of typesRaw) {
+    if (typeof type !== "string" || !type) {
+      return { ok: false, why: `not a feature type: ${JSON.stringify(type)}` };
     }
-    if (featureTypes.includes(t)) {
-      return { ok: false, why: `featureTypes repeats ${JSON.stringify(t)}` };
+    if (featureTypes.includes(type)) {
+      return { ok: false, why: `featureTypes repeats ${JSON.stringify(type)}` };
     }
-    featureTypes.push(t);
+    featureTypes.push(type);
   }
 
   const hostsRaw = r.hosts === undefined ? [] : r.hosts;
@@ -189,6 +218,7 @@ export function parseManifest(raw: unknown): ParseResult {
       formerIds,
       featureTypes,
       geometryWasm: str(r.geometryWasm),
+      translations: parseTranslations(r.translations),
     },
   };
 }
@@ -202,17 +232,15 @@ export function describeGrants(manifest: PluginManifest): { can: string[]; canno
   for (const g of GRANTS) {
     const copy = COPY[g];
     if (held.has(g)) {
-      if (g === "network") can.push(`Connect to ${manifest.hosts.join(", ")}`);
-      else if (g === "files.read" && engineReadsAnyFile(manifest)) can.push(ANY_FILE);
-      else can.push(copy.can);
+      if (g === "network") can.push(t("plugins.grant.network.hosts", { hosts: manifest.hosts.join(", ") }));
+      else if (g === "files.read" && engineReadsAnyFile(manifest)) can.push(t("plugins.grant.files.read.any"));
+      else can.push(t(copy.can));
     } else if (copy.cannot) {
-      cannot.push(copy.cannot);
+      cannot.push(t(copy.cannot));
     }
   }
   return { can, cannot };
 }
-
-const ANY_FILE = "Read any file you can open on this computer";
 
 // The window side reads only picked file handles, the engine's wasm host takes the paths a document's feature fields
 // name, so a geometry component with files.read reaches every file the person can.
@@ -225,19 +253,18 @@ function engineReadsAnyFile(manifest: Pick<PluginManifest, "grants" | "geometryW
 export function sandboxNote(manifest: Pick<PluginManifest, "kind" | "grants" | "geometryWasm">): string {
   const kind = manifest.kind;
   if ((kind === "panel" || kind === "compute") && engineReadsAnyFile(manifest)) {
-    const where = kind === "panel" ? "Runs inside the window" : "Runs as an isolated calculation";
-    return `${where} with no network, but its geometry can read any file you can open on this computer, so install it only if you trust where it came from.`;
+    return t(kind === "panel" ? "plugins.sandbox.panelFiles" : "plugins.sandbox.computeFiles");
   }
   switch (kind) {
     case "builtin":
       // The bluntest of the four on purpose: for a built-in the list is a description, not a permission.
-      return "Part of FundaCAD itself. The list above is what it uses, not a limit on it, and turning it off stops it running.";
+      return t("plugins.sandbox.builtin");
     case "process":
-      return "Runs as a normal program on your computer. The list above is what it reaches through FundaCAD, not a cage around it, so install it only if you trust where it came from.";
+      return t("plugins.sandbox.process");
     case "panel":
-      return "Runs inside the window with no network and no access to your files, so the list above is all it can do.";
+      return t("plugins.sandbox.panel");
     case "compute":
-      return "Runs as an isolated calculation with no network and no access to your files, so the list above is all it can do.";
+      return t("plugins.sandbox.compute");
   }
 }
 

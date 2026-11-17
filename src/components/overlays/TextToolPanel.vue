@@ -189,9 +189,17 @@ onUnmounted(() => {
       </div>
 
       <!-- pointerdown, not click: the buttons have to act before the field next
-           to them can blur, or a commit loses the last keystroke. -->
+           to them can blur, or a commit loses the last keystroke. A click of detail 0
+           is Enter or Space on the focused button, with no field left to blur. -->
       <div class="text-tool-actions">
-        <Button class="text-tool-add" variant="primary" size="sm" icon="check" @pointerdown.prevent.stop="commit">
+        <Button
+          class="text-tool-add"
+          variant="primary"
+          size="sm"
+          icon="check"
+          @pointerdown.prevent.stop="commit"
+          @click="$event.detail === 0 && commit()"
+        >
           Add
         </Button>
         <IconButton
@@ -201,6 +209,7 @@ onUnmounted(() => {
           size="md"
           variant="plain"
           @pointerdown.prevent.stop="panels.cancelText()"
+          @click="$event.detail === 0 && panels.cancelText()"
         />
       </div>
     </div>

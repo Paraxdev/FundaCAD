@@ -1,4 +1,5 @@
 import { isMac } from "../../input/platform";
+import { t } from "../../i18n";
 
 /** The click a key press on a row stands for: Space is the platform's toggle click (Ctrl, Cmd on macOS), Shift+Space a
  *  Shift click for a run, and Enter a plain click. */
@@ -30,13 +31,14 @@ export function useKeyRename(start: () => void, row: () => HTMLElement | null | 
   };
 }
 
-export const EYE_HELP = "Show/hide · drag across eyes to show or hide many · Alt+click to show only this";
+export const eyeHelp = () => t("items.eye.help");
 
 /** The eye says what a press does to which row, so a list of them reads as rows, not as one repeated tip. */
 export function eyeName(visible: boolean | undefined, label: string): string {
-  return `${visible === false ? "Show" : "Hide"} ${label}`;
+  return t("items.eye.name", { hidden: visible === false ? "yes" : "no", label });
 }
 
 export function stateWords(words: readonly (string | false | null | undefined)[]): string {
-  return words.filter(Boolean).join(", ");
+  const shown = words.filter((w): w is string => !!w);
+  return shown.length ? shown.reduce((before, after) => t("pick.list.more", { before, after })) : "";
 }

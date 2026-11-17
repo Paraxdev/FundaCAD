@@ -3,7 +3,14 @@
 // third of four corners used to commit the chamfer with two.
 
 import { describe, expect, it } from "vitest";
-import { MEMBER_PREFERENCE_PX, blendClickTarget, missPrompt, screenPolylineDist } from "../../src/features/blendPick";
+import {
+  COINCIDE_PX,
+  MEMBER_PREFERENCE_PX,
+  blendClickTarget,
+  missPrompt,
+  screenPolylineDist,
+  screenPolylineNearest,
+} from "../../src/features/blendPick";
 
 const R = 13;
 
@@ -68,6 +75,29 @@ describe("blendClickTarget", () => {
   it("adds an edge running on from a member's end once the pointer is clearly on it", () => {
     expect(blendClickTarget(10, 0, R)).toBe("edge");
     expect(blendClickTarget(MEMBER_PREFERENCE_PX, 0, R)).toBe("member");
+  });
+
+  it("adds the visible edge over a member hidden behind it on the same screen line", () => {
+    // From below, a box's top back edge lies exactly behind its bottom back edge.
+    expect(blendClickTarget(0, 0, R, true)).toBe("edge");
+    expect(blendClickTarget(0, COINCIDE_PX, R, true)).toBe("edge");
+  });
+
+  it("still drops a hidden member the pointer is on when the edge in front is only beside it", () => {
+    expect(blendClickTarget(0, COINCIDE_PX + 1, R, true)).toBe("member");
+    expect(blendClickTarget(0, 0, R, false)).toBe("member");
+  });
+});
+
+describe("screenPolylineNearest", () => {
+  it("says which segment and how far along it the nearest point falls", () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+    ];
+    expect(screenPolylineNearest(pts, { x: 12, y: 4 })).toEqual({ dist: 2, seg: 1, t: 0.4 });
+    expect(screenPolylineNearest(pts, { x: 2.5, y: -1 })).toEqual({ dist: 1, seg: 0, t: 0.25 });
   });
 });
 

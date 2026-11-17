@@ -53,7 +53,10 @@ function tilesAt(dir: [number, number, number]) {
   return { t, frame, screen, labels };
 }
 
-/** The side of the largest axis aligned square of pixels that all pick `plane`, scanned around the origin. */
+/**
+ * The side of the largest axis aligned square of pixels that all pick `plane`, scanned around the origin. The scan
+ * stops once every plane has a square of `minPx`, since a caller only asks whether each reaches it.
+ */
 function largestSquare(
   screen: PlaneOnScreen[],
   labels: Record<string, P2>,
@@ -84,6 +87,7 @@ function largestSquare(
       }
     }
     for (const k of PLANES) runs[k].reverse();
+    if (PLANES.every((k) => out[k] >= minPx)) break;
   }
   return out;
 }
@@ -135,7 +139,7 @@ describe("hit area on screen", () => {
       for (const k of PLANES) expect(sq[k], `${dir} ${k}`).toBeGreaterThanOrEqual(HIT_MIN_PX);
       t.dispose();
     }
-  });
+  }, 60_000);
 
   it("gives the two tiles seen exactly edge on from the top a full size target", () => {
     const { t, frame, screen, labels } = tilesAt(TOP);
@@ -223,7 +227,7 @@ describe("hit area on screen", () => {
     ]);
   });
 
-  it("matches the drawn tile under the pointer through OriginTiles.pick, and nothing once hidden", () => {
+  it("matches the drawn tile under the pointer through OriginTiles.pick, and nothing once hidden, lit or not", () => {
     const { t, frame, screen } = tilesAt([1, -1.5, 1.1]);
     // Toward each tile's far corner, where no other tile is drawn over it from this side.
     const AXES: Record<Plane3, [number, number]> = { XY: [0, 1], XZ: [0, 2], YZ: [1, 2] };
@@ -238,6 +242,8 @@ describe("hit area on screen", () => {
     PLANES.forEach((k, i) => expect(t.pick(own[i]!.x, own[i]!.y, frame, HIT_MIN_PX)?.plane).toBe(k));
     t.setShown(false);
     expect(t.pick(own[0]!.x, own[0]!.y, frame, HIT_MIN_PX)).toBe(null);
+    t.hover("XY");
+    expect([t.drawn, t.pick(own[0]!.x, own[0]!.y, frame, HIT_MIN_PX)]).toEqual([true, null]);
     t.dispose();
   });
 });

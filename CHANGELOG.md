@@ -25,9 +25,30 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **AI assistants can be turned off.** Preferences, AI assistants (MCP) has a
+  Let AI assistants reach this window box. Off, no assistant can see or edit
+  the open document, and nothing waits for one in the background. It is on
+  unless you turn it off, and Reset settings leaves it as it is.
+
+- **Ctrl+1 to Ctrl+7 pick a view, and a screen reader hears where the model is
+  seen from.** Front, Back, Left, Right, Top, Bottom and Isometric (Cmd on
+  macOS) go by the key's place on the digit row, so an AZERTY keyboard uses the
+  same keys, and they work from a value box too. Every view is in the command
+  palette and under Look in the right-click menu. After a view, an arrow key
+  turn, Reset camera or a view cube click, a screen reader hears the view, or
+  the nearest side with how far the view is turned and tilted, and the
+  projection. On a layout whose digit key types a plus or minus, such as 6 on
+  French AZERTY, Ctrl with that key still changes the interface size. Choosing a
+  view no longer closes the sketch you are drawing.
+
 - **Printability says what it found.** When a check ends, a screen reader
   hears the count, each kind, and the largest overhang with its area and face.
   A failed or cancelled check is spoken too.
+
+- **Up and Down step the value in Extrude, Press/Pull, Fillet and Chamfer.**
+  Shift steps finer, Page Up and Page Down take ten steps, and a screen reader
+  hears each new value and, in the box, the size of a step. Ctrl+Z takes a
+  step back like typing. A box that holds a parameter name is left as typed.
 
 - **The Stress panel offers Perceptual, Rainbow or Greyscale colours, banded or
   smooth.** Colour map and Bands sit under the colour bar. The body and the bar
@@ -593,6 +614,30 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A chamfer too large for a plate full of holes is refused with the size that fits.**
+  Chamfering the top of a plate with about two hundred holes at a size that does not
+  fit took close to a minute to work out the size to offer, long enough that the engine
+  was restarted as stalled and no offer came. The search now looks first at the rims
+  that run into each other, finishes in about two thirds of the time, and keeps the
+  engine alive while it works.
+
+- **A chamfer on the rim of a round hole cuts the rim.** Where a hole's rim chamfer
+  needed the slower build that follows the edge, its cut was turned into the hole
+  instead of onto the rim, so the chamfer failed there and a refused chamfer offered a
+  size a hair under the one that fits. It now cuts the rim, and the offer is the size
+  that fits.
+
+- **The Capsule holder's threads no longer ask you to check their seams.** Every helical
+  cut that had to be cut in pieces showed a note to check the seams, even where the cut
+  is whole. A cut that two different ways of splitting agree on is now quiet, and one
+  that nothing confirmed still shows the note.
+
+- **The size a refused chamfer offers builds.** A two distance chamfer that did not fit
+  offered only its first distance, and that size was refused again, a chamfer dragged
+  too large could offer a size the finished chamfer refused, and some chamfers offered
+  a size another corner refused. The offer now names both distances a two distance
+  chamfer takes, and every offered size builds.
 
 - **An Interference check no longer shows up in the next document.** A check
   still running when you opened another document reopened the panel there with

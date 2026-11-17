@@ -3,7 +3,8 @@
 import { iconElement } from "../../ui/icons";
 import { announce } from "../../ui/announce";
 import { a11yPrefs, onA11yPrefsChange } from "../../ui/a11yPrefs";
-import { spokenUnit, unitById } from "../../ui/measure";
+import { spellNumber, spokenUnit, unitById } from "../../ui/measure";
+import { decimalMark, onLanguageChange } from "../../i18n";
 import { ariaKeys } from "../../input/platform";
 import { tipText } from "./tip";
 import { swallowDisabled } from "./useDisabled";
@@ -304,13 +305,15 @@ let numberNo = 0;
 type UnitWord = { word: WeakRef<HTMLElement>; unit: string };
 const unitWords = new Set<UnitWord>();
 const forgetUnitWord = new FinalizationRegistry<UnitWord>((w) => unitWords.delete(w));
-onA11yPrefsChange(() => {
+function refreshUnitWords(): void {
   const full = a11yPrefs().unitsInFull;
   for (const w of unitWords) {
     const word = w.word.deref();
     if (word) word.textContent = spokenUnit(w.unit, full);
   }
-});
+}
+onA11yPrefsChange(refreshUnitWords);
+onLanguageChange(refreshUnitWords);
 
 function followUnitsInFull(word: HTMLElement, unit: string): void {
   word.textContent = spokenUnit(unit, a11yPrefs().unitsInFull);
@@ -459,14 +462,17 @@ export function uiSlider(o: UiSliderOptions): UiSlider {
     output.setAttribute("aria-live", "off");
     root.append(output);
   }
-  const readout = (v: number) => (!o.unit ? String(v) : o.unit === "%" ? `${v}%` : `${v} ${o.unit}`);
+  const readout = (v: number) => {
+    const n = spellNumber(v);
+    return !o.unit ? n : o.unit === "%" ? `${n}%` : `${n} ${o.unit}`;
+  };
   let model = o.value;
   const paint = (v: number) => {
     input.value = String(v);
     const span = max - min;
     const fill = span > 0 ? `${((Math.min(Math.max(v, min), max) - min) / span) * 100}%` : "0%";
     input.style.setProperty("--ui-slider-fill", fill);
-    const spoken = o.valueText?.(v) ?? (o.unit ? readout(v) : undefined);
+    const spoken = o.valueText?.(v) ?? (o.unit || decimalMark() === "," ? readout(v) : undefined);
     if (spoken) input.setAttribute("aria-valuetext", spoken);
     if (output) output.textContent = readout(v);
   };

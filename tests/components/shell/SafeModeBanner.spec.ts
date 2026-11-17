@@ -6,14 +6,17 @@ const invoke = vi.fn(async (..._a: unknown[]) => undefined);
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 
 import SafeModeBanner from "../../../src/components/shell/SafeModeBanner.vue";
+import { setLanguage } from "../../../src/i18n";
 import { slotFor } from "../../../src/io/recovery";
 import { useDialogStore } from "../../../src/stores/dialogs";
 import type { BugReportDeps } from "../../../src/ui/bugReporter";
+import { safeModeWhy } from "../../../src/ui/safeMode";
 
 enableAutoUnmount(afterEach);
-afterEach(() => {
+afterEach(async () => {
   delete window.__FUNDACAD_SAFE_MODE__;
   invoke.mockClear();
+  await setLanguage("system");
 });
 
 describe("the safe mode banner", () => {
@@ -37,6 +40,15 @@ describe("the safe mode banner", () => {
     expect(mount(SafeModeBanner).text()).toMatch(/started with --safe-mode.*take the switch out/s);
     window.__FUNDACAD_SAFE_MODE__ = { reason: "env", failedStarts: 0 };
     expect(mount(SafeModeBanner).text()).toMatch(/FUNDACAD_SAFE_MODE is set.*Remove FUNDACAD_SAFE_MODE/s);
+  });
+
+  it("says the person chose it from the start question, after unfinished starts or a crash loop", () => {
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "failedStarts", failedStarts: 2, chosen: true };
+    expect(mount(SafeModeBanner).text()).toContain("because you chose it after the last 2 starts did not finish");
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "crashes", failedStarts: 0, crashes: 3, chosen: true };
+    const text = mount(SafeModeBanner).text();
+    expect(text).toContain("because you chose it after FundaCAD closed unexpectedly 3 times soon after starting");
+    expect(text).not.toMatch(/take the switch out|Remove FUNDACAD_SAFE_MODE/);
   });
 
   it("restarts normally from its button, once", async () => {
@@ -70,6 +82,26 @@ describe("the safe mode banner", () => {
     expect(w.findAll("button").map((b) => b.text())).toEqual(["Restart normally", "Report a problem"]);
     await w.get(".safe-report").trigger("click");
     expect([useDialogStore().bugReport, invoke.mock.calls]).toEqual([true, []]);
+  });
+
+  it("reads in the chosen language, while the problem report keeps the English reason", async () => {
+    await setLanguage("de");
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "failedStarts", failedStarts: 2, chosen: true };
+    let w = mount(SafeModeBanner);
+    const text = w.get("#safe-mode-banner").text();
+    expect(text).toContain("FundaCAD wurde im abgesicherten Modus gestartet.");
+    expect(text).toContain("Grund: Sie haben ihn gewählt, nachdem die letzten 2 Starts nicht abgeschlossen wurden.");
+    expect(text).not.toMatch(/started in safe mode|because|are off/);
+    expect(w.findAll("button").map((b) => b.text())).toEqual(["Normal neu starten", "Problem melden"]);
+    expect(safeModeWhy(window.__FUNDACAD_SAFE_MODE__)).toBe("you chose it after the last 2 starts did not finish");
+
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "env", failedStarts: 0 };
+    invoke.mockRejectedValueOnce("no executable");
+    w = mount(SafeModeBanner);
+    expect(w.text()).toContain("Entfernen Sie FUNDACAD_SAFE_MODE");
+    await w.get("button").trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("Neustart nicht möglich: no executable");
   });
 
   it("keeps its recovery snapshots apart from the ones it did not offer", () => {

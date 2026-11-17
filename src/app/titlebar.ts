@@ -1,3 +1,4 @@
+import { onLanguageChange } from "../i18n";
 import { repairableDiagFor } from "../features/repickReference";
 import { useUiStore } from "../stores/ui";
 import { useTimelineStore } from "../stores/timeline";
@@ -20,6 +21,7 @@ export function installTitlebar(e: Engine): void {
   e.store.onDocChange(syncUndo);
   e.store.onBuild(syncUndo);
   e.store.onBusy(syncUndo);
+  onLanguageChange(syncUndo);
   const syncMeta = () => {
     ui.docName = e.store.fileName;
     ui.dirty = needsSave(e);

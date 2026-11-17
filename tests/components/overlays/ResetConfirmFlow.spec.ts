@@ -38,7 +38,7 @@ beforeEach(() => {
 describe("Reset to defaults over a page", () => {
   it("opens with Cancel focused and the Reset choice painted red", async () => {
     await open();
-    expect($(".ui-confirm").textContent).toContain("Reset experimental limits?");
+    expect($(".ui-confirm").textContent).toContain("Reset the Path traced limits?");
     expect(document.activeElement?.textContent).toContain("Cancel");
     expect(
       [...document.querySelectorAll(".ui-confirm-choice")].map((b) => b.classList.contains("ui-confirm-danger")),

@@ -1,6 +1,7 @@
 //! Fillets and chamfers, blends.py. One kernel call on the whole group first, on a copy. When that refuses the
 //! edges go one at a time in canonical order, and one that still refuses fails saying whether a smaller size builds.
 
+pub mod apex;
 pub mod eval;
 pub mod ops;
 pub mod overlap;
@@ -9,6 +10,8 @@ pub mod smooth;
 use fundacad_core::schema::{Chamfer, Fillet, OneOrMany, Selector};
 use glam::DVec3;
 use opencascade::primitives::Shape;
+use opencascade::progress::ProgressRange;
+use opencascade::shape_io::BrepWriteOptions;
 use serde_json::{json, Map, Value};
 
 use crate::builder::{py_g, Ctx, FResult, Fail};
@@ -80,6 +83,8 @@ pub enum Misfit {
     /// It would carve away the face line the blend on a neighbouring edge
     /// rests on.
     Overlap,
+    /// The patch that closes a corner where four or more chamfers meet would bulge out of the body.
+    Corner,
 }
 
 impl Misfit {
@@ -97,14 +102,59 @@ impl Misfit {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Fits {
     UpTo(f64),
+    /// A size the whole blend was built at, offered as it is.
+    Built(f64),
     Nothing,
     /// The search for it ran out of time.
     Unknown,
 }
 
+/// The second distance a two distance chamfer takes at a size it is offered at, `None` for any other blend.
+type Pair = dyn Fn(f64) -> Option<f64>;
+
+/// A size on the grid refusals offer sizes on, 0.01 from 1 mm up and 0.001 under it, rounded down.
+fn grid_floor(v: f64) -> f64 {
+    let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+    (v * step + 1e-6).floor() / step
+}
+
+/// A size an offer names, with the second distance that goes with it.
+fn offered(v: f64, pair: &Pair) -> String {
+    match pair(v) {
+        Some(v2) => format!("{}mm with distance 2 at {}mm", py_g(v), py_g(v2)),
+        None => format!("{}mm", py_g(v)),
+    }
+}
+
+/// The second distance of a two distance chamfer of `d` and `d2` shrunk to `size`. The search for a size that fits
+/// shrinks both, the second onto the grid an offer names it on, so the pair it builds is the pair offered.
+fn second_distance(d: f64, d2: f64, size: f64) -> f64 {
+    if size < d {
+        grid_floor(d2 * size / d)
+    } else {
+        d2
+    }
+}
+
+/// A draft's section build is coarser than the full one, and where blends just touch it takes a size the full build
+/// refuses, so a size it found is offered one grid step under.
+fn draft_fits(draft: bool, why: Misfit, fits: Fits) -> Fits {
+    match fits {
+        Fits::UpTo(k) if draft && matches!(why, Misfit::Split | Misfit::Overlap) => {
+            let under = grid_floor(k) - if k > 1.0 + 1e-9 { 0.01 } else { 0.001 };
+            if under > 0.0 {
+                Fits::UpTo(under)
+            } else {
+                Fits::Unknown
+            }
+        }
+        _ => fits,
+    }
+}
+
 /// The section build's refusal of a blend too large for its edge, with the
 /// size that fits rounded down so that it still does.
-fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at: [f64; 3]) -> Fail {
+fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at: [f64; 3], pair: &Pair) -> Fail {
     let [x, y, z] = at.map(|c| py_g(py_round(c, 3)));
     let neighbour = format!("it would run into the {} on the neighbouring edge", label.to_lowercase());
     let past = match why {
@@ -112,22 +162,24 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
         Misfit::Mixed => "it would run off a face on part of the edge only",
         Misfit::Split => "it would cut the body in pieces",
         Misfit::Overlap => &neighbour,
+        Misfit::Corner => "the patch that closes the corner where the chamfers meet would bulge out through the faces",
     };
     let head = format!(
         "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
         py_g(size),
         label.to_lowercase()
     );
-    // At the limit the ball ends exactly on a face's edge and the kernel leaves a sliver face, so the offer stays
-    // a hair below it. A split's or an overlap's limit is a size that built, already on this grid.
-    let shown = |v: f64| {
-        let v = if matches!(why, Misfit::Split | Misfit::Overlap) { v + 1e-6 } else { v - 1e-4 };
-        let step = if v >= 1.0 { 100.0 } else { 1000.0 };
-        (v * step).floor() / step
+    let v = match fits {
+        Fits::UpTo(k) => shown_fits(why, k),
+        Fits::Built(v) => v,
+        _ => 0.0,
     };
     match fits {
-        Fits::UpTo(k) if shown(k) > 0.0 => value_err(
-            format!("{head} It fits up to {}mm, so try that or a smaller value.", py_g(shown(k))),
+        _ if v > 0.0 => value_err(
+            match pair(v) {
+                Some(_) => format!("{head} It fits up to {}, so try those or smaller values.", offered(v, pair)),
+                None => format!("{head} It fits up to {}, so try that or a smaller value.", offered(v, pair)),
+            },
             Some(BLEND_TOO_LARGE),
         ),
         Fits::Unknown => value_err(format!("{head} Try a smaller value."), Some(BLEND_TOO_LARGE)),
@@ -135,9 +187,20 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
     }
 }
 
+/// The size a refusal offers for the section build's limit `k`. At the limit the ball ends exactly on a face's edge
+/// and the kernel leaves a sliver face, so the offer stays a hair below it. A split's or an overlap's limit is a size
+/// that built, already on this grid.
+fn shown_fits(why: Misfit, k: f64) -> f64 {
+    let v = if matches!(why, Misfit::Split | Misfit::Overlap | Misfit::Corner) { k + 1e-6 } else { k - 1e-4 };
+    let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+    (v * step).floor() / step
+}
+
 /// Stop here when the job was cancelled. The builder drops whatever a
 /// cancelled feature returns, so the failure only has to end the work.
+/// Reaching one also tells the stall watchdog the blend is still moving.
 fn checkpoint() -> FResult {
+    crate::heartbeat::beat();
     if crate::cancel::requested() {
         return Err(Fail::msg("cancelled"));
     }
@@ -204,6 +267,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
             Some(&section),
             smooth || only_picked,
             !smooth && !chord && p.abs() < PROFILE_EPS,
+            None,
         );
     }
     let conic = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> { ops::conic(s, es, size, p) };
@@ -219,6 +283,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         Some(&section),
         false,
         false,
+        None,
     ) {
         Err(Fail::Value { message, code: Some(CONIC_NOT_APPLICABLE) }) => {
             let _ = message;
@@ -234,6 +299,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                 Some(&section),
                 true,
                 false,
+                None,
             ) {
                 Ok(()) => Ok(()),
                 Err(_) => {
@@ -250,6 +316,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                         Some(&section),
                         false,
                         !chord,
+                        None,
                     )?;
                     note_profile_fallback(ctx, &f.id);
                     Ok(())
@@ -287,11 +354,11 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
     let op = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
         match d2 {
             None => build123d_chamfer(s, es, size),
-            Some(d2) => native_two_distance_chamfer(s, es, size, d2 * size / d),
+            Some(d2) => native_two_distance_chamfer(s, es, size, second_distance(d, d2, size)),
         }
     };
     let section = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, SectionErr> {
-        ops::section(s, es, true, &vec![size; es.len()], d2.map(|d2| d2 * size / d), size, 1, draft, 0.0)
+        ops::section(s, es, true, &vec![size; es.len()], d2.map(|d2| second_distance(d, d2, size)), size, 1, draft, 0.0)
     };
     blend_edges(
         ctx,
@@ -305,6 +372,7 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         Some(&section),
         f.tangent_edges == Some(false),
         false,
+        d2,
     )
 }
 
@@ -585,6 +653,7 @@ pub(crate) fn sequential_blend(
                 still.push((orig, fp, failed_on));
                 continue;
             }
+            crate::heartbeat::beat();
             let Some(target) = crate::bench::phase("blend_rematch", || {
                 rematch_edge(&current, &fp, max_mid_dist, tol_pos).filter(|t| still_on(&orig, t, on_curve))
             }) else {
@@ -793,9 +862,91 @@ fn smooth_size(size: f64, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
         .find(|&v| checkpoint().is_ok() && builds(v))
 }
 
+/// The largest size under `size`, on the grid a refusal offers sizes on, that `builds` takes. A `quick` search tries
+/// only the top one. The kernel fails sizes in no order, so the bisection offers only a size that built.
+fn kernel_size(size: f64, quick: bool, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
+    let step = if size > 1.0 + 1e-9 { 100.0 } else { 1000.0 };
+    let top = ((size * step - 1e-6).ceil() - 1.0) / step;
+    if top <= 0.0 || checkpoint().is_err() {
+        return None;
+    }
+    if builds(top) {
+        return Some(top);
+    }
+    if quick {
+        return None;
+    }
+    let (mut lo, mut hi, mut best) = (0.0, top, None);
+    for _ in 0..KERNEL_SIZE_STEPS {
+        if checkpoint().is_err() {
+            break;
+        }
+        let mid = grid_floor(0.5 * (lo + hi));
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if builds(mid) {
+            (lo, best) = (mid, Some(mid));
+        } else {
+            hi = mid;
+        }
+    }
+    best
+}
+
+/// Builds the bisection may try, by count and not by time, so the size offered is the same on a slow or busy
+/// machine. Fourteen halvings reach the 0.01 grid under 163.84.
+const KERNEL_SIZE_STEPS: usize = 14;
+
+/// The sizes full builds offered, so a rebuild that runs an unchanged refused chamfer again does not search again.
+static KERNEL_OFFERS: std::sync::Mutex<Vec<KernelOffer>> = std::sync::Mutex::new(Vec::new());
+const KERNEL_OFFERS_HELD: usize = 32;
+
+struct KernelOffer {
+    key: String,
+    size: u64,
+    body: String,
+    fits: Option<f64>,
+}
+
+/// `kernel_size`, looked up first for a full build by `key`, the size asked and the body's shape.
+fn kernel_offer(key: &str, size: f64, draft: bool, body: &Shape, builds: &dyn Fn(f64) -> bool) -> Option<f64> {
+    if draft {
+        return kernel_size(size, true, builds);
+    }
+    held_offer(key, size, body, &|| kernel_size(size, false, builds))
+}
+
+/// What `find` offers, looked up first by `key`, the size asked and the body's shape.
+fn held_offer(key: &str, size: f64, body: &Shape, find: &dyn Fn() -> Option<f64>) -> Option<f64> {
+    let Some(digest) = shape_digest(body) else {
+        return find();
+    };
+    let held = |o: &KernelOffer| o.key == key && o.size == size.to_bits() && o.body == digest;
+    if let Some(fits) = KERNEL_OFFERS.lock().ok().and_then(|v| v.iter().find(|o| held(o)).map(|o| o.fits)) {
+        return fits;
+    }
+    let fits = find();
+    if checkpoint().is_ok() {
+        if let Ok(mut v) = KERNEL_OFFERS.lock() {
+            if v.len() >= KERNEL_OFFERS_HELD {
+                v.remove(0);
+            }
+            v.push(KernelOffer { key: key.to_owned(), size: size.to_bits(), body: digest, fits });
+        }
+    }
+    fits
+}
+
+fn shape_digest(s: &Shape) -> Option<String> {
+    let options = BrepWriteOptions { with_triangles: false, with_normals: false, version: 0 };
+    let bytes = s.to_brep_bytes(options, &ProgressRange::detached()).ok()?;
+    Some(crate::cache::keys::hash_hex(&[&bytes]))
+}
+
 /// A blend over an edge whose faces turn tangent that came out rippled, or did not build. `found` is `None` when
 /// no smaller size was tried, and `Some(None)` when none tried built smooth.
-fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option<Option<f64>>) -> Fail {
+fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option<Option<f64>>, pair: &Pair) -> Fail {
     let what = label.to_lowercase();
     let how = if rippled { "comes out rippled" } else { "does not fit" };
     let head = format!(
@@ -803,7 +954,13 @@ fn uneven_error(label: &str, body: &str, size: f64, rippled: bool, found: Option
         py_g(size)
     );
     match found {
-        Some(Some(v)) => value_err(format!("{head}. It builds smooth at {}mm, so try that size.", py_g(v)), Some(BLEND_TOO_LARGE)),
+        Some(Some(v)) => value_err(
+            match pair(v) {
+                Some(_) => format!("{head}. It builds smooth at {}, so try those sizes.", offered(v, pair)),
+                None => format!("{head}. It builds smooth at {}, so try that size.", offered(v, pair)),
+            },
+            Some(BLEND_TOO_LARGE),
+        ),
         Some(None) => value_err(
             format!(
                 "{head}, and none of the smaller sizes tried, down to {}mm, did either. Leave out the edge that runs up into that seam.",
@@ -839,10 +996,14 @@ fn blend_edges(
     section_only: bool,
     // Whether the blend is a rolling ball round, whose radius is its size.
     ball: bool,
+    // A two distance chamfer's second distance at `blend_size`.
+    second: Option<f64>,
 ) -> FResult {
     if !(blend_size > 0.0) {
         return Err(Fail::msg(format!("{label}: size must be greater than 0 (got {})", py_g(blend_size))));
     }
+    let pair = move |v: f64| second.map(|d2| second_distance(blend_size, d2, v));
+    let _fitted = ops::fitted_scope();
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
     let overruns: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
@@ -859,7 +1020,7 @@ fn blend_edges(
         let edges = drop_seams(&body_shape, sels, edges, label)?;
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
-        let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
+        let misfit: std::cell::Cell<Option<(Misfit, Fits, [f64; 3])>> = std::cell::Cell::new(None);
         let ends = smooth::fade_ends(&body_shape, &edges);
         let fades = !ends.is_empty();
         let gauge = fades.then(|| smooth::Gauge::new(&body_shape, &edges, ends, ball, blend_size));
@@ -873,7 +1034,7 @@ fn blend_edges(
         };
         let note_overrun = || {
             if let Some(o) = ops::take_overrun() {
-                overruns.borrow_mut().push(overrun_note(label, &body_name, blend_size, o));
+                overruns.borrow_mut().push(overrun_note(label, &body_name, blend_size, o, &pair));
             }
         };
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
@@ -888,7 +1049,7 @@ fn blend_edges(
                     kept
                 }
                 Err(SectionErr::TooLarge { why, fits, at }) => {
-                    misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
+                    misfit.set(Some((why, draft_fits(draft, why, fits), at)));
                     None
                 }
                 Err(_) => None,
@@ -898,7 +1059,7 @@ fn blend_edges(
             match section.map(|s| s(&body_shape, &edges, blend_size)) {
                 Some(Ok(out)) => {
                     if !smooth_at(&out, blend_size) {
-                        return Err(uneven_error(label, &body_name, blend_size, true, None));
+                        return Err(uneven_error(label, &body_name, blend_size, true, None, &pair));
                     }
                     let sharp = still_sharp(&out, &edges);
                     if !sharp.is_empty() {
@@ -918,7 +1079,8 @@ fn blend_edges(
                 Some(Err(SectionErr::Internal(name))) => return Err(Fail::Internal(name)),
                 Some(Err(SectionErr::Cancelled)) => return Err(Fail::msg("cancelled")),
                 Some(Err(SectionErr::TooLarge { why, fits, at })) => {
-                    return Err(misfit_error(label, &body_name, blend_size, why, fits, at))
+                    let fits = draft_fits(draft, why, fits);
+                    return Err(misfit_error(label, &body_name, blend_size, why, fits, at, &pair));
                 }
                 None => return Err(Fail::Internal("TypeError".into())),
             }
@@ -933,22 +1095,84 @@ fn blend_edges(
 
         let (work, work_edges) = ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
         let one_edge_at = |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
+        let section_builds = |size: f64| {
+            section.is_some_and(|sec| {
+                ops::take_fitted(&body_shape, &edges, size)
+                    .map_or_else(|| sec(&body_shape, &edges, size), Ok)
+                    .is_ok_and(|out| {
+                        still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
+                    })
+            })
+        };
         // Whether a size really builds smooth, by the kernel or else the section build, each on a fresh copy.
         let builds_smooth = |size: f64| {
             let by_kernel = ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
                 op(&b, &es, size).is_ok_and(|out| !overlap::folds_over_itself(&b, &out, size) && smooth_at(&out, size))
             });
-            by_kernel
-                || section.is_some_and(|sec| {
-                    sec(&body_shape, &edges, size).is_ok_and(|out| {
-                        still_sharp(&out, &edges).is_empty() && keeps_voids(&body_shape, &out) && smooth_at(&out, size)
-                    })
-                })
+            by_kernel || section_builds(size)
         };
         let uneven = || {
             let found = (!draft).then(|| smooth_size(blend_size, &builds_smooth));
-            uneven_error(label, &body_name, blend_size, rippled.get(), found)
+            uneven_error(label, &body_name, blend_size, rippled.get(), found, &pair)
         };
+        let apex = (label == "Chamfer").then(|| apex::convex_apex(&body_shape, &edges)).flatten();
+        let meeting = |at: [f64; 3]| {
+            let at = DVec3::from(at);
+            edges.iter().filter(|e| vertex_points(e).iter().any(|&v| DVec3::from(v).distance(at) < 1e-3)).count()
+        };
+        // Only at four edges does OCCT's patch run through the setback meets, at eight it keeps most of the spike.
+        let capped_apex = apex.is_some_and(|at| meeting(at) == 4);
+        let kernel_builds = |size: f64| {
+            use crate::kernel::{count, Kind};
+            (capped_apex && section_builds(size))
+                || ops::copy(&body_shape, &edges).is_some_and(|(b, es)| {
+                    op(&b, &es, size).is_ok_and(|out| {
+                        !overlap::folds_over_itself(&b, &out, size)
+                            && (apex.is_none() || !apex::leaves_body(&b, &out))
+                            && smooth_at(&out, size)
+                            && still_sharp(&out, &es).is_empty()
+                            && keeps_voids(&b, &out)
+                            && count(&out, Kind::Solid) == count(&b, Kind::Solid)
+                            && crate::soundness::of(&out).fault().is_none()
+                    })
+                })
+        };
+        // Where four or more chosen edges meet off a convex apex OCCT builds sizes under the limit off its own volume
+        // trend (a tilted pyramid's apex at 9.12 of 9.13 built 137.19), so no size is offered there.
+        // The section build cannot size a chamfer corner it has no patch for, while OCCT, the path that builds
+        // these chamfers, often stops only at the asked size, so the offer is the largest size OCCT builds.
+        let refused = |(why, fits, at): (Misfit, Fits, [f64; 3])| {
+            let fits = match fits {
+                Fits::Unknown if label == "Chamfer" && (apex.is_some() || meeting(at) < 4) => {
+                    kernel_offer(&fell_back, blend_size, draft, &body_shape, &kernel_builds).map_or(fits, Fits::Built)
+                }
+                // The section build sizes a chamfer by its overlaps and splits alone, so a corner it cannot mitre
+                // refuses the size it found. That size is offered only once the whole chamfer builds there, else
+                // the largest OCCT builds under it is, as the section refuses every size above it.
+                Fits::UpTo(k) if label == "Chamfer" && !draft => {
+                    let v = shown_fits(why, k);
+                    let whole = |size: f64| kernel_builds(size) || (apex.is_none() && section_builds(size));
+                    let find = || match v > 0.0 {
+                        true if whole(v) => Some(v),
+                        true => kernel_size(v, false, &kernel_builds),
+                        false => kernel_size(blend_size, false, &kernel_builds),
+                    };
+                    held_offer(&format!("{fell_back}|{v}"), blend_size, &body_shape, &find)
+                        .map_or(Fits::Unknown, Fits::Built)
+                }
+                _ => fits,
+            };
+            misfit_error(label, &body_name, blend_size, why, fits, at, &pair)
+        };
+        // OCCT's plate at a convex apex of four chamfers strays off its flat setback meets by frame and edge order, the
+        // section build caps it flat when they are coplanar.
+        if capped_apex {
+            checkpoint()?;
+            if let Some(built) = try_section(&body_shape, &edges) {
+                staged.push((index, built));
+                continue;
+            }
+        }
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -978,8 +1202,8 @@ fn blend_edges(
                     if fades {
                         return Err(uneven());
                     }
-                    if let Some(fail) = misfit.take() {
-                        return Err(fail);
+                    if let Some(m) = misfit.take() {
+                        return Err(refused(m));
                     }
                     let body = BodyRef { name: &body_name, shape: &work };
                     return Err(blend_failure(label, &body, &unresolved, &one_edge_at, op, blend_size, &combined_err));
@@ -991,13 +1215,15 @@ fn blend_edges(
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None if fades => return Err(uneven()),
-                None => return Err(misfit.take().unwrap_or_else(|| fold_error(&body_name))),
+                None => return Err(misfit.take().map_or_else(|| fold_error(&body_name), refused)),
             }
         } else if !smooth_at(&new_shape, blend_size) {
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None => return Err(uneven()),
             }
+        } else if let Some(at) = apex.filter(|_| apex::leaves_body(&work, &new_shape)) {
+            return Err(refused((Misfit::Corner, Fits::Unknown, at)));
         } else {
             new_shape
         };
@@ -1017,19 +1243,14 @@ fn blend_edges(
         ctx.set_shape(index, shape);
     }
     for message in overruns.into_inner() {
-        ctx.diagnostics.push(json!({
-            "feature_id": fid,
-            "kind": "edge",
-            "lossy": false,
-            "message": message,
-        }));
+        ctx.advise(fid, "blendOverrun", message);
     }
     Ok(())
 }
 
 /// A section round built though it runs past a face: no fillet rests on both
 /// faces at that size, it cuts the corner off, so the build says so.
-fn overrun_note(label: &str, body: &str, size: f64, o: ops::Overrun) -> String {
+fn overrun_note(label: &str, body: &str, size: f64, o: ops::Overrun, pair: &Pair) -> String {
     let [x, y, z] = o.at.map(|c| py_g(py_round(c, 3)));
     let what = label.to_lowercase();
     let head = format!(
@@ -1043,7 +1264,7 @@ fn overrun_note(label: &str, body: &str, size: f64, o: ops::Overrun) -> String {
         (v * step).floor() / step
     });
     match fits {
-        Some(v) if v > 0.0 => format!("{head} A {what} that rests on both fits up to {}mm.", py_g(v)),
+        Some(v) if v > 0.0 => format!("{head} A {what} that rests on both fits up to {}.", offered(v, pair)),
         _ => head,
     }
 }

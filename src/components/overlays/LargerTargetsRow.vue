@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
+import { t } from "../../i18n";
 import Checkbox from "../ui/Checkbox.vue";
 import { onA11yPrefsChange } from "../../ui/a11yPrefs";
 import { largeTargetsOn, setLargeTargets } from "../../ui/targets";
@@ -22,11 +23,8 @@ onUnmounted(() => stop?.());
       class="pref-head pref-check"
       :model-value="on"
       @update:model-value="setLargeTargets"
-      ><span class="pref-title">Larger click targets</span></Checkbox
+      ><span class="pref-title">{{ t("prefs.targets.title") }}</span></Checkbox
     >
-    <p id="prefs-larger-targets-hint" class="pref-hint">
-      Every button, box and handle reacts to the pointer over about 32 pixels, the size a finger gets, so a shaky hand
-      or a head pointer hits it more easily. Nothing moves or changes size on screen.
-    </p>
+    <p id="prefs-larger-targets-hint" class="pref-hint">{{ t("prefs.targets.hint") }}</p>
   </div>
 </template>

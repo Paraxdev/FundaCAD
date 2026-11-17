@@ -25,12 +25,19 @@ afterEach(() => {
 });
 
 describe("installCanvasStop", () => {
-  it("makes the canvas one named Tab stop", () => {
+  it("makes the canvas one named Tab stop, a 3D view described by the hidden summary", () => {
     expect({
       tabIndex: canvas.tabIndex,
       role: canvas.getAttribute("role"),
       name: canvas.getAttribute("aria-label"),
-    }).toEqual({ tabIndex: 0, role: "img", name: "3D view" });
+      roleDescription: canvas.getAttribute("aria-roledescription"),
+      describedBy: canvas.getAttribute("aria-describedby"),
+    }).toEqual({ tabIndex: 0, role: "img", name: "Model", roleDescription: "3D view", describedBy: "view-summary" });
+  });
+
+  it("is never an application, which would switch off browse and rotor keys", () => {
+    expect(canvas.closest("[role=application]")).toBeNull();
+    expect(canvas.getAttribute("role")).not.toBe("application");
   });
 
   it.each([0, 1, 2])("a press with button %i takes focus from a field and leaves it on the body", (button) => {

@@ -5,6 +5,8 @@ import { singleKeysOn } from "../ui/a11yPrefs";
 import { announce } from "../ui/announce";
 import { isChoiceOpen } from "../ui/choice";
 import { describePick } from "../ui/describePick";
+import { onPickSessionBegin, treePickWaiting } from "../ui/treePick";
+import { VIEW_SUMMARY_ID } from "../ui/viewSummary";
 import type { Engine } from "./engine";
 import { refuseAloud } from "./planePick";
 
@@ -13,11 +15,14 @@ const KIND_WORDS: Record<GeometryKind, string> = { faces: "Faces", edges: "Edges
 const STEP_SPEECH_DELAY = 120;
 
 /** Makes the canvas a Tab stop that a pointer press does not land on: with no focus change on a press, every path that
- *  hands focus back only from the body keeps working (focusables.ts, treeRowKeys.ts, Menu.vue, Select.vue). */
+ *  hands focus back only from the body keeps working (focusables.ts, treeRowKeys.ts, Menu.vue, Select.vue).
+ *  An img, never an application: that switches off browse mode in Windows and Linux screen readers and the rotor in VoiceOver. */
 export function installCanvasStop(canvas: HTMLElement): void {
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "3D view");
+  canvas.setAttribute("aria-label", "Model");
+  canvas.setAttribute("aria-roledescription", "3D view");
+  canvas.setAttribute("aria-describedby", VIEW_SUMMARY_ID);
   canvas.addEventListener("mousedown", (ev) => {
     ev.preventDefault();
     const active = document.activeElement;
@@ -64,7 +69,8 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   const canvas = e.viewport.domElement;
   let waiting: 1 | -1 | null = null;
 
-  const held = () => e.sketch.active || e.toolOwnsScreen() || isChoiceOpen();
+  // A tool owns the screen except while it waits for a row, which these keys feed.
+  const held = () => e.sketch.active || isChoiceOpen() || (e.toolOwnsScreen() && !treePickWaiting());
   const say = (text: string) => announce(text, "polite", { key: "pick-step", delay: STEP_SPEECH_DELAY });
 
   function putOut() {
@@ -73,21 +79,28 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   }
 
   function step(delta: 1 | -1) {
-    const blocked = ctl.pickBlocked();
+    const blocked = ctl.stepBlocked();
     if (blocked) return say(blocked);
     ctl.startStepping();
     if (list.state === "loading") {
       waiting = delta;
-      return say(`Listing ${list.kind}`);
+      return say(ctl.waitsOnTool() ?? `Listing ${list.kind}`);
+    }
+    const held = ctl.rowsHeld();
+    if (held) {
+      list.setLit(false);
+      return say(held);
     }
     const row = ctl.step(delta);
     if (!row) {
       list.setLit(false);
-      return say(emptyStepWords(list));
+      return say((!list.rows.length && ctl.waitsOnTool()) || emptyStepWords(list));
     }
     list.setLit(true);
     const { type, facing, minSize } = list.filters;
-    const words = describePick(row.facts).spoken;
+    const said = describePick(row.facts);
+    // Enter gives a plane to the waiting tool, it starts no sketch then.
+    const words = (row.plane && treePickWaiting() && said.aloud) || said.spoken;
     say(type !== null || facing !== null || minSize !== null ? `${words}. Filtered` : words);
   }
 
@@ -110,9 +123,35 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     if (refused) refuseAloud(e, refused);
   }
 
-  function onKey(ev: KeyboardEvent) {
-    // Not taken: the keymap goes on to clear the selection.
+  // The key of an Enter or Space this listener took. Its repeats are swallowed wherever they land, since the take may
+  // have moved focus to the tool's value box, whose own Enter commits.
+  let claimedKey: string | null = null;
+
+  // A tool's own Enter (Mirror and Fillet apply on it) listens in window capture, so this one must hear first.
+  function onKeyCapture(ev: KeyboardEvent) {
+    // Not taken: the keymap goes on to clear the selection, and a tool's capture may stop the key after this.
     if (ev.key === "Escape") return putOut();
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    if (ev.repeat && claimedKey === ev.key) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    if (!ev.repeat) claimedKey = null;
+    if (!treePickWaiting() || held()) return;
+    if (ev.target !== canvas && !(ev.target === document.body && singleKeysOn())) return;
+    if (ev.ctrlKey || ev.altKey || ev.metaKey || ev.shiftKey) return;
+    const row = list.litRow;
+    if (ev.repeat || !row) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    claimedKey = ev.key;
+    putOut();
+    const stale = ctl.offer([row]);
+    if (stale) refuseAloud(e, stale);
+  }
+
+  function onKey(ev: KeyboardEvent) {
     if (ev.defaultPrevented || held()) return;
     if (ev.target !== canvas && !(ev.target === document.body && singleKeysOn())) return;
     const bracket = bracketOf(ev);
@@ -153,6 +192,9 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     },
     { flush: "sync" },
   );
+  // A light from before the pick began would go to its first Enter unasked.
+  const stopBegun = onPickSessionBegin(putOut);
+  window.addEventListener("keydown", onKeyCapture, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("focus", onFocus, true);
   canvas.addEventListener("pointerdown", putOut);
@@ -161,6 +203,8 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
   return () => {
     stopLight();
     stopWaiting();
+    stopBegun();
+    window.removeEventListener("keydown", onKeyCapture, true);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("focus", onFocus, true);
     canvas.removeEventListener("pointerdown", putOut);

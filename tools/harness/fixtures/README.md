@@ -15,6 +15,7 @@ Documents the harness tests open through File > Open. They are JSON documents, w
 - `near_boxes.json`: a 20 x 20 x 30 mm box and a 10 mm box 10 mm from it, close enough that a point on the second reads as one clear face of the first.
 - `steps.json`: three primitives named Base, Post and Ball that do not depend on each other, so the History tests
   can roll back, edit and reorder them by keys without breaking the build.
+- `history_ten.json`: ten small boxes that do not depend on each other, so the History card is tall and the Stress panel under it has little room left in a 800 px window.
 - `whole_sketch_extrude.json`: document version 9 on purpose, so opening it also runs the
   migration. Extrude `e` covers its whole 30 x 30 sketch and names no areas, extrude `e2` names an
   area by a point that is nowhere on its sketch, so that area is really gone.
@@ -25,3 +26,4 @@ Documents the harness tests open through File > Open. They are JSON documents, w
   above the plate, holes through the plate) whose walls are 1.3 mm and 1.2 mm, for the Stress thin wall tests.
 - `filleted_box.json`: a 111.3 x 67.8 x 52.1 mm box with one vertical corner rounded by a 37.1 mm G3 fillet, the
   user's file from a Press/Pull report, for pushing the round face together with the top face.
+- `feature_properties.json`: a 40 x 30 x 20 mm Block with a counterbored hole off its centre, a three copy circular pattern of that hole over 270 degrees, and a thin, two sided extrude of a rectangle beside it, so the properties panel of an extrude, a hole and a pattern each show their longest rows.

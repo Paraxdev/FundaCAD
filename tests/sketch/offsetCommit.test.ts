@@ -150,12 +150,35 @@ describe("offset of a projected filleted face outline commits its preview", () =
     expect(copyOf(again.entities, first.pairs, "f")).toEqual(copyOf(fresh.committed, fresh.pairs, "f"));
   });
 
-  it("leaves a B-spline edge out of the chain, and the lines commit as previewed", async () => {
-    const r = await previewAndCommit(faceOutline(turned, { mixed: true, poly: true }), 3, turned(0, 10), 6.04);
+  it("offsets a face outline's poly edge with the rest, the profile closed and the lines committed as previewed", async () => {
+    const ents = faceOutline(turned, { mixed: true, poly: true });
+    const r = await previewAndCommit(ents, 3, turned(0, 10), 6.04);
     expect(r.solved.conflicts).toEqual([]);
     expect(maxDev(r.preview, r.committed)).toBeLessThan(1e-6);
-    expect(r.preview.map((e) => e.type)).toEqual(["line", "line", "line", "line"]);
+    expect(r.preview.map((e) => e.type)).toEqual(["line", "line", "spline", "line", "line"]);
+    // the solver ties lines only, so the poly edge has no pair
     expect(flips(r.pairs)).toEqual(["a", "b", "c", "e"].map((src) => ({ src, cpy: "string" })));
+
+    const ends = (e: ResolvedEntity): P[] =>
+      e.type === "line"
+        ? [
+            [e.x1, e.y1],
+            [e.x2, e.y2],
+          ]
+        : e.type === "spline"
+          ? [
+              [e.points[0]!.x, e.points[0]!.y],
+              [e.points.at(-1)!.x, e.points.at(-1)!.y],
+            ]
+          : [];
+    const all = r.committed.flatMap(ends);
+    for (const [x, y] of all) expect(all.filter(([u, w]) => Math.hypot(u - x, w - y) < 1e-6)).toHaveLength(2);
+
+    // the copy of the quarter arc (R 47.92 about the filleted corner) is the same arc 6.04 smaller
+    const spline = r.committed.find((e) => e.type === "spline") as Extract<ResolvedEntity, { type: "spline" }>;
+    const [cx, cy] = turned(...centre(64.92));
+    const radii = spline.points.slice(1, -1).map((p) => Math.hypot(p.x - cx, p.y - cy));
+    for (const rad of radii) expect(rad).toBeCloseTo(64.92 - 17 - 6.04, 1);
   });
 
   it("flips every corner of a rounded rectangle offset inward from a line", async () => {

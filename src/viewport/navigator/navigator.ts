@@ -502,13 +502,7 @@ export class Navigator {
       this.reseatAndContain();
       this.emit("rest");
     }
-    if (this.mode === "auto" && this.gesture?.kind !== "orbit" && !this.orbit) {
-      const want = this.autoOrtho();
-      if (want !== this.pose.ortho) {
-        this.pose.ortho = want;
-        this.moved();
-      }
-    }
+    if (this.followAuto()) this.moved();
     if (!this.flight) {
       this.eyeSet = false;
       this.deliberate = false;
@@ -676,6 +670,15 @@ export class Navigator {
     return depth >= this.limits.minDistance && depth * halfTan(p.fov) <= this.limits.maxScale;
   }
 
+  /** True when 'auto' swapped the projection; the caller emits the move. */
+  private followAuto(): boolean {
+    if (this.mode !== "auto" || this.gesture?.kind === "orbit" || this.orbit) return false;
+    const want = this.autoOrtho();
+    if (want === this.pose.ortho) return false;
+    this.pose.ortho = want;
+    return true;
+  }
+
   private autoOrtho(eyeSet = this.eyeSet): boolean {
     const eye = eyeOf(this.pose, new THREE.Vector3());
     const dir = this.pose.target.clone().sub(eye);
@@ -828,6 +831,8 @@ export class Navigator {
     const t = this.pose.level ? { yaw: this.pose.yaw, elev: this.pose.elev, roll: 0 } : decompose(this.pose.q);
     const [lo, hi] = elevRange(this.limits);
     turntableAbout(this.pose, pivot, t.yaw + az, Math.min(hi, Math.max(lo, t.elev + pol)), t.roll);
+    // Not left to the next frame: a stalled one would let a settled view read the projection it turned away from.
+    this.followAuto();
     this.moved();
   }
 

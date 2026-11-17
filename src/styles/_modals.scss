@@ -66,9 +66,11 @@
 /* 3D mouse (sm) settings. */
 .sm-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* The right inset is the setting cards' padding, so a flip checkbox ends where their controls do. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   /* The widest gap in the app, so the eye does not read across two independent columns. */
   gap: var(--s-7);
+  padding-right: var(--s-4);
 }
 .sm-col {
   display: flex;
@@ -166,7 +168,7 @@
 }
 .sm-map-row {
   display: grid;
-  grid-template-columns: 84px 1fr auto;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-3);
 }
@@ -730,10 +732,47 @@
   vertical-align: middle;
   background: var(--key);
 }
+/* The tint of a finding's kind in the Printability panel, set per swatch through --key. */
+.print-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-2);
+  border-radius: 2px;
+  vertical-align: middle;
+  background: var(--key);
+}
 .measure-hint {
   margin-top: var(--s-2);
   font-size: var(--fs-micro);
   color: var(--text-mute, #6b7280);
+}
+/* The Reference images plugin's panel: its title is the image's file name, so it ellipses rather than wraps. */
+.ref-image-window .ui-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-image-panel {
+  width: 260px;
+  max-width: 100%;
+  .param-row > label {
+    flex: 0 0 72px;
+  }
+}
+.ref-image-prompt {
+  margin-bottom: var(--s-3);
+  color: var(--text-mute);
+}
+.ref-image-flip {
+  display: flex;
+  gap: var(--s-4);
+  margin-bottom: var(--s-2);
+}
+.ref-image-problem {
+  margin-top: var(--s-2);
+  color: var(--error);
 }
 .mirror-chips {
   display: flex;
@@ -919,4 +958,36 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+// Describe model: one well per section on the glass, the text selectable so it can be copied in parts.
+.describe-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  user-select: text;
+}
+/* Inset so the ring keeps clear of the dialog's sides, with the dialog's own corner inside it. */
+.describe-body:focus-visible {
+  corner-shape: squircle;
+  border-radius: calc(var(--r-lg, 10px) + var(--s-2));
+  outline-offset: calc(-1 * var(--s-2));
+}
+.describe-section {
+  padding: var(--s-3) var(--s-4);
+  corner-shape: squircle;
+  border-radius: 8px;
+  background: var(--float-tile-bg);
+}
+.describe-head {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.describe-list {
+  margin: 0;
+  padding-left: 1.25em;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
 }

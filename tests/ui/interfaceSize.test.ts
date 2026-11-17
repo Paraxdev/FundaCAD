@@ -22,8 +22,9 @@ function boot(entries: Record<string, string> = {}, tauri = false) {
     setItem: (k: string, v: string) => void stored.set(k, v),
     removeItem: (k: string) => void stored.delete(k),
   });
-  vi.stubGlobal("document", { documentElement: root });
-  vi.stubGlobal("window", tauri ? { __TAURI_INTERNALS__: {} } : {});
+  vi.stubGlobal("document", { documentElement: root, createElement: () => ({}) });
+  const win = { addEventListener: () => {} };
+  vi.stubGlobal("window", tauri ? { ...win, __TAURI_INTERNALS__: {} } : win);
 }
 
 async function load() {

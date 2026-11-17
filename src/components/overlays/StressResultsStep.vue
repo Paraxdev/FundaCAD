@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
@@ -56,14 +57,14 @@ const deformStep = computed(() => {
 <template>
   <div class="stress-step stress-results" data-panel-scroll :class="{ stale: modelChanged || setupChanged }">
     <div v-if="modelChanged || setupChanged" class="stress-stale">
-      <span>{{ modelChanged ? "The model changed since this Run." : "The setup changed since this Run." }}</span>
+      <span>{{ modelChanged ? t("stress.results.modelChanged") : t("stress.results.setupChanged") }}</span>
       <Button
         variant="primary"
         size="sm"
         class="stress-rerun"
         :disabled="stress.running"
         @click="engine.ui.panels.runStress()"
-        >Run again</Button
+        >{{ t("stress.results.runAgain") }}</Button
       >
     </div>
 
@@ -78,7 +79,7 @@ const deformStep = computed(() => {
 
     <template v-if="deform?.shown && !modelChanged">
       <div class="measure-row">
-        <span :id="exaggerationId" class="measure-k">Exaggeration</span>
+        <span :id="exaggerationId" class="measure-k">{{ t("stress.results.exaggeration") }}</span>
         <span class="measure-v stress-deform-label">{{ deformLabel(deform.scale) }}</span>
       </div>
       <div class="measure-row stress-deform-row">
@@ -87,9 +88,9 @@ const deformStep = computed(() => {
           class="stress-animate"
           :icon="deform.animate ? 'pause' : 'play'"
           :pressed="deform.animate"
-          :tip="deform.animate ? 'Hold the shape where it is' : 'Swing the shape between still and bent'"
+          :tip="deform.animate ? t('stress.results.pauseTip') : t('stress.results.playTip')"
           @click="engine.ui.panels.setStressAnimate(!deform.animate)"
-          >{{ deform.animate ? "Pause" : "Play" }}</Button
+          >{{ deform.animate ? t("stress.results.pause") : t("stress.results.play") }}</Button
         >
         <Slider
           class="stress-deform"
@@ -98,41 +99,37 @@ const deformStep = computed(() => {
           :min="0"
           :max="deform.max"
           :step="deformStep"
-          tip="Exaggeration"
+          :tip="t('stress.results.exaggeration')"
           @update:model-value="engine.ui.panels.setStressDeformation($event)"
         />
         <Button
           size="sm"
           class="stress-true-scale"
-          tip="Draw the deflection at its true size"
+          :tip="t('stress.results.trueSizeTip')"
           @click="engine.ui.panels.setStressDeformation(1)"
-          >True size</Button
+          >{{ t("stress.results.trueSize") }}</Button
         >
       </div>
     </template>
 
     <div class="stress-view-row">
-      <label v-if="!modelChanged && !drawing" class="stress-gravity" title="Show the stress colours on the body">
+      <label v-if="!modelChanged && !drawing" class="stress-gravity" :title="t('stress.results.coloursTip')">
         <Switch
           :model-value="stress.colours === 'shown'"
           class="stress-colours"
-          label="Colours"
+          :label="t('stress.results.colours')"
           @update:model-value="engine.ui.panels.setStressColours($event)"
         />
-        <span class="measure-k">Colours</span>
+        <span class="measure-k">{{ t("stress.results.colours") }}</span>
       </label>
-      <label
-        v-if="deform && !modelChanged && !drawing"
-        class="stress-gravity"
-        title="Draw the body bent under the load"
-      >
+      <label v-if="deform && !modelChanged && !drawing" class="stress-gravity" :title="t('stress.results.deformedTip')">
         <Switch
           :model-value="deform.shown"
           class="stress-shape"
-          label="Deformed shape"
+          :label="t('stress.results.deformed')"
           @update:model-value="engine.ui.panels.setStressShape($event)"
         />
-        <span class="measure-k">Deformed shape</span>
+        <span class="measure-k">{{ t("stress.results.deformed") }}</span>
       </label>
       <!-- Stays pressable to leave probe mode whatever the colours are doing. -->
       <Button
@@ -140,19 +137,19 @@ const deformStep = computed(() => {
         class="stress-probe"
         :pressed="stress.probe"
         :disabled="(modelChanged || drawing) && !stress.probe"
-        tip="Read the stress at a point on the body"
+        :tip="t('stress.results.probeTip')"
         @click="engine.ui.panels.setStressProbe(!stress.probe)"
-        >Read a point</Button
+        >{{ t("stress.results.probe") }}</Button
       >
     </div>
 
     <div v-for="(p, i) in stress.pins" :key="'p' + p.id" class="measure-row stress-pin">
-      <span class="measure-k">Point {{ i + 1 }}</span>
+      <span class="measure-k">{{ t("stress.results.point", { i: i + 1 }) }}</span>
       <span class="measure-v">{{ p.label }}</span>
       <IconButton
         class="stress-remove-pin"
         icon="close"
-        :tip="`Remove point ${i + 1}`"
+        :tip="t('stress.results.removePoint', { i: i + 1 })"
         size="sm"
         variant="danger"
         :icon-size="14"
@@ -166,19 +163,23 @@ const deformStep = computed(() => {
 
     <ReadoutList :rows="keyRows" row-class="stress-key-row">
       <template #value="{ row }">
-        <dd class="measure-v" :class="{ 'stress-yields': row.k === 'Safety factor' && result.yields }">{{ row.v }}</dd>
+        <dd
+          class="measure-v"
+          :class="{ 'stress-yields': row.k === t('stress.result.safetyFactor') && result.yields }"
+          >{{ row.v }}</dd
+        >
       </template>
     </ReadoutList>
 
     <template v-if="result.peaks.length && !modelChanged">
-      <div :id="whereId" class="measure-k stress-where-head">Where the highest values are</div>
+      <div :id="whereId" class="measure-k stress-where-head">{{ t("stress.results.where") }}</div>
       <ul class="stress-where" :aria-labelledby="whereId">
         <li v-for="p in result.peaks" :key="p.label">
           <ListRow
             :label="p.label"
             :hint="p.where"
             :aria-label="p.spoken"
-            tip="Look at it"
+            :tip="t('stress.results.lookAt')"
             @click="engine.ui.panels.lookAtStressPoint(p.at, p.size)"
           />
         </li>
@@ -192,7 +193,8 @@ const deformStep = computed(() => {
       :aria-expanded="detailsOpen"
       @click="detailsOpen = !detailsOpen"
     >
-      <template #icon><Icon :name="detailsOpen ? 'caretDown' : 'caretRight'" :size="12" /></template>Details
+      <template #icon><Icon :name="detailsOpen ? 'caretDown' : 'caretRight'" :size="12" /></template
+      >{{ t("stress.results.details") }}
     </Button>
     <div v-show="detailsOpen" class="stress-fold stress-details-body">
       <ReadoutList :rows="result.details" row-class="stress-detail-row" />

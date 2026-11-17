@@ -13,9 +13,10 @@ import { contextMenu, type CtxItem } from "./menu";
 import { useContextMenuStore } from "../stores/contextMenu";
 import { isInspectorEditable } from "../document/numFields";
 import { allCommands } from "./commands";
-import { featureMeta } from "./featureMeta";
+import { featureEnglish } from "./featureMeta";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
-import { keyHint } from "../input/shortcuts";
+import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
+import { t } from "../i18n";
 import type { Feature, PlaneDef } from "../types";
 import type { EdgeHit, FaceHit } from "../viewport/picking";
 import type { FacePlanePick } from "../features/facePlanePick";
@@ -190,7 +191,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     };
     const ownerId = featureForFace(hit.faceId);
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
-    const ownerLabel = owner ? featureMeta(owner).label : "";
+    const ownerLabel = owner ? featureEnglish(owner) : "";
     const items: CtxItem[] = [
       {
         label: "Press/Pull face",
@@ -380,12 +381,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Fit view", shortcut: keyHint("fit"), onClick: () => handleAction("fit") },
       {
         label: "Look",
-        children: [
-          { label: "Isometric", onClick: () => handleAction("iso") },
-          { label: "Top", onClick: () => handleAction("top") },
-          { label: "Front", onClick: () => handleAction("front") },
-          { label: "Right", onClick: () => handleAction("right") },
-        ],
+        children: STANDARD_VIEWS.map((view) => ({
+          label: t("view.named", { view }),
+          shortcut: keyHint(view),
+          onClick: () => handleAction(view),
+        })),
       },
       {
         label: "Show all bodies",
@@ -394,14 +394,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
       },
       { separator: true, label: "" },
       {
-        label: stepMenuText("Undo", stepLabelFor(deps, "undo")),
+        label: stepMenuText("undo", stepLabelFor(deps, "undo")),
         refName: "Undo",
         shortcut: "Ctrl+Z",
         disabled: !canStep(deps, "undo"),
         onClick: () => handleAction("undo"),
       },
       {
-        label: stepMenuText("Redo", stepLabelFor(deps, "redo")),
+        label: stepMenuText("redo", stepLabelFor(deps, "redo")),
         refName: "Redo",
         shortcut: "Ctrl+Y",
         disabled: !canStep(deps, "redo"),

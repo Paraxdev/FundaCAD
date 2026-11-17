@@ -10,6 +10,8 @@ import {
   uiSlider,
 } from "../components/ui/dom";
 import { claimEscape } from "../ui/escapeClaim";
+import { ExprError } from "../params/parse";
+import { canonicalTyping } from "../ui/measure";
 import {
   PROFILE_DETENT,
   PROFILE_MAX,
@@ -68,6 +70,16 @@ function glyph(size: number): { svg: SVGSVGElement; set: (p: number) => void } {
       solid.setAttribute("d", `${d} L1 23 Z`);
     },
   };
+}
+
+// Number, not the expression reader: the box shows a signed value and the grammar has no unary plus. A string is the
+// reason the text was refused, such as an ambiguous 1.500.
+function profileTyped(text: string): number | string {
+  try {
+    return Number(canonicalTyping(text));
+  } catch (e) {
+    return e instanceof ExprError ? e.message : Number.NaN;
+  }
 }
 
 function hold(e: Event) {
@@ -223,7 +235,11 @@ export class ProfileChip {
     head.append(title, num.root, word);
     const typed = () => {
       const text = num.input.value.trim();
-      const v = Number(text);
+      const v = profileTyped(text);
+      if (typeof v === "string") {
+        setInvalid(num, v);
+        return;
+      }
       if (!text || !Number.isFinite(v)) {
         setInvalid(num, `Type a profile from ${formatProfile(PROFILE_MIN)} to ${formatProfile(PROFILE_MAX)}`);
         return;

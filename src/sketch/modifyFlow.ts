@@ -31,6 +31,7 @@ import { pickPlaneEdge, planeEdgeChain } from "./planeEdgePick";
 import { contextMenu } from "../ui/menu";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
+import { t } from "../i18n";
 
 /** The slice of SketchMode these tools read/write, live accessors, not copies. */
 export interface ModifyHost {
@@ -539,6 +540,11 @@ export class ModifyFlow {
       return;
     }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
+    if (res?.refused) {
+      toast(t("sketch.offsetSplineOpen"));
+      this.cancelOffset();
+      return;
+    }
     if (!res) {
       toast("Offset: that distance would collapse the shape");
       this.cancelOffset();

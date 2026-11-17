@@ -193,6 +193,7 @@ export class OriginTiles {
   private shape: TileShape;
   private readonly tiles: Record<Plane3, Tile>;
   private states = tileStates(null);
+  private shown = false;
   private labelsPainted = false;
   private k = 1;
   private ink = NOIR_TEXT;
@@ -249,15 +250,26 @@ export class OriginTiles {
   }
 
   setShown(on: boolean) {
-    for (const k of PLANES) this.tiles[k].fill.visible = on;
+    this.shown = on;
     this.states = tileStates(null);
-    this.paintLook();
-    if (on) this.paintLabels();
+    this.applyVisible();
   }
 
+  /** While the tiles are hidden, the lit one is drawn alone, so a plane lit from a list still shows. */
   hover(kind: Plane3 | null) {
     this.states = tileStates(kind);
+    this.applyVisible();
+  }
+
+  /** True while any tile is drawn, all three or a lit one alone. */
+  get drawn(): boolean {
+    return PLANES.some((k) => this.tiles[k].fill.visible);
+  }
+
+  private applyVisible() {
+    for (const k of PLANES) this.tiles[k].fill.visible = this.shown || this.states[k] === "hot";
     this.paintLook();
+    if (this.drawn) this.paintLabels();
   }
 
   /** `pixelWorldSize` is the world size of one screen pixel at the origin. With `rect`, the canvas in client
@@ -314,9 +326,9 @@ export class OriginTiles {
     return placeLabels(tiles, LABEL_BOX_PX);
   }
 
-  /** The plane a press at client (`x`, `y`) takes, null while the tiles are hidden. */
+  /** The plane a press at client (`x`, `y`) takes, null while the tiles are hidden, a lone lit one included. */
   pick(x: number, y: number, frame: ScreenFrame, minPx: number): PlaneHit | null {
-    if (!this.tiles.XY.fill.visible || this.group.scale.x <= 0) return null;
+    if (!this.shown || this.group.scale.x <= 0) return null;
     const tiles = this.onScreen(frame);
     return pickPlaneOnScreen(tiles, this.labelsOnScreen(frame, tiles), { x, y }, minPx, this.labelBox());
   }

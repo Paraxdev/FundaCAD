@@ -1,6 +1,6 @@
 // Display-only, no feature and no History row: a toast before you slice it and find out the hard way.
 
-import { definePluginSettings, readSetting, type SettingsSchema } from "fundacad";
+import { definePluginSettings, readSetting, spellFixed, type SettingsSchema } from "fundacad";
 
 export type Vec3 = readonly [number, number, number];
 
@@ -137,8 +137,8 @@ export function parseCustomBedSize(width: number, depth: number, height: number)
  *  percent, which is closer than a bed's own accuracy ever is. */
 export function bedFitMessage(size: Vec3, bed: Vec3): string {
   const { fits, scale } = bedFit(size, bed);
-  const dims = size.map((s) => s.toFixed(1)).join(" x ");
-  const bedDims = bed.map((s) => s.toFixed(0)).join(" x ");
+  const dims = size.map((s) => spellFixed(s, 1)).join(" x ");
+  const bedDims = bed.map((s) => spellFixed(s, 0)).join(" x ");
   if (fits) return `Fits the ${bedDims} mm bed (model is ${dims} mm)`;
-  return `Too big for the ${bedDims} mm bed (model is ${dims} mm); scale to ${(scale * 100).toFixed(1)}% to fit`;
+  return `Too big for the ${bedDims} mm bed (model is ${dims} mm); scale to ${spellFixed(scale * 100, 1)}% to fit`;
 }

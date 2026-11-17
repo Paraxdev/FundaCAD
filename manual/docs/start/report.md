@@ -20,7 +20,7 @@ Opening an issue needs a GitHub account, and nothing leaves your computer until 
 
 What will be sent shows the exact text before anything is copied:
 
-1. the version, your system, the engine and the plugins that run;
+1. the version, your system, the engine and the plugins that run, and on Linux whether a screen reader can reach FundaCAD ([Accessibility](../reference/accessibility.md#linux));
 2. your description;
 3. your last steps and the last three errors;
 4. the end of the app log, unless you untick it;

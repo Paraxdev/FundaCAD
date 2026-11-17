@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from "fundacad/ui";
 import { usePrintStatusStore } from "./printStatus";
 
 const print = usePrintStatusStore();
@@ -18,19 +19,25 @@ const PILL = {
   fontSize: "var(--fs-small, 12px)",
   color: "var(--text, #e6e8ec)",
   boxShadow: "var(--shadow-2, 0 2px 8px rgba(0, 0, 0, 0.4))",
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--s-3)",
   pointerEvents: "none",
 } as const;
 </script>
 
 <template>
   <Teleport to="body">
+    <!-- Progress changes by the percent, so it is a status region that does not speak each change. -->
     <div
       v-if="print.text != null"
       class="print-status-pill"
-      :style="[PILL, print.onClick ? { cursor: 'pointer' } : {}]"
-      :title="print.onClick ? 'Show camera' : undefined"
-      @click="print.onClick?.()"
-      >{{ print.text }}</div
+      role="status"
+      aria-live="off"
+      :style="[PILL, print.onClick ? { pointerEvents: 'auto' } : {}]"
     >
+      <span>{{ print.text }}</span>
+      <Button v-if="print.onClick" size="sm" variant="ghost" @click="print.onClick()">Show camera</Button>
+    </div>
   </Teleport>
 </template>

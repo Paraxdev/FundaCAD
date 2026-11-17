@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { t } from "../../i18n";
 import Checkbox from "../ui/Checkbox.vue";
 import Segmented from "../ui/Segmented.vue";
 import Select from "../ui/Select.vue";
@@ -34,31 +35,29 @@ function pickSize(v: string) {
   const n = asInterfaceSize(v);
   if (n !== null) setA11yPref("interfaceSize", n);
 }
-const LABEL_OPTIONS: { value: ViewportLabels; label: string }[] = [
-  { value: "s", label: "Small" },
-  { value: "m", label: "Medium" },
-  { value: "l", label: "Large" },
-  { value: "xl", label: "Extra large" },
-];
-const sizeKeys = fmtKeys("Ctrl+Plus and Ctrl+Minus step it from anywhere in the app, and Ctrl+0 puts it back to 100%.");
+const LABEL_OPTIONS = computed<{ value: ViewportLabels; label: string }[]>(() => [
+  { value: "s", label: t("prefs.viewportLabels.small") },
+  { value: "m", label: t("prefs.viewportLabels.medium") },
+  { value: "l", label: t("prefs.viewportLabels.large") },
+  { value: "xl", label: t("prefs.viewportLabels.extraLarge") },
+]);
+const sizeKeys = computed(() => fmtKeys(t("prefs.size.keys")));
 </script>
 
 <template>
   <div class="pref-card" data-a11y-size="interface">
     <div class="pref-head">
-      <label class="pref-title" for="prefs-interface-size">Interface size</label>
+      <label class="pref-title" for="prefs-interface-size">{{ t("prefs.size.title") }}</label>
       <Select
         id="prefs-interface-size"
-        label="Interface size"
+        :label="t('prefs.size.title')"
         aria-describedby="prefs-interface-size-hint"
         :model-value="String(size)"
         :options="SIZE_OPTIONS"
         @update:model-value="pickSize"
       />
     </div>
-    <p id="prefs-interface-size-hint" class="pref-hint">
-      Makes every panel, menu and label larger or smaller. {{ sizeKeys }}
-    </p>
+    <p id="prefs-interface-size-hint" class="pref-hint">{{ t("prefs.size.hint", { keys: sizeKeys }) }}</p>
   </div>
   <div class="pref-card" data-a11y-size="comfortable">
     <Checkbox
@@ -67,28 +66,23 @@ const sizeKeys = fmtKeys("Ctrl+Plus and Ctrl+Minus step it from anywhere in the 
       aria-describedby="prefs-comfortable-text-hint"
       :model-value="comfortable"
       @update:model-value="(on: boolean) => setA11yPref('comfortableText', on)"
-      ><span class="pref-title">Comfortable text</span></Checkbox
+      ><span class="pref-title">{{ t("prefs.comfortable.title") }}</span></Checkbox
     >
-    <p id="prefs-comfortable-text-hint" class="pref-hint">
-      Spaces lines, letters and words further apart, which some people with low vision or dyslexia read more easily.
-      Buttons and labels grow to fit.
-    </p>
+    <p id="prefs-comfortable-text-hint" class="pref-hint">{{ t("prefs.comfortable.hint") }}</p>
   </div>
   <!-- Wide: four worded sizes cut each other short in a 290 px card once the Interface size passes 125 percent. -->
   <div class="pref-card wide" data-a11y-size="labels">
     <div class="pref-head">
-      <span class="pref-title">Viewport labels</span>
+      <span class="pref-title">{{ t("prefs.viewportLabels.title") }}</span>
     </div>
     <Segmented
       id="prefs-viewport-labels"
-      label="Viewport labels"
+      :label="t('prefs.viewportLabels.title')"
       aria-describedby="prefs-viewport-labels-hint"
       :model-value="labels"
       :options="LABEL_OPTIONS"
       @update:model-value="(v: ViewportLabels) => setA11yPref('viewportLabels', v)"
     />
-    <p id="prefs-viewport-labels-hint" class="pref-hint">
-      Sizes the sketch dimensions, constraint marks and plane names drawn over the model, and the view cube.
-    </p>
+    <p id="prefs-viewport-labels-hint" class="pref-hint">{{ t("prefs.viewportLabels.hint") }}</p>
   </div>
 </template>

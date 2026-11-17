@@ -1,6 +1,10 @@
 // The one-line readout for several picked things, and the measures it and the prompts share.
 
 import { shallowRef } from "vue";
+import { spellNumber } from "./measure";
+import { t } from "../i18n";
+import type { EntityKind, SelectionCounts } from "../features/toolCapabilities";
+import { countLine, KIND_RANK } from "./selectionTools";
 import { fmtLength } from "./units";
 
 export type Pt3 = readonly [number, number, number];
@@ -50,7 +54,7 @@ export function circleDiameter(points: readonly Pt3[], tol = 0.01): number | nul
   return radii.every((r) => Math.abs(r - mean) <= mean * tol) ? mean * 2 : null;
 }
 
-const mm = (v: number) => `${Number(v.toFixed(2))} mm`;
+const mm = (v: number) => `${spellNumber(Number(v.toFixed(2)))} mm`;
 
 export interface RoundSize {
   radius: number;
@@ -75,19 +79,38 @@ export function roundFacePrompt(round: RoundSize): string {
   );
 }
 
-/** "3 faces", "2 edges · 300.74 mm". One face or edge goes through describePick once its facts are known. */
+/** "3 faces", "2 edges · 300.74 mm", "1 face · 1 edge · 40 mm". One face or edge goes through describePick once its
+ *  facts are known. `others` counts the kinds picked beside `kind`. */
 export function describeSelection(input: {
+  kind: EntityKind;
   count: number;
-  noun: string;
-  plural: string;
   edges?: readonly (readonly Pt3[])[];
+  bodyHint?: boolean;
+  others?: SelectionCounts;
 }): string {
-  if (input.count <= 0) return "";
-  const parts = [`${input.count} ${input.count === 1 ? input.noun : input.plural}`];
-  if (input.edges?.length) {
-    parts.push(fmtLength(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
+  const others = input.others ?? {};
+  // The primary kind ranks first and is named last, beside its measures.
+  const also = KIND_RANK.filter((k) => k !== input.kind && (others[k] ?? 0) > 0)
+    .reverse()
+    .map((k) => countLine(k, others[k]!));
+  return [...also, primaryLine(input)].filter(Boolean).join(" · ");
+}
+
+function primaryLine(input: {
+  kind: EntityKind;
+  count: number;
+  edges?: readonly (readonly Pt3[])[];
+  bodyHint?: boolean;
+}): string {
+  const { kind, count } = input;
+  if (count <= 0) return "";
+  if (kind === "body" && input.bodyHint) return t("readout.bodiesAuto", { n: count });
+  if (kind === "edge" && input.edges?.length) {
+    const length = fmtLength(input.edges.reduce((s, e) => s + polylineLength(e), 0));
     const d = input.edges.length === 1 ? circleDiameter(input.edges[0]!) : null;
-    if (d !== null) parts.push(`⌀${fmtLength(d)}`);
+    return d === null
+      ? t("readout.edges", { n: count, length })
+      : t("readout.edgesCircle", { n: count, length, diameter: fmtLength(d) });
   }
-  return parts.join(" · ");
+  return countLine(kind, count);
 }

@@ -1,6 +1,7 @@
 // A mechanism keeps both `offset` (mm) and `angle` (deg) as top-level numeric fields, but only one means anything:
 // a slider drive reads the offset, a revolute drive the angle.
 
+import { t } from "../i18n";
 import type { ChoiceOption } from "./optionFields";
 import type { DatumMark, Feature, JointMode, MechanismJoint } from "../types";
 
@@ -52,9 +53,10 @@ export const NO_DRIVE = "";
 
 // Also lists whatever the drive names when it is not drivable (rigid or removed), so the row never lies.
 export function mechanismDriveChoice(values: Record<string, unknown>): { options: ChoiceOption[]; current: string } {
-  const options: ChoiceOption[] = [{ value: NO_DRIVE, label: "None" }];
+  const options: ChoiceOption[] = [{ value: NO_DRIVE, label: t("field.option.none") }];
   for (const j of mechanismJoints(values)) {
-    if (isDrivable(j.mode)) options.push({ value: j.id, label: `${j.id} (${j.mode})` });
+    if (isDrivable(j.mode))
+      options.push({ value: j.id, label: t("field.option.driveJoint", { joint: j.id, mode: j.mode }) });
   }
   const drive = typeof values.drive === "string" ? values.drive : NO_DRIVE;
   if (!options.some((o) => o.value === drive)) options.push({ value: drive, label: drive });

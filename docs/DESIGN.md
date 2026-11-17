@@ -299,7 +299,7 @@ your layer from what is actually on screen:
 | z | Layer |
 |---|---|
 | 17 | `.sketch-dim-leaders`, `calc(var(--z-panel) - 2)`, the sketch dimension leaders, under the panel |
-| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel |
+| 18 | `.stress-glyph-label`, `calc(var(--z-panel) - 1)`, the Stress readouts in the view, under the panel, so a pinned readout turns to the side of its point no panel or card covers |
 | 19 | `.measure-panel` (`--z-panel`), every floating panel |
 | 20 | `#float-layer` (`--z-float`), the cards and rail |
 | 200 | `.float-popover` (`--z-popover`) |
@@ -611,6 +611,9 @@ one; a name that is not there renders nothing. The common actions:
 
 There is no `trash`, `settings`, `info`, `error`, `eye` or `chevron` icon.
 
+A native `<details>` takes `class="disclosure"` and leads its `<summary>` with a 10px `caretRight` as
+`.disclosure-caret`, turned down while open, never the browser's triangle.
+
 | Size | Use |
 |---|---|
 | 12 to 15 | Inline in rows, close crosses, title bar buttons (15) |
@@ -687,7 +690,7 @@ anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ow
 | `KeyChip` | A shortcut drawn as key caps | `keys`; `inTitle` hides it from a screen reader when the owner's `title` already says it | none, it is a label |
 | `KeyCapture` | A shortcut setting: a button that opens a capture dialog, never armed on focus | `action`, the start of its name; `keys`, in the table's form, empty shows Not set; `problem`, the owner's refusal, spoken in place of the new keys; `clearable` adds Clear; emits `capture` (`key`, `code`, `ctrl`, `shift`, `alt`) and `clear` | as `Button`; the dialog's region shows when it listens |
 | `TextField` | Typed text: a name, a search, a URL | `modelValue`; `commit`: `live` (default) or `change`; `type`: `text`, `search`, `url`; `validate`, `error`; `selectOnFocus`; `size`: `sm` 24 or `md` 32; `leading` and `trailing` slots; a refusal is described on the field and spoken once | focus, error, disabled |
-| `NumberField` | Every number a person types | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker, and the unit a screen reader hears as the field's description, millimetres or degrees); `caption`, a unit word that is only text, so "in" or "deg" is not read as a measure; `unitless`, which says a count or a ratio has no unit and changes nothing; `parse`, `ui/measure` by default, so units, fractions and a decimal comma read, or `readAs` from `ui/measure` for a field of one kind, which refuses a written unit of another; `validate`; `problem`, a refusal from the kernel (described on the field and spoken once, at once in `change` mode and after a 700 ms pause in `live` mode); `min`, `max`, `step`; `stepFrom`, where an arrow starts on a blank field; `limits`: `refuse` (default) or `arrows`, which holds `min` and `max` to the arrow keys and lets typed text past them commit, as a native number input does, only for an owner that judges the value; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
+| `NumberField` | Every number a person types, shown with the language's decimal mark | `modelValue: number \| null`; `commit`: `change` (default) or `live`; `unit` and `units` (the unit and its picker, and the unit a screen reader hears as the field's description, millimetres or degrees); `caption`, a unit word that is only text, so "in" or "deg" is not read as a measure; `unitless`, which says a count or a ratio has no unit and changes nothing; `parse`, `ui/measure` by default, so units, fractions and a decimal comma read, or `readAs` from `ui/measure` for a field of one kind, which refuses a written unit of another; `validate`; `problem`, a refusal from the kernel (described on the field and spoken once, at once in `change` mode and after a 700 ms pause in `live` mode); `min`, `max`, `step`; `stepFrom`, where an arrow starts on a blank field; `limits`: `refuse` (default) or `arrows`, which holds `min` and `max` to the arrow keys and lets typed text past them commit, as a native number input does, only for an owner that judges the value; `nullable`; `preview` and `previewEnd`; `widthCh` | focus, error with the rejected text kept, disabled |
 | `UnitChip` | The unit beside a value | `unit`; `options` makes it a picker, without them it is a caption; `spokenElsewhere` hides a caption from browse mode when the field already says the unit | picker: hover, pressed, open, disabled |
 | `Select` | A choice from a list too long to show at once | `modelValue`; `options` (`value`, `label`, `hint`, `disabled`); `placeholder`; `size`; `variant`: `field` (a well) or `chip` (the `UnitChip` look) | hover, focus, open with an active row, disabled |
 | `Combobox` | A search field over the list of its matches, as the command palette is | `modelValue`, the query; `options` (`value`, `label`, `hint`, `disabled`, `keyshortcuts`); `active` with `v-model:active`, -1 for none; `listClass`, `optionClass`; `pick` emits the chosen value; a `default` slot per option, an `empty` slot | focus, the active row `.is-active`, a disabled option |
@@ -704,7 +707,7 @@ anything that says what it acts on, then itself: `aria-labelledby="{labelId} {ow
 | `ConfirmDialog` | A short question with a few answers, or a checklist to confirm | `title`, `message`; `options` (`value`, `label`, `hint`, `primary`, `danger`); `danger`; `multi` with `min`; `confirmLabel`, `cancelLabel` | as `Dialog`, and its buttons |
 | `Panel` | A small tool or readout panel ([7.13](#713-tool-and-readout-panels-measure-panel)) | `open`, `title`, `hint`, `closable`, `closeOnEsc`, `panelClass`; `head-actions` and `foot` slots | none of its own, its controls carry theirs |
 | `Card` | A titled card in a pane, as Items and History are ([7.1](#71-floating-card-float-card)) | `title`; `collapsible` with `v-model:collapsed`; `head-actions` and `foot` slots | a collapsible title: hover, focus |
-| `FieldRow` | A label and its control | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
+| `FieldRow` | A label and its control; in `inline` and `param` a control that does not fit beside its label moves under it ([7.9](#79-rows)) | `label`; `for`, or the id it hands its slot, or `null` for no `for` when `aria-labelledby` names the control; `hint`; `error`; `layout`: `inline`, `stacked` or `param`, the inspector row that keeps the `.param-row` classes, with `controlClass` for its value column and `labelWidth` for a fixed label column; the slot gets `describedby`, the hint only, and `errorId` while there is an error, for a control that does not speak its own | error |
 | `ListRow` | A selectable row in a list, or a row that is a button | `label`, `hint`, `icon`, `selected`; `as`: `option` (inside a listbox, whose owner moves focus) or `button` | hover, pressed, focus, selected, disabled |
 | `ReadoutList` | Label and value pairs in a panel: Measure, Properties, the Stress key rows | `rows` (`k`, `v`); `rowClass`, worn by each row; the `value` slot draws the `dd` for a row (`row`, `index`) | none |
 | `RailButton` | A tool on the rail ([7.3](#73-rail-tile-rail-btn-rail-tile-rail-pill)) | as today | as 7.3 |
@@ -840,7 +843,8 @@ wears it.
 `RailButton.vue`. The tile is glass A at `--rail-tile`, `--float-tile-radius`,
 filled with `--float-tile-bg`. The pill (label) is glass A, `--float-chip-radius`,
 filled with `--float-chip-bg`, padding `3px 9px`, label `.rail-label`
-`--fs-body`/600, sub label `.rail-sub` `--fs-micro` `--text-mute`.
+`--fs-body`/600, sub label `.rail-sub` `--fs-micro` `--text-mute`. The pill is at most `14rem` wide and its label and sub label wrap
+(`overflow-wrap: break-word`, `hyphens: auto`), so a long translated name grows the pill taller, never cut.
 
 | State | Recipe |
 |---|---|
@@ -998,6 +1002,13 @@ The sketch palette holds three lists under one heading each (`SketchShapesList`,
   with what it holds). A row that can be removed sits in an `li.rel-row` with a sibling `IconButton` (`.rel-del`,
   `danger`) named `Delete` and the same words. The button is a sibling, never inside the row button, so Tab reaches
   both. It shows on hover and on `:focus-within`, and stays in the tab order while hidden.
+- A row with a label and a control wraps: a control that does not fit beside its label moves to its own line under it,
+  in every language, and a label is never cut with an ellipsis. `FieldRow` `inline` and `param` rows and `.stress-field`
+  get this from the `wrap-row` and `wrap-label` mixins in `src/styles/ui/_field-row.scss`; a new row of this kind
+  includes them, and a row that fits looks as it did. The rows of one group that should start their boxes at one x (the Stress material and its custom values) wear
+  `.stress-keyed`, which gives their labels one share of the row.
+  In plain text a `.param-row` select takes the width of its whole value (at least 120px), so a long option such as
+  "Plan de l'esquisse" is read in full or the row stacks; Comfortable text wraps the value instead.
 - A Dimensions row is a `FieldRow` with a `NumberField` (`commit="change"`, the unit of the dimension), named by the
   dimension's subject. A driven dimension is disabled and says why.
 - The line above Relations (`.rel-summary`) takes focus after a Delete, so the keys do not fall back to the page. A
@@ -1120,7 +1131,9 @@ defineEmits<{ close: [] }>();
   `min-height` set shrinks and the rows around it stay in view. The in-view chips (`.dim-input`, `.sketch-dims`,
   `.snap-tag`, `.prompt` and the like) draw over a panel they meet, so a form with its
   actions at the panel's foot keeps `--prompt-clear` free below them.
-  The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`.
+  The shell is `min-width: 180px`, `padding: var(--s-4)`, `font-size: var(--fs-small)`. The Stress panel's least is
+  160px, so at 1024x600 with History open it keeps the full height column left of History rather than a short shelf; its
+  rows, tabs and buttons wrap in that column and the quarter ticks of its colour scale give way.
 
 | Class | Recipe |
 |---|---|
@@ -1131,7 +1144,7 @@ defineEmits<{ close: [] }>();
 | `.measure-divider` | 1px `--line`, margin `var(--s-2) 0` |
 | `.measure-select`, `.measure-number` | the old small inline fields; new work uses `Select` and `NumberField` at `sm` |
 | `.measure-hint` | `--fs-micro`, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close"); `hint` writes it |
-| Fields | `FieldRow` with its control, for a label and something to change; `.measure-row` is for a label and a value |
+| Fields | `FieldRow` with its control, for a label and something to change; `.measure-row` is for a label and a value. A `.stress-field` row wraps like a `FieldRow` ([7.9](#79-rows)) |
 | Actions | `Button`, or `Button variant="primary"` for the one main action; a 28px icon action is `IconButton size="md" variant="plain"` ([7.1](#71-floating-card-float-card)) |
 
 Do not add a head with its own padding: the shell padding is the inset, and a
@@ -1198,6 +1211,20 @@ Copy has two patterns, pick by the button:
   refuses, fail silently, the text stays selectable.
 - A text action that copies (McpSection's config): `toast("Copied.")`, and on
   failure `toast("Could not copy. Select the text and copy it.", { kind: "error" })`.
+
+A progress bar for a long job, such as the Camera tab's traced picture, is
+`role="progressbar"` with a name, `aria-valuemin`, `aria-valuemax` and
+`aria-valuenow`, and an `aria-valuetext` when the unit is not a percent
+(`64 of 256 samples`). It sits in no live region, and its values change at
+most once a second, and at once at each quarter and at the total
+(`src/ui/renderProgress.ts`), so a reader is never pushed a number per frame.
+The button that starts the job keeps one name while it runs. Its speech goes
+through `announce()`: start, finish and cancel at Normal, each quarter at
+Verbose, and a failure drops a waiting line before its error is spoken. The
+start is said at the job's first report, so a job that never begins is not
+heard as one, and a finish whose result can no longer be used is not said.
+Escape in the job's tab cancels it too, see the Escape table in
+[11](#11-accessibility).
 
 ### 7.15 Marks in the scene
 
@@ -1313,7 +1340,7 @@ The standard transition is
 Transition only background, color, box-shadow, opacity and
 transform, never layout. The one layout property that moves is the `width` of
 a progress fill inside a fixed track (`.timeline-busy .busy-bar i` and
-`.timeline-node .t-bar i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
+`.timeline-node .t-bar i` and `.rd-progress-track i` at `0.4s var(--ease)`, `.rd-emitting-bar` at
 `120ms linear`), because it moves nothing around it.
 
 Off the scale, do not copy: `profile-panel-in 0.14s ease-out`
@@ -1372,6 +1399,9 @@ which turns them into the Command and Option glyphs on a Mac; Control+ names the
 its caret glyph. Use "No X yet" for lists that will fill and
 "X appear here" for passive sources. Technical engine text goes after a plain
 lead; the full text is kept in the console.
+
+New UI text goes through `t()`, with its English line in `src/i18n/locales/en.json` and a translation in every
+other language file; [I18N.md](I18N.md) shows how to add a line or a language.
 
 ## 10. Light and dark themes
 
@@ -1531,6 +1561,7 @@ Escape depends on what the surface is:
 | A dialog (`Dialog.vue`, `ModalFrame.vue`, the chooser) | Closes the topmost one through the modal gate (`composables/useModalGate.ts`); `Dialog` does it itself, a `ModalFrame` dialog through its own handler |
 | A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `Panel` (or `FloatingPanel`). It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
 | A panel that belongs to a running tool or mode (Measure, Overhang) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close") |
+| A dock tab with a job running (the traced picture on the Camera tab, `RenderCamera.vue`) | Cancels the job. It calls `claimEscape()` only while the job runs and focus is in the tab, and stops the key there so the keymap keeps the selection. With no job running the key goes on to whatever owned it before |
 | A tool panel with layers of its own to back out of (Stress) | No `close-on-esc`, its own bubble phase `keydown` in `StressPanel.vue`. One layer per press: a drag, placing a spot or Read a point first (`viewport/stressGlyphs.ts` takes them in capture and stops the key), then a focused field gives up focus, and only then the panel closes, keeping the setup and the last result as the Close button does |
 
 Never call `claimEscape()` from a tool panel: the tool would stop hearing its

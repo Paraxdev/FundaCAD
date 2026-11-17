@@ -2,84 +2,65 @@
 
 ## What's new since the last beta
 
-**Security**
-- A STEP or XBF import no longer reads other files or network locations that the file names.
-- More damaged or oversized documents and imports now stop with a clear message, instead of freezing or filling memory or disk.
-- Plugins work within firmer limits, and installing a plugin or exporting through one keeps your old file if something goes wrong.
-- The assistant connection checks documents more strictly and follows the same save rules everywhere.
-- On Windows and Linux, the part of FundaCAD that reads your files runs with fewer rights, so a bad file can do less harm.
+**Languages**
+- FundaCAD speaks German, French, Spanish, Chinese and Japanese, machine translated. Pick one in Preferences, Appearance, Language, and it applies at once.
+- Translated so far: Home, the menu bar, the command palette, the tool rail, Keyboard Shortcuts, Items and History, a step's properties, Undo and Redo, the selection readout, Stress, Preferences, Plugins, the render settings and update notices. The Language card links to the manual's full list.
+- The command palette and Keyboard Shortcuts find everything by its translated or its English name.
+- In German, French and Spanish, value boxes and expressions show and take a decimal comma. Saved files open the same in every language.
+- Your own language file can correct any line or add a language. A file Notepad saved as .json.txt is read too, and a refused file names the line and column where it broke.
 
 **Accessibility**
-- Interface size goes from 80 to 200 percent, with a readable text floor and Comfortable text.
-- After renaming in Items by keyboard, focus goes back to the row.
-- The new Geometry tab beside Items lists faces, edges and planes, so you can find, hear and pick them without a mouse. Every tool that waits for a face, edge or plane takes a row from it.
-- Line, rectangle and circle can be drawn with keys only, and are spoken as you draw.
-- Sketch dimensions and constraints are a list you can move through with keys, and free or fixed sketch lines differ by more than colour.
-- Printability, interference and Stress results are also listed in words.
-- Messages are spoken and stay long enough to read, and Undo says what it undid.
-- Fields say their unit, and why a value was refused.
-- Notices stay out of the way of an open dialog, and a notice with a button waits until you can use it.
-- Comfortable text wraps a long dropdown value onto a second line instead of cutting it off.
-
-**Interface**
-- Panels, menus, sketch labels and placed boxes keep their place and stay inside the window at every Interface size.
-- Preferences stays visible in the Edit menu in a short window or at a large Interface size.
-- Dragging the rollback marker in History shows where it will land.
-- Resizing the window no longer shows an unexpected error.
+- Ctrl+1 to Ctrl+7 pick the front, back, left, right, top, bottom and isometric views, and a screen reader hears where the model is seen from once the view settles.
+- Tab reaches the 3D view, and a screen reader hears a short summary of the bodies, view and selection. Describe Model in the command search lists every body with its size and position, with Copy as text.
+- A running tool such as Mirror, Fillet, Text on face or Stress takes a face or edge from the Geometry list, or the lit one from the brackets and Enter on the 3D view, with no pointer needed.
+- Up and Down step the value in Extrude, Press/Pull, Fillet and Chamfer, finer with Shift and ten steps with Page Up or Page Down, and a screen reader hears each new value.
+- The shipped plugin panels, from Texture and Parameters to Printing and the 3D mouse settings, work by keyboard and with a screen reader, and a plugin that will not start says why.
+- The guide speaks each step as it arrives, with its keys in words.
+- Closing a dialog no longer reads the unchanged selection out again, and a key that moves focus out of Items keeps it where it went.
 
 **Modeling**
-- Moving the camera in Path traced no longer shows black bands or partial pictures.
-- Inside a closed model, Automatic projection stays in perspective near an axis, unless you pick a view.
-- The fillet preview shows the G2 or G3 shape you picked, the same one Enter builds.
-- Zebra stripes follow the surface and show curvature, with a stripe direction and width.
-- The tool value box takes parameter names and expressions.
-- A modeling step that fails shows its error and the next step runs, instead of the engine restarting.
-- Hiding a sketch in Items shows at once.
-- The origin plane tiles have four rounded corners and a small gap again.
-- A mouse wheel keeps zooming at every Interface size, and Ctrl with the wheel pans the view up and down.
-- In Path traced, the picture settles sooner after a zoom, and no longer comes back in between the repeats of a held arrow key or during a view click from inside a model.
-- Ctrl+Z in a tool first takes back what you typed in its field.
-- Press/Pull on a round picked with the walls it meets carries the round along at its own radius, instead of refusing, whichever you click first.
-- Press/Pull on a round alone changes its radius, so it stays smooth with its walls.
-- Press/Pull shows the body see-through only in Cut.
-- Shell refuses a face picked through its opening, and Shell across several bodies keeps each face on its own body, also when you edit it again.
-- Undo, or any change that removes the step an open tool is editing, closes that tool.
-- A sketch far from the origin that makes an empty body now reports a failure.
+- Extrude and Press/Pull show the body solid while open, with an outline of what the step adds or takes away.
+- Fillet and Chamfer pick their edges on the model before them, and editing one shows that model faint. A click on the fillet's own round or the chamfer's own flat says to pick an edge of the model before it.
+- In Fillet and Chamfer, the edge you click wins over a picked edge hidden behind it, and Undo or Redo picks on the new model.
+- A fillet or chamfer that is too large says the largest size that fits, in the tool and on its History chip, and that size builds, also for a two distance chamfer, a plate full of holes and a slanted, curved or pointed corner.
+- A chamfer on the rim of a round hole cuts the rim, and a chamfer on the four edges of a pyramid tip cuts the tip flat.
+- A long helical cut, such as a narrow thread, comes out whole or warns that it may be partly uncut, and a whole one, like the Capsule holder's threads, shows no note.
+- Offsetting a sketch outline with a spline in it keeps the copy closed and follows the spline's real curve, or says the distance is too large.
+- A number typed with a space, like 12 500,5, gets a hint, and Enter no longer enters only part of it. An expression with a mistake is quoted back as you typed it.
+- A Save right after a drag keeps the size the drag shows, and an edit that cannot be built is never written to the file.
+- A large model opened again rebuilds as fast as on its first open.
+- Fine metric grid steps read in µm.
 
-**Stress**
-- Stress runs thin walled parts by itself, with no size to set. More options has Mesh detail: Coarse, Standard and Fine.
-- While the Stress panel is open, Undo and Redo change only the Stress setup.
-- Every support now has a remove button like a load, and supports and loads have Clear to empty their faces.
-- A deformation scale below 1 now says it is drawn smaller than true size.
+**Interface**
+- The selection readout names every kind you picked, so a face and an edge together read as both.
+- In the command search, Ctrl+A selects what you typed, Ctrl+Z no longer undoes a step of the model, and Ctrl+F or Ctrl+K opens it while Move is up.
+- Printability says what it checks each time it opens.
+- The Stress panel stays in the window with History open, keeps a full height column in a small window, and its weak spot label stays clear of the panels.
+- Parameter Setup and Extra Parameters show each parameter once, and every choice in full in a narrow panel.
+- Preferences, Experimental groups its settings and lists more limits you can raise.
+- If FundaCAD keeps failing to start or closes unexpectedly, it asks whether to start normally, in safe mode or with settings reset, and keeps a copy of the old settings.
+
+**Rendering**
+- A traced picture shows its progress in a bar, its button says Cancel render, Escape on the Camera tab cancels it, and a screen reader hears it start and finish.
+- The frame rate readout hides when the panels leave it no room.
 
 **Assistants**
-- AI assistants can list, create, edit and assign render materials, on bodies and on single faces. In the open app each change is one step you can undo.
+- Preferences, AI assistants has a switch, Let AI assistants reach this window. Off, no assistant can reach the window and FundaCAD opens no port for one.
+- An assistant that connects while FundaCAD is still opening waits for the window.
+- An assistant that inspects a large body or checks its printability again gets its answer at once.
 
-**Files**
-- Big 3MF and SVG files import with less memory.
-- A recovered session is cleared once you save it, discard it or choose Don't save.
-- A version saved right after opening an example holds only your next change.
-
-**Plugins**
-- Plugin number fields take a decimal comma and refuse values past their limits or in the wrong unit.
-- Plugin panels keep their content inside the panel, and Fasteners keeps Save in reach at every window width.
-- The Gamepad plugin no longer picks up a 3D mouse.
-
-**Updates**
-- Settings, Updates has a channel picker.
-
-**Linux**
-- The Flatpak and AppImage now use native Wayland, for sharper text at a fractional display scale.
+**Help**
+- The manual has an Accessibility page and a page on modelling without sight, and Help opens them.
+- The manual starts dark, keeps your light or dark choice across the beta and dev manuals, and its animations rest when you ask for reduced motion.
+- On Linux, a problem report says whether a screen reader can reach FundaCAD.
 
 **After you update**
-- In the Flatpak, assistants work in Documents/FundaCAD and ask before using any other path.
-- A STEP file that refers to other documents imports without those references, and a note on the import says so.
-- A plugin that uses a name another plugin already uses is not loaded, and the plugin list names the plugin that owns it.
-- On Linux with a SpaceMouse, unplug it and plug it back in once. If you set it up with setup-spacemouse.sh, run it again.
-- If you set Scrolling to Mouse to work around the wheel problem, you can set it back to Automatic.
+- Choosing a view no longer closes the sketch you are drawing.
+- An open Extrude or Press/Pull with its value set finishes when you click a face, an edge, the next profile or another tool, with no Accept. In Press/Pull, T now stops at a face.
 
 ## Known limits
 
+- Only some parts of FundaCAD are translated so far, the rest stays English, and a machine translated line may read oddly.
 - If flashing light affects you, stay in Realtime or Matcap. Path traced can still change the whole picture quickly while you move the camera.
 - On low powered or software graphics, Path traced is greyed out with the reason.
 - With Realtime while moving off, the traced picture can trail the edges for a moment while you drag.

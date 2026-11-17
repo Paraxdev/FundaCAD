@@ -13,7 +13,8 @@ import TitleFold from "./TitleFold.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
 import ErrorNotice from "./ErrorNotice.vue";
-import { stepMenuText } from "../../ui/canStep";
+import { sketchStepName, stepMenuText } from "../../ui/canStep";
+import { t } from "../../i18n";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import { TITLEBAR_FOLD_QUERY } from "../../ui/layoutBreakpoints";
 import { useMediaQuery } from "../../composables/useMediaQuery";
@@ -31,17 +32,17 @@ const canUndo = computed(() =>
 const canRedo = computed(() =>
   ui.sketchActive ? ui.sketchCanRedo : panels.stress ? panels.stress.canRedo : ui.canRedo,
 );
-// Only the tooltip names the step, the button keeps the name Undo for voice control and the harness.
+// Only the tooltip names the step, the button keeps the bare verb for voice control.
 const undoTip = computed(() =>
   stepMenuText(
-    "Undo",
-    !canUndo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.undoLabel : ui.undoLabel,
+    "undo",
+    !canUndo.value ? null : ui.sketchActive ? sketchStepName() : panels.stress ? panels.stress.undoLabel : ui.undoLabel,
   ),
 );
 const redoTip = computed(() =>
   stepMenuText(
-    "Redo",
-    !canRedo.value ? null : ui.sketchActive ? "sketch edit" : panels.stress ? panels.stress.redoLabel : ui.redoLabel,
+    "redo",
+    !canRedo.value ? null : ui.sketchActive ? sketchStepName() : panels.stress ? panels.stress.redoLabel : ui.redoLabel,
   ),
 );
 const folded = useMediaQuery(TITLEBAR_FOLD_QUERY);
@@ -86,14 +87,14 @@ onUnmounted(() => {
       <MenuBar :menus="menus">
         <template #head="{ menu }"><TitleFold v-if="folded && menu === 'File'" /></template>
       </MenuBar>
-      <Toolbar class="tb-history" label="Undo and redo">
+      <Toolbar class="tb-history" :label="t('step.history')">
         <!-- The name leaves the keys out, they are in the tooltip and a screen reader need not say them. -->
         <IconButton
           id="undo-btn"
           icon="undo"
           :tip="undoTip"
           keys="Ctrl+Z"
-          aria-label="Undo"
+          :aria-label="t('step.undo')"
           size="sm"
           variant="plain"
           :icon-size="15"
@@ -105,7 +106,7 @@ onUnmounted(() => {
           icon="redo"
           :tip="redoTip"
           keys="Ctrl+Y"
-          aria-label="Redo"
+          :aria-label="t('step.redo')"
           size="sm"
           variant="plain"
           :icon-size="15"

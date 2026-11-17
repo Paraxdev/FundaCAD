@@ -26,6 +26,15 @@ describe("the Render dock styles", () => {
     expect(decls(".sm-hint + .rd-check")).toEqual({ "margin-top": "var(--s-2)" });
   });
 
+  it("spaces the progress bar away from the button above and the hint below", () => {
+    expect(decls(".rd-progress")).toEqual({
+      display: "flex",
+      "flex-direction": "column",
+      gap: "var(--s-1)",
+      margin: "var(--s-2) 0",
+    });
+  });
+
   it("keeps no rules for the tab and readout classes the base Tabs and Slider replaced", () => {
     expect([decls(".rd-tab"), decls(".rd-tab:hover"), decls(".rd-tab.active"), decls(".rd-value")]).toEqual([
       {},

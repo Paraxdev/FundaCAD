@@ -276,7 +276,7 @@ export class SectionTool {
           def = face.def;
         } else if (pick.kind === "datumPlane") def = pick.def;
         else if (pick.kind === "basePlane") def = baseDef(pick.plane);
-        if (!def) return treePickRefusal(pick, "a plane or a flat face");
+        if (!def) return treePickRefusal(pick, "planeOrFlatFace");
         this.endPick();
         this.armOn(def);
         return true;

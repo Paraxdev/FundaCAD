@@ -1,4 +1,4 @@
-import { awaitTreePick, treePickRefusal, type TreePickAnswer } from "../ui/treePick";
+import { awaitTreePick, treePickRefusal, type TreePickAnswer, type TreePickWant } from "../ui/treePick";
 import type { Viewport } from "../viewport/viewport";
 import type { PressPullFaces } from "../viewport/faceAnalysis";
 
@@ -6,9 +6,10 @@ import type { PressPullFaces } from "../viewport/faceAnalysis";
  *  open through undo and menu commands, so their row session does too. */
 export function awaitFaceRows(
   viewport: Viewport,
-  wanted: string,
+  wanted: TreePickWant,
   take: (faces: PressPullFaces) => TreePickAnswer,
   end: () => void,
+  batch?: (run: () => void) => void,
 ): () => void {
   return awaitTreePick(
     (pick) => {
@@ -17,6 +18,6 @@ export function awaitFaceRows(
       return faces ? take(faces) : "The model is still building";
     },
     end,
-    { keepsOnRewind: true, keepsOnCommand: true },
+    { keepsOnRewind: true, keepsOnCommand: true, ...(batch ? { batch } : {}) },
   );
 }

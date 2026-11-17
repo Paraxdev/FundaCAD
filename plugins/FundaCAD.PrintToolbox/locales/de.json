@@ -1,0 +1,13 @@
+{
+  "group.print": "Drucken",
+  "tool.bedFit": "Bauplatten-Prüfung",
+  "tool.counterboreBridge": "Senkungsbrücke",
+  "tool.elephantFootChamfer": "Elefantenfuß-Fase",
+  "tool.printability": "Druckbarkeit",
+  "tool.roofBridge": "Dachbrücke",
+  "tool.sacrificialLayer": "Opferschicht",
+  "tool.teardrop": "Tropfenform",
+  "tool.threadRibs": "Gewindeformende Rippen",
+  "tool.verticalFillet": "Verrundung senkrechter Kanten",
+  "tool.zipTieChannel": "Kabelbinder-Kanal"
+}

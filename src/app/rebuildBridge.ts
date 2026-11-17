@@ -2,7 +2,7 @@ import { toast } from "../ui/toast";
 import { failedText } from "../ui/plainError";
 import { featureFailureReport } from "../ui/errorReport";
 import { failureKey } from "../ui/buildAnnouncement";
-import { featureMeta } from "../ui/featureMeta";
+import { featureEnglish } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, contributedRelief, onContribChange } from "../plugins/contrib";
 import { importedBodyColors, importedFacePaint } from "../document/faceColors";
@@ -148,7 +148,7 @@ export function installRebuildBridge(e: Engine): void {
         for (const err of errs) {
           if (!err.feature_id || prevErrorIds.has(err.feature_id)) continue;
           const f = e.store.document.features.find((x) => x.id === err.feature_id);
-          const label = f ? featureMeta(f).label : err.feature_id;
+          const label = f ? featureEnglish(f) : err.feature_id;
           const id = err.feature_id;
           // An ambiguous saved reference is the one failure fixable from here, so offer the repair.
           const amb = repairableDiagFor(s.result?.diagnostics, id);

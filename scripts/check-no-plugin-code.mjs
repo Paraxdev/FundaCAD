@@ -21,7 +21,7 @@ const MARKERS = [
   // String literals, because a minifier renames functions but leaves strings alone.
   ["FundaCAD.Texture", "Perlin noise"],
   ["FundaCAD.Texture", "Flat land on the crests"],
-  ["FundaCAD.ExtraParameters", "Parameter Setup"],
+  ["FundaCAD.ExtraParameters", "menu.edit.parameterSetup"],
   ["FundaCAD.ExtraParameters", "save the current values as"],
   ["FundaCAD.PrintToolbox", "select the flat floor of each counterbore"],
   ["FundaCAD.Screws", "Make a custom one from this"],

@@ -107,12 +107,15 @@ function savedAs(store: DocumentStore, path: string, edits: number, swaps: numbe
 }
 
 /** Save: write to the current path if known, else behave like Save As. `beforeWrite` runs once the path is known,
- *  so a cancelled dialog runs nothing. */
-export async function saveDocument(store: DocumentStore, beforeWrite?: () => void) {
+ *  so a cancelled dialog runs nothing. A sync one adds no await, the thumbnail is taken before the first one. */
+export async function saveDocument(store: DocumentStore, beforeWrite?: () => void | Promise<void>) {
   if (isTauri() && store.filePath && isSaveExt(store.filePath.split(".").pop())) {
     const session = store.session;
     const path = store.filePath;
-    beforeWrite?.();
+    const settling = beforeWrite?.();
+    if (settling) await settling;
+    // A document opened while the save waited is not written under this path.
+    if (!session.alive) return;
     const edits = store.editCount;
     const swaps = store.untitledSwapCount;
     const err = await writeContainer(store, path);
@@ -129,7 +132,7 @@ export async function saveDocument(store: DocumentStore, beforeWrite?: () => voi
 }
 
 /** Save As: always prompt for a path (or download in a plain browser). */
-export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => void) {
+export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => void | Promise<void>) {
   const session = store.session;
   const swaps = store.untitledSwapCount;
   if (isTauri()) {
@@ -143,7 +146,9 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
     });
     // A path picked for a document that was closed or swapped for an assistant's meanwhile is not where the next one goes.
     if (path && session.alive && store.untitledSwapCount === swaps) {
-      beforeWrite?.();
+      const settling = beforeWrite?.();
+      if (settling) await settling;
+      if (!session.alive || store.untitledSwapCount !== swaps) return;
       const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
@@ -156,7 +161,9 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
   } else {
     // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".
     const name = store.filePath ? store.fileName : `${store.fileName}.${DOC_EXT}`;
-    beforeWrite?.();
+    const settling = beforeWrite?.();
+    if (settling) await settling;
+    if (!session.alive) return;
     const built = await browserDocumentText(store);
     if ("refused" in built) {
       await reportError(built.refused);

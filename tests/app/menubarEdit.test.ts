@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildMenubar } from "../../src/app/menubarDef";
 import type { Engine } from "../../src/app/engine";
+import { menuName } from "../../src/ui/menu";
 
 describe("the Edit menu", () => {
   const rows = () =>
     buildMenubar({} as Engine)
-      .find((m) => m.label === "Edit")!
+      .find((m) => menuName(m) === "Edit")!
       .items.map((i) => (i.separator ? "-" : (i.refName ?? i.label)));
 
   // A short window or a large interface caps the menu's height and scrolls the rest, so Preferences, the way to

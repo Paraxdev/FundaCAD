@@ -26,6 +26,7 @@ function input(over: Partial<ReportInput> = {}): ReportInput {
     channel: "beta",
     system: "linux x86_64 · Ubuntu 24.04.1 LTS · AppImage",
     webview: "WebKitGTK 2.46.3",
+    accessibility: null,
     userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
     connected: true,
     safeMode: null,
@@ -90,6 +91,18 @@ describe("the report text", () => {
       logCut: false,
       documentLeftOut: null,
     });
+  });
+
+  it("puts the Linux accessibility line under the webview, only when there is one", () => {
+    const head = (r: { text: string }) => r.text.split("\n").slice(2, 5);
+    expect(
+      head(buildReport(input({ accessibility: "no AT-SPI bus on the session bus · NO_AT_BRIDGE=1 · x11" }))),
+    ).toEqual([
+      "system: linux x86_64 · Ubuntu 24.04.1 LTS · AppImage",
+      "webview: WebKitGTK 2.46.3",
+      "accessibility: no AT-SPI bus on the session bus · NO_AT_BRIDGE=1 · x11",
+    ]);
+    expect(buildReport(input()).text).not.toContain("accessibility:");
   });
 
   it("leaves out the sections it has nothing for, and says safe mode is off and no plugin runs", () => {

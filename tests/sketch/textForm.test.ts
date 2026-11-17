@@ -5,6 +5,7 @@
 // engine as NaN.
 
 import { describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import { initialTextForm, styleOf, textFormErrors, textPanelPos, toTextValues } from "../../src/sketch/textForm";
 
 describe("styleOf", () => {
@@ -40,6 +41,28 @@ describe("initialTextForm", () => {
   it("leaves the box-width field empty rather than showing a meaningless 0", () => {
     expect(initialTextForm({ boxWidth: 0 }).boxWidth).toBe("");
     expect(initialTextForm({ boxWidth: 25 }).boxWidth).toBe("25");
+  });
+
+  it("shows stored decimals with the language's mark and reads them back unchanged", async () => {
+    const v = {
+      text: "Hi",
+      font: "Arial",
+      height: 6.5,
+      style: "regular",
+      align: "center",
+      angle: -12.25,
+      boxWidth: 30.75,
+    } as const;
+    await setLanguage("de");
+    const f = initialTextForm(v);
+    const back = toTextValues(f);
+    await setLanguage("system");
+    expect({ height: f.height, angle: f.angle, boxWidth: f.boxWidth, back }).toEqual({
+      height: "6,5",
+      angle: "-12,25",
+      boxWidth: "30,75",
+      back: v,
+    });
   });
 
   it("round-trips an existing text object", () => {

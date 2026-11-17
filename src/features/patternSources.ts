@@ -2,7 +2,7 @@
 // can choose features mode and say why not before the first commit bounces.
 
 import type { Feature, RebuildResult } from "../types";
-import { featureMeta } from "../ui/featureMeta";
+import { featureEnglish, featureMeta } from "../ui/featureMeta";
 
 type BuildBodies = RebuildResult["bodies"];
 
@@ -68,9 +68,9 @@ export function featureLabel(f: Feature): string {
 }
 
 function refusalReason(f: Feature): string {
-  const label = featureLabel(f);
+  const label = (f as { name?: string }).name?.trim() || featureEnglish(f as { type: string; operation?: unknown });
   if (!isPatternableType(f.type)) {
-    const kind = featureMeta(f as { type: string; operation?: unknown }).label.toLowerCase();
+    const kind = featureEnglish(f as { type: string; operation?: unknown }).toLowerCase();
     return `Pattern: ${label} is a ${kind}, which cannot be patterned. ${PATTERNABLE}`;
   }
   return `Pattern: ${label} has no cut or join to repeat, it made a new body, is switched off, or did not build. ${PATTERNABLE}`;

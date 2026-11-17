@@ -200,13 +200,12 @@ export function holeFieldApplies(field: string, values: Record<string, unknown>)
   }
 }
 
-/** Read what was typed in the tool's size box: a size name ("M3", "m2.5") or a
- *  plain diameter in mm. Null for anything else. */
+/** A size name ("M3", "m2.5", "M2,5") or a plain diameter in mm, null for anything else. */
 export function parseHoleSize(text: string): { size: HoleSize } | { diameter: number } | null {
   const t = text.trim();
-  const m = /^m\s*(\d+(?:\.\d+)?)$/i.exec(t);
+  const m = /^m\s*(\d+(?:[.,]\d+)?)$/i.exec(t);
   if (m) {
-    const name = `M${Number(m[1])}`;
+    const name = `M${Number(m[1]!.replace(",", "."))}`;
     return isHoleSize(name) ? { size: name } : null;
   }
   const d = plainNumber(t);

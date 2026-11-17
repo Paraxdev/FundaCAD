@@ -165,6 +165,15 @@ pub struct InspectBody<'a> {
     pub id: Value,
     pub name: Value,
     pub shape: Option<&'a Shape>,
+    /// `Body::identity` of a built body. A rebuild resumed from RAM hands out a fresh copy of every shape, so
+    /// only this keeps a measurement for the next inspect.
+    pub identity: Option<(u64, u64)>,
+}
+
+impl<'a> InspectBody<'a> {
+    pub fn built(b: &'a BuiltBody) -> Self {
+        InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape), identity: Some(b.identity) }
+    }
 }
 
 /// How much `inspect_bodies` reports per body.
@@ -275,6 +284,8 @@ struct Cached {
 struct LocalCache {
     calls: u64,
     entries: HashMap<LocalKey, Cached>,
+    /// The entry each built body was last measured or found under, by `Body::identity`.
+    bodies: HashMap<(u64, u64), LocalKey>,
 }
 
 /// Calls an entry survives unused, so a few one body inspects between two
@@ -289,11 +300,18 @@ fn local_cache() -> &'static Mutex<LocalCache> {
 /// False when a job abandoned mid inspect still holds the cache.
 pub(crate) fn release_locals() -> bool {
     match local_cache().try_lock() {
-        Ok(mut c) => c.entries.clear(),
-        Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().entries.clear(),
+        Ok(mut c) => c.clear(),
+        Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().clear(),
         Err(std::sync::TryLockError::WouldBlock) => return false,
     }
     true
+}
+
+impl LocalCache {
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.bodies.clear();
+    }
 }
 
 #[cfg(test)]
@@ -306,22 +324,34 @@ fn local_key(shape: &Shape) -> LocalKey {
     (fq::FQ_tshape(shape.raw()), fq::FQ_orientation(shape.raw()))
 }
 
-/// Each shape's [`Local`], measured once per TShape: an assembly places one
-/// screw many times, and a measurement outlives the call for the next one.
-fn locals_of(shapes: &[Option<&Shape>]) -> Vec<Option<Arc<Local>>> {
-    let keys: Vec<Option<LocalKey>> = shapes.iter().map(|s| s.map(local_key)).collect();
+/// Each shape's [`Local`] and the cache entry it came from, measured once per TShape: an assembly places one
+/// screw many times, and a measurement outlives the call for the next one. A built body is found again by its
+/// identity, since a rebuild resumed from RAM hands out a copy of every shape with new TShapes.
+fn locals_of(
+    shapes: &[Option<&Shape>],
+    ids: &[Option<(u64, u64)>],
+) -> (Vec<Option<Arc<Local>>>, Vec<Option<LocalKey>>) {
     let mut missing: Vec<(LocalKey, Shape)> = Vec::new();
-    {
+    let keys: Vec<Option<LocalKey>> = {
         let cache = local_cache().lock().unwrap_or_else(|p| p.into_inner());
         let mut queued = HashSet::new();
-        for (k, s) in keys.iter().zip(shapes) {
-            if let (Some(k), Some(s)) = (k, s) {
-                if !cache.entries.contains_key(k) && queued.insert(*k) {
-                    missing.push((*k, sa::unlocated(s)));
+        shapes
+            .iter()
+            .zip(ids)
+            .map(|(s, id)| {
+                let s = (*s)?;
+                let known = id.as_ref().and_then(|id| cache.bodies.get(id)).copied();
+                if let Some(k) = known.filter(|k| cache.entries.contains_key(k)) {
+                    return Some(k);
                 }
-            }
-        }
-    }
+                let k = local_key(s);
+                if !cache.entries.contains_key(&k) && queued.insert(k) {
+                    missing.push((k, sa::unlocated(s)));
+                }
+                Some(k)
+            })
+            .collect()
+    };
     let reps: Vec<&Shape> = missing.iter().map(|(_, s)| s).collect();
     let groups = crate::par::share_groups(&reps);
     let work = crate::par::Shared((&reps, crate::heartbeat::current()));
@@ -338,6 +368,11 @@ fn locals_of(shapes: &[Option<&Shape>]) -> Vec<Option<Arc<Local>>> {
     for ((k, s), (_, local)) in missing.into_iter().zip(measured) {
         cache.entries.insert(k, Cached { _keep: s, local: Arc::new(local), placed: HashMap::new(), used: now });
     }
+    for (k, id) in keys.iter().zip(ids) {
+        if let (Some(k), Some(id)) = (k, id) {
+            cache.bodies.insert(*id, *k);
+        }
+    }
     let out = keys
         .iter()
         .map(|k| {
@@ -346,8 +381,10 @@ fn locals_of(shapes: &[Option<&Shape>]) -> Vec<Option<Arc<Local>>> {
             Some(e.local.clone())
         })
         .collect();
-    cache.entries.retain(|_, e| e.used + KEEP_FOR > now);
-    out
+    let LocalCache { entries, bodies, .. } = &mut *cache;
+    entries.retain(|_, e| e.used + KEEP_FOR > now);
+    bodies.retain(|_, k| entries.contains_key(k));
+    (out, keys)
 }
 
 /// `b` placed by `m` when `m` only swaps and flips axes and translates, which
@@ -379,6 +416,7 @@ fn place_point(m: &Option<[f64; 12]>, p: [f64; 3]) -> [f64; 3] {
 /// placement allows it exactly, measured again where it does not.
 fn placed_boxes(
     shapes: &[Option<&Shape>],
+    keys: &[Option<LocalKey>],
     locals: &[Option<Arc<Local>>],
     placements: &[Option<[f64; 12]>],
 ) -> Vec<Option<[f64; 6]>> {
@@ -393,8 +431,7 @@ fn placed_boxes(
                 (_, None) => None,
                 (None, b) => b,
                 (Some(m), Some(b)) => permuted_box(m, &b).or_else(|| {
-                    let known =
-                        shapes[i].and_then(|s| cache.entries.get(&local_key(s))).and_then(|e| e.placed.get(&bits(m)));
+                    let known = keys[i].and_then(|k| cache.entries.get(&k)).and_then(|e| e.placed.get(&bits(m)));
                     if known.is_none() {
                         again.push(i);
                     }
@@ -414,8 +451,8 @@ fn placed_boxes(
     for (k, b) in measured {
         let i = again[k];
         out[i] = b;
-        if let (Some(s), Some(m)) = (shapes[i], &placements[i]) {
-            if let Some(e) = cache.entries.get_mut(&local_key(s)) {
+        if let (Some(k), Some(m)) = (keys[i], &placements[i]) {
+            if let Some(e) = cache.entries.get_mut(&k) {
                 e.placed.insert(bits(m), b);
             }
         }
@@ -464,9 +501,10 @@ pub fn inspect_bodies_at(
     max_edges: usize,
 ) -> builder::FResult<Vec<Value>> {
     let shapes: Vec<Option<&Shape>> = bodies.iter().map(|b| b.shape).collect();
-    let locals = crate::bench::phase("inspect_locals", || locals_of(&shapes));
+    let ids: Vec<Option<(u64, u64)>> = bodies.iter().map(|b| b.identity).collect();
+    let (locals, keys) = crate::bench::phase("inspect_locals", || locals_of(&shapes, &ids));
     let placements: Vec<Option<[f64; 12]>> = shapes.iter().map(|s| s.and_then(sa::placement)).collect();
-    let boxes = crate::bench::phase("inspect_boxes", || placed_boxes(&shapes, &locals, &placements));
+    let boxes = crate::bench::phase("inspect_boxes", || placed_boxes(&shapes, &keys, &locals, &placements));
     let mut lists: Vec<Option<builder::FResult<Lists>>> = (0..bodies.len()).map(|_| None).collect();
     if level == Level::Detail {
         let live: Vec<usize> = (0..bodies.len()).filter(|&i| shapes[i].is_some()).collect();
@@ -586,7 +624,7 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
         .bodies
         .iter()
         .filter(|b| want.as_ref().map_or(true, |w| w.contains(&b.id) || w.contains(&b.name)))
-        .map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) })
+        .map(InspectBody::built)
         .collect();
     let bodies = match inspect_bodies_at(&live, level, cap(req, "maxFaces", MAX_FACES), cap(req, "maxEdges", MAX_EDGES))
     {
@@ -811,3 +849,7 @@ pub fn interference_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobRe
     }
     JobResult::Json(out)
 }
+
+#[cfg(test)]
+#[path = "inspect_locals_tests.rs"]
+mod locals_tests;

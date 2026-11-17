@@ -5,6 +5,7 @@
 import { ref } from "vue";
 import FieldRow from "../ui/FieldRow.vue";
 import NumberField from "../ui/NumberField.vue";
+import { t } from "../../i18n";
 import type { UnitDef } from "../../ui/measure";
 
 defineProps<{
@@ -62,7 +63,7 @@ function onValue(v: number | null) {
       :text="text"
       :unit="unit"
       :units="units"
-      :unit-tip="units?.length ? 'Change unit' : 'Expressions are written in this unit'"
+      :unit-tip="units?.length ? t('field.unitTip.change') : t('field.unitTip.fixed')"
       adopt-unit
       :parse="parse"
       :validate="validate"

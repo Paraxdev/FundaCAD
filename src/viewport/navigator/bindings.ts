@@ -98,19 +98,39 @@ export function validateBindings(table: readonly PointerBinding[]): string[] {
   return out;
 }
 
-/** The ? sheet's mouse rows for a table. */
-export function bindingRows(table: readonly PointerBinding[]): { key: string; label: string }[] {
-  const rows: { key: string; label: string }[] = [];
-  for (const b of table) if (b.drag) rows.push({ key: `${bindingKeys(b)} drag`, label: cap(ACTION_NAMES[b.drag]) });
-  // One menu row per button, the plainest way to click it.
-  const held = (b: PointerBinding) => MODS.filter((m) => b[m] === true).length;
+export interface BindingEntry {
+  button: PointerButton;
+  mods: string[];
+  kind: "drag" | "click";
+  what: PointerDrag | "menu";
+}
+
+/** One entry per drag, then one click entry per button, the plainest way to click it. */
+export function bindingEntries(table: readonly PointerBinding[]): BindingEntry[] {
+  const mods = (b: PointerBinding) => MODS.filter((m) => b[m] === true);
+  const entry = (b: PointerBinding, kind: "drag" | "click", what: PointerDrag | "menu"): BindingEntry => ({
+    button: b.button,
+    mods: mods(b).map(cap),
+    kind,
+    what,
+  });
+  const out: BindingEntry[] = [];
+  for (const b of table) if (b.drag) out.push(entry(b, "drag", b.drag));
   const menus = new Map<PointerButton, PointerBinding>();
   for (const b of table) {
     const had = menus.get(b.button);
-    if (b.click && (!had || held(b) < held(had))) menus.set(b.button, b);
+    if (b.click && (!had || mods(b).length < mods(had).length)) menus.set(b.button, b);
   }
-  for (const b of menus.values()) rows.push({ key: `${bindingKeys(b)} click`, label: cap(ACTION_NAMES[b.click!]) });
-  return rows;
+  for (const b of menus.values()) out.push(entry(b, "click", "menu"));
+  return out;
+}
+
+/** The ? sheet's mouse rows for a table. */
+export function bindingRows(table: readonly PointerBinding[]): { key: string; label: string }[] {
+  return bindingEntries(table).map((e) => ({
+    key: `${[...e.mods, e.mods.length ? e.button : cap(e.button)].join("+")} ${e.kind}`,
+    label: cap(ACTION_NAMES[e.what]),
+  }));
 }
 
 let active: readonly PointerBinding[] = DEFAULT_BINDINGS;

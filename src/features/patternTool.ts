@@ -136,7 +136,7 @@ export class PatternTool {
       this.releaseRows = awaitTreePick(
         (pick) => {
           if (pick.kind === "face") return this.askAxis(this.viewport.faceSelectorOf(pick.faceId), true);
-          if (pick.kind !== "edge") return treePickRefusal(pick, "a face or an edge for the axis");
+          if (pick.kind !== "edge") return treePickRefusal(pick, "axisFaceOrEdge");
           const ref = edgeSelectorFrom({ points: pick.edge.points as Vec3[], body: pick.edge.body });
           return ref ? this.askAxis(ref, true) : "That edge has no length";
         },

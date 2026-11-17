@@ -477,7 +477,7 @@ impl FundaCad {
             let mut st = server.state.lock().await;
             st.app_build = app.build;
             let mut live = LiveLink::new();
-            match live.pull(&st.link).await {
+            match live.pull_now(&st.link).await {
                 Ok(_) => {
                     log(&format!(
                         "[mcp] sharing the open document: {}",

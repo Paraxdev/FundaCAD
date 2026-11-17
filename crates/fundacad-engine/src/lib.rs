@@ -386,7 +386,7 @@ impl Engine {
             out,
             next_client: AtomicU64::new(1),
             never_closed: Arc::new(AtomicBool::new(false)),
-            live: Mutex::new(live::LiveSession::monotonic()),
+            live: Mutex::new(live::LiveSession::monotonic().with_start_grace(start_grace())),
         }
     }
 
@@ -826,6 +826,11 @@ fn spawn_watchdog(
             let _ = job.out.send(&mut std::iter::once(Message::Text(frame)));
         }
     })
+}
+
+/// Overridable so a test of the start-up wait does not sit through the real grace.
+fn start_grace() -> f64 {
+    std::env::var("FUNDACAD_ENGINE_START_GRACE_S").ok().and_then(|v| v.parse().ok()).unwrap_or(live::START_GRACE)
 }
 
 #[cfg(test)]

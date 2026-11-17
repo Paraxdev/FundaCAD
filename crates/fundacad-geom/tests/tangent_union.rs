@@ -77,7 +77,7 @@ fn a_line_inside_a_face_is_not_an_open_edge() {
     assert_eq!(lines_in_faces(&raw), 2, "the raw fuse keeps both touch lines");
     assert_eq!(kernel::open_edge_count(&raw), 0);
     let report = inspect::inspect_bodies(
-        &[InspectBody { id: json!("body1"), name: json!("raw"), shape: Some(&raw) }],
+        &[InspectBody { id: json!("body1"), name: json!("raw"), shape: Some(&raw), identity: None }],
         true,
         10_000,
         10_000,
@@ -102,13 +102,7 @@ fn the_claw_slider_union_inspects_closed() {
     let r = build(&doc);
     assert_eq!(r.bodies.len(), 1);
     assert_closed(&r.bodies[0].shape, "slider");
-    let report = inspect::inspect_bodies(
-        &[InspectBody { id: json!("body1"), name: json!("slider"), shape: Some(&r.bodies[0].shape) }],
-        true,
-        10_000,
-        10_000,
-    )
-    .expect("inspected");
+    let report = inspect::inspect_bodies(&[InspectBody::built(&r.bodies[0])], true, 10_000, 10_000).expect("inspected");
     let open: Vec<&Value> =
         report[0]["edges"].as_array().expect("edges").iter().filter(|e| e["openBoundary"] == json!(true)).collect();
     assert!(open.is_empty(), "inspect lists open edges {open:?}");

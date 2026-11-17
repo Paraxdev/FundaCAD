@@ -3,7 +3,8 @@ import { computed, onMounted, onUnmounted, ref, useId, useTemplateRef, watch } f
 import Icon from "../shell/Icon.vue";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
-import { ago } from "../../ui/timeAgo";
+import { t } from "../../i18n";
+import { ago, agoKind } from "../../ui/timeAgo";
 import { folderPath, type HomeEntry } from "../../ui/homeList";
 import type { ThumbQueue } from "../../ui/thumbQueue";
 
@@ -12,14 +13,14 @@ const emit = defineEmits<{ open: []; menu: [ev: MouseEvent]; versions: [] }>();
 
 const when = computed(() => {
   const e = props.entry;
-  if (e.editedAt != null) return `Edited ${ago(e.editedAt)}`;
-  return e.openedAt != null ? `Opened ${ago(e.openedAt)}` : "";
+  if (e.editedAt != null) return t("home.card.edited", { when: ago(e.editedAt), kind: agoKind(e.editedAt) });
+  return e.openedAt != null ? t("home.card.opened", { when: ago(e.openedAt), kind: agoKind(e.openedAt) }) : "";
 });
 
 const badge = computed(() => {
-  if (props.entry.open) return "Open";
-  if (props.entry.missing) return "Not found";
-  return props.unreadable ? "Could not be read" : null;
+  if (props.entry.open) return t("home.card.open");
+  if (props.entry.missing) return t("home.card.missing");
+  return props.unreadable ? t("home.card.unreadable") : null;
 });
 
 const pathId = useId();
@@ -90,11 +91,11 @@ onUnmounted(() => {
       v-if="!entry.missing"
       class="home-card-versions"
       icon="versions"
-      tip="Versions"
+      :tip="t('home.card.versions')"
       size="md"
       variant="tile"
       :icon-size="14"
-      :aria-label="`Versions of ${entry.name}`"
+      :aria-label="t('home.card.versionsOf', { name: entry.name })"
       @click="emit('versions')"
     />
   </div>

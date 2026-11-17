@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref, type Component, type PropType } from "vue";
 
@@ -280,6 +280,62 @@ describe("Tree", () => {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     expect(document.activeElement).toBe(field);
     field.remove();
+  });
+
+  describe("on a slow frame", () => {
+    const frames: FrameRequestCallback[] = [];
+    const runFrames = () => frames.splice(0).forEach((f) => f(0));
+    const setup = async (refocusInFrame = true) => {
+      const w = render();
+      const field = document.body.appendChild(document.createElement("input"));
+      const other = document.body.appendChild(document.createElement("button"));
+      const raise = () => {
+        field.focus();
+        if (refocusInFrame) requestAnimationFrame(() => field.focus());
+      };
+      tabTo(w, "body1");
+      await nextTick();
+      keepTreeKeyFocus(raise);
+      return { w, field, other };
+    };
+    beforeEach(() => vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb)));
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      frames.length = 0;
+      document.body.querySelectorAll("input, button").forEach((n) => n.remove());
+    });
+
+    it("leaves focus where a key moved it before the frame", async () => {
+      const { other } = await setup(false);
+      press("f", { ctrlKey: true });
+      other.focus();
+      runFrames();
+      expect(document.activeElement).toBe(other);
+    });
+
+    it("still returns to the tree when no key came, after the raised field focused itself in the frame", async () => {
+      const { field } = await setup();
+      expect(document.activeElement).not.toBe(field);
+      runFrames();
+      expect(focused()).toBe("Body 1");
+    });
+
+    it("takes focus back from a focus that a pointer, not a key, put outside the tree", async () => {
+      const { other } = await setup();
+      other.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      other.focus();
+      runFrames();
+      expect(focused()).toBe("Body 1");
+    });
+
+    it("keeps the tree a key walked within, after the raised field focused itself in the frame", async () => {
+      await setup();
+      press("ArrowDown");
+      expect(focused()).toBe("Body 2");
+      await nextTick();
+      runFrames();
+      expect(focused()).toBe("Body 2");
+    });
   });
 
   it("lets go of a focused row when a press lands outside the tree, where the viewport keeps focus put", () => {

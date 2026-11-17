@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { legendGradient, legendTicks, STRESS_BANDS, STRESS_RAMPS, type StressRamp } from "../../ui/stress";
 import { onStressLookChange, stressLook } from "../../ui/stressLook";
 import Select from "../ui/Select.vue";
@@ -23,38 +24,38 @@ const ticks = computed(() => legendTicks(props.legend));
 <template>
   <div class="stress-legend-wrap">
     <div class="stress-legend" :style="{ background: gradient }" />
-    <ol class="stress-ticks" aria-label="Stress scale, MPa">
+    <ol class="stress-ticks" :aria-label="t('stress.legend.scale')">
       <li
-        v-for="t in ticks"
-        :key="t.pct"
+        v-for="tick in ticks"
+        :key="tick.pct"
         class="stress-tick"
-        :class="{ 'is-first': t.pct === 0, 'is-last': t.pct === 100 }"
-        :style="{ left: `${t.pct}%` }"
+        :class="{ 'is-first': tick.pct === 0, 'is-last': tick.pct === 100 }"
+        :style="{ left: `${tick.pct}%` }"
       >
-        {{ t.label }}
+        {{ tick.label }}
       </li>
     </ol>
-    <div class="stress-legend-unit" aria-hidden="true">Stress, MPa</div>
+    <div class="stress-legend-unit" aria-hidden="true">{{ t("stress.legend.unit") }}</div>
     <div class="stress-look">
       <label class="stress-field">
-        <span class="measure-k">Colour map</span>
+        <span class="measure-k">{{ t("stress.legend.colourMap") }}</span>
         <Select
           :model-value="look.ramp"
           :options="STRESS_RAMPS"
           size="sm"
-          label="Colour map"
+          :label="t('stress.legend.colourMap')"
           testid="stress-colour-map"
           @update:model-value="(r: StressRamp) => engine.ui.panels.setStressLook({ ramp: r })"
         />
       </label>
-      <label class="stress-gravity" title="Draw the colours in steps">
+      <label class="stress-gravity" :title="t('stress.legend.bandsTip')">
         <Switch
           :model-value="look.bands"
           class="stress-bands"
-          label="Bands"
+          :label="t('stress.legend.bands')"
           @update:model-value="engine.ui.panels.setStressLook({ bands: $event })"
         />
-        <span class="measure-k">Bands</span>
+        <span class="measure-k">{{ t("stress.legend.bands") }}</span>
       </label>
     </div>
   </div>

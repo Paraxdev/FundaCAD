@@ -161,11 +161,12 @@ class Session(Actions):
         self._browser = self._pw.chromium.launch(
             executable_path=self.chrome, headless=not self.headed, args=chrome_args(self.gpu)
         )
-        # A dark OS, so the System theme the app starts in is Noir, as every shot and check before it.
+        # A dark English OS, so the app starts in Noir and in English, as every shot and check expects.
         ctx = self._browser.new_context(
             viewport={"width": self.viewport[0], "height": self.viewport[1]},
             device_scale_factor=self.scale,
             color_scheme="dark",
+            locale="en-US",
         )
         self.page = ctx.new_page()
         self._page_log = open(self.work / "page.log", "w", encoding="utf-8", errors="replace")
@@ -318,10 +319,16 @@ class Session(Actions):
         if kind != "none":
             close = self.page.locator(".home .modal-close, .modal-overlay .modal-close").first
             if close.count():
-                close.click(timeout=5000)
+                try:
+                    close.click(timeout=15000)
+                except Exception as e:
+                    # A slow VM's first frames can hold the main thread past the click's wait, the Escape below
+                    # still closes it once the page is free (7tft9mw2).
+                    if type(e).__name__ != "TimeoutError":
+                        raise
             if not self._wait_for(lambda: self.bridge.call("startScreen") == "none", 5):
                 self.page.keyboard.press("Escape")
-                if not self._wait_for(lambda: self.bridge.call("startScreen") == "none", 5):
+                if not self._wait_for(lambda: self.bridge.call("startScreen") == "none", 15):
                     self.failed = True
                     raise HarnessError(f"the {kind} screen did not close")
         if not self._wait_for(lambda: not self.bridge.call("stageInert"), 5):

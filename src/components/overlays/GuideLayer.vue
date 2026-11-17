@@ -4,6 +4,8 @@
 import * as THREE from "three";
 import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
+import { announce } from "../../ui/announce";
 import { labelOf } from "../../ui/controlRefs";
 import { resolveControl } from "../../ui/guide/controls";
 import type { GuideState, StepState } from "../../ui/guide/guideSession";
@@ -52,7 +54,8 @@ function locateUi(s: StepState): void {
   const own = target ? parseFloat(getComputedStyle(target).borderTopLeftRadius) : NaN;
   radius.value = Number.isFinite(own) && own > 0 ? `${own + 4}px` : null;
   ref_.value = r.el ? (r.via ?? r.ref) : "";
-  hint.value = r.el && r.via ? `Open ${labelOf(r.el) || r.via} first` : r.el ? "" : (r.missing ?? "");
+  hint.value =
+    r.el && r.via ? t("guide.openFirst", { control: labelOf(r.el) || r.via }) : r.el ? "" : (r.missing ?? "");
   guide.updateResolution(r.el ? { found: true, via: r.via } : { found: false, missing: r.missing, near: r.near });
   if (target && !r.via && scrolledFor !== s.seq) {
     scrolledFor = s.seq;
@@ -172,9 +175,24 @@ function restart(): void {
   void nextTick(schedule);
 }
 
+const counterOf = (s: StepState) => (s.of > 1 ? t("guide.counter", { step: s.step, of: s.of }) : t("guide.title"));
+const sentence = (s: string) =>
+  !s || /[.!?:。：！？]$/.test(s) ? s : /[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]$/.test(s) ? `${s}。` : `${s}.`;
+
+// The bubble mounts with its first step's text, and a live region that arrives filled is mostly not read.
+let spokenSeq = -1;
+function speak(s: StepState | null): void {
+  if (!s) spokenSeq = -1;
+  if (!s || s.next || s.seq === spokenSeq) return;
+  spokenSeq = s.seq;
+  const keys = s.keys ? ` ${t("guide.keysLabel")} ${s.keys}` : "";
+  announce(`${sentence(counterOf(s))} ${sentence(s.caption)}${keys}`, "polite", { key: "guide" });
+}
+
 const stopWatching = guide.subscribe((s) => {
   const before = state.value.step;
   state.value = s;
+  speak(s.step);
   if (s.step?.seq !== before?.seq || !!s.step?.next !== !!before?.next) restart();
   else schedule();
 });
@@ -193,9 +211,7 @@ const bubbleStyle = computed(() => {
   const b = bubbleAt.value;
   return b ? { left: `${b.left}px`, top: `${b.top}px` } : { visibility: "hidden" as const };
 });
-const counter = computed(() =>
-  step.value && step.value.of > 1 ? `Step ${step.value.step} of ${step.value.of}` : "Guide",
-);
+const counter = computed(() => (step.value ? counterOf(step.value) : t("guide.title")));
 </script>
 
 <template>
@@ -216,17 +232,19 @@ const counter = computed(() =>
         ref="bubble"
         class="guide-bubble"
         role="dialog"
-        aria-live="polite"
         :aria-label="counter"
         :data-side="bubbleAt?.side"
         :style="bubbleStyle"
       >
         <div class="guide-count">{{ counter }}</div>
         <p class="guide-caption">{{ step.caption }}</p>
+        <p v-if="step.keys" class="guide-keys" data-guide-keys>
+          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ step.keys }}
+        </p>
         <p v-if="hint" class="guide-hint">{{ hint }}</p>
         <div class="guide-actions">
-          <Button id="guide-stop" @click="guide.stop()">Stop</Button>
-          <Button id="guide-next" variant="primary" @click="guide.next()">Next</Button>
+          <Button id="guide-stop" @click="guide.stop()">{{ t("guide.stop") }}</Button>
+          <Button id="guide-next" variant="primary" @click="guide.next()">{{ t("guide.next") }}</Button>
         </div>
       </div>
     </div>

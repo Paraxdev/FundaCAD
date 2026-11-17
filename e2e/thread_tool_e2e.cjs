@@ -133,9 +133,16 @@ const at = (x, y, z) => [x + OFF, y + OFF, z + OFF];
     offBy === "M6, 0.10 mm over tap drill",
     offBy,
   );
-  check("a bore opens on a tap drill bore", (await page.inputValue("[data-testid=thread-faceis]")) === "tap");
-  await page.selectOption("[data-testid=thread-hand]", "left");
-  await page.check("[data-testid=thread-printfit]");
+  const valueOf = (testid) => page.getAttribute(`[data-testid=${testid}]`, "data-value");
+  const pick = async (testid, name) => {
+    await page.click(`[data-testid=${testid}]`);
+    await page.getByRole("option", { name, exact: true }).click();
+  };
+  check("a bore opens on a tap drill bore", (await valueOf("thread-faceis")) === "tap");
+  await pick("thread-hand", "Left");
+  if ((await page.getAttribute("[data-testid=thread-printfit]", "aria-checked")) !== "true") {
+    await page.click("[data-testid=thread-printfit]");
+  }
   const clearance = await page.inputValue("[data-testid=thread-clearance]");
   check("Print fit offers 0.2 mm by default", clearance === "0.2", clearance);
   await page.screenshot({ path: path.join(OUT, "thread_1_panel.png") });
@@ -214,10 +221,10 @@ const at = (x, y, z) => [x + OFF, y + OFF, z + OFF];
     );
     check("double clicking the bore thread reopens the panel", reopened);
     if (reopened) {
-      const hand = await page.inputValue("[data-testid=thread-hand]");
-      const size = await page.inputValue("[data-testid=thread-size]");
+      const hand = await valueOf("thread-hand");
+      const size = await valueOf("thread-size");
       check("the panel reopens on the hand and size written", hand === "left" && size === "M6", `${hand} ${size}`);
-      await page.selectOption("[data-testid=thread-starts]", "2");
+      await pick("thread-starts", "2");
       await page.click("[data-testid=thread-apply]");
       await settle();
       st = await state();

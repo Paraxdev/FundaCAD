@@ -8,6 +8,7 @@ import {
   defaultAxisPlace,
   describeAxis,
 } from "../../src/features/patternAxis";
+import { setLanguage } from "../../src/i18n";
 import { patternAxisChoice, patternAxisPatch, PLACED_AXIS } from "../../src/document/optionFields";
 import type { Feature, Selector } from "../../src/types";
 
@@ -47,6 +48,15 @@ describe("patternAxis", () => {
     expect(describeAxis({ origin: [20, 15, 0], dir: [0, 0, 1] }, undefined)).toBe("line through (20, 15, 0)");
     expect(describeAxis({ origin: [0, 0, 0], dir: [0, 0, 1] }, ref)).toBe("picked on the model");
     expect(describeAxis({ datum: "ax1" }, undefined, (id) => (id === "ax1" ? "Axis" : undefined))).toBe("Axis");
+  });
+
+  it("spells a line's origin with the language's mark, and a comma language lists it with semicolons", async () => {
+    const line = { origin: [20.456, -7.5, 3], dir: [0.6, 0, 0.8] };
+    const en = describeAxis(line, undefined);
+    await setLanguage("de");
+    const de = describeAxis(line, undefined);
+    await setLanguage("system");
+    expect({ en, de }).toEqual({ en: "line through (20.46, -7.5, 3)", de: "line through (20,46; -7,5; 3)" });
   });
 });
 

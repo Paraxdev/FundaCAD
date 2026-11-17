@@ -17,6 +17,8 @@ SMOKE = os.path.join(HERE, "..", "..", "scripts", "bundle-smoke.py")
 FAKE = r'''
 import json, os, sys, time
 mode = os.environ.get("FAKE_MODE", "ok")
+# How many doc_new calls answer that the window is not sharing yet.
+unshared = int(os.environ.get("FAKE_UNSHARED", "0"))
 if mode == "banner":
     print("Gtk-Message: hello from an AppRun hook", flush=True)
 if mode == "exit":
@@ -33,7 +35,10 @@ for line in sys.stdin:
         text = {"build": 'body1 "Box": 30.0 x 20.0 x 10.0 mm, vol %s mm3, 6 faces' % os.environ.get("FAKE_VOL", "6000")}.get(name, "ok")
         if mode == "hang" and name == "build":
             time.sleep(60)
-        if mode == "tool-error" and name == "build":
+        if name == "doc_new" and unshared > 0:
+            unshared -= 1
+            result = {"isError": True, "content": [{"type": "text", "text": "no FundaCAD window is sharing a document, open one, or turn on live editing in its settings"}]}
+        elif mode == "tool-error" and name == "build":
             result = {"isError": True, "content": [{"type": "text", "text": "the geometry engine could not be reached"}]}
         else:
             result = {"content": [{"type": "text", "text": text}]}
@@ -53,8 +58,8 @@ class BundleSmoke(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def run_smoke(self, mode="ok", vol="6000", extra=()):
-        env = dict(os.environ, FAKE_MODE=mode, FAKE_VOL=vol)
+    def run_smoke(self, mode="ok", vol="6000", extra=(), unshared=0):
+        env = dict(os.environ, FAKE_MODE=mode, FAKE_VOL=vol, FAKE_UNSHARED=str(unshared))
         return subprocess.run(
             [sys.executable, SMOKE, *extra, "--", sys.executable, self.fake],
             env=env, capture_output=True, text=True, timeout=60,
@@ -91,6 +96,24 @@ class BundleSmoke(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("no reply in 3 s", r.stdout)
         self.assertLess(time.monotonic() - started, 15, "the hung server was waited on after its timeout")
+
+    def test_a_window_that_shares_late_passes_with_a_wait(self):
+        r = self.run_smoke(unshared=2, extra=("--wait-shared", "20"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("the window shared its document after", r.stdout)
+
+    def test_a_window_that_is_not_sharing_fails_at_once_without_a_wait(self):
+        r = self.run_smoke(unshared=1)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("no FundaCAD window is sharing a document", r.stdout)
+        self.assertNotIn("still after", r.stdout)
+
+    def test_a_window_that_never_shares_fails_after_the_wait(self):
+        started = time.monotonic()
+        r = self.run_smoke(unshared=1000, extra=("--wait-shared", "3"))
+        self.assertEqual(r.returncode, 1)
+        self.assertRegex(r.stdout, r"still after [34] s")
+        self.assertLess(time.monotonic() - started, 20)
 
 
 if __name__ == "__main__":

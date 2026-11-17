@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
+import { t } from "../../i18n";
 import { useWhatsNewStore } from "../../stores/whatsNew";
 import { REPO_URL } from "../../ui/reportText";
 import { openExternal } from "../../ui/welcome";
@@ -32,7 +33,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => window.removeEventListener("resize", measure));
 const title = computed(() =>
-  /^\d/.test(news.version) ? `What's new in FundaCAD ${news.version}` : "What's new in FundaCAD",
+  /^\d/.test(news.version) ? t("home.news.titleVersion", { version: news.version }) : t("home.news.title"),
 );
 </script>
 
@@ -48,8 +49,8 @@ const title = computed(() =>
       </template>
     </div>
     <div class="home-news-acts">
-      <Button class="home-news-all" @click="void openExternal(`${REPO_URL}/releases`)">All release notes</Button>
-      <Button class="home-news-hide" @click="news.dismiss()">Hide</Button>
+      <Button class="home-news-all" @click="void openExternal(`${REPO_URL}/releases`)">{{ t("home.news.all") }}</Button>
+      <Button class="home-news-hide" @click="news.dismiss()">{{ t("home.news.hide") }}</Button>
     </div>
   </section>
 </template>

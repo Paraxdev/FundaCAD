@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use fundacad_geom::plugins::{discovered_ids, plugin_root, PluginRoot};
-use fundacad_lib::plugins::{write_disabled, DISABLED};
+use fundacad_lib::plugins::{disable_all, write_disabled, DISABLED};
 use serde_json::json;
 
 fn temp_root(tag: &str) -> PathBuf {
@@ -149,4 +149,31 @@ fn the_switched_off_list_is_sorted_and_holds_only_plugin_ids() {
     let _ = std::fs::remove_dir_all(&root);
     assert_eq!(text, r#"["Alpha","Zed.Plugin"]"#);
     assert_eq!(left, [DISABLED]);
+}
+
+/// The app's own record, which `plugin_list` and `disable_all` read, has more fields than the engine needs.
+fn put_app_record(dir: &Path, id: &str) {
+    let record = json!({"id": id, "version": "1.0.0", "promise": "p", "source": "file", "sha256": "00",
+                        "installedAt": 1, "dir": id,
+                        "consented": {"kind": "compute", "version": "1.0.0", "grants": [], "hosts": []}});
+    std::fs::write(dir.join("installed.json"), record.to_string()).unwrap();
+}
+
+#[test]
+fn reset_with_plugins_off_turns_every_installed_plugin_off_before_the_engine_loads_one() {
+    let root = temp_root("disable-all");
+    for id in ["Some.Plugin", "Other.Plugin"] {
+        let at = put_plugin(&root, id, id, &[]);
+        put_app_record(&at, id);
+    }
+    write_disabled(&root, &["Gone.Plugin".into()]).unwrap();
+
+    let count = disable_all(&root).unwrap();
+    let ids = discovered_ids(&[PluginRoot { dir: root.clone(), records: true }]);
+    let text = std::fs::read_to_string(root.join(DISABLED)).unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(count, 2);
+    assert!(ids.is_empty(), "{ids:?}");
+    assert_eq!(text, r#"["Gone.Plugin","Other.Plugin","Some.Plugin"]"#);
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
@@ -7,6 +7,7 @@ import { usePanelsStore } from "../../src/stores/panels";
 import { useToastStore } from "../../src/stores/toasts";
 import { toast } from "../../src/ui/toast";
 import { createDocumentActions } from "../../src/app/documentActions";
+import { setLanguage } from "../../src/i18n";
 import type { Engine } from "../../src/app/engine";
 import type { CadDocument, StressStudy } from "../../src/types";
 
@@ -21,6 +22,8 @@ vi.mock("../../src/ui/announce", async (importOriginal) => ({
 
 // The Stress panel's own undo against a hand-made viewport and store: it takes back setup steps while the panel is
 // open, says what it took back, and never reaches the model's history.
+
+afterEach(() => setLanguage("system"));
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -279,6 +282,26 @@ describe("Stress undo from Edit, Undo", () => {
     a.doRedo();
     expect(announced).toEqual(["Redid Add support"]);
     expect(shown()).toBe("Redid: Add support");
+  });
+
+  it("says a step in the chosen language, the same words as its toast", async () => {
+    await setLanguage("de");
+    const r = rig();
+    await open(r);
+    r.ui.addStressSupport();
+    r.ui.addStressSupport();
+    await nextTick();
+    const a = actions(r);
+    announced.length = 0;
+    a.doUndo();
+    a.doRedo();
+    expect(announced).toEqual(["Rückgängig: Halterung hinzufügen", "Wiederholt: Halterung hinzufügen"]);
+    expect(shown()).toBe("Wiederholt: Halterung hinzufügen");
+    await setLanguage("ja");
+    announced.length = 0;
+    a.doUndo();
+    expect(announced).toEqual([shown()]);
+    expect(announced[0]).toMatch(/^元に戻しました: /);
   });
 
   it("says Nothing left once, from the panel", async () => {

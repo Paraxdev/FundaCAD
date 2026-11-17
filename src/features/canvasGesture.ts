@@ -13,6 +13,14 @@ export interface GestureHandlers {
   frame?(): void;
 }
 
+export function capturePointer(el: Element, e: PointerEvent): void {
+  try {
+    el.setPointerCapture?.(e.pointerId);
+  } catch {
+    // A pointer already released, or a synthetic event, has nothing to capture.
+  }
+}
+
 export class CanvasGesture {
   private readonly move: (e: PointerEvent) => void;
   private readonly down: (e: PointerEvent) => void;
@@ -26,7 +34,11 @@ export class CanvasGesture {
     handlers: GestureHandlers,
   ) {
     this.move = (e) => handlers.move(e);
-    this.down = (e) => handlers.down(e);
+    this.down = (e) => {
+      handlers.down(e);
+      // A press the tool claimed keeps its release here, or a drag let go over the value box or a panel never ends.
+      if (e.defaultPrevented) capturePointer(el, e);
+    };
     this.up = (e) => handlers.up?.(e);
     this.key = (e) => {
       if (isMenuKey(e) || isBoxButtonKey(e)) return;

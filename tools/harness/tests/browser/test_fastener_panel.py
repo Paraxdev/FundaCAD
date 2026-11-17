@@ -77,9 +77,9 @@ def assert_form_reachable(s, scrolls: bool = False) -> None:
     assert s.page.evaluate(HITS, ".scr-save") == []
     assert s.page.locator(FORM_TEXT).count() > 0
     if scrolls:
-        s.page.locator(".scr-form button:not(.scr-save)").scroll_into_view_if_needed()
-    assert s.page.evaluate(HITS, ".scr-form button:not(.scr-save)") == []
-    s.page.locator(".scr-form button:not(.scr-save)").click()
+        s.page.locator(".scr-form .scr-cancel").scroll_into_view_if_needed()
+    assert s.page.evaluate(HITS, ".scr-form .scr-cancel") == []
+    s.page.locator(".scr-form .scr-cancel").click()
     s.page.locator(".scr-new").wait_for()
 
 
@@ -202,7 +202,7 @@ def test_catalogue_stays_inside_the_panel(library, window):
     s = library
     place(s, window)
     s.page.locator(".scr-tab-catalogue").click()
-    s.page.locator(".scr-search").fill("M3")
+    s.page.locator(".scr-search input").fill("M3")
     s.page.locator(".scr-row[data-key='iso4762|M3']").click()
     s.page.locator(".scr-insert").wait_for()
     s.page.wait_for_timeout(300)

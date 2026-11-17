@@ -4,14 +4,12 @@
 mod common;
 
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 fn owner_binary() -> PathBuf {
-    let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
-    profile.join("examples").join(if cfg!(windows) { "engine_owner.exe" } else { "engine_owner" })
+    common::profile_dir().join("examples").join(if cfg!(windows) { "engine_owner.exe" } else { "engine_owner" })
 }
 
 fn alive(pid: u32) -> bool {

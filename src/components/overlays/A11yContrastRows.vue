@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, type Directive } from "vue";
+import { computed, onMounted, onUnmounted, ref, type Directive } from "vue";
+import { t } from "../../i18n";
 import Checkbox from "../ui/Checkbox.vue";
 import Segmented from "../ui/Segmented.vue";
 import { a11yPrefs, asContrast, onA11yPrefsChange, setA11yPref } from "../../ui/a11yPrefs";
@@ -22,12 +23,13 @@ const stops: (() => void)[] = [];
 onMounted(() => stops.push(onA11yPrefsChange(sync), onOsAppearanceChange(sync)));
 onUnmounted(() => stops.splice(0).forEach((stop) => stop()));
 
-const CONTRAST = [
-  { value: "system", label: "Follow system" },
-  { value: "standard", label: "Standard" },
-  { value: "more", label: "More" },
-  { value: "maximum", label: "Maximum" },
-];
+const CONTRAST = computed(() => [
+  { value: "system", label: t("prefs.contrast.system") },
+  { value: "standard", label: t("prefs.contrast.standard") },
+  { value: "more", label: t("prefs.contrast.more") },
+  { value: "maximum", label: t("prefs.contrast.maximum") },
+]);
+const osLevel = computed(() => (osMore.value ? "more" : "standard"));
 function pickContrast(id: string) {
   const v = asContrast(id);
   if (v) setA11yPref("contrast", v);
@@ -47,10 +49,10 @@ const vBoxHint: Directive<HTMLElement, string> = {
 <template>
   <div class="pref-card wide" data-a11y-contrast>
     <div class="pref-head pref-wrap">
-      <span class="pref-title">Contrast</span>
+      <span class="pref-title">{{ t("prefs.contrast.title") }}</span>
       <Segmented
         id="prefs-contrast"
-        label="Contrast"
+        :label="t('prefs.contrast.title')"
         aria-describedby="prefs-contrast-hint"
         :model-value="choice"
         :options="CONTRAST"
@@ -58,12 +60,8 @@ const vBoxHint: Directive<HTMLElement, string> = {
       />
     </div>
     <p id="prefs-contrast-hint" class="pref-hint">
-      More brightens muted text and control edges and widens the focus ring, Maximum draws all text, lines and edges in
-      the full text colour. Follow system takes More while a Windows contrast theme, Increase contrast on macOS or High
-      contrast on GNOME is on.
-      <template v-if="choice === 'system'"
-        >Right now the system asks for {{ osMore ? "more" : "standard" }} contrast.</template
-      >
+      {{ t("prefs.contrast.hint") }}
+      <template v-if="choice === 'system'">{{ t("prefs.contrast.systemNow", { level: osLevel }) }}</template>
     </p>
   </div>
   <div class="pref-card">
@@ -74,11 +72,8 @@ const vBoxHint: Directive<HTMLElement, string> = {
       :model-value="solid"
       :disabled="implied"
       @update:model-value="setSolid"
-      ><span class="pref-title">Solid panels</span></Checkbox
+      ><span class="pref-title">{{ t("prefs.solid.title") }}</span></Checkbox
     >
-    <p id="prefs-solid-panels-hint" class="pref-hint">
-      Panels, menus and the floating cards draw opaque instead of glass, so no model colour shows through behind their
-      text. More and Maximum contrast turn it on.
-    </p>
+    <p id="prefs-solid-panels-hint" class="pref-hint">{{ t("prefs.solid.hint") }}</p>
   </div>
 </template>

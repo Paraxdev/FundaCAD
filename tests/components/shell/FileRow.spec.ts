@@ -95,4 +95,13 @@ describe("FileRow", () => {
     expect(openDialog).toHaveBeenCalledTimes(1);
     expect(commits).toEqual(["C:/x/new.png"]);
   });
+
+  it("renders its field as data-field on the row, and none without one", () => {
+    const withField = mount(FileRow, {
+      props: { label: "Heightmap", field: "heightmapPath", value: "", commit: () => {} },
+    });
+    expect(withField.get(".param-row").attributes("data-field")).toBe("heightmapPath");
+    const without = mount(FileRow, { props: { label: "Heightmap", value: "", commit: () => {} } });
+    expect(without.get(".param-row").attributes("data-field")).toBeUndefined();
+  });
 });

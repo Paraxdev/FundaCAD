@@ -1,5 +1,7 @@
 // The arithmetic behind the fillet profile control (profileChip.ts).
 
+import { spellFixed } from "../ui/measure";
+
 /** Open interval: at +1 no blend is left and at -1 the weight is zero. Past 0.95 the solid checks valid but its volume
  *  and booleans are wrong; the chamfer end holds to -0.99. Keep in step with blend_conic.hxx PROFILE_MAX and MIN. */
 export const PROFILE_MAX = 0.95;
@@ -42,7 +44,7 @@ export function profileFromFraction(t: number): number {
 export function formatProfile(p: number): string {
   const v = clampProfile(p);
   if (v === 0) return "0";
-  return `${v > 0 ? "+" : "-"}${Math.abs(v).toFixed(3)}`;
+  return `${v > 0 ? "+" : "-"}${spellFixed(Math.abs(v), 3)}`;
 }
 
 /** What the profile is doing, for the prompt line. */

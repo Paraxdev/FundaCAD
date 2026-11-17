@@ -3,10 +3,11 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import FieldRow from "../ui/FieldRow.vue";
 import NumberField from "../ui/NumberField.vue";
 import { valueProblem } from "../../document/numFields";
+import { t } from "../../i18n";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import { distinctNames } from "../../sketch/sketchNames";
 import { getUnit, onUnitChange } from "../../ui/units";
-import { tryParseMeasure } from "../../ui/measure";
+import { shownExpr, tryParseMeasure } from "../../ui/measure";
 import type { DimKind } from "../../sketch/annotationFormat";
 
 const s = useSketchAnnotationStore();
@@ -91,7 +92,7 @@ function parse(r: Row) {
 }
 
 function validate(r: Row) {
-  return (v: number) => (r.kind === "angle" ? null : valueProblem("Length", { positive: true }, v));
+  return (v: number) => (r.kind === "angle" ? null : valueProblem(t("field.length"), { positive: true }, v));
 }
 
 let refocus: { key: string; at: number } | null = null;
@@ -157,7 +158,7 @@ function focusOut(r: Row, e: FocusEvent) {
           :width-ch="6"
           :unit="unitOf(r)"
           :model-value="r.valueMm"
-          :text="r.expr ?? null"
+          :text="r.expr === undefined ? null : shownExpr(r.expr)"
           :parse="parse(r)"
           :validate="validate(r)"
           :expression="(raw: string) => expression(r, raw)"

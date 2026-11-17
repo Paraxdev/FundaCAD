@@ -93,3 +93,46 @@ fn each_os_names_its_webview_and_no_version_means_no_line() {
         assert_eq!(webview(os, version).as_deref(), want, "{os} {version:?}");
     }
 }
+
+fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+    move |k| pairs.iter().find(|(name, _)| *name == k).map(|(_, v)| v.to_string())
+}
+
+#[test]
+fn the_accessibility_line_says_where_the_bus_is_and_what_turns_it_off() {
+    let none = env_of(&[]);
+    let cases = [
+        (Bus::Given, "AT-SPI bus from AT_SPI_BUS_ADDRESS"),
+        (Bus::Session, "AT-SPI bus up"),
+        (Bus::NoSessionBus, "no AT-SPI bus, no session bus"),
+        (Bus::NoService, "no AT-SPI bus on the session bus"),
+        (Bus::Unknown, "AT-SPI bus did not answer in 200 ms"),
+    ];
+    for (bus, want) in cases {
+        assert_eq!(accessibility(bus, &none), want, "{bus:?}");
+    }
+    let all = env_of(&[
+        ("NO_AT_BRIDGE", "1"),
+        ("GTK_MODULES", "gail:atk-bridge"),
+        ("XDG_SESSION_TYPE", "wayland"),
+        ("GDK_BACKEND", "x11"),
+    ]);
+    assert_eq!(
+        accessibility(Bus::Session, &all),
+        "AT-SPI bus up · NO_AT_BRIDGE=1 · GTK_MODULES=gail:atk-bridge · wayland · GDK_BACKEND=x11"
+    );
+    let empty = env_of(&[("NO_AT_BRIDGE", ""), ("GTK_MODULES", ""), ("XDG_SESSION_TYPE", "x11")]);
+    assert_eq!(accessibility(Bus::NoService, &empty), "no AT-SPI bus on the session bus · x11");
+}
+
+#[test]
+fn no_at_bridge_turns_the_bridge_off_exactly_where_atoi_reads_one() {
+    for on in ["1", " 1", "\t+1", "1abc", "01", "1.0"] {
+        assert!(bridge_off(Some(on)), "{on:?}");
+    }
+    for off in ["0", "2", "11", "-1", "", "yes", "one", "x1"] {
+        assert!(!bridge_off(Some(off)), "{off:?}");
+    }
+    assert!(!bridge_off(None));
+    assert!(!bridge_off(Some("99999999999999999999999")));
+}

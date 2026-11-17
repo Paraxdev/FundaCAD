@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import { rotationFrame, type RotationFrame } from "../features/transformGizmo";
 import { pageZoom } from "../ui/interfaceSize";
+import { spellNumber } from "../ui/measure";
 
 export const DIAL_RADIUS = 62;
 const TICK = 3;
@@ -20,7 +21,7 @@ export function dialPoint(frame: RotationFrame, a: number, radius: number): THRE
 /** "345°", "-30°", "7.5°": whole degrees without a fraction, one decimal otherwise. */
 export function formatTurn(deg: number): string {
   const r = Math.round(deg * 10) / 10;
-  return `${Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1)}°`;
+  return `${spellNumber(r)}°`;
 }
 
 export class RotateDial {

@@ -2,6 +2,7 @@
 
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
+import { onLanguageChange } from "../i18n";
 import { onUnitChange } from "../ui/units";
 import { deleteRows, soleSelectedFeature } from "./featureRows";
 import type { RowSelection } from "../ui/rowSelection";
@@ -61,6 +62,7 @@ import { startWhatsNew } from "../ui/whatsNew";
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
 import { safeMode } from "../ui/safeMode";
+import { installCarryOn } from "./carryOn";
 import { closeToolOnLostStep, createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
@@ -83,6 +85,7 @@ import { installIsolateCamera } from "./isolateCamera";
 import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
 import { installCanvasPick } from "./canvasPick";
+import { installViewSummary } from "./describeModel";
 import { installKeyboard } from "./keyboard";
 import { installToolFocus } from "./toolFocus";
 import { installTitlebar } from "./titlebar";
@@ -98,6 +101,7 @@ import { wireDocumentSwap } from "./documentSwap";
 import { createGeometryBrowser, type GeometryBrowser } from "./geometryBrowser";
 import { watchOutOfDate } from "./staleModel";
 import { LiveSessionHost } from "../live/liveSession";
+import { loadMcpSwitch, mcpEnabled, onMcpChange } from "../live/mcpSwitch";
 import { GuideSession } from "../ui/guide/guideSession";
 import { resolveTarget, takeSnapshot } from "../ui/guide/probe";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
@@ -234,6 +238,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   e.viewport = new Viewport(canvas);
   onUnitChange(() => e.viewport.requestRender());
+  onLanguageChange(() => e.viewport.requestRender());
   e.viewport.onGridStep = (mm) => {
     useUiStore().gridStepMm = mm;
   };
@@ -279,11 +284,13 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   );
   e.live.attachGuide(e.guide);
   const syncLive = () => {
-    if (liveSharingEnabled()) e.live.start();
+    if (mcpEnabled() === true && liveSharingEnabled()) e.live.start();
     else void e.live.stop();
   };
   syncLive();
   onLiveEditingChange(syncLive);
+  onMcpChange(syncLive);
+  void loadMcpSwitch();
 
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group, "sketches");
@@ -449,9 +456,7 @@ export function mountUi(e: Engine): void {
   // Global, so the palette opens from anywhere.
   const cmdk = useCommandPaletteStore();
   cmdk.bind((a) => e.handleAction(a));
-  cmdk.bindLabels((id) =>
-    id === "undo" || id === "redo" ? stepMenuText(id === "undo" ? "Undo" : "Redo", stepLabelFor(e, id)) : null,
-  );
+  cmdk.bindLabels((id) => (id === "undo" || id === "redo" ? stepMenuText(id, stepLabelFor(e, id)) : null));
   window.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === "k" || ev.key === "K")) {
       ev.preventDefault();
@@ -568,6 +573,8 @@ export function mountUi(e: Engine): void {
   e.store.onBuild((s) => e.geometryBrowser.buildChanged(s));
   installSketchStateBridge(e);
   installCanvasPick(e);
+  installCarryOn(e);
+  installViewSummary(e);
   installToolFocus(e);
   installKeyboard(e);
 

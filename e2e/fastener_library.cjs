@@ -87,7 +87,7 @@ const BLOCK = JSON.stringify({
   await page.evaluate(() => window.__fundacad.handleAction("fasteners"));
   await page.waitForSelector(".scr-library", { timeout: 10000 });
   check("the Fasteners action opens the library", true);
-  await page.fill(".scr-search", "M3");
+  await page.fill(".scr-search input", "M3");
   await page.waitForTimeout(300);
   const sizes = await page.$$eval(".scr-row", (rows) => rows.map((r) => r.getAttribute("data-key")));
   check(
@@ -169,7 +169,7 @@ const BLOCK = JSON.stringify({
   await page.waitForSelector(".scr-make-custom");
   await page.click(".scr-make-custom");
   await page.waitForSelector(".scr-form");
-  await page.fill(".scr-name", "");
+  await page.fill(".scr-name input", "");
   await page.waitForTimeout(200);
   const refused = await page.$$eval(".scr-problems li", (li) => li.map((x) => x.textContent));
   check(
@@ -177,7 +177,7 @@ const BLOCK = JSON.stringify({
     refused.some((t) => t.includes("a name")),
     refused.join(" | "),
   );
-  await page.fill(".scr-name", "Long M3 cap screw");
+  await page.fill(".scr-name input", "Long M3 cap screw");
   await page.fill(".scr-len-length input", "22");
   await page.fill(".scr-len-thread-length input", "30");
   await page.waitForTimeout(200);
@@ -202,7 +202,7 @@ const BLOCK = JSON.stringify({
   );
   check("the custom fastener is saved in the settings", saved.includes("Long M3 cap screw"), saved.join(", "));
   await page.click(".scr-tab-catalogue");
-  await page.fill(".scr-search", "long");
+  await page.fill(".scr-search input", "long");
   await page.waitForTimeout(300);
   const badge = await page.$$eval(".scr-row .scr-badge", (b) => b.length);
   check("it is listed with a Custom badge", badge === 1);
@@ -216,7 +216,7 @@ const BLOCK = JSON.stringify({
   check("the custom fastener inserts as a body", (await bodies()).includes("Long M3 cap screw"));
 
   // --- drag a nut onto the block ---
-  await page.fill(".scr-search", "M5 hex nut");
+  await page.fill(".scr-search input", "M5 hex nut");
   await page.waitForTimeout(300);
   const nutRow = page.locator(".scr-row[data-key='iso4032|M5']");
   check("the M5 hex nut is found", (await nutRow.count()) === 1);
@@ -304,7 +304,7 @@ const BLOCK = JSON.stringify({
     await page.click(".scr-custom-row button:has-text('Edit')");
     await page.waitForSelector(".scr-form");
     const renamed = `Long M3 cap screw at ${width}`;
-    await page.fill(".scr-name", renamed);
+    await page.fill(".scr-name input", renamed);
     await page.waitForFunction(
       () => !document.querySelector(".scr-problems") && !document.querySelector(".scr-form .scr-preview-status"),
       null,

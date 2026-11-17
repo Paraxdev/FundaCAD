@@ -17,12 +17,49 @@ pub struct Overrun {
     pub at: [f64; 3],
 }
 
+/// The body the last refused section build on this thread built at the size it offers.
+struct Fitted {
+    body: Shape,
+    edges: Vec<Shape>,
+    size: f64,
+    least: f64,
+    built: Shape,
+}
+
 thread_local! {
     static OVERRUN: std::cell::Cell<Option<Overrun>> = const { std::cell::Cell::new(None) };
+    static FITTED: std::cell::Cell<Option<Fitted>> = const { std::cell::Cell::new(None) };
 }
 
 pub fn take_overrun() -> Option<Overrun> {
     OVERRUN.with(std::cell::Cell::take)
+}
+
+/// What a section build of `edges` on `body` at `size` gives, when the refusal just before it built that very size
+/// while searching for the size to offer. Building it again takes seconds on a plate full of holes. One that folds
+/// is left to a real build, which tries again without the one-shot cut.
+pub fn take_fitted(body: &Shape, edges: &[Shape], size: f64) -> Option<Shape> {
+    let f = FITTED.with(std::cell::Cell::take)?;
+    let same = f.body.is_same(body)
+        && f.edges.len() == edges.len()
+        && f.edges.iter().zip(edges).all(|(a, b)| a.is_same(b))
+        && (f.size - size).abs() <= 1e-9 * size.max(1.0);
+    (same && !super::overlap::folds_over_itself(body, &f.built, f.least)).then_some(f.built)
+}
+
+/// Keeps a refused build's body to the blend that made it. The builder hands the same body to the next feature, so
+/// a body left over could answer for a fillet where a chamfer was built.
+pub struct FittedScope(());
+
+pub fn fitted_scope() -> FittedScope {
+    FITTED.with(std::cell::Cell::take);
+    FittedScope(())
+}
+
+impl Drop for FittedScope {
+    fn drop(&mut self) {
+        FITTED.with(std::cell::Cell::take);
+    }
 }
 
 fn overrun_of(message: &str) -> Option<Overrun> {
@@ -61,11 +98,22 @@ fn built(r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>, status: i32) -> Res
     Ok((Shape::from_raw(p), state))
 }
 
+// Note: two OCCT fillet or chamfer builds at once, even on unrelated shapes, return random
+// face counts, NotDone or invalid shapes, so they take turns (cnmzf0w4).
+static FILLET_BUILDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn one_at_a_time<T>(f: impl FnOnce() -> T) -> T {
+    let _turn = FILLET_BUILDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    f()
+}
+
 pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
     let began = std::time::Instant::now();
-    let r = crate::bench::phase("blend_fillet", || ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status));
+    let r = crate::bench::phase("blend_fillet", || {
+        one_at_a_time(|| ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status))
+    });
     let (shape, n, radii) = (shape.clone(), edges.len(), radii.to_vec());
     traced("BRepFilletAPI_MakeFillet", began, built(r, status), move || {
         format!("shape={}, {n} edges, radii={radii:?}", kernel::describe(&shape))
@@ -76,7 +124,9 @@ pub fn chamfer(shape: &Shape, edges: &[Shape], d1: &[f64], d2: &[f64]) -> Result
     let es = kernel::compound(edges);
     let mut status = 0;
     let began = std::time::Instant::now();
-    let r = crate::bench::phase("blend_chamfer", || ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status));
+    let r = crate::bench::phase("blend_chamfer", || {
+        one_at_a_time(|| ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status))
+    });
     let (shape, n, d1, d2) = (shape.clone(), edges.len(), d1.to_vec(), d2.to_vec());
     traced("BRepFilletAPI_MakeChamfer", began, built(r, status), move || {
         format!("shape={}, {n} edges, d1={d1:?}, d2={d2:?}", kernel::describe(&shape))
@@ -143,7 +193,7 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
     let mut status = 0;
     let mut message = String::new();
     let out = crate::bench::phase("blend_conic", || {
-        ffi::blend_conic(shape.raw(), es.raw(), radius, profile, &mut status, &mut message)
+        one_at_a_time(|| ffi::blend_conic(shape.raw(), es.raw(), radius, profile, &mut status, &mut message))
     });
     match status {
         0 if !out.is_null() => {
@@ -200,10 +250,12 @@ fn section_with(
     profile: f64,
     one_shot: bool,
 ) -> Result<Shape, SectionErr> {
+    FITTED.with(std::cell::Cell::take);
     let es = kernel::compound(edges);
     let mut status = 0;
     let mut message = String::new();
-    let progress = crate::cancel::progress();
+    // Sizing a refused chamfer on a plate of 200 holes takes tens of seconds, its cancel checks keep the job alive.
+    let progress = crate::cancel::progress_beating();
     let range = progress.start();
     let out = crate::bench::phase("blend_section", || {
         ffi::blend_section(
@@ -236,6 +288,14 @@ fn section_with(
         3 => Err(SectionErr::Cancelled),
         4 => {
             let n: Vec<f64> = message.split(' ').filter_map(|w| w.parse().ok()).collect();
+            if let (Some(&fits), false) = (n.get(1), out.is_null()) {
+                let built = Shape::from_raw(out);
+                if fits > 0.0 && !kernel::is_null(&built) {
+                    let least = sizes.iter().copied().fold(f64::INFINITY, f64::min) / unit * fits;
+                    let fitted = Fitted { body: shape.clone(), edges: edges.to_vec(), size: fits, least, built };
+                    FITTED.with(|c| c.set(Some(fitted)));
+                }
+            }
             match n.as_slice() {
                 [why, fits, x, y, z] => Err(SectionErr::TooLarge {
                     why: Misfit::from_code(*why as i32),

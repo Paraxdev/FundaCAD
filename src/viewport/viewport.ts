@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { MeshBVH } from "three-mesh-bvh";
 import { createScene, environmentKey, environmentRoomFor, isHdrHeld, type SceneBundle } from "./scene";
 import { createCameraRig, type CameraRig, type StandardView, type ProjectionMode } from "./cameras";
 import {
@@ -56,7 +57,7 @@ import {
 import { barycentric, displacedPositions, stressColors, type StressRamp } from "../ui/stress";
 import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods, type PickRef } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
-import { flushRaycastIndex } from "./raycastIndex";
+import { buildRaycastIndex, flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
 import { clipSelectionOverlays, selectionGlowWarmup } from "./selectionGlow";
 import { linkProgramsAhead } from "./linkPrograms";
@@ -238,6 +239,13 @@ function devTracerSwitch(): { kind: TracerKind; prefer?: string; call?: Call } |
 
 /** Pixel radii of the extra rays `probe` casts for a finger. */
 const PROBE_RINGS_PX = [8, 16];
+// Two meshes of one curved face tilt their facets apart by up to the coarsest angular tolerance, 0.5 rad, so a
+// face counts as fresh only past 30 degrees: a blend on a square edge turns 45 degrees from both faces it joins.
+const FRESH_FACE_COS = Math.cos((30 * Math.PI) / 180);
+// A blend between faces at a shallow angle turns too little for that, but it sinks below the faces it joins and its
+// facets lie nearest both, where a face it trimmed lies on one. At shipping quality two meshes of one curved face sit
+// up to 0.004 of its radius apart, under this share of the model's size while that radius is under a quarter of it.
+const FRESH_FACE_SINK = 1e-3;
 /** How long the camera has to stay still for a gesture to count as over. */
 const MOTION_SETTLE_MS = 300;
 /** A frame that spent this long merging edges is a build, not a frame of the edge level. */
@@ -320,6 +328,8 @@ export class Viewport {
 
   onHit: ((hit: Hit | null, shiftKey: boolean) => void) | null = null;
   onSelectionChange: (() => void) | null = null; // fired when edge/face selection changes
+  /** A click on a view cube face, edge or corner turned the view. */
+  onCubeView: (() => void) | null = null;
   /** The verdict of an area box being dragged, for the prompt, and null when it ends. */
   onAreaDrag: ((mode: AreaMode | null) => void) | null = null;
   onPickDatum: ((id: string) => void) | null = null; // fired when a datum plane quad is clicked
@@ -376,17 +386,21 @@ export class Viewport {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
-    this.progressive = new ProgressiveModel(this.scene.modelGroup, disposeBody);
+    this.progressive = new ProgressiveModel(this.scene.modelGroup, (b) => this.retireBody(b));
     this.scene.scene.add(markOverlay(this.datumGroup, "origin"));
     this.scene.scene.add(this.contactShadow.group);
     const rect = canvas.getBoundingClientRect();
     this.rig = createCameraRig(canvas, rect.width / rect.height);
 
     this.cube = new ViewCube(canvas, this.scene.renderer, {
-      applySide: (side) => this.applyCubeSide(side),
+      applySide: (side) => {
+        this.applyCubeSide(side);
+        this.onCubeView?.();
+      },
       applyDir: (dir, up) => {
         this.rig.setViewDir(dir, up, true);
         this.requestRender();
+        this.onCubeView?.();
       },
       getOverrides: () => this.store?.viewOverrides ?? {},
       beginSetOverride: (side) => this.beginSetOverride(side),
@@ -2356,14 +2370,18 @@ export class Viewport {
   /** The edges on the selected faces, found geometrically: the reply never says
    *  which edges bound which face (faceEdges.ts). */
   edgesOfSelectedFaces(): EdgeRef[] {
-    if (!this.highlighter || !this.model) return [];
-    const faces = this.highlighter.getSelectedFaces();
-    if (!faces.length) return [];
+    return this.highlighter ? this.edgesOfFaces(this.highlighter.getSelectedFaces()) : [];
+  }
+
+  /** The edges on these faces. `all` reads every model edge, not only the drawn ones, since the tangent edge
+   *  setting hides edges a face's ring needs. */
+  edgesOfFaces(faceIds: readonly number[], opts: { all?: boolean } = {}): EdgeRef[] {
+    if (!this.model || !faceIds.length) return [];
     const tol = faceEdgeTol(this.model.box.getSize(new THREE.Vector3()).length());
-    const all = this.visibleEdgeLines();
+    const every = opts.all ? this.model.edges : this.visibleEdgeLines();
     const out: EdgeRef[] = [];
     const seen = new Set<EdgeRef>();
-    for (const fid of faces) {
+    for (const fid of faceIds) {
       const tris = this.faceTriangles(fid).map((t): Tri => [
         [t.a.x, t.a.y, t.a.z],
         [t.b.x, t.b.y, t.b.z],
@@ -2371,7 +2389,7 @@ export class Viewport {
       ]);
       if (!tris.length) continue;
       const bodyId = this.faceIdToBodyId(fid);
-      const candidates = bodyId ? all.filter((e) => !e.body || e.body === bodyId) : all;
+      const candidates = bodyId ? every.filter((e) => !e.body || e.body === bodyId) : every;
       for (const edge of edgesOnFace(candidates, faceSurface(tris), tol)) {
         if (seen.has(edge)) continue;
         seen.add(edge);
@@ -2399,16 +2417,19 @@ export class Viewport {
     return this.highlighter?.getSelectedEdges().length ?? 0;
   }
 
-  private midIndex: { edges: readonly EdgeRef[]; count: number; tol: number; index: EdgeMidIndex } | null = null;
+  // Per edge list, so a held model and the one on screen do not evict each other.
+  private midIndexes: WeakMap<readonly EdgeRef[], { count: number; tol: number; index: EdgeMidIndex }> | undefined;
 
   /** Model scaled tolerance. The rebuild stable way to find the edge a saved selector or diagnostic means. */
-  edgeLineByMid(mid: [number, number, number]): EdgeRef | null {
-    if (!this.model) return null;
-    const edges = this.model.edges;
-    const tol = midMatchTol(this.model.box.getSize(this.projScratch).length());
-    let c = this.midIndex;
-    if (!c || c.edges !== edges || c.count !== edges.length || c.tol !== tol) {
-      c = this.midIndex = { edges, count: edges.length, tol, index: new EdgeMidIndex(edges, tol) };
+  edgeLineByMid(mid: [number, number, number], view: ModelView | null = this.model): EdgeRef | null {
+    if (!view) return null;
+    const edges = view.edges;
+    const tol = midMatchTol(view.box.getSize(this.projScratch).length());
+    const cache = (this.midIndexes ??= new WeakMap());
+    let c = cache.get(edges);
+    if (!c || c.count !== edges.length || c.tol !== tol) {
+      c = { count: edges.length, tol, index: new EdgeMidIndex(edges, tol) };
+      cache.set(edges, c);
     }
     const i = c.index.nearest(mid);
     return i == null ? null : (edges[i] ?? null);
@@ -2776,7 +2797,7 @@ export class Viewport {
         if (prev) {
           this.scene.modelGroup.remove(prev.mesh);
           this.scene.modelGroup.remove(prev.edges.object);
-          disposeBody(prev);
+          this.retireBody(prev);
         }
         this.scene.modelGroup.add(body.mesh);
         this.scene.modelGroup.add(body.edges.object);
@@ -2793,7 +2814,7 @@ export class Viewport {
     for (const stale of prevBodies.values()) {
       this.scene.modelGroup.remove(stale.mesh);
       this.scene.modelGroup.remove(stale.edges.object);
-      disposeBody(stale);
+      this.retireBody(stale);
     }
 
     // Orphan edges have no per body cache key, so they are rebuilt every call.
@@ -2950,7 +2971,13 @@ export class Viewport {
     // `streaming` would suppress picking for good.
     this.abortProgressiveModel();
     if (this.model) {
-      detachModel(this.scene.modelGroup, this.model, this.disposeQueue);
+      for (const b of this.model.bodies) {
+        if (!this.isHeld(b)) continue;
+        this.scene.modelGroup.remove(b.mesh);
+        this.scene.modelGroup.remove(b.edges.object);
+      }
+      const bodies = this.model.bodies.filter((b) => !this.isHeld(b));
+      detachModel(this.scene.modelGroup, { ...this.model, bodies }, this.disposeQueue);
       this.model = null;
       this.lastResult = null;
       this.dropHighlighter();
@@ -3071,9 +3098,13 @@ export class Viewport {
     return this.planesOnTop;
   }
 
-  /** Brighten the plane under the cursor during plane-pick (null = none). */
+  /** Brighten the plane under the cursor during plane-pick (null = none). With the tiles hidden, the lit one is
+   *  drawn alone. */
   hoverPlane(kind: Plane3 | null) {
-    this.scene.originTiles.hover(kind);
+    const tiles = this.scene.originTiles;
+    const wasDrawn = tiles.drawn;
+    tiles.hover(kind);
+    if (!wasDrawn && tiles.drawn) tiles.applyTheme(this.groundHex());
     this.requestRender();
   }
 
@@ -3095,15 +3126,65 @@ export class Viewport {
   /** Edge-only pick for the edge tools (fillet, chamfer, an axis): the whole
    *  grab radius, faces never compete, and only edges you can see unless the
    *  view is see-through. */
-  pickEdgeAt(clientX: number, clientY: number): EdgeCandidate | null {
-    if (!this.model) return null;
+  pickEdgeAt(clientX: number, clientY: number, view: ModelView | null = this.model): EdgeCandidate | null {
+    if (!view) return null;
     const rect = this.canvas.getBoundingClientRect();
-    return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, this.model, { visibleOnly: !this.seeThrough });
+    return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, view, { visibleOnly: !this.seeThrough });
   }
 
-  /** All visible edge lines of the current model, for tangent-chain expansion. */
-  visibleEdgeLines(): EdgeRef[] {
-    return this.model ? this.picker.visibleEdges(this.model) : [];
+  /** All visible edge lines of the current model, or of a held one, for tangent-chain expansion. */
+  visibleEdgeLines(view: ModelView | null = this.model): EdgeRef[] {
+    return view ? this.picker.visibleEdges(view) : [];
+  }
+
+  // Unset until the first hold: some checks build a Viewport without its constructor.
+  private heldViews: Set<ModelView> | undefined;
+
+  /** The model on screen, kept pickable after a preview replaces it: a body it holds is taken off screen but not
+   *  disposed until releaseModel. Never drawn. */
+  holdModel(): ModelView | null {
+    if (!this.model) return null;
+    const view: ModelView = {
+      bodies: [...this.model.bodies],
+      edges: this.model.bodies.flatMap((b) => b.edges.refs),
+      orphanEdges: null,
+      box: this.model.box.clone(),
+    };
+    (this.heldViews ??= new Set()).add(view);
+    return view;
+  }
+
+  releaseModel(view: ModelView | null) {
+    if (!view || !this.heldViews?.delete(view)) return;
+    const live = new Set(this.model?.bodies ?? []);
+    for (const b of view.bodies) if (!live.has(b) && !this.isHeld(b)) disposeBody(b);
+  }
+
+  /** What the model on screen and a held one do not share: the held bodies off screen, and the edges on screen
+   *  the held model has no edge for. */
+  heldDiff(view: ModelView | null): { gone: BodyMesh[]; fresh: EdgeRef[] } {
+    if (!view || !this.model) return { gone: [], fresh: [] };
+    const live = new Set(this.model.bodies);
+    const held = new Set(view.bodies);
+    const gone = view.bodies.filter((b) => !live.has(b));
+    const changed = this.model.bodies.filter((b) => !held.has(b));
+    const fresh = changed.flatMap((b) => this.picker.visibleEdges({ ...this.model!, bodies: [b], orphanEdges: null }));
+    return {
+      gone,
+      fresh: fresh.filter((e) => {
+        const mid = polylineMid(e.points as [number, number, number][]);
+        return !!mid && !this.edgeLineByMid(mid, view);
+      }),
+    };
+  }
+
+  private isHeld(b: BodyMesh): boolean {
+    for (const v of this.heldViews ?? []) if (v.bodies.includes(b)) return true;
+    return false;
+  }
+
+  private retireBody(b: BodyMesh) {
+    if (!this.isHeld(b)) disposeBody(b);
   }
 
   /** Face vs edge gated like selection. */
@@ -3660,11 +3741,11 @@ export class Viewport {
   }
 
   /** Lights every model edge as selectable while the fillet or chamfer edge tool is active. */
-  emphasizeEdges(on: boolean) {
+  emphasizeEdges(on: boolean, widthPx = 2.8) {
     this.edgesEmphasized = on;
     this.highlighter?.setEdgeBase(this.edgeBaseColor());
     if (this.model) {
-      for (const d of edgeObjects(this.model)) d.material.linewidth = on ? 2.8 : 1.6;
+      for (const d of edgeObjects(this.model)) d.material.linewidth = on ? widthPx : 1.6;
     }
     this.requestRender();
   }
@@ -3677,6 +3758,61 @@ export class Viewport {
     this.surfaceRaycaster.ray.copy(this.rayFrom(clientX, clientY).ray);
     const kept = this.keptHit(this.surfaceRaycaster);
     return kept ? { distance: kept.distance, faceId: kept.cap ? null : faceIdOfHit(kept.hit) } : null;
+  }
+
+  /** Whether the face under (x, y) is one `view`, a held model, has no face for: somewhere on it the nearest surface
+   *  of the held model faces another way. A blend's round or flat does, a face it only trimmed does not. */
+  freshFaceAt(clientX: number, clientY: number, view: ModelView): boolean {
+    if (!this.model) return false;
+    const hit = this.faceHit(this.rayFrom(clientX, clientY));
+    const owner = hit?.object.userData.owner as BodyMesh | undefined;
+    if (!hit || !owner || view.bodies.includes(owner)) return false;
+    const held = visibleBodyMeshes(view);
+    if (!held.length) return false;
+    flushRaycastIndex();
+    const facets = faceTrianglesOf(this.model, faceIdOfHit(hit), 64);
+    const mid = new THREE.Vector3();
+    const own = new THREE.Vector3();
+    const local = new THREE.Vector3();
+    const near = new THREE.Vector3();
+    const tri = new THREE.Triangle();
+    const toLocal = new THREE.Matrix4();
+    const found = { point: new THREE.Vector3(), distance: Infinity, faceIndex: 0 };
+    const nearest = new Set<number>();
+    let sink = 0;
+    for (const f of facets) {
+      f.getMidpoint(mid);
+      f.getNormal(own);
+      let best = Infinity;
+      let face = 0;
+      for (const mesh of held) {
+        const geo = mesh.geometry;
+        if (!geo.boundsTree) buildRaycastIndex(geo);
+        const tree = geo.boundsTree as MeshBVH | undefined;
+        if (!tree) continue;
+        local.copy(mid).applyMatrix4(toLocal.copy(mesh.matrixWorld).invert());
+        found.distance = Infinity;
+        if (!tree.closestPointToPoint(local, found)) continue;
+        const d = found.point.applyMatrix4(mesh.matrixWorld).distanceTo(mid);
+        if (d >= best) continue;
+        best = d;
+        face = (mesh.userData.owner as BodyMesh).faceIds[found.faceIndex] ?? 0;
+        const pos = geo.getAttribute("position");
+        const index = geo.getIndex()!;
+        const at = (k: number) =>
+          new THREE.Vector3()
+            .fromBufferAttribute(pos, index.getX(found.faceIndex * 3 + k))
+            .applyMatrix4(mesh.matrixWorld);
+        tri.set(at(0), at(1), at(2)).getNormal(near);
+      }
+      if (best === Infinity) continue;
+      if (own.dot(near) < FRESH_FACE_COS) return true;
+      nearest.add(face);
+      sink = Math.max(sink, best);
+    }
+    const size = new THREE.Box3();
+    for (const mesh of held) size.expandByObject(mesh);
+    return nearest.size > 1 && sink > FRESH_FACE_SINK * size.getSize(new THREE.Vector3()).length();
   }
 
   /** The faceId under (x, y), without touching the hover highlight. */
@@ -4134,6 +4270,7 @@ export class Viewport {
     // CSS pixels: a DPR-scaled size thins fat lines and shrinks the edge pick radius.
     this.resolution.set(w, h);
     setEdgeResolution(this.model, this.resolution);
+    for (const v of this.heldViews ?? []) setEdgeResolution(v, this.resolution);
     this.emphasis?.setResolution(this.resolution);
     if (this.model && !this.userMovedCamera && w > 10 && h > 10) {
       this.rig.fit(this.model.box, false);
@@ -4606,15 +4743,12 @@ export class Viewport {
           if (this.scene.grid.group.visible) this.reportGridStep(this.scene.grid.step);
         }
         // Origin arrows keep a constant screen size, measured at the origin where they are drawn.
+        const tilesDrawn = this.scene.originTiles.drawn;
         if (this.overlayDrawn("origin")) {
-          this.scene.triad.update(
-            this.pixelWorldSize(WORLD_ORIGIN),
-            this.modelDiagonal(),
-            triadMinScale(this.planesOnTop),
-          );
-          this.scene.triad.drawOver(this.planesOnTop ? TILE_ORDER.rim : null);
+          this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal(), triadMinScale(tilesDrawn));
+          this.scene.triad.drawOver(tilesDrawn ? TILE_ORDER.rim : null);
         }
-        if (this.planesOnTop) this.syncOriginTiles();
+        if (tilesDrawn) this.syncOriginTiles();
         // Focus on whatever the view is centred on, every frame since a wheel changes the orbit distance.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
         this.contactShadow.sync({

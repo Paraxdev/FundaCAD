@@ -4,8 +4,21 @@
 
 import { ref, watch } from "vue";
 import { cameraPanel } from "./state";
-import { FloatingPanel } from "fundacad/ui";
+import { Button, Panel } from "fundacad/ui";
 import { printerCameraStart, printerCameraStop, onPrinterCameraFrame, onPrinterCameraOffline } from "./printerClient";
+
+// Inline, because a plugin has nowhere to ship a stylesheet.
+const S = {
+  frame: {
+    display: "block",
+    width: "480px",
+    maxWidth: "100%",
+    minHeight: "180px",
+    objectFit: "contain",
+    background: "#111",
+  },
+  offline: { padding: "8px", color: "#e24a3b", display: "flex", alignItems: "center", gap: "var(--s-3)" },
+} as const;
 
 const frame = ref<string | null>(null);
 const offline = ref(false);
@@ -56,23 +69,24 @@ watch(
 </script>
 
 <template>
-  <FloatingPanel
+  <Panel
     :open="!!cameraPanel"
     :title="cameraPanel ? `Camera, ${cameraPanel}` : 'Camera'"
+    title-hidden
     close-on-esc
     @close="cameraPanel = null"
   >
     <div class="measure-title" aria-hidden="true">Camera, {{ cameraPanel }}</div>
     <img
       class="camera-frame"
-      alt="printer camera"
+      :alt="frame ? 'Latest frame from the printer camera' : 'No camera frame yet'"
       :src="frame ?? undefined"
-      style="display: block; width: 480px; max-width: 100%; min-height: 180px; object-fit: contain; background: #111"
+      :style="S.frame"
     />
-    <div v-if="offline" class="camera-offline" style="padding: 8px; color: #e24a3b">
-      camera unavailable
-      <button class="camera-retry" @click="cameraPanel && start(cameraPanel)">Retry</button>
+    <div v-if="offline" class="camera-offline" :style="S.offline">
+      <span role="alert">Error: camera unavailable</span>
+      <Button class="camera-retry" size="sm" @click="cameraPanel && start(cameraPanel)">Retry</Button>
     </div>
     <div class="measure-hint">~1 frame/s · Esc to close</div>
-  </FloatingPanel>
+  </Panel>
 </template>

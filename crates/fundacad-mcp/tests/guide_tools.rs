@@ -22,11 +22,19 @@ struct Window {
     state: Value,
     /// An old window publishes its document and never answers the guide.
     old: bool,
+    /// The last highlight command as the window got it.
+    last: Value,
 }
 
 impl Window {
     fn new(host: Host, user: User) -> Window {
-        Window { host, user, state: json!({"ack": 0, "step": null, "wait": null, "stopped": null}), old: false }
+        Window {
+            host,
+            user,
+            state: json!({"ack": 0, "step": null, "wait": null, "stopped": null}),
+            old: false,
+            last: Value::Null,
+        }
     }
 
     async fn tick(&mut self) {
@@ -40,6 +48,7 @@ impl Window {
             let seq = c["seq"].clone();
             match c["kind"].as_str() {
                 Some("highlight") => {
+                    self.last = c.clone();
                     let found = c["target"]["ui"] != json!("nope:x");
                     self.state["step"] = json!({"seq": seq, "step": c["step"], "of": c["of"], "found": found,
                         "via": if c["target"]["ui"] == json!("pick:fillet") { json!("family:cat:MODIFY") } else { Value::Null },
@@ -152,6 +161,22 @@ async fn a_highlight_returns_once_the_window_has_taken_it() {
     let (_mcp, out) = call(mcp, &mut window, "guide_highlight", json!({"ui": "nope:x", "caption": "?"})).await;
     assert!(out.is_error);
     assert!(out.text.contains("no control \"nope:x\"") && out.text.contains("Near: family:cat:MODIFY"), "{}", out.text);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_step_carries_its_keys_and_a_step_without_them_still_shows() {
+    let (_engine, mut window, mcp) = attached(User::Watches).await;
+    let keys = "press F6 until you hear Items";
+    let (mcp, out) =
+        call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Open Items", "keys": keys}))
+            .await;
+    assert!(!out.is_error, "{}", out.text);
+    assert_eq!(window.last["keys"], json!(keys));
+
+    let (_mcp, out) = call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items"})).await;
+    assert!(!out.is_error, "{}", out.text);
+    assert_eq!(window.last["caption"], json!("Items"));
+    assert!(window.last.get("keys").is_none());
 }
 
 #[tokio::test(flavor = "multi_thread")]

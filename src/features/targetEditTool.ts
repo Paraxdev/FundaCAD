@@ -11,7 +11,15 @@ import { setPrompt } from "../ui/prompt";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 import { edgeSelectorFrom, polylineMid } from "../viewport/edgeMatch";
 import { trackedFace } from "./holeFace";
-import { pointOf, readTarget, sameEntry, writeTarget, type TargetEntry, type TargetField } from "./selectionTargets";
+import {
+  pointOf,
+  readTarget,
+  sameEntry,
+  spanLabel,
+  writeTarget,
+  type TargetEntry,
+  type TargetField,
+} from "./selectionTargets";
 
 // `resolved` is false for an entry this build does not show; it is kept and drawn greyed,
 // so a set of four never reads as three.
@@ -72,7 +80,7 @@ export class TargetEditTool {
     if (!t) return [];
     return this.entries.map((entry) => {
       const found = this.locate(entry);
-      return { entry, label: this.labelFor(entry, found), resolved: found !== null };
+      return { entry, label: this.labelFor(entry, found), resolved: found !== null || spanLabel(entry) !== null };
     });
   }
 
@@ -227,7 +235,7 @@ export class TargetEditTool {
     if (!t || this.awaitingRollback) return STILL_BUILDING;
     if (t.kind === "body") return this.takeBodyRow(pick, t);
     if (t.kind === "face") return this.takeFaceRow(pick, t);
-    if (pick.kind !== "edge") return treePickRefusal(pick, "an edge");
+    if (pick.kind !== "edge") return treePickRefusal(pick, "edge");
     const sel = edgeSelectorFrom(pick.edge);
     const mid = polylineMid(pick.edge.points);
     const there = mid && this.viewport.edgeLineByMid(mid);
@@ -241,7 +249,7 @@ export class TargetEditTool {
 
   // The Geometry list follows the roll back, so a face row numbers a face of the model this feature edits.
   private takeFaceRow(pick: TreePick, t: TargetField): TreePickAnswer {
-    if (pick.kind !== "face") return treePickRefusal(pick, "a face");
+    if (pick.kind !== "face") return treePickRefusal(pick, "face");
     if (t.tracked) {
       const at = this.viewport.facesForPressPull([pick.faceId]);
       if (!at) return STILL_BUILDING;
@@ -255,7 +263,7 @@ export class TargetEditTool {
   }
 
   private takeBodyRow(pick: TreePick, t: TargetField): TreePickAnswer {
-    if (pick.kind !== "body" && pick.kind !== "bodies") return treePickRefusal(pick, "a body");
+    if (pick.kind !== "body" && pick.kind !== "bodies") return treePickRefusal(pick, "body");
     const ids = pick.kind === "body" ? [pick.id] : pick.ids;
     if (t.arity === "one" && ids.length !== 1) return "This takes one body";
     const built = this.store.buildState.result?.bodies ?? [];
@@ -374,7 +382,8 @@ export class TargetEditTool {
     if (found?.kind === "edge") {
       return ofBody(`Edge ${found.edge.slot + 1}`, found.edge.body && this.bodyLabel(found.edge.body));
     }
-    return t.kind === "body" ? "" : `${t.kind === "edge" ? "Edge" : "Face"} not on this build`;
+    if (t.kind === "body") return "";
+    return spanLabel(entry) ?? `${t.kind === "edge" ? "Edge" : "Face"} not on this build`;
   }
 
   private bodyLabel(id: string): string | undefined {

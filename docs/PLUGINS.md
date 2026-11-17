@@ -252,7 +252,7 @@ with everything it adds, and gets back the removal:
 
 | point | what it fills |
 | --- | --- |
-| `menus` | rows in a menu that exists, or a whole menu that does not |
+| `menus` | rows in a menu that exists, or a whole menu that does not; a core menu is named by its English name (File, Edit, View, Help) in every language. A row or menu label may be a function that returns the text, read again each time the menu shows, with `refName` as the name refs and the harness find it by. A plugin's own rows follow the language when it ships its own lines, see Your plugin in other languages |
 | `ribbon` | a group of buttons, with a collapse priority |
 | `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
 | `overlays` | components mounted for the life of the capability |
@@ -313,6 +313,42 @@ rows it wants are still loading and is then left showing the previous state
 permanently, because nothing else is coming. `TitleBar.vue` and `RibbonBar.vue`
 watch `onContribChange` for exactly this reason. It is written down because it
 was got wrong, and because no unit test caught it, a rendered app did.
+
+### Your plugin in other languages
+
+A plugin may ship its own lines in `locales/<code>.json` beside its code, `en.json` complete, and read them with
+`pluginText` from `fundacad`. It never reads a core key. The chain per line is the person's own `<id>:<key>` line,
+the plugin's file for the language, its base language, then English. The full format is in `docs/I18N.md`.
+
+```ts
+// lines.ts
+import { pluginText } from "fundacad";
+
+export const { t, tEnglish } = pluginText<typeof import("./locales/en.json")>(
+  "Acme.Rivets",
+  import.meta.glob("./locales/*.json", { eager: true, import: "default" }),
+);
+```
+
+```ts
+contribute("Acme.Rivets", {
+  menus: [{ menu: "File", items: [{ label: () => t("menu.file.send"), refName: "Send to Printer…", onClick }] }],
+  ribbon: [
+    {
+      group: "PRINT",
+      get label() { return t("group.print"); },
+      items: [{ action: "print-send", get label() { return t("tool.send"); }, refName: "Send to Printer", iconName: "printerSend" }],
+    },
+  ],
+});
+```
+
+- A label is a getter or a function, so it follows a language switch without contributing again.
+- `refName` is the literal English name. The palette finds the tool by it in every language, and the harness locates it by it. A ribbon button or a tool contribution without one has no English alias.
+- `group` stays the stable id and is what groups match on. `label` on the group is the shown heading, the first running plugin that gives one wins, so plugins that share a group should use the same line. A core group (CREATE, MODIFY and the rest) keeps the core heading whatever a plugin says.
+- A `keymap` row's `label` may be a getter too, `get label() { return t("keys.rivet"); }`. The Keyboard Shortcuts window reads it each time it draws, so the row follows the language. A plain string stays in the plugin's language, and the window finds the row by what it shows.
+- A plugin without locales changes nothing, its text stays as written.
+- A plugin that must also run on an older app guards the call: `import * as host from "fundacad"`, then use its own `en.json` when `host.pluginText` is missing.
 
 ### A modeling tool, which is what the last three points are for
 
@@ -514,6 +550,9 @@ the person picks, through the native dialog in the app and a download or an uplo
 `announce(text, priority)` in `fundacad` speaks a line through the app's own live regions, polite by default and
 `"assertive"` for a failure. Use it for a result that appears with no focus move, since the status line is not read.
 
+`toast(text)` in `fundacad` shows and speaks a line, and returns its id. A plugin takes down its own toast with
+`dismissToast(id)`, by the id `toast()` gave it, for example when its panel closes.
+
 ### Two plugins that need each other
 
 The filament palette is the case that made this concrete. A palette is a list of
@@ -528,6 +567,41 @@ through the app, which stores it and hands it back without looking inside. With
 the printer switched off the panel is not hidden by a check: it has no way to
 learn what is loaded, so it draws nothing, which is what it should do on a
 machine with no printer anyway.
+
+### Keep it accessible
+
+A plugin's panel is used with a keyboard, a screen reader and voice control as
+well as a mouse. The base controls are one way to get much of that without
+writing it again:
+
+- Draw with the controls in `fundacad/ui` (`Button`, `IconButton`, `TextField`,
+  `NumberField`, `Select`, `Checkbox`, `Switch`, `Slider`, `Segmented`) inside a
+  `FieldRow`, rather than a raw `input`, `select` or `button`. They carry the
+  focus ring, the keys, the disabled reason and the spoken state, and they
+  follow the theme. `scripts/check-ui-controls.mjs` counts the raw ones.
+- Every control needs a name. Give it `label`, or `labelledby` with the id of
+  the text that names it (`FieldRow` hands its label's id to its slot). An
+  `IconButton`'s `tip` is its name. A dev build warns about an unnamed control.
+- Give a value its unit. `NumberField` takes `unit="mm"` or `unit="deg"`, a
+  `caption` for any other unit word, or `unitless` for a count, and `Slider`
+  takes `unit` and `valueText`, so a screen reader says "width, 60 mm" and not a
+  bare number.
+- Say what a screen reader user would otherwise miss. `announce(text, priority)`
+  from `fundacad/ui` (the same one `fundacad` exports) speaks once through the
+  app's own live regions: a long job that finished, a result drawn away from
+  focus, a check that started failing. A `toast` is spoken as well as shown,
+  unless it is `silent`, so a line it carries needs no `announce` too. A list of
+  problems a person has to fix is a `role="alert"` element, spoken when it
+  changes after an edit, not on first draw. Use one or the other for a problem,
+  never both, or it is heard twice. A list that changes with every key is
+  better as plain text with one `announce` that waits for a pause.
+- A composite widget of the plugin's own, such as a grid of swatches, moves
+  focus with the arrow keys and keeps one Tab stop. `useRovingFocus` from
+  `fundacad/ui` is the helper the base controls use for that.
+- An empty label fails validation. `contribute` refuses a menu, a menu row, a
+  ribbon group, a ribbon button, a tool or a feature row whose label is empty
+  or only spaces, naming the plugin and the place. The manifest refuses an
+  empty name, and the settings schema an empty label.
 
 ## Where a plugin's source lives
 

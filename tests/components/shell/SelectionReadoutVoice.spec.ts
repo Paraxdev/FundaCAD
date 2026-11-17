@@ -17,6 +17,8 @@ vi.mock("../../../src/app/engineKey", () => ({ useEngine: () => host.engine }));
 
 import SelectionReadout from "../../../src/components/shell/SelectionReadout.vue";
 import { announce } from "../../../src/ui/announce";
+import { popModal, pushModal } from "../../../src/ui/choice";
+import { useModalStore } from "../../../src/stores/modals";
 
 enableAutoUnmount(afterEach);
 
@@ -191,13 +193,76 @@ describe("one voice for a selection", () => {
     const v = await voice();
     v.browser.show(true);
     await land(v.asks[0]!, topology("body1", 6));
-    const engine = host.engine as { toolOwnsScreen: () => boolean };
+    const engine = host.engine as { toolOwnsScreen: () => boolean; toolAtWork: () => boolean };
     engine.toolOwnsScreen = () => true;
+    engine.toolAtWork = () => true;
     v.click(2, false);
     await frame();
     v.click(3, true);
     await frame();
     expect(said()).toEqual([]);
     expect(v.wrapper.find("[data-testid=selection-readout]").exists()).toBe(false);
+  });
+
+  describe("a dialog or a tool lets go of the screen", () => {
+    // toolBusy.ts: a modal counts for toolOwnsScreen but not for toolAtWork.
+    const wire = () => {
+      const state = { tool: false };
+      const engine = host.engine as { toolOwnsScreen: () => boolean; toolAtWork: () => boolean };
+      engine.toolAtWork = () => state.tool;
+      engine.toolOwnsScreen = () => state.tool || useModalStore().depth > 0;
+      return state;
+    };
+
+    it("does not say the unchanged selection again when a dialog closes", async () => {
+      const v = await voice();
+      wire();
+      v.click(2, false);
+      await frame();
+      v.click(4, true);
+      await frame();
+      const before = said();
+      expect(before).toHaveLength(2);
+
+      pushModal();
+      await frame();
+      await frame();
+      popModal();
+      await frame();
+      await frame();
+      expect(said()).toEqual(before);
+    });
+
+    it("says a real change made after the dialog closes", async () => {
+      const v = await voice();
+      wire();
+      v.click(2, false);
+      await frame();
+      pushModal();
+      await frame();
+      popModal();
+      await frame();
+      v.click(5, true);
+      await frame();
+      expect(said()).toHaveLength(2);
+      expect(said()[1]).toContain("2 selected");
+    });
+
+    it("says what stays selected, whole, once a tool ends", async () => {
+      const v = await voice();
+      const state = wire();
+      v.click(3, false);
+      await frame();
+      expect(said()).toHaveLength(1);
+      state.tool = true;
+      await frame();
+      await frame();
+      expect(said()).toHaveLength(1);
+      state.tool = false;
+      await frame();
+      await frame();
+      expect(said()).toHaveLength(2);
+      expect(said()[1]).toBe(said()[0]);
+    });
   });
 });

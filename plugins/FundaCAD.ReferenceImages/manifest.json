@@ -8,5 +8,27 @@
   "grants": [
     "document.read",
     "document.write"
-  ]
+  ],
+  "translations": {
+    "de": {
+      "name": "Referenzbilder",
+      "summary": "Legen Sie ein Foto oder eine Zeichnung auf eine Ebene oder eine ebene Fläche, skalieren Sie es über zwei Punkte und einen bekannten Abstand und skizzieren Sie darüber."
+    },
+    "es": {
+      "name": "Imágenes de referencia",
+      "summary": "Coloque una foto o un dibujo sobre un plano o una cara plana, escálelo con dos puntos y una distancia conocida y dibuje encima."
+    },
+    "fr": {
+      "name": "Images de référence",
+      "summary": "Posez une photo ou un dessin sur un plan ou une face plane, mettez-le à l'échelle avec deux points et une distance connue, et dessinez par-dessus."
+    },
+    "ja": {
+      "name": "参照画像",
+      "summary": "写真や図面を平面や平らな面に置き、2点と既知の距離で拡大縮小して、その上からスケッチできます。"
+    },
+    "zh-CN": {
+      "name": "参考图像",
+      "summary": "把照片或图纸放在平面或平整面上,用两点和已知距离缩放,并在其上绘制草图。"
+    }
+  }
 }

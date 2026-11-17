@@ -5,6 +5,7 @@
 // part instead of texturing the surface it sits on.
 
 import { describe, it, expect } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import {
   ANGLE_KINDS,
   SEED_KINDS,
@@ -154,6 +155,13 @@ describe("initialTextureForm / toTextureValues", () => {
     expect(v.scale).toBe(2);
     expect(v.seed).toBe(1);
     expect(v.sharpness).toBe(0);
+  });
+
+  it("shows stored decimals with the language's mark", async () => {
+    await setLanguage("de");
+    const f = initialTextureForm({ depth: 0.35, scale: 2.5, angle: -15.5, seamBlend: 0.75 });
+    await setLanguage("system");
+    expect([f.depth, f.scale, f.angle, f.seamBlend, f.seed]).toEqual(["0,35", "2,5", "-15,5", "0,75", "1"]);
   });
 
   it("round-trips an existing texture feature", () => {

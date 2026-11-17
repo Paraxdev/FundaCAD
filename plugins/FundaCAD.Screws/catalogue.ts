@@ -15,6 +15,7 @@ import {
   type Part,
   type Units,
 } from "./spec";
+import { spellFixed, spellNumber } from "fundacad";
 
 export type ThreadTable = "metric" | "inch" | "tapping";
 
@@ -156,11 +157,11 @@ export function pitchesFor(f: Family, size: string): PitchChoice[] {
 const INCH_FRACTIONS = 32;
 
 /** 0.625 -> "5/8", 1.25 -> "1-1/4", 0.086 -> "0.086". */
-export function formatInch(v: number): string {
+export function formatInch(v: number, spelled = false): string {
   const whole = Math.floor(v + 1e-9);
   const rest = v - whole;
   const num = Math.round(rest * INCH_FRACTIONS);
-  if (Math.abs(rest * INCH_FRACTIONS - num) > 1e-6) return String(+v.toFixed(4));
+  if (Math.abs(rest * INCH_FRACTIONS - num) > 1e-6) return (spelled ? spellNumber : String)(+v.toFixed(4));
   if (num === 0) return String(whole);
   let a = num;
   let b = INCH_FRACTIONS;
@@ -172,7 +173,7 @@ export function formatInch(v: number): string {
 }
 
 export function formatLength(v: number, units: Units): string {
-  return units === "in" ? `${formatInch(v)}"` : `${+v.toFixed(3)}`;
+  return units === "in" ? `${formatInch(v, true)}"` : spellNumber(+v.toFixed(3));
 }
 
 export function threadDesignation(f: Family, size: string, pitch: number): string {
@@ -309,7 +310,7 @@ export interface SpecRow {
 
 function num(v: unknown, units: Units): string {
   if (typeof v !== "number") return String(v ?? "");
-  return units === "in" ? `${+v.toFixed(4)} in` : `${+v.toFixed(3)} mm`;
+  return units === "in" ? `${spellNumber(+v.toFixed(4))} in` : `${spellNumber(+v.toFixed(3))} mm`;
 }
 
 /** The spec table: standard, every dimension the spec's parts carry, the thread, and the holes. */
@@ -340,7 +341,7 @@ export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: num
     rows.push({ label: "  Diameter", value: num(t.diameter, u) });
     rows.push({
       label: "  Pitch",
-      value: u === "in" ? `${Math.round(1 / t.pitch)} TPI` : `${+t.pitch.toFixed(4)} mm`,
+      value: u === "in" ? `${Math.round(1 / t.pitch)} TPI` : `${spellNumber(+t.pitch.toFixed(4))} mm`,
     });
     if (typeof t.length === "number") rows.push({ label: "  Thread length", value: num(t.length, u) });
     rows.push({ label: "  Hand", value: t.hand === "left" ? "Left" : "Right" });
@@ -371,7 +372,7 @@ export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: num
   if (opts.volume !== undefined) {
     rows.push({
       label: "Mass (steel)",
-      value: `${(opts.volume * 7.85e-3).toFixed(opts.volume * 7.85e-3 < 10 ? 2 : 1)} g`,
+      value: `${spellFixed(opts.volume * 7.85e-3, opts.volume * 7.85e-3 < 10 ? 2 : 1)} g`,
     });
   }
   if (spec.notes) rows.push({ label: "Notes", value: spec.notes });

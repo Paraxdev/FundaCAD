@@ -1,21 +1,27 @@
 <script setup lang="ts">
+import { fieldNumber, spellNumber } from "../../ui/measure";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { t } from "../../i18n";
 import { confirmDanger } from "../../ui/choice";
 import { toast } from "../../ui/toast";
 import { claimEscape } from "../../ui/escapeClaim";
 import {
   DEFAULT_EXPERIMENTAL,
   ENV_WIDTHS,
+  EXPERIMENTAL_GROUPS,
   EXPERIMENTAL_RANGE,
+  experimentalLocked,
   experimentalPrefs,
   onExperimentalPrefsChange,
-  resetExperimentalPrefs,
+  resetExperimentalGroup,
   setExperimentalPref,
   type EnvWidth,
+  type ExperimentalGroup,
   type ExperimentalPrefs,
 } from "../../ui/experimentalPrefs";
 import { hdrTextureMax } from "../../viewport/hdrRegistry";
 import Button from "../ui/Button.vue";
+import Chip from "../ui/Chip.vue";
 import NumberField from "../ui/NumberField.vue";
 import Segmented from "../ui/Segmented.vue";
 
@@ -41,7 +47,7 @@ const refused = (e: Event) => (e.target as HTMLElement).getAttribute("aria-inval
 // A draft that reads back as the stored number leaves Escape nothing to revert, so the first Escape closes.
 function drafted(f: Field, e: Event) {
   const text = (e.target as HTMLInputElement).value.trim();
-  holdEscape(text === "" ? boxValue(f) !== null : Number(text) !== boxValue(f));
+  holdEscape(text === "" ? boxValue(f) !== null : fieldNumber(text) !== boxValue(f));
 }
 function onNumberKey(f: Field, e: KeyboardEvent) {
   if (e.key === "ArrowUp" || e.key === "ArrowDown") void nextTick(() => drafted(f, e));
@@ -53,21 +59,25 @@ onUnmounted(() => {
   holdEscape(false);
 });
 
-async function onReset() {
-  if (
-    !(await confirmDanger("Reset experimental limits?", "Reset", "Every limit on this page goes back to its default."))
-  )
-    return;
-  resetExperimentalPrefs();
-  toast("Experimental limits are back to their defaults.");
+const locked = experimentalLocked();
+const LOCKED_REASON = computed(() => t("prefs.experimental.lockedReason"));
+
+async function onReset(g: ExperimentalGroup) {
+  const asked = await confirmDanger(
+    t("prefs.experimental.resetTitle", { group: g.title }),
+    t("prefs.experimental.resetAction"),
+    t("prefs.experimental.resetBody", { group: g.title }),
+  );
+  if (!asked) return;
+  resetExperimentalGroup(g.id);
+  toast(t("prefs.experimental.resetDone", { group: g.title }));
 }
 
-const changed = computed(() =>
-  (Object.keys(DEFAULT_EXPERIMENTAL) as (keyof ExperimentalPrefs)[]).some(
-    (k) => prefs.value[k] !== DEFAULT_EXPERIMENTAL[k],
-  ),
-);
-const widthLabel = (w: EnvWidth) => (w === "gpu" ? `GPU maximum (${hdrTextureMax()})` : String(w));
+const changed = (k: keyof ExperimentalPrefs) => prefs.value[k] !== DEFAULT_EXPERIMENTAL[k];
+const groupChanged = (g: ExperimentalGroup) => g.keys.some(changed);
+const changedId = (k: keyof ExperimentalPrefs) => `prefs-x-${k}-changed`;
+const widthLabel = (w: EnvWidth) =>
+  w === "gpu" ? t("prefs.experimental.envWidth.gpu", { n: hdrTextureMax() }) : String(w);
 const widthOptions = () =>
   ENV_WIDTHS.map((w) => ({ value: w, label: widthLabel(w), attrs: { "data-env-width": String(w) } }));
 
@@ -80,64 +90,70 @@ interface Field {
   scale: number;
   hint: string;
 }
-const PATH: Field[] = [
+const FIELDS = computed<Field[]>(() => [
   {
     key: "sampleCap",
-    title: "Samples per pixel",
-    unit: "samples",
+    title: t("prefs.experimental.sampleCap.title"),
+    unit: t("prefs.experimental.sampleCap.unit"),
     step: 1,
     scale: 1,
-    hint: "Where Path traced stops refining. More is cleaner and takes longer.",
+    hint: t("prefs.experimental.sampleCap.hint"),
   },
   {
     key: "batterySampleCap",
-    title: "Samples on battery",
-    unit: "samples",
+    title: t("prefs.experimental.batterySampleCap.title"),
+    unit: t("prefs.experimental.batterySampleCap.unit"),
     step: 1,
     scale: 1,
-    hint: "The same, while a laptop runs on its battery.",
+    hint: t("prefs.experimental.batterySampleCap.hint"),
   },
   {
     key: "bounces",
-    title: "Bounces",
-    unit: "bounces",
+    title: t("prefs.experimental.bounces.title"),
+    unit: t("prefs.experimental.bounces.unit"),
     step: 1,
     scale: 1,
-    hint: "How many times light reflects or passes through glass, in both tracers.",
+    hint: t("prefs.experimental.bounces.hint"),
   },
   {
     key: "firefly",
-    title: "Firefly clamp",
-    unit: "luminance",
+    title: t("prefs.experimental.firefly.title"),
+    unit: t("prefs.experimental.firefly.unit"),
     step: 1,
     scale: 1,
-    hint: "How bright an indirect light sample may be before it is turned down, in the native tracer. 0 turns the clamp off, which is unbiased and speckled.",
+    hint: t("prefs.experimental.firefly.hint"),
   },
   {
     key: "traceScale",
-    title: "Trace resolution",
-    unit: "of the screen",
+    title: t("prefs.experimental.traceScale.title"),
+    unit: t("prefs.experimental.traceScale.unit"),
     step: 0.05,
     scale: 1,
-    hint: "The viewport trace against the screen's pixels, up to 1, the view's own size. Empty is Auto, 0.75 or 0.5 by the screen and the battery.",
+    hint: t("prefs.experimental.traceScale.hint"),
   },
   {
     key: "pictureMegapixels",
-    title: "Largest traced picture",
-    unit: "megapixels",
+    title: t("prefs.experimental.pictureMegapixels.title"),
+    unit: t("prefs.experimental.pictureMegapixels.unit"),
     step: 1,
     scale: 1,
-    hint: "Save picture is scaled down past this. The GPU's own buffer and texture sizes still apply.",
+    hint: t("prefs.experimental.pictureMegapixels.hint"),
   },
   {
     key: "triangleBudget",
-    title: "Most triangles traced",
-    unit: "million",
+    title: t("prefs.experimental.triangleBudget.title"),
+    unit: t("prefs.experimental.triangleBudget.unit"),
     step: 0.5,
     scale: 1e6,
-    hint: "Path traced refuses a model with more. What the GPU can bind is still checked.",
+    hint: t("prefs.experimental.triangleBudget.hint"),
   },
-];
+]);
+
+const fieldsOf = (g: ExperimentalGroup) => FIELDS.value.filter((f) => g.keys.includes(f.key));
+const defaultLine = (f: Field) =>
+  t("prefs.experimental.default", {
+    value: autoAtZero(f) ? t("prefs.experimental.auto") : spellNumber(defaultShown(f)),
+  });
 
 const shown = (f: Field) => +(prefs.value[f.key] / f.scale).toFixed(f.key === "pictureMegapixels" ? 1 : 3);
 /** Trace resolution's 0 is Auto, shown as an empty box. */
@@ -152,57 +168,89 @@ const max = (f: Field) => EXPERIMENTAL_RANGE[f.key][1] / f.scale;
 </script>
 
 <template>
-  <h3 class="prefs-pane-title" tabindex="-1">Experimental</h3>
-  <p class="pref-warning" role="note" data-experimental-warning>
-    These settings can make FundaCAD unstable or crash it. Use them at your own risk.
-  </p>
-  <div class="prefs-grid">
-    <div class="pref-card wide">
-      <div class="pref-head">
-        <span class="pref-title">HDR environment size</span>
-        <Segmented
-          id="prefs-env-width"
-          label="HDR environment size"
-          :model-value="prefs.envWidth"
-          :options="widthOptions()"
-          @update:model-value="pickWidth"
-        />
-      </div>
-      <p class="pref-hint">
-        The width an imported HDR is kept at, for lighting and inside saved documents; the lighting reads half of it.
-        Larger needs more memory and makes documents bigger. Applies to the next import. Default 2048.
-      </p>
+  <h3 class="prefs-pane-title" tabindex="-1">{{ t("prefs.tab.experimental") }}</h3>
+  <p class="pref-warning" role="note" data-experimental-warning>{{ t("prefs.experimental.warning") }}</p>
+  <p v-if="locked" class="pref-hint prefs-x-locked" role="note" data-experimental-locked>{{
+    t("prefs.experimental.locked")
+  }}</p>
+  <div
+    v-for="g in EXPERIMENTAL_GROUPS"
+    :key="g.id"
+    class="prefs-group"
+    role="group"
+    :aria-labelledby="`prefs-x-group-${g.id}`"
+    :data-experimental-group="g.id"
+  >
+    <div class="prefs-group-head">
+      <h4 :id="`prefs-x-group-${g.id}`" class="prefs-group-title">{{ g.title }}</h4>
+      <Button
+        size="sm"
+        :disabled="locked || !groupChanged(g)"
+        :disabled-reason="locked ? LOCKED_REASON : undefined"
+        :aria-describedby="`prefs-x-group-${g.id}`"
+        :data-experimental-reset="g.id"
+        @click="onReset(g)"
+        >{{ t("prefs.experimental.reset") }}</Button
+      >
     </div>
-    <div v-for="f in PATH" :key="f.key" class="pref-card">
-      <div class="pref-head">
-        <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
-        <span
-          class="pref-number"
-          @input="drafted(f, $event)"
-          @keydown="onNumberKey(f, $event)"
-          @focusin="holdEscape(refused($event))"
-          @focusout="holdEscape(false)"
-        >
-          <NumberField
-            :id="`prefs-x-${f.key}`"
-            :label="f.title"
-            :model-value="boxValue(f)"
-            :min="min(f)"
-            :max="max(f)"
-            :step="f.step"
-            :nullable="autoAtZero(f)"
-            :placeholder="autoAtZero(f) ? 'Auto' : undefined"
-            :caption="f.unit"
-            :width-ch="9"
-            :data-experimental="f.key"
-            @update:model-value="onNumber(f, $event)"
+    <div class="prefs-grid">
+      <div v-if="g.keys.includes('envWidth')" class="pref-card wide">
+        <div class="pref-head">
+          <span class="pref-title-row">
+            <span class="pref-title">{{ t("prefs.experimental.envWidth.title") }}</span>
+            <Chip v-if="changed('envWidth')" :id="changedId('envWidth')" variant="accent" data-experimental-changed>{{
+              t("prefs.experimental.changed")
+            }}</Chip>
+          </span>
+          <Segmented
+            id="prefs-env-width"
+            :label="t('prefs.experimental.envWidth.title')"
+            :model-value="prefs.envWidth"
+            :options="widthOptions()"
+            :disabled="locked"
+            :disabled-reason="locked ? LOCKED_REASON : undefined"
+            :aria-describedby="changed('envWidth') ? changedId('envWidth') : undefined"
+            @update:model-value="pickWidth"
           />
-        </span>
+        </div>
+        <p class="pref-hint">{{ t("prefs.experimental.envWidth.hint") }}</p>
       </div>
-      <p class="pref-hint"> {{ f.hint }} Default {{ autoAtZero(f) ? "Auto" : defaultShown(f) }}. </p>
+      <div v-for="f in fieldsOf(g)" :key="f.key" class="pref-card">
+        <div class="pref-head">
+          <span class="pref-title-row">
+            <label class="pref-title" :for="`prefs-x-${f.key}`">{{ f.title }}</label>
+            <Chip v-if="changed(f.key)" :id="changedId(f.key)" variant="accent" data-experimental-changed>{{
+              t("prefs.experimental.changed")
+            }}</Chip>
+          </span>
+          <span
+            class="pref-number"
+            @input="drafted(f, $event)"
+            @keydown="onNumberKey(f, $event)"
+            @focusin="holdEscape(refused($event))"
+            @focusout="holdEscape(false)"
+          >
+            <NumberField
+              :id="`prefs-x-${f.key}`"
+              :label="f.title"
+              :model-value="boxValue(f)"
+              :min="min(f)"
+              :max="max(f)"
+              :step="f.step"
+              :nullable="autoAtZero(f)"
+              :placeholder="autoAtZero(f) ? t('prefs.experimental.auto') : undefined"
+              :caption="f.unit"
+              :width-ch="9"
+              :disabled="locked"
+              :disabled-reason="locked ? LOCKED_REASON : undefined"
+              :aria-describedby="changed(f.key) ? changedId(f.key) : undefined"
+              :data-experimental="f.key"
+              @update:model-value="onNumber(f, $event)"
+            />
+          </span>
+        </div>
+        <p class="pref-hint"> {{ f.hint }} {{ defaultLine(f) }} </p>
+      </div>
     </div>
-  </div>
-  <div class="prefs-actions">
-    <Button :disabled="!changed" data-experimental-reset @click="onReset">Reset to defaults</Button>
   </div>
 </template>

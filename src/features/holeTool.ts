@@ -28,6 +28,7 @@ import {
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 import { boxBindings } from "./boxBindings";
+import { spellNumber } from "../ui/measure";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
@@ -117,7 +118,7 @@ export class HoleTool {
     if (pre && this.takeFace(pre)) return;
     this.releaseRows = awaitFaceRows(
       this.viewport,
-      "a flat face",
+      "flatFace",
       (faces) => this.takeFace(faces) || "That face is curved, a hole needs a flat face",
       () => this.cancel(),
     );
@@ -395,7 +396,7 @@ export class HoleTool {
   }
 
   private sizeText(): string {
-    return this.diameter != null ? String(this.diameter) : this.size;
+    return this.diameter != null ? spellNumber(this.diameter) : this.size;
   }
 
   private blind(): boolean {

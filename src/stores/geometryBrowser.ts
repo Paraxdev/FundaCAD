@@ -20,6 +20,7 @@ export const useGeometryBrowserStore = defineStore("geometryBrowser", () => {
   const rows = shallowRef<readonly GeometryRow[]>([]);
   /** "loading" with rows means the old rows are still shown while new ones arrive. */
   const state = ref<GeometryState>("idle");
+  /** The failure under "error", or under "loading" why the rows wait. */
   const error = ref<string | null>(null);
   /** How many faces the engine left out at its cap, null when it listed them all. */
   const truncated = ref<number | null>(null);

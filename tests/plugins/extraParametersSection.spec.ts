@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import ParametersSection from "../../plugins/FundaCAD.ExtraParameters/ParametersSection.vue";
@@ -14,6 +14,7 @@ import { DocumentStore } from "../../src/document/store";
 import type { Engine } from "../../src/app/engine";
 import type { CadDocument } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { setLanguage } from "../../src/i18n";
 
 afterEach(() => {
   setupOpen.value = false;
@@ -64,9 +65,11 @@ function fidget(): CadDocument {
   };
 }
 
-async function render() {
+async function render(edit?: (d: CadDocument) => void) {
   setActivePinia(createPinia());
-  const store = new DocumentStore(backend, fidget());
+  const doc = fidget();
+  edit?.(doc);
+  const store = new DocumentStore(backend, doc);
   const docVersion = ref(0);
   store.onDocChange(() => {
     docVersion.value++;
@@ -99,9 +102,12 @@ describe("the Parameters section", () => {
 
   it("names every control by its parameter, so a screen reader does not read a bare value", async () => {
     const { w } = await render();
+    const nameOf = (el: Element) =>
+      el.getAttribute("aria-label") ??
+      document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent?.trim();
     const named = w
-      .findAll(".xp-row input, .xp-row select")
-      .map((c) => [c.element.closest(".xp-row")?.getAttribute("data-param"), c.attributes("aria-label")]);
+      .findAll(".xp-row input")
+      .map((c) => [c.element.closest(".xp-row")?.getAttribute("data-param"), nameOf(c.element)]);
     expect(named).toEqual([
       ["gap", "gap"],
       ["solidCore", "solidCore"],
@@ -124,7 +130,7 @@ describe("the Parameters section", () => {
     // the check only fails when the value gets there some other way
     expect(store.setParamExpr("gap", "0.2")).toBeNull();
     await settle();
-    expect(w.findAll(".xp-check").map((c) => c.text())).toEqual(["gap below 0.3 mm fuses"]);
+    expect(w.findAll(".xp-check").map((c) => c.text())).toEqual(["Warning: gap below 0.3 mm fuses"]);
     expect(w.find('[data-param="gap"]').attributes("title")).toMatch(/below the minimum/);
   });
 
@@ -141,7 +147,11 @@ describe("the Parameters section", () => {
     await settle();
     expect(store.document.paramDefs!["joinedRings"]!.expr).toBe("5");
 
-    await w.find(".xp-config").setValue("c2");
+    w.find(".xp-config").element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
+    [...document.body.querySelectorAll<HTMLElement>("[role=option]")]
+      .find((o) => o.textContent!.includes("Button"))!
+      .click();
     await settle();
     expect(store.document.paramDefs!["joinedRings"]!.expr).toBe("3");
     expect(w.text()).not.toContain("modified");
@@ -151,5 +161,69 @@ describe("the Parameters section", () => {
 
     await w.find(".xp-setup").trigger("click");
     expect(setupOpen.value).toBe(true);
+  });
+});
+
+describe("the Parameters section in German", () => {
+  afterEach(() => setLanguage("system"));
+
+  it("shows a choice that is a bare number with a comma", async () => {
+    const sizes = (d: CadDocument) => {
+      d.paramDefs!["size"] = {
+        expr: "2.5",
+        value: 2.5,
+        unit: "mm",
+        control: {
+          kind: "choice",
+          choices: [
+            { label: "2.5", value: 2.5 },
+            { label: "Large", value: 30 },
+          ],
+        },
+      };
+    };
+    await setLanguage("de");
+    const { w } = await render(sizes);
+    w.find('[data-param="size"] [role=combobox]').element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+    const options = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].map((o) => o.textContent!.trim());
+    expect({ shown: w.find('[data-param="size"] [role=combobox]').text(), options }).toEqual({
+      shown: "2,5",
+      options: ["2,5", "Large"],
+    });
+  });
+
+  it("spells a calculated value with a comma", async () => {
+    const slanted = (d: CadDocument) => {
+      d.paramDefs!["pitch"] = { expr: "gap * 2.5", value: 1.25, unit: "mm" };
+    };
+    const en = await render(slanted);
+    expect(en.w.find('[data-param="pitch"]').text()).toContain("fx 1.25");
+    en.w.unmount();
+    await setLanguage("de");
+    const de = await render(slanted);
+    expect(de.w.find('[data-param="pitch"]').text()).toContain("fx 1,25");
+    de.w.unmount();
+  });
+
+  it("shows the expression behind a calculated value with a comma, to sighted and screen reader users", async () => {
+    const slanted = (d: CadDocument) => {
+      d.paramDefs!["pitch"] = { expr: "max(gap * 2.5;0.75)", value: 1.25, unit: "mm" };
+    };
+    await setLanguage("system");
+    const calc = (w: VueWrapper) => w.find('[data-param="pitch"] span[title^="="]');
+    const en = await render(slanted);
+    expect([calc(en.w).attributes("title"), calc(en.w).find(".sr-only").text()]).toEqual([
+      "= max(gap * 2.5;0.75)",
+      ", calculated from max(gap * 2.5;0.75)",
+    ]);
+    en.w.unmount();
+    await setLanguage("de");
+    const de = await render(slanted);
+    expect([calc(de.w).attributes("title"), calc(de.w).find(".sr-only").text()]).toEqual([
+      "= max(gap * 2,5;0,75)",
+      ", calculated from max(gap * 2,5;0,75)",
+    ]);
+    de.w.unmount();
   });
 });

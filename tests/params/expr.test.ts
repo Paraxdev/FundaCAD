@@ -8,6 +8,7 @@ import {
   renameRefs,
 } from "../../src/params/parse";
 import { evalExpr } from "../../src/params/eval";
+import { commasToPoints } from "../../src/params/decimalForm";
 
 const ev = (src: string, values: Record<string, number> = {}) => evalExpr(src, values);
 
@@ -66,6 +67,44 @@ describe("expression evaluator", () => {
     expect(() => ev("2 $ 3")).toThrow(/unexpected character/);
     expect(ev("1 / 0")).toBe(Infinity); // caller gates on isFinite
     expect(Number.isNaN(ev("sqrt(-1)"))).toBe(true);
+  });
+
+  it("a comma between arguments says that arguments take a semicolon, other characters do not", () => {
+    const message = (src: string) => {
+      try {
+        return String(ev(src, { weite: 12.5 }));
+      } catch (e) {
+        return (e as Error).message;
+      }
+    };
+    const said = [
+      message("min(2.5, 7)"),
+      message(commasToPoints("max(weite; 1,5, 3)")),
+      message("2 $ 3"),
+      message(commasToPoints("max(weite; 1,5; 3)")),
+    ];
+    expect(said[0]).toMatch(/unexpected character ",".*";"/);
+    expect(said[1]).toMatch(/unexpected character ",".*";"/);
+    expect(said[2]).toMatch(/unexpected character "\$"/);
+    expect(said[2]).not.toContain(";");
+    expect(said[3]).toBe("12.5");
+  });
+
+  it.each([
+    ["max(1, 2)", true],
+    ["max(1; abs(2, 3))", true],
+    ["1,5,5", false],
+    ["(1, 2)", false],
+    ["max((1, 2); 3)", false],
+    ["max(1; 2), 3", false],
+    ["2(1, 2)", false],
+  ])("a comma in %j gives the semicolon hint only inside a function's brackets: %s", (src, hint) => {
+    expect(() => ev(src)).toThrow(
+      new ExprError(
+        hint ? 'unexpected character ",", separate arguments with ";"' : 'unexpected character ","',
+        src.indexOf(","),
+      ),
+    );
   });
 
   it("comparisons and logic yield 1 or 0, and bind looser than arithmetic", () => {

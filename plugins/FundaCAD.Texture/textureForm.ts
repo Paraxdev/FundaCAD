@@ -2,7 +2,7 @@
 // wave has no shape parameter) and are contributed to the value rows, so the panel and the rows agree.
 
 import type { ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField } from "fundacad";
-import { fieldError, fieldNumber } from "fundacad";
+import { fieldError, fieldNumber, spellNumber } from "fundacad";
 
 export type TextureKind =
   | "knurl"
@@ -316,29 +316,29 @@ export function initialTextureForm(initial: Partial<TextureValues>): TextureForm
     // Hard surface is the default: planar facets and real creases are what a
     // printer can actually reproduce. "Smooth" restores the original fields.
     profile: initial.profile ?? "facet",
-    depth: String(initial.depth ?? 0.4),
-    scale: String(initial.scale ?? 2),
-    angle: String(initial.angle ?? 0),
-    sharpness: String(initial.sharpness ?? 0.5),
+    depth: spellNumber(initial.depth ?? 0.4),
+    scale: spellNumber(initial.scale ?? 2),
+    angle: spellNumber(initial.angle ?? 0),
+    sharpness: spellNumber(initial.sharpness ?? 0.5),
     direction: initial.direction ?? "out",
-    seed: String(initial.seed ?? 1),
+    seed: spellNumber(initial.seed ?? 1),
     invert: initial.invert ?? false,
     imagePath: initial.imagePath ?? "",
-    colorSlot: initial.colorSlot != null ? String(initial.colorSlot) : "",
-    offset: String(initial.offset ?? 0),
-    edgeBlend: String(initial.boundaryInset ?? 0),
-    grime: String(initial.grime ?? 0),
-    smooth: String(initial.smooth ?? 0),
+    colorSlot: initial.colorSlot != null ? spellNumber(initial.colorSlot) : "",
+    offset: spellNumber(initial.offset ?? 0),
+    edgeBlend: spellNumber(initial.boundaryInset ?? 0),
+    grime: spellNumber(initial.grime ?? 0),
+    smooth: spellNumber(initial.smooth ?? 0),
     // Triplanar is the default for a freeform face: it keeps the pattern one size
     // where a single planar projection would foreshorten it.
     projection: initial.projection ?? "triplanar",
-    seamBlend: String(initial.seamBlend ?? 0.5),
-    seamBand: String(initial.seamBand ?? 0.5),
-    amplitude: String(initial.amplitude ?? 1),
-    slopeMin: String(initial.slopeMin ?? 0),
-    slopeMax: String(initial.slopeMax ?? 180),
-    targetEdge: String(initial.targetEdge ?? 0),
-    triBudget: String(initial.triBudget ?? 0),
+    seamBlend: spellNumber(initial.seamBlend ?? 0.5),
+    seamBand: spellNumber(initial.seamBand ?? 0.5),
+    amplitude: spellNumber(initial.amplitude ?? 1),
+    slopeMin: spellNumber(initial.slopeMin ?? 0),
+    slopeMax: spellNumber(initial.slopeMax ?? 180),
+    targetEdge: spellNumber(initial.targetEdge ?? 0),
+    triBudget: spellNumber(initial.triBudget ?? 0),
   };
 }
 

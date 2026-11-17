@@ -20,13 +20,16 @@ import {
 } from "../../src/input/shortcuts";
 import { useBrowserStore } from "../../src/stores/browser";
 import { useShellStore } from "../../src/stores/shell";
+import { t } from "../../src/i18n";
 import { announce } from "../../src/ui/announce";
-import { allCommands } from "../../src/ui/commands";
+import { allCommands, commandEnglish } from "../../src/ui/commands";
 import { describePick } from "../../src/ui/describePick";
 import { awaitTreePick, resetTreePicks, treePickRefusal, treePickWaiting, type TreePick } from "../../src/ui/treePick";
 import { edge, land, result, rig, settle, topology } from "./geometryBrowserRig";
+import { menuName } from "../../src/ui/menu";
+import { rowName, row as menuRow } from "./menuRows";
 
-vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {} }));
+vi.mock("../../src/ui/toast", () => ({ toast: () => {}, dismissToast: () => {}, dismissToastsSaying: () => {} }));
 vi.mock("../../src/ui/announce", async (actual) => ({
   ...(await actual<typeof import("../../src/ui/announce")>()),
   announce: vi.fn(),
@@ -89,9 +92,11 @@ describe("where the commands are listed", () => {
 
   it("the Edit menu runs them through the dispatcher", () => {
     const handleAction = vi.fn();
-    const edit = buildMenubar({ handleAction } as unknown as Engine).find((m) => m.label === "Edit")!;
-    const items = edit.items.filter((i) => allCommands().find((c) => ALL.includes(c.id) && c.label === i.label));
-    expect(items.map((i) => [i.label, i.shortcut])).toEqual([
+    const edit = buildMenubar({ handleAction } as unknown as Engine).find((m) => menuName(m) === "Edit")!;
+    const items = edit.items.filter((i) =>
+      allCommands().find((c) => ALL.includes(c.id) && commandEnglish(c.id) === i.refName),
+    );
+    expect(items.map((i) => [rowName(i), i.shortcut])).toEqual([
       ["Next Face", undefined],
       ["Previous Face", undefined],
       ["Next Edge", undefined],
@@ -110,14 +115,14 @@ describe("where the commands are listed", () => {
     expect(resolveShortcut("F9", true, "model")).toBe("next-edge");
     expect(resolveShortcut("F9", true, "sketch")).toBe("next-edge");
     expect(allCommands().find((c) => c.id === "next-edge")?.key).toBe("Shift+F9");
-    const edit = buildMenubar({} as Engine).find((m) => m.label === "Edit")!;
-    expect(edit.items.find((i) => i.label === "Next Edge")?.shortcut).toBe("Shift+F9");
-    expect(edit.items.find((i) => i.label === "Next Face")?.shortcut).toBeUndefined();
+    const edit = buildMenubar({} as Engine).find((m) => menuName(m) === "Edit")!;
+    expect(menuRow("Edit", "Next Edge", [edit])?.shortcut).toBe("Shift+F9");
+    expect(menuRow("Edit", "Next Face", [edit])?.shortcut).toBeUndefined();
   });
 
   it("the ? dialog lets them be bound, and keeps the canvas keys a fixed group", () => {
     const groups = shortcutHudGroups();
-    const rows = groups.find((g) => g.name === "Global")!.rows.filter((x) => /face|edge/.test(x.label));
+    const rows = groups.find((g) => g.name === "Global")!.rows.filter((x) => /face|edge/i.test(x.label));
     expect(rows.map((x) => x.key)).toEqual(["", "", "", "", ""]);
     expect(rows.every((x) => x.id !== undefined)).toBe(true);
     const canvas = groups.find((g) => g.name === "3D view focused")!.rows;
@@ -390,13 +395,56 @@ describe("what a command refuses", () => {
     expect(treePickWaiting()).toBe(true);
     expect(end).not.toHaveBeenCalled();
     expect(taker).not.toHaveBeenCalled();
+    const words = r.host.setStatus.mock.calls.map((c) => c[0]);
+    expect(words).toEqual(STEPS.map(() => t("geometry.commands.pickWaiting")));
+    expect(words[0]).toMatch(/\]/);
+    expect(words[0]).not.toMatch(/Finish/);
+    expect(said()).toEqual(words);
+    expect(picks(r)).toEqual([]);
+  });
+
+  it("a tool on screen with no pick waiting still says to finish it first", async () => {
+    const { r, run } = await opened();
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    expect(treePickWaiting()).toBe(false);
+    for (const a of STEPS) run(a);
     expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual(STEPS.map(() => "Finish the tool first"));
     expect(picks(r)).toEqual([]);
   });
 
+  it("an open sketch or a build under way outranks the waiting pick's words", async () => {
+    const { r, run } = await opened();
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    awaitTreePick(() => true as const, vi.fn());
+    r.host.sketch.active = true;
+    run("next-face");
+    r.host.sketch.active = false;
+    r.viewport.modelUnsettled = true;
+    run("next-edge");
+    expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual([
+      "Finish the sketch first",
+      "The model is still building",
+    ]);
+  });
+
+  it("a pick that owns no screen gives the suspended picks' own reason, not the waiting pick's words", async () => {
+    const { r, run } = await opened();
+    awaitTreePick(() => true as const, vi.fn());
+    r.viewport.picksSuspended = true;
+    run("next-face");
+    r.host.toolOwnsScreen.mockReturnValue(true);
+    run("next-edge");
+    expect(r.host.setStatus.mock.calls.map((c) => c[0])).toEqual([
+      "The model is still building",
+      t("geometry.commands.pickWaiting"),
+    ]);
+    expect(picks(r)).toEqual([]);
+    expect(treePickWaiting()).toBe(true);
+  });
+
   it("a pick the screen does not count as a tool, as setting a view's face, is passed over and the step selects", async () => {
     const { r, run } = await opened();
-    const taker = vi.fn((pick: TreePick) => treePickRefusal(pick, "a model face, pick it in the view"));
+    const taker = vi.fn((pick: TreePick) => treePickRefusal(pick, "modelFlatFace"));
     awaitTreePick(taker, vi.fn());
     run("next-face");
     expect(taker).not.toHaveBeenCalled();

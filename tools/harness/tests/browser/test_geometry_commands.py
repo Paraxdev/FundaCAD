@@ -99,7 +99,7 @@ def test_an_open_sketch_stays_open_and_refuses_in_words(s):
 def test_a_waiting_plane_pick_survives_a_refused_command_and_browse(s):
     s.tool("Sketch")
     s.command("Next Edge")
-    heard(s, "Finish the tool first")
+    heard(s, "waiting for a pick")
     s.command("Browse Faces and Edges")
     expect(s.page.get_by_role("tab", name="Geometry")).to_have_attribute("aria-selected", "true")
     s.page.get_by_role("radio", name="Planes").click()

@@ -142,7 +142,7 @@ def test_a_canvas_pick_beside_the_console_keeps_its_own_reason():
     app = App()
     app.rows, app.modal = [[1, "action:clear", "button", "Clear", []]], False
     s = session(app)
-    with pytest.raises(Occluded, match='try s.view\("front"\)'):
+    with pytest.raises(Occluded, match=r'try s.view\("front"\)'):
         s.pick_face("front")
     s.close()
 

@@ -3,6 +3,7 @@
 // would set a key by reading the row. The keys are taken only inside the dialog the button opens.
 import { computed, nextTick, ref, useId, useTemplateRef } from "vue";
 import { comboKey, spokenKeys } from "../../input/platform";
+import { t } from "../../i18n";
 import { announce } from "../../ui/announce";
 import Button from "./Button.vue";
 import Dialog from "./Dialog.vue";
@@ -42,7 +43,11 @@ const listening = ref(false);
 const hintId = useId();
 const button = useTemplateRef<InstanceType<typeof Button>>("button");
 
-const name = computed(() => `${props.action}, shortcut ${props.keys ? spokenKeys(props.keys) : "not set"}, change`);
+const name = computed(() =>
+  props.keys
+    ? t("keyCapture.name", { action: props.action, keys: spokenKeys(props.keys) })
+    : t("keyCapture.nameUnset", { action: props.action }),
+);
 
 const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock", "OS", "Super", "Hyper", "Fn"]);
 // A dead key or an IME is still composing: the key that counts comes next.
@@ -58,7 +63,9 @@ async function finish(result: (() => void) | null) {
   if (!result) return;
   if (props.problem) announce(props.problem, "assertive");
   else {
-    const said = props.keys ? `${props.action} is now ${spokenKeys(props.keys)}` : `${props.action} has no shortcut`;
+    const said = props.keys
+      ? t("keyCapture.isNow", { action: props.action, keys: spokenKeys(props.keys) })
+      : t("keyCapture.none", { action: props.action });
     announce(said, "polite");
   }
 }
@@ -93,12 +100,12 @@ function onPadKey(e: KeyboardEvent) {
     @click="open = true"
   >
     <KeyChip v-if="keys" :keys="keys" in-title />
-    <template v-else>Not set</template>
+    <template v-else>{{ t("keyCapture.notSet") }}</template>
   </Button>
   <Dialog
     v-if="open"
     size="sm"
-    :title="`Shortcut for ${action}`"
+    :title="t('keyCapture.title', { action })"
     initial-focus=".key-capture-pad"
     @close="finish(null)"
   >
@@ -106,19 +113,21 @@ function onPadKey(e: KeyboardEvent) {
       class="key-capture-pad"
       role="application"
       tabindex="0"
-      :aria-label="`Press the new shortcut for ${action}`"
+      :aria-label="t('keyCapture.pad', { action })"
       :aria-describedby="hintId"
       @keydown="onPadKey"
       @focus="listening = true"
       @blur="listening = false"
     >
-      <span aria-hidden="true">{{ listening ? "Press the new keys" : "Click here, then press the new keys" }}</span>
-      <span v-if="keys" class="key-capture-now" aria-hidden="true">Now <KeyChip :keys="keys" in-title /></span>
+      <span aria-hidden="true">{{ listening ? t("keyCapture.listening") : t("keyCapture.idle") }}</span>
+      <span v-if="keys" class="key-capture-now" aria-hidden="true"
+        >{{ t("keyCapture.now") }} <KeyChip :keys="keys" in-title
+      /></span>
     </div>
-    <p :id="hintId" class="key-capture-hint">Escape cancels. Tab moves on to the buttons.</p>
+    <p :id="hintId" class="key-capture-hint">{{ t("keyCapture.hint") }}</p>
     <template #footer>
-      <Button v-if="clearable" variant="ghost" @click="finish(() => emit('clear'))">Clear</Button>
-      <Button @click="finish(null)">Cancel</Button>
+      <Button v-if="clearable" variant="ghost" @click="finish(() => emit('clear'))">{{ t("keyCapture.clear") }}</Button>
+      <Button @click="finish(null)">{{ t("keyCapture.cancel") }}</Button>
     </template>
   </Dialog>
 </template>

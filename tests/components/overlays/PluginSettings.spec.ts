@@ -11,6 +11,7 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { definePluginSettings, type PluginSettings } from "../../../src/plugins/settings";
 import { pluginFocus } from "../../../src/plugins/settingsFocus";
 import { setUnit } from "../../../src/ui/units";
+import { setLanguage } from "../../../src/i18n";
 import { announce } from "../../../src/ui/announce";
 
 vi.mock("../../../src/ui/announce", async (actual) => ({
@@ -529,5 +530,83 @@ describe("each kind of schema field", () => {
     expect(reset.classes()).not.toContain("hidden");
     await reset.trigger("click");
     expect(k.get("name")).toBe("a");
+  });
+});
+
+describe("number settings in a comma language", () => {
+  let k: PluginSettings;
+
+  beforeEach(async () => {
+    await setLanguage("de");
+    k = definePluginSettings("Test.Comma", {
+      version: 1,
+      props: [
+        { key: "pitch", type: "number", label: "Pitch", unit: "length", default: 12.375, min: 0, max: 100, step: 5 },
+        { key: "layer", type: "number", label: "Layer", unit: "length", default: 0.2, min: 0.02, max: 1, step: 0.05 },
+        { key: "plies", type: "number", label: "Plies", unit: "layers", default: 6.5, max: 9.5, step: 0.5 },
+      ],
+    });
+    contribute("Test.Comma", { settings: [{ key: "s", settings: k }] });
+  });
+
+  afterEach(async () => {
+    setUnit("mm");
+    await setLanguage("system");
+  });
+
+  const field = async (key: string) => {
+    const w = mount(PluginsSection, { attachTo: document.body });
+    const row = (await expand(w, "Test.Comma")).get(`[data-setting="${key}"]`);
+    return { row, input: row.get("input"), el: row.get("input").element as HTMLInputElement };
+  };
+  const type = async (input: Awaited<ReturnType<typeof field>>["input"], text: string) => {
+    await input.setValue(text);
+    await input.trigger("keydown", { key: "Enter" });
+  };
+
+  it("shows each value with a comma and steps from it", async () => {
+    const pitch = await field("pitch");
+    expect(pitch.el.value).toBe("12,375");
+    await pitch.input.trigger("keydown", { key: "ArrowUp" });
+    await pitch.input.trigger("keydown", { key: "Enter" });
+    expect(k.get("pitch")).toBe(17.375);
+    const plies = await field("plies");
+    expect(plies.el.value).toBe("6,5");
+    await plies.input.trigger("keydown", { key: "ArrowDown" });
+    await plies.input.trigger("keydown", { key: "Enter" });
+    expect(k.get("plies")).toBe(6);
+  });
+
+  it("reads a limit typed back as shown as that exact value, in millimetres", async () => {
+    const layer = await field("layer");
+    await type(layer.input, "0,02");
+    expect(k.get("layer")).toBe(0.02);
+    await type(layer.input, "1");
+    expect(k.get("layer")).toBe(1);
+    await type(layer.input, "0,33");
+    expect(k.get("layer")).toBe(0.33);
+  });
+
+  it("reads a limit typed back as shown as that exact value, in inches, with a comma or a point", async () => {
+    setUnit("in");
+    const pitch = await field("pitch");
+    expect(pitch.el.value).toBe("0,487");
+    await type(pitch.input, "3,94");
+    expect(k.get("pitch")).toBe(100);
+    await type(pitch.input, "1,5");
+    expect(k.get("pitch")).toBeCloseTo(38.1, 9);
+    await type(pitch.input, "3.94");
+    expect(k.get("pitch")).toBe(100);
+    const layer = await field("layer");
+    expect(layer.el.value).toBe("0,00787");
+    await type(layer.input, "0,000787");
+    expect(k.get("layer")).toBe(0.02);
+  });
+
+  it("refuses a value past a limit and names the limit with a comma", async () => {
+    const plies = await field("plies");
+    await type(plies.input, "9,6");
+    expect(k.get("plies")).toBe(6.5);
+    expect(plies.input.attributes("title") ?? plies.row.text()).toMatch(/9,5/);
   });
 });

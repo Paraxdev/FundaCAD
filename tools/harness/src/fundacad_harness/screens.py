@@ -39,24 +39,42 @@ def again(s: Session, step) -> None:
         step()
 
 
+# The dialog and its tabs are found by class and tab id, so they open in whichever language the app shows.
+PREFS_DIALOG = ".prefs-panel[role=dialog]"
+SETTINGS_TABS = {
+    "Appearance": "appearance",
+    "Viewport": "viewport",
+    "Navigation": "navigation",
+    "Accessibility": "access",
+    "Updates": "updates",
+    "AI assistants": "mcp",
+    "Plugins": "plugins",
+    "Experimental": "experimental",
+}
+
+
+def settings_tab(s: Session, category: str):
+    return s.page.locator(f'{PREFS_DIALOG} [role=tab][data-tab="{SETTINGS_TABS.get(category, category)}"]')
+
+
 def open_settings(s: Session, category: str) -> None:
     again(s, lambda: s.panel("settings"))
-    s.page.get_by_role("dialog", name="Preferences").wait_for()
-    s.page.get_by_role("tab", name=category, exact=True).click()
+    s.page.locator(PREFS_DIALOG).wait_for()
+    settings_tab(s, category).click()
 
 
 def set_theme(s: Session, theme: str) -> None:
     """Picks the theme through Settings and leaves it open on the Accessibility pane."""
     open_settings(s, "Appearance")
     pick(s, "#prefs-theme", THEMES[theme])
-    s.page.get_by_role("tab", name="Accessibility", exact=True).click()
+    settings_tab(s, "Accessibility").click()
     settled(s)
 
 
 def close_settings(s: Session) -> None:
     # Escape, as the Close button can stay unstable past the click wait while an example rebuilds in SwiftShader.
     s.page.keyboard.press("Escape")
-    s.page.get_by_role("dialog", name="Preferences").wait_for(state="hidden")
+    s.page.locator(PREFS_DIALOG).wait_for(state="hidden")
     s.settle()
     settled(s)
 

@@ -4,6 +4,8 @@ import { fmtKeys } from "../../input/platform";
 import { useDisabled } from "./useDisabled";
 import { useName, type Named } from "./useName";
 import { announce } from "../../ui/announce";
+import { spellNumber } from "../../ui/measure";
+import { decimalMark } from "../../i18n";
 
 defineOptions({ inheritAttrs: false });
 
@@ -54,11 +56,17 @@ const fill = computed(() => {
   const span = hi.value - lo.value;
   return span > 0 ? `${((Math.min(Math.max(shown.value, lo.value), hi.value) - lo.value) / span) * 100}%` : "0%";
 });
-const readoutOf = (v: number) => (!props.unit ? String(v) : props.unit === "%" ? `${v}%` : `${v} ${props.unit}`);
+const readoutOf = (v: number) => {
+  const n = spellNumber(v);
+  return !props.unit ? n : props.unit === "%" ? `${n}%` : `${n} ${props.unit}`;
+};
 const readout = computed(() => readoutOf(shown.value));
 const spokenOf = (v: number) =>
   typeof props.valueText === "function" ? props.valueText(v) : (props.valueText ?? readoutOf(v));
-const valueText = computed(() => (props.valueText !== undefined || props.unit ? spokenOf(shown.value) : undefined));
+// The native range reports its value with a point, so a comma mark has to say the readout itself.
+const valueText = computed(() =>
+  props.valueText !== undefined || props.unit || decimalMark() === "," ? spokenOf(shown.value) : undefined,
+);
 
 const decimals = computed(() => (String(inc.value).split(".")[1] ?? "").length);
 function snap(v: number) {

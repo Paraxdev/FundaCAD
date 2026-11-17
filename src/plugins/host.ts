@@ -81,7 +81,8 @@ export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } fr
 export { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME } from "../features/moveTarget";
 export type { Frame, MoveCommit, MoveHandleSet, MoveResult, MoveTarget } from "../features/moveTarget";
 
-export { toast } from "../ui/toast";
+/** `toast` returns the id `dismissToast` takes, so a plugin takes down only a toast of its own. */
+export { dismissToast, toast } from "../ui/toast";
 /** Speaks a line through the app's live regions for a screen reader, polite unless it is a failure. */
 export { announce } from "../ui/announce";
 /** The line under the viewport that says what a running tool wants next. A plugin tool that takes over the pick needs
@@ -114,10 +115,26 @@ export function openPluginSettings(pluginId: string) {
 }
 export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from "./settings";
 
+/** A translator bound to the plugin's own language files, English when a line is missing. */
+export { pluginText } from "../i18n";
+export type { PluginText } from "../i18n";
+
 /** The app's display precision rule, so a plugin's readout rounds a length like every other panel. */
 export { roundForDisplay as displayRound } from "../ui/measure";
 /** Number boxes read through the app's measure grammar (units, fractions, arithmetic, decimal comma). */
 export { fieldNumber, fieldError, readAs } from "../ui/measure";
+/** A box that takes only a plain number reads it by the language's decimal rules, null for anything else. */
+export { plainNumber } from "../ui/units";
+/** A rounded number as a value box shows it, with the language's decimal mark. */
+export { spellRounded as numberText } from "../ui/measure";
+/** A number or a fixed decimal count spelled with the language's decimal mark, and a list of numbers joined so the
+ *  mark still reads. */
+export { spellNumber, spellFixed, listJoin } from "../ui/measure";
+/** "," in a language that writes a decimal comma, where a list of numbers is split at ";" as listJoin joins it. */
+export { decimalMark } from "../i18n";
+/** Typed expression text with a decimal comma as the point text the document stores, the reason it refuses one, and
+ *  the way back. */
+export { storedExpr, typedExprProblem, shownExpr } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 

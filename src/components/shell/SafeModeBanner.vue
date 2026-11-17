@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { leaveSafeMode, safeMode, safeModeLeaveNote, safeModeWhy } from "../../ui/safeMode";
+import { t } from "../../i18n";
+import { leaveSafeMode, safeMode, safeModeLeaveNote, safeModeReason } from "../../ui/safeMode";
 import { openReportDialog } from "../../ui/bugReporter";
 import Button from "../ui/Button.vue";
 
@@ -15,7 +16,7 @@ async function restart() {
     await leaveSafeMode();
   } catch (e) {
     leaving.value = false;
-    failed.value = `Could not restart: ${String(e)}`;
+    failed.value = String(e);
   }
 }
 </script>
@@ -23,14 +24,12 @@ async function restart() {
 <template>
   <div v-if="info" id="safe-mode-banner" role="alert">
     <div class="text">
-      <strong>FundaCAD started in safe mode</strong> because {{ safeModeWhy(info) }}. Plugins, saved preferences and
-      work recovery are off for this session, and nothing saved was changed. Preferences changed now are forgotten when
-      it closes.
+      <strong>{{ t("safeMode.banner.title") }}</strong> {{ safeModeReason(info) }} {{ t("safeMode.banner.off") }}
       <template v-if="safeModeLeaveNote(info)"> {{ safeModeLeaveNote(info) }}</template>
-      <span v-if="failed" class="failed">{{ failed }}</span>
+      <span v-if="failed !== null" class="failed">{{ t("safeMode.banner.restartFailed", { error: failed }) }}</span>
     </div>
-    <Button :disabled="leaving" @click="restart">Restart normally</Button>
-    <Button class="safe-report" @click="openReportDialog()">Report a problem</Button>
+    <Button :disabled="leaving" @click="restart">{{ t("safeMode.banner.restart") }}</Button>
+    <Button class="safe-report" @click="openReportDialog()">{{ t("safeMode.banner.report") }}</Button>
   </div>
 </template>
 

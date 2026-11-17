@@ -17,7 +17,14 @@ const props = withDefaults(
   defineProps<
     {
       modelValue: T;
-      options: readonly { value: T; label: string; hint?: string | undefined; disabled?: boolean | undefined }[];
+      options: readonly {
+        value: T;
+        label: string;
+        hint?: string | undefined;
+        disabled?: boolean | undefined;
+        lang?: string | undefined;
+        parts?: readonly { text: string; lang?: string | undefined }[] | undefined;
+      }[];
       id?: string | undefined;
       testid?: string | undefined;
       disabled?: boolean | undefined;
@@ -217,7 +224,12 @@ onBeforeUnmount(() => window.clearTimeout(bufferTimer));
     @keydown="onKeydown"
     @keyup="onKeyup"
   >
-    <span :id="valueId" class="select-value">{{ shown }}</span>
+    <span :id="valueId" class="select-value" :lang="options[selected]?.lang">
+      <template v-if="options[selected]?.parts">
+        <span v-for="(p, j) in options[selected]!.parts" :key="j" :lang="p.lang">{{ p.text }}</span>
+      </template>
+      <template v-else>{{ shown }}</template>
+    </span>
     <Icon v-if="variant !== 'chip'" class="select-caret" name="caretRight" :size="10" />
   </button>
 

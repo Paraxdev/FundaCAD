@@ -28,6 +28,7 @@ import {
 } from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
+import { setLanguage } from "../../../src/i18n";
 import { DocumentStore } from "../../../src/document/store";
 import { createDocBridge } from "../../../src/app/docBridge";
 import type { GeometryBackend } from "../../../src/geometry/client";
@@ -176,6 +177,14 @@ async function flip(w: VueWrapper, label: string) {
   await row.find("[role=switch]").trigger("click");
 }
 
+/** Commit `text` into the value row of `field`, whatever language its label is in. */
+async function commitTo(w: VueWrapper, field: string, text: string) {
+  const input = w.find<HTMLInputElement>(`.param-row[data-field="${field}"] input`);
+  input.element.value = text;
+  await input.trigger("input");
+  await input.trigger("keydown", { key: "Enter" });
+}
+
 /** Commit `text` into the row whose label starts with `label`. */
 async function commit(w: VueWrapper, label: string, text: string) {
   const row = w.findAll(".param-row").find((r) => r.find("label").text().startsWith(label))!;
@@ -232,6 +241,14 @@ describe("FeatureProperties", () => {
       ["Radius", "mm", "2"],
       ["Profile", "", "0.5"],
     ]);
+  });
+
+  it("reads Profile 0 on a plain Round fillet, which leaves the field out", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "f1", type: "fillet", radius: 2 } as unknown as Feature],
+    });
+    expect(rows(render(fake, "f1")).find(([label]) => label === "Profile")).toEqual(["Profile", "", "0"]);
   });
 
   it("writes a sketch dimension back through the ONE entity it belongs to", async () => {
@@ -454,6 +471,21 @@ describe("FeatureProperties", () => {
       ],
     });
     expect(rows(render(fake, "f1"))).toContainEqual(["Edges", "", "2 edges"]);
+  });
+
+  it("says a chamfer on every edge covers every edge, where the one selector read as 1 edge", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [
+        {
+          id: "c1",
+          type: "chamfer",
+          distance: 1,
+          edges: { kind: "edge", by: "all", body: "body1" },
+        } as unknown as Feature,
+      ],
+    });
+    expect(rows(render(fake, "c1"))).toContainEqual(["Edges", "", "every edge"]);
   });
 
   it("opens the selection editor from Edit, and refuses a second one while it is open on this row", async () => {
@@ -765,27 +797,71 @@ describe("FeatureProperties expressions through NumberField", () => {
     setTargetExpr: (t: { field: string }, raw: string) => string | null;
   };
   const storeOf = (fake: ReturnType<typeof makeEngine>) => fake.engine.store as unknown as FakeStore;
-  const field = (w: VueWrapper, label: string) =>
-    w.findAll(".param-row").find((r) => r.find("label").text().startsWith(label))!;
+  // By the field, not the label: these cases run in German.
+  const field = (w: VueWrapper, name: string) => w.find<HTMLElement>(`.param-row[data-field="${name}"]`);
 
   it.each([["width"], ["width/2"], ["20+5"], ["d=20"], ["w * 2 + 1"]])(
     "hands %j to the parameter engine as typed",
     async (raw) => {
       const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
-      await commit(render(fake, "e1"), "Distance", raw);
+      await commitTo(render(fake, "e1"), "distance", raw);
       expect(fake.exprs).toEqual([{ field: "distance", raw }]);
       expect(fake.values).toEqual([]);
     },
   );
 
+  it.each([
+    ["width*1,5", "width*1.5"],
+    ["w = width/1,5 + 0,25", "w = width/1.5 + 0.25"],
+    ["max(1,5; width)", "max(1.5; width)"],
+    ["width*1,5 - 2,25*gap", "width*1.5 - 2.25*gap"],
+    ["breite * 1,5", "breite * 1.5"],
+    ["breite * 0.250", "breite * 0.250"],
+  ])("in German hands %j to the parameter engine as %j", async (raw, stored) => {
+    await setLanguage("de");
+    try {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      await commitTo(render(fake, "e1"), "distance", raw);
+      expect(fake.exprs).toEqual([{ field: "distance", raw: stored }]);
+      expect(fake.values).toEqual([]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it.each([
+    ["breite * 1.500", "1.500"],
+    ["1.500", "1.500"],
+    ["-12.000", "12.000"],
+  ])("in German refuses %j as ambiguous under the row and hands the engine nothing", async (raw, num) => {
+    await setLanguage("de");
+    try {
+      const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+      const w = render(fake, "e1");
+      await commitTo(w, "distance", raw);
+      expect([fake.exprs, fake.values]).toEqual([[], []]);
+      expect(field(w, "distance").find(".param-problem").text()).toBe(
+        `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+      );
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("keeps a comma as typed in English, for the tokenizer to refuse", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    await commitTo(render(fake, "e1"), "distance", "width*1,5; gap");
+    expect(fake.exprs).toEqual([{ field: "distance", raw: "width*1,5; gap" }]);
+  });
+
   it("keeps an expression the parameter engine refuses, and says why under the row", async () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
     storeOf(fake).setTargetExpr = () => 'unknown parameter "widht"';
     const w = render(fake, "e1");
-    await commit(w, "Distance", "widht/2");
-    const input = field(w, "Distance").find("input");
+    await commitTo(w, "distance", "widht/2");
+    const input = field(w, "distance").find("input");
     expect([(input.element as HTMLInputElement).value, input.attributes("aria-invalid")]).toEqual(["widht/2", "true"]);
-    expect(field(w, "Distance").find(".param-problem").text()).toBe('unknown parameter "widht"');
+    expect(field(w, "distance").find(".param-problem").text()).toBe('unknown parameter "widht"');
   });
 
   it("follows the expression once the queued commit lands, though the field is still focused", async () => {
@@ -796,15 +872,15 @@ describe("FeatureProperties expressions through NumberField", () => {
       global: { provide: { [ENGINE as symbol]: fake.engine } },
       attachTo: document.body,
     });
-    const input = field(w, "Distance").find("input");
+    const input = field(w, "distance").find("input");
     (input.element as HTMLInputElement).focus();
-    await commit(w, "Distance", "width/2");
+    await commitTo(w, "distance", "width/2");
     storeOf(fake).boundExpr = () => ({ name: "d1", expr: "width/2", value: 20 });
     storeOf(fake).isParamBound = () => true;
     fake.engine.bridge.docVersion.value++;
     await w.vm.$nextTick();
     expect([(input.element as HTMLInputElement).value, document.activeElement]).toEqual(["width/2", input.element]);
-    expect(field(w, "Distance").classes()).toContain("fx-row");
+    expect(field(w, "distance").classes()).toContain("fx-row");
     w.unmount();
   });
 
@@ -813,7 +889,7 @@ describe("FeatureProperties expressions through NumberField", () => {
     storeOf(fake).boundExpr = () => ({ name: "d1", expr: "w/4", value: 10 });
     storeOf(fake).isParamBound = () => true;
     const w = render(fake, "e1");
-    const row = field(w, "Distance");
+    const row = field(w, "distance");
     expect(row.classes()).toContain("fx-row");
     expect((row.find("input").element as HTMLInputElement).value).toBe("w/4");
     const chip = row.find(".ui-unit-chip");
@@ -823,8 +899,29 @@ describe("FeatureProperties expressions through NumberField", () => {
       "Expressions are written in this unit",
     ]);
     // The same number the expression yields still replaces the expression: the user typed a literal.
-    await commit(w, "Distance", "10");
+    await commitTo(w, "distance", "10");
     expect(fake.values).toEqual([{ field: "distance", value: 10 }]);
+  });
+
+  it("shows a bound expression and its title with the language's decimal mark, and back", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    storeOf(fake).boundExpr = () => ({ name: "d1", expr: "max(width*1.5;2.25)", value: 12.375 });
+    storeOf(fake).isParamBound = () => true;
+    const w = render(fake, "e1");
+    const shown = () => {
+      const row = field(w, "distance");
+      return [(row.find("input").element as HTMLInputElement).value, row.attributes("title")];
+    };
+    expect(shown()).toEqual(["max(width*1.5;2.25)", "d1 = max(width*1.5;2.25) = 12.375"]);
+    try {
+      await setLanguage("de");
+      await w.vm.$nextTick();
+      expect(shown()).toEqual(["max(width*1,5;2,25)", "d1 = max(width*1,5;2,25) = 12,375"]);
+    } finally {
+      await setLanguage("system");
+    }
+    await w.vm.$nextTick();
+    expect(shown()).toEqual(["max(width*1.5;2.25)", "d1 = max(width*1.5;2.25) = 12.375"]);
   });
 
   it("reads a fraction in the row's unit, as one value and not arithmetic", async () => {
@@ -833,8 +930,8 @@ describe("FeatureProperties expressions through NumberField", () => {
       props: { featureId: "e1", unit: "in" },
       global: { provide: { [ENGINE as symbol]: fake.engine } },
     });
-    await commit(w, "Distance", "1/2");
-    await commit(w, "Distance", "1 1/2");
+    await commitTo(w, "distance", "1/2");
+    await commitTo(w, "distance", "1 1/2");
     expect(fake.values.map((v) => Math.round(v.value * 1e9) / 1e9)).toEqual([12.7, 38.1]);
     expect(fake.exprs).toEqual([]);
   });
@@ -842,27 +939,27 @@ describe("FeatureProperties expressions through NumberField", () => {
   it("changes a row's unit from the chip and shows the value in it", async () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
     const w = render(fake, "e1");
-    const row = field(w, "Distance");
+    const row = field(w, "distance");
     const chip = selectIn(w, row);
     chip.vm.$emit("update:modelValue", "in");
     await w.vm.$nextTick();
-    expect(field(w, "Distance").find(".ui-unit-chip").text()).toBe("in");
-    expect((field(w, "Distance").find("input").element as HTMLInputElement).value).toBe("0.394");
+    expect(field(w, "distance").find(".ui-unit-chip").text()).toBe("in");
+    expect((field(w, "distance").find("input").element as HTMLInputElement).value).toBe("0.394");
   });
 
   it("offers the units the field's kind can take, by chip", () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
-    const chip = field(render(fake, "e1"), "Distance").find(".ui-unit-chip");
+    const chip = field(render(fake, "e1"), "distance").find(".ui-unit-chip");
     expect([chip.attributes("role"), chip.attributes("title")]).toEqual(["combobox", "Change unit"]);
   });
 
   it("puts a refused row's text back on Escape, and its error goes with it", async () => {
     const fake = makeEngine({ parameters: {}, features: [FILLET_ROW()] });
     const w = render(fake, "f1");
-    await commit(w, "Radius", "-2");
-    const input = field(w, "Radius").find("input");
+    await commitTo(w, "radius", "-2");
+    const input = field(w, "radius").find("input");
     await input.trigger("keydown", { key: "Escape" });
-    expect([(input.element as HTMLInputElement).value, field(w, "Radius").find(".param-problem").exists()]).toEqual([
+    expect([(input.element as HTMLInputElement).value, field(w, "radius").find(".param-problem").exists()]).toEqual([
       "2",
       false,
     ]);

@@ -4,11 +4,13 @@
 mod common;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use common::FakeEngine;
 use fundacad_mcp::server::FundaCad;
-use serde_json::json;
+use serde_json::{json, Value};
 
 /// `FUNDACAD_SESSION_FILE` and `FUNDACAD_MCP_MODE` are the process's, so these
 /// run one at a time.
@@ -47,16 +49,37 @@ impl Drop for Session {
     }
 }
 
-/// The document a window has open, and an engine that shares it.
+/// The document a window has open, as the engine reports it shared.
+fn shared() -> Value {
+    json!({
+        "attached": true, "revision": 7, "title": "the user's part",
+        "status": {"canEdit": true, "applied": []},
+        "document": {"features": [{"id": "f1", "type": "sketch"}], "parameters": {}}})
+}
+
 fn sharing_engine() -> FakeEngine {
     FakeEngine::start(|op, _req| match op {
         "ping" => json!({"ok": true, "result": {"pong": true}}),
-        "session_state" => json!({"ok": true, "result": {
-            "attached": true, "revision": 7, "title": "the user's part",
-            "status": {"canEdit": true, "applied": []},
-            "document": {"features": [{"id": "f1", "type": "sketch"}], "parameters": {}}}}),
+        "session_state" => json!({"ok": true, "result": shared()}),
         _ => json!({"ok": true, "result": {}}),
     })
+}
+
+/// An app whose window is still loading its page for the first `loading` state reads, then reads as `then`.
+fn starting_engine(loading: usize, then: Value) -> FakeEngine {
+    let reads = Arc::new(AtomicUsize::new(0));
+    FakeEngine::start(move |op, _req| match op {
+        "ping" => json!({"ok": true, "result": {"pong": true}}),
+        "session_state" if reads.fetch_add(1, Ordering::SeqCst) < loading => {
+            json!({"ok": true, "result": {"attached": false, "starting": true}})
+        }
+        "session_state" => json!({"ok": true, "result": then}),
+        _ => json!({"ok": true, "result": {}}),
+    })
+}
+
+fn state_reads(engine: &FakeEngine) -> usize {
+    engine.ops().iter().filter(|o| *o == "session_state").count()
 }
 
 /// The app's engine, with live editing turned off in the window's settings.
@@ -90,6 +113,31 @@ async fn the_app_opening_later_is_noticed() {
     let doc = srv.document().await;
     assert_eq!(doc["features"][0]["id"], json!("f1"), "{doc:?}");
     assert_eq!(srv.engine_port().await, app.port);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_app_still_loading_its_window_is_waited_for_and_adopted() {
+    // Staying private would put the first edit in a copy the window never sees, and that edit stops the re-probe.
+    let _serial = serial();
+    let app = starting_engine(3, shared());
+    let _session = Session::published(&app);
+    let (srv, _private) = fresh();
+    srv.probe_for_the_app().await;
+    assert!(srv.is_live().await, "stayed private while the window loaded");
+    assert_eq!(srv.document().await["features"][0]["id"], json!("f1"));
+    assert_eq!(state_reads(&app), 4);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_app_that_finishes_starting_without_sharing_leaves_the_session_private() {
+    let _serial = serial();
+    let app = starting_engine(2, json!({"attached": false, "starting": false}));
+    let _session = Session::published(&app);
+    let (srv, private) = fresh();
+    srv.probe_for_the_app().await;
+    assert!(!srv.is_live().await, "adopted a window that shares nothing");
+    assert_eq!(srv.engine_port().await, private.port);
+    assert_eq!(state_reads(&app), 3, "{:?}", app.ops());
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -32,6 +32,8 @@ export interface StepState extends Resolution {
   step: number;
   of: number;
   caption: string;
+  /** The same step for keys alone, in words, when the assistant gave it. */
+  keys?: string | undefined;
   target: GuideTarget;
   /** Next was pressed on this step. */
   next: boolean;
@@ -163,7 +165,16 @@ export class GuideSession {
     const res = this.resolve(target);
     this.s = {
       ...this.s,
-      step: { seq, step: num(c.step, 1), of: num(c.of, 1), caption: str(c.caption) ?? "", target, next: false, ...res },
+      step: {
+        seq,
+        step: num(c.step, 1),
+        of: num(c.of, 1),
+        caption: str(c.caption) ?? "",
+        keys: str(c.keys)?.trim() || undefined,
+        target,
+        next: false,
+        ...res,
+      },
     };
   }
 

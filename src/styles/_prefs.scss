@@ -73,6 +73,8 @@
   min-width: 0;
   overflow-y: auto;
   padding: var(--s-5);
+  // A control scrolled into view, by Tab or a screen reader, keeps its grown hit area and focus ring clear of the edge.
+  scroll-padding-block: var(--s-2);
 }
 .prefs-pane-title {
   margin: 0 0 var(--s-4);
@@ -144,8 +146,16 @@ label.pref-head {
   line-height: 1.5;
   color: var(--text);
 }
-[data-prefs-experimental] .prefs-actions {
-  margin-top: var(--s-4);
+.prefs-x-locked {
+  margin-bottom: var(--s-4);
+}
+/* A changed mark sits beside its title and wraps under it before it pushes the control out of the card. */
+.pref-title-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  min-width: 0;
 }
 .pref-number {
   display: inline-flex;
@@ -190,8 +200,12 @@ label.pref-head {
 
 /* An empty upload error stays in the tree, so its alert role is live before the text lands, but out of the card's gap. */
 .pref-card > .prefs-theme-error:empty,
-.pref-card > .prefs-theme-warning:empty {
+.pref-card > .prefs-theme-warning:empty,
+.pref-card > .prefs-language-status:empty {
   position: absolute;
+}
+.prefs-language-skipped {
+  padding-left: var(--s-4);
 }
 
 .prefs-a11y-actions {
@@ -216,6 +230,16 @@ label.pref-head {
   font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text-dim);
+}
+.prefs-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.prefs-group-head .prefs-group-title {
+  margin: 0;
 }
 
 /* Sections with their own rows (assistants, plugins), sized like the cards around them. */
@@ -335,14 +359,17 @@ label.pref-head {
 .sc-problem {
   display: flex;
   flex: 1 1 100%;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-1) var(--s-3);
   border-left: 2px solid var(--accent);
   color: var(--text);
 }
-.sc-problem span {
-  flex: 1;
+.sc-problem > span {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 640px) {

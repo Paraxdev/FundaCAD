@@ -2,14 +2,18 @@
 // wait is open, none after: a wait used to start a second loop from inside the
 // first, so callbacks doubled every frame until the window crashed.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import * as THREE from "three";
 import GuideLayer from "../../../src/components/overlays/GuideLayer.vue";
 import { ENGINE } from "../../../src/app/engineKey";
+import { setLanguage } from "../../../src/i18n";
 import type { Engine } from "../../../src/app/engine";
 import { GuideSession } from "../../../src/ui/guide/guideSession";
 import { emptySnapshot, type Snapshot } from "../../../src/ui/guide/wait";
+import { announce } from "../../../src/ui/announce";
+
+vi.mock(import("../../../src/ui/announce"), async (orig) => ({ ...(await orig()), announce: vi.fn() }));
 
 enableAutoUnmount(afterEach);
 
@@ -19,6 +23,7 @@ const realRaf = globalThis.requestAnimationFrame;
 const realCaf = globalThis.cancelAnimationFrame;
 
 beforeEach(() => {
+  vi.mocked(announce).mockClear();
   queue = new Map();
   globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
     const id = nextId++;
@@ -197,5 +202,113 @@ describe("GuideLayer bubble", () => {
     next.click();
     await tick();
     expect(document.querySelector(".guide-bubble")).toBeNull();
+  });
+
+  it("shows a step's keys under its caption, labelled in the user's language, and nothing for a step without", async () => {
+    const g = setup();
+    const keysText = () => document.querySelector("[data-guide-keys]")?.textContent?.replace(/\s+/g, " ").trim();
+    g.guide.apply([
+      { kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Here", keys: "press F6" },
+    ]);
+    await tick();
+    expect(document.querySelector(".guide-caption")!.nextElementSibling).toBe(
+      document.querySelector("[data-guide-keys]"),
+    );
+    expect(keysText()).toBe("With keys: press F6");
+
+    try {
+      await setLanguage("de");
+      g.guide.apply([
+        { kind: "highlight", seq: 2, target: { ui: "guide-spec-target" }, caption: "Hier", keys: "F6 drücken" },
+      ]);
+      await tick();
+      expect(keysText()).toBe("Mit Tasten: F6 drücken");
+    } finally {
+      await setLanguage("system");
+    }
+
+    g.guide.apply([{ kind: "highlight", seq: 3, target: { ui: "guide-spec-target" }, caption: "There" }]);
+    await tick();
+    expect(document.querySelector(".guide-caption")!.textContent).toBe("There");
+    expect(document.querySelector("[data-guide-keys]")).toBeNull();
+  });
+});
+
+describe("GuideLayer speech", () => {
+  const said = () => vi.mocked(announce).mock.calls;
+  const at = { ui: "guide-spec-target" };
+
+  it("says a new step once with its counter, caption and keys, through announce and not a live bubble", async () => {
+    const g = setup();
+    g.guide.apply([
+      { kind: "highlight", seq: 1, step: 1, of: 2, target: at, caption: "Pick the edge", keys: "press F6" },
+      { kind: "wait", seq: 2, until: "tool" },
+    ]);
+    await tick();
+    for (let i = 0; i < 5; i++) frame();
+    g.setTool("Fillet / Chamfer");
+    frame();
+    await tick();
+    expect(said()).toEqual([["Step 1 of 2. Pick the edge. With keys: press F6", "polite", { key: "guide" }]]);
+    expect(document.querySelector(".guide-bubble")!.hasAttribute("aria-live")).toBe(false);
+  });
+
+  it("says a step without keys as its caption alone, nothing on Next, and the next step when it comes", async () => {
+    const g = setup();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: at, caption: "Here" }]);
+    await tick();
+    g.guide.next();
+    await tick();
+    g.guide.apply([{ kind: "highlight", seq: 2, step: 2, of: 2, target: at, caption: "Now there." }]);
+    await tick();
+    expect(said().map((c) => c[0])).toEqual(["Guide. Here.", "Step 2 of 2. Now there."]);
+  });
+
+  it("says the first step again when a new guide starts its count over", async () => {
+    const g = setup();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: at, caption: "Here" }]);
+    g.guide.reset();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: at, caption: "Again" }]);
+    await tick();
+    expect(said().map((c) => c[0])).toEqual(["Guide. Here.", "Guide. Again."]);
+  });
+
+  it("shows and says the counter and the buttons in the user's language", async () => {
+    const g = setup();
+    const text = (sel: string) => document.querySelector(sel)!.textContent!.trim();
+    try {
+      await setLanguage("de");
+      g.guide.apply([{ kind: "highlight", seq: 1, step: 1, of: 2, target: at, caption: "Hier", keys: "F6 drücken" }]);
+      await tick();
+      expect([text(".guide-count"), text("#guide-stop"), text("#guide-next")]).toEqual([
+        "Schritt 1 von 2",
+        "Beenden",
+        "Weiter",
+      ]);
+      expect(document.querySelector(".guide-bubble")!.getAttribute("aria-label")).toBe("Schritt 1 von 2");
+      g.guide.apply([{ kind: "highlight", seq: 2, target: at, caption: "Fertig." }]);
+      await tick();
+      expect(said().map((c) => c[0])).toEqual(["Schritt 1 von 2. Hier. Mit Tasten: F6 drücken", "Anleitung. Fertig."]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("ends a Chinese or Japanese sentence with a full stop of its own script, and the Japanese counter has no slash", async () => {
+    const g = setup();
+    try {
+      await setLanguage("zh-CN");
+      g.guide.apply([{ kind: "highlight", seq: 1, step: 1, of: 3, target: at, caption: "选择这条边" }]);
+      await tick();
+      await setLanguage("ja");
+      g.guide.apply([{ kind: "highlight", seq: 2, step: 2, of: 3, target: at, caption: "ここをクリック" }]);
+      await tick();
+      expect(said().map((c) => c[0])).toEqual([
+        "第 1 步，共 3 步。 选择这条边。",
+        "ステップ 2（全 3）。 ここをクリック。",
+      ]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 });

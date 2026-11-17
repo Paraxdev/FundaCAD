@@ -1,0 +1,761 @@
+{
+  "boolean": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "union",
+      "title": null,
+      "options": [
+        [
+          "union",
+          "Union"
+        ],
+        [
+          "subtract",
+          "Subtract"
+        ],
+        [
+          "intersect",
+          "Intersect"
+        ]
+      ]
+    }
+  ],
+  "extrude": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "new",
+      "title": null,
+      "options": [
+        [
+          "new",
+          "New body"
+        ],
+        [
+          "join",
+          "Join"
+        ],
+        [
+          "cut",
+          "Cut"
+        ],
+        [
+          "intersect",
+          "Intersect"
+        ]
+      ]
+    },
+    {
+      "field": "startType",
+      "label": "Start",
+      "fallback": "sketch",
+      "title": null,
+      "options": [
+        [
+          "sketch",
+          "Sketch plane"
+        ],
+        [
+          "offset",
+          "Offset"
+        ],
+        [
+          "face",
+          "Face"
+        ],
+        [
+          "plane",
+          "Plane"
+        ],
+        [
+          "point",
+          "Point"
+        ]
+      ]
+    },
+    {
+      "field": "startPlane",
+      "label": "Start plane",
+      "fallback": "XY",
+      "title": null,
+      "options": [
+        [
+          "XY",
+          "XY"
+        ],
+        [
+          "XZ",
+          "XZ"
+        ],
+        [
+          "YZ",
+          "YZ"
+        ]
+      ]
+    },
+    {
+      "field": "startPoint",
+      "label": "Start point",
+      "fallback": "",
+      "title": null,
+      "options": []
+    },
+    {
+      "field": "endType",
+      "label": "End",
+      "fallback": "distance",
+      "title": "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short",
+      "options": [
+        [
+          "distance",
+          "Distance"
+        ],
+        [
+          "upToFace",
+          "Up to face"
+        ],
+        [
+          "upToPlane",
+          "Up to plane"
+        ],
+        [
+          "upToPoint",
+          "Up to point"
+        ],
+        [
+          "throughAll",
+          "Through all"
+        ]
+      ]
+    },
+    {
+      "field": "upToPlane",
+      "label": "Up to plane",
+      "fallback": "XY",
+      "title": null,
+      "options": [
+        [
+          "XY",
+          "XY"
+        ],
+        [
+          "XZ",
+          "XZ"
+        ],
+        [
+          "YZ",
+          "YZ"
+        ]
+      ]
+    },
+    {
+      "field": "upToPoint",
+      "label": "Up to point",
+      "fallback": "",
+      "title": null,
+      "options": []
+    },
+    {
+      "field": "endType2",
+      "label": "End 2",
+      "fallback": "distance",
+      "title": "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short",
+      "options": [
+        [
+          "distance",
+          "Distance"
+        ],
+        [
+          "upToFace",
+          "Up to face"
+        ],
+        [
+          "upToPlane",
+          "Up to plane"
+        ],
+        [
+          "upToPoint",
+          "Up to point"
+        ],
+        [
+          "throughAll",
+          "Through all"
+        ]
+      ]
+    },
+    {
+      "field": "upToPlane2",
+      "label": "Up to plane 2",
+      "fallback": "XY",
+      "title": null,
+      "options": [
+        [
+          "XY",
+          "XY"
+        ],
+        [
+          "XZ",
+          "XZ"
+        ],
+        [
+          "YZ",
+          "YZ"
+        ]
+      ]
+    },
+    {
+      "field": "upToPoint2",
+      "label": "Up to point 2",
+      "fallback": "",
+      "title": null,
+      "options": []
+    },
+    {
+      "field": "side",
+      "label": "Wall side",
+      "fallback": "center",
+      "title": "Inside is the enclosed side, of an open chain the side it bends toward, of a straight line its left as drawn; two sides puts Thickness inside and Thickness 2 outside",
+      "options": [
+        [
+          "center",
+          "Centered"
+        ],
+        [
+          "inside",
+          "Inside"
+        ],
+        [
+          "outside",
+          "Outside"
+        ],
+        [
+          "twoSides",
+          "Two sides"
+        ]
+      ]
+    }
+  ],
+  "revolve": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "new",
+      "title": null,
+      "options": [
+        [
+          "new",
+          "New body"
+        ],
+        [
+          "join",
+          "Join"
+        ],
+        [
+          "cut",
+          "Cut"
+        ],
+        [
+          "intersect",
+          "Intersect"
+        ]
+      ]
+    },
+    {
+      "field": "axis",
+      "label": "Axis",
+      "fallback": "Z",
+      "title": null,
+      "options": [
+        [
+          "X",
+          "X"
+        ],
+        [
+          "Y",
+          "Y"
+        ],
+        [
+          "Z",
+          "Z"
+        ]
+      ]
+    }
+  ],
+  "thread": [
+    {
+      "field": "hand",
+      "label": "Hand",
+      "fallback": "right",
+      "title": null,
+      "options": [
+        [
+          "right",
+          "Right"
+        ],
+        [
+          "left",
+          "Left"
+        ]
+      ]
+    },
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "cut",
+      "title": null,
+      "options": [
+        [
+          "join",
+          "Join"
+        ],
+        [
+          "cut",
+          "Cut"
+        ]
+      ]
+    }
+  ],
+  "textOnFace": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "join",
+      "title": null,
+      "options": [
+        [
+          "join",
+          "Emboss"
+        ],
+        [
+          "cut",
+          "Engrave"
+        ]
+      ]
+    },
+    {
+      "field": "align",
+      "label": "Align",
+      "fallback": "center",
+      "title": null,
+      "options": [
+        [
+          "left",
+          "Left"
+        ],
+        [
+          "center",
+          "Centre"
+        ],
+        [
+          "right",
+          "Right"
+        ]
+      ]
+    }
+  ],
+  "loft": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "new",
+      "title": null,
+      "options": [
+        [
+          "new",
+          "New body"
+        ],
+        [
+          "join",
+          "Join"
+        ],
+        [
+          "cut",
+          "Cut"
+        ],
+        [
+          "intersect",
+          "Intersect"
+        ]
+      ]
+    }
+  ],
+  "sweep": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "new",
+      "title": null,
+      "options": [
+        [
+          "new",
+          "New body"
+        ],
+        [
+          "join",
+          "Join"
+        ],
+        [
+          "cut",
+          "Cut"
+        ]
+      ]
+    }
+  ],
+  "thicken": [
+    {
+      "field": "operation",
+      "label": "Operation",
+      "fallback": "join",
+      "title": null,
+      "options": [
+        [
+          "new",
+          "New body"
+        ],
+        [
+          "join",
+          "Join"
+        ]
+      ]
+    }
+  ],
+  "mirror": [
+    {
+      "field": "plane",
+      "label": "Plane",
+      "fallback": "XY",
+      "title": null,
+      "options": [
+        [
+          "XY",
+          "XY"
+        ],
+        [
+          "XZ",
+          "XZ"
+        ],
+        [
+          "YZ",
+          "YZ"
+        ]
+      ]
+    }
+  ],
+  "draft": [
+    {
+      "field": "axis",
+      "label": "Pull axis",
+      "fallback": "Z",
+      "title": null,
+      "options": [
+        [
+          "X",
+          "X"
+        ],
+        [
+          "Y",
+          "Y"
+        ],
+        [
+          "Z",
+          "Z"
+        ]
+      ]
+    }
+  ],
+  "patternLinear": [
+    {
+      "field": "axis",
+      "label": "Direction",
+      "fallback": "X",
+      "title": null,
+      "options": [
+        [
+          "X",
+          "X"
+        ],
+        [
+          "Y",
+          "Y"
+        ],
+        [
+          "Z",
+          "Z"
+        ]
+      ]
+    }
+  ],
+  "patternCircular": [
+    {
+      "field": "axis",
+      "label": "Axis",
+      "fallback": "Z",
+      "title": null,
+      "options": [
+        [
+          "X",
+          "X"
+        ],
+        [
+          "Y",
+          "Y"
+        ],
+        [
+          "Z",
+          "Z"
+        ]
+      ]
+    }
+  ],
+  "mechanism": [
+    {
+      "field": "drive",
+      "label": "Drive",
+      "fallback": "",
+      "title": "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
+      "options": [
+        [
+          "",
+          "None"
+        ]
+      ]
+    }
+  ],
+  "press-pull": [
+    {
+      "field": "mode",
+      "label": "Operation",
+      "fallback": "auto",
+      "title": "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
+      "options": [
+        [
+          "auto",
+          "Auto"
+        ],
+        [
+          "new",
+          "New body"
+        ],
+        [
+          "join",
+          "Join"
+        ],
+        [
+          "cut",
+          "Cut"
+        ],
+        [
+          "intersect",
+          "Intersect"
+        ]
+      ]
+    },
+    {
+      "field": "direction",
+      "label": "Direction",
+      "fallback": "normal",
+      "title": "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
+      "options": [
+        [
+          "normal",
+          "Along normal"
+        ],
+        [
+          "axis",
+          "Along axis"
+        ]
+      ]
+    }
+  ],
+  "fillet": [
+    {
+      "field": "sizeType",
+      "label": "Size Type",
+      "fallback": "radius",
+      "title": "Chord Length sizes the round by the width across it rather than its radius",
+      "options": [
+        [
+          "radius",
+          "Radius"
+        ],
+        [
+          "chord",
+          "Chord Length"
+        ]
+      ]
+    },
+    {
+      "field": "continuity",
+      "label": "Continuity",
+      "fallback": "G1",
+      "title": "G1 is a circular round; G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either. G2 and G3 need both faces flat across the edge",
+      "options": [
+        [
+          "G1",
+          "G1"
+        ],
+        [
+          "G2",
+          "G2"
+        ],
+        [
+          "G3",
+          "G3"
+        ]
+      ]
+    }
+  ],
+  "chamfer": [
+    {
+      "field": "chamferType",
+      "label": "Type",
+      "fallback": "equal",
+      "title": null,
+      "options": [
+        [
+          "equal",
+          "Equal Distance"
+        ],
+        [
+          "twoDistance",
+          "Two-Distance"
+        ]
+      ]
+    }
+  ],
+  "hole": [
+    {
+      "field": "holeType",
+      "label": "Hole type",
+      "fallback": "simple",
+      "title": "Heat-set insert sizes the bore for a brass insert of the chosen size",
+      "options": [
+        [
+          "simple",
+          "Simple"
+        ],
+        [
+          "counterbore",
+          "Counterbore"
+        ],
+        [
+          "countersink",
+          "Countersink"
+        ],
+        [
+          "insert",
+          "Heat-set insert"
+        ]
+      ]
+    },
+    {
+      "field": "standard",
+      "label": "Standard",
+      "fallback": "clearance",
+      "title": "Clearance is ISO 273, Tap drill the coarse pitch drill; Custom keeps the diameter you type",
+      "options": [
+        [
+          "clearance",
+          "Clearance"
+        ],
+        [
+          "tap",
+          "Tap drill"
+        ],
+        [
+          "custom",
+          "Custom"
+        ]
+      ]
+    },
+    {
+      "field": "size",
+      "label": "Size",
+      "fallback": "M3",
+      "title": null,
+      "options": [
+        [
+          "M2",
+          "M2"
+        ],
+        [
+          "M2.5",
+          "M2.5"
+        ],
+        [
+          "M3",
+          "M3"
+        ],
+        [
+          "M4",
+          "M4"
+        ],
+        [
+          "M5",
+          "M5"
+        ],
+        [
+          "M6",
+          "M6"
+        ],
+        [
+          "M8",
+          "M8"
+        ],
+        [
+          "M10",
+          "M10"
+        ],
+        [
+          "M12",
+          "M12"
+        ],
+        [
+          "M16",
+          "M16"
+        ],
+        [
+          "M20",
+          "M20"
+        ]
+      ]
+    },
+    {
+      "field": "fit",
+      "label": "Fit",
+      "fallback": "normal",
+      "title": null,
+      "options": [
+        [
+          "close",
+          "Close"
+        ],
+        [
+          "normal",
+          "Normal"
+        ],
+        [
+          "loose",
+          "Loose"
+        ]
+      ]
+    },
+    {
+      "field": "extent",
+      "label": "Extent",
+      "fallback": "blind",
+      "title": null,
+      "options": [
+        [
+          "blind",
+          "Blind"
+        ],
+        [
+          "through",
+          "Through all"
+        ]
+      ]
+    }
+  ]
+}

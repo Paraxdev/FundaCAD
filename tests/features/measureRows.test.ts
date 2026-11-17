@@ -6,6 +6,7 @@
 import { afterEach, describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { measureRows, type MeasureProbe } from "../../src/features/measureRows";
+import { setLanguage } from "../../src/i18n";
 import { setUnit } from "../../src/ui/units";
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -26,7 +27,10 @@ const edge = (length: number, at = V(0, 0, 0), dir = V(1, 0, 0)): MeasureProbe =
 const keys = (rows: { k: string }[]) => rows.map((r) => r.k);
 const valueOf = (rows: { k: string; v: string }[], k: string) => rows.find((r) => r.k === k)?.v;
 
-afterEach(() => setUnit("mm"));
+afterEach(async () => {
+  setUnit("mm");
+  await setLanguage("system");
+});
 
 describe("measureRows", () => {
   it("asks for a pick when nothing has been picked", () => {
@@ -73,5 +77,37 @@ describe("measureRows", () => {
     // defensive: closestPair is only computed when there are two probes, but the
     // signature allows the mismatch and a crash here would kill the whole tool
     expect(keys(measureRows(face(50), face(20), null))).toEqual(["Area", "At"]);
+  });
+});
+
+describe("measureRows in a comma language", () => {
+  const a = face(12.375, V(12.5, -3.25, 40), V(0, 0, 1));
+  const b = edge(50, V(3, 4, 5), V(1, 1, 0));
+  const near = { d: 2.5, pa: V(1, 2, 3), pb: V(1.5, -0.35, 8) };
+
+  it("reads one pick with a decimal comma and joins the position with semicolons", async () => {
+    await setLanguage("de");
+    expect(measureRows(a, undefined, null)).toEqual([
+      { k: "Area", v: "12,375 mm²" },
+      { k: "At", v: "12,5; -3,25; 40" },
+    ]);
+  });
+
+  it("keeps the point and the comma joined list in English", () => {
+    expect(measureRows(a, undefined, null)).toEqual([
+      { k: "Area", v: "12.375 mm²" },
+      { k: "At", v: "12.5, -3.25, 40" },
+    ]);
+  });
+
+  it("reads a pair with a decimal comma in inches", async () => {
+    await setLanguage("fr");
+    setUnit("in");
+    expect(measureRows(a, b, near)).toEqual([
+      { k: "Distance", v: "0,0984 in" },
+      { k: "ΔX ΔY ΔZ", v: "0,0197; -0,0925; 0,197" },
+      { k: "Centers", v: "1,46 in" },
+      { k: "Angle", v: "90°" },
+    ]);
   });
 });

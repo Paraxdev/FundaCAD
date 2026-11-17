@@ -32,6 +32,12 @@ export { default as UnitChip } from "../components/ui/UnitChip.vue";
 export type { SegmentedOption } from "../components/ui/Segmented.vue";
 export type { TabItem } from "../components/ui/Tabs.vue";
 
+// Speech and focus, so a plugin's results and its own composite widgets work for a keyboard and a screen reader.
+export { announce } from "../ui/announce";
+export type { AnnouncePriority, AnnounceOptions } from "../ui/announce";
+export { useRovingFocus } from "../components/ui/useRovingFocus";
+export type { RovingOrientation } from "../components/ui/useRovingFocus";
+
 export { default as Icon } from "../components/shell/Icon.vue";
 export { default as InlineLabel } from "../components/shell/InlineLabel.vue";
 

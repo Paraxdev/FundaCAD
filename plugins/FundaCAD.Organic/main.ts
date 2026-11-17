@@ -6,6 +6,7 @@ import { NodeTool } from "./nodeTool";
 import NodePanel from "./NodePanel.vue";
 import * as panel from "./panel";
 import { NODE_CHOICE_FIELDS, NODE_TARGETS, NODE_TYPE, nodeNumFields } from "./nodeForm";
+import { t } from "./lines";
 
 const ID = "FundaCAD.Organic";
 
@@ -30,7 +31,10 @@ export async function activate(e: Engine): Promise<() => void> {
     tools: [
       {
         id: "nodeBody",
-        label: "Node Body",
+        get label() {
+          return t("tool.nodeBody");
+        },
+        refName: "Node Body",
         iconName: "node-body",
         consumes: [],
         source: "selection",
@@ -39,7 +43,21 @@ export async function activate(e: Engine): Promise<() => void> {
       },
     ],
     actions: { nodeBody: start },
-    ribbon: [{ group: "CREATE", items: [{ action: "nodeBody", label: "Node Body", iconName: "node-body" }] }],
+    ribbon: [
+      {
+        group: "CREATE",
+        items: [
+          {
+            action: "nodeBody",
+            get label() {
+              return t("tool.nodeBody");
+            },
+            refName: "Node Body",
+            iconName: "node-body",
+          },
+        ],
+      },
+    ],
     icons: { "node-body": NODE_ICON },
     overlays: [NodePanel],
     features: [
