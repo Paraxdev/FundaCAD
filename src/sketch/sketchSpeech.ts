@@ -34,7 +34,7 @@ const LOWERS_LABELS: ReadonlySet<string> = new Set(["en", "fr", "es"]);
 
 function anchorWords(c: SnapCandidate): string {
   if (!c.label) return t("sketch.speech.anchor", { kind: c.kind });
-  const label = LOWERS_LABELS.has(activeLanguage().code) ? c.label.toLowerCase() : c.label;
+  const label = LOWERS_LABELS.has(activeLanguage().code.split("-")[0]!) ? c.label.toLowerCase() : c.label;
   return t("sketch.speech.named", { label });
 }
 

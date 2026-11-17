@@ -29,7 +29,10 @@ type Internals = {
   setTool(t: string): void;
 };
 
-function makeSketch(tool: string) {
+type Hit = { kind: string; label?: string; origin?: boolean; p: THREE.Vector2 };
+const ORIGIN: Hit = { kind: "center", label: "Origin", origin: true, p: new THREE.Vector2(0, 0) };
+
+function makeSketch(tool: string, hit: Hit = ORIGIN) {
   const s = Object.create(SketchMode.prototype) as Internals;
   Object.assign(s, {
     active: false, // keeps bankIfChanged and the solve pump out of it
@@ -61,7 +64,7 @@ function makeSketch(tool: string) {
     projectPanel: { hide() {} },
     viewport: { hoverEntity() {}, domElement: {} },
     planeTooEdgeOn: () => false,
-    snapAt: () => ({ kind: "center", label: "Origin", p: new THREE.Vector2(0, 0) }),
+    snapAt: () => hit,
     showDimFields() {},
     cancelBox() {},
     dropTextPreview: () => false,
@@ -116,5 +119,22 @@ describe("SK-10: an origin pin waits for its shape", () => {
     const pin = s.entities.find((e) => e.type === "point");
     expect(pin).toMatchObject({ x: 0, y: 0, construction: true });
     expect(s.constraints).toEqual([{ type: "fix", e: pin!.id, p: 0 }]);
+  });
+
+  it("the pin follows the origin snap, whatever its label reads in the language shown", () => {
+    const s = makeSketch("rectangle", { ...ORIGIN, label: "Ursprung" });
+    press(s);
+    s.entities.push(rect());
+    s.requestSolve();
+    expect(s.entities.some((e) => e.type === "point")).toBe(true);
+  });
+
+  it("another centre that happens to be named Origin is not pinned", () => {
+    const s = makeSketch("rectangle", { kind: "center", label: "Origin", p: new THREE.Vector2(0, 0) });
+    press(s);
+    s.entities.push(rect());
+    s.requestSolve();
+    expect(s.entities.some((e) => e.type === "point")).toBe(false);
+    expect(s.constraints).toEqual([]);
   });
 });

@@ -52,6 +52,7 @@ export interface KeyHit {
   kind: SnapKind;
   label?: string | undefined;
   ref?: SnapRef | undefined;
+  origin?: boolean | undefined;
 }
 
 /** A shape a placed point finished. */
@@ -103,6 +104,7 @@ const hitOf = (p: THREE.Vector2, c: SnapCandidate | null): KeyHit => ({
   kind: c?.kind ?? "free",
   label: c?.label,
   ref: c?.ref,
+  origin: c?.origin,
 });
 
 export class KeyDrawFlow {

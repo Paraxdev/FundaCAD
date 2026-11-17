@@ -1986,7 +1986,7 @@ export class SketchMode {
   private noteOriginPin(hit: KeyHit) {
     if (
       hit.kind === "center" &&
-      hit.label === t("sketch.snap.origin") &&
+      hit.origin &&
       this.tool !== "select" &&
       !MODIFY_TOOLS.has(this.tool) &&
       !PATTERN_TOOLS.has(this.tool)
@@ -3480,6 +3480,7 @@ export class SketchMode {
       world: this.plane.to3D(res.point.x, res.point.y),
       guides: res.guides,
       label: res.label,
+      origin: res.origin,
     };
   }
 

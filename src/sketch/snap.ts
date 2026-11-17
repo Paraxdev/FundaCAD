@@ -34,6 +34,8 @@ export interface SnapCandidate {
   ref?: SnapRef | undefined;
   /** The entity it belongs to, `id~k` for a rectangle's edge k. Only speech reads it, ref stays what the solver holds. */
   owner?: string | undefined;
+  /** The world origin, which a drawn point that lands on it gets pinned to. */
+  origin?: boolean | undefined;
 }
 
 /** `axis: "x"` means the cursor took the anchor's x, standing on its vertical line. */
@@ -49,6 +51,7 @@ export interface SnapResult {
   guides: SnapGuide[];
   label?: string | undefined;
   ref?: SnapRef | undefined;
+  origin?: boolean | undefined;
 }
 
 export function snap(
@@ -88,7 +91,15 @@ export function snap(
     if (dy <= pixelTol && (!alignY || dy < alignY.d)) alignY = { c, d: dy };
   }
 
-  if (best) return { point: best.p.clone(), kind: best.kind, guides: [], label: snapLabel(best), ref: best.ref };
+  if (best)
+    return {
+      point: best.p.clone(),
+      kind: best.kind,
+      guides: [],
+      label: snapLabel(best),
+      ref: best.ref,
+      origin: best.origin,
+    };
 
   // Each axis snaps to the grid on its own, so anywhere along a grid line snaps and an intersection is both firing.
   // Full screen distance per axis (see screenGap). Computed before alignment, which can leave one axis free.
@@ -201,6 +212,7 @@ export function originCandidate(plane: SketchPlane): SnapCandidate[] {
       kind: "center",
       priority: 95,
       label: t("sketch.snap.origin"),
+      origin: true,
       lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
     },
   ];
