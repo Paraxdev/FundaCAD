@@ -408,6 +408,45 @@ describe("GuideLayer over an open menu", () => {
   });
 });
 
+describe("GuideLayer in a sketch", () => {
+  it("forgets the last sketch's drawing when a sketch opens again", async () => {
+    const g = setup();
+    g.sketch.active = true;
+    g.sketch.drawnBounds = () => ({ minx: 0, miny: 0, maxx: 70, maxy: 20 });
+    g.guide.apply([{ kind: "highlight", seq: 1, caption: "Draw the L." }]);
+    await tick();
+    const left = async () => {
+      frame();
+      await tick();
+      return document.querySelector<HTMLElement>(".guide-bubble")!.style.left;
+    };
+    // The stub projects 1 mm to 10 px: the 70 mm drawing ends at 700 px, the first 50 mm square at 500.
+    expect(await left()).toBe("716px");
+    g.sketch.active = false;
+    expect(await left()).toBe(`${window.innerWidth / 2 - 140}px`);
+    g.sketch.active = true;
+    g.sketch.drawnBounds = () => null;
+    expect(await left()).toBe("516px");
+  });
+
+  it("reads the shell's panels every 15 frames and as a sketch opens, and open menus every frame", async () => {
+    const qsa = vi.spyOn(document, "querySelectorAll");
+    const reads = (part: string) => qsa.mock.calls.filter(([sel]) => String(sel).includes(part)).length;
+    const g = setup();
+    g.sketch.active = true;
+    g.guide.apply([{ kind: "highlight", seq: 1, caption: "Draw the L." }]);
+    await tick();
+    for (let i = 0; i < 30; i++) frame();
+    expect([reads(".tool-rail"), reads(".ui-menu")]).toEqual([2, 30]);
+    g.sketch.active = false;
+    frame();
+    g.sketch.active = true;
+    frame();
+    expect([reads(".tool-rail"), reads(".ui-menu")]).toEqual([3, 32]);
+    qsa.mockRestore();
+  });
+});
+
 describe("GuideLayer speech", () => {
   const said = () => vi.mocked(announce).mock.calls;
   const at = { ui: "guide-spec-target" };
