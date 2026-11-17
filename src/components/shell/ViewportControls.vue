@@ -52,6 +52,7 @@ import Tabs from "../ui/Tabs.vue";
 import TabPanel from "../ui/TabPanel.vue";
 import type { SelectPolicy } from "../../viewport/clickIntent";
 import { t } from "../../i18n";
+import { UNTITLED } from "../../document/untitled";
 
 const engine = useEngine();
 const ui = useUiStore();
@@ -288,7 +289,7 @@ async function screenshot() {
   try {
     // Note: read the pixels in the same task as the render, before any await.
     const url = engine.viewport.renderStill(1, { edges: true });
-    const base = engine.store.fileName === "Untitled" ? "screenshot" : engine.store.fileName;
+    const base = engine.store.fileName === UNTITLED ? "screenshot" : engine.store.fileName;
     const path = await saveRenderedImage(url, `${base}.png`);
     if (path) toast(t("viewControls.screenshot.saved", { path }));
   } finally {

@@ -8,6 +8,7 @@ import { contextMenu, namedRow } from "../ui/menu";
 import { themeColor } from "./themeColors";
 import { hitScale } from "../input/pointerKind";
 import { viewportLabelScale } from "../ui/viewportLabels";
+import { onLanguageChange, t } from "../i18n";
 
 export const SIZE = 120; // corner viewport at Medium Viewport labels, CSS px
 export const MARGIN = 14; // gap from the top-right edge
@@ -21,17 +22,17 @@ const CUBE_PROBE_RINGS_PX = [6, 12];
 const HALF = 0.5; // half-extent of the unit cube
 
 // Default view direction (eye relative to target) and up of each side, Z up.
-export const FACE_VIEWS: Record<
-  ViewCubeSide,
-  { view: StandardView; normal: THREE.Vector3; up: THREE.Vector3; label: string }
-> = {
-  front: { view: "front", normal: new THREE.Vector3(0, -1, 0), up: new THREE.Vector3(0, 0, 1), label: "FRONT" },
-  back: { view: "back", normal: new THREE.Vector3(0, 1, 0), up: new THREE.Vector3(0, 0, 1), label: "BACK" },
-  right: { view: "right", normal: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 0, 1), label: "RIGHT" },
-  left: { view: "left", normal: new THREE.Vector3(-1, 0, 0), up: new THREE.Vector3(0, 0, 1), label: "LEFT" },
-  top: { view: "top", normal: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, 1, 0), label: "TOP" },
-  bottom: { view: "bottom", normal: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(0, -1, 0), label: "BOTTOM" },
+export const FACE_VIEWS: Record<ViewCubeSide, { view: StandardView; normal: THREE.Vector3; up: THREE.Vector3 }> = {
+  front: { view: "front", normal: new THREE.Vector3(0, -1, 0), up: new THREE.Vector3(0, 0, 1) },
+  back: { view: "back", normal: new THREE.Vector3(0, 1, 0), up: new THREE.Vector3(0, 0, 1) },
+  right: { view: "right", normal: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 0, 1) },
+  left: { view: "left", normal: new THREE.Vector3(-1, 0, 0), up: new THREE.Vector3(0, 0, 1) },
+  top: { view: "top", normal: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, 1, 0) },
+  bottom: { view: "bottom", normal: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(0, -1, 0) },
 };
+
+/** The word a side's plate carries, in the language the app speaks. */
+export const faceLabel = (side: ViewCubeSide): string => t("viewport.cube.face", { side });
 
 // A face plate is painted whole into its canvas and its material is untinted: `color` multiplies the map and
 // can only darken it, which once made every label near black on black. Colours are read per call for theme changes.
@@ -116,6 +117,10 @@ export class ViewCube {
     this.scene.add(this.group);
     this.buildCube();
     this.installPointer();
+    onLanguageChange(() => {
+      this.refreshOverrideMarks();
+      this.hooks.redraw?.();
+    });
   }
 
   private buildCube() {
@@ -202,10 +207,14 @@ export class ViewCube {
     ctx.fillStyle = hovered ? hex(faceHover()) : hex(faceFill());
     ctx.fillRect(0, 0, W, W);
     ctx.fillStyle = hovered ? hex(inkHoverFill()) : hex(inkFill());
-    ctx.font = "600 56px Inter, system-ui, sans-serif";
+    const label = faceLabel(side);
+    const font = (px: number) => `600 ${px}px Inter, system-ui, sans-serif`;
+    ctx.font = font(56);
+    const wide = ctx.measureText(label).width;
+    if (wide > W * 0.86) ctx.font = font(Math.floor((56 * W * 0.86) / wide));
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(FACE_VIEWS[side].label, W / 2, W / 2);
+    ctx.fillText(label, W / 2, W / 2);
     if (redefined) {
       ctx.beginPath();
       ctx.fillStyle = hovered ? hex(inkHoverFill()) : hex(faceHover());
@@ -367,7 +376,7 @@ export class ViewCube {
     const has = !!this.hooks.getOverrides()[side];
     contextMenu(clientX, clientY, [
       {
-        ...namedRow("viewport.cube.setFromFace", { side: FACE_VIEWS[side].label }),
+        ...namedRow("viewport.cube.setFromFace", { side: faceLabel(side) }),
         onClick: () => this.hooks.beginSetOverride(side),
       },
       {

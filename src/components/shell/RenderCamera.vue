@@ -17,6 +17,7 @@ import type { DocumentSession } from "../../document/session";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
 import { plainError, seeConsole } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
+import { UNTITLED } from "../../document/untitled";
 import {
   APERTURE_STOPS,
   MAX_FOV,
@@ -192,7 +193,7 @@ async function takePicture() {
   saving.value = true;
   try {
     const session = engine.store.session;
-    const base = engine.store.fileName === "Untitled" ? "render" : engine.store.fileName;
+    const base = engine.store.fileName === UNTITLED ? "render" : engine.store.fileName;
     const url = await render(session);
     if (!url || !session.alive) return;
     const path = await saveRenderedImage(url, `${base}.png`);

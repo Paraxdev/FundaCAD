@@ -95,6 +95,9 @@
   line-height: 1.3;
   text-align: center;
   color: var(--text-dim);
+  // Japanese and Chinese otherwise break inside a word such as ドキュメント, this breaks after 、 instead.
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .home-tools {
   display: flex;
