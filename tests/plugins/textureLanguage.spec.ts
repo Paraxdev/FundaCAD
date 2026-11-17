@@ -16,8 +16,12 @@ import {
   sharpnessLabel,
   textureNumFields,
 } from "../../plugins/FundaCAD.Texture/textureForm";
+import { activate } from "../../plugins/FundaCAD.Texture/main";
 import { reloadLanguageFiles, setLanguage } from "../../src/i18n";
+import { resetContributions } from "../../src/plugins/contrib";
+import type { Engine } from "../../src/app/engine";
 import type { DocumentStore, Viewport } from "../../src/plugins/host";
+import { featureEnglish, featureMeta } from "../../src/ui/featureMeta";
 
 enableAutoUnmount(afterEach);
 
@@ -28,7 +32,7 @@ const optionTexts = () => [...document.querySelectorAll('[role="option"]')].map(
 function openPanel(palette: { name: string; color: string }[] = []) {
   const wrapper = mount(TextureToolPanel, { attachTo: document.body });
   panel.show(
-    { editing: false, mode: "faces", summary: "", initial: {}, palette },
+    { editing: false, mode: "faces", initial: {}, palette },
     { onCommit: vi.fn(), onCancel: vi.fn(), onChange: vi.fn(), onModeChange: vi.fn() },
   );
   return wrapper;
@@ -51,6 +55,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   panel.resetPanel();
+  resetContributions();
   vi.unstubAllGlobals();
   await reloadLanguageFiles();
   await setLanguage("system");
@@ -86,7 +91,7 @@ describe("the Texture pickers and value rows follow the language", () => {
 
     await setLanguage("ja");
     expect(find("direction").label).toBe("方向");
-    expect(labels(find("projection").options)).toEqual(["3平面", "ボックス", "平面"]);
+    expect(labels(find("projection").options)).toEqual(["3平面", "ボックス", "平面投影"]);
   });
 
   it("builds the numeric rows and the shape label fresh in each language", async () => {
@@ -198,5 +203,30 @@ describe("the Texture tool's summary follows the language", () => {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     expect(panel.summary.value).toBe("3個の面を選択中");
     tool.cancel();
+  });
+
+  it("words the line again when the language changes with the tool open", async () => {
+    const { vp, state } = fakeViewport();
+    const tool = new TextureTool(vp, fakeStore());
+    tool.start(() => {});
+    state.faceIds = [3, 4];
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(panel.summary.value).toBe("2 faces selected");
+
+    await setLanguage("de");
+    expect(panel.summary.value).toBe("2 Flächen gewählt");
+    await setLanguage("ja");
+    expect(panel.summary.value).toBe("2個の面を選択中");
+    tool.cancel();
+  });
+});
+
+describe("the Texture step keeps its English name", () => {
+  it("names the feature Texture for English paths whatever the language", async () => {
+    const stop = await activate({ viewport: {}, store: {}, geometry: {} } as unknown as Engine);
+    await setLanguage("de");
+    expect(featureMeta({ type: "texture" }).label).toBe("Textur");
+    expect(featureEnglish({ type: "texture" })).toBe("Texture");
+    stop();
   });
 });

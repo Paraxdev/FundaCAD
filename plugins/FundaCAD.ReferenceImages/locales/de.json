@@ -27,6 +27,7 @@
   "panel.promptDistance": "Der tatsächliche Abstand zwischen beiden:",
   "panel.promptFirst": "Klicken Sie auf den ersten Punkt im Bild.",
   "panel.promptSecond": "Klicken Sie auf den zweiten Punkt.",
+  "panel.refused": "{label}: {why}",
   "panel.shiftDrag": "Ziehen Sie das Bild mit gedrückter Umschalttaste, um es zu verschieben.",
   "panel.width": "Breite",
   "prompt.distance": "Geben Sie den tatsächlichen Abstand zwischen den beiden Punkten ein",

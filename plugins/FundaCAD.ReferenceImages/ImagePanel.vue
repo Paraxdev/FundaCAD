@@ -26,7 +26,7 @@ const refused = reactive<Record<string, string | null>>({});
 const problems = computed(() => Object.values(refused).filter((why): why is string => !!why));
 
 function refuse(key: string, label: string, why: string | null) {
-  refused[key] = why && `${label}: ${why}`;
+  refused[key] = why && t("panel.refused", { label, why });
 }
 
 watch(step, async (s) => {

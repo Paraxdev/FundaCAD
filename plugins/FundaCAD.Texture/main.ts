@@ -91,6 +91,7 @@ export async function activate(e: Engine): Promise<() => void> {
           get label() {
             return t("tool.texture");
           },
+          refName: "Texture",
         },
         choiceFields: TEXTURE_CHOICE_FIELDS,
         fileFields: TEXTURE_FILE_FIELDS,

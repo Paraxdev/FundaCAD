@@ -27,6 +27,7 @@
   "panel.promptDistance": "2点間の実際の距離:",
   "panel.promptFirst": "画像上の1点目をクリックしてください。",
   "panel.promptSecond": "2点目をクリックしてください。",
+  "panel.refused": "{label}: {why}",
   "panel.shiftDrag": "Shift を押しながらドラッグすると画像を移動できます。",
   "panel.width": "幅",
   "prompt.distance": "2点間の実際の距離を入力してください",

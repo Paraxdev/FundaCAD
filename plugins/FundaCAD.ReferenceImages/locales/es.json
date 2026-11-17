@@ -27,6 +27,7 @@
   "panel.promptDistance": "La distancia real entre ellos:",
   "panel.promptFirst": "Haga clic en el primer punto de la imagen.",
   "panel.promptSecond": "Haga clic en el segundo punto.",
+  "panel.refused": "{label}: {why}",
   "panel.shiftDrag": "Arrastre la imagen con Mayús pulsada para moverla.",
   "panel.width": "Anchura",
   "prompt.distance": "Escriba la distancia real entre los dos puntos",

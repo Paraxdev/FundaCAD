@@ -84,7 +84,7 @@ function handlers() {
 async function open(opts: Partial<Parameters<typeof panel.show>[0]> = {}) {
   const h = handlers();
   mount(TextureToolPanel, { attachTo: document.body });
-  panel.show({ editing: false, mode: "faces", summary: "2 faces", initial: {}, ...opts }, h);
+  panel.show({ editing: false, mode: "faces", facts: { mode: "faces", n: 2 }, initial: {}, ...opts }, h);
   await flushPromises();
   return { root: document.querySelector("[data-panel=texture]")!, h };
 }
@@ -235,7 +235,7 @@ describe("a refused number", () => {
     expect(root.querySelectorAll("[data-testid=texture-field-error]")).toHaveLength(1);
     panel.hide();
     await flushPromises();
-    panel.show({ editing: false, mode: "faces", summary: "", initial: {} }, h);
+    panel.show({ editing: false, mode: "faces", initial: {} }, h);
     await flushPromises();
     expect(document.querySelectorAll("[data-testid=texture-field-error]")).toHaveLength(0);
   });

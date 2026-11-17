@@ -27,6 +27,7 @@
   "panel.promptDistance": "The real distance between them:",
   "panel.promptFirst": "Click the first point on the image.",
   "panel.promptSecond": "Click the second point.",
+  "panel.refused": "{label}: {why}",
   "panel.shiftDrag": "Shift drag the image to move it.",
   "panel.width": "Width",
   "prompt.distance": "Type the real distance between the two points",

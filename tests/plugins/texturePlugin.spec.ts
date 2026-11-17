@@ -173,7 +173,7 @@ describe("the Texture plugin, switched on and off", () => {
 
   describe("the feature it leaves behind", () => {
     it("has a name and a mark in the history", () => {
-      expect(featureMeta({ type: "texture" })).toEqual({ icon: "texture", label: "Texture" });
+      expect(featureMeta({ type: "texture" })).toEqual({ icon: "texture", label: "Texture", refName: "Texture" });
     });
 
     it("has the dropdowns and the switch its values are edited with", () => {

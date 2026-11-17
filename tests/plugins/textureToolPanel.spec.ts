@@ -39,7 +39,7 @@ function open(opts: Partial<Parameters<typeof panel.show>[0]> = {}) {
     onModeChange: vi.fn<(m: TextureMode) => void>(),
   };
   const wrapper = mountPanel();
-  panel.show({ editing: false, mode: "faces", summary: "2 faces", initial: {}, ...opts }, handlers);
+  panel.show({ editing: false, mode: "faces", facts: { mode: "faces", n: 2 }, initial: {}, ...opts }, handlers);
   return { handlers, wrapper };
 }
 
@@ -87,7 +87,7 @@ describe("TextureToolPanel", () => {
     expect(panel.isOpen()).toBe(false);
 
     panel.show(
-      { editing: false, mode: "faces", summary: "2 faces", initial: {} },
+      { editing: false, mode: "faces", facts: { mode: "faces", n: 2 }, initial: {} },
       {
         onCommit: vi.fn(),
         onCancel: vi.fn(),
@@ -133,7 +133,7 @@ describe("TextureToolPanel", () => {
     panel.hide();
     await nextTick();
     panel.show(
-      { editing: false, mode: "faces", summary: "", initial: { depth: 2.5 } },
+      { editing: false, mode: "faces", initial: { depth: 2.5 } },
       {
         onCommit: vi.fn(),
         onCancel: vi.fn(),
@@ -146,7 +146,7 @@ describe("TextureToolPanel", () => {
   });
 
   it("shows the live summary and refreshes it without touching the form", async () => {
-    open({ summary: "2 faces" });
+    open({ facts: { mode: "faces", n: 2 } });
     await nextTick();
     expect(document.body.textContent).toContain("2 faces");
 
@@ -155,9 +155,9 @@ describe("TextureToolPanel", () => {
     depth.dispatchEvent(new Event("input"));
     await nextTick();
 
-    panel.summary.value = "5 faces";
+    panel.summaryFacts.value = { mode: "faces", n: 5 };
     await nextTick();
-    expect(document.body.textContent).toContain("5 faces");
+    expect(document.body.textContent).toContain("5 faces selected");
     expect(depth.value).toBe("9"); // the field being typed into is untouched
   });
 

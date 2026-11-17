@@ -217,7 +217,7 @@ export class TextureTool {
       {
         editing,
         mode: this.mode,
-        summary: this.currentSummary(),
+        facts: this.currentFacts(),
         initial: this.values,
         // Whatever colours a plugin says this document has, usually none, and an empty palette already means no inlay.
         palette: contributedPalette(),
@@ -297,21 +297,19 @@ export class TextureTool {
     this.raf = requestAnimationFrame(this.boundTick);
   }
 
-  private currentSummary(): string {
+  private currentFacts(): panel.SummaryFacts {
     if (this.mode === "body") {
       const ids = this.viewport.getSelectedBodies();
       const id = ids[0];
-      if (!id) return t("summary.bodyNone");
+      if (!id) return { mode: "body", n: 0, name: "" };
       const b = (this.store.buildState.result?.bodies ?? []).find((x) => x.id === id);
-      const name = this.store.bodyName(id) ?? b?.name ?? id;
-      return ids.length > 1 ? t("summary.bodyMany", { name, n: ids.length }) : t("summary.body", { name });
+      return { mode: "body", n: ids.length, name: this.store.bodyName(id) ?? b?.name ?? id };
     }
-    const n = this.viewport.getSelectedFaceIds().length;
-    return n ? t("summary.faces", { n }) : t("summary.facesNone");
+    return { mode: "faces", n: this.viewport.getSelectedFaceIds().length };
   }
 
   private refreshSummary() {
-    panel.summary.value = this.currentSummary();
+    panel.summaryFacts.value = this.currentFacts();
   }
 
   /** The real displaced mesh, ~half a second behind the slider. A GPU vertex shader preview cannot move vertices a flat

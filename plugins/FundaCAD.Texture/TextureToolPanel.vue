@@ -75,7 +75,7 @@ const numHead = computed<NumDef[]>(() => [
   { key: "sharpness", label: t("field.sharpness"), unit: null, step: 0.1, min: 0, max: 1 },
 ]);
 const numAdvanced = computed<NumDef[]>(() => [
-  { key: "offset", label: t("field.offset"), unit: "mm", step: 0.1, tip: t("tip.edge") },
+  { key: "offset", label: t("field.offset"), unit: "mm", step: 0.1, tip: t("tip.offset") },
   { key: "edgeBlend", label: t("field.edgeBlend"), unit: "mm", step: 0.1, min: 0, tip: t("tip.edge") },
   { key: "slopeMin", label: t("field.slopeMin"), unit: "deg", step: 5, min: 0, max: 180, tip: t("tip.slope") },
   { key: "slopeMax", label: t("field.slopeMax"), unit: "deg", step: 5, min: 0, max: 180, tip: t("tip.slope") },
@@ -113,7 +113,7 @@ function setNum(k: NumKey, v: number | null) {
 }
 
 function refuse(k: string, label: string, why: string | null) {
-  refused[k] = why && `${label}: ${why}`;
+  refused[k] = why && t("panel.refused", { label, why });
 }
 
 const pctOf = (k: PctKey) => Math.max(0, Math.min(100, Math.round((fieldNumber(form[k]) || 0) * 100)));
@@ -150,7 +150,7 @@ const colorOptions = computed(() => [
   ...palette.value.map((s, i) => ({ value: String(i), label: t("panel.slot", { name: s.name, n: i + 1 }) })),
 ]);
 const modeOptions = computed<{ value: TextureMode; label: string }[]>(() => [
-  { value: "faces", label: t("field.faces") },
+  { value: "faces", label: t("option.faces") },
   { value: "body", label: t("panel.wholeBody") },
 ]);
 

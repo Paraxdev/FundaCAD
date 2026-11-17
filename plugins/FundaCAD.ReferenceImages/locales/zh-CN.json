@@ -27,6 +27,7 @@
   "panel.promptDistance": "两点之间的实际距离：",
   "panel.promptFirst": "点击图像上的第一个点。",
   "panel.promptSecond": "点击第二个点。",
+  "panel.refused": "{label}：{why}",
   "panel.shiftDrag": "按住 Shift 拖动图像即可移动。",
   "panel.width": "宽度",
   "prompt.distance": "输入两点之间的实际距离",
