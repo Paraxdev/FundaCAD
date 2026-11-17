@@ -2,6 +2,8 @@
 
 The guided first bracket walks you through a small L bracket, from a flat sketch to a file for your slicer. It takes about 10 minutes. A bubble says what to do next, and a ring shows the control to use.
 
+![The guide's first step, a ring on Sketch and a bubble beside it](../img/first-bracket-step1.png)
+
 ## Start the guide
 
 Start it from any of these:
@@ -10,11 +12,13 @@ Start it from any of these:
 2. Help > Guided First Bracket.
 3. Ctrl+K, type `Guided First Bracket` and press Enter.
 
+![The Your first bracket tile on Home](../img/first-bracket-tile.png)
+
 If the open document has unsaved changes, FundaCAD asks first. The guide then opens a new document called Bracket, closes Home and shows step 1.
 
 ## The steps
 
-Each step moves on by itself once you have done what it asks. The key in brackets works in place of the click.
+Each step moves on by itself once you have done what it asks. The key in brackets works in place of the click. If you turned off Single key shortcuts in Preferences, the bubble leaves the key out.
 
 | Step | The guide asks you to | Moves on when |
 |---|---|---|

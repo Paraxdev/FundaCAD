@@ -17,6 +17,8 @@ When a step can be done from the keyboard, the assistant can add its keys in wor
 
 The guide shows only while Live document shares your document, read only or with edits allowed ([Share your document](sharing.md)). An app or assistant connection too old for it says so rather than showing nothing.
 
+The guided first bracket in Help runs on its own guide session. It does not start while an assistant's guide runs, and an assistant's guide stops it.
+
 ## What it never does
 
 The steps never change your document. Clean view does not hide them, and they are never part of a picture you save.
