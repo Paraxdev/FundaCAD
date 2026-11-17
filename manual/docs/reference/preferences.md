@@ -21,16 +21,16 @@ Preferences holds the settings that belong to you, not to a document. Open it fr
 
 Language sets the language of FundaCAD's text, and it applies at once. System, the default, is English for now. Deutsch, Français, Español, 简体中文 and 日本語 are machine translated, and the list says so in each language's own words. A machine translated line may read oddly. So far these parts speak them, and the rest stays English until it is translated:
 
-- Home and the safe mode banner
-- the menu bar, the command palette, the tool rail and the Keyboard Shortcuts window
-- Items and History, the names of unnamed steps, and the unit tips
-- the properties of a step: row names, choices, hints and notes, but not yet the rows that pick faces, edges or bodies
-- Undo and Redo, the Mirror tool's prompts, the selection readout and what it says, and Describe Selection
-- Stress: its setup, results, warnings and what it says
-- the guide's step counter, buttons and hints
-- Preferences and all its sections, the Language card, the Plugins page and plugin messages, the render settings and the theme names
-- the menu rows, tools and names of plugins that ship their own language lines
-- the update notices
+1. Home and the safe mode banner
+2. the menu bar, the command palette, the tool rail and the Keyboard Shortcuts window
+3. Items and History, the names of unnamed steps, and the unit tips
+4. the properties of a step: row names, choices, hints and notes, but not yet the rows that pick faces, edges or bodies
+5. Undo and Redo, the Mirror tool's prompts, the selection readout and what it says, and Describe Selection
+6. Stress: its setup, results, warnings and what it says
+7. the guide's step counter, buttons and hints
+8. Preferences and all its sections, the Language card, the Plugins page and plugin messages, the render settings and the theme names
+9. the menu rows, tools and names of plugins that ship their own language lines
+10. the update notices
 
 The command palette and the Keyboard Shortcuts window also find a command or a tool by its English name, so `save as` still finds Save As and `extrude` still finds the extrude tool in Deutsch.
 
