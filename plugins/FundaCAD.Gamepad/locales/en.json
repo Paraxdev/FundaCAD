@@ -6,6 +6,7 @@
   "button.leftStick": "Left stick click",
   "button.rightStick": "Right stick click",
   "group.sticks": "Sticks",
+  "key.delete": "Delete",
   "key.enter": "Enter (confirm)",
   "key.escape": "Escape (cancel)",
   "key.palette": "Command palette",

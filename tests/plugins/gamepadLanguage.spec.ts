@@ -56,7 +56,7 @@ describe("the Game controller panel", () => {
     expect(options[0]).toMatch(/Rien/);
     expect(options[1]).toMatch(/Curseur activé \/ désactivé/);
     expect(options.find((o) => /Entrée \(valider\)/.test(o))).toMatch(/Touches/);
-    expect(options.find((o) => /Delete/.test(o))).toBeDefined();
+    expect(options.find((o) => /Suppr/.test(o))).toBeDefined();
   });
 });
 
@@ -71,11 +71,12 @@ describe("the lists and settings read the language when asked", () => {
     ]);
     expect(KEY_CHOICES.map((k) => k.label)).toEqual([
       "Enter (bestätigen)",
-      "Escape (abbrechen)",
-      "Delete",
+      "Esc (abbrechen)",
+      "Entf",
       "Tab",
       "Befehlspalette",
     ]);
+    expect(KEY_CHOICES.map((k) => k.value)).toContain("key:Delete");
     expect(prop("panSens").label).toBe("Verschiebegeschwindigkeit");
     expect(prop("deadzone").group).toBe("Sticks");
     await setLanguage("ja");

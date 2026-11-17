@@ -6,6 +6,7 @@
   "button.leftStick": "Pulsar el stick izquierdo",
   "button.rightStick": "Pulsar el stick derecho",
   "group.sticks": "Sticks",
+  "key.delete": "Supr",
   "key.enter": "Intro (confirmar)",
   "key.escape": "Esc (cancelar)",
   "key.palette": "Paleta de comandos",

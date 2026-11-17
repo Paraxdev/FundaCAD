@@ -6,6 +6,7 @@
   "button.leftStick": "左スティック押し込み",
   "button.rightStick": "右スティック押し込み",
   "group.sticks": "スティック",
+  "key.delete": "Delete",
   "key.enter": "Enter(決定)",
   "key.escape": "Escape(キャンセル)",
   "key.palette": "コマンドパレット",

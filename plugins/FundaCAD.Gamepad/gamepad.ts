@@ -57,7 +57,12 @@ export const KEY_CHOICES: { value: Binding; label: string }[] = [
       return t("key.escape");
     },
   },
-  { value: "key:Delete", label: "Delete" },
+  {
+    value: "key:Delete",
+    get label() {
+      return t("key.delete");
+    },
+  },
   { value: "key:Tab", label: "Tab" },
   {
     value: "key:Ctrl+K",

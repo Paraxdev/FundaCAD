@@ -6,6 +6,7 @@
   "button.leftStick": "按下左摇杆",
   "button.rightStick": "按下右摇杆",
   "group.sticks": "摇杆",
+  "key.delete": "Delete",
   "key.enter": "Enter（确认）",
   "key.escape": "Escape（取消）",
   "key.palette": "命令面板",

@@ -6,6 +6,7 @@
   "button.leftStick": "Clic du stick gauche",
   "button.rightStick": "Clic du stick droit",
   "group.sticks": "Sticks",
+  "key.delete": "Suppr",
   "key.enter": "Entrée (valider)",
   "key.escape": "Échap (annuler)",
   "key.palette": "Palette de commandes",
