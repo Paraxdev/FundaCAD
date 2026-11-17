@@ -9,14 +9,14 @@ import { bodyExtraMenu, elementMoveMenu, materialMenu } from "./browserTree";
 import { canStep, stepLabelFor, stepMenuText } from "./canStep";
 import { ancestryOf } from "../document/elements";
 import { useBrowserStore } from "../stores/browser";
-import { contextMenu, type CtxItem } from "./menu";
+import { contextMenu, namedRow, type CtxItem } from "./menu";
 import { useContextMenuStore } from "../stores/contextMenu";
 import { isInspectorEditable } from "../document/numFields";
-import { allCommands } from "./commands";
-import { featureEnglish } from "./featureMeta";
-import { BOOLEAN_COMMANDS, booleanEnglish } from "../features/booleanOps";
+import { allCommands, commandEnglish } from "./commands";
+import { featureEnglish, featureMeta } from "./featureMeta";
+import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint, STANDARD_VIEWS } from "../input/shortcuts";
-import { t } from "../i18n";
+import { t, tEnglish } from "../i18n";
 import type { Feature, PlaneDef } from "../types";
 import type { EdgeHit, FaceHit } from "../viewport/picking";
 import type { FacePlanePick } from "../features/facePlanePick";
@@ -82,7 +82,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // The gizmo a body pick raises would refuse every item below. A no-op for datum, edge and face menus.
       dropBodyGizmo();
       if (toolBusy()) {
-        setStatus("Finish the active tool first (Esc cancels it)", "");
+        setStatus(t("ctx.busy"), "");
         return;
       }
       fn();
@@ -95,17 +95,17 @@ export function createContextMenus(deps: ContextMenusDeps) {
     );
     selectFeature(datumId); // same as clicking it, the menu acts on a visible selection
     contextMenu(x, y, [
-      { label: "Cut all bodies", onClick: unlessBusy(() => void startCutByPlane(datumId)) },
+      { ...namedRow("items.plane.cutAll"), onClick: unlessBusy(() => void startCutByPlane(datumId)) },
       // Enter by id: the def is only the cached placement, the id makes the sketch follow later offset edits.
       {
-        label: "Sketch on plane",
+        ...namedRow("ctx.plane.sketch"),
         disabled: !f,
         onClick: unlessBusy(() => {
           if (f) sketch.enter(datumPlaneDef(f), store, undefined, f.id);
         }),
       },
       {
-        label: "Offset plane",
+        ...namedRow("ctx.plane.offset"),
         disabled: !f,
         onClick: unlessBusy(() => {
           if (f) offsetPlaneFromFace(datumPlaneDef(f), f.id);
@@ -115,7 +115,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // setPlaneVisibility deliberately emits nothing (a plane toggle costs no
       // rebuild), so the browser is told by hand, see stores/browser.ts.
       {
-        label: "Hide plane",
+        ...namedRow("ctx.plane.hide"),
         onClick: () => {
           store.setPlaneVisibility(datumId, false);
           syncDatumPlanes();
@@ -123,7 +123,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         },
       },
       {
-        label: "Delete plane",
+        ...namedRow("ctx.plane.delete"),
         danger: true,
         onClick: unlessBusy(() => deleteFeatures([datumId])),
       },
@@ -134,7 +134,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
       {
-        label: "Fillet",
+        ...namedRow("tool.fillet"),
         shortcut: keyHint("fillet"),
         onClick: unlessBusy(() => {
           viewport.selectOnlyEdge(hit.edge);
@@ -142,7 +142,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       },
       {
-        label: "Chamfer",
+        ...namedRow("tool.chamfer"),
         shortcut: keyHint("chamfer"),
         onClick: unlessBusy(() => {
           viewport.selectOnlyEdge(hit.edge);
@@ -150,14 +150,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       },
       {
-        label: "Plane normal to edge",
+        ...namedRow("ctx.edge.planeNormal"),
         onClick: unlessBusy(() => {
           viewport.selectOnlyEdge(hit.edge);
           handleAction("plane-normal-edge");
         }),
       },
       {
-        label: "Plane at angle",
+        ...namedRow("ctx.edge.planeAngle"),
         onClick: unlessBusy(() => {
           viewport.selectOnlyEdge(hit.edge);
           handleAction("plane-angle");
@@ -165,7 +165,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       },
       { separator: true, label: "" },
       {
-        label: "Measure from here",
+        ...namedRow("ctx.measureFrom"),
         shortcut: keyHint("measure"),
         onClick: unlessBusy(() => {
           setLastAction("measure");
@@ -186,15 +186,16 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const flatFace = facePick && facePick.kind === "planar" ? facePick : null;
     const exportFace = (format: "dxf" | "svg") => {
       if (!flatFace) return;
-      const label = `${(bodyId && store.bodyName(bodyId)) || "part"} face`;
+      const body = (bodyId && store.bodyName(bodyId)) || "";
+      const label = body ? t("export.flat.face", { body }) : t("export.flat.partFace");
       exportFlat({ face: flatFace.selector, plane: flatFace.def, label }, format);
     };
     const ownerId = featureForFace(hit.faceId);
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
-    const ownerLabel = owner ? featureEnglish(owner) : "";
+    const ownerKey = owner && isInspectorEditable(owner.type) ? "ctx.face.edit" : "ctx.face.select";
     const items: CtxItem[] = [
       {
-        label: "Press/Pull face",
+        ...namedRow("ctx.face.pressPull"),
         shortcut: keyHint("presspull"),
         onClick: unlessBusy(() => {
           viewport.selectOnlyFace(hit.faceId);
@@ -202,7 +203,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       },
       {
-        label: "Sketch on this face",
+        ...namedRow("ctx.face.sketch"),
         shortcut: keyHint("sketch"),
         disabled: !plane,
         onClick: unlessBusy(() => {
@@ -210,7 +211,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       },
       {
-        label: "Measure from here",
+        ...namedRow("ctx.measureFrom"),
         shortcut: keyHint("measure"),
         onClick: unlessBusy(() => {
           setLastAction("measure");
@@ -219,14 +220,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
       },
       { separator: true, label: "" },
       {
-        label: "Select coplanar faces",
+        ...namedRow("ctx.face.coplanar"),
         onClick: unlessBusy(() => {
           const n = viewport.selectCoplanarFaces(hit.faceId);
-          setStatus(`Selected ${n} coplanar face${n === 1 ? "" : "s"}`, "");
+          setStatus(t("ctx.face.coplanarDone", { n }), "");
         }),
       },
       {
-        label: "Offset plane from face",
+        ...namedRow("ctx.face.offsetPlane"),
         shortcut: keyHint("offset-plane"),
         disabled: !plane,
         onClick: unlessBusy(() => {
@@ -234,29 +235,30 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       },
       ...(facePick?.kind === "tangent"
-        ? [{ label: "Axis of cylinder", onClick: unlessBusy(() => axisFromRoundFace(facePick)) }]
+        ? [{ ...namedRow("ctx.face.axis"), onClick: unlessBusy(() => axisFromRoundFace(facePick)) }]
         : []),
       { separator: true, label: "" },
-      { label: "Export face as DXF…", disabled: !flatFace, onClick: unlessBusy(() => exportFace("dxf")) },
-      { label: "Export face as SVG…", disabled: !flatFace, onClick: unlessBusy(() => exportFace("svg")) },
+      { ...namedRow("ctx.face.exportDxf"), disabled: !flatFace, onClick: unlessBusy(() => exportFace("dxf")) },
+      { ...namedRow("ctx.face.exportSvg"), disabled: !flatFace, onClick: unlessBusy(() => exportFace("svg")) },
       { separator: true, label: "" },
       ...(owner
         ? [
             {
-              label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`,
+              label: t(ownerKey, { feature: featureMeta(owner).label }),
+              refName: tEnglish(ownerKey, { feature: featureEnglish(owner) }),
               onClick: unlessBusy(() => editFeature(owner.id)),
             },
           ]
         : []),
       ...(bodyId
         ? [
-            { label: "Hide body", onClick: () => hideBody(bodyId) },
-            { label: "Isolate body", onClick: () => isolateBody(bodyId) },
+            { ...namedRow("ctx.hideBody"), onClick: () => hideBody(bodyId) },
+            { ...namedRow("ctx.isolateBody"), onClick: () => isolateBody(bodyId) },
           ]
         : []),
       { separator: true, label: "" },
       {
-        label: "Delete face (heal)",
+        ...namedRow("ctx.face.delete"),
         danger: true,
         onClick: unlessBusy(() => {
           viewport.selectOnlyFace(hit.faceId);
@@ -278,7 +280,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       const run = reply?.resize?.tangent?.run;
       if (!Array.isArray(run) || run.length < 2 || !menu.open || menu.epoch !== epoch) return;
       const item: CtxItem = {
-        label: "Select tangent faces",
+        ...namedRow("ctx.face.tangent"),
         onClick: unlessBusy(() => {
           const ids = new Set([hit.faceId]);
           for (const p of run) {
@@ -286,11 +288,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
             if (id !== null) ids.add(id);
           }
           viewport.selectOnlyFaces([...ids]);
-          setStatus(`Selected ${ids.size} tangent face${ids.size === 1 ? "" : "s"}`, "");
+          setStatus(t("ctx.face.tangentDone", { n: ids.size }), "");
         }),
       };
       const items = menu.items;
-      const at = items.findIndex((i) => i.label === "Select coplanar faces") + 1;
+      const at = items.findIndex((i) => i.refName === tEnglish("ctx.face.coplanar")) + 1;
       menu.items = markRaw([...items.slice(0, at), item, ...items.slice(at)]);
     });
   }
@@ -321,28 +323,36 @@ export function createContextMenus(deps: ContextMenusDeps) {
     if (!viewport.getSelectedBodies().includes(bodyId)) viewport.setSelectedBodies([bodyId]);
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
-      { label: "Move", shortcut: keyHint("move"), onClick: unlessBusy(() => handleAction("move")) },
+      { ...namedRow("tool.move"), shortcut: keyHint("move"), onClick: unlessBusy(() => handleAction("move")) },
       // Neither needs an edge pre-picked (edgeFeatureTool.start asks), so both work from a plain body selection.
-      { label: "Fillet…", shortcut: keyHint("fillet"), onClick: unlessBusy(() => handleAction("fillet")) },
-      { label: "Chamfer…", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => handleAction("chamfer")) },
+      {
+        ...namedRow("ctx.body.fillet"),
+        shortcut: keyHint("fillet"),
+        onClick: unlessBusy(() => handleAction("fillet")),
+      },
+      {
+        ...namedRow("ctx.body.chamfer"),
+        shortcut: keyHint("chamfer"),
+        onClick: unlessBusy(() => handleAction("chamfer")),
+      },
       // All three booleans, not one dialog entry, so a right-clicked body is one click from the boolean you want.
       ...BOOLEAN_COMMANDS.map((c) => ({
-        label: `${booleanEnglish(c.op)} with…`,
+        ...namedRow("ctx.body.boolean", { op: c.op }),
         shortcut: keyHint(c.action),
         onClick: unlessBusy(() => handleAction(c.action)),
       })),
-      { label: "Separate", onClick: unlessBusy(() => handleAction("separate")) },
-      { label: "Properties", onClick: unlessBusy(() => handleAction("properties")) },
+      { ...namedRow("tool.separate"), onClick: unlessBusy(() => handleAction("separate")) },
+      { ...namedRow("tool.properties"), onClick: unlessBusy(() => handleAction("properties")) },
       { separator: true, label: "" },
-      { label: "Hide body", onClick: () => hideBody(bodyId) },
-      { label: "Isolate body", onClick: () => isolateBody(bodyId) },
+      { ...namedRow("ctx.hideBody"), onClick: () => hideBody(bodyId) },
+      { ...namedRow("ctx.isolateBody"), onClick: () => isolateBody(bodyId) },
       {
-        label: "Show all bodies",
+        ...namedRow("items.vis.showAll", { what: "bodies" }),
         shortcut: keyHint("show-all-bodies"),
         onClick: () => handleAction("show-all-bodies"),
       },
       { separator: true, label: "" },
-      { label: "Rename…", onClick: () => useBrowserStore().beginRename(bodyId) },
+      { ...namedRow("ctx.body.rename"), onClick: () => useBrowserStore().beginRename(bodyId) },
       // Same submenu as the Browser row: on a big import the part you want to file is the one you just clicked.
       moveToElementMenu(bodyId),
       materialMenu(
@@ -357,8 +367,8 @@ export function createContextMenus(deps: ContextMenusDeps) {
       ),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
-      { label: "Duplicate body", onClick: unlessBusy(() => store.duplicateBody(bodyId)) },
-      { label: "Remove body", danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },
+      { ...namedRow("ctx.body.duplicate"), onClick: unlessBusy(() => store.duplicateBody(bodyId)) },
+      { ...namedRow("ctx.body.remove"), danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },
     ]);
   }
 
@@ -371,16 +381,21 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const lastAction = getLastAction();
     contextMenu(x, y, [
       {
-        label: lastAction ? `Repeat ${actionLabel(lastAction)}` : "Repeat last command",
+        ...(lastAction
+          ? {
+              label: t("ctx.repeat", { command: actionLabel(lastAction) }),
+              refName: tEnglish("ctx.repeat", { command: commandEnglish(lastAction) ?? lastAction }),
+            }
+          : namedRow("ctx.repeatNone")),
         disabled: !lastAction,
         onClick: () => {
           if (lastAction) handleAction(lastAction);
         },
       },
       { separator: true, label: "" },
-      { label: "Fit view", shortcut: keyHint("fit"), onClick: () => handleAction("fit") },
+      { ...namedRow("ctx.fit"), shortcut: keyHint("fit"), onClick: () => handleAction("fit") },
       {
-        label: "Look",
+        ...namedRow("ctx.look"),
         children: STANDARD_VIEWS.map((view) => ({
           label: t("view.named", { view }),
           shortcut: keyHint(view),
@@ -388,7 +403,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         })),
       },
       {
-        label: "Show all bodies",
+        ...namedRow("items.vis.showAll", { what: "bodies" }),
         shortcut: keyHint("show-all-bodies"),
         onClick: () => handleAction("show-all-bodies"),
       },

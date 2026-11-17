@@ -7,6 +7,7 @@ vi.mock("../../src/ui/announce", () => ({ announce }));
 
 import { toast } from "../../src/ui/toast";
 import { dismissErrorNotice } from "../../src/ui/errorNotice";
+import { setLanguage } from "../../src/i18n";
 
 // the toast store times its rows with window.setTimeout
 (globalThis as Record<string, unknown>).window ??= globalThis;
@@ -48,6 +49,17 @@ describe("toasts are spoken", () => {
       ["Update 1.7 is ready! Restart button in Notifications.", "assertive", {}],
       ["Face moved? Re-pick face button in Notifications.", "polite", {}],
       ["Fillet 3 is stale. Rebuild button in Notifications.", "polite", {}],
+    ]);
+  });
+
+  it("names the button in Japanese after its own stop or a full width one", async () => {
+    await setLanguage("ja");
+    toast("ボックス 2 を削除しました", { action: { label: "元に戻す", onClick: () => {} } });
+    toast("更新の準備ができました！", { action: { label: "再起動", onClick: () => {} } });
+    await setLanguage("system");
+    expect(announce.mock.calls).toEqual([
+      ["ボックス 2 を削除しました。「元に戻す」ボタンは通知にあります。", "polite", {}],
+      ["更新の準備ができました！「再起動」ボタンは通知にあります。", "polite", {}],
     ]);
   });
 

@@ -1,5 +1,7 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { sceneStats } from "../../src/diagnostics/sceneStats";
+import { setLanguage } from "../../src/i18n";
 import { TracerRefused, type TracerBackend } from "../../src/viewport/pathtrace/backend";
 import {
   FIRST_SAMPLE_TIMEOUT_MS,
@@ -22,7 +24,7 @@ class FakeTracer implements TracerBackend {
   calls: string[] = [];
   count = 0;
   pending: ((n: number) => void)[] = [];
-  faultCb: ((why: string) => void) | null = null;
+  faultCb: ((why: string, english?: string) => void) | null = null;
   async init() {}
   setSize() {
     this.calls.push("size");
@@ -98,7 +100,7 @@ class FakeTracer implements TracerBackend {
   dispose() {
     this.calls.push("dispose");
   }
-  onFault(cb: (why: string) => void) {
+  onFault(cb: (why: string, english?: string) => void) {
     this.faultCb = cb;
   }
   answer(n: number) {
@@ -785,6 +787,42 @@ describe("path trace host", () => {
     await flush();
     await flush();
     expect(faults[0]).toMatch(/no adapter/);
+  });
+
+  it("shows a fault in German and keeps it in English for the problem report", async () => {
+    await setLanguage("de");
+    vi.stubGlobal("window", {});
+    try {
+      const shown: string[] = [];
+      const { host } = await started();
+      host.onFault = (why) => shown.push(why);
+      host.tick(frame({}, 1000));
+      host.tick(frame({}, 1000 + FIRST_SAMPLE_TIMEOUT_MS + 1));
+      expect(shown).toEqual(["Die Pfadverfolgung hat in 10 Sekunden kein Sample gesammelt"]);
+      const trace = { state: "off", backend: "", samples: 0, denoised: false, fault: host.lastFault, gpu: "" };
+      const canvas = { clientWidth: 10, clientHeight: 10 } as HTMLCanvasElement;
+      const stats = sceneStats({ model: null, canvas, pixelRatio: 1, frameMs: null, trace });
+      expect(stats.find((l) => l.includes("last fault"))).toMatch(
+        /last fault Path tracing gathered no sample in 10 seconds$/,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      await setLanguage("system");
+    }
+  });
+
+  it("passes a tracer's own English line to the report beside the German one", async () => {
+    await setLanguage("de");
+    try {
+      const faults: [string, string][] = [];
+      const { host, t } = await started();
+      host.onFault = (why, _off, english) => faults.push([why, english]);
+      t.faultCb!("Verbindung zur GPU verloren: x", "GPU device lost: x");
+      expect(faults).toEqual([["Verbindung zur GPU verloren: x", "GPU device lost: x"]]);
+      expect(host.lastFault).toBe("GPU device lost: x");
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("drops to Realtime on a backend that refuses the device, without counting it toward turning off", async () => {

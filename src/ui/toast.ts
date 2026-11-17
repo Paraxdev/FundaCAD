@@ -10,6 +10,8 @@ export interface ToastOptions {
   timeout?: number;
   /** Kept with the console entry, for an error the full report. */
   detail?: unknown;
+  /** The message in English, for the problem report's breadcrumb when the message is translated. */
+  english?: string;
   source?: string;
   /** An error's announcer key, see showErrorNotice. */
   announceKey?: string;
@@ -24,11 +26,13 @@ import { useToastStore } from "../stores/toasts";
 import { showErrorNotice } from "./errorNotice";
 import { announce } from "./announce";
 import { noticeHoldMs } from "./noticeTime";
+import { t } from "../i18n";
+import { joinSaid } from "./joinSaid";
 
 // A screen reader user cannot see the button, so the line names it and where it is.
 function spokenLine(message: string, action: ToastOptions["action"]): string {
   if (!action) return message;
-  return `${message}${/[.!?]$/.test(message) ? "" : "."} ${action.label} button in Notifications.`;
+  return joinSaid(message, t("toast.spokenAction", { action: action.label }));
 }
 
 let last: { message: string; kind: ToastKind; id: number | null } | null = null;
@@ -41,7 +45,7 @@ function showCopy(message: string, kind: ToastKind): void {
 /** The toast's id for `dismissToast`, or null for an error, which is the title bar notice. */
 export function toast(message: string, opts: ToastOptions = {}): number | null {
   const kind = opts.kind ?? "info";
-  crumb(`[${kind}] ${message}`); // toasts double as bug-report breadcrumbs
+  crumb(`[${kind}] ${opts.english ?? message}`); // toasts double as bug-report breadcrumbs
   // Every toast is logged whole, not only errors: the warning before a failure often explains it.
   const entry = log(kind, message, { source: opts.source ?? "ui", detail: opts.detail });
   // An error is the title bar notice instead, which opens this entry.
@@ -70,7 +74,7 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
 /** Says the newest message again and shows it again. It never becomes the newest message itself. */
 export function showLastMessage(): void {
   if (!last) {
-    showCopy("No messages yet", "info");
+    showCopy(t("toast.noMessages"), "info");
     return;
   }
   const { message, kind, id } = last;

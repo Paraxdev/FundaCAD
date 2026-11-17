@@ -1,6 +1,9 @@
 // The one way to speak to a screen reader: Announcer.vue mounts the two live regions once at boot, outside any
 // inert subtree, and everything transient (prompts, results, errors) goes through announce().
 
+import { t } from "../i18n";
+import { joinSaid } from "./joinSaid";
+
 export type AnnouncePriority = "polite" | "assertive";
 export type Verbosity = "off" | "errors" | "normal" | "verbose";
 
@@ -60,24 +63,31 @@ function heard(priority: AnnouncePriority, verbose: boolean): boolean {
   return v === "verbose" || !verbose;
 }
 
+// The unit is framed whole, so Japanese says 平方mm, and the value before it picks French carré or carrés.
+const POWER = /(?:(\d+(?:[.,]\d+)?)(\s*))?(\p{L}*)([²³])/gu;
+
+function power(_all: string, value: string | undefined, gap: string | undefined, unit: string, mark: string): string {
+  const n = value === undefined ? NaN : Number(value.replace(",", "."));
+  return `${value ?? ""}${gap ?? ""}${t(mark === "²" ? "spoken.squared" : "spoken.cubed", { unit, n })}`;
+}
+
 /** Text as a screen reader should hear it: glyphs some voices skip or spell out become words. */
 export function spoken(text: string): string {
   return text
     .replace(/\s*·\s*/g, ", ")
-    .replace(/⌀\s*/g, "diameter ")
-    .replace(/²/g, " squared")
-    .replace(/³/g, " cubed")
-    .replace(/⌘(?![-+])\s*/g, "Command ")
-    .replace(/⌘/g, "Command")
-    .replace(/⌥(?![-+])\s*/g, "Option ")
-    .replace(/⌥/g, "Option")
+    .replace(/⌀\s*/g, `${t("spoken.diameter")} `)
+    .replace(POWER, power)
+    .replace(/⌘(?![-+])\s*/g, `${t("keys.spoken.command")} `)
+    .replace(/⌘/g, t("keys.spoken.command"))
+    .replace(/⌥(?![-+])\s*/g, `${t("keys.spoken.option")} `)
+    .replace(/⌥/g, t("keys.spoken.option"))
     .replace(/…/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function joined(parts: readonly string[]): string {
-  return parts.reduce((all, p) => (!all ? p : /[.!?:]$/.test(all) ? `${all} ${p}` : `${all}. ${p}`), "");
+  return parts.reduce(joinSaid, "");
 }
 
 class Channel {

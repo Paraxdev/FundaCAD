@@ -870,6 +870,25 @@
     {
       "en": "example",
       "text": "Beispiel"
+    },
+    {
+      "en": "Interference",
+      "text": "Kollision",
+      "note": "the tool, and a clash it finds"
+    },
+    {
+      "en": "Interference check",
+      "text": "Kollisionsprüfung",
+      "note": "what the tool runs, and its panel before a result"
+    },
+    {
+      "en": "Bounding box",
+      "text": "Begrenzungsquader"
+    },
+    {
+      "en": "tracer",
+      "text": "Verfolger",
+      "note": "the native or WebGPU tracer, not Tracer; path tracing itself is Pfadverfolgung"
     }
   ]
 }

@@ -22,6 +22,7 @@ import { nextTick, ref } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
+import PluginSectionItem from "../../../src/components/shell/PluginSectionItem.vue";
 import Select from "../../../src/components/ui/Select.vue";
 import { useToastStore } from "../../../src/stores/toasts";
 import { useShellStore } from "../../../src/stores/shell";
@@ -813,6 +814,18 @@ describe("BrowserPane", () => {
       .filter((r) => r.kind === "folder")
       .map((r) => r.text);
     expect(heads).toEqual(["Origin", "Contributed", "Bodies", "Sketches"]);
+  });
+
+  it("names a contributed section's row with its plugin's label, else with its key made readable", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+    contribute("Some.Body", {
+      browserSections: [{ key: "marker", component: MarkerSection, label: () => "Markierungen" }],
+    });
+    contribute("Other.Body", { browserSections: [{ key: "otherMarker", component: MarkerSection }] });
+    const w = render(fake);
+    await nextTick();
+    const labels = w.findAllComponents(PluginSectionItem).map((c) => c.props("label"));
+    expect(labels.sort()).toEqual(["Markierungen", "Other marker"]);
   });
 
   it("forgets a section when its plugin stops", async () => {

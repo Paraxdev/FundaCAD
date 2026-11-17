@@ -73,10 +73,7 @@ export function roundSize({ radius, full }: RoundSize): string {
 
 /** The prompt for a selected round face; only a full wrap can be dragged away. */
 export function roundFacePrompt(round: RoundSize): string {
-  return (
-    `Round face selected (${roundSize(round)}), drag the handle to resize it` +
-    `${round.full ? " · drag it away to nothing to remove it" : ""} · Esc to clear`
-  );
+  return t("selection.roundFace", { size: roundSize(round), full: round.full ? "yes" : "no" });
 }
 
 /** "3 faces", "2 edges · 300.74 mm", "1 face · 1 edge · 40 mm". One face or edge goes through describePick once its

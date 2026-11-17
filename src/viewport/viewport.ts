@@ -68,6 +68,7 @@ import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
+import { t, tEnglish } from "../i18n";
 import { awaitTreePick } from "../ui/treePick";
 import { overrideRowAnswer, viewOverrideOf } from "./viewOverride";
 import type { DocumentStore } from "../document/store";
@@ -444,16 +445,16 @@ export class Viewport {
       this.requestRender();
     };
     this.trace.onStateChange = (st) => this.onTraceStateChange?.(st);
-    this.trace.onFault = (why, off) => {
+    this.trace.onFault = (why, off, english) => {
       if (this.tracerKind) this.tracerFaults.add(this.tracerKind);
       const check = failedSelfCheck();
       if (check && this.tracerKind === "native" && this.native?.available)
         this.native = refusedBySelfCheck(this.native, check);
-      this.dropTrace(why, off);
+      this.dropTrace(why, off, english);
     };
-    this.trace.onRefuse = (why) => {
+    this.trace.onRefuse = (why, english) => {
       if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
-      this.onTraceNotice?.(why);
+      this.onTraceNotice?.(why, english);
     };
     onExperimentalPrefsChange(() => {
       this.trace.refreshLimits();
@@ -1139,8 +1140,9 @@ export class Viewport {
   private tracerPref = renderPrefs().tracer;
   private tierListeners = new Set<() => void>();
   /** A GPU fault dropped the view to Realtime; `off` once Path traced is off for the session. */
-  onTraceFault: ((why: string, off: boolean) => void) | null = null;
-  onTraceNotice: ((message: string) => void) | null = null;
+  /** `english` is the line the problem report keeps. */
+  onTraceFault: ((why: string, off: boolean, english: string) => void) | null = null;
+  onTraceNotice: ((message: string, english: string) => void) | null = null;
   onTraceStateChange: ((s: TraceState) => void) | null = null;
 
   /** The tier changes without a prefs change once the WebGPU probe lands or
@@ -1209,7 +1211,7 @@ export class Viewport {
       }
     }
     if (died) clearGuard();
-    if (notice) this.onTraceNotice?.("FundaCAD closed while path tracing was starting, so the view opened in Realtime");
+    if (notice) this.onTraceNotice?.(t("render.trace.bootFallback"), tEnglish("render.trace.bootFallback"));
     this.gpu = probe;
     crumb(describeProbe(probe));
     this.tierChanged();
@@ -1232,9 +1234,9 @@ export class Viewport {
     return createTracerOf(kind, dev?.prefer, dev?.call);
   }
 
-  private dropTrace(why: string, off: boolean) {
+  private dropTrace(why: string, off: boolean, english: string) {
     if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
-    this.onTraceFault?.(why, off);
+    this.onTraceFault?.(why, off, english);
     this.tierChanged();
   }
 
@@ -3979,7 +3981,7 @@ export class Viewport {
       () => this.cancelSetOverride(),
     );
     this.setOverrideSide = side;
-    setPrompt(`Click a model face to set as "${FACE_VIEWS[side].label}" (Esc to cancel)`);
+    setPrompt(t("viewport.cube.pickFace", { side: FACE_VIEWS[side].label }));
     this.overrideKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") this.cancelSetOverride();
     };
@@ -4003,7 +4005,7 @@ export class Viewport {
     const side = this.setOverrideSide!;
     const plane = this.pickFacePlane(e.clientX, e.clientY);
     if (!plane) {
-      setPrompt("No face there, click a model face (Esc to cancel)");
+      setPrompt(t("viewport.cube.noFace"));
       return;
     }
     this.setOverrideFrom(side, viewOverrideOf(plane));

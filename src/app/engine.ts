@@ -256,7 +256,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     useUiStore().traceState = st;
   };
   e.viewport.onTraceFault = traceFaultToast;
-  e.viewport.onTraceNotice = (message) => toast(message, { kind: "warning", source: "pathtrace" });
+  e.viewport.onTraceNotice = (message, english) => toast(message, { kind: "warning", source: "pathtrace", english });
   e.viewport.onStutterChange = (on) => {
     useUiStore().lowPerformance = on;
   };

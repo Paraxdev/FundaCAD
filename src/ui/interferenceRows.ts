@@ -1,4 +1,6 @@
+import { t } from "../i18n";
 import type { ClashRow, ClearanceRow, InterferenceData } from "../stores/panels";
+import { bodyReason } from "./engineReasons";
 
 interface Reply {
   pairs: { a: string; b: string; aName: string; bName: string; volume: number }[];
@@ -15,44 +17,61 @@ interface Display {
 }
 
 export function interferenceTitle(clashes: number): string {
-  return clashes ? `Interference, ${clashes} clash${clashes > 1 ? "es" : ""}` : "Interference";
+  return t("interference.title", { n: clashes });
 }
-
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** What a finished check says aloud; `closePairs` is null unless Clearance mode ran. */
 export function interferenceSummary(clashes: number, closePairs: number | null, unchecked: number): string {
-  const parts = [clashes ? count(clashes, "clash", "clashes") : "no clashes"];
-  if (closePairs !== null) parts.push(closePairs ? count(closePairs, "close pair", "close pairs") : "no close pairs");
-  if (unchecked) parts.push(`${count(unchecked, "body", "bodies")} could not be checked`);
-  const text = parts.join(", ");
-  return `Interference: ${text}`;
+  return t("interference.summary", {
+    clashes,
+    clearance: closePairs === null ? "no" : "yes",
+    close: closePairs ?? 0,
+    unchecked,
+  });
+}
+
+/** The status bar line of a finished check; `closePairs` is null unless Clearance mode ran. */
+export function interferenceStatus(clashes: number, closePairs: number | null, unchecked: number): string {
+  return t("interference.status.done", {
+    found: clashes || closePairs ? "yes" : "no",
+    clashes,
+    clearance: closePairs === null ? "no" : "yes",
+    close: closePairs ?? 0,
+    unchecked,
+  });
 }
 
 export function interferenceData(reply: Reply, d: Display): InterferenceData {
   const names = (r: { a: string; b: string; aName: string; bName: string }) =>
-    `${d.label(r.a, r.aName)} and ${d.label(r.b, r.bName)}`;
+    t("interference.pair", { a: d.label(r.a, r.aName), b: d.label(r.b, r.bName) });
   const f = d.scale;
   // Without the word in the value, mm³ against mm is all a sighted reader has to tell a clash from a close pair.
   const clashes: ClashRow[] = reply.pairs.map((p) => {
-    const vol = `${d.round(p.volume * f * f * f)} ${d.unit}³`;
+    const volume = `${d.round(p.volume * f * f * f)} ${d.unit}³`;
     return {
       key: `${p.a} ${p.b}`,
       label: names(p),
-      v: `${vol} overlap`,
-      spoken: `${names(p)}, overlap ${vol}`,
+      v: t("interference.overlap", { volume }),
+      spoken: t("interference.overlapSaid", { pair: names(p), volume }),
       a: p.a,
       b: p.b,
     };
   });
   const clearances: ClearanceRow[] = reply.clearances.map((c) => {
-    const v = `${d.round(c.distance * f)} ${d.unit} apart`;
-    return { key: `${c.a} ${c.b}`, label: names(c), v, spoken: `${names(c)}, ${v}`, a: c.a, b: c.b };
+    const v = t("interference.apart", { distance: `${d.round(c.distance * f)} ${d.unit}` });
+    return {
+      key: `${c.a} ${c.b}`,
+      label: names(c),
+      v,
+      spoken: t("interference.apartSaid", { pair: names(c), apart: v }),
+      a: c.a,
+      b: c.b,
+    };
   });
   return {
     title: interferenceTitle(clashes.length),
     clashes,
     clearances,
-    unchecked: reply.unchecked.map((u) => `${d.label(u.id, u.name)} ${u.reason}`),
+    unchecked: reply.unchecked.map((u) => bodyReason(d.label(u.id, u.name), u.reason)),
   };
 }

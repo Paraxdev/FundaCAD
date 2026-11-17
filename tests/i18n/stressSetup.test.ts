@@ -135,18 +135,21 @@ describe("the Stress setup choices", () => {
     expect(german.supports[0]!.label).not.toBe("Fixed");
   });
 
-  it("name the material presets as they are in every language, only the Custom label follows it", async () => {
-    const presets = STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.name }));
+  it("keep trade names like PLA in every language, word names and Custom follow it, the saved values stay", async () => {
+    const presets = (file: Record<string, string>) =>
+      STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.word ? file[m.word] : m.name }));
     const english = materialOptions();
     await setLanguage("de");
     const german = materialOptions();
     await setLanguage("ja");
 
     expect([english, german, materialOptions()]).toEqual([
-      [...presets, { value: "Custom", label: "Custom" }],
-      [...presets, { value: "Custom", label: de["stress.material.custom"] }],
-      [...presets, { value: "Custom", label: ja["stress.material.custom"] }],
+      [...STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.name })), { value: "Custom", label: "Custom" }],
+      [...presets(de), { value: "Custom", label: de["stress.material.custom"] }],
+      [...presets(ja), { value: "Custom", label: ja["stress.material.custom"] }],
     ]);
+    expect(german.find((m) => m.value === "PLA")?.label).toBe("PLA");
+    expect(german.find((m) => m.value === "steel S235")?.label).toBe("Stahl S235");
   });
 });
 

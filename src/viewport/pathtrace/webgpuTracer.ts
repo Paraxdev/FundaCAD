@@ -3,7 +3,15 @@
 
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { SAMPLE_CAP, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
+import {
+  faultLine,
+  SAMPLE_CAP,
+  type FaultLine,
+  type PictureOptions,
+  type TraceLook,
+  type TraceScene,
+  type TracerBackend,
+} from "./backend";
 import { coverPreview, fitPreview, FrameBudget, type PreviewBackend, type PreviewTracer } from "./budget";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
@@ -51,7 +59,7 @@ export class WebGpuTracer implements TracerBackend {
   private tracer: InstanceType<TracerModule["WebGPUPathTracer"]> | null = null;
   private scene = new THREE.Scene();
   private camera: THREE.Camera | null = null;
-  private faultCbs: ((why: string) => void)[] = [];
+  private faultCbs: ((why: string, english?: string) => void)[] = [];
   private disposed = false;
   private tracerMod: TracerModule | null = null;
   private tsl: TslModule | null = null;
@@ -80,13 +88,13 @@ export class WebGpuTracer implements TracerBackend {
     this.canvas = document.createElement("canvas");
   }
 
-  onFault(cb: (why: string) => void) {
+  onFault(cb: (why: string, english?: string) => void) {
     this.faultCbs.push(cb);
   }
 
-  private fault(why: string) {
+  private fault(line: FaultLine) {
     if (this.disposed) return;
-    for (const cb of this.faultCbs) cb(why);
+    for (const cb of this.faultCbs) cb(line.shown, line.english);
   }
 
   async init() {
@@ -125,8 +133,12 @@ export class WebGpuTracer implements TracerBackend {
       onDeviceLost: (info: { message?: string; reason?: string }) => void;
       onError: (e: { type?: string; message?: string }) => void;
     };
-    hooks.onDeviceLost = (info) => this.fault(`GPU device lost: ${info.message ?? info.reason ?? "unknown"}`);
-    hooks.onError = (e) => this.fault(`GPU ${e.type ?? "error"}: ${e.message ?? ""}`);
+    hooks.onDeviceLost = (info) =>
+      this.fault(faultLine("render.trace.deviceLost", { reason: info.message ?? info.reason ?? "unknown" }));
+    hooks.onError = (e) => {
+      const why = `GPU ${e.type ?? "error"}: ${e.message ?? ""}`;
+      this.fault({ shown: why, english: why });
+    };
     this.renderer = r;
     const device = (r.backend as unknown as { device?: GpuQueueDevice }).device;
     if (device) {

@@ -2,6 +2,7 @@
 // localStorage holds. Panoramas are kept by hash, so two saved looks share one file.
 
 import type { EnvSettings } from "./renderPrefs";
+import { t } from "../i18n";
 
 export type EnvTable = "entries" | "hdrs";
 
@@ -61,13 +62,17 @@ export function indexedDbKv(name = "fundacad-environments"): KvStore {
         reject(req.error);
       };
     }));
-  const run = async <T>(t: EnvTable, mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T> => {
-    const tx = (await db()).transaction(t, mode);
-    const req = op(tx.objectStore(t));
+  const run = async <T>(
+    table: EnvTable,
+    mode: IDBTransactionMode,
+    op: (s: IDBObjectStore) => IDBRequest,
+  ): Promise<T> => {
+    const tx = (await db()).transaction(table, mode);
+    const req = op(tx.objectStore(table));
     return new Promise<T>((resolve, reject) => {
       tx.oncomplete = () => resolve(req.result as T);
       tx.onerror = () => reject(tx.error ?? req.error);
-      tx.onabort = () => reject(tx.error ?? new Error("The environment library write was cancelled."));
+      tx.onabort = () => reject(tx.error ?? new Error(t("render.libraryWriteCancelled")));
     });
   };
   return {

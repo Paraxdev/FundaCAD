@@ -7,7 +7,7 @@ import { useUiStore } from "../stores/ui";
 import { announce } from "../ui/announce";
 import { buildLine, failureKey } from "../ui/buildAnnouncement";
 import { busyLine } from "../ui/buildProgress";
-import { stepEnglish } from "../ui/featureMeta";
+import { numberedName, stepEnglish } from "../ui/featureMeta";
 import { onWorkspaceChange } from "../ui/workspace";
 import { t } from "../i18n";
 
@@ -16,8 +16,13 @@ export const BUSY_SPEAK_MS = 1000;
 
 export function installAnnouncements(e: { store: DocumentStore }): () => void {
   const store = e.store;
+  const step = (id: string) => store.document.features.find((x) => x.id === id);
   const nameOf = (id: string) => {
-    const f = store.document.features.find((x) => x.id === id);
+    const f = step(id);
+    return f ? numberedName(f, store.document.features) : null;
+  };
+  const englishOf = (id: string) => {
+    const f = step(id);
     return f ? stepEnglish(f) : null;
   };
 
@@ -31,7 +36,7 @@ export function installAnnouncements(e: { store: DocumentStore }): () => void {
     // The replay on subscribe and progress ticks after the result are not a build finishing.
     const finished = building;
     building = false;
-    const line = finished ? buildLine(s, lastSettled, nameOf) : null;
+    const line = finished ? buildLine(s, lastSettled, nameOf, englishOf) : null;
     if (!s.previewBuilt && !s.cancelled) lastSettled = s;
     if (!line) return;
     const failed = line.priority === "assertive" && s.errorFeatureId;

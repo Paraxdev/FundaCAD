@@ -1,5 +1,5 @@
 """The Properties, Overhang and Interference panels in German and Japanese on two boxes: each reads in the language,
-and no label or control in it is cut or pushed out of the window by the longer lines."""
+its rows and title too, and no label or control in it is cut or pushed out of the window by the longer lines."""
 
 import pytest
 
@@ -14,6 +14,8 @@ WORDS = {
     "de": {
         "properties": "Eigenschaften",
         "infill": "Füllung",
+        "volume": "Volumen",
+        "box": "Begrenzungsquader",
         "overhang": "Überhanganalyse",
         "legend": [
             "Überhang, braucht Stützstruktur",
@@ -21,13 +23,17 @@ WORDS = {
             "Zeigt nach oben",
         ],
         "clashes": "Kollisionen",
+        "interference": "Kollision",
     },
     "ja": {
         "properties": "のプロパティ",
         "infill": "インフィル",
+        "volume": "体積",
+        "box": "バウンディングボックス",
         "overhang": "オーバーハング解析",
         "legend": ["オーバーハング、サポートが必要", "壁または急な下面、そのまま印刷できます", "上向き"],
         "clashes": "干渉",
+        "interference": "干渉",
     },
 }
 
@@ -89,6 +95,7 @@ def test_properties_reads_in_the_language(seen, lang):
     got = seen[(lang, "properties")]
     assert WORDS[lang]["properties"] in got["title"], got
     assert WORDS[lang]["infill"] in got["keys"], got
+    assert WORDS[lang]["volume"] in got["keys"] and WORDS[lang]["box"] in got["keys"], got
 
 
 @pytest.mark.parametrize("lang", LANGS)
@@ -101,6 +108,7 @@ def test_overhang_reads_in_the_language(seen, lang):
 def test_interference_names_its_list_in_the_language(seen, lang):
     got = seen[(lang, "interference")]
     assert got["lists"][0] == WORDS[lang]["clashes"], got
+    assert WORDS[lang]["interference"] in got["title"], got
 
 
 @pytest.mark.parametrize("lang", LANGS)

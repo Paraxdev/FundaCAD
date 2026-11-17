@@ -4,14 +4,23 @@
 import { asViewMode, groundKey, renderPrefs, setRenderPref, type Ground, type ViewMode } from "./renderPrefs";
 import { workspace, type Workspace } from "./workspace";
 import type { OverlayKind, OverlayState } from "../viewport/overlayKinds";
+import { t } from "../i18n";
 
 export type { ViewMode };
 export { asViewMode };
 
-export const VIEW_MODES: readonly { id: ViewMode; label: string; icon: string }[] = [
-  { id: "matcap", label: "Matcap", icon: "view-matcap" },
-  { id: "realtime", label: "Realtime", icon: "view-realtime" },
-  { id: "pathtraced", label: "Path traced", icon: "view-pathtraced" },
+const viewModeEntry = (id: ViewMode, icon: string) => ({
+  id,
+  get label() {
+    return t("viewControls.mode", { mode: id });
+  },
+  icon,
+});
+
+export const VIEW_MODES: readonly { readonly id: ViewMode; readonly label: string; readonly icon: string }[] = [
+  viewModeEntry("matcap", "view-matcap"),
+  viewModeEntry("realtime", "view-realtime"),
+  viewModeEntry("pathtraced", "view-pathtraced"),
 ];
 
 /** Performance or potato mode or a weak machine (`auto`), plus WebGPU adapter and native tracer availability, each
@@ -33,24 +42,22 @@ export interface RenderTier {
   traceFault?: boolean;
 }
 
-export const PATH_TRACING_OFF =
-  "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.";
-export const PATH_TRACING_AUTO =
-  "This computer was detected as low powered, so turning off performance mode may not lift it.";
-export const PATH_TRACING_NO_GPU = "Path tracing needs a GPU tracer, which this system does not have";
-export const PATH_TRACING_NO_ADAPTER = "Path tracing needs a graphics card, and FundaCAD found none on this computer";
-export const PATH_TRACING_CPU = "This computer only offers software graphics, which is too slow to path trace";
-export const PATH_TRACING_SELF_CHECK =
-  "This graphics card drew the path tracer's test scene wrong, so path tracing is off";
+export const pathTracingOff = (): string => t("viewMode.blocked.off");
+export const pathTracingAuto = (): string => t("viewMode.blocked.auto");
+export const pathTracingNoGpu = (): string => t("viewMode.blocked.noGpu");
+export const pathTracingNoAdapter = (): string => t("viewMode.blocked.noAdapter");
+export const pathTracingCpu = (): string => t("viewMode.blocked.cpu");
+export const pathTracingSelfCheck = (): string => t("viewMode.blocked.selfCheck");
 export const pathTracingLimits = (storageBuffers: number): string =>
-  `This graphics card binds ${storageBuffers} storage buffers and path tracing needs 12`;
-export const PATH_TRACING_PROBING = "Checking whether this system can path trace";
-export const PATH_TRACING_FAULT = "Path tracing stopped after a GPU error and stays off until FundaCAD restarts";
+  t("viewMode.blocked.limits", { n: storageBuffers });
+export const pathTracingProbing = (): string => t("viewMode.blocked.probing");
+export const pathTracingFault = (): string => t("viewMode.blocked.fault");
+export const pathTracingAgain = (): string => t("viewMode.blocked.again");
+const andThen = (first: string, then: string): string => t("viewMode.blocked.then", { first, then });
 
 export type PathTracedBlockReason = "perf" | "nogpu" | "probing" | "fault";
 
 const OVERRIDE_WINDOW_MS = 6000;
-export const PATH_TRACING_AGAIN = "Click again to path trace anyway until FundaCAD restarts.";
 
 // In memory on purpose: a restart greys Path traced again.
 let perfOverride = false;
@@ -65,29 +72,29 @@ export function resetPathTracedOverride(): void {
  *  reason is checked first so a weak machine reads the user's wording. */
 export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReason; tooltip: string } | null {
   if ((tier.lowPower || tier.auto) && !perfOverride) {
-    return { reason: "perf", tooltip: tier.auto ? `${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}` : PATH_TRACING_OFF };
+    return { reason: "perf", tooltip: tier.auto ? andThen(pathTracingOff(), pathTracingAuto()) : pathTracingOff() };
   }
   if (!tier.webgpu) {
     if (tier.webgpu === undefined || tier.native === undefined)
-      return { reason: "probing", tooltip: PATH_TRACING_PROBING };
+      return { reason: "probing", tooltip: pathTracingProbing() };
     if (!tier.native.available) return { reason: "nogpu", tooltip: refusalTooltip(tier.native) };
   }
-  if (tier.traceFault) return { reason: "fault", tooltip: PATH_TRACING_FAULT };
+  if (tier.traceFault) return { reason: "fault", tooltip: pathTracingFault() };
   return null;
 }
 
 function refusalTooltip(n: { class?: string | undefined; storageBuffers?: number | undefined }): string {
   switch (n.class) {
     case "noadapter":
-      return PATH_TRACING_NO_ADAPTER;
+      return pathTracingNoAdapter();
     case "cpu":
-      return PATH_TRACING_CPU;
+      return pathTracingCpu();
     case "limits":
-      return n.storageBuffers === undefined ? PATH_TRACING_NO_GPU : pathTracingLimits(n.storageBuffers);
+      return n.storageBuffers === undefined ? pathTracingNoGpu() : pathTracingLimits(n.storageBuffers);
     case "selfcheck":
-      return PATH_TRACING_SELF_CHECK;
+      return pathTracingSelfCheck();
     default:
-      return PATH_TRACING_NO_GPU;
+      return pathTracingNoGpu();
   }
 }
 
@@ -108,7 +115,7 @@ export function requestPathTraced(
     return { result: "enabled", message: "" };
   }
   warnedAt = now;
-  return { result: "warn", message: `${block.tooltip} ${PATH_TRACING_AGAIN}` };
+  return { result: "warn", message: andThen(block.tooltip, pathTracingAgain()) };
 }
 
 /** The mode to open with. `guardSet` reads the flag left by a tracer start

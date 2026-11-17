@@ -411,6 +411,28 @@ describe("RenderEnvironment in German and Japanese", () => {
     w.unmount();
   });
 
+  it("says why High is off and names the denoiser in the language, following a switch", async () => {
+    denoiserState.info = { active: "filter", version: "", offered: true, bytes: 40_000_000, note: "not downloaded" };
+    const w = mountEnv({ software: true });
+    await flushPromises();
+    const tip = () => w.get('[data-realtime-quality="high"]').attributes("title");
+    const denoiser = () => w.get("[data-denoiser] p").text();
+    expect(tip()).toBe("This computer draws with software graphics, which is too slow for High.");
+    expect(denoiser()).toBe("Native tracer: the edge aware filter.");
+
+    await setLanguage("de");
+    await flushPromises();
+    expect(tip()).toBe("Dieser Computer zeichnet mit Softwaregrafik, die für „Hoch“ zu langsam ist.");
+    expect(denoiser()).toBe("Nativer Verfolger: der kantenerhaltende Filter.");
+
+    await setLanguage("ja");
+    await flushPromises();
+    expect(tip()).toBe("このコンピューターはソフトウェア描画を使っているため、「高」には遅すぎます。");
+    expect(denoiser()).toBe("ネイティブトレーサー: エッジ保持フィルター。");
+    denoiserState.info = null;
+    w.unmount();
+  });
+
   it("names a tile in the language", async () => {
     await setLanguage("de");
     const w = mountEnv();

@@ -647,7 +647,12 @@ const nodes = useDocValue((doc): TreeNode[] => {
   // filter section of its own is always shown, rather than vanishing under a filter nobody told it about.
   for (const { key, section } of sections.value) {
     if (section.filter && isBrowserSection(section.filter) && !show(section.filter)) continue;
-    out.push({ kind: "plugin", k: `x:${key}`, label: sectionName(section.key), component: section.component });
+    out.push({
+      kind: "plugin",
+      k: `x:${key}`,
+      label: section.label?.() ?? sectionName(section.key),
+      component: section.component,
+    });
   }
 
   const scanIds = new Set((store.buildState.result?.bodies ?? []).filter((b) => b.scan).map((b) => b.id));

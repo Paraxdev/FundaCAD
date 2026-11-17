@@ -1,6 +1,9 @@
 // Frame time readout. Rendering is on demand, so no frames reads `render idle` rather than 0 fps, and the ms figure
 // leads because the rate is capped by the display refresh.
 
+import { t } from "../i18n";
+import { spellFixed } from "../ui/measure";
+
 /** Frames older than this are dropped from the rolling window. */
 const WINDOW_MS = 1000;
 /** No rendered frame for this long = the app is idle, not slow. */
@@ -45,11 +48,7 @@ export class FpsMeter {
     const last = this.stamps[this.stamps.length - 1];
     if (last === undefined || now - last > IDLE_AFTER_MS) {
       // Not "idle" alone: beside the history's build state that read as the engine's.
-      this.show(
-        "render idle",
-        "The viewport only draws when something changes, nothing to render right now. This says nothing about the geometry engine." +
-          gpuLine,
-      );
+      this.show(t("viewport.fps.idle"), t("viewport.fps.idleTip") + gpuLine);
       return;
     }
     // Rate over the window, and the mean interval between the frames in it.
@@ -61,10 +60,8 @@ export class FpsMeter {
     const fps = ((n - 1) / span) * 1000;
     const ms = span / (n - 1);
     this.show(
-      `${Math.round(fps)} fps · ${ms.toFixed(1)} ms`,
-      `${n} frames drawn in the last ${Math.round(span)}ms. ` +
-        "The viewport renders on demand, so this only counts frames that were actually drawn." +
-        gpuLine,
+      `${Math.round(fps)} fps · ${spellFixed(ms, 1)} ms`,
+      t("viewport.fps.tip", { n, ms: Math.round(span) }) + gpuLine,
     );
   }
 

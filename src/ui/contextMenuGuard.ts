@@ -1,7 +1,7 @@
 // No right-click opens the webview's own menu: whatever reaches the window unclaimed stops here. Text fields and
 // selections get our own Cut, Copy, Paste and Select all, since the native menu was the only mouse paste.
 
-import { contextMenu, type CtxItem } from "./menu";
+import { contextMenu, namedRow, type CtxItem } from "./menu";
 
 type TextField = HTMLInputElement | HTMLTextAreaElement;
 
@@ -52,7 +52,7 @@ function fieldMenu(field: TextField): CtxItem[] {
   };
   return [
     {
-      label: "Cut",
+      ...namedRow("ctx.edit.cut"),
       shortcut: "Ctrl+X",
       disabled: readOnly || !picked,
       onClick: () => {
@@ -60,9 +60,9 @@ function fieldMenu(field: TextField): CtxItem[] {
         replace("");
       },
     },
-    { label: "Copy", shortcut: "Ctrl+C", disabled: !picked, onClick: () => void writeClipboard(picked) },
+    { ...namedRow("ctx.edit.copy"), shortcut: "Ctrl+C", disabled: !picked, onClick: () => void writeClipboard(picked) },
     {
-      label: "Paste",
+      ...namedRow("ctx.edit.paste"),
       shortcut: "Ctrl+V",
       disabled: readOnly,
       onClick: () =>
@@ -72,7 +72,7 @@ function fieldMenu(field: TextField): CtxItem[] {
     },
     { separator: true, label: "" },
     {
-      label: "Select all",
+      ...namedRow("ctx.edit.selectAll"),
       shortcut: "Ctrl+A",
       disabled: !field.value,
       onClick: () => {
@@ -96,7 +96,7 @@ function editableMenu(host: HTMLElement): CtxItem[] {
   };
   return [
     {
-      label: "Cut",
+      ...namedRow("ctx.edit.cut"),
       shortcut: "Ctrl+X",
       disabled: !picked,
       onClick: () => {
@@ -105,9 +105,9 @@ function editableMenu(host: HTMLElement): CtxItem[] {
         document.execCommand("delete");
       },
     },
-    { label: "Copy", shortcut: "Ctrl+C", disabled: !picked, onClick: () => void writeClipboard(picked) },
+    { ...namedRow("ctx.edit.copy"), shortcut: "Ctrl+C", disabled: !picked, onClick: () => void writeClipboard(picked) },
     {
-      label: "Paste",
+      ...namedRow("ctx.edit.paste"),
       shortcut: "Ctrl+V",
       onClick: () =>
         void readClipboard().then((text) => {
@@ -118,7 +118,7 @@ function editableMenu(host: HTMLElement): CtxItem[] {
     },
     { separator: true, label: "" },
     {
-      label: "Select all",
+      ...namedRow("ctx.edit.selectAll"),
       shortcut: "Ctrl+A",
       onClick: () => {
         host.focus();
@@ -139,7 +139,7 @@ export function fallbackMenu(target: EventTarget | null): CtxItem[] | null {
   const sel = window.getSelection();
   const picked = sel?.toString() ?? "";
   if (picked.trim() && target instanceof Node && sel?.containsNode(target, true))
-    return [{ label: "Copy", shortcut: "Ctrl+C", onClick: () => void writeClipboard(picked) }];
+    return [{ ...namedRow("ctx.edit.copy"), shortcut: "Ctrl+C", onClick: () => void writeClipboard(picked) }];
   return null;
 }
 

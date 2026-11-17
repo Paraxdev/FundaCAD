@@ -174,7 +174,7 @@ function expected(file: Lines, locale: string) {
       [S("forceDirection"), [L("stress.dir.into"), ...axes, L("stress.dir.custom")]],
       [S("loadKind", { i: 2 }), loadKinds],
       [S("whichWayDown"), axes],
-      [S("material"), [...STRESS_MATERIALS.map((m) => m.name), custom]],
+      [S("material"), [...STRESS_MATERIALS.map((m) => (m.word ? L(m.word) : m.name)), custom]],
       [S("meshDetail"), ["coarse", "standard", "fine"].map((m) => L(`stress.mesh.${m}`))],
     ],
     buttons: [

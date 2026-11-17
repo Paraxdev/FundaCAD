@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fallbackMenu } from "../../src/ui/contextMenuGuard";
+import { setLanguage } from "../../src/i18n";
 
 describe("the right-click nobody claimed", () => {
   it("offers our own edit menu in a text field", () => {
@@ -25,5 +26,16 @@ describe("the right-click nobody claimed", () => {
   it("shows nothing at all over anything else", () => {
     expect(fallbackMenu(document.createElement("div"))).toBeNull();
     expect(fallbackMenu(document.createElement("canvas"))).toBeNull();
+  });
+
+  it("reads the edit menu in the chosen language and keeps the English names", async () => {
+    await setLanguage("de");
+    try {
+      const items = fallbackMenu(document.createElement("input"))!.filter((i) => !i.separator);
+      expect(items.map((i) => i.label)).toEqual(["Ausschneiden", "Kopieren", "Einfügen", "Alles auswählen"]);
+      expect(items.map((i) => i.refName)).toEqual(["Cut", "Copy", "Paste", "Select all"]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 });

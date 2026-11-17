@@ -3,6 +3,7 @@
 
 import { shallowRef } from "vue";
 import type { StandardView } from "../viewport/cameras";
+import { t } from "../i18n";
 
 export const VIEW_SUMMARY_ID = "view-summary";
 
@@ -32,16 +33,6 @@ export interface SummaryFacts {
   selection: SelectionFacts;
 }
 
-const VIEW_NAMES: Record<StandardView, string> = {
-  front: "Front",
-  back: "Back",
-  left: "Left",
-  right: "Right",
-  top: "Top",
-  bottom: "Bottom",
-  iso: "Isometric",
-};
-
 // Where the eye sits from the target in each standard view, as cameras.ts and navigator/rig.ts place it.
 const EYES: [StandardView, [number, number, number]][] = [
   ["front", [0, -1, 0]],
@@ -64,34 +55,31 @@ export function standardViewOf(eye: readonly [number, number, number]): Standard
   return null;
 }
 
-export function count(n: number, one: string, many: string): string {
-  return n === 0 ? `no ${many}` : `${n} ${n === 1 ? one : many}`;
-}
-
-const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 export function viewWords(v: ViewFacts): string {
-  return `${v.view ? VIEW_NAMES[v.view] : "Custom"} view, ${v.ortho ? "orthographic" : "perspective"}`;
+  const projection = v.ortho ? "ortho" : "persp";
+  return v.view ? t("camera.standard", { view: v.view, projection }) : t("describe.view.custom", { projection });
 }
 
 export function selectionWords(s: SelectionFacts): string {
   const parts: string[] = [];
   if (s.bodies.length === 1) parts.push(s.bodies[0]!);
-  else if (s.bodies.length) parts.push(count(s.bodies.length, "body", "bodies"));
-  if (s.faces) parts.push(count(s.faces, "face", "faces"));
-  if (s.edges) parts.push(count(s.edges, "edge", "edges"));
-  return parts.length ? `Selected: ${parts.join(", ")}` : "Nothing selected";
+  else if (s.bodies.length) parts.push(t("describe.selected.count", { kind: "body", n: s.bodies.length }));
+  if (s.faces) parts.push(t("describe.selected.count", { kind: "face", n: s.faces }));
+  if (s.edges) parts.push(t("describe.selected.count", { kind: "edge", n: s.edges }));
+  if (!parts.length) return t("selection.said.none");
+  return t("describe.selected", { items: parts.reduce((before, after) => t("describe.next", { before, after })) });
 }
 
 /** "2 bodies (1 hidden), 5 features (1 failed)". */
 export function countWords(f: Pick<SummaryFacts, "bodies" | "hidden" | "features" | "failed">): string {
-  const bodies = count(f.bodies, "body", "bodies") + (f.hidden ? ` (${f.hidden} hidden)` : "");
-  const features = count(f.features, "feature", "features") + (f.failed ? ` (${f.failed} failed)` : "");
-  return capital(`${bodies}, ${features}`);
+  return t("describe.counts", { bodies: f.bodies, hidden: f.hidden, features: f.features, failed: f.failed });
 }
 
 export function viewSummary(f: SummaryFacts): string {
-  return [countWords(f), viewWords(f.view), f.view.section ? "Section on" : "Section off", selectionWords(f.selection)]
-    .map((s) => `${s}.`)
-    .join(" ");
+  return t("describe.summary", {
+    counts: countWords(f),
+    view: viewWords(f.view),
+    section: t("describe.section", { on: f.view.section ? "yes" : "no" }),
+    selection: selectionWords(f.selection),
+  });
 }

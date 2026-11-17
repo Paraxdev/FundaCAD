@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import {
   allInsideRect,
   areaFilterIcon,
-  areaFilterLabel,
   areaSelectionMode,
   areaTakesProfiles,
   AREA_FILTERS,
@@ -217,12 +216,11 @@ describe("the filter decides what kind of selection a box makes", () => {
     expect(f).toBe("all"); // back where it started
   });
 
-  it("gives every filter a label and a mark", () => {
+  it("gives every filter a mark", () => {
     // CONTROL on adding a fifth: the chip on the box renders whatever
     // areaFilterIcon returns, and an icon name with no entry draws nothing at
     // all rather than failing.
     for (const f of AREA_FILTERS) {
-      expect(areaFilterLabel(f)).toBeTruthy();
       expect(iconPaths(areaFilterIcon(f))).toBeTruthy();
     }
   });

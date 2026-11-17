@@ -1,12 +1,26 @@
 // Which job the window is set up for, modelling or rendering: the two want opposite things from the same 300px.
 // Not persisted, since it describes the sitting, not the user; reopening into a render layout is a worse first frame.
 
+import { t } from "../i18n";
+
 /** "render" trades a column for finish, environment and camera, and is the only mode where a material can change. */
 export type Workspace = "model" | "render";
 
-export const WORKSPACES: readonly { id: Workspace; label: string; icon: string }[] = [
-  { id: "model", label: "Model", icon: "box" },
-  { id: "render", label: "Render", icon: "material" },
+export const WORKSPACES: readonly { id: Workspace; readonly label: string; icon: string }[] = [
+  {
+    id: "model",
+    get label() {
+      return t("shell.workspace.name", { workspace: "model" });
+    },
+    icon: "box",
+  },
+  {
+    id: "render",
+    get label() {
+      return t("shell.workspace.name", { workspace: "render" });
+    },
+    icon: "material",
+  },
 ];
 
 let current: Workspace = "model";

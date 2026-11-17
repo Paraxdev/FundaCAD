@@ -16,6 +16,8 @@ import { vonMisesAt } from "./stressLocate";
  *  numbers are only what the panel shows. */
 export interface MaterialPreset {
   name: string;
+  /** The name in the maker's language, when it is a word rather than a trade name like PLA. */
+  word?: MessageKey;
   E: number;
   nu: number;
   yield: number;
@@ -27,19 +29,26 @@ export const STRESS_MATERIALS: readonly MaterialPreset[] = [
   { name: "PETG", E: 2100, nu: 0.38, yield: 50, density: 1.27 },
   { name: "ABS", E: 2200, nu: 0.35, yield: 40, density: 1.04 },
   { name: "ASA", E: 2200, nu: 0.35, yield: 45, density: 1.07 },
-  { name: "PA12 nylon", E: 1700, nu: 0.4, yield: 45, density: 1.01 },
+  { name: "PA12 nylon", word: "stress.material.pa12", E: 1700, nu: 0.4, yield: 45, density: 1.01 },
   { name: "PC", E: 2400, nu: 0.37, yield: 60, density: 1.2 },
-  { name: "aluminium 6061-T6", E: 69000, nu: 0.33, yield: 275, density: 2.7 },
-  { name: "steel S235", E: 210000, nu: 0.3, yield: 235, density: 7.85 },
+  { name: "aluminium 6061-T6", word: "stress.material.aluminium", E: 69000, nu: 0.33, yield: 275, density: 2.7 },
+  { name: "steel S235", word: "stress.material.steel", E: 210000, nu: 0.3, yield: 235, density: 7.85 },
 ];
 
 /** The dropdown's last entry, E, nu, yield and density typed by the user. Saved as is, only its label is translated. */
 export const CUSTOM_MATERIAL = "Custom";
 
+/** A material as the maker reads it, the study keeps the English name. */
+export function materialLabel(name: string): string {
+  if (name === CUSTOM_MATERIAL) return t("stress.material.custom");
+  const word = STRESS_MATERIALS.find((m) => m.name === name)?.word;
+  return word ? t(word) : name;
+}
+
 export function materialOptions(): { value: string; label: string }[] {
   return [
-    ...STRESS_MATERIALS.map((m) => ({ value: m.name, label: m.name })),
-    { value: CUSTOM_MATERIAL, label: t("stress.material.custom") },
+    ...STRESS_MATERIALS.map((m) => ({ value: m.name, label: materialLabel(m.name) })),
+    { value: CUSTOM_MATERIAL, label: materialLabel(CUSTOM_MATERIAL) },
   ];
 }
 
@@ -629,7 +638,7 @@ export function formatStressResult(
     liveRow("stress.result.maxDeflection", () => deflectionValue(r, unit)),
   ];
   const details: PanelRow[] = [];
-  details.push(liveRow("stress.setup.material", () => r.material.name));
+  details.push(liveRow("stress.setup.material", () => materialLabel(r.material.name)));
   details.push(liveRow("stress.setup.yield", () => `${spellRounded(r.material.yield)} MPa`));
   const weight = r.weight;
   if (weight) details.push(liveRow("stress.result.weight", () => fmtForce(weight)));

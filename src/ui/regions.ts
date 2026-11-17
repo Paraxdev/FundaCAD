@@ -2,6 +2,7 @@ import { focusables, landOn, shown } from "../components/ui/focusables";
 import { resolveShortcut } from "../input/shortcuts";
 import { isEditableTarget } from "./focus";
 import { announce } from "./announce";
+import { t, type MessageKey } from "../i18n";
 
 /** The parts of the shell F6 and Shift+F6 step through, in that order. */
 export const REGION_ORDER = [
@@ -103,13 +104,13 @@ export function cycleRegion(dir: 1 | -1): Region | null {
   return null;
 }
 
-const ABSENT: Partial<Record<RegionKind, string>> = {
-  menubar: "The menu bar is not on screen",
-  tools: "The tools are not on screen",
-  items: "Items is not on screen",
-  viewport: "The model is not on screen",
-  panel: "No panel is open",
-  history: "History is not on screen",
+const ABSENT: Partial<Record<RegionKind, MessageKey>> = {
+  menubar: "regions.absent.menubar",
+  tools: "regions.absent.tools",
+  items: "regions.absent.items",
+  viewport: "regions.absent.viewport",
+  panel: "regions.absent.panel",
+  history: "regions.absent.history",
 };
 
 /** Focuses a region of `kind`, the one after the region holding focus when there are several (floating panels), and
@@ -123,7 +124,7 @@ export function goToRegion(kind: RegionKind): Region | null {
     const next = all[(from + k) % all.length]!;
     if (focusRegion(next)) return next;
   }
-  announce(ABSENT[kind] ?? "That part is not on screen");
+  announce(t(ABSENT[kind] ?? "regions.absent.other"));
   return null;
 }
 

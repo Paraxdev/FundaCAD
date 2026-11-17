@@ -7,6 +7,7 @@ import type { TraceLens } from "./camera";
 import type { FrameView } from "./frameCamera";
 import type { TraceBloomSettings } from "./tracePost";
 import type { TraceHemi } from "./environment";
+import { t, tEnglish, type MessageArgs, type MessageKey } from "../../i18n";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -102,8 +103,8 @@ export interface TracerBackend {
   /** Samples gathered per pixel since the last reset. */
   samples(): Promise<number>;
   dispose(): void;
-  /** A GPU error or a lost device; the viewport drops to Realtime. */
-  onFault(cb: (why: string) => void): void;
+  /** A GPU error or a lost device; the viewport drops to Realtime. `english` is the line for the problem report. */
+  onFault(cb: (why: string, english?: string) => void): void;
 }
 
 export interface PictureOptions {
@@ -119,3 +120,14 @@ export const SAMPLE_CAP = 256;
 /** A start refused because the device cannot trace properly. It is not one of
  *  the two faults that turn Path traced off, the other backend may stand in. */
 export class TracerRefused extends Error {}
+
+/** A line shown in the maker's language, kept in English for the problem report. */
+export interface FaultLine {
+  shown: string;
+  english: string;
+}
+
+export const faultLine = (key: MessageKey, args?: MessageArgs): FaultLine => ({
+  shown: t(key, args),
+  english: tEnglish(key, args),
+});

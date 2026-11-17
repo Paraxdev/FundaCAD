@@ -16,7 +16,7 @@ export async function activate(_e: Engine): Promise<() => void> {
   };
 
   const off = contribute(ID, {
-    browserSections: [{ key: "parameters", component: ParametersSection }],
+    browserSections: [{ key: "parameters", component: ParametersSection, label: () => t("section.parameters") }],
     overlays: [SetupPanel],
     menus: [
       {
