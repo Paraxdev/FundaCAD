@@ -2,10 +2,10 @@
 // `x` as multiply and parameters are normalised into the expression language of params/parse.ts, the one evaluator.
 // No dimensional analysis: "2mm * 3mm" is 6.
 
-import { ExprError, parseExpr } from "../params/parse";
+import { ExprError, ExprRefusal, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
 import { commasToPoints, pointsToCommas, TypedNumberError } from "../params/decimalForm";
-import { decimalMark, t, tEnglish, type DecimalMark, type MessageArgs, type MessageKey } from "../i18n";
+import { decimalMark, t, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
 
@@ -227,14 +227,7 @@ function refuseThousandsComma(src: string, m: RegExpExecArray): void {
 }
 
 /** A value box's refusal, English in its message like every ExprError, worded from its key where a box shows it. */
-export class MeasureRefusal extends ExprError {
-  constructor(
-    readonly key: MessageKey,
-    readonly args: MessageArgs = {},
-  ) {
-    super(tEnglish(key, args));
-  }
-}
+export class MeasureRefusal extends ExprRefusal {}
 
 /** "1 000" or "1 5", two numbers with only a space between. Its hint names both on screen, so a box refuses it rather
  *  than fall back to the value typed before. */
@@ -398,18 +391,31 @@ export function measureError(
   displayUnit: UnitDef | null,
   params: Record<string, number> = {},
 ): string | null {
+  const e = measureFault(raw, displayUnit, params);
+  if (e === null) return null;
+  return e instanceof Error && e.message ? refusalText(e) : t("field.problem.notValue");
+}
+
+/** What parseMeasure throws for the text, null when it reads. */
+export function measureFault(raw: string, displayUnit: UnitDef | null, params: Record<string, number> = {}): unknown {
   try {
     parseMeasure(raw, displayUnit, params);
     return null;
   } catch (e) {
-    return e instanceof Error && e.message ? refusalText(e) : t("field.problem.notValue");
+    return e;
   }
+}
+
+/** True when the text reads as a name the parameters do not hold, which a tool words as its own line. */
+export function namesUnknown(raw: string, displayUnit: UnitDef | null): boolean {
+  const fault = measureFault(raw, displayUnit);
+  return fault instanceof ExprRefusal && fault.key === "field.problem.unknownName";
 }
 
 /** A value box's reason for refusing text: a typed number it will not guess in the chosen language, any other as
  *  written. */
 export function refusalText(e: Error): string {
-  if (e instanceof MeasureRefusal) return t(e.key, e.args);
+  if (e instanceof ExprRefusal) return t(e.key, e.args);
   if (!(e instanceof TypedNumberError)) return e.message;
   return e.kind === "invalid"
     ? t("field.problem.invalidNumber", { number: e.number })

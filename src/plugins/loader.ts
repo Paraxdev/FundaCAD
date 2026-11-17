@@ -2,6 +2,7 @@
 // bundle. `new Function`, not `import()`: `script-src 'self'` refuses blob URLs, see tests/security/csp.test.ts.
 
 import type { Component } from "vue";
+import { WordedError } from "../ui/wordedError";
 
 /** Shared, not bundled: two Vues cannot see each other's refs, two Pinias split the stores, two three.js break
  *  `instanceof`. The keys are exactly `SHARED` in scripts/build-plugin-code.mjs, which the tests check. */
@@ -45,20 +46,18 @@ export function evaluatePlugin(id: string, code: string, modules: HostModules): 
       `${code}\n;return typeof ${EXPORT_NAME} === "undefined" ? undefined : ${EXPORT_NAME};`,
     ) as (host: HostModules) => unknown;
   } catch (err) {
-    throw new Error(`${id}: its code would not compile: ${msg(err)}`);
+    throw new WordedError("plugins.error.noCompile", { id, why: msg(err) });
   }
 
   let exported: unknown;
   try {
     exported = factory(modules);
   } catch (err) {
-    throw new Error(`${id}: its code threw while loading: ${msg(err)}`);
+    throw new WordedError("plugins.error.threwLoading", { id, why: msg(err) });
   }
 
   if (!exported || typeof exported !== "object") {
-    throw new Error(
-      `${id}: its code defined no ${EXPORT_NAME}. It was probably not built by ` + "scripts/build-plugin-code.mjs.",
-    );
+    throw new WordedError("plugins.error.noExport", { id, name: EXPORT_NAME });
   }
   return exported as PluginModule;
 }

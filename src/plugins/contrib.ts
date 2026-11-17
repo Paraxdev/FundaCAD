@@ -13,6 +13,7 @@ import type { PluginSettings } from "./settings";
 import type { MaterialDef } from "../document/materials";
 import { setPointerBindings, type PointerBinding, type PointerGesture } from "../viewport/navigator/bindings";
 import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts";
+import { WordedError } from "../ui/wordedError";
 
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
 export type Unregister = () => void;
@@ -261,22 +262,22 @@ function changed() {
 const blank = (s: unknown) => typeof s !== "string" || !s.trim();
 
 /** Where a contribution would draw a control with no name, or null. A label computed on open is judged by the menu. */
-function emptyLabel(c: Contribution): string | null {
+function emptyLabel(c: Contribution): { what: string; name?: string } | null {
   for (const m of c.menus ?? []) {
-    if (blank(m.menu)) return "a menu";
+    if (blank(m.menu)) return { what: "menu" };
     for (const it of m.items) {
-      if (!it.separator && typeof it.label !== "function" && blank(it.label)) return `a row of the ${m.menu} menu`;
+      if (!it.separator && typeof it.label !== "function" && blank(it.label)) return { what: "menuRow", name: m.menu };
     }
   }
   for (const r of c.ribbon ?? []) {
-    if (blank(r.group)) return "a ribbon group";
-    for (const it of r.items) if (blank(it.label)) return `the ribbon button "${it.action}"`;
+    if (blank(r.group)) return { what: "ribbonGroup" };
+    for (const it of r.items) if (blank(it.label)) return { what: "ribbonButton", name: it.action };
   }
-  for (const t of c.tools ?? []) if (blank(t.label)) return `the tool "${t.id}"`;
+  for (const t of c.tools ?? []) if (blank(t.label)) return { what: "tool", name: t.id };
   for (const f of c.features ?? []) {
     const rows = [...(f.choiceFields ?? []), ...(f.toggleFields ?? []), ...(f.fileFields ?? []), ...(f.targets ?? [])];
     const nums = typeof f.numFields === "function" ? [] : (f.numFields ?? []).map(([, label]) => ({ label }));
-    if ([...rows, ...nums].some((r) => blank(r.label))) return `a row of the feature "${f.type}"`;
+    if ([...rows, ...nums].some((r) => blank(r.label))) return { what: "featureRow", name: f.type };
   }
   return null;
 }
@@ -284,19 +285,20 @@ function emptyLabel(c: Contribution): string | null {
 /** One call per plugin rather than per point, so turning a capability off cannot half succeed. Returns the removal. */
 export function contribute(plugin: string, c: Contribution): Unregister {
   const nameless = emptyLabel(c);
-  if (nameless) throw new Error(`${plugin} gives ${nameless} an empty label, a screen reader could not name it`);
+  if (nameless)
+    throw new WordedError("plugins.error.emptyLabel", { plugin, what: nameless.what, name: nameless.name ?? "" });
   for (const point of ["pointerBindings", "keymap"] as const) {
     if (!c[point]) continue;
     if (!grantsOf(plugin)?.includes("input.remap")) {
-      throw new Error(`${plugin} contributes ${point} without the input.remap grant`);
+      throw new WordedError("plugins.error.noRemapGrant", { plugin, point });
     }
     const other = entries.find((e) => e.c[point] && e.plugin !== plugin);
-    if (other) throw new Error(`${plugin} contributes ${point}, which ${other.plugin} already does`);
+    if (other) throw new WordedError("plugins.error.taken", { plugin, point, other: other.plugin });
   }
   for (const section of c.settings ?? []) {
     // No grant for a plugin's own settings, so the one rule is that they are its own.
     if (section.settings && section.settings.pluginId !== plugin) {
-      throw new Error(`${plugin} contributes the settings of ${section.settings.pluginId}`);
+      throw new WordedError("plugins.error.othersSettings", { plugin, owner: section.settings.pluginId });
     }
   }
   const entry: Entry = { plugin, c };

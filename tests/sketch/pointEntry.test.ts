@@ -219,6 +219,12 @@ describe("readPoint in a language with a decimal comma", () => {
     expect(readPoint(yOnly("1", "@5;3"), U, LAST)).toEqual({ ok: true, x: 22.5, y: -1.25 });
   });
 
+  it("says a name is not a number in German, and an expression's own problem too", async () => {
+    await setLanguage("de");
+    expect(bad(readPoint(typed("abc", "4"), U, FROM))).toEqual({ field: "x", problem: "„abc“ ist keine Zahl" });
+    expect(bad(readPoint(typed("2 +", "4"), U, FROM))?.problem).toBe("unerwartetes Ende des Ausdrucks");
+  });
+
   it("reads @5,3 as a 5.3 step in X", async () => {
     await setLanguage("de");
     expect(readPoint(typed("@5,3"), U, LAST)).toEqual({ ok: true, x: 22.8, y: -4.25 });

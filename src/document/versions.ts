@@ -2,6 +2,7 @@
 // plus the rest), a branch names its newest version. No merge: two branches of a part are two designs.
 
 import { contentHash } from "./contentHash";
+import { WordedError } from "../ui/wordedError";
 import type { CadDocument, Feature } from "../types";
 
 export interface VersionTree {
@@ -91,11 +92,11 @@ export function restOf(repo: VersionRepo, v: Version): Omit<Snapshot, "features"
 
 export function snapshotOf(repo: VersionRepo, id: string): Snapshot {
   const v = versionById(repo, id);
-  if (!v) throw new Error(`no version ${id}`);
+  if (!v) throw new WordedError("versions.error.noVersion", { id });
   const rest = restOf(repo, v);
   const features = v.tree.features.map((h) => {
     const text = repo.objects[h];
-    if (text === undefined) throw new Error(`version ${id} is missing a feature`);
+    if (text === undefined) throw new WordedError("versions.error.missingFeature", { id });
     return JSON.parse(text) as Feature;
   });
   return { ...rest, features };
@@ -117,16 +118,16 @@ export function log(repo: VersionRepo, branch = repo.current): Version[] {
 // The name is tidied and must be new.
 export function createBranch(repo: VersionRepo, name: string, from: string): string {
   const clean = name.trim().replace(/\s+/g, "-");
-  if (!clean) throw new Error("a branch needs a name");
-  if (repo.branches[clean]) throw new Error(`there is already a branch called ${clean}`);
-  if (!versionById(repo, from)) throw new Error(`no version ${from}`);
+  if (!clean) throw new WordedError("versions.error.needsName");
+  if (repo.branches[clean]) throw new WordedError("versions.error.branchExists", { name: clean });
+  if (!versionById(repo, from)) throw new WordedError("versions.error.noVersion", { id: from });
   repo.branches[clean] = from;
   return clean;
 }
 
 export function switchBranch(repo: VersionRepo, name: string): Version {
   const head = headOf(repo, name);
-  if (!head) throw new Error(`no branch called ${name}`);
+  if (!head) throw new WordedError("versions.error.noBranch", { name });
   repo.current = name;
   return head;
 }

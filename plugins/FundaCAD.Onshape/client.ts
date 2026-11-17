@@ -1,4 +1,4 @@
-import { t } from "./lines";
+import { t, tEnglish } from "./lines";
 import { signOnshape } from "./sign";
 import { isOnshapeHost } from "./url";
 
@@ -29,13 +29,33 @@ export interface Keys {
   secret: string;
 }
 
+type OnshapeKey = Parameters<typeof t>[0];
+type Args = Record<string, string | number>;
+
+/** English in its message for the log, worded by `shownError` where the plugin shows it. `lines` are arguments that
+ *  are lines themselves, worded in the same language. */
 export class OnshapeError extends Error {
+  readonly status: number | undefined;
   constructor(
-    message: string,
-    readonly status?: number,
+    readonly key: OnshapeKey,
+    readonly args: Args = {},
+    opts: { status?: number; lines?: Record<string, OnshapeKey> } = {},
   ) {
-    super(message);
+    super(tEnglish(key, { ...args, ...wordLines(tEnglish, opts.lines) }));
+    this.status = opts.status;
+    this.lines = opts.lines ?? {};
   }
+  readonly lines: Record<string, OnshapeKey>;
+}
+
+function wordLines(say: typeof t, lines: Record<string, OnshapeKey> = {}): Args {
+  return Object.fromEntries(Object.entries(lines).map(([name, key]) => [name, say(key)]));
+}
+
+/** What the plugin shows for a failure, in the chosen language when it worded it. */
+export function shownError(e: unknown): string {
+  if (e instanceof OnshapeError) return t(e.key, { ...e.args, ...wordLines(t, e.lines) });
+  return e instanceof Error ? e.message : String(e);
 }
 
 export interface ClientDeps {
@@ -67,7 +87,7 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
     let retries = 0;
     for (;;) {
       const host = new URL(url).hostname;
-      if (!isOnshapeHost(host)) throw new OnshapeError(t("error.redirectedAway", { host }));
+      if (!isOnshapeHost(host)) throw new OnshapeError("error.redirectedAway", { host });
       // The reference client signs every request as JSON, GETs included.
       const signed = await signOnshape({ method, url, contentType: "application/json", ...keys });
       const headers: [string, string][] = [
@@ -82,28 +102,27 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
         ...(opts.saveAs ? { saveAs: opts.saveAs, timeoutMs: 600_000 } : { timeoutMs: 60_000 }),
       });
       if (res.status === 307 || res.status === 308) {
-        if (!res.location || ++hops > MAX_HOPS) throw new OnshapeError(t("error.tooManyRedirects"));
+        if (!res.location || ++hops > MAX_HOPS) throw new OnshapeError("error.tooManyRedirects");
         url = new URL(res.location, url).toString();
         continue;
       }
       if (res.status === 429) {
-        if (++retries > MAX_RETRIES) throw new OnshapeError(t("error.tooManyRequests"), 429);
+        if (++retries > MAX_RETRIES) throw new OnshapeError("error.tooManyRequests", {}, { status: 429 });
         const secs = Number(res.retryAfter);
         await sleep(Math.min(Number.isFinite(secs) && secs > 0 ? secs : 2, 60) * 1000);
         continue;
       }
       if (res.status === 401 || res.status === 403) {
-        throw new OnshapeError(t("error.refusedKeys"), res.status);
+        throw new OnshapeError("error.refusedKeys", {}, { status: res.status });
       }
       if (res.status === 404) {
-        throw new OnshapeError(t("error.notFound"), 404);
+        throw new OnshapeError("error.notFound", {}, { status: 404 });
       }
       if (res.status < 200 || res.status >= 300) {
         const reason = reasonOf(res);
-        const message = reason
-          ? t("error.statusReason", { status: res.status, reason })
-          : t("error.status", { status: res.status });
-        throw new OnshapeError(message, res.status);
+        throw reason
+          ? new OnshapeError("error.statusReason", { status: res.status, reason }, { status: res.status })
+          : new OnshapeError("error.status", { status: res.status }, { status: res.status });
       }
       return res;
     }
@@ -114,7 +133,7 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
     try {
       return JSON.parse(res.text ?? "") as T;
     } catch {
-      throw new OnshapeError(t("error.badJson"));
+      throw new OnshapeError("error.badJson");
     }
   }
 

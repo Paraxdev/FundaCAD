@@ -144,7 +144,8 @@ export { spellNumber, spellFixed, listJoin } from "../ui/measure";
 export { decimalMark } from "../i18n";
 /** Typed expression text with a decimal comma as the point text the document stores, the reason it refuses one, and
  *  the way back. */
-export { storedExpr, typedExprProblem, shownExpr } from "../ui/measure";
+export { storedExpr, typedExprProblem, shownExpr, refusalText } from "../ui/measure";
+export { exprProblem } from "../document/numFields";
 
 export { stripDocumentExt } from "../io/documentExt";
 

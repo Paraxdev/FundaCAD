@@ -254,6 +254,21 @@ describe("message keys in use", () => {
       "toast.saved",
     ]);
   });
+
+  it("collects the keys a thrown error carries, and no sentence it throws", () => {
+    const code = [
+      `throw new OnshapeError(ok ? "error.assembly" : "error.tab", {}, { lines: { reason: "error.noReason" } });`,
+      `throw new WordedError("versions.error.saveFirst");`,
+      `throw new Error("the file a.json is gone");`,
+      `throw new Error(message);`,
+    ].join("\n");
+    expect([...usedKeys({ "src/a.ts": code })].sort()).toEqual([
+      "error.assembly",
+      "error.noReason",
+      "error.tab",
+      "versions.error.saveFirst",
+    ]);
+  });
 });
 
 describe("the allowlist", () => {

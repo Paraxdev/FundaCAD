@@ -21,7 +21,7 @@ import { regionStep } from "../ui/regions";
 import { underZoom } from "../ui/anchor";
 import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
-import { storedExpr, typedExprProblem } from "../ui/measure";
+import { namesUnknown, storedExpr, typedExprProblem } from "../ui/measure";
 import { getUnit, niceStep, parseField } from "../ui/units";
 import {
   commonUnits,
@@ -868,7 +868,7 @@ export class DimInput {
       const expr = this.typedExpr(f);
       if (expr && !expr.ok)
         return `${f.def.label}: ${expr.error.replace(/^unknown parameter /, "no parameter named ")}`;
-      return `${f.def.label}: ${/unknown parameter/.test(err) ? `"${raw}" is not a number` : err}`;
+      return `${f.def.label}: ${namesUnknown(raw, f.unit) ? `"${raw}" is not a number` : err}`;
     }
     return this.rangeProblem(f.def, v);
   }
@@ -908,8 +908,7 @@ export class DimInput {
     const doc = this.doc();
     const text = this.numberText(f).trim();
     if (!doc || !text || this.parseMeasure(f) !== null) return null;
-    const err = measureError(text, f.unit);
-    if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
+    if (!namesUnknown(text, f.unit) && !splitNameValue(text)) return null;
     const refused = typedExprProblem(text);
     if (refused) return { ok: false, error: refused };
     return doc.classifyTargetExpr(null, null, storedExpr(text), f.def.kind ?? "length");

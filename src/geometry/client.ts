@@ -25,6 +25,7 @@ import type {
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { tEnglish } from "../i18n";
+import { WordedError } from "../ui/wordedError";
 import type { EngineTiming } from "../diagnostics/editTiming";
 import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -1580,7 +1581,7 @@ export class Geometry implements GeometryBackend {
       if (msg.result.stored) return hash;
       offset += piece.length;
     } while (offset < total);
-    throw new Error("the engine did not store the bytes");
+    throw new WordedError("engine.blobNotStored");
   }
 
   async blobGet(hash: string): Promise<Uint8Array | null> {

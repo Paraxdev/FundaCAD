@@ -232,6 +232,41 @@ describe("GuideLayer bubble", () => {
     expect(document.querySelector(".guide-caption")!.textContent).toBe("There");
     expect(document.querySelector("[data-guide-keys]")).toBeNull();
   });
+
+  it("says a model part or control is not on screen in the user's language, and keeps the English detail for the assistant", async () => {
+    const g = setup();
+    const hintText = () => document.querySelector(".guide-hint")?.textContent?.trim();
+    try {
+      g.guide.apply([{ kind: "highlight", seq: 1, target: { model: "body9:index=0" }, caption: "Here" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("That part of the model is not on screen");
+
+      g.guide.apply([{ kind: "highlight", seq: 2, target: { ui: "no-such-control" }, caption: "Here" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("That control is not on screen");
+      expect(g.guide.state.step?.missing).toMatch(/^no control "no-such-control" on screen/);
+
+      await setLanguage("de");
+      g.guide.apply([{ kind: "highlight", seq: 3, target: { ui: "no-such-control" }, caption: "Hier" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("Dieses Bedienelement ist gerade nicht zu sehen");
+      expect(g.guide.state.step?.missing).toMatch(/^no control "no-such-control" on screen/);
+
+      g.guide.apply([{ kind: "highlight", seq: 4, target: { model: "body9:index=0" }, caption: "Hier" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("Dieser Teil des Modells ist gerade nicht zu sehen");
+    } finally {
+      await setLanguage("system");
+    }
+  });
 });
 
 describe("GuideLayer speech", () => {

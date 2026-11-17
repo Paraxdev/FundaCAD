@@ -55,7 +55,7 @@ function locateUi(s: StepState): void {
   radius.value = Number.isFinite(own) && own > 0 ? `${own + 4}px` : null;
   ref_.value = r.el ? (r.via ?? r.ref) : "";
   hint.value =
-    r.el && r.via ? t("guide.openFirst", { control: labelOf(r.el) || r.via }) : r.el ? "" : (r.missing ?? "");
+    r.el && r.via ? t("guide.openFirst", { control: labelOf(r.el) || r.via }) : r.el ? "" : t("guide.controlMissing");
   guide.updateResolution(r.el ? { found: true, via: r.via } : { found: false, missing: r.missing, near: r.near });
   if (target && !r.via && scrolledFor !== s.seq) {
     scrolledFor = s.seq;
@@ -94,7 +94,8 @@ function modelBox(s: StepState): Box | null {
   const shape = shapeFor!.shape;
   if (shape instanceof Error) {
     paths.value = [];
-    hint.value = s.missing ?? shape.message;
+    // The selector's English detail stays in the guide state for the assistant.
+    hint.value = t("guide.modelMissing");
     return null;
   }
   ref_.value = shape.name;

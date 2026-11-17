@@ -302,6 +302,23 @@ describe("FeatureProperties", () => {
     expect(input.attributes("title")).toBeTruthy();
   });
 
+  it("says why a sketch dimension is refused in the chosen language", async () => {
+    const title = async (text: string, label = "Diameter") => {
+      const w = render(makeEngine({ parameters: {}, features: [CIRCLE(6)] }), "s1");
+      await commit(w, label, text);
+      return w.find("input").attributes("title");
+    };
+    expect(await title("banana")).toBe("not a value");
+    expect(await title("10deg")).toMatch(/ is not a length$/);
+    await setLanguage("de");
+    try {
+      expect(await title("banana", "Durchmesser")).toBe("kein Wert");
+      expect(await title("10deg", "Durchmesser")).toMatch(/ ist keine Länge$/);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   // --- the feature-field write path (the sketch rows above are the other half)
   //
   // These two rows sit one under the other in the same panel and used to

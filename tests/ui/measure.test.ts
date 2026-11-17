@@ -501,7 +501,7 @@ describe("fieldNumber / fieldError", () => {
     try {
       expect({ en, de: measureError("3,", null) }).toEqual({
         en: ['unexpected character ","', 'unexpected character ",", separate arguments with ";"'],
-        de: 'unexpected character ","',
+        de: "unerwartetes Zeichen „,“",
       });
     } finally {
       await setLanguage("system");

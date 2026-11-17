@@ -1,6 +1,6 @@
 import { importPath, reportError, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
-import { onshapeClient, type Keys } from "./client";
+import { onshapeClient, shownError, type Keys } from "./client";
 import { askForLink } from "./dialog";
 import { t } from "./lines";
 import { loadKeys, removeDownload, saveKeys, webRequest } from "./native";
@@ -77,6 +77,6 @@ export async function importFromOnshape(store: DocumentStore, geometry: Geometry
     }
   } catch (e) {
     if (signal.aborted) return;
-    await reportError(t("toast.importFailed", { message: e instanceof Error ? e.message : String(e) }));
+    await reportError(t("toast.importFailed", { message: shownError(e) }));
   }
 }

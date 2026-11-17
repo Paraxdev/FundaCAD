@@ -12,7 +12,7 @@ import {
 } from "../components/ui/dom";
 import { claimEscape } from "../ui/escapeClaim";
 import { ExprError } from "../params/parse";
-import { canonicalTyping } from "../ui/measure";
+import { canonicalTyping, refusalText } from "../ui/measure";
 import {
   PROFILE_DETENT,
   PROFILE_MAX,
@@ -117,7 +117,7 @@ function profileTyped(text: string): number | string {
   try {
     return Number(canonicalTyping(text));
   } catch (e) {
-    return e instanceof ExprError ? e.message : Number.NaN;
+    return e instanceof ExprError ? refusalText(e) : Number.NaN;
   }
 }
 

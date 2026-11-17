@@ -8,7 +8,7 @@ import type { FrameView } from "./frameCamera";
 import type { TraceBloomSettings } from "./tracePost";
 import type { TraceHemi } from "./environment";
 import { t, tEnglish, type MessageArgs, type MessageKey } from "../../i18n";
-import { englishMessage, shownMessage } from "../../ui/wordedError";
+import { englishMessage, shownMessage, WordedError } from "../../ui/wordedError";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -120,7 +120,7 @@ export const SAMPLE_CAP = 256;
 
 /** A start refused because the device cannot trace properly. It is not one of
  *  the two faults that turn Path traced off, the other backend may stand in. */
-export class TracerRefused extends Error {}
+export class TracerRefused extends WordedError {}
 
 /** A line shown in the maker's language, kept in English for the problem report. */
 export interface FaultLine {

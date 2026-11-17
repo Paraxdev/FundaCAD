@@ -3,7 +3,7 @@
 // in a language with a decimal point: with a decimal comma a pair takes a semicolon.
 
 import { decimalMark, t as tr, type DecimalMark } from "../i18n";
-import { measureError, tryParseMeasure, type UnitDef } from "../ui/measure";
+import { measureError, namesUnknown, tryParseMeasure, type UnitDef } from "../ui/measure";
 
 export interface PointTyping {
   x: string;
@@ -31,11 +31,8 @@ function number(text: string, unit: UnitDef | null): Part {
   if (!text.trim()) return { ok: false, problem: tr("sketch.point.typeNumber") };
   const m = tryParseMeasure(text, unit);
   if (m) return { ok: true, value: m.value };
-  const problem = measureError(text, unit) ?? tr("sketch.point.notNumber");
-  return {
-    ok: false,
-    problem: /unknown parameter/.test(problem) ? tr("sketch.point.notNumberText", { text: text.trim() }) : problem,
-  };
+  if (namesUnknown(text, unit)) return { ok: false, problem: tr("sketch.point.notNumberText", { text: text.trim() }) };
+  return { ok: false, problem: measureError(text, unit) ?? tr("sketch.point.notNumber") };
 }
 
 /** One value, or two split on a semicolon or, with a point mark, on the only comma. */

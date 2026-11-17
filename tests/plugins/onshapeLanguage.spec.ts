@@ -13,7 +13,7 @@ vi.mock("../../plugins/FundaCAD.Onshape/native", () => native);
 
 import KeysSection from "../../plugins/FundaCAD.Onshape/KeysSection.vue";
 import LinkDialog from "../../plugins/FundaCAD.Onshape/LinkDialog.vue";
-import { onshapeClient, OnshapeError } from "../../plugins/FundaCAD.Onshape/client";
+import { onshapeClient, OnshapeError, shownError } from "../../plugins/FundaCAD.Onshape/client";
 import type { LinkRequest } from "../../plugins/FundaCAD.Onshape/dialog";
 import { pollTranslation } from "../../plugins/FundaCAD.Onshape/translate";
 import { parseOnshapeUrl } from "../../plugins/FundaCAD.Onshape/url";
@@ -147,10 +147,11 @@ describe("the Onshape import errors follow the language", () => {
       keys: { access: "a", secret: "s" },
       sleep: async () => undefined,
     });
+  // Where the import flow shows it: the message itself stays English for the log.
   const message = (p: Promise<unknown>) =>
     p.then(
       () => "",
-      (e: Error) => e.message,
+      (e: unknown) => shownError(e),
     );
 
   it("keeps the sentence in German and what Onshape said as it came", async () => {
@@ -162,6 +163,22 @@ describe("the Onshape import errors follow the language", () => {
     expect(await message(client(500, JSON.stringify({ message: "Internal trouble" })).send("GET", url))).toBe(
       "Onshape antwortete mit 500: Internal trouble",
     );
+  });
+
+  it("keeps a failed export English in its message and German where it is shown", async () => {
+    const failed = (failureReason?: string) =>
+      pollTranslation(async () => ({}) as never, { id: "t1", requestState: "FAILED", failureReason } as never, {
+        sleep: async () => undefined,
+        now: () => 0,
+      }).catch((e: unknown) => e);
+    await setLanguage("de");
+    const bare = await failed();
+    expect(bare).toBeInstanceOf(OnshapeError);
+    expect((bare as Error).message).toBe("Onshape could not export STEP: no reason given");
+    expect(shownError(bare)).toBe("Onshape konnte STEP nicht exportieren: kein Grund angegeben");
+    const said = await failed("Bad part");
+    expect((said as Error).message).toBe("Onshape could not export STEP: Bad part");
+    expect(shownError(said)).toBe("Onshape konnte STEP nicht exportieren: Bad part");
   });
 
   it("lets each language own the colon before what Onshape said", async () => {
