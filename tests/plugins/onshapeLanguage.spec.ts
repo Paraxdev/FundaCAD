@@ -164,6 +164,17 @@ describe("the Onshape import errors follow the language", () => {
     );
   });
 
+  it("lets each language own the colon before what Onshape said", async () => {
+    const url = "https://cad.onshape.com/api/documents/x";
+    const body = JSON.stringify({ message: "Internal trouble" });
+    expect(await message(client(500, body).send("GET", url))).toBe("Onshape answered 500: Internal trouble");
+    await setLanguage("fr");
+    expect(await message(client(500, body).send("GET", url))).toBe("Onshape a répondu 500 : Internal trouble");
+    await setLanguage("ja");
+    expect(await message(client(500, body).send("GET", url))).toBe("Onshape の応答 500：Internal trouble");
+    expect(await message(client(500).send("GET", url))).toBe("Onshape の応答 500");
+  });
+
   it("says the wait in minutes with the language's plural", async () => {
     const stuck = { id: "t1", requestState: "ACTIVE" };
     const run = (minutes: number) =>

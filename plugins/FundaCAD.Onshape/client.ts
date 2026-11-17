@@ -50,7 +50,7 @@ const MAX_RETRIES = 5;
 function reasonOf(res: WebResponse): string {
   try {
     const j = JSON.parse(res.text ?? "") as { message?: unknown };
-    if (typeof j.message === "string" && j.message) return `: ${j.message.slice(0, 200)}`;
+    if (typeof j.message === "string" && j.message) return j.message.slice(0, 200);
   } catch {
     // not JSON, the status says enough
   }
@@ -99,7 +99,11 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
         throw new OnshapeError(t("error.notFound"), 404);
       }
       if (res.status < 200 || res.status >= 300) {
-        throw new OnshapeError(t("error.status", { status: res.status, reason: reasonOf(res) }), res.status);
+        const reason = reasonOf(res);
+        const message = reason
+          ? t("error.statusReason", { status: res.status, reason })
+          : t("error.status", { status: res.status });
+        throw new OnshapeError(message, res.status);
       }
       return res;
     }
