@@ -4,6 +4,7 @@ links in the pages it touches resolve.
     python3 tests/manual/test_keyboard_page.py
 """
 
+import json
 import re
 import tomllib
 import unittest
@@ -14,6 +15,11 @@ DOCS = ROOT / "manual" / "docs"
 PAGE = DOCS / "sketch" / "keyboard.md"
 LINKERS = ["sketch/start.md", "sketch/exact-sizes.md", "sketch/snapping.md", "reference/shortcuts.md"]
 LINK = re.compile(r"\]\(([^)#\s]+\.md)(?:#[^)]*)?\)")
+
+
+def fill(message, **values):
+    """An ICU message with plain `{name}` placeholders only, filled in."""
+    return re.sub(r"\{(\w+)\}", lambda m: values[m.group(1)], message)
 
 
 def walk(node):
@@ -61,12 +67,20 @@ class KeyboardPage(unittest.TestCase):
 
     def test_the_page_quotes_the_words_the_last_tab_stop_says(self):
         page = PAGE.read_text(encoding="utf-8")
+        en = json.loads((ROOT / "src" / "i18n" / "locales" / "en.json").read_text(encoding="utf-8"))
+        coords = "20, " + fill(en["dim.negative"], amount="20")
+        end_of = re.search(r"\bend \{([^{}]*\{name\}[^{}]*)\}", en["sketch.speech.of"]).group(1)
+        no_snap = fill(en["sketch.speech.noSnap"], coords=coords)
+        walk_end = fill(
+            en["sketch.speech.snapped"],
+            at=fill(en["sketch.speech.walkEnd"], coords=coords),
+            target=fill(end_of, name="Line 2"),
+        )
+        self.assertIn(f'"{no_snap}"', page)
+        self.assertIn(f'"{walk_end}"', page)
         speech = (ROOT / "src" / "sketch" / "sketchSpeech.ts").read_text(encoding="utf-8")
-        self.assertIn('"No snap, cursor at 20, minus 20"', page)
-        self.assertIn('"End of nearest snaps, cursor at 20, minus 20, snapped to the end of Line 2"', page)
-        self.assertIn("`cursor at ${coordWords(p.x, p.y)}`", speech)
-        self.assertIn("`No snap, ${at}`", speech)
-        self.assertIn("`End of nearest snaps, ${at}, snapped to ", speech)
+        for key in ["sketch.speech.noSnap", "sketch.speech.walkEnd", "sketch.speech.snapped"]:
+            self.assertIn(f't("{key}"', speech)
         self.assertIn("Tab walks the 16 candidates nearest the cursor", page)
         limit = (ROOT / "src" / "sketch" / "keyCursor.ts").read_text(encoding="utf-8")
         self.assertIn("const RING_LIMIT = 16;", limit)
