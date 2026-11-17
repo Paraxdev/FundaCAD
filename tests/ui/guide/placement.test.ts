@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUTTER, intersects, placeBubble, ringRect } from "../../../src/ui/guide/placement";
+import { CAPTION_TOP, GUTTER, intersects, placeBubble, placeCaption, ringRect } from "../../../src/ui/guide/placement";
 
 const view = { width: 1200, height: 800 };
 const size = { width: 260, height: 120 };
@@ -49,5 +49,19 @@ describe("placeBubble", () => {
 
   it("inflates the ring by 4 px", () => {
     expect(ringRect({ left: 10, top: 10, width: 20, height: 20 })).toEqual({ left: 6, top: 6, width: 28, height: 28 });
+  });
+});
+
+describe("placeCaption", () => {
+  it("sits at the top centre with nothing in the way", () => {
+    expect(placeCaption(view, size)).toEqual({ side: "below", left: 470, top: CAPTION_TOP, ...size });
+  });
+
+  it("moves beside a dialog that covers the top centre, never over it", () => {
+    const dialog = { left: 400, top: 40, width: 400, height: 500 };
+    const b = placeCaption(view, size, [dialog]);
+    expect(intersects(b, dialog)).toBe(false);
+    expect(b.left).toBeGreaterThanOrEqual(GUTTER);
+    expect(b.left + b.width).toBeLessThanOrEqual(view.width - GUTTER);
   });
 });

@@ -11,6 +11,8 @@ export interface Placed extends Box {
 export const GUTTER = 16;
 export const GAP = 12;
 export const RING_PAD = 4;
+/** Below the title bar and the ribbon. */
+export const CAPTION_TOP = 72;
 
 export function ringRect(target: Box, pad = RING_PAD): Box {
   return {
@@ -69,4 +71,21 @@ export function placeBubble(
     width: size.width,
     height: size.height,
   };
+}
+
+/** A bubble with nothing to point at: the top centre, or beside an `avoid` rect that covers it. */
+export function placeCaption(
+  view: { width: number; height: number },
+  size: { width: number; height: number },
+  avoid: Box[] = [],
+): Placed {
+  const top: Placed = {
+    side: "below",
+    left: clamp(view.width / 2 - size.width / 2, GUTTER, Math.max(GUTTER, view.width - GUTTER - size.width)),
+    top: CAPTION_TOP,
+    width: size.width,
+    height: size.height,
+  };
+  const over = avoid.find((b) => intersects(top, b));
+  return over ? placeBubble(over, view, size, avoid) : top;
 }

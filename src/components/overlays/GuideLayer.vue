@@ -1,22 +1,29 @@
 <script setup lang="ts">
-// Guide mode overlay: a ring on what an assistant points at and a caption bubble (manual/docs/ai/guide.md).
+// Guide mode overlay: a ring on what an assistant or a tour points at and a caption bubble (manual/docs/ai/guide.md).
 // Model outlines are SVG, not three.js, so Clean view and the pick mask never see them.
 import * as THREE from "three";
-import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
+import { computed, nextTick, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { t } from "../../i18n";
 import { announce } from "../../ui/announce";
 import { labelOf } from "../../ui/controlRefs";
 import { resolveControl } from "../../ui/guide/controls";
-import type { GuideState, StepState } from "../../ui/guide/guideSession";
-import { placeBubble, ringRect, type Placed } from "../../ui/guide/placement";
+import type { GuideSession, GuideState, GuideTarget, StepState } from "../../ui/guide/guideSession";
+import { placeBubble, placeCaption, ringRect, type Placed } from "../../ui/guide/placement";
 import { modelShape, type ModelShape } from "../../ui/guide/probe";
 import type { Box } from "../../ui/controlRefs";
 import { pageZoom } from "../../ui/interfaceSize";
 import Button from "../ui/Button.vue";
 
+const props = defineProps<{
+  /** The assistant's guide when left out. */
+  session?: GuideSession;
+  /** Hides the bubble and ring while the wait stays open, as under Home. */
+  hidden?: boolean;
+}>();
+
 const engine = useEngine();
-const guide = engine.guide;
+const guide = props.session ?? engine.guide;
 
 const state = shallowRef<GuideState>(guide.state);
 const ring = ref<Box | null>(null);
@@ -32,6 +39,9 @@ const step = computed<StepState | null>(() => {
   const s = state.value.step;
   return s && !s.next ? s : null;
 });
+const shown = computed(() => (props.hidden ? null : step.value));
+const captionOnly = (g: GuideTarget) => g.ui === undefined && g.model === undefined && !g.region;
+const shownHint = computed(() => hint.value || shown.value?.hint || "");
 
 let raf = 0;
 let frame = 0;
@@ -131,7 +141,9 @@ function follow(s: StepState): void {
   // Window pixels in, the CSS pixels of the root zoom out.
   const z = pageZoom();
   const css = (b: Box): Box => ({ left: b.left / z, top: b.top / z, width: b.width / z, height: b.height / z });
-  const seen = s.target.ui !== undefined ? (target?.isConnected ? target.getBoundingClientRect() : null) : modelBox(s);
+  let seen: Box | null = null;
+  if (s.target.ui !== undefined) seen = target?.isConnected ? target.getBoundingClientRect() : null;
+  else if (!captionOnly(s.target)) seen = modelBox(s);
   const box = seen ? css(seen) : null;
   const r = box ? ringRect(box) : null;
   if (!sameBox(r, ring.value)) ring.value = r;
@@ -140,9 +152,7 @@ function follow(s: StepState): void {
     const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
     const view = { width: window.innerWidth / z, height: window.innerHeight / z };
     const avoid = [...document.querySelectorAll(AVOID)].map((d) => css(d.getBoundingClientRect()));
-    const at = box
-      ? placeBubble(box, view, size, avoid)
-      : { side: "below" as const, left: view.width / 2 - size.width / 2, top: 72, ...size };
+    const at = box ? placeBubble(box, view, size, avoid) : placeCaption(view, size, avoid);
     if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
   }
 }
@@ -151,7 +161,7 @@ function follow(s: StepState): void {
 // second loop started from in here would double every frame.
 function loop(): void {
   raf = 0;
-  const s = step.value;
+  const s = shown.value;
   if (s) follow(s);
   guide.observe();
   schedule();
@@ -183,7 +193,7 @@ const sentence = (s: string) =>
 let spokenSeq = -1;
 function speak(s: StepState | null): void {
   if (!s) spokenSeq = -1;
-  if (!s || s.next || s.seq === spokenSeq) return;
+  if (!s || s.next || s.seq === spokenSeq || props.hidden) return;
   spokenSeq = s.seq;
   const keys = s.keys ? ` ${t("guide.keysLabel")} ${s.keys}` : "";
   announce(`${sentence(counterOf(s))} ${sentence(s.caption)}${keys}`, "polite", { key: "guide" });
@@ -196,6 +206,12 @@ const stopWatching = guide.subscribe((s) => {
   if (s.step?.seq !== before?.seq || !!s.step?.next !== !!before?.next) restart();
   else schedule();
 });
+watch(
+  () => props.hidden,
+  (hidden) => {
+    if (!hidden) speak(state.value.step);
+  },
+);
 onUnmounted(() => {
   stopWatching();
   if (raf) cancelAnimationFrame(raf);
@@ -216,15 +232,15 @@ const counter = computed(() => (step.value ? counterOf(step.value) : t("guide.ti
 
 <template>
   <Teleport to="body">
-    <div v-if="step" class="guide-layer" data-testid="guide-layer" :data-ref="ref_">
+    <div v-if="shown" class="guide-layer" data-testid="guide-layer" :data-ref="ref_">
       <svg v-if="paths.length" class="guide-model" aria-hidden="true">
         <polyline v-for="(p, i) in paths" :key="i" :points="p" />
       </svg>
       <!-- A model area is its own outline; a box around it would ring empty space. -->
       <div
-        v-if="ring && step.target.model === undefined"
+        v-if="ring && shown.target.model === undefined"
         class="guide-ring"
-        :class="{ 'guide-region': !!step.target.region }"
+        :class="{ 'guide-region': !!shown.target.region }"
         :style="ringStyle"
         aria-hidden="true"
       ></div>
@@ -237,11 +253,11 @@ const counter = computed(() => (step.value ? counterOf(step.value) : t("guide.ti
         :style="bubbleStyle"
       >
         <div class="guide-count">{{ counter }}</div>
-        <p class="guide-caption">{{ step.caption }}</p>
-        <p v-if="step.keys" class="guide-keys" data-guide-keys>
-          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ step.keys }}
+        <p class="guide-caption">{{ shown.caption }}</p>
+        <p v-if="shown.keys" class="guide-keys" data-guide-keys>
+          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ shown.keys }}
         </p>
-        <p v-if="hint" class="guide-hint">{{ hint }}</p>
+        <p v-if="shownHint" class="guide-hint">{{ shownHint }}</p>
         <div class="guide-actions">
           <Button id="guide-stop" @click="guide.stop()">{{ t("guide.stop") }}</Button>
           <Button id="guide-next" variant="primary" @click="guide.next()">{{ t("guide.next") }}</Button>

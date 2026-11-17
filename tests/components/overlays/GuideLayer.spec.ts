@@ -47,7 +47,7 @@ function frame(): number {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-function setup() {
+function setup(props: { session?: GuideSession; hidden?: boolean } = {}) {
   let snap: Snapshot = emptySnapshot();
   let faceCalls = 0;
   /** The body's live pose: the Move tool's ghost sets it on the mesh and never touches the store. */
@@ -93,8 +93,9 @@ function setup() {
   const btn = document.createElement("button");
   btn.id = "guide-spec-target";
   document.body.appendChild(btn);
-  mount(GuideLayer, { global: { provide: { [ENGINE as symbol]: engine } } });
+  const wrapper = mount(GuideLayer, { props, global: { provide: { [ENGINE as symbol]: engine } } });
   return {
+    wrapper,
     guide,
     store,
     setTool: (t: string) => (snap = { ...snap, tool: t }),
@@ -231,6 +232,70 @@ describe("GuideLayer bubble", () => {
     await tick();
     expect(document.querySelector(".guide-caption")!.textContent).toBe("There");
     expect(document.querySelector("[data-guide-keys]")).toBeNull();
+  });
+});
+
+describe("GuideLayer for a tour", () => {
+  const tourSession = () =>
+    new GuideSession(
+      () => ({ found: true }),
+      () => emptySnapshot(),
+    );
+  const shown = () => [!!document.querySelector(".guide-bubble"), !!document.querySelector(".guide-ring")];
+
+  it("shows its own session's step, not the assistant's", async () => {
+    const session = tourSession();
+    const g = setup({ session });
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Theirs" }]);
+    session.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Ours" }]);
+    await tick();
+    expect([...document.querySelectorAll(".guide-caption")].map((c) => c.textContent)).toEqual(["Ours"]);
+    document.getElementById("guide-next")!.click();
+    expect([session.state.step?.next, g.guide.state.step?.next]).toEqual([true, false]);
+  });
+
+  it("puts a caption alone at the top centre, with no ring and no hint", async () => {
+    const session = tourSession();
+    setup({ session });
+    session.apply([{ kind: "highlight", seq: 1, step: 2, of: 14, caption: "Click the tile labelled XZ." }]);
+    await tick();
+    frame();
+    await tick();
+    const bubble = document.querySelector<HTMLElement>(".guide-bubble")!;
+    expect([bubble.style.left, bubble.style.top]).toEqual([`${window.innerWidth / 2 - 140}px`, "72px"]);
+    expect([document.querySelector(".guide-ring"), document.querySelector(".guide-hint")]).toEqual([null, null]);
+    expect(document.querySelector(".guide-caption")!.textContent).toBe("Click the tile labelled XZ.");
+  });
+
+  it("shows the tour's hint under the caption", async () => {
+    const session = tourSession();
+    setup({ session });
+    session.apply([{ kind: "highlight", seq: 1, caption: "Draw the L." }]);
+    session.setHint("The L is not closed yet, click its first corner again.");
+    await tick();
+    expect(document.querySelector(".guide-hint")!.textContent).toBe(
+      "The L is not closed yet, click its first corner again.",
+    );
+  });
+
+  it("hides the bubble and ring while hidden and keeps the wait open, then shows them again", async () => {
+    const session = tourSession();
+    const g = setup({ session, hidden: true });
+    session.apply([
+      { kind: "highlight", seq: 1, target: { region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }, caption: "Here" },
+      { kind: "wait", seq: 2, until: "next" },
+    ]);
+    await tick();
+    for (let i = 0; i < 3; i++) expect(frame()).toBe(1);
+    expect(shown()).toEqual([false, false]);
+    expect([session.state.wait?.done, session.active]).toEqual([null, true]);
+    expect(vi.mocked(announce)).not.toHaveBeenCalled();
+
+    await g.wrapper.setProps({ hidden: false });
+    frame();
+    await tick();
+    expect(shown()).toEqual([true, true]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["Guide. Here."]);
   });
 });
 
