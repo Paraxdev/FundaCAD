@@ -20,6 +20,8 @@ beforeEach(() => {
     <div id="toasts"></div>
     <div class="toast-stack"><button>Undo</button></div>
     <div id="a11y-announcer"><div role="status"></div></div>
+    <div id="guide-assistant" class="guide-layer"><button id="guide-next">Next</button></div>
+    <div id="guide-tour" class="guide-layer"><button id="guide-stop">Stop</button></div>
     <script id="boot"></script>
     <div id="dlg-a" class="overlay"><div class="panel"><button>A</button></div></div>
     <div id="dlg-b" class="overlay"><div class="panel"><button>B</button></div></div>`;
@@ -46,6 +48,17 @@ describe("inertOthers", () => {
     hold($("#dlg-a .panel"));
     expect(inert(".toast-stack")).toBe(true);
     expect($(".toast-stack").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("keeps the assistant's and the tour's guide layers live over a modal, so Next and Stop still work", () => {
+    hold($("#dlg-a .panel"));
+    expect([inert("#guide-assistant"), inert("#guide-tour")]).toEqual([false, false]);
+    expect([$("#guide-assistant").hasAttribute("aria-hidden"), $("#guide-tour").hasAttribute("aria-hidden")]).toEqual([
+      false,
+      false,
+    ]);
+    hold($("#home"));
+    expect([inert("#guide-assistant"), inert("#guide-tour")]).toEqual([false, false]);
   });
 
   it("walks into the app for a modal inside it, so only its siblings at each level go inert", () => {

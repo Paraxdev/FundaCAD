@@ -13,6 +13,7 @@ import { placeBubble, placeCaption, ringRect, type Placed } from "../../ui/guide
 import { modelShape, type ModelShape } from "../../ui/guide/probe";
 import type { Box } from "../../ui/controlRefs";
 import { pageZoom } from "../../ui/interfaceSize";
+import { cubeSize, MARGIN as CUBE_MARGIN } from "../../viewport/viewCube";
 import Button from "../ui/Button.vue";
 
 const props = defineProps<{
@@ -53,6 +54,12 @@ let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null 
 const RETRY_FRAMES = 30;
 
 const AVOID = ".modal-panel, .cmdk-card";
+const CHROME = ".float-left-stack > *, .tool-rail, .float-right > *, .prompt:not(.hidden)";
+/** A new sketch grows from its origin, so a caption keeps off the square this far past it before it is drawn. */
+const SKETCH_START_MM = 50;
+let drawn: { minx: number; miny: number; maxx: number; maxy: number } | null = null;
+let drawnFrame = -1;
+const corner = new THREE.Vector3();
 
 function sameBox(a: Box | null, b: Box | null): boolean {
   return !!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
@@ -134,6 +141,53 @@ function modelBox(s: StepState): Box | null {
   return out.length ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
 }
 
+/** The open sketch's box in window pixels: what is drawn, and the first square past its origin. */
+function sketchBox(): Box | null {
+  const sk = engine.sketch;
+  if (!sk.active) return null;
+  if (drawnFrame < 0 || frame - drawnFrame >= 15) {
+    drawn = sk.drawnBounds();
+    drawnFrame = frame;
+  }
+  const xs = [Math.min(0, drawn?.minx ?? 0), Math.max(SKETCH_START_MM, drawn?.maxx ?? 0)];
+  const ys = [Math.min(0, drawn?.miny ?? 0), Math.max(SKETCH_START_MM, drawn?.maxy ?? 0)];
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const x of xs) {
+    for (const y of ys) {
+      const p = engine.viewport.projectToScreen(sk.activePlane.to3D(x, y, corner));
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  return minX <= maxX ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
+}
+
+/** The view cube is drawn into the canvas, left of the right column. */
+function cubeBox(): Box | null {
+  const right = document.querySelector(".float-right");
+  if (!right) return null;
+  const size = cubeSize();
+  const top = engine.viewport.domElement.getBoundingClientRect().top + CUBE_MARGIN;
+  return { left: right.getBoundingClientRect().left - size - CUBE_MARGIN, top, width: size, height: size };
+}
+
+/** What a caption keeps off while a sketch is open, in window pixels. */
+function captionKeep(): { work?: Box; chrome?: Box[] } {
+  const work = sketchBox();
+  if (!work) return {};
+  const chrome: Box[] = [...document.querySelectorAll(CHROME)]
+    .map((d) => d.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+  const cube = cubeBox();
+  return { work, chrome: cube ? [...chrome, cube] : chrome };
+}
+
 function follow(s: StepState): void {
   if (s.target.ui !== undefined) {
     if (frame % 15 === 0 || !target?.isConnected) locateUi(s);
@@ -153,7 +207,15 @@ function follow(s: StepState): void {
     const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
     const view = { width: window.innerWidth / z, height: window.innerHeight / z };
     const avoid = [...document.querySelectorAll(AVOID)].map((d) => css(d.getBoundingClientRect()));
-    const at = box ? placeBubble(box, view, size, avoid) : placeCaption(view, size, avoid);
+    let at: Placed;
+    if (box) at = placeBubble(box, view, size, avoid);
+    else {
+      const keep = captionKeep();
+      at = placeCaption(view, size, avoid, {
+        work: keep.work ? css(keep.work) : null,
+        chrome: keep.chrome?.map(css) ?? [],
+      });
+    }
     if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
   }
 }
@@ -183,6 +245,7 @@ function restart(): void {
   ref_.value = "";
   radius.value = null;
   shapeFor = null;
+  drawnFrame = -1;
   void nextTick(schedule);
 }
 

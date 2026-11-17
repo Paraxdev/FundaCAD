@@ -2993,7 +2993,7 @@
   "tour.bracket.hole": "Add screw holes. Click {tool}{has, select, yes {, or press {key}} other {}}.",
   "tour.bracket.line": "Click {tool}{has, select, yes {, or press {key}} other {}}.",
   "tour.bracket.opened": "The guided bracket stopped because another document opened.",
-  "tour.bracket.place": "Click the flat back of the upright arm where a screw goes, click once more for each other screw, then press Enter.",
+  "tour.bracket.place": "Click the inside face of the upright arm, the side that faces the other arm, where a screw goes. Click once more for each extra screw, then press Enter.",
   "tour.bracket.plane": "Click the small square labelled XZ beside the origin. It stands upright, so you draw the side of the bracket on it.",
   "tour.bracket.refused": "An assistant's guide is running. Stop it first, then start the guided bracket.",
   "tour.bracket.sketch": "A part starts as a flat drawing. Click {tool}{has, select, yes {, or press {key}} other {}}.",

@@ -12,6 +12,7 @@ import type { Engine } from "../../../src/app/engine";
 import { GuideSession } from "../../../src/ui/guide/guideSession";
 import { emptySnapshot, type Snapshot } from "../../../src/ui/guide/wait";
 import { announce } from "../../../src/ui/announce";
+import { SketchPlane } from "../../../src/sketch/plane";
 
 vi.mock(import("../../../src/ui/announce"), async (orig) => ({ ...(await orig()), announce: vi.fn() }));
 
@@ -75,9 +76,15 @@ function setup(props: { session?: GuideSession; hidden?: boolean } = {}) {
     () => ({ found: true }),
     () => snap,
   );
+  const sketch = {
+    active: false,
+    activePlane: new SketchPlane("XY"),
+    drawnBounds: (): { minx: number; miny: number; maxx: number; maxy: number } | null => null,
+  };
   const engine = {
     guide,
     store,
+    sketch,
     viewport: {
       domElement: canvas,
       projectToScreen: (v: THREE.Vector3) => ({ x: v.x * 10, y: v.y * 10 }),
@@ -101,6 +108,7 @@ function setup(props: { session?: GuideSession; hidden?: boolean } = {}) {
     setTool: (t: string) => (snap = { ...snap, tool: t }),
     faceCalls: () => faceCalls,
     pose,
+    sketch,
   };
 }
 
@@ -300,6 +308,27 @@ describe("GuideLayer for a tour", () => {
     expect([bubble.style.left, bubble.style.top]).toEqual([`${window.innerWidth / 2 - 140}px`, "72px"]);
     expect([document.querySelector(".guide-ring"), document.querySelector(".guide-hint")]).toEqual([null, null]);
     expect(document.querySelector(".guide-caption")!.textContent).toBe("Click the tile labelled XZ.");
+  });
+
+  it("moves a caption off the open sketch, its first 50 mm square and what is drawn past it", async () => {
+    const session = tourSession();
+    const g = setup({ session });
+    g.sketch.active = true;
+    session.apply([{ kind: "highlight", seq: 1, step: 4, of: 14, caption: "Draw the L." }]);
+    await tick();
+    frame();
+    await tick();
+    const bubble = document.querySelector<HTMLElement>(".guide-bubble")!;
+    // The stub projects 1 mm to 10 px, so the square is 0 to 500 px.
+    const at = () => [parseFloat(bubble.style.left), parseFloat(bubble.style.top)];
+    const [left, top] = at();
+    expect(left! >= 504 || top! >= 504).toBe(true);
+
+    g.sketch.drawnBounds = () => ({ minx: 0, miny: 0, maxx: 60, maxy: 20 });
+    for (let i = 0; i < 16; i++) frame();
+    await tick();
+    const [left2, top2] = at();
+    expect(left2! >= 604 || top2! >= 504).toBe(true);
   });
 
   it("shows the tour's hint under the caption", async () => {

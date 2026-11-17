@@ -2993,7 +2993,7 @@
   "tour.bracket.hole": "添加螺丝孔。{has, select, yes {请点击 {tool}，或按 {key}} other {请点击 {tool}}}。",
   "tour.bracket.line": "{has, select, yes {请点击 {tool}，或按 {key}} other {请点击 {tool}}}。",
   "tour.bracket.opened": "由于打开了另一个文档，支架引导已停止。",
-  "tour.bracket.place": "请在竖直臂平坦的背面点击要放螺丝的位置，每多一个螺丝再点击一次，然后按 Enter。",
+  "tour.bracket.place": "请在竖直臂朝向另一条臂的内侧面上点击要放螺丝的位置。每多一个螺丝再点击一次，然后按 Enter。",
   "tour.bracket.plane": "请点击原点旁标有 XZ 的小方块。它是竖直的，所以您在上面画支架的侧面。",
   "tour.bracket.refused": "助手的引导正在运行。请先停止它，然后再启动支架引导。",
   "tour.bracket.sketch": "零件从一张平面图开始。{has, select, yes {请点击 {tool}，或按 {key}} other {请点击 {tool}}}。",
