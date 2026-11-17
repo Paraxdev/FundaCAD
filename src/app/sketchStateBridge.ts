@@ -1,7 +1,7 @@
 import { setPrompt } from "../ui/prompt";
 import { endPickSession } from "../ui/treePick";
 import { setWorkspace } from "../ui/workspace";
-import { SELF_PROMPTING, SKETCH_PROMPTS } from "./actionTables";
+import { SELF_PROMPTING, sketchPrompt } from "./actionTables";
 import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import { useRibbonStore } from "../stores/ribbon";
@@ -42,7 +42,7 @@ export function installSketchStateBridge(e: Engine): void {
     ui.sketchActive = e.sketch.active;
     syncHistory();
     if (e.sketch.active) {
-      if (!SELF_PROMPTING.has(e.sketch.tool)) setPrompt(e.sketch.keyPrompt ?? SKETCH_PROMPTS[e.sketch.tool] ?? null);
+      if (!SELF_PROMPTING.has(e.sketch.tool)) setPrompt(e.sketch.keyPrompt ?? sketchPrompt(e.sketch.tool));
     } else {
       setPrompt(null);
     }

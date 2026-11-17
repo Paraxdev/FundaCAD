@@ -8,7 +8,8 @@ import { announce } from "../ui/announce";
 import { buildLine, failureKey } from "../ui/buildAnnouncement";
 import { busyLine } from "../ui/buildProgress";
 import { stepEnglish } from "../ui/featureMeta";
-import { onWorkspaceChange, WORKSPACES } from "../ui/workspace";
+import { onWorkspaceChange } from "../ui/workspace";
+import { t } from "../i18n";
 
 /** Work quicker than this only says its result, so a short rebuild is not "Rebuilding" then "Built". */
 export const BUSY_SPEAK_MS = 1000;
@@ -59,12 +60,12 @@ export function installAnnouncements(e: { store: DocumentStore }): () => void {
   const ui = useUiStore();
   const stopMode = watch(
     () => ui.sketchActive,
-    (on) => announce(on ? "Sketch mode" : "Solid mode", "polite", { key: "mode" }),
+    (on) => announce(t("announce.mode", { mode: on ? "sketch" : "solid" }), "polite", { key: "mode" }),
   );
   const offWorkspace = onWorkspaceChange((w) => {
     // The switch itself is a radio group the screen reader already reads as it changes.
     if (document.activeElement?.closest("#workspace-toggle")) return;
-    announce(`${WORKSPACES.find((x) => x.id === w)?.label ?? w} workspace`, "polite", { key: "mode" });
+    announce(t("announce.workspace", { workspace: w }), "polite", { key: "mode" });
   });
 
   return () => {

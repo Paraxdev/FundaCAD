@@ -9,7 +9,7 @@ import type { SketchTool } from "../sketch/sketchMode";
 import { routeTreeClick } from "../ui/treePick";
 import { SKETCH_TOOLS } from "./actionTables";
 import type { Engine } from "./engine";
-import { BUSY_TOOL_HINT, refuseAloud, treeClickDeps } from "./planePick";
+import { busyToolHint, refuseAloud, treeClickDeps } from "./planePick";
 import { createProfileAt } from "./profileAt";
 
 const CARRY_LIMIT_MS = 10_000;
@@ -51,7 +51,7 @@ export function carryCommand(e: Pick<CarryEngine, "tools" | "setStatus">, action
   const tool = [e.tools.extrude, e.tools.pressPull].find((x) => x.active);
   if (!tool?.carry) return false;
   if (!tool.carryOffered) {
-    refuseAloud(e, BUSY_TOOL_HINT);
+    refuseAloud(e, busyToolHint());
     return true;
   }
   const done = carryTo(tool, tool.carry, { kind: "action", action });

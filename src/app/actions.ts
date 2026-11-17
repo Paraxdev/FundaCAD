@@ -2,6 +2,7 @@ import { exportSelection, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
+import { t } from "../i18n";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { STANDARD_VIEWS, toggleShortcutHUD } from "../input/shortcuts";
 import { cycleRegion, goToRegion } from "../ui/regions";
@@ -83,7 +84,7 @@ export function createActions(e: Engine): (action: string) => void {
   function startFaceOffset(mode: FaceOffsetMode) {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
-      e.setStatus("Create or import a body first", "");
+      e.setStatus(t("tool.needBody"), "");
       return;
     }
     e.tools.faceOffset.start(mode, (id) => {
@@ -94,7 +95,7 @@ export function createActions(e: Engine): (action: string) => void {
   function startFaceTool(which: "draft" | "thread" | "hole" | "textOnFace") {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
-      e.setStatus("Create or import a body first", "");
+      e.setStatus(t("tool.needBody"), "");
       return;
     }
     e.tools[which].start((id) => {
@@ -120,13 +121,13 @@ export function createActions(e: Engine): (action: string) => void {
       const tool = SKETCH_MODIFY[action];
       if (e.sketch.active) {
         if (tool && !e.sketch.applySelectedConstraint(tool)) e.sketch.setTool(tool);
-      } else e.setStatus("Enter a sketch to use modify tools", "");
+      } else e.setStatus(t("sketch.modify.needSketch"), "");
       return;
     }
     if (action === "finish") return void e.sketch.finish(true);
     if (action === "tie-loose-ends") {
       if (e.sketch.active) void e.sketch.tieLooseEnds();
-      else e.setStatus("Enter a sketch to tie its loose ends", "");
+      else e.setStatus(t("sketch.looseEnds.needSketch"), "");
       return;
     }
     if (action === "construction") {
@@ -333,7 +334,7 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "measure":
         if (!e.hasBody()) {
-          e.setStatus("Measure: create or import a body first", "");
+          e.setStatus(t("tool.measure.needBody"), "");
           break;
         }
         e.tools.measure.start();
@@ -351,19 +352,19 @@ export function createActions(e: Engine): (action: string) => void {
           break;
         }
         if (!e.hasBody()) {
-          e.setStatus("Section: create or import a body first", "");
+          e.setStatus(t("tool.section.needBody"), "");
           break;
         }
         // Its handle, box and keys would stay live beside the other tool's until that ends.
         if (e.toolAtWork()) {
-          e.setStatus("Section: finish the active tool first (Esc cancels it)", "");
+          e.setStatus(t("tool.section.toolBusy"), "");
           break;
         }
         // The world axes need no aiming, for a part with no face turned the way you want to look.
         void (async () => {
-          const src = await choose<"pick" | "X" | "Y" | "Z">("Section, cut along what?", [
-            { value: "pick", label: "Face or plane", hint: "click one" },
-            { value: "Z", label: "Z", hint: "horizontal cut" },
+          const src = await choose<"pick" | "X" | "Y" | "Z">(t("tool.section.ask"), [
+            { value: "pick", label: t("tool.section.faceOrPlane"), hint: t("tool.section.faceOrPlaneHint") },
+            { value: "Z", label: "Z", hint: t("tool.section.horizontalHint") },
             { value: "X", label: "X" },
             { value: "Y", label: "Y" },
           ]);
@@ -374,43 +375,43 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "component-colors":
         if (!e.hasBody()) {
-          e.setStatus("Component colors: create or import a body first", "");
+          e.setStatus(t("analysis.colors.needBody"), "");
           break;
         }
         e.viewport.setAnalysis(e.viewport.analysis === "component" ? "none" : "component");
         e.ui.panels.closeOverhangSettings(); // leaving draft mode
-        e.setStatus(e.viewport.analysis === "component" ? "Component colors on" : "Component colors off", "");
+        e.setStatus(t("analysis.colors.toggled", { on: e.viewport.analysis === "component" ? "yes" : "no" }), "");
         break;
       case "draft-analysis":
         if (!e.hasBody()) {
-          e.setStatus("Draft analysis: create or import a body first", "");
+          e.setStatus(t("analysis.draft.needBody"), "");
           break;
         }
         e.viewport.setAnalysis(e.viewport.analysis === "draft" ? "none" : "draft");
         if (e.viewport.analysis === "draft") {
           const { dir, threshold } = e.viewport.draftConfig;
-          e.setStatus(`Overhang: red = unsupported below ${threshold}° from horizontal (build ${dir})`, "");
+          e.setStatus(t("analysis.draft.on", { threshold, dir }), "");
           e.ui.panels.showOverhangSettings();
         } else {
           e.ui.panels.closeOverhangSettings();
-          e.setStatus("Draft analysis off", "");
+          e.setStatus(t("analysis.draft.off"), "");
         }
         break;
       case "zebra":
         if (!e.hasBody()) {
-          e.setStatus("Zebra: create or import a body first", "");
+          e.setStatus(t("analysis.zebra.needBody"), "");
           break;
         }
         e.viewport.setZebra(!e.viewport.zebraOn);
-        e.setStatus(e.viewport.zebraOn ? "Zebra stripes on (surface continuity)" : "Zebra off", "");
+        e.setStatus(t("analysis.zebra.toggled", { on: e.viewport.zebraOn ? "yes" : "no" }), "");
         break;
       case "curvature":
         if (!e.hasBody()) {
-          e.setStatus("Curvature combs: create or import a body first", "");
+          e.setStatus(t("analysis.curvature.needBody"), "");
           break;
         }
         e.viewport.setCurvatureCombs(!e.viewport.combsOn);
-        e.setStatus(e.viewport.combsOn ? "Curvature combs on (edge bend visualization)" : "Curvature combs off", "");
+        e.setStatus(t("analysis.curvature.toggled", { on: e.viewport.combsOn ? "yes" : "no" }), "");
         break;
       case "interference":
         void e.ui.panels.showInterference();
@@ -488,7 +489,7 @@ export function createActions(e: Engine): (action: string) => void {
       case "hide-selected": {
         const ids = e.viewport.getSelectedBodies();
         if (!ids.length) {
-          e.setStatus("Hide: select bodies first (press 2 for body select)", "");
+          e.setStatus(t("tool.hide.selectBodies"), "");
           break;
         }
         e.store.setBodiesVisibility(new Map(ids.map((id) => [id, false])));
@@ -507,7 +508,7 @@ export function createActions(e: Engine): (action: string) => void {
         toggleShortcutHUD();
         break;
       case "compute-all":
-        e.setStatus("Compute All, rebuilding everything from scratch…", "");
+        e.setStatus(t("tool.computeAll.running"), "");
         void e.store.computeAllNow();
         break;
       // Plugins come last, so a contribution naming "save" or "export" cannot replace the app's own.

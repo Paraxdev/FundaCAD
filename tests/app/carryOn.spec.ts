@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { carryCommand, installCarryOn, type CarryEngine } from "../../src/app/carryOn";
-import { BUSY_TOOL_HINT } from "../../src/app/planePick";
+import { busyToolHint } from "../../src/app/planePick";
 import { carryWords, type CarryCommit, type CarryHost, type CarryTarget } from "../../src/features/carryOn";
 import type { RebuildState } from "../../src/document/store";
 import { t } from "../../src/i18n";
@@ -433,7 +433,7 @@ describe("a tool command while a step is open", () => {
     open(r, { carryOffered: false });
     expect(carryCommand(r.e as unknown as CarryEngine, "chamfer")).toBe(true);
     expect(r.e.tools.extrude.commitForCarry).not.toHaveBeenCalled();
-    expect(r.status).toEqual([BUSY_TOOL_HINT]);
+    expect(r.status).toEqual([busyToolHint()]);
   });
 
   it("leaves the command alone with no step open, or for a command that starts no tool", () => {

@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "../ui/toast";
 import { openReportDialog } from "../ui/bugReporter";
+import { t } from "../i18n";
 
 interface Death {
   kind: string;
@@ -11,14 +12,14 @@ interface Death {
 /** Shows the cause, since field reports arrive as screenshots of this toast. */
 export function deathMessage(p: Partial<Death> | null | undefined): string {
   const cause = p && typeof p.cause === "string" && p.cause ? p.cause : "";
-  const why = cause ? ` (${cause})` : "";
+  const args = { known: cause ? "yes" : "no", cause };
   switch (p?.kind) {
     case "start_failed":
-      return `FundaCAD could not start its geometry engine${why}. It keeps trying, and restarting FundaCAD may help.`;
+      return t("engine.died.startFailed", args);
     case "restarted":
-      return `The geometry engine crashed${why} and was restarted. The last operation did not finish.`;
+      return t("engine.died.restarted", args);
     default:
-      return `The geometry engine crashed${why}. Save your work, then restart FundaCAD.`;
+      return t("engine.died.crashed", args);
   }
 }
 
@@ -31,7 +32,7 @@ export function installEngineDiedToast(): void {
       timeout: 60000,
       source: "engine",
       detail: e.payload.detail,
-      action: { label: "Report", onClick: openReportDialog },
+      action: { label: t("engine.died.report"), onClick: openReportDialog },
     });
   });
 }

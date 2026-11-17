@@ -9,9 +9,14 @@ import { onPickSessionBegin, treePickWaiting } from "../ui/treePick";
 import { VIEW_SUMMARY_ID } from "../ui/viewSummary";
 import type { Engine } from "./engine";
 import { refuseAloud } from "./planePick";
+import { onLanguageChange, t, type MessageKey } from "../i18n";
 
 const KINDS: readonly GeometryKind[] = ["faces", "edges", "planes"];
-const KIND_WORDS: Record<GeometryKind, string> = { faces: "Faces", edges: "Edges", planes: "Planes" };
+const KIND_WORDS: Record<GeometryKind, MessageKey> = {
+  faces: "geometry.list.kind.faces",
+  edges: "geometry.list.kind.edges",
+  planes: "geometry.list.kind.planes",
+};
 const STEP_SPEECH_DELAY = 120;
 
 /** Makes the canvas a Tab stop that a pointer press does not land on: with no focus change on a press, every path that
@@ -20,8 +25,12 @@ const STEP_SPEECH_DELAY = 120;
 export function installCanvasStop(canvas: HTMLElement): void {
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "Model");
-  canvas.setAttribute("aria-roledescription", "3D view");
+  const name = () => {
+    canvas.setAttribute("aria-label", t("canvas.name"));
+    canvas.setAttribute("aria-roledescription", t("canvas.roleDescription"));
+  };
+  name();
+  onLanguageChange(name);
   canvas.setAttribute("aria-describedby", VIEW_SUMMARY_ID);
   canvas.addEventListener("mousedown", (ev) => {
     ev.preventDefault();
@@ -49,8 +58,8 @@ function bracketOf(ev: KeyboardEvent): { delta: 1 | -1; switches: boolean } | nu
 
 export function emptyStepWords(list: ReturnType<typeof useGeometryBrowserStore>): string {
   if (list.state === "error" && list.error) return list.error;
-  if (list.rows.length) return `No ${list.kind} match the filter`;
-  return list.bodyId === null ? "No body to step through" : `No ${list.kind} on this body`;
+  if (list.rows.length) return t("geometry.step.noMatch", { kind: list.kind });
+  return list.bodyId === null ? t("geometry.step.noBody") : t("geometry.step.noneOnBody", { kind: list.kind });
 }
 
 export interface CanvasPickHost {
@@ -84,7 +93,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     ctl.startStepping();
     if (list.state === "loading") {
       waiting = delta;
-      return say(ctl.waitsOnTool() ?? `Listing ${list.kind}`);
+      return say(ctl.waitsOnTool() ?? t("geometry.list.listingShort", { kind: list.kind }));
     }
     const held = ctl.rowsHeld();
     if (held) {
@@ -101,7 +110,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     const said = describePick(row.facts);
     // Enter gives a plane to the waiting tool, it starts no sketch then.
     const words = (row.plane && treePickWaiting() && said.aloud) || said.spoken;
-    say(type !== null || facing !== null || minSize !== null ? `${words}. Filtered` : words);
+    say(type !== null || facing !== null || minSize !== null ? t("geometry.step.filtered", { words }) : words);
   }
 
   function switchKind(delta: 1 | -1) {
@@ -109,7 +118,7 @@ export function installCanvasPick(e: CanvasPickHost): () => void {
     const next = KINDS[(KINDS.indexOf(list.kind) + delta + KINDS.length) % KINDS.length]!;
     ctl.setKind(next);
     ctl.startStepping();
-    say(KIND_WORDS[next]);
+    say(t(KIND_WORDS[next]));
   }
 
   function pick(additive: boolean) {

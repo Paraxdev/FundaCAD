@@ -4,11 +4,12 @@ import type { Engine } from "./engine";
 import type { Plane3 } from "../types";
 import { announce, cancelAnnouncement } from "../ui/announce";
 import { dismissToastsSaying } from "../ui/toast";
+import { t } from "../i18n";
 import { routeTreeClick, type OfferDeps, type TreeClickDeps, type TreeClickRoute, type TreePick } from "../ui/treePick";
 
 export const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
 
-export const BUSY_TOOL_HINT = "Finish the active tool first, or press Esc";
+export const busyToolHint = (): string => t("pick.busyTool");
 
 /** How long a selection's words wait to be spoken, so a run of Ctrl-clicks says only its last. */
 export const SELECTION_SPEECH_DELAY = 250;
@@ -31,7 +32,7 @@ export type PlaneRowHost = Pick<Engine, "store" | "toolOwnsScreen" | "setStatus"
  *  rows keep working inside one. */
 function busyHint(e: PlaneRowHost): string | null {
   if (!e.toolOwnsScreen() || e.sketch.active) return null;
-  return BUSY_TOOL_HINT;
+  return busyToolHint();
 }
 
 // Left up beside the next prompt, a refusal reads as if the row just taken had failed too. The spoken copy is put away
@@ -57,7 +58,7 @@ export function offerDeps(e: PlaneRowHost): OfferDeps {
 
 export function sketchOnPlane(e: PlaneRowHost, pick: PlanePick) {
   if (e.sketch.active) {
-    refuseAloud(e, "Finish this sketch before starting another");
+    refuseAloud(e, t("pick.finishSketchFirst"));
     return;
   }
   if (pick.kind === "basePlane") e.sketch.enter(pick.plane, e.store);

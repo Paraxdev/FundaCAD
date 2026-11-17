@@ -10,17 +10,18 @@ import { startDatumPoseEdit } from "../features/datumPlaneEdit";
 import { cancelActiveTools } from "./toolBusy";
 import { typedDimBox } from "../sketch/dimInput";
 import { endPickSession, pickHoldsEdits } from "../ui/treePick";
-import { BUSY_TOOL_HINT, refuseAloud } from "./planePick";
+import { busyToolHint, refuseAloud } from "./planePick";
+import { t } from "../i18n";
 
-const VALUES_IN_HISTORY = "Not draggable, edit the value under this feature in the history";
+const valuesInHistory = (): string => t("edit.valuesInHistory");
 
 function whyNotEditable(e: Engine, id: string): string | null {
-  if (e.store.isSuppressed(id)) return "Unsuppress the feature to edit it";
+  if (e.store.isSuppressed(id)) return t("edit.unsuppressFirst");
   if (e.store.buildState.result?.skippedFeatures?.some((s) => s.feature_id === id)) {
-    return "This version of FundaCAD cannot edit this feature";
+    return t("edit.unknownFeature");
   }
   const idx = e.store.document.features.findIndex((x) => x.id === id);
-  if (idx >= e.store.rollbackIndex) return "Roll the timeline forward to edit this feature";
+  if (idx >= e.store.rollbackIndex) return t("edit.rolledBack");
   return null;
 }
 
@@ -37,8 +38,8 @@ export function closeOpenEdit(e: Engine, except: string): void {
   if ((e.store.editPreviewId ?? e.selectedFeature) === except) return;
   const typed = typedDimBox();
   if (typed) {
-    if (!typed.confirm()) e.setStatus("Fix the value being typed or press Esc, then edit the other feature", "");
-    else if (e.toolAtWork()) e.setStatus("Finish this edit, then edit the other feature", "");
+    if (!typed.confirm()) e.setStatus(t("edit.fixTyped"), "");
+    else if (e.toolAtWork()) e.setStatus(t("edit.finishFirst"), "");
     return;
   }
   cancelActiveTools(e.tools);
@@ -71,7 +72,7 @@ export function closeToolOnLostStep(e: Engine): () => void {
 /** True when a waiting pick keeps the edit of a step back, said aloud so the double click or Enter is not lost. */
 export function editHeldByPick(e: Pick<Engine, "setStatus">): boolean {
   if (!pickHoldsEdits()) return false;
-  refuseAloud(e, BUSY_TOOL_HINT);
+  refuseAloud(e, busyToolHint());
   return true;
 }
 
@@ -134,7 +135,7 @@ export function createSelection(
       ...(fsel.bodyId ? { body: fsel.bodyId } : {}),
     } as Feature);
     e.viewport.clearSelection();
-    e.setStatus("Deleting face…", "");
+    e.setStatus(t("edit.deletingFace"), "");
     setPrompt(null);
     return true;
   };
@@ -165,16 +166,16 @@ export function createSelection(
       case "fillet":
       case "chamfer":
         // false: not tool editable, and selectFeature has already opened its values in the history.
-        if (!e.tools.edgeFeature.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!e.tools.edgeFeature.startEdit(id, done)) e.setStatus(valuesInHistory(), "");
         break;
       case "extrude":
-        if (!e.tools.extrude.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!e.tools.extrude.startEdit(id, done)) e.setStatus(valuesInHistory(), "");
         break;
       case "revolve":
-        if (!e.tools.revolvePitch.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!e.tools.revolvePitch.startEdit(id, done)) e.setStatus(valuesInHistory(), "");
         break;
       case "hole":
-        if (!e.tools.hole.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!e.tools.hole.startEdit(id, done)) e.setStatus(valuesInHistory(), "");
         break;
       case "datumPlane": {
         const deps = {
@@ -183,20 +184,20 @@ export function createSelection(
           sourceOf: (d: Extract<Feature, { type: "datumPlane" }>) => e.datumSourceOf(d),
           previewPose: (pid: string, p: DatumPose | null) => e.previewDatumPose(pid, p),
         };
-        if (!startDatumPoseEdit(deps, id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!startDatumPoseEdit(deps, id, done)) e.setStatus(valuesInHistory(), "");
         break;
       }
       case "joint":
-        if (!e.tools.joint.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!e.tools.joint.startEdit(id, done)) e.setStatus(valuesInHistory(), "");
         break;
       case "mechanism":
-        if (!e.tools.mechanism.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!e.tools.mechanism.startEdit(id, done)) e.setStatus(valuesInHistory(), "");
         break;
       default:
         // Asked last, so a plugin cannot take over a type the app already handles.
         {
           const edit = contributedFeature(f.type)?.edit;
-          if (edit && !edit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+          if (edit && !edit(id, done)) e.setStatus(valuesInHistory(), "");
         }
         break;
     }

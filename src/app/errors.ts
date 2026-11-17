@@ -1,5 +1,6 @@
 import { toast } from "../ui/toast";
-import { plainError, SEE_CONSOLE } from "../ui/plainError";
+import { plainError, seeConsole } from "../ui/plainError";
+import { t } from "../i18n";
 import { describe } from "../ui/logStore";
 import { isSessionEnded } from "../document/session";
 import { isBrowserNotice } from "../diagnostics/browserNotice";
@@ -8,7 +9,7 @@ import { isBrowserNotice } from "../diagnostics/browserNotice";
 export function installGlobalErrorHandlers(): void {
   const headline = (v: unknown) => {
     const m = plainError(v, "");
-    return m ? `Unexpected error: ${m}` : `Something went wrong. ${SEE_CONSOLE}`;
+    return m ? t("error.unexpected", { message: m }) : t("error.somethingWrong", { details: seeConsole() });
   };
   const agent = typeof navigator === "undefined" ? "" : `\n\nPlatform: ${navigator.userAgent}`;
   window.addEventListener("unhandledrejection", (e) => {
