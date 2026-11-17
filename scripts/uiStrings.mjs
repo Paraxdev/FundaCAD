@@ -390,7 +390,7 @@ export function isThrownScanned(path) {
   return !/\.(test|spec)\.ts$/.test(path);
 }
 
-const THROWN = /(Error|Refusal)$/;
+const THROWN = /(Error|Refusal|Refused)$/;
 const words = (s) => (s.replaceAll(HOLE, " ").match(/\p{L}{2,}/gu) ?? []).length >= 2;
 
 function scanThrownScript(code, firstLine, add) {

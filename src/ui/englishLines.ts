@@ -1,6 +1,6 @@
 // Lines the app writes in English because the build state and the MCP tools carry them (src/document/facelessBodies.ts,
-// src/geometry/client.ts, the parameter engine's refusals in src/params). Each pattern is made from the English line
-// itself, so rewording one cannot drift.
+// src/geometry/client.ts, the parameter engine's refusals in src/params), or for the console detail beside a worded
+// toast (the sketch dimension editor). Each pattern is made from the English line itself, so rewording one cannot drift.
 
 import { t, tEnglish, type MessageArgs, type MessageKey } from "../i18n";
 
@@ -32,6 +32,14 @@ const FORMS: readonly Form[] = [
   { key: "field.problem.noFiniteValue" },
   { key: "field.problem.invalidExpression" },
   { key: "field.problem.targetGone" },
+  { key: "field.problem.nameChars" },
+  { key: "field.problem.reservedName", texts: ["name"] },
+  { key: "field.problem.nameTaken", texts: ["name"] },
+  { key: "field.problem.modelNames" },
+  { key: "params.referencedBy", texts: ["name", "refs"] },
+  { key: "field.problem.invalidValue" },
+  { key: "field.problem.noDocument" },
+  { key: "field.problem.notPositive" },
   { key: "expr.tooLong", numbers: ["max"] },
   { key: "expr.tooDeep", numbers: ["max"] },
   { key: "expr.qualifiedName" },

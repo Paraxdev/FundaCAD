@@ -72,7 +72,7 @@ function targetLabel(doc: CadDocument, target: ParamTarget): string {
 // button.
 const delError = ref<Record<string, string>>({});
 function del(name: string) {
-  const err = store.deleteParam(name);
+  const err = exprProblem(store.deleteParam(name));
   if (err) delError.value = { ...delError.value, [name]: err };
 }
 
@@ -132,7 +132,7 @@ function add() {
           commit="change"
           :label="t('params.nameOf', { name: r.name })"
           :model-value="r.name"
-          :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
+          :validate="commitWith((raw) => (raw === r.name ? null : exprProblem(store.renameParam(r.name, raw))))"
         />
         <TextField
           commit="change"
@@ -192,7 +192,7 @@ function add() {
             commit="change"
             :label="t('params.nameOf', { name: r.name })"
             :model-value="r.name"
-            :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
+            :validate="commitWith((raw) => (raw === r.name ? null : exprProblem(store.renameParam(r.name, raw))))"
           />
           <TextField
             commit="change"

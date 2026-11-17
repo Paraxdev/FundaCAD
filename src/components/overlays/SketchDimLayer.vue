@@ -10,6 +10,7 @@ import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
 import { shownExpr, spellNumber } from "../../ui/measure";
+import { exprProblem } from "../../document/numFields";
 import { pageZoom } from "../../ui/interfaceSize";
 import { labelLeader, layoutUnderZoom, type Held, type LabelAt } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
@@ -308,7 +309,7 @@ function onEditKey(e: KeyboardEvent, l: DimItem) {
       // formulas, and any edit to an already-bound dim, go through the
       // expression path so the binding stays consistent
       const err = l.commitExpr(raw);
-      if (err) editError.value = err;
+      if (err) editError.value = exprProblem(err);
       return; // success: refreshActive() rebuilds the labels
     }
     const val = parseField(raw, l.kind ?? "length");

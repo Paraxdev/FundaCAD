@@ -40,6 +40,18 @@ describe("a thrown English sentence", () => {
     ]);
   });
 
+  it("is flagged from a class named Refused, and a key such a class carries is left alone", () => {
+    expect(
+      found(
+        [
+          'throw new HostRefused("pass `text` or `base64`");',
+          'throw new TracerRefused("render.trace.selfCheckWrong", selfCheckArgs(check));',
+          "throw new BrokerRefused(op, r.code, r.why, r.missing);",
+        ].join("\n"),
+      ),
+    ).toEqual(["src/geometry/a.ts:1 HostRefused pass `text` or `base64`"]);
+  });
+
   it("is found in a component's script", () => {
     const vue = '<script setup lang="ts">\nfunction f() {\n  throw new Error("pick a face first");\n}\n</script>\n';
     expect(found(vue, "src/components/A.vue")).toEqual(["src/components/A.vue:3 Error pick a face first"]);

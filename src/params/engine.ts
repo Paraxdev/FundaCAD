@@ -245,11 +245,10 @@ const OBJECT_PROTO_NAMES = new Set([
 
 /** Reject bad user-parameter names in one place. Returns an error or null. */
 export function validateName(defs: Record<string, ParamDef>, name: string): string | null {
-  if (!isIdentName(name)) return "names are letters, digits and _ (not starting with a digit)";
-  if (isReservedName(name)) return `"${name}" is a reserved name`;
-  if (OBJECT_PROTO_NAMES.has(name)) return `"${name}" is a reserved name`;
-  if (name in defs) return `"${name}" already exists`;
-  if (/^d\d+$/.test(name)) return "dN names are reserved for model parameters";
+  if (!isIdentName(name)) return tEnglish("field.problem.nameChars");
+  if (isReservedName(name) || OBJECT_PROTO_NAMES.has(name)) return tEnglish("field.problem.reservedName", { name });
+  if (name in defs) return tEnglish("field.problem.nameTaken", { name });
+  if (/^d\d+$/.test(name)) return tEnglish("field.problem.modelNames");
   return null;
 }
 
@@ -421,7 +420,7 @@ function renameIn(expr: string, from: string, to: string): string {
 export function deleteBlockers(doc: CadDocument, name: string): string | null {
   if (!(name in defsOf(doc))) return `no parameter "${name}"`;
   const refs = referencesTo(doc, name);
-  if (refs.length) return `"${name}" is referenced by: ${refs.join(", ")}`;
+  if (refs.length) return tEnglish("params.referencedBy", { name, refs: refs.join(", ") });
   return null;
 }
 
