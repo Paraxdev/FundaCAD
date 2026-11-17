@@ -3,6 +3,7 @@
 // toolheads hold, not a colour scheme, and a control that cannot do its job is worse present than absent.
 
 import { computed, onUnmounted, ref, useId, watch } from "vue";
+import { t } from "./lines";
 import { FILAMENTS, staleSlots, type FilamentSource } from "./palette";
 import { service, useBrowserStore, useBuildValue, useEngine } from "fundacad";
 import { Icon, IconButton, InlineLabel } from "fundacad/ui";
@@ -38,8 +39,8 @@ const dotStyle = computed(() => ({
 }));
 const dotTitle = computed(() =>
   isStale.value
-    ? `Printer filaments changed since sync (slot${stale.value.length > 1 ? "s" : ""} ${stale.value.map((i) => i + 1).join(", ")}), click the sync button to re-sync`
-    : "Printer connection",
+    ? t("palette.stale", { count: stale.value.length, slots: stale.value.map((i) => i + 1).join(", ") })
+    : t("palette.connection"),
 );
 
 // Passive checks, armed once when bodies first appear: a one-shot probe that lights the dot and a single 30s
@@ -101,21 +102,21 @@ onUnmounted(() => {
         size="sm"
         :icon="collapsed ? 'caretRight' : 'caretDown'"
         :icon-size="11"
-        :tip="`${collapsed ? 'Expand' : 'Collapse'} Palette`"
+        :tip="collapsed ? t('palette.expand') : t('palette.collapse')"
         :aria-expanded="!collapsed"
         :aria-controls="`${uid}-body`"
         @click.stop="browser.toggle('Palette')"
       />
       <span class="feature-icon"><Icon name="filament" :size="14" /></span>
-      <span>Palette</span>
+      <span>{{ t("palette.title") }}</span>
       <span style="flex: 1"></span>
       <span class="pal-dot" role="img" :aria-label="dotTitle" :title="dotTitle" :style="dotStyle"></span>
-      <span v-if="isStale" class="sr-only" role="alert">Warning: {{ dotTitle }}</span>
+      <span v-if="isStale" class="sr-only" role="alert">{{ t("palette.warning", { message: dotTitle }) }}</span>
       <!-- .stop: the button lives in the header but must not also toggle it -->
       <IconButton
         class="pal-sync"
         icon="sync"
-        tip="Sync filaments from printer"
+        :tip="t('palette.sync')"
         size="sm"
         variant="plain"
         :icon-size="14"
@@ -125,19 +126,23 @@ onUnmounted(() => {
       <span class="tree-count">{{ store.colorPalette.length }}</span>
     </div>
 
-    <div v-if="!collapsed" :id="`${uid}-body`" role="list" aria-label="Filament slots" style="display: contents">
+    <div v-if="!collapsed" :id="`${uid}-body`" role="list" :aria-label="t('palette.slots')" style="display: contents">
       <div
         v-for="(slot, i) in store.colorPalette"
         :key="`pal:${i}`"
         role="listitem"
         class="feature-row tree-child"
-        :title="`Filament slot ${i + 1} → toolhead ${i + 1}${slot.material ? ` (${slot.material})` : ''}`"
+        :title="
+          slot.material
+            ? t('palette.slotMaterial', { n: i + 1, material: slot.material })
+            : t('palette.slot', { n: i + 1 })
+        "
       >
         <!-- Kept raw: no base control draws a colour picker, so the name is the slot's. -->
         <input
           type="color"
           class="pal-swatch"
-          :aria-label="`Colour of ${slot.name}`"
+          :aria-label="t('palette.colorOf', { name: slot.name })"
           :value="slot.color"
           @change="store.setPaletteSlot(i, { color: ($event.target as HTMLInputElement).value })"
         />
