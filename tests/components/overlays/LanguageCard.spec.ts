@@ -110,7 +110,10 @@ describe("the Language card", () => {
       line(fr, "prefs.language.hint", "fr"),
       "fr",
     ]);
-    expect(Object.values(de).filter((v) => !v.includes("{") && card.includes(v))).toEqual([]);
+    // A line French writes the same way (OK, r) cannot tell the two languages apart.
+    const frLines = fr as Record<string, string>;
+    const leftover = Object.entries(de).filter(([k, v]) => v !== frLines[k] && !v.includes("{") && card.includes(v));
+    expect(leftover.map(([k]) => k)).toEqual([]);
   });
 
   it("says machine translated text may read oddly only under a machine translated language", async () => {
