@@ -132,7 +132,9 @@ export class ViewCube {
       // No tint, see faceFill.
       const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff, transparent: false });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), f.normal);
+      // The plate's +Y follows the side's up, so its word reads upright when the camera looks at that side.
+      const basis = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(f.up, f.normal), f.up, f.normal);
+      mesh.quaternion.setFromRotationMatrix(basis);
       mesh.position.copy(f.normal).multiplyScalar(HALF + 0.001);
       this.group.add(mesh);
       this.parts.push({
