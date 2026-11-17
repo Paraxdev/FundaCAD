@@ -3,6 +3,7 @@
 // ever sets img.src. The poller is tied to the component's lifetime, since onUnmounted cannot be missed.
 
 import { ref, watch } from "vue";
+import { t } from "./lines";
 import { cameraPanel } from "./state";
 import { Button, Panel } from "fundacad/ui";
 import { printerCameraStart, printerCameraStop, onPrinterCameraFrame, onPrinterCameraOffline } from "./printerClient";
@@ -71,22 +72,22 @@ watch(
 <template>
   <Panel
     :open="!!cameraPanel"
-    :title="cameraPanel ? `Camera, ${cameraPanel}` : 'Camera'"
+    :title="cameraPanel ? t('camera.title', { id: cameraPanel }) : t('camera.titleBare')"
     title-hidden
     close-on-esc
     @close="cameraPanel = null"
   >
-    <div class="measure-title" aria-hidden="true">Camera, {{ cameraPanel }}</div>
+    <div class="measure-title" aria-hidden="true">{{ t("camera.title", { id: cameraPanel ?? "" }) }}</div>
     <img
       class="camera-frame"
-      :alt="frame ? 'Latest frame from the printer camera' : 'No camera frame yet'"
+      :alt="frame ? t('camera.imageAlt') : t('camera.imageAltNone')"
       :src="frame ?? undefined"
       :style="S.frame"
     />
     <div v-if="offline" class="camera-offline" :style="S.offline">
-      <span role="alert">Error: camera unavailable</span>
-      <Button class="camera-retry" size="sm" @click="cameraPanel && start(cameraPanel)">Retry</Button>
+      <span role="alert">{{ t("error.prefix", { message: t("camera.unavailable") }) }}</span>
+      <Button class="camera-retry" size="sm" @click="cameraPanel && start(cameraPanel)">{{ t("camera.retry") }}</Button>
     </div>
-    <div class="measure-hint">~1 frame/s · Esc to close</div>
+    <div class="measure-hint">{{ t("camera.hint") }}</div>
   </Panel>
 </template>

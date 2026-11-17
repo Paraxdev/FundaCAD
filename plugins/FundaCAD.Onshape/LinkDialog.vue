@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Button, Checkbox, FieldRow, ModalFrame, TextField } from "fundacad/ui";
+import { t } from "./lines";
 import { parseOnshapeUrl } from "./url";
 import type { LinkRequest } from "./dialog";
 
@@ -27,7 +28,7 @@ function confirm() {
     return;
   }
   if (askKeys.value && (!access.value.trim() || !secret.value.trim())) {
-    error.value = "Paste both the access key and the secret key.";
+    error.value = t("dialog.needKeys");
     return;
   }
   props.req.resolve({
@@ -55,21 +56,16 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 
 <template>
   <ModalFrame panel-class="onshape-link-dialog" @close="cancel()">
-    <template #title>Import from Onshape link</template>
+    <template #title>{{ t("dialog.title") }}</template>
 
     <div class="modal-body">
       <div :style="S.form">
-        <FieldRow
-          v-slot="{ id, describedby }"
-          label="Link"
-          layout="stacked"
-          hint="A part studio link imports that part studio. A document link imports every part studio in it."
-        >
+        <FieldRow v-slot="{ id, describedby }" :label="t('dialog.link')" layout="stacked" :hint="t('dialog.linkHint')">
           <TextField
             :id="id"
             v-model="link"
             :style="S.link"
-            label="Link"
+            :label="t('dialog.link')"
             type="url"
             spellcheck="false"
             autofocus
@@ -80,45 +76,43 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </FieldRow>
 
         <template v-if="askKeys">
-          <FieldRow v-slot="{ id }" label="Access key">
+          <FieldRow v-slot="{ id }" :label="t('dialog.accessKey')">
             <TextField
               :id="id"
               v-model="access"
-              label="Access key"
+              :label="t('dialog.accessKey')"
               spellcheck="false"
               autocomplete="off"
               data-testid="onshape-access"
             />
           </FieldRow>
           <!-- TextField has no password type, so this raw input sits in the same field well, named by its row. -->
-          <FieldRow v-slot="{ id }" label="Secret key">
+          <FieldRow v-slot="{ id }" :label="t('dialog.secretKey')">
             <span class="ui-field ui-text-field ui-field-md">
               <input
                 :id="id"
                 v-model="secret"
-                aria-label="Secret key"
+                :aria-label="t('dialog.secretKey')"
                 type="password"
                 autocomplete="off"
                 data-testid="onshape-secret"
               />
             </span>
           </FieldRow>
-          <Checkbox v-model="remember">Remember in the system's credential store</Checkbox>
-          <div class="sm-hint"
-            >Create a key with read access at dev-portal.onshape.com/keys. The keys never go in the document.</div
-          >
+          <Checkbox v-model="remember">{{ t("dialog.remember") }}</Checkbox>
+          <div class="sm-hint">{{ t("dialog.keysHint") }}</div>
         </template>
-        <Button v-else size="sm" @click="changeKeys = true">Use other keys</Button>
+        <Button v-else size="sm" @click="changeKeys = true">{{ t("dialog.useOtherKeys") }}</Button>
 
-        <div v-if="error" class="sm-hint" role="alert" :style="S.error" data-testid="onshape-error"
-          >Error: {{ error }}</div
-        >
+        <div v-if="error" class="sm-hint" role="alert" :style="S.error" data-testid="onshape-error">{{
+          t("error.prefix", { message: error })
+        }}</div>
       </div>
     </div>
 
     <div class="modal-foot">
-      <Button @click="cancel()">Cancel</Button>
-      <Button variant="primary" data-testid="onshape-import" @click="confirm()">Import</Button>
+      <Button @click="cancel()">{{ t("dialog.cancel") }}</Button>
+      <Button variant="primary" data-testid="onshape-import" @click="confirm()">{{ t("dialog.import") }}</Button>
     </div>
   </ModalFrame>
 </template>

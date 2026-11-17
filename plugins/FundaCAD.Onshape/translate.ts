@@ -1,4 +1,5 @@
 import { OnshapeError, type OnshapeClient } from "./client";
+import { t } from "./lines";
 import type { OnshapeLink, Wvm } from "./url";
 
 export interface Translation {
@@ -24,21 +25,21 @@ export async function pollTranslation(
   { sleep, now, timeoutMs = 600_000 }: PollDeps,
 ): Promise<string> {
   const start = now();
-  let t = first;
+  let tr = first;
   for (let i = 0; ; i++) {
-    if (t.requestState === "DONE") {
-      const id = t.resultExternalDataIds?.[0];
-      if (!id) throw new OnshapeError("Onshape finished the STEP export but sent no file");
+    if (tr.requestState === "DONE") {
+      const id = tr.resultExternalDataIds?.[0];
+      if (!id) throw new OnshapeError(t("error.exportNoFile"));
       return id;
     }
-    if (t.requestState === "FAILED") {
-      throw new OnshapeError(`Onshape could not export STEP: ${t.failureReason || "no reason given"}`);
+    if (tr.requestState === "FAILED") {
+      throw new OnshapeError(t("error.exportFailed", { reason: tr.failureReason || t("error.noReason") }));
     }
     if (now() - start > timeoutMs) {
-      throw new OnshapeError(`Onshape has not finished the STEP export after ${Math.round(timeoutMs / 60000)} minutes`);
+      throw new OnshapeError(t("error.exportTimeout", { minutes: Math.round(timeoutMs / 60000) }));
     }
     await sleep(DELAYS[Math.min(i, DELAYS.length - 1)]!);
-    t = await get(first.id);
+    tr = await get(first.id);
   }
 }
 
@@ -68,7 +69,7 @@ export async function studiosOf(client: OnshapeClient, link: OnshapeLink): Promi
     );
     wvmid = doc.defaultWorkspace?.id;
     wvm = "w";
-    if (!wvmid) throw new OnshapeError("Onshape did not say which workspace the document opens in");
+    if (!wvmid) throw new OnshapeError(t("error.noWorkspace"));
   }
   const elements = await client.json<Element[]>(
     "GET",
@@ -84,15 +85,18 @@ export async function studiosOf(client: OnshapeClient, link: OnshapeLink): Promi
   });
   if (link.eid) {
     const e = elements.find((x) => x.id === link.eid);
-    if (!e) throw new OnshapeError("That tab is not in the document any more");
+    if (!e) throw new OnshapeError(t("error.tabGone"));
     if (e.elementType !== "PARTSTUDIO") {
-      const what = e.elementType === "ASSEMBLY" ? "an assembly" : "not a part studio";
-      throw new OnshapeError(`"${e.name}" is ${what}. Link a part studio instead`);
+      throw new OnshapeError(
+        e.elementType === "ASSEMBLY"
+          ? t("error.assembly", { name: e.name })
+          : t("error.notPartStudio", { name: e.name }),
+      );
     }
     return [studio(e)];
   }
   const all = elements.filter((e) => e.elementType === "PARTSTUDIO").map(studio);
-  if (!all.length) throw new OnshapeError("That document has no part studio");
+  if (!all.length) throw new OnshapeError(t("error.noPartStudio"));
   return all;
 }
 
@@ -126,6 +130,6 @@ export async function downloadStep(client: OnshapeClient, s: Studio, deps: PollD
   const res = await client.send("GET", `${base}/api/documents/d/${did}/externaldata/${xid}`, {
     saveAs: downloadName(s.name),
   });
-  if (!res.path) throw new OnshapeError("Onshape sent the STEP file but it was not saved");
+  if (!res.path) throw new OnshapeError(t("error.exportNotSaved"));
   return res.path;
 }

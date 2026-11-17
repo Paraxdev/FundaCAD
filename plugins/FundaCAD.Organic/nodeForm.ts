@@ -1,7 +1,9 @@
 // Rows address a node by its id (`nodes.n3.sx`), never its place in the list, so a binding follows the node through
 // a reorder or a delete. Pure, so it is tested without a window.
 
+import { spellNumber } from "fundacad";
 import type { ChoiceField, FieldKind, TargetField } from "fundacad";
+import { t } from "./lines";
 
 export const NODE_TYPE = "organic";
 
@@ -33,16 +35,24 @@ export interface NodeFeature {
   targets?: string[];
 }
 
-export const NODE_FIELDS: readonly (readonly [keyof NodeValues & string, string, FieldKind])[] = [
-  ["x", "X", "length"],
-  ["y", "Y", "length"],
-  ["z", "Z", "length"],
-  ["sx", "Radius X", "length"],
-  ["sy", "Radius Y", "length"],
-  ["sz", "Radius Z", "length"],
-  ["rx", "Turn X", "angle"],
-  ["ry", "Turn Y", "angle"],
-  ["rz", "Turn Z", "angle"],
+const centreRow = (id: string, axis: string) => t("field.rowCentre", { id, axis });
+const radiusRow = (id: string, axis: string) => t("field.rowRadius", { id, axis });
+const turnRow = (id: string, axis: string) => t("field.rowTurn", { id, axis });
+
+export const NODE_FIELDS: readonly (readonly [
+  keyof NodeValues & string,
+  (id: string, axis: string) => string,
+  FieldKind,
+])[] = [
+  ["x", centreRow, "length"],
+  ["y", centreRow, "length"],
+  ["z", centreRow, "length"],
+  ["sx", radiusRow, "length"],
+  ["sy", radiusRow, "length"],
+  ["sz", radiusRow, "length"],
+  ["rx", turnRow, "angle"],
+  ["ry", turnRow, "angle"],
+  ["rz", turnRow, "angle"],
 ];
 
 export function asNodeFeature(f: unknown): NodeFeature | null {
@@ -53,25 +63,53 @@ export function asNodeFeature(f: unknown): NodeFeature | null {
 
 /** The value rows: the blend, then every node's position, radii and turn. */
 export function nodeNumFields(values: Record<string, unknown>): [string, string, FieldKind][] {
-  const rows: [string, string, FieldKind][] = [["blend", "Blend", "length"]];
+  const rows: [string, string, FieldKind][] = [["blend", t("field.blend"), "length"]];
   const nodes = Array.isArray(values["nodes"]) ? (values["nodes"] as { id?: unknown }[]) : [];
   for (const n of nodes) {
     if (typeof n?.id !== "string") continue;
-    for (const [field, label, kind] of NODE_FIELDS) rows.push([`nodes.${n.id}.${field}`, `${n.id} ${label}`, kind]);
+    for (const [field, label, kind] of NODE_FIELDS) {
+      rows.push([`nodes.${n.id}.${field}`, label(n.id, field.slice(-1).toUpperCase()), kind]);
+    }
   }
   return rows;
+}
+
+export function operationOptions(): { value: Operation; label: string }[] {
+  return [
+    {
+      value: "new",
+      get label() {
+        return t("field.option.newBody");
+      },
+    },
+    {
+      value: "join",
+      get label() {
+        return t("field.option.join");
+      },
+    },
+    {
+      value: "cut",
+      get label() {
+        return t("field.option.cut");
+      },
+    },
+    {
+      value: "intersect",
+      get label() {
+        return t("field.option.intersect");
+      },
+    },
+  ];
 }
 
 export const NODE_CHOICE_FIELDS: ChoiceField[] = [
   {
     field: "operation",
-    label: "Operation",
-    options: [
-      { value: "new", label: "New body" },
-      { value: "join", label: "Join" },
-      { value: "cut", label: "Cut" },
-      { value: "intersect", label: "Intersect" },
-    ],
+    get label() {
+      return t("field.operation");
+    },
+    options: operationOptions(),
     fallback: "new",
   },
 ];
@@ -79,6 +117,7 @@ export const NODE_CHOICE_FIELDS: ChoiceField[] = [
 export const NODE_TARGETS: TargetField[] = [
   {
     field: "targets",
+    // Stays English like the core Bodies rows, whose counts the host words in English for now.
     label: "Bodies",
     kind: "body",
     shape: "bodyId",
@@ -196,6 +235,6 @@ export function nodesBox(nodes: readonly NodeValues[]): { min: number[]; max: nu
  *  when that is a round number, so a reference reads at a glance. */
 export function sizeLabel(mm: number): string {
   const r = Math.round(mm * 100) / 100;
-  if (r >= 10 && Math.abs(r / 10 - Math.round(r / 10)) < 1e-9) return `${Math.round(r / 10)} cm`;
-  return `${r} mm`;
+  if (r >= 10 && Math.abs(r / 10 - Math.round(r / 10)) < 1e-9) return `${spellNumber(Math.round(r / 10))} cm`;
+  return `${spellNumber(r)} mm`;
 }

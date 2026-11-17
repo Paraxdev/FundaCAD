@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { ALL_HANDLES, setPrompt } from "fundacad";
 import type { Engine, Feature, Frame, MoveCommit, MoveResult, MoveTarget } from "fundacad";
+import { t } from "./lines";
 import * as panel from "./panel";
 import {
   NODE_TYPE,
@@ -25,8 +26,6 @@ const PREVIEW_DEBOUNCE_MS = 120;
 const DOT_PX = 6;
 const HIT_PX = 12;
 const DRAG_PX = 4;
-const PROMPT =
-  "Click to place a node · Alt-drag a node to pull a linked one out · Shift-click to link · Del removes · Enter · Esc";
 
 const NODE_COLOR = 0x3fb6a8;
 const PICKED_COLOR = 0xffb347;
@@ -134,7 +133,7 @@ export class NodeTool {
       commit: () => this.commit(),
       cancel: () => this.cancel(),
     });
-    setPrompt(PROMPT);
+    setPrompt(t("tool.prompt"));
     this.redraw();
     this.frame();
   }
@@ -272,8 +271,8 @@ export class NodeTool {
     const n = this.node(id);
     if (!n || field === "id") return null;
     const v = Number(raw.trim());
-    if (raw.trim() === "" || !Number.isFinite(v)) return "Type a number";
-    if ((field === "sx" || field === "sy" || field === "sz") && !(v > 0)) return "A radius must be greater than 0";
+    if (raw.trim() === "" || !Number.isFinite(v)) return t("check.number");
+    if ((field === "sx" || field === "sy" || field === "sz") && !(v > 0)) return t("check.radiusPositive");
     (n as unknown as Record<string, unknown>)[field] = v;
     this.reopenGizmo();
     this.changed();
@@ -663,7 +662,8 @@ export class NodeTool {
       const s = vp.projectToScreen(centerOf(sel));
       const d = [numOf(sel.sx, 5), numOf(sel.sy, 5), numOf(sel.sz, 5)].map((v) => 2 * v);
       const same = Math.abs(d[0]! - d[1]!) < 1e-6 && Math.abs(d[1]! - d[2]!) < 1e-6;
-      const text = same ? `⌀ ${sizeLabel(d[0]!)}` : d.map(sizeLabel).join(" × ");
+      const [x, y, z] = d.map(sizeLabel) as [string, string, string];
+      const text = same ? t("panel.diameter", { size: x }) : t("panel.sizeBy", { x, y, z });
       const cur = panel.label.value;
       if (!cur || Math.abs(cur.x - s.x) > 0.5 || Math.abs(cur.y - s.y) > 0.5 || cur.text !== text) {
         panel.label.value = { x: s.x, y: s.y, text };

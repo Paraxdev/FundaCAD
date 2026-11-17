@@ -12,7 +12,12 @@ const h = vi.hoisted(() => ({
   seen: [] as WebRequest[],
 }));
 
-vi.mock("fundacad", () => ({ importPath: h.importPath, reportError: h.reportError, toast: h.toast }));
+vi.mock("fundacad", async () => ({
+  importPath: h.importPath,
+  reportError: h.reportError,
+  toast: h.toast,
+  pluginText: (await import("../../src/i18n")).pluginText,
+}));
 vi.mock("../../plugins/FundaCAD.Onshape/native", () => ({
   loadKeys: async () => ({ access: "a".repeat(24), secret: "s".repeat(48) }),
   saveKeys: async () => undefined,

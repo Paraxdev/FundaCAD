@@ -1,3 +1,5 @@
+import { t } from "./lines";
+
 export type Wvm = "w" | "v" | "m";
 
 export interface OnshapeLink {
@@ -22,14 +24,14 @@ export function parseOnshapeUrl(text: string): OnshapeLink | { error: string } {
   try {
     url = new URL(text.trim());
   } catch {
-    return { error: "That is not a link. Copy the address of an Onshape document or part studio." };
+    return { error: t("url.notALink") };
   }
   if (url.protocol !== "https:" || url.username || url.password || url.port || !isOnshapeHost(url.hostname)) {
-    return { error: "That is not an Onshape link. It should start with https://cad.onshape.com/documents/" };
+    return { error: t("url.notOnshape") };
   }
   const m = PATH.exec(url.pathname.toLowerCase());
   if (!m) {
-    return { error: "That link does not point at an Onshape document. Open the part studio and copy its address." };
+    return { error: t("url.notDocument") };
   }
   const [, did, wvm, wvmid, eid] = m;
   return {

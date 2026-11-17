@@ -953,6 +953,31 @@
       "en": "Pitch and lead of a multi start thread",
       "text": "Teilung P, Steigung Ph",
       "note": "DIN 202 wording for a thread with several starts"
+    },
+    {
+      "en": "node",
+      "text": "Knoten",
+      "note": "a point of a node body, drawn as an ellipsoid"
+    },
+    {
+      "en": "chain",
+      "text": "Kette",
+      "note": "nodes joined in a row in a node body"
+    },
+    {
+      "en": "blend",
+      "text": "Übergang",
+      "note": "how smoothly the nodes of a node body run into each other, as in the fillet messages"
+    },
+    {
+      "en": "filament slot",
+      "text": "Slot",
+      "note": "a filament position on the printer, the makers' word; the sketch slot is a Langloch"
+    },
+    {
+      "en": "toolhead",
+      "text": "Werkzeugkopf",
+      "note": "one print head of a multi-head printer"
     }
   ]
 }

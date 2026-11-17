@@ -143,7 +143,7 @@ describe("the Node body panel, for a screen reader", () => {
     const list = root.querySelector<HTMLElement>("[role=list][aria-label=Chains], ul[aria-label=Chains]")!;
     expect(list.children).toHaveLength(2);
     expect(list.textContent).toContain("n1 → n2");
-    byName<HTMLElement>(root, "button", "Remove chain n2 to n3")!.click();
+    byName<HTMLElement>(root, "button", "Remove chain n2 → n3")!.click();
     expect(h.removeChain).toHaveBeenCalledWith(1);
   });
 

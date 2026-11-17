@@ -1,3 +1,4 @@
+import { t } from "./lines";
 import { signOnshape } from "./sign";
 import { isOnshapeHost } from "./url";
 
@@ -49,7 +50,7 @@ const MAX_RETRIES = 5;
 function reasonOf(res: WebResponse): string {
   try {
     const j = JSON.parse(res.text ?? "") as { message?: unknown };
-    if (typeof j.message === "string" && j.message) return `: ${j.message.slice(0, 200)}`;
+    if (typeof j.message === "string" && j.message) return j.message.slice(0, 200);
   } catch {
     // not JSON, the status says enough
   }
@@ -66,7 +67,7 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
     let retries = 0;
     for (;;) {
       const host = new URL(url).hostname;
-      if (!isOnshapeHost(host)) throw new OnshapeError(`Onshape sent the request on to ${host}, which is not Onshape`);
+      if (!isOnshapeHost(host)) throw new OnshapeError(t("error.redirectedAway", { host }));
       // The reference client signs every request as JSON, GETs included.
       const signed = await signOnshape({ method, url, contentType: "application/json", ...keys });
       const headers: [string, string][] = [
@@ -81,28 +82,28 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
         ...(opts.saveAs ? { saveAs: opts.saveAs, timeoutMs: 600_000 } : { timeoutMs: 60_000 }),
       });
       if (res.status === 307 || res.status === 308) {
-        if (!res.location || ++hops > MAX_HOPS) throw new OnshapeError("Onshape redirected the request too many times");
+        if (!res.location || ++hops > MAX_HOPS) throw new OnshapeError(t("error.tooManyRedirects"));
         url = new URL(res.location, url).toString();
         continue;
       }
       if (res.status === 429) {
-        if (++retries > MAX_RETRIES)
-          throw new OnshapeError("Onshape is asking for fewer requests, try again in a minute", 429);
+        if (++retries > MAX_RETRIES) throw new OnshapeError(t("error.tooManyRequests"), 429);
         const secs = Number(res.retryAfter);
         await sleep(Math.min(Number.isFinite(secs) && secs > 0 ? secs : 2, 60) * 1000);
         continue;
       }
       if (res.status === 401 || res.status === 403) {
-        throw new OnshapeError(
-          "Onshape refused the keys. Check the access and secret key, and that the key may read documents",
-          res.status,
-        );
+        throw new OnshapeError(t("error.refusedKeys"), res.status);
       }
       if (res.status === 404) {
-        throw new OnshapeError("Onshape could not find that document, or these keys cannot open it", 404);
+        throw new OnshapeError(t("error.notFound"), 404);
       }
       if (res.status < 200 || res.status >= 300) {
-        throw new OnshapeError(`Onshape answered ${res.status}${reasonOf(res)}`, res.status);
+        const reason = reasonOf(res);
+        const message = reason
+          ? t("error.statusReason", { status: res.status, reason })
+          : t("error.status", { status: res.status });
+        throw new OnshapeError(message, res.status);
       }
       return res;
     }
@@ -113,7 +114,7 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
     try {
       return JSON.parse(res.text ?? "") as T;
     } catch {
-      throw new OnshapeError("Onshape sent a reply that is not JSON");
+      throw new OnshapeError(t("error.badJson"));
     }
   }
 

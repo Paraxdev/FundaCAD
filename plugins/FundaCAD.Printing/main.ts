@@ -111,8 +111,14 @@ export async function activate(e: Engine): Promise<() => void> {
   };
 }
 
+/** The palette keeps the English default name, so a sync compares the same text in every language. */
+function shownName(name: string): string {
+  const m = /^Toolhead (\d+)$/.exec(name);
+  return m ? t("toolhead.name", { n: Number(m[1]) }) : name;
+}
+
 /** The `filaments` service: probe, read, and the confirmed sync. */
-function filamentSource() {
+export function filamentSource() {
   return {
     async probe(): Promise<boolean> {
       if (!("__TAURI_INTERNALS__" in window)) return false;
@@ -132,7 +138,7 @@ function filamentSource() {
         filaments = await printerFilaments(activePrinterId());
       } catch (err) {
         const pe = asPrinterError(err);
-        toast(pe ? `Can't reach the printer: ${pe.message}` : `Printer error: ${String(err)}`, {
+        toast(pe ? t("error.unreachable", { message: pe.message }) : t("error.printer", { message: String(err) }), {
           kind: "error",
         });
         return false;
@@ -149,7 +155,7 @@ function filamentSource() {
           : undefined,
       );
       if (!proposed.some(Boolean)) {
-        toast("No filament loaded on the printer.", { kind: "info" });
+        toast(t("toast.noFilament"), { kind: "info" });
         return false;
       }
 
@@ -158,22 +164,26 @@ function filamentSource() {
         const diff = proposed
           .map((p, i) =>
             p && (cur[i]?.name !== p.name || cur[i]?.color !== p.color)
-              ? `Slot ${i + 1}: ${cur[i]?.name ?? ", "} → ${p.name}`
+              ? t("sync.slotLine", {
+                  n: i + 1,
+                  old: cur[i] ? shownName(cur[i].name) : t("sync.emptySlot"),
+                  new: shownName(p.name),
+                })
               : null,
           )
           .filter(Boolean) as string[];
         const go = await choose<"apply" | "cancel">(
-          diff.length ? `Overwrite palette from printer?\n${diff.join("\n")}` : "Sync palette from printer?",
+          diff.length ? `${t("sync.overwriteQuestion")}\n${diff.join("\n")}` : t("sync.question"),
           [
-            { value: "apply", label: "Overwrite", hint: `${diff.length} slot${diff.length === 1 ? "" : "s"}` },
-            { value: "cancel", label: "Cancel" },
+            { value: "apply", label: t("sync.overwrite"), hint: t("sync.overwriteHint", { n: diff.length }) },
+            { value: "cancel", label: t("dialog.cancel") },
           ],
         );
         if (go !== "apply") return false;
       }
 
       store.replacePaletteSlots(proposed);
-      toast("Palette synced from printer.", { kind: "info" });
+      toast(t("sync.done"), { kind: "info" });
       return true;
     },
   };

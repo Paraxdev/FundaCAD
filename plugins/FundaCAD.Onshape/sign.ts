@@ -1,6 +1,8 @@
 // Onshape's API key signature as its reference client builds it: HMAC-SHA256 over method, nonce, date, content type,
 // path and query, one per line with a trailing newline, all lowercased except the secret.
 
+import { t } from "./lines";
+
 export interface SignInput {
   method: string;
   url: string;
@@ -37,7 +39,7 @@ export async function signOnshape(input: SignInput): Promise<SignedHeaders> {
   const url = new URL(input.url);
   const query = url.search.replace(/^\?/, "");
   const text = [input.method, nonce, date, input.contentType, url.pathname, query, ""].join("\n").toLowerCase();
-  if (!globalThis.crypto?.subtle) throw new Error("this window has no WebCrypto, so Onshape requests cannot be signed");
+  if (!globalThis.crypto?.subtle) throw new Error(t("error.noWebCrypto"));
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(input.secret), { name: "HMAC", hash: "SHA-256" }, false, [
     "sign",

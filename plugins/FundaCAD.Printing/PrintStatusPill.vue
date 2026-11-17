@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button } from "fundacad/ui";
+import { t } from "./lines";
 import { usePrintStatusStore } from "./printStatus";
 
 const print = usePrintStatusStore();
@@ -36,8 +37,10 @@ const PILL = {
       aria-live="off"
       :style="[PILL, print.onClick ? { pointerEvents: 'auto' } : {}]"
     >
-      <span>{{ print.text }}</span>
-      <Button v-if="print.onClick" size="sm" variant="ghost" @click="print.onClick()">Show camera</Button>
+      <span>{{ typeof print.text === "function" ? print.text() : print.text }}</span>
+      <Button v-if="print.onClick" size="sm" variant="ghost" @click="print.onClick()">{{
+        t("pill.showCamera")
+      }}</Button>
     </div>
   </Teleport>
 </template>

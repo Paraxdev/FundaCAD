@@ -876,6 +876,31 @@
       "en": "tracer",
       "text": "moteur de tracé",
       "note": "the native or WebGPU tracer, not traceur; path tracing itself is tracé de chemins"
+    },
+    {
+      "en": "node",
+      "text": "nœud",
+      "note": "a point of a node body, drawn as an ellipsoid"
+    },
+    {
+      "en": "chain",
+      "text": "chaîne",
+      "note": "nodes joined in a row in a node body"
+    },
+    {
+      "en": "blend",
+      "text": "raccord",
+      "note": "how smoothly the nodes of a node body run into each other, as in the fillet messages"
+    },
+    {
+      "en": "filament slot",
+      "text": "emplacement",
+      "note": "a filament position on the printer; the sketch slot is a rainure"
+    },
+    {
+      "en": "toolhead",
+      "text": "tête d'outil",
+      "note": "one print head of a multi-head printer"
     }
   ]
 }

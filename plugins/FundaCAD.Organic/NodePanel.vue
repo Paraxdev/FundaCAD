@@ -3,22 +3,48 @@
 // .vue may not carry a <style> block.
 
 import { computed, reactive, useId, watch, type CSSProperties } from "vue";
+import { numberText, shownExpr, spellNumber } from "fundacad";
 import { Button, Checkbox, Chip, FieldRow, IconButton, ListRow, NumberField, Panel, Select } from "fundacad/ui";
+import { t } from "./lines";
 import * as panel from "./panel";
-import { numOf, type NodeValues, type Operation } from "./nodeForm";
+import { numOf, operationOptions, type NodeValues } from "./nodeForm";
 
 type NodeField = keyof NodeValues & string;
-const GROUPS: { label: string; title: string; unit: "mm" | "deg"; fields: NodeField[] }[] = [
-  { label: "Centre", title: "Where the node sits", unit: "mm", fields: ["x", "y", "z"] },
-  { label: "Radius", title: "Half the node's size along each of its own axes", unit: "mm", fields: ["sx", "sy", "sz"] },
-  { label: "Turn", title: "About X, then Y, then Z", unit: "deg", fields: ["rx", "ry", "rz"] },
-];
-const OPERATIONS: { value: Operation; label: string }[] = [
-  { value: "new", label: "New body" },
-  { value: "join", label: "Join" },
-  { value: "cut", label: "Cut" },
-  { value: "intersect", label: "Intersect" },
-];
+interface Group {
+  id: string;
+  label: string;
+  axisLabel: (axis: string) => string;
+  title: string;
+  unit: "mm" | "deg";
+  fields: NodeField[];
+}
+const GROUPS = computed<Group[]>(() => [
+  {
+    id: "centre",
+    label: t("field.centre"),
+    axisLabel: (axis) => t("field.axisCentre", { axis }),
+    title: t("field.centreTip"),
+    unit: "mm",
+    fields: ["x", "y", "z"],
+  },
+  {
+    id: "radius",
+    label: t("field.radius"),
+    axisLabel: (axis) => t("field.axisRadius", { axis }),
+    title: t("field.radiusTip"),
+    unit: "mm",
+    fields: ["sx", "sy", "sz"],
+  },
+  {
+    id: "turn",
+    label: t("field.turn"),
+    axisLabel: (axis) => t("field.axisTurn", { axis }),
+    title: t("field.turnTip"),
+    unit: "deg",
+    fields: ["rx", "ry", "rz"],
+  },
+]);
+const OPERATIONS = computed(operationOptions);
 
 const uid = useId();
 const v = computed(() => panel.view.value);
@@ -27,9 +53,20 @@ const picked = computed<NodeValues | null>(() => {
   return (s && s.selected && s.feature.nodes.find((n) => n.id === s.selected)) || null;
 });
 
-// A refusal stays until that field is committed or the node changes, and every one is listed as an alert.
-const refused = reactive<Record<string, string | null>>({});
-const problems = computed(() => Object.values(refused).filter((why): why is string => !!why));
+// A refusal stays until that field is committed or the node changes, and every one is listed as an alert. It keeps the
+// facts, so the line is worded again when a language switch redraws it.
+const KNOWN = ["check.number", "check.radiusPositive", "check.blendNegative"] as const;
+interface Refusal {
+  label: () => string;
+  why: string;
+  key: (typeof KNOWN)[number] | undefined;
+}
+const refused = reactive<Record<string, Refusal | null>>({});
+const problems = computed(() =>
+  Object.values(refused)
+    .filter((r): r is Refusal => !!r)
+    .map((r) => t("check.refused", { label: r.label(), why: r.key ? t(r.key) : r.why })),
+);
 watch(
   () => picked.value?.id,
   () => {
@@ -37,13 +74,13 @@ watch(
   },
 );
 
-function refuse(key: string, label: string, why: string | null) {
-  refused[key] = why && `${label}: ${why}`;
+function refuse(key: string, label: () => string, why: string | null) {
+  refused[key] = why ? { label, why, key: KNOWN.find((k) => t(k) === why) } : null;
 }
 
 function shown(x: unknown): string {
-  if (typeof x === "number") return String(Math.round(x * 1000) / 1000);
-  return x == null ? "" : String(x);
+  if (typeof x === "number") return spellNumber(Math.round(x * 1000) / 1000);
+  return x == null ? "" : shownExpr(String(x));
 }
 
 function numeric(x: unknown): number | null {
@@ -52,12 +89,11 @@ function numeric(x: unknown): number | null {
 }
 
 const axisOf = (f: string) => f.slice(-1).toUpperCase();
-const labelOf = (group: { label: string }, f: string) => `${group.label} ${axisOf(f)}`;
+const labelOf = (group: Group, f: string) => group.axisLabel(axisOf(f));
 const isRadius = (f: string) => f === "sx" || f === "sy" || f === "sz";
-const radiusRule = (f: string) =>
-  isRadius(f) ? (x: number) => (x > 0 ? null : "A radius must be greater than 0") : undefined;
+const radiusRule = (f: string) => (isRadius(f) ? (x: number) => (x > 0 ? null : t("check.radiusPositive")) : undefined);
 
-function commitValue(f: NodeField, label: string, value: number | null) {
+function commitValue(f: NodeField, label: () => string, value: number | null) {
   const n = picked.value;
   if (!n || value === null) return;
   refuse(f, label, panel.act()?.setValue(n.id, f, String(value)) ?? null);
@@ -68,7 +104,7 @@ function setBlend(value: number | null) {
   panel.act()?.setFeature({ blend: value });
 }
 
-const blendRule = (x: number) => (x < 0 ? "The blend is a radius of 0 or more" : null);
+const blendRule = (x: number) => (x < 0 ? t("check.blendNegative") : null);
 
 function isBound(field: string): boolean {
   const n = picked.value;
@@ -81,12 +117,15 @@ function diameters(n: NodeValues): number[] {
 
 function describe(n: NodeValues): string {
   const d = diameters(n);
-  return d[0] === d[1] && d[1] === d[2] ? `⌀ ${d[0]}` : d.join(" × ");
+  const [x, y, z] = d.map((v) => numberText(v)) as [string, string, string];
+  return d[0] === d[1] && d[1] === d[2] ? t("panel.diameter", { size: x }) : t("panel.sizeBy", { x, y, z });
 }
 
 function spoken(n: NodeValues): string {
   const d = diameters(n);
-  return `${n.id}, ${d[0] === d[1] && d[1] === d[2] ? `diameter ${d[0]}` : `size ${d.join(" by ")}`} mm`;
+  const [x, y, z] = d.map((v) => numberText(v)) as [string, string, string];
+  if (d[0] === d[1] && d[1] === d[2]) return t("panel.spokenDiameter", { id: n.id, size: x });
+  return t("panel.spokenSize", { id: n.id, x, y, z });
 }
 
 const WIDTH: CSSProperties = { width: "300px", maxWidth: "100%", maxHeight: "calc(100vh - 180px)", overflowY: "auto" };
@@ -124,14 +163,14 @@ const TAG: CSSProperties = {
 </script>
 
 <template>
-  <Panel :open="!!v" :title="v?.editing ? 'Edit node body' : 'Node body'">
+  <Panel :open="!!v" :title="v?.editing ? t('panel.titleEdit') : t('panel.title')">
     <div v-if="v" data-panel="node-body" :style="WIDTH">
-      <div v-if="v.error" role="alert" :style="PROBLEM">Error: {{ v.error }}</div>
-      <div v-else-if="!v.feature.nodes.length" :style="MUTED">Click in the view to place the first node.</div>
+      <div v-if="v.error" role="alert" :style="PROBLEM">{{ t("error.prefix", { message: v.error }) }}</div>
+      <div v-else-if="!v.feature.nodes.length" :style="MUTED">{{ t("panel.placeFirst") }}</div>
 
       <template v-if="v.feature.nodes.length">
-        <h3 :style="SECTION">Nodes</h3>
-        <div role="list" aria-label="Nodes">
+        <h3 :style="SECTION">{{ t("panel.nodes") }}</h3>
+        <div role="list" :aria-label="t('panel.nodes')">
           <div v-for="n in v.feature.nodes" :key="n.id" role="listitem" :style="ITEM">
             <ListRow
               :data-node="n.id"
@@ -144,7 +183,7 @@ const TAG: CSSProperties = {
             />
             <IconButton
               icon="close"
-              :tip="`Remove node ${n.id}`"
+              :tip="t('panel.removeNode', { id: n.id })"
               size="sm"
               variant="plain"
               @click="panel.act()?.removeNode(n.id)"
@@ -159,14 +198,8 @@ const TAG: CSSProperties = {
           <span />
           <span v-for="axis in ['X', 'Y', 'Z']" :key="axis" :style="AXIS">{{ axis }}</span>
         </div>
-        <div
-          v-for="group in GROUPS"
-          :key="group.label"
-          role="group"
-          :aria-labelledby="`${uid}-${group.label}`"
-          :style="GRID"
-        >
-          <span :id="`${uid}-${group.label}`" :title="group.title">{{ group.label }}</span>
+        <div v-for="group in GROUPS" :key="group.id" role="group" :aria-labelledby="`${uid}-${group.id}`" :style="GRID">
+          <span :id="`${uid}-${group.id}`" :title="group.title">{{ group.label }}</span>
           <NumberField
             v-for="f in group.fields"
             :key="f"
@@ -179,22 +212,22 @@ const TAG: CSSProperties = {
             :model-value="numeric(picked[f])"
             :text="isBound(f) ? shown(picked[f]) : undefined"
             :disabled="isBound(f)"
-            disabled-reason="A parameter drives this value"
+            :disabled-reason="t('field.locked')"
             :validate="radiusRule(f)"
-            @update:model-value="commitValue(f, labelOf(group, f), $event)"
-            @error="refuse(f, labelOf(group, f), $event)"
+            @update:model-value="commitValue(f, () => labelOf(group, f), $event)"
+            @error="refuse(f, () => labelOf(group, f), $event)"
           />
         </div>
       </template>
 
       <template v-if="v.feature.chains.length">
-        <h3 :style="SECTION">Chains</h3>
-        <div role="list" aria-label="Chains">
+        <h3 :style="SECTION">{{ t("panel.chains") }}</h3>
+        <div role="list" :aria-label="t('panel.chains')">
           <div v-for="(c, i) in v.feature.chains" :key="i" role="listitem" :style="ITEM">
             <span :style="GROW">{{ c.join(" → ") }}</span>
             <IconButton
               icon="close"
-              :tip="`Remove chain ${c.join(' to ')}`"
+              :tip="t('panel.removeChain', { chain: c.join(' → ') })"
               size="sm"
               variant="plain"
               @click="panel.act()?.removeChain(i)"
@@ -203,43 +236,45 @@ const TAG: CSSProperties = {
         </div>
       </template>
 
-      <h3 :id="`${uid}-body`" :style="SECTION">Body</h3>
+      <h3 :id="`${uid}-body`" :style="SECTION">{{ t("panel.body") }}</h3>
       <div role="group" :aria-labelledby="`${uid}-body`">
-        <FieldRow v-slot="{ id }" layout="param" label="Blend" :label-width="LABEL_WIDTH">
+        <FieldRow v-slot="{ id }" layout="param" :label="t('field.blend')" :label-width="LABEL_WIDTH">
           <NumberField
             :id="id"
             data-field="blend"
-            label="Blend"
+            :label="t('field.blend')"
             unit="mm"
             size="sm"
             :model-value="numeric(v.feature.blend ?? 0)"
             :validate="blendRule"
             @update:model-value="setBlend"
-            @error="refuse('blend', 'Blend', $event)"
+            @error="refuse('blend', () => t('field.blend'), $event)"
           />
         </FieldRow>
-        <FieldRow v-slot="{ id }" layout="param" label="Operation" :label-width="LABEL_WIDTH">
+        <FieldRow v-slot="{ id }" layout="param" :label="t('field.operation')" :label-width="LABEL_WIDTH">
           <Select
             :id="id"
             data-field="operation"
-            label="Operation"
+            :label="t('field.operation')"
             size="sm"
             :options="OPERATIONS"
             :model-value="v.feature.operation ?? 'new'"
             @update:model-value="panel.act()?.setFeature({ operation: $event })"
           />
         </FieldRow>
-        <Checkbox :model-value="v.linkNew" @update:model-value="panel.act()?.setLinkNew($event)"
-          >Link new nodes to the picked one</Checkbox
-        >
+        <Checkbox :model-value="v.linkNew" @update:model-value="panel.act()?.setLinkNew($event)">{{
+          t("panel.linkNew")
+        }}</Checkbox>
       </div>
 
-      <div v-for="msg in problems" :key="msg" role="alert" :style="PROBLEM">Error: {{ msg }}</div>
+      <div v-for="msg in problems" :key="msg" role="alert" :style="PROBLEM">{{
+        t("error.prefix", { message: msg })
+      }}</div>
 
       <div :style="ACTIONS">
-        <Button data-action="cancel" @click="panel.act()?.cancel()">Cancel</Button>
+        <Button data-action="cancel" @click="panel.act()?.cancel()">{{ t("panel.cancel") }}</Button>
         <Button variant="primary" data-action="commit" @click="panel.act()?.commit()">{{
-          v.editing ? "Update" : "Add"
+          v.editing ? t("panel.update") : t("panel.add")
         }}</Button>
       </div>
     </div>
