@@ -192,3 +192,38 @@ steps = [
 show = "A STEP assembly imported, its parts listed as bodies in the Items card."
 alt = "An imported STEP assembly with one body per part"
 uses = ["manual/docs/files/import.md"]
+
+[[shot]]
+file = "manual/docs/img/first-bracket-tile.png"
+size = [247, 219]
+theme = "fundacad"
+crop = "region"
+around = ".home-tour .home-example"
+park = [1400, 860]
+# The other cards are hidden so the picture holds this tile alone, a clip beside them came out half repainted.
+steps = [
+  { open = "home" },
+  { wait = 400 },
+  { evaluate = "() => document.querySelectorAll('.home-examples > .home-cell:not(.home-tour)').forEach((c) => (c.style.visibility = 'hidden'))" },
+]
+show = "The Your first bracket tile on Home, with its play icon and the line Guided, about 10 minutes."
+alt = "The Your first bracket tile on Home"
+uses = ["manual/docs/start/first-bracket.md"]
+
+[[shot]]
+file = "manual/docs/img/first-bracket-step1.png"
+size = [560, 239]
+theme = "fundacad"
+crop = "region"
+around = ".guide-ring"
+offset = [200, 35.3]
+park = [1400, 860]
+# The guide is started as the Home tile starts it, then the shot waits for the first bubble. The box starts below the menu bar, which it would cut.
+steps = [
+  { evaluate = "() => window.__fundacad.handleAction('first-bracket')" },
+  { evaluate = "async () => { for (let i = 0; i < 100; i++) { if (document.querySelector('.guide-bubble')?.textContent.includes('Step 1 of 14')) return; await new Promise((r) => setTimeout(r, 100)); } throw new Error('no Step 1 of 14 bubble'); }" },
+  { wait = 800 },
+]
+show = "The first step of the guide: a ring on Sketch on the left rail and the bubble beside it, Step 1 of 14."
+alt = "The guide's first step, a ring on Sketch and a bubble beside it"
+uses = ["manual/docs/start/first-bracket.md"]
