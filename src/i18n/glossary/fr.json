@@ -857,6 +857,25 @@
     {
       "en": "example",
       "text": "exemple"
+    },
+    {
+      "en": "Interference",
+      "text": "Interférence",
+      "note": "the tool, and a clash it finds"
+    },
+    {
+      "en": "Interference check",
+      "text": "Vérification des interférences",
+      "note": "what the tool runs, and its panel before a result"
+    },
+    {
+      "en": "Bounding box",
+      "text": "Boîte englobante"
+    },
+    {
+      "en": "tracer",
+      "text": "moteur de tracé",
+      "note": "the native or WebGPU tracer, not traceur; path tracing itself is tracé de chemins"
     }
   ]
 }

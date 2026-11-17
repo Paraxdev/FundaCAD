@@ -1,22 +1,80 @@
-// The engine words why a body has no inside after the body's name (crates/fundacad-geom/src/soundness.rs). Each form
-// it sends is pinned here exactly, so a reworded engine line shows up as a failing test, not an English sentence
-// in a German panel.
+// The engine words why a body has no inside after the body's name (crates/fundacad-geom/src/soundness.rs), and the
+// app words why the denoiser fell back (src-tauri). The fixed pieces each form is built from are read from the Rust
+// source, so a reworded line fails here, not as an English sentence in a German panel.
 import { afterEach, describe, expect, it } from "vitest";
-import { setLanguage } from "../../src/i18n";
+import { setLanguage, t } from "../../src/i18n";
 import { bodyReason, knownBodyReason } from "../../src/ui/engineReasons";
+import { describeDenoiser } from "../../src/viewport/pathtrace/denoiser";
+import soundnessRs from "../../crates/fundacad-geom/src/soundness.rs?raw";
+import framesDenoiserRs from "../../src-tauri/src/frames/denoiser.rs?raw";
+import oidnRs from "../../src-tauri/tracer/src/oidn.rs?raw";
 
 afterEach(() => setLanguage("system"));
 
-const ENGINE = {
-  surface: "is a surface, not a solid, so it has no inside",
-  openOne: "is not a closed solid, 1 of its edges bounds only one face, so it has no inside",
-  open: "is not a closed solid, 12 of its edges bound only one face, so it has no inside",
-  crowdedOne: "is not one clean solid, 1 of its edges is shared by more than two faces, so it has no single inside",
-  crowded: "is not one clean solid, 4 of its edges are shared by more than two faces, so it has no single inside",
-  flipped: "has faces that point the wrong way, at 3 of its edges the two faces disagree about which side is inside",
-  insideOutStuck: "is inside out, its faces point into the material, and it could not be turned over",
-  insideOut: "is inside out, its faces point into the material",
+const rust = (source: string) => source.replace(/\r\n/g, "\n");
+
+const SURFACE = "is a surface, not a solid, so it has no inside";
+const OPEN = "is not a closed solid, # {} only one face, so it has no inside";
+const CROWDED = "is not one clean solid, # {shared} shared by more than two faces, so it has no single inside";
+const FLIPPED = "has faces that point the wrong way, at # the two faces disagree about which side is inside";
+const INSIDE_OUT = "is inside out, its faces point into the material";
+const STUCK = ", and it could not be turned over";
+
+// The Rust soundness.rs fault() and material() put together from those pieces.
+const PIECES: Record<string, string> = {
+  surface: `"${SURFACE}"`,
+  open: `"${OPEN}", pick(n, "bounds", "bound")`,
+  crowded: `"${CROWDED}"`,
+  crowdedWord: `let shared = pick(n, "is", "are");`,
+  flipped: `"${FLIPPED}"`,
+  count: `why.replace('#', &format!("{n} of its edges"))`,
+  pick: `fn pick<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {\n    if n == 1 {\n        one\n    } else {\n        many`,
+  insideOut: `pub const INSIDE_OUT: &str = "${INSIDE_OUT}";`,
+  stuck: `format!("{INSIDE_OUT}${STUCK}")`,
 };
+
+const counted = (form: string, word: string, n: number) =>
+  form.replace(/\{\w*\}/, word).replace("#", `${n} of its edges`);
+
+const ENGINE = {
+  surface: SURFACE,
+  openOne: counted(OPEN, "bounds", 1),
+  open: counted(OPEN, "bound", 12),
+  crowdedOne: counted(CROWDED, "is", 1),
+  crowded: counted(CROWDED, "are", 4),
+  flipped: counted(FLIPPED, "", 3),
+  insideOutStuck: INSIDE_OUT + STUCK,
+  insideOut: INSIDE_OUT,
+};
+
+const MAC = "the high quality denoise is not offered on macOS yet, the edge aware filter cleans the picture";
+const OFFLINE = "the download failed, the edge aware filter stays ({e})";
+
+describe("the Rust source", () => {
+  it.each(Object.entries(PIECES))("still words the body reason piece %s that way", (_name, piece) => {
+    expect(rust(soundnessRs)).toContain(piece);
+  });
+
+  it("still words the denoiser notes the panel reads back that way", () => {
+    expect(rust(oidnRs)).toContain(`"${MAC}".into()`);
+    expect(rust(framesDenoiserRs)).toContain(`format!("${OFFLINE}")`);
+  });
+});
+
+describe("the denoiser notes", () => {
+  const filter = { active: "filter" as const, version: "", offered: true, bytes: 40_000_000 };
+  const note = (s: string) => describeDenoiser({ info: { ...filter, note: s }, downloading: false, error: "" });
+  const failed = (s: string) => describeDenoiser({ info: { ...filter, note: null }, downloading: false, error: s });
+
+  it("read in German as the app words them", async () => {
+    await setLanguage("de");
+    expect(note(MAC)).toBe(t("render.denoiser.filterWhy", { why: t("render.denoiser.notOnMac") }));
+    expect(failed(OFFLINE.replace("{e}", "timed out"))).toBe(
+      t("render.denoiser.filterWhy", { why: t("render.denoiser.offline", { detail: "timed out" }) }),
+    );
+    expect(note(MAC)).not.toContain("macOS yet");
+  });
+});
 
 describe("engine reasons", () => {
   it("read back word for word in English for every form the engine sends", () => {

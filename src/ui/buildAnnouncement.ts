@@ -20,11 +20,13 @@ export const failureKey = (featureId: string) => `failed:${featureId}`;
 const failureOf = (s: Settled) => (s.errorFeatureId || s.errorMessage ? `${s.errorFeatureId}|${s.errorMessage}` : null);
 
 /** Null while building and for a tool's live preview, which the tool's own prompt reports. A failure is assertive the
- *  first time; one that is still there after the next edit is said politely, so every edit does not interrupt. */
+ *  first time; one that is still there after the next edit is said politely, so every edit does not interrupt.
+ *  `nameOf` is the step as said, `englishOf` the name the engine's English sentence may start with. */
 export function buildLine(
   now: Settled,
   lastSettled: Settled | null,
   nameOf: (featureId: string) => string | null,
+  englishOf: (featureId: string) => string | null = nameOf,
 ): BuildLine | null {
   if (now.building || now.previewBuilt) return null;
   if (now.cancelled) return { text: t("buildSaid.cancelled"), priority: "polite" };
@@ -38,7 +40,8 @@ export function buildLine(
     return { text: t("buildSaid.stillFails", { built, named: at ? "yes" : "no", at: at ?? "" }), priority: "polite" };
   }
   const why = plainError(now.errorMessage ?? "", "");
-  const word = at ? namesStep(at, why) : 0;
+  const english = now.errorFeatureId ? englishOf(now.errorFeatureId) : null;
+  const word = at && english ? namesStep(english, why) : 0;
   // "Fillet: <why>" drops its label for the step's own name, "Fillet failed on Box" already names the step.
   if (word && why[word] === ":")
     return { text: t("buildSaid.failedAt", { at: at!, why: why.slice(word + 1).trim() }), priority: "assertive" };

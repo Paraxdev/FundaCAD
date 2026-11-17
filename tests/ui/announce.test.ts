@@ -77,6 +77,23 @@ describe("announce", () => {
     expect(polite.textContent).toBe("plate.funda を開きました。構築しました");
   });
 
+  it("joins Japanese lines with no stop by the full width stop, after a colon by nothing, after a half width stop by a space", async () => {
+    const { setLanguage } = await import("../../src/i18n");
+    await setLanguage("ja");
+    attach();
+    m.announce("plate.funda を開きました");
+    m.announce("面を選択：");
+    m.announce("押し出し 1");
+    frame();
+    expect(polite.textContent).toBe("plate.funda を開きました。面を選択：押し出し 1");
+    vi.advanceTimersByTime(5000);
+    m.announce("Ready?");
+    m.announce("構築しました");
+    frame();
+    expect(polite.textContent).toBe("Ready? 構築しました");
+    await setLanguage("system");
+  });
+
   it("keeps only the newest few of a flood", () => {
     attach();
     for (let i = 1; i <= 6; i++) m.announce(`Step ${i}`);
@@ -266,5 +283,16 @@ describe("spoken", () => {
       "Command-click adds more, Option drag copies, Command+Z",
     );
     expect(spoken("Analysing…")).toBe("Analysing");
+  });
+
+  it("frames a squared or cubed unit in the language, with the French plural following the value", async () => {
+    const { spoken } = await import("../../src/ui/announce");
+    const { setLanguage } = await import("../../src/i18n");
+    expect(spoken("12 cm³ · mm²")).toBe("12 cm cubed, mm squared");
+    await setLanguage("fr");
+    expect(spoken("1 mm² · 340 mm² · 1,5 cm³ · 2,5 cm³")).toBe("1 mm carré, 340 mm carrés, 1,5 cm cube, 2,5 cm cubes");
+    await setLanguage("ja");
+    expect(spoken("340 mm² · 12 cm³")).toBe("340 平方mm, 12 立方cm");
+    await setLanguage("system");
   });
 });

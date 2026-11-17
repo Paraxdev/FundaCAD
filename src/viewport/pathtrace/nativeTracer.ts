@@ -4,14 +4,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { TracerRefused, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
+import {
+  faultLine,
+  TracerRefused,
+  type PictureOptions,
+  type TraceLook,
+  type TraceScene,
+  type TracerBackend,
+} from "./backend";
 import type { TraceLens } from "./camera";
 import { FrameCameras, type FrameView } from "./frameCamera";
 import { NativeScene, type Call } from "./nativeScene";
 import { PresentSlot } from "./presentSlot";
 import { runSelfCheck, selfCheckReason } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
-import { t } from "../../i18n";
+import type { MessageKey } from "../../i18n";
 
 export interface NativeFrame {
   seq: number;
@@ -400,7 +407,7 @@ export class NativeTracer implements TracerBackend {
   private generation = 0;
   private pending: Promise<NativeFrame> | null = null;
   private count = 0;
-  private faultCb: ((why: string) => void) | null = null;
+  private faultCb: ((why: string, english?: string) => void) | null = null;
   private width = 1;
   private height = 1;
   private scale = 1;
@@ -426,7 +433,7 @@ export class NativeTracer implements TracerBackend {
     this.canvas = o.canvas ?? document.createElement("canvas");
     this.slot = new PresentSlot(({ seq, coarse }) => this.showFrame(seq, coarse), o.raf, o.caf);
     this.scene = new NativeScene(o.call ?? tauriCall, (e) =>
-      this.fault(t("render.trace.nativeRefusedScene", { reason: e instanceof Error ? e.message : String(e) })),
+      this.fault("render.trace.nativeRefusedScene", e instanceof Error ? e.message : String(e)),
     );
   }
 
@@ -486,7 +493,7 @@ export class NativeTracer implements TracerBackend {
         },
         (e) => {
           this.resizing--;
-          this.fault(t("render.trace.nativeFramesResize", { reason: String(e) }));
+          this.fault("render.trace.nativeFramesResize", String(e));
         },
       );
     }, RESIZE_SETTLE_MS);
@@ -598,7 +605,7 @@ export class NativeTracer implements TracerBackend {
       this.pending = this.disposed ? null : this.request();
     } catch (e) {
       this.pending = null;
-      this.fault(t("render.trace.nativeFramesStopped", { reason: e instanceof Error ? e.message : String(e) }));
+      this.fault("render.trace.nativeFramesStopped", e instanceof Error ? e.message : String(e));
       throw e;
     }
     try {
@@ -721,10 +728,10 @@ export class NativeTracer implements TracerBackend {
     try {
       s = (await this.call("pt_status")) as typeof s;
     } catch (e) {
-      this.fault(t("render.trace.nativeStopped", { reason: e instanceof Error ? e.message : String(e) }));
+      this.fault("render.trace.nativeStopped", e instanceof Error ? e.message : String(e));
       throw e;
     }
-    if (s.fault) this.fault(t("render.trace.nativeStopped", { reason: s.fault }));
+    if (s.fault) this.fault("render.trace.nativeStopped", s.fault);
     if (epoch !== this.epoch) return 0;
     // Status runs ahead of the frames: the host must not put the trace up over an older camera's picture.
     const onCanvas = this.shownSeq !== null && !this.shownCoarse && this.cameras.isNewest(this.shownSeq);
@@ -735,12 +742,14 @@ export class NativeTracer implements TracerBackend {
     return (this.o.call ?? tauriCall)(cmd, args);
   }
 
-  onFault(cb: (why: string) => void) {
+  onFault(cb: (why: string, english?: string) => void) {
     this.faultCb = cb;
   }
 
-  private fault(why: string) {
-    if (!this.disposed) this.faultCb?.(why);
+  private fault(key: MessageKey, reason: string) {
+    if (this.disposed) return;
+    const line = faultLine(key, { reason });
+    this.faultCb?.(line.shown, line.english);
   }
 
   dispose() {

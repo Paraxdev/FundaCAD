@@ -3,10 +3,10 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { TracerRefused, type TraceLook, type TracerBackend } from "./backend";
+import { faultLine, TracerRefused, type FaultLine, type TraceLook, type TracerBackend } from "./backend";
 import { experimentalPrefs } from "../../ui/experimentalPrefs";
 import { spellFixed } from "../../ui/measure";
-import { t } from "../../i18n";
+import { t, tEnglish } from "../../i18n";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
 import type { FrameView } from "./frameCamera";
@@ -130,9 +130,10 @@ export class PathTraceHost {
   note = "";
   onShownChange: ((shown: boolean) => void) | null = null;
   onStateChange: ((s: TraceState) => void) | null = null;
-  onFault: ((why: string, disabled: boolean) => void) | null = null;
+  /** `english` is `why` as the problem report keeps it. */
+  onFault: ((why: string, disabled: boolean, english: string) => void) | null = null;
   /** The model is too big to trace; not a fault, Path traced stays available. */
-  onRefuse: ((why: string) => void) | null = null;
+  onRefuse: ((why: string, english: string) => void) | null = null;
 
   private backend: TracerBackend | null = null;
   private starting = false;
@@ -434,14 +435,13 @@ export class PathTraceHost {
     if (sig === this.refusedSig) return true;
     this.refusedSig = sig;
     this.hasScene = false;
-    const has = spellFixed(tris / 1e6, 1);
-    this.note = overDevice
-      ? t("render.trace.tooBig", { has })
-      : t("render.trace.overBudget", { limit: budget / 1e6, has });
+    const key = overDevice ? "render.trace.tooBig" : "render.trace.overBudget";
+    const millions = tris / 1e6;
+    this.note = t(key, { limit: budget / 1e6, has: spellFixed(millions, 1) });
     this.samples = 0;
     this.traceSince = 0;
     this.disarm();
-    this.onRefuse?.(this.note);
+    this.onRefuse?.(this.note, tEnglish(key, { limit: budget / 1e6, has: millions.toFixed(1) }));
     return true;
   }
 
@@ -453,7 +453,7 @@ export class PathTraceHost {
       try {
         await this.arm();
         const b = await this.create();
-        b.onFault((why) => this.fault(why));
+        b.onFault((why, english) => this.fault({ shown: why, english: english ?? why }));
         this.webglCanvas.parentElement?.insertBefore(b.canvas, this.webglCanvas);
         const st = b.canvas.style;
         st.position = "absolute";
@@ -474,7 +474,7 @@ export class PathTraceHost {
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
         this.fault(
-          t("render.trace.couldNotStart", { reason: e instanceof Error ? e.message : String(e) }),
+          faultLine("render.trace.couldNotStart", { reason: e instanceof Error ? e.message : String(e) }),
           !(e instanceof TracerRefused),
         );
       } finally {
@@ -590,11 +590,11 @@ export class PathTraceHost {
       return;
     }
     if (!this.traceSince) this.traceSince = now;
-    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault(t("render.trace.noSample"));
+    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault(faultLine("render.trace.noSample"));
   }
 
-  private fault(why: string, counts = true) {
-    this.faultText = why;
+  private fault(why: FaultLine, counts = true) {
+    this.faultText = why.english;
     if (counts) this.faults++;
     this.disabled = this.faults >= 2;
     const b = this.backend;
@@ -609,7 +609,7 @@ export class PathTraceHost {
       /* already gone with the device */
     }
     this.disarm();
-    this.onFault?.(why, this.disabled);
+    this.onFault?.(why.shown, this.disabled, why.english);
   }
 
   dispose() {

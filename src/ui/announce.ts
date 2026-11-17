@@ -2,6 +2,7 @@
 // inert subtree, and everything transient (prompts, results, errors) goes through announce().
 
 import { t } from "../i18n";
+import { joinSaid } from "./joinSaid";
 
 export type AnnouncePriority = "polite" | "assertive";
 export type Verbosity = "off" | "errors" | "normal" | "verbose";
@@ -62,13 +63,20 @@ function heard(priority: AnnouncePriority, verbose: boolean): boolean {
   return v === "verbose" || !verbose;
 }
 
+// The unit is framed whole, so Japanese says 平方mm, and the value before it picks French carré or carrés.
+const POWER = /(?:(\d+(?:[.,]\d+)?)(\s*))?(\p{L}*)([²³])/gu;
+
+function power(_all: string, value: string | undefined, gap: string | undefined, unit: string, mark: string): string {
+  const n = value === undefined ? NaN : Number(value.replace(",", "."));
+  return `${value ?? ""}${gap ?? ""}${t(mark === "²" ? "spoken.squared" : "spoken.cubed", { unit, n })}`;
+}
+
 /** Text as a screen reader should hear it: glyphs some voices skip or spell out become words. */
 export function spoken(text: string): string {
   return text
     .replace(/\s*·\s*/g, ", ")
     .replace(/⌀\s*/g, `${t("spoken.diameter")} `)
-    .replace(/²/g, ` ${t("spoken.squared")}`)
-    .replace(/³/g, ` ${t("spoken.cubed")}`)
+    .replace(POWER, power)
     .replace(/⌘(?![-+])\s*/g, `${t("keys.spoken.command")} `)
     .replace(/⌘/g, t("keys.spoken.command"))
     .replace(/⌥(?![-+])\s*/g, `${t("keys.spoken.option")} `)
@@ -78,12 +86,8 @@ export function spoken(text: string): string {
     .trim();
 }
 
-// Japanese and Chinese end a sentence with a full width mark and put no space after it.
 function joined(parts: readonly string[]): string {
-  return parts.reduce(
-    (all, p) => (!all ? p : /[。！？：]$/.test(all) ? all + p : /[.!?:]$/.test(all) ? `${all} ${p}` : `${all}. ${p}`),
-    "",
-  );
+  return parts.reduce(joinSaid, "");
 }
 
 class Channel {

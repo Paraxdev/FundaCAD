@@ -4,11 +4,10 @@
 import * as THREE from "three";
 import type { StandardView } from "./cameras";
 import type { ViewCubeSide, ViewOverride } from "../types";
-import { contextMenu } from "../ui/menu";
+import { contextMenu, namedRow } from "../ui/menu";
 import { themeColor } from "./themeColors";
 import { hitScale } from "../input/pointerKind";
 import { viewportLabelScale } from "../ui/viewportLabels";
-import { t } from "../i18n";
 
 export const SIZE = 120; // corner viewport at Medium Viewport labels, CSS px
 export const MARGIN = 14; // gap from the top-right edge
@@ -368,11 +367,11 @@ export class ViewCube {
     const has = !!this.hooks.getOverrides()[side];
     contextMenu(clientX, clientY, [
       {
-        label: t("viewport.cube.setFromFace", { side: FACE_VIEWS[side].label }),
+        ...namedRow("viewport.cube.setFromFace", { side: FACE_VIEWS[side].label }),
         onClick: () => this.hooks.beginSetOverride(side),
       },
       {
-        label: t("viewport.cube.reset"),
+        ...namedRow("viewport.cube.reset"),
         disabled: !has,
         onClick: () => {
           this.hooks.resetOverride(side);

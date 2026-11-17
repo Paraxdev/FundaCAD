@@ -187,7 +187,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const exportFace = (format: "dxf" | "svg") => {
       if (!flatFace) return;
       const body = (bodyId && store.bodyName(bodyId)) || "";
-      const label = t("ctx.face.exportName", { named: body ? "yes" : "no", body });
+      const label = body ? t("export.flat.face", { body }) : t("export.flat.partFace");
       exportFlat({ face: flatFace.selector, plane: flatFace.def, label }, format);
     };
     const ownerId = featureForFace(hit.faceId);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLanguage } from "../../src/i18n";
 import { buildLine } from "../../src/ui/buildAnnouncement";
 
 const settled = (over: Partial<Parameters<typeof buildLine>[0]> = {}): Parameters<typeof buildLine>[0] => ({
@@ -66,6 +67,26 @@ describe("buildLine", () => {
     });
     const unnamed = settled({ errorFeatureId: "gone", errorMessage: "x" });
     expect(buildLine(unnamed, unnamed, names)?.text).toBe("Built, 2 bodies, a feature still fails");
+  });
+
+  it("says the step by its German name and still drops the engine's English label for it", async () => {
+    await setLanguage("de");
+    try {
+      const german = (id: string) => (id === "f2" ? "Extrusion 2" : null);
+      const english = (id: string) => (id === "f2" ? "Extrude" : null);
+      const line = (errorMessage: string) =>
+        buildLine(settled({ errorFeatureId: "f2", errorMessage }), null, german, english)?.text;
+      expect([line("Extrude: the target body no longer exists"), line("Profile is open")]).toEqual([
+        "Aufbau fehlgeschlagen bei Extrusion 2: the target body no longer exists",
+        "Aufbau fehlgeschlagen bei Extrusion 2: Profile is open",
+      ]);
+      const fail = settled({ errorFeatureId: "f2", errorMessage: "Profile is open" });
+      expect(buildLine(fail, fail, german, english)?.text).toBe(
+        "Aufgebaut, 2 Körper, Extrusion 2 schlägt weiterhin fehl",
+      );
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("says a different failure assertively again", () => {

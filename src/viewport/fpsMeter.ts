@@ -2,6 +2,7 @@
 // leads because the rate is capped by the display refresh.
 
 import { t } from "../i18n";
+import { spellFixed } from "../ui/measure";
 
 /** Frames older than this are dropped from the rolling window. */
 const WINDOW_MS = 1000;
@@ -59,7 +60,7 @@ export class FpsMeter {
     const fps = ((n - 1) / span) * 1000;
     const ms = span / (n - 1);
     this.show(
-      `${Math.round(fps)} fps · ${ms.toFixed(1)} ms`,
+      `${Math.round(fps)} fps · ${spellFixed(ms, 1)} ms`,
       t("viewport.fps.tip", { n, ms: Math.round(span) }) + gpuLine,
     );
   }

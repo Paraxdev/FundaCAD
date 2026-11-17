@@ -2,7 +2,7 @@
 
 import { watch } from "vue";
 import type * as THREE from "three";
-import { t } from "../i18n";
+import { onLanguageChange, t } from "../i18n";
 import type { DocumentStore } from "../document/store";
 import type { SectionTool } from "../features/sectionTool";
 import { useDialogStore } from "../stores/dialogs";
@@ -187,6 +187,7 @@ export function installViewSummary(e: DescribeHost): () => void {
     e.store.onDocChange(schedule),
     e.tools.section.onChange(schedule),
     watch(() => [useSelectionStore().rows, useGeometryBrowserStore().selected], schedule),
+    onLanguageChange(now),
   ];
   now();
   return () => {
