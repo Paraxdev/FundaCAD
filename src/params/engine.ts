@@ -3,6 +3,7 @@
 // paramDefs is the truth and doc.parameters a derived cache, recompute is the sole writer of bound fields, and a
 // broken expression is never committed; load-time breakage keeps its cached value and shows in `issues`.
 
+import { tEnglish } from "../i18n";
 import { asFeature } from "../types";
 import type { CadDocument, ParamDef, ParamTarget } from "../types";
 import { ExprError, isIdentName, isNumericLiteral, isReservedName, parseExpr, refsOfNode, renameRefs } from "./parse";
@@ -76,7 +77,7 @@ export function recompute(doc: CadDocument): RecomputeResult {
   for (const rs of refsByName.values()) for (const r of rs) referenced.add(r);
   for (const [name, def] of Object.entries(defs)) {
     if (def.target && !resolveTarget(doc, def.target)) {
-      if (referenced.has(name)) issues[name] = "its dimension or feature no longer exists";
+      if (referenced.has(name)) issues[name] = tEnglish("field.problem.targetGone");
       else {
         delete defs[name];
         nodes.delete(name);
@@ -103,7 +104,7 @@ export function recompute(doc: CadDocument): RecomputeResult {
     }
   }
   const inOrder = new Set(order);
-  for (const n of names) if (!inOrder.has(n)) issues[n] ??= "circular reference";
+  for (const n of names) if (!inOrder.has(n)) issues[n] ??= tEnglish("field.problem.circular");
 
   // Every def contributes its value, the cached one when it cannot be evaluated.
   const values: Record<string, number> = {};
@@ -112,13 +113,13 @@ export function recompute(doc: CadDocument): RecomputeResult {
     const def = defs[n]!;
     const node = nodes.get(n);
     if (!node) {
-      issues[n] = "invalid expression";
+      issues[n] = tEnglish("field.problem.invalidExpression");
       continue;
     }
     try {
       const v = evalNode(node, values);
       if (!Number.isFinite(v)) {
-        issues[n] = "does not evaluate to a finite number";
+        issues[n] = tEnglish("field.problem.noFiniteValue");
       } else {
         def.value = v;
         values[n] = v;
@@ -181,15 +182,15 @@ export function validateExpr(doc: CadDocument, name: string | null, expr: string
   }
   const refs = refsOfNode(node);
   for (const r of refs) {
-    if (!(r in defs)) return { ok: false, error: `unknown parameter "${r}"` };
-    if (r === name) return { ok: false, error: `"${name}" cannot reference itself` };
+    if (!(r in defs)) return { ok: false, error: tEnglish("field.problem.unknownName", { name: r }) };
+    if (r === name) return { ok: false, error: tEnglish("field.problem.selfReference", { name }) };
   }
   if (name) {
     const cycle = findCycle(defs, name, refs);
-    if (cycle) return { ok: false, error: `circular reference: ${cycle.join(" → ")}` };
+    if (cycle) return { ok: false, error: tEnglish("field.problem.circularVia", { chain: cycle.join(" → ") }) };
   }
   if (kind === "count" && hasUnitLiteral(node)) {
-    return { ok: false, error: "this field is unitless, write a plain number" };
+    return { ok: false, error: tEnglish("field.problem.unitless") };
   }
   const values = Object.fromEntries(Object.entries(defs).map(([n, d]) => [n, d.value]));
   let value: number;
@@ -198,7 +199,7 @@ export function validateExpr(doc: CadDocument, name: string | null, expr: string
   } catch (e) {
     return { ok: false, error: e instanceof ExprError ? e.message : String(e) };
   }
-  if (!Number.isFinite(value)) return { ok: false, error: "does not evaluate to a finite number" };
+  if (!Number.isFinite(value)) return { ok: false, error: tEnglish("field.problem.noFiniteValue") };
   return { ok: true, value };
 }
 

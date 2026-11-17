@@ -262,7 +262,7 @@ describe("the problems a value box shows", () => {
     await setLanguage("de");
     const w = panel("p1");
     await type(w, "count", "3mm");
-    expect(problemOf(w, "count")).toBe("this field is unitless, write a plain number");
+    expect(problemOf(w, "count")).toBe("dieses Feld hat keine Einheit, schreiben Sie eine reine Zahl");
     expect([
       exprProblem(null),
       exprProblem('unknown parameter "gap" in sketch'),
@@ -274,7 +274,7 @@ describe("the problems a value box shows", () => {
       'unknown parameter "gap" in sketch',
       "unbekannte Funktion „sqr“",
       "„gap2“ ist keine Zahl und kein Parameter",
-      "circular reference: a → b",
+      "Zirkelbezug: a → b",
     ]);
   });
 

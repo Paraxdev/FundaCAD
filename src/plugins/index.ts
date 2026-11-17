@@ -263,7 +263,7 @@ export function candidateFrom(raw: RawInspected, from: "url" | "file"): Candidat
   const parsed = parseManifest(raw.manifest);
   if (!parsed.ok) {
     // Refused rather than shown with the bad parts hidden: a manifest this app cannot fully read, it cannot describe.
-    throw new WordedError("plugins.notInstallable", { why: parsed.why });
+    throw new WordedError("plugins.notInstallable", parsed.args, { lines: { why: parsed.key } });
   }
   return {
     manifest: parsed.manifest,

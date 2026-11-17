@@ -516,6 +516,24 @@ describe("what is typed is read, or refused out loud", () => {
     expect(commit).toHaveBeenCalledTimes(1);
   });
 
+  it("says text that is not a value, and a unit a count does not take, in the chosen language", async () => {
+    const said = async (code: string) => {
+      await setLanguage(code);
+      dim.show([{ name: "move", label: "Move" }], () => {});
+      type("abc");
+      const notNumber = problem();
+      dim.show([{ name: "count", label: "Count", kind: "count" }], () => {});
+      type("3 mm");
+      return [notNumber, problem()];
+    };
+    try {
+      expect(await said("en")).toEqual(['Move: "abc" is not a number', "Count takes a plain number, no unit"]);
+      expect(await said("de")).toEqual(["Move: „abc“ ist keine Zahl", "Count erwartet eine reine Zahl ohne Einheit"]);
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   it("refuses a negative where only a positive means anything, instead of flipping it", () => {
     const commit = vi.fn();
     dim.show([{ name: "radius", label: "R", positive: true }], commit);
@@ -1120,6 +1138,30 @@ describe("DimInput reads parameter names", () => {
     expect(commit).not.toHaveBeenCalled();
     expect(problem()).toBe('Depth: no parameter named "widht"');
     expect(dim.exprOf("depth")).toBeNull();
+  });
+
+  it("says the engine's refusals in the chosen language, the label and all", async () => {
+    const said = async (code: string) => {
+      await setLanguage(code);
+      dim.dispose();
+      dim = new DimInput(() => source);
+      dim.show([{ name: "depth", label: "Depth", positive: true }], commit);
+      const lines: (string | null)[] = [];
+      for (const text of ["widht / 4", "width / 0"]) {
+        type(text);
+        lines.push(problem());
+      }
+      return lines;
+    };
+    try {
+      expect(await said("en")).toEqual([
+        'Depth: no parameter named "widht"',
+        "Depth: does not evaluate to a finite number",
+      ]);
+      expect(await said("de")).toEqual(["Depth: kein Parameter namens „widht“", "Depth: ergibt keine endliche Zahl"]);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("refuses name = expr for a name that already exists, as the History rows do", () => {
