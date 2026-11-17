@@ -4,6 +4,7 @@
 import type { Axis3 } from "../types";
 import { t } from "../i18n";
 import { spellNumber } from "../ui/measure";
+import { fmtLength } from "../ui/units";
 
 /** 1 is legal mid-gesture, on the way to 2, but not to commit. */
 export const MIN_COUNT = 1;
@@ -47,12 +48,20 @@ export function circularAngles(count: number, totalAngle: number): number[] {
 
 export function describePattern(kind: "linear" | "circular", count: number, value: number, axis: Axis3): string {
   const n = clampCount(count);
-  return t(kind === "linear" ? "tool.pattern.linear" : "tool.pattern.circular", { n, value: fmt(value), axis });
+  const spoken = kind === "linear" ? fmtLength(finite(value)) : fmt(value);
+  return t(kind === "linear" ? "tool.pattern.linear" : "tool.pattern.circular", { n, value: spoken, axis });
 }
 
 export function describeRect(nx: number, ny: number, sx: number, sy: number): string {
-  return t("tool.pattern.rect", { nx: clampCount(nx), ny: clampCount(ny), sx: fmt(sx), sy: fmt(sy) });
+  return t("tool.pattern.rect", {
+    nx: clampCount(nx),
+    ny: clampCount(ny),
+    sx: fmtLength(finite(sx)),
+    sy: fmtLength(finite(sy)),
+  });
 }
+
+const finite = (v: number) => (Number.isFinite(v) ? v : 0);
 
 function fmt(v: number): string {
   if (!Number.isFinite(v)) return "0";
