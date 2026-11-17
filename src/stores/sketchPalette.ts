@@ -1,26 +1,75 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { t } from "../i18n";
 
 export type PaletteToggle =
   "lockView" | "construction" | "reference" | "grid" | "snap" | "profile" | "dimensions" | "constraints";
 
 interface ToggleDef {
   key: PaletteToggle;
-  label: string;
+  readonly label: string;
   default: boolean;
 }
 
 export const PALETTE_TOGGLES: ToggleDef[] = [
   // Off by default: entry already squares the view and flattens the projection, so the lock is only for people who want
   // the camera nailed down while the rest can turn the view.
-  { key: "lockView", label: "Lock to Plane", default: false },
-  { key: "construction", label: "Construction", default: false },
-  { key: "reference", label: "Reference Dim", default: false },
-  { key: "grid", label: "Sketch Grid", default: true },
-  { key: "snap", label: "Snap", default: true },
-  { key: "profile", label: "Show Profile", default: true },
-  { key: "dimensions", label: "Show Dimensions", default: true },
-  { key: "constraints", label: "Show Constraints", default: true },
+  {
+    key: "lockView",
+    get label() {
+      return t("sketchPalette.toggle.lockView");
+    },
+    default: false,
+  },
+  {
+    key: "construction",
+    get label() {
+      return t("sketchPalette.toggle.construction");
+    },
+    default: false,
+  },
+  {
+    key: "reference",
+    get label() {
+      return t("sketchPalette.toggle.reference");
+    },
+    default: false,
+  },
+  {
+    key: "grid",
+    get label() {
+      return t("sketchPalette.toggle.grid");
+    },
+    default: true,
+  },
+  {
+    key: "snap",
+    get label() {
+      return t("sketchPalette.toggle.snap");
+    },
+    default: true,
+  },
+  {
+    key: "profile",
+    get label() {
+      return t("sketchPalette.toggle.profile");
+    },
+    default: true,
+  },
+  {
+    key: "dimensions",
+    get label() {
+      return t("sketchPalette.toggle.dimensions");
+    },
+    default: true,
+  },
+  {
+    key: "constraints",
+    get label() {
+      return t("sketchPalette.toggle.constraints");
+    },
+    default: true,
+  },
 ];
 
 /** The Sketch Palette. Toggle values live here, not in the component, so they survive the panel hiding between sketches
@@ -32,7 +81,7 @@ export const useSketchPaletteStore = defineStore("sketchPalette", () => {
   /** The Shapes list is a disclosure, closed in each session until opened. */
   const shapesOpen = ref(false);
   const state = ref<Record<PaletteToggle, boolean>>(
-    Object.fromEntries(PALETTE_TOGGLES.map((t) => [t.key, t.default])) as Record<PaletteToggle, boolean>,
+    Object.fromEntries(PALETTE_TOGGLES.map((d) => [d.key, d.default])) as Record<PaletteToggle, boolean>,
   );
 
   /** Assigned by the engine; the component and emitAll() both fire it. */
@@ -52,7 +101,7 @@ export const useSketchPaletteStore = defineStore("sketchPalette", () => {
   }
   /** Push every toggle's current value to the listener (called on sketch entry). */
   function emitAll() {
-    for (const t of PALETTE_TOGGLES) onToggle?.(t.key, state.value[t.key]);
+    for (const d of PALETTE_TOGGLES) onToggle?.(d.key, state.value[d.key]);
   }
 
   return { visible, offNormal, shapesOpen, state, bind, set, lookAt, emitAll };

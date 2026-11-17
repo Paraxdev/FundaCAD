@@ -1,6 +1,7 @@
 // The `thread` feature finds its face again on every build, so an edited hole is rethreaded at its new size.
 // Standard sizes (ISO fine, UNC, UNF, Tr, ACME) come from the Screws plugin.
 
+import { t } from "../i18n";
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
@@ -78,10 +79,10 @@ export class ThreadTool {
     this.releaseRows = awaitFaceRows(
       this.viewport,
       "roundFace",
-      (faces) => this.takeFace(faces) || "That face is not round. A thread needs a cylinder, a shank or a bore",
+      (faces) => this.takeFace(faces) || t("tool.thread.notRound"),
       () => this.cancel(),
     );
-    setPrompt("Click a round face, a shank or a bore, to thread · Esc");
+    setPrompt(t("tool.thread.pick"));
   }
 
   private takeFace(f: PressPullFaces): boolean {
@@ -133,7 +134,7 @@ export class ThreadTool {
       if (!hit) return;
       const round = this.viewport.roundFaceAt(hit.faceId, hit.anchor);
       if (!round) {
-        setPrompt("That face is not round. A thread needs a cylinder, a shank or a bore · Esc");
+        setPrompt(t("tool.thread.notRoundEsc"));
         return;
       }
       e.preventDefault();
@@ -171,8 +172,12 @@ export class ThreadTool {
   private prompt() {
     const turns = threadTurns(this.length, this.pitch);
     setPrompt(
-      `${this.external ? "External" : "Internal"} thread · ⌀${spellFixed(2 * this.radius, 2)} × ` +
-        `${spellNumber(this.pitch)}mm pitch · ${spellFixed(turns, 1)} turns · drag or type · click to commit · Esc`,
+      t("tool.thread.prompt", {
+        side: this.external ? "external" : "internal",
+        diameter: spellFixed(2 * this.radius, 2),
+        pitch: spellNumber(this.pitch),
+        turns: spellFixed(turns, 1),
+      }),
     );
   }
 
@@ -199,7 +204,7 @@ export class ThreadTool {
       }
     }
     if (!Number.isFinite(lo) || !(hi > lo)) {
-      toast("That face has no length along its axis to thread.");
+      toast(t("tool.thread.noLength"));
       this.cancel();
       return;
     }
@@ -340,12 +345,12 @@ export class ThreadTool {
   private commit() {
     if (this.phase !== "size") return this.cancel();
     if (threadTurns(this.length, this.pitch) < MIN_THREAD_TURNS) {
-      setPrompt(`A thread needs at least one full turn, ${this.pitch}mm at this pitch · Esc`);
+      setPrompt(t("tool.thread.oneTurn", { pitch: spellNumber(this.pitch) }));
       return;
     }
     const features = this.buildFeatures();
     if (!features) {
-      toast("That pitch is too coarse for this diameter, the groove would reach the axis.");
+      toast(t("tool.thread.tooCoarse"));
       return;
     }
     const thread = features[0] as Feature & { pitch: number; length?: number };

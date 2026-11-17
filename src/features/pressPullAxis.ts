@@ -1,6 +1,7 @@
 // Press/pull along a hole's axis deepens it, where along the normal the cone widens until it breaks out. The engine
 // decides which faces have an axis (features/axis_push.rs), so the arrow and the build cannot disagree.
 
+import { t } from "../i18n";
 import type { FaceAxisReply, FaceResize } from "../geometry/client";
 import type { PressPullDirection, Vec3 } from "../types";
 import type { RoundTangent } from "./radialDrag";
@@ -14,8 +15,12 @@ export interface HoleAxis {
 }
 
 export const DIRECTION_LABEL: Record<PressPullDirection, string> = {
-  normal: "Along normal",
-  axis: "Along axis",
+  get normal() {
+    return t("field.option.alongNormal");
+  },
+  get axis() {
+    return t("field.option.alongAxis");
+  },
 };
 
 const finite = (v: unknown): v is Vec3 =>

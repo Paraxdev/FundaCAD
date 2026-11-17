@@ -1,6 +1,8 @@
 // Which boolean an extrude performs, decided rather than asked: a profile pulled off a face is a boss, pushed into
 // the part a pocket. It is only a default, the Operation row (document/optionFields.ts) changes it.
 
+import { t } from "../i18n";
+
 export type ExtrudeOp = "new" | "join" | "cut" | "intersect";
 
 export interface ExtrudeSituation {
@@ -27,8 +29,16 @@ export function plannedOperation(s: ExtrudeSituation): ExtrudeOp {
 
 /** Leads the drag prompt, so it says which boolean you will get without stopping the gesture. */
 export const OP_WORD: Record<ExtrudeOp, string> = {
-  new: "New body",
-  join: "Join",
-  cut: "Cut",
-  intersect: "Intersect",
+  get new() {
+    return t("field.option.newBody");
+  },
+  get join() {
+    return t("field.option.join");
+  },
+  get cut() {
+    return t("field.option.cut");
+  },
+  get intersect() {
+    return t("field.option.intersect");
+  },
 };

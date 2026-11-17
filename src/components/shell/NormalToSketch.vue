@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Button from "../ui/Button.vue";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
+import { t } from "../../i18n";
 
 const palette = useSketchPaletteStore();
 </script>
@@ -11,8 +12,8 @@ const palette = useSketchPaletteStore();
     size="sm"
     class="normal-to-sketch"
     data-testid="normal-to-sketch"
-    tip="Square the view to the sketch plane"
+    :tip="t('sketchPalette.lookAtTip')"
     @click="palette.lookAt()"
-    >Normal to Sketch</Button
+    >{{ t("sketchPalette.normalToSketch") }}</Button
   >
 </template>

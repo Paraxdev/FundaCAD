@@ -55,8 +55,7 @@ export function blendClickTarget(
 }
 
 export function missPrompt(kind: "fillet" | "chamfer", members: number): string {
-  const kept = `${members} edge${members === 1 ? "" : "s"} kept`;
-  return `No edge there, ${kept} · click an edge to add it · Enter or ✓ to ${kind} · Esc`;
+  return t("tool.fillet.miss", { n: members, kind });
 }
 
 /** A click on an edge or a face only the blend's result has: its rim, a seam it made, or its own round or flat. */

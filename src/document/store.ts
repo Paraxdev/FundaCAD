@@ -3641,7 +3641,7 @@ export class DocumentStore {
       : [reply.error];
     const err = errs.find((e) => e.feature_id === p.id);
     if (!err) return false;
-    this.onWarning?.(`${p.what} was refused, nothing changed: ${err.message}`);
+    this.onWarning?.(t("field.problem.refused", { what: p.what, reason: err.message }));
     this.st.restoreArmed = true;
     this.undoStep();
     return true;

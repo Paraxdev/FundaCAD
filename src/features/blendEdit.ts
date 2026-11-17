@@ -1,6 +1,7 @@
 // Re-editing a committed fillet or chamfer. The tool's preview feature lacks the name, other panels' fields and the
 // original selectors, so the commit starts from the original and takes only what changed while the tool was open.
 
+import { t } from "../i18n";
 import type { Feature, Selector } from "../types";
 
 /** Fields the edge tool reads or writes on a fillet or chamfer. */
@@ -75,7 +76,7 @@ export function blendEditCommit(e: BlendEdit): BlendEditCommit {
     return {
       feature: null,
       param: null,
-      refused: `The ${sizeField(e.opened)} is driven by parameter "${e.paramRef}", so it cannot become a ${e.built.type} here`,
+      refused: t("tool.fillet.paramKind", { field: sizeField(e.opened), name: e.paramRef, kind: e.built.type }),
     };
   }
   const field = sizeField(e.built);

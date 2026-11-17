@@ -11,7 +11,7 @@ import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
-import { canConsume, TOOL_CAPABILITIES } from "./toolCapabilities";
+import { canConsume } from "./toolCapabilities";
 import { EDGE_CAP, confirmEdgeCount } from "./edgeCountGate";
 import { MidSet, TangentChains } from "./tangentChains";
 import { GhostLines, type GhostSlot } from "./ghostLines";
@@ -92,9 +92,33 @@ const IDLE_PX = 1.6;
 export type { Continuity };
 /** One segment per profile, in order, so a later G3 is one more entry. */
 export const CONTINUITY_SEGMENTS: (DimSegment & { id: Continuity })[] = [
-  { id: "G1", label: "G1, circular round", text: "G1", icon: "continuityG1", key: "1" },
-  { id: "G2", label: "G2, curvature continuous", text: "G2", icon: "continuityG2", key: "2" },
-  { id: "G3", label: "G3, curvature rate continuous", text: "G3", icon: "continuityG3", key: "3" },
+  {
+    id: "G1",
+    get label() {
+      return t("tool.fillet.continuity.g1");
+    },
+    text: "G1",
+    icon: "continuityG1",
+    key: "1",
+  },
+  {
+    id: "G2",
+    get label() {
+      return t("tool.fillet.continuity.g2");
+    },
+    text: "G2",
+    icon: "continuityG2",
+    key: "2",
+  },
+  {
+    id: "G3",
+    get label() {
+      return t("tool.fillet.continuity.g3");
+    },
+    text: "G3",
+    icon: "continuityG3",
+    key: "3",
+  },
 ];
 
 /** Chain members toggle as one unit, recorded at add time since the preview may consume the edges and the chain could
@@ -377,7 +401,7 @@ export class EdgeFeatureTool {
       });
       if (began && opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
+      setPrompt(t("tool.fillet.pickEdge", { kind }));
     }
   }
 
@@ -477,7 +501,7 @@ export class EdgeFeatureTool {
     this.viewport.suspendPicking = true;
     this.viewport.emphasizeEdges(true, IDLE_PX);
     this.gesture.attach();
-    setPrompt("Rolling back to edit…");
+    setPrompt(t("tool.fillet.rollingBack"));
 
     // The next completed build shows the sharp member edges, snapshotted as ghosts before the preview goes back on top.
     this.store.beginEditPreview(featureId);
@@ -546,7 +570,8 @@ export class EdgeFeatureTool {
     if (this.phase !== "drag") return;
     this.refreshEditGhost();
     this.afterMembershipChange();
-    if (dropped) setPrompt(`${way} removed ${dropped} edge${dropped === 1 ? "" : "s"} from the ${this.kind}`);
+    if (dropped)
+      setPrompt(t("tool.fillet.rebased", { way: way === "Undo" ? "undo" : "redo", n: dropped, kind: this.kind }));
   }
 
   /** Edit mode only: what the result replaced, faint, and the rims it made. */
@@ -667,7 +692,7 @@ export class EdgeFeatureTool {
       resolved: true,
     }));
     this.unmatchedSels.forEach((_, i) => {
-      rows.push({ key: `u${i}`, label: "Unresolved edge", resolved: false });
+      rows.push({ key: `u${i}`, label: t("fillet.unresolvedEdge"), resolved: false });
     });
     return rows;
   }
@@ -694,7 +719,7 @@ export class EdgeFeatureTool {
   /** Adding is already a click on an edge or an edge row, so this only says so. */
   promptAddMember() {
     if (this.phase !== "drag") return;
-    setPrompt(`Click an edge, or take an edge row from the Geometry list, to add it to the ${this.kind}`);
+    setPrompt(t("tool.fillet.addMember", { kind: this.kind }));
   }
 
   private disposeGhosts() {
@@ -786,9 +811,7 @@ export class EdgeFeatureTool {
     if (g) this.ghostLines?.setColor(g.slot, edgeHoverColor());
     if (g && this.phase === "drag") {
       const n = this.memberCount();
-      setPrompt(
-        `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · click ${g.name} to remove it · Enter · Esc`,
-      );
+      setPrompt(t("tool.fillet.hover", { kind: treatmentLabel(this.kind), n, name: g.name }));
     } else if (prev && this.phase === "drag") this.promptForPhase();
     this.viewport.requestRender();
   }
@@ -878,7 +901,7 @@ export class EdgeFeatureTool {
   }
 
   private refuseOverCap(count: number) {
-    void confirmEdgeCount(TOOL_CAPABILITIES[this.kind].label, count);
+    void confirmEdgeCount(this.kind, count);
   }
 
   /** Same rule as the picks that armed the tool (viewport/pickScope.ts), so adding mid gesture behaves the same. */
@@ -945,8 +968,7 @@ export class EdgeFeatureTool {
       this.kind === "fillet"
         ? {
             name: "continuity",
-            title:
-              "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature, G3 with no jump in its rate either",
+            title: t("field.tip.continuity"),
             segments: CONTINUITY_SEGMENTS.map((s) => {
               const why = this.continuityBlocked(s.id);
               return why ? { ...s, disabled: why } : s;
@@ -1028,7 +1050,7 @@ export class EdgeFeatureTool {
     const bounds = typed ? { min: MIN_EDGE_VALUE, max: Infinity } : this.bounds();
     const next = switchTreatment(this.kind, this.value, bounds);
     if (this.paramBlocked(next.kind)) {
-      setPrompt(`This feature's ${treatmentField(next.kind).name} is driven by a parameter, change it in the history`);
+      setPrompt(t("tool.fillet.paramDriven", { field: treatmentField(next.kind).name }));
       return;
     }
     this.kind = next.kind;
@@ -1052,25 +1074,42 @@ export class EdgeFeatureTool {
   private promptForPhase() {
     const n = this.memberCount();
     if (!n) {
-      setPrompt("Click an edge · Esc");
+      setPrompt(t("tool.fillet.pickEdgeEsc"));
       return;
     }
     if (this.neutral) {
-      setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · Esc`);
+      const other = otherTreatment(this.positiveKind);
+      setPrompt(
+        t("tool.fillet.dragOut", {
+          kind: t("tool.fillet.noun", { kind: this.positiveKind }),
+          other: t("tool.fillet.noun", { kind: other }),
+        }),
+      );
       return;
     }
     if (this.refusalShown) {
       const then = this.dim.isUserDriven(this.field.name) ? "type" : this.shown !== null ? "keep" : "drag";
       const size = this.shown !== null ? fmtLength(this.shown) : "";
-      setPrompt(`${this.refusalShown} · ${t("pick.blendThen", { then, field: this.field.name, size })} · Esc`);
+      setPrompt(
+        t("tool.fillet.refusedThen", {
+          reason: this.refusalShown,
+          then: t("pick.blendThen", { then, field: this.field.name, size }),
+        }),
+      );
       return;
     }
     // The profile is mentioned only on a fillet, with its number only off the circular default.
-    const prof =
-      this.kind === "fillet" && !isPlainProfile(this.profile) ? ` · profile ${formatProfile(this.profile)}` : "";
-    const param = this.paramRef ? ` · sets parameter "${this.paramRef}"` : "";
+    const showProfile = this.kind === "fillet" && !isPlainProfile(this.profile);
     setPrompt(
-      `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name} · Up or Down steps${prof}${param} · Tab · Enter · Esc`,
+      t("tool.fillet.drag", {
+        kind: treatmentLabel(this.kind),
+        n,
+        field: this.field.name,
+        profile: showProfile ? "yes" : "no",
+        value: showProfile ? formatProfile(this.profile) : "",
+        param: this.paramRef ? "yes" : "no",
+        name: this.paramRef ?? "",
+      }),
     );
   }
 
@@ -1078,7 +1117,8 @@ export class EdgeFeatureTool {
    *  would build a blend OCCT refuses on every pointermove, so both drop back to the bare model. */
   private continuityBlocked(c: Continuity): string | null {
     const chord = this.optionsKind === "fillet" && this.options.sizeType === "chord";
-    return continuityBlocked(c, pickedReach(this.ghosts, this.value, chord ? "chord" : "radius"));
+    const why = continuityBlocked(c, pickedReach(this.ghosts, this.value, chord ? "chord" : "radius"));
+    return why ? t("tool.fillet.continuityBlocked", { level: c }) : null;
   }
 
   /** Greys out G2 and G3 while a picked edge runs along a curved face; the engine refuses them there too. */
@@ -1091,7 +1131,7 @@ export class EdgeFeatureTool {
     this.dim.setOption("continuity", "G1");
     this.forgetBuildRange();
     this.refreshGhost();
-    setPrompt(`${why}, so the fillet is G1 now`);
+    setPrompt(t("tool.fillet.continuityKept", { why }));
   }
 
   private pushPreview() {
@@ -1515,7 +1555,7 @@ export class EdgeFeatureTool {
     // Zero on purpose means "don't do this after all".
     if (this.neutral) return this.cancel();
     if (this.currentSelectors().length === 0) {
-      setPrompt("Click an edge · Esc");
+      setPrompt(t("tool.fillet.pickEdgeEsc"));
       return; // deleting is an explicit timeline action, not an implicit empty commit
     }
     const decision = commitDecision({

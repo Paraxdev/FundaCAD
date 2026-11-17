@@ -9,6 +9,7 @@ import Button from "../ui/Button.vue";
 import Card from "../ui/Card.vue";
 import IconButton from "../ui/IconButton.vue";
 import SwitchRow from "../ui/SwitchRow.vue";
+import { t } from "../../i18n";
 import type { EdgeMemberRow } from "../../features/edgeFeatureTool";
 
 const engine = useEngine();
@@ -20,13 +21,13 @@ const rows = shallowRef<EdgeMemberRow[]>([]);
 const tangent = shallowRef(true);
 
 function refresh(): boolean {
-  const t = tool();
-  const on = t.editingMembers();
+  const edge = tool();
+  const on = edge.editingMembers();
   active.value = on;
   if (on) {
-    rows.value = t.memberRows();
-    kind.value = t.blendKind();
-    tangent.value = t.includesTangentEdges();
+    rows.value = edge.memberRows();
+    kind.value = edge.blendKind();
+    tangent.value = edge.includesTangentEdges();
   } else {
     rows.value = [];
   }
@@ -78,10 +79,15 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
 </script>
 
 <template>
-  <Card v-if="active && rows.length" class="fm-card" role="group" :title="kind === 'fillet' ? 'Fillet' : 'Chamfer'">
+  <Card
+    v-if="active && rows.length"
+    class="fm-card"
+    role="group"
+    :title="kind === 'fillet' ? t('tool.fillet') : t('tool.chamfer')"
+  >
     <template #head-actions>
-      <span class="fm-count">{{ resolvedCount() }} edge{{ resolvedCount() === 1 ? "" : "s" }}</span>
-      <span v-if="unresolvedCount()" class="fm-warn-count">{{ unresolvedCount() }} unresolved</span>
+      <span class="fm-count">{{ t("rail.count.edge", { n: resolvedCount() }) }}</span>
+      <span v-if="unresolvedCount()" class="fm-warn-count">{{ t("fillet.unresolved", { n: unresolvedCount() }) }}</span>
     </template>
     <ul class="fm-list">
       <li v-for="r in rows" :key="r.key" class="fm-row" :class="{ unresolved: !r.resolved }">
@@ -90,7 +96,7 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
         <IconButton
           class="fm-x"
           icon="close"
-          :tip="`Remove ${r.label}`"
+          :tip="t('fillet.remove', { label: r.label })"
           size="sm"
           variant="danger"
           :icon-size="13"
@@ -101,11 +107,13 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
     <template #foot>
       <SwitchRow
         class="fm-tangent"
-        label="Include tangent edges"
+        :label="t('fillet.includeTangent')"
         :model-value="tangent"
         @update:model-value="setTangent"
       />
-      <Button class="fm-add" icon="plus" size="sm" block @pointerdown.prevent.stop="add()">Add edge</Button>
+      <Button class="fm-add" icon="plus" size="sm" block @pointerdown.prevent.stop="add()">{{
+        t("fillet.addEdge")
+      }}</Button>
     </template>
   </Card>
 </template>
