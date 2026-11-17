@@ -2,6 +2,8 @@
 
 This makes a plate 40 mm by 20 mm and 5 mm thick, with a 6 mm hole, and exports it for your slicer.
 
+For a first part with a guide on screen at every step, start [Your first bracket](first-bracket.md) from Home.
+
 ## Sketch it
 
 1. On Home, click **Blank**.
