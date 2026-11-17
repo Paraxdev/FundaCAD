@@ -61,7 +61,7 @@ export async function activate(e: Engine): Promise<() => void> {
       },
     ],
     icons: { "ref-image": IMAGE_ICON, "ref-locked": LOCKED_ICON, "ref-unlocked": UNLOCKED_ICON },
-    browserSections: [{ key: "referenceImages", component: ItemsSection }],
+    browserSections: [{ key: "referenceImages", component: ItemsSection, label: () => t("section.referenceImages") }],
     overlays: [ImagePanel],
   });
 

@@ -69,6 +69,14 @@ describe("announce", () => {
     expect(polite.textContent).toBe("Opened plate.funda. Built, 1 body");
   });
 
+  it("joins after a full width stop with no extra stop or space, as Japanese and Chinese write", () => {
+    attach();
+    m.announce("plate.funda を開きました。");
+    m.announce("構築しました");
+    frame();
+    expect(polite.textContent).toBe("plate.funda を開きました。構築しました");
+  });
+
   it("keeps only the newest few of a flood", () => {
     attach();
     for (let i = 1; i <= 6; i++) m.announce(`Step ${i}`);

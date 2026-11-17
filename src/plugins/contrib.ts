@@ -90,6 +90,8 @@ export interface BrowserSection {
   component: Component;
   /** The browser filter section it is hidden with. One the core does not have means always shown. */
   filter?: string;
+  /** The tree row's name in the chosen language, from the plugin's own t(). Without it the key is made readable. */
+  label?: () => string;
 }
 
 export interface MaterialPresetGroup {

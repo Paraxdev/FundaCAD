@@ -256,7 +256,7 @@ with everything it adds, and gets back the removal:
 | `ribbon` | a group of buttons, with a collapse priority |
 | `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
 | `overlays` | components mounted for the life of the capability |
-| `browserSections` | a panel in the browser, drawn as its own component |
+| `browserSections` | a panel in the browser, drawn as its own component; `label: () => t("...")` names its tree row in the chosen language |
 | `renderSections` | a block at the end of one Render dock tab (`material`, `environment` or `camera`), drawn as its own component |
 | `materialPresets` | `() => { group, materials }[]`, starting points under the Render dock's New material menu, one submenu per group |
 | `bodyMenu` | rows on a body's right-click menu |

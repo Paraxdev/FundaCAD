@@ -78,8 +78,12 @@ export function spoken(text: string): string {
     .trim();
 }
 
+// Japanese and Chinese end a sentence with a full width mark and put no space after it.
 function joined(parts: readonly string[]): string {
-  return parts.reduce((all, p) => (!all ? p : /[.!?:]$/.test(all) ? `${all} ${p}` : `${all}. ${p}`), "");
+  return parts.reduce(
+    (all, p) => (!all ? p : /[。！？：]$/.test(all) ? all + p : /[.!?:]$/.test(all) ? `${all} ${p}` : `${all}. ${p}`),
+    "",
+  );
 }
 
 class Channel {
