@@ -363,6 +363,51 @@ describe("GuideLayer for a tour", () => {
   });
 });
 
+function rectOf(el: Element, b: { left: number; top: number; width: number; height: number }): void {
+  const r = { ...b, x: b.left, y: b.top, right: b.left + b.width, bottom: b.top + b.height };
+  el.getBoundingClientRect = () => ({ ...r, toJSON: () => r }) as DOMRect;
+}
+
+describe("GuideLayer over an open menu", () => {
+  const bubbleAt = () => {
+    const b = document.querySelector<HTMLElement>(".guide-bubble")!;
+    return { left: b.style.left, side: b.dataset.side, hidden: b.style.visibility === "hidden" };
+  };
+  const step = async () => {
+    frame();
+    await tick();
+  };
+
+  it("moves the bubble off a menu the frame it opens, hides it with the ring kept while nothing is clear", async () => {
+    const g = setup();
+    const btn = document.createElement("button");
+    btn.id = "guide-menu-target";
+    document.body.appendChild(btn);
+    rectOf(btn, { left: 360, top: 40, width: 80, height: 28 });
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "#guide-menu-target" }, caption: "Finish" }]);
+    await tick();
+    await step();
+    expect(bubbleAt()).toEqual({ left: "456px", side: "right", hidden: false });
+
+    const menu = document.createElement("div");
+    menu.className = "ui-menu";
+    document.body.appendChild(menu);
+    rectOf(menu, { left: 430, top: 32, width: 240, height: 300 });
+    await step();
+    expect(bubbleAt()).toEqual({ left: "64px", side: "left", hidden: false });
+
+    rectOf(menu, { left: 0, top: 80, width: 1024, height: 600 });
+    await step();
+    expect(bubbleAt().hidden).toBe(true);
+    expect(document.querySelector(".guide-ring")).not.toBeNull();
+
+    menu.remove();
+    await step();
+    expect(bubbleAt()).toEqual({ left: "456px", side: "right", hidden: false });
+    btn.remove();
+  });
+});
+
 describe("GuideLayer speech", () => {
   const said = () => vi.mocked(announce).mock.calls;
   const at = { ui: "guide-spec-target" };

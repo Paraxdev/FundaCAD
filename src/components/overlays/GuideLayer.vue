@@ -54,6 +54,8 @@ let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null 
 const RETRY_FRAMES = 30;
 
 const AVOID = ".modal-panel, .cmdk-card";
+/** Read every frame, so a menu that opens moves the bubble at once. */
+const MENUS = ".ui-menu";
 const CHROME = ".float-left-stack > *, .tool-rail, .float-right > *, .prompt:not(.hidden)";
 /** A new sketch grows from its origin, so a caption keeps off the square this far past it before it is drawn. */
 const SKETCH_START_MM = 50;
@@ -188,6 +190,14 @@ function captionKeep(): { work?: Box; chrome?: Box[] } {
   return { work, chrome: cube ? [...chrome, cube] : chrome };
 }
 
+/** Open menus and submenus, a menu not yet placed left out. */
+function openMenus(): Box[] {
+  return [...document.querySelectorAll<HTMLElement>(MENUS)]
+    .filter((m) => m.style.visibility !== "hidden")
+    .map((m) => m.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+}
+
 function follow(s: StepState): void {
   if (s.target.ui !== undefined) {
     if (frame % 15 === 0 || !target?.isConnected) locateUi(s);
@@ -207,14 +217,18 @@ function follow(s: StepState): void {
     const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
     const view = { width: window.innerWidth / z, height: window.innerHeight / z };
     const avoid = [...document.querySelectorAll(AVOID)].map((d) => css(d.getBoundingClientRect()));
-    let at: Placed;
-    if (box) at = placeBubble(box, view, size, avoid);
+    const menus = openMenus().map(css);
+    let at: Placed | null;
+    if (box) at = placeBubble(box, view, size, avoid, menus);
     else {
       const keep = captionKeep();
-      at = placeCaption(view, size, avoid, {
-        work: keep.work ? css(keep.work) : null,
-        chrome: keep.chrome?.map(css) ?? [],
-      });
+      at = placeCaption(
+        view,
+        size,
+        avoid,
+        { work: keep.work ? css(keep.work) : null, chrome: keep.chrome?.map(css) ?? [] },
+        menus,
+      );
     }
     if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
   }
