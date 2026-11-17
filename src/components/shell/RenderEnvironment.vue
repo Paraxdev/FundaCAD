@@ -11,7 +11,7 @@ import TextField from "../ui/TextField.vue";
 // The same settings are also in Preferences on purpose: here you try six in ten seconds while looking at the part,
 // which a swatch grid suits and a dropdown in a modal does not.
 
-import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, useId, watch } from "vue";
 import {
   ENVIRONMENTS_LIST,
   REALTIME_QUALITY_PREFS,
@@ -69,7 +69,7 @@ const qualityLabel = (q: RealtimeQualityPref) =>
   q === "auto" ? t("render.quality.auto") : q === "high" ? t("render.quality.high") : t("render.quality.standard");
 // Dev builds only until High looks different from Standard.
 const showQuality = import.meta.env.DEV;
-const highReason = ref<string | null>(highRefusal(engine.viewport.qualityTier()));
+const qualityTier = shallowRef(engine.viewport.qualityTier());
 const aiming = ref(false);
 const saved = ref<EnvEntry[]>([]);
 const activeSaved = ref<string | null>(activeSavedId());
@@ -105,13 +105,13 @@ onMounted(() => {
   offs.push(
     onRenderPrefsChange(() => {
       prefs.value = { ...renderPrefs() };
-      highReason.value = highRefusal(engine.viewport.qualityTier());
+      qualityTier.value = engine.viewport.qualityTier();
       syncLabel();
     }),
   );
   offs.push(
     engine.viewport.onRenderTierChange(() => {
-      highReason.value = highRefusal(engine.viewport.qualityTier());
+      qualityTier.value = engine.viewport.qualityTier();
     }),
   );
   offs.push(
@@ -285,7 +285,7 @@ const evText = (value: number) =>
   t("render.exposure.value", { value: `${value > 0 ? "+" : ""}${spellFixed(value, 2)}` });
 const qualityChoices = computed(() =>
   REALTIME_QUALITY_PREFS.map((q) => {
-    const refused = q === "high" ? highReason.value : null;
+    const refused = q === "high" ? highRefusal(qualityTier.value) : null;
     return {
       value: q,
       label: qualityLabel(q),

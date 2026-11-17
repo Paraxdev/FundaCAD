@@ -5,6 +5,8 @@ import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { TracerRefused, type TraceLook, type TracerBackend } from "./backend";
 import { experimentalPrefs } from "../../ui/experimentalPrefs";
+import { spellFixed } from "../../ui/measure";
+import { t } from "../../i18n";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
 import type { FrameView } from "./frameCamera";
@@ -432,10 +434,10 @@ export class PathTraceHost {
     if (sig === this.refusedSig) return true;
     this.refusedSig = sig;
     this.hasScene = false;
-    const has = (tris / 1e6).toFixed(1);
+    const has = spellFixed(tris / 1e6, 1);
     this.note = overDevice
-      ? `Path tracing needs more GPU memory than this device allows for a model of ${has} million triangles`
-      : `Path tracing is limited to ${budget / 1e6} million triangles for now, this model has ${has} million`;
+      ? t("render.trace.tooBig", { has })
+      : t("render.trace.overBudget", { limit: budget / 1e6, has });
     this.samples = 0;
     this.traceSince = 0;
     this.disarm();
@@ -472,7 +474,7 @@ export class PathTraceHost {
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
         this.fault(
-          `Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`,
+          t("render.trace.couldNotStart", { reason: e instanceof Error ? e.message : String(e) }),
           !(e instanceof TracerRefused),
         );
       } finally {
@@ -588,8 +590,7 @@ export class PathTraceHost {
       return;
     }
     if (!this.traceSince) this.traceSince = now;
-    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS)
-      this.fault("Path tracing gathered no sample in 10 seconds");
+    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault(t("render.trace.noSample"));
   }
 
   private fault(why: string, counts = true) {

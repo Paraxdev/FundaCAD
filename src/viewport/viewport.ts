@@ -68,6 +68,7 @@ import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
+import { t } from "../i18n";
 import { awaitTreePick } from "../ui/treePick";
 import { overrideRowAnswer, viewOverrideOf } from "./viewOverride";
 import type { DocumentStore } from "../document/store";
@@ -1209,7 +1210,7 @@ export class Viewport {
       }
     }
     if (died) clearGuard();
-    if (notice) this.onTraceNotice?.("FundaCAD closed while path tracing was starting, so the view opened in Realtime");
+    if (notice) this.onTraceNotice?.(t("render.trace.bootFallback"));
     this.gpu = probe;
     crumb(describeProbe(probe));
     this.tierChanged();
@@ -3979,7 +3980,7 @@ export class Viewport {
       () => this.cancelSetOverride(),
     );
     this.setOverrideSide = side;
-    setPrompt(`Click a model face to set as "${FACE_VIEWS[side].label}" (Esc to cancel)`);
+    setPrompt(t("viewport.cube.pickFace", { side: FACE_VIEWS[side].label }));
     this.overrideKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") this.cancelSetOverride();
     };
@@ -4003,7 +4004,7 @@ export class Viewport {
     const side = this.setOverrideSide!;
     const plane = this.pickFacePlane(e.clientX, e.clientY);
     if (!plane) {
-      setPrompt("No face there, click a model face (Esc to cancel)");
+      setPrompt(t("viewport.cube.noFace"));
       return;
     }
     this.setOverrideFrom(side, viewOverrideOf(plane));

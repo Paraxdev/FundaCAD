@@ -5,7 +5,7 @@ import { nextTick, ref } from "vue";
 import ViewportControls from "../../../src/components/shell/ViewportControls.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
-import { PATH_TRACING_OFF, resetPathTracedOverride, type RenderTier } from "../../../src/ui/viewMode";
+import { pathTracingOff, resetPathTracedOverride, type RenderTier } from "../../../src/ui/viewMode";
 import { renderPrefs, setRenderPref } from "../../../src/ui/renderPrefs";
 import { useUiStore } from "../../../src/stores/ui";
 import { setInputModalityForTest } from "../../../src/ui/inputModality";
@@ -67,8 +67,8 @@ describe("ViewportControls Path traced button", () => {
     const why = document.getElementById(btn.attributes("aria-describedby") ?? "")?.textContent;
     expect([btn.attributes("aria-label"), btn.attributes("title"), why]).toEqual([
       "Path traced (Z)",
-      PATH_TRACING_OFF,
-      PATH_TRACING_OFF,
+      pathTracingOff(),
+      pathTracingOff(),
     ]);
   });
 

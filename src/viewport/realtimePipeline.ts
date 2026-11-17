@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { RealtimeQualityPref, ViewMode } from "../ui/renderPrefs";
 import { isGlassAuto } from "./glassThickness";
 import { mirror } from "./potato";
+import { t } from "../i18n";
 
 export type RealtimeQuality = "standard" | "high";
 /** What the machine is: Light and Potato (`lowPower`), a machine detected as weak
@@ -15,15 +16,11 @@ export interface QualityTier {
   software: boolean;
 }
 
-export const HIGH_NEEDS_GPU = "This computer draws with software graphics, which is too slow for High.";
-export const HIGH_NEEDS_POWER = "This computer was detected as low powered, so High is off.";
-export const HIGH_NEEDS_FULL = "High is off while performance mode or potato mode is on.";
-
 /** Why High is refused on this tier, or null where it is offered. */
-export function highRefusal(t: QualityTier): string | null {
-  if (t.software) return HIGH_NEEDS_GPU;
-  if (t.auto) return HIGH_NEEDS_POWER;
-  if (t.lowPower) return HIGH_NEEDS_FULL;
+export function highRefusal(tier: QualityTier): string | null {
+  if (tier.software) return t("render.quality.refused", { why: "software" });
+  if (tier.auto) return t("render.quality.refused", { why: "lowPower" });
+  if (tier.lowPower) return t("render.quality.refused", { why: "performance" });
   return null;
 }
 

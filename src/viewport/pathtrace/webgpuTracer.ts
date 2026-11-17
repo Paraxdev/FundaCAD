@@ -15,6 +15,7 @@ import { OidnPass, type OidnLike } from "./oidnPass";
 import { TraceBloom, type FadeQuad, type TraceBloomDeps, type TraceBloomSettings } from "./tracePost";
 import smallWeights from "./weights/rt_hdr_calb_cnrm_small.tza?url";
 import largeWeights from "./weights/rt_hdr_calb_cnrm_large.tza?url";
+import { t } from "../../i18n";
 
 type WebGpuModule = typeof import("three/webgpu");
 type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
@@ -30,6 +31,8 @@ interface GpuQueueDevice {
 }
 
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+// Outside the class: init's own `t` is the tracer.
+const deviceLost = (reason: string) => t("render.trace.deviceLost", { reason });
 
 /** The WebGPU floor every adapter grants without asking. */
 const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
@@ -125,7 +128,7 @@ export class WebGpuTracer implements TracerBackend {
       onDeviceLost: (info: { message?: string; reason?: string }) => void;
       onError: (e: { type?: string; message?: string }) => void;
     };
-    hooks.onDeviceLost = (info) => this.fault(`GPU device lost: ${info.message ?? info.reason ?? "unknown"}`);
+    hooks.onDeviceLost = (info) => this.fault(deviceLost(info.message ?? info.reason ?? "unknown"));
     hooks.onError = (e) => this.fault(`GPU ${e.type ?? "error"}: ${e.message ?? ""}`);
     this.renderer = r;
     const device = (r.backend as unknown as { device?: GpuQueueDevice }).device;

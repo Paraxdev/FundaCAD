@@ -3,16 +3,13 @@
 // the overlays are drawn after it on the canvas, with everything given back.
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import {
-  HIGH_NEEDS_FULL,
-  HIGH_NEEDS_GPU,
-  HIGH_NEEDS_POWER,
-  resolveRealtimeQuality,
-  stagesFor,
-  type FrameState,
-} from "../../src/viewport/realtimePipeline";
+import { resolveRealtimeQuality, stagesFor, type FrameState } from "../../src/viewport/realtimePipeline";
 import { PostChain } from "../../src/viewport/scene";
 import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
+
+const HIGH_NEEDS_GPU = "This computer draws with software graphics, which is too slow for High.";
+const HIGH_NEEDS_POWER = "This computer was detected as low powered, so High is off.";
+const HIGH_NEEDS_FULL = "High is off while performance mode or potato mode is on.";
 
 function state(over: Partial<FrameState> = {}): FrameState {
   return {

@@ -4,7 +4,7 @@ import { TracerRefused } from "../../src/viewport/pathtrace/backend";
 import { NativeTracer } from "../../src/viewport/pathtrace/nativeTracer";
 import { chooseTracer } from "../../src/viewport/pathtrace/choose";
 import { failedSelfCheck, refusedBySelfCheck, resetSelfCheckForTest } from "../../src/viewport/pathtrace/selfCheck";
-import { PATH_TRACING_SELF_CHECK, pathTracedBlock } from "../../src/ui/viewMode";
+import { pathTracingSelfCheck, pathTracedBlock } from "../../src/ui/viewMode";
 
 const passing = { diff: 0.29, threshold: 2.98, noise: 0.25, ms: 428, path: "software", passed: true };
 const failing = { diff: 9.5, threshold: 3.4, noise: 0.35, ms: 410, path: "software", passed: false };
@@ -62,7 +62,7 @@ describe("the tracer self check", () => {
     const refused = refusedBySelfCheck(probe, failing);
     expect(pathTracedBlock({ lowPower: false, auto: false, webgpu: false, native: refused })).toEqual({
       reason: "nogpu",
-      tooltip: PATH_TRACING_SELF_CHECK,
+      tooltip: pathTracingSelfCheck(),
     });
     expect(pathTracedBlock({ lowPower: false, auto: false, webgpu: false, native: probe })).toBeNull();
     expect(chooseTracer("auto", { webgpu: true, native: refused })).toBe("webgpu");

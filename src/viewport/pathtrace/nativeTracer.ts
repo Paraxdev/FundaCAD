@@ -11,6 +11,7 @@ import { NativeScene, type Call } from "./nativeScene";
 import { PresentSlot } from "./presentSlot";
 import { runSelfCheck, selfCheckReason } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
+import { t } from "../../i18n";
 
 export interface NativeFrame {
   seq: number;
@@ -425,7 +426,7 @@ export class NativeTracer implements TracerBackend {
     this.canvas = o.canvas ?? document.createElement("canvas");
     this.slot = new PresentSlot(({ seq, coarse }) => this.showFrame(seq, coarse), o.raf, o.caf);
     this.scene = new NativeScene(o.call ?? tauriCall, (e) =>
-      this.fault(`The native tracer refused the scene: ${e instanceof Error ? e.message : String(e)}`),
+      this.fault(t("render.trace.nativeRefusedScene", { reason: e instanceof Error ? e.message : String(e) })),
     );
   }
 
@@ -485,7 +486,7 @@ export class NativeTracer implements TracerBackend {
         },
         (e) => {
           this.resizing--;
-          this.fault(`The native frames could not resize: ${String(e)}`);
+          this.fault(t("render.trace.nativeFramesResize", { reason: String(e) }));
         },
       );
     }, RESIZE_SETTLE_MS);
@@ -597,7 +598,7 @@ export class NativeTracer implements TracerBackend {
       this.pending = this.disposed ? null : this.request();
     } catch (e) {
       this.pending = null;
-      this.fault(`The native frames stopped: ${e instanceof Error ? e.message : String(e)}`);
+      this.fault(t("render.trace.nativeFramesStopped", { reason: e instanceof Error ? e.message : String(e) }));
       throw e;
     }
     try {
@@ -720,10 +721,10 @@ export class NativeTracer implements TracerBackend {
     try {
       s = (await this.call("pt_status")) as typeof s;
     } catch (e) {
-      this.fault(`The native tracer stopped: ${e instanceof Error ? e.message : String(e)}`);
+      this.fault(t("render.trace.nativeStopped", { reason: e instanceof Error ? e.message : String(e) }));
       throw e;
     }
-    if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
+    if (s.fault) this.fault(t("render.trace.nativeStopped", { reason: s.fault }));
     if (epoch !== this.epoch) return 0;
     // Status runs ahead of the frames: the host must not put the trace up over an older camera's picture.
     const onCanvas = this.shownSeq !== null && !this.shownCoarse && this.cameras.isNewest(this.shownSeq);
@@ -756,11 +757,11 @@ export class NativeTracer implements TracerBackend {
 }
 
 export function createNativeTracer(o: NativeTracerOptions = {}): Promise<TracerBackend> {
-  const t = new NativeTracer(o);
-  return t.init().then(
-    () => t,
+  const tracer = new NativeTracer(o);
+  return tracer.init().then(
+    () => tracer,
     (e: unknown) => {
-      t.dispose();
+      tracer.dispose();
       throw e;
     },
   );
