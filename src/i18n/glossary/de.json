@@ -492,7 +492,7 @@
     {
       "en": "Pitch",
       "text": "Steigung",
-      "note": "the climb of a thread per turn"
+      "note": "the climb of a thread per turn, DIN 13 Steigung P for a single-start thread; only a multi-start line that names both says Teilung P for pitch and Steigung Ph for lead"
     },
     {
       "en": "Count",
