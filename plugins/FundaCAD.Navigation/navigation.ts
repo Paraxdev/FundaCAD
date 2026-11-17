@@ -1,15 +1,14 @@
 // Pure apart from storage, so the tests can read every rule here.
 
 import {
-  SHORTCUTS,
   bindingEntries,
   checkShortcut,
   formatShortcut,
   readSetting,
+  shortcutLabel,
   type CtxItem,
   type PointerBinding,
   type SettingsSchema,
-  type Shortcut,
   type ShortcutOverride,
   type ShortcutProblem,
 } from "fundacad";
@@ -372,12 +371,6 @@ export function bindingRows(table: readonly PointerBinding[]): { key: string; la
               : t("binding.context");
     return { key, label };
   });
-}
-
-/** A row's name as it reads now: the table copies a label when it stages its rows, so a copy can be a language behind. */
-export function shortcutLabel(s: Pick<Shortcut, "action" | "label">): string {
-  if (s.action === RADIAL_ACTION) return t("radial.name");
-  return SHORTCUTS.find((o) => o.action === s.action)?.label ?? s.label;
 }
 
 // The host words these problems in English. Both sets are closed, the spec reads the host's table for drift, and a
