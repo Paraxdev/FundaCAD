@@ -1,10 +1,11 @@
 // The pure half of this capability: no DOM, no Vue, no Tauri.
 
 import type { CtxItem, DocumentStore } from "fundacad";
+import { t } from "./lines";
 
 /** The "Color" entry for a body's right-click menu, as a list to spread so that "no entry at all" is expressible. */
 export function bodyColorMenu(store: DocumentStore, bodyId: string): CtxItem[] {
-  return [{ label: "Color", children: bodyColorMenuItems(store, bodyId) }];
+  return [{ label: t("menu.color"), refName: "Color", children: bodyColorMenuItems(store, bodyId) }];
 }
 
 /** Palette → menu items for assigning a body's color slot. Exported for the
@@ -18,7 +19,12 @@ export function bodyColorMenuItems(store: DocumentStore, bodyId: string): CtxIte
       disabled: slot === i,
       onClick: () => store.setBodyColorSlot(bodyId, i),
     })),
-    { label: "None", disabled: slot == null, onClick: () => store.setBodyColorSlot(bodyId, null) },
+    {
+      label: t("menu.none"),
+      refName: "None",
+      disabled: slot == null,
+      onClick: () => store.setBodyColorSlot(bodyId, null),
+    },
   ];
 }
 

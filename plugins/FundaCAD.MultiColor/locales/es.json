@@ -1,0 +1,15 @@
+{
+  "menu.color": "Color",
+  "menu.none": "Ninguno",
+  "palette.collapse": "Contraer la paleta",
+  "palette.colorOf": "Color de {name}",
+  "palette.connection": "Conexión con la impresora",
+  "palette.expand": "Expandir la paleta",
+  "palette.slot": "Ranura de filamento {n} → cabezal {n}",
+  "palette.slotMaterial": "Ranura de filamento {n} → cabezal {n} ({material})",
+  "palette.slots": "Ranuras de filamento",
+  "palette.stale": "{count, plural, one {El filamento de la impresora ha cambiado desde la sincronización (ranura {slots}), haga clic en el botón de sincronización para volver a sincronizar} other {Los filamentos de la impresora han cambiado desde la sincronización (ranuras {slots}), haga clic en el botón de sincronización para volver a sincronizar}}",
+  "palette.sync": "Sincronizar los filamentos desde la impresora",
+  "palette.title": "Paleta",
+  "palette.warning": "Advertencia: {message}"
+}

@@ -3,6 +3,7 @@
 
 import { toast, type Engine, type ShapePlacement } from "fundacad";
 import type { FastenerSpec } from "./spec";
+import { t } from "./lines";
 import { GENERATOR, PLUGIN_ID } from "./state";
 
 type Vec = { x: number; y: number; z: number };
@@ -41,15 +42,15 @@ export async function insertFastener(
 ): Promise<string | null> {
   const generate = e.geometry.generateShape?.bind(e.geometry);
   if (!generate) {
-    toast("Fasteners need the geometry engine, which this build does not run", { kind: "error" });
+    toast(t("insert.needsEngine"), { kind: "error" });
     return null;
   }
-  e.setStatus(`Inserting ${spec.name}`, "");
+  e.setStatus(t("insert.inserting", { name: spec.name }), "");
   const reply = await generate(GENERATOR, spec, { output: "store", ...(placement ? { placement } : {}) });
   if (!reply.ok || !reply.shape.geom) {
-    const why = reply.ok ? "no geometry came back" : reply.message;
-    e.setStatus(`Could not insert ${spec.name}`, "");
-    toast(`Could not insert ${spec.name}: ${why}`, { kind: "error" });
+    const why = reply.ok ? t("insert.noGeometry") : reply.message;
+    e.setStatus(t("insert.couldNot", { name: spec.name }), "");
+    toast(t("insert.couldNotWhy", { name: spec.name, why }), { kind: "error" });
     return null;
   }
   const id = e.store.nextId();
@@ -62,7 +63,7 @@ export async function insertFastener(
     solid: reply.shape.solid,
     generatedBy: { plugin: PLUGIN_ID, spec: spec as unknown as Record<string, unknown> },
   });
-  e.setStatus(`Inserted ${spec.name}`, "");
+  e.setStatus(t("insert.inserted", { name: spec.name }), "");
   e.noteCommitted(id);
   e.selectFeature(id);
   return id;

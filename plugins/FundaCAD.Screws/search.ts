@@ -3,8 +3,14 @@
 import { CATEGORY_ORDER, FAMILIES, drivesOf, headLabel, lengthsFor, unitsOf, type Family } from "./catalogue";
 import { PARTS, type FastenerSpec } from "./spec";
 import type { UserFastener } from "./library";
+import { familyTitle, label, t } from "./lines";
 
 export const CUSTOM_CATEGORY = "Custom";
+
+/** A category heading in the chosen language. The English category stays the id a filter and a sort go by. */
+export function categoryLabel(category: string): string {
+  return category === CUSTOM_CATEGORY ? t("panel.custom") : label(category);
+}
 
 export interface ListEntry {
   key: string;
@@ -137,8 +143,28 @@ export function parseQuery(query: string): ParsedQuery {
   return out;
 }
 
+/** What the chosen language calls an entry's family, category, head and drives, so a word in that language finds it. */
+function localWords(e: ListEntry): string {
+  return [
+    e.familyId ? familyTitle(e.familyId, e.familyName) : "",
+    categoryLabel(e.category),
+    e.head ? label(e.head) : "",
+    ...e.drives.map((d) => label(PARTS.drive[d]?.label ?? d)),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
 export function filterEntries(entries: ListEntry[], filters: Filters): ListEntry[] {
   const q = parseQuery(filters.query);
+  const words = new Map<string, string>();
+  // Entries of one family share their words, so each is worded once per call, in the language of that moment.
+  const wordsOf = (e: ListEntry) => {
+    const key = e.familyId ?? e.key;
+    let text = words.get(key);
+    if (text === undefined) words.set(key, (text = localWords(e)));
+    return text;
+  };
   return entries.filter((e) => {
     if (filters.category && e.category !== filters.category) return false;
     if (filters.system && e.system !== filters.system) return false;
@@ -148,7 +174,7 @@ export function filterEntries(entries: ListEntry[], filters: Filters): ListEntry
     if (q.size !== undefined && e.size.toUpperCase() !== q.size && !e.size.toUpperCase().startsWith(`${q.size}-`))
       return false;
     if (q.length !== undefined && !e.lengths.some((l) => Math.abs(l - q.length!) < 1e-9)) return false;
-    return q.words.every((w) => e.haystack.includes(w));
+    return q.words.every((w) => e.haystack.includes(w) || wordsOf(e).includes(w));
   });
 }
 
@@ -189,7 +215,7 @@ export function groupEntries(entries: ListEntry[]): Group[] {
     groups.set(e.category, byFamily);
     const famKey = e.source === "custom" ? CUSTOM_CATEGORY : e.familyId!;
     const fam = byFamily.get(famKey) ?? {
-      title: e.source === "custom" ? "Your fasteners" : e.familyName,
+      title: e.source === "custom" ? t("panel.yourFasteners") : familyTitle(e.familyId!, e.familyName),
       standard: e.source === "custom" ? "" : e.standard,
       entries: [],
     };

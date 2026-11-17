@@ -5,9 +5,11 @@ import { computed, reactive, ref, watch } from "vue";
 import { Button, FieldRow, NumberField, Select, TextField, announce } from "fundacad/ui";
 import { plainNumber, typedExprProblem } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
+import { label, t } from "./lines";
 import {
   HANDS,
   KINDS,
+  PART_LABELS,
   PARTS,
   getPath,
   setPath,
@@ -76,7 +78,7 @@ function part(p: PartName): Record<string, unknown> {
 // is all that reads.
 function readNumber(raw: string): number {
   const x = plainNumber(raw);
-  if (x === null) throw new Error(typedExprProblem(raw) ?? "Not a number");
+  if (x === null) throw new Error(typedExprProblem(raw) ?? t("form.notNumber"));
   return x;
 }
 
@@ -91,10 +93,10 @@ function writeField(p: PartName, field: string, v: number | null) {
 }
 
 // A refused optional field leaves nothing in the spec to object to, so its refusal holds Save itself.
-const refused = reactive<Record<string, string | null>>({});
+const refused = reactive<Record<string, { name: () => string; why: string } | null>>({});
 
-function refuse(p: PartName, f: string, label: string, why: string | null) {
-  refused[f] = why && `${label}: ${why}`;
+function refuse(p: PartName, f: string, name: () => string, why: string | null) {
+  refused[f] = why ? { name, why } : null;
   if (why) writeField(p, f, null);
 }
 
@@ -114,8 +116,8 @@ function onKind(value: string) {
 
 function onUnits(value: string) {
   draft["units"] = value;
-  const t = part("thread");
-  if (t && (t["type"] === "metric" || t["type"] === "unified")) t["type"] = inch.value ? "unified" : "metric";
+  const th = part("thread");
+  if (th && (th["type"] === "metric" || th["type"] === "unified")) th["type"] = inch.value ? "unified" : "metric";
 }
 
 function designation(spec: FastenerSpec): string | undefined {
@@ -138,23 +140,25 @@ const spec = computed<FastenerSpec>(() => {
 
 const problems = computed(() => [
   ...specProblems(spec.value),
-  ...Object.values(refused).filter((why): why is string => !!why),
+  ...Object.values(refused).flatMap((r) => (r ? [t("form.refusal", { label: r.name(), why: r.why })] : [])),
 ]);
-const previewProblem = ref<string | null>(null);
+const previewProblem = ref<{ message?: string } | null>(null);
 const previewSpec = computed(() => (problems.value.length ? null : spec.value));
 
-const kindOptions = Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }));
-const unitOptions = [
-  { value: "mm", label: "Millimetres" },
-  { value: "in", label: "Inches" },
-];
-const handOptions = HANDS.map((h) => ({ value: h, label: h === "right" ? "Right" : "Left" }));
-const threadOptions = [
-  { value: "simple", label: "Simplified" },
-  { value: "modelled", label: "Modelled helix" },
-];
-const titled = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
-const typeOptions = (p: PartName) => Object.entries(PARTS[p]).map(([value, def]) => ({ value, label: def.label }));
+const kindOptions = computed(() => Object.entries(KINDS).map(([value, k]) => ({ value, label: label(k.label) })));
+const unitOptions = computed(() => [
+  { value: "mm", label: t("option.millimetres") },
+  { value: "in", label: t("option.inches") },
+]);
+const handOptions = computed(() =>
+  HANDS.map((h) => ({ value: h, label: h === "right" ? t("option.right") : t("option.left") })),
+);
+const threadOptions = computed(() => [
+  { value: "simple", label: t("option.simplified") },
+  { value: "modelled", label: t("option.modelledHelix") },
+]);
+const typeOptions = (p: PartName) =>
+  Object.entries(PARTS[p]).map(([value, def]) => ({ value, label: label(def.label) }));
 
 // A plugin ships no stylesheet, so the layout is written here.
 const LABEL_WIDTH = "150px";
@@ -169,7 +173,11 @@ const heading = {
 };
 
 const allProblems = computed(() =>
-  problems.value.length ? problems.value : previewProblem.value ? [previewProblem.value] : [],
+  problems.value.length
+    ? problems.value
+    : previewProblem.value
+      ? [previewProblem.value.message ?? t("preview.noPreview")]
+      : [],
 );
 
 // Spoken once per change and only after the person has used the form, never for what it opens with.
@@ -183,8 +191,10 @@ watch(
     if (!touched) return;
     const [first, ...more] = allProblems.value;
     const line = first
-      ? `${first}${more.length ? `, and ${more.length} more` : ""}`
-      : "Everything needed to build it is there";
+      ? more.length
+        ? t("form.problemsMore", { first, count: more.length })
+        : first
+      : t("form.ready");
     announce(line, first ? "assertive" : "polite", { key: "screws-form-problems", delay: 500 });
   },
 );
@@ -205,57 +215,57 @@ watch(
     @keydown.capture="touch"
   >
     <div :style="{ minHeight: '140px', overflow: 'auto', paddingRight: '6px' }">
-      <FieldRow v-slot="{ id }" layout="param" label="Name" :label-width="LABEL_WIDTH">
+      <FieldRow v-slot="{ id }" layout="param" :label="t('field.name')" :label-width="LABEL_WIDTH">
         <TextField
           :id="id"
           class="scr-name"
           size="sm"
-          label="Name"
-          placeholder="M4 thumb screw, long"
+          :label="t('field.name')"
+          :placeholder="t('form.namePlaceholder')"
           :model-value="String(draft['name'] ?? '')"
           @update:model-value="draft['name'] = $event"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" layout="param" label="Kind" :label-width="LABEL_WIDTH">
+      <FieldRow v-slot="{ id }" layout="param" :label="t('field.kind')" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           class="scr-kind"
           size="sm"
-          label="Kind"
+          :label="t('field.kind')"
           :options="kindOptions"
           :model-value="String(draft['kind'])"
           @update:model-value="onKind"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" layout="param" label="Units" :label-width="LABEL_WIDTH">
+      <FieldRow v-slot="{ id }" layout="param" :label="t('field.units')" :label-width="LABEL_WIDTH">
         <Select
           :id="id"
           class="scr-units"
           size="sm"
-          label="Units"
+          :label="t('field.units')"
           :options="unitOptions"
           :model-value="String(draft['units'])"
           @update:model-value="onUnits"
         />
       </FieldRow>
-      <FieldRow v-slot="{ id }" layout="param" label="Standard (optional)" :label-width="LABEL_WIDTH">
+      <FieldRow v-slot="{ id }" layout="param" :label="t('field.standardOptional')" :label-width="LABEL_WIDTH">
         <TextField
           :id="id"
           size="sm"
-          label="Standard (optional)"
+          :label="t('field.standardOptional')"
           :model-value="String(draft['standard'] ?? '')"
           @update:model-value="draft['standard'] = $event"
         />
       </FieldRow>
 
       <template v-for="p in parts" :key="p">
-        <h3 :style="heading">{{ p }}</h3>
-        <FieldRow v-slot="{ id }" layout="param" label="Type" :label-width="LABEL_WIDTH">
+        <h3 :style="heading">{{ PART_LABELS[p] }}</h3>
+        <FieldRow v-slot="{ id }" layout="param" :label="t('field.type')" :label-width="LABEL_WIDTH">
           <Select
             :id="id"
             :class="`scr-${p}-type`"
             size="sm"
-            :label="`${titled(p)} type`"
+            :label="t('form.partType', { part: PART_LABELS[p] })"
             :options="typeOptions(p)"
             :model-value="String(part(p)['type'])"
             @update:model-value="part(p)['type'] = $event"
@@ -266,13 +276,13 @@ watch(
             v-if="p === 'thread' && f === 'pitch' && inch"
             v-slot="{ id }"
             layout="param"
-            label="Threads per inch"
+            :label="t('field.threadsPerInch')"
             :label-width="LABEL_WIDTH"
           >
             <NumberField
               :id="id"
               class="scr-tpi"
-              label="Threads per inch"
+              :label="t('field.threadsPerInch')"
               caption="TPI"
               size="sm"
               commit="live"
@@ -285,11 +295,11 @@ watch(
               @error="$event && writeTpi(null)"
             />
           </FieldRow>
-          <FieldRow v-else v-slot="{ id }" layout="param" :label="text" :label-width="LABEL_WIDTH">
+          <FieldRow v-else v-slot="{ id }" layout="param" :label="label(text)" :label-width="LABEL_WIDTH">
             <NumberField
               :id="id"
               :class="`scr-${p}-${f}`"
-              :label="text"
+              :label="label(text)"
               :unit="inch ? undefined : 'mm'"
               :caption="inch ? 'in' : undefined"
               size="sm"
@@ -308,12 +318,12 @@ watch(
           v-if="p === 'head' && part('head')['type'] === 'countersunk'"
           v-slot="{ id }"
           layout="param"
-          label="Countersink angle"
+          :label="t('field.countersinkAngle')"
           :label-width="LABEL_WIDTH"
         >
           <NumberField
             :id="id"
-            label="Countersink angle"
+            :label="t('field.countersinkAngle')"
             unit="deg"
             size="sm"
             commit="live"
@@ -325,7 +335,7 @@ watch(
             placeholder="90"
             :model-value="numberOr(part('head')['angle'])"
             @update:model-value="writeField('head', 'angle', $event)"
-            @error="refuse('head', 'angle', 'Countersink angle', $event)"
+            @error="refuse('head', 'angle', () => t('field.countersinkAngle'), $event)"
             @vue:unmounted="refused['angle'] = null"
           />
         </FieldRow>
@@ -333,12 +343,13 @@ watch(
           v-if="p === 'drive' && ['phillips', 'pozidriv', 'torx'].includes(String(part('drive')['type']))"
           v-slot="{ id }"
           layout="param"
-          label="Driver number (optional)"
+          :label="t('field.driverNumber')"
           :label-width="LABEL_WIDTH"
         >
           <NumberField
             :id="id"
-            label="Driver number (optional)"
+            class="scr-drive-number"
+            :label="t('field.driverNumber')"
             unitless
             size="sm"
             commit="live"
@@ -348,26 +359,26 @@ watch(
             :step="1"
             :model-value="numberOr(part('drive')['number'])"
             @update:model-value="writeField('drive', 'number', $event)"
-            @error="refuse('drive', 'number', 'Driver number', $event)"
+            @error="refuse('drive', 'number', () => t('field.driverNumberName'), $event)"
             @vue:unmounted="refused['number'] = null"
           />
         </FieldRow>
         <template v-if="p === 'thread'">
-          <FieldRow v-slot="{ id }" layout="param" label="Hand" :label-width="LABEL_WIDTH">
+          <FieldRow v-slot="{ id }" layout="param" :label="t('field.hand')" :label-width="LABEL_WIDTH">
             <Select
               :id="id"
               size="sm"
-              label="Hand"
+              :label="t('field.hand')"
               :options="handOptions"
               :model-value="String(part('thread')['hand'] ?? 'right')"
               @update:model-value="part('thread')['hand'] = $event"
             />
           </FieldRow>
-          <FieldRow v-slot="{ id }" layout="param" label="Thread" :label-width="LABEL_WIDTH">
+          <FieldRow v-slot="{ id }" layout="param" :label="t('field.thread')" :label-width="LABEL_WIDTH">
             <Select
               :id="id"
               size="sm"
-              label="Thread"
+              :label="t('field.thread')"
               :options="threadOptions"
               :model-value="part('thread')['modelled'] ? 'modelled' : 'simple'"
               @update:model-value="part('thread')['modelled'] = $event === 'modelled'"
@@ -376,19 +387,19 @@ watch(
         </template>
       </template>
 
-      <h3 v-if="KINDS[kind].fields.length" :style="heading">Lengths</h3>
+      <h3 v-if="KINDS[kind].fields.length" :style="heading">{{ t("field.lengths") }}</h3>
       <FieldRow
         v-for="[path, text] in KINDS[kind].fields"
         :key="path"
         v-slot="{ id }"
         layout="param"
-        :label="text"
+        :label="label(text)"
         :label-width="LABEL_WIDTH"
       >
         <NumberField
           :id="id"
           :class="`scr-len-${path.replace('.', '-')}`"
-          :label="text"
+          :label="label(text)"
           :unit="inch ? undefined : 'mm'"
           :caption="inch ? 'in' : undefined"
           size="sm"
@@ -403,12 +414,12 @@ watch(
         />
       </FieldRow>
 
-      <FieldRow v-slot="{ id }" layout="stacked" label="Notes">
+      <FieldRow v-slot="{ id }" layout="stacked" :label="t('field.notes')">
         <TextField
           :id="id"
           multiline
           rows="3"
-          label="Notes"
+          :label="t('field.notes')"
           :style="FILL"
           :model-value="String(draft['notes'] ?? '')"
           @update:model-value="draft['notes'] = $event"
@@ -443,7 +454,7 @@ watch(
             <li v-for="msg in allProblems" :key="msg">{{ msg }}</li>
           </ul>
         </div>
-        <div v-else class="measure-hint">Everything needed to build it is there.</div>
+        <div v-else class="measure-hint">{{ t("form.ready") }}</div>
       </div>
       <div
         :style="{
@@ -460,12 +471,12 @@ watch(
           variant="primary"
           class="scr-save"
           :disabled="allProblems.length > 0"
-          disabled-reason="Fix what is listed first"
+          :disabled-reason="t('form.fixFirst')"
           @click="emit('save', spec)"
         >
-          {{ editing ? "Save changes" : "Add to my fasteners" }}
+          {{ editing ? t("form.save") : t("form.add") }}
         </Button>
-        <Button class="scr-cancel" @click="emit('cancel')">Cancel</Button>
+        <Button class="scr-cancel" @click="emit('cancel')">{{ t("action.cancel") }}</Button>
       </div>
     </div>
   </div>

@@ -688,7 +688,7 @@ describe("the custom fastener form", () => {
     expect(field(".scr-len-length").closest(".param-row")!.textContent).toContain("Length");
     expect(byLabel("Countersink angle").value).toBe("");
     expect(byLabel("Countersink angle").placeholder).toBe("90");
-    expect(byLabel("Driver number").value).toBe("");
+    expect(field(".scr-drive-number").value).toBe("");
   });
 
   it("reads a decimal comma in a part field, as typed, and saves it", async () => {
@@ -703,8 +703,8 @@ describe("the custom fastener form", () => {
     afterEach(() => setLanguage("system"));
 
     async function driver(text: string) {
-      const { byLabel, problems, saved } = await form();
-      const input = byLabel("Driver number");
+      const { field, problems, saved } = await form();
+      const input = field(".scr-drive-number");
       type(input, text);
       await flushPromises();
       const number = (await saved())?.drive?.["number"] ?? null;
@@ -719,7 +719,7 @@ describe("the custom fastener form", () => {
       const read = (number: number) => ({ number, invalid: null, problems: [] });
       const refused = (why: RegExp) => ({ number: null, invalid: "true", problems: [expect.stringMatching(why)] });
       expect({ de, en }).toEqual({
-        de: [read(1.5), read(0.25), refused(/^Driver number: "1\.500" is ambiguous/)],
+        de: [read(1.5), read(0.25), refused(/^Antriebsgröße: "1\.500" is ambiguous/)],
         en: [read(1.5), refused(/^Driver number: "1,500" is ambiguous/)],
       });
     });

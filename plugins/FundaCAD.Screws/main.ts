@@ -55,7 +55,7 @@ export async function activate(e: Engine): Promise<() => void> {
       standardThread: () => {
         if (e.toolBusy()) return;
         if (!e.hasBody()) {
-          e.setStatus("Standard Thread: create or import a body first", "");
+          e.setStatus(t("thread.needsBody"), "");
           return;
         }
         thread.start(threadDone);

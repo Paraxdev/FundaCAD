@@ -16,6 +16,7 @@ import {
   type Units,
 } from "./spec";
 import { spellFixed, spellNumber } from "fundacad";
+import { label, t } from "./lines";
 
 export type ThreadTable = "metric" | "inch" | "tapping";
 
@@ -140,17 +141,18 @@ export interface PitchChoice {
 
 /** Coarse first, then the fine pitches the thread standard defines for this size. */
 export function pitchesFor(f: Family, size: string): PitchChoice[] {
-  const t = threadSize(f, size);
-  if (!t) return [];
+  const ts = threadSize(f, size);
+  if (!ts) return [];
   if (f.threads === "inch") {
     const out: PitchChoice[] = [];
-    if (t.unc) out.push({ pitch: 1 / t.unc, label: `${t.unc} TPI (UNC)`, fine: false });
-    if (t.unf) out.push({ pitch: 1 / t.unf, label: `${t.unf} TPI (UNF)`, fine: true });
+    if (ts.unc) out.push({ pitch: 1 / ts.unc, label: `${ts.unc} TPI (UNC)`, fine: false });
+    if (ts.unf) out.push({ pitch: 1 / ts.unf, label: `${ts.unf} TPI (UNF)`, fine: true });
     return out;
   }
   const out: PitchChoice[] = [];
-  if (t.coarse) out.push({ pitch: t.coarse, label: `${t.coarse} mm coarse`, fine: false });
-  for (const p of t.fine ?? []) out.push({ pitch: p, label: `${p} mm fine`, fine: true });
+  if (ts.coarse)
+    out.push({ pitch: ts.coarse, label: t("pitch.coarse", { pitch: spellNumber(ts.coarse) }), fine: false });
+  for (const p of ts.fine ?? []) out.push({ pitch: p, label: t("pitch.fine", { pitch: spellNumber(p) }), fine: true });
   return out;
 }
 
@@ -317,64 +319,84 @@ function num(v: unknown, units: Units): string {
 export function specRows(spec: FastenerSpec, opts: { size?: string; volume?: number } = {}): SpecRow[] {
   const u = spec.units;
   const rows: SpecRow[] = [];
-  if (spec.standard) rows.push({ label: "Standard", value: spec.standard });
-  rows.push({ label: "Type", value: KINDS[spec.kind]?.label ?? spec.kind });
-  if (spec.info?.["size"]) rows.push({ label: "Size", value: String(spec.info["size"]) });
+  const kindLabel = KINDS[spec.kind] ? label(KINDS[spec.kind].label) : spec.kind;
+  if (spec.standard) rows.push({ label: t("field.standard"), value: spec.standard });
+  rows.push({ label: t("field.type"), value: kindLabel });
+  if (spec.info?.["size"]) rows.push({ label: t("field.size"), value: String(spec.info["size"]) });
   const kind = KINDS[spec.kind];
   for (const partName of kind?.parts ?? []) {
     const part = spec[partName] as Part | undefined;
     if (!part) continue;
     const def = PARTS[partName][part.type];
     if (partName === "thread") continue;
-    let typeLabel = def?.label ?? part.type;
+    let typeLabel = def ? label(def.label) : part.type;
     if (partName === "drive" && typeof part["number"] === "number") {
       typeLabel += ` ${DRIVE_PREFIX[part.type] ?? ""}${part["number"]}`;
     }
     rows.push({ label: PART_LABELS[partName], value: typeLabel });
-    for (const [field, label] of def?.fields ?? []) rows.push({ label: `  ${label}`, value: num(part[field], u) });
+    for (const [field, english] of def?.fields ?? [])
+      rows.push({ label: `  ${label(english)}`, value: num(part[field], u) });
     if (partName === "head" && typeof part["angle"] === "number")
-      rows.push({ label: "  Countersink angle", value: `${part["angle"]} deg` });
+      rows.push({
+        label: `  ${t("field.countersinkAngle")}`,
+        value: t("spec.angleValue", { angle: spellNumber(part["angle"]) }),
+      });
   }
-  const t = spec.thread;
-  if (t) {
-    rows.push({ label: "Thread", value: t.designation ?? `${num(t.diameter, u)}` });
-    rows.push({ label: "  Diameter", value: num(t.diameter, u) });
+  const thread = spec.thread;
+  if (thread) {
+    rows.push({ label: t("field.thread"), value: thread.designation ?? `${num(thread.diameter, u)}` });
+    rows.push({ label: `  ${t("spec.diameter")}`, value: num(thread.diameter, u) });
     rows.push({
-      label: "  Pitch",
-      value: u === "in" ? `${Math.round(1 / t.pitch)} TPI` : `${spellNumber(+t.pitch.toFixed(4))} mm`,
+      label: `  ${t("field.pitch")}`,
+      value:
+        u === "in"
+          ? t("spec.tpi", { tpi: Math.round(1 / thread.pitch) })
+          : `${spellNumber(+thread.pitch.toFixed(4))} mm`,
     });
-    if (typeof t.length === "number") rows.push({ label: "  Thread length", value: num(t.length, u) });
-    rows.push({ label: "  Hand", value: t.hand === "left" ? "Left" : "Right" });
+    if (typeof thread.length === "number")
+      rows.push({ label: `  ${t("spec.threadLength")}`, value: num(thread.length, u) });
+    rows.push({ label: `  ${t("field.hand")}`, value: thread.hand === "left" ? t("option.left") : t("option.right") });
     rows.push({
-      label: "  Modelled",
-      value: t.modelled ? "Helical thread" : "Simplified, plain at the nominal diameter",
+      label: `  ${t("spec.modelled")}`,
+      value: thread.modelled ? t("spec.helical") : t("spec.plainThread"),
     });
   }
-  for (const [path, label] of kind?.fields ?? []) {
+  for (const [path, english] of kind?.fields ?? []) {
     if (path === "thread.length") continue;
-    rows.push({ label, value: num(getPath(spec, path), u) });
+    rows.push({ label: label(english), value: num(getPath(spec, path), u) });
   }
   const holes = opts.size ? HOLES[opts.size] : undefined;
   if (holes) {
-    rows.push({ label: "Clearance hole", value: `close ${num(holes.close, u)}, free ${num(holes.free, u)}` });
-    if (spec.kind !== "washer") rows.push({ label: "Tap drill", value: num(holes.tap, u) });
+    rows.push({
+      label: t("spec.clearanceHole"),
+      value: t("spec.clearanceValue", { close: num(holes.close, u), free: num(holes.free, u) }),
+    });
+    if (spec.kind !== "washer") rows.push({ label: t("spec.tapDrill"), value: num(holes.tap, u) });
   }
   const head = spec.head;
   if (head && (head.type === "socketCap" || head.type === "lowHead")) {
     const extra = u === "in" ? 1 / 32 : 1;
     rows.push({
-      label: "Counterbore",
-      value: `${num(Number(head.diameter) + extra, u)} dia, ${num(Number(head.height) + extra / 2, u)} deep`,
+      label: t("spec.counterbore"),
+      value: t("spec.counterboreValue", {
+        dia: num(Number(head.diameter) + extra, u),
+        deep: num(Number(head.height) + extra / 2, u),
+      }),
     });
   }
-  if (head?.type === "countersunk") rows.push({ label: "Countersink", value: `${num(Number(head.diameter), u)} dia` });
-  if (spec.info?.["hole"] !== undefined) rows.push({ label: "Hole for printing", value: num(spec.info["hole"], u) });
+  if (head?.type === "countersunk")
+    rows.push({
+      label: t("spec.countersink"),
+      value: t("spec.countersinkValue", { dia: num(Number(head.diameter), u) }),
+    });
+  if (spec.info?.["hole"] !== undefined)
+    rows.push({ label: t("spec.holeForPrinting"), value: num(spec.info["hole"], u) });
   if (opts.volume !== undefined) {
     rows.push({
-      label: "Mass (steel)",
+      label: t("spec.mass"),
       value: `${spellFixed(opts.volume * 7.85e-3, opts.volume * 7.85e-3 < 10 ? 2 : 1)} g`,
     });
   }
-  if (spec.notes) rows.push({ label: "Notes", value: spec.notes });
+  if (spec.notes) rows.push({ label: t("field.notes"), value: spec.notes });
   return rows;
 }
