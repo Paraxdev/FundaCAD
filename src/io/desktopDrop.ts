@@ -1,5 +1,6 @@
 import type { Engine } from "../app/engine";
 import { mayDiscard, placeImport } from "../app/documentActions";
+import { t } from "../i18n";
 import {
   importFileBytes,
   importInTurn,
@@ -30,7 +31,7 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
   if (doc) {
     // Cancelling drops the whole drop: its imports belong to the document that
     // was meant to open, not to the one that stayed.
-    if (!(await mayDiscard(e, `Discard unsaved changes and open ${doc.name}?`))) return;
+    if (!(await mayDiscard(e, t("files.discardAndOpen", { name: doc.name })))) return;
     let outcome: OpenOutcome = "unreadable";
     if (doc.path) outcome = await openDocumentAtPath(e.store, doc.path, e.geometry);
     else if (doc.file) outcome = await openDocumentBytes(e.store, doc.file, e.geometry);
@@ -214,7 +215,7 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     queue = queue
       .then(async () => takeDroppedFiles(e, await (fromGtk ? collectFromGtk() : collect(files))))
       .catch((err) => {
-        void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
+        void reportError(t("files.dropFailed", { error: err instanceof Error ? err.message : String(err) }));
       });
   };
 

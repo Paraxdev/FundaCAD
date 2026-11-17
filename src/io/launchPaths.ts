@@ -1,5 +1,6 @@
 import type { Engine } from "../app/engine";
 import { openPathGuarded } from "../app/documentActions";
+import { t } from "../i18n";
 import { closeHome } from "../ui/home";
 import { toast } from "../ui/toast";
 
@@ -28,7 +29,7 @@ export async function drainLaunchPaths(e: LaunchEngine): Promise<void> {
   if ((await openPathGuarded(e, first)) !== "ok") return;
   closeHome();
   if (paths.length > 1) {
-    toast(`Opened ${first.split(/[\\/]/).pop()}, FundaCAD opens one document at a time`, {
+    toast(t("files.launch.oneAtATime", { name: first.split(/[\\/]/).pop() ?? first }), {
       kind: "info",
       timeout: 8000,
     });

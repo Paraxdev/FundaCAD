@@ -2,6 +2,9 @@
 // upgraded, and nothing renames an opened file; only Save As offers the new name. Keep in step with
 // src-tauri/src/lib.rs, which gates double-click open on the same names (a mismatch opens a blank window).
 
+import { t } from "../i18n";
+import { nameList } from "./nameList";
+
 /** The extension new documents are saved as: readable JSON. */
 export const DOC_EXT = "funda";
 
@@ -47,6 +50,6 @@ export function stripDocumentExt(name: string): string {
 export function leftOutSectionsNotice(path: string, carried: readonly { name: string }[]): string | null {
   if (carried.length === 0) return null;
   if ((path.split(".").pop() ?? "").toLowerCase() === BINARY_DOC_EXT) return null;
-  const names = carried.map((c) => c.name).join(", ");
-  return `Saved without ${carried.length === 1 ? "a section" : `${carried.length} sections`} (${names}) that this version of FundaCAD does not read. Save as .${BINARY_DOC_EXT} to keep ${carried.length === 1 ? "it" : "them"}.`;
+  const names = nameList(carried.map((c) => c.name));
+  return t("files.leftOutSections", { n: carried.length, names, ext: BINARY_DOC_EXT });
 }

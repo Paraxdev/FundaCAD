@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { nativeDialog } from "./nativeDialog";
 
 export interface FileStat {
@@ -62,7 +63,7 @@ export const tauriLibrary: DocumentLibrary = {
   },
   async pickFolder() {
     const { open } = await nativeDialog();
-    const picked = await open({ directory: true, multiple: false, title: "Add folder to Home" });
+    const picked = await open({ directory: true, multiple: false, title: t("files.addFolderTitle") });
     return typeof picked === "string" ? picked : null;
   },
   async thumbs(paths) {

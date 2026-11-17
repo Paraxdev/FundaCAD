@@ -9,6 +9,7 @@ import { migrateDocument } from "../document/migrate";
 import type { CadDocument, Feature, ImportReply } from "../types";
 import { asFeature } from "../types";
 import { contentHash } from "../document/contentHash";
+import { t } from "../i18n";
 
 export type FundaInsertMode = "append" | "link";
 
@@ -97,28 +98,31 @@ async function bakeSource(
   } catch (e) {
     return {
       ok: false,
-      message: `could not read ${baseName(source.path)}: ${e instanceof Error ? e.message : String(e)}`,
+      message: t("insert.error.read", {
+        name: baseName(source.path),
+        error: e instanceof Error ? e.message : String(e),
+      }),
     };
   }
-  if (!doc.features.length) return { ok: false, message: `${baseName(source.path)} has nothing in it to insert` };
+  if (!doc.features.length) return { ok: false, message: t("insert.error.empty", { name: baseName(source.path) }) };
   const label = baseName(source.path);
-  const exported = await store.runBusy(`Building ${label}`, (onStarted) =>
+  const exported = await store.runBusy(t("insert.busy.building", { name: label }), (onStarted) =>
     geometry.export(doc, "step", tempPath, {}, onStarted),
   );
   if (!exported.ok) {
     return {
       ok: false,
-      message: exported.message ?? `could not build ${label}`,
+      message: exported.message ?? t("insert.error.build", { name: label }),
       ...(exported.cancelled ? { cancelled: true } : {}),
     };
   }
-  const read = await store.runBusy(`Reading ${label}`, (onStarted) =>
+  const read = await store.runBusy(t("insert.busy.reading", { name: label }), (onStarted) =>
     geometry.importGeometry(exported.path ?? tempPath, "step", onStarted),
   );
   if (!read.ok)
     return {
       ok: false,
-      message: read.message ?? `could not read ${label} back`,
+      message: read.message ?? t("insert.error.readBack", { name: label }),
       ...(read.cancelled ? { cancelled: true } : {}),
     };
   return read;
@@ -161,7 +165,7 @@ export async function updateFundaLink(
     store.document.features.find((x) => x.id === featureId),
     "import",
   );
-  if (!f?.link) return { ok: false, message: "that step is not linked to a file" };
+  if (!f?.link) return { ok: false, message: t("insert.error.notLinked") };
   // The bake runs on the engine for this document; its session ending rejects it before anything is written.
   const baked = await store.session.step(store.importing(() => bakeSource(store, geometry, source, tempPath)));
   if (!baked.ok) return baked;

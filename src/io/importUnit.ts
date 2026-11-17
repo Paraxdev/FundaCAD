@@ -1,16 +1,37 @@
 // The unit of a glTF, VRML or X3D file. The specs say metres but writers rarely mean it, so each import asks
 // and the last answer, a per-user preference, is the next default.
 
+import { t } from "../i18n";
 import type { ImportFormat } from "../types";
 import { choose } from "../ui/choice";
 
 export type ImportUnit = "mm" | "cm" | "m" | "inch";
 
-const UNITS: { value: ImportUnit; label: string }[] = [
-  { value: "mm", label: "Millimetres" },
-  { value: "cm", label: "Centimetres" },
-  { value: "m", label: "Metres" },
-  { value: "inch", label: "Inches" },
+const UNITS: { readonly value: ImportUnit; readonly label: string }[] = [
+  {
+    value: "mm",
+    get label() {
+      return t("import.unit.mm");
+    },
+  },
+  {
+    value: "cm",
+    get label() {
+      return t("import.unit.cm");
+    },
+  },
+  {
+    value: "m",
+    get label() {
+      return t("import.unit.m");
+    },
+  },
+  {
+    value: "inch",
+    get label() {
+      return t("import.unit.inch");
+    },
+  },
 ];
 
 const KEY = "fundacad.importUnit";
@@ -45,12 +66,12 @@ export function rememberImportUnit(unit: ImportUnit): void {
 export function unitChoices(last: ImportUnit) {
   const first = UNITS.find((u) => u.value === last);
   const rest = UNITS.filter((u) => u.value !== last);
-  return [...(first ? [{ ...first, hint: "last used" }] : []), ...rest];
+  return [...(first ? [{ ...first, hint: t("import.unit.lastUsed") }] : []), ...rest];
 }
 
 /** Ask which unit the file is in, null when the dialog is dismissed or `signal` aborts. */
 export async function askImportUnit(fmt: ImportFormat, signal?: AbortSignal): Promise<ImportUnit | null> {
-  const pick = await choose(`What unit is this ${fmt.toUpperCase()} file in?`, unitChoices(lastImportUnit()), signal);
+  const pick = await choose(t("import.unit.ask", { format: fmt.toUpperCase() }), unitChoices(lastImportUnit()), signal);
   const unit = asImportUnit(pick);
   if (unit) rememberImportUnit(unit);
   return unit;
