@@ -17,6 +17,7 @@
   { "path": "plugins/FundaCAD.Onshape/main.ts", "kind": "script", "count": 1, "reason": "the English reference name of the menu row, an id scripts and the AI tools click by, the shown row reads from the lines" },
   { "path": "plugins/FundaCAD.Onshape/sign.ts", "kind": "script", "count": 1, "reason": "the Authorization header Onshape reads, a protocol value" },
   { "path": "plugins/FundaCAD.Organic/main.ts", "kind": "script", "count": 3, "reason": "the English reference names of the tool and the feature, ids scripts and the AI tools use, the shown names read from the lines" },
+  { "path": "plugins/FundaCAD.Organic/nodeForm.ts", "kind": "script", "count": 1, "reason": "the Bodies row of the feature stays English like the core Bodies rows, whose counts the host words in English for now" },
   { "path": "plugins/FundaCAD.PrintLook/LayerLinesSection.vue", "kind": "template", "count": 6, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "plugins/FundaCAD.PrintLook/main.ts", "kind": "script", "count": 1, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "plugins/FundaCAD.PrintLook/presets.ts", "kind": "script", "count": 7, "reason": "raw text before localisation, a codemod lane converts it" },

@@ -3,6 +3,7 @@
 // .vue may not carry a <style> block.
 
 import { computed, reactive, useId, watch, type CSSProperties } from "vue";
+import { numberText, shownExpr, spellNumber } from "fundacad";
 import { Button, Checkbox, Chip, FieldRow, IconButton, ListRow, NumberField, Panel, Select } from "fundacad/ui";
 import { t } from "./lines";
 import * as panel from "./panel";
@@ -12,14 +13,36 @@ type NodeField = keyof NodeValues & string;
 interface Group {
   id: string;
   label: string;
+  axisLabel: (axis: string) => string;
   title: string;
   unit: "mm" | "deg";
   fields: NodeField[];
 }
 const GROUPS = computed<Group[]>(() => [
-  { id: "centre", label: t("field.centre"), title: t("field.centreTip"), unit: "mm", fields: ["x", "y", "z"] },
-  { id: "radius", label: t("field.radius"), title: t("field.radiusTip"), unit: "mm", fields: ["sx", "sy", "sz"] },
-  { id: "turn", label: t("field.turn"), title: t("field.turnTip"), unit: "deg", fields: ["rx", "ry", "rz"] },
+  {
+    id: "centre",
+    label: t("field.centre"),
+    axisLabel: (axis) => t("field.axisCentre", { axis }),
+    title: t("field.centreTip"),
+    unit: "mm",
+    fields: ["x", "y", "z"],
+  },
+  {
+    id: "radius",
+    label: t("field.radius"),
+    axisLabel: (axis) => t("field.axisRadius", { axis }),
+    title: t("field.radiusTip"),
+    unit: "mm",
+    fields: ["sx", "sy", "sz"],
+  },
+  {
+    id: "turn",
+    label: t("field.turn"),
+    axisLabel: (axis) => t("field.axisTurn", { axis }),
+    title: t("field.turnTip"),
+    unit: "deg",
+    fields: ["rx", "ry", "rz"],
+  },
 ]);
 const OPERATIONS = computed(operationOptions);
 
@@ -30,9 +53,20 @@ const picked = computed<NodeValues | null>(() => {
   return (s && s.selected && s.feature.nodes.find((n) => n.id === s.selected)) || null;
 });
 
-// A refusal stays until that field is committed or the node changes, and every one is listed as an alert.
-const refused = reactive<Record<string, string | null>>({});
-const problems = computed(() => Object.values(refused).filter((why): why is string => !!why));
+// A refusal stays until that field is committed or the node changes, and every one is listed as an alert. It keeps the
+// facts, so the line is worded again when a language switch redraws it.
+const KNOWN = ["check.number", "check.radiusPositive", "check.blendNegative"] as const;
+interface Refusal {
+  label: () => string;
+  why: string;
+  key: (typeof KNOWN)[number] | undefined;
+}
+const refused = reactive<Record<string, Refusal | null>>({});
+const problems = computed(() =>
+  Object.values(refused)
+    .filter((r): r is Refusal => !!r)
+    .map((r) => t("check.refused", { label: r.label(), why: r.key ? t(r.key) : r.why })),
+);
 watch(
   () => picked.value?.id,
   () => {
@@ -40,13 +74,13 @@ watch(
   },
 );
 
-function refuse(key: string, label: string, why: string | null) {
-  refused[key] = why && t("check.refused", { label, why });
+function refuse(key: string, label: () => string, why: string | null) {
+  refused[key] = why ? { label, why, key: KNOWN.find((k) => t(k) === why) } : null;
 }
 
 function shown(x: unknown): string {
-  if (typeof x === "number") return String(Math.round(x * 1000) / 1000);
-  return x == null ? "" : String(x);
+  if (typeof x === "number") return spellNumber(Math.round(x * 1000) / 1000);
+  return x == null ? "" : shownExpr(String(x));
 }
 
 function numeric(x: unknown): number | null {
@@ -55,11 +89,11 @@ function numeric(x: unknown): number | null {
 }
 
 const axisOf = (f: string) => f.slice(-1).toUpperCase();
-const labelOf = (group: { label: string }, f: string) => `${group.label} ${axisOf(f)}`;
+const labelOf = (group: Group, f: string) => group.axisLabel(axisOf(f));
 const isRadius = (f: string) => f === "sx" || f === "sy" || f === "sz";
 const radiusRule = (f: string) => (isRadius(f) ? (x: number) => (x > 0 ? null : t("check.radiusPositive")) : undefined);
 
-function commitValue(f: NodeField, label: string, value: number | null) {
+function commitValue(f: NodeField, label: () => string, value: number | null) {
   const n = picked.value;
   if (!n || value === null) return;
   refuse(f, label, panel.act()?.setValue(n.id, f, String(value)) ?? null);
@@ -83,13 +117,15 @@ function diameters(n: NodeValues): number[] {
 
 function describe(n: NodeValues): string {
   const d = diameters(n);
-  return d[0] === d[1] && d[1] === d[2] ? `⌀ ${d[0]}` : d.join(" × ");
+  const [x, y, z] = d.map((v) => numberText(v)) as [string, string, string];
+  return d[0] === d[1] && d[1] === d[2] ? t("panel.diameter", { size: x }) : t("panel.sizeBy", { x, y, z });
 }
 
 function spoken(n: NodeValues): string {
   const d = diameters(n);
-  if (d[0] === d[1] && d[1] === d[2]) return t("panel.spokenDiameter", { id: n.id, size: d[0]! });
-  return t("panel.spokenSize", { id: n.id, x: d[0]!, y: d[1]!, z: d[2]! });
+  const [x, y, z] = d.map((v) => numberText(v)) as [string, string, string];
+  if (d[0] === d[1] && d[1] === d[2]) return t("panel.spokenDiameter", { id: n.id, size: x });
+  return t("panel.spokenSize", { id: n.id, x, y, z });
 }
 
 const WIDTH: CSSProperties = { width: "300px", maxWidth: "100%", maxHeight: "calc(100vh - 180px)", overflowY: "auto" };
@@ -178,8 +214,8 @@ const TAG: CSSProperties = {
             :disabled="isBound(f)"
             :disabled-reason="t('field.locked')"
             :validate="radiusRule(f)"
-            @update:model-value="commitValue(f, labelOf(group, f), $event)"
-            @error="refuse(f, labelOf(group, f), $event)"
+            @update:model-value="commitValue(f, () => labelOf(group, f), $event)"
+            @error="refuse(f, () => labelOf(group, f), $event)"
           />
         </div>
       </template>
@@ -191,7 +227,7 @@ const TAG: CSSProperties = {
             <span :style="GROW">{{ c.join(" → ") }}</span>
             <IconButton
               icon="close"
-              :tip="t('panel.removeChain', { chain: c.join(t('panel.chainJoin')) })"
+              :tip="t('panel.removeChain', { chain: c.join(' → ') })"
               size="sm"
               variant="plain"
               @click="panel.act()?.removeChain(i)"
@@ -212,7 +248,7 @@ const TAG: CSSProperties = {
             :model-value="numeric(v.feature.blend ?? 0)"
             :validate="blendRule"
             @update:model-value="setBlend"
-            @error="refuse('blend', t('field.blend'), $event)"
+            @error="refuse('blend', () => t('field.blend'), $event)"
           />
         </FieldRow>
         <FieldRow v-slot="{ id }" layout="param" :label="t('field.operation')" :label-width="LABEL_WIDTH">

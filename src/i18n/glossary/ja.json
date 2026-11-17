@@ -861,6 +861,31 @@
     {
       "en": "example",
       "text": "サンプル"
+    },
+    {
+      "en": "node",
+      "text": "ノード",
+      "note": "a point of a node body, drawn as an ellipsoid"
+    },
+    {
+      "en": "chain",
+      "text": "チェーン",
+      "note": "nodes joined in a row in a node body"
+    },
+    {
+      "en": "blend",
+      "text": "ブレンド",
+      "note": "how smoothly the nodes of a node body run into each other"
+    },
+    {
+      "en": "filament slot",
+      "text": "スロット",
+      "note": "a filament position on the printer; the sketch slot is a 長穴"
+    },
+    {
+      "en": "toolhead",
+      "text": "ツールヘッド",
+      "note": "one print head of a multi-head printer"
     }
   ]
 }

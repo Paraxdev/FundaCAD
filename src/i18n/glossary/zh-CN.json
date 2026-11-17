@@ -861,6 +861,31 @@
     {
       "en": "example",
       "text": "示例"
+    },
+    {
+      "en": "node",
+      "text": "节点",
+      "note": "a point of a node body, drawn as an ellipsoid"
+    },
+    {
+      "en": "chain",
+      "text": "链",
+      "note": "nodes joined in a row in a node body"
+    },
+    {
+      "en": "blend",
+      "text": "过渡",
+      "note": "how smoothly the nodes of a node body run into each other, as in the fillet messages"
+    },
+    {
+      "en": "filament slot",
+      "text": "槽位",
+      "note": "a filament position on the printer; the sketch slot is a 槽"
+    },
+    {
+      "en": "toolhead",
+      "text": "工具头",
+      "note": "one print head of a multi-head printer"
     }
   ]
 }

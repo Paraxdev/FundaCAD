@@ -662,7 +662,8 @@ export class NodeTool {
       const s = vp.projectToScreen(centerOf(sel));
       const d = [numOf(sel.sx, 5), numOf(sel.sy, 5), numOf(sel.sz, 5)].map((v) => 2 * v);
       const same = Math.abs(d[0]! - d[1]!) < 1e-6 && Math.abs(d[1]! - d[2]!) < 1e-6;
-      const text = same ? `⌀ ${sizeLabel(d[0]!)}` : d.map(sizeLabel).join(" × ");
+      const [x, y, z] = d.map(sizeLabel) as [string, string, string];
+      const text = same ? t("panel.diameter", { size: x }) : t("panel.sizeBy", { x, y, z });
       const cur = panel.label.value;
       if (!cur || Math.abs(cur.x - s.x) > 0.5 || Math.abs(cur.y - s.y) > 0.5 || cur.text !== text) {
         panel.label.value = { x: s.x, y: s.y, text };
