@@ -1,10 +1,8 @@
 // The kernel can hand back a body with no faces, as it does for a sketch 1e8 mm out: nothing draws, so the step that
 // made it has failed even though the engine reported no error.
+import { t } from "../i18n";
 import { within } from "../sketch/pointEntry";
 import type { CadDocument, CoreFeature, RebuildResult } from "../types";
-
-export const FACELESS_BODY = "The body came out with no faces, so there is nothing to show.";
-export const FAR_SKETCH_HINT = "Move the sketch within 1 km of the origin.";
 
 type Doc = Pick<CadDocument, "features" | "bodyIds" | "parameters">;
 type FeatureError = NonNullable<RebuildResult["featureErrors"]>[number];
@@ -56,7 +54,7 @@ export function withFacelessFailures(result: RebuildResult, doc: Doc): RebuildRe
     const maker = makerOf(b.id, doc);
     if (failed.has(maker)) continue;
     failed.add(maker);
-    const message = sketchTooFar(maker, doc) ? `${FACELESS_BODY} ${FAR_SKETCH_HINT}` : FACELESS_BODY;
+    const message = t("document.faceless", { far: sketchTooFar(maker, doc) ? "yes" : "no" });
     added.push(maker ? { feature_id: maker, message } : { message });
   }
   if (!added.length) return result;

@@ -97,8 +97,9 @@ import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { logEditTiming } from "../diagnostics/editTiming";
 import { t } from "../i18n";
-import { labelOf, nameRef, numberedEnglish } from "../ui/featureMeta";
-import { STEP_LABEL, stepLabel, stepText, type StepLabel } from "./stepLabels";
+import { labelOf, nameRef, nameText } from "../ui/featureMeta";
+import { seeConsole } from "../ui/plainError";
+import { STEP_LABEL, stepLabel, stepText, type StepLabel, type StepName } from "./stepLabels";
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
@@ -1266,7 +1267,7 @@ export class DocumentStore {
       .catch((e) => {
         if (isSessionEnded(e)) return;
         console.error("param commit failed:", e);
-        this.onWarning?.("Parameter change failed to apply, see the console for details.");
+        this.onWarning?.(t("document.paramFailed", { details: seeConsole() }));
       });
   }
   // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
@@ -1342,9 +1343,7 @@ export class DocumentStore {
     if (this.projStreak >= 5) {
       if (this.projValveOpen) {
         this.projValveOpen = false;
-        this.onWarning?.(
-          "Projected geometry keeps changing on every rebuild, paused automatic refresh (edit the model or Compute All to retry).",
-        );
+        this.onWarning?.(t("document.projection.paused"));
       }
       return;
     }
@@ -1359,7 +1358,7 @@ export class DocumentStore {
       .catch((e) => {
         if (isSessionEnded(e)) return;
         console.error("projection refresh failed:", e);
-        this.onWarning?.("Projected geometry failed to refresh, see the console for details.");
+        this.onWarning?.(t("document.projection.failed", { details: seeConsole() }));
       });
   }
 
@@ -1379,7 +1378,7 @@ export class DocumentStore {
     // The engine emits stale:true only on the transition, so every entry here is news.
     for (const sid of new Set(valid.filter((u) => u.stale).map((u) => u.sketch))) {
       const f = sketchOf.get(sid)!;
-      this.onWarning?.(`Projected geometry in ${f.name ?? sid} lost its source, keeping last shape`);
+      this.onWarning?.(t("document.projection.lost", { sketch: nameText(nameRef(f, this.doc.features)) }));
     }
 
     const open = this.openSketchId?.() ?? null;
@@ -1462,7 +1461,10 @@ export class DocumentStore {
     const v = params.validateExpr(this.doc, name, expr);
     if (!v.ok) return v.error;
     // Named for the parameter, not the steps it drives, which the cascade edits too.
-    this.queueParamCommit((d) => params.commitParamExpr(d, name, expr, unit), `Parameter ${name}`);
+    this.queueParamCommit((d) => params.commitParamExpr(d, name, expr, unit), {
+      key: "step.label.parameter",
+      args: { name },
+    });
     return null;
   }
 
@@ -1600,7 +1602,10 @@ export class DocumentStore {
       const v = params.validateExpr(d, bound, b.expr, b.kind);
       if (!v.ok || nameBad) {
         this.onWarning?.(
-          `Dimension expression "${b.name ? `${b.name}=` : ""}${b.expr}" was dropped: ${nameBad ?? (v.ok ? "" : v.error)}`,
+          t("document.dimExprDropped", {
+            expr: `${b.name ? `${b.name}=` : ""}${b.expr}`,
+            reason: nameBad ?? (v.ok ? "" : v.error),
+          }),
         );
         continue;
       }
@@ -1789,14 +1794,12 @@ export class DocumentStore {
     this.emitDoc();
     this.scheduleRebuild(true);
   }
-  private stepNameOf(id: string): string {
+  private stepRefOf(id: string): StepName {
     const f = this.doc.features.find((x) => x.id === id);
-    return f ? numberedEnglish(f, this.doc.features) : "step";
+    return f ? nameRef(f, this.doc.features) : nameRef({ type: "step", name: "step" });
   }
   private suppressLabel(on: boolean, ids: readonly string[]): StepLabel {
-    const f = ids.length === 1 ? this.doc.features.find((x) => x.id === ids[0]) : undefined;
-    const step =
-      ids.length === 1 ? (f ? nameRef(f, this.doc.features) : nameRef({ type: "step", name: "step" })) : undefined;
+    const step = ids.length === 1 ? this.stepRefOf(ids[0]!) : undefined;
     return { key: "step.label.suppress", args: { state: on ? "on" : "off", n: ids.length }, ...(step && { step }) };
   }
   toggleSuppress(id: string) {
@@ -2078,7 +2081,11 @@ export class DocumentStore {
     this.markDirty();
     if (was === visible) return;
     this.pushOverlayUndo({
-      label: `${visible ? "Show" : "Hide"} ${this.stepNameOf(id)}`,
+      label: {
+        key: "step.label.sketchVisibility",
+        args: { visible: visible ? "show" : "hide" },
+        step: this.stepRefOf(id),
+      },
       undo: () => {
         if (was === undefined) this.sketchVis.delete(id);
         else this.sketchVis.set(id, was);
@@ -2965,6 +2972,7 @@ export class DocumentStore {
     if (!repo) return;
     const was = repo.current;
     const head = switchVersionBranch(repo, name);
+    const switchLabel: StepLabel = { key: "step.label.switchBranch", args: { name } };
     const onto = (branch: string) => {
       if (!repo.branches[branch]) return;
       repo.current = branch;
@@ -2973,10 +2981,10 @@ export class DocumentStore {
     this.undoAsOne(
       () => {
         this.restoreVersion(head.id);
-        this.pushOverlayUndo({ label: `Switch to ${name}`, undo: () => onto(was), redo: () => onto(name) });
+        this.pushOverlayUndo({ label: switchLabel, undo: () => onto(was), redo: () => onto(name) });
       },
       undefined,
-      { label: `Switch to ${name}` },
+      { label: switchLabel },
     );
   }
   toJSON(): string {
@@ -2999,7 +3007,7 @@ export class DocumentStore {
   private warnParamDropped(owner: number) {
     if (this.droppedFor === owner) return;
     this.droppedFor = owner;
-    this.onWarning?.("A parameter change was dropped, another document replaced this one before it finished applying.");
+    this.onWarning?.(t("document.paramDropped"));
   }
   // Moves on an untitled load and on its undo and redo: a save begun before it holds the other document, so it must not
   // name the one on screen.
@@ -3415,7 +3423,7 @@ export class DocumentStore {
     const computeAll = this.geometry.computeAll?.bind(this.geometry);
     const drain = (async () => {
       await this.runBusy(
-        st.computeAllQueued && computeAll ? "Computing all" : "Rebuilding",
+        t(st.computeAllQueued && computeAll ? "history.busy.computingAll" : "history.busy.rebuilding"),
         async (onStarted) => {
           try {
             do {
@@ -3437,7 +3445,7 @@ export class DocumentStore {
               const send = (id: string) => {
                 if (flight.dropped) throw new OpCancelled();
                 flight.id = id;
-                onStarted(id, all ? "Computing all" : "Rebuilding");
+                onStarted(id, t(all ? "history.busy.computingAll" : "history.busy.rebuilding"));
               };
               const reply =
                 all && computeAll

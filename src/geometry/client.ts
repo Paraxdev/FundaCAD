@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
+import { t } from "../i18n";
 import type { EngineTiming } from "../diagnostics/editTiming";
 import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -655,12 +656,8 @@ export const MAX_MESSAGE_BYTES = 128 * 1024 * 1024;
  *  in UTF-16 units, slightly under-counting non-ASCII, since measuring UTF-8 would copy 100+ MiB per call. */
 export function tooLargeToSend(len: number): string | null {
   if (len <= MAX_MESSAGE_BYTES) return null;
-  const mib = (n: number) => `${Math.round(n / (1024 * 1024))} MiB`;
-  return (
-    `This model is too large for the geometry engine: ${mib(len)}, ` +
-    `and the limit is ${mib(MAX_MESSAGE_BYTES)}. ` +
-    `Remove or simplify the imported body, then try again.`
-  );
+  const mib = (n: number) => Math.round(n / (1024 * 1024));
+  return t("engine.tooLarge", { size: mib(len), limit: mib(MAX_MESSAGE_BYTES) });
 }
 
 /** One `importing` frame: the request it is for, its stage fraction 0 to 100 or
@@ -893,10 +890,7 @@ export class Geometry implements GeometryBackend {
     this.emitStatus();
     // A refused size means call()'s pre-flight guard and the engine limit have drifted. Saying so avoids blaming
     // the connection, which misled GH #4's reporter.
-    const message = tooBig
-      ? "That model is too large for the geometry engine to accept. " +
-        "Remove or simplify the imported body, then try again."
-      : "geometry engine connection lost";
+    const message = tooBig ? t("engine.tooLargeRefused") : "geometry engine connection lost";
     // Settle every in-flight call with an engine-shaped error. Otherwise a call made before the drop hangs, rebuildNow()
     // never clears `rebuilding`, and the reconnect rebuild in main.ts's onStatus() silently no-ops forever.
     for (const [id, resolve] of this.pending) {
