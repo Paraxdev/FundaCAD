@@ -3,6 +3,7 @@
 // most settings modules read their value once, when they are imported.
 
 import { RECENT_FILES_KEYS } from "../io/recentFiles";
+import { t } from "../i18n";
 
 /** What Rust hands over for Reset settings. `plugins` is the "Also turn off plugins" box. */
 export interface StartChoice {
@@ -114,23 +115,12 @@ export async function runStartChoice(deps: StartChoiceDeps | null = tauriDeps())
 
 export function startChoiceNotice(o: StartChoiceOutcome): { text: string; kind: "info" | "warning" } {
   if (o.kind === "backupFailed") {
-    return {
-      text: `Settings were not reset, because their backup could not be written: ${o.error}`,
-      kind: "warning",
-    };
+    return { text: t("startChoice.backupFailed", { error: o.error }), kind: "warning" };
   }
-  const saved = `The old settings are saved in ${o.backup}.`;
-  if (o.plugins === "off") {
-    return {
-      text: `Settings were reset and plugins turned off. ${saved} Turn plugins back on in Preferences, Plugins.`,
-      kind: "info",
-    };
-  }
-  if (o.plugins === "kept") return { text: `Settings were reset. ${saved}`, kind: "info" };
-  return {
-    text: `Settings were reset, but plugins could not be turned off: ${o.plugins.failed}. ${saved}`,
-    kind: "warning",
-  };
+  const backup = o.backup;
+  if (o.plugins === "off") return { text: t("startChoice.pluginsOff", { backup }), kind: "info" };
+  if (o.plugins === "kept") return { text: t("startChoice.reset", { backup }), kind: "info" };
+  return { text: t("startChoice.pluginsFailed", { error: o.plugins.failed, backup }), kind: "warning" };
 }
 
 function tauriDeps(): StartChoiceDeps | null {

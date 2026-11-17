@@ -6,7 +6,8 @@ import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { featureEnglish } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
 import { TIE_BAND_PX, ambiguousCandidates } from "../viewport/edgeTies";
-import { areaFilterLabel, outlineInBox } from "../viewport/areaSelect";
+import { outlineInBox } from "../viewport/areaSelect";
+import { t } from "../i18n";
 import { useBrowserStore } from "../stores/browser";
 import { useRibbonStore } from "../stores/ribbon";
 import { analysisFlags } from "../ui/railActive";
@@ -78,7 +79,7 @@ export function installViewportWiring(e: Engine): void {
     );
     // Tied by rank, so a faint tangent edge beside a sharp one is not a question; touch gets a wider band.
     const choices = ambiguousCandidates(
-      rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.rankPx })),
+      rows.map((r, i) => ({ ...r, label: labels[i] ?? t("viewport.edgeFallback"), screenDist: r.cand.rankPx })),
       hitPx(TIE_BAND_PX),
     );
     if (choices.length < 2) return false;
@@ -142,12 +143,8 @@ export function installViewportWiring(e: Engine): void {
       e.viewport.onSelectionChange?.();
       return;
     }
-    const takes = areaFilterLabel(e.viewport.areaTakes);
-    setPrompt(
-      mode === "window"
-        ? `Taking ${takes} fully inside the box, drag left to take anything it touches · Tab filters`
-        : `Taking ${takes} the box touches, drag right to take only what is fully inside · Tab filters`,
-    );
+    const takes = e.viewport.areaTakes;
+    setPrompt(t(mode === "window" ? "areaSelect.window" : "areaSelect.crossing", { takes }));
   };
 
   // A menu holds targets captured at open time, which a rebuild renumbers, so it closes before a stale click acts.
@@ -258,34 +255,21 @@ export function installViewportWiring(e: Engine): void {
     }
 
     if (e.toolBusy()) return;
-    const plural = (n: number, one: string) => `${n} ${one}${n > 1 ? "s" : ""}`;
     // The list's keys drag no handle and delete nothing there, and the readout says the row's own words.
     if (listPick && (edges.length || faces?.faceIds.length)) {
       setPrompt(null);
       if (faces?.round) askExactRound(faces.selectors[0]!, faces.bodyId, faces.faceIds[0]!);
     } else if (edges.length) {
-      setPrompt(
-        `${plural(edges.length, "edge")} selected, drag the handle to round it off ` +
-          `(out fillets, back past zero chamfers) · Esc to clear`,
-      );
+      setPrompt(t("nudge.edges", { n: edges.length }));
     } else if (regions.length) {
-      setPrompt(
-        `${plural(regions.length, "profile area")} selected, drag the handle to pull it into a solid ` +
-          `(in cuts) · Ctrl-click adds · Esc clears`,
-      );
+      setPrompt(t("nudge.profiles", { n: regions.length }));
     } else if (faces?.round) {
       setPrompt(roundFacePrompt({ radius: faces.round.radius, full: faces.round.full !== false }));
       askExactRound(faces.selectors[0]!, faces.bodyId, faces.faceIds[0]!);
     } else if (faces?.lead) {
-      setPrompt(
-        `${plural(faces.faceIds.length, "face")} selected, drag the handle to resize them as one ` +
-          `if they run smoothly together, or push them · Esc to clear`,
-      );
+      setPrompt(t("nudge.facesLead", { n: faces.faceIds.length }));
     } else if (faces?.faceIds.length) {
-      setPrompt(
-        `${plural(faces.faceIds.length, "face")} selected, drag the handle to push or pull ` +
-          `(out adds, in cuts) · Del removes it and heals · Esc to clear`,
-      );
+      setPrompt(t("nudge.faces", { n: faces.faceIds.length }));
     } else {
       setPrompt(null);
     }

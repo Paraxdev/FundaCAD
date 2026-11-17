@@ -2,7 +2,7 @@
 
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
-import { onLanguageChange } from "../i18n";
+import { onLanguageChange, t } from "../i18n";
 import { onUnitChange } from "../ui/units";
 import { deleteRows, soleSelectedFeature } from "./featureRows";
 import type { RowSelection } from "../ui/rowSelection";
@@ -592,7 +592,7 @@ export function mountUi(e: Engine): void {
   if (!safeMode()) activatePlugins(e);
 
   e.geometry.onStatus((connected) => {
-    if (!connected) e.setStatus("connecting to the geometry engine…", "error");
+    if (!connected) e.setStatus(t("engine.connecting"), "error");
     else
       e.store.rebuildNow().catch((err: unknown) => {
         if (!isSessionEnded(err)) throw err;

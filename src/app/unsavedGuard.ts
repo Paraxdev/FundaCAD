@@ -1,6 +1,7 @@
 import { clearRecovery } from "../io/recovery";
 import { choose } from "../ui/choice";
 import { PRODUCT_NAME } from "./channel";
+import { t } from "../i18n";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
 import { heldEdits, needsSave, saveWork, type SaveEngine } from "./documentActions";
@@ -17,9 +18,9 @@ export function windowTitle(fileName: string, dirty: boolean): string {
 export async function saveFirst(e: SaveEngine, question: string, discardHint: string): Promise<boolean> {
   if (!needsSave(e)) return true;
   const pick = await choose(question, [
-    { value: "save", label: "Save" },
-    { value: "discard", label: "Don't save", hint: discardHint },
-    { value: "cancel", label: "Cancel" },
+    { value: "save", label: t("command.save") },
+    { value: "discard", label: t("unsaved.dontSave"), hint: discardHint },
+    { value: "cancel", label: t("common.cancel") },
   ]);
   if (pick === "discard") {
     e.store.markGivenUp();
@@ -34,8 +35,8 @@ export async function saveFirst(e: SaveEngine, question: string, discardHint: st
 export function beforeUpdate(e: Pick<Engine, "store" | "sketch"> & SaveEngine): BeforeInstall {
   return async () => {
     if (e.sketch.hasUncommittedEdits) return "sketch";
-    const question = `Save changes to ${e.store.fileName} before updating?`;
-    return (await saveFirst(e, question, "restart and lose the changes")) ? "go" : "stop";
+    const question = t("unsaved.beforeUpdate", { name: e.store.fileName });
+    return (await saveFirst(e, question, t("unsaved.beforeUpdateHint"))) ? "go" : "stop";
   };
 }
 
@@ -91,7 +92,7 @@ export function closeRequestHandler(e: SaveEngine): (ev: { preventDefault(): voi
 /** A close with unsaved work: Save, Don't save or Cancel. Don't save gives the work up, so the next start must not
  *  offer its snapshot back. */
 export async function confirmClose(e: SaveEngine, ev: { preventDefault(): void }): Promise<void> {
-  const question = `Save changes to ${e.store.fileName} before closing?`;
-  if (!(await saveFirst(e, question, "close and lose the changes"))) ev.preventDefault();
+  const question = t("unsaved.beforeClose", { name: e.store.fileName });
+  if (!(await saveFirst(e, question, t("unsaved.beforeCloseHint")))) ev.preventDefault();
   else if (needsSave(e)) await clearRecovery(e.store.filePath);
 }

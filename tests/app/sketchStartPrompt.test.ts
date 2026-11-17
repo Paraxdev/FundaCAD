@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { SELF_PROMPTING, SKETCH_PROMPTS } from "../../src/app/actionTables";
+import { SELF_PROMPTING, sketchPrompt } from "../../src/app/actionTables";
 import { installSketchStateBridge } from "../../src/app/sketchStateBridge";
 import { setPrompt } from "../../src/ui/prompt";
 import { usePromptStore } from "../../src/stores/prompt";
@@ -41,7 +41,7 @@ describe("the prompt a sketch tool starts with", () => {
   it.each(["text", "project", "boltCircle", "hexHoles", "honeycomb", "gridHoles"])("is set for %s", (tool) => {
     const { to } = bridge();
     to(tool);
-    expect(usePromptStore().text).toBe(SKETCH_PROMPTS[tool]);
+    expect(usePromptStore().text).toBe(sketchPrompt(tool));
     expect(usePromptStore().text).toMatch(/^Click /);
   });
 
@@ -53,21 +53,21 @@ describe("the prompt a sketch tool starts with", () => {
     to("patternRect");
     expect(usePromptStore().text).toBe("2 picked · click more to add · click where the pattern starts · Esc");
     to("line");
-    expect(usePromptStore().text).toBe(SKETCH_PROMPTS.line);
+    expect(usePromptStore().text).toBe(sketchPrompt("line"));
   });
 
   it("reads the keys prompt of a draw tool when the sketch has one, else the pointer's", () => {
     const { to, keys } = bridge();
     to("rectangle");
-    expect(usePromptStore().text).toBe(SKETCH_PROMPTS.rectangle);
+    expect(usePromptStore().text).toBe(sketchPrompt("rectangle"));
     keys("Type X and Y, or @dx,dy · Enter · Esc");
     expect(usePromptStore().text).toBe("Type X and Y, or @dx,dy · Enter · Esc");
     keys("Type the size · Enter · Esc");
     expect(usePromptStore().text).toBe("Type the size · Enter · Esc");
     keys(null);
-    expect(usePromptStore().text).toBe(SKETCH_PROMPTS.rectangle);
+    expect(usePromptStore().text).toBe(sketchPrompt("rectangle"));
     to("circle");
-    expect(usePromptStore().text).toBe(SKETCH_PROMPTS.circle);
+    expect(usePromptStore().text).toBe(sketchPrompt("circle"));
   });
 
   it("leaves a self-prompting tool to itself even with a keys prompt set", () => {

@@ -67,8 +67,7 @@ export const SAVE_VERIFY_CAP_MS = 3000;
 async function settleForSave(e: SaveEngine): Promise<void> {
   settleHeldEdit(e);
   await e.store.provisionalVerdict(SAVE_VERIFY_CAP_MS);
-  if (anySavableHeld(e))
-    toast("A drag you were holding could not be applied, so the save left it out", { kind: "warning" });
+  if (anySavableHeld(e)) toast(t("document.save.heldLeftOut"), { kind: "warning" });
 }
 
 // Settled once the path is chosen, so a cancelled Save As dialog leaves the drag held and Escape still cancels it.
@@ -83,8 +82,8 @@ export async function saveWorkAs(e: SaveEngine): Promise<void> {
 export async function mayDiscard(e: WorkEngine, question: string): Promise<boolean> {
   if (!hasUnsavedWork(e)) return true;
   const pick = await choose(question, [
-    { value: "discard", label: "Discard", hint: "lose the unsaved changes" },
-    { value: "cancel", label: "Cancel" },
+    { value: "discard", label: t("document.discard.label"), hint: t("document.discard.hint") },
+    { value: "cancel", label: t("common.cancel") },
   ]);
   if (pick !== "discard") return false;
   e.store.markGivenUp();
@@ -96,7 +95,7 @@ export async function openPathGuarded(
   path: string,
 ): Promise<OpenOutcome | "cancelled"> {
   const name = path.split(/[\\/]/).pop() ?? path;
-  if (!(await mayDiscard(e, `Discard unsaved changes and open ${name}?`))) return "cancelled";
+  if (!(await mayDiscard(e, t("document.discard.open", { name })))) return "cancelled";
   return openDocumentAtPath(e.store, path, e.geometry);
 }
 
@@ -189,21 +188,17 @@ export async function importFromHome(
     return true;
   }
   const doc = displayName(e.store.fileName);
-  const what = names.length > 1 ? `${first} and ${names.length - 1} more` : first;
-  const pick = await choose(
-    `Add ${what} to ${doc}, or start a new document with ${names.length > 1 ? "them" : "it"}?`,
-    [
-      { value: "add", label: `Add to ${doc}` },
-      { value: "new", label: "New document" },
-      { value: "cancel", label: "Cancel" },
-    ],
-  );
+  const pick = await choose(t("document.import.ask", { first, more: names.length - 1, doc }), [
+    { value: "add", label: t("document.import.addTo", { doc }) },
+    { value: "new", label: t("document.import.newDocument") },
+    { value: "cancel", label: t("common.cancel") },
+  ]);
   if (pick === "add") {
     closeHome();
     await run();
     return true;
   }
-  if (pick !== "new" || !(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return false;
+  if (pick !== "new" || !(await mayDiscard(e, t("plugins.host.discard")))) return false;
   e.store.newDocument();
   e.viewport.resetCamera(false);
   await importNamed(e, importedName(first), names, run);
@@ -223,7 +218,7 @@ type ExampleEngine = Pick<Engine, "store" | "sketch" | "viewport" | "geometry" |
 export async function newFromTemplate(e: ExampleEngine, id: string): Promise<void> {
   const info = TEMPLATES.find((t) => t.id === id);
   if (!info) return;
-  if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
+  if (!(await mayDiscard(e, t("plugins.host.discard")))) return;
   if ((await openTemplate(e.store, info.name, () => templateText(id))) === "ok") e.frameNextModel();
 }
 
@@ -233,7 +228,7 @@ type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork"
  *  open does, so one still at work on the open document holds it back. */
 function heldBack(e: VersionEngine, path: string): boolean {
   if (e.store.filePath !== path || !e.toolAtWork()) return false;
-  e.setStatus("Finish the sketch or tool first, then try again", "");
+  e.setStatus(t("document.version.finishFirst"), "");
   return true;
 }
 
@@ -248,7 +243,7 @@ async function reach(e: VersionEngine, path: string): Promise<boolean> {
  *  also drops the path, so Save asks where and the original stays as it is. */
 export async function openAtVersion(e: VersionEngine, path: string, id: string, copy: boolean): Promise<boolean> {
   if (heldBack(e, path)) return false;
-  if (copy && e.store.filePath === path && !(await mayDiscard(e, "Discard unsaved changes and open a copy?"))) {
+  if (copy && e.store.filePath === path && !(await mayDiscard(e, t("document.discard.openCopy")))) {
     return false;
   }
   if (!(await reach(e, path))) return false;
@@ -275,18 +270,18 @@ const speak = (text: string) => announce(text, "polite", { key: "history" });
 const ownHistoryOpen = (e: Engine) => e.sketch.active || usePanelsStore().stress !== null;
 
 const UNDO_REFUSED = {
-  under: "Not undone, later steps came after it. Undo step by step from the Edit menu to reach it.",
-  undone: "Already undone, Redo puts it back.",
-  held: "Not undone yet, wait for the import to finish.",
-  gone: "Not undone, that step is no longer in the history.",
-};
+  under: "history.refused.under",
+  undone: "history.refused.undone",
+  held: "history.refused.held",
+  gone: "history.refused.gone",
+} as const;
 
 export function createDocumentActions(
   e: Engine,
 ): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo" | "undoIfLatest"> {
   const actions = {
     async newDocument() {
-      if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
+      if (!(await mayDiscard(e, t("plugins.host.discard")))) return;
       e.store.newDocument();
       e.viewport.resetCamera(false);
     },
@@ -295,7 +290,7 @@ export function createDocumentActions(
       await openDocument(
         e.store,
         e.geometry,
-        () => mayDiscard(e, "Discard unsaved changes and open another document?"),
+        () => mayDiscard(e, t("document.discard.openAnother")),
         (names, run) => placeImport(e, names, run),
       );
     },
@@ -343,11 +338,11 @@ export function createDocumentActions(
     },
     // A toast button undoes only the step it was made for, never a later one, and never a sketch edit or a Stress step.
     undoIfLatest(mark: number) {
-      if (e.sketch.active) return void toast("Finish the sketch first, then undo.");
+      if (e.sketch.active) return void toast(t("history.finishSketchFirst"));
       if (usePanelsStore().stress) return void toast(t("history.closeStressFirst"));
       const place = e.tools.move.pending ? "under" : e.store.markPlace(mark);
       if (place === "top") return actions.doUndo();
-      toast(UNDO_REFUSED[place ?? "gone"]);
+      toast(t(UNDO_REFUSED[place ?? "gone"]));
     },
   };
   return actions;

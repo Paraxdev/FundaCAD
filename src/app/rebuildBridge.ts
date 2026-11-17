@@ -9,6 +9,7 @@ import { importedBodyColors, importedFacePaint } from "../document/faceColors";
 import { faceMaterialFinishes, faceMaterialPaint, resolveFaceMaterials } from "../document/faceMaterials";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
+import { t } from "../i18n";
 import { markDrawn } from "../diagnostics/rebuildTiming";
 
 /** The one place a build result becomes pixels. */
@@ -154,10 +155,10 @@ export function installRebuildBridge(e: Engine): void {
           const amb = repairableDiagFor(s.result?.diagnostics, id);
           const action = amb?.at
             ? {
-                label: amb.kind === "edge" ? "Re-pick edge" : "Re-pick face",
+                label: t("rebuild.repick", { kind: amb.kind === "edge" ? "edge" : "face" }),
                 onClick: () => e.starters.repickReference(id, amb.at!, amb.kind),
               }
-            : { label: "Show", onClick: () => e.selectFeature(id) };
+            : { label: t("rebuild.show"), onClick: () => e.selectFeature(id) };
           const detail = featureFailureReport({
             label,
             message: err.message,
@@ -182,12 +183,7 @@ export function installRebuildBridge(e: Engine): void {
         prevHiddenFaces = hidden;
         // A rolled back timeline hides later faces on purpose, so it says nothing.
         if (lost && e.store.rollbackIndex >= e.store.document.features.length) {
-          toast(
-            lost === 1
-              ? "A face material lost its face in this rebuild, it shows again if the face comes back"
-              : `${lost} face materials lost their faces in this rebuild, they show again if the faces come back`,
-            { kind: "warning" },
-          );
+          toast(t("rebuild.faceMaterialsLost", { n: lost }), { kind: "warning" });
         }
       }
     }
