@@ -1,9 +1,7 @@
 [
   { "path": "plugins/FundaCAD.ExtraParameters/ParametersSection.vue", "kind": "template", "count": 1, "reason": "fx, the math mark for a calculated value, not a word" },
   { "path": "plugins/FundaCAD.ExtraParameters/main.ts", "kind": "script", "count": 1, "reason": "refName of the Edit menu row, the English name refs and the harness find it by" },
-  { "path": "plugins/FundaCAD.Gamepad/GamepadSection.vue", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "plugins/FundaCAD.Gamepad/GamepadSection.vue", "kind": "template", "count": 6, "reason": "raw text before localisation, a codemod lane converts it" },
-  { "path": "plugins/FundaCAD.Gamepad/gamepad.ts", "kind": "script", "count": 25, "reason": "raw text before localisation, a codemod lane converts it" },
+  { "path": "plugins/FundaCAD.Gamepad/gamepad.ts", "kind": "script", "count": 4, "reason": "device button and key names printed on the hardware or the keyboard (View / Back, Menu / Start, Delete), the px/s unit" },
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "script", "count": 2, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "plugins/FundaCAD.MultiColor/PaletteSection.vue", "kind": "template", "count": 9, "reason": "raw text before localisation, a codemod lane converts it" },
   { "path": "plugins/FundaCAD.MultiColor/palette.ts", "kind": "script", "count": 3, "reason": "raw text before localisation, a codemod lane converts it" },

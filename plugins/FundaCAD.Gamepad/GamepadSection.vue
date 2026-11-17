@@ -11,6 +11,7 @@ import {
   type GamepadConfig,
 } from "./gamepad";
 import { padState } from "./state";
+import { t } from "./lines";
 import { allCommands } from "fundacad";
 import { FieldRow, Select } from "fundacad/ui";
 
@@ -43,10 +44,13 @@ const groups = computed(() => {
 // a select at 60% of a width that follows each row's own label.
 const S = { select: { width: "240px", maxWidth: "100%" } } as const;
 
+// The device name sits in bold between the two halves of one translated sentence.
+const reading = computed(() => t("pad.reading", { name: "" }).split("") as [string, string]);
+
 const options = computed(() => [
-  { value: "", label: "Nothing" },
-  { value: CURSOR, label: "Cursor on / off" },
-  ...KEY_CHOICES.map((k) => ({ value: k.value, label: k.label, hint: "Keys" })),
+  { value: "", label: t("option.nothing") },
+  { value: CURSOR, label: t("option.cursor") },
+  ...KEY_CHOICES.map((k) => ({ value: k.value, label: k.label, hint: t("option.keys") })),
   ...groups.value.flatMap(([group, cmds]) => cmds.map((c) => ({ value: c.id, label: c.label, hint: group }))),
 ]);
 </script>
@@ -55,29 +59,23 @@ const options = computed(() => [
   <div class="prefs-grid">
     <div class="pref-card wide">
       <div class="pref-head">
-        <span class="pref-title">Controller</span>
+        <span class="pref-title">{{ t("pad.controller") }}</span>
       </div>
       <p class="pref-hint">
         <template v-if="padState.name"
-          >Reading <b>{{ padState.name }}</b
-          >.</template
+          >{{ reading[0] }}<b>{{ padState.name }}</b
+          >{{ reading[1] }}</template
         >
-        <template v-else>
-          No controller seen yet. Plug one in and press any button, the webview only reports a pad after its first
-          press.
-        </template>
-        Left stick pans, right stick rotates, the triggers zoom. On a Steam Deck, start FundaCAD from Steam so the Deck
-        shows up as a controller; its trackpads keep working as a mouse.
+        <template v-else>{{ t("pad.none") }}</template>
+        {{ t("pad.usage") }}
       </p>
     </div>
 
     <div class="pref-card wide" role="group" aria-labelledby="gp-buttons-title">
       <div class="pref-head">
-        <span id="gp-buttons-title" class="pref-title">Buttons</span>
+        <span id="gp-buttons-title" class="pref-title">{{ t("pad.buttons") }}</span>
       </div>
-      <p class="pref-hint">
-        With the cursor on, the left stick moves it and A clicks, so faces can be picked without a mouse.
-      </p>
+      <p class="pref-hint">{{ t("pad.cursorHint") }}</p>
       <FieldRow v-for="i in BINDABLE" :key="i" v-slot="{ id }" :for="`gp-btn-${i}`" :label="BUTTON_LABELS[i] ?? ''">
         <Select
           :id="id"
