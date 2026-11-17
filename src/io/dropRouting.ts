@@ -1,5 +1,7 @@
+import { t } from "../i18n";
 import { isDocumentExt } from "./documentExt";
 import { IMPORT_EXTS } from "./files";
+import { nameList } from "./nameList";
 
 export type DropAction = "open" | "import" | "environment" | "reject";
 
@@ -50,13 +52,13 @@ export function planDrop<T>(items: readonly T[], nameOf: (item: T) => string): D
 /** One sentence about what a drop left out, or null when it took everything. */
 export function describeDropLeftovers<T>(plan: DropPlan<T>, nameOf: (item: T) => string): string | null {
   const parts: string[] = [];
-  const names = (list: T[]) => list.map((i) => baseName(nameOf(i))).join(", ");
+  const names = (list: T[]) => nameList(list.map((i) => baseName(nameOf(i))));
   if (plan.rejected.length) {
     const nothing = plan.open === null && plan.imports.length === 0 && plan.environments.length === 0;
-    parts.push(`${nothing ? "Nothing was imported" : "Not imported"}, FundaCAD cannot read ${names(plan.rejected)}.`);
+    parts.push(t("files.drop.rejected", { nothing: nothing ? "yes" : "no", names: names(plan.rejected) }));
   }
   if (plan.skipped.length) {
-    parts.push(`Only one document opens at a time, so ${names(plan.skipped)} stayed closed.`);
+    parts.push(t("files.drop.skipped", { n: plan.skipped.length, names: names(plan.skipped) }));
   }
   return parts.length ? parts.join(" ") : null;
 }

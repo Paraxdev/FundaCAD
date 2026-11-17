@@ -1,5 +1,6 @@
 // What the Export dialog asks for, its presets, and the choices it remembers.
 
+import { t } from "../i18n";
 import type { ExportFormat, PlaneDef } from "../types";
 import type { TreeGroup } from "../ui/browserTree";
 
@@ -80,12 +81,37 @@ export const FORMATS: { value: ExportFormat; label: string; ext: string; exts: s
   { value: "svg", label: "SVG (*.svg)", ext: "svg", exts: ["svg"] },
 ];
 
-export const UNITS: { value: ExportUnit; label: string }[] = [
-  { value: "mm", label: "Millimeter" },
-  { value: "cm", label: "Centimeter" },
-  { value: "m", label: "Meter" },
-  { value: "in", label: "Inch" },
-  { value: "ft", label: "Foot" },
+export const UNITS: { readonly value: ExportUnit; readonly label: string }[] = [
+  {
+    value: "mm",
+    get label() {
+      return t("export.unitName.mm");
+    },
+  },
+  {
+    value: "cm",
+    get label() {
+      return t("export.unitName.cm");
+    },
+  },
+  {
+    value: "m",
+    get label() {
+      return t("export.unitName.m");
+    },
+  },
+  {
+    value: "in",
+    get label() {
+      return t("export.unitName.in");
+    },
+  },
+  {
+    value: "ft",
+    get label() {
+      return t("export.unitName.ft");
+    },
+  },
 ];
 
 export const REFINEMENTS: Record<Exclude<Refinement, "custom">, Faceting> = {

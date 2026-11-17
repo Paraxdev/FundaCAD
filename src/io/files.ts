@@ -2,6 +2,9 @@
 // Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
+import { decimalMark, t } from "../i18n";
+import { nameList } from "./nameList";
+import { andWords } from "../sketch/sketchNames";
 import { pickFile } from "../components/ui/dom";
 import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
 import { asFeature } from "../types";
@@ -101,7 +104,7 @@ function savedAs(store: DocumentStore, path: string, edits: number, swaps: numbe
   if (store.untitledSwapCount !== swaps) return;
   const whole = store.editCount === edits;
   store.markSaved(path, whole);
-  announce(`Saved ${fileName(path)}`);
+  announce(t("files.saved", { name: fileName(path) }));
   noteRecent(path);
   if (whole) void clearRecovery(path);
 }
@@ -120,7 +123,7 @@ export async function saveDocument(store: DocumentStore, beforeWrite?: () => voi
     const swaps = store.untitledSwapCount;
     const err = await writeContainer(store, path);
     if (err) {
-      await reportError(`Couldn't save ${path}: ${err}`);
+      await reportError(t("files.saveFailed", { path, error: err }));
       return;
     }
     // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
@@ -139,8 +142,8 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
     const { save } = await nativeDialog();
     const path = await save({
       filters: [
-        { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
-        { name: "FundaCAD Binary Document (smaller)", extensions: [BINARY_DOC_EXT] },
+        { name: t("files.filter.documentJson"), extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
+        { name: t("files.filter.documentBinary"), extensions: [BINARY_DOC_EXT] },
       ],
       defaultPath: suggestedSavePath(store.filePath && savableName(store.filePath), savableName(store.fileName)),
     });
@@ -152,7 +155,7 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
       const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
-        await reportError(`Couldn't save ${path}: ${err}`);
+        await reportError(t("files.saveFailed", { path, error: err }));
         return;
       }
       if (!session.alive) return;
@@ -174,7 +177,7 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
     // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
     if (store.untitledSwapCount === swaps) {
       store.markSaved(name);
-      announce(`Saved ${name}`);
+      announce(t("files.saved", { name }));
     }
   }
 }
@@ -207,9 +210,9 @@ async function browserDocumentText(store: DocumentStore): Promise<{ text: string
       const imp = asFeature(f, "import");
       if (imp?.geom && missing.includes(imp.geom)) names.add(imp.name || imp.source || imp.id);
     }
-    if (names.size < missing.length) names.add("an import in an earlier version");
+    if (names.size < missing.length) names.add(t("files.browserSave.earlierImport"));
     return {
-      refused: `Couldn't save: the geometry of ${[...names].join(", ")} is not in the engine, so the file would open without it. Import it again, then save.`,
+      refused: t("files.browserSave.missingGeometry", { names: nameList([...names]) }),
     };
   }
   for (const h of optionalHashes) {
@@ -219,7 +222,7 @@ async function browserDocumentText(store: DocumentStore): Promise<{ text: string
   }
   if (total > MAX_BROWSER_GEOMETRY_BYTES) {
     return {
-      refused: `Couldn't save: its imported geometry is ${Math.round(total / 1048576)} MB, more than the browser can put in one file. Save it in the desktop app.`,
+      refused: t("files.browserSave.tooBig", { mb: Math.round(total / 1048576) }),
     };
   }
   const geometry: Record<string, string> = {};
@@ -239,7 +242,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
   }
   const embedded = raw && typeof raw === "object" ? (raw as { geometry?: unknown }).geometry : undefined;
   if (embedded === undefined) return null;
-  const damaged = (detail: string) => new UnreadableDocumentError("its embedded geometry is damaged", detail);
+  const damaged = (detail: string) => new UnreadableDocumentError(t("files.unreadable.geometryDamaged"), detail);
   if (!embedded || typeof embedded !== "object" || Array.isArray(embedded)) throw damaged("geometry is not an object");
   const blobs: Uint8Array[] = [];
   for (const [hash, data] of Object.entries(embedded)) {
@@ -252,7 +255,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
     }
     if (blake2b128Hex(bytes) !== hash) {
       throw new UnreadableDocumentError(
-        "its geometry does not match its hash, so it was changed or damaged",
+        t("files.unreadable.geometryHash"),
         `geometry ${hash} does not match its bytes`,
       );
     }
@@ -260,7 +263,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
   }
   if (!blobs.length) return null;
   const backend = store.backend;
-  if (!backend.blobPut) return "this engine has no blob store";
+  if (!backend.blobPut) return t("files.noBlobStore");
   try {
     for (const b of blobs) await backend.blobPut(b);
   } catch (e) {
@@ -299,11 +302,14 @@ export async function openDocument(
         // body), routed by extension below, so users can just "open" an STL.
         filters: [
           {
-            name: "All supported",
+            name: t("files.filter.allSupported"),
             extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
           },
-          { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
-          { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
+          {
+            name: t("files.filter.document"),
+            extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]),
+          },
+          { name: t("files.filter.meshCad"), extensions: dialogExts(IMPORT_EXTS) },
         ],
       }),
     );
@@ -340,12 +346,9 @@ export async function openDocumentText(
   }
   // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
-  if (!unpublished) announce(`Opened ${name}`);
+  if (!unpublished) announce(t("files.opened", { name }));
   await warnAboutOpen(store);
-  if (unpublished)
-    await reportError(
-      `Opened ${name}, but its embedded geometry could not be handed to the engine, so its imports will not build: ${unpublished}.`,
-    );
+  if (unpublished) await reportError(t("files.openedUnpublished", { name, reason: unpublished }));
   return "ok";
 }
 
@@ -374,7 +377,7 @@ export async function openDocumentBytes(
       dropped: r.droppedSections ?? 0,
     };
   } catch (e) {
-    await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
+    await reportError(t("files.openFailed", { name: file.name, error: errMsg(e) }));
     return settle(store, ticket, "unreadable");
   }
   return settle(store, ticket, await finishOpen(store, file.name, opened, geometry, null, ticket));
@@ -422,19 +425,20 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
     if (ticket.op.superseded) return false;
     if (!ticket.op.session.alive) {
       const { toast } = await import("../ui/toast");
-      toast(`${name} was not opened, another document was started while it was read.`, { kind: "info" });
+      toast(t("files.startedWhileRead", { name }), { kind: "info" });
       return false;
     }
     if (store.userEditCount === ticket.edits || !store.dirty) return true;
     ticket.edits = store.userEditCount;
     const { choose } = await import("../ui/choice");
-    const pick = await choose(
-      `${store.fileName} changed while ${name} was read. Discard those changes and open ${name}?`,
-      [
-        { value: "discard", label: "Discard", hint: "lose the changes" },
-        { value: "cancel", label: "Cancel", hint: `keep them, ${name} is not opened` },
-      ],
-    );
+    const pick = await choose(t("files.changedWhileRead", { doc: store.fileName, name }), [
+      {
+        value: "discard",
+        label: t("files.changedWhileRead.discard"),
+        hint: t("files.changedWhileRead.discardHint"),
+      },
+      { value: "cancel", label: t("common.cancel"), hint: t("files.changedWhileRead.keepHint", { name }) },
+    ]);
     if (pick !== "discard") return false;
     ticket.given = store.markGivenUp();
   }
@@ -518,7 +522,7 @@ export async function openDocumentAtPath(
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
     // manifest), so pass them through rather than wrapping them in ours.
-    await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
+    await reportError(t("files.openFailed", { name: base, error: errMsg(e) }));
     return settle(store, ticket, "unreadable");
   }
   return settle(store, ticket, await finishOpen(store, base, opened, geometry, path, ticket));
@@ -560,17 +564,14 @@ async function finishOpen(
     store.load(text);
   } catch (e) {
     if (looksLikeContainer(text)) {
-      await reportError(
-        `${base} was saved by a newer version of FundaCAD, which stores geometry in a ` +
-          `packaged document this build can't read. Update FundaCAD to open it.`,
-      );
+      await reportError(t("files.newerFormat", { name: base }));
       return "newerFormat";
     }
     await reportUnreadable(e);
     return "unreadable";
   }
   store.carriedSections = carried;
-  announce(`Opened ${base}`);
+  announce(t("files.opened", { name: base }));
   // freshly opened == clean
   if (path) {
     store.markSaved(path);
@@ -582,19 +583,14 @@ async function finishOpen(
   if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
   if (repaired) {
     const { toast } = await import("../ui/toast");
-    toast(`${base} was damaged on disk and its error correction repaired it. Save to write a clean copy.`, {
+    toast(t("files.repaired", { name: base }), {
       kind: "warning",
       timeout: 12000,
     });
   }
   if (dropped > 0) {
     const { toast } = await import("../ui/toast");
-    const [sections, them] = dropped === 1 ? ["1 section", "it"] : [`${dropped} sections`, "them"];
-    toast(
-      `${base} holds ${sections} from a newer version of FundaCAD that this version could not keep. ` +
-        `Saving over the file leaves ${them} out, so use Save As to keep the original whole.`,
-      { kind: "warning", timeout: 12000 },
-    );
+    toast(t("files.droppedSections", { name: base, n: dropped }), { kind: "warning", timeout: 12000 });
   }
   return "ok";
 }
@@ -615,7 +611,9 @@ export function flatSourceOf(
   const face = viewport.selectedFaceSketchPlane();
   if (!face) return null;
   const body = (face.anchor.selector as { body?: string }).body;
-  return { face: face.anchor.selector, plane: face.plane, label: `${(body && store.bodyName(body)) || "part"} face` };
+  const named = body && store.bodyName(body);
+  const label = named ? t("export.flat.face", { body: named }) : t("export.flat.partFace");
+  return { face: face.anchor.selector, plane: face.plane, label };
 }
 
 export function sketchFlatSource(store: DocumentStore, sketchId: string): FlatSource {
@@ -670,9 +668,7 @@ export async function exportModel(
   if (!isTauri()) {
     // The engine writes exports straight to a path, which a plain browser cannot give it, so refuse rather than
     // quietly produce nothing.
-    await reportError(
-      "Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.",
-    );
+    await reportError(t("export.needsDesktop"));
     return;
   }
   const opts: {
@@ -716,7 +712,7 @@ export async function exportModel(
   // replays the whole history, and onStarted lets Cancel target this export rather than a later rebuild.
   const file = fileName(path);
   const res = await store
-    .runBusy(`Exporting ${file}`, (onStarted) =>
+    .runBusy(t("export.busy", { name: file }), (onStarted) =>
       geometry.export(
         store.document,
         fmt,
@@ -731,31 +727,29 @@ export async function exportModel(
       ),
     )
     .catch((e: unknown) => {
-      if (isSessionEnded(e)) return { ok: false as const, cancelled: true, message: "export cancelled" };
+      if (isSessionEnded(e)) return { ok: false as const, cancelled: true, message: t("export.cancelled") };
       throw e;
     });
   if (!session.alive && !res.ok) {
     const { toast } = await import("../ui/toast");
-    toast(`${file} was not written, its document was closed during the export.`, { kind: "warning" });
+    toast(t("export.closedDuring", { name: file }), { kind: "warning" });
     return;
   }
   if (!res.ok) {
     // The user stopped it, so say nothing rather than "Export failed: cancelled".
     if (res.cancelled) return;
-    await reportError(`Export failed: ${res.message ?? "unknown error"}`);
+    await reportError(t("export.failed", { error: res.message ?? t("export.unknownError") }));
     return;
   }
   // List every written file and name features missing from the export, since one failed feature no longer blocks it.
   const written = res.paths?.length ? res.paths : res.path ? [res.path] : [];
   const lines = [...written];
   for (const w of res.warnings ?? []) {
-    lines.push(`Warning: ${w.feature_id ?? "feature"} failed, its result is NOT in the export: ${w.message}`);
+    lines.push(t("export.warning", { feature: w.feature_id ?? t("export.warningFeature"), error: w.message }));
   }
   if (lines.length) {
     const { listModal } = await import("../ui/choice");
-    const title = res.warnings?.length
-      ? `Exported ${written.length} file${written.length === 1 ? "" : "s"}, with warnings`
-      : `Exported ${written.length} file${written.length === 1 ? "" : "s"}`;
+    const title = t(res.warnings?.length ? "export.doneWarnings" : "export.done", { n: written.length });
     announce(title);
     await listModal(title, lines);
   }
@@ -811,7 +805,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   if (!isTauri()) {
     // Only a drop reaches the engine's bytes form of import (importFileBytes),
     // this picker has no browser file input behind it.
-    await reportError("Import needs the desktop app: a browser tab has no filesystem path to give the engine to read.");
+    await reportError(t("import.needsDesktop"));
     return;
   }
   const session = store.session;
@@ -821,7 +815,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
     const path = await open({
       multiple: false,
       filters: [
-        { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
+        { name: t("files.filter.allSupported"), extensions: dialogExts(IMPORT_EXTS) },
         { name: "STL", extensions: dialogExts(["stl"]) },
         { name: "3MF", extensions: dialogExts(["3mf"]) },
         { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
@@ -830,9 +824,9 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
         { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
         { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
         { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
-        { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
+        { name: t("files.filter.ifc"), extensions: dialogExts(["ifc"]) },
         { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
-        { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
+        { name: t("files.filter.svg"), extensions: dialogExts(["svg"]) },
         { name: "OBJ", extensions: dialogExts(["obj"]) },
         { name: "PLY", extensions: dialogExts(["ply"]) },
         { name: "OFF", extensions: dialogExts(["off"]) },
@@ -841,7 +835,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
         { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
         { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
         { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
-        { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
+        { name: t("files.filter.old3ds"), extensions: dialogExts(["3ds"]) },
       ],
     });
     if (typeof path !== "string" || !session.alive) return;
@@ -865,11 +859,9 @@ const SLOW_BODY_LIMIT = 3000;
  *  not mistaken for a broken app; separate so the thresholds test without a viewport. */
 export function describeImportCapability(bodies: number): string | null {
   if (!Number.isFinite(bodies) || bodies <= SMOOTH_BODY_LIMIT) return null;
-  const n = bodies.toLocaleString();
-  if (bodies <= SLOW_BODY_LIMIT) {
-    return `Imported ${n} bodies. The 3D view is smooth to about ${SMOOTH_BODY_LIMIT.toLocaleString()} bodies, so orbiting may lag a little. Everything still works.`;
-  }
-  return `Imported ${n} bodies. Expect the 3D view to be slow: measured 27-37 fps at ${SLOW_BODY_LIMIT.toLocaleString()} bodies against 60 at ${SMOOTH_BODY_LIMIT.toLocaleString()}. Modelling, export and printing are unaffected.`;
+  const count = (n: number) => (decimalMark() === "." ? n.toLocaleString("en-US") : String(n));
+  const args = { count: count(bodies), smooth: count(SMOOTH_BODY_LIMIT), slow: count(SLOW_BODY_LIMIT) };
+  return t(bodies <= SLOW_BODY_LIMIT ? "import.manyBodies.smooth" : "import.manyBodies.slow", args);
 }
 
 /** Bodies an import feature will produce: one per assembly leaf, or a single
@@ -911,12 +903,16 @@ export async function importFileBytes(
   const fmt = extToImportFormat(file.name);
   const importBytes = geometry.importBytes?.bind(geometry);
   if (!importBytes) {
-    await reportError(`Couldn't import ${file.name}: this geometry backend reads files by path only.`);
+    await reportError(t("import.byPathOnly", { name: file.name }));
     return;
   }
   if (file.size > MAX_DROPPED_IMPORT_BYTES) {
     await reportError(
-      `Couldn't import ${file.name}: it is ${Math.round(file.size / 1048576)} MB, a dropped file can be 90 MB at most here. Use File > Import in the desktop app.`,
+      t("import.tooBig", {
+        name: file.name,
+        mb: Math.round(file.size / 1048576),
+        max: MAX_DROPPED_IMPORT_BYTES / 1048576,
+      }),
     );
     return;
   }
@@ -976,7 +972,7 @@ async function importNow(
       unit = picked;
     }
     // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
-    res = await store.runBusy(`Importing ${fileName(path)}`, (onStarted) => read(onStarted, unit), {
+    res = await store.runBusy(t("import.busy", { name: fileName(path) }), (onStarted) => read(onStarted, unit), {
       holdHistory: true,
     });
   } catch (e) {
@@ -996,7 +992,8 @@ async function importNow(
       lastCancelledImport = opts.retryable === false ? null : path;
       return;
     }
-    await reportError(`Couldn't import ${path.split(/[\\/]/).pop()}: ${res.message ?? "unreadable file"}`);
+    const name = path.split(/[\\/]/).pop() ?? path;
+    await reportError(t("import.failed", { name, error: res.message ?? t("import.unreadableFile") }));
     return;
   }
   lastCancelledImport = null;
@@ -1047,13 +1044,8 @@ type ImportEnd = "dropped" | undefined;
 /** Says imports were left out because another document was opened before they landed. */
 export async function importDropped(names: readonly string[]) {
   if (!names.length) return;
-  const many = names.length > 1;
-  const list = many ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
   const { toast } = await import("../ui/toast");
-  const were = many ? "they were" : "it was";
-  toast(`${list} ${many ? "were" : "was"} not imported, another document was opened while ${were} read.`, {
-    kind: "warning",
-  });
+  toast(t("import.dropped", { n: names.length, names: andWords(names, true) }), { kind: "warning" });
 }
 
 /** Runs a batch of imports in turn and stops at the first document opened meanwhile, as the rest belong to the
@@ -1104,14 +1096,9 @@ async function cancelledImport(
   const undone = store.undoIfTop((before) => !has(before) && has(store.document));
   if (undone && untouched) store.markClean();
   if (undone) recolorOnRedo(store, imported, res);
-  const name = importSource(imported)?.split(/[\\/]/).pop() || "the file";
+  const name = importSource(imported)?.split(/[\\/]/).pop() || t("import.theFile");
   const { toast } = await import("../ui/toast");
-  toast(
-    undone
-      ? `Import of ${name} cancelled, nothing was added. Redo brings it back.`
-      : "Rebuild cancelled, the model is not built. Compute All builds it.",
-    { kind: "info" },
-  );
+  toast(undone ? t("import.cancelled", { name }) : t("import.rebuildCancelled"), { kind: "info" });
   return true;
 }
 
@@ -1230,8 +1217,8 @@ export async function adoptImportedColors(
 /** A document load() refused, in words for people. The technical reason goes
  *  with the notice's log entry rather than into the sentence. */
 async function reportUnreadable(e: unknown) {
-  const reason = e instanceof UnreadableDocumentError ? e.reason : "part of it could not be read";
-  await reportError(`This file is not a FundaCAD document, or it is damaged: ${reason}.`, errMsg(e));
+  const reason = e instanceof UnreadableDocumentError ? e.reason : t("files.unreadable.partUnread");
+  await reportError(t("files.unreadable", { reason }), errMsg(e));
 }
 
 /** Surface an error: a native dialog in the app, the title bar error notice otherwise. Exported so capabilities
@@ -1292,14 +1279,14 @@ export async function exportMaterialLibrary(store: DocumentStore) {
   }
   const { save } = await nativeDialog();
   const path = await save({
-    filters: [{ name: "Material library", extensions: ["json"] }],
+    filters: [{ name: t("files.filter.materials"), extensions: ["json"] }],
     defaultPath: name,
   });
   if (!path) return;
   try {
     await (await import("@tauri-apps/plugin-fs")).writeTextFile(path, text);
   } catch (e) {
-    await reportError(`Couldn't write ${path}: ${errMsg(e)}`);
+    await reportError(t("files.writeFailed", { path, error: errMsg(e) }));
   }
 }
 
@@ -1313,13 +1300,13 @@ export async function importMaterialLibrary(
     const { open } = await nativeDialog();
     const path = await open({
       multiple: false,
-      filters: [{ name: "Material library", extensions: ["json"] }],
+      filters: [{ name: t("files.filter.materials"), extensions: ["json"] }],
     });
     if (typeof path !== "string") return null;
     try {
       text = await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
     } catch (e) {
-      await reportError(`Couldn't read ${path}: ${errMsg(e)}`);
+      await reportError(t("files.readFailed", { path, error: errMsg(e) }));
       return null;
     }
   } else {
@@ -1328,7 +1315,7 @@ export async function importMaterialLibrary(
   if (text === null) return null;
   const { materials, problem } = parseLibrary(text);
   if (!materials.length) {
-    return { added: 0, updated: 0, problem: problem ?? "there were no materials in it" };
+    return { added: 0, updated: 0, problem: problem ?? t("files.materials.none") };
   }
   return { ...store.importMaterials(materials), problem };
 }
@@ -1351,7 +1338,7 @@ export async function saveTextFile(
     await (await import("@tauri-apps/plugin-fs")).writeTextFile(path, text);
     return true;
   } catch (e) {
-    await reportError(`Couldn't write ${path}: ${errMsg(e)}`);
+    await reportError(t("files.writeFailed", { path, error: errMsg(e) }));
     return false;
   }
 }
@@ -1365,7 +1352,7 @@ export async function openTextFile(filter: { name: string; extensions: string[] 
   try {
     return await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
   } catch (e) {
-    await reportError(`Couldn't read ${path}: ${errMsg(e)}`);
+    await reportError(t("files.readFailed", { path, error: errMsg(e) }));
     return null;
   }
 }
@@ -1375,7 +1362,7 @@ export async function openTextFile(filter: { name: string; extensions: string[] 
 export async function saveRenderedImage(dataUrl: string, suggested: string): Promise<string | null> {
   const comma = dataUrl.indexOf(",");
   if (!dataUrl.startsWith("data:image/png;base64,") || comma < 0) {
-    await reportError("The render came back empty.");
+    await reportError(t("files.renderEmpty"));
     return null;
   }
   const b64 = dataUrl.slice(comma + 1);
@@ -1388,7 +1375,7 @@ export async function saveRenderedImage(dataUrl: string, suggested: string): Pro
   }
   const { save } = await nativeDialog();
   const path = await save({
-    filters: [{ name: "PNG image", extensions: ["png"] }],
+    filters: [{ name: t("files.filter.png"), extensions: ["png"] }],
     defaultPath: suggested,
   });
   if (!path) return null;
@@ -1399,7 +1386,7 @@ export async function saveRenderedImage(dataUrl: string, suggested: string): Pro
   try {
     await (await import("@tauri-apps/plugin-fs")).writeFile(path, bytes);
   } catch (e) {
-    await reportError(`Couldn't write ${path}: ${errMsg(e)}`);
+    await reportError(t("files.writeFailed", { path, error: errMsg(e) }));
     return null;
   }
   return path;
