@@ -433,6 +433,20 @@ describe("SketchDimLayer", () => {
     expect(labels()[0]!.querySelector("input")).toBeNull();
   });
 
+  it("keeps the English line it is refused with for the console and shows it in German", async () => {
+    await setLanguage("de");
+    try {
+      const input = await openEditor({ commitExpr: () => "must evaluate to a positive value" });
+      input.value = "width - 50";
+      input.dispatchEvent(new Event("input"));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      await nextTick();
+      expect(labels()[0]!.querySelector("input")!.title).toBe("muss einen positiven Wert ergeben");
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
   it("focuses and selects the value it opens, with no tooltip of its own", async () => {
     const input = await openEditor();
     await nextTick();

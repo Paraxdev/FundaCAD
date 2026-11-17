@@ -141,7 +141,7 @@ import { announce } from "../ui/announce";
 import { constraintRows } from "./relations";
 import { constraintDimName, dimKey, entityDimName, entityLabeller } from "./sketchNames";
 import { toast } from "../ui/toast";
-import { t } from "../i18n";
+import { t, tEnglish } from "../i18n";
 import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
@@ -1493,7 +1493,7 @@ export class SketchMode {
         onDelete: () => this.deleteConstraint(d.cIndex),
         commitExpr: (raw: string) => {
           const c = this.constraints[d.cIndex];
-          if (!c || !isDimConstraint(c)) return "not editable";
+          if (!c || !isDimConstraint(c)) return tEnglish("field.problem.notEditable");
           if (!c.id) c.id = newConstraintId();
           return this.commitExprInput(`c:${c.id}`, d.kind === "angle" ? "angle" : "length", raw, (v) => {
             this.writeDimValue(c, v);
@@ -1616,17 +1616,17 @@ export class SketchMode {
   ): { value: number; expr: string | null; name?: string } | { error: string } {
     if (isPlainNumber(raw)) {
       const value = parseField(raw, kind);
-      if (value == null || (kind !== "angle" && !(value > 0))) return { error: "invalid value" };
+      if (value == null || (kind !== "angle" && !(value > 0))) return { error: tEnglish("field.problem.invalidValue") };
       return { value, expr: null };
     }
-    if (!this.store) return { error: "no document" };
+    if (!this.store) return { error: tEnglish("field.problem.noDocument") };
     const bound = key ? (this.docBinding(key)?.name ?? null) : null;
     const pending = key ? (this.pendingBindings.get(key)?.name ?? null) : null;
     const refused = typedExprProblem(raw);
     if (refused) return { error: refused };
     const c = this.store.classifyTargetExpr(bound, pending, storedExpr(raw), kind);
     if (!c.ok) return { error: c.error };
-    if (kind !== "angle" && !(c.value > 0)) return { error: "must evaluate to a positive value" };
+    if (kind !== "angle" && !(c.value > 0)) return { error: tEnglish("field.problem.notPositive") };
     return { value: c.value, expr: c.expr, ...(c.name ? { name: c.name } : {}) };
   }
 
@@ -1655,11 +1655,11 @@ export class SketchMode {
    *  constraint; rigid fields bind as entity targets. Derived dims take numbers only. */
   private commitEntityDimExpr(index: number, field: DimField, raw: string): string | null {
     const e = this.entities[index];
-    if (!e) return "no entity";
+    if (!e) return tEnglish("field.problem.noEntity");
     const driving = drivingDimFor(e, field, 0);
     if (driving) return this.commitConvertedDim(e, field, driving, raw);
     const bindable = RIGID_ENTITY_NUM_FIELDS[e.type]?.some(([f]) => f === field);
-    if (!bindable) return "this dimension can't hold an expression yet";
+    if (!bindable) return tEnglish("field.problem.noExpressionHere");
     return this.commitExprInput(`e:${e.id}:${field}`, "length", raw, (v) => {
       entityDims(e)
         .find((d) => d.field === field)

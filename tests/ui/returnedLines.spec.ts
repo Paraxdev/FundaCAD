@@ -5,12 +5,21 @@ import { setLanguage } from "../../src/i18n";
 import { exprProblem } from "../../src/document/numFields";
 import { Geometry } from "../../src/geometry/client";
 import type { TransportSink } from "../../src/geometry/transport";
-import { recompute, validateExpr } from "../../src/params/engine";
+import { classifyExprInput, deleteBlockers, recompute, validateExpr, validateName } from "../../src/params/engine";
 import { candidateFrom } from "../../src/plugins/index";
 import { parseManifest } from "../../src/plugins/manifest";
+import { SketchMode } from "../../src/sketch/sketchMode";
 import type { CadDocument, ParamDef } from "../../src/types";
 import { plainError } from "../../src/ui/plainError";
 import { WordedError, shownMessage } from "../../src/ui/wordedError";
+
+vi.mock("../../src/sketch/solver", () => ({
+  SolverUnavailable: class extends Error {},
+  initSolver: async () => false,
+  solveSketch: async () => {
+    throw new Error("no solver in this test");
+  },
+}));
 
 afterEach(async () => {
   await setLanguage("system");
@@ -77,6 +86,87 @@ describe("the parameter engine's refusals", () => {
       "its dimension or feature no longer exists",
       "die zugehörige Bemaßung oder der zugehörige Schritt existiert nicht mehr",
     ]);
+  });
+
+  it.each([
+    [
+      "1a",
+      "names are letters, digits and _ (not starting with a digit)",
+      "Namen bestehen aus den Buchstaben A bis Z ohne Umlaute, Ziffern und _ und beginnen nicht mit einer Ziffer",
+    ],
+    ["sin", '"sin" is a reserved name', "„sin“ ist ein reservierter Name"],
+    ["constructor", '"constructor" is a reserved name', "„constructor“ ist ein reservierter Name"],
+    ["a", '"a" already exists', "„a“ existiert bereits"],
+    ["d3", "dN names are reserved for model parameters", "Namen der Form dN sind für Modellparameter reserviert"],
+  ])("refuses the name %s in English and reads it in German", async (name, english, german) => {
+    expect(validateName(doc.paramDefs!, name)).toBe(english);
+    expect(await shown(english)).toEqual([english, german]);
+  });
+
+  it("refuses a new name typed into a value box as the name check does", () => {
+    expect(classifyExprInput(doc, "a = 5", "length", null)).toEqual({ ok: false, error: '"a" already exists' });
+  });
+
+  it("names what holds a parameter it will not delete, in English and in German", async () => {
+    const english = '"a" is referenced by: b';
+    expect(deleteBlockers(doc, "a")).toBe(english);
+    expect(await shown(english)).toEqual([english, "„a“ wird verwendet von: b"]);
+  });
+});
+
+describe("the sketch dimension editor's refusals", () => {
+  const doc = docOf({ width: { expr: "40", value: 40, unit: "mm" } });
+
+  function evalDim(raw: string, withStore: boolean) {
+    const mode = Object.create(SketchMode.prototype) as {
+      evalDimInput(raw: string, kind: "length", key: string | null): unknown;
+    };
+    Object.assign(mode, {
+      pendingBindings: new Map(),
+      store: withStore
+        ? {
+            classifyTargetExpr: (b: string | null, p: string | null, r: string, k: "length") =>
+              classifyExprInput(doc, r, k, b, p),
+          }
+        : null,
+    });
+    return mode.evalDimInput(raw, "length", null);
+  }
+
+  it.each([
+    ["-5", true, "invalid value", "ungültiger Wert"],
+    ["width - 50", true, "must evaluate to a positive value", "muss einen positiven Wert ergeben"],
+    ["width / 2", false, "no document", "kein Dokument"],
+    [
+      "d7 = 12",
+      true,
+      "dN names are reserved for model parameters",
+      "Namen der Form dN sind für Modellparameter reserviert",
+    ],
+  ] as const)("%s stays English for the console and reads in German on screen", async (raw, store, english, german) => {
+    await setLanguage("de");
+    expect(evalDim(raw, store)).toEqual({ error: english });
+    expect(plainError(english, "")).toBe(german);
+    await setLanguage("system");
+    expect(await shown(english)).toEqual([english, german]);
+  });
+
+  it("refuses an expression on an entity that is gone in English and reads it in German", async () => {
+    const mode = Object.create(SketchMode.prototype) as {
+      commitEntityDimExpr(index: number, field: string, raw: string): string | null;
+    };
+    Object.assign(mode, { entities: [] });
+    await setLanguage("de");
+    expect(mode.commitEntityDimExpr(0, "length", "width")).toBe("no entity");
+    await setLanguage("system");
+    expect(await shown("no entity")).toEqual(["no entity", "kein Element"]);
+  });
+
+  it.each([
+    ["not editable", "nicht bearbeitbar"],
+    ["this dimension can't hold an expression yet", "diese Bemaßung kann noch keinen Ausdruck aufnehmen"],
+  ])("reads %s in German", async (english, german) => {
+    expect(await shown(english)).toEqual([english, german]);
   });
 });
 

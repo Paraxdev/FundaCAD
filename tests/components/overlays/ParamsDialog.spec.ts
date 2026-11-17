@@ -144,6 +144,23 @@ describe("ParamsDialog", () => {
     expect([add.title, add.classList.contains("btn-danger")]).toEqual(["used by Extrude e1", true]);
   });
 
+  it("reads the store's English line for a refused delete and a refused name in German", async () => {
+    const fake = makeEngine();
+    await open(fake);
+    await setLanguage("de");
+    fake.refuse('"w" is referenced by: d1');
+    const del = document.body.querySelector<HTMLButtonElement>(".params-del")!;
+    del.click();
+    await flushPromises();
+    expect(del.title).toBe("„w“ wird verwendet von: d1");
+    fake.refuse('"sin" is a reserved name');
+    const name = inputs()[0]!;
+    await type(name, "sin");
+    name.dispatchEvent(new Event("blur"));
+    await flushPromises();
+    expect([name.getAttribute("aria-invalid"), name.title]).toEqual(["true", "„sin“ ist ein reservierter Name"]);
+  });
+
   it("tells under the table that function arguments take a semicolon", async () => {
     await open(makeEngine());
     const hint = document.body.querySelector(".params-dialog .measure-hint")!.textContent!;

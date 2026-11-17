@@ -155,6 +155,81 @@
     "reason": "fake library for tests and the browser build, internal"
   },
   {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "… must be a string",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "… must be an object",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "…: files are handled by the desktop app, and this is not running in it",
+    "reason": "plugin API refusal, the broker hands it to the plugin as its English why, which stays English as MCP does"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "…: this host was built without a plugin id, so a file could not be recorded against anybody",
+    "reason": "plugin API refusal, the broker hands it to the plugin as its English why, which stays English as MCP does"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "no feature …, have …",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "…: the document this plugin run was working on was closed, nothing was applied",
+    "reason": "plugin API refusal, the broker hands it to the plugin as its English why, which stays English as MCP does"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "…: this host was built without a plugin id, so it has no settings to read",
+    "reason": "plugin API refusal, the broker hands it to the plugin as its English why, which stays English as MCP does"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "pass `text` or `base64`",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "…: the user kept the unsaved changes, so no new document was started",
+    "reason": "plugin API refusal, the broker hands it to the plugin as its English why, which stays English as MCP does"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "…: an import is still being read into the open document, nothing was applied, try again once it has landed",
+    "reason": "plugin API refusal, the broker hands it to the plugin as its English why, which stays English as MCP does"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "expr must be a number or an expression",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "a feature needs a `type`",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "feature id … is already used",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "to must be a number",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
+    "path": "src/plugins/broker/appHost.ts",
+    "prefix": "… is not served here",
+    "reason": "plugin API argument check, the broker hands it to the plugin as its English why, read by the plugin author"
+  },
+  {
     "path": "src/plugins/broker/testing.ts",
     "prefix": "… must be a string",
     "reason": "plugin test host, read by the plugin author in a unit test run"
