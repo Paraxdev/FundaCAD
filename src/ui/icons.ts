@@ -3,6 +3,7 @@
 
 import { contributedIcons } from "../plugins/contrib";
 import { readSetting } from "./storedSetting";
+import { t } from "../i18n";
 
 /** `paths` maps an icon name to the inner markup drawn inside the shared 24×24 stroke wrapper. */
 export interface IconPack {
@@ -35,7 +36,9 @@ function packPaths(pack: string): Record<string, string> {
 /** Hairline strokes. The fallback every other pack resolves against, so it must stay complete. */
 export const FORGE_PACK: IconPack = {
   id: "forge",
-  label: "Forge (outline)",
+  get label() {
+    return t("prefs.icons.forge");
+  },
   paths: packPaths("forge"),
 };
 
@@ -43,7 +46,9 @@ export const FORGE_PACK: IconPack = {
  *  only for the marks that appear dozens of times on screen at small sizes. */
 export const ANVIL_PACK: IconPack = {
   id: "anvil",
-  label: "Anvil (solid)",
+  get label() {
+    return t("prefs.icons.anvil");
+  },
   paths: packPaths("anvil"),
 };
 

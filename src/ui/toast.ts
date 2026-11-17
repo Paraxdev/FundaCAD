@@ -24,6 +24,7 @@ import { useToastStore } from "../stores/toasts";
 import { showErrorNotice } from "./errorNotice";
 import { announce } from "./announce";
 import { noticeHoldMs } from "./noticeTime";
+import { t } from "../i18n";
 
 // A screen reader user cannot see the button, so the line names it and where it is.
 function spokenLine(message: string, action: ToastOptions["action"]): string {
@@ -70,7 +71,7 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
 /** Says the newest message again and shows it again. It never becomes the newest message itself. */
 export function showLastMessage(): void {
   if (!last) {
-    showCopy("No messages yet", "info");
+    showCopy(t("toast.noMessages"), "info");
     return;
   }
   const { message, kind, id } = last;

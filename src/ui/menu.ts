@@ -5,6 +5,7 @@ import { useRadialMenuStore } from "../stores/radialMenu";
 import { RadialSession, pickRadial, type RadialTrigger } from "./radialMenu";
 import { claimEscape } from "./escapeClaim";
 import { isMenuKey } from "./focus";
+import { t, tEnglish, type MessageArgs, type MessageKey } from "../i18n";
 
 export interface MenuItem {
   /** A thunk reads again on each open, like `disabled`, so Undo can name its step. */
@@ -31,6 +32,12 @@ export const menuName = (m: MenuDef): string => m.refName ?? (typeof m.label ===
 export const menuText = (m: MenuDef): string => (typeof m.label === "function" ? m.label() : m.label);
 
 export type { CtxItem };
+
+/** A row's label in the language, and its English name, which the harness finds the row by in any language. */
+export const namedRow = (key: MessageKey, args?: MessageArgs): { label: string; refName: string } => ({
+  label: t(key, args),
+  refName: tEnglish(key, args),
+});
 
 /** For tool and mode exits; ordinary dismissal is handled by the menu itself. */
 export function dismissContextMenu(): void {

@@ -311,7 +311,7 @@ describe("numbering", () => {
 });
 
 describe("the English sentences that name a feature", () => {
-  it("keep the English name in German: the failure toast, the face menu", async () => {
+  it("keep the English name in the German failure toast, the face menu reads whole in German", async () => {
     await setLanguage("de");
     const features = [
       { id: "s1", type: "sketch" },
@@ -387,8 +387,9 @@ describe("the English sentences that name a feature", () => {
       selector: { kind: "face", by: "nearest", point: [23.5, 7.25, 3] },
       point: [23.5, 7.25, 3],
     });
-    const labels = useContextMenuStore().items.map((i) => i.label);
-    expect(labels.filter((l) => /Extrude/.test(l))).toEqual(["Edit Extrude"]);
-    expect(labels.join("|")).not.toContain(line(de, "tool.extrude"));
+    const items = useContextMenuStore().items;
+    const edit = items.find((i) => i.refName === "Edit Extrude");
+    expect(edit?.label).toBe(`${line(de, "tool.extrude")} bearbeiten`);
+    expect(items.map((i) => i.label).join("|")).not.toContain("Extrude");
   });
 });

@@ -19,6 +19,7 @@ import { installedIds, RELEASE_TAG } from "../plugins";
 import { pluginEnabled } from "../plugins/registry";
 import { openExternal } from "./welcome";
 import { saveRenderedImage } from "../io/files";
+import { t } from "../i18n";
 
 export interface BugReportDeps {
   store: DocumentStore;
@@ -160,7 +161,12 @@ export function lastReport(): { text: string; at: number } | null {
   return last;
 }
 
-const copyAgainAction = { label: "Copy Again", onClick: () => void copyAgain() };
+const copyAgainAction = {
+  get label() {
+    return t("bugReport.copyAgain");
+  },
+  onClick: () => void copyAgain(),
+};
 
 async function writeClipboard(text: string): Promise<boolean> {
   try {
@@ -168,13 +174,10 @@ async function writeClipboard(text: string): Promise<boolean> {
     last = { text, at: Date.now() };
     return true;
   } catch {
-    toast(
-      "Could not reach the clipboard, so the report was not copied. Select the text under What will be sent and copy it.",
-      {
-        kind: "error",
-        timeout: 10000,
-      },
-    );
+    toast(t("bugReport.clipboardFailedSelect", { preview: t("bugReport.preview") }), {
+      kind: "error",
+      timeout: 10000,
+    });
     return false;
   }
 }
@@ -182,7 +185,7 @@ async function writeClipboard(text: string): Promise<boolean> {
 /** Resolves true when the dialog should close, false only when the clipboard was refused so the text is not lost. */
 export async function copyReport(text: string): Promise<boolean> {
   if (!(await writeClipboard(text))) return false;
-  toast("Report copied.", { kind: "info", action: copyAgainAction });
+  toast(t("bugReport.copied"), { kind: "info", action: copyAgainAction });
   return true;
 }
 
@@ -192,10 +195,10 @@ export async function copyAgain(): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    toast("Could not reach the clipboard, so the report was not copied.", { kind: "error", timeout: 10000 });
+    toast(t("bugReport.clipboardFailed"), { kind: "error", timeout: 10000 });
     return false;
   }
-  toast("Report copied.", { kind: "info", action: copyAgainAction });
+  toast(t("bugReport.copied"), { kind: "info", action: copyAgainAction });
   return true;
 }
 
@@ -209,14 +212,10 @@ export async function openIssue(
   try {
     await openExternal(issueUrl(fields));
   } catch {
-    toast(
-      "Could not open the browser. The report is copied, paste it into a new issue at github.com/Paraxdev/fundacad/issues.",
-      { kind: "warning", timeout: 15000, action: copyAgainAction },
-    );
+    toast(t("bugReport.browserFailed"), { kind: "warning", timeout: 15000, action: copyAgainAction });
     return true;
   }
-  const drag = picture ? ` Drag ${picture} into the issue too.` : "";
-  toast(`Report copied. Paste it into the Report box on GitHub.${drag}`, {
+  toast(t("bugReport.copiedPaste", { drag: picture ? "yes" : "no", picture: picture ?? "" }), {
     kind: "info",
     timeout: 15000,
     action: copyAgainAction,

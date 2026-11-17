@@ -16,6 +16,7 @@ import {
   type HdrImage,
 } from "../viewport/hdrImage";
 import { hdrStoredWidth, heldHdr, registerHdr } from "../viewport/hdrRegistry";
+import { t } from "../i18n";
 import { createEnvLibrary, indexedDbKv, type EnvEntry, type EnvLibrary, type StoredHdr } from "./environmentLibrary";
 import {
   applyEnvSettings,
@@ -137,7 +138,7 @@ export async function importEnvironmentBytes(
     return null;
   } catch (err) {
     if (err instanceof HdrRefusal) return err.message;
-    return `Couldn't use ${name} as the environment: ${err instanceof Error ? err.message : String(err)}`;
+    return t("render.useFailed", { name, message: err instanceof Error ? err.message : String(err) });
   }
 }
 

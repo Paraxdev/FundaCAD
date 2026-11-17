@@ -16,6 +16,7 @@ import { locator, type Locator } from "./stressLocate";
 import { weakSpotLabel } from "./stressVerdict";
 import { StressHistory } from "./stressHistory";
 import { plainError } from "./stressWarnings";
+import { seeConsole } from "./plainError";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -53,7 +54,8 @@ import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } fr
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
 import { awaitTreePick, treePickRefusal, type TreePickAnswer } from "./treePick";
-import { interferenceData, interferenceSummary } from "./interferenceRows";
+import { interferenceData, interferenceStatus, interferenceSummary } from "./interferenceRows";
+import { bodyReason } from "./engineReasons";
 import { toast } from "./toast";
 import * as THREE from "three";
 
@@ -94,7 +96,7 @@ export function createPanels(deps: PanelsDeps) {
   // Mass and filament are computed live in the panel from `raw`, so a material change needs no geometry call.
   function showProperties() {
     if (!hasBody()) {
-      setStatus("Properties: create or import a body first", "");
+      setStatus(t("properties.noBody"), "");
       return;
     }
     const sel = viewport.getSelectedBodies();
@@ -108,21 +110,21 @@ export function createPanels(deps: PanelsDeps) {
     const names = bodyLabels(built, (id) => store.bodyName(id));
     const faults = built
       .filter((b) => b.fault !== undefined && p.ids.includes(b.id))
-      .map((b) => `${names.get(b.id)} ${b.fault}`);
+      .map((b) => bodyReason(names.get(b.id) ?? b.id, b.fault!));
     const solid = faults.length === 0;
     const rows: PanelRow[] = [
-      ...(solid ? [{ k: "Volume", v: `${spellRounded(p.volume * f * f * f)} ${unit}³` }] : []),
-      { k: "Surface area", v: `${spellRounded(p.area * f * f)} ${unit}²` },
+      ...(solid ? [{ k: t("properties.volume"), v: `${spellRounded(p.volume * f * f * f)} ${unit}³` }] : []),
+      { k: t("properties.area"), v: `${spellRounded(p.area * f * f)} ${unit}²` },
       ...(solid
         ? [
             {
-              k: "Center of mass",
+              k: t("properties.centerOfMass"),
               v: listJoin([p.com.x, p.com.y, p.com.z].map((c) => spellRounded(toDisplay(c)))),
             },
           ]
         : []),
       {
-        k: "Bounding box",
+        k: t("properties.boundingBox"),
         v:
           `${spellRounded(toDisplay(p.bbox.max.x - p.bbox.min.x))} × ` +
           `${spellRounded(toDisplay(p.bbox.max.y - p.bbox.min.y))} × ` +
@@ -130,7 +132,12 @@ export function createPanels(deps: PanelsDeps) {
       },
     ];
     panels.showProperties({
-      title: sel.length === 1 ? (p.names[0] ?? "") : sel.length ? `${sel.length} bodies` : "All bodies",
+      title:
+        sel.length === 1
+          ? (p.names[0] ?? "")
+          : sel.length
+            ? t("properties.bodies", { n: sel.length })
+            : t("properties.allBodies"),
       rows,
       raw: solid ? { volumeMm3: p.volume, areaMm2: p.area } : null,
       faults,
@@ -147,21 +154,21 @@ export function createPanels(deps: PanelsDeps) {
   // The optional clearance (mm) adds a near-miss pass.
   async function showInterference(clearanceMm?: number) {
     if (!hasBody()) {
-      setStatus("Interference: create or import a body first", "");
+      setStatus(t("interference.status.noBody"), "");
       return;
     }
     if ((store.buildState.result?.bodies?.length ?? 0) < 2) {
-      setStatus("Interference: needs at least two bodies", "");
+      setStatus(t("interference.status.oneBody"), "");
       return;
     }
-    setStatus("Checking interference…", "");
+    setStatus(t("interference.status.checking"), "");
     resetInterferenceTint();
     const seq = ++interferenceSeq;
     const res = await geometry.interference(store.document, clearanceMm);
     if (seq !== interferenceSeq) return;
     resetInterferenceTint();
     if (!res.ok) {
-      const failed = `Interference check failed: ${res.message ?? "error"}`;
+      const failed = t("interference.status.failed", { message: res.message ?? seeConsole() });
       setStatus(failed, "error");
       announce(failed, "assertive", { key: "interference" });
       return;
@@ -170,16 +177,10 @@ export function createPanels(deps: PanelsDeps) {
     const clearances = res.clearances ?? [];
     const labels = bodyLabels(store.buildState.result?.bodies ?? [], (id) => store.bodyName(id));
     const label = (id: string, raw: string) => labels.get(id) ?? raw;
-    const unchecked = (res.unchecked ?? []).map((u) => `${label(u.id, u.name)} ${u.reason}`);
+    const unchecked = res.unchecked ?? [];
     const foundAny = pairs.length || clearances.length;
-    const notJudged = unchecked.length
-      ? `, ${unchecked.length} ${unchecked.length === 1 ? "body" : "bodies"} could not be checked`
-      : "";
     setStatus(
-      (foundAny
-        ? `${pairs.length} interference${pairs.length === 1 ? "" : "s"}` +
-          (clearanceMm ? `, ${clearances.length} close pair${clearances.length === 1 ? "" : "s"}` : "")
-        : "No interferences found") + notJudged,
+      interferenceStatus(pairs.length, clearanceMm ? clearances.length : null, unchecked.length),
       foundAny || unchecked.length ? "error" : "connected",
     );
     announce(interferenceSummary(pairs.length, clearanceMm ? clearances.length : null, unchecked.length), "polite", {
@@ -187,7 +188,7 @@ export function createPanels(deps: PanelsDeps) {
     });
     panels.showInterference({
       ...interferenceData(
-        { pairs, clearances, unchecked: res.unchecked ?? [] },
+        { pairs, clearances, unchecked },
         { unit: getUnit(), scale: toDisplay(1), round: displayRound, label },
       ),
       ...(res.truncated ? { truncatedMessage: res.message } : {}),

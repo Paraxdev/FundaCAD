@@ -1,6 +1,8 @@
 // The one way to speak to a screen reader: Announcer.vue mounts the two live regions once at boot, outside any
 // inert subtree, and everything transient (prompts, results, errors) goes through announce().
 
+import { t } from "../i18n";
+
 export type AnnouncePriority = "polite" | "assertive";
 export type Verbosity = "off" | "errors" | "normal" | "verbose";
 
@@ -64,13 +66,13 @@ function heard(priority: AnnouncePriority, verbose: boolean): boolean {
 export function spoken(text: string): string {
   return text
     .replace(/\s*·\s*/g, ", ")
-    .replace(/⌀\s*/g, "diameter ")
-    .replace(/²/g, " squared")
-    .replace(/³/g, " cubed")
-    .replace(/⌘(?![-+])\s*/g, "Command ")
-    .replace(/⌘/g, "Command")
-    .replace(/⌥(?![-+])\s*/g, "Option ")
-    .replace(/⌥/g, "Option")
+    .replace(/⌀\s*/g, `${t("spoken.diameter")} `)
+    .replace(/²/g, ` ${t("spoken.squared")}`)
+    .replace(/³/g, ` ${t("spoken.cubed")}`)
+    .replace(/⌘(?![-+])\s*/g, `${t("keys.spoken.command")} `)
+    .replace(/⌘/g, t("keys.spoken.command"))
+    .replace(/⌥(?![-+])\s*/g, `${t("keys.spoken.option")} `)
+    .replace(/⌥/g, t("keys.spoken.option"))
     .replace(/…/g, "")
     .replace(/\s+/g, " ")
     .trim();

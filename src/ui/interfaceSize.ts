@@ -4,6 +4,7 @@
 import { zoomChord, type ZoomChord } from "../input/platform";
 import { a11yPrefs, INTERFACE_SIZES, onA11yPrefsChange, setA11yPref } from "./a11yPrefs";
 import { announce } from "./announce";
+import { t } from "../i18n";
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -93,8 +94,8 @@ export function resetInterfaceSize(): number {
 export function changeInterfaceSize(how: ZoomChord) {
   const before = a11yPrefs().interfaceSize;
   const now = how === "reset" ? resetInterfaceSize() : stepInterfaceSize(how === "up" ? 1 : -1);
-  const end = how !== "reset" && now === before ? (how === "up" ? ", the largest" : ", the smallest") : "";
-  announce(`Interface size ${now} percent${end}`, "polite", { key: "interface-size" });
+  const end = how !== "reset" && now === before ? (how === "up" ? "largest" : "smallest") : "no";
+  announce(t("prefs.size.said", { now, end }), "polite", { key: "interface-size" });
 }
 
 /** For a window keydown listener in the capture phase, so no field, menu or running tool sees the chord. */
