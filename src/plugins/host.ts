@@ -125,6 +125,8 @@ export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from 
 /** A translator bound to the plugin's own language files, English when a line is missing. */
 export { pluginText } from "../i18n";
 export type { PluginText } from "../i18n";
+/** The chosen language as `{ code, bcp47 }`. It reads a shallowRef, so a template that formats with it follows a switch. */
+export { activeLanguage } from "../i18n";
 
 /** The app's display precision rule, so a plugin's readout rounds a length like every other panel. */
 export { roundForDisplay as displayRound } from "../ui/measure";

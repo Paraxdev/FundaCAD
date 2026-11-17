@@ -6,11 +6,12 @@ import { createPinia, setActivePinia } from "pinia";
 
 import PaletteSection from "../../plugins/FundaCAD.MultiColor/PaletteSection.vue";
 import { FILAMENTS, bodyColorMenu } from "../../plugins/FundaCAD.MultiColor/palette";
+import { activate } from "../../plugins/FundaCAD.MultiColor/main";
 import type { Engine } from "../../src/app/engine";
 import { ENGINE } from "../../src/app/engineKey";
 import type { DocumentStore } from "../../src/document/store";
 import { reloadLanguageFiles, setLanguage } from "../../src/i18n";
-import { contribute, resetContributions } from "../../src/plugins/contrib";
+import { contribute, contributedBrowserSections, resetContributions } from "../../src/plugins/contrib";
 
 enableAutoUnmount(afterEach);
 
@@ -136,5 +137,21 @@ describe("the filament palette", () => {
     await setLanguage("fr");
     await nextTick();
     expect(document.body.querySelector("[role=alert]")!.textContent).toMatch(/^Avertissement : Les filaments/);
+  });
+});
+
+describe("the palette row of the browser tree", () => {
+  it("names itself in the language after a switch", async () => {
+    const off = await activate(fakeEngine());
+    const row = () =>
+      contributedBrowserSections()
+        .find((s) => s.key === "FundaCAD.MultiColor:palette")
+        ?.section.label?.();
+    expect(row()).toBe("Palette");
+    await setLanguage("ja");
+    expect(row()).toBe("パレット");
+    await setLanguage("zh-CN");
+    expect(row()).toBe("调色板");
+    off();
   });
 });

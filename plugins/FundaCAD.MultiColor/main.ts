@@ -4,6 +4,7 @@
 import { bodyColorMenu, nearestPaletteSlot, paintFrom } from "./palette";
 import PaletteSection from "./PaletteSection.vue";
 import { contribute } from "fundacad";
+import { t } from "./lines";
 import type { Engine } from "fundacad";
 
 const ID = "FundaCAD.MultiColor";
@@ -23,7 +24,9 @@ export async function activate(e: Engine): Promise<() => void> {
     // "Color >" on a body, in the browser tree and in the viewport alike.
     bodyMenu: (bodyId) => bodyColorMenu(store, bodyId),
 
-    browserSections: [{ key: "palette", component: PaletteSection, filter: "palette" }],
+    browserSections: [
+      { key: "palette", component: PaletteSection, filter: "palette", label: () => t("palette.title") },
+    ],
 
     // An imported mesh's own colour goes on the nearest slot. This writes, so it must only run while the capability
     // does: a slot set behind a hidden palette is an edit nobody can see. Body ids are positional, so wait for the

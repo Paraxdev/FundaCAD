@@ -1,4 +1,4 @@
-import { pluginText } from "fundacad";
+import { activeLanguage, pluginText } from "fundacad";
 
 export const { t } = pluginText<typeof import("./locales/en.json")>(
   "FundaCAD.Screws",
@@ -130,9 +130,8 @@ export const label = (english: string): string => LABELS[english]?.() ?? english
 // Only languages that lowercase a noun mid sentence take a label lowercased, the rule of LOWERS_LABELS in the core.
 const LOWERS_LABELS: ReadonlySet<string> = new Set(["en", "fr", "es"]);
 
-// The page's lang attribute is the one place a plugin can read the language code from.
-export const pageLanguage = () => (typeof document === "undefined" ? "" : document.documentElement.lang);
+export const languageTag = () => activeLanguage().bcp47;
 
-const languageCode = () => pageLanguage().split("-")[0] || "en";
+const languageCode = () => activeLanguage().code.split("-")[0] || "en";
 
 export const lowerCase = (text: string) => (LOWERS_LABELS.has(languageCode()) ? text.toLowerCase() : text);
