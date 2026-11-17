@@ -1,5 +1,6 @@
 import { definePluginSettings } from "fundacad";
 import { DEFAULTS, DIRECTIONS, LIMITS } from "./look";
+import { t } from "./lines";
 
 export const PLUGIN_ID = "FundaCAD.PrintLook";
 
@@ -9,14 +10,20 @@ export const settings = definePluginSettings(PLUGIN_ID, {
     {
       key: "layerLines",
       type: "boolean",
-      label: "Layer lines",
+      get label() {
+        return t("setting.layerLines");
+      },
       default: DEFAULTS.layerLines,
-      description: "Draw the fine ridges a printed part shows. Display only, the model is unchanged.",
+      get description() {
+        return t("setting.layerLines.hint");
+      },
     },
     {
       key: "layerHeight",
       type: "number",
-      label: "Layer height",
+      get label() {
+        return t("setting.layerHeight");
+      },
       unit: "length",
       default: DEFAULTS.layerHeight,
       min: LIMITS.layerHeight[0],
@@ -26,24 +33,32 @@ export const settings = definePluginSettings(PLUGIN_ID, {
     {
       key: "direction",
       type: "enum",
-      label: "Build direction",
+      get label() {
+        return t("setting.direction");
+      },
       default: DEFAULTS.direction,
       options: DIRECTIONS.map((d) => ({ id: d.id, label: d.label })),
     },
     {
       key: "depth",
       type: "number",
-      label: "Depth",
+      get label() {
+        return t("setting.depth");
+      },
       default: DEFAULTS.depth,
       min: LIMITS.depth[0],
       max: LIMITS.depth[1],
       step: 0.05,
-      description: "How deep a ridge is, as a share of the layer height.",
+      get description() {
+        return t("setting.depth.hint");
+      },
     },
     {
       key: "variation",
       type: "number",
-      label: "Colour variation",
+      get label() {
+        return t("setting.variation");
+      },
       default: DEFAULTS.variation,
       min: LIMITS.variation[0],
       max: LIMITS.variation[1],
@@ -52,7 +67,9 @@ export const settings = definePluginSettings(PLUGIN_ID, {
     {
       key: "grooveShading",
       type: "number",
-      label: "Groove shading",
+      get label() {
+        return t("setting.grooveShading");
+      },
       default: DEFAULTS.grooveShading,
       min: LIMITS.grooveShading[0],
       max: LIMITS.grooveShading[1],

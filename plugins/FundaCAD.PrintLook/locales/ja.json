@@ -1,4 +1,16 @@
 {
   "group.print": "印刷",
+  "preset.filament": "フィラメント",
+  "section.direction": "方向",
+  "section.hint": "積層線はリアルタイムビューにのみ描画されます。モデルは変更されません。",
+  "section.title": "印刷後の見た目",
+  "setting.depth": "深さ",
+  "setting.depth.hint": "レイヤー高さに対する、段差の深さの割合です。",
+  "setting.direction": "造形方向",
+  "setting.grooveShading": "溝の陰影",
+  "setting.layerHeight": "レイヤー高さ",
+  "setting.layerLines": "積層線",
+  "setting.layerLines.hint": "印刷された部品に見える細かい段差を描画します。表示のみで、モデルは変更されません。",
+  "setting.variation": "色のばらつき",
   "tool.layerLines": "積層線"
 }

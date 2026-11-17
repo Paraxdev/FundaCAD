@@ -1,4 +1,16 @@
 {
   "group.print": "打印",
+  "preset.filament": "耗材",
+  "section.direction": "方向",
+  "section.hint": "仅在实时视图中绘制层纹。模型保持不变。",
+  "section.title": "打印外观",
+  "setting.depth": "深度",
+  "setting.depth.hint": "纹路的深度，以层高的比例表示。",
+  "setting.direction": "打印方向",
+  "setting.grooveShading": "沟槽阴影",
+  "setting.layerHeight": "层高",
+  "setting.layerLines": "层纹",
+  "setting.layerLines.hint": "绘制打印件上可见的细微纹路。仅用于显示，模型保持不变。",
+  "setting.variation": "颜色变化",
   "tool.layerLines": "层纹"
 }
