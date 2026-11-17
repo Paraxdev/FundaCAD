@@ -26,7 +26,7 @@ vi.mock("../../src/features/edgeCountGate", async (actual) => ({
   get EDGE_CAP() {
     return cap.value;
   },
-  confirmEdgeCount: async (label: string, count: number) => (cap.asked.push([label, count]), false),
+  confirmEdgeCount: async (kind: string, count: number) => (cap.asked.push([kind, count]), false),
 }));
 
 function lenient<T extends object>(own: Record<string, unknown>): T {

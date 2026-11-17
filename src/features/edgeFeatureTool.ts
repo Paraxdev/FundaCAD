@@ -11,7 +11,7 @@ import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
-import { canConsume, TOOL_CAPABILITIES } from "./toolCapabilities";
+import { canConsume } from "./toolCapabilities";
 import { EDGE_CAP, confirmEdgeCount } from "./edgeCountGate";
 import { MidSet, TangentChains } from "./tangentChains";
 import { GhostLines, type GhostSlot } from "./ghostLines";
@@ -901,7 +901,7 @@ export class EdgeFeatureTool {
   }
 
   private refuseOverCap(count: number) {
-    void confirmEdgeCount(TOOL_CAPABILITIES[this.kind].label, count);
+    void confirmEdgeCount(this.kind, count);
   }
 
   /** Same rule as the picks that armed the tool (viewport/pickScope.ts), so adding mid gesture behaves the same. */

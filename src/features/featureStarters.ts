@@ -35,7 +35,6 @@ import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, planeSpecOf, type Fac
 import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
 import { confirmEdgeCount, edgeGate } from "./edgeCountGate";
-import { TOOL_CAPABILITIES } from "./toolCapabilities";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type {
@@ -139,7 +138,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       edgeFeature.start(kind, committed, opts);
       return;
     }
-    void confirmEdgeCount(TOOL_CAPABILITIES[kind].label, count).then((ok) => {
+    void confirmEdgeCount(kind, count).then((ok) => {
       const { grabAt: _, ...arrow } = opts ?? {};
       if (ok && !toolBusy()) edgeFeature.start(kind, committed, opts ? arrow : undefined);
     });

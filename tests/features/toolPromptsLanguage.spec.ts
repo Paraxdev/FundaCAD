@@ -74,14 +74,14 @@ describe("messages built from whole sentences", () => {
   it("asks before a big blend in the chosen language and answers from the button", async () => {
     choose.mockResolvedValue("go");
     await setLanguage("de");
-    expect(await confirmEdgeCount("Fillet", 4000)).toBe(true);
+    expect(await confirmEdgeCount("fillet", 4000)).toBe(true);
     const [title, buttons, , body] = choose.mock.calls[0]!;
     expect(title).toBe("Verrundung für 4000 Kanten?");
     expect(body).toContain("4000");
     expect(buttons.map((b: { value: string }) => b.value)).toEqual(["cancel", "go"]);
     expect(buttons[0].label).not.toBe("Cancel");
     choose.mockResolvedValue("ok");
-    expect(await confirmEdgeCount("Chamfer", 9000)).toBe(false);
+    expect(await confirmEdgeCount("chamfer", 9000)).toBe(false);
     expect(choose.mock.calls[1]![0]).toContain("Fase");
   });
 });

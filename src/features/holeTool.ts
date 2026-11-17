@@ -510,7 +510,7 @@ export class HoleTool {
   private valueChanged() {
     this.drawMarkers();
     const n = this.points.length;
-    const what = this.diameter != null ? `⌀${this.diameter}` : this.size;
+    const what = this.diameter != null ? `⌀${spellNumber(this.diameter)}` : this.size;
     setPrompt(t("tool.hole.prompt", { type: TYPE_LABEL[this.holeType], what, n }));
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {

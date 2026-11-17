@@ -110,6 +110,6 @@ describe("fillet on a chain scoped preselection", () => {
     tool.start("fillet", done);
     expect(done).toHaveBeenCalledWith(null);
     expect(tool.memberRows().length).toBe(0);
-    expect(confirmEdgeCount).toHaveBeenCalledWith("Fillet", EDGE_CAP + 1);
+    expect(confirmEdgeCount).toHaveBeenCalledWith("fillet", EDGE_CAP + 1);
   });
 });

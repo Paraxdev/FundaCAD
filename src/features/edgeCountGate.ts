@@ -3,6 +3,7 @@
 
 import { decimalMark, t } from "../i18n";
 import { choose } from "../ui/choice";
+import type { EdgeTreatment } from "./edgeDragMath";
 
 export const EDGE_WARN = 3000;
 export const EDGE_CAP = 5000;
@@ -18,11 +19,9 @@ export function edgeGate(count: number): EdgeGate {
 }
 
 /** True when the tool may start: at once below the warning, on confirm up to the cap, never above it. */
-export async function confirmEdgeCount(label: string, count: number): Promise<boolean> {
+export async function confirmEdgeCount(kind: EdgeTreatment, count: number): Promise<boolean> {
   const gate = edgeGate(count);
   if (gate === "go") return true;
-  // The callers pass the capability's English label, which only tells fillet from chamfer.
-  const kind = label.toLowerCase().startsWith("chamfer") ? "chamfer" : "fillet";
   const shown = fmt(count);
   const name = t(kind === "chamfer" ? "tool.chamfer" : "tool.fillet");
   if (gate === "refuse") {

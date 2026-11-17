@@ -345,7 +345,7 @@ export class ThreadTool {
   private commit() {
     if (this.phase !== "size") return this.cancel();
     if (threadTurns(this.length, this.pitch) < MIN_THREAD_TURNS) {
-      setPrompt(t("tool.thread.oneTurn", { pitch: String(this.pitch) }));
+      setPrompt(t("tool.thread.oneTurn", { pitch: spellNumber(this.pitch) }));
       return;
     }
     const features = this.buildFeatures();
