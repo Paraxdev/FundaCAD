@@ -1,7 +1,8 @@
 // Module refs, not a pinia store, since a plugin's pinia would have to agree with the app's. The component is mounted
 // for the plugin's whole life through contributedOverlays() and decides itself whether to draw.
 
-import { ref, shallowRef } from "vue";
+import { computed, ref, shallowRef } from "vue";
+import { t } from "./lines";
 import type { TextureMode, TextureValues } from "./textureForm";
 
 /** Replaced wholesale on each show(), never mutated in place. */
@@ -21,9 +22,19 @@ export interface TextureReq {
  *  store, which must not become reactive proxies. */
 export const request = shallowRef<TextureReq | null>(null);
 
+/** What the selection holds, as facts rather than a sentence, so the line is worded again when the language changes. */
+export type SummaryFacts = { mode: "faces"; n: number } | { mode: "body"; n: number; name: string };
+
 /** Its own ref, not a request field: the tool rewrites it several times a second, and replacing the request would
  *  remount the form and take the focus out of the field being typed into. */
-export const summary = ref("");
+export const summaryFacts = ref<SummaryFacts>({ mode: "faces", n: 0 });
+
+export const summary = computed(() => {
+  const f = summaryFacts.value;
+  if (f.mode === "faces") return f.n ? t("summary.faces", { n: f.n }) : t("summary.facesNone");
+  if (!f.n) return t("summary.bodyNone");
+  return f.n > 1 ? t("summary.bodyMany", { name: f.name, n: f.n }) : t("summary.body", { name: f.name });
+});
 
 /** Which of Faces / Whole Body the toggle shows as active. */
 export const mode = ref<TextureMode>("faces");
@@ -34,7 +45,7 @@ export function show(
   opts: {
     editing: boolean;
     mode: TextureMode;
-    summary: string;
+    facts?: SummaryFacts;
     initial: Partial<TextureValues>;
     palette?: { name: string; color: string }[];
   },
@@ -45,7 +56,7 @@ export function show(
     onModeChange: (mode: TextureMode) => void;
   },
 ): void {
-  summary.value = opts.summary;
+  summaryFacts.value = opts.facts ?? { mode: opts.mode, n: 0, name: "" };
   mode.value = opts.mode;
   request.value = {
     id: nextId++,
@@ -81,6 +92,6 @@ export function cancel(): void {
  *  the next one renders. */
 export function resetPanel(): void {
   request.value = null;
-  summary.value = "";
+  summaryFacts.value = { mode: "faces", n: 0 };
   mode.value = "faces";
 }

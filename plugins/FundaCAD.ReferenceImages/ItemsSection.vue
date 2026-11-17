@@ -6,6 +6,7 @@ import { useBrowserStore, useEngine } from "fundacad";
 import { Icon, IconButton, InlineLabel } from "fundacad/ui";
 import { patched, readRefImage, type RefImage } from "./refImage";
 import { missingTick, selected, tool } from "./state";
+import { t } from "./lines";
 
 const engine = useEngine();
 const uid = useId();
@@ -41,13 +42,13 @@ function set(id: string, change: Partial<RefImage>) {
         size="sm"
         :icon="collapsed ? 'caretRight' : 'caretDown'"
         :icon-size="11"
-        :tip="`${collapsed ? 'Expand' : 'Collapse'} Reference images`"
+        :tip="collapsed ? t('items.expand') : t('items.collapse')"
         :aria-expanded="!collapsed"
         :aria-controls="`${uid}-body`"
         @click.stop="browser.toggle('Reference images')"
       />
       <span class="feature-icon"><Icon name="ref-image" :size="14" /></span>
-      <span :id="`${uid}-head`">Reference images</span>
+      <span :id="`${uid}-head`">{{ t("items.title") }}</span>
       <span style="flex: 1"></span>
       <span class="tree-count">{{ list.length }}</span>
     </div>
@@ -59,7 +60,7 @@ function set(id: string, change: Partial<RefImage>) {
         class="feature-row tree-child"
         :class="{ selected: selected === r.id }"
         :data-ref-image="r.id"
-        :title="missing(r.id) ? 'The image file is not in this document or the engine store' : r.name"
+        :title="missing(r.id) ? t('items.missingTitle') : r.name"
         @click="selected = selected === r.id ? null : r.id"
       >
         <span class="feature-icon"><Icon name="ref-image" :size="14" /></span>
@@ -73,9 +74,9 @@ function set(id: string, change: Partial<RefImage>) {
             }
           "
         />
-        <span v-if="missing(r.id)" style="margin-left: 6px; opacity: 0.6; font-size: var(--fs-micro, 11px)"
-          >image not found</span
-        >
+        <span v-if="missing(r.id)" style="margin-left: 6px; opacity: 0.6; font-size: var(--fs-micro, 11px)">{{
+          t("items.notFound")
+        }}</span>
         <span style="flex: 1"></span>
         <!-- .stop: a button sits inside the row, and a bare click would also open or close the image's panel. -->
         <IconButton
@@ -84,7 +85,7 @@ function set(id: string, change: Partial<RefImage>) {
           variant="plain"
           size="sm"
           :icon-size="13"
-          :tip="`Settings of ${r.name}`"
+          :tip="t('items.settings', { name: r.name })"
           :active="selected === r.id"
           @click.stop="selected = selected === r.id ? null : r.id"
         />
@@ -94,7 +95,7 @@ function set(id: string, change: Partial<RefImage>) {
           variant="plain"
           size="sm"
           :icon-size="13"
-          :tip="`Lock ${r.name} against moving and calibrating`"
+          :tip="t('items.lock', { name: r.name })"
           :active="r.locked"
           data-action="lock"
           @click.stop="set(r.id, { locked: !r.locked })"
@@ -105,7 +106,7 @@ function set(id: string, change: Partial<RefImage>) {
           variant="plain"
           size="sm"
           :icon-size="13"
-          :tip="`Delete ${r.name}`"
+          :tip="t('items.delete', { name: r.name })"
           data-action="delete"
           @click.stop="tool?.remove(r.id)"
         />
@@ -115,7 +116,7 @@ function set(id: string, change: Partial<RefImage>) {
           variant="plain"
           size="sm"
           :icon-size="13"
-          :tip="`${r.hidden ? 'Show' : 'Hide'} ${r.name}`"
+          :tip="r.hidden ? t('items.show', { name: r.name }) : t('items.hide', { name: r.name })"
           data-action="eye"
           @click.stop="set(r.id, { hidden: !r.hidden })"
         />

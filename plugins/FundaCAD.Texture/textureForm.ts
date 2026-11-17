@@ -3,6 +3,7 @@
 
 import type { ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField } from "fundacad";
 import { fieldError, fieldNumber, spellNumber } from "fundacad";
+import { t } from "./lines";
 
 export type TextureKind =
   | "knurl"
@@ -24,35 +25,44 @@ export type TextureKind =
 export type TextureMode = "faces" | "body";
 export type TextureProjection = "auto" | "triplanar" | "box";
 
+/** A label read at use, so a list follows a language switch. */
+const labelled = <T extends object>(base: T, label: () => string): T & { readonly label: string } =>
+  Object.defineProperty({ ...base }, "label", { enumerable: true, get: label }) as T & { readonly label: string };
+const kind = (value: TextureKind, label: () => string) => labelled({ value }, label);
+
 /** Grouped so a picker of sixteen stays legible, and flattened for the value rows so a texture reads the same before
  *  and after it is committed. */
 export const TEXTURE_KIND_GROUPS: { label: string; kinds: { value: TextureKind; label: string }[] }[] = [
-  {
-    label: "Geometric",
-    kinds: [
-      { value: "knurl", label: "Knurl" },
-      { value: "hex", label: "Hex" },
-      { value: "waves", label: "Waves" },
-      { value: "ribs", label: "Ribs" },
-      { value: "stripes", label: "Stripes" },
-      { value: "grid", label: "Grid" },
-      { value: "dots", label: "Dots" },
-      { value: "brick", label: "Brick" },
-      { value: "isogrid", label: "Isogrid" },
-      { value: "basket", label: "Basket weave" },
-      { value: "carbon", label: "Carbon fibre" },
-    ],
-  },
-  {
-    label: "Organic",
-    kinds: [
-      { value: "voronoi", label: "Voronoi" },
-      { value: "noise", label: "Perlin noise" },
-      { value: "leather", label: "Leather" },
-    ],
-  },
-  { label: "Functional", kinds: [{ value: "grip", label: "Grip" }] },
-  { label: "Image", kinds: [{ value: "image", label: "Heightmap" }] },
+  labelled(
+    {
+      kinds: [
+        kind("knurl", () => t("kind.knurl")),
+        kind("hex", () => t("kind.hex")),
+        kind("waves", () => t("kind.waves")),
+        kind("ribs", () => t("kind.ribs")),
+        kind("stripes", () => t("kind.stripes")),
+        kind("grid", () => t("kind.grid")),
+        kind("dots", () => t("kind.dots")),
+        kind("brick", () => t("kind.brick")),
+        kind("isogrid", () => t("kind.isogrid")),
+        kind("basket", () => t("kind.basket")),
+        kind("carbon", () => t("kind.carbon")),
+      ],
+    },
+    () => t("kindGroup.geometric"),
+  ),
+  labelled(
+    {
+      kinds: [
+        kind("voronoi", () => t("kind.voronoi")),
+        kind("noise", () => t("kind.noise")),
+        kind("leather", () => t("kind.leather")),
+      ],
+    },
+    () => t("kindGroup.organic"),
+  ),
+  labelled({ kinds: [kind("grip", () => t("kind.grip"))] }, () => t("kindGroup.functional")),
+  labelled({ kinds: [kind("image", () => t("kind.image"))] }, () => t("kindGroup.image")),
 ];
 
 /** The flat pattern list, derived from the groups so the two cannot drift. */
@@ -115,104 +125,134 @@ export function textureFieldApplies(field: string, values: Record<string, unknow
 /** Contributed as `fieldLabel`, so the value rows and the panel name the shape slider the same. */
 export function sharpnessLabel(profile: unknown): { text: string; title: string } {
   return profile === "round"
-    ? { text: "Sharp", title: "Crispness of the smooth profile" }
-    : { text: "Land", title: "Flat land on the crests: 0 = pure V-groove peaks, 1 = wide flat tops" };
+    ? { text: t("sharp.round"), title: t("sharp.round.title") }
+    : { text: t("sharp.facet"), title: t("sharp.facet.title") };
 }
 
 /** "length" is millimetres shown in the display unit, "angle" is degrees, "count" is any real unitless value (Sharpness
- *  0..1, Seed). textureFieldApplies decides which rows a pattern reads. */
-export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
-  ["depth", "Depth", "length"],
-  ["scale", "Scale", "length"],
-  ["angle", "Angle", "angle"],
-  ["offset", "Offset", "length"],
-  ["sharpness", "Sharpness", "count"],
-  ["boundaryInset", "Edge blend", "length"],
-  ["grime", "Grime", "count"],
-  ["smooth", "Soften", "count"],
-  ["seamBlend", "Seam blend", "count"],
-  ["seamBand", "Seam band", "count"],
-  ["amplitude", "Amplitude", "count"],
-  ["slopeMin", "Slope min", "angle"],
-  ["slopeMax", "Slope max", "angle"],
-  ["targetEdge", "Mesh detail", "length"],
-  ["triBudget", "Max triangles", "count"],
-  ["seed", "Seed", "count"],
-];
+ *  0..1, Seed). textureFieldApplies decides which rows a pattern reads. A function, so the labels follow the language. */
+export function textureNumFields(): readonly [string, string, FieldKind][] {
+  return [
+    ["depth", t("field.depth"), "length"],
+    ["scale", t("field.scale"), "length"],
+    ["angle", t("field.angle"), "angle"],
+    ["offset", t("field.offset"), "length"],
+    ["sharpness", t("field.sharpness"), "count"],
+    ["boundaryInset", t("field.edgeBlend"), "length"],
+    ["grime", t("field.grime"), "count"],
+    ["smooth", t("field.soften"), "count"],
+    ["seamBlend", t("field.seamBlend"), "count"],
+    ["seamBand", t("field.seamBand"), "count"],
+    ["amplitude", t("field.amplitude"), "count"],
+    ["slopeMin", t("field.slopeMin"), "angle"],
+    ["slopeMax", t("field.slopeMax"), "angle"],
+    ["targetEdge", t("field.meshDetail"), "length"],
+    ["triBudget", t("field.maxTriangles"), "count"],
+    ["seed", t("field.seed"), "count"],
+  ];
+}
 
 /** Empty is legal and means the whole body, spelled out so the row does not show "0 faces". */
 export const TEXTURE_TARGETS: readonly TargetField[] = [
   {
     field: "faces",
-    label: "Faces",
+    get label() {
+      return t("field.faces");
+    },
     kind: "face",
     shape: "selector",
     arity: "many",
-    whenEmpty: "the whole body",
+    get whenEmpty() {
+      return t("field.facesEmpty");
+    },
   },
 ];
 
 export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
   {
     field: "kind",
-    label: "Pattern",
+    get label() {
+      return t("field.pattern");
+    },
     options: TEXTURE_KINDS,
     fallback: "knurl",
-    title: "Which pattern is cut into the surface. Heightmap reads an image file.",
+    get title() {
+      return t("field.pattern.title");
+    },
   },
   {
     field: "profile",
-    label: "Surface",
+    get label() {
+      return t("field.surface");
+    },
     options: [
-      { value: "facet", label: "Faceted" },
-      { value: "round", label: "Smooth" },
+      labelled({ value: "facet" }, () => t("option.faceted")),
+      labelled({ value: "round" }, () => t("option.smooth")),
     ],
     fallback: "facet",
-    title:
-      "Faceted gives planar facets and real creases, which is what survives " +
-      "a print, a printer rounds a sub-millimetre sinusoid into mush. Smooth " +
-      "keeps the continuous field.",
+    get title() {
+      return t("field.surface.title");
+    },
   },
   {
     field: "direction",
-    label: "Direction",
+    get label() {
+      return t("field.direction");
+    },
     options: [
-      { value: "out", label: "Emboss" },
-      { value: "in", label: "Deboss" },
-      { value: "both", label: "Symmetric" },
+      labelled({ value: "out" }, () => t("option.emboss")),
+      labelled({ value: "in" }, () => t("option.deboss")),
+      labelled({ value: "both" }, () => t("option.symmetric")),
     ],
     fallback: "out",
-    title: "Whether the pattern stands out of the surface, is cut into it, or is " + "centred on it.",
+    get title() {
+      return t("field.direction.title");
+    },
   },
   {
     field: "projection",
-    label: "Projection",
+    get label() {
+      return t("field.projection");
+    },
     options: [
-      { value: "triplanar", label: "Triplanar" },
-      { value: "box", label: "Box" },
-      { value: "auto", label: "Planar" },
+      labelled({ value: "triplanar" }, () => t("option.triplanar")),
+      labelled({ value: "box" }, () => t("option.box")),
+      labelled({ value: "auto" }, () => t("option.planar")),
     ],
     fallback: "triplanar",
-    title:
-      "How a curved (freeform) face lays out the pattern. Triplanar blends " +
-      "three world planes so the pattern keeps one size where the face curves; " +
-      "Box favours the nearest axis; Planar projects along one mean direction " +
-      "and foreshortens where the face turns away. Flat, cylindrical and " +
-      "conical faces use their exact chart regardless.",
+    get title() {
+      return t("field.projection.title");
+    },
   },
 ];
 
-export const TEXTURE_TOGGLE_FIELDS: ToggleField[] = [{ field: "invert", label: "Invert heights", fallback: false }];
+export const TEXTURE_TOGGLE_FIELDS: ToggleField[] = [
+  {
+    field: "invert",
+    get label() {
+      return t("field.invert");
+    },
+    fallback: false,
+  },
+];
 
 /** The heightmap path in the value rows, with the same filters and dialog as the panel's Browse button. */
 export const TEXTURE_FILE_FIELDS: FileField[] = [
   {
     field: "imagePath",
-    label: "Heightmap",
-    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "bmp"] }],
-    title: "The image whose brightness becomes height. Light is high.",
+    get label() {
+      return t("field.heightmap");
+    },
+    get filters() {
+      return imageFilters();
+    },
+    get title() {
+      return t("field.heightmap.title");
+    },
   },
 ];
+
+export const imageFilters = () => [{ name: t("file.images"), extensions: ["png", "jpg", "jpeg", "bmp"] }];
 
 export interface TextureValues {
   kind: TextureKind;

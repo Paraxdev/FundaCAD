@@ -7,6 +7,7 @@ import { calibrate, moved, onImage, type V2 } from "./calibrate";
 import { pixelSize, type ImageLayer } from "./quads";
 import { freshId, patched, readRefImage, type RefImage } from "./refImage";
 import { calibrating, selected } from "./state";
+import { t } from "./lines";
 
 const MAX_BYTES = 32 * 1024 * 1024;
 const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
@@ -70,7 +71,7 @@ export class RefImageTool {
 
   insert() {
     if (this.e.toolBusy()) return;
-    this.e.starters.pickPlane("Select a plane or a flat face to put the image on", (spec, _face, datumId) => {
+    this.e.starters.pickPlane(t("prompt.pickPlane"), (spec, _face, datumId) => {
       this.chooseFile(spec, datumId);
     });
   }
@@ -80,7 +81,7 @@ export class RefImageTool {
     const input = document.createElement("input");
     input.type = "file";
     input.id = "ri-file-input";
-    input.setAttribute("aria-label", "Reference image file");
+    input.setAttribute("aria-label", t("field.fileLabel"));
     input.accept = "image/png,image/jpeg,.png,.jpg,.jpeg";
     input.style.display = "none";
     input.addEventListener("change", () => {
@@ -97,29 +98,29 @@ export class RefImageTool {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     const mime = file.type === "image/png" || file.type === "image/jpeg" ? file.type : MIME[ext];
     if (!mime) {
-      toast("A reference image has to be a PNG or a JPEG");
+      toast(t("toast.notImage"));
       return null;
     }
     if (file.size > MAX_BYTES) {
-      toast("That image is over 32 MB, save a smaller copy and insert that");
+      toast(t("toast.tooBig"));
       return null;
     }
     const put = this.e.geometry.blobPut?.bind(this.e.geometry);
     if (!put) {
-      toast("Inserting an image needs the geometry engine");
+      toast(t("toast.needEngine"));
       return null;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     const px = await pixelSize(bytes, mime);
     if (!px) {
-      toast(`${file.name} could not be read as an image`);
+      toast(t("toast.unreadable", { name: file.name }));
       return null;
     }
     let hash: string;
     try {
       hash = await put(bytes);
     } catch (err) {
-      toast(`The image could not be stored: ${(err as Error).message}`);
+      toast(t("toast.storeFailed", { message: (err as Error).message }));
       return null;
     }
     this.layer.prime(hash, bytes, mime);
@@ -151,13 +152,13 @@ export class RefImageTool {
     const r = this.image(id);
     if (!r) return;
     if (r.locked) {
-      toast("The image is locked, unlock it to calibrate");
+      toast(t("toast.locked"));
       return;
     }
     if (this.e.toolBusy()) return;
     this.begin();
     calibrating.value = { id, stage: "first" };
-    setPrompt("Click the first point on the image");
+    setPrompt(t("prompt.first"));
   }
 
   /** The typed distance; an error to show, or null when it is done. */
@@ -166,7 +167,7 @@ export class RefImageTool {
     if (!step || step.stage !== "distance") return null;
     const r = this.image(step.id);
     const next = r ? calibrate(r, step.a, step.b, fieldNumber(raw)) : null;
-    if (!r || !next) return "Type a length above zero";
+    if (!r || !next) return t("error.positiveLength");
     this.write(r.id, { at: next.at, width: next.width });
     this.end();
     return null;
@@ -222,15 +223,15 @@ export class RefImageTool {
     }
     const p = this.pointOn(r, ev.clientX, ev.clientY);
     if (!p || !onImage(r, p)) {
-      setPrompt("Click a point on the image itself");
+      setPrompt(t("prompt.offImage"));
       return;
     }
     if (step.stage === "first") {
       calibrating.value = { id: step.id, stage: "second", a: p };
-      setPrompt("Click the second point on the image");
+      setPrompt(t("prompt.second"));
     } else {
       calibrating.value = { id: step.id, stage: "distance", a: step.a, b: p };
-      setPrompt("Type the real distance between the two points");
+      setPrompt(t("prompt.distance"));
     }
   };
 

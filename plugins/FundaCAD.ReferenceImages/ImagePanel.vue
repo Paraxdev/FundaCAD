@@ -7,6 +7,7 @@ import { Button, Checkbox, FieldRow, NumberField, Panel, Slider, Switch } from "
 import { heightOf, withWidth } from "./calibrate";
 import { MIN_OPACITY, readRefImage, type RefImage } from "./refImage";
 import { calibrating, selected, tool } from "./state";
+import { t } from "./lines";
 
 const engine = useEngine();
 const list = ref<RefImage[]>([]);
@@ -25,7 +26,7 @@ const refused = reactive<Record<string, string | null>>({});
 const problems = computed(() => Object.values(refused).filter((why): why is string => !!why));
 
 function refuse(key: string, label: string, why: string | null) {
-  refused[key] = why && `${label}: ${why}`;
+  refused[key] = why && t("panel.refused", { label, why });
 }
 
 watch(step, async (s) => {
@@ -56,15 +57,15 @@ function onDistanceKey(ev: KeyboardEvent) {
   if (ev.key === "Escape") tool.value?.cancel();
 }
 
-const positive = (v: number) => (v > 0 ? null : "Type a length above zero");
+const positive = (v: number) => (v > 0 ? null : t("error.positiveLength"));
 
 const prompt = computed(() =>
   step.value === "first"
-    ? "Click the first point on the image."
+    ? t("panel.promptFirst")
     : step.value === "second"
-      ? "Click the second point."
+      ? t("panel.promptSecond")
       : step.value === "distance"
-        ? "The real distance between them:"
+        ? t("panel.promptDistance")
         : null,
 );
 </script>
@@ -74,29 +75,29 @@ const prompt = computed(() =>
     <div v-if="r" ref="body" class="ref-image-panel" data-panel="reference-image">
       <template v-if="prompt">
         <div class="ref-image-prompt" role="status">{{ prompt }}</div>
-        <FieldRow v-if="step === 'distance'" v-slot="{ id }" layout="param" label="Distance">
+        <FieldRow v-if="step === 'distance'" v-slot="{ id }" layout="param" :label="t('panel.distance')">
           <NumberField
             :id="id"
             v-model="distance"
             data-field="distance"
-            label="Distance"
+            :label="t('panel.distance')"
             unit="mm"
             size="sm"
             commit="change"
-            placeholder="100 mm"
+            :placeholder="t('panel.distancePlaceholder')"
             :validate="positive"
             @update:model-value="onDistance"
             @keydown="onDistanceKey"
-            @error="refuse('distance', 'Distance', $event)"
+            @error="refuse('distance', t('panel.distance'), $event)"
           />
         </FieldRow>
       </template>
       <template v-else>
-        <FieldRow v-slot="{ id }" layout="param" label="Width">
+        <FieldRow v-slot="{ id }" layout="param" :label="t('panel.width')">
           <NumberField
             :id="id"
             data-field="width"
-            label="Width"
+            :label="t('panel.width')"
             unit="mm"
             size="sm"
             commit="change"
@@ -104,27 +105,27 @@ const prompt = computed(() =>
             :disabled="r.locked"
             :validate="positive"
             @update:model-value="onWidth"
-            @error="refuse('width', 'Width', $event)"
+            @error="refuse('width', t('panel.width'), $event)"
           />
         </FieldRow>
-        <FieldRow layout="param" label="Height" :for="null">
-          <span>{{ numberText(heightOf(r)) }} mm</span>
+        <FieldRow layout="param" :label="t('panel.height')" :for="null">
+          <span>{{ t("panel.heightValue", { value: numberText(heightOf(r)) }) }}</span>
         </FieldRow>
-        <FieldRow v-slot="{ id }" layout="param" label="Angle">
+        <FieldRow v-slot="{ id }" layout="param" :label="t('panel.angle')">
           <NumberField
             :id="id"
             data-field="angle"
-            label="Angle"
+            :label="t('panel.angle')"
             unit="deg"
             size="sm"
             commit="change"
             :model-value="r.angle"
             :disabled="r.locked"
             @update:model-value="(a) => a !== null && set({ angle: a })"
-            @error="refuse('angle', 'Angle', $event)"
+            @error="refuse('angle', t('panel.angle'), $event)"
           />
         </FieldRow>
-        <FieldRow v-slot="{ labelId }" layout="param" label="Opacity" :for="null">
+        <FieldRow v-slot="{ labelId }" layout="param" :label="t('panel.opacity')" :for="null">
           <Slider
             :labelledby="labelId"
             data-field="opacity"
@@ -143,37 +144,39 @@ const prompt = computed(() =>
             :model-value="!!r.flipX"
             :disabled="r.locked"
             @update:model-value="set({ flipX: $event })"
-            >Flip X</Checkbox
+            >{{ t("panel.flipX") }}</Checkbox
           >
           <Checkbox
             data-field="flipY"
             :model-value="!!r.flipY"
             :disabled="r.locked"
             @update:model-value="set({ flipY: $event })"
-            >Flip Y</Checkbox
+            >{{ t("panel.flipY") }}</Checkbox
           >
         </div>
-        <FieldRow v-slot="{ id }" layout="param" label="Lock">
+        <FieldRow v-slot="{ id }" layout="param" :label="t('panel.lock')">
           <Switch
             :id="id"
             data-field="locked"
-            label="Lock"
+            :label="t('panel.lock')"
             :model-value="r.locked"
             @update:model-value="set({ locked: !r.locked })"
           />
         </FieldRow>
-        <div v-if="!r.locked" class="measure-hint">Shift drag the image to move it.</div>
+        <div v-if="!r.locked" class="measure-hint">{{ t("panel.shiftDrag") }}</div>
       </template>
-      <div v-for="why in problems" :key="why" class="ref-image-problem" role="alert">Error: {{ why }}</div>
+      <div v-for="why in problems" :key="why" class="ref-image-problem" role="alert">{{
+        t("panel.error", { why })
+      }}</div>
     </div>
     <template #foot>
       <template v-if="r && prompt">
-        <Button data-action="cancel" @click="tool?.cancel()">Cancel</Button>
+        <Button data-action="cancel" @click="tool?.cancel()">{{ t("panel.cancel") }}</Button>
       </template>
       <template v-else-if="r">
-        <Button data-action="close" @click="selected = null">Close</Button>
+        <Button data-action="close" @click="selected = null">{{ t("panel.close") }}</Button>
         <Button variant="primary" data-action="calibrate" :disabled="r.locked" @click="tool?.startCalibrate(r.id)">
-          Calibrate
+          {{ t("panel.calibrate") }}
         </Button>
       </template>
     </template>
