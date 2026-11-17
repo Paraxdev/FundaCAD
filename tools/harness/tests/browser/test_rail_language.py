@@ -99,7 +99,7 @@ def walk_height(height: int) -> dict:
         found["bait"] = read(s)
         s.page.evaluate("() => document.getElementById('pill-bait').remove()")
         s.press("Escape")
-        to_items_plane(s)
+        to_items_plane(s, "XY-Ebene")
         frames(s)
         found["sketch"] = read(s)
         found["fams"] = open_flyouts(s, "fam:")
