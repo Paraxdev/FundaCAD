@@ -3,6 +3,7 @@
 
 import { t } from "../i18n";
 import { knownBodyReason } from "./engineReasons";
+import { shownLine } from "./englishLines";
 import { listJoin, spellNumber } from "./measure";
 import { displayRound, getUnit, toDisplay } from "./units";
 import { countWords, selectionWords, viewWords, type SelectionFacts, type ViewFacts } from "./viewSummary";
@@ -75,7 +76,7 @@ function bodyLine(b: DescribedBody): string {
 function stateWords(state: string): string {
   if (state === "rolled back") return t("history.state.rolledBack");
   if (state === "suppressed") return t("history.state.suppressed");
-  if (state.startsWith("error: ")) return t("history.state.failed", { message: state.slice(7) });
+  if (state.startsWith("error: ")) return t("history.state.failed", { message: shownLine(state.slice(7)) });
   return state;
 }
 

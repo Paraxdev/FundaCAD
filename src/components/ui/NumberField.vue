@@ -10,6 +10,7 @@ import { fmtKeys } from "../../input/platform";
 import {
   formatMeasure,
   parseMeasure,
+  refusalText,
   roundForDisplay,
   spellNumber,
   spellRounded,
@@ -117,7 +118,7 @@ function check(raw: string): { value: number | null; error: string | null; expr?
   try {
     v = read(raw);
   } catch (e) {
-    return { value: null, error: e instanceof Error && e.message ? e.message : t("ui.number.notValue") };
+    return { value: null, error: e instanceof Error && e.message ? refusalText(e) : t("ui.number.notValue") };
   }
   if (v === null) return { value: null, error: null, expr: true };
   if (props.limits !== "arrows") {

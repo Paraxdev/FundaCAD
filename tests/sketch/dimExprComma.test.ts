@@ -53,7 +53,7 @@ describe("evalDimInput with a decimal comma", () => {
   ])("in German %j is refused as ambiguous", async (raw, num) => {
     await setLanguage("de");
     expect(evalDim(raw)).toEqual({
-      error: `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+      error: `„${num}“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg`,
     });
   });
 

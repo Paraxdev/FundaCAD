@@ -243,7 +243,8 @@ describe("ParamsDialog", () => {
       const expr = inputs()[1]!;
       await type(expr, "w * 2.500");
       await enter(expr);
-      const why = (n: string) => `"${n}" is ambiguous, write a comma for decimals or leave the point out`;
+      const why = (n: string) =>
+        `„${n}“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg`;
       expect({ calls: fake.calls, add: add.title, expr: [expr.value, expr.title] }).toEqual({
         calls: [],
         add: why("1.500"),

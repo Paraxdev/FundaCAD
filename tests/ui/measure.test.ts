@@ -340,7 +340,11 @@ describe("a decimal comma in a language that writes one", () => {
     expect({ en, de }).toEqual({
       en: [1.5, 0.25],
       de: {
-        refused: ['"1.500" is ambiguous, write a comma for decimals or leave the point out', null, null],
+        refused: [
+          "„1.500“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg",
+          null,
+          null,
+        ],
         read: [0.25, -0.25, 0.5, 1.5, 1.5, 2.25, 1.5, 1.5, 1.2345],
         plain: [0.25, -0.25],
         saved: 0.125,
@@ -718,7 +722,7 @@ describe("shownExpr and storedExpr, one per mark", () => {
     expect({ de, en }).toEqual({
       de: {
         comma: ["breite * 1.5", null],
-        point: '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+        point: "„1.500“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg",
         shownBack: "breite * 1.500",
       },
       en: ["breite * 1.500", null],

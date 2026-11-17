@@ -4,6 +4,7 @@
 import { featureTypeOwner } from "../document/missingPlugins";
 import { blendFitsArgs } from "../features/edgeDragMath";
 import { t } from "../i18n";
+import { shownLine } from "./englishLines";
 
 /** Structural, so a test or a cached partial build need not construct a whole RebuildResult. */
 export interface NoteSources {
@@ -49,12 +50,14 @@ export interface FailureSources {
   heldRefusal?: { featureId: string } | null | undefined;
 }
 
-/** For the History badge and red chips. A held preview's refusal is left out: its tool explains it in the value box. */
+/** For the History badge and red chips, each message as shown. A held preview's refusal is left out: its tool explains
+ *  it in the value box. */
 export function featureFailures(src: FailureSources): Map<string, string> {
   const failed = new Map<string, string>();
-  for (const e of src.featureErrors ?? []) if (e.feature_id) failed.set(e.feature_id, e.message);
+  for (const e of src.featureErrors ?? []) if (e.feature_id) failed.set(e.feature_id, shownLine(e.message));
   const id = src.errorFeatureId;
-  if (id && !failed.has(id) && src.heldRefusal?.featureId !== id) failed.set(id, src.errorMessage ?? "failed");
+  if (id && !failed.has(id) && src.heldRefusal?.featureId !== id)
+    failed.set(id, src.errorMessage ? shownLine(src.errorMessage) : "failed");
   return failed;
 }
 

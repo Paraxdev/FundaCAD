@@ -4,9 +4,9 @@
 //   translated, the name stands alone or lands in a line that goes through t():
 //     TimelineBar.vue chips and rename placeholder, geometryBrowser.ts ownerNamesOf (Items), readouts.ts,
 //     describeModel.ts, ParamsDialog.vue targetLabel, TargetEditPanel.vue, ToolRail.vue unnamed sketch,
-//     patternSources.featureLabel (the Features row), plainError.ts sketchConflictText.
+//     patternSources.featureLabel (the Features row), plainError.ts sketchConflictText, rebuildBridge.ts failure toast.
 //   English, the name lands in a raw English sentence another lane owns (featureEnglish, stepEnglish, numberedEnglish):
-//     rebuildBridge.ts failure toast, contextMenus.ts "Edit X",
+//     contextMenus.ts "Edit X",
 //     patternSources.refusalReason, viewportWiring.ts edge picker, announcements.ts build line, VersionsPanel.vue
 //     summary, stepLabels.ts and store.ts undo and toast labels.
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -311,7 +311,7 @@ describe("numbering", () => {
 });
 
 describe("the English sentences that name a feature", () => {
-  it("keep the English name in the German failure toast, the face menu reads whole in German", async () => {
+  it("frame the German failure toast with the German name, the face menu reads whole in German", async () => {
     await setLanguage("de");
     const features = [
       { id: "s1", type: "sketch" },
@@ -366,7 +366,7 @@ describe("the English sentences that name a feature", () => {
         building: false,
         result: { ...result, featureErrors: [{ feature_id: "f1", message: "Radius 7.25 is larger than the edge" }] },
       } as unknown as RebuildState);
-    expect(toasts).toEqual(["Fillet failed: Radius 7.25 is larger than the edge"]);
+    expect(toasts).toEqual([`${line(de, "tool.fillet")} fehlgeschlagen: Radius 7.25 is larger than the edge`]);
 
     const menus = createContextMenus({
       sketch: { active: false },
