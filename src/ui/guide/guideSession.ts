@@ -34,7 +34,10 @@ export interface StepState extends Resolution {
   caption: string;
   /** The same step for keys alone, in words, when the assistant gave it. */
   keys?: string | undefined;
+  /** An empty target is a caption alone, with no ring. */
   target: GuideTarget;
+  /** A tour's nudge when the step makes no progress. */
+  hint?: string | undefined;
   /** Next was pressed on this step. */
   next: boolean;
 }
@@ -71,7 +74,8 @@ function targetOf(v: unknown): GuideTarget {
     return { region: { x: f("x"), y: f("y"), w: f("w"), h: f("h") } };
   }
   if (str(t.model)) return { model: str(t.model) };
-  return { ui: str(t.ui) ?? "" };
+  const ui = str(t.ui);
+  return ui ? { ui } : {};
 }
 
 export class GuideSession {
@@ -119,6 +123,13 @@ export class GuideSession {
     const st = this.s.step;
     if (!st || (st.found === r.found && st.via === r.via && st.missing === r.missing)) return;
     this.s = { ...this.s, step: { ...st, ...r, via: r.via, missing: r.missing, near: r.near } };
+    this.emit();
+  }
+
+  setHint(text: string | undefined): void {
+    const st = this.s.step;
+    if (!st || st.hint === text) return;
+    this.s = { ...this.s, step: { ...st, hint: text } };
     this.emit();
   }
 

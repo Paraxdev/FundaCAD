@@ -7,6 +7,7 @@ import type { Viewport } from "../viewport/viewport";
 import { stepName } from "./featureMeta";
 import { logEntries } from "./logStore";
 import { sketchRail } from "./railDefs";
+import type { TourRunner, TourState } from "./tour/tourRunner";
 
 export interface ReadHost {
   store: Pick<
@@ -280,4 +281,10 @@ export function guide(doc: Document = document): GuideReadout | null {
     bubble: boxOf(layer.querySelector(".guide-bubble")),
     outline,
   };
+}
+
+/** The tour running or the last one to end, null before any. */
+export function tour(h: { tour?: Pick<TourRunner, "state"> }): TourState | null {
+  const s = h.tour?.state;
+  return s?.id ? { ...s } : null;
 }

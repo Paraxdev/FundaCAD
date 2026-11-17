@@ -17,7 +17,7 @@ export const HARNESS_API = 1;
 export type HarnessHost = read.ReadHost &
   SettleHost &
   picks.PickHost &
-  HandleHost & { store: Pick<DocumentStore, "onOpen"> };
+  HandleHost & { store: Pick<DocumentStore, "onOpen"> } & Parameters<typeof read.tour>[0];
 
 type Args = Record<string, unknown>;
 type Method = (args: Args) => unknown;
@@ -127,6 +127,7 @@ export function createMethods(
     },
     selection: () => read.selection(h, doc),
     guide: () => read.guide(doc),
+    tour: () => read.tour(h),
     history: () => read.history(h),
     opens: () => opens,
     bodies: () => read.bodies(h),

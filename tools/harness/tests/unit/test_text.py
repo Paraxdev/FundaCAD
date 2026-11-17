@@ -70,6 +70,12 @@ def test_selection_text():
     assert text.selection(v) == "faces body1:index=3 (1 face)"
 
 
+def test_tour_text():
+    assert text.tour({"id": "first-bracket", "step": 3, "of": 14, "ended": None}) == "first-bracket step 3 of 14"
+    v = {"id": "first-bracket", "step": 5, "of": 14, "ended": "stopped"}
+    assert text.tour(v) == "first-bracket step 5 of 14, ended stopped"
+
+
 def test_api_check():
     check_api(DRIVER_API)
     with pytest.raises(DriverMismatch, match="no harness driver"):

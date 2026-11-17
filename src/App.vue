@@ -138,7 +138,8 @@ watch(
   <!-- Each Teleports to body, so none inherits a stacking context from #app's grid. -->
   <ToastStack />
   <ModalHost />
-  <GuideLayer />
+  <GuideLayer :session="engine.guide" />
+  <GuideLayer :session="engine.tour.session" :hidden="home.shown" />
   <ContextMenuHost />
   <RadialMenuHost />
   <ConsolePanel />
