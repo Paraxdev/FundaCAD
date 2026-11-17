@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget } from "../../src/features/facePlanePick";
+import { curvedFaceRow, facePlaneOfRow, pickPlaneTarget } from "../../src/features/facePlanePick";
 import { planeFromPointNormal } from "../../src/features/planeMath";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { PlaneDef } from "../../src/types";
@@ -143,8 +143,8 @@ describe("what a Geometry list face row implies", () => {
   });
 
   it("the curved hint names a flat face and a plane and does not send the user to the view", () => {
-    expect(CURVED_FACE_ROW).toMatch(/curved/);
-    expect(CURVED_FACE_ROW).toMatch(/flat face or a plane/);
-    expect(CURVED_FACE_ROW).not.toMatch(/in the view/);
+    expect(curvedFaceRow()).toMatch(/curved/);
+    expect(curvedFaceRow()).toMatch(/flat face or a plane/);
+    expect(curvedFaceRow()).not.toMatch(/in the view/);
   });
 });

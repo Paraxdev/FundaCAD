@@ -31,9 +31,6 @@ type FaceHit = Pick<
   "faceId" | "anchor" | "normal" | "bodyId"
 >;
 
-/** The same words as curvedFaceRow(), for the callers that have not moved to it. */
-export const CURVED_FACE_ROW = "That face is curved, pick a flat face or a plane";
-
 export const curvedFaceRow = (): string => t("tool.curvedFace");
 
 /** A Geometry list row has no click, so the face's middle stands in for it. Null when the face is neither flat nor

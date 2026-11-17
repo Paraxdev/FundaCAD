@@ -2,6 +2,7 @@
 // TOOL_CAPABILITIES is the app's half and `capabilities()` merges in plugin tools; the `...In`
 // forms take the table as an argument so tests need no plugin registered.
 
+import { t, type MessageKey } from "../i18n";
 import { contributedTools } from "../plugins/contrib";
 
 /** "vertex" is ahead of its picker: no tool declares it yet, so `toolsConsuming("vertex")` is empty. */
@@ -40,7 +41,7 @@ export type ToolId =
   | "hole";
 
 export interface ToolCapability {
-  label: string;
+  readonly label: string;
   /** Most specific first: the order breaks ties when a selection holds several kinds, so Extrude
    *  takes a visible profile over the solid face under it (featureStarters.startExtrude). */
   consumes: readonly EntityKind[];
@@ -51,40 +52,50 @@ export interface ToolCapability {
   icon?: string;
 }
 
+// A getter, so the label follows a language switch.
+function cap(labelKey: MessageKey, rest: Omit<ToolCapability, "label">): ToolCapability {
+  return {
+    ...rest,
+    get label() {
+      return t(labelKey);
+    },
+  };
+}
+
 /** Declaration order is offer order: the first tool a selection feeds is the affordance default. */
 export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // A face is shorthand for every edge of it; edgeFeatureTool.start() expands it.
-  fillet: { label: "Fillet", consumes: ["edge", "face"], source: "selection" },
-  chamfer: { label: "Chamfer", consumes: ["edge", "face"], source: "selection" },
-  presspull: { label: "Press/Pull", consumes: ["face"], source: "selection" },
-  extrude: { label: "Extrude", consumes: ["sketch-region", "face"], source: "selection" },
-  revolve: { label: "Revolve", consumes: ["sketch-region"], source: "selection" },
-  sweep: { label: "Sweep", consumes: ["sketch-region"], source: "selection" },
-  loft: { label: "Loft", consumes: ["sketch-region"], source: "selection", min: 2 },
+  fillet: cap("tool.fillet", { consumes: ["edge", "face"], source: "selection" }),
+  chamfer: cap("tool.chamfer", { consumes: ["edge", "face"], source: "selection" }),
+  presspull: cap("tool.pressPull", { consumes: ["face"], source: "selection" }),
+  extrude: cap("tool.extrude", { consumes: ["sketch-region", "face"], source: "selection" }),
+  revolve: cap("tool.revolve", { consumes: ["sketch-region"], source: "selection" }),
+  sweep: cap("tool.sweep", { consumes: ["sketch-region"], source: "selection" }),
+  loft: cap("tool.loft", { consumes: ["sketch-region"], source: "selection", min: 2 }),
   // Not an action string: it goes through engine.deleteSelectedFace (Del key, face context menu),
   // but leaving it out would make "what applies to this face" wrong.
-  "delete-face": { label: "Delete Face", consumes: ["face"], source: "selection" },
-  move: { label: "Move", consumes: ["body", "sketch-region"], source: "selection" },
+  "delete-face": cap("feature.deleteFace", { consumes: ["face"], source: "selection" }),
+  move: cap("tool.move", { consumes: ["body", "sketch-region"], source: "selection" }),
   // Patterns repeat the selected bodies, else the active one. A face stands for the feature
   // that made it, so a hole's wall patterns the hole (features/patternSources.ts).
-  "pattern-linear": { label: "Linear Pattern", consumes: ["body", "face"], source: "selection" },
-  "pattern-circular": { label: "Circular Pattern", consumes: ["body", "face"], source: "selection" },
-  "pattern-rect": { label: "Rect Pattern", consumes: ["body", "face"], source: "selection" },
-  mirror: { label: "Mirror", consumes: ["body"], source: "selection" },
+  "pattern-linear": cap("tool.linearPattern", { consumes: ["body", "face"], source: "selection" }),
+  "pattern-circular": cap("tool.circularPattern", { consumes: ["body", "face"], source: "selection" }),
+  "pattern-rect": cap("tool.rectPattern", { consumes: ["body", "face"], source: "selection" }),
+  mirror: cap("tool.mirror", { consumes: ["body"], source: "selection" }),
   // The first selected body is the one kept, so Subtract has a direction without asking.
-  "boolean-union": { label: "Union", consumes: ["body"], source: "selection", min: 2 },
-  "boolean-subtract": { label: "Subtract", consumes: ["body"], source: "selection", min: 2 },
-  "boolean-intersect": { label: "Intersect", consumes: ["body"], source: "selection", min: 2 },
-  shell: { label: "Shell", consumes: ["face"], source: "selection" },
-  draft: { label: "Draft", consumes: ["face"], source: "selection" },
-  "offset-face": { label: "Offset Face", consumes: ["face"], source: "selection" },
+  "boolean-union": cap("tool.union", { consumes: ["body"], source: "selection", min: 2 }),
+  "boolean-subtract": cap("tool.subtract", { consumes: ["body"], source: "selection", min: 2 }),
+  "boolean-intersect": cap("tool.intersect", { consumes: ["body"], source: "selection", min: 2 }),
+  shell: cap("tool.shell", { consumes: ["face"], source: "selection" }),
+  draft: cap("tool.draft", { consumes: ["face"], source: "selection" }),
+  "offset-face": cap("tool.offsetFace", { consumes: ["face"], source: "selection" }),
   // The selected face is where the first hole goes; further clicks add more.
-  hole: { label: "Hole", consumes: ["face"], source: "selection" },
-  measure: { label: "Measure", consumes: ["face", "edge"], source: "pick" },
-  thicken: { label: "Thicken", consumes: ["face"], source: "pick" },
+  hole: cap("tool.hole", { consumes: ["face"], source: "selection" }),
+  measure: cap("tool.measure", { consumes: ["face", "edge"], source: "pick" }),
+  thicken: cap("tool.thicken", { consumes: ["face"], source: "pick" }),
   // Thread needs a round face, which no kind describes; the tool refuses a flat one itself.
-  thread: { label: "Thread", consumes: ["face"], source: "pick" },
-  "text-on-face": { label: "Text on Face", consumes: ["face"], source: "pick" },
+  thread: cap("tool.thread", { consumes: ["face"], source: "pick" }),
+  "text-on-face": cap("tool.textOnFace", { consumes: ["face"], source: "pick" }),
 };
 
 export const TOOL_IDS = Object.keys(TOOL_CAPABILITIES) as ToolId[];
@@ -101,14 +112,14 @@ export function coreCapabilities(): Capabilities {
  *  Rebuilt per call, not cached: a plugin can be switched off, and this is asked per click, not per frame. */
 export function capabilities(): Capabilities {
   const merged = new Map(coreCapabilities());
-  for (const t of contributedTools()) {
-    if (merged.has(t.id)) continue;
-    merged.set(t.id, {
-      label: t.label,
-      consumes: t.consumes,
-      source: t.source,
-      ...(t.min !== undefined ? { min: t.min } : {}),
-      icon: t.iconName,
+  for (const tool of contributedTools()) {
+    if (merged.has(tool.id)) continue;
+    merged.set(tool.id, {
+      label: tool.label,
+      consumes: tool.consumes,
+      source: tool.source,
+      ...(tool.min !== undefined ? { min: tool.min } : {}),
+      icon: tool.iconName,
     });
   }
   return merged;

@@ -17,7 +17,7 @@ import {
   planeThroughPoints,
   unit,
 } from "./planeMath";
-import { booleanEnglish, type BooleanOp } from "./booleanOps";
+import { BOOLEAN_LABEL, type BooleanOp } from "./booleanOps";
 import type { ExtrudeTool } from "./extrudeTool";
 import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
@@ -31,7 +31,7 @@ import { featureOwnersOfFaces, patternStart, type PatternCandidates } from "./pa
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
-import { CURVED_FACE_ROW, facePlaneOfRow, pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
+import { curvedFaceRow, facePlaneOfRow, pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { bodyLabels } from "../ui/bodyLabels";
 import { choose } from "../ui/choice";
 import { confirmEdgeCount, edgeGate } from "./edgeCountGate";
@@ -62,8 +62,10 @@ import { upgradeFace } from "./holeFace";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
-import { thinExtrudeOf } from "./thinExtrude";
-import { spellNumber } from "../ui/measure";
+import { THIN_DEFAULTS, thinExtrudeOf } from "./thinExtrude";
+import { t } from "../i18n";
+import { numberedName } from "../ui/featureMeta";
+import { fmtLength } from "../ui/units";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -93,6 +95,23 @@ export interface FeatureStartersDeps {
   setPlanePick: (v: boolean) => void;
   /** the Move gizmo's target for a selected datum plane */
   datumMoveTarget: (id: string) => MoveTarget | null;
+}
+
+/** Split and Cut ask the same question. */
+function keepSides(): { value: "both" | "top" | "bottom"; label: string; hint: string }[] {
+  return [
+    { value: "both", label: t("tool.split.both"), hint: t("tool.split.bothHint") },
+    { value: "top", label: t("tool.split.top"), hint: t("tool.split.topHint") },
+    { value: "bottom", label: t("tool.split.bottom"), hint: t("tool.split.bottomHint") },
+  ];
+}
+
+/** What keeps a sketch from closing, said at the end of a refusal. */
+type TieWhy = { why: "gap"; gap: string } | { why: "open" | "loose"; n: number } | null;
+
+function tieArgs(tie: TieWhy): { why: string; gap: string; n: number } {
+  if (!tie) return { why: "none", gap: "", n: 0 };
+  return tie.why === "gap" ? { why: "gap", gap: tie.gap, n: 0 } : { why: tie.why, gap: "", n: tie.n };
 }
 
 export function createFeatureStarters(deps: FeatureStartersDeps) {
@@ -197,7 +216,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const why = target?.kind === "unusable";
       if (why !== sayingWhy) {
         sayingWhy = why;
-        setPrompt(why ? `${promptText}, this face is neither flat nor round, so it implies no plane` : promptText);
+        setPrompt(why ? t("tool.datum.noPlane", { prompt: promptText }) : promptText);
       }
     };
     const onDown = (e: PointerEvent) => {
@@ -221,15 +240,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       (pick) => {
         if (pick.kind === "face" && opts.roundFace) {
           const round = facePlaneOfRow(viewport, pick.faceId);
-          if (!round) return "That face is not round, pick a round face for its axis";
-          if (round.kind !== "tangent") return "That face is flat, pick a round face for its axis";
+          if (!round) return t("tool.datum.notRound");
+          if (round.kind !== "tangent") return t("tool.datum.flatNotRound");
           cleanup();
           deferPick(viewport.domElement, () => onPick(round.def, round, null));
           return true;
         }
         if (pick.kind === "face") {
           const flat = viewport.faceSketchPlane(pick.faceId);
-          if (!flat) return CURVED_FACE_ROW;
+          if (!flat) return curvedFaceRow();
           const { selector, at } = flat.anchor;
           cleanup();
           deferPick(viewport.domElement, () =>
@@ -276,22 +295,19 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
     }
-    pickPlaneInteractive(
-      "Select a plane or a face to sketch on · a round face gives its tangent plane",
-      (spec, face, datumId) => {
-        // Only a planar face can be followed, a tangent plane is defined by the pick's own point. A datum is followed
-        // by id, so editing its offset moves this sketch.
-        sketch.enter(
-          spec,
-          store,
-          undefined,
-          datumId ?? undefined,
-          face && face.kind === "planar" ? { selector: face.selector, at: face.at } : null,
-        );
-        if (face) viewport.showSketchFace(face.faceId);
-        if (tool) sketch.setTool(tool);
-      },
-    );
+    pickPlaneInteractive(t("tool.datum.sketchOn"), (spec, face, datumId) => {
+      // Only a planar face can be followed, a tangent plane is defined by the pick's own point. A datum is followed
+      // by id, so editing its offset moves this sketch.
+      sketch.enter(
+        spec,
+        store,
+        undefined,
+        datumId ?? undefined,
+        face && face.kind === "planar" ? { selector: face.selector, at: face.at } : null,
+      );
+      if (face) viewport.showSketchFace(face.faceId);
+      if (tool) sketch.setTool(tool);
+    });
   }
 
   // Offset Plane: pick a plane or face, drag or type the offset, then sketch on it. It saves a parametric
@@ -307,7 +323,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
     }
-    pickPlaneInteractive("Select a plane or face to offset from", (spec, face, datumId) => {
+    pickPlaneInteractive(t("tool.datum.offsetFrom"), (spec, face, datumId) => {
       startOffsetFrom(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) });
     });
   }
@@ -340,14 +356,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Datum Plane: a source plane plus a scalar offset rather than a baked plane, so the offset stays editable. A round
   // face gives its tangent plane at the click (planeMath.tangentPlaneOnCylinder) and the offset then runs radially.
   function createDatumPlane() {
-    pickPlaneInteractive(
-      "Select a plane or face for the datum plane · a round face gives its tangent plane",
-      (spec, face, datumId) => {
-        placeNewDatum(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) }, (id) =>
-          selectFeature(id, false),
-        );
-      },
-    );
+    pickPlaneInteractive(t("tool.datum.planeFrom"), (spec, face, datumId) => {
+      placeNewDatum(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) }, (id) =>
+        selectFeature(id, false),
+      );
+    });
   }
 
   /** SketchPlane is the one place that turns a named base plane into a def. */
@@ -363,14 +376,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Midplane: the plane between two picks (planeMath.midPlane says what that means when they are not parallel).
   // Picks with a reference (flat face, datum, world plane) are kept so it follows either wall; a tangent plane bakes.
   function createMidplane() {
-    pickPlaneInteractive("Select the first plane or face for the midplane", (a, fa, da) => {
+    pickPlaneInteractive(t("tool.datum.midFirst"), (a, fa, da) => {
       // Next frame, like the pick's own commit: the first pick's click must not
       // arrive at the second pick's listeners.
       requestAnimationFrame(() => {
-        pickPlaneInteractive("Select the second plane or face", (b, fb, db) => {
+        pickPlaneInteractive(t("tool.datum.midSecond"), (b, fb, db) => {
           const def = midPlane(asDef(a), asDef(b));
           if (!def) {
-            setStatus("Midplane: those two faces name no plane between them", "");
+            setStatus(t("tool.datum.midNone"), "");
             return;
           }
           const ra = planeOfPick(a, fa, da);
@@ -400,11 +413,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Plane through three points, for a plane no face lies in. Points use the gizmo origin's snap (viewport.pointAt);
   // edge ends and middles are kept as references, a bare surface spot leaves the plane baked.
   function createPlaneThroughPoints() {
-    pickPointsInteractive(3, "Select three points for the plane", (pts, refs) => {
+    pickPointsInteractive(3, t("tool.datum.threePoints"), (pts, refs) => {
       const [a, b, c] = pts;
       const def = a && b && c ? planeThroughPoints(a, b, c) : null;
       if (!def) {
-        setStatus("Plane through points: those three points lie in a line", "");
+        setStatus(t("tool.datum.pointsInLine"), "");
         return;
       }
       const id = store.nextId();
@@ -423,7 +436,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Datum Point: one snapped click saved as a named reference to measure and snap to; it builds no geometry. On an
   // edge end or middle it follows that edge, on a bare surface spot the coordinate is baked.
   function createDatumPoint() {
-    pickPointsInteractive(1, "Select a point for the datum point", (pts, refs) => {
+    pickPointsInteractive(1, t("tool.datum.point"), (pts, refs) => {
       const [p] = pts;
       if (!p) return;
       const at = refs[0];
@@ -436,12 +449,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Datum Axis: the line through two clicks, `origin` the first and `dir` the second minus the first, for a revolve,
   // circular pattern or mirror to aim at. Follows its points like the datum point.
   function createDatumAxis() {
-    pickPointsInteractive(2, "Select two points for the datum axis", (pts, refs) => {
+    pickPointsInteractive(2, t("tool.datum.axisPoints"), (pts, refs) => {
       const [a, b] = pts;
       if (!a || !b) return;
       const dir: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
       if (Math.hypot(dir[0], dir[1], dir[2]) < 1e-6) {
-        setStatus("Datum axis: those two points are the same", "");
+        setStatus(t("tool.datum.axisSamePoint"), "");
         return;
       }
       const id = store.nextId();
@@ -461,10 +474,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Datum Axis on an edge: the engine re-resolves the edge every rebuild so the axis follows the part. The baked
   // origin and dir written here are the cache the follow falls back to.
   function createDatumAxisOnEdge() {
-    pickEdgeInteractive("Select a straight edge for the datum axis", (sel, points) => {
+    pickEdgeInteractive(t("tool.datum.axisEdge"), (sel, points) => {
       const line = axisFromEdge(points as Vec3[]);
       if (!line) {
-        setStatus("A datum axis has to be a straight edge", "");
+        setStatus(t("tool.datum.axisNotStraight"), "");
         return;
       }
       const id = store.nextId();
@@ -502,7 +515,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Plane normal to an edge, starting at its middle; `t` is the fraction along it (0 one end, 1 the other). The
   // engine re-resolves the edge every rebuild, so a longer edge keeps the plane at the same fraction.
   function createPlaneNormalToEdge() {
-    withEdge("Select an edge or path for the plane normal to it", (sel, points) => {
+    withEdge(t("tool.datum.normalEdge"), (sel, points) => {
       const at = alongPolyline(points, 0.5);
       const def = at && planeFromPointNormal(at.p, at.tangent);
       if (!def) return;
@@ -521,16 +534,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Plane through two edges: two parallel edges, or two that cross in one plane.
   function createPlaneThroughEdges() {
-    pickEdgeInteractive("Select the first edge for the plane", (sa, pa) => {
+    pickEdgeInteractive(t("tool.datum.edgeFirst"), (sa, pa) => {
       requestAnimationFrame(() => {
-        pickEdgeInteractive("Select the second edge", (sb, pb) => {
+        pickEdgeInteractive(t("tool.datum.edgeSecond"), (sb, pb) => {
           const a0 = pa[0];
           const a1 = pa[pa.length - 1];
           const b0 = pb[0];
           const b1 = pb[pb.length - 1];
           const def = a0 && a1 && b0 && b1 ? planeThroughPoints(a0, a1, dist3(a0, b0) > dist3(a0, b1) ? b0 : b1) : null;
           if (!def) {
-            setStatus("Plane through edges: those two edges lie in a line", "");
+            setStatus(t("tool.datum.edgesInLine"), "");
             return;
           }
           const id = store.nextId();
@@ -550,17 +563,17 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Plane at an angle: a straight edge as the hinge, then the face or plane the angle is measured from, 45 degrees
   // to start. The engine places it, this first placement is only the cache.
   function createPlaneAtAngle() {
-    withEdge("Select a straight edge to turn the plane about", (sel, points) => {
+    withEdge(t("tool.datum.angleHinge"), (sel, points) => {
       const line = axisFromEdge(points as Vec3[]);
       if (!line) {
-        setStatus("A plane at an angle turns about a straight edge", "");
+        setStatus(t("tool.datum.angleHingeStraight"), "");
         return;
       }
       requestAnimationFrame(() => {
-        pickPlaneInteractive("Select the face or plane the angle is measured from", (spec, face, datumId) => {
+        pickPlaneInteractive(t("tool.datum.angleFrom"), (spec, face, datumId) => {
           const from = planeOfPick(spec, face, datumId);
           if (!from) {
-            setStatus("Plane at angle: measure from a flat face or a plane", "");
+            setStatus(t("tool.datum.angleFromFlat"), "");
             return;
           }
           const angle = 45;
@@ -594,7 +607,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Axis of a round face: the hole or shaft axis, followed when it moves.
   function createAxisFromCylinder() {
-    pickPlaneInteractive("Select a round face for its axis", (_spec, face) => axisFromRoundFace(face), {
+    pickPlaneInteractive(t("tool.datum.cylinder"), (_spec, face) => axisFromRoundFace(face), {
       roundFace: true,
     });
   }
@@ -602,7 +615,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function axisFromRoundFace(face: FacePlanePick | null) {
     const cyl = face && face.kind === "tangent" ? viewport.faceCylinder(face.faceId) : null;
     if (!face || !cyl) {
-      setStatus("Axis from cylinder: pick a round face", "");
+      setStatus(t("tool.datum.cylinderRefused"), "");
       return;
     }
     const id = store.nextId();
@@ -618,14 +631,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   }
 
   function createAxisFromPlanes() {
-    pickPlaneInteractive("Select the first plane or flat face", (a, fa, da) => {
+    pickPlaneInteractive(t("tool.datum.planesFirst"), (a, fa, da) => {
       requestAnimationFrame(() => {
-        pickPlaneInteractive("Select the second plane or flat face", (b, fb, db) => {
+        pickPlaneInteractive(t("tool.datum.planesSecond"), (b, fb, db) => {
           const ra = planeOfPick(a, fa, da);
           const rb = planeOfPick(b, fb, db);
           const line = planesMeet(asDef(a), asDef(b));
           if (!ra || !rb || !line) {
-            setStatus("Axis from planes: pick two flat faces or planes that cross", "");
+            setStatus(t("tool.datum.planesRefused"), "");
             return;
           }
           const id = store.nextId();
@@ -655,7 +668,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     viewport.suspendPicking = true;
     const taken: Vec3[] = [];
     const refs: (PointAt | null)[] = [];
-    const say = () => setPrompt(`${promptText} · ${taken.length} of ${n} · Esc`);
+    const say = () => setPrompt(t("tool.datum.pointsTaken", { prompt: promptText, taken: taken.length, n }));
     say();
     const draw = (live: Vec3 | null) => viewport.setPickMarkers(taken, live);
     draw(null);
@@ -738,7 +751,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   async function startSplit() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Split: create or import a body first", "");
+      setStatus(t("tool.split.needBody"), "");
       return;
     }
     // A selected construction plane cuts all visible bodies (startCutByPlane asks for the side to keep).
@@ -746,20 +759,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const sel = selId ? store.document.features.find((f) => f.id === selId) : null;
     if (sel?.type === "datumPlane") return void startCutByPlane(sel.id);
 
-    const keep = await choose<"both" | "top" | "bottom">("Split Body, keep which side?", [
-      { value: "both", label: "Both", hint: "two bodies" },
-      { value: "top", label: "Top", hint: "+normal side" },
-      { value: "bottom", label: "Bottom", hint: "−normal side" },
-    ]);
+    const keep = await choose(t("tool.split.keepSide"), keepSides());
     if (!keep) return;
     const bodies = store.buildState.result?.bodies ?? [];
     let body: string | undefined;
     if (bodies.length > 1) {
-      const picked = await chooseBody("Which body to split?", bodies);
+      const picked = await chooseBody(t("tool.split.whichBody"), bodies);
       if (!picked) return;
       body = picked;
     }
-    pickPlaneInteractive("Select a plane or face to cut by", (spec) => {
+    pickPlaneInteractive(t("tool.split.cutBy"), (spec) => {
       planeOffset.start(new SketchPlane(spec), (def) => {
         if (def)
           store.addFeature({ id: store.nextId(), type: "split", plane: def, keep, body, groupSides: true } as Feature);
@@ -772,13 +781,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
     if (!bodies.length) {
-      setStatus("Separate: create or import a body first", "");
+      setStatus(t("tool.separate.needBody"), "");
       return;
     }
     let ids = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
     if (!ids.length && bodies.length === 1 && bodies[0]) ids = [bodies[0].id];
     if (!ids.length) {
-      const picked = await chooseBody("Which body to separate?", bodies);
+      const picked = await chooseBody(t("tool.separate.whichBody"), bodies);
       if (!picked) return;
       ids = [picked];
     }
@@ -846,14 +855,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   async function startCutByPlane(planeId: string) {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Cut: create or import a body first", "");
+      setStatus(t("tool.cut.needBody"), "");
       return;
     }
-    const keep = await choose<"both" | "top" | "bottom">("Cut, keep which side?", [
-      { value: "both", label: "Both", hint: "two bodies" },
-      { value: "top", label: "Top", hint: "+normal side" },
-      { value: "bottom", label: "Bottom", hint: "−normal side" },
-    ]);
+    const keep = await choose(t("tool.cut.keepSide"), keepSides());
     if (!keep) return;
     const ids = (store.buildState.result?.bodies ?? []).filter((b) => store.isBodyVisible(b.id)).map((b) => b.id);
     store.addFeature({ id: store.nextId(), type: "split", planeId, keep, bodies: ids, groupSides: true } as Feature);
@@ -865,7 +870,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
     if (bodies.length < 2) {
-      setStatus(`${booleanEnglish(op)} needs two bodies`, "");
+      setStatus(t("tool.boolean.needTwo", { tool: BOOLEAN_LABEL[op] }), "");
       return;
     }
     const pre = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
@@ -876,12 +881,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
 
-    const verb = booleanEnglish(op).toLowerCase();
     // Asked even with one candidate left, so the gesture is the same whatever the body count and one click never
     // removes a body.
     const withTarget = (target: string) => {
       pickBodyInteractive(
-        `Click the body to ${verb} with · Esc cancels`,
+        t("tool.boolean.pickTool", { op }),
         [target], // clicking the kept body again is a miss, not a boolean with itself
         (tool) => commitBoolean(op, target, [tool]),
       );
@@ -893,7 +897,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     pickBodyInteractive(
-      op === "subtract" ? "Click the body to keep · Esc cancels" : `Click the first body to ${verb} · Esc cancels`,
+      op === "subtract" ? t("tool.boolean.pickKept") : t("tool.boolean.pickFirst", { op }),
       [],
       withTarget,
     );
@@ -935,7 +939,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const releaseTree = awaitTreePick(
       (pick) => {
         if (pick.kind !== "body") return treePickRefusal(pick, "oneBody");
-        if (exclude.includes(pick.id)) return "That body is already part of this operation, pick another";
+        if (exclude.includes(pick.id)) return t("tool.boolean.alreadyUsed");
         cleanup();
         requestAnimationFrame(() => onPick(pick.id));
         return true;
@@ -971,7 +975,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function startSimplifyMesh() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Simplify Mesh: import or create a body first", "");
+      setStatus(t("tool.simplifyMesh.needBody"), "");
       return;
     }
     store.addFeature({ id: store.nextId(), type: "simplifyMesh", tolerance: 1 } as Feature);
@@ -982,23 +986,23 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function startCleanUp() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Clean Up: import or create a body first", "");
+      setStatus(t("tool.cleanUp.needBody"), "");
       return;
     }
     store.addFeature({ id: store.nextId(), type: "cleanUp" } as Feature);
-    setStatus("Clean Up added, bodies unified from here on", "");
+    setStatus(t("tool.cleanUp.added"), "");
   }
 
   // Scale is about the origin, mostly to fix the units of an import.
   function startScale() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Scale: create or import a body first", "");
+      setStatus(t("tool.scale.needBody"), "");
       return;
     }
     store.addFeature({ id: store.nextId(), type: "scale", factor: 1 } as Feature);
     // Factor 1 is a visual no-op, so say the feature was added, the way Clean Up does.
-    setStatus("Scale added, set the factor in the value rows", "");
+    setStatus(t("tool.scale.added"), "");
   }
 
   function startMove() {
@@ -1026,7 +1030,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
     }
     if (!hasBody()) {
-      setStatus("Move: select a body or a sketch first", "");
+      setStatus(t("tool.move.needBodyOrSketch"), "");
       return;
     }
     const bodies = store.buildState.result?.bodies ?? [];
@@ -1035,7 +1039,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (lastBody) ids = [lastBody.id]; // none selected → active body
     }
     if (!ids.length) {
-      setStatus("Move: select a body first (Select: Bodies)", "");
+      setStatus(t("tool.move.selectBody", { control: t("tool.selectBodiesControl") }), "");
       return;
     }
     moveTool.start(ids, committed);
@@ -1046,7 +1050,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function startMirror() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Mirror: create a body first", "");
+      setStatus(t("tool.mirror.needBody"), "");
       return;
     }
     const bodies = store.buildState.result?.bodies ?? [];
@@ -1103,8 +1107,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         const only = mine.length === 1 ? mine[0] : undefined;
         if (!only) {
           return mine.length
-            ? `That sketch has ${mine.length} profiles, this step takes a sketch with one closed profile`
-            : `That sketch shows no closed profile${offerTie(pick.id)}`;
+            ? t("tool.profile.many", { n: mine.length })
+            : t("tool.profile.none", tieArgs(offerTie(pick.id)));
         }
         cleanup();
         requestAnimationFrame(() => onPick(only));
@@ -1140,11 +1144,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const wr = picked[0];
     if (!wr) {
       if (!overlay.regions.length) {
-        setStatus("Revolve needs a closed sketch profile, draw one first", "");
+        setStatus(t("tool.revolve.needProfile"), "");
         return;
       }
       // Several profiles show and none is selected: ask in the viewport rather than refuse.
-      pickRegionInteractive("Click the profile to revolve · Esc", (r) => revolveFrom([r]));
+      pickRegionInteractive(t("tool.revolve.pickProfile"), (r) => revolveFrom([r]));
       return;
     }
     revolveFrom(picked);
@@ -1171,7 +1175,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         )
       : undefined;
     if (selAxis) {
-      setStatus(`Revolving about ${selAxis.name || "the datum axis"}`, "");
+      setStatus(t("tool.revolve.about", { name: numberedName(selAxis, store.document.features) }), "");
       requestAnimationFrame(() => onPick({ origin: selAxis.origin, dir: selAxis.dir }));
       return;
     }
@@ -1189,7 +1193,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     setPlanePick(true);
     viewport.suspendPicking = true;
     viewport.emphasizeEdges(true);
-    setPrompt("Click an axis arrow at the origin, or a straight edge on the model, to spin around. Esc cancels.");
+    setPrompt(t("tool.revolve.pickAxis"));
     const onMove = (e: PointerEvent) => {
       // An arrow wins over an edge behind it: arrows are small, drawn in front and deliberately aimed at.
       const axis = axisAt(e.clientX, e.clientY);
@@ -1211,7 +1215,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const pts = hit!.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
       const line = axisFromEdge(pts);
       if (!line) {
-        setStatus("An axis has to be a straight edge", "");
+        setStatus(t("tool.revolve.axisStraight"), "");
         return;
       }
       requestAnimationFrame(() => onPick(line, hit!.selector));
@@ -1224,7 +1228,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         if (pick.kind === "edge") {
           const pts = pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
           const line = axisFromEdge(pts);
-          if (!line) return "An axis has to be a straight edge, pick a line";
+          if (!line) return t("tool.revolve.axisLine");
           const sel = edgeSelectorFrom({ points: pts, body: pick.edge.body });
           cleanup();
           requestAnimationFrame(() => onPick(line, sel));
@@ -1287,10 +1291,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const wr = regions[0] ?? (overlay.regions.length === 1 ? overlay.regions[0] : null);
     if (!wr) {
       if (!overlay.regions.length) {
-        setStatus("Sweep needs a closed profile sketch, draw one first", "");
+        setStatus(t("tool.sweep.needProfile"), "");
         return;
       }
-      pickRegionInteractive("Click the profile to sweep · Esc", (r) => void sweepFrom(r));
+      pickRegionInteractive(t("tool.sweep.pickProfile"), (r) => void sweepFrom(r));
       return;
     }
     await sweepFrom(wr);
@@ -1300,17 +1304,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const all = store.document.features.filter((f) => f.type === "sketch");
     const candidates = all.filter((f) => f.id !== wr.sketchId);
     if (candidates.length === 0) {
-      setStatus("Sweep: add a second sketch with an open curve for the path", "");
+      setStatus(t("tool.sweep.needPath"), "");
       return;
     }
-    const label = (id: string) => `Sketch ${all.findIndex((f) => f.id === id) + 1}`;
     const c0 = candidates[0];
     if (!c0) return;
     let pathId = c0.id;
     if (candidates.length > 1) {
       const picked = await choose<string>(
-        "Pick the path sketch",
-        candidates.map((f) => ({ value: f.id, label: label(f.id) })),
+        t("tool.sweep.pickPath"),
+        candidates.map((f) => ({ value: f.id, label: numberedName(f, store.document.features) })),
       );
       if (!picked) return;
       pathId = picked;
@@ -1326,12 +1329,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   async function startPrimitive() {
     if (toolBusy()) return;
-    const shape = await choose<"box" | "cylinder" | "cone" | "sphere" | "torus">("Create primitive", [
-      { value: "box", label: "Box", hint: "l×w×h" },
-      { value: "cylinder", label: "Cylinder", hint: "r, h" },
-      { value: "cone", label: "Cone", hint: "r1, r2, h" },
-      { value: "sphere", label: "Sphere", hint: "r" },
-      { value: "torus", label: "Torus", hint: "ring, tube" },
+    const shape = await choose<"box" | "cylinder" | "cone" | "sphere" | "torus">(t("tool.primitive.title"), [
+      { value: "box", label: t("feature.box"), hint: t("tool.primitive.boxHint") },
+      { value: "cylinder", label: t("feature.cylinder"), hint: t("tool.primitive.cylinderHint") },
+      { value: "cone", label: t("feature.cone"), hint: t("tool.primitive.coneHint") },
+      { value: "sphere", label: t("feature.sphere"), hint: t("tool.primitive.sphereHint") },
+      { value: "torus", label: t("feature.torus"), hint: t("tool.primitive.torusHint") },
     ]);
     if (!shape) return;
     const id = store.nextId();
@@ -1351,7 +1354,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   ): boolean {
     if (toolBusy()) return false;
     if (!hasBody()) {
-      setStatus("Create or import a body first", "");
+      setStatus(t("tool.needBody"), "");
       return false;
     }
     setPlanePick(true);
@@ -1412,7 +1415,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   ): boolean {
     if (toolBusy()) return false;
     if (!hasBody()) {
-      setStatus("Create or import a body first", "");
+      setStatus(t("tool.needBody"), "");
       return false;
     }
     setPlanePick(true);
@@ -1470,7 +1473,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (!feature) return;
     const site = findSelectorAt(feature, at);
     if (!site) {
-      setStatus("That reference has already changed, nothing to re-pick", "");
+      setStatus(t("tool.repick.changed"), "");
       return;
     }
     if (toolBusy()) return;
@@ -1499,7 +1502,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const cur = store.document.features.find((f) => f.id === featureId);
       const site2 = cur ? findSelectorAt(cur, at) : null;
       if (!cur || !site2) {
-        if (cur) setStatus("That reference has already changed, nothing to re-pick", "");
+        if (cur) setStatus(t("tool.repick.changed"), "");
         end();
         return;
       }
@@ -1510,8 +1513,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const pick = () => {
       const opened = wantsEdge
-        ? pickEdgeInteractive("Pick the edge to use · Esc", (sel, pts) => apply(sel, null, pts), end)
-        : pickFaceInteractive("Pick the face to use · Esc", apply, end);
+        ? pickEdgeInteractive(t("tool.repick.edge"), (sel, pts) => apply(sel, null, pts), end)
+        : pickFaceInteractive(t("tool.repick.face"), apply, end);
       if (!opened) end();
     };
     // The selector resolves where the feature sits in history, so pick on the model rolled back to it; the finished
@@ -1532,14 +1535,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
       // A refused build keeps the last mesh, which is still the finished model.
       if (!s.result || s.result === shown) {
-        setStatus("Could not roll back to that feature to re-pick", "error");
+        setStatus(t("tool.repick.rollbackFailed"), "error");
         end();
         return;
       }
       pick();
     });
     setPlanePick(true);
-    setPrompt("Rolling back to re-pick…");
+    setPrompt(t("tool.repick.rollingBack"));
     window.addEventListener("keydown", onWaitEsc, true);
     store.beginEditPreview(featureId);
   }
@@ -1577,19 +1580,19 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function startJoint() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Create or import a body first", "");
+      setStatus(t("tool.needBody"), "");
       return;
     }
-    pickFaceInteractive("Joint: pick a face on the body to MOVE · Esc to cancel", (mateSel) => {
+    pickFaceInteractive(t("tool.joint.pickMoving"), (mateSel) => {
       const movingBody = (mateSel as { body?: string }).body;
       if (!movingBody) {
-        setStatus("Joint: that face has no body, pick another", "");
+        setStatus(t("tool.joint.noBody"), "");
         return;
       }
-      pickFaceInteractive("Joint: pick the face to mate it TO · Esc to cancel", (toSel) => {
+      pickFaceInteractive(t("tool.joint.pickTo"), (toSel) => {
         const toBody = (toSel as { body?: string }).body;
         if (toBody === movingBody) {
-          setStatus("Joint: pick a face on a DIFFERENT body to mate to", "");
+          setStatus(t("tool.joint.sameBody"), "");
           return;
         }
         store.addFeature({
@@ -1653,8 +1656,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
             body = pick.edge.body;
             sel = edgeSelectorFrom({ points: pick.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3), body });
           } else return treePickRefusal(pick, "faceOrEdge");
-          if (!body || !sel) return `That ${pick.kind} is on no part, pick a face or an edge on a part`;
-          if (body === exclude) return "That is on the part already picked, pick a face or an edge on the other part";
+          if (!body || !sel) return t("tool.mechanism.noPart", { kind: pick.kind });
+          if (body === exclude) return t("tool.mechanism.samePart");
           cleanup();
           requestAnimationFrame(() => resolve({ body, sel: { ...sel, body } as Selector }));
           return true;
@@ -1686,47 +1689,42 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   async function startMechanism() {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Create or import a body first", "");
+      setStatus(t("tool.needBody"), "");
       return;
     }
     const ground = await new Promise<string>((resolve) =>
-      pickBodyInteractive("Mechanism: pick the GROUND body, the one that holds still · Esc to cancel", [], resolve),
+      pickBodyInteractive(t("tool.mechanism.pickGround"), [], resolve),
     );
     const joints: MechanismJoint[] = [];
     for (;;) {
       const kinds: { value: JointMode | "done"; label: string }[] = [
-        { value: "revolute", label: "Revolute (pin)" },
-        { value: "slider", label: "Slider" },
-        { value: "rigid", label: "Rigid" },
+        { value: "revolute", label: t("tool.mechanism.revolute") },
+        { value: "slider", label: t("tool.mechanism.slider") },
+        { value: "rigid", label: t("tool.mechanism.rigid") },
       ];
-      if (joints.length) kinds.push({ value: "done", label: "Done" });
-      const title = joints.length
-        ? `Mechanism: ${joints.length} joint${joints.length === 1 ? "" : "s"} so far, add another or finish`
-        : "Mechanism: what kind is the first joint?";
+      if (joints.length) kinds.push({ value: "done", label: t("common.done") });
+      const title = joints.length ? t("tool.mechanism.soFar", { n: joints.length }) : t("tool.mechanism.firstKind");
       const mode = await choose<JointMode | "done">(title, kinds);
-      if (mode === null) return setStatus("Mechanism cancelled", "");
+      if (mode === null) return setStatus(t("tool.mechanism.cancelled"), "");
       if (mode === "done") break;
       const id = nextJointId(joints, mode);
-      const a = await pickAxisConnectorInteractive(
-        `Mechanism ${id}: pick a face or edge on the part that MOVES · Esc to cancel`,
-        null,
-      );
-      if (!a) return setStatus("Mechanism cancelled", "");
-      const b = await pickAxisConnectorInteractive(
-        `Mechanism ${id}: pick a face or edge on the part it JOINS · Esc to cancel`,
-        a.body,
-      );
-      if (!b) return setStatus("Mechanism cancelled", "");
+      const a = await pickAxisConnectorInteractive(t("tool.mechanism.pickMoves", { id }), null);
+      if (!a) return setStatus(t("tool.mechanism.cancelled"), "");
+      const b = await pickAxisConnectorInteractive(t("tool.mechanism.pickJoins", { id }), a.body);
+      if (!b) return setStatus(t("tool.mechanism.cancelled"), "");
       joints.push({ id, mode, a: { body: a.body, axis: a.sel }, b: { body: b.body, axis: b.sel } });
     }
     const drivable = joints.filter((j) => isDrivable(j.mode));
     let drive: string | null = NO_DRIVE;
     if (drivable.length) {
-      drive = await choose<string>("Mechanism: which joint does the drive move?", [
-        ...drivable.map((j) => ({ value: j.id, label: `${j.id} (${j.mode})` })),
-        { value: NO_DRIVE, label: "None, close it as modelled" },
+      drive = await choose<string>(t("tool.mechanism.whichDrive"), [
+        ...drivable.map((j) => ({
+          value: j.id,
+          label: t("field.option.driveJoint", { joint: j.id, mode: j.mode ?? "" }),
+        })),
+        { value: NO_DRIVE, label: t("tool.mechanism.noDrive") },
       ]);
-      if (drive === null) return setStatus("Mechanism cancelled", "");
+      if (drive === null) return setStatus(t("tool.mechanism.cancelled"), "");
     }
     const id = store.nextId();
     store.addFeature({
@@ -1756,7 +1754,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function startPattern(kind: PatternKind) {
     if (toolBusy()) return;
     if (!hasBody()) {
-      setStatus("Pattern: create or import a body first", "");
+      setStatus(t("tool.pattern.needBody"), "");
       return;
     }
     const built = store.buildState.result?.bodies ?? [];
@@ -1780,7 +1778,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (last) ids = [last.id];
     }
     if (!ids.length) {
-      setStatus("Pattern: select a body first (Select: Bodies)", "");
+      setStatus(t("tool.pattern.selectBody", { control: t("tool.selectBodiesControl") }), "");
       return;
     }
     patternTool.start(kind, ids, committed);
@@ -1811,28 +1809,24 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       // A gap a few mm wide is a profile drawn short, so it is named and offered a fix; Extrude
       // pressed again on it, as the toast says, is the person picking the wall.
       if (gap?.kind === "gap" && !(gapAsked?.sketch === chosen && Date.now() < gapAsked.until)) {
-        const n = gap.open;
-        setStatus(
-          `That sketch has a ${gapMm(gap.gapMm)} gap between ${n} open end${n === 1 ? "" : "s"}, Close gap ties them into a profile, or press Extrude again for a thin wall`,
-          "",
-        );
-        const message = `That sketch has a ${gapMm(gap.gapMm)} gap, close it for a profile or press Extrude again for a thin wall`;
+        setStatus(t("tool.extrude.gapEnds", { gap: gapLength(gap.gapMm), n: gap.open }), "");
+        const message = t("tool.extrude.gapToast", { gap: gapLength(gap.gapMm) });
         gapAsked = {
           sketch: chosen,
           until: Date.now() + GAP_ASK_MS,
-          toast: toastTie(chosen, message, "Close gap", gap.reach, GAP_ASK_MS),
+          toast: toastTie(chosen, message, t("sketch.mode.closeGap"), gap.reach, GAP_ASK_MS),
         };
         return;
       }
       // Gaps that Tie Loose Ends can close mean a profile was meant, so the tie is offered instead of a wall.
       if (gap?.kind === "tieable") {
-        setStatus(`That sketch has no closed profile to extrude${offerTie(chosen)}`, "");
+        setStatus(t("tool.extrude.noProfile", tieArgs(offerTie(chosen))), "");
         return;
       }
       // An open sketch, lines and arcs with no closed area, extrudes as a wall along them.
       const wall = thinExtrudeOf(store.document.features, chosen, "");
       if (!wall) {
-        setStatus(`That sketch has no closed profile or curve to extrude${offerTie(chosen)}`, "");
+        setStatus(t("tool.extrude.noCurve", tieArgs(offerTie(chosen))), "");
         return;
       }
       if (gapAsked?.toast != null) dismissToast(gapAsked.toast);
@@ -1840,14 +1834,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const thin = { ...wall, id: store.nextId() } as Feature;
       store.addFeature(thin);
       committed(thin.id);
-      setStatus("Thin extrude: a 2 mm wall along the sketch's curves, set Thickness and Wall side in its rows", "");
+      setStatus(t("tool.extrude.thinAdded", { thickness: fmtLength(THIN_DEFAULTS.thickness) }), "");
       return;
     }
     if (overlay.regions.length === 0) {
-      setStatus(
-        "Extrude needs a face or a closed sketch profile, or an open sketch picked in the tree for a thin wall",
-        "",
-      );
+      setStatus(t("tool.extrude.needProfile"), "");
       return;
     }
     extrude.start(committed, rests);
@@ -1880,7 +1871,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return gapReport(ents, sk.constraints ?? [], defaultReach(ents));
   }
 
-  const gapMm = (v: number) => `${spellNumber(Number(v.toPrecision(2)))} mm`;
+  const gapLength = (mm: number) => fmtLength(Number(mm.toPrecision(2)));
 
   function toastTie(sketchId: string, message: string, label: string, reach?: number, timeout?: number): number | null {
     const sk = asFeature(
@@ -1901,17 +1892,18 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   }
 
   /** Why a sketch shows no profile, when loose ends are why, with a toast that ties them. */
-  function offerTie(sketchId: string): string {
+  function offerTie(sketchId: string): TieWhy {
     const gap = gapOf(sketchId);
-    if (!gap) return "";
+    if (!gap) return null;
     const n = gap.tieable;
     if (gap.kind === "gap") {
-      toastTie(sketchId, `That sketch has a ${gapMm(gap.gapMm)} gap`, "Close gap", gap.reach);
-      return `, a ${gapMm(gap.gapMm)} gap`;
+      const length = gapLength(gap.gapMm);
+      toastTie(sketchId, t("tool.looseEnds.gap", { gap: length }), t("sketch.mode.closeGap"), gap.reach);
+      return { why: "gap", gap: length };
     }
-    if (!n) return gap.open ? `, ${gap.open} open end${gap.open === 1 ? "" : "s"}` : "";
-    toastTie(sketchId, `${n} loose end${n === 1 ? "" : "s"} keep that sketch open`, "Tie Loose Ends");
-    return `, ${n} loose end${n === 1 ? "" : "s"}`;
+    if (!n) return gap.open ? { why: "open", n: gap.open } : null;
+    toastTie(sketchId, t("tool.looseEnds.keepOpen", { n }), t("tool.tieLooseEnds"));
+    return { why: "loose", n };
   }
 
   /** A sketch picked in the tree that shows no areas, usually one an earlier extrude hid. An area picked in the
