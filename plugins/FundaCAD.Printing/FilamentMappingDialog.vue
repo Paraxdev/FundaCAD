@@ -2,8 +2,9 @@
 // One row per colored slot the sliced job uses, choosing which physical U1 toolhead holds that filament, plus the
 // three U1 start flags.
 
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { Button, Checkbox, ModalFrame, Select } from "fundacad/ui";
+import { t } from "./lines";
 import type { FilamentReq } from "./state";
 import { autoMatch, toolheadLabel } from "./printDialog";
 
@@ -17,11 +18,14 @@ const props = defineProps<{ req: FilamentReq }>();
 const picked = ref(new Map<number, number>(props.req.slots.map((s) => [s.index, autoMatch(s, props.req.toolheads)])));
 
 const opts = ref({ bedLevel: false, flowCalibrate: false, timeLapseCamera: false });
-const OPTS = [
-  { key: "bedLevel", label: "Auto bed leveling" },
-  { key: "flowCalibrate", label: "Flow calibrate" },
-  { key: "timeLapseCamera", label: "Timelapse" },
-] as const;
+const OPTS = computed(
+  () =>
+    [
+      { key: "bedLevel", label: t("dialog.optBedLevel") },
+      { key: "flowCalibrate", label: t("dialog.optFlow") },
+      { key: "timeLapseCamera", label: t("dialog.optTimelapse") },
+    ] as const,
+);
 
 // Inline, because a plugin has nowhere to ship a stylesheet.
 const S = {
@@ -65,17 +69,19 @@ function confirm() {
   });
 }
 
-const nameOf = (slot: FilamentReq["slots"][number]) => slot.name || `Filament ${slot.index + 1}`;
-const toolheadOptions = props.req.toolheads.map((t) => ({ value: String(t.index), label: toolheadLabel(t) }));
+const nameOf = (slot: FilamentReq["slots"][number]) => slot.name || t("filament.fallbackName", { n: slot.index + 1 });
+const toolheadOptions = computed(() =>
+  props.req.toolheads.map((th) => ({ value: String(th.index), label: toolheadLabel(th) })),
+);
 </script>
 
 <template>
   <ModalFrame panel-class="print-map-card" @close="req.resolve(null)">
-    <template #title>Send to printer, filament mapping</template>
+    <template #title>{{ t("dialog.title") }}</template>
 
     <div class="modal-body">
       <div :style="S.card">
-        <ul class="print-map-rows" aria-label="Filament slots" :style="S.rows">
+        <ul class="print-map-rows" :aria-label="t('dialog.slotsLabel')" :style="S.rows">
           <li v-for="slot in req.slots" :key="slot.index" class="print-map-row" :style="S.row">
             <span class="print-map-slot" :style="S.slot">
               <span class="print-swatch" aria-hidden="true" :style="[S.swatch, { background: slot.color }]"></span>
@@ -86,7 +92,7 @@ const toolheadOptions = props.req.toolheads.map((t) => ({ value: String(t.index)
               class="print-map-select"
               size="sm"
               :style="S.select"
-              :label="`Toolhead for ${nameOf(slot)}`"
+              :label="t('dialog.toolheadFor', { name: nameOf(slot) })"
               :options="toolheadOptions"
               :model-value="String(picked.get(slot.index))"
               @update:model-value="picked.set(slot.index, Number($event))"
@@ -94,15 +100,15 @@ const toolheadOptions = props.req.toolheads.map((t) => ({ value: String(t.index)
           </li>
         </ul>
 
-        <div class="print-map-opts" role="group" aria-label="Start options" :style="S.opts">
+        <div class="print-map-opts" role="group" :aria-label="t('dialog.optionsLabel')" :style="S.opts">
           <Checkbox v-for="o in OPTS" :key="o.key" v-model="opts[o.key]">{{ o.label }}</Checkbox>
         </div>
       </div>
     </div>
 
     <div class="modal-foot">
-      <Button @click="req.resolve(null)">Cancel</Button>
-      <Button variant="primary" @click="confirm()">Upload &amp; Print</Button>
+      <Button @click="req.resolve(null)">{{ t("dialog.cancel") }}</Button>
+      <Button variant="primary" @click="confirm()">{{ t("dialog.upload") }}</Button>
     </div>
   </ModalFrame>
 </template>

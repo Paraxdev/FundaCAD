@@ -1,6 +1,7 @@
 // Each slot the job uses (logical gcode tool Tn) is pre-matched to a physical U1 toolhead by material, then nearest
 // color, the same client-side reconciliation Snapmaker Orca does.
 
+import { t } from "./lines";
 import { openFilamentMapping } from "./state";
 import type { StartOpts, ToolheadFilament } from "./printerClient";
 
@@ -30,26 +31,27 @@ function colorDist(a: string, b: string): number {
 /** Best physical toolhead for a logical slot: prefer a present toolhead whose
  *  material matches, break ties (and material-less palettes) by nearest color. */
 export function autoMatch(slot: LogicalSlot, toolheads: ToolheadFilament[]): number {
-  const present = toolheads.filter((t) => t.present);
+  const present = toolheads.filter((th) => th.present);
   const pool = present.length ? present : toolheads;
   let best = pool[0]?.index ?? slot.index;
   let bestScore = Infinity;
-  for (const t of pool) {
+  for (const th of pool) {
     const materialMiss =
-      slot.material && t.material && slot.material.toLowerCase() !== t.material.toLowerCase() ? 1e9 : 0;
-    const score = materialMiss + colorDist(slot.color, t.color);
+      slot.material && th.material && slot.material.toLowerCase() !== th.material.toLowerCase() ? 1e9 : 0;
+    const score = materialMiss + colorDist(slot.color, th.color);
     if (score < bestScore) {
       bestScore = score;
-      best = t.index;
+      best = th.index;
     }
   }
   return best;
 }
 
 /** "3: Polymaker PLA" / "2: Toolhead 2 (empty)". */
-export function toolheadLabel(t: ToolheadFilament): string {
-  const name = `${t.vendor} ${t.material}`.trim() || `Toolhead ${t.index + 1}`;
-  return `${t.index + 1}: ${name}${t.present ? "" : " (empty)"}`;
+export function toolheadLabel(th: ToolheadFilament): string {
+  const n = th.index + 1;
+  const name = `${th.vendor} ${th.material}`.trim() || t("toolhead.name", { n });
+  return th.present ? t("toolhead.label", { n, name }) : t("toolhead.labelEmpty", { n, name });
 }
 
 export function filamentMappingDialog(

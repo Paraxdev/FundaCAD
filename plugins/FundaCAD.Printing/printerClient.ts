@@ -3,6 +3,7 @@
 // sent by POST /server/files/upload then POST /server/files/start_local_print with a `map_table` filament remap.
 
 import { readSetting } from "fundacad";
+import { t } from "./lines";
 import { dataAdopt, dataRead, dataWrite, localRequest, type LocalRequest, type LocalResponse } from "./native";
 
 export type PrinterKind = "MoonrakerU1" | "Moonraker";
@@ -120,8 +121,8 @@ export async function printersList(): Promise<PrinterConfig[]> {
 }
 
 export async function printersUpsert(cfg: PrinterConfig): Promise<void> {
-  if (!cfg.id.trim()) throw fail("Config", "printer id required");
-  if (!validHost(cfg.host)) throw fail("Config", `invalid host ${JSON.stringify(cfg.host)} (bare IP/hostname only)`);
+  if (!cfg.id.trim()) throw fail("Config", t("error.printerIdRequired"));
+  if (!validHost(cfg.host)) throw fail("Config", t("error.invalidHost", { host: JSON.stringify(cfg.host) }));
   const list = await printersList();
   const i = list.findIndex((p) => p.id === cfg.id);
   if (i >= 0) list[i] = cfg;
@@ -135,8 +136,8 @@ export async function printersRemove(id: string): Promise<void> {
 
 async function resolve(id: string): Promise<PrinterConfig> {
   const cfg = (await printersList()).find((p) => p.id === id);
-  if (!cfg) throw fail("Config", `no printer with id ${JSON.stringify(id)}`);
-  if (!validHost(cfg.host)) throw fail("Config", `invalid host ${JSON.stringify(cfg.host)}`);
+  if (!cfg) throw fail("Config", t("error.noPrinter", { id: JSON.stringify(id) }));
+  if (!validHost(cfg.host)) throw fail("Config", t("error.invalidHostShort", { host: JSON.stringify(cfg.host) }));
   return cfg;
 }
 
@@ -203,7 +204,7 @@ export async function printerFilaments(id: string): Promise<ToolheadFilament[]> 
   const colors = arr("filament_color_rgba");
   const exists = arr("filament_exist");
   const n = Math.max(types.length, colors.length);
-  if (n === 0) throw fail("Protocol", "printer returned no filament slots (print_task_config empty)");
+  if (n === 0) throw fail("Protocol", t("error.noSlots"));
   return Array.from({ length: n }, (_, i) => ({
     index: i,
     vendor: str(vendors[i]),
@@ -249,7 +250,7 @@ export function interpretStartReply(v: Record<string, unknown>): PrinterError | 
   const state = str(v.state);
   const msg = str(v.message);
   if (state === "success") return null;
-  if (state === "busy") return fail("Busy", msg || "printer is busy");
+  if (state === "busy") return fail("Busy", msg || t("error.busy"));
   const low = msg.toLowerCase();
   const code =
     low.includes("busy") || low.includes("printing") || low.includes("not ready")
@@ -257,7 +258,7 @@ export function interpretStartReply(v: Record<string, unknown>): PrinterError | 
       : low.includes("nozzle")
         ? "NozzleMismatch"
         : "Rejected";
-  return fail(code, msg || "printer rejected the job");
+  return fail(code, msg || t("error.rejected"));
 }
 
 /** Upload a sliced job the person picked (by its file handle) and start it.
@@ -286,7 +287,7 @@ export async function printerUploadAndPrint(
       ],
     },
   });
-  if (!ok(up)) throw fail("Rejected", `upload failed: ${up.text ?? ""}`);
+  if (!ok(up)) throw fail("Rejected", t("error.uploadFailed", { text: up.text ?? "" }));
 
   if (cfg.kind === "MoonrakerU1") {
     const r = await send({

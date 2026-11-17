@@ -1,6 +1,7 @@
 // openInOrca leaves slicing and Upload&Print to OrcaSlicer, whose U1 preset already carries the printer host.
 
 import { exportPrintProject } from "./exportProject";
+import { t } from "./lines";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
 import { contributedPalette, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
@@ -34,7 +35,7 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
     stagingPath = await dataPath(stagingName(stripDocumentExt(store.fileName) || "part"));
     setup = await slicerSetup(await systemDirs());
   } catch (e) {
-    toast(`Couldn't prepare export: ${String(e)}`, { kind: "error" });
+    toast(t("toast.prepareFailed", { error: String(e) }), { kind: "error" });
     return;
   }
   // The user's active OrcaSlicer machine preset is flattened into the project so it OPENS on the U1 (with its print
@@ -50,18 +51,14 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
   });
   if (!written) return; // exportPrintProject already surfaced any error
   if (!written.path.toLowerCase().endsWith(".3mf")) {
-    toast("Couldn't launch OrcaSlicer: expected a .3mf project", { kind: "error" });
+    toast(t("toast.expected3mf"), { kind: "error" });
     return;
   }
   try {
     await launch(setup.programs, [written.path]);
-    toast(
-      written.presets
-        ? "Opened in OrcaSlicer on your U1 preset, slice, then Upload & Print."
-        : "Opened in OrcaSlicer, pick your U1 printer, slice, then Upload & Print.",
-    );
+    toast(written.presets ? t("toast.openedPreset") : t("toast.openedPick"));
   } catch (e) {
-    toast(`Couldn't launch OrcaSlicer: ${String(e)}`, { kind: "error" });
+    toast(t("toast.launchFailed", { error: String(e) }), { kind: "error" });
   }
 }
 
@@ -81,7 +78,7 @@ function usedSlots(store: DocumentStore): LogicalSlot[] {
       const mat = palette[i]?.material;
       return {
         index: i,
-        name: palette[i]?.name ?? `Filament ${i + 1}`,
+        name: palette[i]?.name ?? t("filament.fallbackName", { n: i + 1 }),
         color: palette[i]?.color ?? "#808080",
         ...(mat !== undefined ? { material: mat } : {}),
       };
@@ -99,14 +96,14 @@ export async function sendToPrinter(store: DocumentStore, _geometry: GeometryBac
   // comes back is a handle, so the upload can only ever send this file.
   let picked;
   try {
-    picked = await pickFile("Choose the sliced G-code to send", ["gcode"]);
+    picked = await pickFile(t("pick.title"), ["gcode"]);
   } catch (e) {
-    toast(`Couldn't open the file: ${String(e)}`, { kind: "error" });
+    toast(t("toast.openFailed", { error: String(e) }), { kind: "error" });
     return;
   }
   if (!picked) return;
   if (!picked.name.toLowerCase().endsWith(".gcode")) {
-    toast("Expected a .gcode file.", { kind: "error" });
+    toast(t("toast.expectedGcode"), { kind: "error" });
     return;
   }
 
@@ -115,7 +112,9 @@ export async function sendToPrinter(store: DocumentStore, _geometry: GeometryBac
     toolheads = await printerFilaments(id);
   } catch (e) {
     const pe = asPrinterError(e);
-    toast(pe ? `Can't reach the printer: ${pe.message}` : `Printer error: ${String(e)}`, { kind: "error" });
+    toast(pe ? t("error.unreachable", { message: pe.message }) : t("error.printer", { message: String(e) }), {
+      kind: "error",
+    });
     return;
   }
 
@@ -127,14 +126,17 @@ export async function sendToPrinter(store: DocumentStore, _geometry: GeometryBac
     await printerUploadAndPrint(id, picked.handle, remoteName, mapping.mapTable, mapping.opts);
   } catch (e) {
     const pe = asPrinterError(e);
-    if (pe?.code === "Busy") toast("Printer is busy, job not sent.", { kind: "error" });
-    else if (pe?.code === "NozzleMismatch") toast(`Nozzle mismatch, ${pe.message}`, { kind: "error" });
-    else if (pe?.code === "Unreachable") toast("Printer not reachable, is it on?", { kind: "error" });
-    else toast(pe ? `Print rejected: ${pe.message}` : `Send failed: ${String(e)}`, { kind: "error" });
+    if (pe?.code === "Busy") toast(t("toast.busy"), { kind: "error" });
+    else if (pe?.code === "NozzleMismatch") toast(t("toast.nozzle", { message: pe.message }), { kind: "error" });
+    else if (pe?.code === "Unreachable") toast(t("toast.notReachable"), { kind: "error" });
+    else
+      toast(pe ? t("toast.rejected", { message: pe.message }) : t("toast.sendFailed", { error: String(e) }), {
+        kind: "error",
+      });
     return;
   }
 
-  toast(`Sent ${remoteName}, printing`, { kind: "info" });
+  toast(t("toast.sent", { name: remoteName }), { kind: "info" });
   void startMonitoring(id);
 }
 
@@ -145,20 +147,23 @@ async function startMonitoring(id: string) {
   const offStatus = onPrinterStatus((s) => {
     if (s.id !== id) return;
     if (s.state === "printing" || s.state === "paused") {
+      const percent = Math.round(s.progress * 100);
       setPrinterStatusText(
-        `${s.state === "paused" ? "Paused" : "Printing"} ${s.filename}, ${Math.round(s.progress * 100)}%`,
+        s.state === "paused"
+          ? t("status.paused", { file: s.filename, percent })
+          : t("status.printing", { file: s.filename, percent }),
       );
     } else {
       setPrinterStatusText(null);
-      if (s.state === "complete") toast(`Print complete: ${s.filename}`, { kind: "info" });
-      else if (s.state === "error") toast(`Print error on ${s.filename}`, { kind: "error" });
+      if (s.state === "complete") toast(t("toast.complete", { file: s.filename }), { kind: "info" });
+      else if (s.state === "error") toast(t("toast.errorOn", { file: s.filename }), { kind: "error" });
       cleanup();
     }
   });
   const offOffline = onPrinterOffline((oid) => {
     if (oid !== id) return;
     setPrinterStatusText(null);
-    toast("Lost connection to the printer.", { kind: "error" });
+    toast(t("toast.lost"), { kind: "error" });
     cleanup();
   });
   const cleanup = () => {

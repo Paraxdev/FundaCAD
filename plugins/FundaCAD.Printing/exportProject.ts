@@ -1,6 +1,7 @@
 // The colored 3MF PROJECT export: one object per body with a toolhead assignment each, rather than the app's one-mesh
 // 3MF. This plugin's exporter in the geometry engine (geometry/register.py) writes it, reached through `exportWith`.
 
+import { t } from "./lines";
 import { contributedPalette, listModal, reportError, saveDialog, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
 
@@ -26,12 +27,12 @@ export async function exportPrintProject(
     return null;
   }
   if (!geometry.exportWith) {
-    await reportError("Colored 3MF export is not available with this geometry engine yet.");
+    await reportError(t("export.noEngine"));
     return null;
   }
   const bodies = store.buildState.result?.bodies ?? [];
   if (!bodies.length) {
-    await reportError("Nothing to export yet, build a body first.");
+    await reportError(t("export.noBodies"));
     return null;
   }
 
@@ -39,7 +40,7 @@ export async function exportPrintProject(
   if (!path) {
     const base = stripDocumentExt(store.fileName) || "part";
     const picked = await saveDialog({
-      filters: [{ name: "3MF project", extensions: ["3mf"] }],
+      filters: [{ name: t("export.filterName"), extensions: ["3mf"] }],
       defaultPath: `${base}.3mf`,
     });
     if (!picked) return null;
@@ -55,12 +56,13 @@ export async function exportPrintProject(
 
   // Same busy/cancel treatment as the app's own export and import: this path
   // tessellates every body at export grade before writing the project.
-  const res = await store.runBusy(`Exporting ${path.split(/[\\/]/).pop() ?? "project"}`, (onStarted) =>
-    geometry.exportWith!(store.document, path, PROJECT_EXPORTER, options, onStarted),
+  const res = await store.runBusy(
+    t("export.busy", { name: path.split(/[\\/]/).pop() ?? t("export.busyFallback") }),
+    (onStarted) => geometry.exportWith!(store.document, path, PROJECT_EXPORTER, options, onStarted),
   );
   if (!res.ok) {
     if (res.cancelled) return null;
-    await reportError(`Print export failed: ${res.message ?? "unknown error"}`);
+    await reportError(t("export.failed", { message: res.message ?? t("error.unknown") }));
     return null;
   }
   void warnUnloadedFilaments(
@@ -70,10 +72,10 @@ export async function exportPrintProject(
   // Only a modal when there are warnings (features that didn't build); the
   // silent staging path shouldn't pop a dialog on the happy path.
   if (res.warnings?.length) {
-    const lines = res.warnings.map(
-      (w) => `Warning: ${w.feature_id ?? "feature"} failed, its result is NOT in the export: ${w.message}`,
+    const lines = res.warnings.map((w) =>
+      t("export.featureFailed", { feature: w.feature_id ?? t("export.featureFallback"), message: w.message }),
     );
-    await listModal("Exported project, with warnings", [res.path ?? path, ...lines]);
+    await listModal(t("export.warnTitle"), [res.path ?? path, ...lines]);
   }
   const out: ProjectExport = { path: res.path ?? path };
   if (typeof res.info?.presets === "boolean") out.presets = res.info.presets;
@@ -106,13 +108,10 @@ async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
     if (!empty.length && !unassigned) return;
     const parts: string[] = [];
     if (empty.length) {
-      parts.push(
-        `slot${empty.length > 1 ? "s" : ""} ${empty.map((s) => s + 1).join(", ")} ha${empty.length > 1 ? "ve" : "s"} no filament loaded on the printer`,
-      );
+      parts.push(t("export.warnSlots", { n: empty.length, list: empty.map((s) => s + 1).join(", ") }));
     }
-    if (unassigned)
-      parts.push(`${unassigned} bod${unassigned > 1 ? "ies are" : "y is"} unassigned (defaulting to slot 1)`);
-    toast(`Exported, but ${parts.join("; ")}.`, { kind: "warning" });
+    if (unassigned) parts.push(t("export.warnBodies", { n: unassigned }));
+    toast(t("export.warnLead", { parts: parts.join(t("export.warnSeparator")) }), { kind: "warning" });
   } catch {
     // printer offline/slow/unconfigured, the check is best-effort by design
   }
