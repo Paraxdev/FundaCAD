@@ -9,6 +9,7 @@ import { useName, type Named } from "./useName";
 import { fmtKeys } from "../../input/platform";
 import {
   formatMeasure,
+  MeasureRefusal,
   parseMeasure,
   refusalText,
   roundForDisplay,
@@ -105,9 +106,9 @@ function read(raw: string): number | null {
   const v = props.parse ? props.parse(raw, unitDef.value) : parseMeasure(raw, unitDef.value).value;
   if (v === null) {
     if (props.expression) return null;
-    throw new Error(t("ui.number.notNumber"));
+    throw new MeasureRefusal("ui.number.notNumber");
   }
-  if (!Number.isFinite(v)) throw new Error(t("ui.number.notNumber"));
+  if (!Number.isFinite(v)) throw new MeasureRefusal("ui.number.notNumber");
   return v;
 }
 

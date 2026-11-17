@@ -7,6 +7,7 @@ import {
   captureConfiguration,
   checkResults,
   evalExpr,
+  refusalText,
   shownExpr,
   spellNumber,
   storedExpr,
@@ -216,7 +217,7 @@ function exprError(expr: string): string | null {
     evalExpr(storedExpr(expr), values);
     return null;
   } catch (e) {
-    return e instanceof Error ? e.message : String(e);
+    return e instanceof Error ? refusalText(e) : String(e);
   }
 }
 

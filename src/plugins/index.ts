@@ -6,6 +6,7 @@ import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
 import { t } from "../i18n";
 import { toast } from "../ui/toast";
+import { WordedError } from "../ui/wordedError";
 import type { RunOutcome } from "./runner/host";
 import { nativeDialog } from "../io/nativeDialog";
 
@@ -262,7 +263,7 @@ export function candidateFrom(raw: RawInspected, from: "url" | "file"): Candidat
   const parsed = parseManifest(raw.manifest);
   if (!parsed.ok) {
     // Refused rather than shown with the bad parts hidden: a manifest this app cannot fully read, it cannot describe.
-    throw new Error(t("plugins.notInstallable", { why: parsed.why }));
+    throw new WordedError("plugins.notInstallable", { why: parsed.why });
   }
   return {
     manifest: parsed.manifest,

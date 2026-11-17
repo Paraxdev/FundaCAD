@@ -30,3 +30,22 @@ export declare function lowerAllowlist(
   allow: readonly StringAllowEntry[],
 ): StringAllowEntry[];
 export declare function formatAllowlist(allow: readonly StringAllowEntry[]): string;
+
+export interface ThrownFinding {
+  path: string;
+  line: number;
+  /** The class thrown, for example `Error` or `MeasureRefusal`. */
+  name: string;
+  /** The message on one line, a hole shown as an ellipsis, or `t() at the throw: …`. */
+  text: string;
+}
+
+export interface ThrownAllowEntry {
+  path: string;
+  prefix: string;
+  reason: string;
+}
+
+export declare function isThrownScanned(path: string): boolean;
+export declare function scanThrown(files: Record<string, string>): ThrownFinding[];
+export declare function checkThrown(findings: readonly ThrownFinding[], allow: readonly ThrownAllowEntry[]): string[];

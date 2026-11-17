@@ -258,7 +258,7 @@ describe("the problems a value box shows", () => {
     ]);
   });
 
-  it("pass every other parameter engine text through as sent", async () => {
+  it("word the parameter engine's own refusals and pass every other text through as sent", async () => {
     await setLanguage("de");
     const w = panel("p1");
     await type(w, "count", "3mm");
@@ -268,11 +268,13 @@ describe("the problems a value box shows", () => {
       exprProblem('unknown parameter "gap" in sketch'),
       exprProblem('unknown function "sqr"'),
       exprProblem('unknown parameter "gap2"'),
+      exprProblem("circular reference: a → b"),
     ]).toEqual([
       null,
       'unknown parameter "gap" in sketch',
-      'unknown function "sqr"',
+      "unbekannte Funktion „sqr“",
       "„gap2“ ist keine Zahl und kein Parameter",
+      "circular reference: a → b",
     ]);
   });
 

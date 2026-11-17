@@ -16,7 +16,7 @@ import type { TraceLens } from "./camera";
 import { FrameCameras, type FrameView } from "./frameCamera";
 import { NativeScene, type Call } from "./nativeScene";
 import { PresentSlot } from "./presentSlot";
-import { runSelfCheck, selfCheckReason } from "./selfCheck";
+import { runSelfCheck, selfCheckArgs } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 import type { MessageKey } from "../../i18n";
 import { WordedError } from "../../ui/wordedError";
@@ -458,7 +458,7 @@ export class NativeTracer implements TracerBackend {
     this.syncBloom();
     // After the connect, which is what opens the native tracer the check borrows its path from.
     const check = await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
-    if (check && !check.passed) throw new TracerRefused(selfCheckReason(check));
+    if (check && !check.passed) throw new TracerRefused("render.trace.selfCheckWrong", selfCheckArgs(check));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {

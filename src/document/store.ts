@@ -82,6 +82,7 @@ import {
   savedFaceRefs,
 } from "./faceRefs";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
+import { WordedError } from "../ui/wordedError";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { withFacelessFailures } from "./facelessBodies";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
@@ -2960,7 +2961,7 @@ export class DocumentStore {
   }
 
   branchFromVersion(id: string, name: string): string {
-    if (!this.repo) throw new Error("save a version first");
+    if (!this.repo) throw new WordedError("versions.error.saveFirst");
     const clean = createVersionBranch(this.repo, name, id);
     this.switchVersionBranch(clean);
     return clean;
@@ -3039,12 +3040,12 @@ export class DocumentStore {
       raw = JSON.parse(json);
     } catch (e) {
       throw new UnreadableDocumentError(
-        t("files.unreadable.garbled"),
+        "files.unreadable.garbled",
         `could not read document: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
     const problem = documentShapeProblem(raw);
-    if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
+    if (problem) throw new UnreadableDocumentError(problem.key, problem.detail, problem.args);
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     if (!replace) {

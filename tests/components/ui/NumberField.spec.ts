@@ -838,4 +838,15 @@ describe("NumberField in a comma language", () => {
     await idle.w.vm.$nextTick();
     expect(idle.el.value).toBe("12.375");
   });
+
+  it("says a parsed text is not a number in the chosen language", async () => {
+    await setLanguage("en");
+    const english = await render({ parse: () => null });
+    await commit(english.input, "banana");
+    expect(english.input.attributes("title")).toBe("Not a number");
+    await setLanguage("de");
+    const german = await render({ parse: () => Number.NaN });
+    await commit(german.input, "banana");
+    expect(german.input.attributes("title")).toBe("Keine Zahl");
+  });
 });

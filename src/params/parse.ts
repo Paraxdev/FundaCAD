@@ -14,12 +14,26 @@
 // time, the AST keeping the tag. Function arguments are separated by `;` since `,` is a decimal comma in some
 // locales. Identifiers are case-sensitive and may not contain '.'.
 
+import { tEnglish, type MessageArgs, type MessageKey } from "../i18n";
+
 export class ExprError extends Error {
   constructor(
     message: string,
     readonly pos?: number,
   ) {
     super(message);
+  }
+}
+
+/** An ExprError the app worded: its message stays English for the MCP tools and the log, and `refusalText` or
+ *  `exprProblem` words it from the key where it is shown. */
+export class ExprRefusal extends ExprError {
+  constructor(
+    readonly key: MessageKey,
+    readonly args: MessageArgs = {},
+    pos?: number,
+  ) {
+    super(tEnglish(key, args), pos);
   }
 }
 
@@ -81,7 +95,7 @@ export const MAX_EXPR_DEPTH = 100;
 export function tokenize(src: string): Token[] {
   // The engine counts code points, not UTF-16 units.
   if (src.length > MAX_EXPR_LEN && [...src].length > MAX_EXPR_LEN) {
-    throw new ExprError(`expression is longer than ${MAX_EXPR_LEN} characters`);
+    throw new ExprRefusal("expr.tooLong", { max: MAX_EXPR_LEN });
   }
   const out: Token[] = [];
   // One entry per open bracket, true when it opens a function's arguments.
@@ -106,14 +120,14 @@ export function tokenize(src: string): Token[] {
       }
       const text = src.slice(start, i);
       const value = Number(text);
-      if (!Number.isFinite(value)) throw new ExprError(`invalid number "${text}"`, start);
+      if (!Number.isFinite(value)) throw new ExprRefusal("field.problem.invalidNumber", { number: text }, start);
       out.push({ kind: "num", value, start, end: i });
       continue;
     }
     if (IDENT_START.test(ch)) {
       const start = i;
       while (i < src.length && IDENT_PART.test(src[i]!)) i++;
-      if (src[i] === ".") throw new ExprError("qualified names ('.') are not supported", i);
+      if (src[i] === ".") throw new ExprRefusal("expr.qualifiedName", {}, i);
       out.push({ kind: "ident", name: src.slice(start, i), start, end: i });
       continue;
     }
@@ -130,8 +144,8 @@ export function tokenize(src: string): Token[] {
       i++;
       continue;
     }
-    if (ch === "," && calls.at(-1)) throw new ExprError('unexpected character ",", separate arguments with ";"', i);
-    throw new ExprError(`unexpected character "${ch}"`, i);
+    if (ch === "," && calls.at(-1)) throw new ExprRefusal("expr.commaInCall", {}, i);
+    throw new ExprRefusal("expr.unexpectedCharacter", { char: ch }, i);
   }
   return out;
 }
@@ -166,12 +180,13 @@ class Parser {
   }
 
   parse(): ExprNode {
-    if (this.toks.length === 0) throw new ExprError("empty expression");
+    if (this.toks.length === 0) throw new ExprRefusal("expr.empty");
     const node = this.expr();
     const left = this.peek();
     if (left)
-      throw new ExprError(
-        `unexpected "${left.kind === "op" ? left.op : left.kind === "ident" ? left.name : left.value}"`,
+      throw new ExprRefusal(
+        "expr.unexpected",
+        { token: left.kind === "op" ? left.op : left.kind === "ident" ? left.name : String(left.value) },
         left.start,
       );
     return node;
@@ -197,7 +212,7 @@ class Parser {
     const node: ExprNode = { t: "bin", op, l, r: this.add() };
     const chained = this.peek();
     if (chained?.kind === "op" && CMP_OPS.includes(chained.op as BinOp)) {
-      throw new ExprError("comparisons do not chain, join them with &&", chained.start);
+      throw new ExprRefusal("expr.unchained", {}, chained.start);
     }
     return node;
   }
@@ -220,7 +235,7 @@ class Parser {
   // Every recursive path (parentheses, call arguments, `- !`, `^`) passes through here, so one counter bounds them all.
   private unary(): ExprNode {
     if (this.depth >= MAX_EXPR_DEPTH) {
-      throw new ExprError(`expression nests deeper than ${MAX_EXPR_DEPTH} levels`, this.peek()?.start);
+      throw new ExprRefusal("expr.tooDeep", { max: MAX_EXPR_DEPTH }, this.peek()?.start);
     }
     this.depth++;
     try {
@@ -241,7 +256,7 @@ class Parser {
   }
   private primary(): ExprNode {
     const t = this.peek();
-    if (!t) throw new ExprError("unexpected end of expression");
+    if (!t) throw new ExprRefusal("expr.unexpectedEnd");
     if (t.kind === "num") {
       this.i++;
       const suffix = this.peek();
@@ -257,7 +272,8 @@ class Parser {
       if (this.takeOp("(")) {
         const args: ExprNode[] = [this.expr()];
         while (this.takeOp(";")) args.push(this.expr());
-        if (!this.takeOp(")")) throw new ExprError(`missing ")" in ${t.name}(…)`, this.peek()?.start ?? t.end);
+        if (!this.takeOp(")"))
+          throw new ExprRefusal("expr.missingParenIn", { name: t.name }, this.peek()?.start ?? t.end);
         return { t: "call", name: t.name, args };
       }
       return { t: "ref", name: t.name };
@@ -265,10 +281,10 @@ class Parser {
     if (t.op === "(") {
       this.i++;
       const inner = this.expr();
-      if (!this.takeOp(")")) throw new ExprError('missing ")"', this.peek()?.start ?? t.end);
+      if (!this.takeOp(")")) throw new ExprRefusal("expr.missingParen", {}, this.peek()?.start ?? t.end);
       return inner;
     }
-    throw new ExprError(`unexpected "${t.op}"`, t.start);
+    throw new ExprRefusal("expr.unexpected", { token: t.op }, t.start);
   }
 }
 

@@ -830,14 +830,20 @@ describe("path trace host", () => {
     const t = new FakeTracer();
     let n = 0;
     const host = new PathTraceHost(glCanvas, async () => {
-      if (n++ === 0) throw new TracerRefused("the native tracer drew its test scene wrong");
+      if (n++ === 0)
+        throw new TracerRefused("render.trace.selfCheckWrong", { path: "dx12", diff: "9.00", threshold: "4.00" });
       return t;
     });
     host.onFault = (why, off) => faults.push([why, off]);
     host.tick(frame());
     await flush();
     await flush();
-    expect(faults).toEqual([["Path tracing could not start: the native tracer drew its test scene wrong", false]]);
+    expect(faults).toEqual([
+      [
+        "Path tracing could not start: the native tracer drew its test scene wrong on dx12 (diff 9.00 over 4.00 of 255)",
+        false,
+      ],
+    ]);
     host.tick(frame());
     await flush();
     await flush();

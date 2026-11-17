@@ -199,7 +199,11 @@ describe("ProfileChip", () => {
       field().value = "0.250";
       key(field(), "Enter");
       expect({ refused, taken: [chip.profile, field().value] }).toEqual({
-        refused: [-0.35, "true", '"1.500" is ambiguous, write a comma for decimals or leave the point out'],
+        refused: [
+          -0.35,
+          "true",
+          "„1.500“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg",
+        ],
         taken: [0.25, "+0,250"],
       });
     } finally {

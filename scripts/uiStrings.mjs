@@ -234,12 +234,21 @@ export function scanStrings(files) {
   return found.sort((a, b) => (a.path === b.path ? a.line - b.line : a.path < b.path ? -1 : 1));
 }
 
+const KEY_SHAPE = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)+$/;
+
 function collectKeys(code, keys) {
+  const keyed = (node) => {
+    if (ts.isStringLiteralLike(node) && KEY_SHAPE.test(node.text)) keys.add(node.text);
+    ts.forEachChild(node, keyed);
+  };
   const visit = (node) => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "t") {
       const first = node.arguments[0];
       if (first && ts.isStringLiteralLike(first)) keys.add(first.text);
     }
+    // A thrown error carries its keys, worded where it is shown.
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && THROWN.test(node.expression.text))
+      for (const arg of node.arguments ?? []) keyed(arg);
     ts.forEachChild(node, visit);
   };
   visit(sourceOf(code, "k.ts"));
@@ -345,4 +354,83 @@ export function formatAllowlist(allow) {
   const line = (e) =>
     `  { "path": ${JSON.stringify(e.path)}, "kind": ${JSON.stringify(e.kind)}, "count": ${e.count}, "reason": ${JSON.stringify(e.reason)} }`;
   return `[\n${allow.map(line).join(",\n")}\n]\n`;
+}
+
+// Thrown sentences. A message stays English for the log, the crumbs and MCP, so a sentence the maker may read is
+// thrown as a key (WordedError and its kin) and worded where it is shown. Kept English throws are listed in
+// scripts/thrown-allow.json by file and message prefix, each with its reason.
+
+export function isThrownScanned(path) {
+  if (!/^(src|plugins)\/.+\.(vue|ts)$/.test(path) || path.endsWith(".d.ts")) return false;
+  if (/(^|\/)(node_modules|target|dist|tests?|__tests__)\//.test(path)) return false;
+  return !/\.(test|spec)\.ts$/.test(path);
+}
+
+const THROWN = /(Error|Refusal)$/;
+const words = (s) => (s.replaceAll(HOLE, " ").match(/\p{L}{2,}/gu) ?? []).length >= 2;
+
+function scanThrownScript(code, firstLine, add) {
+  const sf = sourceOf(code, "s.ts");
+  const visit = (node) => {
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && THROWN.test(node.expression.text)) {
+      const first = node.arguments?.[0];
+      let head = first;
+      while (head && ts.isBinaryExpression(head) && head.operatorToken.kind === ts.SyntaxKind.PlusToken)
+        head = head.left;
+      const text = head ? literalText(head) : null;
+      const line = firstLine + lineOf(sf, node);
+      if (text !== null && words(text) && !looksCode(text)) add(line, node.expression.text, oneLine(text));
+      else if (first && ts.isCallExpression(first) && /^(t|tr)$/.test(first.expression.getText()))
+        add(line, node.expression.text, `t() at the throw: ${first.getText()}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+}
+
+export function scanThrown(files) {
+  const found = [];
+  for (const [path, src] of Object.entries(files)) {
+    if (!isThrownScanned(path)) continue;
+    const add = (line, name, text) => found.push({ path, line, name, text });
+    if (path.endsWith(".vue")) {
+      for (const block of vueParts(path, src).scripts) scanThrownScript(block.content, block.loc.start.line, add);
+    } else {
+      scanThrownScript(src, 1, add);
+    }
+  }
+  return found.sort((a, b) => (a.path === b.path ? a.line - b.line : a.path < b.path ? -1 : 1));
+}
+
+const validThrownEntry = (e) =>
+  e &&
+  typeof e.path === "string" &&
+  typeof e.prefix === "string" &&
+  e.prefix.trim() !== "" &&
+  typeof e.reason === "string" &&
+  e.reason.trim() !== "";
+
+/** Every thrown sentence needs an entry, and every entry a sentence, so a converted throw takes its entry with it. */
+export function checkThrown(findings, allow) {
+  const problems = [];
+  allow.forEach((e, i) => {
+    if (!validThrownEntry(e)) problems.push(`entry ${i + 1} (${e?.path}): needs a path, a message prefix and a reason`);
+  });
+  if (problems.length) return problems;
+  const used = new Set();
+  for (const f of findings) {
+    const i = allow.findIndex((e) => e.path === f.path && f.text.startsWith(e.prefix));
+    if (i >= 0) used.add(i);
+    else
+      problems.push(
+        `${f.path}:${f.line} new ${f.name}(${JSON.stringify(f.text)}) throws an English sentence the maker may read. ` +
+          `Throw a WordedError with a key and word it where it is shown (shownMessage, plainError, refusalText), ` +
+          `or list it in scripts/thrown-allow.json with the reason it never reaches the screen.`,
+      );
+  }
+  allow.forEach((e, i) => {
+    if (!used.has(i))
+      problems.push(`${e.path}: no thrown sentence starts ${JSON.stringify(e.prefix)}, remove the entry`);
+  });
+  return problems;
 }

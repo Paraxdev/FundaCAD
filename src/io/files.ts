@@ -3,6 +3,7 @@
 
 import { suggestedSavePath } from "./saveFolder";
 import { decimalMark, t } from "../i18n";
+import { shownMessage } from "../ui/wordedError";
 import { nameList } from "./nameList";
 import { andWords } from "../sketch/sketchNames";
 import { pickFile } from "../components/ui/dom";
@@ -249,7 +250,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
   }
   const embedded = raw && typeof raw === "object" ? (raw as { geometry?: unknown }).geometry : undefined;
   if (embedded === undefined) return null;
-  const damaged = (detail: string) => new UnreadableDocumentError(t("files.unreadable.geometryDamaged"), detail);
+  const damaged = (detail: string) => new UnreadableDocumentError("files.unreadable.geometryDamaged", detail);
   if (!embedded || typeof embedded !== "object" || Array.isArray(embedded)) throw damaged("geometry is not an object");
   const blobs: Uint8Array[] = [];
   for (const [hash, data] of Object.entries(embedded)) {
@@ -261,10 +262,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
       throw damaged(`geometry ${hash} is not base64`);
     }
     if (blake2b128Hex(bytes) !== hash) {
-      throw new UnreadableDocumentError(
-        t("files.unreadable.geometryHash"),
-        `geometry ${hash} does not match its bytes`,
-      );
+      throw new UnreadableDocumentError("files.unreadable.geometryHash", `geometry ${hash} does not match its bytes`);
     }
     blobs.push(bytes);
   }
@@ -274,7 +272,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
   try {
     for (const b of blobs) await backend.blobPut(b);
   } catch (e) {
-    return errMsg(e);
+    return shownMessage(e);
   }
   return null;
 }

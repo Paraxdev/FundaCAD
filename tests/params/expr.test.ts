@@ -100,10 +100,10 @@ describe("expression evaluator", () => {
     ["2(1, 2)", false],
   ])("a comma in %j gives the semicolon hint only inside a function's brackets: %s", (src, hint) => {
     expect(() => ev(src)).toThrow(
-      new ExprError(
-        hint ? 'unexpected character ",", separate arguments with ";"' : 'unexpected character ","',
-        src.indexOf(","),
-      ),
+      expect.objectContaining({
+        message: hint ? 'unexpected character ",", separate arguments with ";"' : 'unexpected character ","',
+        pos: src.indexOf(","),
+      }),
     );
   });
 

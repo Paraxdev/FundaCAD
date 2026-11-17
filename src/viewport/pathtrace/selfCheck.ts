@@ -2,6 +2,7 @@
 // showing a wrong picture; a check that could not run is only logged.
 
 import { crumb } from "../../diagnostics/breadcrumbs";
+import { tEnglish } from "../../i18n";
 import type { NativeProbe } from "./choose";
 import type { Call } from "./nativeScene";
 
@@ -51,8 +52,15 @@ export function failedSelfCheck(): SelfCheckAnswer | null {
   return failed;
 }
 
+export const selfCheckArgs = (a: SelfCheckAnswer) => ({
+  path: a.path,
+  diff: a.diff.toFixed(2),
+  threshold: a.threshold.toFixed(2),
+});
+
+/** English, for the probe and the problem report. */
 export function selfCheckReason(a: SelfCheckAnswer): string {
-  return `the native tracer drew its test scene wrong on ${a.path} (diff ${a.diff.toFixed(2)} over ${a.threshold.toFixed(2)} of 255)`;
+  return tEnglish("render.trace.selfCheckWrong", selfCheckArgs(a));
 }
 
 /** The probe as the page holds it once the self check failed: refused with

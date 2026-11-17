@@ -1,7 +1,7 @@
 // Expression evaluation in canonical units (mm, degrees, counts). Arithmetic never throws (x/0 is Infinity) and
 // callers gate on Number.isFinite; structural problems (unknown name or function, wrong arity) throw ExprError.
 
-import { CONSTANTS, ExprError, FUNCTIONS, RESERVED_FUNCTIONS, parseExpr } from "./parse";
+import { CONSTANTS, ExprRefusal, FUNCTIONS, RESERVED_FUNCTIONS, parseExpr } from "./parse";
 import type { BinOp, ExprNode } from "./parse";
 
 const TRUTH_OPS = new Set<BinOp>(["<", "<=", ">", ">=", "==", "!=", "&&", "||"]);
@@ -13,20 +13,19 @@ export function evalNode(n: ExprNode, values: Record<string, number>): number {
     case "ref": {
       if (n.name in values) return values[n.name]!;
       if (n.name in CONSTANTS) return CONSTANTS[n.name]!;
-      throw new ExprError(`unknown parameter "${n.name}"`);
+      throw new ExprRefusal("field.problem.unknownName", { name: n.name });
     }
     case "call": {
       const fn = FUNCTIONS[n.name];
       if (!fn) {
-        throw new ExprError(
-          RESERVED_FUNCTIONS.has(n.name) ? `${n.name}() is not supported yet` : `unknown function "${n.name}"`,
-        );
+        throw new ExprRefusal(RESERVED_FUNCTIONS.has(n.name) ? "expr.notYet" : "expr.unknownFunction", {
+          name: n.name,
+        });
       }
       const [lo, hi] = fn.arity;
       if (n.args.length < lo || n.args.length > hi) {
-        throw new ExprError(
-          `${n.name}() takes ${hi === Infinity ? `at least ${lo}` : lo === hi ? lo : `${lo}, ${hi}`} argument${lo === 1 && hi === 1 ? "" : "s"}`,
-        );
+        const form = hi === Infinity ? "atLeast" : lo !== hi ? "range" : lo === 1 ? "one" : "other";
+        throw new ExprRefusal("expr.arity", { name: n.name, form, lo, hi: hi === Infinity ? lo : hi });
       }
       return fn.apply(n.args.map((a) => evalNode(a, values)));
     }
