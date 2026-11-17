@@ -125,8 +125,32 @@ export interface DeviceBlocked {
   hint?: string | null;
 }
 
+// The native side words its hints in English, so each one maps to a line of its own with the shell command kept as
+// sent. tests/plugins/spaceMouseHintsDrift.test.ts reads the Rust sources, and a hint not listed shows as sent.
+const ENGINE_HINTS = new Map<string, { cmd: string; say: (cmd: string) => string }>([
+  [
+    "start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule",
+    { cmd: "sudo systemctl enable --now spacenavd", say: (cmd) => t("hint.absent", { cmd }) },
+  ],
+  [
+    "spacenavd is not answering, restart it (sudo systemctl restart spacenavd) or install the udev rule",
+    { cmd: "sudo systemctl restart spacenavd", say: (cmd) => t("hint.refused", { cmd }) },
+  ],
+  [
+    "start spacenavd on this computer, or grant the device with: flatpak override --user --device=all dev.fundacad.app",
+    { cmd: "flatpak override --user --device=all dev.fundacad.app", say: (cmd) => t("hint.flatpak", { cmd }) },
+  ],
+]);
+
+export const ENGINE_HINT_TEXTS: readonly string[] = [...ENGINE_HINTS.keys()];
+
+export function hintText(hint: string): string {
+  const known = ENGINE_HINTS.get(hint);
+  return known ? known.say(known.cmd) : hint;
+}
+
 export function blockedText(b: DeviceBlocked): string {
-  return t("blocked.text", { name: b.name, fix: b.hint || t("blocked.fix") });
+  return t("blocked.text", { name: b.name, fix: b.hint ? hintText(b.hint) : t("blocked.fix") });
 }
 
 /** Shared by the viewport loop and the settings preview. The deadzone runs first, which matters only once CROSS_AXIS_MAX

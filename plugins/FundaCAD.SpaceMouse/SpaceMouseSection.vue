@@ -14,6 +14,7 @@ import {
   filterMotion,
   getLatestMotion,
   getSpaceMouseConfig,
+  hintText,
   onSpaceMouseMotion,
   setSpaceMouseConfig,
   settings,
@@ -229,7 +230,7 @@ onUnmounted(() => {
       <div class="sm-section">{{ t("panel.axesTitle") }}</div>
       <div class="sm-hint">{{ t("panel.axesHint") }}</div>
       <div v-if="flatpakHint" class="sm-hint" data-testid="spacemouse-flatpak-hint">
-        {{ t("panel.flatpak", { hint: flatpakHint }) }}
+        {{ t("panel.flatpak", { hint: hintText(flatpakHint) }) }}
       </div>
       <!-- The bars move at device report rate, which no screen reader could follow, so only sight gets them. -->
       <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row" aria-hidden="true">

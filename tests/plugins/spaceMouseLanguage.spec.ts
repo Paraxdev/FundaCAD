@@ -36,11 +36,15 @@ afterEach(async () => {
   await setLanguage("system");
 });
 
+const FLATPAK =
+  "start spacenavd on this computer, or grant the device with: flatpak override --user --device=all dev.fundacad.app";
+const ABSENT = "start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule";
+
 const prop = (key: string) => SETTINGS.props.find((p) => p.key === key) as unknown as Record<string, unknown>;
 
 describe("the 3D mouse panel", () => {
   it("reads in German, then in Japanese, without a remount", async () => {
-    invoke.mockImplementation(async (cmd) => (cmd === "spacemouse_flatpak_hint" ? "run spacenavd" : null));
+    invoke.mockImplementation(async (cmd) => (cmd === "spacemouse_flatpak_hint" ? FLATPAK : null));
     await setLanguage("de");
     const w = mount(SpaceMouseSection, { attachTo: document.body });
     await flushPromises();
@@ -48,13 +52,16 @@ describe("the 3D mouse panel", () => {
     expect(w.text()).toContain("Achsenzuordnung");
     expect(w.text()).toContain("Schieben ←→ (Tx)");
     expect(w.find('[data-testid="spacemouse-flatpak-hint"]').text()).toBe(
-      "Damit das Flatpak eine 3D-Maus erreicht, run spacenavd",
+      "Damit das Flatpak eine 3D-Maus erreicht, starten Sie spacenavd auf diesem Computer oder geben Sie das Gerät frei mit: flatpak override --user --device=all dev.fundacad.app",
     );
     expect(w.find("canvas").attributes("aria-label")).toContain("Testwürfel");
     expect(w.find(".sm-map-row .sr-only").text()).toBe("Verschieben ←→");
 
     await setLanguage("ja");
     await nextTick();
+    expect(w.find('[data-testid="spacemouse-flatpak-hint"]').text()).toBe(
+      "Flatpak から 3D マウスを使うには、このコンピューターで spacenavd を起動するか、次のコマンドでデバイスを許可してください: flatpak override --user --device=all dev.fundacad.app",
+    );
     expect(w.text()).toContain("軸の割り当て");
     expect(w.text()).toContain("スライド ←→ (Tx)");
     expect(w.find(".sm-map-row .sr-only").text()).toBe("パン ←→");
@@ -83,7 +90,13 @@ describe("the lists, settings and refusal read the language when asked", () => {
     expect(blockedText(b)).toBe(
       "„SpaceMouse Pro“ wurde gefunden, kann aber nicht gelesen werden, starten Sie spacenavd oder installieren Sie die udev-Regel. Lesen Sie dazu die Seite zur 3D-Maus im Handbuch.",
     );
+    expect(blockedText({ ...b, hint: ABSENT })).toBe(
+      "„SpaceMouse Pro“ wurde gefunden, kann aber nicht gelesen werden, starten Sie spacenavd (sudo systemctl enable --now spacenavd) oder installieren Sie die udev-Regel. Lesen Sie dazu die Seite zur 3D-Maus im Handbuch.",
+    );
+    expect(blockedText({ ...b, hint: FLATPAK })).toContain("geben Sie das Gerät frei mit: flatpak override");
+    expect(blockedText({ ...b, hint: "do this" })).toContain("kann aber nicht gelesen werden, do this. ");
     await setLanguage("en");
+    expect(blockedText({ ...b, hint: ABSENT })).toContain(`can't read it, ${ABSENT}.`);
     expect(blockedText({ ...b, hint: "do this" })).toBe(
       'Found "SpaceMouse Pro" but can\'t read it, do this. See the 3D mouse page of the manual.',
     );
