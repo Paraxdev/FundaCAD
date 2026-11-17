@@ -66,7 +66,14 @@ export function rememberImportUnit(unit: ImportUnit): void {
 export function unitChoices(last: ImportUnit) {
   const first = UNITS.find((u) => u.value === last);
   const rest = UNITS.filter((u) => u.value !== last);
-  return [...(first ? [{ ...first, hint: t("import.unit.lastUsed") }] : []), ...rest];
+  const lead = first && {
+    value: first.value,
+    get label() {
+      return first.label;
+    },
+    hint: t("import.unit.lastUsed"),
+  };
+  return [...(lead ? [lead] : []), ...rest];
 }
 
 /** Ask which unit the file is in, null when the dialog is dismissed or `signal` aborts. */

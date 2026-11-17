@@ -6,6 +6,7 @@ import { unitChoices } from "../../src/io/importUnit";
 import { describeDropLeftovers, type DropPlan } from "../../src/io/dropRouting";
 import { leftOutSectionsNotice } from "../../src/io/documentExt";
 import { describeImportCapability } from "../../src/io/files";
+import { documentShapeProblem } from "../../src/document/documentShape";
 
 afterEach(() => setLanguage("system"));
 
@@ -38,6 +39,12 @@ describe("the unit lists", () => {
     expect(labels(choices)).toEqual(["Zoll", "Millimeter", "Zentimeter", "Meter"]);
     await setLanguage("ja");
     expect(unitChoices("mm")[0]).toEqual({ value: "mm", label: "ミリメートル", hint: "前回使用" });
+  });
+
+  it("keep the last used row's label live across a switch", async () => {
+    const lead = unitChoices("inch")[0]!;
+    await setLanguage("de");
+    expect(lead.label).toBe("Zoll");
   });
 
   it("keep the export format names and patterns the same in every language", async () => {
@@ -89,5 +96,18 @@ describe("file notices", () => {
     expect(t("export.doneWarnings", { n: 3 })).toBe("3 Dateien exportiert, mit Warnungen");
     await setLanguage("ja");
     expect(t("export.done", { n: 2 })).toBe("2 個のファイルをエクスポートしました");
+  });
+});
+
+describe("an unreadable document", () => {
+  it("says why in the chosen language and keeps the detail English", async () => {
+    await setLanguage("de");
+    expect(documentShapeProblem({})?.reason).toBe("sie enthält keine Modellierungsschritte");
+    expect(documentShapeProblem({ features: [{}] })?.reason).toBe("Modellierungsschritt 1 ist beschädigt");
+    expect(documentShapeProblem(null)?.detail).toBe("top level is null, expected an object");
+    await setLanguage("ja");
+    expect(t("files.unreadable", { reason: documentShapeProblem([])!.reason })).toBe(
+      "このファイルは FundaCAD ドキュメントではないか、破損しています: ドキュメントが含まれていません。",
+    );
   });
 });

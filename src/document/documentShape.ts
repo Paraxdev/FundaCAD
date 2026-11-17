@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 // load() checks this before touching the store, so a non document is refused whole with a readable reason (FI-8).
 
 // `reason` finishes "This file is not a FundaCAD document, or it is damaged: ..."; `message` keeps the detail.
@@ -21,15 +23,15 @@ const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typ
 
 export function documentShapeProblem(parsed: unknown): { reason: string; detail: string } | null {
   if (!isRecord(parsed)) {
-    return { reason: "it holds no document", detail: `top level is ${kindOf(parsed)}, expected an object` };
+    return { reason: t("files.unreadable.noDocument"), detail: `top level is ${kindOf(parsed)}, expected an object` };
   }
   const features = parsed["features"];
   if (features === undefined) {
-    return { reason: "it has no modelling steps in it", detail: `"features" is missing` };
+    return { reason: t("files.unreadable.noSteps"), detail: `"features" is missing` };
   }
   if (!Array.isArray(features)) {
     return {
-      reason: "its list of modelling steps is damaged",
+      reason: t("files.unreadable.stepsDamaged"),
       detail: `"features" is ${kindOf(features)}, expected an array`,
     };
   }
@@ -37,18 +39,24 @@ export function documentShapeProblem(parsed: unknown): { reason: string; detail:
     const f: unknown = features[i];
     if (!isRecord(f) || typeof f["type"] !== "string" || !f["type"]) {
       return {
-        reason: `step ${i + 1} of its modelling steps is damaged`,
+        reason: t("files.unreadable.stepDamaged", { n: i + 1 }),
         detail: `features[${i}] is ${isRecord(f) ? "missing a type" : kindOf(f)}`,
       };
     }
   }
   const params = parsed["parameters"];
   if (params !== undefined && !isRecord(params)) {
-    return { reason: "its parameters are damaged", detail: `"parameters" is ${kindOf(params)}, expected an object` };
+    return {
+      reason: t("files.unreadable.parametersDamaged"),
+      detail: `"parameters" is ${kindOf(params)}, expected an object`,
+    };
   }
   const version = parsed["version"];
   if (version !== undefined && typeof version !== "number") {
-    return { reason: "its format version is damaged", detail: `"version" is ${kindOf(version)}, expected a number` };
+    return {
+      reason: t("files.unreadable.versionDamaged"),
+      detail: `"version" is ${kindOf(version)}, expected a number`,
+    };
   }
   return null;
 }

@@ -703,7 +703,8 @@ export async function exportModel(
     ? drawn.label
     : opts.body
       ? (store.bodyName(opts.body) ?? docName)
-      : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
+      : (opts.bodies ? start.base : docName) ||
+        t("export.defaultName", { many: opts.separate || opts.bodies ? "yes" : "no" });
   const name = exportFileName(base, kind.ext);
   const dir = lastExportDir();
   const { save } = await nativeDialog();
@@ -734,7 +735,7 @@ export async function exportModel(
       ),
     )
     .catch((e: unknown) => {
-      if (isSessionEnded(e)) return { ok: false as const, cancelled: true, message: t("export.cancelled") };
+      if (isSessionEnded(e)) return { ok: false as const, cancelled: true, message: undefined };
       throw e;
     });
   if (!session.alive && !res.ok) {

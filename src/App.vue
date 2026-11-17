@@ -49,6 +49,7 @@ import HomeScreen from "./components/home/HomeScreen.vue";
 import { useExportDialogStore } from "./stores/exportDialog";
 import { useToolPanelStore } from "./stores/toolPanels";
 import { contributedOverlays, onContribChange } from "./plugins/contrib";
+import { t } from "./i18n";
 
 const dialogs = useDialogStore();
 const home = useHomeStore();
@@ -105,7 +106,7 @@ watch(
   <!-- src/styles/_layout.scss and the e2e suite select on these element ids and class names. -->
   <TitleBar />
   <SafeModeBanner />
-  <main id="main" aria-label="Model">
+  <main id="main" :aria-label="t('shell.main')">
     <h1 class="sr-only">{{ ui.docName }}</h1>
     <!-- The float layer takes no pointer events, only its cards do, so the model stays pickable between them. -->
     <div id="stage" ref="stage" :class="{ narrow: shell.narrow }">

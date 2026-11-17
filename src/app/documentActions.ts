@@ -198,7 +198,7 @@ export async function importFromHome(
     await run();
     return true;
   }
-  if (pick !== "new" || !(await mayDiscard(e, t("plugins.host.discard")))) return false;
+  if (pick !== "new" || !(await mayDiscard(e, t("document.discard.newDocument")))) return false;
   e.store.newDocument();
   e.viewport.resetCamera(false);
   await importNamed(e, importedName(first), names, run);
@@ -218,7 +218,7 @@ type ExampleEngine = Pick<Engine, "store" | "sketch" | "viewport" | "geometry" |
 export async function newFromTemplate(e: ExampleEngine, id: string): Promise<void> {
   const info = TEMPLATES.find((t) => t.id === id);
   if (!info) return;
-  if (!(await mayDiscard(e, t("plugins.host.discard")))) return;
+  if (!(await mayDiscard(e, t("document.discard.newDocument")))) return;
   if ((await openTemplate(e.store, info.name, () => templateText(id))) === "ok") e.frameNextModel();
 }
 
@@ -281,7 +281,7 @@ export function createDocumentActions(
 ): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo" | "undoIfLatest"> {
   const actions = {
     async newDocument() {
-      if (!(await mayDiscard(e, t("plugins.host.discard")))) return;
+      if (!(await mayDiscard(e, t("document.discard.newDocument")))) return;
       e.store.newDocument();
       e.viewport.resetCamera(false);
     },

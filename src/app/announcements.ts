@@ -65,7 +65,7 @@ export function installAnnouncements(e: { store: DocumentStore }): () => void {
   const offWorkspace = onWorkspaceChange((w) => {
     // The switch itself is a radio group the screen reader already reads as it changes.
     if (document.activeElement?.closest("#workspace-toggle")) return;
-    announce(t("announce.workspace", { workspace: w }), "polite", { key: "mode" });
+    announce(t("announce.workspace", { name: t("shell.workspace.name", { workspace: w }) }), "polite", { key: "mode" });
   });
 
   return () => {

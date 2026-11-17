@@ -3031,7 +3031,7 @@ export class DocumentStore {
       raw = JSON.parse(json);
     } catch (e) {
       throw new UnreadableDocumentError(
-        "its contents are garbled or cut short",
+        t("files.unreadable.garbled"),
         `could not read document: ${e instanceof Error ? e.message : String(e)}`,
       );
     }

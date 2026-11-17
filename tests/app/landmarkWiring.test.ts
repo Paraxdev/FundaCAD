@@ -2,9 +2,11 @@
 
 import { describe, expect, it } from "vitest";
 import { parse } from "@vue/compiler-sfc";
+import { t } from "../../src/i18n";
 import {
   NodeTypes,
   type AttributeNode,
+  type DirectiveNode,
   type ElementNode,
   type RootNode,
   type TemplateChildNode,
@@ -17,6 +19,16 @@ const app = Object.values(
 const elements = (nodes: TemplateChildNode[]) => nodes.filter((c): c is ElementNode => c.type === NodeTypes.ELEMENT);
 const attr = (el: ElementNode, name: string) =>
   el.props.find((p): p is AttributeNode => p.type === NodeTypes.ATTRIBUTE && p.name === name)?.value?.content;
+const bound = (el: ElementNode, name: string) => {
+  const d = el.props.find(
+    (p): p is DirectiveNode =>
+      p.type === NodeTypes.DIRECTIVE &&
+      p.name === "bind" &&
+      p.arg?.type === NodeTypes.SIMPLE_EXPRESSION &&
+      p.arg.content === name,
+  );
+  return d?.exp?.type === NodeTypes.SIMPLE_EXPRESSION ? d.exp.content : undefined;
+};
 const roots = () => elements((parse(app, { filename: "App.vue" }).descriptor.template!.ast as RootNode).children);
 
 describe("landmark wiring", () => {
@@ -30,7 +42,8 @@ describe("landmark wiring", () => {
 
   it("wraps the stage in one main landmark named Model", () => {
     const mains = roots().filter((c) => c.tag === "main");
-    expect(mains.map((m) => [attr(m, "id"), attr(m, "aria-label")])).toEqual([["main", "Model"]]);
+    expect(mains.map((m) => [attr(m, "id"), bound(m, "aria-label")])).toEqual([["main", "t('shell.main')"]]);
+    expect(t("shell.main")).toBe("Model");
     expect(roots().some((c) => attr(c, "id") === "main" && c.tag !== "main")).toBe(false);
   });
 
