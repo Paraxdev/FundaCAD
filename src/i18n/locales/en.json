@@ -636,7 +636,7 @@
   "import.needsDesktop": "Import needs the desktop app: a browser tab has no filesystem path to give the engine to read.",
   "import.rebuildCancelled": "Rebuild cancelled, the model is not built. Compute All builds it.",
   "import.theFile": "the file",
-  "import.tooBig": "Couldn't import {name}: it is {mb, number} MB, a dropped file can be {max, number} MB at most here. Use File > Import in the desktop app.",
+  "import.tooBig": "Couldn't import {name}: it is {mb, number} MB, a dropped file can be {max, number} MB at most here. Use File > Import Mesh in the desktop app.",
   "import.unit.ask": "What unit is this {format} file in?",
   "import.unit.cm": "Centimetres",
   "import.unit.inch": "Inches",
