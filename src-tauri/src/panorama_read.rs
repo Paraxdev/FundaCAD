@@ -4,6 +4,8 @@
 use std::io::Read;
 use std::path::Path;
 
+use tauri::Manager;
+
 use crate::doc_paths::Provenance;
 
 /// Past this an .hdr or .exr is not a panorama a viewport can light with.
@@ -37,12 +39,11 @@ pub fn read_panorama(held: &Provenance, raw: &str, cap: u64) -> Result<Vec<u8>, 
 
 /// The bytes of a panorama the person dropped or picked, as the raw IPC body.
 #[tauri::command]
-pub async fn read_dropped_panorama(
-    held: tauri::State<'_, Provenance>,
-    path: String,
-) -> Result<tauri::ipc::Response, String> {
-    let held = held.inner();
-    read_panorama(held, &path, MAX_PANORAMA_BYTES).map(tauri::ipc::Response::new)
+pub async fn read_dropped_panorama(app: tauri::AppHandle, path: String) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || read_panorama(&app.state::<Provenance>(), &path, MAX_PANORAMA_BYTES))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(tauri::ipc::Response::new)
 }
 
 #[cfg(test)]
