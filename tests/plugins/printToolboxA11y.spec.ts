@@ -180,7 +180,7 @@ describe("the Printability panel, for a screen reader", () => {
     const rows = [...list.querySelectorAll<HTMLElement>("li > button")];
     expect(rows.map((r) => nameOf(r))).toEqual([
       "Overhang, 132 mm² leaning 90°, face 4, from 5 mm above the bed",
-      "Bridge 14 mm span (over 10), face 5, centred 8 mm above the bed",
+      "Bridge 14 mm span (over 10 mm), face 5, centred 8 mm above the bed",
     ]);
   });
 

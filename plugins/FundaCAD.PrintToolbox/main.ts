@@ -10,7 +10,7 @@ import PrintabilityPanel from "./PrintabilityPanel.vue";
 import { createPrintabilityPanel, printabilityPanel } from "./printabilityPanel";
 import { BodyTool } from "./bodyTool";
 import { FaceTool } from "./faceTool";
-import { groupLabel, toolLabel } from "./lines";
+import { groupLabel, t, toolLabel } from "./lines";
 import { PRINT_TOOLS, type PrintTool } from "./printForm";
 
 const ID = "FundaCAD.PrintToolbox";
@@ -54,7 +54,7 @@ export async function activate(e: Engine): Promise<() => void> {
     geometry: e.geometry,
     hasBody: () => e.hasBody(),
     setStatus: (t, c) => e.setStatus(t, c),
-    toast: (t) => toast(t),
+    toast: (text) => toast(text),
     dismissToast,
     announce,
   });
@@ -63,7 +63,7 @@ export async function activate(e: Engine): Promise<() => void> {
   function start(tool: PrintTool) {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
-      e.setStatus(`${tool.label}: create or import a body first`, "");
+      e.setStatus(t("status.createBody", { tool: tool.label }), "");
       return;
     }
     const done = (id: string | null) => {
@@ -77,7 +77,7 @@ export async function activate(e: Engine): Promise<() => void> {
   async function checkBedFit() {
     const bbox = e.store.buildState.result?.bbox;
     if (!bbox) {
-      e.setStatus("Bed Fit Check: build the model first", "");
+      e.setStatus(t("status.buildFirst", { tool: toolLabel(BED_FIT_ACTION) }), "");
       return;
     }
     const size: readonly [number, number, number] = [
@@ -87,7 +87,7 @@ export async function activate(e: Engine): Promise<() => void> {
     ];
     const setting = loadBedFitSetting();
     const picked = await choose(
-      "Bed size",
+      t("bed.chooseTitle"),
       BED_PRESETS.map((p) => ({ value: p.id, label: p.label })),
     );
     if (!picked) return;
@@ -105,20 +105,20 @@ export async function activate(e: Engine): Promise<() => void> {
   }
 
   const off = contribute(ID, {
-    tools: PRINT_TOOLS.map((t) => ({
-      id: t.id,
+    tools: PRINT_TOOLS.map((tool) => ({
+      id: tool.id,
       get label() {
-        return toolLabel(t.id);
+        return toolLabel(tool.id);
       },
-      refName: t.label,
-      iconName: t.icon,
-      consumes: t.pick === "bodies" ? ["body"] : ["face"],
+      refName: toolLabel(tool.id, true),
+      iconName: tool.icon,
+      consumes: tool.pick === "bodies" ? ["body"] : ["face"],
       source: "selection",
-      busy: () => (t.pick === "bodies" ? bodyTool.active : faceTool.active),
-      cancel: () => (t.pick === "bodies" ? bodyTool.cancel() : faceTool.cancel()),
+      busy: () => (tool.pick === "bodies" ? bodyTool.active : faceTool.active),
+      cancel: () => (tool.pick === "bodies" ? bodyTool.cancel() : faceTool.cancel()),
     })),
     actions: {
-      ...Object.fromEntries(PRINT_TOOLS.map((t) => [t.id, () => start(t)])),
+      ...Object.fromEntries(PRINT_TOOLS.map((tool) => [tool.id, () => start(tool)])),
       [BED_FIT_ACTION]: () => void checkBedFit(),
       [PRINTABILITY_ACTION]: () => printability.show(),
     },
@@ -129,20 +129,20 @@ export async function activate(e: Engine): Promise<() => void> {
           return groupLabel();
         },
         items: [
-          ...PRINT_TOOLS.map((t) => ({
-            action: t.id,
+          ...PRINT_TOOLS.map((tool) => ({
+            action: tool.id,
             get label() {
-              return toolLabel(t.id);
+              return toolLabel(tool.id);
             },
-            refName: t.label,
-            iconName: t.icon,
+            refName: toolLabel(tool.id, true),
+            iconName: tool.icon,
           })),
           {
             action: BED_FIT_ACTION,
             get label() {
               return toolLabel(BED_FIT_ACTION);
             },
-            refName: "Bed Fit Check",
+            refName: toolLabel(BED_FIT_ACTION, true),
             iconName: "printBedFit",
           },
           {
@@ -150,7 +150,7 @@ export async function activate(e: Engine): Promise<() => void> {
             get label() {
               return toolLabel(PRINTABILITY_ACTION);
             },
-            refName: "Printability",
+            refName: toolLabel(PRINTABILITY_ACTION, true),
             iconName: "printPrintability",
           },
         ],
@@ -162,14 +162,20 @@ export async function activate(e: Engine): Promise<() => void> {
     },
     overlays: [CustomBedHost, PrintabilityPanel],
     settings: [{ key: "bed", settings: bedSettings }],
-    features: PRINT_TOOLS.map((t) => ({
-      type: t.type,
-      meta: { icon: t.icon, label: t.label },
-      numFields: t.numFields,
-      choiceFields: t.choiceFields,
-      ...(t.toggleFields ? { toggleFields: t.toggleFields } : {}),
-      targets: t.targets,
-      ...(t.fieldApplies ? { fieldApplies: t.fieldApplies } : {}),
+    features: PRINT_TOOLS.map((tool) => ({
+      type: tool.type,
+      meta: {
+        icon: tool.icon,
+        get label() {
+          return tool.label;
+        },
+      },
+      // Read on every draw, so the row names follow the language.
+      numFields: () => tool.numFields,
+      choiceFields: tool.choiceFields,
+      ...(tool.toggleFields ? { toggleFields: tool.toggleFields } : {}),
+      targets: tool.targets,
+      ...(tool.fieldApplies ? { fieldApplies: tool.fieldApplies } : {}),
     })),
   });
 

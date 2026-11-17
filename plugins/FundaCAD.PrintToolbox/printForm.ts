@@ -2,23 +2,26 @@
 // pick turns into. Pure, so the tests run without a DOM or an app.
 
 import type { ChoiceField, Feature, FieldKind, Selector, TargetField, ToggleField } from "fundacad";
+import { t, toolLabel } from "./lines";
 
 export type BuildDir = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
+type NumFieldRows = readonly [string, string, FieldKind][];
 
 export interface PrintTool {
   /** Action id, tool id and ribbon action, one string for all three. */
   id: string;
   /** The feature type this tool leaves in the history. */
   type: string;
-  label: string;
+  readonly label: string;
   icon: string;
   /** What to pick, for the prompt line. */
-  pickHint: string;
+  readonly pickHint: string;
   /** Written into a new feature before the pick. */
   defaults: Record<string, number | string>;
   /** Whether the feature records the build direction it was made for. */
   usesBuildDir: boolean;
-  numFields: readonly [string, string, FieldKind][];
+  /** Read afresh, so the row names follow the language. */
+  readonly numFields: NumFieldRows;
   choiceFields: readonly ChoiceField[];
   toggleFields?: readonly ToggleField[];
   fieldApplies?: (field: string, values: Record<string, unknown>) => boolean;
@@ -40,11 +43,14 @@ export const BUILD_DIRS: { value: BuildDir; label: string }[] = [
 
 const BUILD_DIR_FIELD: ChoiceField = {
   field: "buildDir",
-  label: "Build direction",
+  get label() {
+    return t("field.buildDir");
+  },
   options: BUILD_DIRS,
   fallback: "+Z",
-  title:
-    "The direction the printer stacks layers, so the roof points up. Taken from Overhang when the feature is made.",
+  get title() {
+    return t("field.buildDir.hint");
+  },
 };
 
 export const FACES_TARGET: readonly TargetField[] = [
@@ -54,26 +60,46 @@ export const FACES_TARGET: readonly TargetField[] = [
 export const TEARDROP: PrintTool = {
   id: "print-teardrop",
   type: "teardropHole",
-  label: "Teardrop",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printTeardrop",
-  pickHint: "select the inside face of each sideways hole",
+  get pickHint() {
+    return t("pick.teardrop");
+  },
   defaults: { angle: 45, roof: "pointed", flatHeight: 0 },
   usesBuildDir: true,
-  numFields: [
-    ["angle", "Roof angle", "angle"],
-    ["flatHeight", "Flat above hole", "length"],
-  ],
+  get numFields(): NumFieldRows {
+    return [
+      ["angle", t("field.roofAngle"), "angle"],
+      ["flatHeight", t("field.flatHeight"), "length"],
+    ];
+  },
   choiceFields: [
     BUILD_DIR_FIELD,
     {
       field: "roof",
-      label: "Roof",
+      get label() {
+        return t("field.roof");
+      },
       options: [
-        { value: "pointed", label: "Pointed" },
-        { value: "flat", label: "Flat" },
+        {
+          value: "pointed",
+          get label() {
+            return t("field.roof.pointed");
+          },
+        },
+        {
+          value: "flat",
+          get label() {
+            return t("field.roof.flat");
+          },
+        },
       ],
       fallback: "pointed",
-      title: "Pointed meets in a tip. Flat cuts the tip off level, at the top of the hole plus the height below.",
+      get title() {
+        return t("field.roof.hint");
+      },
     },
   ],
   fieldApplies: (field, values) => field !== "flatHeight" || values["roof"] === "flat",
@@ -84,12 +110,18 @@ export const TEARDROP: PrintTool = {
 export const ROOF_BRIDGE: PrintTool = {
   id: "print-roof-bridge",
   type: "roofBridge",
-  label: "Roof Bridge",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printRoofBridge",
-  pickHint: "select the inside face of each sideways hole",
+  get pickHint() {
+    return t("pick.roofBridge");
+  },
   defaults: { height: 0 },
   usesBuildDir: true,
-  numFields: [["height", "Extra height", "length"]],
+  get numFields(): NumFieldRows {
+    return [["height", t("field.extraHeight"), "length"]];
+  },
   choiceFields: [BUILD_DIR_FIELD],
   pick: "faces",
   targets: FACES_TARGET,
@@ -98,16 +130,22 @@ export const ROOF_BRIDGE: PrintTool = {
 export const COUNTERBORE_BRIDGE: PrintTool = {
   id: "print-counterbore-bridge",
   type: "counterboreBridge",
-  label: "Counterbore Bridge",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printCounterboreBridge",
-  pickHint: "select the flat floor of each counterbore",
+  get pickHint() {
+    return t("pick.counterbore");
+  },
   defaults: { layerHeight: 0.2, layers: 2, angle: 0 },
   usesBuildDir: false,
-  numFields: [
-    ["layerHeight", "Layer height", "length"],
-    ["layers", "Layers", "count"],
-    ["angle", "Slot angle", "angle"],
-  ],
+  get numFields(): NumFieldRows {
+    return [
+      ["layerHeight", t("field.layerHeight"), "length"],
+      ["layers", t("field.layers"), "count"],
+      ["angle", t("field.slotAngle"), "angle"],
+    ];
+  },
   choiceFields: [],
   pick: "faces",
   targets: FACES_TARGET,
@@ -116,28 +154,47 @@ export const COUNTERBORE_BRIDGE: PrintTool = {
 export const SACRIFICIAL_LAYER: PrintTool = {
   id: "print-sacrificial-layer",
   type: "sacrificialLayer",
-  label: "Sacrificial Layer",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printSacrificialLayer",
-  pickHint: "select a hole's inside face, or the flat face it opens onto",
+  get pickHint() {
+    return t("pick.sacrificial");
+  },
   defaults: { layerHeight: 0.2, layers: 1, depth: 0, side: "bottom" },
   usesBuildDir: true,
-  numFields: [
-    ["layerHeight", "Layer height", "length"],
-    ["layers", "Layers", "count"],
-    ["depth", "Depth", "length"],
-  ],
+  get numFields(): NumFieldRows {
+    return [
+      ["layerHeight", t("field.layerHeight"), "length"],
+      ["layers", t("field.layers"), "count"],
+      ["depth", t("field.depth"), "length"],
+    ];
+  },
   choiceFields: [
     BUILD_DIR_FIELD,
     {
       field: "side",
-      label: "Close end",
+      get label() {
+        return t("field.closeEnd");
+      },
       options: [
-        { value: "bottom", label: "Bottom" },
-        { value: "top", label: "Top" },
+        {
+          value: "bottom",
+          get label() {
+            return t("field.closeEnd.bottom");
+          },
+        },
+        {
+          value: "top",
+          get label() {
+            return t("field.closeEnd.top");
+          },
+        },
       ],
       fallback: "bottom",
-      title:
-        "Which opening is closed when a hole's inside face was picked, lowest or highest along the build direction.",
+      get title() {
+        return t("field.closeEnd.hint");
+      },
     },
   ],
   pick: "faces",
@@ -147,17 +204,23 @@ export const SACRIFICIAL_LAYER: PrintTool = {
 export const THREAD_RIBS: PrintTool = {
   id: "print-thread-ribs",
   type: "threadRibs",
-  label: "Thread-Forming Ribs",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printThreadRibs",
-  pickHint: "select the inside face of each screw hole",
+  get pickHint() {
+    return t("pick.threadRibs");
+  },
   defaults: { ribCount: 3, ribWidth: 0.6, coreDiameter: 0, startDepth: 0.5 },
   usesBuildDir: false,
-  numFields: [
-    ["ribCount", "Rib count", "count"],
-    ["ribWidth", "Rib width", "length"],
-    ["coreDiameter", "Core diameter", "length"],
-    ["startDepth", "Start depth", "length"],
-  ],
+  get numFields(): NumFieldRows {
+    return [
+      ["ribCount", t("field.ribCount"), "count"],
+      ["ribWidth", t("field.ribWidth"), "length"],
+      ["coreDiameter", t("field.coreDiameter"), "length"],
+      ["startDepth", t("field.startDepth"), "length"],
+    ];
+  },
   choiceFields: [],
   pick: "faces",
   targets: FACES_TARGET,
@@ -166,23 +229,31 @@ export const THREAD_RIBS: PrintTool = {
 export const ZIP_TIE_CHANNEL: PrintTool = {
   id: "print-zip-tie-channel",
   type: "zipTieChannel",
-  label: "Zip-Tie Channel",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printZipTieChannel",
-  pickHint: "select the face to cut a channel under",
+  get pickHint() {
+    return t("pick.zipTie");
+  },
   defaults: { channelWidth: 4, channelHeight: 2, insetDepth: 2, span: 10, angle: 0 },
   usesBuildDir: false,
-  numFields: [
-    ["channelWidth", "Channel width", "length"],
-    ["channelHeight", "Channel height", "length"],
-    ["insetDepth", "Inset depth", "length"],
-    ["span", "Span", "length"],
-    ["angle", "Angle", "angle"],
-  ],
+  get numFields(): NumFieldRows {
+    return [
+      ["channelWidth", t("field.channelWidth"), "length"],
+      ["channelHeight", t("field.channelHeight"), "length"],
+      ["insetDepth", t("field.insetDepth"), "length"],
+      ["span", t("field.span"), "length"],
+      ["angle", t("field.angle"), "angle"],
+    ];
+  },
   choiceFields: [],
   toggleFields: [
     {
       field: "allowBreakthrough",
-      label: "Allow breakthrough",
+      get label() {
+        return t("field.allowBreakthrough");
+      },
       fallback: false,
     },
   ],
@@ -198,12 +269,18 @@ export const BODIES_TARGET: readonly TargetField[] = [
 export const ELEPHANT_FOOT_CHAMFER: PrintTool = {
   id: "print-elephant-foot-chamfer",
   type: "elephantFootChamfer",
-  label: "Elephant-Foot Chamfer",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printElephantFootChamfer",
-  pickHint: "select the body, or its bottom face",
+  get pickHint() {
+    return t("pick.elephantFoot");
+  },
   defaults: { size: 0.4 },
   usesBuildDir: true,
-  numFields: [["size", "Chamfer size", "length"]],
+  get numFields(): NumFieldRows {
+    return [["size", t("field.chamferSize"), "length"]];
+  },
   choiceFields: [BUILD_DIR_FIELD],
   pick: "bodies",
   targets: BODIES_TARGET,
@@ -212,14 +289,28 @@ export const ELEPHANT_FOOT_CHAMFER: PrintTool = {
 export const VERTICAL_FILLET: PrintTool = {
   id: "print-vertical-fillet",
   type: "verticalFillet",
-  label: "Vertical Edge Fillet",
+  get label() {
+    return toolLabel(this.id);
+  },
   icon: "printVerticalFillet",
-  pickHint: "select the body to round",
+  get pickHint() {
+    return t("pick.verticalFillet");
+  },
   defaults: { radius: 2 },
   usesBuildDir: true,
-  numFields: [["radius", "Radius", "length"]],
+  get numFields(): NumFieldRows {
+    return [["radius", t("field.radius"), "length"]];
+  },
   choiceFields: [BUILD_DIR_FIELD],
-  toggleFields: [{ field: "onlyConvex", label: "Convex edges only", fallback: false }],
+  toggleFields: [
+    {
+      field: "onlyConvex",
+      get label() {
+        return t("field.onlyConvex");
+      },
+      fallback: false,
+    },
+  ],
   pick: "bodies",
   targets: BODIES_TARGET,
 };

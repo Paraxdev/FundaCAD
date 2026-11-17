@@ -1,13 +1,13 @@
 import { pluginText } from "fundacad";
 
-export const { t } = pluginText<typeof import("./locales/en.json")>(
+export const { t, tEnglish } = pluginText<typeof import("./locales/en.json")>(
   "FundaCAD.PrintToolbox",
   import.meta.glob("./locales/*.json", { eager: true, import: "default" }),
 );
 
 export const groupLabel = () => t("group.print");
 
-export function toolLabel(id: string): string {
+function named(id: string, t: typeof tEnglish): string {
   switch (id) {
     case "print-teardrop":
       return t("tool.teardrop");
@@ -33,3 +33,6 @@ export function toolLabel(id: string): string {
       return id;
   }
 }
+
+/** `english` gives the name a menu search and the harness find the tool by, whatever the language. */
+export const toolLabel = (id: string, english = false): string => named(id, english ? tEnglish : t);
