@@ -42,7 +42,7 @@ import {
   envLibrary,
   hdrName,
   hdrThumb,
-  importEnvironmentFile,
+  importEnvironment,
   onEnvLibraryChange,
   renameSavedEnvironment,
   saveEnvironmentAs,
@@ -135,8 +135,7 @@ const fail = (err: unknown) => {
 
 const importFile = async (file: File) => {
   notice.value = t("render.reading", { name: file.name });
-  let note: string | null = null;
-  const refused = await importEnvironmentFile(engine.store, file, { onNote: (n) => (note = n) });
+  const { refused, note } = await importEnvironment(engine.store, { name: file.name, file });
   notice.value = refused ?? note;
 };
 const onFilePicked = (e: Event) => {

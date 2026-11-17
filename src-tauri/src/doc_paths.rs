@@ -353,6 +353,15 @@ impl Provenance {
         require_file(raw)
     }
 
+    /// For a file the page may only read after the person handed it over this session, a dialog, a launch argument or
+    /// a drop. Unlike `check_read`, a local path nobody handed over is refused too.
+    pub fn check_read_vouched(&self, raw: &str) -> Result<PathBuf, String> {
+        if !lock(&self.session).contains(raw) {
+            return Err(format!("{raw} was not dropped or picked in this session, so it was not read."));
+        }
+        self.check_read(raw)
+    }
+
     pub fn stat(&self, raw: &str) -> Result<Option<DocStat>, String> {
         self.refuse_unvouched(raw)?;
         stat_path(raw)

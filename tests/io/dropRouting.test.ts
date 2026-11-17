@@ -43,10 +43,16 @@ vi.mock("../../src/io/files", async (importOriginal) => {
 });
 
 vi.mock("../../src/ui/environmentImport", () => ({
-  importEnvironmentFile: vi.fn(async (_s: unknown, file: File) => {
-    calls.push(`environment ${file.name}`);
-    return file.name.startsWith("huge") ? `${file.name} is too big.` : null;
+  importEnvironment: vi.fn(async (_s: unknown, source: { name: string; file?: File; path?: string }) => {
+    calls.push(`environment ${source.name} ${source.file ? "bytes" : source.path}`);
+    return {
+      refused: source.name.startsWith("huge") ? `${source.name} is too big.` : null,
+      note: source.name.startsWith("big") ? `${source.name} was kept smaller.` : null,
+    };
   }),
+}));
+vi.mock("../../src/ui/toast", () => ({
+  toast: (msg: string, o: { kind?: string }) => void calls.push(`toast ${o.kind} ${msg}`),
 }));
 
 import { IMPORT_EXTS } from "../../src/io/files";
@@ -152,13 +158,23 @@ describe("takeDroppedFiles", () => {
   it("lights with a dropped panorama and says nothing could not be read", async () => {
     const hdr = new File(["#?RADIANCE"], "room.hdr");
     await takeDroppedFiles(engine, [{ name: "room.hdr", path: "D:/in/room.hdr", file: hdr }]);
-    expect(calls).toEqual(["environment room.hdr"]);
+    expect(calls).toEqual(["environment room.hdr bytes"]);
+  });
+
+  it("reaches the import with a path alone, as WebKitGTK drops give no bytes", async () => {
+    await takeDroppedFiles(engine, [{ name: "room.hdr", path: "/in/room.hdr" }]);
+    expect(calls).toEqual(["environment room.hdr /in/room.hdr"]);
+  });
+
+  it("tells the maker when the panorama was kept smaller than the file", async () => {
+    await takeDroppedFiles(engine, [{ name: "big.hdr", path: "/in/big.hdr" }]);
+    expect(calls).toEqual(["environment big.hdr /in/big.hdr", "toast info big.hdr was kept smaller."]);
   });
 
   it("passes on the environment's refusal", async () => {
     const hdr = new File(["#?RADIANCE"], "huge.hdr");
     await takeDroppedFiles(engine, [{ name: "huge.hdr", file: hdr }]);
-    expect(calls).toEqual(["environment huge.hdr", "error huge.hdr is too big."]);
+    expect(calls).toEqual(["environment huge.hdr bytes", "error huge.hdr is too big."]);
   });
 
   it("names every refused file and does nothing else when all are refused", async () => {

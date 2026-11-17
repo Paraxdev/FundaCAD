@@ -34,9 +34,9 @@ vi.mock("../../src/io/files", async (orig) => ({
   reportError: async (m: string) => void h.events.push(`error: ${m}`),
 }));
 vi.mock("../../src/ui/environmentImport", () => ({
-  importEnvironmentFile: async (_s: unknown, file: File) => {
-    h.events.push(`environment ${file.name}`);
-    return null;
+  importEnvironment: async (_s: unknown, source: { name: string }) => {
+    h.events.push(`environment ${source.name}`);
+    return { refused: null, note: null };
   },
 }));
 

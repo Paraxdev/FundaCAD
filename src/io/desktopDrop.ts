@@ -40,7 +40,8 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     if (outcome !== "ok") return;
   }
   const env = plan.environments[plan.environments.length - 1];
-  const envFile = env?.file;
+  const envSource =
+    env && (env.file ? { name: env.name, file: env.file } : env.path ? { name: env.name, path: env.path } : null);
   const run = () =>
     importInTurn(e.store, [
       ...plan.imports.map((item) => ({
@@ -50,7 +51,7 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
           if (item.file) return importFileBytes(e.store, e.geometry, item.file, undefined, { batched: true });
         },
       })),
-      ...(env && envFile
+      ...(env && envSource
         ? [
             {
               name: env.name,
@@ -61,9 +62,15 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
                 let left = false;
                 const offOpen = e.store.onOpen(() => (opened = true));
                 try {
-                  const { importEnvironmentFile } = await import("../ui/environmentImport");
-                  const refused = await importEnvironmentFile(e.store, envFile, { leftOut: () => (left = opened) });
+                  const { importEnvironment } = await import("../ui/environmentImport");
+                  const { refused, note } = await importEnvironment(e.store, envSource, {
+                    leftOut: () => (left = opened),
+                  });
                   if (refused) await reportError(refused);
+                  else if (note) {
+                    const { toast } = await import("../ui/toast");
+                    toast(note, { kind: "info", timeout: 12000 });
+                  }
                 } finally {
                   offOpen();
                 }
