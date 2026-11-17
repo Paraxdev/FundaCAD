@@ -2,6 +2,7 @@
 // The log view (ui/logStore.ts records it). Unlike a toast nothing is clipped or expires, a stack must be readable whole.
 
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
+import { activeLanguage, t } from "../../i18n";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
 import {
@@ -57,8 +58,6 @@ function toggleDetail(id: number) {
 
 const body = ref<HTMLElement | null>(null);
 const heading = ref<HTMLElement | null>(null);
-
-const SEVERITY_WORD: Record<LogLevel, string> = { error: "Error:", warning: "Warning:", info: "Info:" };
 
 // Remembered when the panel opens, so closing hands focus back to where the user was.
 let opener: HTMLElement | null = null;
@@ -121,7 +120,7 @@ async function copy(text: string, id: number | null) {
   }
 }
 
-const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour12: false });
+const clockOf = (at: number) => new Date(at).toLocaleTimeString(activeLanguage().bcp47, { hour12: false });
 </script>
 
 <template>
@@ -129,7 +128,7 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
     <!-- v-if, not hidden: a panel left in the DOM over the viewport steals its picks. -->
     <div v-if="open" class="logcon" role="region" aria-labelledby="logcon-heading">
       <div class="logcon-head">
-        <h2 id="logcon-heading" ref="heading" class="logcon-title" tabindex="-1">Console</h2>
+        <h2 id="logcon-heading" ref="heading" class="logcon-title" tabindex="-1">{{ t("console.title") }}</h2>
         <Button
           v-for="lvl in LEVELS"
           :key="lvl"
@@ -140,26 +139,38 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
           :pressed="show[lvl]"
           @click="show[lvl] = !show[lvl]"
         >
-          {{ lvl }} <span class="logcon-count">{{ counts[lvl] }}</span>
+          {{ t("console.level", { level: lvl }) }} <span class="logcon-count">{{ counts[lvl] }}</span>
         </Button>
         <span class="logcon-spacer"></span>
         <IconButton
           icon="copy"
-          tip="Copy everything shown"
+          :tip="t('console.copyAll')"
           size="sm"
           variant="plain"
           :icon-size="14"
           @click="copy(formatLog(rows), null)"
         />
         <!-- cleanUp, not bin: the icon table has no bin, and an unknown name renders as a blank square. -->
-        <IconButton icon="cleanUp" tip="Clear" size="sm" variant="plain" :icon-size="14" @click="clearLog()" />
-        <IconButton icon="close" tip="Close" size="sm" variant="plain" :icon-size="14" @click="setConsoleOpen(false)" />
+        <IconButton
+          icon="cleanUp"
+          :tip="t('console.clear')"
+          size="sm"
+          variant="plain"
+          :icon-size="14"
+          @click="clearLog()"
+        />
+        <IconButton
+          icon="close"
+          :tip="t('common.close')"
+          size="sm"
+          variant="plain"
+          :icon-size="14"
+          @click="setConsoleOpen(false)"
+        />
       </div>
 
-      <div ref="body" class="logcon-body" role="log" aria-live="off" aria-label="Console messages">
-        <p v-if="!rows.length" class="logcon-empty">
-          Nothing here. Errors and warnings are kept in full, and stay until cleared.
-        </p>
+      <div ref="body" class="logcon-body" role="log" aria-live="off" :aria-label="t('console.messages')">
+        <p v-if="!rows.length" class="logcon-empty">{{ t("console.empty") }}</p>
         <div
           v-for="e in rows"
           :key="e.id"
@@ -167,17 +178,17 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
           :class="[`is-${e.level}`, { 'is-revealed': flashed === e.id }]"
           :data-log-id="e.id"
         >
-          <span class="sr-only">{{ SEVERITY_WORD[e.level] }}</span>
+          <span class="sr-only">{{ t("console.severity", { level: e.level }) }}</span>
           <span class="logcon-time">{{ clockOf(e.at) }}</span>
           <span v-if="e.source" class="logcon-src">{{ e.source }}</span>
           <span class="logcon-msg">{{ e.message }}</span>
           <Button v-if="e.detail" size="sm" variant="ghost" class="logcon-more" @click="toggleDetail(e.id)">{{
-            expanded.has(e.id) ? "less" : "more"
+            expanded.has(e.id) ? t("console.less") : t("console.more")
           }}</Button>
           <IconButton
             class="logcon-copy"
             :icon="copied === e.id ? 'check' : 'copy'"
-            :tip="copied === e.id ? 'Copied' : 'Copy this entry'"
+            :tip="copied === e.id ? t('console.copied') : t('console.copyEntry')"
             size="sm"
             variant="plain"
             :icon-size="12"

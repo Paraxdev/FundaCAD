@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { t } from "../../i18n";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { useExportDialogStore } from "../../stores/exportDialog";
 import {
@@ -39,29 +40,29 @@ const mesh = computed(() => isMeshFormat(settings.value.format));
 const flatShown = computed(() => isFlatFormat(settings.value.format));
 const unitShown = computed(() => takesUnit(settings.value.format));
 
-const REFINEMENT_OPTIONS: { value: Refinement; label: string }[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "custom", label: "Custom" },
-];
+const REFINEMENT_OPTIONS = computed<{ value: Refinement; label: string }[]>(() => [
+  { value: "low", label: t("export.refinement.low") },
+  { value: "medium", label: t("export.refinement.medium") },
+  { value: "high", label: t("export.refinement.high") },
+  { value: "custom", label: t("export.refinement.custom") },
+]);
 const scopeOptions = computed(() => [
-  { value: "all", label: "All in one file" },
-  { value: "separate", label: "Each body as its own file" },
+  { value: "all", label: t("export.scope.all") },
+  { value: "separate", label: t("export.scope.separate") },
   ...(picked > 1
     ? [
-        { value: "selected", label: `Selected (${picked} bodies)` },
-        { value: "selected-separate", label: `Selected (${picked} bodies), each as its own file` },
+        { value: "selected", label: t("export.scope.selected", { n: picked }) },
+        { value: "selected-separate", label: t("export.scope.selectedSeparate", { n: picked }) },
       ]
     : []),
   ...bodies.map((b) => ({ value: b.id, label: b.name })),
 ]);
 // The picker speaks strings; STL's binary flag is a bool, so it rides through
 // one either way.
-const BINARY_OPTIONS = [
-  { value: "binary", label: "Binary" },
+const BINARY_OPTIONS = computed(() => [
+  { value: "binary", label: t("export.binary") },
   { value: "ascii", label: "ASCII" },
-];
+]);
 function onRefinement(r: Refinement) {
   settings.value.refinement = r;
   if (r === "custom") settings.value.showAdvanced = true;
@@ -105,7 +106,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
   <!-- Escape and Enter are this dialog's own handler above; the frame holds the modal gate and the focus. Fields are
        live, as Enter confirms before a field would commit. -->
   <Dialog
-    title="Export"
+    :title="t('export.title')"
     panel-class="export-dialog"
     :close-on-esc="false"
     :body="false"
@@ -114,18 +115,18 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
   >
     <div class="modal-body prefs export-body">
       <label class="prefs-row">
-        <span class="prefs-label">Type</span>
-        <Select v-model="settings.format" :options="formatOptions" label="Type" testid="export-format" />
+        <span class="prefs-label">{{ t("export.type") }}</span>
+        <Select v-model="settings.format" :options="formatOptions" :label="t('export.type')" testid="export-format" />
       </label>
       <template v-if="flatShown && flat">
         <div class="prefs-row">
-          <span class="prefs-label">Draws</span>
+          <span class="prefs-label">{{ t("export.draws") }}</span>
           <span data-testid="export-flat-source">{{ flat.label }}</span>
         </div>
         <label class="prefs-row">
-          <span class="prefs-label">Tolerance</span>
+          <span class="prefs-label">{{ t("export.tolerance") }}</span>
           <NumberField
-            label="Tolerance"
+            :label="t('export.tolerance')"
             commit="live"
             unit="mm"
             data-testid="export-tolerance"
@@ -137,91 +138,88 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             "
           />
         </label>
-        <div class="sm-hint"
-          >Drawn at true size in millimetres. Lines, arcs and circles stay exact, other curves become polylines this
-          close to the curve.</div
-        >
+        <div class="sm-hint">{{ t("export.flatHint") }}</div>
       </template>
       <label v-if="bodies.length > 1 && !flatShown" class="prefs-row">
-        <span class="prefs-label">Bodies</span>
-        <Select v-model="scope" :options="scopeOptions" label="Bodies" testid="export-scope" />
+        <span class="prefs-label">{{ t("export.bodies") }}</span>
+        <Select v-model="scope" :options="scopeOptions" :label="t('export.bodies')" testid="export-scope" />
       </label>
 
       <template v-if="mesh">
-        <div class="sm-section">Output</div>
+        <div class="sm-section">{{ t("export.output") }}</div>
         <label v-if="unitShown" class="prefs-row">
-          <span class="prefs-label">Unit</span>
-          <Select v-model="settings.unit" :options="UNITS" label="Unit" testid="export-unit" />
+          <span class="prefs-label">{{ t("export.unit") }}</span>
+          <Select v-model="settings.unit" :options="UNITS" :label="t('export.unit')" testid="export-unit" />
         </label>
         <label v-if="settings.format === 'stl'" class="prefs-row">
-          <span class="prefs-label">Format</span>
+          <span class="prefs-label">{{ t("export.format") }}</span>
           <Select
             :model-value="settings.binary ? 'binary' : 'ascii'"
             :options="BINARY_OPTIONS"
-            label="Format"
+            :label="t('export.format')"
             testid="export-binary"
             @update:model-value="settings.binary = $event === 'binary'"
           />
         </label>
         <label class="prefs-row">
-          <span class="prefs-label">Refinement</span>
+          <span class="prefs-label">{{ t("export.refinement.title") }}</span>
           <Select
             :model-value="settings.refinement"
             :options="REFINEMENT_OPTIONS"
-            label="Refinement"
+            :label="t('export.refinement.title')"
             testid="export-refinement"
             @update:model-value="onRefinement"
           />
         </label>
         <label class="prefs-row">
-          <span class="prefs-label">Advanced</span>
-          <Switch v-model="settings.showAdvanced" label="Advanced" data-testid="export-advanced" />
+          <span class="prefs-label">{{ t("export.advanced") }}</span>
+          <Switch v-model="settings.showAdvanced" :label="t('export.advanced')" data-testid="export-advanced" />
         </label>
 
         <template v-if="settings.showAdvanced">
           <label class="prefs-row">
-            <span class="prefs-label">Surface deviation</span>
+            <span class="prefs-label">{{ t("export.surfaceDeviation") }}</span>
             <NumberField
               commit="live"
               unit="mm"
-              label="Surface deviation"
+              :label="t('export.surfaceDeviation')"
               data-testid="export-surface-deviation"
               :model-value="settings.faceting.surfaceDeviation"
               @update:model-value="setFacet('surfaceDeviation', $event)"
             />
           </label>
-          <div class="sm-hint">The largest distance allowed between the body and a facet.</div>
+          <div class="sm-hint">{{ t("export.surfaceDeviationHint") }}</div>
           <label class="prefs-row">
-            <span class="prefs-label">Normal deviation</span>
+            <span class="prefs-label">{{ t("export.normalDeviation") }}</span>
             <NumberField
               commit="live"
               unit="deg"
-              label="Normal deviation"
+              :label="t('export.normalDeviation')"
               data-testid="export-normal-deviation"
               :model-value="settings.faceting.normalDeviation"
               @update:model-value="setFacet('normalDeviation', $event)"
             />
           </label>
-          <div class="sm-hint">The largest angle allowed between the normals of two neighbouring facets.</div>
+          <div class="sm-hint">{{ t("export.normalDeviationHint") }}</div>
           <label class="prefs-row">
-            <span class="prefs-label">Maximum cell size</span>
+            <span class="prefs-label">{{ t("export.maxEdge") }}</span>
             <NumberField
               commit="live"
               unit="mm"
-              label="Maximum cell size"
+              :label="t('export.maxEdge')"
               data-testid="export-max-edge"
               :model-value="settings.faceting.maxEdgeLength"
               @update:model-value="setFacet('maxEdgeLength', $event)"
             />
           </label>
-          <div class="sm-hint">The longest a facet edge may be, 0 for no limit.</div>
+          <div class="sm-hint">{{ t("export.maxEdgeHint") }}</div>
         </template>
       </template>
     </div>
 
     <template #footer>
-      <Button @click="cancel()">Cancel</Button>
-      <Button variant="primary" data-testid="export-confirm" @click="confirm()">Export…</Button>
+      <Button @click="cancel()">{{ t("common.cancel") }}</Button>
+      <Button variant="primary" data-testid="export-confirm" @click="confirm()">{{ t("export.confirm") }}</Button>
     </template>
   </Dialog>
 </template>

@@ -2,13 +2,13 @@
 // The Report a problem form and its preview, what a report contains lives in ui/bugReporter.ts.
 
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { activeLanguage, t } from "../../i18n";
 import { useDialogStore } from "../../stores/dialogs";
 import {
   appLogTail,
   composeReport,
   copyAgain,
   copyReport,
-  formatSize,
   lastReport,
   openIssue,
   reportSnapshot,
@@ -55,9 +55,19 @@ const choices = (withDocument: boolean) => ({
 const tooBig = computed(() => composeReport(snap, choices(true)).report.documentLeftOut);
 const composed = computed(() => composeReport(snap, choices(includeDocument.value && tooBig.value === null)));
 
-const previousAt = previous
-  ? new Date(previous.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  : null;
+// The report itself keeps formatSize's English, this is the line the maker reads.
+const tooBigText = computed(() => {
+  const chars = tooBig.value ?? 0;
+  return t("bugReport.tooBig", {
+    size: t("bugReport.size", chars < 1024 ? { unit: "bytes", n: chars } : { unit: "kb", n: Math.round(chars / 1024) }),
+  });
+});
+
+const previousAt = computed(() =>
+  previous
+    ? new Date(previous.at).toLocaleTimeString(activeLanguage().bcp47, { hour: "2-digit", minute: "2-digit" })
+    : "",
+);
 
 const desc = useTemplateRef<InstanceType<typeof TextField>>("desc");
 const askedForText = ref(false);
@@ -118,7 +128,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 <template>
   <!-- Escape is this dialog's own handler above; the frame holds the modal gate, focus, its trap and its return. -->
   <Dialog
-    title="Report a problem"
+    :title="t('bugReport.title')"
     panel-class="bug-report-card"
     :close-on-esc="false"
     initial-focus=".bug-desc textarea"
@@ -130,52 +140,49 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       class="bug-desc"
       multiline
       rows="4"
-      label="What happened"
-      placeholder="What happened? What did you expect?"
+      :label="t('bugReport.what')"
+      :placeholder="t('bugReport.placeholder')"
     />
     <div v-if="askedForText && !description.trim()" class="bug-note bug-need-text" role="alert">
-      Say what happened first, then send the report.
+      {{ t("bugReport.needText") }}
     </div>
     <Checkbox
       v-if="logTail !== null"
       v-model="includeLog"
       class="bug-check bug-log"
-      label="Include the app log (user names hidden)"
+      :label="t('bugReport.includeLog')"
     />
     <div class="bug-shot-row">
-      <span>A picture of the 3D view helps, it shows your design.</span>
-      <Button class="bug-shot" :disabled="busy" @click="shoot()">Save Picture…</Button>
+      <span>{{ t("bugReport.pictureHint") }}</span>
+      <Button class="bug-shot" :disabled="busy" @click="shoot()">{{ t("bugReport.savePicture") }}</Button>
     </div>
     <div v-if="picture" class="bug-shot-saved">
       <img :src="picture.url" alt="" />
-      <span>Saved as {{ picture.name }}, drag it into the issue.</span>
+      <span>{{ t("bugReport.pictureSaved", { name: picture.name }) }}</span>
     </div>
     <Checkbox
       v-model="includeDocument"
       class="bug-check bug-doc"
-      label="Include the current document (contains your design)"
+      :label="t('bugReport.includeDocument')"
       :disabled="tooBig !== null"
     />
-    <div v-if="tooBig !== null" class="bug-note bug-doc-big">
-      The document is too big to paste ({{ formatSize(tooBig) }}). Attach the .funda file to the issue yourself, inside
-      a .zip.
-    </div>
+    <div v-if="tooBig !== null" class="bug-note bug-doc-big">{{ tooBigText }}</div>
     <details class="bug-preview disclosure">
-      <summary><Icon class="disclosure-caret" name="caretRight" :size="10" />What will be sent</summary>
-      <div class="bug-note">
-        Your words, then technical notes for whoever fixes it: the version, your system, the last steps and errors.
-      </div>
+      <summary><Icon class="disclosure-caret" name="caretRight" :size="10" />{{ t("bugReport.preview") }}</summary>
+      <div class="bug-note">{{ t("bugReport.previewHint") }}</div>
       <pre>{{ composed.preview }}</pre>
     </details>
     <div v-if="previous" class="bug-again">
-      <span>Last report, {{ previousAt }}.</span>
-      <Button class="bug-again-copy" @click="copyAgain()">Copy Again</Button>
+      <span>{{ t("bugReport.last", { time: previousAt }) }}</span>
+      <Button class="bug-again-copy" @click="copyAgain()">{{ t("bugReport.copyAgain") }}</Button>
     </div>
-    <div class="bug-note">Open on GitHub needs a GitHub account. Nothing is sent until you submit the issue there.</div>
+    <div class="bug-note">{{ t("bugReport.githubNote") }}</div>
     <template #footer>
-      <Button class="bug-cancel" @click="close()">Cancel</Button>
-      <Button class="bug-send" :disabled="busy" @click="send('copy')">Copy report</Button>
-      <Button variant="primary" class="bug-github" :disabled="busy" @click="send('github')">Open on GitHub</Button>
+      <Button class="bug-cancel" @click="close()">{{ t("common.cancel") }}</Button>
+      <Button class="bug-send" :disabled="busy" @click="send('copy')">{{ t("bugReport.copy") }}</Button>
+      <Button variant="primary" class="bug-github" :disabled="busy" @click="send('github')">{{
+        t("bugReport.github")
+      }}</Button>
     </template>
   </Dialog>
 </template>

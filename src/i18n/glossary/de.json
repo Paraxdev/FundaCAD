@@ -524,6 +524,19 @@
       "text": "Toleranz"
     },
     {
+      "en": "Console",
+      "text": "Konsole"
+    },
+    {
+      "en": "facet",
+      "text": "Facette"
+    },
+    {
+      "en": "issue",
+      "text": "Issue",
+      "note": "a report on GitHub"
+    },
+    {
       "en": "Offset value",
       "text": "Versatz",
       "note": "the Offset row, a distance; the Offset tool keeps its own verb"

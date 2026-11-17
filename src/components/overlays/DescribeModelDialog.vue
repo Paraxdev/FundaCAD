@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
+import { t } from "../../i18n";
 import Button from "../ui/Button.vue";
 import Dialog from "../ui/Dialog.vue";
 import { useDialogStore } from "../../stores/dialogs";
@@ -20,9 +21,9 @@ async function copy() {
   if (!d) return;
   try {
     await navigator.clipboard.writeText(descriptionText(d));
-    announce("Copied the model description");
+    announce(t("describeModel.copied"));
   } catch {
-    announce("Could not reach the clipboard, select the text in the dialog and copy it", "assertive");
+    announce(t("describeModel.copyFailed"), "assertive");
   }
 }
 </script>
@@ -38,7 +39,12 @@ async function copy() {
     initial-focus=".describe-body"
     @close="close()"
   >
-    <div class="modal-body ui-dialog-body describe-body" role="document" tabindex="0" aria-label="Description">
+    <div
+      class="modal-body ui-dialog-body describe-body"
+      role="document"
+      tabindex="0"
+      :aria-label="t('describeModel.label')"
+    >
       <section v-for="(s, i) in description.sections" :key="s.heading" class="describe-section">
         <h3 :id="`${base}-${i}`" class="describe-head">{{ s.heading }}</h3>
         <component :is="s.ordered ? 'ol' : 'ul'" class="describe-list" :aria-labelledby="`${base}-${i}`">
@@ -47,8 +53,8 @@ async function copy() {
       </section>
     </div>
     <template #footer>
-      <Button @click="close()">Close</Button>
-      <Button variant="primary" @click="copy()">Copy as text</Button>
+      <Button @click="close()">{{ t("common.close") }}</Button>
+      <Button variant="primary" @click="copy()">{{ t("describeModel.copy") }}</Button>
     </template>
   </Dialog>
 </template>

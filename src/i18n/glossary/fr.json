@@ -512,6 +512,19 @@
       "text": "Tolérance"
     },
     {
+      "en": "Console",
+      "text": "Console"
+    },
+    {
+      "en": "facet",
+      "text": "facette"
+    },
+    {
+      "en": "issue",
+      "text": "ticket",
+      "note": "a report on GitHub"
+    },
+    {
       "en": "Offset value",
       "text": "Décalage",
       "note": "the Offset row, a distance; the Offset tool keeps its own verb"

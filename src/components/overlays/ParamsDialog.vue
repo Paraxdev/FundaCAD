@@ -3,6 +3,7 @@
 
 import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
@@ -49,20 +50,20 @@ function formatValue(def: ParamDef): string {
   return spellRounded(def.value);
 }
 
-function targetLabel(doc: CadDocument, t: ParamTarget): string {
+function targetLabel(doc: CadDocument, target: ParamTarget): string {
   const featureName = (id: string) => {
     const f = doc.features.find((x) => x.id === id);
     return f ? `${featureMeta(f).label} ${id}` : id;
   };
-  switch (t.kind) {
+  switch (target.kind) {
     case "feature":
-      return `${featureName(t.feature)} · ${t.field}`;
+      return `${featureName(target.feature)} · ${target.field}`;
     case "constraint":
-      return `dimension in ${featureName(t.sketch)}`;
+      return t("params.drives.dimension", { feature: featureName(target.sketch) });
     case "entity":
-      return `${t.field} in ${featureName(t.sketch)}`;
+      return t("params.drives.field", { field: target.field, feature: featureName(target.sketch) });
     case "pattern":
-      return `pattern ${t.field} in ${featureName(t.sketch)}`;
+      return t("params.drives.pattern", { field: target.field, feature: featureName(target.sketch) });
   }
 }
 
@@ -74,11 +75,11 @@ function del(name: string) {
   if (err) delError.value = { ...delError.value, [name]: err };
 }
 
-const UNITS: { value: ParamUnit; label: string }[] = [
+const UNITS = computed<{ value: ParamUnit; label: string }[]>(() => [
   { value: "mm", label: "mm" },
   { value: "deg", label: "deg" },
-  { value: "count", label: "unitless" },
-];
+  { value: "count", label: t("params.unitless") },
+]);
 const newName = ref("");
 const newExpr = ref("");
 const newUnit = ref<ParamUnit>("mm");
@@ -104,15 +105,19 @@ function add() {
 <template>
   <Panel
     :open="panels.params"
-    title="Parameters"
+    :title="t('tool.parameters')"
     close-on-esc
     panel-class="params-dialog"
     @close="panels.params = false"
   >
     <div class="params-body">
-      <div class="params-section">User Parameters</div>
+      <div class="params-section">{{ t("params.user") }}</div>
       <div class="params-row params-head">
-        <span>Name</span><span>Expression</span><span>Value</span><span>Comment / drives</span><span></span>
+        <span>{{ t("params.column.name") }}</span
+        ><span>{{ t("params.column.expression") }}</span
+        ><span>{{ t("params.column.value") }}</span
+        ><span>{{ t("params.column.comment") }}</span
+        ><span></span>
       </div>
       <div
         v-for="r in userRows"
@@ -123,20 +128,20 @@ function add() {
       >
         <TextField
           commit="change"
-          :label="`Name of ${r.name}`"
+          :label="t('params.nameOf', { name: r.name })"
           :model-value="r.name"
           :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
         />
         <TextField
           commit="change"
-          :label="`Expression of ${r.name}`"
+          :label="t('params.expressionOf', { name: r.name })"
           :model-value="shownExpr(r.def.expr)"
           :validate="commitExpr((expr) => store.setParamExpr(r.name, expr))"
         />
         <span class="params-value">{{ r.value }}</span>
         <TextField
           commit="change"
-          :label="`Comment on ${r.name}`"
+          :label="t('params.commentOn', { name: r.name })"
           :model-value="r.def.comment ?? ''"
           :validate="commitWith((raw) => (store.setParamComment(r.name, raw), null))"
         />
@@ -144,7 +149,7 @@ function add() {
           class="params-del"
           :class="{ 'is-error': !!delError[r.name] }"
           icon="close"
-          :tip="delError[r.name] ?? `Delete ${r.name}`"
+          :tip="delError[r.name] ?? t('params.delete', { name: r.name })"
           size="sm"
           variant="danger"
           @click="del(r.name)"
@@ -152,16 +157,27 @@ function add() {
       </div>
 
       <div class="params-row params-add">
-        <TextField v-model="newName" placeholder="name" label="New parameter name" />
-        <TextField v-model="newExpr" placeholder="expression" label="New parameter expression" @keydown.enter="add()" />
-        <Select v-model="newUnit" :options="UNITS" label="New parameter unit" />
-        <Button :variant="addError ? 'danger' : 'secondary'" :tip="addError || undefined" @click="add()">+ Add</Button>
+        <TextField v-model="newName" :placeholder="t('params.new.namePlaceholder')" :label="t('params.new.name')" />
+        <TextField
+          v-model="newExpr"
+          :placeholder="t('params.new.expressionPlaceholder')"
+          :label="t('params.new.expression')"
+          @keydown.enter="add()"
+        />
+        <Select v-model="newUnit" :options="UNITS" :label="t('params.new.unit')" />
+        <Button :variant="addError ? 'danger' : 'secondary'" :tip="addError || undefined" @click="add()">{{
+          t("params.add")
+        }}</Button>
       </div>
 
       <template v-if="modelRows.length">
-        <div class="params-section">Model Parameters</div>
+        <div class="params-section">{{ t("params.model") }}</div>
         <div class="params-row params-head">
-          <span>Name</span><span>Expression</span><span>Value</span><span>Comment / drives</span><span></span>
+          <span>{{ t("params.column.name") }}</span
+          ><span>{{ t("params.column.expression") }}</span
+          ><span>{{ t("params.column.value") }}</span
+          ><span>{{ t("params.column.comment") }}</span
+          ><span></span>
         </div>
         <div
           v-for="r in modelRows"
@@ -172,13 +188,13 @@ function add() {
         >
           <TextField
             commit="change"
-            :label="`Name of ${r.name}`"
+            :label="t('params.nameOf', { name: r.name })"
             :model-value="r.name"
             :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
           />
           <TextField
             commit="change"
-            :label="`Expression of ${r.name}`"
+            :label="t('params.expressionOf', { name: r.name })"
             :model-value="shownExpr(r.def.expr)"
             :validate="commitExpr((expr) => store.setParamExpr(r.name, expr))"
           />
@@ -189,10 +205,7 @@ function add() {
         </div>
       </template>
 
-      <div class="measure-hint">
-        Expressions are in mm / degrees; suffixes mm cm in deg rad allowed · a semicolon separates arguments: max(a; b)
-        · Esc to close
-      </div>
+      <div class="measure-hint">{{ t("params.hint") }}</div>
     </div>
   </Panel>
 </template>

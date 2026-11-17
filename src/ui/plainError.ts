@@ -1,7 +1,10 @@
-import { numberedEnglish } from "./featureMeta";
+import { t, tEnglish } from "../i18n";
+import { numberedName } from "./featureMeta";
 import type { Feature } from "../types";
 
-export const SEE_CONSOLE = "The details are in the console.";
+// English: it closes sentences that are still written in English. A translated sentence takes seeConsole().
+export const SEE_CONSOLE = tEnglish("console.seeDetails");
+export const seeConsole = (): string => t("console.seeDetails");
 
 const INTERNAL: readonly RegExp[] = [
   /\b(?:Type|Reference|Syntax|Range|Eval|URI|Internal)Error\b/,
@@ -52,6 +55,5 @@ export function failedText(label: string, raw: unknown): string {
 
 export function sketchConflictText(sketchId: string, features: readonly Feature[]): string {
   const f = features.find((g) => g.id === sketchId);
-  const name = f ? numberedEnglish(f, features) : "a sketch";
-  return `The dimensions in ${name} conflict, so the sketch was left as it was`;
+  return t("params.sketchConflict", { named: f ? "yes" : "no", name: f ? numberedName(f, features) : "" });
 }

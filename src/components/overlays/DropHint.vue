@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { t } from "../../i18n";
 import { installDesktopDrop } from "../../io/desktopDrop";
 
 const engine = useEngine();
@@ -18,8 +19,8 @@ onUnmounted(() => uninstall?.());
   <Teleport to="body">
     <div v-if="shown" class="drophint" data-testid="drop-hint" aria-hidden="true">
       <div class="drophint-card">
-        <strong>Drop to open or import</strong>
-        <span>A FundaCAD document opens, STEP, STL, 3MF and the other model files import into this one.</span>
+        <strong>{{ t("dropHint.title") }}</strong>
+        <span>{{ t("dropHint.body") }}</span>
       </div>
     </div>
   </Teleport>
