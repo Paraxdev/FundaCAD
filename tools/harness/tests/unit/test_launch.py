@@ -111,6 +111,27 @@ def test_a_dead_engine_reports_its_log(tmp_path):
     assert "boom" in e.value.log_tail
 
 
+def plugin(repo: Path, name: str, manifest: str, built: bool = False) -> None:
+    d = repo / "plugins" / name
+    d.mkdir(parents=True)
+    (d / "manifest.json").write_text(manifest)
+    if built:
+        (d / "geometry.wasm").write_bytes(b"wasm")
+
+
+def test_a_release_engine_will_not_start_without_a_plugins_geometry_wasm(tmp_path):
+    plugin(tmp_path, "FundaCAD.Screws", '{"geometryWasm": "geometry.wasm"}')
+    plugin(tmp_path, "FundaCAD.Organic", '{"geometryWasm": "geometry.wasm"}', built=True)
+    plugin(tmp_path, "FundaCAD.Gamepad", '{"id": "FundaCAD.Gamepad"}')
+    plugin(tmp_path, "Broken", "{")
+    assert launch.missing_geometry_wasm(tmp_path) == ["FundaCAD.Screws"]
+    with pytest.raises(LaunchError) as e:
+        launch.start_engine([str(tmp_path / "release" / launch.EXE)], tmp_path, tmp_path, 5999, timeout=30)
+    assert "FundaCAD.Screws" in str(e.value) and "build-plugin-wasm.py" in str(e.value)
+    launch.check_geometry_wasm([str(tmp_path / "target" / "debug" / launch.EXE)], tmp_path)
+    launch.check_geometry_wasm([str(tmp_path / "notes" / launch.EXE)], tmp_path)
+
+
 def test_stop_kills_only_its_own_child(tmp_path):
     sleeper = [sys.executable, "-c", "import time; time.sleep(600)"]
     other = subprocess.Popen(sleeper)
