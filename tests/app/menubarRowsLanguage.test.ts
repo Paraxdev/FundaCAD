@@ -6,6 +6,7 @@ import { buildMenus, menuOf, names, row, texts } from "./menuRows";
 const FILE = ["Home", "---", "New", "Open…", "---", "Import Mesh…", "---", "Save", "Save As…", "---", "Export…"];
 const HELP = [
   "Keyboard Shortcuts",
+  "Guided First Bracket",
   "Manual",
   "Accessibility",
   "---",
@@ -55,6 +56,7 @@ describe("File, Edit, Help and analysis rows under a language", () => {
     expect(editMiddle(menuOf("Edit", menus), names)).toEqual(EDIT_MIDDLE);
     expect(texts(menuOf("Help", menus))).toEqual([
       "Tastenkürzel",
+      "Geführte erste Halterung",
       "Handbuch",
       "Barrierefreiheit",
       "---",

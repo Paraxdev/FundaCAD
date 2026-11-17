@@ -69,6 +69,7 @@ function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
     currentVersions: () => null,
     openVersion: vi.fn(async () => true),
     openBranch: vi.fn(async () => true),
+    startTour: vi.fn(async () => {}),
     ...over,
   };
 }
@@ -529,6 +530,7 @@ describe("HomeScreen", () => {
     expect($$(".home-new-card").map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Blank", "Open…"]);
     expect($(".home-new-template")).toBeNull();
     expect($$(".home-example-name").map((n) => n.textContent)).toEqual([
+      "Your first bracket",
       "Wall bracket",
       "Box with a lid",
       "Capsule holder",
@@ -541,9 +543,28 @@ describe("HomeScreen", () => {
 
   it("starts a document from an example card", async () => {
     const { cb } = open();
-    $$(".home-example")[3]!.click();
+    $$(".home-example")[4]!.click();
     await flushPromises();
     expect(cb.newFromTemplate).toHaveBeenCalledWith("plate");
+  });
+
+  it("starts the guided bracket from the first card, and finds it by name", async () => {
+    const { cb } = open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
+    await flushPromises();
+    expect($(".home-examples > .home-tour")).toBe($(".home-examples")!.firstElementChild);
+    $(".home-tour .home-example")!.click();
+    await flushPromises();
+    expect(cb.startTour).toHaveBeenCalledOnce();
+    expect(cb.newFromTemplate).not.toHaveBeenCalled();
+    const field = document.querySelector<HTMLInputElement>(".home-search input")!;
+    field.value = "first br";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Your first bracket"]);
+    field.value = "lever";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($(".home-tour")).toBeNull();
   });
 
   it("finds an example by name, and says nothing matches only when no example does either", async () => {
@@ -571,7 +592,7 @@ describe("HomeScreen", () => {
     ["the browser build", null, "Recent documents appear here in the desktop app."],
   ] as const)("shows the examples with no recent documents in %s", (_where, lib, empty) => {
     open([], {}, lib);
-    expect($$(".home-example")).toHaveLength(5);
+    expect($$(".home-example")).toHaveLength(6);
     expect($(".home-empty")!.textContent).toBe(empty);
   });
 
@@ -933,7 +954,7 @@ describe("Home on a first run", () => {
     const text = welcome.querySelector("p")!.textContent!;
     expect(text).toContain("start with Blank");
     expect(text).toContain("STEP, STL and 3MF");
-    expect(text.toLowerCase()).not.toContain("guide");
+    expect(text).toContain("guided bracket");
     expect($(".home-section")!.textContent).toBe("Start here");
     const [w, heading, grid, empty] = order(".home-welcome", ".home-section", ".home-examples", ".home-empty");
     expect(w! < heading! && heading! < grid! && grid! < empty!).toBe(true);
@@ -996,6 +1017,7 @@ describe("Home on a first run", () => {
         c.querySelector("svg")!.getAttribute("data-icon"),
       ]),
     ).toEqual([
+      ["Your first bracket", "Guided, about 10 minutes", "play"],
       ["Wall bracket", "Find where it bends", "stress"],
       ["Box with a lid", "A lid that fits, ready to print", "shell"],
       ["Capsule holder", "A screw-on cap, ready to print", "thread"],
@@ -1003,6 +1025,7 @@ describe("Home on a first run", () => {
       ["Pinned lever", "See the load on a pin", "rotate"],
     ]);
     expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
+      "A guide shows each step of an L bracket, from sketch to STL",
       "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
       "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
       "A tube and a screw-on cap laid out for printing. Change innerDiameter in Parameters and both threads follow, or set screwedOn to 1 to see the cap on the tube",
@@ -1019,8 +1042,12 @@ describe("Home on a first run", () => {
       expect($(".home-welcome h2")!.textContent).toBe("Willkommen bei FundaCAD");
       expect($(".home-section")!.textContent).toBe("Hier beginnen");
       expect($$(".home-new-name").map((n) => n.textContent)).toEqual(["Leer", "Öffnen…"]);
-      expect($(".home-example-name")!.textContent).toBe("Wandhalter");
-      expect($(".home-example-line")!.textContent).toBe("Sehen, wo er sich biegt");
+      expect(
+        $$(".home-example-name")
+          .map((n) => n.textContent)
+          .slice(0, 2),
+      ).toEqual(["Ihre erste Halterung", "Wandhalter"]);
+      expect($$(".home-example-line")[1]!.textContent).toBe("Sehen, wo er sich biegt");
       expect($(".home-empty")!.textContent).toBe("Dokumente, die Sie öffnen oder speichern, erscheinen hier.");
       expect($(".modal-close")!.getAttribute("aria-label")).toBe("Zurück zum Dokument");
       const field = document.querySelector<HTMLInputElement>(".home-search input")!;

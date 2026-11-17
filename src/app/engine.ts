@@ -76,6 +76,7 @@ import {
   openOnBranch,
   openPathGuarded,
 } from "./documentActions";
+import { startFirstBracket } from "./tourActions";
 import { endRewoundPick } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -491,6 +492,7 @@ export function mountUi(e: Engine): void {
     currentVersions: () => e.store.versionRepo,
     openVersion: (path, id, copy) => openAtVersion(e, path, id, copy),
     openBranch: (path, name) => openOnBranch(e, path, name),
+    startTour: async () => void (await startFirstBracket(e)),
   });
   wireHomeOnOpen(e.store, e.ui.home);
   setThumbnailSource(() => e.viewport.renderThumbnail(480, 300));

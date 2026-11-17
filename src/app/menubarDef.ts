@@ -11,7 +11,7 @@ import { ideaUrl, REPO_URL } from "../ui/reportText";
 import { menuName, type MenuDef, type MenuItem } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
-import { t } from "../i18n";
+import { t, tEnglish } from "../i18n";
 import { allCommands, commandEnglish, commandLabel, GEOMETRY_COMMANDS, type Command } from "../ui/commands";
 import { analysisFlags } from "../ui/railActive";
 import { canStep, stepLabelFor, stepMenuText } from "../ui/canStep";
@@ -170,6 +170,11 @@ export function buildMenubar(e: Engine): MenuDef[] {
           refName: "Keyboard Shortcuts",
           shortcut: "?",
           onClick: () => toggleShortcutHUD(),
+        },
+        {
+          label: () => t("menu.help.firstBracket"),
+          refName: tEnglish("menu.help.firstBracket"),
+          onClick: () => e.handleAction("first-bracket"),
         },
         { label: () => t("menu.help.manual"), refName: "Manual", onClick: () => void openExternal(MANUAL_URL) },
         {
