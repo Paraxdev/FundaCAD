@@ -54,11 +54,17 @@ let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null 
 const RETRY_FRAMES = 30;
 
 const AVOID = ".modal-panel, .cmdk-card";
+/** Read every frame, so a menu that opens moves the bubble at once. */
+const MENUS = ".ui-menu";
 const CHROME = ".float-left-stack > *, .tool-rail, .float-right > *, .prompt:not(.hidden)";
 /** A new sketch grows from its origin, so a caption keeps off the square this far past it before it is drawn. */
 const SKETCH_START_MM = 50;
+const REREAD_FRAMES = 15;
+/** What is drawn and the shell's panels, read again every REREAD_FRAMES and as a sketch opens or closes. */
 let drawn: { minx: number; miny: number; maxx: number; maxy: number } | null = null;
-let drawnFrame = -1;
+let chrome: Box[] = [];
+let readFrame = -1;
+let sketchOpen = false;
 const corner = new THREE.Vector3();
 
 function sameBox(a: Box | null, b: Box | null): boolean {
@@ -144,11 +150,6 @@ function modelBox(s: StepState): Box | null {
 /** The open sketch's box in window pixels: what is drawn, and the first square past its origin. */
 function sketchBox(): Box | null {
   const sk = engine.sketch;
-  if (!sk.active) return null;
-  if (drawnFrame < 0 || frame - drawnFrame >= 15) {
-    drawn = sk.drawnBounds();
-    drawnFrame = frame;
-  }
   const xs = [Math.min(0, drawn?.minx ?? 0), Math.max(SKETCH_START_MM, drawn?.maxx ?? 0)];
   const ys = [Math.min(0, drawn?.miny ?? 0), Math.max(SKETCH_START_MM, drawn?.maxy ?? 0)];
   let minX = Infinity,
@@ -179,13 +180,31 @@ function cubeBox(): Box | null {
 
 /** What a caption keeps off while a sketch is open, in window pixels. */
 function captionKeep(): { work?: Box; chrome?: Box[] } {
+  const sk = engine.sketch;
+  if (sk.active !== sketchOpen) {
+    sketchOpen = sk.active;
+    readFrame = -1;
+  }
+  if (!sk.active) return {};
+  if (readFrame < 0 || frame - readFrame >= REREAD_FRAMES) {
+    readFrame = frame;
+    drawn = sk.drawnBounds();
+    chrome = [...document.querySelectorAll(CHROME)]
+      .map((d) => d.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const cube = cubeBox();
+    if (cube) chrome.push(cube);
+  }
   const work = sketchBox();
-  if (!work) return {};
-  const chrome: Box[] = [...document.querySelectorAll(CHROME)]
-    .map((d) => d.getBoundingClientRect())
+  return work ? { work, chrome } : {};
+}
+
+/** Open menus and submenus, a menu not yet placed left out. */
+function openMenus(): Box[] {
+  return [...document.querySelectorAll<HTMLElement>(MENUS)]
+    .filter((m) => m.style.visibility !== "hidden")
+    .map((m) => m.getBoundingClientRect())
     .filter((r) => r.width > 0 && r.height > 0);
-  const cube = cubeBox();
-  return { work, chrome: cube ? [...chrome, cube] : chrome };
 }
 
 function follow(s: StepState): void {
@@ -207,14 +226,18 @@ function follow(s: StepState): void {
     const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
     const view = { width: window.innerWidth / z, height: window.innerHeight / z };
     const avoid = [...document.querySelectorAll(AVOID)].map((d) => css(d.getBoundingClientRect()));
-    let at: Placed;
-    if (box) at = placeBubble(box, view, size, avoid);
+    const menus = openMenus().map(css);
+    let at: Placed | null;
+    if (box) at = placeBubble(box, view, size, avoid, menus);
     else {
       const keep = captionKeep();
-      at = placeCaption(view, size, avoid, {
-        work: keep.work ? css(keep.work) : null,
-        chrome: keep.chrome?.map(css) ?? [],
-      });
+      at = placeCaption(
+        view,
+        size,
+        avoid,
+        { work: keep.work ? css(keep.work) : null, chrome: keep.chrome?.map(css) ?? [] },
+        menus,
+      );
     }
     if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
   }
@@ -245,7 +268,7 @@ function restart(): void {
   ref_.value = "";
   radius.value = null;
   shapeFor = null;
-  drawnFrame = -1;
+  readFrame = -1;
   void nextTick(schedule);
 }
 

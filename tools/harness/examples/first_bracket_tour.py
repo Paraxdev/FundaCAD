@@ -1,6 +1,7 @@
 """The guided first bracket, started from Home's card and done step by step with real clicks and keys. Each step
 advances by itself, the open L hint shows while the L is left open, the bracket ends as one body extruded 30 mm,
-and the guide ends finished. A second start from Help is stopped on step 5 and leaves nothing on screen.
+and the guide ends finished. The bubble keeps off an open menu, Help's at step 5 and File's with the ring on Export
+at step 13. A second start from Help is stopped on step 5 and leaves nothing on screen.
 
 Run with `python tools/harness/examples/first_bracket_tour.py`.
 """
@@ -21,6 +22,14 @@ SHORT = (0, 8)
 HOLES = "() => window.store.document.features.filter((f) => f.type === 'hole')"
 INSPECT = "() => window.geometry.session('inspect', { document: window.store.document })"
 EXTRUDES = "() => window.store.document.features.filter((f) => f.type === 'extrude').map((f) => ({ id: f.id, distance: f.distance }))"
+OPEN_MENU = "() => { const m = document.querySelector('.ui-menu'); return m && m.style.visibility !== 'hidden' ? m.getBoundingClientRect().toJSON() : null; }"
+BUBBLE = "() => { const b = document.querySelector('.guide-bubble'); return b && getComputedStyle(b).visibility !== 'hidden' ? b.getBoundingClientRect().toJSON() : null; }"
+# What is on top at the middle of the open menu's first item.
+FIRST_ITEM_ON_TOP = """() => {
+  const item = document.querySelector('.ui-menu [role^=menuitem]');
+  const r = item.getBoundingClientRect();
+  return item.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+}"""
 
 
 def extent(box):
@@ -65,11 +74,41 @@ def follow(s, want):
         if g["on"] == want:
             return s.click(want)
         s.click(g["on"])
+        # A flyout animates open, so a second click before the ring moves would close it again.
+        until(s, lambda: s.guide(raw=True)["on"] != g["on"], seconds=2)
     raise AssertionError(f"the ring never reached {want}: {s.guide(raw=True)}")
 
 
 def keys(s, text):
     s.press(*text, "Enter")
+
+
+def overlaps(a, b):
+    across = a["x"] < b["x"] + b["width"] and b["x"] < a["x"] + a["width"]
+    return across and a["y"] < b["y"] + b["height"] and b["y"] < a["y"] + a["height"]
+
+
+def bubble_off_menu(s):
+    """The open menu, once the guide's bubble is off it or hidden."""
+    menu = until(s, lambda: s.page.evaluate(OPEN_MENU))
+    assert menu, "no menu opened"
+
+    def clear():
+        b = s.page.evaluate(BUBBLE)
+        return b is None or not overlaps(b, menu)
+
+    assert until(s, clear, seconds=2), (s.page.evaluate(BUBBLE), menu)
+    return menu
+
+
+def menu_takes_clicks(s, top):
+    """Opens a title bar menu over the guide, its first item takes a click, and Escape closes it."""
+    s.click(f"menu:{top}")
+    bubble_off_menu(s)
+    assert s.page.evaluate(FIRST_ITEM_ON_TOP), f"the guide covers {top}'s first item"
+    s.page.locator(".ui-menu [role^=menuitem]").first.click(trial=True, timeout=5000)
+    s.press("Escape")
+    assert until(s, lambda: s.page.evaluate(OPEN_MENU) is None), f"Escape did not close {top}"
 
 
 def body_box(s):
@@ -112,6 +151,8 @@ def run(s):
     s.click_at(sketch=L[0])
 
     expect_step(s, 5)
+    menu_takes_clicks(s, "Help")
+    assert s.tour(raw=True)["step"] == 5, s.tour()
     follow(s, "action:finish")
 
     expect_step(s, 6)
@@ -158,7 +199,12 @@ def run(s):
         s.press("Ctrl+S")
         dl.value.save_as(str(Path(tmp) / "Bracket.funda"))
     assert dl.value.suggested_filename == "Bracket.funda", dl.value.suggested_filename
-    s.menu("File/Export…")
+    # The ring moves into the open File menu, and the bubble sits beside the menu, not on it.
+    s.click("menu:File")
+    assert until(s, lambda: s.guide(raw=True)["on"] == "menu:File/Export…" and s.guide(raw=True)["ring"]), s.guide()
+    bubble_off_menu(s)
+    assert s.page.evaluate(BUBBLE), "the bubble hid beside the File menu"
+    s.click("menu:File/Export…")
 
     expect_step(s, 14)
     # Escape closes the dialog and leaves the guide up, then Next works with the dialog open again.

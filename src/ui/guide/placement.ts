@@ -61,36 +61,39 @@ function besideSpots(target: Box, view: Size, size: Size): Placed[] {
   });
 }
 
-/** The bubble beside the target, right first, then left, below and above, inside a
- *  16 px gutter and never over the target or an `avoid` rect such as an open dialog. */
-export function placeBubble(target: Box, view: Size, size: Size, avoid: Box[] = []): Placed {
+/** The bubble beside the target, right first, then left, below and above, inside a 16 px gutter and never over the
+ *  target. It keeps off an `avoid` rect such as an open dialog where it can, and off `menus`, the open menus and
+ *  submenus, always: null hides it while no spot is clear of them. */
+export function placeBubble(target: Box, view: Size, size: Size, avoid: Box[] = [], menus: Box[] = []): Placed | null {
   const ring = ringRect(target);
   const maxLeft = view.width - GUTTER - size.width;
   const maxTop = view.height - GUTTER - size.height;
   const midX = ring.left + ring.width / 2 - size.width / 2;
-  const spots = besideSpots(target, view, size);
-  const clear = spots.find((b) => clearOf(b, [ring, ...avoid]));
-  if (clear) return clear;
-  const fallback = spots[0];
-  if (fallback && !intersects(fallback, ring)) return fallback;
-  return {
+  const last: Placed = {
     side: "below",
     left: clamp(midX, GUTTER, Math.max(GUTTER, maxLeft)),
     top: ring.top + ring.height + GAP <= maxTop ? ring.top + ring.height + GAP : GUTTER,
     width: size.width,
     height: size.height,
   };
+  const spots = [...besideSpots(target, view, size), last];
+  return (
+    spots.find((b) => clearOf(b, [ring, ...menus, ...avoid])) ??
+    spots.find((b) => clearOf(b, [ring, ...menus])) ??
+    (clearOf(last, menus) ? last : null)
+  );
 }
 
 /** A bubble with nothing to point at. It sits at the top centre unless that covers `work`, the open sketch, then
- *  beside the sketch. It never covers an `avoid` rect such as an open dialog, and keeps off `chrome`, the rail,
- *  cards and view controls, where it can. */
+ *  beside the sketch. It never covers an `avoid` rect such as an open dialog or one of `menus`, and keeps off
+ *  `chrome`, the rail, cards and view controls, where it can. Null while no spot is clear of an open menu. */
 export function placeCaption(
   view: Size,
   size: Size,
   avoid: Box[] = [],
   keep: { work?: Box | null; chrome?: Box[] } = {},
-): Placed {
+  menus: Box[] = [],
+): Placed | null {
   const top: Placed = {
     side: "below",
     left: clamp(view.width / 2 - size.width / 2, GUTTER, Math.max(GUTTER, view.width - GUTTER - size.width)),
@@ -99,10 +102,10 @@ export function placeCaption(
     height: size.height,
   };
   const work = keep.work ?? null;
-  const must = work ? [ringRect(work), ...avoid] : avoid;
+  const must = [...(work ? [ringRect(work)] : []), ...menus, ...avoid];
   const spots = [top, ...(work ? besideSpots(work, view, size) : [])];
   const spot = spots.find((b) => clearOf(b, [...must, ...(keep.chrome ?? [])])) ?? spots.find((b) => clearOf(b, must));
   if (spot) return spot;
-  const over = avoid.find((b) => intersects(top, b));
-  return over ? placeBubble(over, view, size, avoid) : top;
+  const over = [...avoid, ...menus].find((b) => intersects(top, b));
+  return over ? placeBubble(over, view, size, avoid, menus) : top;
 }
