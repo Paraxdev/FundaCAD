@@ -2935,7 +2935,7 @@
   "tour.bracket.hole": "Fügen Sie Bohrungen für Schrauben hinzu. Klicken Sie auf {tool}{has, select, yes { oder drücken Sie {key}} other {}}.",
   "tour.bracket.line": "Klicken Sie auf {tool}{has, select, yes { oder drücken Sie {key}} other {}}.",
   "tour.bracket.opened": "Die Anleitung für die Halterung wurde beendet, weil ein anderes Dokument geöffnet wurde.",
-  "tour.bracket.place": "Klicken Sie auf die flache Rückseite des aufrechten Schenkels, wo eine Schraube hinkommt, klicken Sie für jede weitere Schraube noch einmal und drücken Sie dann Enter.",
+  "tour.bracket.place": "Klicken Sie auf die Innenseite des aufrechten Schenkels, die dem anderen Schenkel zugewandt ist, wo eine Schraube hinkommt. Klicken Sie für jede weitere Schraube noch einmal und drücken Sie dann Enter.",
   "tour.bracket.plane": "Klicken Sie auf das kleine Quadrat mit der Beschriftung XZ neben dem Ursprung. Es steht aufrecht, daher zeichnen Sie darauf die Seite der Halterung.",
   "tour.bracket.refused": "Die Anleitung eines Assistenten läuft. Beenden Sie diese zuerst und starten Sie dann die Anleitung für die Halterung.",
   "tour.bracket.sketch": "Ein Teil beginnt als flache Zeichnung. Klicken Sie auf {tool}{has, select, yes { oder drücken Sie {key}} other {}}.",

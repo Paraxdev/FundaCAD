@@ -2935,7 +2935,7 @@
   "tour.bracket.hole": "Ajoutez des perçages pour les vis. Cliquez sur {tool}{has, select, yes {, ou appuyez sur {key}} other {}}.",
   "tour.bracket.line": "Cliquez sur {tool}{has, select, yes {, ou appuyez sur {key}} other {}}.",
   "tour.bracket.opened": "Le guide du support s'est arrêté, car un autre document a été ouvert.",
-  "tour.bracket.place": "Cliquez sur le dos plat du bras vertical à l'endroit d'une vis, cliquez encore une fois pour chaque autre vis, puis appuyez sur Entrée.",
+  "tour.bracket.place": "Cliquez sur la face intérieure du bras vertical, celle tournée vers l'autre bras, à l'endroit d'une vis. Cliquez encore une fois pour chaque autre vis, puis appuyez sur Entrée.",
   "tour.bracket.plane": "Cliquez sur le petit carré marqué XZ près de l'origine. Il est vertical, vous y dessinez donc le côté du support.",
   "tour.bracket.refused": "Le guide d'un assistant est en cours. Arrêtez-le d'abord, puis lancez le guide du support.",
   "tour.bracket.sketch": "Une pièce commence par un dessin à plat. Cliquez sur {tool}{has, select, yes {, ou appuyez sur {key}} other {}}.",

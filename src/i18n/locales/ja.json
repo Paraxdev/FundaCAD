@@ -2935,7 +2935,7 @@
   "tour.bracket.hole": "ねじ穴を追加します。{has, select, yes {{tool} をクリックするか、{key} を押してください} other {{tool} をクリックしてください}}。",
   "tour.bracket.line": "{has, select, yes {{tool} をクリックするか、{key} を押してください} other {{tool} をクリックしてください}}。",
   "tour.bracket.opened": "別のドキュメントが開かれたため、ブラケットのガイドを終了しました。",
-  "tour.bracket.place": "立っている腕の平らな背面で、ねじを付ける位置をクリックし、ほかのねじごとにもう一度クリックしてから Enter を押してください。",
+  "tour.bracket.place": "立っている腕の、もう一方の腕に向いた内側の面で、ねじを付ける位置をクリックしてください。ほかのねじごとにもう一度クリックしてから Enter を押してください。",
   "tour.bracket.plane": "原点の横にある XZ と書かれた小さな四角をクリックしてください。垂直に立っているので、その上にブラケットの側面を描きます。",
   "tour.bracket.refused": "アシスタントのガイドが実行中です。先にそれを終了してから、ブラケットのガイドを開始してください。",
   "tour.bracket.sketch": "部品は平らな図面から始まります。{has, select, yes {{tool} をクリックするか、{key} を押してください} other {{tool} をクリックしてください}}。",

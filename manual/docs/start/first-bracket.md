@@ -28,7 +28,7 @@ Each step moves on by itself once you have done what it asks. The key in bracket
 | 8 | Click **Fillet** (F). | Fillet is running |
 | 9 | Click the inside corner edge where the arms meet, type 4 and press Enter. | the corner is rounded |
 | 10 | Click **Hole**. | Hole is running |
-| 11 | Click the flat back of the upright arm where a screw goes, click once more for each other screw, then press Enter. | the holes are made |
+| 11 | Click the inside face of the upright arm, the side that faces the other arm, where a screw goes. Click once more for each extra screw, then press Enter. | the holes are made |
 | 12 | Double click **Extrude** in the History, change 25 to 30 and press Enter. | the Extrude's distance changes |
 | 13 | Save it with Ctrl+S, then choose **Export…** from the **File** menu and pick STL. | the Export window is open |
 | 14 | Press **Next** to finish. | you press Next |

@@ -2935,7 +2935,7 @@
   "tour.bracket.hole": "Añada agujeros para tornillos. Haga clic en {tool}{has, select, yes { o pulse {key}} other {}}.",
   "tour.bracket.line": "Haga clic en {tool}{has, select, yes { o pulse {key}} other {}}.",
   "tour.bracket.opened": "La guía del soporte se detuvo porque se abrió otro documento.",
-  "tour.bracket.place": "Haga clic en la parte trasera plana del brazo vertical donde va un tornillo, haga clic una vez más por cada otro tornillo y luego pulse Intro.",
+  "tour.bracket.place": "Haga clic en la cara interior del brazo vertical, la que mira hacia el otro brazo, donde va un tornillo. Haga clic una vez más por cada tornillo adicional y luego pulse Intro.",
   "tour.bracket.plane": "Haga clic en el pequeño cuadrado marcado XZ junto al origen. Está en vertical, así que en él dibuja el lado del soporte.",
   "tour.bracket.refused": "La guía de un asistente está en curso. Deténgala primero y luego inicie la guía del soporte.",
   "tour.bracket.sketch": "Una pieza empieza como un dibujo plano. Haga clic en {tool}{has, select, yes { o pulse {key}} other {}}.",
