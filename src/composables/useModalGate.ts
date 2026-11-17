@@ -9,8 +9,9 @@ export function useModalGate(): void {
 }
 
 // Live under every modal: the Announcer (Teleported to body) keeps speaking. The toast stack is not, a region beside a
-// modal is content a screen reader finds but cannot reach; toasts are still spoken through the Announcer.
-const ALWAYS_LIVE = ["#a11y-announcer"];
+// modal is content a screen reader finds but cannot reach; toasts are still spoken through the Announcer. A guide's
+// layer, the tour's and the assistant's, draws over modals and can guide into one, so its Next and Stop stay live.
+const ALWAYS_LIVE = ["#a11y-announcer", ".guide-layer"];
 
 type Layer = { el: HTMLElement; keep: string[] };
 const layers: Layer[] = [];
