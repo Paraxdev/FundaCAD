@@ -841,7 +841,7 @@ describe("FeatureProperties expressions through NumberField", () => {
       await commitTo(w, "distance", raw);
       expect([fake.exprs, fake.values]).toEqual([[], []]);
       expect(field(w, "distance").find(".param-problem").text()).toBe(
-        `"${num}" is ambiguous, write a comma for decimals or leave the point out`,
+        `„${num}“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg`,
       );
     } finally {
       await setLanguage("system");

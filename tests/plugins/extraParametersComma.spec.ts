@@ -158,7 +158,9 @@ describe("the choices box", () => {
           { label: "Small", value: 2.5 },
           { label: "Large", value: 30 },
         ],
-        alert: expect.stringContaining('"1.500" is ambiguous, write a comma for decimals or leave the point out'),
+        alert: expect.stringContaining(
+          "„1.500“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg",
+        ),
       },
     });
   });

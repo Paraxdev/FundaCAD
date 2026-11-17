@@ -4,7 +4,7 @@
 
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
-import { commasToPoints, pointsToCommas } from "../params/decimalForm";
+import { commasToPoints, pointsToCommas, TypedNumberError } from "../params/decimalForm";
 import { decimalMark, t, type DecimalMark } from "../i18n";
 
 export type Dim = "length" | "angle";
@@ -222,7 +222,7 @@ function loneComma(src: string): RegExpExecArray | null {
 
 function refuseThousandsComma(src: string, m: RegExpExecArray): void {
   if (m[2]!.length === 3) {
-    throw new ExprError(`"${src}" is ambiguous, write a point for decimals or leave the comma out`);
+    throw new TypedNumberError("ambiguous", src, ".");
   }
 }
 
@@ -391,8 +391,17 @@ export function measureError(
     parseMeasure(raw, displayUnit, params);
     return null;
   } catch (e) {
-    return e instanceof Error && e.message ? e.message : "not a value";
+    return e instanceof Error && e.message ? refusalText(e) : "not a value";
   }
+}
+
+/** A value box's reason for refusing text: a typed number it will not guess in the chosen language, any other as
+ *  written. */
+export function refusalText(e: Error): string {
+  if (!(e instanceof TypedNumberError)) return e.message;
+  return e.kind === "invalid"
+    ? t("field.problem.invalidNumber", { number: e.number })
+    : t("field.problem.ambiguousNumber", { number: e.number, mark: e.mark === "," ? "comma" : "point" });
 }
 
 const DIM_WORD: Record<Dim, string> = { length: "a length", angle: "an angle" };
@@ -457,18 +466,18 @@ export function storedExpr(typedRaw: string, mark: DecimalMark = decimalMark()):
   const bad = TWO_POINT_NUMBER.exec(stored);
   if (bad) {
     const at = bad.index;
-    throw new ExprError(`invalid number "${typed.slice(at, at + bad[0].length)}"`, at);
+    throw new TypedNumberError("invalid", typed.slice(at, at + bad[0].length), ",", at);
   }
   return stored;
 }
 
-/** Why storedExpr refuses typed expression text, null when it takes it. */
+/** Why storedExpr refuses typed expression text, in the chosen language, null when it takes it. */
 export function typedExprProblem(typed: string, mark: DecimalMark = decimalMark()): string | null {
   try {
     storedExpr(typed, mark);
     return null;
   } catch (e) {
-    if (e instanceof ExprError) return e.message;
+    if (e instanceof ExprError) return refusalText(e);
     throw e;
   }
 }

@@ -8,6 +8,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
+import { shownLine } from "../ui/englishLines";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, type DragHandle } from "./manipulator";
 import { MAX_DRAFT_DEG, draftAngle, draftDelta, draftLever, pullAxisFor, type Axis3 } from "./draftMath";
@@ -276,10 +277,10 @@ export class DraftTool {
           this.commit();
           return;
         }
-        setPrompt(t("tool.draft.refused", { reason: refusal }));
+        setPrompt(t("tool.draft.refused", { reason: shownLine(refusal) }));
       } else if (refusal !== this.refusalShown) {
         this.refusalShown = refusal;
-        if (refusal) setPrompt(t("tool.draft.refused", { reason: refusal }));
+        if (refusal) setPrompt(t("tool.draft.refused", { reason: shownLine(refusal) }));
         else if (!this.commitPending) this.prompt();
       }
       const s = this.viewport.projectToScreen(this.anchor);

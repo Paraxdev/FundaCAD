@@ -3,6 +3,25 @@
 
 import { ExprError, tokenize } from "./parse";
 
+/** A typed number refused rather than guessed. The message is English like every ExprError, a value box words it from
+ *  the fields. `mark` is the decimal mark to write. */
+export class TypedNumberError extends ExprError {
+  constructor(
+    readonly kind: "ambiguous" | "invalid",
+    readonly number: string,
+    readonly mark: "," | ".",
+    pos?: number,
+  ) {
+    const [write, drop] = mark === "," ? ["comma", "point"] : ["point", "comma"];
+    super(
+      kind === "invalid"
+        ? `invalid number "${number}"`
+        : `"${number}" is ambiguous, write a ${write} for decimals or leave the ${drop} out`,
+      pos,
+    );
+  }
+}
+
 const DIGIT = /[0-9]/;
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
@@ -53,7 +72,7 @@ function swapMark(text: string, from: "," | ".", to: "," | "."): string {
       }
       const num = text.slice(i, j);
       if (to === "." && POINT_BEFORE_THREE.test(num) && !EXPONENT.test(text.slice(j))) {
-        throw new ExprError(`"${num}" is ambiguous, write a comma for decimals or leave the point out`, i);
+        throw new TypedNumberError("ambiguous", num, ",", i);
       }
       out += num.split(from).join(to);
       i = j;

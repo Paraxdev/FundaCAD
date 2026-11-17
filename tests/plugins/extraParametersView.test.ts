@@ -102,7 +102,7 @@ describe("Extra Parameters: what the section lists", () => {
     it("in German refuses 1.500 with the reason, and a comma where a semicolon belongs", async () => {
       await setLanguage("de");
       expect([parseChoices("Small = 1.500; Large = 30"), parseChoices("Small = 2,5, Large = 30")]).toEqual([
-        '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+        "„1.500“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg",
         "„Small = 2,5, Large = 30“ sind zwei Auswahlen, setzen Sie ; dazwischen",
       ]);
     });

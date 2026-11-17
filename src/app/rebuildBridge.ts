@@ -1,8 +1,8 @@
 import { toast } from "../ui/toast";
-import { failedText } from "../ui/plainError";
+import { failedEnglish, failedText } from "../ui/plainError";
 import { featureFailureReport } from "../ui/errorReport";
 import { failureKey } from "../ui/buildAnnouncement";
-import { featureEnglish } from "../ui/featureMeta";
+import { featureEnglish, featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, contributedRelief, onContribChange } from "../plugins/contrib";
 import { importedBodyColors, importedFacePaint } from "../document/faceColors";
@@ -167,8 +167,9 @@ export function installRebuildBridge(e: Engine): void {
             detail: err.detail,
             diagnostics: (s.result?.diagnostics ?? []).filter((d) => d.feature_id === id),
           });
-          toast(failedText(label, err.message), {
+          toast(failedText(f ? featureMeta(f).label : label, err.message, label), {
             kind: "error",
+            english: failedEnglish(label, err.message),
             action,
             detail,
             source: id,

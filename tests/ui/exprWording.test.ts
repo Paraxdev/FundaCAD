@@ -55,10 +55,27 @@ describe("German expression number with two marks", () => {
   });
 
   it("quotes the typed text in the language set, German and French", async () => {
-    for (const lang of ["de", "fr"] as const) {
-      await setLanguage(lang);
-      expect(typedExprProblem("w * 2,5,5")).toContain('"2,5,5"');
-    }
+    await setLanguage("de");
+    expect(typedExprProblem("w * 2,5,5")).toBe("ungültige Zahl „2,5,5“");
+    await setLanguage("fr");
+    expect(typedExprProblem("w * 2,5,5")).toBe("nombre non valide « 2,5,5 »");
+  });
+
+  it("words an ambiguous number in the language set, while the refusal storedExpr throws stays English", async () => {
+    await setLanguage("de");
+    expect(typedExprProblem("1.500")).toBe(
+      "„1.500“ ist mehrdeutig, schreiben Sie ein Komma für Dezimalstellen oder lassen Sie den Punkt weg",
+    );
+    expect(() => storedExpr("1.500")).toThrow(
+      '"1.500" is ambiguous, write a comma for decimals or leave the point out',
+    );
+    await setLanguage("ja");
+    expect(typedExprProblem("1,000")).toBe(
+      "「1,000」はあいまいです。小数点にはピリオドを使うか、カンマを省いてください",
+    );
+    expect(() => storedExpr("1,000")).toThrow(
+      '"1,000" is ambiguous, write a point for decimals or leave the comma out',
+    );
   });
 
   it.each(["1,5", "breite * 2,25 + 4", "3,5e2", "max(1,5;2,5)", "1.500"])("%j keeps its earlier outcome", (typed) => {
