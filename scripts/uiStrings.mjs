@@ -235,7 +235,19 @@ export function scanStrings(files) {
 }
 
 const KEY_SHAPE = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)+$/;
-const KEYED_ERRORS = new Set(["WordedError", "ExprRefusal", "OnshapeError"]);
+const BUILTIN_ERRORS = new Set([
+  "Error",
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "ReferenceError",
+  "EvalError",
+  "URIError",
+  "AggregateError",
+]);
+
+// Our own error classes and a plugin's subclasses of them are keyed; the built-in ones carry text.
+const isKeyedError = (name) => /(Error|Refusal|Refused)$/.test(name) && !BUILTIN_ERRORS.has(name);
 
 function propertiesNamed(node, name) {
   if (!ts.isObjectLiteralExpression(node)) return [];
@@ -256,7 +268,7 @@ function collectKeys(code, keys) {
     }
     // A keyed error is worded where it is shown, from its first argument and its `lines`. Its other arguments are
     // text, so an English one shaped like a key does not count.
-    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && KEYED_ERRORS.has(node.expression.text)) {
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && isKeyedError(node.expression.text)) {
       const [first, ...rest] = node.arguments ?? [];
       if (first) keyed(first);
       for (const arg of rest) for (const lines of propertiesNamed(arg, "lines")) keyed(lines);

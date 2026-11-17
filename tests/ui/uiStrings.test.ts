@@ -275,15 +275,22 @@ describe("message keys in use", () => {
       `throw new WordedError("plugins.notInstallable", { why: "see.the.log" }, { lines: { why: "plugins.manifest.noName" } });`,
       `throw new ExprRefusal("expr.unexpected", { token: "a.b" });`,
       `throw new OnshapeError("error.tab", { name: "part.one" }, { status: 404 });`,
-      `throw new TracerRefused("render.trace.selfCheckWrong");`,
+      `throw new TracerRefused("render.trace.selfCheckWrong", { file: "a.png" });`,
       `throw new Error("the.file.json");`,
+      `throw new TypeError("config.json");`,
     ].join("\n");
     expect([...usedKeys({ "src/a.ts": code })].sort()).toEqual([
       "error.tab",
       "expr.unexpected",
       "plugins.manifest.noName",
       "plugins.notInstallable",
+      "render.trace.selfCheckWrong",
     ]);
+  });
+
+  it("counts a subclass of a keyed error, as a plugin's own", () => {
+    const code = `class PartRefusal extends WordedError {}\nthrow new PartRefusal("myplugin.part.tooThin", { mm: 0.2 });`;
+    expect([...usedKeys({ "src/a.ts": code })]).toEqual(["myplugin.part.tooThin"]);
   });
 });
 

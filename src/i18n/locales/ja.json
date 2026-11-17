@@ -408,7 +408,7 @@
   "field.problem.ambiguousNumber": "「{number}」はあいまいです。{mark, select, comma {小数点にはカンマを使うか、ピリオドを省いてください} other {小数点にはピリオドを使うか、カンマを省いてください}}",
   "field.problem.atLeast": "{label}は{min, number}以上にしてください",
   "field.problem.circular": "循環参照です",
-  "field.problem.circularVia": "循環参照です: {chain}",
+  "field.problem.circularVia": "循環参照: {chain}",
   "field.problem.empty": "値が空です",
   "field.problem.invalidExpression": "式が無効です",
   "field.problem.invalidNumber": "無効な数値「{number}」",
