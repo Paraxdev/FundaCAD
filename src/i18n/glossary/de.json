@@ -870,6 +870,11 @@
     {
       "en": "example",
       "text": "Beispiel"
+    },
+    {
+      "en": "ring slot",
+      "text": "Position",
+      "note": "a numbered place on the radial menu's ring, not the Slot feature"
     }
   ]
 }

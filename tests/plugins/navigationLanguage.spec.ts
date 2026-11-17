@@ -9,10 +9,15 @@ import {
   RADIAL_CONTEXTS,
   RADIAL_DRAGS,
   SETTINGS,
+  RESERVED_NAMES,
   bindingRows,
+  keymapFor,
+  problemText,
   tableFor,
 } from "../../plugins/FundaCAD.Navigation/navigation";
 import { navState } from "../../plugins/FundaCAD.Navigation/state";
+import { checkShortcut, setShortcutOverrides } from "../../src/input/shortcuts";
+import shortcutsTs from "../../src/input/shortcuts.ts?raw";
 import { setLanguage } from "../../src/i18n";
 import { byName, nameOf, stubResizeObserver } from "./pluginA11y";
 
@@ -26,6 +31,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   vi.unstubAllGlobals();
+  setShortcutOverrides([]);
   await setLanguage("system");
 });
 
@@ -40,6 +46,8 @@ const keyButtons = () =>
     /, (shortcut|Tastenkürzel|ショートカット) /.test(nameOf(b)),
   );
 
+const radialButton = () => document.querySelector<HTMLElement>('[data-nav-key="navigation.radial"]')!;
+
 describe("the Navigation settings", () => {
   it("read in German, then in Japanese, without a remount", async () => {
     await setLanguage("de");
@@ -47,7 +55,7 @@ describe("the Navigation settings", () => {
     const groups = [...document.querySelectorAll("details [role=group]")].map(nameOf);
     expect(groups).toEqual(["Nichts ausgewählt", "Etwas ausgewählt", "In einer Skizze"]);
     const names = [...document.querySelectorAll("[role=combobox]")].map((c) => nameOf(c).split(",")[0]);
-    expect(names[0]).toBe("Platz 1");
+    expect(names[0]).toBe("Position 1");
     expect(names.at(-1)).toBe("Mehr 2");
     const list = document.querySelector("[role=list]")!;
     expect(nameOf(list)).toBe("Tastenkürzel");
@@ -77,7 +85,7 @@ describe("the Navigation settings", () => {
     expect(nameOf(first)).toBe(`Neues Tastenkürzel für ${label} drücken`);
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     await flushPromises();
-    expect(document.querySelector("[role=alert]")!.textContent).toMatch(/^Fehler: /);
+    expect(document.querySelector("[role=alert]")!.textContent).toBe("Fehler: von Filter der Rahmenauswahl belegt");
   });
 
   it("say a radial conflict as a warning, worded again after a switch", async () => {
@@ -89,7 +97,66 @@ describe("the Navigation settings", () => {
     );
     await setLanguage("ja");
     await flushPromises();
-    expect(document.querySelector("[role=alert]")!.textContent).toContain("右ドラッグはすでに回転に使われている");
+    expect(document.querySelector("[role=alert]")!.textContent).toContain("右ドラッグはすでにオービットに使われている");
+  });
+});
+
+describe("the key rows with the plugin active", () => {
+  it("keep the radial menu row in the chosen language across a switch", async () => {
+    setShortcutOverrides(keymapFor(navState.cfg));
+    await open();
+    const first = () => nameOf(radialButton()).split(/[,、]/)[0];
+    expect(first()).toBe("Radial menu");
+    await setLanguage("de");
+    await flushPromises();
+    expect(first()).toBe("Radialmenü");
+    await setLanguage("ja");
+    await flushPromises();
+    expect(first()).toBe("ラジアルメニュー");
+    await setLanguage("en");
+    await flushPromises();
+    expect(first()).toBe("Radial menu");
+  });
+
+  it("word a key another action holds with that action's name in the chosen language", async () => {
+    setShortcutOverrides(keymapFor(navState.cfg));
+    await setLanguage("de");
+    await open();
+    radialButton().click();
+    await flushPromises();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(document.querySelector("[role=alert]")!.textContent).toBe(
+      "Warnung: E wird bereits von Extrusion verwendet, dieses hat Vorrang",
+    );
+  });
+});
+
+describe("the shortcut problems", () => {
+  it("say a reserved key and the Alt refusal in the chosen language", async () => {
+    await setLanguage("de");
+    expect(problemText({ reserved: "Command palette" })).toBe("von Befehlspalette belegt");
+    expect(problemText({ reserved: "Save As" })).toBe("von Speichern unter belegt");
+    expect(problemText({ refused: "Alt is read by the tools, pick a key without it" })).toBe(
+      "Alt wird von den Werkzeugen gelesen, wählen Sie eine Taste ohne Alt",
+    );
+    expect(problemText({ refused: "something new" })).toBe("something new");
+    expect(problemText({ reserved: "Something new" })).toBe("von Something new belegt");
+    await setLanguage("ja");
+    expect(problemText({ reserved: "Undo" })).toBe("元に戻すが使用しています");
+  });
+
+  it("know every name and refusal the host sends", async () => {
+    const block = /const RESERVED: Record<string, string> = \{([^}]*)\}/.exec(shortcutsTs)![1]!;
+    const names = new Set([...block.matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]!));
+    expect(names.size).toBeGreaterThan(10);
+    expect([...names].sort()).toEqual([...RESERVED_NAMES].sort());
+    await setLanguage("de");
+    for (const name of names) {
+      expect(problemText({ reserved: name }), name).not.toBe(`von ${name} belegt`);
+    }
+    const alt = checkShortcut({ action: "x", key: "a", alt: true })!;
+    expect(problemText(alt)).toBe("Alt wird von den Werkzeugen gelesen, wählen Sie eine Taste ohne Alt");
   });
 });
 
@@ -106,7 +173,7 @@ describe("the lists and settings read the language when asked", () => {
     );
     expect(bindingRows(tableFor(DEFAULT_CONFIG).table)).toContainEqual({ key: "Rechts ziehen", label: "drehen" });
     await setLanguage("ja");
-    expect(PRESETS[0]!.label).toBe("右ボタンで回転(既定)");
+    expect(PRESETS[0]!.label).toBe("右ボタンでオービット(既定)");
     expect(preset.label).toBe("マウスボタン");
     await setLanguage("en");
     expect(PRESETS[0]!.label).toBe("Right orbits (default)");

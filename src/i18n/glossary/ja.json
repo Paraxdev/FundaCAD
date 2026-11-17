@@ -861,6 +861,11 @@
     {
       "en": "example",
       "text": "サンプル"
+    },
+    {
+      "en": "ring slot",
+      "text": "枠",
+      "note": "a numbered place on the radial menu's ring, not the Slot feature"
     }
   ]
 }

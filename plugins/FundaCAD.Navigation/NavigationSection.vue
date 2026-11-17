@@ -7,7 +7,6 @@ import {
   activeShortcuts,
   allCommands,
   checkShortcut,
-  describeShortcutProblem,
   formatShortcut,
   type Shortcut,
   type ShortcutOverride,
@@ -20,6 +19,8 @@ import {
   RING_SLOTS,
   bindingRows as bindingRowsOf,
   keymapFor,
+  problemText,
+  shortcutLabel,
   tableFor,
   type RadialContext,
 } from "./navigation";
@@ -73,7 +74,7 @@ const keyRows = computed(() => {
     if (seen.has(s.action) || s.action === "shortcut-help") continue;
     seen.add(s.action);
     const now = table.find((o) => o.action === s.action);
-    out.push({ action: s.action, label: s.label, context: s.context, key: now ? formatShortcut(now) : "" });
+    out.push({ action: s.action, label: shortcutLabel(s), context: s.context, key: now ? formatShortcut(now) : "" });
   }
   if (cfg.value.radial && !seen.has(RADIAL_ACTION)) {
     const k = keymapFor(cfg.value).find((o) => o.action === RADIAL_ACTION);
@@ -110,14 +111,14 @@ function onCapture(e: KeyboardEvent) {
   };
   const p = checkShortcut(o);
   if (p && !("conflict" in p)) {
-    notes.value = { ...notes.value, [action]: t("note.error", { problem: describeShortcutProblem(p) }) };
+    notes.value = { ...notes.value, [action]: t("note.error", { problem: problemText(p) }) };
     return;
   }
   const { alt: _alt, ...kept } = o;
   store(kept, action);
   notes.value = {
     ...notes.value,
-    [action]: p ? t("note.warning", { problem: describeShortcutProblem(p) }) : "",
+    [action]: p ? t("note.warning", { problem: problemText(p) }) : "",
   };
   if (!p) {
     const key = formatShortcut({ ...kept, context: "global", label: "" });

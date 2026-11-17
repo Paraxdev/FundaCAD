@@ -1,7 +1,19 @@
 // Pure apart from storage, so the tests can read every rule here.
 
-import { readSetting, type CtxItem, type PointerBinding, type SettingsSchema, type ShortcutOverride } from "fundacad";
-import { t } from "./lines";
+import {
+  SHORTCUTS,
+  bindingEntries,
+  checkShortcut,
+  formatShortcut,
+  readSetting,
+  type CtxItem,
+  type PointerBinding,
+  type SettingsSchema,
+  type Shortcut,
+  type ShortcutOverride,
+  type ShortcutProblem,
+} from "fundacad";
+import { t, tEnglish } from "./lines";
 
 export const PLUGIN_ID = "FundaCAD.Navigation";
 /** Not "fundacad.navigation": the core's own navigation preferences use it. */
@@ -341,34 +353,66 @@ export function radialItems(
   ];
 }
 
-const MODS = ["shift", "ctrl", "alt"] as const;
-
 /** What each mouse binding of a table does, as `Right drag: orbit.` rows, one per drag and one click per button. */
 export function bindingRows(table: readonly PointerBinding[]): { key: string; label: string }[] {
-  const mods = (b: PointerBinding) => MODS.filter((m) => b[m] === true).map((m) => m[0]!.toUpperCase() + m.slice(1));
-  const row = (b: PointerBinding, kind: "drag" | "click", what: "orbit" | "pan" | "zoom" | "radial" | "context") => {
-    const held = mods(b);
-    const args = { button: b.button, kind };
-    const key = held.length ? t("binding.gestureHeld", { ...args, mods: held.join("+") }) : t("binding.gesture", args);
+  return bindingEntries(table).map((e) => {
+    const args = { button: e.button, kind: e.kind };
+    const key = e.mods.length
+      ? t("binding.gestureHeld", { ...args, mods: e.mods.join("+") })
+      : t("binding.gesture", args);
     const label =
-      what === "orbit"
+      e.what === "orbit"
         ? t("binding.orbit")
-        : what === "pan"
+        : e.what === "pan"
           ? t("binding.pan")
-          : what === "zoom"
+          : e.what === "zoom"
             ? t("binding.zoom")
-            : what === "radial"
+            : e.what === "gesture"
               ? t("binding.radial")
               : t("binding.context");
     return { key, label };
-  };
-  const out: { key: string; label: string }[] = [];
-  for (const b of table) if (b.drag) out.push(row(b, "drag", b.drag === "gesture" ? "radial" : b.drag));
-  const menus = new Map<string, PointerBinding>();
-  for (const b of table) {
-    const had = menus.get(b.button);
-    if (b.click && (!had || mods(b).length < mods(had).length)) menus.set(b.button, b);
+  });
+}
+
+/** A row's name as it reads now: the table copies a label when it stages its rows, so a copy can be a language behind. */
+export function shortcutLabel(s: Pick<Shortcut, "action" | "label">): string {
+  if (s.action === RADIAL_ACTION) return t("radial.name");
+  return SHORTCUTS.find((o) => o.action === s.action)?.label ?? s.label;
+}
+
+// The host words these problems in English. Both sets are closed, the spec reads the host's table for drift, and a
+// text not listed here shows as sent. A reserved name is matched on the plugin's English line of it, and the Alt
+// refusal is asked of the host, which has no export for its text.
+const altRefusal = () => (checkShortcut({ action: RADIAL_ACTION, key: "a", alt: true }) as { refused: string }).refused;
+const RESERVED_LINES = [
+  { say: () => t("reserved.undo"), english: () => tEnglish("reserved.undo") },
+  { say: () => t("reserved.redo"), english: () => tEnglish("reserved.redo") },
+  { say: () => t("reserved.save"), english: () => tEnglish("reserved.save") },
+  { say: () => t("reserved.saveAs"), english: () => tEnglish("reserved.saveAs") },
+  { say: () => t("reserved.new"), english: () => tEnglish("reserved.new") },
+  { say: () => t("reserved.open"), english: () => tEnglish("reserved.open") },
+  { say: () => t("reserved.export"), english: () => tEnglish("reserved.export") },
+  { say: () => t("reserved.find"), english: () => tEnglish("reserved.find") },
+  { say: () => t("reserved.palette"), english: () => tEnglish("reserved.palette") },
+  { say: () => t("reserved.preferences"), english: () => tEnglish("reserved.preferences") },
+  { say: () => t("reserved.items"), english: () => tEnglish("reserved.items") },
+  { say: () => t("reserved.history"), english: () => tEnglish("reserved.history") },
+  { say: () => t("reserved.console"), english: () => tEnglish("reserved.console") },
+  { say: () => t("reserved.interfaceSize"), english: () => tEnglish("reserved.interfaceSize") },
+  { say: () => t("reserved.cancel"), english: () => tEnglish("reserved.cancel") },
+  { say: () => t("reserved.boxFilter"), english: () => tEnglish("reserved.boxFilter") },
+  { say: () => t("reserved.delete"), english: () => tEnglish("reserved.delete") },
+  { say: () => t("reserved.thisSheet"), english: () => tEnglish("reserved.thisSheet") },
+];
+
+export const RESERVED_NAMES: readonly string[] = RESERVED_LINES.map((l) => l.english());
+
+export function problemText(p: ShortcutProblem): string {
+  if ("conflict" in p) {
+    return t("problem.used", { key: formatShortcut(p.conflict), label: shortcutLabel(p.conflict) });
   }
-  for (const b of menus.values()) out.push(row(b, "click", "context"));
-  return out;
+  if ("reserved" in p) {
+    return t("problem.taken", { name: RESERVED_LINES.find((l) => l.english() === p.reserved)?.say() ?? p.reserved });
+  }
+  return p.refused === altRefusal() ? t("problem.alt") : p.refused;
 }
