@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue";
+import { t } from "../../i18n";
 import Button from "../ui/Button.vue";
 import IconButton from "../ui/IconButton.vue";
 import { useToastStore } from "../../stores/toasts";
@@ -12,9 +13,9 @@ const focused = ref(false);
 // A row removed under the pointer fires no pointerleave and a removed focused button no reliable focusout,
 // so rows changing re-checks both instead of trusting the events.
 watch(
-  () => toasts.items.map((t) => `${t.id}${t.leaving ? "x" : ""}`),
+  () => toasts.items.map((x) => `${x.id}${x.leaving ? "x" : ""}`),
   () => {
-    const live = new Set(toasts.items.filter((t) => !t.leaving).map((t) => t.id));
+    const live = new Set(toasts.items.filter((x) => !x.leaving).map((x) => x.id));
     hovered.value = new Set([...hovered.value].filter((id) => live.has(id)));
     const active = document.activeElement;
     const row = active && region.value?.contains(active) ? active.closest(".toast") : null;
@@ -65,38 +66,38 @@ function focusOut(e: FocusEvent) {
       ref="region"
       class="toast-stack"
       role="region"
-      aria-label="Notifications"
+      :aria-label="t('toast.region')"
       @focusin="focused = true"
       @focusout="focusOut"
     >
       <div
-        v-for="t in toasts.items"
-        :key="t.id"
+        v-for="item in toasts.items"
+        :key="item.id"
         class="toast"
-        :class="[`toast-${t.kind}`, { 'toast-out': t.leaving }]"
-        @pointerenter="enter(t.id)"
-        @pointerleave="leave(t.id)"
+        :class="[`toast-${item.kind}`, { 'toast-out': item.leaving }]"
+        @pointerenter="enter(item.id)"
+        @pointerleave="leave(item.id)"
       >
         <!-- Messages carry engine error text and document-sourced names, {{ }} escapes them. -->
-        <span class="toast-msg">{{ t.message }}</span>
+        <span class="toast-msg">{{ item.message }}</span>
         <Button
-          v-if="t.action"
+          v-if="item.action"
           size="sm"
           class="toast-action"
           @click="
-            t.action.onClick();
-            toasts.dismiss(t.id);
+            item.action.onClick();
+            toasts.dismiss(item.id);
           "
-          >{{ t.action.label }}</Button
+          >{{ item.action.label }}</Button
         >
         <IconButton
           icon="close"
-          tip="Dismiss"
+          :tip="t('toast.dismiss')"
           size="sm"
           variant="plain"
           :icon-size="12"
           class="toast-close"
-          @click="toasts.dismiss(t.id)"
+          @click="toasts.dismiss(item.id)"
         />
       </div>
     </div>

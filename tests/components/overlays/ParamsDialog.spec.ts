@@ -170,10 +170,11 @@ describe("ParamsDialog", () => {
   });
 
   describe("a saved expression", () => {
+    // The second box of each parameter row, as its label follows the language.
     const exprs = () =>
-      inputs()
-        .filter((el) => el.getAttribute("aria-label")?.startsWith("Expression of"))
-        .map((el) => el.value);
+      [...document.body.querySelectorAll(".params-dialog .params-row:not(.params-head, .params-add)")].map(
+        (row) => row.querySelectorAll("input")[1]!.value,
+      );
 
     it("shows with a decimal comma in German, commits nothing on a blur, and goes back to a point in English", async () => {
       const fake = makeEngine();

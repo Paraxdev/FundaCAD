@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
+import { t } from "../../i18n";
 import { useModalStore } from "../../stores/modals";
 import Button from "../ui/Button.vue";
 import ConfirmDialog from "../ui/ConfirmDialog.vue";
@@ -95,7 +96,8 @@ onUnmounted(() => {
     :options="req.options"
     :multi="req.kind === 'multi'"
     :min="req.kind === 'multi' ? req.min : 1"
-    :confirm-label="req.kind === 'multi' ? req.confirmLabel : 'OK'"
+    :confirm-label="(req.kind === 'multi' ? req.confirmLabel : undefined) ?? t('common.ok')"
+    :cancel-label="t('common.cancel')"
     @pick="finish"
     @confirm="finish"
     @cancel="cancel()"
@@ -115,7 +117,7 @@ onUnmounted(() => {
       <li v-for="(it, i) in req.items" :key="i" :title="it">{{ it }}</li>
     </ul>
     <template #footer>
-      <Button variant="primary" class="ui-confirm-ok" @click="cancel()">Done</Button>
+      <Button variant="primary" class="ui-confirm-ok" @click="cancel()">{{ t("common.done") }}</Button>
     </template>
   </Dialog>
 </template>

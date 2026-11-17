@@ -1,6 +1,7 @@
 // What opening a document says about what this version leaves out: a plugin-declared type keeps the plugin's own
 // message, every other unbuildable type shares one notice.
 
+import { t } from "../i18n";
 import type { CadDocument, Feature } from "../types";
 import { FORMAT_VERSION } from "./migrate";
 import { missingPluginMessage, missingPlugins } from "./missingPlugins";
@@ -12,12 +13,13 @@ export interface OpenNotice {
   detail?: string;
 }
 
-const NEWER = "Opened a file from a newer version of FundaCAD.";
 const MOST_NAMES = 3;
 
+const listed = (names: string[]) => names.reduce((before, after) => t("pick.list.more", { before, after }));
+
 function namesOf(names: string[]): string {
-  if (names.length <= MOST_NAMES) return names.join(", ");
-  return `${names.slice(0, MOST_NAMES).join(", ")} and ${names.length - MOST_NAMES} more`;
+  if (names.length <= MOST_NAMES) return listed(names);
+  return t("openNotice.andMore", { names: listed(names.slice(0, MOST_NAMES)), n: names.length - MOST_NAMES });
 }
 
 // As History names it.
@@ -37,25 +39,16 @@ export function openNotices(doc: Pick<CadDocument, "features">, openedVersion: n
   const total = unknown.reduce((n, u) => n + u.count, 0);
   if (total === 0) {
     if (newer) {
-      out.unshift({
-        message: `${NEWER} Anything this version does not know is kept and saved with the file.`,
-        kind: "info",
-      });
+      out.unshift({ message: t("openNotice.newerKnown"), kind: "info" });
     }
     return out;
   }
   const types = new Set(unknown.map((u) => u.type));
   const left = doc.features.filter((f) => types.has(f.type));
   const names = namesOf([...new Set(left.map(rowName))]);
-  const one = total === 1;
-  const kept = one
-    ? "It is kept and saved with the file. Bodies after it may differ."
-    : "They are kept and saved with the file. Bodies after them may differ.";
   // An older stamp means no newer version wrote these, so most likely a plugin not running here, which can also be one
   // the engine still builds.
-  const sentence = newer
-    ? `${NEWER} ${one ? "1 feature was" : `${total} features were`} not included because this version does not know ${one ? "it" : "them"}: ${names}. ${kept} Update FundaCAD to build ${one ? "it" : "them"}.`
-    : `${one ? "1 feature needs" : `${total} features need`} a plugin that is not running here: ${names}. ${kept}`;
+  const sentence = t(newer ? "openNotice.newerUnknown" : "openNotice.needsPlugin", { n: total, names });
   const detail = unknown
     .map((u) => {
       const ids = doc.features.filter((f) => f.type === u.type).map((f) => f.id);

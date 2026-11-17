@@ -83,7 +83,7 @@ export function chooseMulti<T extends string>(
       title,
       options: options as ChoiceOption[],
       min: opts.min ?? 1,
-      confirmLabel: opts.confirmLabel ?? "OK",
+      confirmLabel: opts.confirmLabel,
       resolve: (v: string[] | null) => {
         m.depth = Math.max(0, m.depth - 1);
         resolve(v as T[] | null);

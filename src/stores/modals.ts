@@ -22,7 +22,7 @@ export interface MultiReq {
   title: string;
   options: ChoiceOption[];
   min: number;
-  confirmLabel: string;
+  confirmLabel?: string | undefined;
   resolve: (v: string[] | null) => void;
 }
 export interface ListReq {

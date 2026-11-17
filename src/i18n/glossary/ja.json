@@ -516,6 +516,19 @@
       "text": "公差"
     },
     {
+      "en": "Console",
+      "text": "コンソール"
+    },
+    {
+      "en": "facet",
+      "text": "ファセット"
+    },
+    {
+      "en": "issue",
+      "text": "Issue",
+      "note": "a report on GitHub"
+    },
+    {
       "en": "Offset value",
       "text": "オフセット量",
       "note": "the Offset row, a distance; the Offset tool keeps its own verb"

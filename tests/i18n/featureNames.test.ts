@@ -4,9 +4,9 @@
 //   translated, the name stands alone or lands in a line that goes through t():
 //     TimelineBar.vue chips and rename placeholder, geometryBrowser.ts ownerNamesOf (Items), readouts.ts,
 //     describeModel.ts, ParamsDialog.vue targetLabel, TargetEditPanel.vue, ToolRail.vue unnamed sketch,
-//     patternSources.featureLabel (the Features row).
+//     patternSources.featureLabel (the Features row), plainError.ts sketchConflictText.
 //   English, the name lands in a raw English sentence another lane owns (featureEnglish, stepEnglish, numberedEnglish):
-//     rebuildBridge.ts failure toast, plainError.ts sketchConflictText, contextMenus.ts "Edit X",
+//     rebuildBridge.ts failure toast, contextMenus.ts "Edit X",
 //     patternSources.refusalReason, viewportWiring.ts edge picker, announcements.ts build line, VersionsPanel.vue
 //     summary, stepLabels.ts and store.ts undo and toast labels.
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -311,7 +311,7 @@ describe("numbering", () => {
 });
 
 describe("the English sentences that name a feature", () => {
-  it("keep the English name in German: the sketch conflict, the failure toast, the face menu", async () => {
+  it("keep the English name in German: the failure toast, the face menu", async () => {
     await setLanguage("de");
     const features = [
       { id: "s1", type: "sketch" },
@@ -324,8 +324,9 @@ describe("the English sentences that name a feature", () => {
     expect(refused[0]!.reason).toMatch(new RegExp(`^Muster: .+ ist vom Typ ${line(de, "tool.fillet")} und kann nicht`));
     expect(refused[1]!.reason).toMatch(/^Muster: .+ hat nichts Ausgeschnittenes/);
 
+    // The pattern refusal and the sketch conflict toast are translated whole, so they name the feature in German.
     expect(sketchConflictText("s1", features)).toBe(
-      "The dimensions in Sketch 1 conflict, so the sketch was left as it was",
+      "Die Bemaßungen in Skizze 1 widersprechen sich, daher bleibt die Skizze unverändert",
     );
 
     setActivePinia(createPinia());
