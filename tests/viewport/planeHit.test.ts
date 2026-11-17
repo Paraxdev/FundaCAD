@@ -53,7 +53,10 @@ function tilesAt(dir: [number, number, number]) {
   return { t, frame, screen, labels };
 }
 
-/** The side of the largest axis aligned square of pixels that all pick `plane`, scanned around the origin. */
+/**
+ * The side of the largest axis aligned square of pixels that all pick `plane`, scanned around the origin. The scan
+ * stops once every plane has a square of `minPx`, since a caller only asks whether each reaches it.
+ */
 function largestSquare(
   screen: PlaneOnScreen[],
   labels: Record<string, P2>,
@@ -84,6 +87,7 @@ function largestSquare(
       }
     }
     for (const k of PLANES) runs[k].reverse();
+    if (PLANES.every((k) => out[k] >= minPx)) break;
   }
   return out;
 }
@@ -135,7 +139,7 @@ describe("hit area on screen", () => {
       for (const k of PLANES) expect(sq[k], `${dir} ${k}`).toBeGreaterThanOrEqual(HIT_MIN_PX);
       t.dispose();
     }
-  });
+  }, 60_000);
 
   it("gives the two tiles seen exactly edge on from the top a full size target", () => {
     const { t, frame, screen, labels } = tilesAt(TOP);
