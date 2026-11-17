@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { spellFixed } from "../../ui/measure";
+import { spellFixed, spellNumber } from "../../ui/measure";
 import { fmtKeys } from "../../input/platform";
 import RenderSections from "./RenderSections.vue";
 // Editing is live with no OK: none of it is on the undo stack, so a buffered copy would be a library the model is not
@@ -12,7 +12,15 @@ import { useBuildValue } from "../../app/useDoc";
 import Icon from "./Icon.vue";
 import { toast } from "../../ui/toast";
 import { exportMaterialLibrary, importMaterialLibrary } from "../../io/files";
-import { finishLabel, finishOf, type MaterialDef, type SurfaceSpec } from "../../document/materials";
+import {
+  finishOf,
+  finishWords,
+  type FinishGloss,
+  type FinishKind,
+  type MaterialDef,
+  type SurfaceSpec,
+} from "../../document/materials";
+import { t, type MessageKey } from "../../i18n";
 import { materialPreview, onPreviewsChanged } from "../../viewport/materialPreview";
 import { FALLBACK_THICKNESS } from "../../viewport/glassThickness";
 import { isRenderLowPower } from "../../viewport/render";
@@ -87,10 +95,30 @@ const usage = useBuildValue((b) => {
   return out;
 });
 
+const GLOSS_KEYS = {
+  glossy: "render.mat.finish.glossy",
+  satin: "render.mat.finish.satin",
+  matte: "render.mat.finish.matte",
+} as const satisfies Record<FinishGloss, MessageKey>;
+const KIND_KEYS = {
+  lit: "render.mat.finish.lit",
+  transparent: "render.mat.finish.transparent",
+  metallic: "render.mat.finish.metallic",
+  glitter: "render.mat.finish.glitter",
+  brushed: "render.mat.finish.brushed",
+  velvet: "render.mat.finish.velvet",
+} as const satisfies Record<FinishKind, MessageKey>;
+
+function finishText(m: MaterialDef): string {
+  const { gloss, kind } = finishWords(m);
+  if (!kind) return t(GLOSS_KEYS[gloss]);
+  return t("render.mat.finish.pair", { gloss: t(GLOSS_KEYS[gloss]), kind: t(KIND_KEYS[kind]) });
+}
+
 const matches = (m: MaterialDef) => {
   const q = search.value.trim().toLowerCase();
   if (!q) return true;
-  return `${m.name} ${finishLabel(m)} ${m.color}`.toLowerCase().includes(q);
+  return `${m.name} ${finishText(m)} ${m.color}`.toLowerCase().includes(q);
 };
 
 /** The ones on the model first: an imported assembly wears fifteen of a thirty-strong library. */
@@ -108,6 +136,13 @@ const selectionCount = computed(() => {
   return browser.selectedBodyIds.length;
 });
 const faceCount = ref(0);
+const applyLabel = computed(() =>
+  faceCount.value
+    ? t("render.mat.applyTo", { what: "face", n: faceCount.value })
+    : selectionCount.value
+      ? t("render.mat.applyTo", { what: "body", n: selectionCount.value })
+      : t("render.mat.applyTo", { what: "selection", n: 0 }),
+);
 /** What the selection wears now, null for none or several. A click only picks a tile to look at, so this tells the
  *  tile on the model apart from the picked one. */
 const wornId = ref<string | null>(null);
@@ -164,7 +199,13 @@ function applyTile(id: string) {
 }
 
 function tileName(m: MaterialDef) {
-  return `${m.name}, ${finishLabel(m)}${wornId.value === m.id ? ", applied to the selection" : ""}`;
+  const args = { name: m.name, finish: finishText(m) };
+  return wornId.value === m.id ? t("render.mat.tileWorn", args) : t("render.mat.tile", args);
+}
+
+function tileTitle(m: MaterialDef) {
+  const args = { name: m.name, finish: finishText(m) };
+  return wornId.value === m.id ? t("render.mat.tileTitleWorn", args) : t("render.mat.tileTitle", args);
 }
 
 async function deleteSelected() {
@@ -172,14 +213,10 @@ async function deleteSelected() {
   if (!ids.length) return;
   const worn = ids.filter((id) => usage.value.has(id)).length;
   if (worn) {
-    const what = ids.length === 1 ? "this material" : `these ${ids.length} materials`;
-    const answer = await choose(
-      `Delete ${what}? What wears ${worn === 1 && ids.length === 1 ? "it" : "them"} goes back to the default grey.`,
-      [
-        { value: "delete", label: "Delete" },
-        { value: "cancel", label: "Cancel" },
-      ],
-    );
+    const answer = await choose(t("render.mat.deleteAsk", { n: ids.length }), [
+      { value: "delete", label: t("render.mat.delete") },
+      { value: "cancel", label: t("common.cancel") },
+    ]);
     if (answer !== "delete") return;
   }
   store.removeMaterials(ids);
@@ -192,28 +229,23 @@ function openMenu(e: MouseEvent, m: MaterialDef) {
   const ids = [...selectedIds.value];
   const n = ids.length;
   const items: CtxItem[] = [];
-  const target = faceCount.value
-    ? `${faceCount.value} ${faceCount.value === 1 ? "face" : "faces"}`
-    : selectionCount.value
-      ? `${selectionCount.value} ${selectionCount.value === 1 ? "body" : "bodies"}`
-      : "";
   if (n === 1) {
     items.push({
-      label: target ? `Apply to ${target}` : "Apply to selection",
-      disabled: !target,
+      label: applyLabel.value,
+      disabled: !faceCount.value && !selectionCount.value,
       onClick: () => applyToSelection(),
     });
-    items.push({ label: "Duplicate", onClick: () => addMaterial() });
+    items.push({ label: t("render.mat.duplicate"), onClick: () => addMaterial() });
   }
   const worn = ids.filter((id) => usage.value.has(id));
   items.push({
-    label: n === 1 ? "Remove from the model" : `Remove ${n} from the model`,
+    label: t("render.mat.unassign", { n }),
     disabled: !worn.length,
     onClick: () => store.unassignMaterials(worn),
   });
   items.push({ separator: true, label: "" });
   items.push({
-    label: n === 1 ? "Delete" : `Delete ${n} materials`,
+    label: t("render.mat.deleteMenu", { n }),
     danger: true,
     shortcut: "Del",
     onClick: () => void deleteSelected(),
@@ -223,8 +255,8 @@ function openMenu(e: MouseEvent, m: MaterialDef) {
 
 function onKey(e: KeyboardEvent) {
   if (e.key !== "Delete" && e.key !== "Backspace") return;
-  const t = e.target as HTMLElement | null;
-  if (t?.closest("input, textarea, select, [contenteditable='true']")) return;
+  const el = e.target as HTMLElement | null;
+  if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
   if (!selectedIds.value.length) return;
   e.preventDefault();
   // The window's own Delete removes a selected face or feature; this one is the
@@ -247,7 +279,7 @@ function newMaterialMenu(e: MouseEvent) {
   const groups = contributedMaterialPresets();
   if (!groups.length) return addMaterial();
   const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const items: CtxItem[] = [{ label: "Blank", onClick: () => addMaterial() }];
+  const items: CtxItem[] = [{ label: t("render.mat.blank"), onClick: () => addMaterial() }];
   for (const g of groups) {
     items.push({
       label: g.group,
@@ -344,15 +376,35 @@ function transmissionOf(m: MaterialDef): number {
   return Math.round((1 - finishOf(m).opacity) * 100) / 100;
 }
 function setTransmission(raw: string) {
-  const t = Number.parseFloat(raw);
-  if (Number.isFinite(t)) set("opacity", String(Math.round((1 - t) * 100) / 100));
+  const v = Number.parseFloat(raw);
+  if (Number.isFinite(v)) set("opacity", String(Math.round((1 - v) * 100) / 100));
 }
 
 const IOR_PRESETS = [
-  { label: "Water", ior: 1.33 },
-  { label: "Glass", ior: 1.5 },
-  { label: "Crystal", ior: 2.0 },
-  { label: "Diamond", ior: 2.42 },
+  {
+    ior: 1.33,
+    get label() {
+      return t("render.mat.ior.water");
+    },
+  },
+  {
+    ior: 1.5,
+    get label() {
+      return t("render.mat.ior.glass");
+    },
+  },
+  {
+    ior: 2.0,
+    get label() {
+      return t("render.mat.ior.crystal");
+    },
+  },
+  {
+    ior: 2.42,
+    get label() {
+      return t("render.mat.ior.diamond");
+    },
+  },
 ] as const;
 const TINT_DEPTH = 20;
 // An undefined field is how a patch removes it, which exactOptionalPropertyTypes does not allow.
@@ -361,8 +413,18 @@ type MaterialPatch = Partial<Omit<MaterialDef, "id">>;
 /** Glass controls only where the viewport draws glass: see-through and not metal. */
 // Flakes and Flake size stay in the document but are not offered: nothing draws them yet (material rework 5pkzj6br).
 const ADVANCED_SLIDERS = [
-  { field: "sheen", label: "Sheen" },
-  { field: "anisotropy", label: "Anisotropy" },
+  {
+    field: "sheen",
+    get label() {
+      return t("render.mat.sheen");
+    },
+  },
+  {
+    field: "anisotropy",
+    get label() {
+      return t("render.mat.anisotropy");
+    },
+  },
 ] as const;
 
 function isGlass(m: MaterialDef): boolean {
@@ -373,14 +435,14 @@ function isGlass(m: MaterialDef): boolean {
 // Procedural surface, separate from `set` because it is one nested object: the picker builds a fresh one with
 // defaults, the sliders merge into it, and None removes it.
 const SURFACE_KINDS = ["none", "noise", "scratches", "brushed", "voronoi", "wave"] as const;
-const SURFACE_LABEL: Record<string, string> = {
-  none: "None",
-  noise: "Noise",
-  scratches: "Scratches",
-  brushed: "Brushed",
-  voronoi: "Wear",
-  wave: "Bands",
-};
+const SURFACE_KEYS = {
+  none: "render.surface.none",
+  noise: "render.surface.noise",
+  scratches: "render.surface.scratches",
+  brushed: "render.surface.brushed",
+  voronoi: "render.surface.wear",
+  wave: "render.surface.bands",
+} as const satisfies Record<(typeof SURFACE_KINDS)[number], MessageKey>;
 
 function pickSurface(kind: string) {
   const m = selected.value;
@@ -459,10 +521,15 @@ async function doImport() {
   const res = await importMaterialLibrary(store);
   if (!res) return; // cancelled
   const { added, updated, problem } = res;
-  const said = added || updated ? `${added} added, ${updated} updated` : "nothing usable in it";
-  toast(problem ? `Materials: ${said}, ${problem}` : `Materials: ${said}`, {
-    kind: added || updated ? "info" : "error",
-  });
+  const usable = added || updated;
+  const line = usable
+    ? problem
+      ? t("render.mat.import.countsProblem", { added, updated, problem })
+      : t("render.mat.import.counts", { added, updated })
+    : problem
+      ? t("render.mat.import.nothingProblem", { problem })
+      : t("render.mat.import.nothing");
+  toast(line, { kind: usable ? "info" : "error" });
 }
 </script>
 
@@ -475,14 +542,14 @@ async function doImport() {
         v-model="search"
         class="sm-input"
         type="search"
-        placeholder="Search materials"
-        aria-label="Search materials"
+        :placeholder="t('render.mat.search')"
+        :aria-label="t('render.mat.search')"
       />
     </label>
 
     <section v-if="used.length" class="rd-section">
       <h3 class="rd-head"
-        >In this document <span class="tree-count">{{ used.length }}</span></h3
+        >{{ t("render.mat.inDocument") }} <span class="tree-count">{{ used.length }}</span></h3
       >
       <button
         v-for="m in used"
@@ -490,11 +557,7 @@ async function doImport() {
         class="rd-used"
         :class="{ 'is-selected': selectedSet.has(m.id) }"
         draggable="true"
-        :title="
-          fmtKeys(
-            `${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`,
-          )
-        "
+        :title="fmtKeys(t('render.mat.usedTitle', { name: m.name, finish: finishText(m) }))"
         @click="pick(m.id, $event, used)"
         @contextmenu="openMenu($event, m)"
         @dragstart="onDragStart($event, m)"
@@ -504,14 +567,14 @@ async function doImport() {
         <span v-else class="rd-ball sm flat" :style="{ background: m.color }"></span>
         <span class="rd-used-text">
           <span class="rd-used-name">{{ m.name }}</span>
-          <span class="rd-sub">{{ finishLabel(m) }}</span>
+          <span class="rd-sub">{{ finishText(m) }}</span>
         </span>
         <span class="rd-used-count">
-          <template v-if="usage.get(m.id)?.bodies"
-            >{{ usage.get(m.id)!.bodies }} {{ usage.get(m.id)!.bodies === 1 ? "body" : "bodies" }}</template
-          >
+          <template v-if="usage.get(m.id)?.bodies">{{
+            t("render.mat.usedBodies", { n: usage.get(m.id)!.bodies })
+          }}</template>
           <template v-if="usage.get(m.id)?.faces">
-            <br />{{ usage.get(m.id)!.faces }} {{ usage.get(m.id)!.faces === 1 ? "face" : "faces" }}</template
+            <br />{{ t("render.mat.usedFaces", { n: usage.get(m.id)!.faces }) }}</template
           >
         </span>
       </button>
@@ -519,15 +582,15 @@ async function doImport() {
 
     <section class="rd-section">
       <h3 class="rd-head">
-        Library <span class="tree-count">{{ all.length }}</span>
-        <button class="rd-mini" title="New material" @click="newMaterialMenu($event)">
-          <Icon name="plus" :size="13" />New
+        {{ t("render.mat.library") }} <span class="tree-count">{{ all.length }}</span>
+        <button class="rd-mini" :title="t('render.mat.newTitle')" @click="newMaterialMenu($event)">
+          <Icon name="plus" :size="13" />{{ t("render.mat.new") }}
         </button>
       </h3>
       <Listbox
         v-model:anchor="anchorId"
         class="rd-grid"
-        label="Material library"
+        :label="t('render.mat.libraryLabel')"
         multiple
         :items="libraryItems"
         :model-value="selectedIds"
@@ -543,52 +606,43 @@ async function doImport() {
             :aria-describedby="tileHowtoId"
             draggable="true"
             :data-material="m.id"
-            :title="
-              wornId === m.id
-                ? `${m.name}, ${finishLabel(m)}. Already applied to the selection.`
-                : `${m.name}, ${finishLabel(m)}. Click to preview here, double-click or Apply below to use it. Drag onto a face, hold Shift for the whole body.`
-            "
+            :title="tileTitle(m)"
             @click="pickTile(m.id, $event)"
             @dblclick="applyTile(m.id)"
             @contextmenu="openMenu($event, m)"
             @dragstart="onDragStart($event, m)"
             @dragend="endMaterialDrag()"
           >
-            <span v-if="wornId === m.id" class="rd-worn" title="What the selection wears now">
-              <Icon name="check" :size="11" /> Applied
+            <span v-if="wornId === m.id" class="rd-worn" :title="t('render.mat.wornTitle')">
+              <Icon name="check" :size="11" /> {{ t("render.mat.worn") }}
             </span>
             <img v-if="preview(m)" class="rd-ball" :src="preview(m)!" alt="" />
             <span v-else class="rd-ball flat" :style="{ background: m.color }"></span>
-            <span class="rd-sub">{{ finishLabel(m) }}</span>
+            <span class="rd-sub">{{ finishText(m) }}</span>
             <span class="rd-tile-name">{{ m.name }}</span>
           </button>
         </template>
       </Listbox>
-      <span :id="tileHowtoId" class="sr-only"
-        >Space picks or drops it to edit below, Enter applies it to the selection.</span
-      >
+      <span :id="tileHowtoId" class="sr-only">{{ t("render.mat.tileHowto") }}</span>
       <div v-if="!all.length" class="sm-hint">
-        {{ search ? "Nothing here matches that." : "This document has no materials." }}
+        {{ search ? t("render.mat.noMatch") : t("render.mat.none") }}
       </div>
-      <p class="sm-hint rd-howto">
-        Click a tile to preview it below; it is not applied until you double-click, drag it onto the model, or press
-        Apply. Drag onto a face to dress just that face, hold Shift while you drop to dress the whole body.
-      </p>
+      <p class="sm-hint rd-howto">{{ t("render.mat.howto") }}</p>
     </section>
 
     <section v-if="selectedIds.length > 1" class="rd-section rd-edit">
-      <h3 class="rd-head">{{ selectedIds.length }} materials picked</h3>
+      <h3 class="rd-head">{{ t("render.mat.picked", { n: selectedIds.length }) }}</h3>
       <div class="mats-actions">
-        <button class="btn" @click="store.unassignMaterials(selectedIds)">Remove from the model</button>
-        <button class="btn" @click="deleteSelected()">Delete</button>
-        <button class="btn" @click="selectOnly(null)">Deselect</button>
+        <button class="btn" @click="store.unassignMaterials(selectedIds)">{{ t("render.mat.unassignPicked") }}</button>
+        <button class="btn" @click="deleteSelected()">{{ t("render.mat.delete") }}</button>
+        <button class="btn" @click="selectOnly(null)">{{ t("render.mat.deselect") }}</button>
       </div>
     </section>
 
     <section v-if="selected" class="rd-section rd-edit">
       <h3 class="rd-head">{{ selected.name }}</h3>
       <label class="prefs-row">
-        <span class="prefs-label">Name</span>
+        <span class="prefs-label">{{ t("render.mat.name") }}</span>
         <input
           class="sm-input"
           type="text"
@@ -597,7 +651,7 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Colour</span>
+        <span class="prefs-label">{{ t("render.mat.colour") }}</span>
         <input
           class="mats-color"
           type="color"
@@ -606,7 +660,7 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Metalness</span>
+        <span class="prefs-label">{{ t("render.mat.metalness") }}</span>
         <input
           class="sm-slider"
           type="range"
@@ -618,7 +672,7 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Roughness</span>
+        <span class="prefs-label">{{ t("render.mat.roughness") }}</span>
         <input
           class="sm-slider"
           type="range"
@@ -630,7 +684,7 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Transmission</span>
+        <span class="prefs-label">{{ t("render.mat.transmission") }}</span>
         <input
           class="sm-slider"
           type="range"
@@ -644,11 +698,8 @@ async function doImport() {
       </label>
       <label class="prefs-row">
         <span class="prefs-label rd-heavy-label">
-          Emission
-          <span
-            class="rd-heavy"
-            data-heavy="emissive"
-            title="Heavy effect: every glowing body adds lights and shadows, which can slow the view on a large model."
+          {{ t("render.mat.emission") }}
+          <span class="rd-heavy" data-heavy="emissive" :title="t('render.mat.emissionHeavy')"
             ><Icon name="warning" :size="13"
           /></span>
         </span>
@@ -668,17 +719,15 @@ async function doImport() {
         v-if="emitting !== null"
         class="rd-emitting"
         role="progressbar"
-        aria-label="Applying emission"
+        :aria-label="t('render.mat.emissionProgress')"
         :aria-valuenow="Math.round(emitting * 100)"
       >
         <span class="rd-emitting-bar" :style="{ width: `${Math.round(emitting * 100)}%` }" />
       </div>
       <!-- Only where it applies: a glow needs Bloom (another tab), and a slider silently depending on it looks broken. -->
-      <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">
-        Emission is on for this material. Turn Bloom on under Environment to see it spill light.
-      </div>
+      <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">{{ t("render.mat.emissionBloom") }}</div>
       <label v-if="finishOf(selected).emissive > 0" class="prefs-row">
-        <span class="prefs-label">Lights other parts</span>
+        <span class="prefs-label">{{ t("render.mat.castsLight") }}</span>
         <input
           type="checkbox"
           data-field="castsLight"
@@ -687,7 +736,7 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Clearcoat</span>
+        <span class="prefs-label">{{ t("render.mat.clearcoat") }}</span>
         <input
           class="sm-slider"
           type="range"
@@ -699,7 +748,7 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Thin film</span>
+        <span class="prefs-label">{{ t("render.mat.thinFilm") }}</span>
         <input
           class="sm-slider"
           data-field="iridescence"
@@ -712,7 +761,7 @@ async function doImport() {
         />
       </label>
       <div class="prefs-row">
-        <span class="prefs-label">Highlight tint</span>
+        <span class="prefs-label">{{ t("render.mat.highlightTint") }}</span>
         <input
           class="mats-color"
           data-field="specularColor"
@@ -720,10 +769,14 @@ async function doImport() {
           :value="selected.specularColor ?? '#ffffff'"
           @input="set('specularColor', ($event.target as HTMLInputElement).value)"
         />
-        <button v-if="selected.specularColor" class="rd-chip" @click="set('specularColor', '')">Clear</button>
+        <button v-if="selected.specularColor" class="rd-chip" @click="set('specularColor', '')">{{
+          t("render.mat.clearColour")
+        }}</button>
       </div>
       <details class="rd-advanced disclosure" data-advanced>
-        <summary class="prefs-label"><Icon class="disclosure-caret" name="caretRight" :size="10" />Advanced</summary>
+        <summary class="prefs-label"
+          ><Icon class="disclosure-caret" name="caretRight" :size="10" />{{ t("render.mat.advanced") }}</summary
+        >
         <label v-for="s in ADVANCED_SLIDERS" :key="s.field" class="prefs-row">
           <span class="prefs-label">{{ s.label }}</span>
           <input
@@ -738,7 +791,7 @@ async function doImport() {
           />
         </label>
         <label v-if="isGlass(selected)" class="prefs-row">
-          <span class="prefs-label">Scatter (mm)</span>
+          <span class="prefs-label">{{ t("render.mat.scatter") }}</span>
           <input
             class="sm-slider"
             type="range"
@@ -754,11 +807,11 @@ async function doImport() {
 
       <!-- Glass: how light bends and colours on its way through. -->
       <div v-if="isGlass(selected)" class="rd-surface" data-glass>
-        <span class="prefs-label">Glass</span>
-        <div class="rd-chips" role="group" aria-label="Index of refraction">
+        <span class="prefs-label">{{ t("render.mat.glass") }}</span>
+        <div class="rd-chips" role="group" :aria-label="t('render.mat.iorLabel')">
           <button
             v-for="p in IOR_PRESETS"
-            :key="p.label"
+            :key="p.ior"
             class="rd-chip"
             :class="{ active: finishOf(selected).ior === p.ior }"
             :data-ior="p.ior"
@@ -767,7 +820,7 @@ async function doImport() {
           >
         </div>
         <label class="prefs-row">
-          <span class="prefs-label">IOR {{ spellFixed(finishOf(selected).ior, 2) }}</span>
+          <span class="prefs-label">{{ t("render.mat.ior", { value: spellFixed(finishOf(selected).ior, 2) }) }}</span>
           <input
             class="sm-slider"
             data-field="ior"
@@ -779,10 +832,12 @@ async function doImport() {
             @input="set('ior', ($event.target as HTMLInputElement).value)"
           />
         </label>
-        <div class="prefs-row" title="Auto measures how deep light travels through each body, a number overrides it">
-          <span class="prefs-label"
-            >Thickness {{ selected.thickness === undefined ? "auto" : `${selected.thickness} mm` }}</span
-          >
+        <div class="prefs-row" :title="t('render.mat.thicknessTitle')">
+          <span class="prefs-label">{{
+            selected.thickness === undefined
+              ? t("render.mat.thicknessAuto")
+              : t("render.mat.thickness", { mm: spellNumber(selected.thickness) })
+          }}</span>
           <input
             class="sm-slider"
             data-field="thickness"
@@ -798,11 +853,11 @@ async function doImport() {
             class="rd-chip"
             data-field="thickness-auto"
             @click="set('thickness', '')"
-            >Auto</button
+            >{{ t("render.mat.auto") }}</button
           >
         </div>
         <label class="prefs-row">
-          <span class="prefs-label">Dispersion</span>
+          <span class="prefs-label">{{ t("render.mat.dispersion") }}</span>
           <input
             class="sm-slider"
             data-field="dispersion"
@@ -815,10 +870,10 @@ async function doImport() {
           />
         </label>
         <div v-if="finishOf(selected).dispersion > 0 && (selected.thickness ?? Infinity) < 10" class="sm-hint">
-          Dispersion fans the colours out over the distance light travels, raise Thickness to see it.
+          {{ t("render.mat.dispersionHint") }}
         </div>
         <div class="prefs-row">
-          <span class="prefs-label">Tint</span>
+          <span class="prefs-label">{{ t("render.mat.tint") }}</span>
           <input
             class="mats-color"
             data-field="attenuationColor"
@@ -826,10 +881,14 @@ async function doImport() {
             :value="selected.attenuationColor ?? '#ffffff'"
             @input="set('attenuationColor', ($event.target as HTMLInputElement).value)"
           />
-          <button v-if="selected.attenuationColor" class="rd-chip" @click="set('attenuationColor', '')">Clear</button>
+          <button v-if="selected.attenuationColor" class="rd-chip" @click="set('attenuationColor', '')">{{
+            t("render.mat.clearColour")
+          }}</button>
         </div>
         <label v-if="selected.attenuationColor" class="prefs-row">
-          <span class="prefs-label">Tint depth {{ finishOf(selected).attenuationDistance }} mm</span>
+          <span class="prefs-label">{{
+            t("render.mat.tintDepth", { mm: spellNumber(finishOf(selected).attenuationDistance) })
+          }}</span>
           <input
             class="sm-slider"
             data-field="attenuationDistance"
@@ -841,17 +900,15 @@ async function doImport() {
             @input="set('attenuationDistance', ($event.target as HTMLInputElement).value)"
           />
         </label>
-        <div class="sm-hint">Roughness frosts the glass.</div>
-        <div v-if="isRenderLowPower()" class="sm-hint">
-          Performance mode draws glass as plain see-through, so these show once it is off.
-        </div>
+        <div class="sm-hint">{{ t("render.mat.frost") }}</div>
+        <div v-if="isRenderLowPower()" class="sm-hint">{{ t("render.mat.glassLowPower") }}</div>
       </div>
 
       <!-- Procedural surface: a generator plus a few knobs. Triplanar (no UVs),
            driving roughness, a bump and a tint, see viewport/proceduralSurface.ts. -->
       <div class="rd-surface">
-        <span class="prefs-label">Surface</span>
-        <div class="rd-chips" role="group" aria-label="Surface">
+        <span class="prefs-label">{{ t("render.mat.surface") }}</span>
+        <div class="rd-chips" role="group" :aria-label="t('render.mat.surface')">
           <button
             v-for="k in SURFACE_KINDS"
             :key="k"
@@ -859,12 +916,12 @@ async function doImport() {
             :class="{ active: (selected.surface?.kind ?? 'none') === k }"
             :data-surface="k"
             @click="pickSurface(k)"
-            >{{ SURFACE_LABEL[k] }}</button
+            >{{ t(SURFACE_KEYS[k]) }}</button
           >
         </div>
         <template v-if="selected.surface">
           <label class="prefs-row">
-            <span class="prefs-label">Scale</span>
+            <span class="prefs-label">{{ t("render.surface.scale") }}</span>
             <input
               class="sm-slider"
               type="range"
@@ -876,7 +933,7 @@ async function doImport() {
             />
           </label>
           <label class="prefs-row">
-            <span class="prefs-label">Amount</span>
+            <span class="prefs-label">{{ t("render.surface.amount") }}</span>
             <input
               class="sm-slider"
               type="range"
@@ -888,7 +945,7 @@ async function doImport() {
             />
           </label>
           <label class="prefs-row">
-            <span class="prefs-label">Bump</span>
+            <span class="prefs-label">{{ t("render.surface.bump") }}</span>
             <input
               class="sm-slider"
               type="range"
@@ -907,7 +964,7 @@ async function doImport() {
             "
             class="prefs-row"
           >
-            <span class="prefs-label">Angle</span>
+            <span class="prefs-label">{{ t("render.surface.angle") }}</span>
             <input
               class="sm-slider"
               type="range"
@@ -919,7 +976,7 @@ async function doImport() {
             />
           </label>
           <label class="prefs-row">
-            <span class="prefs-label">Tint</span>
+            <span class="prefs-label">{{ t("render.surface.tint") }}</span>
             <input
               class="mats-color"
               type="color"
@@ -928,7 +985,7 @@ async function doImport() {
             />
           </label>
           <label class="prefs-row">
-            <span class="prefs-label">Tint amount</span>
+            <span class="prefs-label">{{ t("render.surface.tintAmount") }}</span>
             <input
               class="sm-slider"
               type="range"
@@ -940,33 +997,31 @@ async function doImport() {
             />
           </label>
         </template>
-        <button class="rd-chip" data-editgraph style="margin-top: 6px" @click="editingGraph = true">Edit graph…</button>
-        <div v-if="selected.surfaceGraph" class="sm-hint"
-          >Using a node graph, the picker above is ignored while it is set.</div
-        >
+        <button class="rd-chip" data-editgraph style="margin-top: 6px" @click="editingGraph = true">{{
+          t("render.mat.editGraph")
+        }}</button>
+        <div v-if="selected.surfaceGraph" class="sm-hint">{{ t("render.mat.graphHint") }}</div>
       </div>
 
       <div class="mats-actions">
         <button
           class="btn btn-primary"
           :disabled="!selectionCount && !faceCount"
-          :title="selectionCount || faceCount ? '' : 'Select a body or a face first'"
+          :title="selectionCount || faceCount ? '' : t('render.mat.applyReason')"
           @click="applyToSelection()"
         >
-          <template v-if="faceCount">Apply to {{ faceCount }} {{ faceCount === 1 ? "face" : "faces" }}</template>
-          <template v-else-if="selectionCount"
-            >Apply to {{ selectionCount }} {{ selectionCount === 1 ? "body" : "bodies" }}</template
-          >
-          <template v-else>Apply to selection</template>
+          {{ applyLabel }}
         </button>
-        <button class="btn" :disabled="!selectionCount && !faceCount" @click="clearOnSelection()">Clear</button>
-        <button class="btn" @click="deleteSelected()">Delete</button>
+        <button class="btn" :disabled="!selectionCount && !faceCount" @click="clearOnSelection()">{{
+          t("render.mat.clearSelection")
+        }}</button>
+        <button class="btn" @click="deleteSelected()">{{ t("render.mat.delete") }}</button>
       </div>
     </section>
 
     <div class="rd-foot">
-      <button class="btn" @click="doImport()">Import…</button>
-      <button class="btn" @click="exportMaterialLibrary(store)">Export…</button>
+      <button class="btn" @click="doImport()">{{ t("render.mat.import") }}</button>
+      <button class="btn" @click="exportMaterialLibrary(store)">{{ t("render.mat.export") }}</button>
     </div>
 
     <!-- Inside the one root: RenderDock's v-show only reaches a single-root component, a second root left this list

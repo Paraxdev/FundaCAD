@@ -201,11 +201,14 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
   };
 }
 
-// "Glossy, metallic": surface then kind, for search and screen readers. Kinds are ranked, not combined: a light is a
+export type FinishGloss = "glossy" | "satin" | "matte";
+export type FinishKind = "lit" | "transparent" | "metallic" | "glitter" | "brushed" | "velvet";
+
+// Surface then kind, as ids the Materials tab names in the language. Kinds are ranked, not combined: a light is a
 // light, and see-through comes before anything else.
-export function finishLabel(m: MaterialDef | undefined): string {
+export function finishWords(m: MaterialDef | undefined): { gloss: FinishGloss; kind: FinishKind | null } {
   const f = finishOf(m);
-  const gloss = f.roughness <= 0.18 ? "Glossy" : f.roughness <= 0.45 ? "Satin" : "Matte";
+  const gloss = f.roughness <= 0.18 ? "glossy" : f.roughness <= 0.45 ? "satin" : "matte";
   const kind =
     f.emissive > 0
       ? "lit"
@@ -219,8 +222,15 @@ export function finishLabel(m: MaterialDef | undefined): string {
               ? "brushed"
               : f.sheen >= 0.3
                 ? "velvet"
-                : "";
-  return kind ? `${gloss}, ${kind}` : gloss;
+                : null;
+  return { gloss, kind };
+}
+
+/** The English form, "Glossy, metallic". */
+export function finishLabel(m: MaterialDef | undefined): string {
+  const { gloss, kind } = finishWords(m);
+  const word = gloss[0]!.toUpperCase() + gloss.slice(1);
+  return kind ? `${word}, ${kind}` : word;
 }
 
 // Generic materials named for the stuff, not a supplier's product, and deliberately short: examples of the fields.

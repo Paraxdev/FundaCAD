@@ -6,25 +6,27 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { pageZoom } from "../../ui/interfaceSize";
 import type { MaterialDef, SurfaceGraph, SurfaceNode } from "../../document/materials";
+import { t, type MessageKey } from "../../i18n";
 
 const props = defineProps<{ materialId: string }>();
 const emit = defineEmits<{ close: [] }>();
 const store = useEngine().store;
 
 type NodeType = SurfaceNode["type"];
-const LABEL: Record<NodeType, string> = {
-  noise: "Noise",
-  scratches: "Scratches",
-  brushed: "Brushed",
-  voronoi: "Wear",
-  wave: "Bands",
-  fresnel: "Fresnel",
-  ramp: "Ramp",
-  colorramp: "Color Ramp",
-  mix: "Mix",
-  math: "Math",
-  output: "Output",
+const LABEL_KEYS: Record<NodeType, MessageKey> = {
+  noise: "render.surface.noise",
+  scratches: "render.surface.scratches",
+  brushed: "render.surface.brushed",
+  voronoi: "render.surface.wear",
+  wave: "render.surface.bands",
+  fresnel: "render.graph.node.fresnel",
+  ramp: "render.graph.node.ramp",
+  colorramp: "render.graph.node.colorRamp",
+  mix: "render.graph.node.mix",
+  math: "render.graph.node.math",
+  output: "render.graph.node.output",
 };
+const nodeLabel = (type: NodeType) => t(LABEL_KEYS[type]);
 const ADDABLE: NodeType[] = [
   "noise",
   "scratches",
@@ -37,8 +39,25 @@ const ADDABLE: NodeType[] = [
   "mix",
   "math",
 ];
-const MATH_OPS = ["multiply", "add", "subtract", "min", "max", "pow"];
-// input ports per type, and the output type each node produces (for wiring rules)
+const MATH_OPS = ["multiply", "add", "subtract", "min", "max", "pow"] as const;
+const MATH_KEYS = {
+  multiply: "render.graph.math.multiply",
+  add: "render.graph.math.add",
+  subtract: "render.graph.math.subtract",
+  min: "render.graph.math.min",
+  max: "render.graph.math.max",
+  pow: "render.graph.math.pow",
+} as const satisfies Record<(typeof MATH_OPS)[number], MessageKey>;
+// The output's ports are named in the language, the factor and operand letters are the same everywhere.
+const PORT_KEYS: Partial<Record<string, MessageKey>> = {
+  roughness: "render.graph.port.roughness",
+  bump: "render.graph.port.bump",
+  color: "render.graph.port.color",
+};
+const portLabel = (port: string) => {
+  const key = PORT_KEYS[port];
+  return key ? t(key) : port;
+}; // input ports per type, and the output type each node produces (for wiring rules)
 const INPUTS: Record<NodeType, string[]> = {
   noise: [],
   scratches: [],
@@ -76,8 +95,10 @@ const PORT_TYPE: Record<string, "float" | "vec3"> = {
   color: "vec3",
 };
 // A float is a blue circle and a vec3 colour an amber square, on ports and wires, so types read without a label.
-const outClass = (t: NodeType) => `t-${OUT_TYPE[t]}`;
+const outClass = (type: NodeType) => `t-${OUT_TYPE[type]}`;
 const inClass = (port: string) => `t-${PORT_TYPE[port] ?? "float"}`;
+const portTitle = (port: string) =>
+  t("render.graph.input", { port: portLabel(port), type: PORT_TYPE[port] ?? "float" });
 // A small icon per node, so a card is recognised by shape not only by its name.
 const ICON: Record<NodeType, string> = {
   noise: "node-noise",
@@ -162,11 +183,31 @@ function addNode(type: NodeType, at?: { x: number; y: number }) {
 }
 
 // The Shift+A add menu, grouped like Blender's.
-const ADD_GROUPS: { label: string; items: NodeType[] }[] = [
-  { label: "Texture", items: ["noise", "scratches", "brushed", "voronoi", "wave"] },
-  { label: "Input", items: ["fresnel"] },
-  { label: "Color", items: ["ramp", "colorramp"] },
-  { label: "Converter", items: ["math", "mix"] },
+const ADD_GROUPS: { readonly label: string; items: NodeType[] }[] = [
+  {
+    get label() {
+      return t("render.graph.group.texture");
+    },
+    items: ["noise", "scratches", "brushed", "voronoi", "wave"],
+  },
+  {
+    get label() {
+      return t("render.graph.group.input");
+    },
+    items: ["fresnel"],
+  },
+  {
+    get label() {
+      return t("render.graph.group.color");
+    },
+    items: ["ramp", "colorramp"],
+  },
+  {
+    get label() {
+      return t("render.graph.group.converter");
+    },
+    items: ["math", "mix"],
+  },
 ];
 const addMenu = ref<{ x: number; y: number; wx: number; wy: number } | null>(null);
 const screenCursor = ref({ x: 0, y: 0 });
@@ -190,8 +231,8 @@ function pickAdd(type: NodeType) {
   addMenu.value = null;
 }
 function onKey(e: KeyboardEvent) {
-  const t = e.target as HTMLElement | null;
-  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+  const el = e.target as HTMLElement | null;
+  if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
   if (e.shiftKey && (e.key === "a" || e.key === "A")) {
     e.preventDefault();
     openAddMenu();
@@ -255,33 +296,42 @@ function setParam(id: string, key: string, raw: string, numeric: boolean) {
   (n.params ??= {})[key] = v;
   sync();
 }
-type NumParam = { key: string; label: string; min: number; max: number; step: number; def: number };
-const SCALE: NumParam = { key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5, def: 6 };
-const ANGLE: NumParam = { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01, def: 0 };
+type NumParam = { key: string; readonly label: string; min: number; max: number; step: number; def: number };
+function param(key: string, label: () => string, min: number, max: number, step: number, def: number): NumParam {
+  return {
+    key,
+    get label() {
+      return label();
+    },
+    min,
+    max,
+    step,
+    def,
+  };
+}
+const SCALE = param("scale", () => t("render.surface.scale"), 0.5, 30, 0.5, 6);
+const ANGLE = param("angle", () => t("render.surface.angle"), 0, 3.14, 0.01, 0);
 const NUM_PARAMS: Record<NodeType, NumParam[]> = {
   noise: [
     SCALE,
-    { key: "detail", label: "Detail", min: 1, max: 8, step: 1, def: 4 },
-    { key: "roughness", label: "Rough", min: 0, max: 1, step: 0.05, def: 0.5 },
-    { key: "distortion", label: "Warp", min: 0, max: 2, step: 0.05, def: 0 },
+    param("detail", () => t("render.graph.param.detail"), 1, 8, 1, 4),
+    param("roughness", () => t("render.graph.param.rough"), 0, 1, 0.05, 0.5),
+    param("distortion", () => t("render.graph.param.warp"), 0, 2, 0.05, 0),
   ],
   voronoi: [SCALE],
   scratches: [SCALE, ANGLE],
   brushed: [SCALE, ANGLE],
   wave: [SCALE, ANGLE],
-  mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01, def: 0.5 }],
+  mix: [param("t", () => t("render.graph.param.mix"), 0, 1, 0.01, 0.5)],
   // a/b sliders show only for the ports left unwired; the op is a select below
-  math: [
-    { key: "a", label: "A", min: 0, max: 1, step: 0.01, def: 0.5 },
-    { key: "b", label: "B", min: 0, max: 1, step: 0.01, def: 0.5 },
-  ],
-  fresnel: [{ key: "power", label: "Power", min: 0.5, max: 8, step: 0.1, def: 3 }],
+  math: [param("a", () => "A", 0, 1, 0.01, 0.5), param("b", () => "B", 0, 1, 0.01, 0.5)],
+  fresnel: [param("power", () => t("render.graph.param.power"), 0.5, 8, 0.1, 3)],
   ramp: [],
   colorramp: [],
   output: [
-    { key: "roughAmount", label: "Rough", min: 0, max: 1, step: 0.01, def: 0.5 },
-    { key: "bumpAmount", label: "Bump", min: 0, max: 1, step: 0.01, def: 0.4 },
-    { key: "colorAmount", label: "Colour", min: 0, max: 1, step: 0.01, def: 0.4 },
+    param("roughAmount", () => t("render.graph.param.rough"), 0, 1, 0.01, 0.5),
+    param("bumpAmount", () => t("render.graph.param.bump"), 0, 1, 0.01, 0.4),
+    param("colorAmount", () => t("render.graph.param.colour"), 0, 1, 0.01, 0.4),
   ],
 };
 const pnum = (n: SurfaceNode, key: string, d = 0) =>
@@ -401,8 +451,8 @@ function startDrag(n: SurfaceNode, e: PointerEvent) {
 }
 function onCanvasDown(e: PointerEvent) {
   // only the empty background pans; nodes and ports are children with other jobs
-  const t = e.target as HTMLElement;
-  if (t !== canvasEl.value && !t.classList.contains("ne-world")) return;
+  const el = e.target as HTMLElement;
+  if (el !== canvasEl.value && !el.classList.contains("ne-world")) return;
   armed.value = null;
   addMenu.value = null;
   canvasEl.value?.setPointerCapture(e.pointerId);
@@ -501,14 +551,19 @@ const pending = computed(() => {
   <div class="ne-overlay" :style="{ height: panelH + 'px' }">
     <div class="ne-resize" @pointerdown="startResize" @pointermove="onResizeMove" @pointerup="onResizeUp"></div>
     <div class="ne-bar">
-      <span class="ne-title-main">Surface graph · {{ material?.name }}</span>
-      <button v-for="t in ADDABLE" :key="t" class="rd-chip" :data-add="t" @click="addNode(t)">+ {{ LABEL[t] }}</button>
+      <span class="ne-title-main">{{ t("render.graph.title", { name: material?.name ?? "" }) }}</span>
+      <button v-for="type in ADDABLE" :key="type" class="rd-chip" :data-add="type" @click="addNode(type)">
+        + {{ nodeLabel(type) }}
+      </button>
       <span class="ne-hint">Shift+A</span>
-      <span class="ne-legend"><span class="ne-dot t-float"></span>value<span class="ne-dot t-vec3"></span>colour</span>
+      <span class="ne-legend"
+        ><span class="ne-dot t-float"></span>{{ t("render.graph.value") }}<span class="ne-dot t-vec3"></span
+        >{{ t("render.graph.colour") }}</span
+      >
       <span class="ne-spacer"></span>
-      <button class="rd-chip" @click="fit">Fit</button>
-      <button class="rd-chip" @click="clearGraph">Clear</button>
-      <button class="btn btn-primary" @click="emit('close')">Done</button>
+      <button class="rd-chip" @click="fit">{{ t("render.graph.fit") }}</button>
+      <button class="rd-chip" @click="clearGraph">{{ t("render.graph.clear") }}</button>
+      <button class="btn btn-primary" @click="emit('close')">{{ t("render.graph.done") }}</button>
     </div>
     <div
       class="ne-canvas"
@@ -533,7 +588,7 @@ const pending = computed(() => {
           :data-cat="CATEGORY[n.type]"
         >
           <div class="ne-node-head" @pointerdown="startDrag(n, $event)">
-            <Icon class="ne-icon" :name="ICON[n.type]" :size="12" />{{ LABEL[n.type] }}
+            <Icon class="ne-icon" :name="ICON[n.type]" :size="12" />{{ nodeLabel(n.type) }}
             <button v-if="n.type !== 'output'" class="ne-x" @pointerdown.stop @click="removeNode(n.id)"
               ><Icon name="close" :size="12"
             /></button>
@@ -544,33 +599,33 @@ const pending = computed(() => {
             class="ne-port ne-in"
             :style="{ top: 30 + i * 20 + 'px' }"
             :data-in="n.id + ':' + port"
-            :title="PORT_TYPE[port] === 'vec3' ? port + ' (colour)' : port + ' (value)'"
+            :title="portTitle(port)"
             @pointerup.stop="wire && wire.moved ? tryWire(n.id, port, wire.from) : null"
             @click="n.in?.[port] ? disconnect(n.id, port) : clickInput(n.id, port)"
-            ><span class="ne-dot" :class="inClass(port)"></span>{{ port }}</div
+            ><span class="ne-dot" :class="inClass(port)"></span>{{ portLabel(port) }}</div
           >
           <div
             v-if="OUT_TYPE[n.type] !== 'none'"
             class="ne-port ne-out"
             :class="{ armed: armed === n.id }"
             :data-out="n.id"
-            :title="OUT_TYPE[n.type] === 'vec3' ? 'outputs a colour' : 'outputs a value'"
+            :title="t('render.graph.outputs', { type: OUT_TYPE[n.type] })"
             @pointerdown.stop="startWire(n.id, $event)"
             @click="armed = armed === n.id ? null : n.id"
-            >out<span class="ne-dot" :class="outClass(n.type)"></span
+            >{{ t("render.graph.out") }}<span class="ne-dot" :class="outClass(n.type)"></span
           ></div>
           <div
             class="ne-params"
             :style="{ paddingTop: (INPUTS[n.type].length ? INPUTS[n.type].length * 20 + 8 : 6) + 'px' }"
           >
             <label v-if="n.type === 'math'" class="ne-prow">
-              <span>Op</span>
+              <span>{{ t("render.graph.op") }}</span>
               <select
                 class="ne-select"
                 :value="pcol(n, 'op', 'multiply')"
                 @change="setParam(n.id, 'op', ($event.target as HTMLSelectElement).value, false)"
               >
-                <option v-for="o in MATH_OPS" :key="o" :value="o">{{ o }}</option>
+                <option v-for="o in MATH_OPS" :key="o" :value="o">{{ t(MATH_KEYS[o]) }}</option>
               </select>
             </label>
             <!-- a/b constant only matters while that port is unwired -->
@@ -631,7 +686,7 @@ const pending = computed(() => {
                   ><Icon name="close" :size="12"
                 /></button>
               </div>
-              <button class="rd-chip ne-addstop" @click="addStop(n.id)">+ stop</button>
+              <button class="rd-chip ne-addstop" @click="addStop(n.id)">{{ t("render.graph.addStop") }}</button>
             </template>
           </div>
         </div>
@@ -641,12 +696,17 @@ const pending = computed(() => {
     <template v-if="addMenu">
       <div class="ne-addbackdrop" @pointerdown="addMenu = null"></div>
       <div class="ne-addmenu" :style="{ left: addMenu.x + 'px', top: addMenu.y + 'px' }" @pointerdown.stop>
-        <div class="ne-addhead">Add</div>
+        <div class="ne-addhead">{{ t("render.graph.add") }}</div>
         <div v-for="grp in ADD_GROUPS" :key="grp.label" class="ne-addgrp">
           <div class="ne-addgrp-label">{{ grp.label }}</div>
-          <button v-for="t in grp.items" :key="t" class="ne-additem" :data-add-menu="t" @click="pickAdd(t)">{{
-            LABEL[t]
-          }}</button>
+          <button
+            v-for="type in grp.items"
+            :key="type"
+            class="ne-additem"
+            :data-add-menu="type"
+            @click="pickAdd(type)"
+            >{{ nodeLabel(type) }}</button
+          >
         </div>
       </div>
     </template>

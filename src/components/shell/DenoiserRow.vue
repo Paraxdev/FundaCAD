@@ -6,8 +6,8 @@ import {
   describeDenoiser,
   downloadDenoiser,
   refreshDenoiser,
-  sizeLabel,
 } from "../../viewport/pathtrace/denoiser";
+import { t } from "../../i18n";
 
 // buttonClass is declared only so Preferences' button-class does not fall through onto the row.
 withDefaults(defineProps<{ hintClass: string; buttonClass?: string; size?: "sm" | "md" }>(), { size: "md" });
@@ -25,7 +25,7 @@ onMounted(() => {
       data-denoiser-download
       :disabled="s.downloading"
       @click="downloadDenoiser()"
-      >High quality denoise ({{ sizeLabel(s.info.bytes) }})</Button
+      >{{ t("render.denoiser.download", { mb: Math.round(s.info.bytes / 1e6) }) }}</Button
     >
   </div>
 </template>
