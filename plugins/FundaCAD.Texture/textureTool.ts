@@ -4,6 +4,7 @@
 import { contributedPalette, setPrompt } from "fundacad";
 import type { DocumentStore, Feature, Num, Selector, Viewport } from "fundacad";
 import * as panel from "./panel";
+import { t } from "./lines";
 import {
   ANGLE_KINDS,
   PROJECTION_KINDS,
@@ -41,7 +42,7 @@ const defaultValues = (): TextureValues => ({
   invert: false,
 });
 
-const PICK_PROMPT = "Select faces (or switch to Whole Body) for the texture · Esc to cancel";
+const pickPrompt = () => t("prompt.pick");
 
 function sameSet<T>(a: T[], b: T[]): boolean {
   if (a.length !== b.length) return false;
@@ -117,7 +118,7 @@ export class TextureTool {
       this.runHeldCommit();
     });
     this.openPanel(false);
-    setPrompt(PICK_PROMPT);
+    setPrompt(pickPrompt());
     this.listenForEscape();
     this.raf = requestAnimationFrame(this.boundTick);
   }
@@ -170,7 +171,7 @@ export class TextureTool {
     this.lastFaceIds = [];
     this.lastBodyIds = [];
     this.viewport.setSelectionMode(this.mode === "body" ? "bodies" : "faces");
-    setPrompt("Rolling back to edit… (later features are hidden while editing)");
+    setPrompt(t("prompt.rollback"));
 
     this.store.beginEditPreview(featureId);
     this.listenForEscape();
@@ -181,7 +182,7 @@ export class TextureTool {
         this.awaitingRollback = false;
         this.seedSelectionFromSaved();
         this.openPanel(true);
-        setPrompt(PICK_PROMPT);
+        setPrompt(pickPrompt());
         this.pushPreview();
         this.raf = requestAnimationFrame(this.boundTick);
       } else {
@@ -300,13 +301,13 @@ export class TextureTool {
     if (this.mode === "body") {
       const ids = this.viewport.getSelectedBodies();
       const id = ids[0];
-      if (!id) return "Whole body: nothing selected, click a body";
+      if (!id) return t("summary.bodyNone");
       const b = (this.store.buildState.result?.bodies ?? []).find((x) => x.id === id);
       const name = this.store.bodyName(id) ?? b?.name ?? id;
-      return ids.length > 1 ? `Whole body: ${name} (using first of ${ids.length} selected)` : `Whole body: ${name}`;
+      return ids.length > 1 ? t("summary.bodyMany", { name, n: ids.length }) : t("summary.body", { name });
     }
     const n = this.viewport.getSelectedFaceIds().length;
-    return n ? `${n} face${n === 1 ? "" : "s"} selected` : "No faces selected, click one or more faces";
+    return n ? t("summary.faces", { n }) : t("summary.facesNone");
   }
 
   private refreshSummary() {
@@ -427,14 +428,10 @@ export class TextureTool {
       // The selection is briefly empty while a chunked reply lands, so hold the commit and try once more after it.
       if (this.building && !this.pendingCommit) {
         this.pendingCommit = true;
-        setPrompt("Adding the texture, waiting for the model…");
+        setPrompt(t("prompt.adding"));
         return;
       }
-      setPrompt(
-        this.mode === "faces"
-          ? "No faces selected, click one or more faces · Esc to cancel"
-          : "No body selected, click a body · Esc to cancel",
-      );
+      setPrompt(this.mode === "faces" ? t("prompt.noFaces") : t("prompt.noBody"));
       return;
     }
     if (this.editId) {

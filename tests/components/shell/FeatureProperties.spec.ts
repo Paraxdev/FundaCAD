@@ -20,11 +20,11 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import {
   TEXTURE_CHOICE_FIELDS,
   TEXTURE_FILE_FIELDS,
-  TEXTURE_NUM_FIELDS,
   TEXTURE_TARGETS,
   TEXTURE_TOGGLE_FIELDS,
   sharpnessLabel,
   textureFieldApplies,
+  textureNumFields,
 } from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
@@ -57,7 +57,7 @@ function withTexturePlugin() {
         choiceFields: TEXTURE_CHOICE_FIELDS,
         fileFields: TEXTURE_FILE_FIELDS,
         toggleFields: TEXTURE_TOGGLE_FIELDS,
-        numFields: TEXTURE_NUM_FIELDS,
+        numFields: textureNumFields,
         targets: TEXTURE_TARGETS,
         fieldApplies: textureFieldApplies,
         fieldLabel: (field, values) => (field === "sharpness" ? sharpnessLabel(values["profile"]) : null),

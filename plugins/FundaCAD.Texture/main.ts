@@ -9,11 +9,11 @@ import * as panel from "./panel";
 import {
   TEXTURE_CHOICE_FIELDS,
   TEXTURE_FILE_FIELDS,
-  TEXTURE_NUM_FIELDS,
   TEXTURE_TARGETS,
   TEXTURE_TOGGLE_FIELDS,
   sharpnessLabel,
   textureFieldApplies,
+  textureNumFields,
 } from "./textureForm";
 import { t } from "./lines";
 
@@ -33,7 +33,7 @@ export async function activate(e: Engine): Promise<() => void> {
   function start() {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
-      e.setStatus("Texture: create or import a body first", "");
+      e.setStatus(t("status.needBody"), "");
       return;
     }
     tool.start((id) => {
@@ -86,12 +86,17 @@ export async function activate(e: Engine): Promise<() => void> {
     features: [
       {
         type: "texture",
-        meta: { icon: "texture", label: "Texture" },
+        meta: {
+          icon: "texture",
+          get label() {
+            return t("tool.texture");
+          },
+        },
         choiceFields: TEXTURE_CHOICE_FIELDS,
         fileFields: TEXTURE_FILE_FIELDS,
         toggleFields: TEXTURE_TOGGLE_FIELDS,
         // Nothing in the app knows a texture has a Depth, so its rows are labelled here.
-        numFields: TEXTURE_NUM_FIELDS,
+        numFields: textureNumFields,
         targets: TEXTURE_TARGETS,
         // Every row stays parameter-drivable but only some are drawn: a voronoi has a Seed, a knurl does not.
         fieldApplies: textureFieldApplies,
