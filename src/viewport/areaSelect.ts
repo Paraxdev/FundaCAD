@@ -20,11 +20,6 @@ export function nextAreaFilter(f: AreaFilter): AreaFilter {
   return AREA_FILTERS[(i + 1) % AREA_FILTERS.length] as AreaFilter;
 }
 
-/** Reads as the object of a sentence: "taking EDGES fully inside the box". */
-export function areaFilterLabel(f: AreaFilter): string {
-  return f === "all" ? "everything" : f === "profiles" ? "sketch profiles" : f;
-}
-
 /** An icons.ts name, shown on the chip on the box. */
 export function areaFilterIcon(f: AreaFilter): string {
   return f === "faces"
