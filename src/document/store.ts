@@ -104,6 +104,7 @@ import { STEP_LABEL, stepLabel, stepText, type StepLabel, type StepName } from "
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
+import { UNTITLED } from "./untitled";
 
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
@@ -944,7 +945,7 @@ export class DocumentStore {
     return this.isDirty;
   }
   get fileName(): string {
-    if (!this.path) return this.pathlessName ?? "Untitled";
+    if (!this.path) return this.pathlessName ?? UNTITLED;
     return this.path.split(/[\\/]/).pop() || this.path;
   }
   /** `clean` false: the file lacks a change made while it was written, so the document stays unsaved. */

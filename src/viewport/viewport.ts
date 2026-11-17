@@ -66,7 +66,7 @@ import type { BlendKind } from "../features/blendGhost";
 import type { Continuity } from "../features/continuity";
 import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
-import { ViewCube, FACE_VIEWS } from "./viewCube";
+import { ViewCube, FACE_VIEWS, faceLabel } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import { t, tEnglish } from "../i18n";
 import { WordedError } from "../ui/wordedError";
@@ -3982,7 +3982,7 @@ export class Viewport {
       () => this.cancelSetOverride(),
     );
     this.setOverrideSide = side;
-    setPrompt(t("viewport.cube.pickFace", { side: FACE_VIEWS[side].label }));
+    setPrompt(t("viewport.cube.pickFace", { side: faceLabel(side) }));
     this.overrideKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") this.cancelSetOverride();
     };
