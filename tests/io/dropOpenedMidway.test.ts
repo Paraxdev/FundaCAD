@@ -27,10 +27,10 @@ vi.mock("../../src/ui/toast", () => ({
   toast: (msg: string, o: { kind?: string } = {}) => void (o.kind === "error" ? h.reported : h.told).push(msg),
 }));
 vi.mock("../../src/ui/environmentImport", () => ({
-  importEnvironmentFile: async (_s: unknown, file: File) => {
-    h.read.push(file.name);
-    h.reading[file.name]?.(h.store!);
-    return null;
+  importEnvironment: async (_s: unknown, source: { name: string }) => {
+    h.read.push(source.name);
+    h.reading[source.name]?.(h.store!);
+    return { refused: null, note: null };
   },
 }));
 

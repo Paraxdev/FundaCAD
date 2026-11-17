@@ -106,10 +106,13 @@ export function keptSmallerNote(
   kept: { width: number; height: number },
 ): string | null {
   if (!source || source.width <= kept.width) return null;
-  return (
-    `${name} is ${source.width} x ${source.height}. It lights the scene from a ${kept.width} x ${kept.height} ` +
-    `copy, the size kept for lighting and saved documents (Preferences, Experimental).`
-  );
+  return t("render.keptSmaller", {
+    name,
+    sw: source.width,
+    sh: source.height,
+    kw: kept.width,
+    kh: kept.height,
+  });
 }
 
 /** Light the viewport with an .hdr or .exr. Returns the refusal, or null. */
@@ -142,12 +145,41 @@ export async function importEnvironmentBytes(
   }
 }
 
-export async function importEnvironmentFile(
+/** A panorama as the page got it, or only as a path the desktop app handed over. */
+export type EnvironmentSource = { name: string; file: File } | { name: string; path: string };
+
+export interface EnvironmentImport {
+  /** Why the panorama was not used, or null. */
+  refused: string | null;
+  /** A sentence saying the panorama was kept smaller than the file, or null. */
+  note: string | null;
+}
+
+async function sourceBytes(source: EnvironmentSource): Promise<Uint8Array> {
+  if ("file" in source) return new Uint8Array(await source.file.arrayBuffer());
+  const { invoke } = await import("@tauri-apps/api/core");
+  return new Uint8Array(await invoke<ArrayBuffer>("read_dropped_panorama", { path: source.path }));
+}
+
+/** The one way a button or a drop lights the viewport with a panorama. */
+export async function importEnvironment(
   store: DocumentStore | null,
-  file: File,
-  opts: ImportOptions = {},
-): Promise<string | null> {
-  return importEnvironmentBytes(store, new Uint8Array(await file.arrayBuffer()), file.name, envLibrary(), opts);
+  source: EnvironmentSource,
+  opts: Pick<ImportOptions, "leftOut"> = {},
+): Promise<EnvironmentImport> {
+  let bytes: Uint8Array;
+  try {
+    bytes = await sourceBytes(source);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { refused: t("render.useFailed", { name: source.name, message }), note: null };
+  }
+  let note: string | null = null;
+  const refused = await importEnvironmentBytes(store, bytes, source.name, envLibrary(), {
+    ...opts,
+    onNote: (n) => (note = n),
+  });
+  return { refused, note };
 }
 
 /** Make sure the panorama the settings name is decoded, then redraw. */
@@ -311,7 +343,7 @@ export async function saveEnvironmentAs(
 export async function applySavedEnvironment(store: DocumentStore | null, entry: EnvEntry, library = envLibrary()) {
   const hash = hdrHashOf(entry.settings.environment);
   if (hash && !(await ensureHdrLoaded(hash, library))) {
-    throw new Error(`The panorama ${entry.name} lights with is no longer in the library.`);
+    throw new Error(t("render.savedGone", { name: entry.name }));
   }
   setActiveSaved({ id: entry.id, name: entry.name });
   applyEnvSettings(asEnvSettings(entry.settings, renderPrefs()));

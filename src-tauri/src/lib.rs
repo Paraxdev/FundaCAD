@@ -18,6 +18,7 @@ pub mod library;
 mod log_file;
 pub mod mcp_switch;
 pub mod os_a11y_prefs;
+pub mod panorama_read;
 pub mod plugins;
 pub mod recovery;
 pub mod safe_mode;
@@ -506,6 +507,7 @@ pub fn run() {
         settings_backup_write,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
+        panorama_read::read_dropped_panorama,
         recovery_write,
         recovery_read,
         recovery_list,
