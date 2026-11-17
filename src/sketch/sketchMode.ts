@@ -63,7 +63,7 @@ import {
   type ConstraintDim,
 } from "./entityDims";
 import { clampPlace, pickDimTarget } from "./dimensionTool";
-import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
+import { pickEntity, projectedFixedMsg } from "./modify";
 import { newEntityId, newConstraintId, isDimConstraint, notePatternId } from "./id";
 import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "./history";
 import { allConstruction, toggleConstruction } from "./construction";
@@ -88,7 +88,7 @@ import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
 import { KeySurface } from "./keySurface";
 import { coordLabel } from "./sketchSpeech";
-import { KeyDrawFlow, KEY_DRAW_TOOLS, TOO_SMALL, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
+import { KeyDrawFlow, KEY_DRAW_TOOLS, tooSmallMsg, type Drawn, type KeyDrawHost, type KeyHit } from "./keyDrawFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
 import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import { onThemeChange } from "../ui/theme";
@@ -1465,7 +1465,7 @@ export class SketchMode {
         key: dimKey(ownsSide ? sideKey : null, con && "id" in con ? con.id : undefined, d.cIndex),
         name: side
           ? entityDimName(t(side.field === "width" ? "sketch.dim.width" : "sketch.dim.height"), subject)
-          : constraintDimName(face?.name ?? "Dimension", labels),
+          : constraintDimName(face?.name ?? t("tool.dimension"), labels),
         entities: [...new Set(operands.map((o) => o.split("~")[0] ?? o))],
         anchor: d.labelPos,
         valueMm: d.valueMm,
@@ -1986,7 +1986,7 @@ export class SketchMode {
   private noteOriginPin(hit: KeyHit) {
     if (
       hit.kind === "center" &&
-      hit.label === "Origin" &&
+      hit.label === t("sketch.snap.origin") &&
       this.tool !== "select" &&
       !MODIFY_TOOLS.has(this.tool) &&
       !PATTERN_TOOLS.has(this.tool)
@@ -3270,7 +3270,7 @@ export class SketchMode {
     this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
-      toast(TOO_SMALL);
+      toast(tooSmallMsg());
       return null;
     }
     if (this.constructionMode) entity.construction = true;
@@ -4121,7 +4121,7 @@ export class SketchMode {
             // Keep the anchor on the fixed point, or the next search grabs another point.
             if (!this.dragRefusedToast) {
               this.dragRefusedToast = true;
-              toast(r.dragRefused === "projected" ? PROJECTED_FIXED_MSG : t("sketch.mode.pointFixed"));
+              toast(r.dragRefused === "projected" ? projectedFixedMsg() : t("sketch.mode.pointFixed"));
             }
           } else if (this.dragFrom) {
             this.dragFrom.set(d.toX, d.toY); // track grabbed pt

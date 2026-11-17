@@ -21,7 +21,7 @@ import {
   breakAt,
   extendLine,
   breakLink,
-  PROJECTED_FIXED_MSG,
+  projectedFixedMsg,
   type OffsetResult,
 } from "./modify";
 import { newEntityId } from "./id";
@@ -156,19 +156,15 @@ export class ModifyFlow {
     const pick = this.offsetPick;
     contextMenu(e.clientX, e.clientY, [
       {
-        label: "Chain Selection",
+        label: t("sketch.offset.chain"),
         checked: this.offsetChainMode,
         onClick: () => {
           this.offsetChainMode = !this.offsetChainMode;
-          setPrompt(
-            this.offsetChainMode
-              ? "Chain Selection on, the whole connected profile offsets as a unit"
-              : "Chain Selection off, only the clicked curve offsets",
-          );
+          setPrompt(t(this.offsetChainMode ? "sketch.offset.chainOn" : "sketch.offset.chainOff"));
         },
       },
       {
-        label: "Flip",
+        label: t("sketch.offset.flip"),
         disabled: !pick,
         onClick: () => {
           if (pick) pick.side = -pick.side;
@@ -176,13 +172,13 @@ export class ModifyFlow {
       },
       { separator: true, label: "" },
       {
-        label: "OK",
+        label: t("sketch.offset.ok"),
         disabled: !pick,
         onClick: () => {
           if (pick) this.commitOffset();
         },
       },
-      { label: "Cancel", disabled: !pick, onClick: () => this.cancelOffset() },
+      { label: t("sketch.menu.cancel"), disabled: !pick, onClick: () => this.cancelOffset() },
     ]);
   }
 
@@ -255,7 +251,7 @@ export class ModifyFlow {
    *  calls this and bails with one consistent toast. Delete stays allowed. */
   guardProjected(e: ResolvedEntity | undefined): boolean {
     if (e?.type !== "projected") return false;
-    toast(PROJECTED_FIXED_MSG);
+    toast(projectedFixedMsg());
     return true;
   }
 
@@ -268,10 +264,10 @@ export class ModifyFlow {
     );
   }
 
-  /** Toasts PROJECTED_FIXED_MSG once when any exist; each caller keeps its own retention (deselect, keep, skip). */
+  /** Toasts projectedFixedMsg once when any exist; each caller keeps its own retention (deselect, keep, skip). */
   warnSelectedProjected(): Set<string> {
     const ids = this.selectedProjectedIds();
-    if (ids.size) toast(PROJECTED_FIXED_MSG);
+    if (ids.size) toast(projectedFixedMsg());
     return ids;
   }
 
@@ -326,12 +322,12 @@ export class ModifyFlow {
    *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
   moveClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select something first, then use Move or Copy");
+      toast(t("sketch.modify.selectFirst", { tool: "move" }));
       return;
     }
     if (!this.moveBase) {
       this.moveBase = p.clone();
-      toast("Click the destination point");
+      toast(t("sketch.modify.clickDestination"));
       return;
     }
     const dx = p.x - this.moveBase.x,
@@ -358,33 +354,35 @@ export class ModifyFlow {
   /** Rotate the selection about a clicked center by a typed angle (degrees). */
   rotateClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select something first, then use Rotate");
+      toast(t("sketch.modify.selectFirst", { tool: "rotate" }));
       return;
     }
     const cx = p.x,
       cy = p.y;
-    this.host.dim().show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => {
+    this.host.dim().show([{ name: "angle", label: t("sketch.dim.angle"), icon: "angle", kind: "angle" }], () => {
       const ang = ((this.host.dim().getValue("angle") ?? 0) * Math.PI) / 180;
       this.host.dim().hide();
       this.transformSelection((e) => this.reid(rotated(e, cx, cy, ang, e.id)));
     });
-    toast("Rotate: type an angle in degrees");
+    toast(t("sketch.modify.rotateHint"));
   }
 
   /** Scale the selection about a clicked base point by a typed factor. */
   scaleClick(p: THREE.Vector2) {
     if (!this.host.selected().size) {
-      toast("Select something first, then use Scale");
+      toast(t("sketch.modify.selectFirst", { tool: "scale" }));
       return;
     }
     const cx = p.x,
       cy = p.y;
-    this.host.dim().show([{ name: "factor", label: "Factor", icon: "scale", kind: "count", positive: true }], () => {
-      const f = this.host.dim().getValue("factor") ?? 1;
-      this.host.dim().hide();
-      if (f > 0) this.transformSelection((e) => [scaled(e, cx, cy, f, e.id)]);
-    });
-    toast("Scale: type a factor (e.g. 2 or 0.5)");
+    this.host
+      .dim()
+      .show([{ name: "factor", label: t("field.factor"), icon: "scale", kind: "count", positive: true }], () => {
+        const f = this.host.dim().getValue("factor") ?? 1;
+        this.host.dim().hide();
+        if (f > 0) this.transformSelection((e) => [scaled(e, cx, cy, f, e.id)]);
+      });
+    toast(t("sketch.modify.scaleHint"));
   }
   /** Two-phase Offset (Fusion parity): click a curve, then the cursor or a typed value sets side and distance.
    *  `side` and `mag` stay apart because the box shows the magnitude; one signed number flipped typed inward offsets.
@@ -414,11 +412,11 @@ export class ModifyFlow {
     // Nothing may end in silence here: the user is mid-gesture, and a tool that
     // does nothing without saying why reads as broken.
     if (e.type === "text") {
-      toast("Offset does not work on sketch text");
+      toast(t("sketch.offset.noText"));
       return;
     }
     if (e.type === "point") {
-      toast("Offset needs a line or curve, not a point");
+      toast(t("sketch.offset.noPoint"));
       return;
     }
     this.beginOffset(idx, []);
@@ -427,7 +425,7 @@ export class ModifyFlow {
   private beginOffset(idx: number, added: string[]) {
     this.offsetPick = { idx, side: 1, mag: 0, added };
     this.host.dim().show(
-      [{ name: "offset", label: "Offset", kind: "length" }],
+      [{ name: "offset", label: t("field.offset"), kind: "length" }],
       () => this.commitOffset(),
       () => this.cancelOffset(),
     );
@@ -440,7 +438,7 @@ export class ModifyFlow {
         this.drawOffsetPreview(this.offsetPick);
       },
     );
-    setPrompt("Move to pick the side, or type a distance · Enter · Esc");
+    setPrompt(t("sketch.offset.pickSide"));
   }
 
   /** Projects a face edge clicked off the model (and its loop) in, then carries on as for a projected curve.
@@ -449,7 +447,7 @@ export class ModifyFlow {
     const all = this.host.planeEdges();
     const edges = chain.map((k) => all[k]!.edge);
     this.edgePickPending = true;
-    setPrompt("Reading the face edge…");
+    setPrompt(t("sketch.offset.readingEdge"));
     let landed;
     try {
       landed = await this.host.projectModelEdges(edges);
@@ -462,7 +460,7 @@ export class ModifyFlow {
     if (!landed || !stillHere || idx < 0) {
       if (landed) this.removeEntities(landed.added);
       this.emphasise([]);
-      if (stillHere) setPrompt("Offset: click a curve or a face edge to offset");
+      if (stillHere) setPrompt(t("sketch.offset.pick"));
       return;
     }
     this.beginOffset(idx, landed.added);
@@ -528,7 +526,7 @@ export class ModifyFlow {
     if (this.host.dim().isUserDriven("offset")) {
       const typed = this.host.dim().getValue("offset");
       if (typed === null) {
-        toast("Offset: type a distance, or Esc to cancel");
+        toast(t("sketch.offset.typeDistance"));
         return;
       }
       // same rule as the live preview: a typed sign is the side (see offsetMove)
@@ -536,7 +534,7 @@ export class ModifyFlow {
       if (typed !== 0) pick.side = typed < 0 ? -1 : 1;
     }
     if (pick.mag < 1e-6) {
-      toast("Offset: type a distance, or Esc to cancel");
+      toast(t("sketch.offset.typeDistance"));
       return;
     }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
@@ -546,7 +544,7 @@ export class ModifyFlow {
       return;
     }
     if (!res) {
-      toast("Offset: that distance would collapse the shape");
+      toast(t("sketch.offset.collapse"));
       this.cancelOffset();
       return;
     }
@@ -558,7 +556,7 @@ export class ModifyFlow {
       // the associative link + its single editable dimension
       this.host.setDrivingDimension({ type: "offset", pairs: res.pairs, value: pick.side * pick.mag });
     } else if (!res.linked) {
-      toast("Offset copy created, not linked to the source (this shape type is rigid)");
+      toast(t("sketch.offset.unlinked"));
     }
     this.host.afterModify();
   }
@@ -571,7 +569,7 @@ export class ModifyFlow {
     this.host.dim().hide();
     if (hadProjected) this.host.afterModify();
     else this.host.overlay().setPreview([]);
-    setPrompt("Offset: click a curve or a face edge to offset");
+    setPrompt(t("sketch.offset.pick"));
   }
   extendClick(p: THREE.Vector2) {
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());

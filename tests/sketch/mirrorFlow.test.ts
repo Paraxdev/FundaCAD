@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { MirrorFlow, LINE_LEFT_OBJECTS, LINE_REFUSED, type MirrorHost } from "../../src/sketch/mirrorFlow";
-import { PROJECTED_FIXED_MSG } from "../../src/sketch/modify";
+import { MirrorFlow, lineLeftObjects, lineRefused, type MirrorHost } from "../../src/sketch/mirrorFlow";
+import { projectedFixedMsg } from "../../src/sketch/modify";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { MirrorPanelView } from "../../src/stores/toolPanels";
 
@@ -76,7 +76,7 @@ describe("MirrorFlow start", () => {
   it("fills Objects from the selection and drops projected geometry with a warning", () => {
     const r = rig(["c1", "pr", "l1"]);
     r.flow.begin();
-    expect(r.log.warns).toEqual([PROJECTED_FIXED_MSG]);
+    expect(r.log.warns).toEqual([projectedFixedMsg()]);
     expect([...r.selected]).toEqual(["c1", "l1"]);
     const p = r.panel()!;
     expect(p.active).toBe("line");
@@ -102,7 +102,7 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     const before = r.panel();
     r.flow.click(ON.a1, false);
-    expect(r.log.prompts.at(-1)).toContain(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).toContain(lineRefused());
     expect(r.log.prompts.at(-1)).toContain("Pick the mirror line");
     expect(r.panel()!.fields).toEqual(before!.fields);
     expect(r.flow.ready).toBe(false);
@@ -130,7 +130,7 @@ describe("MirrorFlow picking", () => {
     const r = rig();
     r.flow.begin();
     r.flow.click(ON.pr, false);
-    expect(r.log.warns).toEqual([PROJECTED_FIXED_MSG]);
+    expect(r.log.warns).toEqual([projectedFixedMsg()]);
     expect([...r.selected]).toEqual([]);
     expect(r.panel()!.active).toBe("objects");
   });
@@ -197,7 +197,7 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     r.flow.click(ON.a1, false);
     r.flow.click(ON.insideR1, false);
-    expect(r.log.prompts.at(-1)).not.toContain(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).not.toContain(lineRefused());
     expect(r.log.prompts.at(-1)).toContain("Pick the mirror line");
     expect([...r.selected]).toEqual(["c1"]);
   });
@@ -218,7 +218,7 @@ describe("MirrorFlow picking", () => {
     r.flow.click(ON.ax, false);
     expect([...r.selected]).toEqual(["c1"]);
     expect(r.panel()!.fields[0]!.value).toBe("1 object");
-    expect(r.log.prompts.at(-1)).toContain(LINE_LEFT_OBJECTS);
+    expect(r.log.prompts.at(-1)).toContain(lineLeftObjects());
   });
 
   it("says nothing extra for a line that was not in Objects", () => {
@@ -226,7 +226,7 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     r.flow.click(ON.ax, false);
     expect(r.panel()!.fields[0]!.value).toBe("1 object");
-    expect(r.log.prompts.at(-1)).not.toContain(LINE_LEFT_OBJECTS);
+    expect(r.log.prompts.at(-1)).not.toContain(lineLeftObjects());
     expect(r.log.prompts.at(-1)).toContain("Enter to mirror");
   });
 
@@ -278,7 +278,7 @@ describe("MirrorFlow text", () => {
     r.flow.hover(ON_TEXT);
     expect(r.log.previews.at(-1)!.hover).toBe(null);
     r.flow.click(ON_TEXT, false);
-    expect(r.log.prompts.at(-1)).toContain(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).toContain(lineRefused());
     r.flow.activate("objects");
     r.flow.hover(ON_TEXT);
     expect(r.log.previews.at(-1)!.hover).toBe("t1");

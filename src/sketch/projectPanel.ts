@@ -3,13 +3,29 @@
 
 import { markRaw } from "vue";
 import { useToolPanelStore } from "../stores/toolPanels";
+import { t } from "../i18n";
 
 export type ProjectFilter = "edges" | "sketchCurves" | "silhouette";
 
-export const PROJECT_CHIPS: { key: ProjectFilter; label: string }[] = [
-  { key: "edges", label: "Edges & faces" },
-  { key: "sketchCurves", label: "Sketch curves" },
-  { key: "silhouette", label: "Body silhouette" },
+export const PROJECT_CHIPS: { key: ProjectFilter; readonly label: string }[] = [
+  {
+    key: "edges",
+    get label() {
+      return t("sketch.project.edges");
+    },
+  },
+  {
+    key: "sketchCurves",
+    get label() {
+      return t("sketch.project.sketchCurves");
+    },
+  },
+  {
+    key: "silhouette",
+    get label() {
+      return t("sketch.project.silhouette");
+    },
+  },
 ];
 
 export class ProjectPanel {

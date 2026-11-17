@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import type { ResolvedEntity } from "./snap";
+import { t } from "../i18n";
 import {
   BSPLINE_DEGREES,
   bsplineDegree,
@@ -192,7 +193,7 @@ export function degreeChoices(
   const carried = Math.min(...es.map(bsplineMaxDegree));
   return BSPLINE_DEGREES.map((d) => ({
     degree: d,
-    label: d > carried ? `Degree ${d}, needs ${d + 1} control points` : `Degree ${d}`,
+    label: t("sketch.spline.degree", { degree: d, poles: d + 1, short: d > carried ? "yes" : "no" }),
     checked: now === d,
     disabled: d > carried,
   }));

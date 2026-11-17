@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { singleKeysOn } from "../ui/a11yPrefs";
 import { announce, cancelAnnouncement } from "../ui/announce";
 import { escapeClaimed } from "../ui/escapeClaim";
+import { t } from "../i18n";
 import { isEditableTarget, keyTargetFree, widgetOwnsKey } from "../ui/focus";
 import type { DimInput } from "./dimInput";
 import { coarseStep, fineStep, hasSnap, hitAt, snapRing, stepCoord } from "./keyCursor";
@@ -25,15 +26,25 @@ const ARROWS: Readonly<Record<string, readonly ["x" | "y", 1 | -1]>> = {
 const OPENERS: ReadonlySet<string> = new Set([..."0123456789", "-", ".", "@"]);
 
 export const KEY_PROMPTS = {
-  armed: "Enter or a digit types X and Y · arrows move the cursor · Esc",
-  moved: "Arrows move · Enter places · Tab next snap · Esc",
-  movedBare: "Arrows move · Enter places · Esc",
-  point: "Type X and Y, or @dx,dy from the last point · Enter · Esc",
-  size: "Type the size, or @dx,dy · arrows move · Enter · Esc",
+  get armed() {
+    return t("sketch.keys.armed");
+  },
+  get moved() {
+    return t("sketch.keys.moved");
+  },
+  get movedBare() {
+    return t("sketch.keys.movedBare");
+  },
+  get point() {
+    return t("sketch.keys.point");
+  },
+  get size() {
+    return t("sketch.keys.size");
+  },
 };
 
-export const EDGE_ON_PROMPT = "The sketch plane is edge-on, turn the view to draw on it";
-export const TOO_SMALL = "Too small to draw, give it a size";
+export const edgeOnPrompt = (): string => t("sketch.mode.edgeOn");
+export const tooSmallMsg = (): string => t("sketch.keys.tooSmall");
 
 /** What a placed point carries, the same fields a pointer click's snap result does. */
 export interface KeyHit {
@@ -276,7 +287,7 @@ export class KeyDrawFlow {
     // The box's own Enter would commit what a Shift+Enter in it was only asking to reopen.
     if (this.host.dim().ownsField(e.target)) e.stopPropagation();
     if (this.host.planeTooEdgeOn()) {
-      this.host.prompt(EDGE_ON_PROMPT);
+      this.host.prompt(edgeOnPrompt());
       return true;
     }
     if (this.host.dim().hasField("x")) this.host.dim().focus();
@@ -373,7 +384,7 @@ export class KeyDrawFlow {
     e.preventDefault();
     const p = this.host.cursor().clone();
     const far = outAxis(p.x, p.y);
-    if (this.host.planeTooEdgeOn()) this.host.prompt(EDGE_ON_PROMPT);
+    if (this.host.planeTooEdgeOn()) this.host.prompt(edgeOnPrompt());
     else if (far) this.refuseFar(far);
     else this.placePoint(p);
     return true;
@@ -469,10 +480,10 @@ export class KeyDrawFlow {
   /** The tool refused a second point as too small: the toast alone is lost on a listener. */
   refused() {
     const dim = this.host.dim();
-    dim.flag(TOO_SMALL);
+    dim.flag(tooSmallMsg());
     if (dim.hasField("x")) dim.focusField("x");
     else if (!dim.ownsField(document.activeElement)) dim.focus();
-    announce(TOO_SMALL, "assertive");
+    announce(tooSmallMsg(), "assertive");
     this.host.changed();
   }
 }

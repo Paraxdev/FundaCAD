@@ -6,6 +6,7 @@ import type { DimPlace, ProjectedCurve, ProjectedSource, SketchConstraint } from
 import { asRound } from "./entityDims";
 import { rectCorners } from "./region";
 import type { SketchPlane } from "./plane";
+import { t } from "../i18n";
 
 export type SnapKind = "free" | "grid" | "endpoint" | "midpoint" | "center" | "control" | "curve" | "align";
 
@@ -118,7 +119,13 @@ export function snap(
       const back = nearestOnCurve(onCurve.cv, lattice);
       if (back && back.distanceTo(lattice) <= 1e-9 * Math.max(1, gridStep)) point = lattice;
     }
-    return { point, kind: "curve", guides: [], label: "On Curve", ref: { entity: onCurve.cv.entity, at: "curve" } };
+    return {
+      point,
+      kind: "curve",
+      guides: [],
+      label: t("sketch.snap.onCurve"),
+      ref: { entity: onCurve.cv.entity, at: "curve" },
+    };
   }
 
   // Alignment ranks above the grid, being a statement about the drawing, and below a point: on an anchor, the anchor
@@ -163,16 +170,11 @@ export function snap(
   return { point: raw.clone(), kind: "free", guides: [] };
 }
 
-const KIND_LABEL: Partial<Record<SnapKind, string>> = {
-  endpoint: "Endpoint",
-  midpoint: "Midpoint",
-  center: "Center",
-  control: "Control Point",
-};
+const LABELLED: ReadonlySet<SnapKind> = new Set(["endpoint", "midpoint", "center", "control"]);
 
 /** The name shown beside a snapped anchor: its own, or its kind's. */
 export function snapLabel(c: Pick<SnapCandidate, "kind" | "label">): string | undefined {
-  return c.label ?? KIND_LABEL[c.kind];
+  return c.label ?? (LABELLED.has(c.kind) ? t("sketch.snap.kind", { kind: c.kind }) : undefined);
 }
 
 /** Under the select tool only real geometry anchors (endpoint, midpoint, centre) get a marker, since nothing is placed
@@ -198,7 +200,7 @@ export function originCandidate(plane: SketchPlane): SnapCandidate[] {
       p: plane.to2D(origin),
       kind: "center",
       priority: 95,
-      label: "Origin",
+      label: t("sketch.snap.origin"),
       lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
     },
   ];
@@ -209,7 +211,7 @@ function axisName(dir: THREE.Vector3): string {
   const names = ["X", "Y", "Z"] as const;
   const c = [dir.x, dir.y, dir.z];
   const i = c.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-6);
-  return i >= 0 ? `${names[i]} Axis` : "Axis";
+  return t("sketch.snap.axis", { axis: i >= 0 ? names[i]! : "none" });
 }
 
 /** Shared by the dimension tool and pinOriginPoint so the two agree on what counts as already pinned here. */

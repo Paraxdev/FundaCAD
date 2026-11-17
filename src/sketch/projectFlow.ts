@@ -18,7 +18,8 @@ import { newEntityId } from "./id";
 import { resolveRealEntities } from "./resolve";
 import { edgeProbePoint } from "./planeEdgePick";
 import { toast } from "../ui/toast";
-import { plainError, SEE_CONSOLE } from "../ui/plainError";
+import { t } from "../i18n";
+import { plainError } from "../ui/plainError";
 
 // Fingerprints carry engine float noise: same midpoint within 1e-3 mm, same unoriented tangent and matching length
 // when both carry one is the same edge.
@@ -143,7 +144,7 @@ export class ProjectFlow {
     const failed = sources.findIndex((_s, i) => !results[i]?.ok);
     if (failed >= 0) {
       const raw = results[failed]?.error;
-      toast(plainError(raw, "The projection failed. " + SEE_CONSOLE), { detail: raw });
+      toast(plainError(raw, t("sketch.project.failed")), { detail: raw });
       return null;
     }
     const ids: string[][] = [];
@@ -179,12 +180,11 @@ export class ProjectFlow {
         // Committed curves only, never the active sketch's own. Checked second since a projection usually lies
         // screen-coincident with its source.
         const p = this.host.planePoint(e);
-        if (p && pickEntity(this.host.entities(), p, this.host.pickTol()) >= 0)
-          toast("Can't project the active sketch's own curves");
+        if (p && pickEntity(this.host.entities(), p, this.host.pickTol()) >= 0) toast(t("sketch.project.ownCurves"));
         return;
       }
       if (!this.committedSource(hit.sketchId, hit.entityId)) {
-        toast("Pattern copies can't be projected, pick the pattern's source curve");
+        toast(t("sketch.project.patternCopy"));
         return;
       }
       const dup = this.host
@@ -197,7 +197,7 @@ export class ProjectFlow {
             x.source.entity === hit.entityId,
         );
       if (dup) {
-        toast("That curve is already projected into this sketch");
+        toast(t("sketch.project.curveDup"));
         return;
       }
       source = { kind: "sketchCurve", sketch: hit.sketchId, entity: hit.entityId };
@@ -212,7 +212,7 @@ export class ProjectFlow {
           .entities()
           .some((x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body);
         if (dup) {
-          toast("That body's silhouette is already projected into this sketch");
+          toast(t("sketch.project.silhouetteDup"));
           return;
         }
         source = { kind: "silhouette", body };
@@ -242,22 +242,18 @@ export class ProjectFlow {
     if (!this.host.active() || this.host.tool() !== "project" || this.host.entities() !== session) return; // finished/switched/re-entered mid-flight
     const r = results[0];
     if (!r) {
-      toast("Projecting is not available right now. Try again in a moment.");
+      toast(t("sketch.project.unavailable"));
       return;
     }
     if (!r.ok) {
-      toast(plainError(r.error, "The projection failed. " + SEE_CONSOLE), { detail: r.error }); // "created after this sketch" is an engine sentence that reads plainly
+      toast(plainError(r.error, t("sketch.project.failed")), { detail: r.error }); // "created after this sketch" is an engine sentence that reads plainly
       return;
     }
     // Sketch-curve duplicates were pre-checked above, body edges are checked against the returned fingerprints.
     const fresh = r.curves.filter(({ fp }) => !(fp && this.hasProjectedFp(fp)));
     const skipped = r.curves.length - fresh.length;
     if (skipped)
-      toast(
-        skipped === r.curves.length
-          ? "That edge is already projected into this sketch"
-          : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`,
-      );
+      toast(skipped === r.curves.length ? t("sketch.project.edgeDup") : t("sketch.project.skipped", { n: skipped }));
     if (!fresh.length) return;
     // Multi-curve picks emit siblings sharing source.group, the first sibling's birth-stamped entity id.
     const ids = fresh.map(() => newEntityId());

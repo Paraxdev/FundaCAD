@@ -7,6 +7,7 @@ import type { OffsetPair, SketchConstraint } from "../types";
 import { entitySegments, polygonPoints } from "./region";
 import { splinePolyline } from "./spline";
 import { newEntityId } from "./id";
+import { t } from "../i18n";
 import { arcCenterRadius } from "./arc";
 import { coincKey } from "./sketchSolve";
 import {
@@ -31,7 +32,7 @@ import {
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
 /** The one guard toast every seam that refuses to touch projected (linked, fixed) geometry shows. */
-export const PROJECTED_FIXED_MSG = "Projected geometry is fixed, Break Link to edit it";
+export const projectedFixedMsg = (): string => t("sketch.projectedFixed");
 
 /** Break Link (Fusion): projected entities become native KEEPING their ids, so constraints stay valid, and going
  *  fixed to free can never over-constrain. A closed poly becomes a C0-closed spline that keeps its duplicate closing

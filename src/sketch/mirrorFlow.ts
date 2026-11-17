@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 import type * as THREE from "three";
 import { entityLabel } from "./relations";
-import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
+import { pickEntity, projectedFixedMsg } from "./modify";
 import { mirrorCopies, type Pt } from "./mirror";
 import type { ResolvedEntity } from "./snap";
 import {
@@ -34,8 +34,10 @@ export interface MirrorPreview {
 export interface MirrorAxis {
   a: Pt;
   b: Pt;
-  label: string;
+  kind: "line" | "construction" | "projected" | "x" | "y";
 }
+
+export const axisLabel = (kind: MirrorAxis["kind"]): string => t("sketch.mirror.axis", { kind });
 
 /** The slice of SketchMode the Mirror tool needs. `selected` is live and holds the Objects field. */
 export interface MirrorHost {
@@ -57,18 +59,17 @@ export interface MirrorHost {
   newId(): string;
 }
 
-export const LINE_REFUSED = "Pick a line, arcs and circles cannot be a mirror line";
-export const LINE_LEFT_OBJECTS = "That line is now the mirror line, it is no longer mirrored";
+export const lineRefused = (): string => t("sketch.mirror.lineRefused");
+export const lineLeftObjects = (): string => t("sketch.mirror.lineLeftObjects");
 
 /** A line or a projected straight edge, as a mirror axis. */
 export function axisOf(e: ResolvedEntity): MirrorAxis | null {
   if (e.type === "line") {
-    const label = e.construction ? "Construction line" : "Line";
-    return { a: { x: e.x1, y: e.y1 }, b: { x: e.x2, y: e.y2 }, label };
+    return { a: { x: e.x1, y: e.y1 }, b: { x: e.x2, y: e.y2 }, kind: e.construction ? "construction" : "line" };
   }
   if (e.type === "projected" && e.curve.kind === "line") {
     const c = e.curve;
-    return { a: { x: c.x1, y: c.y1 }, b: { x: c.x2, y: c.y2 }, label: "Projected edge" };
+    return { a: { x: c.x1, y: c.y1 }, b: { x: c.x2, y: c.y2 }, kind: "projected" };
   }
   return null;
 }
@@ -81,8 +82,8 @@ function originAxisAt(p: THREE.Vector2, tol: number): { id: string; axis: Mirror
   const dy = Math.abs(p.x);
   if (Math.min(dx, dy) > tol) return null;
   return dx <= dy
-    ? { id: "origin-x", axis: { a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, label: "X axis" } }
-    : { id: "origin-y", axis: { a: { x: 0, y: 0 }, b: { x: 0, y: 1 }, label: "Y axis" } };
+    ? { id: "origin-x", axis: { a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, kind: "x" } }
+    : { id: "origin-y", axis: { a: { x: 0, y: 0 }, b: { x: 0, y: 1 }, kind: "y" } };
 }
 
 function axisEntity(id: string, ax: MirrorAxis): ResolvedEntity {
@@ -99,7 +100,7 @@ export class MirrorFlow {
   private pre: string[] = [];
   private hovered: ResolvedEntity | null = null;
   private panelId = 0;
-  private refusal: string | null = null;
+  private refusal: (() => string) | null = null;
 
   constructor(private host: MirrorHost) {}
 
@@ -116,7 +117,7 @@ export class MirrorFlow {
     const sel = this.host.selected();
     const projected = [...sel].filter((id) => this.entity(id)?.type === "projected");
     if (projected.length) {
-      this.host.warn(PROJECTED_FIXED_MSG);
+      this.host.warn(projectedFixedMsg());
       for (const id of projected) sel.delete(id);
     }
     this.pre = this.host
@@ -151,18 +152,18 @@ export class MirrorFlow {
       if (axis && hit) {
         const left = f.objects.includes(hit.id);
         this.set(pickLine(f, axis, hit.id));
-        if (left) this.refusal = LINE_LEFT_OBJECTS;
+        if (left) this.refusal = lineLeftObjects;
       } else if (origin) {
         this.set(pickLine(f, origin.axis, null));
       } else if (hit) {
-        this.refusal = LINE_REFUSED;
+        this.refusal = lineRefused;
       }
       this.update();
       return;
     }
     const hit = this.hitAt(p);
     if (hit?.type === "projected") {
-      this.host.warn(PROJECTED_FIXED_MSG);
+      this.host.warn(projectedFixedMsg());
       return;
     }
     if (hit) {
@@ -266,9 +267,7 @@ export class MirrorFlow {
     const copies = f.line
       ? mirrorCopies(ents, new Set(f.objects), { id: f.lineId, ...f.line }, () => "mirror-preview")
       : [];
-    const line = f.line
-      ? (this.entity(f.lineId) ?? axisEntity(`origin-${f.line.label[0]!.toLowerCase()}`, f.line))
-      : null;
+    const line = f.line ? (this.entity(f.lineId) ?? axisEntity(`origin-${f.line.kind}`, f.line)) : null;
     this.host.showPreview({
       copies,
       objects: ents.filter((e) => f.objects.includes(e.id)),
@@ -284,22 +283,22 @@ export class MirrorFlow {
     this.drawPreview();
     const objects = countLabel(f.objects.length, "object");
     const next = nextPick(f, "line");
-    this.host.prompt(`${this.refusal ? `${this.refusal} · ` : ""}${next} · ${objects} · ${t("mirror.escCancel")}`);
+    this.host.prompt(`${this.refusal ? `${this.refusal()} · ` : ""}${next} · ${objects} · ${t("mirror.escCancel")}`);
     this.host.showPanel({
       id: this.panelId,
       fields: [
         {
           key: "objects",
-          label: "Objects",
+          label: t("sketch.mirror.objects"),
           items: f.objects.map((id) => entityLabel(this.host.entities(), id) ?? id),
           value: objects,
           filled: f.objects.length > 0,
         },
         {
           key: "line",
-          label: "Mirror line",
-          items: f.line ? [f.line.label] : [],
-          value: f.line?.label ?? "Nothing picked",
+          label: t("sketch.mirror.line"),
+          items: f.line ? [axisLabel(f.line.kind)] : [],
+          value: f.line ? axisLabel(f.line.kind) : t("mirror.count", { n: 0, what: "object" }),
           filled: f.line !== null,
         },
       ],

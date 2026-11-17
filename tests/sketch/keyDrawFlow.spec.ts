@@ -19,7 +19,7 @@ import Select from "../../src/components/ui/Select.vue";
 import Slider from "../../src/components/ui/Slider.vue";
 import Toolbar from "../../src/components/ui/Toolbar.vue";
 import { DimInput } from "../../src/sketch/dimInput";
-import { EDGE_ON_PROMPT, KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
+import { edgeOnPrompt, KeyDrawFlow, type Drawn, type KeyDrawHost, type KeyHit } from "../../src/sketch/keyDrawFlow";
 import type { ResolvedEntity, SnapCandidate } from "../../src/sketch/snap";
 import { setA11yPref } from "../../src/ui/a11yPrefs";
 import { announce, cancelAnnouncement } from "../../src/ui/announce";
@@ -206,7 +206,7 @@ describe("Enter is left alone", () => {
     state.edgeOn = true;
     const e = press(free());
     expect(e.defaultPrevented).toBe(true);
-    expect(state.prompts).toEqual([EDGE_ON_PROMPT]);
+    expect(state.prompts).toEqual([edgeOnPrompt()]);
     expect(dim.isActive).toBe(false);
     state.edgeOn = false;
     press(free());
@@ -575,7 +575,7 @@ describe("a character opens the box with it typed in X", () => {
     const { state } = rig("line");
     state.edgeOn = true;
     expect(press(free(), { key: "5" }).defaultPrevented).toBe(true);
-    expect(state.prompts).toEqual([EDGE_ON_PROMPT]);
+    expect(state.prompts).toEqual([edgeOnPrompt()]);
     expect(dim.isActive).toBe(false);
   });
 
@@ -1330,7 +1330,7 @@ describe("Enter places at the cursor an arrow moved", () => {
     state.edgeOn = true;
     expect(press(free()).defaultPrevented).toBe(true);
     expect(state.placed).toEqual([]);
-    expect(state.prompts).toEqual([EDGE_ON_PROMPT]);
+    expect(state.prompts).toEqual([edgeOnPrompt()]);
   });
 });
 

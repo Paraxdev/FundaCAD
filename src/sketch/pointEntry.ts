@@ -2,7 +2,7 @@
 // pair typed into one field. A lone comma is split here, before measure.ts, which would read it as a decimal, but only
 // in a language with a decimal point: with a decimal comma a pair takes a semicolon.
 
-import { decimalMark, type DecimalMark } from "../i18n";
+import { decimalMark, t as tr, type DecimalMark } from "../i18n";
 import { measureError, tryParseMeasure, type UnitDef } from "../ui/measure";
 
 export interface PointTyping {
@@ -25,30 +25,30 @@ const tidy = (v: number) => Math.round(v * 1e9) / 1e9;
 // The kernel built a true solid at 1e7 mm and an empty body at 1e8, and tidy moves values past 9e6, so a point stops a safe step short.
 export const POINT_LIMIT_MM = 1e6;
 export const within = (v: number) => Math.abs(v) <= POINT_LIMIT_MM;
-export const tooFar = (axis: "x" | "y") =>
-  `${axis.toUpperCase()} is too far out, a point stays within 1 km of the origin`;
-
-const SEMICOLON_HINT = "Write X;Y with a ; between the numbers when they have decimal commas";
+export const tooFar = (axis: "x" | "y") => tr("sketch.point.tooFar", { axis: axis.toUpperCase() });
 
 function number(text: string, unit: UnitDef | null): Part {
-  if (!text.trim()) return { ok: false, problem: "Type a number" };
+  if (!text.trim()) return { ok: false, problem: tr("sketch.point.typeNumber") };
   const m = tryParseMeasure(text, unit);
   if (m) return { ok: true, value: m.value };
-  const problem = measureError(text, unit) ?? "Not a number";
-  return { ok: false, problem: /unknown parameter/.test(problem) ? `"${text.trim()}" is not a number` : problem };
+  const problem = measureError(text, unit) ?? tr("sketch.point.notNumber");
+  return {
+    ok: false,
+    problem: /unknown parameter/.test(problem) ? tr("sketch.point.notNumberText", { text: text.trim() }) : problem,
+  };
 }
 
 /** One value, or two split on a semicolon or, with a point mark, on the only comma. */
 function split(body: string, mark: DecimalMark): { parts: string[] } | { problem: string } {
   if (body.includes(";")) {
     const parts = body.split(";");
-    return parts.length === 2 ? { parts } : { problem: "Give two numbers at most, X then Y" };
+    return parts.length === 2 ? { parts } : { problem: tr("sketch.point.twoAtMost") };
   }
   if (mark === ",") return { parts: [body] };
   const commas = body.split(",").length - 1;
   if (commas === 0) return { parts: [body] };
   if (commas === 1) return { parts: body.split(",") };
-  return { problem: SEMICOLON_HINT };
+  return { problem: tr("sketch.point.semicolon") };
 }
 
 /** A lone comma before exactly three digits is a thousands mark nobody can be sure of, so it stays one number. */
@@ -66,7 +66,7 @@ function read(
   const rel = (field: Field, text: string): Part => {
     const s = split(text, mark);
     if ("problem" in s) return { ok: false, problem: s.problem };
-    if (s.parts.length !== 1) return { ok: false, problem: "Give one number here" };
+    if (s.parts.length !== 1) return { ok: false, problem: tr("sketch.point.oneHere") };
     return number(s.parts[0]!, units[field]);
   };
   const abs = (field: Field, text: string): Part => number(text, units[field]);

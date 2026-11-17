@@ -3,7 +3,8 @@
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint } from "../types";
-import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
+import { pickEntity, projectedFixedMsg } from "./modify";
+import { t } from "../i18n";
 import { asRound, curveKind, dimRefPoints, lineOperand } from "./entityDims";
 import { rectCorners } from "./region";
 import type { SketchTool } from "./sketchMode";
@@ -86,7 +87,7 @@ export class ConstraintTools {
       // constraining the projected line ITSELF is meaningless, it's fixed;
       // a rectangle's sides already are
       if (op.ent?.type !== "line") {
-        if (op.ent?.type === "projected") this.host.warn(PROJECTED_FIXED_MSG);
+        if (op.ent?.type === "projected") this.host.warn(projectedFixedMsg());
         return;
       }
       if (t === "horizontal") this.addConstraint({ type: "horizontal", line: op.id });
@@ -212,7 +213,7 @@ export class ConstraintTools {
     const pair = this.secondOperand(op);
     if (!pair) return;
     const [first, e] = pair;
-    if (first.kind === "line" && e.kind === "line") return this.host.warn(LINE_TANGENT_MSG);
+    if (first.kind === "line" && e.kind === "line") return this.host.warn(lineTangentMsg());
     this.addConstraint({ type: "tangent2", a: first.id, b: e.id });
   }
 
@@ -259,7 +260,7 @@ export class ConstraintTools {
     // above: it is already fixed) instead of silently doing nothing
     const entities = this.host.entities();
     const idx = pickEntity(entities, p, tol);
-    if (entities[idx]?.type === "projected") this.host.warn(PROJECTED_FIXED_MSG);
+    if (entities[idx]?.type === "projected") this.host.warn(projectedFixedMsg());
   }
 
   /** Mirrors each click flow's own eligibility check, so a selection menu never offers what the tool would refuse.
@@ -292,59 +293,59 @@ export class ConstraintTools {
 
     if (all((o) => o.ent?.type === "line")) {
       add(
-        "Horizontal",
+        t("sketch.constraint.horizontal"),
         "horizontal",
         ops.map((o) => ({ type: "horizontal", line: o.id })),
       );
       add(
-        "Vertical",
+        t("sketch.constraint.vertical"),
         "vertical",
         ops.map((o) => ({ type: "vertical", line: o.id })),
       );
     }
     if (all(isLine)) {
       add(
-        "Parallel",
+        t("sketch.constraint.parallel"),
         "parallel",
         chain((a, b) => ({ type: "parallel", l1: a.id, l2: b.id })),
       );
       if (ops.length === 2)
         add(
-          "Perpendicular",
+          t("sketch.constraint.perpendicular"),
           "perpendicular",
           chain((a, b) => ({ type: "perpendicular", l1: a.id, l2: b.id })),
         );
       add(
-        "Equal",
+        t("sketch.constraint.equal"),
         "equal",
         chain((a, b) => ({ type: "equal", l1: a.id, l2: b.id })),
       );
       add(
-        "Collinear",
+        t("sketch.constraint.collinear"),
         "collinear",
         chain((a, b) => ({ type: "collinear", l1: a.id, l2: b.id })),
       );
     } else if (all(isRnd)) {
       add(
-        "Concentric",
+        t("sketch.constraint.concentric"),
         "concentric",
         chain((a, b) => ({ type: "concentric", c1: a.id, c2: b.id })),
       );
       add(
-        "Equal",
+        t("sketch.constraint.equal"),
         "equal",
         chain((a, b) => ({ type: "equalRadius", a: a.id, b: b.id })),
       );
       if (ops.length === 2)
         add(
-          "Tangent",
+          t("sketch.constraint.tangent"),
           "tangent",
           chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })),
         );
     } else if (ops.length === 2 && all((o) => o.kind !== undefined)) {
       // line and round: tangentClick refuses only line+line, routed above
       add(
-        "Tangent",
+        t("sketch.constraint.tangent"),
         "tangent",
         chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })),
       );
@@ -365,11 +366,17 @@ export class ConstraintTools {
         // two rounds picked whole read as curves, a centre on the other's rim
         // needs the centre itself clicked
         if (centre && !pt.explicit && cv.kind !== "line") continue;
-        add(centre ? (cv.kind === "line" ? "Centre on line" : "Centre on curve") : "On curve", "coincident", [
-          { type: "pointOnCurve", e: pt.id, p, curve: cv.id },
-        ]);
+        add(
+          centre
+            ? t(cv.kind === "line" ? "sketch.constraint.centreOnLine" : "sketch.constraint.centreOnCurve")
+            : t("sketch.constraint.onCurve"),
+          "coincident",
+          [{ type: "pointOnCurve", e: pt.id, p, curve: cv.id }],
+        );
         if (cv.kind === "line")
-          add(centre ? "Centre at midpoint" : "Midpoint", "midpoint", [{ type: "midpoint", e: pt.id, p, line: cv.id }]);
+          add(t(centre ? "sketch.constraint.centreAtMidpoint" : "sketch.constraint.midpoint"), "midpoint", [
+            { type: "midpoint", e: pt.id, p, line: cv.id },
+          ]);
       }
     };
     curveOptions(false);
@@ -379,19 +386,19 @@ export class ConstraintTools {
       // centres would just confuse the relations list
       if (!all(isRnd)) {
         add(
-          "Coincident",
+          t("sketch.constraint.coincident"),
           "coincident",
           chain((a, b) => ({ type: "coincident", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })),
         );
       }
       curveOptions(true);
       add(
-        "Align horizontally",
+        t("sketch.constraint.alignHorizontally"),
         "horizontal",
         chain((a, b) => ({ type: "horizontalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })),
       );
       add(
-        "Align vertically",
+        t("sketch.constraint.alignVertically"),
         "vertical",
         chain((a, b) => ({ type: "verticalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })),
       );
@@ -403,7 +410,7 @@ export class ConstraintTools {
       const pts = ops.filter(hasPt);
       const [pa, pb] = pts;
       if (axis.length === 1 && pa && pb && pa.point !== null && pb.point !== null) {
-        add("Symmetric", "symmetric", [
+        add(t("sketch.constraint.symmetric"), "symmetric", [
           { type: "symmetric", e1: pa.id, p1: pa.point, e2: pb.id, p2: pb.point, line: axis[0]!.id },
         ]);
       }
@@ -418,26 +425,26 @@ export class ConstraintTools {
     const e = op.ent;
     if (!e) return; // a lone rectangle side, its direction is already held
     if (e.type === "line") {
-      add("Horizontal", "horizontal", [{ type: "horizontal", line: e.id }]);
-      add("Vertical", "vertical", [{ type: "vertical", line: e.id }]);
+      add(t("sketch.constraint.horizontal"), "horizontal", [{ type: "horizontal", line: e.id }]);
+      add(t("sketch.constraint.vertical"), "vertical", [{ type: "vertical", line: e.id }]);
     }
     // already fixed, fixing it is meaningless (mirrors fixClick's skip)
     if (e.type === "projected") return;
     if (e.type === "circle" || e.type === "arc") {
-      add("Fix centre", "fix", [{ type: "fix", e: e.id, p: centreIndex(e) }]);
+      add(t("sketch.constraint.fixCentre"), "fix", [{ type: "fix", e: e.id, p: centreIndex(e) }]);
       if (e.type === "arc") {
-        add("Fix start", undefined, [{ type: "fix", e: e.id, p: 0 }]);
-        add("Fix end", undefined, [{ type: "fix", e: e.id, p: 1 }]);
+        add(t("sketch.constraint.fixStart"), undefined, [{ type: "fix", e: e.id, p: 0 }]);
+        add(t("sketch.constraint.fixEnd"), undefined, [{ type: "fix", e: e.id, p: 1 }]);
       }
       const r = asRound(e)?.r;
       const sized = this.host
         .constraints()
         .some((c) => (c.type === "radius" && c.e === e.id) || (c.type === "diameter" && c.circle === e.id));
       if (r !== undefined && !sized)
-        add("Radius", undefined, [{ type: "radius", e: e.id, value: Math.round(r * 1e6) / 1e6 }]);
+        add(t("sketch.dim.radius"), undefined, [{ type: "radius", e: e.id, value: Math.round(r * 1e6) / 1e6 }]);
       return;
     }
-    if (op.point !== null) add("Fix", "fix", [{ type: "fix", e: e.id, p: op.point }]);
+    if (op.point !== null) add(t("sketch.constraint.fix"), "fix", [{ type: "fix", e: e.id, p: op.point }]);
   }
 
   private addConstraint(c: SketchConstraint) {
@@ -450,7 +457,7 @@ export class ConstraintTools {
   }
 }
 
-export const LINE_TANGENT_MSG = "Two lines cannot be tangent, use Collinear or Parallel instead";
+export const lineTangentMsg = (): string => t("sketch.constraint.lineTangent");
 
 interface Operand {
   idx: number;
