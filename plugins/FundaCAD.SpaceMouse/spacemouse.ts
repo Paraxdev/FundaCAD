@@ -5,6 +5,7 @@ import { definePluginSettings, listen, readSetting, type SettingValues, type Set
 
 export const PLUGIN_ID = "FundaCAD.SpaceMouse";
 import type { Viewport } from "fundacad";
+import { t } from "./lines";
 
 export interface Motion {
   tx: number;
@@ -19,22 +20,46 @@ const ZERO: Motion = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };
 export type AxisName = "tx" | "ty" | "tz" | "rx" | "ry" | "rz";
 export const AXIS_NAMES: AxisName[] = ["tx", "ty", "tz", "rx", "ry", "rz"];
 export const AXIS_LABELS: Record<AxisName, string> = {
-  tx: "Slide ←→ (Tx)",
-  ty: "Push/pull (Ty)",
-  tz: "Lift ↑↓ (Tz)",
-  rx: "Tilt/pitch (Rx)",
-  ry: "Tilt sideways/roll (Ry)",
-  rz: "Twist (Rz)",
+  get tx() {
+    return t("axis.tx");
+  },
+  get ty() {
+    return t("axis.ty");
+  },
+  get tz() {
+    return t("axis.tz");
+  },
+  get rx() {
+    return t("axis.rx");
+  },
+  get ry() {
+    return t("axis.ry");
+  },
+  get rz() {
+    return t("axis.rz");
+  },
 };
 
 export type ActionName = "panX" | "panY" | "zoom" | "orbitAz" | "orbitPolar" | "roll";
 export const ACTION_LABELS: Record<ActionName, string> = {
-  panX: "Pan ←→",
-  panY: "Pan ↑↓",
-  zoom: "Zoom",
-  orbitAz: "Rotate ←→",
-  orbitPolar: "Rotate ↑↓",
-  roll: "Roll ↻",
+  get panX() {
+    return t("action.panX");
+  },
+  get panY() {
+    return t("action.panY");
+  },
+  get zoom() {
+    return t("action.zoom");
+  },
+  get orbitAz() {
+    return t("action.orbitAz");
+  },
+  get orbitPolar() {
+    return t("action.orbitPolar");
+  },
+  get roll() {
+    return t("action.roll");
+  },
 };
 
 export interface AxisBinding {
@@ -101,8 +126,7 @@ export interface DeviceBlocked {
 }
 
 export function blockedText(b: DeviceBlocked): string {
-  const fix = b.hint || "run spacenavd or install the udev rule";
-  return `Found "${b.name}" but can't read it, ${fix}. See the 3D mouse page of the manual.`;
+  return t("blocked.text", { name: b.name, fix: b.hint || t("blocked.fix") });
 }
 
 /** Shared by the viewport loop and the settings preview. The deadzone runs first, which matters only once CROSS_AXIS_MAX
@@ -172,12 +196,16 @@ const PERCENT_MAX = 500;
 // Rounded to 1e-9 only to drop float noise; an old slider value is rarely a whole percent.
 const percentOf = (v: number, dflt: number) =>
   Math.min(PERCENT_MAX, Math.max(0, Math.round((v / dflt) * 100 * 1e9) / 1e9));
-const sens = (key: string, label: string) =>
+const sens = (key: string, label: () => string) =>
   ({
     key,
     type: "number",
-    label,
-    group: "Sensitivity",
+    get label() {
+      return label();
+    },
+    get group() {
+      return t("group.sensitivity");
+    },
     unit: "%",
     default: 100,
     min: 0,
@@ -215,24 +243,44 @@ export const SETTINGS: SettingsSchema = {
     {
       key: "mode",
       type: "enum",
-      label: "Mode",
-      description: "Object mode moves the model the way the puck moves; camera mode moves the camera instead.",
+      get label() {
+        return t("setting.mode");
+      },
+      get description() {
+        return t("setting.modeHint");
+      },
       default: DEFAULTS.mode,
       options: [
-        { id: "object", label: "Object mode" },
-        { id: "camera", label: "Camera mode" },
+        {
+          id: "object",
+          get label() {
+            return t("mode.object");
+          },
+        },
+        {
+          id: "camera",
+          get label() {
+            return t("mode.camera");
+          },
+        },
       ],
     },
-    sens("panPercent", "Pan"),
-    sens("zoomPercent", "Zoom"),
-    sens("orbitPercent", "Rotate"),
+    sens("panPercent", () => t("setting.panPercent")),
+    sens("zoomPercent", () => t("setting.zoomPercent")),
+    sens("orbitPercent", () => t("setting.orbitPercent")),
     {
       key: "deadzone",
       type: "number",
-      label: "Deadzone",
-      group: "Sensitivity",
+      get label() {
+        return t("setting.deadzone");
+      },
+      get group() {
+        return t("group.sensitivity");
+      },
       integer: true,
-      description: "How far the puck has to move before anything happens, in device counts.",
+      get description() {
+        return t("setting.deadzoneHint");
+      },
       default: DEFAULTS.deadzone,
       min: 0,
       max: 200,
@@ -241,12 +289,17 @@ export const SETTINGS: SettingsSchema = {
     {
       key: "crossAxisPercent",
       type: "number",
-      label: "Cross-axis filter",
-      group: "Sensitivity",
+      get label() {
+        return t("setting.crossAxis");
+      },
+      get group() {
+        return t("group.sensitivity");
+      },
       unit: "%",
       integer: true,
-      description:
-        "Ignores a weak axis while another axis is much stronger, so a hard tilt does not also zoom. 0 turns it off.",
+      get description() {
+        return t("setting.crossAxisHint");
+      },
       default: Math.round(DEFAULTS.crossAxis * 100),
       min: 0,
       max: Math.round(CROSS_AXIS_MAX * 100),

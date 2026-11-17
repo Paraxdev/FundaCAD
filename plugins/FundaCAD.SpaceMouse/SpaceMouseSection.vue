@@ -3,9 +3,10 @@
 // handles and never a ref. onUnmounted frees the renderer, its geometries and materials and the rAF.
 
 import * as THREE from "three";
-import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
 import { invoke } from "fundacad";
 import { Checkbox, Select } from "fundacad/ui";
+import { t } from "./lines";
 import {
   AXIS_LABELS,
   AXIS_NAMES,
@@ -23,7 +24,7 @@ import {
 } from "./spacemouse";
 
 const ACTIONS = Object.keys(ACTION_LABELS) as ActionName[];
-const axisOptions = AXIS_NAMES.map((a) => ({ value: a, label: AXIS_LABELS[a] }));
+const axisOptions = computed(() => AXIS_NAMES.map((a) => ({ value: a, label: AXIS_LABELS[a] })));
 
 // shallowRef replaced wholesale: setSpaceMouseConfig merges the bindings into its module CONFIG, and a deep ref would
 // put reactive proxies there.
@@ -63,7 +64,7 @@ function updateBars(m: Motion) {
     const suppressed = !dead && f[a] === 0;
     bar.style.background = dead ? "var(--text-mute, #6b7280)" : "var(--accent, #ff7a3c)";
     bar.style.opacity = suppressed ? "0.35" : "1";
-    if (suppressed) bar.setAttribute("title", `${AXIS_LABELS[a]}: suppressed by the cross-axis filter`);
+    if (suppressed) bar.setAttribute("title", t("panel.suppressed", { axis: AXIS_LABELS[a] }));
     else bar.removeAttribute("title");
   }
 }
@@ -225,10 +226,10 @@ onUnmounted(() => {
 <template>
   <div class="sm-grid" data-spacemouse-section>
     <div class="sm-col">
-      <div class="sm-section">Live axes, move the puck</div>
-      <div class="sm-hint">Push/tilt/twist and watch which bar reacts, then map it beside.</div>
+      <div class="sm-section">{{ t("panel.axesTitle") }}</div>
+      <div class="sm-hint">{{ t("panel.axesHint") }}</div>
       <div v-if="flatpakHint" class="sm-hint" data-testid="spacemouse-flatpak-hint">
-        To reach a 3D mouse from the Flatpak, {{ flatpakHint }}
+        {{ t("panel.flatpak", { hint: flatpakHint }) }}
       </div>
       <!-- The bars move at device report rate, which no screen reader could follow, so only sight gets them. -->
       <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row" aria-hidden="true">
@@ -237,19 +238,19 @@ onUnmounted(() => {
           <div class="sm-axis-bar" :ref="(el) => setBar(a, el)"></div>
         </div>
       </div>
-      <div class="sm-section">Test, rotate the cube</div>
+      <div class="sm-section">{{ t("panel.testTitle") }}</div>
       <canvas
         ref="testCanvas"
         class="sm-test"
         role="img"
-        aria-label="Test cube, it turns and moves as the puck does"
+        :aria-label="t('panel.testLabel')"
         width="240"
         height="170"
       ></canvas>
     </div>
 
     <div class="sm-col" role="group" aria-labelledby="sm-map-title">
-      <div id="sm-map-title" class="sm-section">Axis mapping</div>
+      <div id="sm-map-title" class="sm-section">{{ t("panel.mappingTitle") }}</div>
       <div v-for="action in ACTIONS" :key="action" class="sm-map-row">
         <label :id="`sm-map-${action}`" class="sm-map-label" :for="`sm-src-${action}`">{{
           ACTION_LABELS[action]
@@ -263,7 +264,7 @@ onUnmounted(() => {
           @update:model-value="applyBind(action, { src: $event })"
         />
         <Checkbox :model-value="binds[action].invert" @update:model-value="applyBind(action, { invert: $event })"
-          >flip <span class="sr-only">{{ ACTION_LABELS[action] }}</span></Checkbox
+          >{{ t("panel.flip") }} <span class="sr-only">{{ ACTION_LABELS[action] }}</span></Checkbox
         >
       </div>
     </div>
