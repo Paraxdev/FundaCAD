@@ -10,14 +10,14 @@ export const WORKSPACES: readonly { id: Workspace; readonly label: string; icon:
   {
     id: "model",
     get label() {
-      return t("workspace.model");
+      return t("shell.workspace.name", { workspace: "model" });
     },
     icon: "box",
   },
   {
     id: "render",
     get label() {
-      return t("workspace.render");
+      return t("shell.workspace.name", { workspace: "render" });
     },
     icon: "material",
   },

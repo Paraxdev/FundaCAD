@@ -3016,7 +3016,5 @@
   "viewControls.zebra.width": "Ancho de las franjas",
   "viewport.edgeFallback": "Arista",
   "whatsNew.open": "Novedades",
-  "whatsNew.updated": "FundaCAD se ha actualizado.",
-  "workspace.model": "Modelo",
-  "workspace.render": "Render"
+  "whatsNew.updated": "FundaCAD se ha actualizado."
 }

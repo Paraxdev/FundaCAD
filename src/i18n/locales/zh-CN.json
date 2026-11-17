@@ -3016,7 +3016,5 @@
   "viewControls.zebra.width": "条纹宽度",
   "viewport.edgeFallback": "边",
   "whatsNew.open": "新功能",
-  "whatsNew.updated": "FundaCAD 已更新。",
-  "workspace.model": "模型",
-  "workspace.render": "渲染"
+  "whatsNew.updated": "FundaCAD 已更新。"
 }
