@@ -8,6 +8,7 @@ import FieldRow from "../ui/FieldRow.vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { describeTarget, readTarget, type TargetField } from "../../features/selectionTargets";
+import { t } from "../../i18n";
 
 const props = defineProps<{ featureId: string; target: TargetField }>();
 
@@ -51,12 +52,12 @@ function edit() {
       class="target-edit"
       size="sm"
       icon="pen"
-      :tip="`Change which ${target.kind}s this acts on`"
+      :tip="t('shell.target.editTip', { kind: target.kind })"
       :disabled="editing"
-      disabled-reason="Editing this selection"
+      :disabled-reason="t('shell.target.editing')"
       :aria-labelledby="`${labelId} ${countId} ${editId}`"
       @click="edit"
-      >Edit</Button
+      >{{ t("shell.target.edit") }}</Button
     >
   </FieldRow>
 </template>

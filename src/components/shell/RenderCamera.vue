@@ -15,7 +15,7 @@ import { announce, cancelAnnouncement } from "../../ui/announce";
 import { claimEscape } from "../../ui/escapeClaim";
 import type { DocumentSession } from "../../document/session";
 import { startProgress, stepProgress, type TraceProgress } from "../../ui/renderProgress";
-import { plainError, SEE_CONSOLE } from "../../ui/plainError";
+import { plainError, seeConsole } from "../../ui/plainError";
 import { saveRenderedImage } from "../../io/files";
 import {
   APERTURE_STOPS,
@@ -112,8 +112,8 @@ const tracedSize = computed(() => {
 const traced = computed(() => tracedWanted.value && tracedSize.value !== null);
 
 const shotSize = computed(() => {
-  const t = traced.value ? tracedSize.value : null;
-  if (t) return `${t.width} × ${t.height}`;
+  const size = traced.value ? tracedSize.value : null;
+  if (size) return `${size.width} × ${size.height}`;
   const c = engine.canvas.getBoundingClientRect();
   return `${Math.round(c.width * scale.value)} × ${Math.round(c.height * scale.value)}`;
 });
@@ -167,7 +167,7 @@ async function render(session: Pick<DocumentSession, "alive">): Promise<string |
         announce(t("render.progress.cancelled"), "polite", { key: RENDER_KEY });
       } else {
         cancelAnnouncement(RENDER_KEY);
-        toast(`The traced picture failed. ${plainError(e, SEE_CONSOLE)}`, { kind: "error", detail: e });
+        toast(t("render.camera.failed", { reason: plainError(e, seeConsole()) }), { kind: "error", detail: e });
       }
       return null;
     } finally {
@@ -196,7 +196,7 @@ async function takePicture() {
     const url = await render(session);
     if (!url || !session.alive) return;
     const path = await saveRenderedImage(url, `${base}.png`);
-    if (path) toast(`Saved ${path}`);
+    if (path) toast(t("render.camera.saved", { path }));
   } finally {
     saving.value = false;
   }
@@ -206,11 +206,11 @@ async function takePicture() {
 <template>
   <div ref="root" class="rd-scroll" @focusin="focused = true" @focusout="onFocusOut" @keydown="onKeydown">
     <section class="rd-section">
-      <h3 class="rd-head">Lens</h3>
+      <h3 class="rd-head">{{ t("render.camera.lens") }}</h3>
       <Slider
         id="rd-fov"
         class="prefs-row"
-        label="Field of view"
+        :label="t('render.camera.fov')"
         :min="MIN_FOV"
         :max="MAX_FOV"
         :step="1"
@@ -219,78 +219,70 @@ async function takePicture() {
       >
         <template #value="{ value }">{{ Math.round(value) }}°</template>
       </Slider>
-      <div class="sm-hint">
-        A long lens (low numbers) keeps a part's edges nearly parallel, which is the honest look for an engineering
-        drawing. A wide one throws the near corner at you, which flatters a product shot. Straight-on views are drawn
-        with no lens at all, so this does nothing there.
-      </div>
+      <div class="sm-hint">{{ t("render.camera.lensHint") }}</div>
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Depth of field</h3>
+      <h3 class="rd-head">{{ t("render.camera.depthOfField") }}</h3>
       <Slider
         id="rd-blur"
         class="prefs-row"
-        label="Blur"
+        :label="t('render.camera.blur')"
         :min="0"
         :max="1"
         :step="0.02"
         :model-value="prefs.focusBlur"
         @update:model-value="setRenderPref('focusBlur', $event)"
       >
-        <template #value="{ value }">{{ value === 0 ? "off" : spellFixed(value, 2) }}</template>
+        <template #value="{ value }">{{ value === 0 ? t("render.camera.blurOff") : spellFixed(value, 2) }}</template>
       </Slider>
       <div class="prefs-row">
-        <label class="prefs-label" for="rd-aperture">Aperture</label>
+        <label class="prefs-label" for="rd-aperture">{{ t("render.camera.aperture") }}</label>
         <Select
           id="rd-aperture"
           size="sm"
-          label="Aperture"
-          tip="Aperture"
+          :label="t('render.camera.aperture')"
+          :tip="t('render.camera.aperture')"
           :options="APERTURES"
           :disabled="prefs.focusBlur === 0"
-          disabled-reason="Turn Blur up from zero to pick an aperture"
+          :disabled-reason="t('render.camera.apertureReason')"
           :model-value="String(prefs.aperture)"
           @update:model-value="setRenderPref('aperture', Number.parseFloat($event))"
         />
       </div>
-      <div class="sm-hint">
-        Whatever the view is centred on stays sharp, so the way to move the focus is to aim at what you want in focus.
-        Off at zero, and off entirely on a straight-on view: a parallel projection has no lens, so it can have no depth
-        of field.
-      </div>
+      <div class="sm-hint">{{ t("render.camera.focusHint") }}</div>
     </section>
 
     <section class="rd-section">
-      <h3 class="rd-head">Picture</h3>
+      <h3 class="rd-head">{{ t("render.camera.picture") }}</h3>
       <Segmented
         v-model="scale"
         class="rd-chips"
         variant="chips"
         size="sm"
-        label="Render size"
+        :label="t('render.camera.size')"
         :options="SCALE_CHOICES"
       />
-      <div class="sm-hint">{{ shotSize }} pixels, the view as it is framed now.</div>
+      <div class="sm-hint">{{ t("render.camera.pixels", { size: shotSize }) }}</div>
       <template v-if="tracedSize">
-        <Checkbox id="rd-traced" v-model="tracedWanted" class="rd-check" label="Path traced" />
+        <Checkbox id="rd-traced" v-model="tracedWanted" class="rd-check" :label="t('render.camera.pathTraced')" />
         <Segmented
           v-if="traced"
           v-model="samples"
           class="rd-chips"
           variant="chips"
           size="sm"
-          label="Samples"
+          :label="t('render.camera.samples')"
           :options="SAMPLE_CHOICES"
         />
       </template>
-      <Checkbox v-if="!traced" id="rd-edges" v-model="edges" class="rd-check" label="Edge lines" />
+      <Checkbox v-if="!traced" id="rd-edges" v-model="edges" class="rd-check" :label="t('render.camera.edges')" />
       <Checkbox
         v-if="!traced && hasReferences"
         id="rd-references"
         v-model="references"
         class="rd-check"
-        label="Reference images"
+        :label="t('render.camera.references')"
       />
       <div class="mats-actions">
         <Button
@@ -317,14 +309,8 @@ async function takePicture() {
         <span class="rd-progress-track"><i :style="{ width: `${(100 * progress.shown) / progress.total}%` }" /></span>
         <span class="rd-progress-text" aria-hidden="true">{{ countText }}</span>
       </div>
-      <div v-if="traced" class="sm-hint">
-        Traced to the samples picked, then cleaned with the high quality denoise. More samples take longer and keep
-        finer detail. Edge lines and reference images are not traced.
-      </div>
-      <div class="sm-hint">
-        The grid, the origin arrows and the sketch planes are left out: they are on screen because you are working, not
-        because they are part of the model. Everything else is exactly what you are looking at.
-      </div>
+      <div v-if="traced" class="sm-hint">{{ t("render.camera.tracedHint") }}</div>
+      <div class="sm-hint">{{ t("render.camera.leftOut") }}</div>
     </section>
     <RenderSections tab="camera" />
   </div>

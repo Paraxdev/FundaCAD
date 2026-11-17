@@ -19,19 +19,6 @@ export const OVERLAY_KINDS = [
 export type OverlayKind = (typeof OVERLAY_KINDS)[number];
 export type OverlayKinds = Record<OverlayKind, boolean>;
 
-export const OVERLAY_LABELS: Record<OverlayKind, string> = {
-  edges: "Edge outlines",
-  highlight: "Selection and hover",
-  grid: "Grid",
-  origin: "Origin and planes",
-  sketches: "Sketches",
-  sketchLabels: "Sketch dimensions",
-  handles: "Gizmos and handles",
-  stress: "Stress glyphs",
-  section: "Section plane",
-  references: "Reference images",
-};
-
 export interface OverlayState {
   /** The master switch. Off draws no overlay and leaves `kinds` as they were,
    *  which is what Clean view turns back on. */

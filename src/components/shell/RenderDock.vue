@@ -11,14 +11,15 @@ import RenderEnvironment from "./RenderEnvironment.vue";
 import RenderCamera from "./RenderCamera.vue";
 import { onWorkspaceChange, workspace } from "../../ui/workspace";
 import { useHomeStore } from "../../stores/home";
+import { t } from "../../i18n";
 
 type Tab = "material" | "environment" | "camera";
 
-const TABS: { value: Tab; label: string; icon: string }[] = [
-  { value: "material", label: "Material", icon: "material" },
-  { value: "environment", label: "Environment", icon: "sphere" },
-  { value: "camera", label: "Camera", icon: "camera" },
-];
+const TABS = computed<{ value: Tab; label: string; icon: string }[]>(() => [
+  { value: "material", label: t("render.tab.material"), icon: "material" },
+  { value: "environment", label: t("render.tab.environment"), icon: "sphere" },
+  { value: "camera", label: t("render.tab.camera"), icon: "camera" },
+]);
 
 // Kept across a trip through Model and back: coming back to the tab you were on is what the workspace you left means.
 const tab = ref<Tab>("material");
@@ -38,10 +39,10 @@ onUnmounted(() => off?.());
 </script>
 
 <template>
-  <aside v-if="open" id="renderdock" aria-label="Render">
-    <Tabs v-model="tab" class="rd-tabs" variant="bar" :tabs="TABS" label="Render" :panels="panels">
-      <template #tab="{ tab: t }"
-        ><Icon :name="t.icon!" :size="14" /><span>{{ t.label }}</span></template
+  <aside v-if="open" id="renderdock" :aria-label="t('render.dock.label')">
+    <Tabs v-model="tab" class="rd-tabs" variant="bar" :tabs="TABS" :label="t('render.dock.label')" :panels="panels">
+      <template #tab="{ tab: item }"
+        ><Icon :name="item.icon!" :size="14" /><span>{{ item.label }}</span></template
       >
     </Tabs>
     <!-- v-show, not v-if: each tab keeps its scroll position, search box and selected row, so comparing finishes needs

@@ -4,6 +4,7 @@ import { useEngine } from "../../app/engineKey";
 import type { SectionPhase } from "../../features/sectionTool";
 import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
+import { t } from "../../i18n";
 
 const engine = useEngine();
 const section = engine.tools.section;
@@ -49,10 +50,10 @@ const blocked = computed(() => {
 });
 const editTip = computed(() =>
   editing.value
-    ? "Keep the cut and hide the handle (Enter)"
+    ? t("shell.section.keepTip")
     : blocked.value
-      ? "Finish the current tool first"
-      : "Move or flip the cut with its handle",
+      ? t("shell.section.blockedTip")
+      : t("shell.section.editTip"),
 );
 
 function onEdit() {
@@ -68,20 +69,28 @@ function onEdit() {
     v-if="shown"
     class="section-chip"
     role="toolbar"
-    aria-label="Section view"
+    :aria-label="t('shell.section.label')"
     data-testid="section-chip"
     @mousedown.prevent
   >
-    <span class="section-chip-label" title="Section on">
+    <span class="section-chip-label" :title="t('shell.section.on')">
       <Icon name="section" :size="14" />
-      <span class="section-chip-text">Section on</span>
+      <span class="section-chip-text">{{ t("shell.section.on") }}</span>
     </span>
-    <Button size="sm" :pressed="editing" :disabled="blocked" :tip="editTip" data-testid="section-edit" @click="onEdit"
-      >Edit</Button
+    <Button
+      size="sm"
+      :pressed="editing"
+      :disabled="blocked"
+      :tip="editTip"
+      data-testid="section-edit"
+      @click="onEdit"
+      >{{ t("shell.section.edit") }}</Button
     >
-    <Button size="sm" tip="Keep the other side of the cut" data-testid="section-flip" @click="section.flip()"
-      >Flip</Button
-    >
-    <Button size="sm" tip="Turn the section off" data-testid="section-off" @click="section.stop()">Off</Button>
+    <Button size="sm" :tip="t('shell.section.flipTip')" data-testid="section-flip" @click="section.flip()">{{
+      t("shell.section.flip")
+    }}</Button>
+    <Button size="sm" :tip="t('shell.section.offTip')" data-testid="section-off" @click="section.stop()">{{
+      t("shell.section.off")
+    }}</Button>
   </div>
 </template>

@@ -201,11 +201,14 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
   };
 }
 
-// "Glossy, metallic": surface then kind, for search and screen readers. Kinds are ranked, not combined: a light is a
+export type FinishGloss = "glossy" | "satin" | "matte";
+export type FinishKind = "lit" | "transparent" | "metallic" | "glitter" | "brushed" | "velvet";
+
+// Surface then kind, as ids the Materials tab names in the language. Kinds are ranked, not combined: a light is a
 // light, and see-through comes before anything else.
-export function finishLabel(m: MaterialDef | undefined): string {
+export function finishWords(m: MaterialDef | undefined): { gloss: FinishGloss; kind: FinishKind | null } {
   const f = finishOf(m);
-  const gloss = f.roughness <= 0.18 ? "Glossy" : f.roughness <= 0.45 ? "Satin" : "Matte";
+  const gloss = f.roughness <= 0.18 ? "glossy" : f.roughness <= 0.45 ? "satin" : "matte";
   const kind =
     f.emissive > 0
       ? "lit"
@@ -219,8 +222,15 @@ export function finishLabel(m: MaterialDef | undefined): string {
               ? "brushed"
               : f.sheen >= 0.3
                 ? "velvet"
-                : "";
-  return kind ? `${gloss}, ${kind}` : gloss;
+                : null;
+  return { gloss, kind };
+}
+
+/** The English form, "Glossy, metallic". */
+export function finishLabel(m: MaterialDef | undefined): string {
+  const { gloss, kind } = finishWords(m);
+  const word = gloss[0]!.toUpperCase() + gloss.slice(1);
+  return kind ? `${word}, ${kind}` : word;
 }
 
 // Generic materials named for the stuff, not a supplier's product, and deliberately short: examples of the fields.
@@ -470,12 +480,19 @@ export interface MaterialLibraryFile {
 
 // Never throws: a broken file gives the readable materials plus a sentence. A bare `[…]` is accepted too, as a
 // spreadsheet export or hand-written file would be.
-export function parseLibrary(json: string): { materials: MaterialDef[]; problem: string | null } {
+/** What went wrong reading a library file, for the caller to word in the language. */
+export type LibraryProblem =
+  | { kind: "notJson"; detail: string }
+  | { kind: "noList" }
+  | { kind: "skipped"; dropped: number; total: number }
+  | { kind: "empty" };
+
+export function parseLibrary(json: string): { materials: MaterialDef[]; problem: LibraryProblem | null } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch (e) {
-    return { materials: [], problem: `not readable as JSON: ${(e as Error).message}` };
+    return { materials: [], problem: { kind: "notJson", detail: (e as Error).message } };
   }
   const rows = Array.isArray(parsed)
     ? parsed
@@ -483,7 +500,7 @@ export function parseLibrary(json: string): { materials: MaterialDef[]; problem:
       ? (parsed as { materials: unknown[] }).materials
       : null;
   if (!rows) {
-    return { materials: [], problem: 'no materials in it, expected a list or {"materials": [...]}' };
+    return { materials: [], problem: { kind: "noList" } };
   }
   const out: MaterialDef[] = [];
   const taken = new Set<string>();
@@ -498,9 +515,7 @@ export function parseLibrary(json: string): { materials: MaterialDef[]; problem:
     taken.add(m.id);
     out.push(m);
   });
-  const problem = dropped
-    ? `${dropped} of ${rows.length} had no usable colour and ${dropped === 1 ? "was" : "were"} skipped`
-    : null;
+  const problem: LibraryProblem | null = dropped ? { kind: "skipped", dropped, total: rows.length } : null;
   return { materials: out, problem };
 }
 

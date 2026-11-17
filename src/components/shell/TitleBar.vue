@@ -75,7 +75,7 @@ onUnmounted(() => {
     <IconButton
       id="home-btn"
       icon="home"
-      tip="Home"
+      :tip="t('shell.home')"
       size="sm"
       variant="plain"
       :icon-size="15"
@@ -115,13 +115,13 @@ onUnmounted(() => {
         />
       </Toolbar>
       <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
-        {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
+        {{ ui.sketchActive ? t("shell.context.sketch") : t("shell.context.solid") }}
       </span>
       <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
         <!-- After the name, never before: a prefix moved the filename sideways when the document went dirty. -->
         <span class="docname-text">{{ ui.docName }}</span
-        ><span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes" aria-hidden="true">*</span>
-        <span v-if="ui.dirty" class="sr-only"> Unsaved changes</span>
+        ><span v-if="ui.dirty" class="dirty-mark" :title="t('shell.unsaved')" aria-hidden="true">*</span>
+        <span v-if="ui.dirty" class="sr-only">{{ ` ${t("shell.unsaved")}` }}</span>
       </span>
       <!-- Beside the name because it is about this document, renders nothing unless an assistant is attached. -->
       <LiveSessionPill />

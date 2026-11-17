@@ -6,6 +6,7 @@ import MenuItem from "../ui/MenuItem.vue";
 import MenuSeparator from "../ui/MenuSeparator.vue";
 import { useUiStore } from "../../stores/ui";
 import { onWorkspaceChange, setWorkspace, workspace, WORKSPACES } from "../../ui/workspace";
+import { t } from "../../i18n";
 
 const ui = useUiStore();
 const active = ref(workspace());
@@ -29,7 +30,7 @@ onUnmounted(() => off());
       v-for="w in WORKSPACES"
       :key="w.id"
       class="menu-item"
-      :label="`${w.label} Workspace`"
+      :label="t('shell.workspace.fold', { workspace: w.id })"
       :checked="active === w.id"
       :data-fold-workspace="w.id"
       @select="setWorkspace(w.id)"

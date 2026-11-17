@@ -9,6 +9,7 @@ import { motionOn } from "../../ui/motion";
 import Button from "../ui/Button.vue";
 import Chip from "../ui/Chip.vue";
 import IconButton from "../ui/IconButton.vue";
+import { t } from "../../i18n";
 
 type Phase = "hidden" | "icon" | "grow" | "text" | "leave";
 
@@ -169,7 +170,7 @@ onUnmounted(() => {
         class="err-notice"
         :class="`is-${phase}`"
         :style="{ width: `${width}px` }"
-        :title="`${shown.message}\nClick for the full report in the console`"
+        :title="`${shown.message}\n${t('shell.error.tip')}`"
         @click="openDetails"
       >
         <svg class="err-tri" viewBox="0 0 24 24" aria-hidden="true">
@@ -185,7 +186,7 @@ onUnmounted(() => {
       <IconButton
         v-if="shown.holdMs === null && phase === 'text'"
         icon="close"
-        tip="Dismiss"
+        :tip="t('shell.error.dismiss')"
         size="sm"
         variant="plain"
         :icon-size="12"

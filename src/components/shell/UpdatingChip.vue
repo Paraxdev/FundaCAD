@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { watchSlowBuild } from "../../app/staleModel";
 import { motionOn, onMotionChange } from "../../ui/motion";
+import { t } from "../../i18n";
 
 const engine = useEngine();
 const shown = ref(false);
@@ -25,14 +26,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    v-if="shown"
-    class="updating-chip"
-    role="status"
-    title="The model is rebuilding, the one on screen can still be picked"
-    data-testid="updating-chip"
-  >
+  <div v-if="shown" class="updating-chip" role="status" :title="t('shell.updating.tip')" data-testid="updating-chip">
     <span v-if="spinning" class="updating-spin" aria-hidden="true"></span>
-    <span>Updating</span>
+    <span>{{ t("shell.updating") }}</span>
   </div>
 </template>

@@ -6,10 +6,11 @@ import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useMetaValue } from "../../app/useDoc";
 import { diffTrees, log, snapshotOf, versionById, type Version, type VersionDiff } from "../../document/versions";
-import { featureEnglish } from "../../ui/featureMeta";
+import { featureMeta } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
-import { plainError, SEE_CONSOLE } from "../../ui/plainError";
+import { plainError, seeConsole } from "../../ui/plainError";
 import { ago } from "../../ui/timeAgo";
+import { t } from "../../i18n";
 import Icon from "./Icon.vue";
 import Button from "../ui/Button.vue";
 import ListRow from "../ui/ListRow.vue";
@@ -63,7 +64,7 @@ const branchName = ref("");
 function save() {
   const v = store.saveVersion(message.value);
   if (!v) {
-    toast("Nothing has changed since the last version");
+    toast(t("versions.toast.nothing"));
     return;
   }
   message.value = "";
@@ -73,12 +74,15 @@ function restore(v: Version) {
   try {
     store.restoreVersion(v.id);
   } catch (e) {
-    toast(`Could not go back to "${v.message}". ${plainError(e, SEE_CONSOLE)}`, { kind: "error", detail: e });
+    toast(t("versions.toast.restoreFailed", { name: v.message, detail: plainError(e, seeConsole()) }), {
+      kind: "error",
+      detail: e,
+    });
     return;
   }
   const mark = store.undoMark;
-  const undo = mark !== null ? { label: "Undo", onClick: () => engine.undoIfLatest(mark) } : undefined;
-  toast(`Back at "${v.message}"`, undo && { action: undo });
+  const undo = mark !== null ? { label: t("step.undo"), onClick: () => engine.undoIfLatest(mark) } : undefined;
+  toast(t("versions.toast.restored", { name: v.message }), undo && { action: undo });
 }
 
 function startBranch(v: Version) {
@@ -91,10 +95,10 @@ function makeBranch() {
   if (!from) return;
   try {
     const name = store.branchFromVersion(from, branchName.value);
-    toast(`On branch ${name}`);
+    toast(t("versions.toast.onBranch", { name }));
     branching.value = null;
   } catch (e) {
-    toast(plainError(e, "Could not start that branch. " + SEE_CONSOLE), { kind: "error", detail: e });
+    toast(plainError(e, t("versions.toast.branchFailed")), { kind: "error", detail: e });
   }
 }
 
@@ -114,13 +118,13 @@ function summary(d: VersionDiff): string {
   if (d.added.length) parts.push(`+${d.added.length}`);
   if (d.changed.length) parts.push(`~${d.changed.length}`);
   if (d.removed.length) parts.push(`-${d.removed.length}`);
-  if (d.settings) parts.push("settings");
-  return parts.join(" ") || "no change";
+  if (d.settings) parts.push(t("versions.summary.settings"));
+  return parts.join(" ") || t("versions.summary.none");
 }
 
 /** Names for the features a version touched, read from the version itself so a
  *  removed feature is still named. */
-function changedNames(v: Version): { kind: string; name: string }[] {
+function changedNames(v: Version): { kind: "added" | "changed" | "removed"; name: string }[] {
   const r = store.versionRepo!;
   const d = diffOf(v);
   // An unreadable version is named by ids, so its Restore button still shows and reports why.
@@ -135,12 +139,12 @@ function changedNames(v: Version): { kind: string; name: string }[] {
   const before = v.parent ? featuresOf(v.parent) : [];
   const label = (id: string, list: typeof here) => {
     const f = list.find((x) => x.id === id) as ({ name?: string } & (typeof here)[number]) | undefined;
-    return f ? f.name || featureEnglish(f) : id;
+    return f ? f.name || featureMeta(f).label : id;
   };
   return [
-    ...d.added.map((id) => ({ kind: "added", name: label(id, here) })),
-    ...d.changed.map((id) => ({ kind: "changed", name: label(id, here) })),
-    ...d.removed.map((id) => ({ kind: "removed", name: label(id, before) })),
+    ...d.added.map((id) => ({ kind: "added" as const, name: label(id, here) })),
+    ...d.changed.map((id) => ({ kind: "changed" as const, name: label(id, here) })),
+    ...d.removed.map((id) => ({ kind: "removed" as const, name: label(id, before) })),
   ];
 }
 </script>
@@ -148,13 +152,13 @@ function changedNames(v: Version): { kind: string; name: string }[] {
 <template>
   <div class="versions">
     <div class="versions-head">
-      <span class="pop-section">Versions</span>
+      <span class="pop-section">{{ t("versions.title") }}</span>
       <Select
         v-if="branches.length > 1"
         class="versions-branch"
         size="sm"
-        label="Branch"
-        tip="Branch"
+        :label="t('versions.branch')"
+        :tip="t('versions.branch')"
         :model-value="branch"
         :options="branches.map((b) => ({ value: b, label: b }))"
         @update:model-value="switchTo"
@@ -165,15 +169,12 @@ function changedNames(v: Version): { kind: string; name: string }[] {
     </div>
 
     <p class="pop-note">
-      <template v-if="unreadVersions"
-        >This file has versions from a newer FundaCAD that this version cannot show. Saving the file keeps them, saving
-        a version here replaces them.</template
-      >
-      <template v-else-if="!history.length">No versions yet. Save one to be able to come back to this point.</template>
-      <template v-else-if="changeCount"
-        >{{ changeCount }} change{{ changeCount === 1 ? "" : "s" }} since "{{ history[0]!.message }}"</template
-      >
-      <template v-else>Nothing changed since "{{ history[0]!.message }}"</template>
+      <template v-if="unreadVersions">{{ t("versions.note.newer") }}</template>
+      <template v-else-if="!history.length">{{ t("versions.note.empty") }}</template>
+      <template v-else-if="changeCount">{{
+        t("versions.note.changes", { n: changeCount, name: history[0]!.message })
+      }}</template>
+      <template v-else>{{ t("versions.note.unchanged", { name: history[0]!.message }) }}</template>
     </p>
 
     <!-- The guards stand in for a disabled submit button, which used to refuse Enter in the field too. -->
@@ -181,12 +182,14 @@ function changedNames(v: Version): { kind: string; name: string }[] {
       <TextField
         v-model="message"
         class="versions-input"
-        placeholder="What changed"
-        label="Version message"
+        :placeholder="t('versions.message.placeholder')"
+        :label="t('versions.message.label')"
         spellcheck="false"
         @keydown.stop
       />
-      <Button type="submit" class="versions-save-btn" icon="commit" :disabled="!canSave">Save version</Button>
+      <Button type="submit" class="versions-save-btn" icon="commit" :disabled="!canSave">{{
+        t("versions.save")
+      }}</Button>
     </form>
 
     <div v-if="history.length" class="pop-rule"></div>
@@ -209,22 +212,24 @@ function changedNames(v: Version): { kind: string; name: string }[] {
         </ListRow>
         <div v-if="expanded === v.id" class="versions-detail">
           <ul class="versions-changes">
-            <li v-for="(c, k) in changedNames(v)" :key="k" :class="c.kind">{{ c.kind }} {{ c.name }}</li>
+            <li v-for="(c, k) in changedNames(v)" :key="k" :class="c.kind">{{
+              t("versions.change", { kind: c.kind, name: c.name })
+            }}</li>
           </ul>
           <div class="versions-actions">
-            <Button variant="ghost" @click="restore(v)">Restore</Button>
-            <Button variant="ghost" @click="startBranch(v)">Branch from here</Button>
+            <Button variant="ghost" @click="restore(v)">{{ t("versions.restore") }}</Button>
+            <Button variant="ghost" @click="startBranch(v)">{{ t("versions.branchFrom") }}</Button>
           </div>
           <form v-if="branching === v.id" class="versions-save" @submit.prevent="branchName.trim() && makeBranch()">
             <TextField
               v-model="branchName"
               class="versions-input"
-              placeholder="Branch name"
-              label="Branch name"
+              :placeholder="t('versions.branchName')"
+              :label="t('versions.branchName')"
               spellcheck="false"
               @keydown.stop
             />
-            <Button type="submit" :disabled="!branchName.trim()">Create</Button>
+            <Button type="submit" :disabled="!branchName.trim()">{{ t("versions.create") }}</Button>
           </form>
         </div>
       </li>

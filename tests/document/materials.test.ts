@@ -405,13 +405,13 @@ describe("parseLibrary", () => {
       '{"materials":[{"name":"A","color":"#ffffff"},{"name":"B"},{"name":"C"}]}',
     );
     expect(materials.map((m) => m.name)).toEqual(["A"]);
-    expect(problem).toBe("2 of 3 had no usable colour and were skipped");
+    expect(problem).toEqual({ kind: "skipped", dropped: 2, total: 3 });
   });
 
   it("never throws on a file that is not a library", () => {
     expect(parseLibrary("{").materials).toEqual([]);
-    expect(parseLibrary("{").problem).toMatch(/not readable as JSON/);
-    expect(parseLibrary('{"hello":1}').problem).toMatch(/no materials in it/);
+    expect(parseLibrary("{").problem?.kind).toBe("notJson");
+    expect(parseLibrary('{"hello":1}').problem).toEqual({ kind: "noList" });
   });
 
   it("keeps two rows that want the same id, rather than losing one", () => {
