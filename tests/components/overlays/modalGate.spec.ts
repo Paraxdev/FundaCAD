@@ -79,6 +79,7 @@ const fakeHomeCallbacks = (): HomeCallbacks => ({
   openBranch: async () => false,
   openPath: async () => "ok",
   currentPath: () => null,
+  startTour: async () => {},
 });
 
 describe("modal depth gate", () => {

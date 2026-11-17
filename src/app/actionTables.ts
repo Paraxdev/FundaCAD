@@ -79,6 +79,7 @@ export const NON_REPEATABLE = new Set([
   "manual",
   "report-problem",
   "suggest-idea",
+  "first-bracket",
   "finish",
   "palette",
   "construction",

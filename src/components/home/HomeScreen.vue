@@ -27,7 +27,7 @@ import {
   type HomeEntry,
   type SortMode,
 } from "../../ui/homeList";
-import { t, type MessageKey } from "../../i18n";
+import { t, tEnglish, type MessageKey } from "../../i18n";
 import { TEMPLATES, exampleCard } from "../../templates";
 import { readSetting } from "../../ui/storedSetting";
 import { thumbQueueFor } from "../../ui/thumbQueue";
@@ -46,6 +46,7 @@ import Select from "../ui/Select.vue";
 import TextField from "../ui/TextField.vue";
 import DocCard from "./DocCard.vue";
 import ExampleCard from "./ExampleCard.vue";
+import TourCard from "./TourCard.vue";
 import HomeSidebar from "./HomeSidebar.vue";
 import VersionsDrawer from "./VersionsDrawer.vue";
 import { liveSummary } from "../../ui/homeVersions";
@@ -155,6 +156,12 @@ const entries = computed(() => sortEntries(filterEntries(all.value, query.value)
 const examples = computed(() =>
   TEMPLATES.filter((e) => matchesQuery(exampleCard(e).name, query.value) || matchesQuery(e.name, query.value)),
 );
+const tourShown = computed(
+  () =>
+    matchesQuery(t("home.firstBracket.name"), query.value) ||
+    matchesQuery(tEnglish("home.firstBracket.name"), query.value),
+);
+const anyExample = computed(() => tourShown.value || examples.value.length > 0);
 const fresh = computed(() => !inFolder.value && !recents.value.length);
 const unreadable = ref(new Set<string>());
 
@@ -404,9 +411,10 @@ onUnmounted(() => {
       <div class="home-scroll">
         <WhatsNewCard />
         <WelcomeBlock v-if="fresh && !query && !welcomeHidden" @close="welcomeHidden = true" />
-        <template v-if="fresh && examples.length">
+        <template v-if="fresh && anyExample">
           <h2 class="home-section">{{ t("home.startHere") }}</h2>
           <div class="home-grid home-examples">
+            <TourCard v-if="tourShown" @start="startNew(() => cb.startTour())" />
             <ExampleCard
               v-for="ex in examples"
               :key="ex.id"
@@ -428,7 +436,7 @@ onUnmounted(() => {
           />
         </div>
         <template v-else-if="lib && all.length">
-          <p v-if="!examples.length" class="home-empty">{{ t("home.empty.noMatch") }}</p>
+          <p v-if="!anyExample" class="home-empty">{{ t("home.empty.noMatch") }}</p>
         </template>
         <p v-else-if="listing instanceof Error" class="home-empty">
           {{ t("home.empty.folderUnreadable", { folder: folderName(view) }) }}
@@ -438,9 +446,10 @@ onUnmounted(() => {
         <p v-else-if="lib" class="home-empty">{{ t("home.empty.recent") }}</p>
         <p v-else class="home-empty">{{ t("home.empty.browser") }}</p>
 
-        <template v-if="!fresh && examples.length">
+        <template v-if="!fresh && anyExample">
           <h2 class="home-section">{{ t("home.examples") }}</h2>
           <div class="home-grid home-examples">
+            <TourCard v-if="tourShown" @start="startNew(() => cb.startTour())" />
             <ExampleCard
               v-for="ex in examples"
               :key="ex.id"
