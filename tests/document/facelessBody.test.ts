@@ -1,6 +1,7 @@
 // A sketch 1e8 mm out extrudes to a body with no faces: the build is a failure at the step that made it, not "Built".
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentStore } from "../../src/document/store";
+import { setLanguage } from "../../src/i18n";
 import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
 import { buildLine } from "../../src/ui/buildAnnouncement";
@@ -72,6 +73,18 @@ describe("a body with no faces", () => {
     expect(b.errorFeatureId).toBe("ex");
     expect(b.errorMessage).toBe(NO_FACES);
     expect(buildLine(b, null, names)?.text).toBe(`Build failed at Extrude 1: ${NO_FACES}`);
+  });
+
+  it("stays English in the build state in a German session, as the MCP tools read it there", async () => {
+    await setLanguage("de");
+    try {
+      const store = new DocumentStore(backend([body("body1", 0, 0)]), doc());
+      await store.rebuildNow();
+      expect(store.buildState.errorMessage).toBe(NO_FACES + HINT);
+      expect(store.buildState.result?.featureErrors?.[0]?.message).toBe(NO_FACES + HINT);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("gives the hint for a sketch placed past 1 km, or drawn there through a parameter", async () => {

@@ -1,4 +1,5 @@
-// The store's own warnings, its undo labels and the engine's size refusal read in the chosen language.
+// The store's own warnings and undo labels read in the chosen language, and the lines the build state carries in
+// English for the MCP tools have their translation ready.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.stubGlobal("window", globalThis);
@@ -15,18 +16,18 @@ afterEach(async () => {
 const MiB = 1024 * 1024;
 
 describe("the engine's size refusal", () => {
-  it("names the size and the limit in the chosen language", async () => {
-    expect(tooLargeToSend(234 * MiB)).toContain("234 MiB, and the limit is 128 MiB");
+  it("stays English like an engine reply, with its line ready in the chosen language", async () => {
     await setLanguage("de");
-    expect(tooLargeToSend(234 * MiB)).toContain("234 MiB, die Grenze liegt bei 128 MiB");
+    expect(tooLargeToSend(234 * MiB)).toContain("234 MiB, and the limit is 128 MiB");
+    expect(t("engine.tooLarge", { size: 234, limit: 128 })).toContain("234 MiB, die Grenze liegt bei 128 MiB");
     await setLanguage("ja");
-    expect(tooLargeToSend(234 * MiB)).toContain("(上限は 128 MiB)");
+    expect(t("engine.tooLarge", { size: 234, limit: 128 })).toContain("(上限は 128 MiB)");
     expect(t("engine.tooLargeRefused")).toContain("ジオメトリ エンジン");
   });
 });
 
 describe("a body with no faces", () => {
-  it("adds the move hint only for a sketch far out", async () => {
+  it("has its line with the move hint only for a sketch far out", async () => {
     await setLanguage("de");
     const near = t("document.faceless", { far: "no" });
     expect(near).toBe("Der Körper hat keine Flächen, es gibt also nichts anzuzeigen.");

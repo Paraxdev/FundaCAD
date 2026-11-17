@@ -24,7 +24,7 @@ import type {
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
-import { t } from "../i18n";
+import { tEnglish } from "../i18n";
 import type { EngineTiming } from "../diagnostics/editTiming";
 import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -652,12 +652,12 @@ type RebuildPayload = RebuildDeltaPayload | RebuildFullPayload;
  *  Anything larger gets a 1009 close, not an error reply, so the client must catch it before sending. */
 export const MAX_MESSAGE_BYTES = 128 * 1024 * 1024;
 
-/** The user-facing message for an over-cap payload, or null. Exported to test without a 128 MiB string. `len` is
+/** The message for an over-cap payload, or null, in English like an engine reply because the MCP tools read it. Exported to test without a 128 MiB string. `len` is
  *  in UTF-16 units, slightly under-counting non-ASCII, since measuring UTF-8 would copy 100+ MiB per call. */
 export function tooLargeToSend(len: number): string | null {
   if (len <= MAX_MESSAGE_BYTES) return null;
   const mib = (n: number) => Math.round(n / (1024 * 1024));
-  return t("engine.tooLarge", { size: mib(len), limit: mib(MAX_MESSAGE_BYTES) });
+  return tEnglish("engine.tooLarge", { size: mib(len), limit: mib(MAX_MESSAGE_BYTES) });
 }
 
 /** One `importing` frame: the request it is for, its stage fraction 0 to 100 or
@@ -890,7 +890,7 @@ export class Geometry implements GeometryBackend {
     this.emitStatus();
     // A refused size means call()'s pre-flight guard and the engine limit have drifted. Saying so avoids blaming
     // the connection, which misled GH #4's reporter.
-    const message = tooBig ? t("engine.tooLargeRefused") : "geometry engine connection lost";
+    const message = tooBig ? tEnglish("engine.tooLargeRefused") : "geometry engine connection lost";
     // Settle every in-flight call with an engine-shaped error. Otherwise a call made before the drop hangs, rebuildNow()
     // never clears `rebuilding`, and the reconnect rebuild in main.ts's onStatus() silently no-ops forever.
     for (const [id, resolve] of this.pending) {

@@ -93,7 +93,7 @@ import { readsBodyVisibility } from "./readsVisibility";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
-import { writeTarget } from "./numFields";
+import { exprProblem, writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { logEditTiming } from "../diagnostics/editTiming";
 import { t } from "../i18n";
@@ -1604,7 +1604,7 @@ export class DocumentStore {
         this.onWarning?.(
           t("document.dimExprDropped", {
             expr: `${b.name ? `${b.name}=` : ""}${b.expr}`,
-            reason: nameBad ?? (v.ok ? "" : v.error),
+            reason: exprProblem(nameBad ?? (v.ok ? "" : v.error)) ?? "",
           }),
         );
         continue;

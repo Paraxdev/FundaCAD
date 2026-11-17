@@ -1,6 +1,6 @@
 // The kernel can hand back a body with no faces, as it does for a sketch 1e8 mm out: nothing draws, so the step that
 // made it has failed even though the engine reported no error.
-import { t } from "../i18n";
+import { tEnglish } from "../i18n";
 import { within } from "../sketch/pointEntry";
 import type { CadDocument, CoreFeature, RebuildResult } from "../types";
 
@@ -54,7 +54,8 @@ export function withFacelessFailures(result: RebuildResult, doc: Doc): RebuildRe
     const maker = makerOf(b.id, doc);
     if (failed.has(maker)) continue;
     failed.add(maker);
-    const message = t("document.faceless", { far: sketchTooFar(maker, doc) ? "yes" : "no" });
+    // English like the engine's own failures: the MCP tools read it from the build state.
+    const message = tEnglish("document.faceless", { far: sketchTooFar(maker, doc) ? "yes" : "no" });
     added.push(maker ? { feature_id: maker, message } : { message });
   }
   if (!added.length) return result;
