@@ -11,6 +11,7 @@ import UpdatingChip from "./UpdatingChip.vue";
 import { useClearOfCards } from "../../composables/useClearOfCards";
 import { draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope } from "../../ui/materialDrag";
 import { VIEW_SUMMARY_ID, viewSummaryText } from "../../ui/viewSummary";
+import { t } from "../../i18n";
 
 const engine = useEngine();
 const host = useTemplateRef<HTMLDivElement>("host");
@@ -147,7 +148,7 @@ function onDrop(e: DragEvent) {
     <div v-if="chip" class="dropchip" :style="{ left: `${chip.x + 16}px`, top: `${chip.y + 18}px` }">
       <span class="dot" :style="{ background: chip.color }"></span>
       <span>{{ chip.name }}</span>
-      <span class="scope">{{ chip.hit ? (chip.scope === "body" ? "whole body" : "this face") : "nothing here" }}</span>
+      <span class="scope">{{ chip.hit ? t("shell.drop.scope", { scope: chip.scope }) : t("shell.drop.nothing") }}</span>
       <kbd>Shift</kbd>
     </div>
   </Teleport>

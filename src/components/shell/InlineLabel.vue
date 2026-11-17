@@ -3,6 +3,7 @@
 
 import { nextTick, ref, useTemplateRef } from "vue";
 import TextField from "../ui/TextField.vue";
+import { t } from "../../i18n";
 
 const props = defineProps<{
   text: string;
@@ -53,7 +54,7 @@ defineExpose({ start });
     size="sm"
     commit="change"
     select-on-focus
-    label="Rename"
+    :label="t('shell.rename')"
     :model-value="text"
     @update:model-value="save"
     @keydown.stop="onKeydown"

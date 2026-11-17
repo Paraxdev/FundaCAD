@@ -8,6 +8,7 @@ import FieldRow from "../ui/FieldRow.vue";
 import IconButton from "../ui/IconButton.vue";
 import { openDialog } from "../../plugins/host";
 import { toast } from "../../ui/toast";
+import { t } from "../../i18n";
 
 const props = defineProps<{
   label: string;
@@ -29,7 +30,7 @@ const clearId = useId();
 async function browse() {
   // The native dialog exists only in the desktop app, and a silent no-op in a browser would read as a broken button.
   if (!("__TAURI_INTERNALS__" in window)) {
-    toast("Choosing a file needs the desktop app", { kind: "warning" });
+    toast(t("shell.file.desktopOnly"), { kind: "warning" });
     return;
   }
   const picked = await openDialog(props.filters ? { filters: props.filters } : {});
@@ -49,14 +50,14 @@ async function browse() {
     :title="value || rowTitle"
   >
     <Button :id="pickId" class="file-pick" :aria-labelledby="`${labelId} ${pickId}`" @click="browse">{{
-      value ? basename(value) : "Choose…"
+      value ? basename(value) : t("shell.file.choose")
     }}</Button>
     <IconButton
       v-if="value"
       :id="clearId"
       class="file-clear"
       icon="close"
-      tip="Clear the file"
+      :tip="t('shell.file.clear')"
       size="sm"
       variant="plain"
       :icon-size="12"

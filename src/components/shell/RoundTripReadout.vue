@@ -1,28 +1,24 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { lastRoundTripMs, onRoundTrip, type RoundTrip } from "../../diagnostics/rebuildTiming";
+import { t } from "../../i18n";
 
-function label(ms: number | null): string {
-  return ms == null ? "rebuild ..." : `rebuild ${ms.toFixed(0)}ms`;
-}
-
-const text = ref(label(lastRoundTripMs()));
+const ms = ref(lastRoundTripMs());
+const text = computed(() =>
+  ms.value == null ? t("shell.roundTrip.waiting") : t("shell.roundTrip", { ms: ms.value.toFixed(0) }),
+);
 let unsub: (() => void) | null = null;
 
 onMounted(() => {
   unsub = onRoundTrip((rt: RoundTrip) => {
-    text.value = label(rt.drawnAt - rt.sentAt);
+    ms.value = rt.drawnAt - rt.sentAt;
   });
 });
 onUnmounted(() => unsub?.());
 </script>
 
 <template>
-  <div
-    class="roundtrip"
-    :title="'Time from the rebuild request going out to its meshes landing on screen, the last completed one this session.'"
-    >{{ text }}</div
-  >
+  <div class="roundtrip" :title="t('shell.roundTrip.tip')">{{ text }}</div>
 </template>
 
 <style scoped>

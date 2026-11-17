@@ -30,7 +30,7 @@ import {
 import { onWorkspaceChange } from "../../ui/workspace";
 import { keyHint } from "../../input/shortcuts";
 import { chordsOf } from "../../input/platform";
-import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
+import { OVERLAY_KINDS } from "../../viewport/overlayKinds";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
@@ -51,6 +51,7 @@ import ChoiceList from "../ui/ChoiceList.vue";
 import Tabs from "../ui/Tabs.vue";
 import TabPanel from "../ui/TabPanel.vue";
 import type { SelectPolicy } from "../../viewport/clickIntent";
+import { t } from "../../i18n";
 
 const engine = useEngine();
 const ui = useUiStore();
@@ -122,11 +123,11 @@ const offUnit = onUnitChange(() => {
 });
 onUnmounted(offUnit);
 
-const UNITS = [
-  { value: "mm" as Unit, label: "Millimeter" },
-  { value: "cm" as Unit, label: "Centimeter" },
-  { value: "in" as Unit, label: "Inch" },
-];
+const UNITS = computed(() => [
+  { value: "mm" as Unit, label: t("viewControls.unit", { unit: "mm" }) },
+  { value: "cm" as Unit, label: t("viewControls.unit", { unit: "cm" }) },
+  { value: "in" as Unit, label: t("viewControls.unit", { unit: "in" }) },
+]);
 function pickUnit(u: Unit) {
   const ok = asUnit(u);
   if (ok) setUnit(ok);
@@ -135,14 +136,12 @@ function pickUnit(u: Unit) {
 const gridLabel = computed(() => fmtGridStep(ui.gridStepMm));
 const gridLabelCompact = computed(() => fmtLengthCompact(ui.gridStepMm));
 
-const VIEWS = [
-  { view: "top", label: "Top" },
-  { view: "bottom", label: "Bottom" },
-  { view: "front", label: "Front" },
-  { view: "back", label: "Back" },
-  { view: "right", label: "Right" },
-  { view: "left", label: "Left" },
-] as const;
+const VIEWS = computed(() =>
+  (["top", "bottom", "front", "back", "right", "left"] as const).map((view) => ({
+    view,
+    label: t("viewControls.view", { view }),
+  })),
+);
 const viewTab = ref<"views" | "appearance">("views");
 const viewPages = useId();
 
@@ -150,30 +149,26 @@ const projection = computed<ProjectionMode>(() => {
   pulse.value;
   return engine.viewport.projection;
 });
-const PROJECTIONS = [
-  { value: "persp" as ProjectionMode, label: "Perspective" },
-  { value: "ortho" as ProjectionMode, label: "Orthographic" },
+const PROJECTIONS = computed(() => [
+  { value: "persp" as ProjectionMode, label: t("viewControls.projection.persp") },
+  { value: "ortho" as ProjectionMode, label: t("viewControls.projection.ortho") },
   {
     value: "auto" as ProjectionMode,
-    label: "Automatic",
-    hint: "orthographic when looking straight on, inside the model only on a view you pick",
+    label: t("viewControls.projection.auto"),
+    hint: t("viewControls.projection.autoHint"),
   },
-];
+]);
 function pickProjection(m: ProjectionMode) {
   engine.viewport.setProjection(m);
   ui.projLabel = m === "auto" ? "Auto" : m === "ortho" ? "Ortho" : "Persp";
   pulse.value++;
 }
 
-const SELECT_MODES = [
-  {
-    value: "auto" as const,
-    label: "Body, then face",
-    hint: "click a body to take it, click it again for a face or edge",
-  },
-  { value: "faces" as const, label: "Faces" },
-  { value: "bodies" as const, label: "Bodies" },
-];
+const SELECT_MODES = computed(() => [
+  { value: "auto" as const, label: t("viewControls.select.auto"), hint: t("viewControls.select.autoHint") },
+  { value: "faces" as const, label: t("viewControls.select.faces") },
+  { value: "bodies" as const, label: t("viewControls.select.bodies") },
+]);
 function pickSelectMode(m: SelectPolicy) {
   engine.handleAction(`selmode-${m}`);
 }
@@ -200,15 +195,17 @@ const overlays = ref(savedOverlays());
 const realtimeWhileMoving = ref(renderPrefs().realtimeWhileMoving);
 const zebraOf = () => ({ direction: renderPrefs().zebraDirection, width: renderPrefs().zebraWidth });
 const zebra = ref(zebraOf());
-const zebraDirectionOptions: SegmentedOption<ZebraDirection>[] = [
-  { value: "horizontal", label: "Horizontal" },
-  { value: "vertical", label: "Vertical" },
-];
-const matcapOptions = MATCAP_STYLES.map((m) => ({
-  value: m,
-  tip: m,
-  attrs: { class: "matcap-swatch", "data-matcap": m },
-}));
+const zebraDirectionOptions = computed<SegmentedOption<ZebraDirection>[]>(() => [
+  { value: "horizontal", label: t("viewControls.zebra.horizontal") },
+  { value: "vertical", label: t("viewControls.zebra.vertical") },
+]);
+const matcapOptions = computed(() =>
+  MATCAP_STYLES.map((m) => ({
+    value: m,
+    tip: t("viewControls.matcapStyle", { style: m }),
+    attrs: { class: "matcap-swatch", "data-matcap": m },
+  })),
+);
 const offTier = onRenderPrefsChange(() => {
   tier.value = engine.viewport.renderTier;
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
@@ -227,19 +224,17 @@ const offTierChange = engine.viewport.onRenderTierChange(() => {
   tier.value = engine.viewport.renderTier;
 });
 onUnmounted(offTierChange);
-const PAUSED_HINT: Record<string, string> = {
-  "paused:section": "paused: section view",
-  "paused:xray": "paused: x-ray",
-  "paused:wireframe": "paused: wireframe",
-  "paused:sketch": "paused: sketch open",
-};
+const PAUSED = new Set(["paused:section", "paused:xray", "paused:wireframe", "paused:sketch"]);
 const viewModes = computed(() =>
   VIEW_MODES.map((v) => {
     const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
-    const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
-    const name = hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
+    const paused = v.id === "pathtraced" && PAUSED.has(ui.traceState) ? ui.traceState.slice(7) : null;
+    const label = t("viewControls.mode", { mode: v.id });
+    const name = paused
+      ? t("viewControls.mode.tipPaused", { mode: label, paused: t("viewControls.mode.paused", { why: paused }) })
+      : t("viewControls.mode.tip", { mode: label });
     const title = block ? block.tooltip : name;
-    return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", name, title };
+    return { ...v, label, disabled: block !== null, softBlock: block?.reason === "perf", name, title };
   }),
 );
 const viewModeOptions = computed<SegmentedOption<ViewMode>[]>(() =>
@@ -274,12 +269,12 @@ const errorCount = useBuildValue((b) => featureFailures({ ...b, featureErrors: b
 function enablePerformanceMode() {
   shell.closePopover();
   setRenderPref("performanceMode", true);
-  toast("Performance mode is on, you can turn it off in Preferences");
+  toast(t("viewControls.perf.performanceOn"));
 }
 function enablePotatoMode() {
   shell.closePopover();
   setRenderPref("potatoMode", true);
-  toast("Potato mode is on, you can turn it off in Preferences");
+  toast(t("viewControls.perf.potatoOn"));
 }
 function dismissPerformanceWarning() {
   shell.closePopover();
@@ -295,7 +290,7 @@ async function screenshot() {
     const url = engine.viewport.renderStill(1, { edges: true });
     const base = engine.store.fileName === "Untitled" ? "screenshot" : engine.store.fileName;
     const path = await saveRenderedImage(url, `${base}.png`);
-    if (path) toast(`Saved ${path}`);
+    if (path) toast(t("viewControls.screenshot.saved", { path }));
   } finally {
     saving.value = false;
   }
@@ -307,7 +302,7 @@ async function screenshot() {
     <Toolbar
       ref="bar"
       class="float-column vc-scroll"
-      label="View controls"
+      :label="t('viewControls.label')"
       orientation="vertical"
       @scroll.passive="cue.update()"
       @focusin="cue.reveal"
@@ -316,7 +311,7 @@ async function screenshot() {
       <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
         <IconButton
           icon="warning"
-          tip="Low performance"
+          :tip="t('viewControls.perf.title')"
           class="perf-warn"
           popup="dialog"
           :expanded="isOpen('perf')"
@@ -329,7 +324,7 @@ async function screenshot() {
       <div v-if="shell.narrow" class="float-group">
         <IconButton
           icon="items"
-          tip="Items"
+          :tip="t('viewControls.items')"
           data-drawer-switch="items"
           :keys="chordsOf('items')"
           :active="shell.itemsShown"
@@ -337,7 +332,7 @@ async function screenshot() {
         />
         <IconButton
           icon="history"
-          :tip="ui.sketchActive ? 'Sketch options' : 'History'"
+          :tip="ui.sketchActive ? t('viewControls.sketchOptions') : t('viewControls.history')"
           data-drawer-switch="history"
           :keys="chordsOf('history')"
           :active="shell.historyShown"
@@ -348,7 +343,7 @@ async function screenshot() {
       <div class="float-group">
         <IconButton
           icon="magnet"
-          tip="Snapping"
+          :tip="t('viewControls.snap.title')"
           popup="dialog"
           :expanded="isOpen('snap')"
           :active="isOpen('snap')"
@@ -359,7 +354,7 @@ async function screenshot() {
           variant="ghost"
           size="sm"
           class="grid-btn"
-          tip="Grid and units"
+          :tip="t('viewControls.grid.title')"
           popup="dialog"
           :expanded="isOpen('grid')"
           :pressed="isOpen('grid')"
@@ -368,7 +363,7 @@ async function screenshot() {
         >
         <IconButton
           icon="views"
-          tip="Views"
+          :tip="t('viewControls.views.title')"
           popup="dialog"
           :expanded="isOpen('views')"
           :active="isOpen('views')"
@@ -376,7 +371,7 @@ async function screenshot() {
         />
         <IconButton
           icon="view-reset"
-          tip="Reset camera"
+          :tip="t('viewControls.resetCamera')"
           keys="Shift+Home"
           @click="engine.handleAction('reset-camera')"
         />
@@ -384,7 +379,7 @@ async function screenshot() {
       <!-- Manual: arrowing onto Path traced must not start a trace, and no wrap lets the arrows go on along the column. -->
       <Segmented
         class="float-group view-modes"
-        label="View mode"
+        :label="t('viewControls.viewMode')"
         :options="viewModeOptions"
         :model-value="ui.viewMode"
         size="lg"
@@ -398,16 +393,16 @@ async function screenshot() {
       <div class="float-group">
         <IconButton
           icon="shaded"
-          tip="Display"
+          :tip="t('viewControls.display.title')"
           popup="dialog"
           :expanded="isOpen('display')"
           :active="isOpen('display') || ui.xray || ui.wireframe"
           @click="open('display', $event)"
         />
-        <IconButton icon="camera" tip="Screenshot" :active="saving" @click="screenshot()" />
+        <IconButton icon="camera" :tip="t('viewControls.screenshot')" :active="saving" @click="screenshot()" />
         <IconButton
           icon="versions"
-          tip="Versions"
+          :tip="t('viewControls.versions')"
           popup="dialog"
           :expanded="isOpen('versions')"
           :active="isOpen('versions')"
@@ -416,7 +411,7 @@ async function screenshot() {
         <IconButton
           v-if="!shell.narrow"
           icon="history"
-          tip="History"
+          :tip="t('viewControls.history')"
           :keys="chordsOf('history')"
           :active="shell.historyOpen"
           :badge="errorCount || null"
@@ -424,7 +419,7 @@ async function screenshot() {
         />
       </div>
       <div v-if="dialogs.bugDeps" class="float-group">
-        <IconButton icon="bug" tip="Report a problem" @click="dialogs.bugReport = true" />
+        <IconButton icon="bug" :tip="t('viewControls.report')" @click="dialogs.bugReport = true" />
       </div>
 
       <Popover
@@ -432,22 +427,26 @@ async function screenshot() {
         :anchor="anchorOf('perf')"
         side="left"
         kind="vc-pop perf-pop"
-        label="Low performance"
+        :label="t('viewControls.perf.title')"
         @close="shell.closePopover()"
       >
-        <div class="perf-pop-title">Low performance</div>
-        <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
+        <div class="perf-pop-title">{{ t("viewControls.perf.title") }}</div>
+        <p class="perf-pop-text">{{ t("viewControls.perf.body") }}</p>
         <p v-if="!isRenderLowPower()" class="perf-pop-text">
-          Consider enabling
-          <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePerformanceMode()"
-            >performance mode</Button
-          >
+          {{ t("viewControls.perf.consider") }}
+          <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePerformanceMode()">{{
+            t("viewControls.perf.performanceMode")
+          }}</Button>
         </p>
-        <p class="perf-pop-text" title="Lowest quality, for slow or virtual machines">
-          {{ isRenderLowPower() ? "Performance mode is on, consider enabling" : "or, on a slow or virtual machine," }}
-          <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePotatoMode()">potato mode</Button>
+        <p class="perf-pop-text" :title="t('prefs.potato.tip')">
+          {{ isRenderLowPower() ? t("viewControls.perf.considerPotato") : t("viewControls.perf.orPotato") }}
+          <Button variant="ghost" size="sm" class="perf-pop-link" @click="enablePotatoMode()">{{
+            t("viewControls.perf.potatoMode")
+          }}</Button>
         </p>
-        <Button variant="ghost" block class="vc-pop-btn" @click="dismissPerformanceWarning()">Dismiss</Button>
+        <Button variant="ghost" block class="vc-pop-btn" @click="dismissPerformanceWarning()">{{
+          t("viewControls.perf.dismiss")
+        }}</Button>
       </Popover>
 
       <Popover
@@ -455,7 +454,7 @@ async function screenshot() {
         :anchor="anchorOf('versions')"
         side="left"
         kind="vc-pop versions-pop"
-        label="Versions"
+        :label="t('viewControls.versions')"
         @close="shell.closePopover()"
       >
         <VersionsPanel />
@@ -466,30 +465,30 @@ async function screenshot() {
         :anchor="anchorOf('snap')"
         side="left"
         kind="vc-pop"
-        label="Snapping"
+        :label="t('viewControls.snap.title')"
         @close="shell.closePopover()"
       >
-        <div class="pop-section">Snap to</div>
+        <div class="pop-section">{{ t("viewControls.snap.to") }}</div>
         <Toggle
           :model-value="sketchPalette.state.snap"
-          label="Grid"
+          :label="t('viewControls.grid')"
           @update:model-value="sketchPalette.set('snap', $event)"
         />
         <div class="pop-rule"></div>
-        <div class="pop-section">Show</div>
+        <div class="pop-section">{{ t("viewControls.snap.show") }}</div>
         <Toggle
           :model-value="sketchPalette.state.grid"
-          label="Sketch grid"
+          :label="t('viewControls.snap.sketchGrid')"
           @update:model-value="sketchPalette.set('grid', $event)"
         />
         <Toggle
           :model-value="sketchPalette.state.constraints"
-          label="Constraints"
+          :label="t('viewControls.snap.constraints')"
           @update:model-value="sketchPalette.set('constraints', $event)"
         />
         <Toggle
           :model-value="sketchPalette.state.dimensions"
-          label="Dimensions"
+          :label="t('viewControls.snap.dimensions')"
           @update:model-value="sketchPalette.set('dimensions', $event)"
         />
       </Popover>
@@ -499,17 +498,19 @@ async function screenshot() {
         :anchor="anchorOf('grid')"
         side="left"
         kind="vc-pop"
-        label="Grid and units"
+        :label="t('viewControls.grid.title')"
         @close="shell.closePopover()"
       >
-        <div class="pop-section">Units</div>
-        <ChoiceList label="Units" :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
+        <div class="pop-section">{{ t("viewControls.grid.units") }}</div>
+        <ChoiceList
+          :label="t('viewControls.grid.units')"
+          :options="UNITS"
+          :model-value="unit"
+          @update:model-value="pickUnit"
+        />
         <div class="pop-rule"></div>
-        <div class="pop-section">Grid</div>
-        <p class="pop-note"
-          >One square is {{ gridLabel }} at this zoom. Zoom in for a finer grid, and the move gizmo steps by a tenth of
-          a square.</p
-        >
+        <div class="pop-section">{{ t("viewControls.grid") }}</div>
+        <p class="pop-note">{{ t("viewControls.grid.note", { step: gridLabel }) }}</p>
       </Popover>
 
       <Popover
@@ -517,24 +518,24 @@ async function screenshot() {
         :anchor="anchorOf('views')"
         side="left"
         kind="vc-pop"
-        label="Views"
+        :label="t('viewControls.views.title')"
         @close="shell.closePopover()"
       >
         <Tabs
           v-model="viewTab"
-          label="Views"
+          :label="t('viewControls.views.title')"
           :panels="viewPages"
           :tabs="[
-            { value: 'views', label: 'Views' },
-            { value: 'appearance', label: 'Appearance' },
+            { value: 'views', label: t('viewControls.views.title') },
+            { value: 'appearance', label: t('viewControls.views.appearance') },
           ]"
         />
         <TabPanel v-if="viewTab === 'views'" :panels="viewPages" value="views">
           <Button block class="vc-pop-btn" @click="engine.handleAction('iso')"
-            ><template #icon><Icon name="view-iso" :size="16" /></template>Default View</Button
+            ><template #icon><Icon name="view-iso" :size="16" /></template>{{ t("viewControls.views.default") }}</Button
           >
           <Button variant="ghost" block class="vc-pop-btn" @click="engine.handleAction('fit')"
-            ><template #icon><Icon name="view-fit" :size="16" /></template>Fit to Model</Button
+            ><template #icon><Icon name="view-fit" :size="16" /></template>{{ t("viewControls.views.fit") }}</Button
           >
           <div class="pop-rule"></div>
           <ListRow v-for="v in VIEWS" :key="v.view" :label="v.label" @click="engine.handleAction(v.view)"
@@ -542,17 +543,17 @@ async function screenshot() {
           ></ListRow>
         </TabPanel>
         <TabPanel v-else :panels="viewPages" value="appearance">
-          <div class="pop-section">Projection</div>
+          <div class="pop-section">{{ t("viewControls.projection") }}</div>
           <ChoiceList
-            label="Projection"
+            :label="t('viewControls.projection')"
             :options="PROJECTIONS"
             :model-value="projection"
             @update:model-value="pickProjection"
           />
           <div class="pop-rule"></div>
-          <div class="pop-section">Select</div>
+          <div class="pop-section">{{ t("viewControls.select") }}</div>
           <ChoiceList
-            label="Select mode"
+            :label="t('viewControls.select.label')"
             :options="SELECT_MODES"
             :model-value="ui.selMode"
             @update:model-value="pickSelectMode"
@@ -565,12 +566,12 @@ async function screenshot() {
         :anchor="anchorOf('display')"
         side="left"
         kind="vc-pop"
-        label="Display"
+        :label="t('viewControls.display.title')"
         @close="shell.closePopover()"
       >
-        <div class="pop-section">Shading</div>
+        <div class="pop-section">{{ t("viewControls.display.shading") }}</div>
         <ChoiceList
-          label="Shading"
+          :label="t('viewControls.display.shading')"
           :options="viewModeChoices"
           :model-value="ui.viewMode"
           @update:model-value="pickViewMode"
@@ -579,7 +580,7 @@ async function screenshot() {
           <Segmented
             class="matcap-swatches"
             variant="chips"
-            label="Matcap"
+            :label="t('viewControls.display.matcap')"
             icon-only
             :model-value="matcap.style"
             :options="matcapOptions"
@@ -591,23 +592,23 @@ async function screenshot() {
           </Segmented>
           <Toggle
             :model-value="matcap.tint"
-            label="Tint with body colors"
+            :label="t('viewControls.display.tint')"
             @update:model-value="setRenderPref('matcapTint', $event)"
           />
         </template>
         <Toggle
           v-if="ui.viewMode === 'pathtraced'"
           :model-value="realtimeWhileMoving"
-          label="Realtime while moving"
-          title="Off keeps the traced view up while the view moves, noisy until it rests"
+          :label="t('viewControls.display.realtimeMoving')"
+          :title="t('viewControls.display.realtimeMovingTip')"
           data-pt-moving
           @update:model-value="setRenderPref('realtimeWhileMoving', $event)"
         />
         <div class="pop-rule"></div>
-        <div class="pop-section">Overlays</div>
+        <div class="pop-section">{{ t("viewControls.overlays") }}</div>
         <Toggle
           :model-value="overlays.on"
-          label="Show overlays"
+          :label="t('viewControls.overlays.show')"
           data-overlay="all"
           @update:model-value="setOverlaysOn($event)"
         />
@@ -615,44 +616,52 @@ async function screenshot() {
           v-for="k in OVERLAY_KINDS"
           :key="k"
           :model-value="overlays.kinds[k]"
-          :label="OVERLAY_LABELS[k]"
+          :label="t('viewControls.overlay', { kind: k })"
           :disabled="!overlays.on"
           :data-overlay="k"
           @update:model-value="setOverlay(k, $event)"
         />
-        <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
+        <p class="pop-note">{{ t("viewControls.overlays.note") }}</p>
         <Button
           variant="ghost"
           block
           class="vc-pop-btn"
           data-action="clean-view"
           @click="engine.handleAction('clean-view')"
-          >{{ overlays.on ? "Clean view" : "Bring overlays back" }}
+          >{{ overlays.on ? t("viewControls.overlays.clean") : t("viewControls.overlays.back") }}
           <template v-if="cleanKey" #trailing
             ><span class="pop-key">{{ cleanKey }}</span></template
           ></Button
         >
         <div class="pop-rule"></div>
-        <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
+        <Toggle
+          :model-value="ui.xray"
+          :label="t('viewControls.display.xray')"
+          @update:model-value="engine.handleAction('toggle-xray')"
+        />
         <Toggle
           :model-value="ui.wireframe"
-          label="Wireframe"
+          :label="t('viewControls.display.wireframe')"
           @update:model-value="engine.handleAction('toggle-wireframe')"
         />
         <div class="pop-rule"></div>
-        <div class="pop-section">Surface analysis</div>
-        <Toggle :model-value="analysis.zebra" label="Zebra" @update:model-value="runAndRefresh('zebra')" />
+        <div class="pop-section">{{ t("viewControls.analysis") }}</div>
+        <Toggle
+          :model-value="analysis.zebra"
+          :label="t('viewControls.analysis.zebra')"
+          @update:model-value="runAndRefresh('zebra')"
+        />
         <div v-if="analysis.zebra" class="zebra-opts">
           <Segmented
             size="sm"
-            label="Stripe direction"
+            :label="t('viewControls.zebra.direction')"
             data-testid="zebra-direction"
             :options="zebraDirectionOptions"
             :model-value="zebra.direction"
             @update:model-value="setRenderPref('zebraDirection', $event)"
           />
           <Slider
-            label="Stripe width"
+            :label="t('viewControls.zebra.width')"
             data-testid="zebra-width"
             :min="ZEBRA_WIDTH_MIN"
             :max="ZEBRA_WIDTH_MAX"
@@ -664,17 +673,17 @@ async function screenshot() {
         </div>
         <Toggle
           :model-value="analysis.curvature"
-          label="Curvature combs"
+          :label="t('viewControls.analysis.curvature')"
           @update:model-value="runAndRefresh('curvature')"
         />
         <Toggle
           :model-value="analysis.overhang"
-          label="Overhang"
+          :label="t('viewControls.analysis.overhang')"
           @update:model-value="runAndRefresh('draft-analysis')"
         />
         <Toggle
           :model-value="analysis.colors"
-          label="Body colors"
+          :label="t('viewControls.analysis.colors')"
           @update:model-value="runAndRefresh('component-colors')"
         />
       </Popover>
@@ -684,7 +693,7 @@ async function screenshot() {
       v-if="cue.above.value"
       class="vc-more vc-more-up"
       icon="caretDown"
-      tip="More view controls above"
+      :tip="t('viewControls.moreAbove')"
       size="md"
       tabindex="-1"
       @click="cue.page(-1)"
@@ -693,7 +702,7 @@ async function screenshot() {
       v-if="cue.below.value"
       class="vc-more vc-more-down"
       icon="caretDown"
-      tip="More view controls below"
+      :tip="t('viewControls.moreBelow')"
       size="md"
       tabindex="-1"
       @click="cue.page(1)"

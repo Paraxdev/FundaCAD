@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // In the title bar, not the ribbon: the ribbon is a workspace's contents, and the title bar never scrolls.
 
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import Segmented from "../ui/Segmented.vue";
 import { onWorkspaceChange, setWorkspace, workspace, WORKSPACES } from "../../ui/workspace";
 import { useUiStore } from "../../stores/ui";
+import { t } from "../../i18n";
 
 const ui = useUiStore();
 const active = ref(workspace());
@@ -16,13 +17,15 @@ onMounted(() => {
 });
 onUnmounted(() => off?.());
 
-const options = WORKSPACES.map((w) => ({
-  value: w.id,
-  label: w.label,
-  icon: w.icon,
-  tip: w.id === "render" ? "Render: materials, environment and camera" : "Model: the full width, every tool",
-  attrs: { "data-workspace": w.id },
-}));
+const options = computed(() =>
+  WORKSPACES.map((w) => ({
+    value: w.id,
+    label: t("shell.workspace.name", { workspace: w.id }),
+    icon: w.icon,
+    tip: t("shell.workspace.tip", { workspace: w.id }),
+    attrs: { "data-workspace": w.id },
+  })),
+);
 </script>
 
 <template>
@@ -32,7 +35,7 @@ const options = WORKSPACES.map((w) => ({
     id="workspace-toggle"
     :model-value="active"
     :options="options"
-    label="Workspace"
+    :label="t('shell.workspace')"
     size="sm"
     activation="manual"
     @update:model-value="setWorkspace"
