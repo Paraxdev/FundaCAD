@@ -239,8 +239,10 @@ that opens its own session: `assembly_tree.py` (a dropped STEP assembly in Items
 eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open),
 `extrude_reedit.py` (reopening a whole sketch extrude), `shipped_examples.py` (every Home
 example opens untitled, builds and holds its bodies, the box keeps its lid's fit when its parameters
-change, and the capsule holder's cap screws on without touching the tube), and `big_printer_import.py` (a 3,000 part printer
-STEP dropped on a blank document, its import, first frame and orbit times printed to the test log).
+change, and the capsule holder's cap screws on without touching the tube), `big_printer_import.py` (a 3,000 part printer
+STEP dropped on a blank document, its import, first frame and orbit times printed to the test log), and
+`first_ten_minutes.py` (a new maker's walk: Home, each example, the guided bracket by Next, an STL export,
+the printer import and Report a problem, with time budgets and the times printed to the test log).
 `tests/browser/test_examples.py` runs them in the smoke set, the ones marked `heavy` in CI's `e2e-heavy` job beside `e2e`. The fixtures they
 open are described in `tools/harness/fixtures/README.md`.
 

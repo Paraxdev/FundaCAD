@@ -25,6 +25,14 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A guided first bracket walks you from a sketch to an exported part.** Click
+  Your first bracket on Home, or choose Help, Guided First Bracket, or find it
+  with the command search (Ctrl+K). A bubble and a ring lead you through 14 steps:
+  sketch an L, extrude it, round the inside corner, add screw holes, change the
+  extrude's distance in History and export STL for your slicer. Each step moves
+  on by itself once you have done what it asks, and Stop ends the guide at any
+  step. The manual's Your first bracket page has the same steps in prose.
+
 - **AI assistants can be turned off.** Preferences, AI assistants (MCP) has a
   Let AI assistants reach this window box. Off, no assistant can see or edit
   the open document, and nothing waits for one in the background. It is on

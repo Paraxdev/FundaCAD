@@ -41,6 +41,11 @@ def test_first_bracket_tour(s):
 
 
 @pytest.mark.heavy
+def test_first_ten_minutes(s):
+    example("first_ten_minutes").run(s)
+
+
+@pytest.mark.heavy
 def test_big_model_orbit(s, tmp_path):
     example("big_model_orbit").run(s, tmp_path)
 
