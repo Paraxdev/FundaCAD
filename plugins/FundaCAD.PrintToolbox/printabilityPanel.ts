@@ -11,10 +11,12 @@ import {
   formatPrintabilityResult,
   printabilityDetails,
   printabilityHead,
+  printabilityOutcome,
   printabilitySummary,
   problemCount,
 } from "./printability";
 import { createPrintabilityState } from "./printabilityState";
+import { t } from "./lines";
 
 /** Its own layer of face marks, so the app's Stress marks and these come and go apart. */
 export const PRINTABILITY_MARKS = "printability";
@@ -86,16 +88,16 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
 
   function show() {
     if (!hasBody()) {
-      setStatus("Printability: create or import a body first", "");
+      setStatus(t("status.noBody"), "");
       return;
     }
     if (!geometry.printability) {
-      setStatus("Printability: this geometry engine cannot run the check", "error");
+      setStatus(t("status.noEngine"), "error");
       return;
     }
     state.show();
     refreshMarks();
-    say("Printability: checks the selected bodies, or every body when none is selected");
+    say(t("status.scopeHint"));
   }
 
   /** Tint the faces the last Check flagged. Nothing once the model has changed since, when the face ids may name
@@ -153,14 +155,14 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     const d = data.value;
     if (!d || d.running) return;
     if (!geometry.printability) {
-      setStatus("Printability: this geometry engine cannot run the check", "error");
+      setStatus(t("status.noEngine"), "error");
       return;
     }
     takeDown();
     const req = buildPrintabilityRequest(d.setup, scope());
     if (!req.ok) {
       state.finished({ error: req.message });
-      say(`Printability: ${req.message}`);
+      say(t("status.problem", { message: req.message }));
       return;
     }
     const seq = ++checkSeq;
@@ -168,14 +170,14 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     state.started();
     state.clearResult();
     viewport.setFaceMarks(null, PRINTABILITY_MARKS);
-    say("Checking printability…");
+    say(t("status.checking"));
     const res = await geometry.printability(store.builtDocument(), req.options, (id) => {
       if (seq === checkSeq) state.sent(id);
     });
     if (seq !== checkSeq || !data.value) return;
     if (!res.ok) {
       state.finished(res.cancelled ? {} : { error: res.message });
-      const said = res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`;
+      const said = res.cancelled ? t("status.cancelled") : t("status.failed", { message: res.message });
       if (res.cancelled) say(said);
       else setStatus(said, "error");
       if (!res.cancelled) announce(said, "assertive");
@@ -187,11 +189,11 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     const head = printabilityHead(view);
     const toasted = problemCount(view) > 0;
     if (toasted) say(head);
-    else setStatus(head, head === "Printability: nothing found" ? "connected" : "error");
+    else setStatus(head, printabilityOutcome(view) === "clean" ? "connected" : "error");
     // The announcer joins the rest onto the toast's head, so it is still heard as one line.
     announce(toasted ? printabilityDetails(view) : printabilitySummary(view));
     refreshMarks();
-    if (epoch !== docEpoch) say("Printability: the model changed while it ran, check again to see the faces");
+    if (epoch !== docEpoch) say(t("status.changed"));
   }
 
   /** Stop the Check in flight. Only by its own id: without one the client

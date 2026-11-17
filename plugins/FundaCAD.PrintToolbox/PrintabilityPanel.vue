@@ -6,8 +6,9 @@ import { computed, ref, useId, watch, type CSSProperties } from "vue";
 import { readAs, useBrowserStore } from "fundacad";
 import { Button, Checkbox, FloatingPanel, ListRow, NumberField, Select } from "fundacad/ui";
 import type { PrintabilityKind } from "fundacad";
-import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES, cssHex } from "./printability";
+import { KIND_COLORS, checkChoices, cssHex, kindLabel, upChoices } from "./printability";
 import { printabilityPanel } from "./printabilityPanel";
+import { t } from "./lines";
 
 const browser = useBrowserStore();
 const uid = useId();
@@ -23,28 +24,46 @@ const scope = computed(() => {
   const bodies = ctl.value?.bodies.value ?? [];
   const picked = bodies.filter((b) => browser.selectedBodyIds.includes(b.id));
   if (picked.length === 1) return picked[0]!.name || picked[0]!.id;
-  if (picked.length) return `${picked.length} selected`;
+  if (picked.length) return t("panel.scopeSelected", { n: picked.length });
   const n = bodies.length;
-  return n === 1 ? "The one body" : `All ${n}`;
+  return n === 1 ? t("panel.scopeOne") : t("panel.scopeAll", { n });
 });
 
 const readLength = readAs("length");
 type NumberKey = "nozzle" | "layer" | "overhang" | "minGap" | "maxBridge";
-const NUMBERS: {
-  key: NumberKey;
-  label: string;
-  cls: string;
-  unit: "mm" | "deg";
-  min: number;
-  max?: number;
-  step: number;
-  parse?: (raw: string) => number;
-}[] = [
-  { key: "nozzle", label: "Nozzle", cls: "printability-nozzle", unit: "mm", min: 0, step: 0.05, parse: readLength },
-  { key: "layer", label: "Layer", cls: "printability-layer", unit: "mm", min: 0, step: 0.05, parse: readLength },
+const NUMBERS = computed<
+  {
+    key: NumberKey;
+    label: string;
+    cls: string;
+    unit: "mm" | "deg";
+    min: number;
+    max?: number;
+    step: number;
+    parse?: (raw: string) => number;
+  }[]
+>(() => [
+  {
+    key: "nozzle",
+    label: t("panel.nozzle"),
+    cls: "printability-nozzle",
+    unit: "mm",
+    min: 0,
+    step: 0.05,
+    parse: readLength,
+  },
+  {
+    key: "layer",
+    label: t("panel.layer"),
+    cls: "printability-layer",
+    unit: "mm",
+    min: 0,
+    step: 0.05,
+    parse: readLength,
+  },
   {
     key: "overhang",
-    label: "Overhang angle",
+    label: t("panel.overhangAngle"),
     cls: "printability-overhang",
     unit: "deg",
     min: 1,
@@ -52,17 +71,27 @@ const NUMBERS: {
     step: 1,
     parse: readAs("angle"),
   },
-  { key: "minGap", label: "Smallest gap", cls: "printability-gap", unit: "mm", min: 0, step: 0.05, parse: readLength },
+  {
+    key: "minGap",
+    label: t("panel.minGap"),
+    cls: "printability-gap",
+    unit: "mm",
+    min: 0,
+    step: 0.05,
+    parse: readLength,
+  },
   {
     key: "maxBridge",
-    label: "Longest bridge",
+    label: t("panel.maxBridge"),
     cls: "printability-bridge",
     unit: "mm",
     min: 0,
     step: 1,
     parse: readLength,
   },
-];
+]);
+const upOptions = computed(upChoices);
+const checkOptions = computed(checkChoices);
 
 // Pointer and keyboard focus each light a face; leaving one falls back to the other.
 const pointerOn = ref<number | null>(null);
@@ -106,12 +135,12 @@ const checksId = `${uid}-checks`;
 </script>
 
 <template>
-  <FloatingPanel :open="!!d" title="Printability" panel-class="printability-panel" @close="ctl?.close()">
+  <FloatingPanel :open="!!d" :title="t('tool.printability')" panel-class="printability-panel" @close="ctl?.close()">
     <div v-if="ctl && d && setup" :style="BODY">
-      <div class="measure-title" aria-hidden="true">Printability</div>
+      <div class="measure-title" aria-hidden="true">{{ t("tool.printability") }}</div>
 
       <div class="measure-row">
-        <span class="measure-k">Bodies</span>
+        <span class="measure-k">{{ t("panel.bodies") }}</span>
         <span class="measure-v printability-scope">{{ scope }}</span>
       </div>
 
@@ -139,27 +168,27 @@ const checksId = `${uid}-checks`;
         /></span>
       </div>
       <div class="measure-row">
-        <label class="measure-k" :for="fieldId('up')">Up</label>
+        <label class="measure-k" :for="fieldId('up')">{{ t("panel.up") }}</label>
         <Select
           :id="fieldId('up')"
           v-model="setup.up"
           class="printability-up"
-          label="Up"
+          :label="t('panel.up')"
           size="sm"
-          :options="UP_CHOICES"
+          :options="upOptions"
           :disabled="setup.layFlat"
-          disabled-reason="Lay flat chooses the way up"
+          :disabled-reason="t('panel.upDisabled')"
         />
       </div>
       <div class="measure-row">
-        <Checkbox v-model="setup.layFlat" class="printability-layflat">Lay flat on the largest flat face</Checkbox>
+        <Checkbox v-model="setup.layFlat" class="printability-layflat">{{ t("panel.layFlat") }}</Checkbox>
       </div>
 
       <div class="measure-divider" />
       <div role="group" :aria-labelledby="checksId" :style="CHECK_ROW">
-        <span :id="checksId" class="sr-only">Checks to run</span>
+        <span :id="checksId" class="sr-only">{{ t("panel.checksToRun") }}</span>
         <Checkbox
-          v-for="c in CHECKS"
+          v-for="c in checkOptions"
           :key="c.value"
           v-model="setup.checks[c.value]"
           :class="'printability-check-' + c.value"
@@ -172,14 +201,16 @@ const checksId = `${uid}-checks`;
           variant="primary"
           class="printability-run"
           :disabled="d.running"
-          disabled-reason="A check is running"
+          :disabled-reason="t('panel.running')"
           @click="ctl.run()"
-          >{{ d.running ? "Checking…" : "Check" }}</Button
+          >{{ d.running ? t("action.checking") : t("action.check") }}</Button
         >
-        <Button v-if="d.running" class="printability-cancel" @click="ctl.cancel()">Cancel</Button>
-        <Button v-else class="printability-close" @click="ctl.close()">Close</Button>
+        <Button v-if="d.running" class="printability-cancel" @click="ctl.cancel()">{{ t("action.cancel") }}</Button>
+        <Button v-else class="printability-close" @click="ctl.close()">{{ t("action.close") }}</Button>
       </div>
-      <div v-if="d.error" class="measure-hint printability-error" :style="ERROR">Error: {{ d.error }}</div>
+      <div v-if="d.error" class="measure-hint printability-error" :style="ERROR">{{
+        t("panel.error", { message: d.error })
+      }}</div>
 
       <template v-if="d.result">
         <div class="measure-divider" />
@@ -195,9 +226,9 @@ const checksId = `${uid}-checks`;
             ><span :id="fieldId('body-' + g.body)" class="measure-v">{{ g.name }}</span></div
           >
           <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note" :style="WARN">
-            <span class="measure-v">Warning: {{ n }}</span>
+            <span class="measure-v">{{ t("panel.warning", { message: n }) }}</span>
           </div>
-          <ul v-if="g.rows.length" :style="LIST" :aria-label="g.name + ' findings'">
+          <ul v-if="g.rows.length" :style="LIST" :aria-label="t('panel.findingsOf', { name: g.name })">
             <li v-for="r in g.rows" :key="r.index">
               <ListRow
                 class="printability-finding"
@@ -216,29 +247,24 @@ const checksId = `${uid}-checks`;
             </li>
           </ul>
           <div v-if="!g.notes.length && !g.rows.length" class="measure-row printability-clean">
-            <span class="measure-k">Nothing found</span>
+            <span class="measure-k">{{ t("panel.nothingFound") }}</span>
           </div>
         </div>
         <div v-if="!d.result.groups.length && !d.result.errors.length" class="measure-row printability-clean">
-          <span class="measure-k">Nothing found</span>
+          <span class="measure-k">{{ t("panel.nothingFound") }}</span>
         </div>
-        <div v-if="d.result.kinds.length" role="list" aria-label="Legend" :style="LEGEND">
+        <div v-if="d.result.kinds.length" role="list" :aria-label="t('panel.legend')" :style="LEGEND">
           <span v-for="k in d.result.kinds" :key="k" role="listitem" class="measure-k printability-legend-item">
-            <span class="print-swatch" :style="swatch(k)" aria-hidden="true" />{{ KIND_LABELS[k] }}
+            <span class="print-swatch" :style="swatch(k)" aria-hidden="true" />{{ kindLabel(k) }}
           </span>
         </div>
-        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN"
-          >Warning: {{ w }}</div
-        >
-        <div v-if="d.stale" class="measure-hint printability-stale" role="status"
-          >The model changed since this check, check again to see the faces</div
-        >
+        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN">{{
+          t("panel.warning", { message: w })
+        }}</div>
+        <div v-if="d.stale" class="measure-hint printability-stale" role="status">{{ t("panel.stale") }}</div>
       </template>
 
-      <div class="measure-hint">
-        Checks the selected bodies, or every body when none is selected · hover or Tab to a finding to pick out its
-        face, click or press Enter to look at it
-      </div>
+      <div class="measure-hint">{{ t("panel.hint") }}</div>
     </div>
   </FloatingPanel>
 </template>

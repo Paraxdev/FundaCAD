@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { readAs } from "fundacad";
 import { Button, FieldRow, ModalFrame, NumberField } from "fundacad/ui";
 import { parseCustomBedSize } from "./bedFit";
+import { t } from "./lines";
 import type { CustomBedRequest } from "./customBedDialog";
 
 const props = defineProps<{ req: CustomBedRequest }>();
 
-const FIELDS = [
-  { label: "Width", testid: "bed-custom-width" },
-  { label: "Depth", testid: "bed-custom-depth" },
-  { label: "Height", testid: "bed-custom-height" },
-] as const;
+const FIELDS = computed(() => [
+  { label: t("bed.width"), testid: "bed-custom-width" },
+  { label: t("bed.depth"), testid: "bed-custom-depth" },
+  { label: t("bed.height"), testid: "bed-custom-height" },
+]);
 const readLength = readAs("length");
 
 const sizes = reactive<(number | null)[]>([...props.req.initial]);
 // A field holding text that is no number keeps its last value, so its refusal is what Confirm judges it by.
-const refused = reactive<(string | null)[]>(FIELDS.map(() => null));
+const refused = reactive<(string | null)[]>([null, null, null]);
 const error = ref("");
 
 // Inline, because a plugin has nowhere to ship a stylesheet.
@@ -28,7 +29,7 @@ const S = {
 function confirm() {
   const bad = refused.findIndex((why) => why);
   if (bad >= 0) {
-    error.value = `${FIELDS[bad]!.label}: ${refused[bad]}`;
+    error.value = t("bed.fieldError", { field: FIELDS.value[bad]!.label, reason: refused[bad]! });
     return;
   }
   const [width, depth, height] = sizes.map((v) => v ?? Number.NaN) as [number, number, number];
@@ -58,11 +59,11 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 
 <template>
   <ModalFrame panel-class="bed-custom-dialog" @close="cancel()">
-    <template #title>Custom bed size</template>
+    <template #title>{{ t("bed.dialogTitle") }}</template>
 
     <div class="modal-body">
       <div :style="S.form">
-        <FieldRow v-for="(f, i) in FIELDS" :key="f.label" v-slot="{ id }" :label="f.label">
+        <FieldRow v-for="(f, i) in FIELDS" :key="f.testid" v-slot="{ id }" :label="f.label">
           <NumberField
             :id="id"
             :label="f.label"
@@ -78,15 +79,15 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
             @error="refused[i] = $event"
           />
         </FieldRow>
-        <div v-if="error" class="sm-hint" role="alert" :style="S.error" data-testid="bed-custom-error"
-          >Error: {{ error }}</div
-        >
+        <div v-if="error" class="sm-hint" role="alert" :style="S.error" data-testid="bed-custom-error">{{
+          t("panel.error", { message: error })
+        }}</div>
       </div>
     </div>
 
     <div class="modal-foot">
-      <Button data-testid="bed-custom-cancel" @click="cancel()">Cancel</Button>
-      <Button variant="primary" data-testid="bed-custom-confirm" @click="confirm()">OK</Button>
+      <Button data-testid="bed-custom-cancel" @click="cancel()">{{ t("action.cancel") }}</Button>
+      <Button variant="primary" data-testid="bed-custom-confirm" @click="confirm()">{{ t("action.ok") }}</Button>
     </div>
   </ModalFrame>
 </template>

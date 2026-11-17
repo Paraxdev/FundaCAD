@@ -1,12 +1,13 @@
 // Display-only, no feature and no History row: a toast before you slice it and find out the hard way.
 
 import { definePluginSettings, readSetting, spellFixed, type SettingsSchema } from "fundacad";
+import { t } from "./lines";
 
 export type Vec3 = readonly [number, number, number];
 
 export interface BedPreset {
   id: string;
-  label: string;
+  readonly label: string;
   /** Bed size in mm, null for the "custom" entry, which reads storedCustomBed instead. */
   size: Vec3 | null;
 }
@@ -17,7 +18,13 @@ export const BED_PRESETS: readonly BedPreset[] = [
   { id: "256", label: "256 x 256 x 256", size: [256, 256, 256] },
   { id: "300", label: "300 x 300 x 300", size: [300, 300, 300] },
   { id: "350", label: "350 x 350 x 350", size: [350, 350, 350] },
-  { id: "custom", label: "Custom", size: null },
+  {
+    id: "custom",
+    get label() {
+      return t("bed.custom");
+    },
+    size: null,
+  },
 ];
 
 export interface BedFitResult {
@@ -59,13 +66,17 @@ function parseOld(raw: string): BedFitSetting {
   return { presetId, customSize };
 }
 
-const custom = (key: string, label: string, i: number) =>
+const custom = (key: string, label: () => string, i: number) =>
   ({
     key,
     type: "number",
-    label,
+    get label() {
+      return label();
+    },
     unit: "length",
-    group: "Bed fit check",
+    get group() {
+      return t("bed.group");
+    },
     min: 1,
     max: 5000,
     default: DEFAULT_SETTING.customSize[i]!,
@@ -78,15 +89,27 @@ export const BED_SETTINGS: SettingsSchema = {
     {
       key: "presetId",
       type: "enum",
-      label: "Printer bed",
-      group: "Bed fit check",
-      description: "The bed Bed Fit Check measures against. Picking one in the check changes it here too.",
+      get label() {
+        return t("bed.printerBed");
+      },
+      get group() {
+        return t("bed.group");
+      },
+      get description() {
+        return t("bed.printerBed.hint");
+      },
       default: DEFAULT_SETTING.presetId,
-      options: BED_PRESETS.map((p) => ({ id: p.id, label: p.label })),
+      // One option object per preset, so its label is read when the list is drawn.
+      options: BED_PRESETS.map((p) => ({
+        id: p.id,
+        get label() {
+          return p.label;
+        },
+      })),
     },
-    custom("customX", "Custom bed width", 0),
-    custom("customY", "Custom bed depth", 1),
-    custom("customZ", "Custom bed height", 2),
+    custom("customX", () => t("bed.customWidth"), 0),
+    custom("customY", () => t("bed.customDepth"), 1),
+    custom("customZ", () => t("bed.customHeight"), 2),
   ],
   legacy: () => {
     const raw = readSetting(KEY);
@@ -128,7 +151,7 @@ export type CustomBedParse = { ok: true; size: Vec3 } | { ok: false; message: st
  *  the whole rule. */
 export function parseCustomBedSize(width: number, depth: number, height: number): CustomBedParse {
   if ([width, depth, height].some((v) => !Number.isFinite(v) || v <= 0)) {
-    return { ok: false, message: "Width, depth and height must all be positive numbers." };
+    return { ok: false, message: t("bed.sizeRefused") };
   }
   return { ok: true, size: [width, depth, height] };
 }
@@ -139,6 +162,6 @@ export function bedFitMessage(size: Vec3, bed: Vec3): string {
   const { fits, scale } = bedFit(size, bed);
   const dims = size.map((s) => spellFixed(s, 1)).join(" x ");
   const bedDims = bed.map((s) => spellFixed(s, 0)).join(" x ");
-  if (fits) return `Fits the ${bedDims} mm bed (model is ${dims} mm)`;
-  return `Too big for the ${bedDims} mm bed (model is ${dims} mm); scale to ${spellFixed(scale * 100, 1)}% to fit`;
+  if (fits) return t("bed.fits", { bed: bedDims, model: dims });
+  return t("bed.tooBig", { bed: bedDims, model: dims, percent: spellFixed(scale * 100, 1) });
 }

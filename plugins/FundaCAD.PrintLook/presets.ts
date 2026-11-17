@@ -1,7 +1,5 @@
 import type { MaterialDef } from "../../src/document/materials";
 
-export const FILAMENT_GROUP = "Filament";
-
 export const FILAMENT_PRESETS: readonly MaterialDef[] = Object.freeze([
   { id: "filament-pla-matte", name: "PLA, matte", color: "#e7e4dc", metalness: 0, roughness: 0.85, sheen: 0.35 },
   { id: "filament-pla-glossy", name: "PLA, glossy", color: "#2f6fd6", metalness: 0, roughness: 0.38 },

@@ -1,4 +1,16 @@
 {
   "group.print": "Drucken",
+  "preset.filament": "Filament",
+  "section.direction": "Richtung",
+  "section.hint": "Zeichnet Schichtlinien nur in der Echtzeitansicht. Das Modell bleibt unverändert.",
+  "section.title": "Gedruckte Optik",
+  "setting.depth": "Tiefe",
+  "setting.depth.hint": "Wie tief eine Rille ist, als Anteil der Schichthöhe.",
+  "setting.direction": "Baurichtung",
+  "setting.grooveShading": "Rillenschattierung",
+  "setting.layerHeight": "Schichthöhe",
+  "setting.layerLines": "Schichtlinien",
+  "setting.layerLines.hint": "Zeichnet die feinen Rillen, die ein gedrucktes Teil zeigt. Nur Anzeige, das Modell bleibt unverändert.",
+  "setting.variation": "Farbvariation",
   "tool.layerLines": "Schichtlinien"
 }

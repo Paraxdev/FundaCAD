@@ -9,6 +9,7 @@ import type {
   PrintabilityReply,
   PrintabilityUp,
 } from "fundacad";
+import { t, toolLabel } from "./lines";
 
 export interface PrintabilitySetup {
   /** mm whatever the display unit: these are nozzle-sized numbers, and the
@@ -25,22 +26,38 @@ export interface PrintabilitySetup {
   checks: Record<PrintabilityCheck, boolean>;
 }
 
-export const UP_CHOICES: readonly { value: PrintabilityUp; label: string }[] = [
-  { value: "+Z", label: "+Z, as modelled" },
-  { value: "-Z", label: "-Z" },
-  { value: "+X", label: "+X" },
-  { value: "-X", label: "-X" },
-  { value: "+Y", label: "+Y" },
-  { value: "-Y", label: "-Y" },
-];
+/** Read when the list is drawn, so the first label follows the language. */
+export function upChoices(): { value: PrintabilityUp; label: string }[] {
+  return [
+    { value: "+Z", label: t("up.modelled") },
+    { value: "-Z", label: "-Z" },
+    { value: "+X", label: "+X" },
+    { value: "-X", label: "-X" },
+    { value: "+Y", label: "+Y" },
+    { value: "-Y", label: "-Y" },
+  ];
+}
 
-export const CHECKS: readonly { value: PrintabilityCheck; label: string }[] = [
-  { value: "overhang", label: "Overhangs" },
-  { value: "wall", label: "Thin walls" },
-  { value: "gap", label: "Gaps" },
-  { value: "bridge", label: "Bridges" },
-  { value: "open", label: "Open shells" },
-];
+export const CHECK_IDS: readonly PrintabilityCheck[] = ["overhang", "wall", "gap", "bridge", "open"];
+
+function checkLabel(id: PrintabilityCheck): string {
+  switch (id) {
+    case "overhang":
+      return t("check.overhang");
+    case "wall":
+      return t("check.wall");
+    case "gap":
+      return t("check.gap");
+    case "bridge":
+      return t("check.bridge");
+    case "open":
+      return t("check.open");
+  }
+}
+
+export function checkChoices(): { value: PrintabilityCheck; label: string }[] {
+  return CHECK_IDS.map((value) => ({ value, label: checkLabel(value) }));
+}
 
 export function newPrintabilitySetup(): PrintabilitySetup {
   return {
@@ -73,16 +90,26 @@ export function cssHex(c: number): string {
   return `#${c.toString(16).padStart(6, "0")}`;
 }
 
-export const KIND_LABELS: Record<PrintabilityKind, string> = {
-  overhang: "Overhang",
-  bridge: "Bridge",
-  wall: "Thin wall",
-  floor: "Thin floor",
-  gap: "Gap",
-  fused: "Fused",
-  meshHole: "Mesh hole",
-  flatTriangle: "Flat triangle",
-};
+export function kindLabel(kind: PrintabilityKind): string {
+  switch (kind) {
+    case "overhang":
+      return t("kind.overhang");
+    case "bridge":
+      return t("kind.bridge");
+    case "wall":
+      return t("kind.wall");
+    case "floor":
+      return t("kind.floor");
+    case "gap":
+      return t("kind.gap");
+    case "fused":
+      return t("kind.fused");
+    case "meshHole":
+      return t("kind.meshHole");
+    case "flatTriangle":
+      return t("kind.flatTriangle");
+  }
+}
 
 export type PrintabilityRequest = { ok: true; options: PrintabilityOptions } | { ok: false; message: string };
 
@@ -90,15 +117,15 @@ export type PrintabilityRequest = { ok: true; options: PrintabilityOptions } | {
  *  phrased for the status line. Every setting is sent, so the engine checks against what the panel shows. */
 export function buildPrintabilityRequest(s: PrintabilitySetup, bodies: string[]): PrintabilityRequest {
   // A cleared field is null, which compares as 0, so check the type first.
-  if (!isNum(s.nozzle) || !(s.nozzle > 0)) return { ok: false, message: "the nozzle width must be above 0" };
-  if (!isNum(s.layer) || !(s.layer > 0)) return { ok: false, message: "the layer height must be above 0" };
+  if (!isNum(s.nozzle) || !(s.nozzle > 0)) return { ok: false, message: t("request.nozzle") };
+  if (!isNum(s.layer) || !(s.layer > 0)) return { ok: false, message: t("request.layer") };
   if (!isNum(s.overhang) || !(s.overhang > 0 && s.overhang < 90)) {
-    return { ok: false, message: "the overhang angle must be between 0 and 90 degrees" };
+    return { ok: false, message: t("request.overhang") };
   }
-  if (!isNum(s.minGap) || !(s.minGap > 0)) return { ok: false, message: "the smallest gap must be above 0" };
-  if (!isNum(s.maxBridge) || !(s.maxBridge > 0)) return { ok: false, message: "the longest bridge must be above 0" };
-  const checks = CHECKS.map((c) => c.value).filter((c) => s.checks[c]);
-  if (!checks.length) return { ok: false, message: "tick at least one check" };
+  if (!isNum(s.minGap) || !(s.minGap > 0)) return { ok: false, message: t("request.minGap") };
+  if (!isNum(s.maxBridge) || !(s.maxBridge > 0)) return { ok: false, message: t("request.maxBridge") };
+  const checks = CHECK_IDS.filter((c) => s.checks[c]);
+  if (!checks.length) return { ok: false, message: t("request.noChecks") };
   const options: PrintabilityOptions = {
     nozzle: s.nozzle,
     layer: s.layer,
@@ -108,7 +135,7 @@ export function buildPrintabilityRequest(s: PrintabilitySetup, bodies: string[])
   };
   if (bodies.length) options.bodies = [...bodies];
   // Left out when all are on, so the engine runs all it has.
-  if (checks.length < CHECKS.length) options.checks = checks;
+  if (checks.length < CHECK_IDS.length) options.checks = checks;
   if (s.layFlat) options.layFlat = true;
   else options.up = s.up;
   return { ok: true, options };
@@ -122,18 +149,23 @@ function isNum(v: unknown): v is number {
 export interface FindingRow {
   index: number;
   kind: PrintabilityKind;
-  text: string;
+  /** The words are read when drawn, so a language switch reaches a result already on screen. */
+  readonly text: string;
   /** Face and height above the bed, shown under the text. */
-  hint: string;
+  readonly hint: string;
   /** The text and the place, as the row is named to a screen reader. */
-  spoken: string;
+  readonly spoken: string;
 }
+
+/** A problem with a body as a whole, kept as data so its words follow the language. */
+export type BodyFact = { kind: "openShell" | "pieces"; n: number } | { kind: "insideOut" };
 
 export interface BodyGroup {
   body: string;
   name: string;
+  facts: BodyFact[];
   /** Problems with the body as a whole, an open shell or several pieces. */
-  notes: string[];
+  readonly notes: string[];
   rows: FindingRow[];
 }
 
@@ -148,17 +180,16 @@ export interface PrintabilityView {
   errors: string[];
 }
 
-// In mm like the settings they are held to; see PrintabilitySetup.
-function mm(v: number): string {
-  return `${numberText(v)} mm`;
-}
+// In mm like the settings they are held to, see PrintabilitySetup, so a line writes its own unit after the number.
+const num = (v: number) => numberText(v);
 
 function area(v: number): string {
-  return `${v >= 10 ? Math.round(v) : numberText(v)} mm²`;
+  return v >= 10 ? String(Math.round(v)) : numberText(v);
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+/** The pieces of a sentence joined the way the language writes a list of clauses. */
+function join(parts: readonly string[]): string {
+  return parts.reduce((first, second) => t("text.join", { first, second }));
 }
 
 /** A finding in a few plain words. `nameOf` names the other body of a fused pair. */
@@ -166,36 +197,70 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
   let text: string;
   switch (f.kind) {
     case "overhang":
-      text = `Overhang, ${area(f.area)} leaning ${Math.round(f.value)}°`;
+      text = t("finding.overhang", { area: area(f.area), deg: Math.round(f.value) });
       break;
     case "bridge":
-      text = `Bridge ${mm(f.value)} span (over ${numberText(f.limit)})`;
+      text = t("finding.bridge", { value: num(f.value), limit: num(f.limit) });
       break;
     case "wall":
-      text = `Thin wall ${mm(f.value)} (under ${numberText(f.limit)})`;
+      text = t("finding.wall", { value: num(f.value), limit: num(f.limit) });
       break;
     case "floor":
-      text = `Thin floor ${mm(f.value)} (under ${numberText(f.limit)})`;
+      text = t("finding.floor", { value: num(f.value), limit: num(f.limit) });
       break;
     case "gap":
-      text = `Gap ${mm(f.value)} will fuse`;
+      text = t("finding.gap", { value: num(f.value) });
       break;
     case "fused": {
-      const other = f.other ? nameOf(f.other.body) : "another body";
+      const other = f.other ? nameOf(f.other.body) : t("finding.anotherBody");
       // Under a thousandth is touching, as far as the nozzle can tell.
-      text = f.value >= 0.001 ? `${mm(f.value)} from ${other}, prints fused` : `Touches ${other}, prints fused`;
+      text = f.value >= 0.001 ? t("finding.fused", { value: num(f.value), other }) : t("finding.touches", { other });
       break;
     }
     case "meshHole":
-      text = `Mesh has ${plural(Math.round(f.value), "open edge", "open edges")}`;
+      text = t("finding.meshHole", { n: Math.round(f.value) });
       break;
     case "flatTriangle":
-      text = `Mesh has ${plural(Math.round(f.value), "triangle", "triangles")} without area`;
+      text = t("finding.flatTriangle", { n: Math.round(f.value) });
       break;
     default:
       text = String(f.kind);
   }
-  return f.note ? `${text}, ${f.note}` : text;
+  return f.note ? join([text, ...noteParts(f.note)]) : text;
+}
+
+// The engine writes its notes in English and joins several with ", ", see printcheck/mod.rs and op.rs. A note it has
+// not told us about shows as it came.
+const NOTES: Record<string, () => string> = {
+  "partly bridged": () => t("note.partlyBridged"),
+  "a sideways hole: teardropHole or roofBridge fixes it": () =>
+    t("note.sidewaysHole", { teardrop: toolLabel("print-teardrop"), roofBridge: toolLabel("print-roof-bridge") }),
+};
+
+export const ENGINE_NOTES: readonly string[] = Object.keys(NOTES);
+
+function noteParts(note: string): string[] {
+  return note.split(", ").map((part) => NOTES[part]?.() ?? part);
+}
+
+/** The header the engine put on the reply, rebuilt from the reply's own data so it follows the language. The engine
+ *  sends no header when it has nothing to say, and one with no bodies has no bed to name. */
+function headerText(r: PrintabilityReply, nameOf: (id: string) => string): string {
+  if (!r.header || !r.bodies.length) return "";
+  if (r.settings.layFlat) {
+    const list = r.bodies.map((b) =>
+      typeof b.bedFace === "number"
+        ? t("header.onFace", { name: nameOf(b.id), n: b.bedFace + 1 })
+        : t("header.noFlatFace", { name: nameOf(b.id) }),
+    );
+    return t("header.layFlat", { list: join(list) });
+  }
+  const up = r.settings.up;
+  if (!up) return "";
+  // The bed is measured along the up axis, so a down axis reads back as the coordinate it sits at.
+  const bed = Math.min(...r.bodies.map((b) => b.bed)) * (up.startsWith("-") ? -1 : 1);
+  const value = numberText(Math.round(bed * 1000) / 1000 + 0);
+  return t("header.upAsModelled", { up, axis: up.slice(1).toLowerCase(), value });
 }
 
 /** Where a finding sits, by face number (what the Geometry tab shows) and height above its body's bed. `hint` starts
@@ -206,24 +271,25 @@ export function findingPlace(
   bodies: PrintabilityReply["bodies"],
   nameOf: (id: string) => string,
 ): { hint: string; spoken: string } {
-  let faces = `face ${f.face + 1}`;
+  let faces = t("place.face", { n: f.face + 1 });
   if (f.other) {
     faces =
       f.other.body === f.body
-        ? `faces ${f.face + 1} and ${f.other.face + 1}`
-        : `${faces} and face ${f.other.face + 1} of ${nameOf(f.other.body)}`;
+        ? t("place.faces", { a: f.face + 1, b: f.other.face + 1 })
+        : t("place.faceAndOther", { a: f.face + 1, b: f.other.face + 1, name: nameOf(f.other.body) });
   }
   const b = bodies.find((x) => x.id === f.body);
   const parts = [faces];
   if (b && (b.up[0] !== 0 || b.up[1] !== 0 || b.up[2] !== 0)) {
     // Under a thousandth of a millimetre is the bed itself.
-    if (f.kind === "overhang") parts.push(f.low < 0.001 ? "from the bed up" : `from ${mm(f.low)} above the bed`);
-    else {
+    if (f.kind === "overhang") {
+      parts.push(f.low < 0.001 ? t("place.fromBed") : t("place.aboveBedFrom", { value: num(f.low) }));
+    } else {
       const h = f.at[0] * b.up[0] + f.at[1] * b.up[1] + f.at[2] * b.up[2] - b.bed;
-      parts.push(h < 0.001 ? "on the bed" : `centred ${mm(h)} above the bed`);
+      parts.push(h < 0.001 ? t("place.onBed") : t("place.centred", { value: num(h) }));
     }
   }
-  const spoken = parts.join(", ");
+  const spoken = join(parts);
   return { hint: spoken.charAt(0).toUpperCase() + spoken.slice(1), spoken };
 }
 
@@ -242,27 +308,50 @@ export function formatPrintabilityResult(
   const groupOf = (id: string): BodyGroup => {
     let g = groups.get(id);
     if (!g) {
-      g = { body: id, name: nameOf(id), notes: [], rows: [] };
+      g = {
+        body: id,
+        name: nameOf(id),
+        facts: [],
+        get notes() {
+          return this.facts.map(factText);
+        },
+        rows: [],
+      };
       groups.set(id, g);
     }
     return g;
   };
   for (const b of r.bodies) {
     const g = groupOf(b.id);
-    if (b.openEdges > 0) g.notes.push(`Open shell, ${plural(b.openEdges, "open edge", "open edges")}`);
-    if (b.solids > 1) g.notes.push(`${b.solids} separate pieces`);
-    if (b.insideOut) g.notes.push("Inside out, may print hollow or not at all");
+    if (b.openEdges > 0) g.facts.push({ kind: "openShell", n: b.openEdges });
+    if (b.solids > 1) g.facts.push({ kind: "pieces", n: b.solids });
+    if (b.insideOut) g.facts.push({ kind: "insideOut" });
   }
   const kinds = new Set<PrintabilityKind>();
   r.findings.forEach((f, index) => {
-    const text = findingText(f, nameOf);
-    const place = findingPlace(f, r.bodies, nameOf);
-    groupOf(f.body).rows.push({ index, kind: f.kind, text, hint: place.hint, spoken: `${text}, ${place.spoken}` });
+    groupOf(f.body).rows.push({
+      index,
+      kind: f.kind,
+      get text() {
+        return findingText(f, nameOf);
+      },
+      get hint() {
+        return findingPlace(f, r.bodies, nameOf).hint;
+      },
+      get spoken() {
+        return join([findingText(f, nameOf), findingPlace(f, r.bodies, nameOf).spoken]);
+      },
+    });
     kinds.add(f.kind);
   });
-  const errors = (r.errors ?? []).map((e) => (e.feature_id ? `${e.feature_id}: ${e.message}` : e.message));
+  // The engine's own English, with only the feature it names set in the language's punctuation.
+  const errors = (r.errors ?? []).map((e) =>
+    e.feature_id ? t("result.engineError", { id: e.feature_id, message: e.message }) : e.message,
+  );
   return {
-    header: r.header,
+    get header() {
+      return headerText(r, nameOf);
+    },
     groups: [...groups.values()],
     findings: r.findings,
     kinds: KIND_ORDER.filter((k) => kinds.has(k)),
@@ -270,34 +359,66 @@ export function formatPrintabilityResult(
   };
 }
 
+function factText(f: BodyFact): string {
+  switch (f.kind) {
+    case "openShell":
+      return t("note.openShell", { n: f.n });
+    case "pieces":
+      return t("note.pieces", { n: f.n });
+    case "insideOut":
+      return t("note.insideOut");
+  }
+}
+
 /** How many things the check found, body-level problems included. */
 export function problemCount(v: PrintabilityView): number {
   return v.groups.reduce((n, g) => n + g.notes.length + g.rows.length, 0);
 }
 
-const KIND_NOUNS: Record<PrintabilityKind, [string, string]> = {
-  overhang: ["overhang", "overhangs"],
-  bridge: ["bridge", "bridges"],
-  wall: ["thin wall", "thin walls"],
-  floor: ["thin floor", "thin floors"],
-  gap: ["gap", "gaps"],
-  fused: ["fused spot", "fused spots"],
-  meshHole: ["mesh hole", "mesh holes"],
-  flatTriangle: ["flat triangle", "flat triangles"],
-};
+function kindCount(kind: PrintabilityKind, n: number): string {
+  switch (kind) {
+    case "overhang":
+      return t("count.overhang", { n });
+    case "bridge":
+      return t("count.bridge", { n });
+    case "wall":
+      return t("count.wall", { n });
+    case "floor":
+      return t("count.floor", { n });
+    case "gap":
+      return t("count.gap", { n });
+    case "fused":
+      return t("count.fused", { n });
+    case "meshHole":
+      return t("count.meshHole", { n });
+    case "flatTriangle":
+      return t("count.flatTriangle", { n });
+  }
+}
+
+/** Whether the check found things, nothing, or could not run: what the status line colours by. */
+export function printabilityOutcome(v: PrintabilityView): "problems" | "clean" | "failed" {
+  if (problemCount(v)) return "problems";
+  // Failures with no body checked found nothing only because nothing built.
+  return !v.groups.length && v.errors.length ? "failed" : "clean";
+}
 
 /** What a screen reader hears once a Check is done: the count, each kind's share, and the largest overhang with its
  *  area and face. A tie on the area takes the first in the reply. The body is named only when the reply has several. */
-// Failures with no body checked found nothing only because nothing built.
 export function printabilityHead(v: PrintabilityView): string {
-  const n = problemCount(v);
-  if (n) return `Printability: ${plural(n, "thing", "things")} to look at`;
-  return !v.groups.length && v.errors.length ? "Printability: could not check" : "Printability: nothing found";
+  const outcome = printabilityOutcome(v);
+  if (outcome === "problems") return t("head.found", { n: problemCount(v) });
+  return outcome === "failed" ? t("head.failed") : t("head.clean");
 }
+
+const sentence = (text: string) => t("text.sentence", { text });
+const sentences = (parts: readonly string[]) =>
+  parts.map(sentence).reduce((first, second) => t("text.sentences", { first, second }));
 
 export function printabilitySummary(v: PrintabilityView): string {
   const rest = printabilityDetails(v);
-  return `${printabilityHead(v)}.${rest ? ` ${rest}` : ""}`;
+  const head = sentence(printabilityHead(v));
+  return rest ? t("text.sentences", { first: head, second: rest }) : head;
 }
 
 /** The summary after its head, for when a toast has said the head already. */
@@ -305,23 +426,22 @@ export function printabilityDetails(v: PrintabilityView): string {
   const parts: string[] = [];
   for (const k of KIND_ORDER) {
     const c = v.findings.filter((f) => f.kind === k).length;
-    if (c) parts.push(plural(c, ...KIND_NOUNS[k]));
+    if (c) parts.push(kindCount(k, c));
   }
-  const notes = v.groups.reduce((t, g) => t + g.notes.length, 0);
-  if (notes) parts.push(plural(notes, "body note", "body notes"));
-  if (v.errors.length) parts.push(plural(v.errors.length, "error", "errors"));
-  const sentences: string[] = [];
-  if (parts.length) sentences.push(parts.join(", "));
+  const notes = v.groups.reduce((n, g) => n + g.notes.length, 0);
+  if (notes) parts.push(t("count.bodyNote", { n: notes }));
+  if (v.errors.length) parts.push(t("count.error", { n: v.errors.length }));
+  const said: string[] = [];
+  if (parts.length) said.push(join(parts));
   const overhangs = v.findings.filter((f) => f.kind === "overhang");
   let largest: PrintabilityFinding | undefined;
   for (const f of overhangs) if (!largest || f.area > largest.area) largest = f;
   if (largest) {
-    const body =
-      v.groups.length > 1 ? ` of ${v.groups.find((g) => g.body === largest!.body)?.name ?? largest.body}` : "";
-    const lead = overhangs.length > 1 ? "Largest overhang" : "The overhang is";
-    sentences.push(`${lead} ${area(largest.area)} on face ${largest.face + 1}${body}`);
+    const body = v.groups.length > 1 ? (v.groups.find((g) => g.body === largest!.body)?.name ?? largest.body) : null;
+    const args = { many: overhangs.length > 1 ? "yes" : "no", area: area(largest.area), face: largest.face + 1 };
+    said.push(body === null ? t("summary.overhang", args) : t("summary.overhangOf", { ...args, name: body }));
   }
-  return sentences.length ? `${sentences.join(". ")}.` : "";
+  return said.length ? sentences(said) : "";
 }
 
 /** The tints for a result in display face ids: each finding's face in its kind's colour, and the finding put forward

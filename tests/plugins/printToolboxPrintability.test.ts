@@ -117,12 +117,16 @@ describe("findingText", () => {
   const nameOf = (id: string) => ({ body2: "Lid" })[id] ?? id;
   it("words each kind in mm with its limit", () => {
     expect(findingText(finding({}), nameOf)).toBe("Overhang, 132 mm² leaning 90°");
-    expect(findingText(finding({ kind: "wall", value: 0.6, limit: 0.8 }), nameOf)).toBe("Thin wall 0.6 mm (under 0.8)");
+    expect(findingText(finding({ kind: "wall", value: 0.6, limit: 0.8 }), nameOf)).toBe(
+      "Thin wall 0.6 mm (under 0.8 mm)",
+    );
     expect(findingText(finding({ kind: "floor", value: 0.3, limit: 0.6 }), nameOf)).toBe(
-      "Thin floor 0.3 mm (under 0.6)",
+      "Thin floor 0.3 mm (under 0.6 mm)",
     );
     expect(findingText(finding({ kind: "gap", value: 0.1, limit: 0.2 }), nameOf)).toBe("Gap 0.1 mm will fuse");
-    expect(findingText(finding({ kind: "bridge", value: 14, limit: 10 }), nameOf)).toBe("Bridge 14 mm span (over 10)");
+    expect(findingText(finding({ kind: "bridge", value: 14, limit: 10 }), nameOf)).toBe(
+      "Bridge 14 mm span (over 10 mm)",
+    );
     expect(findingText(finding({ kind: "meshHole", value: 1 }), nameOf)).toBe("Mesh has 1 open edge");
     expect(findingText(finding({ kind: "flatTriangle", value: 2 }), nameOf)).toBe("Mesh has 2 triangles without area");
   });
@@ -248,7 +252,7 @@ describe("formatPrintabilityResult", () => {
         [],
         [
           [0, "Overhang, 132 mm² leaning 90°"],
-          [1, "Thin wall 0.6 mm (under 0.8)"],
+          [1, "Thin wall 0.6 mm (under 0.8 mm)"],
           [2, "Touches Lid, prints fused"],
         ],
       ],
@@ -271,9 +275,9 @@ describe("formatPrintabilityResult", () => {
       {
         index: 1,
         kind: "wall",
-        text: "Thin wall 0.6 mm (under 0.8)",
+        text: "Thin wall 0.6 mm (under 0.8 mm)",
         hint: "Faces 5 and 6, centred 5 mm above the bed",
-        spoken: "Thin wall 0.6 mm (under 0.8), faces 5 and 6, centred 5 mm above the bed",
+        spoken: "Thin wall 0.6 mm (under 0.8 mm), faces 5 and 6, centred 5 mm above the bed",
       },
       {
         index: 2,

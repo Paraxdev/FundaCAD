@@ -3,6 +3,7 @@
 
 import { setPrompt } from "fundacad";
 import type { DocumentStore, Viewport } from "fundacad";
+import { t } from "./lines";
 import { featureFor, type BuildDir, type FacePick, type PrintTool } from "./printForm";
 
 export class FaceTool {
@@ -19,7 +20,7 @@ export class FaceTool {
     } else if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      if (!this.commit()) setPrompt(this.prompt("nothing is selected yet"));
+      if (!this.commit()) setPrompt(this.prompt(t("prompt.nothingSelected")));
     }
   };
 
@@ -45,8 +46,10 @@ export class FaceTool {
   }
 
   private prompt(note?: string): string {
-    const t = this.tool!;
-    return `${t.label}: ${note ? `${note}, ` : ""}${t.pickHint} · Enter to apply · Esc to cancel`;
+    const tool = this.tool!;
+    return note
+      ? t("prompt.pickNote", { tool: tool.label, note, hint: tool.pickHint })
+      : t("prompt.pick", { tool: tool.label, hint: tool.pickHint });
   }
 
   private picks(): FacePick[] {

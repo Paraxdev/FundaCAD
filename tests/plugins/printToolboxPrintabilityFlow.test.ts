@@ -248,7 +248,7 @@ describe("printability panel flow", () => {
     const d = r.ui.data.value!;
     expect(d.running).toBe(false);
     expect(d.result!.groups.map((g) => [g.name, g.rows.map((x) => x.text)])).toEqual([
-      ["Block", ["Overhang, 100 mm² leaning 90°", "Thin wall 0.6 mm (under 0.8)"]],
+      ["Block", ["Overhang, 100 mm² leaning 90°", "Thin wall 0.6 mm (under 0.8 mm)"]],
       ["Lid", ["Gap 0.1 mm will fuse"]],
     ]);
     expect(r.tints()).toEqual([
