@@ -2,6 +2,7 @@ import { importPath, reportError, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
 import { onshapeClient, type Keys } from "./client";
 import { askForLink } from "./dialog";
+import { t } from "./lines";
 import { loadKeys, removeDownload, saveKeys, webRequest } from "./native";
 import { downloadStep, studiosOf } from "./translate";
 import { parseOnshapeUrl, sourceOf } from "./url";
@@ -10,12 +11,12 @@ function abortableSleep(signal: AbortSignal) {
   return (ms: number) =>
     new Promise<void>((resolve, reject) => {
       if (signal.aborted) return reject(signal.reason);
-      const t = setTimeout(() => {
+      const timer = setTimeout(() => {
         signal.removeEventListener("abort", stop);
         resolve();
       }, ms);
       const stop = () => {
-        clearTimeout(t);
+        clearTimeout(timer);
         reject(signal.reason);
       };
       signal.addEventListener("abort", stop, { once: true });
@@ -43,7 +44,7 @@ export async function importFromOnshape(store: DocumentStore, geometry: Geometry
     try {
       await saveKeys(answer.keys);
     } catch (e) {
-      toast(`The keys could not be saved, so they are used for this import only. ${String(e)}`, { kind: "warning" });
+      toast(t("toast.keysNotSaved", { message: String(e) }), { kind: "warning" });
     }
   }
 
@@ -58,10 +59,10 @@ export async function importFromOnshape(store: DocumentStore, geometry: Geometry
   };
   const client = onshapeClient({ transport, keys, sleep });
   try {
-    const studios = await store.runBusy("Reading the Onshape document", () => studiosOf(client, link), { abort });
+    const studios = await store.runBusy(t("busy.reading"), () => studiosOf(client, link), { abort });
     for (const studio of studios) {
       const path = await store.runBusy(
-        `Exporting ${studio.name} from Onshape`,
+        t("busy.exporting", { name: studio.name }),
         () => downloadStep(client, studio, { sleep, now: Date.now }),
         { abort },
       );
@@ -76,6 +77,6 @@ export async function importFromOnshape(store: DocumentStore, geometry: Geometry
     }
   } catch (e) {
     if (signal.aborted) return;
-    await reportError(`Couldn't import from Onshape: ${e instanceof Error ? e.message : String(e)}`);
+    await reportError(t("toast.importFailed", { message: e instanceof Error ? e.message : String(e) }));
   }
 }
