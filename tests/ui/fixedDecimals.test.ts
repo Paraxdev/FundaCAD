@@ -59,7 +59,7 @@ describe("fixed decimal readouts in German", () => {
     const prompt = () => nothingToTiePrompt(looseEnds(ents, held, 0.7), gapReport(ents, held, defaultReach(ents)));
     expect(prompt()).toContain("2.5 mm apart");
     await setLanguage("de");
-    expect(prompt()).toContain("2,5 mm apart");
+    expect(prompt()).toContain("im Abstand von 2,5 mm");
   });
 
   it("the bed message and the screw spec rows use the comma", async () => {

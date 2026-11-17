@@ -1,6 +1,7 @@
 // Text, classes and tooltips of the sketch dim badges and constraint glyphs, computed once per sketch rebuild.
 // Badge position changes every camera frame and is written by a rAF loop; screenTransform is its testable part.
 
+import { t } from "../i18n";
 import { shownExpr, spellNumber } from "../ui/measure";
 import { displayValue, fmtLength, isPlainNumber } from "../ui/units";
 import type { ConstraintDiagnosis } from "./glyphs";
@@ -45,8 +46,8 @@ export function dimTitle(d: {
   fx?: boolean | undefined;
   expr?: string | undefined;
 }): string {
-  if (d.driven) return "Reference dimension (measured, not driving)";
-  return d.fx ? `= ${shownExpr(d.expr ?? "")} · click to edit` : "Click to edit, drag to move";
+  if (d.driven) return t("sketch.badge.reference");
+  return d.fx ? t("sketch.badge.formula", { expr: shownExpr(d.expr ?? "") }) : t("sketch.badge.edit");
 }
 
 export function glyphClass(st: ConstraintDiagnosis | null): string {
@@ -55,10 +56,10 @@ export function glyphClass(st: ConstraintDiagnosis | null): string {
 
 export function glyphTitle(st: ConstraintDiagnosis | null): string {
   return st === "conflict"
-    ? "Conflicting constraint, click to select, Delete removes it"
+    ? t("sketch.glyph.conflict")
     : st === "over"
-      ? "Redundant (over-defined) constraint, click to select, Delete removes it"
-      : "Click to select, Delete removes it";
+      ? t("sketch.glyph.over")
+      : t("sketch.glyph.plain");
 }
 
 /** The -50% centring stays in the transform, not the stylesheet: this translate overwrites the whole property. */

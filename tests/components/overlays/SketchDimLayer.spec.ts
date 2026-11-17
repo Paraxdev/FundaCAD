@@ -366,7 +366,7 @@ describe("SketchDimLayer", () => {
       const input = await openEditor({ expr: "max(width*1.5;2.25)", commitExpr });
       expect([input.value, labels()[0]!.title]).toEqual([
         "max(width*1,5;2,25)",
-        "= max(width*1,5;2,25) · click to edit",
+        "= max(width*1,5;2,25) · klicken zum Bearbeiten",
       ]);
       input.value = "max(width*1,5;2,5)";
       input.dispatchEvent(new Event("input"));

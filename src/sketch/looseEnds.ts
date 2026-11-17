@@ -5,6 +5,7 @@ import { refPoint } from "./entityDims";
 import { entityPolyline } from "./region";
 import type { ResolvedEntity } from "./snap";
 import { spellNumber } from "../ui/measure";
+import { t } from "../i18n";
 
 export interface EndRef {
   entity: string;
@@ -442,9 +443,10 @@ const mm = (v: number) => `${spellNumber(Number(v.toPrecision(2)))} mm`;
 /** What Tie Loose Ends says when nothing is in its reach, never "no loose ends"
  *  while red ends show. */
 export function nothingToTiePrompt(le: LooseEnds, gap: GapReport): string {
-  if (le.untied.length) return "These loose ends cannot be tied, draw a line to close them";
+  if (le.untied.length) return t("sketch.looseEnds.untied");
   const n = le.open.length;
-  if (!n) return "No loose ends to tie";
-  const apart = gap.kind === "gap" ? ` ${mm(gap.gapMm)} apart` : "";
-  return `${n} open end${n === 1 ? "" : "s"}${apart}, too far apart to tie, draw a line to close ${n === 1 ? "it" : "them"}`;
+  if (!n) return t("sketch.looseEnds.none");
+  return gap.kind === "gap"
+    ? t("sketch.looseEnds.tooFarGap", { n, gap: mm(gap.gapMm) })
+    : t("sketch.looseEnds.tooFar", { n });
 }

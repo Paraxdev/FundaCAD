@@ -21,6 +21,7 @@ describe("originCandidate", () => {
     expect(c).toHaveLength(1);
     expect(c[0]!.p.x).toBe(0);
     expect(c[0]!.p.y).toBe(0);
+    expect(c[0]!.origin).toBe(true);
   });
 
   it("finds the origin in a face plane's own coordinates", () => {
@@ -67,6 +68,15 @@ describe("snap", () => {
     const r = snap(v(10.2, 0), cands, screen, 1, 10);
     expect(r.kind).toBe("endpoint");
     expect(r.point.x).toBe(10);
+  });
+  it("says when the anchor it took is the origin", () => {
+    const origin = originCandidate(new SketchPlane("XY"));
+    expect(snap(v(-3, 0), [...cands, ...origin], screen, 1, 10).origin).toBe(true);
+    expect(snap(v(10.2, 0), [...cands, ...origin], screen, 1, 10).origin).toBeFalsy();
+  });
+  it("says so too when the cursor is diagonally near the origin, past its point reach", () => {
+    const r = snap(v(8, 8), originCandidate(new SketchPlane("XY")), screen, 0, 10);
+    expect([r.point.x, r.point.y, r.kind, r.origin]).toEqual([0, 0, "center", true]);
   });
   it("falls back to the grid when no candidate is near", () => {
     const r = snap(v(4.9, 5.1), [], screen, 5, 10);

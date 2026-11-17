@@ -232,9 +232,9 @@ describe("sketch speech in a comma language", () => {
       drawnSentence(line, ents, true, 30),
       drawnSentence({ type: "rectangle", id: "r1", width: 6.5, height: 4.25, x: 0, y: 0 }, ents, false),
     ]).toEqual([
-      "Grid step 2,5 mm. Cursor at 20,5; minus 10,5",
-      "Line 2, length 5,408, angle 30 degrees, loop closed",
-      "Rectangle 1, 6,5 by 4,25",
+      "Rasterschritt 2,5 mm. Cursor bei 20,5; minus 10,5",
+      "Linie 2, Länge 5,408, Winkel 30 Grad, Kontur geschlossen",
+      "Rechteck 1, 6,5 mal 4,25",
     ]);
   });
 

@@ -8,7 +8,16 @@ import { coincKey } from "./sketchSolve";
 import { constraintFace, diagnosisOf, type ConstraintDiagnosis } from "./glyphs";
 import { fmtDim } from "./annotationFormat";
 import { rectSideField } from "./directDims";
-import { distinctNames, entityLabel, entityLabeller, relationName, stateWord, type StateWord } from "./sketchNames";
+import {
+  andWords,
+  distinctNames,
+  entityLabel,
+  entityLabeller,
+  relationName,
+  stateWord,
+  type StateWord,
+} from "./sketchNames";
+import { t } from "../i18n";
 
 export { entityLabel };
 
@@ -81,8 +90,8 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
         key: `implied:${ids.join(",")}`,
         index: null,
         icon: "coincident",
-        name: "Coincident",
-        detail: ids.map(labelOf).filter(Boolean).join(" and "),
+        name: t("sketch.constraint.coincident"),
+        detail: andWords(ids.map(labelOf).filter((s): s is string => !!s)),
         entities: ids,
         state: null,
         implied: true,
@@ -129,8 +138,14 @@ export function constraintRows(
       index: i,
       icon: face.icon,
       name:
-        side === "width" ? "Width" : side === "height" ? "Height" : c.type === "fix" ? fixedName(ents, c) : face.name,
-      detail: [...new Set(labels)].join(" and "),
+        side === "width"
+          ? t("sketch.dim.width")
+          : side === "height"
+            ? t("sketch.dim.height")
+            : c.type === "fix"
+              ? fixedName(ents, c)
+              : face.name,
+      detail: andWords([...new Set(labels)]),
       entities: face.operands.map((o) => o.split("~")[0] ?? o),
       state: diagnosisOf(i, conflicts, over),
     };
@@ -150,11 +165,12 @@ function rectSide(ents: ResolvedEntity[], c: SketchConstraint): "width" | "heigh
 // The point indices are the solver's, as dimRefPoints lists them.
 function fixedName(ents: ResolvedEntity[], c: Extract<SketchConstraint, { type: "fix" }>): string {
   const e = ents.find((x) => x.id === c.e);
-  if (e?.type === "point") return "Fixed";
-  if (e?.type === "circle" || (e?.type === "arc" && c.p === 2)) return "Fixed centre";
-  if (e?.type === "rectangle") return "Fixed corner";
-  if (e?.type === "line" || e?.type === "arc" || e?.type === "spline") return c.p === 0 ? "Fixed start" : "Fixed end";
-  return "Fixed point";
+  if (e?.type === "point") return t("sketch.constraint.fixed");
+  if (e?.type === "circle" || (e?.type === "arc" && c.p === 2)) return t("sketch.constraint.fixedCentre");
+  if (e?.type === "rectangle") return t("sketch.constraint.fixedCorner");
+  if (e?.type === "line" || e?.type === "arc" || e?.type === "spline")
+    return t(c.p === 0 ? "sketch.constraint.fixedStart" : "sketch.constraint.fixedEnd");
+  return t("sketch.constraint.fixedPoint");
 }
 
 /** What was drawn, then what the geometry implies. */
@@ -176,8 +192,8 @@ function withWords(r: Omit<RelationRow, "spoken" | "stateWord">): RelationRow {
 
 /** `dof < 0` means no solve has run, which a sketch without constraints stays in, and is not "fully defined". */
 export function dofSummary(dof: number, conflict: boolean): string {
-  if (conflict) return "Conflicting constraints";
-  if (dof < 0) return "Not constrained";
-  if (dof === 0) return "Fully defined";
-  return `${dof} degree${dof === 1 ? "" : "s"} of freedom`;
+  if (conflict) return t("sketch.relations.conflicting");
+  if (dof < 0) return t("sketch.relations.notConstrained");
+  if (dof === 0) return t("sketch.relations.fullyDefined");
+  return t("sketch.relations.dof", { n: dof });
 }

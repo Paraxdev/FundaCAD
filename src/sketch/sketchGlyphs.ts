@@ -7,6 +7,7 @@ import type { SketchPlane } from "./plane";
 import { diagnosisOf, type ConstraintGlyph } from "./glyphs";
 import { glyphClass, glyphTitle } from "./annotationFormat";
 import { useSketchAnnotationStore, type GlyphHooks } from "../stores/sketchAnnotations";
+import { t } from "../i18n";
 
 /** Presentation is resolved once here, neither changes without a rebuild. */
 export interface GlyphItem extends ConstraintGlyph {
@@ -36,7 +37,8 @@ export class SketchGlyphs {
     store.glyphHooks = this.hooks;
     store.showGlyphs(
       glyphs.map((g) => {
-        if (g.patternId) return markRaw<GlyphItem>({ ...g, cls: "sketch-glyph pattern", title: "Edit pattern" });
+        if (g.patternId)
+          return markRaw<GlyphItem>({ ...g, cls: "sketch-glyph pattern", title: t("sketch.pattern.editTip") });
         const st = diagnosisOf(g.cIndex, conflicts, over);
         // markRaw: `pos` is a THREE.Vector2 the layer projects every frame.
         return markRaw<GlyphItem>({ ...g, cls: glyphClass(st), title: glyphTitle(st) });

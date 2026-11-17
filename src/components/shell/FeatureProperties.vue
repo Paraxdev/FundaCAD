@@ -167,7 +167,7 @@ const TYPE_NAME: Record<string, MessageKey> = {
   point: "tool.point",
 };
 
-// entityDims keeps its English labels for its other readers, so the row's word comes from here.
+// The panel's own field words, so a sketch row reads like every other property row.
 const DIM_NAME: Record<string, MessageKey> = {
   width: "field.width",
   height: "field.height",

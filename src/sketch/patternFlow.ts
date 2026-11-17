@@ -7,6 +7,7 @@ import type { DimInput } from "./dimInput";
 import { newPatternId } from "./id";
 import { CENTRE_GRAB_PX, nearCentreDot, patternSweepDeg, selectionCentre, snapAngleDeg } from "./patternDrag";
 import { setPrompt } from "../ui/prompt";
+import { t } from "../i18n";
 import { hitPx } from "../input/pointerKind";
 import type { SketchTool } from "./sketchMode";
 
@@ -135,7 +136,7 @@ export class PatternFlow {
     this.pendingPattern = this.defaultPattern("patternCircular", this.patternCenter);
     this.showHud(this.pendingPattern);
     this.placeHudAtCentre();
-    setPrompt("Drag the centre dot to move it · move to sweep · click to commit · Esc");
+    setPrompt(t("sketch.pattern.sweep"));
     this.syncDot();
     this.host.refreshActive();
     return true;
@@ -207,7 +208,7 @@ export class PatternFlow {
   click(p: THREE.Vector2) {
     if (!this.patternCenter) {
       if (ENTITY_PATTERNS.has(this.host.tool()) && this.host.selected().size === 0) {
-        setPrompt("Click the curves or profile to pattern · Esc");
+        setPrompt(t("sketch.mode.patternPickFirst"));
         return;
       }
       this.patternCenter = p.clone();
@@ -246,27 +247,27 @@ export class PatternFlow {
     if (type === "boltCircle")
       return [
         { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
-        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+        { name: "diameter", label: t("sketch.dim.diameter"), icon: "diameter", positive: true },
       ];
     if (type === "gridHoles")
       return [
-        { name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 },
-        { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 },
-        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+        { name: "countX", label: t("sketch.pattern.countX"), kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "countY", label: t("sketch.pattern.countY"), kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "diameter", label: t("sketch.dim.diameter"), icon: "diameter", positive: true },
       ];
     if (type === "hexHoles" || type === "honeycomb")
       return [
-        { name: "rings", label: "Rings", kind: "count" as const, integer: true, atLeast: 0 },
-        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+        { name: "rings", label: t("sketch.pattern.rings"), kind: "count" as const, integer: true, atLeast: 0 },
+        { name: "diameter", label: t("sketch.dim.diameter"), icon: "diameter", positive: true },
       ];
     if (type === "patternCircular")
       return [
         { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
-        { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
+        { name: "angle", label: t("sketch.dim.angle"), icon: "angle", kind: "angle" as const },
       ];
     return [
-      { name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 },
-      { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 },
+      { name: "countX", label: t("sketch.pattern.countX"), kind: "count" as const, integer: true, atLeast: 1 },
+      { name: "countY", label: t("sketch.pattern.countY"), kind: "count" as const, integer: true, atLeast: 1 },
     ]; // patternRect
   }
 
@@ -415,7 +416,7 @@ export class PatternFlow {
     // A single row is what Linear stores, so it reopens there, matching its glyph.
     this.host.setActiveTool(pat.type === "patternRect" && pat.countY === 1 ? "patternLinear" : pat.type);
     this.showHud(pat);
-    setPrompt("Drag or type to change · click to commit · Delete removes · Esc");
+    setPrompt(t("sketch.pattern.edit"));
     this.syncDot();
     this.placeHudAtCentre();
     this.host.refreshActive();

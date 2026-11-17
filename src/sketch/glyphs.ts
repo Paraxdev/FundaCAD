@@ -6,6 +6,7 @@ import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint, SketchPattern } from "../types";
 import { lineOperand, refPoint } from "./entityDims";
 import { bsplinePoint, bsplineRange, bsplineValid } from "./bspline";
+import { t } from "../i18n";
 
 const V = (x: number, y: number) => new THREE.Vector2(x, y);
 
@@ -23,7 +24,8 @@ export function diagnosisOf(i: number, conflict: Set<number>, over: Set<number>)
   return conflict.has(i) ? "conflict" : over.has(i) ? "over" : null;
 }
 
-/** THE table, shared by the glyph badges and the list so a constraint has one name on canvas and in the panel.
+/** THE table, shared by the glyph badges and the list so a constraint has one name on canvas and in the panel. The
+ *  name is read in the current language each call.
  *  Operand ids may be rect edges (`<rectId>~<k>`), which entityLabel decodes. */
 export function constraintFace(c: SketchConstraint): {
   icon: string;
@@ -32,64 +34,64 @@ export function constraintFace(c: SketchConstraint): {
 } {
   switch (c.type) {
     case "horizontal":
-      return { icon: "horizontal", name: "Horizontal", operands: [c.line] };
+      return { icon: "horizontal", name: t("sketch.constraint.horizontal"), operands: [c.line] };
     case "vertical":
-      return { icon: "vertical", name: "Vertical", operands: [c.line] };
+      return { icon: "vertical", name: t("sketch.constraint.vertical"), operands: [c.line] };
     case "parallel":
-      return { icon: "parallel", name: "Parallel", operands: [c.l1, c.l2] };
+      return { icon: "parallel", name: t("sketch.constraint.parallel"), operands: [c.l1, c.l2] };
     case "perpendicular":
-      return { icon: "perpendicular", name: "Perpendicular", operands: [c.l1, c.l2] };
+      return { icon: "perpendicular", name: t("sketch.constraint.perpendicular"), operands: [c.l1, c.l2] };
     case "collinear":
-      return { icon: "collinear", name: "Collinear", operands: [c.l1, c.l2] };
+      return { icon: "collinear", name: t("sketch.constraint.collinear"), operands: [c.l1, c.l2] };
     case "equal":
-      return { icon: "equal", name: "Equal", operands: [c.l1, c.l2] };
+      return { icon: "equal", name: t("sketch.constraint.equal"), operands: [c.l1, c.l2] };
     case "equalRadius":
-      return { icon: "equal", name: "Equal radius", operands: [c.a, c.b] };
+      return { icon: "equal", name: t("sketch.constraint.equalRadius"), operands: [c.a, c.b] };
     case "tangent":
-      return { icon: "tangent", name: "Tangent", operands: [c.line, c.circle] };
+      return { icon: "tangent", name: t("sketch.constraint.tangent"), operands: [c.line, c.circle] };
     case "tangent2":
-      return { icon: "tangent", name: "Tangent", operands: [c.a, c.b] };
+      return { icon: "tangent", name: t("sketch.constraint.tangent"), operands: [c.a, c.b] };
     case "coincident":
-      return { icon: "coincident", name: "Coincident", operands: [c.e1, c.e2] };
+      return { icon: "coincident", name: t("sketch.constraint.coincident"), operands: [c.e1, c.e2] };
     case "concentric":
-      return { icon: "concentric", name: "Concentric", operands: [c.c1, c.c2] };
+      return { icon: "concentric", name: t("sketch.constraint.concentric"), operands: [c.c1, c.c2] };
     case "midpoint":
-      return { icon: "midpoint", name: "Midpoint", operands: [c.e, c.line] };
+      return { icon: "midpoint", name: t("sketch.constraint.midpoint"), operands: [c.e, c.line] };
     case "pointOnCurve":
-      return { icon: "coincident", name: "On curve", operands: [c.e, c.curve] };
+      return { icon: "coincident", name: t("sketch.constraint.onCurve"), operands: [c.e, c.curve] };
     case "symmetric":
-      return { icon: "symmetric", name: "Symmetric", operands: [c.e1, c.e2, c.line] };
+      return { icon: "symmetric", name: t("sketch.constraint.symmetric"), operands: [c.e1, c.e2, c.line] };
     case "horizontalPoints":
-      return { icon: "horizontal", name: "Aligned horizontally", operands: [c.e1, c.e2] };
+      return { icon: "horizontal", name: t("sketch.constraint.alignedHorizontally"), operands: [c.e1, c.e2] };
     case "verticalPoints":
-      return { icon: "vertical", name: "Aligned vertically", operands: [c.e1, c.e2] };
+      return { icon: "vertical", name: t("sketch.constraint.alignedVertically"), operands: [c.e1, c.e2] };
     case "fix":
-      return { icon: "fix", name: "Fixed", operands: [c.e] };
+      return { icon: "fix", name: t("sketch.constraint.fixed"), operands: [c.e] };
     // Dimensional constraints have no glyph, but a list of only the geometric half would hide what holds the sketch.
     case "distance":
-      return { icon: "distance", name: "Length", operands: [c.line] };
+      return { icon: "distance", name: t("sketch.dim.length"), operands: [c.line] };
     case "diameter":
-      return { icon: "diameter", name: "Diameter", operands: [c.circle] };
+      return { icon: "diameter", name: t("sketch.dim.diameter"), operands: [c.circle] };
     case "radius":
-      return { icon: "radius", name: "Radius", operands: [c.e] };
+      return { icon: "radius", name: t("sketch.dim.radius"), operands: [c.e] };
     case "angle":
-      return { icon: "angle", name: "Angle", operands: [c.l1, c.l2] };
+      return { icon: "angle", name: t("sketch.dim.angle"), operands: [c.l1, c.l2] };
     case "p2pDistance":
-      return { icon: "distance", name: "Distance", operands: [c.e1, c.e2] };
+      return { icon: "distance", name: t("sketch.dim.distance"), operands: [c.e1, c.e2] };
     case "hDistance":
-      return { icon: "distance", name: "Horizontal distance", operands: [c.e1, c.e2] };
+      return { icon: "distance", name: t("sketch.constraint.hDistance"), operands: [c.e1, c.e2] };
     case "vDistance":
-      return { icon: "distance", name: "Vertical distance", operands: [c.e1, c.e2] };
+      return { icon: "distance", name: t("sketch.constraint.vDistance"), operands: [c.e1, c.e2] };
     case "p2lDistance":
-      return { icon: "distance", name: "Distance to line", operands: [c.e, c.line] };
+      return { icon: "distance", name: t("sketch.constraint.distanceToLine"), operands: [c.e, c.line] };
     case "radialGap":
-      return { icon: "distance", name: "Radial gap", operands: [c.inner, c.outer] };
+      return { icon: "distance", name: t("sketch.constraint.radialGap"), operands: [c.inner, c.outer] };
     case "c2cDistance":
-      return { icon: "distance", name: "Rim to rim", operands: [c.c1, c.c2] };
+      return { icon: "distance", name: t("sketch.constraint.rimToRim"), operands: [c.c1, c.c2] };
     case "c2lDistance":
-      return { icon: "distance", name: "Rim to line", operands: [c.circle, c.line] };
+      return { icon: "distance", name: t("sketch.constraint.rimToLine"), operands: [c.circle, c.line] };
     case "p2cDistance":
-      return { icon: "distance", name: "Point to rim", operands: [c.e, c.circle] };
+      return { icon: "distance", name: t("sketch.constraint.pointToRim"), operands: [c.e, c.circle] };
     default:
       return { icon: "warning", name: (c as { type: string }).type, operands: [] };
   }
