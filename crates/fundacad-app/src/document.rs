@@ -1,5 +1,5 @@
 //! What the shell shows of a document: its history and its parameters. `Document::from_funda` reads it from the
-//! session's .funda document, `Document::sample` is the bracket the Vue workspace capture shows when no file is open.
+//! session's .funda document, `Document::sample` is the bracket of the Vue workspace capture, which the tests use.
 
 use gpui::SharedString;
 use serde_json::{Map, Value};
@@ -45,26 +45,13 @@ pub struct Param {
 
 #[derive(Clone, Debug)]
 pub struct Feature {
+    pub id: String,
     /// The forge icon of the feature type.
     pub glyph: &'static str,
     pub name: SharedString,
     pub health: Health,
     pub suppressed: bool,
     pub params: Vec<Param>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Item {
-    pub glyph: &'static str,
-    pub name: SharedString,
-    pub visible: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct Group {
-    pub glyph: &'static str,
-    pub name: SharedString,
-    pub items: Vec<Item>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -74,7 +61,6 @@ pub struct Document {
     pub features: Vec<Feature>,
     /// Features at and past this index are rolled back.
     pub marker: usize,
-    pub groups: Vec<Group>,
     /// The document's named parameters, the ones no feature field owns.
     #[allow(dead_code)]
     pub named: Vec<Param>,
@@ -98,6 +84,7 @@ impl Document {
         self.marker = at.min(self.features.len());
     }
 
+    #[cfg(test)]
     pub fn sample() -> Self {
         let mm = |label: &str, value: f64| Param {
             label: label.to_string().into(),
@@ -106,71 +93,42 @@ impl Document {
             expr: None,
             target: None,
         };
-        let sketch =
-            |params| Feature { glyph: "sketch", name: "Sketch".into(), health: Health::Ok, suppressed: false, params };
-        let extrude = |params| Feature {
+        let sketch = |id: &str, params| Feature {
+            id: id.into(),
+            glyph: "sketch",
+            name: "Sketch".into(),
+            health: Health::Ok,
+            suppressed: false,
+            params,
+        };
+        let extrude = |id: &str, params| Feature {
+            id: id.into(),
             glyph: "extrude",
             name: "Extrude".into(),
             health: Health::Ok,
             suppressed: false,
             params,
         };
-        let item = |glyph, name: &str, visible| Item { glyph, name: name.to_string().into(), visible };
         Self {
             name: "Untitled".into(),
             dirty: true,
             features: vec![
-                sketch(vec![]),
-                extrude(vec![mm("Distance", 10.)]),
-                sketch(vec![]),
-                extrude(vec![Param {
-                    label: "Distance".into(),
-                    value: 40.,
-                    unit: "mm",
-                    expr: Some("height".into()),
-                    target: None,
-                }]),
+                sketch("s1", vec![]),
+                extrude("e1", vec![mm("Distance", 10.)]),
+                sketch("s2", vec![]),
+                extrude(
+                    "e2",
+                    vec![Param {
+                        label: "Distance".into(),
+                        value: 40.,
+                        unit: "mm",
+                        expr: Some("height".into()),
+                        target: None,
+                    }],
+                ),
             ],
             marker: 4,
-            groups: vec![
-                Group {
-                    glyph: "origin",
-                    name: "Origin".into(),
-                    items: vec![
-                        item("plane", "XY plane", true),
-                        item("plane", "XZ plane", true),
-                        item("plane", "YZ plane", true),
-                    ],
-                },
-                Group {
-                    glyph: "body",
-                    name: "Bodies".into(),
-                    items: vec![item("body", "Body1", true), item("body", "Body2", true)],
-                },
-                Group {
-                    glyph: "sketch",
-                    name: "Sketches".into(),
-                    items: vec![item("sketch", "Sketch1", false), item("sketch", "Sketch2", false)],
-                },
-            ],
             named: vec![],
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum Kind {
-    Length,
-    Angle,
-    Count,
-}
-
-impl Kind {
-    fn unit(self) -> &'static str {
-        match self {
-            Kind::Length => "mm",
-            Kind::Angle => "°",
-            Kind::Count => "",
         }
     }
 }
@@ -183,75 +141,8 @@ fn unit_of(def_unit: &str) -> &'static str {
     }
 }
 
-type Fields = &'static [(&'static str, &'static str, Kind)];
-
-const MOVE: Fields = &[
-    ("dx", "Move X", Kind::Length),
-    ("dy", "Move Y", Kind::Length),
-    ("dz", "Move Z", Kind::Length),
-    ("rx", "Rotate X", Kind::Angle),
-    ("ry", "Rotate Y", Kind::Angle),
-    ("rz", "Rotate Z", Kind::Angle),
-];
-
-/// The numeric fields a feature type shows under its step, as `FEATURE_NUM_FIELDS` in src/document/numFields.ts.
-fn num_fields(ty: &str) -> Fields {
-    match ty {
-        "extrude" => &[
-            ("distance", "Distance", Kind::Length),
-            ("taper", "Taper", Kind::Angle),
-            ("startOffset", "Start offset", Kind::Length),
-            ("endOffset", "End offset", Kind::Length),
-            ("distance2", "Distance 2", Kind::Length),
-            ("taper2", "Taper 2", Kind::Angle),
-            ("endOffset2", "End offset 2", Kind::Length),
-            ("thickness", "Thickness", Kind::Length),
-            ("thickness2", "Thickness 2", Kind::Length),
-        ],
-        "fillet" => &[("radius", "Radius", Kind::Length), ("profile", "Profile", Kind::Count)],
-        "chamfer" => &[("distance", "Distance", Kind::Length), ("distance2", "Distance 2", Kind::Length)],
-        "press-pull" => &[
-            ("distance", "Distance", Kind::Length),
-            ("taper", "Taper", Kind::Angle),
-            ("upToOffset", "Up to offset", Kind::Length),
-        ],
-        "revolve" => &[("angle", "Angle", Kind::Angle), ("pitch", "Pitch", Kind::Length)],
-        "datumPlane" => &[
-            ("offset", "Offset", Kind::Length),
-            ("tiltX", "Tilt X", Kind::Angle),
-            ("tiltY", "Tilt Y", Kind::Angle),
-            ("spin", "Spin", Kind::Angle),
-            ("shiftX", "Shift X", Kind::Length),
-            ("shiftY", "Shift Y", Kind::Length),
-        ],
-        "box" => {
-            &[("length", "Length", Kind::Length), ("width", "Width", Kind::Length), ("leadIn", "Lead-in", Kind::Length)]
-        }
-        "patternRect" => &[
-            ("countX", "Count X", Kind::Count),
-            ("countY", "Count Y", Kind::Count),
-            ("spacingX", "Spacing X", Kind::Length),
-            ("spacingY", "Spacing Y", Kind::Length),
-        ],
-        "patternLinear" => &[("count", "Count", Kind::Count), ("spacing", "Spacing", Kind::Length)],
-        "patternCircular" => &[("count", "Count", Kind::Count), ("angle", "Angle", Kind::Angle)],
-        "simplifyMesh" => &[("tolerance", "Angle tol", Kind::Angle)],
-        "cleanUp" => &[("tolerance", "Tolerance", Kind::Length)],
-        "scale" => &[
-            ("factor", "Factor", Kind::Count),
-            ("sx", "X factor", Kind::Count),
-            ("sy", "Y factor", Kind::Count),
-            ("sz", "Z factor", Kind::Count),
-        ],
-        "move" | "duplicate" => MOVE,
-        "joint" => &[("offset", "Offset", Kind::Length), ("angle", "Angle", Kind::Angle)],
-        "mechanism" => &[("offset", "Drive offset", Kind::Length), ("angle", "Drive angle", Kind::Angle)],
-        _ => &[],
-    }
-}
-
 /// The forge icon and the English name of a feature type, as featureMeta in src/ui/featureMeta.ts.
-fn meta(f: &Map<String, Value>) -> (&'static str, String) {
+pub(crate) fn meta(f: &Map<String, Value>) -> (&'static str, String) {
     let ty = f.get("type").and_then(Value::as_str).unwrap_or("");
     let (glyph, label) = match ty {
         "sketch" => ("sketch", "Sketch"),
@@ -306,11 +197,6 @@ fn meta(f: &Map<String, Value>) -> (&'static str, String) {
     (glyph, label.to_string())
 }
 
-fn capitalised(id: &str) -> String {
-    let mut c = id.chars();
-    c.next().map_or_else(String::new, |f| f.to_uppercase().chain(c).collect())
-}
-
 fn is_plain_number(expr: &str) -> bool {
     expr.trim().parse::<f64>().is_ok_and(f64::is_finite)
 }
@@ -322,7 +208,7 @@ pub fn parse_value(text: &str) -> Option<f64> {
     t.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
-fn number(v: f64) -> Value {
+pub(crate) fn number(v: f64) -> Value {
     if v.fract() == 0.0 && v.abs() < 9_007_199_254_740_992.0 {
         Value::from(v as i64)
     } else {
@@ -375,7 +261,8 @@ impl Document {
             let (glyph, label) = meta(f);
             let own = f.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty());
             let mut params = Vec::new();
-            for &(key, label, kind) in num_fields(f.get("type").and_then(Value::as_str).unwrap_or("")) {
+            for n in crate::inspector::num_fields(f.get("type").and_then(Value::as_str).unwrap_or(""), f) {
+                let (key, label, kind) = (n.key.as_str(), n.label.as_str(), n.kind);
                 let Some(raw) = f.get(key) else { continue };
                 let param = |value, expr: Option<&str>, target| Param {
                     label: label.to_string().into(),
@@ -401,6 +288,7 @@ impl Document {
                 });
             }
             steps.push(Feature {
+                id: id.to_string(),
                 glyph,
                 name: own.map_or(label, str::to_string).into(),
                 health: Health::Ok,
@@ -428,57 +316,8 @@ impl Document {
             })
             .collect();
 
-        Self { name, dirty: false, marker, groups: groups(doc, &features, &steps), features: steps, named }
+        Self { name, dirty: false, marker, features: steps, named }
     }
-}
-
-fn groups(doc: &Map<String, Value>, features: &[&Map<String, Value>], steps: &[Feature]) -> Vec<Group> {
-    let item = |glyph, name: &str, visible| Item { glyph, name: name.to_string().into(), visible };
-    let visible = |side: &str, id: &str, default: bool| {
-        doc.get(side).and_then(|v| v.get(id)).and_then(Value::as_bool).unwrap_or(default)
-    };
-    let ty = |f: &Map<String, Value>| f.get("type").and_then(Value::as_str).unwrap_or("").to_string();
-    let id = |f: &Map<String, Value>| f.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-
-    let mut planes =
-        vec![item("plane", "XY plane", true), item("plane", "XZ plane", true), item("plane", "YZ plane", true)];
-    let mut datum = 0;
-    for (f, s) in features.iter().zip(steps).filter(|(f, _)| ty(f) == "datumPlane") {
-        datum += 1;
-        let named = f.get("name").and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty());
-        let name = if named { s.name.to_string() } else { format!("Plane{datum}") };
-        planes.push(item("plane", &name, visible("planeVisibility", &id(f), true)));
-    }
-    let mut out = vec![Group { glyph: "origin", name: "Origin".into(), items: planes }];
-
-    let ids: Vec<&str> = doc
-        .get("bodyIds")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(|m| m.values().filter_map(Value::as_str))
-        .collect();
-    let bodies: Vec<Item> = ids
-        .iter()
-        .map(|bid| {
-            let own = doc.get("bodyNames").and_then(|n| n.get(*bid)).and_then(Value::as_str).filter(|n| !n.is_empty());
-            let label = own.map_or_else(|| capitalised(bid), str::to_string);
-            item("body", &label, visible("bodyVisibility", bid, true))
-        })
-        .collect();
-    if !bodies.is_empty() {
-        out.push(Group { glyph: "body", name: "Bodies".into(), items: bodies });
-    }
-
-    let sketches: Vec<Item> = features
-        .iter()
-        .zip(steps)
-        .filter(|(f, _)| ty(f) == "sketch")
-        .map(|(f, s)| item("sketch", &s.name, visible("sketchVisibility", &id(f), false)))
-        .collect();
-    if !sketches.is_empty() {
-        out.push(Group { glyph: "sketch", name: "Sketches".into(), items: sketches });
-    }
-    out
 }
 
 #[cfg(test)]
@@ -548,15 +387,10 @@ mod tests {
     }
 
     #[test]
-    fn the_named_parameters_and_groups_come_from_the_document() {
+    fn the_named_parameters_come_from_the_document() {
         let d = Document::from_funda("plate".into(), &funda());
         let named: Vec<_> = d.named.iter().map(|p| (p.label.to_string(), p.value, p.expr.as_deref())).collect();
         assert_eq!(named, [("w".to_string(), 10., None), ("h".to_string(), 20., Some("w * 2"))]);
-        let groups: Vec<_> = d.groups.iter().map(|g| (g.name.to_string(), g.items.len())).collect();
-        assert_eq!(groups, [("Origin".to_string(), 3), ("Bodies".to_string(), 2), ("Sketches".to_string(), 1)]);
-        assert_eq!(d.groups[1].items[0].name, "Plate");
-        assert_eq!(d.groups[1].items[1].name, "Body2");
-        assert!(d.groups[2].items[0].visible);
     }
 
     #[test]

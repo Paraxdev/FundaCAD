@@ -1,19 +1,20 @@
 //! The workspace: a 36px title bar over the stage, where the 3D view runs full bleed and every panel floats over it.
 
+mod geometry;
 mod history;
+mod history_menu;
+mod inspector;
 mod items;
 mod modal;
+mod params;
 mod rail;
+mod timeline;
 mod titlebar;
-mod toast;
-#[cfg(test)]
-mod toast_tests;
-pub(crate) mod transfer;
+mod transfer;
 
 use std::collections::HashMap;
 
 use fundacad_client::Doc;
-use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{InputEvent, InputState};
 
@@ -21,6 +22,7 @@ use crate::document::{self, Document, Target};
 use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_1, S_3, UI_FONT};
 use crate::ui::{chip, frost_flush, text};
 use crate::viewport::Viewport;
+pub use params::OpenParameters;
 
 /// A History value being typed, keyed by its `Target::key`.
 struct Field {
@@ -33,13 +35,16 @@ pub struct Shell {
     doc: Document,
     /// The document `doc` was read from, to tell a real change from the viewport redrawing.
     source: Option<Doc>,
-    /// The transport moved the marker, so it is the shell's until the document says otherwise.
-    marker_moved: bool,
+    /// The viewport's count of documents opened when `doc` was read, so a new one starts with the marker at its end.
+    opened: u64,
     fields: HashMap<String, Field>,
+    inspector: inspector::Ui,
     items_tab: usize,
-    /// The History step whose values show under it.
-    open: Option<usize>,
+    items: items::ItemsState,
+    timeline: timeline::Timeline,
     focus: FocusHandle,
+    bench: crate::workbench::Bench,
+    params: Entity<params::ParamsPanel>,
     transfer: transfer::Transfer,
     _system: Subscription,
 }
@@ -51,15 +56,28 @@ impl Shell {
             cx.notify();
         })
         .detach();
+        let bench = crate::workbench::Bench::new(&viewport, window, cx);
+        cx.observe(&bench.overlay, |_, _, cx| cx.notify()).detach();
+        cx.observe(&bench.files, |_, _, cx| cx.notify()).detach();
+        let params = cx.new(|cx| params::ParamsPanel::new(viewport.clone(), window, cx));
+        transfer::install(cx.weak_entity(), cx);
+        let p = params.clone();
+        crate::commands::register(cx, "parameters", "Parameters", crate::commands::Group::Tools, move |_, cx| {
+            p.update(cx, |p, cx| p.toggle(cx))
+        });
         let mut shell = Self {
             viewport,
             doc,
             source: None,
-            marker_moved: false,
+            opened: 0,
             fields: HashMap::new(),
+            inspector: Default::default(),
             items_tab: 0,
-            open: None,
+            items: items::ItemsState::new(cx),
+            timeline: timeline::Timeline::default(),
             focus: cx.focus_handle(),
+            bench,
+            params,
             transfer: transfer::Transfer::new(cx),
             _system: theme::follow_system(window, cx),
         };
@@ -69,18 +87,22 @@ impl Shell {
 
     /// Reads the shown document again when the viewport's has changed.
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let opened = self.viewport.read(cx).opened();
+        if opened != self.opened {
+            self.opened = opened;
+            self.timeline.rows = Default::default();
+            cx.defer_in(window, |this, window, cx| this.check_links(true, window, cx));
+        }
         let viewport = self.viewport.read(cx);
-        let Some(doc) = viewport.doc() else { return };
+        // An STL has no steps, so History empties instead of keeping the last document's.
+        let empty = Doc::new();
+        let doc = viewport.doc().unwrap_or(&empty);
         if self.source.as_ref() == Some(doc) {
             return;
         }
-        let first = self.source.is_none();
-        let mut next = Document::from_funda(self.doc.name.clone(), doc);
+        self.doc = Document::from_funda(self.doc.name.clone(), doc);
         self.source = Some(doc.clone());
-        if self.marker_moved {
-            next.set_marker(self.doc.marker);
-        }
-        self.doc = next;
+        self.timeline_synced(doc);
         let texts: HashMap<String, String> = self.texts();
         let stale: Vec<String> = self.fields.keys().filter(|k| !texts.contains_key(*k)).cloned().collect();
         for key in stale {
@@ -93,12 +115,10 @@ impl Shell {
                 field.input.update(cx, |i, cx| i.set_value(text, window, cx));
             }
         }
-        if first {
-            self.check_links(true, window, cx);
-        }
     }
 
     fn ensure_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.ensure_inspector_fields(window, cx);
         let Some(open) = self.open_step() else { return };
         let wanted: Vec<(String, String)> = self.doc.features[open]
             .params
@@ -134,6 +154,9 @@ impl Shell {
 
     /// Applies what was typed, or puts the value back when it is not a number.
     fn commit(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.inspector_commit(key, window, cx) {
+            return;
+        }
         let Some(field) = self.fields.get(key) else { return };
         let typed = field.input.read(cx).value();
         let current = self
@@ -179,7 +202,7 @@ impl Render for Shell {
             .left(gap)
             .flex()
             .gap(gap)
-            .child(self.items_card(t, cx))
+            .child(self.items_card(t, window, cx))
             .child(rail::rail(t));
         let right = div()
             .absolute()
@@ -204,27 +227,22 @@ impl Render for Shell {
         if window.focused(cx).is_none() {
             window.focus(&self.focus, cx);
         }
-        let overlay = self.transfer_overlay(t, cx);
+        let params = self.params.clone();
+        let files = self.bench.files.read(cx);
+        (self.doc.name, self.doc.dirty) = (files.name(), files.dirty());
         div()
             .size_full()
             .track_focus(&self.focus)
-            .on_action(cx.listener(|this, _: &crate::viewport::Undo, _, cx| {
-                if !this.busy() {
-                    this.viewport.update(cx, |v, cx| v.undo(cx));
-                }
-            }))
-            .on_action(cx.listener(|this, _: &crate::viewport::Redo, _, cx| {
-                if !this.busy() {
-                    this.viewport.update(cx, |v, cx| v.redo(cx));
-                }
-            }))
-            .map(|d| self.transfer_actions(d, cx))
+            .key_context(crate::commands::key_context(cx))
+            .on_action(crate::commands::on_run)
+            .on_action(move |_: &OpenParameters, _, cx| params.update(cx, |p, cx| p.toggle(cx)))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.history_key(ev, window, cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
             .bg(t.bg)
             .text_color(t.text)
-            .child(self.titlebar(t))
+            .child(self.titlebar(t, cx))
             .child(
                 div()
                     .flex_1()
@@ -234,10 +252,13 @@ impl Render for Shell {
                     .child(div().absolute().size_full().child(self.viewport.clone()))
                     .child(left)
                     .child(right)
-                    .child(status),
+                    .child(status)
+                    .child(self.params.clone()),
             )
-            .child(overlay)
+            .children(self.history_menu(t, cx))
+            .children(self.transfer_modal(t, cx))
             .child(frost_flush(self.viewport.clone()))
+            .child(self.bench.overlay.clone())
     }
 }
 
@@ -264,6 +285,9 @@ mod tests {
             "sync",
             "visible",
             "hidden",
+            "pen",
+            "text",
+            "import",
             "more",
             "skipStart",
             "stepBack",
@@ -282,11 +306,7 @@ mod tests {
             "bug",
         ];
         let doc = Document::sample();
-        let from_doc = doc
-            .features
-            .iter()
-            .map(|f| f.glyph)
-            .chain(doc.groups.iter().flat_map(|g| std::iter::once(g.glyph).chain(g.items.iter().map(|i| i.glyph))));
+        let from_doc = doc.features.iter().map(|f| f.glyph);
         let missing: Vec<_> = fixed
             .into_iter()
             .chain(from_doc)

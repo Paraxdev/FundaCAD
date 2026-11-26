@@ -8,6 +8,10 @@ mod pick;
 mod renderer;
 pub mod scene;
 mod undo;
+mod visible;
+mod views;
+
+pub use views::View;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -27,8 +31,6 @@ use undo::UndoStack;
 
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
-
-actions!(viewport, [Undo, Redo]);
 
 /// Index GPUI samples the main 3D view from.
 const MAIN_TEXTURE: u32 = gpui_wgpu::EXTERNAL_TEXTURE_BASE;
@@ -97,12 +99,20 @@ pub struct Viewport {
     hover: Option<(Hit, Result<Grip, String>)>,
     push: Option<Push>,
     mask_revision: u64,
+    /// Counts every change to the open document, and `opened` every document opened, so watchers skip a redraw.
+    changes: u64,
+    opened: u64,
     background: [u8; 3],
     frosted: Vec<Frost>,
     issues: Vec<FeatureIssue>,
     undo: UndoStack,
     message: Option<String>,
+    /// What the last undo, redo or panel edit said, kept past the rebuild it starts.
+    said: Option<String>,
     rebuild_ms: Option<f64>,
+    /// The latest mesh's bodies, hidden ones included.
+    built: Vec<Arc<scene::Body>>,
+    highlight: Option<(String, u32)>,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -138,26 +148,68 @@ impl Viewport {
             hover: None,
             push: None,
             mask_revision: 0,
+            changes: 0,
+            opened: 0,
             background: [23, 26, 31],
             frosted: Vec::new(),
             issues: Vec::new(),
             undo: UndoStack::default(),
             message: None,
+            said: None,
             rebuild_ms: None,
+            built: Vec::new(),
+            highlight: None,
             _wake: None,
             _demo: None,
         }
     }
 
-    pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) {
+    /// Shows the file at `path`, or says why it cannot and keeps what was shown.
+    pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) -> Result<(), String> {
+        self.load(|wake| engine::open(path, wake), cx)
+    }
+
+    /// Shows a document that is in no file, such as a new one.
+    pub fn open_doc(&mut self, doc: Doc, cx: &mut Context<Self>) -> Result<(), String> {
+        self.load(|wake| engine::start(doc, wake).map(Opened::Doc), cx)
+    }
+
+    fn load(
+        &mut self,
+        open: impl FnOnce(Box<dyn Fn() + Send + Sync>) -> Result<Opened, String>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let (tx, rx) = async_channel::bounded::<()>(1);
+        let opened = open(Box::new(move || {
+            let _ = tx.try_send(());
+        }));
+        let opened = match opened {
+            Ok(opened) => opened,
+            Err(e) => {
+                log::error!("{e}");
+                self.message = Some(e.clone());
+                cx.notify();
+                return Err(e);
+            }
+        };
+        self.changes += 1;
+        self.opened += 1;
         self.issues.clear();
         self.undo = UndoStack::default();
-        let (tx, rx) = async_channel::bounded::<()>(1);
-        match engine::open(path, move || {
-            let _ = tx.try_send(());
-        }) {
-            Ok(Opened::Stl(body)) => self.show(&[Arc::new(body)]),
-            Ok(Opened::Doc(session)) => {
+        self.push = None;
+        self.hover = None;
+        self.message = None;
+        self.rebuild_ms = None;
+        self.fitted = false;
+        self._wake = None;
+        self._demo = None;
+        self.show(&[]);
+        match opened {
+            Opened::Stl(body) => {
+                self.session = None;
+                self.show(&[Arc::new(body)]);
+            }
+            Opened::Doc(session) => {
                 self.session = Some(session);
                 self.message = Some("building".into());
                 self._wake = Some(cx.spawn(async move |this, cx| {
@@ -171,12 +223,22 @@ impl Viewport {
                     self._demo = Some(cx.spawn(async move |this, cx| demo::run(this, cx, travel).await));
                 }
             }
-            Err(e) => {
-                log::error!("{e}");
-                self.message = Some(e);
-            }
         }
         cx.notify();
+        Ok(())
+    }
+
+    /// The folder the open document's imported geometry is published to, which a save embeds from.
+    pub fn blob_dir(&self) -> Option<&Path> {
+        self.session.as_ref().map(|s| s.blob_dir.as_path())
+    }
+
+    pub fn changes(&self) -> u64 {
+        self.changes
+    }
+
+    pub fn opened(&self) -> u64 {
+        self.opened
     }
 
     /// The open document as the app sees it, edits included before the engine has built them.
@@ -184,9 +246,9 @@ impl Viewport {
         self.session.as_ref().map(|s| &s.doc)
     }
 
-    /// The engine link and the file of the open document, for requests that run beside the view.
-    pub fn session_link(&self) -> Option<engine::Link> {
-        self.session.as_ref().map(Session::link)
+    /// The engine link of the open document, with `path` its file, for requests that run beside the view.
+    pub fn session_link(&self, path: Option<&std::path::Path>) -> Option<engine::Link> {
+        self.session.as_ref().map(|s| s.link(path))
     }
 
     /// What the latest rebuild said of each feature it could not build whole, empty when all built.
@@ -201,6 +263,18 @@ impl Viewport {
         f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
         cx: &mut Context<Self>,
     ) -> Result<Option<u64>, String> {
+        self.edit_step(None, None, f, cx)
+    }
+
+    /// `edit` as an undo step that folds into the last one of the same `key`, worded `label` when a diff would not.
+    pub fn edit_step(
+        &mut self,
+        key: Option<String>,
+        label: Option<String>,
+        f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
+        cx: &mut Context<Self>,
+    ) -> Result<Option<u64>, String> {
+        self.said = None;
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return Err("a face is being pushed".into());
         }
@@ -208,11 +282,19 @@ impl Viewport {
         let before = session.doc.clone();
         let edited = session.edit(f)?;
         if edited.is_some() {
-            self.undo.record(before, None);
+            self.changes += 1;
+            self.undo.record(before, key, label);
         }
         self.hover = None;
+        self.show_built();
         cx.notify();
         Ok(edited)
+    }
+
+    /// Puts a line in the status until the next change, for what a panel refused or warned of.
+    pub fn say(&mut self, line: String, cx: &mut Context<Self>) {
+        self.said = Some(line);
+        cx.notify();
     }
 
     #[allow(dead_code, reason = "fc2/shell greys its undo button with it")]
@@ -225,29 +307,41 @@ impl Viewport {
         self.undo.can_redo()
     }
 
+    /// "Undo Fillet 2" for the undo or redo button's tooltip.
+    #[allow(dead_code, reason = "fc2/shell titles its undo and redo buttons with it")]
+    pub fn step_text(&self, undo: bool) -> String {
+        let label = self.session.as_ref().and_then(|s| self.undo.label(undo, &s.doc));
+        crate::timeline::labels::menu_text(undo, label.as_deref())
+    }
+
     /// Steps the document back one change, a run of drags of one face counting as one.
     pub fn undo(&mut self, cx: &mut Context<Self>) {
-        self.step(UndoStack::undo, cx);
+        self.step(true, cx);
     }
 
     pub fn redo(&mut self, cx: &mut Context<Self>) {
-        self.step(UndoStack::redo, cx);
+        self.step(false, cx);
     }
 
-    fn step(&mut self, take: fn(&mut UndoStack, Doc) -> Option<Doc>, cx: &mut Context<Self>) {
+    fn step(&mut self, undo: bool, cx: &mut Context<Self>) {
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return;
         }
         let Some(session) = self.session.as_mut() else { return };
-        let Some(doc) = take(&mut self.undo, session.doc.clone()) else { return };
+        let label = self.undo.label(undo, &session.doc);
+        let taken = if undo { self.undo.undo(session.doc.clone()) } else { self.undo.redo(session.doc.clone()) };
+        let Some(doc) = taken else { return };
+        self.said = label.map(|l| crate::timeline::labels::stepped(undo, &l));
         if let Err(e) = session.edit(move |d| {
             d.clone_from(&doc);
             Ok(())
         }) {
             self.message = Some(e);
         }
+        self.changes += 1;
         self.push = None;
         self.hover = None;
+        self.show_built();
         cx.notify();
     }
 
@@ -269,6 +363,9 @@ impl Viewport {
         }
         if let Some(m) = &self.message {
             parts.push(m.clone());
+        }
+        if let Some(s) = &self.said {
+            parts.push(s.clone());
         }
         parts.join(", ")
     }
@@ -317,7 +414,8 @@ impl Viewport {
             self.rebuild_ms = Some(mesh.timing.total.as_secs_f64() * 1000.0);
             self.message = None;
             self.hover = None;
-            self.show(&mesh.bodies);
+            self.built = mesh.bodies.clone();
+            self.show_built();
             self.retarget(mesh.revision);
         }
         cx.notify();
@@ -361,7 +459,7 @@ impl Viewport {
         let hover = match (&self.push, &self.hover) {
             (Some(_), _) => None,
             (None, Some((hit, grip))) => Some((hit.body, hit.face, grip.is_ok())),
-            (None, None) => None,
+            (None, None) => self.highlighted(),
         };
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
@@ -504,7 +602,10 @@ impl Viewport {
         let grip = p.grip.clone();
         if let Some(session) = &mut self.session {
             match session.edit(move |d| grip.apply(d, value)) {
-                Ok(Some(revision)) => p.sent.push((revision, value)),
+                Ok(Some(revision)) => {
+                    p.sent.push((revision, value));
+                    self.changes += 1;
+                }
                 Ok(None) => {}
                 Err(e) => self.message = Some(e),
             }
@@ -516,7 +617,7 @@ impl Viewport {
         if let Some(p) = self.push.as_mut().filter(|p| !p.released) {
             p.released = true;
             if self.session.as_ref().is_some_and(|s| s.doc != p.before) {
-                self.undo.record(p.before.clone(), Some(p.key.clone()));
+                self.undo.record(p.before.clone(), Some(p.key.clone()), None);
             }
             if p.settled() {
                 self.push = None;
