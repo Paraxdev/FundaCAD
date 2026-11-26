@@ -83,6 +83,7 @@ pub struct Target {
 pub struct Tool {
     /// The command id, as the key table and the ribbon name it.
     pub id: &'static str,
+    /// The catalog key of its name.
     pub label: &'static str,
     pub start: fn(&Doc, &Selection) -> Result<Start, String>,
 }

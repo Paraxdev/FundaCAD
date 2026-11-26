@@ -9,6 +9,7 @@ use super::renderer::Selected;
 use super::resolve::resolve;
 use super::scene::Scene;
 use super::Viewport;
+use crate::i18n::tr;
 use crate::selection::{self, Filter, Mods, Pick, PickKind, Selection};
 
 /// How far the cursor may be from an edge on screen and still take it, and how far a press travels before it drags.
@@ -87,7 +88,7 @@ impl Viewport {
 
     pub fn set_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
         self.picking.filter = filter;
-        self.say(format!("Select: {}", filter.label().to_lowercase()), cx);
+        self.say(tr!("viewport.filterSaid", filter = filter.label().to_lowercase()), cx);
     }
 
     pub fn set_selection(&mut self, picks: Vec<Pick>, cx: &mut Context<Self>) {

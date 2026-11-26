@@ -4,6 +4,7 @@
 use serde_json::{json, Value};
 
 use super::{bodies, Doc, Start, Target, Tool};
+use crate::i18n;
 use crate::selection::{Pick, PickKind, Selection};
 
 const fn t(id: &'static str, label: &'static str, start: fn(&Doc, &Selection) -> Result<Start, String>) -> Tool {
@@ -11,51 +12,51 @@ const fn t(id: &'static str, label: &'static str, start: fn(&Doc, &Selection) ->
 }
 
 pub const TOOLS: &[Tool] = &[
-    t("primitive", "Box", |_, _| plain(json!({"type": "box", "length": 20, "width": 20, "height": 20}))),
-    t("primitive-box", "Box", |_, _| plain(json!({"type": "box", "length": 20, "width": 20, "height": 20}))),
-    t("primitive-cylinder", "Cylinder", |_, _| plain(json!({"type": "cylinder", "radius": 10, "height": 20}))),
-    t("primitive-sphere", "Sphere", |_, _| plain(json!({"type": "sphere", "radius": 10}))),
-    t("primitive-cone", "Cone", |_, _| {
+    t("primitive", "feature.box", |_, _| plain(json!({"type": "box", "length": 20, "width": 20, "height": 20}))),
+    t("primitive-box", "feature.box", |_, _| plain(json!({"type": "box", "length": 20, "width": 20, "height": 20}))),
+    t("primitive-cylinder", "feature.cylinder", |_, _| plain(json!({"type": "cylinder", "radius": 10, "height": 20}))),
+    t("primitive-sphere", "feature.sphere", |_, _| plain(json!({"type": "sphere", "radius": 10}))),
+    t("primitive-cone", "feature.cone", |_, _| {
         plain(json!({"type": "cone", "bottomRadius": 10, "topRadius": 0, "height": 20}))
     }),
-    t("primitive-torus", "Torus", |_, _| plain(json!({"type": "torus", "majorRadius": 15, "minorRadius": 5}))),
-    t("boolean-union", "Union", |_, s| boolean("union", s)),
-    t("boolean-subtract", "Subtract", |_, s| boolean("subtract", s)),
-    t("boolean-intersect", "Intersect", |_, s| boolean("intersect", s)),
-    t("fillet", "Fillet", |_, s| edged(json!({"type": "fillet", "radius": 2}), s)),
-    t("chamfer", "Chamfer", |_, s| edged(json!({"type": "chamfer", "distance": 1}), s)),
-    t("shell", "Shell", |_, s| {
+    t("primitive-torus", "feature.torus", |_, _| plain(json!({"type": "torus", "majorRadius": 15, "minorRadius": 5}))),
+    t("boolean-union", "tool.union", |_, s| boolean("union", s)),
+    t("boolean-subtract", "tool.subtract", |_, s| boolean("subtract", s)),
+    t("boolean-intersect", "tool.intersect", |_, s| boolean("intersect", s)),
+    t("fillet", "tool.fillet", |_, s| edged(json!({"type": "fillet", "radius": 2}), s)),
+    t("chamfer", "tool.chamfer", |_, s| edged(json!({"type": "chamfer", "distance": 1}), s)),
+    t("shell", "tool.shell", |_, s| {
         let faces = selectors(s, PickKind::Face);
         let need = vec![Target { field: "faces", kind: PickKind::Face, many: true }];
         Ok(Start { feature: json!({"type": "shell", "thickness": 2, "faces": faces}), need })
     }),
-    t("offset-plane", "Offset Plane", |_, s| datum_plane(s, 10.0, "Offset plane")),
-    t("datum-plane", "Datum Plane", |_, s| datum_plane(s, 0.0, "Plane")),
-    t("midplane", "Midplane", |_, s| {
-        let [a, b] = two(plane_refs(s), "Select two flat faces or planes, then Midplane")?;
+    t("offset-plane", "tool.offsetPlane", |_, s| datum_plane(s, 10.0, "Offset plane")),
+    t("datum-plane", "tool.datumPlane", |_, s| datum_plane(s, 0.0, "Plane")),
+    t("midplane", "tool.midplane", |_, s| {
+        let [a, b] = two(plane_refs(s), &i18n::t("tool.datum.need.midplane"))?;
         let at = mid_cache(s);
         Ok(Start {
             feature: json!({"type": "datumPlane", "plane": at, "name": "Midplane", "through": {"kind": "mid", "a": a, "b": b}}),
             need: Vec::new(),
         })
     }),
-    t("plane-normal-edge", "Normal to Edge", |_, s| {
-        let [edge] = one(selectors(s, PickKind::Edge), "Select an edge, then Normal to Edge")?;
+    t("plane-normal-edge", "tool.normalToEdge", |_, s| {
+        let [edge] = one(selectors(s, PickKind::Edge), &i18n::t("tool.datum.need.normalToEdge"))?;
         Ok(Start {
             feature: json!({"type": "datumPlane", "plane": "XY", "name": "Normal plane", "t": 0.5,
                 "through": {"kind": "normalToEdge", "edge": edge}}),
             need: Vec::new(),
         })
     }),
-    t("plane-two-edges", "Plane Through Two Edges", |_, s| {
-        let [a, b] = two(selectors(s, PickKind::Edge), "Select two edges, then Plane Through Two Edges")?;
+    t("plane-two-edges", "tool.planeTwoEdges", |_, s| {
+        let [a, b] = two(selectors(s, PickKind::Edge), &i18n::t("tool.datum.need.twoEdges"))?;
         Ok(Start {
             feature: json!({"type": "datumPlane", "plane": "XY", "name": "Plane", "through": {"kind": "twoEdges", "a": a, "b": b}}),
             need: Vec::new(),
         })
     }),
-    t("plane-angle", "Plane at Angle", |_, s| {
-        let words = "Select an edge and a flat face or plane, then Plane at Angle";
+    t("plane-angle", "tool.planeAtAngle", |_, s| {
+        let words = &i18n::t("tool.datum.need.angle");
         let [edge] = one(selectors(s, PickKind::Edge), words)?;
         let [from] = one(plane_refs(s), words)?;
         Ok(Start {
@@ -64,8 +65,8 @@ pub const TOOLS: &[Tool] = &[
             need: Vec::new(),
         })
     }),
-    t("plane-points", "Plane Through Points", |_, s| {
-        let words = "Select three faces or edges to lay the plane through, then Plane Through Points";
+    t("plane-points", "tool.planePoints", |_, s| {
+        let words = &i18n::t("tool.datum.need.points");
         let mut points = point_refs(s);
         if points.len() < 3 {
             return Err(words.into());
@@ -75,7 +76,7 @@ pub const TOOLS: &[Tool] = &[
             s.picks.iter().filter(|p| p.selector().is_some()).take(3).map(|p| spot(p).into()).collect();
         let n = (spots[1] - spots[0]).cross(spots[2] - spots[0]);
         if n.length() < 1e-6 {
-            return Err("The three points are in a line, pick one off it".into());
+            return Err(i18n::t("tool.datum.need.pointsInLine"));
         }
         let n = n.normalize();
         Ok(Start {
@@ -84,7 +85,7 @@ pub const TOOLS: &[Tool] = &[
             need: Vec::new(),
         })
     }),
-    t("datum-point", "Datum Point", |_, s| {
+    t("datum-point", "tool.datumPoint", |_, s| {
         let (point, at) = match s.picks.first() {
             Some(p @ Pick::Face { point, .. }) => (*point, Some(json!({"face": p.selector()}))),
             Some(p @ Pick::Edge { mid, .. }) => (*mid, Some(json!({"edge": p.selector(), "t": 0.5}))),
@@ -96,9 +97,9 @@ pub const TOOLS: &[Tool] = &[
         }
         Ok(Start { feature: f, need: Vec::new() })
     }),
-    t("datum-axis", "Datum Axis", |_, s| {
+    t("datum-axis", "tool.datumAxis", |_, s| {
         let points = point_refs(s);
-        let [a, b] = two(points, "Select two faces or edges to run the axis through, then Datum Axis")?;
+        let [a, b] = two(points, &i18n::t("tool.datum.need.axis"))?;
         let (pa, pb) = (spot(&s.picks[0]), spot(&s.picks[1]));
         let dir = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
         Ok(Start {
@@ -107,16 +108,16 @@ pub const TOOLS: &[Tool] = &[
             need: Vec::new(),
         })
     }),
-    t("datum-axis-edge", "Axis on Edge", |_, s| {
-        let [edge] = one(selectors(s, PickKind::Edge), "Select a straight edge, then Axis on Edge")?;
+    t("datum-axis-edge", "tool.axisOnEdge", |_, s| {
+        let [edge] = one(selectors(s, PickKind::Edge), &i18n::t("tool.datum.need.axisEdge"))?;
         let mid = s.of(PickKind::Edge).first().map_or([0.0; 3], |p| spot(p));
         Ok(Start {
             feature: json!({"type": "datumAxis", "origin": round(mid), "dir": [0, 0, 1], "axisEdge": edge, "name": "Axis"}),
             need: Vec::new(),
         })
     }),
-    t("axis-cylinder", "Axis of Cylinder", |_, s| {
-        let [face] = one(selectors(s, PickKind::Face), "Select a round face, then Axis of Cylinder")?;
+    t("axis-cylinder", "tool.axisOfCylinder", |_, s| {
+        let [face] = one(selectors(s, PickKind::Face), &i18n::t("tool.datum.need.cylinder"))?;
         let at = s.of(PickKind::Face).first().map_or([0.0; 3], |p| spot(p));
         Ok(Start {
             feature: json!({"type": "datumAxis", "origin": round(at), "dir": [0, 0, 1], "name": "Axis",
@@ -124,8 +125,8 @@ pub const TOOLS: &[Tool] = &[
             need: Vec::new(),
         })
     }),
-    t("axis-planes", "Axis of Two Planes", |_, s| {
-        let [a, b] = two(plane_refs(s), "Select two flat faces or planes, then Axis of Two Planes")?;
+    t("axis-planes", "tool.axisTwoPlanes", |_, s| {
+        let [a, b] = two(plane_refs(s), &i18n::t("tool.datum.need.planes"))?;
         Ok(Start {
             feature: json!({"type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1], "name": "Axis",
                 "through": {"kind": "planes", "a": a, "b": b}}),

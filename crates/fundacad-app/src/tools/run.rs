@@ -8,6 +8,7 @@ mod tests;
 use serde_json::{json, Value};
 
 use super::{empty, feature, index_of, set_target, Doc, Target};
+use crate::i18n;
 use crate::selection::PickKind;
 
 pub struct Run {
@@ -86,8 +87,8 @@ impl Run {
         }
         let tools = super::entries(doc, &self.feature, "tools");
         match field {
-            "tools" if f.get("target") == Some(value) => Some("That body is the one kept, pick another".into()),
-            "target" if tools.contains(value) => Some("That body is already used, pick another".into()),
+            "tools" if f.get("target") == Some(value) => Some(i18n::t("tool.boolean.bodyKept")),
+            "target" if tools.contains(value) => Some(i18n::t("tool.boolean.bodyUsed")),
             _ => None,
         }
     }
@@ -126,7 +127,10 @@ impl Run {
     pub fn missing(&self, doc: &Doc) -> Option<String> {
         let f = feature(doc, &self.feature)?;
         let t = self.need.iter().find(|t| empty(f, t.field))?;
-        Some(format!("Pick the {} first", noun(t.kind, t.many)))
+        Some(i18n::t_with(
+            "tool.target.pickFirst",
+            &[("many", if t.many { "yes" } else { "no" }.into()), ("kind", noun(t.kind, false).into())],
+        ))
     }
 
     /// OK checks the needed targets are there and gives back the step to record, Cancel restores the document.

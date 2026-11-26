@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 use super::{drag, pick, Viewport};
 use crate::commands::{self, Group, Mode};
+use crate::i18n::{self, tr, Label};
 use crate::sketch::{self, Editor, Plane, Tool};
 
 const FREE: u32 = 0x5b9bff;
@@ -50,7 +51,7 @@ impl Viewport {
             return;
         }
         if self.session.is_none() {
-            self.say("open a FundaCAD document to sketch".into(), cx);
+            self.say(i18n::t("sketch.needDocument"), cx);
             return;
         }
         self.sketch_ui.picking = true;
@@ -63,7 +64,7 @@ impl Viewport {
         let out = made.clone();
         let r = self.edit_step(
             None,
-            Some("Add Sketch".into()),
+            Some(tr!("step.label.add", step = i18n::t("tool.sketch"))),
             move |d| {
                 let id = sketch::add_sketch(d, plane.clone())?;
                 *out.lock().expect("one writer") = Some(id);
@@ -326,17 +327,19 @@ impl Viewport {
     /// The status line part, None while not sketching.
     pub(super) fn sketch_status(&self) -> Option<String> {
         if self.sketch_ui.picking {
-            return Some("click a flat face or an origin plane to sketch on, Esc cancels".into());
+            return Some(i18n::t("sketch.pickPlane"));
         }
         let e = self.sketch.as_ref()?;
         let state = if !e.solved.conflicts.is_empty() {
-            "conflicting constraints".to_string()
+            i18n::t("sketch.relations.conflicting")
         } else if e.solved.dof == 0 {
-            "fully defined".to_string()
+            i18n::t("sketch.relations.fullyDefined")
         } else {
-            format!("{} degrees of freedom left", e.solved.dof)
+            tr!("sketch.status.dofLeft", n = e.solved.dof)
         };
-        Some(format!("{}: {}, {}{}", e.name, e.tool.label(), state, if e.construction { ", construction" } else { "" }))
+        let construction =
+            if e.construction { format!(", {}", i18n::t("sketch.name.construction")) } else { String::new() };
+        Some(format!("{}: {}, {}{}", e.name, e.tool.label(), state, construction))
     }
 
     pub(super) fn sketch_escape(&mut self, cx: &mut Context<Self>) -> bool {
@@ -365,7 +368,7 @@ impl Viewport {
     pub fn sketch_extrude(&mut self, revolve: bool, cx: &mut Context<Self>) {
         let Some(e) = &self.sketch else { return };
         if e.regions().is_empty() {
-            self.say("the sketch has no closed area to make a solid from".into(), cx);
+            self.say(i18n::t("sketch.noArea"), cx);
             return;
         }
         let id = e.feature.clone();
@@ -376,11 +379,11 @@ impl Viewport {
             let (o, d) = (e.plane.to_3d(a), e.plane.to_3d(b) - e.plane.to_3d(a));
             json!({"origin": [o.x, o.y, o.z], "dir": [d.x, d.y, d.z]})
         });
-        let label = if revolve { "Add Revolve" } else { "Add Extrude" };
+        let label = tr!("step.label.add", step = i18n::t(if revolve { "tool.revolve" } else { "tool.extrude" }));
         self.finish_sketch(cx);
         let r = self.edit_step(
             None,
-            Some(label.into()),
+            Some(label),
             move |d| {
                 match &axis {
                     Some(axis) => sketch::add_revolve(d, &id, axis.clone(), &fill),
@@ -417,7 +420,7 @@ impl Viewport {
             let text = typing.clone().unwrap_or_else(|| {
                 let v = match () {
                     _ if d.angle => format!("{}°", fmt(d.value)),
-                    _ if d.label.starts_with("Diameter") => format!("⌀{}", fmt(d.value)),
+                    _ if d.label.starts_with(&i18n::t("sketch.dim.diameter")) => format!("⌀{}", fmt(d.value)),
                     _ => fmt(d.value),
                 };
                 match (&d.expr, d.driven) {
@@ -447,13 +450,13 @@ impl Viewport {
             );
         }
         let tools = [
-            ("Select", Tool::Select),
-            ("Line", Tool::Line),
-            ("Rectangle", Tool::Rectangle),
-            ("Circle", Tool::Circle),
-            ("Arc", Tool::Arc),
-            ("Polygon", Tool::Polygon),
-            ("Dimension", Tool::Dimension),
+            ("viewControls.select", Tool::Select),
+            ("tool.line", Tool::Line),
+            ("tool.rectangle", Tool::Rectangle),
+            ("tool.circle", Tool::Circle),
+            ("tool.arc", Tool::Arc),
+            ("tool.polygon", Tool::Polygon),
+            ("tool.dimension", Tool::Dimension),
         ];
         let button = |label: &'static str, on: bool| {
             div()
@@ -466,7 +469,7 @@ impl Viewport {
                 .text_color(rgb(if on { 0x15131c } else { 0xe8e6f0 }))
                 .when(on, |d| d.bg(rgb(ACCENT)))
                 .hover(|d| d.bg(rgb_a(ACCENT, 0.35)))
-                .child(label)
+                .child(i18n::t(label))
         };
         let mut bar = div().flex().flex_wrap().justify_center().max_w(px(560.)).gap_1().p_1().rounded_md().bg(rgb_a(0x15131c, 0.9));
         for (label, tool) in tools {
@@ -483,10 +486,12 @@ impl Viewport {
         }
         let selected = e.selected.as_ref().is_some_and(|s| e.is_construction(s.split('~').next().unwrap_or(s)));
         let actions: [(&'static str, bool, fn(&mut Viewport, &mut Context<Viewport>)); 4] = [
-            ("Construction", e.construction || selected, |v, cx| v.sketch_do(cx, Editor::toggle_construction)),
-            ("Extrude", false, |v, cx| v.sketch_extrude(false, cx)),
-            ("Revolve", false, |v, cx| v.sketch_extrude(true, cx)),
-            ("Finish", false, |v, cx| v.finish_sketch(cx)),
+            ("sketchPalette.toggle.construction", e.construction || selected, |v, cx| {
+                v.sketch_do(cx, Editor::toggle_construction)
+            }),
+            ("tool.extrude", false, |v, cx| v.sketch_extrude(false, cx)),
+            ("tool.revolve", false, |v, cx| v.sketch_extrude(true, cx)),
+            ("sketch.finish", false, |v, cx| v.finish_sketch(cx)),
         ];
         for (label, on, run) in actions {
             bar = bar.child(button(label, on).on_mouse_down(
@@ -639,39 +644,39 @@ fn preview_points(mut pv: Value, params: &std::collections::HashMap<String, f64>
 
 /// The sketch commands, in the Sketch group.
 pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
-    let on = |id: &'static str, label: &'static str, f: fn(&mut Viewport, &mut Context<Viewport>), cx: &mut App| {
+    let on = |id: &'static str, label: Label, f: fn(&mut Viewport, &mut Context<Viewport>), cx: &mut App| {
         let v = viewport.clone();
         commands::register(cx, id, label, Group::Sketch, move |_, cx| v.update(cx, f));
     };
-    on("sketch", "Sketch", Viewport::begin_sketch, cx);
-    on("sketch-xy", "Sketch on XY", |v, cx| v.new_sketch(json!("XY"), cx), cx);
-    on("sketch-xz", "Sketch on XZ", |v, cx| v.new_sketch(json!("XZ"), cx), cx);
-    on("sketch-yz", "Sketch on YZ", |v, cx| v.new_sketch(json!("YZ"), cx), cx);
-    on("edit-sketch", "Edit Sketch", Viewport::edit_last_sketch, cx);
-    on("finish-sketch", "Finish Sketch", Viewport::finish_sketch, cx);
-    on("sketch-extrude", "Finish & Extrude", |v, cx| v.sketch_extrude(false, cx), cx);
-    on("sketch-revolve", "Finish & Revolve", |v, cx| v.sketch_extrude(true, cx), cx);
+    on("sketch", Label::Key("tool.sketch"), Viewport::begin_sketch, cx);
+    on("sketch-xy", Label::With("sketch.command.on", &[("plane", "XY")]), |v, cx| v.new_sketch(json!("XY"), cx), cx);
+    on("sketch-xz", Label::With("sketch.command.on", &[("plane", "XZ")]), |v, cx| v.new_sketch(json!("XZ"), cx), cx);
+    on("sketch-yz", Label::With("sketch.command.on", &[("plane", "YZ")]), |v, cx| v.new_sketch(json!("YZ"), cx), cx);
+    on("edit-sketch", Label::Key("sketch.command.edit"), Viewport::edit_last_sketch, cx);
+    on("finish-sketch", Label::Key("command.finish"), Viewport::finish_sketch, cx);
+    on("sketch-extrude", Label::Key("sketch.command.finishExtrude"), |v, cx| v.sketch_extrude(false, cx), cx);
+    on("sketch-revolve", Label::Key("sketch.command.finishRevolve"), |v, cx| v.sketch_extrude(true, cx), cx);
     // FC1's E in a sketch is the `extrude` row: finish the sketch and extrude it. The model's own Extrude is not built.
     on(
         "extrude",
-        "Extrude",
+        Label::Key("tool.extrude"),
         |v, cx| match v.sketch.is_some() {
             true => v.sketch_extrude(false, cx),
-            false => v.say("Extrude a sketch with E while it is open".into(), cx),
+            false => v.say(i18n::t("sketch.extrudeHint"), cx),
         },
         cx,
     );
     let tools = [
-        ("line", "Line", Tool::Line),
-        ("rectangle", "Rectangle", Tool::Rectangle),
-        ("circle", "Circle", Tool::Circle),
-        ("arc", "Arc", Tool::Arc),
-        ("polygon", "Polygon", Tool::Polygon),
-        ("dimension", "Dimension", Tool::Dimension),
+        ("line", "tool.line", Tool::Line),
+        ("rectangle", "tool.rectangle", Tool::Rectangle),
+        ("circle", "tool.circle", Tool::Circle),
+        ("arc", "tool.arc", Tool::Arc),
+        ("polygon", "tool.polygon", Tool::Polygon),
+        ("dimension", "tool.dimension", Tool::Dimension),
     ];
     for (id, label, tool) in tools {
         let v = viewport.clone();
-        commands::register(cx, id, label, Group::Sketch, move |_, cx| {
+        commands::register(cx, id, Label::Key(label), Group::Sketch, move |_, cx| {
             v.update(cx, |v, cx| {
                 if v.sketch.is_none() {
                     v.new_sketch(json!("XY"), cx);
@@ -683,15 +688,20 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
             })
         });
     }
-    on("construction", "Construction", |v, cx| v.sketch_do(cx, Editor::toggle_construction), cx);
-    on("horizontal", "Horizontal", |v, cx| v.sketch_do(cx, |e| e.constrain("horizontal")), cx);
-    on("vertical", "Vertical", |v, cx| v.sketch_do(cx, |e| e.constrain("vertical")), cx);
+    on(
+        "construction",
+        Label::Key("sketchPalette.toggle.construction"),
+        |v, cx| v.sketch_do(cx, Editor::toggle_construction),
+        cx,
+    );
+    on("horizontal", Label::Key("tool.horizontal"), |v, cx| v.sketch_do(cx, |e| e.constrain("horizontal")), cx);
+    on("vertical", Label::Key("tool.vertical"), |v, cx| v.sketch_do(cx, |e| e.constrain("vertical")), cx);
     let v = viewport.clone();
-    commands::register(cx, "escape", "Cancel", Group::Edit, move |_, cx| {
+    commands::register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| v.sketch_escape(cx));
     });
     let v = viewport.clone();
-    commands::register(cx, "delete", "Delete", Group::Edit, move |_, cx| {
+    commands::register(cx, "delete", Label::Key("menu.edit.delete"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| v.sketch_do(cx, Editor::delete_selected));
     });
 }

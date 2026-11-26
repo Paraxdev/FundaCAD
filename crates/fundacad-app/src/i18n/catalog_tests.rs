@@ -172,3 +172,13 @@ fn the_sketch_lines_fill_their_arguments() {
     assert_eq!(tr!("step.label.delete", n = 1, step = "Circle 1"), "Delete Circle 1");
     assert_eq!(tr!("date.short", day = "12", month = "nov", year = "2026"), "12 Nov 2026");
 }
+
+#[test]
+fn the_tool_and_viewport_lines_fill_their_arguments() {
+    assert_eq!(tr!("tool.target.pickFirst", many = "yes", kind = "body"), "Pick the bodies first");
+    assert_eq!(tr!("tool.target.pickFirst", many = "no", kind = "edge"), "Pick the edge first");
+    assert_eq!(tr!("sketch.status.dofLeft", n = 1), "1 degree of freedom left");
+    assert_eq!(tr!("sketch.status.dofLeft", n = 4), "4 degrees of freedom left");
+    assert_eq!(tr!("viewport.status.triangles", n = 1200), "1200 triangles");
+    assert_eq!(tr!("viewport.status.push", grip = "Top", mm = 2.5), "drag to push Top (2.5 mm)");
+}

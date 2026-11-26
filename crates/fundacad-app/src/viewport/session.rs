@@ -4,6 +4,7 @@ use gpui::*;
 
 use super::resolve::resolve;
 use super::Viewport;
+use crate::i18n;
 use crate::selection::Pick;
 use crate::tools::{self, Target};
 
@@ -34,12 +35,12 @@ impl Viewport {
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         if self.tool.is_some() {
-            return Err("finish the tool that is running first".into());
+            return Err(i18n::t("ctx.busy"));
         }
         if self.push.is_some() {
-            return Err("a face is being pushed".into());
+            return Err(i18n::t("viewport.pushing"));
         }
-        let session = self.session.as_mut().ok_or("no document is open")?;
+        let session = self.session.as_mut().ok_or_else(|| i18n::t("files.openDocumentFirst"))?;
         let before = session.doc.clone();
         session.edit(f)?;
         self.changes += 1;

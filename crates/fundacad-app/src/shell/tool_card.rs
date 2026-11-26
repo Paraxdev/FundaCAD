@@ -18,7 +18,7 @@ use crate::viewport::Viewport;
 pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     for tool in tools::TOOLS.iter().filter(|t| !tools::HELD.contains(&t.id)) {
         let v = viewport.clone();
-        register(cx, tool.id, tool.label, Group::Tools, move |_, cx| start(&v, tool, cx));
+        register(cx, tool.id, Label::Key(tool.label), Group::Tools, move |_, cx| start(&v, tool, cx));
     }
     let filters =
         [("selmode-faces", Filter::Faces), ("selmode-bodies", Filter::Bodies), ("selmode-auto", Filter::Auto)];
@@ -44,7 +44,7 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     let Some(doc) = v.doc() else { return toast(cx, i18n::t("tool.openDocumentFirst")) };
     let boolean = tool.id.starts_with("boolean-");
     if boolean && v.body_count() < 2 {
-        return toast(cx, tr!("tool.boolean.needTwo", tool = tool.label));
+        return toast(cx, tr!("tool.boolean.needTwo", tool = i18n::t(tool.label)));
     }
     let (id, start) = match tools::started(tool, doc, v.selection()) {
         Ok(s) => s,
@@ -56,7 +56,7 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     let feature = start.feature.clone();
     let begun = viewport.update(cx, |v, cx| {
         let need = start.need.clone();
-        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| tools::insert(d, feature.clone()), cx)?;
+        v.begin_tool(i18n::t(tool.label), label, id.clone(), need, move |d| tools::insert(d, feature.clone()), cx)?;
         v.clear_selection(cx);
         match start.arm() {
             // A boolean with its bodies picked is done at once, as in FundaCAD 1.
