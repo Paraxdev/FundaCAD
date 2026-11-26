@@ -4,7 +4,7 @@ use super::*;
 fn user_names_in_paths_are_hidden() {
     assert_eq!(redact_user_paths(r"C:\Users\alice\Documents\a.funda"), r"C:\Users\[REDACTED]\Documents\a.funda");
     assert_eq!(redact_user_paths(r"c:\users\Bob Smith\x"), r"c:\users\[REDACTED]\x");
-    assert_eq!(redact_user_paths("/home/carol/parts/b.funda"), "/home/[REDACTED]/parts/b.funda");
+    assert_eq!(redact_user_paths("/home/test/parts/b.funda"), "/home/[REDACTED]/parts/b.funda");
     assert_eq!(redact_user_paths("open '/Users/dave' failed"), "open '/Users/[REDACTED]' failed");
     assert_eq!(redact_user_paths(r"/home/ and C:\Users\"), r"/home/ and C:\Users\");
     assert_eq!(redact_user_paths("no paths here"), "no paths here");
