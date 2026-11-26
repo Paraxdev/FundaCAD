@@ -1,5 +1,6 @@
 //! The document's file: New, Open, Save and Save As, the unsaved changes guard, the window title and recent files.
 
+pub mod drop;
 pub mod recent;
 #[cfg(test)]
 mod tests;

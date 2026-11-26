@@ -230,6 +230,7 @@ impl Render for Shell {
             .on_action(crate::commands::on_run)
             .on_action(move |_: &OpenParameters, _, cx| params.update(cx, |p, cx| p.toggle(cx)))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.history_key(ev, window, cx)))
+            .on_drop(crate::files::drop::on_drop)
             .flex()
             .flex_col()
             .font_family(UI_FONT)
@@ -250,6 +251,7 @@ impl Render for Shell {
             )
             .children(self.history_menu(t, cx))
             .child(frost_flush(self.viewport.clone()))
+            .child(crate::files::drop::hint(t))
             .child(self.bench.overlay.clone())
     }
 }
