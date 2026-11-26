@@ -11,6 +11,7 @@ pub mod kit;
 pub mod palette;
 pub mod tokens;
 
+use std::sync::Arc;
 use std::{ops::Deref, time::Duration};
 
 use gpui::{point, px, App, BoxShadow, Context, Global, SharedString, Subscription, Window, WindowAppearance};
@@ -250,7 +251,8 @@ pub struct ThemeState {
     settings: Settings,
     os: OsAppearance,
     custom: Vec<Custom>,
-    theme: Theme,
+    /// Shared, so a render can hold the theme across `&mut cx` calls without copying its shadow lists.
+    theme: Arc<Theme>,
 }
 
 impl Global for ThemeState {}
@@ -274,7 +276,7 @@ fn sanitize(custom: Vec<Custom>) -> Vec<Custom> {
 impl ThemeState {
     fn new(settings: Settings, os: OsAppearance, custom: Vec<Custom>) -> Self {
         let custom = sanitize(custom);
-        let theme = Self::build(&settings, os, &custom);
+        let theme = Arc::new(Self::build(&settings, os, &custom));
         Self { settings, os, custom, theme }
     }
 
@@ -304,7 +306,7 @@ impl ThemeState {
         (os != self.os).then(|| Self::new(self.settings.clone(), os, self.custom.clone()))
     }
 
-    pub fn theme(&self) -> &Theme {
+    pub fn theme(&self) -> &Arc<Theme> {
         &self.theme
     }
 
@@ -340,11 +342,11 @@ impl ThemeState {
 }
 
 pub trait ActiveTheme {
-    fn theme(&self) -> &Theme;
+    fn theme(&self) -> &Arc<Theme>;
 }
 
 impl ActiveTheme for App {
-    fn theme(&self) -> &Theme {
+    fn theme(&self) -> &Arc<Theme> {
         &self.global::<ThemeState>().theme
     }
 }
