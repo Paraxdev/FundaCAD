@@ -1,6 +1,6 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
-//! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`
-//! or `ask:<question>`.
+//! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
+//! `ask:<question>` or `key:<keystroke>` such as `key:ctrl-k`.
 
 use std::time::Duration;
 
@@ -36,6 +36,11 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     } else if let Some(text) = step.strip_prefix("toast:") {
         let toast = crate::overlay::Toast::info(text.to_string()).with_action("Undo", |_, _| {});
         crate::overlay::toast(cx, toast);
+    } else if let Some(key) = step.strip_prefix("key:") {
+        match gpui::Keystroke::parse_with_os(key, cx.platform_info().os) {
+            Ok(k) => drop(window.dispatch_keystroke(k, cx)),
+            Err(e) => log::error!("shot: {key}: {e:?}"),
+        }
     } else if let Some(question) = step.strip_prefix("ask:") {
         use crate::overlay::Choice;
         let choices = vec![
