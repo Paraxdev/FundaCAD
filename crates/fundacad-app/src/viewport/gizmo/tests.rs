@@ -175,3 +175,28 @@ fn outline_sizes_handles_in_pixels() {
     assert!(ring.iter().all(|p| (p.distance(at) - 23.0).abs() < 1e-3 && (p.z - at.z).abs() < 1e-5));
     assert!(outline(Kind::Rect, at, 1.0).iter().all(|(h, l)| matches!(h, Handle::Arrow(0 | 1)) && l.len() == 2));
 }
+
+#[test]
+fn a_value_bound_to_a_parameter_leaves_the_handles_off() {
+    assert_eq!(kind(&json!({"type": "move", "dx": 4, "rz": 15})), Some(Kind::Move));
+    assert_eq!(kind(&json!({"type": "move", "dx": "gap"})), None);
+    assert_eq!(kind(&json!({"type": "duplicate", "ry": "tilt"})), None);
+    assert_eq!(kind(&json!({"type": "patternLinear", "spacing": "pitch"})), None);
+    assert_eq!(kind(&json!({"type": "patternLinear", "spacing": 12, "count": "n"})), Some(Kind::Linear));
+    assert_eq!(kind(&json!({"type": "patternRect", "spacingX": 3, "spacingY": "row"})), None);
+    assert_eq!(kind(&json!({"type": "patternCircular", "angle": "sweep"})), None);
+    assert_eq!(kind(&json!({"type": "patternCircular", "angle": null})), Some(Kind::Circular));
+    assert_eq!(kind(&json!({"type": "draft"})), None);
+}
+
+#[test]
+fn a_linear_arrow_for_another_axis_spaces_the_copies_one_body_length_along_it() {
+    let f = json!({"type": "patternLinear", "count": 4, "spacing": 30, "axis": "X"});
+    let extent = Some(([5.0, -3.0, 2.0], [35.0, 9.5, 9.0]));
+    assert_eq!(linear_axis(&f, 0, extent), f);
+    assert_eq!(linear_axis(&f, 1, extent), json!({"type": "patternLinear", "count": 4, "spacing": 12.5, "axis": "Y"}));
+    assert_eq!(linear_axis(&f, 2, extent), json!({"type": "patternLinear", "count": 4, "spacing": 7.0, "axis": "Z"}));
+    assert_eq!(linear_axis(&f, 2, None), json!({"type": "patternLinear", "count": 4, "spacing": 20.0, "axis": "Z"}));
+    let flat = Some(([0.0, 1.0, 4.0], [10.0, 1.0, 6.0]));
+    assert_eq!(linear_axis(&f, 1, flat)["spacing"], json!(20.0));
+}

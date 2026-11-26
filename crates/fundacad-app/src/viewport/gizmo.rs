@@ -52,14 +52,29 @@ struct Drag {
     travel: f64,
 }
 
+/// None too when a value the handles drag is bound to a parameter, a drag would write a number over the name.
 pub fn kind(f: &Value) -> Option<Kind> {
-    match f.get("type")?.as_str()? {
-        "move" | "duplicate" => Some(Kind::Move),
-        "patternLinear" => Some(Kind::Linear),
-        "patternRect" => Some(Kind::Rect),
-        "patternCircular" => Some(Kind::Circular),
-        _ => None,
+    let (kind, keys): (Kind, &[&str]) = match f.get("type")?.as_str()? {
+        "move" | "duplicate" => (Kind::Move, &["dx", "dy", "dz", "rx", "ry", "rz"]),
+        "patternLinear" => (Kind::Linear, &["spacing"]),
+        "patternRect" => (Kind::Rect, &["spacingX", "spacingY"]),
+        "patternCircular" => (Kind::Circular, &["angle"]),
+        _ => return None,
+    };
+    let bound = keys.iter().any(|k| f.get(*k).is_some_and(|v| !v.is_null() && !v.is_number()));
+    (!bound).then_some(kind)
+}
+
+/// A linear pattern's arrow for another axis turns the pattern to it, one body length apart along it as it opens.
+pub fn linear_axis(f: &Value, k: usize, extent: Option<([f32; 3], [f32; 3])>) -> Value {
+    let mut out = f.clone();
+    if f.get("axis").and_then(Value::as_str) == Some(NAMES[k]) {
+        return out;
     }
+    let span = extent.map(|(lo, hi)| clean(f64::from(hi[k] - lo[k]))).filter(|s| *s > 1e-6);
+    out["axis"] = json!(NAMES[k]);
+    out["spacing"] = json!(span.unwrap_or(20.0));
+    out
 }
 
 pub fn handles(kind: Kind) -> Vec<Handle> {
@@ -337,8 +352,12 @@ impl Viewport {
         let Some((kind, mut f, at)) = self.gizmo_target() else { return false };
         let Some(shapes) = self.gizmo_shapes(kind, at) else { return false };
         let Some(handle) = hit(&shapes, Vec2::new(position.x.as_f32(), position.y.as_f32())) else { return false };
-        if let (Kind::Circular, Handle::Arrow(k)) = (kind, handle) {
-            let turned = grabbed_axis(&f, k);
+        let turned = match (kind, handle) {
+            (Kind::Circular, Handle::Arrow(k)) => Some(grabbed_axis(&f, k)),
+            (Kind::Linear, Handle::Arrow(k)) => Some(linear_axis(&f, k, crate::tools::sources_extent(&f, &self.shown_bodies()))),
+            _ => None,
+        };
+        if let Some(turned) = turned {
             if turned != f {
                 self.gizmo_apply(&turned, cx);
                 f = turned;
