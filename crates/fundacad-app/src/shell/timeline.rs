@@ -264,8 +264,9 @@ impl Shell {
             return;
         }
         let line = labels::deleted_line(&doc, &gone, &deps::dependents(&doc, &gone));
+        let rows = self.timeline.rows.after_delete(&gone);
         if self.timeline_edit(None, move |d| ops::delete(d, &gone), cx) {
-            self.timeline.rows = Rows::default();
+            self.timeline.rows = rows;
             self.viewport.update(cx, |v, cx| v.say(line, cx));
         }
     }

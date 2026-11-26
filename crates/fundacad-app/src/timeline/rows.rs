@@ -51,6 +51,15 @@ impl Rows {
         }
     }
 
+    /// The selection once `gone` is deleted: cleared when it held one of them, else kept whole, as FundaCAD 1 did.
+    pub fn after_delete(&self, gone: &[String]) -> Rows {
+        if self.keys.iter().any(|k| gone.contains(k)) {
+            Rows::default()
+        } else {
+            self.clone()
+        }
+    }
+
     /// The one picked row, None for none or several.
     pub fn sole(&self) -> Option<&str> {
         match &self.keys[..] {

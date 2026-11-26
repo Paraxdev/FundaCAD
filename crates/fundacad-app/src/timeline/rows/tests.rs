@@ -70,3 +70,12 @@ fn sole_is_the_one_picked_row() {
     assert_eq!(rows(&["e1", "e2"], None).sole(), None);
     assert!(rows(&["e1"], None).has("e1") && !rows(&["e1"], None).has("e2"));
 }
+
+#[test]
+fn a_delete_clears_the_selection_only_when_it_held_a_deleted_row() {
+    let two = rows(&["e2", "s1"], Some("e2"));
+    assert_eq!(two.after_delete(&strings(&["f1"])), two, "a menu delete on a row not picked keeps the pick");
+    assert_eq!(two.after_delete(&[]), two);
+    assert_eq!(two.after_delete(&strings(&["f1", "s1"])), Rows::default());
+    assert_eq!(Rows::default().after_delete(&strings(&["e1"])), Rows::default());
+}
