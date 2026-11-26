@@ -153,3 +153,12 @@ fn a_folder_click_takes_adds_or_removes_its_members() {
     assert_eq!(act_on(&s(&["a", "b"]), "b"), s(&["a", "b"]));
     assert_eq!(act_on(&s(&["a", "b"]), "c"), s(&["c"]));
 }
+
+#[test]
+fn showing_what_is_shown_writes_nothing() {
+    let mut d = doc();
+    let before = d.clone();
+    set_visibility(&mut d, Category::Bodies, &changes(&[("body1", true), ("body2", false)]), &HashMap::new()).unwrap();
+    set_visibility(&mut d, Category::Sketches, &changes(&[("s1", false)]), &HashMap::new()).unwrap();
+    assert_eq!(d, before);
+}

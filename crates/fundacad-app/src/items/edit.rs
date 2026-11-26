@@ -30,6 +30,13 @@ pub fn set_visibility(
             None => flat.push((key, *visible)),
         }
     }
+    let now = |id: &str| match category {
+        Category::Bodies => body_visible(doc, id),
+        Category::Sketches => sketch_visible(doc, id),
+        Category::Planes | Category::Datums => plane_visible(doc, id),
+    };
+    // As FC1, a row already in the asked state is left alone, so a no-op is no undo step.
+    flat.retain(|&(id, visible)| now(id) != visible);
     if flat.is_empty() {
         return Ok(());
     }
