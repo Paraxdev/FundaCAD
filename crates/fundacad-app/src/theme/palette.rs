@@ -319,6 +319,7 @@ const COLORBLIND_SAFE: Palette = Palette {
     ..NOIR
 };
 
+#[allow(dead_code)]
 pub struct Shipped {
     pub id: &'static str,
     /// The i18n key of the name, as in src/i18n.
@@ -413,6 +414,7 @@ pub fn shipped(id: &str) -> Option<&'static Shipped> {
 impl Palette {
     /// Sets one token by its CSS name, as an uploaded palette file names it. False for a name that is not a palette
     /// token (the retired `--accent-glow`, the legacy `--accent-blue`) or a value that is not a colour.
+    #[allow(dead_code)]
     pub fn set_css(&mut self, name: &str, value: &str) -> bool {
         let Some(c) = Rgb::parse(value) else { return false };
         let slot = match name.trim().to_ascii_lowercase().as_str() {
@@ -466,6 +468,7 @@ impl Palette {
     }
 
     /// Noir with the tokens a palette file sets, and how many it set.
+    #[allow(dead_code)]
     pub fn from_css<'a>(tokens: impl IntoIterator<Item = (&'a str, &'a str)>) -> (Palette, usize) {
         let mut p = NOIR;
         let n = tokens.into_iter().filter(|(k, v)| p.set_css(k, v)).count();

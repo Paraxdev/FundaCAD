@@ -1714,6 +1714,7 @@ dependencies = [
  "gpui-pre-wgpu",
  "gpui-pre-windows",
  "log",
+ "windows 0.62.2",
 ]
 
 [[package]]

@@ -2,16 +2,18 @@
 //!
 //! `init` once at startup, then read `cx.theme()` in render. A change goes through `update`, which resolves the
 //! theme again and redraws every window, so dark and light switch live. While the choice is System, a root view
-//! keeps the `follow_system` subscription so an OS switch comes through too.
+//! keeps the `follow_system` subscription so an OS switch comes through too. `kit` carries the result onto the
+//! gpui-kit controls.
 
 pub mod color;
 pub mod fonts;
+pub mod kit;
 pub mod palette;
 pub mod tokens;
 
 use std::{ops::Deref, time::Duration};
 
-use gpui::{point, px, App, BoxShadow, Global, SharedString, Subscription, Window, WindowAppearance};
+use gpui::{point, px, App, BoxShadow, Context, Global, SharedString, Subscription, Window, WindowAppearance};
 
 pub use color::Rgb;
 pub use palette::{Mode, Palette};
@@ -20,6 +22,7 @@ pub use tokens::*;
 pub const SYSTEM_ID: &str = "system";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[allow(dead_code)]
 pub enum Contrast {
     #[default]
     Standard,
@@ -45,7 +48,7 @@ impl Default for Settings {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct OsAppearance {
     pub dark: bool,
-    /// An OS high contrast mode. GPUI does not report it, the app sets it where the platform tells.
+    /// An OS high contrast mode. GPUI does not report it, `read_os_contrast` asks the platform.
     pub contrast: bool,
 }
 
@@ -74,6 +77,7 @@ pub struct Custom {
     pub palette: Palette,
 }
 
+#[allow(dead_code)]
 pub struct Entry {
     pub id: SharedString,
     pub label: SharedString,
@@ -84,6 +88,7 @@ pub struct Entry {
 /// Every colour a view reads, finished: the palette after the Contrast setting, plus what the SCSS derives from it
 /// with color-mix. Palette tokens read straight through, as in `theme.text`.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Theme {
     /// The palette in use, System already resolved.
     pub id: SharedString,
@@ -224,7 +229,14 @@ impl Theme {
         }
     }
 
+    /// A control size or hit area, lifted to the minimum hit area, which Larger click targets raises.
+    #[allow(dead_code)]
+    pub fn hit(&self, base: f32) -> f32 {
+        base.max(self.hit_min)
+    }
+
     /// A transition length, near zero with motion off.
+    #[allow(dead_code)]
     pub fn duration(&self, d: Duration) -> Duration {
         if self.motion {
             d
@@ -234,6 +246,7 @@ impl Theme {
     }
 }
 
+#[derive(Clone)]
 pub struct ThemeState {
     settings: Settings,
     os: OsAppearance,
@@ -243,8 +256,25 @@ pub struct ThemeState {
 
 impl Global for ThemeState {}
 
+/// An upload cannot take the id of System, a shipped palette or an earlier upload, which it would shadow in the
+/// Theme select.
+fn sanitize(custom: Vec<Custom>) -> Vec<Custom> {
+    let mut seen = std::collections::HashSet::new();
+    custom
+        .into_iter()
+        .filter(|c| {
+            let ok = c.id != SYSTEM_ID && palette::shipped(&c.id).is_none() && seen.insert(c.id.clone());
+            if !ok {
+                log::warn!("dropped the uploaded palette {:?}, its id is taken", c.id);
+            }
+            ok
+        })
+        .collect()
+}
+
 impl ThemeState {
     fn new(settings: Settings, os: OsAppearance, custom: Vec<Custom>) -> Self {
+        let custom = sanitize(custom);
         let theme = Self::build(&settings, os, &custom);
         Self { settings, os, custom, theme }
     }
@@ -262,23 +292,35 @@ impl ThemeState {
         Theme::resolve(sh.id, sh.mode, sh.palette, s)
     }
 
-    fn rebuild(&mut self) {
-        self.theme = Self::build(&self.settings, self.os, &self.custom);
+    /// The state after `f`, or None when `f` changed nothing.
+    fn edited(&self, f: impl FnOnce(&mut Settings, &mut Vec<Custom>)) -> Option<Self> {
+        let (mut settings, mut custom) = (self.settings.clone(), self.custom.clone());
+        f(&mut settings, &mut custom);
+        let custom = sanitize(custom);
+        (settings != self.settings || custom != self.custom).then(|| Self::new(settings, self.os, custom))
+    }
+
+    /// The state under another OS appearance, or None when it is the same one.
+    fn with_os(&self, os: OsAppearance) -> Option<Self> {
+        (os != self.os).then(|| Self::new(self.settings.clone(), os, self.custom.clone()))
     }
 
     pub fn theme(&self) -> &Theme {
         &self.theme
     }
 
+    #[allow(dead_code)]
     pub fn settings(&self) -> &Settings {
         &self.settings
     }
 
+    #[allow(dead_code)]
     pub fn custom(&self) -> &[Custom] {
         &self.custom
     }
 
     /// System, then the shipped palettes, then the uploaded ones, as the Theme select lists them.
+    #[allow(dead_code)]
     pub fn entries(&self) -> Vec<Entry> {
         let sys_mode = palette::shipped(self.os.palette_id()).map(|s| s.mode).unwrap_or(Mode::Dark);
         let mut out = vec![Entry { id: SYSTEM_ID.into(), label: "System".into(), mode: sys_mode, custom: false }];
@@ -311,7 +353,7 @@ impl ActiveTheme for App {
 /// Bundled fonts in, theme global set. Persisted settings and uploads come from the app's settings store.
 pub fn init(settings: Settings, custom: Vec<Custom>, cx: &mut App) {
     fonts::register(cx);
-    let os = OsAppearance::from_window(cx.window_appearance(), false);
+    let os = OsAppearance::from_window(cx.window_appearance(), read_os_contrast());
     cx.set_global(ThemeState::new(settings, os, custom));
     sync_window_chrome(cx);
 }
@@ -321,40 +363,63 @@ pub fn state(cx: &App) -> &ThemeState {
 }
 
 /// Change the settings or the uploaded palettes, then redraw every window in the new theme.
+#[allow(dead_code)]
 pub fn update(cx: &mut App, f: impl FnOnce(&mut Settings, &mut Vec<Custom>)) {
-    let st = cx.global_mut::<ThemeState>();
-    let before = (st.settings.clone(), st.custom.clone());
-    f(&mut st.settings, &mut st.custom);
-    if (&st.settings, &st.custom) == (&before.0, &before.1) {
-        return;
-    }
-    st.rebuild();
+    let Some(next) = state(cx).edited(f) else { return };
+    cx.set_global(next);
     sync_window_chrome(cx);
     cx.refresh_windows();
 }
 
-pub fn set_os_contrast(contrast: bool, cx: &mut App) {
-    set_os(OsAppearance { contrast, ..state(cx).os }, cx);
-}
-
 fn set_os(os: OsAppearance, cx: &mut App) {
-    let st = cx.global_mut::<ThemeState>();
-    if st.os == os {
-        return;
-    }
-    st.os = os;
-    if st.settings.choice == SYSTEM_ID {
-        st.rebuild();
+    let Some(next) = state(cx).with_os(os) else { return };
+    let follows = next.settings.choice == SYSTEM_ID;
+    cx.set_global(next);
+    if follows {
         cx.refresh_windows();
     }
 }
 
-/// Keep this while the window lives, so System follows the OS from light to dark and back.
-pub fn follow_system(window: &mut Window, _cx: &mut App) -> Subscription {
-    window.observe_window_appearance(|window, cx| {
-        let contrast = state(cx).os.contrast;
-        set_os(OsAppearance::from_window(window.appearance(), contrast), cx);
-    })
+/// Whether Windows High Contrast is on, which System answers with a high contrast palette.
+#[cfg(windows)]
+pub fn read_os_contrast() -> bool {
+    use windows::Win32::UI::{
+        Accessibility::HIGHCONTRASTW,
+        WindowsAndMessaging::{SystemParametersInfoW, SPI_GETHIGHCONTRAST, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS},
+    };
+    let mut hc = HIGHCONTRASTW { cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32, ..Default::default() };
+    let read = unsafe {
+        SystemParametersInfoW(
+            SPI_GETHIGHCONTRAST,
+            hc.cbSize,
+            Some(&mut hc as *mut HIGHCONTRASTW as *mut _),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    read.is_ok() && high_contrast_on(hc.dwFlags.0)
+}
+
+#[cfg(not(windows))]
+pub fn read_os_contrast() -> bool {
+    false
+}
+
+/// HCF_HIGHCONTRASTON in a HIGHCONTRAST's dwFlags.
+fn high_contrast_on(flags: u32) -> bool {
+    flags & 1 != 0
+}
+
+fn refresh_os(window: &Window, cx: &mut App) {
+    set_os(OsAppearance::from_window(window.appearance(), read_os_contrast()), cx);
+}
+
+/// Keep this while the window lives, so System follows the OS from light to dark and back, and into High Contrast.
+/// GPUI sends no message for High Contrast itself, so it is read again on an appearance change and whenever the
+/// window is activated, which covers a switch made in Settings or by the Alt+Shift+PrintScreen shortcut.
+pub fn follow_system<T: 'static>(window: &mut Window, cx: &mut Context<T>) -> Subscription {
+    let appearance = cx.observe_window_appearance(window, |_, window, cx| refresh_os(window, cx));
+    let activation = cx.observe_window_activation(window, |_, window, cx| refresh_os(window, cx));
+    Subscription::new(move || drop((appearance, activation)))
 }
 
 /// The native window frame (macOS) follows a fixed palette's mode, and the OS while System is chosen.
@@ -430,6 +495,160 @@ mod tests {
             for (name, fg) in [("text", t.text), ("text_dim", t.text_dim), ("text_mute", t.text_mute)] {
                 let c = fg.contrast(t.panel);
                 assert!(c >= 4.5, "{} {name} on panel is {c:.2}", sh.id);
+            }
+        }
+    }
+
+    fn state(s: Settings, os: OsAppearance, custom: Vec<Custom>) -> ThemeState {
+        ThemeState::new(s, os, custom)
+    }
+
+    fn custom(id: &str, mode: Mode, palette: Palette) -> Custom {
+        Custom { id: id.into(), label: id.into(), mode, palette }
+    }
+
+    #[test]
+    fn update_ignores_a_change_that_changes_nothing() {
+        let st = state(Settings::default(), OsAppearance::default(), vec![custom("mine", Mode::Dark, palette::NOIR)]);
+        assert!(st.edited(|_, _| {}).is_none());
+        assert!(st.edited(|s, _| s.choice = SYSTEM_ID.into()).is_none());
+        assert!(st.edited(|_, c| c[0] = c[0].clone()).is_none());
+        let next = st.edited(|s, _| s.contrast = Contrast::More).expect("a new contrast is a change");
+        assert_eq!(next.settings().contrast, Contrast::More);
+        assert_eq!(next.theme().focus_ring_width, 3.);
+        assert!(st.edited(|_, c| c.clear()).is_some());
+    }
+
+    #[test]
+    fn a_taken_id_does_not_make_a_palette() {
+        let taken = |id: &str| custom(id, Mode::Light, palette::LIGHT);
+        let st = state(
+            Settings::default(),
+            OsAppearance::default(),
+            vec![taken(palette::NOIR_ID), taken(SYSTEM_ID), taken("mine"), taken("mine"), taken("other")],
+        );
+        let ids: Vec<_> = st.custom().iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, ["mine", "other"]);
+        let listed: Vec<_> = st.entries().iter().map(|e| e.id.to_string()).collect();
+        let mut unique = listed.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(listed.len(), unique.len());
+        // An edit that adds one is a no-op.
+        assert!(st.edited(|_, c| c.push(taken(palette::LIGHT_ID))).is_none());
+    }
+
+    #[test]
+    fn set_os_reaches_system_only() {
+        let system = state(Settings::default(), OsAppearance::default(), vec![]);
+        assert!(system.with_os(OsAppearance::default()).is_none());
+        let dark = system.with_os(OsAppearance { dark: true, contrast: false }).expect("dark is a change");
+        assert_eq!(dark.theme().id, palette::NOIR_ID);
+        let hc = dark.with_os(OsAppearance { dark: true, contrast: true }).expect("contrast is a change");
+        assert_eq!(hc.theme().id, palette::HIGH_CONTRAST_DARK_ID);
+        let hc_light = hc.with_os(OsAppearance { dark: false, contrast: true }).unwrap();
+        assert_eq!(hc_light.theme().id, palette::HIGH_CONTRAST_LIGHT_ID);
+
+        let pinned = Settings { choice: palette::NOIR_ID.into(), ..Default::default() };
+        let fixed = state(pinned, OsAppearance::default(), vec![]);
+        let moved = fixed.with_os(OsAppearance { dark: false, contrast: true }).unwrap();
+        assert_eq!(moved.theme().id, palette::NOIR_ID);
+        assert!(moved.os.contrast);
+    }
+
+    #[test]
+    fn follow_system_reads_the_window_and_the_platform_flag() {
+        use WindowAppearance::*;
+        for (w, dark) in [(Dark, true), (VibrantDark, true), (Light, false), (VibrantLight, false)] {
+            assert_eq!(OsAppearance::from_window(w, false), OsAppearance { dark, contrast: false });
+            assert_eq!(OsAppearance::from_window(w, true), OsAppearance { dark, contrast: true });
+        }
+        // HCF_HIGHCONTRASTON is bit 0 of dwFlags, the other flags (available, hotkey) do not turn it on.
+        assert!(high_contrast_on(0x1));
+        assert!(high_contrast_on(0x1 | 0x4 | 0x40));
+        assert!(!high_contrast_on(0));
+        assert!(!high_contrast_on(0x2 | 0x4));
+        let os = OsAppearance::from_window(Dark, high_contrast_on(0x1));
+        let st = state(Settings::default(), OsAppearance::default(), vec![]).with_os(os).unwrap();
+        assert_eq!(st.theme().id, palette::HIGH_CONTRAST_DARK_ID);
+    }
+
+    #[test]
+    fn more_contrast_keeps_a_palette_text_faint() {
+        let set = Rgb::hex(0x123456);
+        let mine = custom("mine", Mode::Dark, Palette { text_faint: Some(set), ..palette::NOIR });
+        let more = Settings { choice: "mine".into(), contrast: Contrast::More, ..Default::default() };
+        let t = ThemeState::build(&more, OsAppearance::default(), &[mine.clone()]);
+        same(t.text_faint, set);
+        same(t.text_mute, palette::NOIR.text_dim);
+        let max = Settings { contrast: Contrast::Maximum, ..more };
+        same(ThemeState::build(&max, OsAppearance::default(), &[mine]).text_faint, set);
+        // Left out, it follows the swapped text_mute.
+        let t = theme(palette::NOIR_ID, Settings { contrast: Contrast::More, ..Default::default() });
+        same(t.text_faint, palette::NOIR.text_dim.mix(0.7, palette::NOIR.panel));
+    }
+
+    #[test]
+    fn hit_honours_larger_click_targets() {
+        let normal = theme(palette::NOIR_ID, Settings::default());
+        assert_eq!(normal.hit(20.), HIT_MIN);
+        assert_eq!(normal.hit(40.), 40.);
+        let large = theme(palette::NOIR_ID, Settings { large_targets: true, ..Default::default() });
+        assert_eq!(large.hit(20.), HIT_MIN_LARGE);
+        assert_eq!(large.hit(24.), HIT_MIN_LARGE);
+        assert_eq!(large.hit(40.), 40.);
+    }
+
+    /// The minimum ratios of ui/contrast.ts: text and lines or edges, 4.5 and 3 as shipped, 7 and 4.5 in the High
+    /// Contrast themes.
+    fn bar(id: &str) -> (f32, f32) {
+        if id == palette::HIGH_CONTRAST_DARK_ID || id == palette::HIGH_CONTRAST_LIGHT_ID {
+            (7., 4.5)
+        } else {
+            (4.5, 3.)
+        }
+    }
+
+    #[test]
+    fn text_reads_on_the_solid_float_over_a_white_model() {
+        for sh in palette::SHIPPED {
+            let t = theme(sh.id, Settings::default());
+            let solid = t.float_bg_solid.over(Rgb::WHITE);
+            let (text, _) = bar(sh.id);
+            for (name, fg) in [("text", t.text), ("text_dim", t.text_dim), ("text_mute", t.text_mute)] {
+                let c = fg.contrast(solid);
+                assert!(c >= text, "{} {name} on float_bg_solid is {c:.2}", sh.id);
+            }
+        }
+    }
+
+    #[test]
+    fn a_field_edge_stands_clear_of_the_well_and_what_is_around_it() {
+        for sh in palette::SHIPPED {
+            let t = theme(sh.id, Settings::default());
+            let (_, edge) = bar(sh.id);
+            let glass = t.float_bg.over(t.viewport_bg);
+            for (on, under) in [("panel", t.panel), ("panel_2", t.panel_2), ("glass", glass)] {
+                let well = t.field_bg.over(under);
+                let line = t.control_edge.over(well);
+                let (outer, inner) = (line.contrast(under), line.contrast(well));
+                assert!(outer >= edge, "{} edge on the field against {on} is {outer:.2}", sh.id);
+                assert!(inner >= edge, "{} edge on the field well on {on} is {inner:.2}", sh.id);
+            }
+        }
+    }
+
+    #[test]
+    fn accent_and_its_label_read_each_other() {
+        for sh in palette::SHIPPED {
+            let t = theme(sh.id, Settings::default());
+            let (text, ring) = bar(sh.id);
+            let label = t.on_accent.contrast(t.accent);
+            assert!(label >= text, "{} on_accent on accent is {label:.2}", sh.id);
+            for (on, bg) in [("panel", t.panel), ("panel_2", t.panel_2), ("raised", t.raised), ("raised_2", t.raised_2)]
+            {
+                let c = t.accent.contrast(bg);
+                assert!(c >= ring, "{} focus ring on {on} is {c:.2}", sh.id);
             }
         }
     }
