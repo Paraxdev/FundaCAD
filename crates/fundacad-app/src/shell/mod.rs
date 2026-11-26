@@ -19,11 +19,7 @@ impl Shell {
 impl Render for Shell {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = &self.theme;
-        let viewport = self.viewport.read(cx);
-        let status = match viewport.backend() {
-            Some(backend) => format!("{} triangles, {backend}", viewport.triangles()),
-            None => format!("{} triangles", viewport.triangles()),
-        };
+        let status = self.viewport.read(cx).status();
         div()
             .size_full()
             .flex()

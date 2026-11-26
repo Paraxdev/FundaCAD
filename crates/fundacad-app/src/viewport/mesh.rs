@@ -1,35 +1,7 @@
-use glam::Vec3;
+use super::scene::Body;
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Mesh {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
-}
-
-impl Mesh {
-    pub fn triangles(&self) -> usize {
-        self.indices.len() / 3
-    }
-
-    /// Centre and radius of a sphere around every vertex.
-    pub fn bounds(&self) -> Option<(Vec3, f32)> {
-        let mut iter = self.vertices.iter().map(|v| Vec3::from(v.position));
-        let first = iter.next()?;
-        let (min, max) = iter.fold((first, first), |(lo, hi), p| (lo.min(p), hi.max(p)));
-        let centre = (min + max) * 0.5;
-        Some((centre, (max - centre).length()))
-    }
-}
-
-/// Reads a binary STL. Stands in until the engine link delivers meshes.
-pub fn load_stl(bytes: &[u8]) -> Result<Mesh, String> {
+/// Reads a binary STL as one body with a face per triangle.
+pub fn load_stl(bytes: &[u8]) -> Result<Body, String> {
     if bytes.len() < 84 {
         return Err("too short for a binary STL".into());
     }
@@ -37,23 +9,31 @@ pub fn load_stl(bytes: &[u8]) -> Result<Mesh, String> {
     if bytes.len() < 84 + count * 50 {
         return Err(format!("{count} triangles announced, the file is shorter"));
     }
-    let mut vertices = Vec::with_capacity(count * 3);
+    let mut positions = Vec::with_capacity(count * 9);
     for t in 0..count {
-        let base = 84 + t * 50;
-        let f = |o: usize| f32::from_le_bytes(bytes[base + o..base + o + 4].try_into().unwrap());
-        let corners = [0, 1, 2].map(|k| Vec3::new(f(12 + k * 12), f(16 + k * 12), f(20 + k * 12)));
-        let normal = (corners[1] - corners[0]).cross(corners[2] - corners[0]).normalize_or_zero();
-        for c in corners {
-            vertices.push(Vertex { position: c.into(), normal: normal.into() });
+        let base = 84 + t * 50 + 12;
+        for k in 0..9 {
+            let o = base + k * 4;
+            positions.push(f32::from_le_bytes(bytes[o..o + 4].try_into().unwrap()));
         }
     }
-    let indices = (0..vertices.len() as u32).collect();
-    Ok(Mesh { vertices, indices })
+    Ok(Body {
+        id: "stl".into(),
+        positions,
+        indices: (0..count as u32 * 3).collect(),
+        face_ids: (0..count as u32).collect(),
+        ..Default::default()
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use glam::Vec3;
+
     use super::*;
+    use crate::viewport::scene::SceneBody;
 
     #[test]
     fn reads_one_triangle() {
@@ -66,12 +46,10 @@ mod tests {
                 bytes[o..o + 4].copy_from_slice(&v.to_le_bytes());
             }
         }
-        let mesh = load_stl(&bytes).unwrap();
-        assert_eq!(mesh.triangles(), 1);
-        assert_eq!(mesh.vertices[0].normal, [0.0, 0.0, 1.0]);
-        let (centre, radius) = mesh.bounds().unwrap();
-        assert_eq!(centre, Vec3::new(1.0, 1.0, 0.0));
-        assert!((radius - 2f32.sqrt()).abs() < 1e-6);
+        let body = SceneBody::new(Arc::new(load_stl(&bytes).unwrap()));
+        assert_eq!(body.indices.len(), 3);
+        assert_eq!(body.vertices[0].normal(), Vec3::Z);
+        assert_eq!(body.vertices[1].position(), Vec3::new(2.0, 0.0, 0.0));
     }
 
     #[test]
