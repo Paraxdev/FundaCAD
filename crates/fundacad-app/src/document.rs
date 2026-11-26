@@ -54,22 +54,6 @@ pub struct Feature {
     pub params: Vec<Param>,
 }
 
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct Item {
-    pub glyph: &'static str,
-    pub name: SharedString,
-    pub visible: bool,
-}
-
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct Group {
-    pub glyph: &'static str,
-    pub name: SharedString,
-    pub items: Vec<Item>,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Document {
     pub name: SharedString,
@@ -77,9 +61,6 @@ pub struct Document {
     pub features: Vec<Feature>,
     /// Features at and past this index are rolled back.
     pub marker: usize,
-    /// Superseded by `crate::items`, which the Items card reads.
-    #[allow(dead_code)]
-    pub groups: Vec<Group>,
     /// The document's named parameters, the ones no feature field owns.
     #[allow(dead_code)]
     pub named: Vec<Param>,
@@ -127,7 +108,6 @@ impl Document {
             suppressed: false,
             params,
         };
-        let item = |glyph, name: &str, visible| Item { glyph, name: name.to_string().into(), visible };
         Self {
             name: "Untitled".into(),
             dirty: true,
@@ -147,27 +127,6 @@ impl Document {
                 ),
             ],
             marker: 4,
-            groups: vec![
-                Group {
-                    glyph: "origin",
-                    name: "Origin".into(),
-                    items: vec![
-                        item("plane", "XY plane", true),
-                        item("plane", "XZ plane", true),
-                        item("plane", "YZ plane", true),
-                    ],
-                },
-                Group {
-                    glyph: "body",
-                    name: "Bodies".into(),
-                    items: vec![item("body", "Body1", true), item("body", "Body2", true)],
-                },
-                Group {
-                    glyph: "sketch",
-                    name: "Sketches".into(),
-                    items: vec![item("sketch", "Sketch1", false), item("sketch", "Sketch2", false)],
-                },
-            ],
             named: vec![],
         }
     }
@@ -235,11 +194,6 @@ pub(crate) fn meta(f: &Map<String, Value>) -> (&'static str, String) {
         other => ("dot", other),
     };
     (glyph, label.to_string())
-}
-
-fn capitalised(id: &str) -> String {
-    let mut c = id.chars();
-    c.next().map_or_else(String::new, |f| f.to_uppercase().chain(c).collect())
 }
 
 fn is_plain_number(expr: &str) -> bool {
@@ -361,57 +315,8 @@ impl Document {
             })
             .collect();
 
-        Self { name, dirty: false, marker, groups: groups(doc, &features, &steps), features: steps, named }
+        Self { name, dirty: false, marker, features: steps, named }
     }
-}
-
-fn groups(doc: &Map<String, Value>, features: &[&Map<String, Value>], steps: &[Feature]) -> Vec<Group> {
-    let item = |glyph, name: &str, visible| Item { glyph, name: name.to_string().into(), visible };
-    let visible = |side: &str, id: &str, default: bool| {
-        doc.get(side).and_then(|v| v.get(id)).and_then(Value::as_bool).unwrap_or(default)
-    };
-    let ty = |f: &Map<String, Value>| f.get("type").and_then(Value::as_str).unwrap_or("").to_string();
-    let id = |f: &Map<String, Value>| f.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-
-    let mut planes =
-        vec![item("plane", "XY plane", true), item("plane", "XZ plane", true), item("plane", "YZ plane", true)];
-    let mut datum = 0;
-    for (f, s) in features.iter().zip(steps).filter(|(f, _)| ty(f) == "datumPlane") {
-        datum += 1;
-        let named = f.get("name").and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty());
-        let name = if named { s.name.to_string() } else { format!("Plane{datum}") };
-        planes.push(item("plane", &name, visible("planeVisibility", &id(f), true)));
-    }
-    let mut out = vec![Group { glyph: "origin", name: "Origin".into(), items: planes }];
-
-    let ids: Vec<&str> = doc
-        .get("bodyIds")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(|m| m.values().filter_map(Value::as_str))
-        .collect();
-    let bodies: Vec<Item> = ids
-        .iter()
-        .map(|bid| {
-            let own = doc.get("bodyNames").and_then(|n| n.get(*bid)).and_then(Value::as_str).filter(|n| !n.is_empty());
-            let label = own.map_or_else(|| capitalised(bid), str::to_string);
-            item("body", &label, visible("bodyVisibility", bid, true))
-        })
-        .collect();
-    if !bodies.is_empty() {
-        out.push(Group { glyph: "body", name: "Bodies".into(), items: bodies });
-    }
-
-    let sketches: Vec<Item> = features
-        .iter()
-        .zip(steps)
-        .filter(|(f, _)| ty(f) == "sketch")
-        .map(|(f, s)| item("sketch", &s.name, visible("sketchVisibility", &id(f), false)))
-        .collect();
-    if !sketches.is_empty() {
-        out.push(Group { glyph: "sketch", name: "Sketches".into(), items: sketches });
-    }
-    out
 }
 
 #[cfg(test)]
@@ -481,15 +386,10 @@ mod tests {
     }
 
     #[test]
-    fn the_named_parameters_and_groups_come_from_the_document() {
+    fn the_named_parameters_come_from_the_document() {
         let d = Document::from_funda("plate".into(), &funda());
         let named: Vec<_> = d.named.iter().map(|p| (p.label.to_string(), p.value, p.expr.as_deref())).collect();
         assert_eq!(named, [("w".to_string(), 10., None), ("h".to_string(), 20., Some("w * 2"))]);
-        let groups: Vec<_> = d.groups.iter().map(|g| (g.name.to_string(), g.items.len())).collect();
-        assert_eq!(groups, [("Origin".to_string(), 3), ("Bodies".to_string(), 2), ("Sketches".to_string(), 1)]);
-        assert_eq!(d.groups[1].items[0].name, "Plate");
-        assert_eq!(d.groups[1].items[1].name, "Body2");
-        assert!(d.groups[2].items[0].visible);
     }
 
     #[test]

@@ -271,11 +271,7 @@ mod tests {
             "bug",
         ];
         let doc = Document::sample();
-        let from_doc = doc
-            .features
-            .iter()
-            .map(|f| f.glyph)
-            .chain(doc.groups.iter().flat_map(|g| std::iter::once(g.glyph).chain(g.items.iter().map(|i| i.glyph))));
+        let from_doc = doc.features.iter().map(|f| f.glyph);
         let missing: Vec<_> = fixed
             .into_iter()
             .chain(from_doc)
