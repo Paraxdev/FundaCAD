@@ -91,8 +91,6 @@ pub struct Renderer {
     blur: Blur,
     frost: Vec<Panel>,
     scale: f32,
-    #[cfg(feature = "shot")]
-    dump: Option<super::dump::Dump>,
 }
 
 impl Renderer {
@@ -199,15 +197,7 @@ impl Renderer {
             blur: Blur::new(&context.device, context.queue.clone(), format),
             frost: Vec::new(),
             scale: 1.0,
-            #[cfg(feature = "shot")]
-            dump: super::dump::Dump::from_env(),
         }
-    }
-
-    /// The view's dump still waits for its moment, so frames must keep coming.
-    #[cfg(feature = "shot")]
-    pub fn dump_pending(&self) -> bool {
-        self.dump.is_some()
     }
 
     pub fn context_generation(&self) -> u64 {
@@ -311,13 +301,11 @@ impl Renderer {
                 })
                 .create_view(&Default::default())
         };
-        let copy_src =
-            if cfg!(feature = "shot") { wgpu::TextureUsages::COPY_SRC } else { wgpu::TextureUsages::empty() };
         let resolve = make(
             "viewport resolve",
             self.format,
             1,
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | copy_src,
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         );
         let targets = Targets {
             size,
@@ -380,11 +368,7 @@ impl Renderer {
             frost: self.frost.clone(),
             scale: self.scale,
         };
-        #[cfg(feature = "shot")]
-        let dumping = self.dump.as_ref().is_some_and(|d| d.due(!self.bodies.is_empty()));
-        #[cfg(not(feature = "shot"))]
-        let dumping = false;
-        if !dumping && self.drawn.as_ref() == Some(&drawn) {
+        if self.drawn.as_ref() == Some(&drawn) {
             return self.texture_index;
         }
         let aspect = size.width.0.max(1) as f32 / size.height.0.max(1) as f32;
@@ -443,17 +427,6 @@ impl Renderer {
         self.blur.run(&mut encoder, &targets.blur, &targets.resolve, size, &self.frost, self.scale);
         self.queue.submit(Some(encoder.finish()));
         self.drawn = Some(drawn);
-        #[cfg(feature = "shot")]
-        if dumping {
-            if let (Some(dump), Some(targets)) = (self.dump.take(), &self.targets) {
-                dump.save(
-                    &self.device,
-                    &self.queue,
-                    &targets.resolve,
-                    self.format.remove_srgb_suffix() == wgpu::TextureFormat::Bgra8Unorm,
-                );
-            }
-        }
         self.texture_index
     }
 }

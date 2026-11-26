@@ -2,8 +2,6 @@ mod blur;
 mod camera;
 mod demo;
 mod drag;
-#[cfg(feature = "shot")]
-mod dump;
 pub mod mesh;
 mod pick;
 mod renderer;
@@ -322,10 +320,6 @@ impl Viewport {
         let panels = self.frosted.iter().map(|f| blur::Panel::new(f, bounds.origin, scale)).collect();
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, size);
-        #[cfg(feature = "shot")]
-        if renderer.dump_pending() {
-            window.request_animation_frame();
-        }
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
         had_backend != self.backend
     }
