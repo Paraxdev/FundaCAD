@@ -106,6 +106,7 @@ pub struct Theme {
     pub check_off: Rgb,
     pub hover_wash: Rgb,
     /// A dialog's scrim over its blurred backdrop.
+    #[allow(dead_code)]
     pub scrim: Rgb,
     /// A dialog's scrim where there is no blur to set the app behind apart.
     pub scrim_flat: Rgb,

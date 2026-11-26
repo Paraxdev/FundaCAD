@@ -56,7 +56,8 @@ pub fn colors(t: &Theme, mut k: ThemeColor) -> ThemeColor {
     k.ring = h(t.accent);
     k.accent = h(t.accent_tint);
     k.accent_foreground = h(t.text);
-    k.overlay = h(t.scrim);
+    // The kit's dialog backdrop is a plain fill with no blur behind it, the `html.no-glass-blur .modal-overlay` case.
+    k.overlay = h(t.scrim_flat);
     k.window_border = h(t.line);
     k.link = h(t.accent);
     k.link_hover = h(t.accent_hot);
@@ -198,6 +199,7 @@ mod tests {
         assert_eq!(k.primary, h(t.accent));
         assert_eq!(k.scrollbar_thumb_hover, h(t.text_dim));
         assert_eq!(k.button_danger, h(t.error));
+        assert_eq!(k.overlay, h(t.scrim_flat));
     }
 
     #[test]
