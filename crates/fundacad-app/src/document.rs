@@ -45,6 +45,7 @@ pub struct Param {
 
 #[derive(Clone, Debug)]
 pub struct Feature {
+    pub id: String,
     /// The forge icon of the feature type.
     pub glyph: &'static str,
     pub name: SharedString,
@@ -106,9 +107,16 @@ impl Document {
             expr: None,
             target: None,
         };
-        let sketch =
-            |params| Feature { glyph: "sketch", name: "Sketch".into(), health: Health::Ok, suppressed: false, params };
-        let extrude = |params| Feature {
+        let sketch = |id: &str, params| Feature {
+            id: id.into(),
+            glyph: "sketch",
+            name: "Sketch".into(),
+            health: Health::Ok,
+            suppressed: false,
+            params,
+        };
+        let extrude = |id: &str, params| Feature {
+            id: id.into(),
             glyph: "extrude",
             name: "Extrude".into(),
             health: Health::Ok,
@@ -120,16 +128,19 @@ impl Document {
             name: "Untitled".into(),
             dirty: true,
             features: vec![
-                sketch(vec![]),
-                extrude(vec![mm("Distance", 10.)]),
-                sketch(vec![]),
-                extrude(vec![Param {
-                    label: "Distance".into(),
-                    value: 40.,
-                    unit: "mm",
-                    expr: Some("height".into()),
-                    target: None,
-                }]),
+                sketch("s1", vec![]),
+                extrude("e1", vec![mm("Distance", 10.)]),
+                sketch("s2", vec![]),
+                extrude(
+                    "e2",
+                    vec![Param {
+                        label: "Distance".into(),
+                        value: 40.,
+                        unit: "mm",
+                        expr: Some("height".into()),
+                        target: None,
+                    }],
+                ),
             ],
             marker: 4,
             groups: vec![
@@ -158,23 +169,6 @@ impl Document {
     }
 }
 
-#[derive(Clone, Copy)]
-enum Kind {
-    Length,
-    Angle,
-    Count,
-}
-
-impl Kind {
-    fn unit(self) -> &'static str {
-        match self {
-            Kind::Length => "mm",
-            Kind::Angle => "°",
-            Kind::Count => "",
-        }
-    }
-}
-
 fn unit_of(def_unit: &str) -> &'static str {
     match def_unit {
         "mm" => "mm",
@@ -183,75 +177,8 @@ fn unit_of(def_unit: &str) -> &'static str {
     }
 }
 
-type Fields = &'static [(&'static str, &'static str, Kind)];
-
-const MOVE: Fields = &[
-    ("dx", "Move X", Kind::Length),
-    ("dy", "Move Y", Kind::Length),
-    ("dz", "Move Z", Kind::Length),
-    ("rx", "Rotate X", Kind::Angle),
-    ("ry", "Rotate Y", Kind::Angle),
-    ("rz", "Rotate Z", Kind::Angle),
-];
-
-/// The numeric fields a feature type shows under its step, as `FEATURE_NUM_FIELDS` in src/document/numFields.ts.
-fn num_fields(ty: &str) -> Fields {
-    match ty {
-        "extrude" => &[
-            ("distance", "Distance", Kind::Length),
-            ("taper", "Taper", Kind::Angle),
-            ("startOffset", "Start offset", Kind::Length),
-            ("endOffset", "End offset", Kind::Length),
-            ("distance2", "Distance 2", Kind::Length),
-            ("taper2", "Taper 2", Kind::Angle),
-            ("endOffset2", "End offset 2", Kind::Length),
-            ("thickness", "Thickness", Kind::Length),
-            ("thickness2", "Thickness 2", Kind::Length),
-        ],
-        "fillet" => &[("radius", "Radius", Kind::Length), ("profile", "Profile", Kind::Count)],
-        "chamfer" => &[("distance", "Distance", Kind::Length), ("distance2", "Distance 2", Kind::Length)],
-        "press-pull" => &[
-            ("distance", "Distance", Kind::Length),
-            ("taper", "Taper", Kind::Angle),
-            ("upToOffset", "Up to offset", Kind::Length),
-        ],
-        "revolve" => &[("angle", "Angle", Kind::Angle), ("pitch", "Pitch", Kind::Length)],
-        "datumPlane" => &[
-            ("offset", "Offset", Kind::Length),
-            ("tiltX", "Tilt X", Kind::Angle),
-            ("tiltY", "Tilt Y", Kind::Angle),
-            ("spin", "Spin", Kind::Angle),
-            ("shiftX", "Shift X", Kind::Length),
-            ("shiftY", "Shift Y", Kind::Length),
-        ],
-        "box" => {
-            &[("length", "Length", Kind::Length), ("width", "Width", Kind::Length), ("leadIn", "Lead-in", Kind::Length)]
-        }
-        "patternRect" => &[
-            ("countX", "Count X", Kind::Count),
-            ("countY", "Count Y", Kind::Count),
-            ("spacingX", "Spacing X", Kind::Length),
-            ("spacingY", "Spacing Y", Kind::Length),
-        ],
-        "patternLinear" => &[("count", "Count", Kind::Count), ("spacing", "Spacing", Kind::Length)],
-        "patternCircular" => &[("count", "Count", Kind::Count), ("angle", "Angle", Kind::Angle)],
-        "simplifyMesh" => &[("tolerance", "Angle tol", Kind::Angle)],
-        "cleanUp" => &[("tolerance", "Tolerance", Kind::Length)],
-        "scale" => &[
-            ("factor", "Factor", Kind::Count),
-            ("sx", "X factor", Kind::Count),
-            ("sy", "Y factor", Kind::Count),
-            ("sz", "Z factor", Kind::Count),
-        ],
-        "move" | "duplicate" => MOVE,
-        "joint" => &[("offset", "Offset", Kind::Length), ("angle", "Angle", Kind::Angle)],
-        "mechanism" => &[("offset", "Drive offset", Kind::Length), ("angle", "Drive angle", Kind::Angle)],
-        _ => &[],
-    }
-}
-
 /// The forge icon and the English name of a feature type, as featureMeta in src/ui/featureMeta.ts.
-fn meta(f: &Map<String, Value>) -> (&'static str, String) {
+pub(crate) fn meta(f: &Map<String, Value>) -> (&'static str, String) {
     let ty = f.get("type").and_then(Value::as_str).unwrap_or("");
     let (glyph, label) = match ty {
         "sketch" => ("sketch", "Sketch"),
@@ -322,7 +249,7 @@ pub fn parse_value(text: &str) -> Option<f64> {
     t.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
-fn number(v: f64) -> Value {
+pub(crate) fn number(v: f64) -> Value {
     if v.fract() == 0.0 && v.abs() < 9_007_199_254_740_992.0 {
         Value::from(v as i64)
     } else {
@@ -375,7 +302,8 @@ impl Document {
             let (glyph, label) = meta(f);
             let own = f.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty());
             let mut params = Vec::new();
-            for &(key, label, kind) in num_fields(f.get("type").and_then(Value::as_str).unwrap_or("")) {
+            for n in crate::inspector::num_fields(f.get("type").and_then(Value::as_str).unwrap_or(""), f) {
+                let (key, label, kind) = (n.key.as_str(), n.label.as_str(), n.kind);
                 let Some(raw) = f.get(key) else { continue };
                 let param = |value, expr: Option<&str>, target| Param {
                     label: label.to_string().into(),
@@ -401,6 +329,7 @@ impl Document {
                 });
             }
             steps.push(Feature {
+                id: id.to_string(),
                 glyph,
                 name: own.map_or(label, str::to_string).into(),
                 health: Health::Ok,

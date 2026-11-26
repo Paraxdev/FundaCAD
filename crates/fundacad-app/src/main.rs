@@ -5,6 +5,7 @@
 mod assets;
 mod document;
 mod engine;
+mod inspector;
 mod plastic;
 mod shell;
 #[cfg(feature = "shot")]
