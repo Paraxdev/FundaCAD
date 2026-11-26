@@ -128,6 +128,7 @@ fn one_shot(req: &Value, out: &mut impl std::io::Write) {
             say(out, json!({"id": id, "ok": true, "result": {"name": req["path"], "geom": {}}}));
         }
         "refuse" => say(out, json!({"id": id, "ok": false, "error": {"message": "no such body"}})),
+        "cancel" => say(out, json!({"id": id, "ok": true, "result": {"cancelled": false}})),
         "stop" => say(out, json!({"id": id, "ok": false, "cancelled": true, "error": {"message": "cancelled"}})),
         _ => std::process::exit(4),
     }
@@ -381,6 +382,12 @@ fn one_shot_requests_answer_beside_rebuilds() {
     req.insert("path".into(), json!("C:/out/a.step"));
     let out = f.client.export(req).unwrap();
     assert_eq!(Value::Object(out), json!({"path": "C:/out/a.step", "features": 1}));
+    let mut flat = Map::new();
+    flat.insert("path".into(), json!("C:/out/a.dxf"));
+    flat.insert("sketch".into(), json!("f2"));
+    let out = f.client.export(flat).unwrap();
+    assert_eq!(out["features"], json!(2));
+    f.client.cancel_requests();
     let mut imp = Map::new();
     imp.insert("path".into(), json!("s.ply"));
     assert_eq!(f.client.request("import", imp).unwrap()["name"], json!("s.ply"));

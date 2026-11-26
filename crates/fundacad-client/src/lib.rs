@@ -96,6 +96,7 @@ enum Cmd {
     Edit(EditFn, Sender<Edited>),
     Rebuild,
     Request { op: String, fields: Map<String, Value>, with_doc: bool, reply: Sender<Answer> },
+    CancelRequests,
     KillWorker,
     Shutdown,
 }
@@ -218,8 +219,9 @@ impl Client {
         self.ask(op, fields, false)
     }
 
-    /// An `export` of the document as the worker builds it, cut at the rollback marker. `fields` carry the format,
-    /// the path and the options [`transfer::export`] builds.
+    /// An `export` of the open document. `fields` carry the format, the path and the options [`transfer::export`]
+    /// builds. Bodies come from the document cut at the rollback marker, a sketch or face goes whole as in FundaCAD 1,
+    /// since the engine reads a flat source straight from the document and a suppressed sketch still exports.
     pub fn export(&self, fields: Map<String, Value>) -> Answer {
         self.ask("export", fields, true)
     }
@@ -228,6 +230,11 @@ impl Client {
         let (tx, rx) = mpsc::channel();
         self.send(Cmd::Request { op: op.to_owned(), fields, with_doc, reply: tx });
         rx.recv().unwrap_or_else(|_| Err(refused(STOPPED)))
+    }
+
+    /// Asks the engine to stop every one-shot request still waiting, each then answers as cancelled.
+    pub fn cancel_requests(&self) {
+        self.send(Cmd::CancelRequests);
     }
 
     /// Kills the worker as a crash would, for tests and the harness.
@@ -380,6 +387,7 @@ impl Driver {
                 self.wanted();
             }
             Cmd::Request { op, fields, with_doc, reply } => self.request(op, fields, with_doc, reply),
+            Cmd::CancelRequests => self.cancel_requests(),
             Cmd::KillWorker => {
                 if let Some(w) = self.worker.as_mut() {
                     w.kill();
@@ -412,7 +420,9 @@ impl Driver {
                 let _ = reply.send(Err(refused("no document is open")));
                 return;
             };
-            fields.insert("document".into(), Value::Object(doc::built(d).into_owned()));
+            let flat = fields.contains_key("sketch") || fields.contains_key("face");
+            let sent = if flat { d.clone() } else { doc::built(d).into_owned() };
+            fields.insert("document".into(), Value::Object(sent));
         }
         let Some(worker) = self.worker.as_mut() else {
             let _ = reply.send(Err(refused("the engine is restarting, try again in a moment")));
@@ -430,6 +440,16 @@ impl Driver {
             Err(e) => {
                 let _ = reply.send(Err(refused(format!("the engine did not take the request: {e}"))));
             }
+        }
+    }
+
+    fn cancel_requests(&mut self) {
+        let Some(worker) = self.worker.as_mut() else { return };
+        let targets: Vec<String> = self.requests.keys().cloned().collect();
+        for target in targets {
+            self.next_id += 1;
+            let text = json!({"op": "cancel", "id": format!("cx{}", self.next_id), "target": target}).to_string();
+            let _ = worker.send(text);
         }
     }
 
