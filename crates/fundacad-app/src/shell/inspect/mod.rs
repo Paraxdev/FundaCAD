@@ -212,6 +212,27 @@ pub(super) fn frame(t: &Theme, title: &str, id: &'static str, cx: &mut Context<S
 
 impl Shell {
     /// The open Inspect card, or the chips of a Section or Isolate left on.
+    pub(super) fn rail_foot(&self, cx: &App) -> super::rail::Foot {
+        let i = self.viewport.read(cx).inspecting();
+        super::rail::Foot { isolate: i.isolate.is_some(), section: i.section.is_some() }
+    }
+
+    /// FundaCAD 1's rail toggles: Isolate and Section View switch off when on, Measure opens its card.
+    pub(super) fn rail_tool(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
+        match label {
+            "Section View" if self.rail_foot(cx).section => self.viewport.update(cx, |v, cx| {
+                v.set_section(None, cx);
+                if v.inspecting().card == Some(Card::Section) {
+                    v.open_card(None, cx);
+                }
+            }),
+            "Section View" => crate::commands::run("section", window, cx),
+            "Isolate" => crate::commands::run("isolate", window, cx),
+            "Measure" => crate::commands::run("measure", window, cx),
+            _ => {}
+        }
+    }
+
     pub(super) fn inspect_card(&self, t: &Theme, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         let v = self.viewport.read(cx);
         let i = v.inspecting();

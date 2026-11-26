@@ -47,7 +47,14 @@ const FOOT: &[Entry] =
 
 type OnFamily = std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)>;
 
-fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on_family: &OnFamily) -> AnyElement {
+/// Whether the Isolate and Section View toggles are on.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Foot {
+    pub isolate: bool,
+    pub section: bool,
+}
+
+fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on: Option<bool>, on_click: Option<&OnFamily>) -> AnyElement {
     let corner = t.text_mute;
     let tile = tile(t, RAIL_TILE).relative().child(icon(e.glyph, 22., t.text)).when(e.family, |d| {
         d.child(
@@ -99,12 +106,13 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on_family: &OnFamily) -
                 .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).line_height(px(16.)).child(e.label))
                 .when(!e.keys.is_empty(), |d| d.child(div().flex().gap(px(3.)).children(e.keys.iter().map(key)))),
         )
-        .when_some(e.sub, |d, sub| d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(t.text_mute).child(sub)));
-    let row = div().flex().items_center().gap(px(6.)).child(tile.when(open == Some(e.label), |d| d.bg(t.accent_wash))).child(pill);
-    if !e.family {
-        return row.into_any_element();
-    }
-    let f = on_family.clone();
+        .when_some(e.sub, |d, sub| {
+            let sub = if on == Some(true) { "On" } else { sub };
+            d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(if on == Some(true) { t.accent } else { t.text_mute }).child(sub))
+        });
+    let lit = open == Some(e.label) || on == Some(true);
+    let row = div().flex().items_center().gap(px(6.)).child(tile.when(lit, |d| d.bg(t.accent_wash))).child(pill);
+    let Some(f) = on_click.cloned() else { return row.into_any_element() };
     let label = e.label;
     // The tile and the pill occlude the view, which would hide the row's own hitbox, so a cover on top takes the click.
     let cover = div()
@@ -116,17 +124,26 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on_family: &OnFamily) -
     row.relative().child(cover).into_any_element()
 }
 
-pub(super) fn rail(t: &Theme, open: Option<&str>, on_family: OnFamily) -> Div {
-    let section = |entries: &'static [Entry]| {
-        div().flex().flex_col().gap(px(GAP)).children(entries.iter().map(|e| row(t, e, open, &on_family)))
+/// `on_family` gets a family's label, `on_tool` a foot entry's label.
+pub(super) fn rail(t: &Theme, open: Option<&str>, foot: Foot, on_family: OnFamily, on_tool: OnFamily) -> Div {
+    let section = |entries: &'static [Entry], is_foot: bool| {
+        div().flex().flex_col().gap(px(GAP)).children(entries.iter().map(|e| {
+            let on = match e.label {
+                "Isolate" => Some(foot.isolate),
+                "Section View" => Some(foot.section),
+                _ => None,
+            };
+            let click = if is_foot { Some(&on_tool) } else { e.family.then_some(&on_family) };
+            row(t, e, open, on, click)
+        }))
     };
     div()
         .h_full()
         .flex()
         .flex_col()
         .justify_between()
-        .child(div().flex().flex_col().gap(px(GAP + SEP + GAP)).children(TOP.iter().map(|s| section(s))))
-        .child(section(FOOT))
+        .child(div().flex().flex_col().gap(px(GAP + SEP + GAP)).children(TOP.iter().map(|s| section(s, false))))
+        .child(section(FOOT, true))
 }
 
 #[cfg(test)]

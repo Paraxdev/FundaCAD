@@ -215,7 +215,11 @@ impl Render for Shell {
                 let e = cx.entity();
                 let on_family: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
                     std::rc::Rc::new(move |label, _, cx| e.update(cx, |s, cx| s.toggle_family(label, cx)));
-                div().relative().h_full().child(rail::rail(t, self.rail_open, on_family)).children(
+                let e = cx.entity();
+                let on_tool: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
+                    std::rc::Rc::new(move |label, window, cx| e.update(cx, |s, cx| s.rail_tool(label, window, cx)));
+                let foot = self.rail_foot(cx);
+                div().relative().h_full().child(rail::rail(t, self.rail_open, foot, on_family, on_tool)).children(
                     self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
                 )
             });
