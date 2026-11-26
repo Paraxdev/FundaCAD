@@ -7,6 +7,7 @@ mod inspector;
 mod items;
 mod params;
 mod rail;
+mod rail_menu;
 mod timeline;
 mod titlebar;
 mod tool_card;
@@ -44,6 +45,8 @@ pub struct Shell {
     focus: FocusHandle,
     bench: crate::workbench::Bench,
     params: Entity<params::ParamsPanel>,
+    /// The rail family whose tools are listed.
+    rail_open: Option<&'static str>,
     _system: Subscription,
 }
 
@@ -76,6 +79,7 @@ impl Shell {
             focus: cx.focus_handle(),
             bench,
             params,
+            rail_open: None,
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -198,7 +202,14 @@ impl Render for Shell {
             .flex()
             .gap(gap)
             .child(self.items_card(t, window, cx))
-            .child(rail::rail(t));
+            .child({
+                let e = cx.entity();
+                let on_family: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
+                    std::rc::Rc::new(move |label, _, cx| e.update(cx, |s, cx| s.toggle_family(label, cx)));
+                div().relative().h_full().child(rail::rail(t, self.rail_open, on_family)).children(
+                    self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
+                )
+            });
         let right = div()
             .absolute()
             .top(gap)

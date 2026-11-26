@@ -11,6 +11,7 @@ mod inspector;
 mod items;
 mod overlay;
 mod plastic;
+mod ribbon;
 mod selection;
 mod settings;
 mod shell;
