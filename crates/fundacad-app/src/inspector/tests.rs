@@ -340,7 +340,8 @@ fn a_pattern_of_features_lists_them_and_acts_on_no_bodies() {
 #[test]
 fn the_build_note_comes_first() {
     let d = doc(json!([{ "id": "e", "type": "extrude", "distance": 10 }]));
-    let issue = FeatureIssue { feature_id: "e".into(), message: "the profile is open".into(), warning: false };
+    let issue =
+        FeatureIssue { feature_id: "e".into(), message: "the profile is open".into(), warning: false, note: false };
     let r = rows(&d, "e", &[issue]);
     assert_eq!(r[0], Row::Note { text: "the profile is open".into(), warning: false });
     assert!(rows(&d, "missing", &[]).is_empty());

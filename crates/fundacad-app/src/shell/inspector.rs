@@ -74,8 +74,10 @@ impl Shell {
             // FUNDA_OPEN_STEP=<index> opens a History step for a screenshot, once the document is read.
             static OPENED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
             if self.source.is_some() && !OPENED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                if let Some(i) = std::env::var("FUNDA_OPEN_STEP").ok().and_then(|s| s.parse().ok()) {
-                    self.open = Some(i);
+                if let Some(i) = std::env::var("FUNDA_OPEN_STEP").ok().and_then(|s| s.parse::<usize>().ok()) {
+                    if let Some(id) = self.row_ids().get(i).cloned() {
+                        self.timeline.rows = crate::timeline::rows::Rows { keys: vec![id.clone()], anchor: Some(id) };
+                    }
                 }
             }
         }

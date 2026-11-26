@@ -2,10 +2,12 @@
 
 mod geometry;
 mod history;
+mod history_menu;
 mod inspector;
 mod items;
 mod params;
 mod rail;
+mod timeline;
 mod titlebar;
 
 use std::collections::HashMap;
@@ -31,16 +33,13 @@ pub struct Shell {
     doc: Document,
     /// The document `doc` was read from, to tell a real change from the viewport redrawing.
     source: Option<Doc>,
-    /// The transport moved the marker, so it is the shell's until the document says otherwise.
-    marker_moved: bool,
     /// The viewport's count of documents opened when `doc` was read, so a new one starts with the marker at its end.
     opened: u64,
     fields: HashMap<String, Field>,
     inspector: inspector::Ui,
     items_tab: usize,
     items: items::ItemsState,
-    /// The History step whose values show under it.
-    open: Option<usize>,
+    timeline: timeline::Timeline,
     focus: FocusHandle,
     bench: crate::workbench::Bench,
     params: Entity<params::ParamsPanel>,
@@ -66,13 +65,12 @@ impl Shell {
             viewport,
             doc,
             source: None,
-            marker_moved: false,
             opened: 0,
             fields: HashMap::new(),
             inspector: Default::default(),
             items_tab: 0,
             items: items::ItemsState::new(cx),
-            open: None,
+            timeline: timeline::Timeline::default(),
             focus: cx.focus_handle(),
             bench,
             params,
@@ -87,8 +85,7 @@ impl Shell {
         let viewport = self.viewport.read(cx);
         if viewport.opened() != self.opened {
             self.opened = viewport.opened();
-            self.marker_moved = false;
-            self.open = None;
+            self.timeline.rows = Default::default();
         }
         // An STL has no steps, so History empties instead of keeping the last document's.
         let empty = Doc::new();
@@ -96,12 +93,9 @@ impl Shell {
         if self.source.as_ref() == Some(doc) {
             return;
         }
-        let mut next = Document::from_funda(self.doc.name.clone(), doc);
+        self.doc = Document::from_funda(self.doc.name.clone(), doc);
         self.source = Some(doc.clone());
-        if self.marker_moved {
-            next.set_marker(self.doc.marker);
-        }
-        self.doc = next;
+        self.timeline_synced(doc);
         let texts: HashMap<String, String> = self.texts();
         let stale: Vec<String> = self.fields.keys().filter(|k| !texts.contains_key(*k)).cloned().collect();
         for key in stale {
@@ -235,6 +229,7 @@ impl Render for Shell {
             .key_context(crate::commands::key_context(cx))
             .on_action(crate::commands::on_run)
             .on_action(move |_: &OpenParameters, _, cx| params.update(cx, |p, cx| p.toggle(cx)))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.history_key(ev, window, cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
@@ -253,6 +248,7 @@ impl Render for Shell {
                     .child(status)
                     .child(self.params.clone()),
             )
+            .children(self.history_menu(t, cx))
             .child(frost_flush(self.viewport.clone()))
             .child(self.bench.overlay.clone())
     }
@@ -281,6 +277,9 @@ mod tests {
             "sync",
             "visible",
             "hidden",
+            "pen",
+            "text",
+            "import",
             "more",
             "skipStart",
             "stepBack",

@@ -107,6 +107,8 @@ pub struct Viewport {
     issues: Vec<FeatureIssue>,
     undo: UndoStack,
     message: Option<String>,
+    /// What the last undo, redo or panel edit said, kept past the rebuild it starts.
+    said: Option<String>,
     rebuild_ms: Option<f64>,
     /// The latest mesh's bodies, hidden ones included.
     built: Vec<Arc<scene::Body>>,
@@ -153,6 +155,7 @@ impl Viewport {
             issues: Vec::new(),
             undo: UndoStack::default(),
             message: None,
+            said: None,
             rebuild_ms: None,
             built: Vec::new(),
             highlight: None,
@@ -255,6 +258,18 @@ impl Viewport {
         f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
         cx: &mut Context<Self>,
     ) -> Result<Option<u64>, String> {
+        self.edit_step(None, None, f, cx)
+    }
+
+    /// `edit` as an undo step that folds into the last one of the same `key`, worded `label` when a diff would not.
+    pub fn edit_step(
+        &mut self,
+        key: Option<String>,
+        label: Option<String>,
+        f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
+        cx: &mut Context<Self>,
+    ) -> Result<Option<u64>, String> {
+        self.said = None;
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return Err("a face is being pushed".into());
         }
@@ -263,12 +278,18 @@ impl Viewport {
         let edited = session.edit(f)?;
         if edited.is_some() {
             self.changes += 1;
-            self.undo.record(before, None);
+            self.undo.record(before, key, label);
         }
         self.hover = None;
         self.show_built();
         cx.notify();
         Ok(edited)
+    }
+
+    /// Puts a line in the status until the next change, for what a panel refused or warned of.
+    pub fn say(&mut self, line: String, cx: &mut Context<Self>) {
+        self.said = Some(line);
+        cx.notify();
     }
 
     #[allow(dead_code, reason = "fc2/shell greys its undo button with it")]
@@ -281,21 +302,31 @@ impl Viewport {
         self.undo.can_redo()
     }
 
+    /// "Undo Fillet 2" for the undo or redo button's tooltip.
+    #[allow(dead_code, reason = "fc2/shell titles its undo and redo buttons with it")]
+    pub fn step_text(&self, undo: bool) -> String {
+        let label = self.session.as_ref().and_then(|s| self.undo.label(undo, &s.doc));
+        crate::timeline::labels::menu_text(undo, label.as_deref())
+    }
+
     /// Steps the document back one change, a run of drags of one face counting as one.
     pub fn undo(&mut self, cx: &mut Context<Self>) {
-        self.step(UndoStack::undo, cx);
+        self.step(true, cx);
     }
 
     pub fn redo(&mut self, cx: &mut Context<Self>) {
-        self.step(UndoStack::redo, cx);
+        self.step(false, cx);
     }
 
-    fn step(&mut self, take: fn(&mut UndoStack, Doc) -> Option<Doc>, cx: &mut Context<Self>) {
+    fn step(&mut self, undo: bool, cx: &mut Context<Self>) {
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return;
         }
         let Some(session) = self.session.as_mut() else { return };
-        let Some(doc) = take(&mut self.undo, session.doc.clone()) else { return };
+        let label = self.undo.label(undo, &session.doc);
+        let taken = if undo { self.undo.undo(session.doc.clone()) } else { self.undo.redo(session.doc.clone()) };
+        let Some(doc) = taken else { return };
+        self.said = label.map(|l| crate::timeline::labels::stepped(undo, &l));
         if let Err(e) = session.edit(move |d| {
             d.clone_from(&doc);
             Ok(())
@@ -327,6 +358,9 @@ impl Viewport {
         }
         if let Some(m) = &self.message {
             parts.push(m.clone());
+        }
+        if let Some(s) = &self.said {
+            parts.push(s.clone());
         }
         parts.join(", ")
     }
@@ -578,7 +612,7 @@ impl Viewport {
         if let Some(p) = self.push.as_mut().filter(|p| !p.released) {
             p.released = true;
             if self.session.as_ref().is_some_and(|s| s.doc != p.before) {
-                self.undo.record(p.before.clone(), Some(p.key.clone()));
+                self.undo.record(p.before.clone(), Some(p.key.clone()), None);
             }
             if p.settled() {
                 self.push = None;
