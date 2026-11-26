@@ -98,3 +98,12 @@ fn unix_time_turns_into_a_calendar_stamp() {
     let s = stamp_from_unix(951_782_400, 0);
     assert_eq!((s.year, s.month, s.day), (2000, 2, 29));
 }
+
+#[test]
+fn an_ambiguous_point_blocks_the_typed_number() {
+    assert!(typed_number("1.500", ',').is_err());
+    assert_eq!(typed_number(" 1,5 ", ','), Ok(Some(1.5)));
+    assert_eq!(typed_number("1.500", '.'), Ok(Some(1.5)));
+    assert_eq!(typed_number("abc", ','), Ok(None));
+    assert_eq!(typed_number("", '.'), Ok(None));
+}

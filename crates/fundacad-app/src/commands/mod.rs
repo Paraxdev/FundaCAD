@@ -186,6 +186,11 @@ pub fn key_context(cx: &App) -> KeyContext {
     context
 }
 
+/// The predicate of a fixed key outside the table, which waits like the table's keys while an overlay is open.
+pub fn workspace_predicate() -> &'static str {
+    "Workspace && !Modal"
+}
+
 fn predicate(row: &Shortcut) -> String {
     let ctx = match row.context {
         Ctx::Model => "Model",

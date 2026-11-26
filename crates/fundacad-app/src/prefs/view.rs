@@ -174,7 +174,7 @@ impl PrefsWindow {
         let sizes = SIZES.into_iter().map(|s| {
             chip(t_, ("size", s as usize), format!("{s}%"), s == now)
                 .on_click(move |_, w, cx| {
-                    super::set_size(s, w);
+                    super::set_size(s, w, cx);
                     cx.refresh_windows();
                 })
                 .into_any_element()

@@ -46,7 +46,7 @@ fn main() {
         prefs::install(cx);
         commands::bind(cx);
         files::set_startup(cx, path);
-        cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, None)]);
+        cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, Some(commands::workspace_predicate()))]);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             // Below this the left and right float clusters overlap.
@@ -55,7 +55,7 @@ fn main() {
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
-            prefs::apply_size(window);
+            prefs::apply_size(window, cx);
             let viewport = cx.new(|_| viewport::Viewport::new());
             cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
         })

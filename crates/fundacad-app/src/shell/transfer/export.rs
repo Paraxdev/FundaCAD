@@ -13,7 +13,7 @@ use gpui::*;
 use gpui_kit::component::input::{Input, InputState};
 use serde_json::{json, Value};
 
-use super::logic::{flat_sources, scope_choices, stamp_now, with_ext, written_summary};
+use super::logic::{flat_sources, scope_choices, stamp_now, typed_number, with_ext, written_summary};
 use super::modal::{button, choice, note, row};
 use super::{picker, prefs, Modal, Shell};
 use crate::i18n::{self, tr};
@@ -37,26 +37,35 @@ fn number(v: f64) -> String {
     i18n::show_stored(&format!("{v}"), i18n::decimal_mark())
 }
 
-fn typed(input: &Entity<InputState>, cx: &App) -> Option<f64> {
-    i18n::read_typed(input.read(cx).value().trim(), i18n::decimal_mark()).ok()?.parse::<f64>().ok()
+fn typed(input: &Entity<InputState>, cx: &App) -> Result<Option<f64>, String> {
+    typed_number(&input.read(cx).value(), i18n::decimal_mark())
 }
 
 impl ExportDialog {
-    fn read_inputs(&mut self, cx: &App) {
+    /// Takes the typed numbers, keeping the earlier value for text that is no number. Returns the first ambiguous one.
+    fn read_inputs(&mut self, cx: &App) -> Result<(), String> {
+        let mut problem = None;
+        let mut read = |input: &Entity<InputState>| {
+            typed(input, cx).unwrap_or_else(|why| {
+                problem.get_or_insert(why);
+                None
+            })
+        };
         if self.settings.show_advanced {
-            if let Some(v) = typed(&self.surface, cx) {
+            if let Some(v) = read(&self.surface) {
                 self.settings.set_faceting(v, |f| &mut f.surface_deviation);
             }
-            if let Some(v) = typed(&self.normal, cx) {
+            if let Some(v) = read(&self.normal) {
                 self.settings.set_faceting(v, |f| &mut f.normal_deviation);
             }
-            if let Some(v) = typed(&self.edge, cx) {
+            if let Some(v) = read(&self.edge) {
                 self.settings.set_faceting(v, |f| &mut f.max_edge_length);
             }
         }
-        if let Some(v) = typed(&self.tolerance, cx) {
+        if let Some(v) = read(&self.tolerance) {
             self.settings.tolerance = clamp_tolerance(v);
         }
+        problem.map_or(Ok(()), Err)
     }
 
     fn flat(&self) -> Option<&FlatSource> {
@@ -101,7 +110,7 @@ impl Shell {
 
     fn pick_refinement(&mut self, r: Refinement, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::Export(d)) = &mut self.transfer.modal else { return };
-        d.read_inputs(cx);
+        let _ = d.read_inputs(cx);
         d.settings.pick_refinement(r);
         let f = d.settings.faceting;
         for (input, v) in
@@ -190,7 +199,7 @@ impl Shell {
             let advanced = choice(t, "export-advanced", tr!("export.advanced"), s.show_advanced, true).on_click(cx.listener(
                 |this, _: &ClickEvent, _, cx| {
                     if let Some(Modal::Export(d)) = &mut this.transfer.modal {
-                        d.read_inputs(cx);
+                        let _ = d.read_inputs(cx);
                         d.settings.show_advanced = !d.settings.show_advanced;
                         cx.notify();
                     }
@@ -212,7 +221,10 @@ impl Shell {
 
     fn run_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::Export(d)) = &mut self.transfer.modal else { return };
-        d.read_inputs(cx);
+        if let Err(why) = d.read_inputs(cx) {
+            overlay::toast(cx, Toast::error(why));
+            return;
+        }
         let (settings, before, scope, start) = (d.settings.clone(), d.before.clone(), d.scope.clone(), d.start.clone());
         let flat = d.flat().cloned().filter(|_| settings.format.is_flat());
         let path = self.bench.files.read(cx).path().map(Path::to_path_buf);

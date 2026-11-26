@@ -42,7 +42,7 @@ shot = ["dep:image", "gpui/test-support", "gpui_windows/test-support"]
 
 [target.'cfg(windows)'.dependencies]
 gpui_windows = { package = "gpui-pre-windows", version = "=0.3.14" }
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_SystemInformation", "Win32_UI_Accessibility", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_SystemInformation", "Win32_UI_Accessibility", "Win32_UI_WindowsAndMessaging"] }
 
 [profile.dev]
 opt-level = 1

@@ -21,6 +21,8 @@ pub(super) struct Ui {
     open_choice: Option<String>,
     /// Why a typed value was refused, by `Target::key`.
     problems: HashMap<String, String>,
+    /// The decimal mark the fields were last written with.
+    mark: Option<char>,
 }
 
 /// Before a document is open the step's own values stand in, edited by the shell's plain commit.
@@ -44,6 +46,11 @@ fn param_row(p: &Param) -> Row {
 /// The field key of a row that takes typing.
 fn typed_key(n: &NumRow) -> Option<String> {
     n.target.as_ref().filter(|_| n.expr.is_none()).map(|t| t.key())
+}
+
+/// Whether a typed value reads back as the value there is, so committing it would add an empty undo step.
+pub(super) fn unchanged(current: Option<f64>, typed: f64) -> bool {
+    current.is_some_and(|c| format_value(c) == format_value(typed))
 }
 
 fn shown(n: &NumRow) -> String {
@@ -82,12 +89,17 @@ impl Shell {
             }
         }
         let rows = self.open_rows(cx).map(|(_, rows)| rows).unwrap_or_default();
+        let mark = crate::i18n::decimal_mark();
+        let remark = self.inspector.mark.replace(mark).is_some_and(|m| m != mark);
         let mut keys = HashSet::new();
         for row in rows {
             let Row::Number(n) = row else { continue };
             let Some(key) = typed_key(&n) else { continue };
             let text = shown(&n);
             let input = self.field(&key, &text, window, cx);
+            if remark {
+                input.update(cx, |i, cx| i.set_value(text.clone(), window, cx));
+            }
             if input.read(cx).value() == text {
                 self.inspector.problems.remove(&key);
             }
@@ -110,7 +122,7 @@ impl Shell {
         }
         let checked =
             model::parse(n.kind, &typed).and_then(|v| model::value_problem(&n.label, n.rule, v).map_or(Ok(v), Err));
-        let (value, Some(target)) = (checked, n.target) else { return true };
+        let (value, Some(target)) = (checked, n.target.clone()) else { return true };
         let value = match value {
             Ok(v) => v,
             Err(why) => {
@@ -120,6 +132,12 @@ impl Shell {
             }
         };
         self.inspector.problems.remove(key);
+        if unchanged(n.value, value) {
+            let text = shown(&n);
+            field.input.update(cx, |i, cx| i.set_value(text, window, cx));
+            cx.notify();
+            return true;
+        }
         let step = self.open_rows(cx).map(|(id, _)| crate::timeline::labels::name_of(&self.timeline.doc, &id));
         let label = step.map(|s| format!("{} of {s}", n.label.to_lowercase()));
         let edited =

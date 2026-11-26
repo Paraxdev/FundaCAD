@@ -4,6 +4,8 @@ mod geometry;
 mod history;
 mod history_menu;
 mod inspector;
+#[cfg(test)]
+mod inspector_tests;
 mod items;
 mod modal;
 mod params;

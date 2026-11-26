@@ -7,7 +7,7 @@ mod view;
 
 use gpui::*;
 
-use crate::commands::{register, Group, Run};
+use crate::commands::{self, register, Group, Run};
 use crate::i18n::Label;
 use crate::settings;
 use crate::theme::{self, Contrast, Theme};
@@ -40,13 +40,13 @@ pub fn size() -> u32 {
 }
 
 /// Zooms the window to the stored size.
-pub fn apply_size(window: &mut Window) {
-    window.set_ui_zoom(size() as f32 / 100.);
+pub fn apply_size(window: &mut Window, cx: &mut App) {
+    window.set_ui_zoom(size() as f32 / 100., cx);
 }
 
-pub fn set_size(size: u32, window: &mut Window) {
+pub fn set_size(size: u32, window: &mut Window, cx: &mut App) {
     settings::write(SIZE_KEY, &as_size(Some(f64::from(size))));
-    apply_size(window);
+    apply_size(window, cx);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,7 +152,7 @@ pub fn install(cx: &mut App) {
     ];
     for (id, label, to) in sizes {
         register(cx, id, label, Group::View, move |w, cx| {
-            set_size(to(size()), w);
+            set_size(to(size()), w, cx);
             cx.refresh_windows();
         });
     }
@@ -164,5 +164,6 @@ pub fn install(cx: &mut App) {
         ("ctrl--", "interface-smaller"),
         ("ctrl-0", "interface-reset"),
     ];
-    cx.bind_keys(keys.map(|(k, id)| KeyBinding::new(k, Run::new(id), None)));
+    let pred = commands::workspace_predicate();
+    cx.bind_keys(keys.map(|(k, id)| KeyBinding::new(k, Run::new(id), Some(pred))));
 }

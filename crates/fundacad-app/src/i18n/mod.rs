@@ -16,6 +16,8 @@ mod decimal_tests;
 mod format_tests;
 #[cfg(test)]
 mod languages_tests;
+#[cfg(test)]
+mod system_tests;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -255,8 +257,12 @@ fn pseudo_offered() -> bool {
     cfg!(debug_assertions)
 }
 
-/// The OS languages as BCP 47 tags, read from the POSIX locale variables, none on Windows.
+/// The OS languages as BCP 47 tags, from the user's preferred UI languages on Windows, else the POSIX locale variables.
 fn system_tags() -> Vec<String> {
+    #[cfg(windows)]
+    if let Some(tags) = windows_ui_languages() {
+        return tags;
+    }
     ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
         .iter()
         .filter_map(|v| std::env::var(v).ok())
@@ -266,6 +272,24 @@ fn system_tags() -> Vec<String> {
             (!tag.is_empty() && tag != "C" && tag != "POSIX").then_some(tag)
         })
         .collect()
+}
+
+#[cfg(windows)]
+fn windows_ui_languages() -> Option<Vec<String>> {
+    use windows::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
+    use windows::core::PWSTR;
+    let (mut count, mut len) = (0u32, 0u32);
+    unsafe { GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &mut count, None, &mut len) }.ok()?;
+    let mut buf = vec![0u16; len as usize];
+    unsafe { GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &mut count, Some(PWSTR(buf.as_mut_ptr())), &mut len) }
+        .ok()?;
+    Some(multi_sz_tags(&buf))
+}
+
+/// The strings of a NUL separated, double NUL ended UTF-16 list.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn multi_sz_tags(buf: &[u16]) -> Vec<String> {
+    buf.split(|c| *c == 0).filter(|s| !s.is_empty()).map(String::from_utf16_lossy).collect()
 }
 
 /// The code a setting means now, given the own files there are.

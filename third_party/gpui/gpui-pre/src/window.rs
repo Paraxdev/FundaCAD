@@ -3507,14 +3507,13 @@ impl Window {
 
     /// Scales every logical pixel by `zoom` on top of the display's scale, so the layout gets a smaller or larger
     /// viewport and reflows, as a browser's page zoom.
-    pub fn set_ui_zoom(&mut self, zoom: f32) {
+    pub fn set_ui_zoom(&mut self, zoom: f32, cx: &mut App) {
         let zoom = if zoom.is_finite() && zoom > 0. { zoom } else { 1. };
         if zoom == self.ui_zoom {
             return;
         }
         self.ui_zoom = zoom;
-        self.apply_ui_zoom();
-        self.refresh();
+        self.bounds_changed(cx);
     }
 
     /// The zoom `set_ui_zoom` set, 1 by default.
@@ -7266,8 +7265,6 @@ impl Window {
         self.on_next_frame(|window, cx| {
             if let Some(mut input_handler) = window.platform_window.take_input_handler() {
                 if let Some(bounds) = input_handler.selected_bounds(window, cx) {
-                    let zoom = window.ui_zoom;
-                    let bounds = Bounds::new(bounds.origin.map(|v| v * zoom), bounds.size.map(|v| v * zoom));
                     window.platform_window.update_ime_position(bounds);
                 }
                 window.platform_window.set_input_handler(input_handler);
@@ -11276,6 +11273,21 @@ fn unzoomed(event: PlatformInput, zoom: f32) -> PlatformInput {
         PlatformInput::Pinch(mut e) => {
             e.position = at(e.position);
             PlatformInput::Pinch(e)
+        }
+        PlatformInput::Touch(mut e) => {
+            e.position = at(e.position);
+            e.predicted_position = e.predicted_position.map(at);
+            PlatformInput::Touch(e)
+        }
+        PlatformInput::LongPress(mut e) => {
+            e.start_position = at(e.start_position);
+            e.position = at(e.position);
+            PlatformInput::LongPress(e)
+        }
+        PlatformInput::TouchDrag(mut e) => {
+            e.start_position = at(e.start_position);
+            e.position = at(e.position);
+            PlatformInput::TouchDrag(e)
         }
         PlatformInput::FileDrop(e) => PlatformInput::FileDrop(match e {
             FileDropEvent::Entered { position, paths } => FileDropEvent::Entered { position: at(position), paths },

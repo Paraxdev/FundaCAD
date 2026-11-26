@@ -17,7 +17,7 @@ mod picker_tests;
 mod prefs_tests;
 
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fundacad_client::transfer::export::ExportSettings;
 use fundacad_client::transfer::import::{as_import_unit, SPEC_UNIT};
@@ -102,8 +102,16 @@ impl Drop for PrefsGuard {
 }
 
 pub fn prefs() -> PrefsGuard {
-    static PREFS: LazyLock<Mutex<TransferPrefs>> = LazyLock::new(|| Mutex::new(TransferPrefs::load()));
-    let held = PREFS.lock().unwrap_or_else(PoisonError::into_inner);
+    #[cfg(not(test))]
+    static PREFS: std::sync::LazyLock<Mutex<TransferPrefs>> = std::sync::LazyLock::new(|| Mutex::new(TransferPrefs::load()));
+    #[cfg(not(test))]
+    let prefs: &'static Mutex<TransferPrefs> = &PREFS;
+    // The settings store is per thread under test, so these are too.
+    #[cfg(test)]
+    thread_local!(static PREFS: &'static Mutex<TransferPrefs> = Box::leak(Box::new(Mutex::new(TransferPrefs::load()))));
+    #[cfg(test)]
+    let prefs: &'static Mutex<TransferPrefs> = PREFS.with(|p| *p);
+    let held = prefs.lock().unwrap_or_else(PoisonError::into_inner);
     let before = held.clone();
     PrefsGuard { held, before }
 }
