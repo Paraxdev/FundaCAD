@@ -275,3 +275,32 @@ fn a_click_near_a_hole_point_finds_the_nearest_within_reach() {
     r.pick(&mut now, json!({"point": [3.5, -8.0, 12.0]}), had).unwrap();
     assert_eq!(last(&now)["points"], json!([[6.0, -8.0, 12.0]]));
 }
+
+#[test]
+fn a_waiting_datum_plane_takes_a_face_a_world_plane_or_a_datum_plane() {
+    let d = doc(json!({"features": [{"id": "f1", "type": "box"}, {"id": "f2", "type": "datumPlane", "plane": "XZ", "offset": 4}]}));
+    let (mut r, mut now, s) = run_of(&d, "offset-plane", vec![]);
+    let id = r.feature.clone();
+    assert_eq!(s.arm(), Some(PLANE));
+    assert!(takes_plane(&now, &id, "plane"));
+    assert!(!takes_plane(&now, &id, "face"));
+    assert!(!takes_plane(&now, "f1", "plane"));
+    assert_eq!(r.missing(&now), Some("Pick the face first".into()));
+    let tilted = Pick::Face { body: "body1".into(), face: 2, point: [4.5, -3.0, 8.0], normal: [1.0, 0.0, 0.0] };
+    r.pick(&mut now, tilted.selector().unwrap(), None).unwrap();
+    after_pick(&mut now, &id, "plane", &tilted);
+    assert_eq!(
+        last(&now),
+        json!({"type": "datumPlane", "offset": 10.0, "name": "Offset plane",
+            "plane": {"origin": [4.5, -3.0, 8.0], "normal": [1.0, 0.0, 0.0], "xdir": [0.0, 1.0, 0.0]},
+            "face": tilted.selector().unwrap(), "at": [4.5, -3.0, 8.0]})
+    );
+    assert_eq!(r.missing(&now), None);
+    r.set_arm(&mut now, Some(PLANE));
+    r.pick(&mut now, json!({"plane": "f2"}), None).unwrap();
+    assert_eq!(last(&now), json!({"type": "datumPlane", "offset": 10.0, "name": "Offset plane", "plane": "XY", "planeId": "f2"}));
+    r.set_arm(&mut now, Some(PLANE));
+    r.pick(&mut now, json!({"plane": "YZ"}), None).unwrap();
+    assert_eq!(last(&now), json!({"type": "datumPlane", "offset": 10.0, "name": "Offset plane", "plane": "YZ"}));
+    assert!(r.finish(&mut now, true).unwrap().is_some());
+}

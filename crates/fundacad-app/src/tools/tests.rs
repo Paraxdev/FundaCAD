@@ -129,7 +129,8 @@ fn an_offset_plane_follows_a_face_a_plane_or_waits_for_one() {
     let (_, s) = run("datum-plane", &d, vec![Pick::Plane { id: "f4".into() }]).unwrap();
     assert_eq!((s.feature["plane"].clone(), s.feature["planeId"].clone()), (json!("XY"), json!("f4")));
     let (_, s) = run("offset-plane", &d, vec![]).unwrap();
-    assert_eq!(s.arm(), Some(Target { field: "face", kind: PickKind::Face, many: false }));
+    assert_eq!(s.feature, json!({"id": "f1", "type": "datumPlane", "offset": 10.0, "name": "Offset plane"}));
+    assert_eq!(s.arm(), Some(Target { field: "plane", kind: PickKind::Face, many: false }));
 }
 
 #[test]

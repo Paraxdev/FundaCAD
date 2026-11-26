@@ -61,6 +61,9 @@ impl Viewport {
     /// The planes the running feature's needed fields hold by name.
     fn arm_planes(&self) -> Vec<String> {
         let (Some(tool), Some(doc)) = (self.tool.as_ref(), self.doc()) else { return Vec::new() };
+        if let Some(id) = crate::tools::feature(doc, &tool.feature).and_then(|f| f.get("planeId")).and_then(|p| p.as_str()) {
+            return vec![id.to_string()];
+        }
         tool.need
             .iter()
             .flat_map(|t| crate::tools::entries(doc, &tool.feature, t.field))

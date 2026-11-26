@@ -164,6 +164,7 @@ impl Viewport {
             let body = face.as_ref().or(edge.as_ref()).and_then(|p| p.body()).map(|b| Pick::Body { body: b.into() });
             let pick = match arm.kind {
                 PickKind::Edge => edge,
+                PickKind::Face if self.arm_takes_plane() => self.plane_pick(position).or(face),
                 PickKind::Face | PickKind::Point => face,
                 PickKind::Body => body,
                 PickKind::Area => self.area_pick(position),
@@ -175,8 +176,7 @@ impl Viewport {
             }
             return;
         }
-        let pick = selection::resolve(self.picking.filter, &self.picking.selection, face, edge);
-        let pick = pick.or_else(|| self.plane_pick(position));
+        let pick = self.plane_pick(position).or_else(|| selection::resolve(self.picking.filter, &self.picking.selection, face, edge));
         let before = self.picking.selection.clone();
         self.picking.selection.click(pick, mods);
         if before != self.picking.selection {

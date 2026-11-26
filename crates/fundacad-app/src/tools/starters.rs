@@ -240,7 +240,8 @@ fn datum_plane(s: &Selection, offset: f64, name: &str) -> Result<Start, String> 
         Some(Pick::Plane { id }) if ["XY", "XZ", "YZ"].contains(&id.as_str()) => f["plane"] = json!(id),
         Some(Pick::Plane { id }) => f["planeId"] = json!(id),
         _ => {
-            return Ok(Start { feature: f, need: vec![Target { field: "face", kind: PickKind::Face, many: false }] });
+            f.as_object_mut().expect("an object").remove("plane");
+            return Ok(Start { feature: f, need: vec![build::PLANE] });
         }
     }
     Ok(Start { feature: f, need: Vec::new() })

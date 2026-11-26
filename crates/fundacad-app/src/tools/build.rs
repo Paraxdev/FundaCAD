@@ -10,6 +10,8 @@ use super::{entries, feature, Doc, Start, Target};
 use crate::selection::{Pick, PickKind, Selection};
 
 const REGIONS: Target = Target { field: "regions", kind: PickKind::Area, many: true };
+/// A datum plane's plane, which a click on a face or on a drawn plane fills.
+pub const PLANE: Target = Target { field: "plane", kind: PickKind::Face, many: false };
 
 /// The features that make no solid of their own.
 const NO_SOLID: &[&str] = &["sketch", "datumPlane", "datumAxis", "datumPoint", "parameter", "group"];
@@ -238,6 +240,9 @@ fn set(doc: &mut Doc, id: &str, field: &str, value: Value) {
 /// region point and names the sketch, a loft profile or a sweep's sketch; a spot on a face becomes its point. Writes
 /// what the feature needs beside it, and says why a pick does not fit.
 pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<Value, String> {
+    if takes_plane(doc, id, target.field) {
+        return Ok(plane_placed(doc, id, value));
+    }
     match target.kind {
         PickKind::Point => return value.get("point").cloned().ok_or_else(|| "Click on a face".to_string()),
         PickKind::Area => {}
@@ -286,6 +291,34 @@ pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<V
     }
 }
 
+/// Whether a click on a drawn plane fills `field`, a datum plane's own plane.
+pub fn takes_plane(doc: &Doc, id: &str, field: &str) -> bool {
+    ty(doc, id) == "datumPlane" && field == PLANE.field
+}
+
+/// A face keeps its selector beside the plane, which after_pick writes from the face. A world plane is the plane, a
+/// datum plane is named by planeId, as the starter writes for a plane picked first.
+fn plane_placed(doc: &mut Doc, id: &str, value: Value) -> Value {
+    for k in ["face", "at", "planeId"] {
+        if let Some(f) = doc.get_mut("features").and_then(Value::as_array_mut).and_then(|fs| {
+            fs.iter_mut().find(|f| f.get("id").and_then(Value::as_str) == Some(id)).and_then(Value::as_object_mut)
+        }) {
+            f.remove(k);
+        }
+    }
+    match value.get("plane").and_then(Value::as_str) {
+        Some(world @ ("XY" | "XZ" | "YZ")) => json!(world),
+        Some(datum) => {
+            set(doc, id, "planeId", json!(datum));
+            json!("XY")
+        }
+        None => {
+            set(doc, id, "face", value);
+            json!("XY")
+        }
+    }
+}
+
 /// Why `pick` cannot go in `field` before anything is written: a revolve axis edge must be straight.
 pub fn fits(doc: &Doc, id: &str, field: &str, pick: &Pick) -> Result<(), String> {
     match (ty(doc, id), field) {
@@ -298,7 +331,7 @@ pub fn fits(doc: &Doc, id: &str, field: &str, pick: &Pick) -> Result<(), String>
 /// starter does for a face picked first, and a revolve's axis edge its line.
 pub fn after_pick(doc: &mut Doc, id: &str, field: &str, pick: &Pick) {
     match (pick, ty(doc, id), field) {
-        (Pick::Face { point, normal, .. }, "datumPlane", "face") => {
+        (Pick::Face { point, normal, .. }, "datumPlane", "face" | "plane") => {
             let (plane, at) = (super::starters::plane_def(*point, *normal), json!(round(*point)));
             set(doc, id, "plane", plane);
             set(doc, id, "at", at);

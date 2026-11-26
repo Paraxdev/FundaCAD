@@ -23,6 +23,11 @@ impl Viewport {
         self.tool.as_ref()?.arm
     }
 
+    pub(super) fn arm_takes_plane(&self) -> bool {
+        let (Some(tool), Some(doc)) = (self.tool.as_ref(), self.doc()) else { return false };
+        tool.arm.is_some_and(|a| tools::build::takes_plane(doc, &tool.feature, a.field))
+    }
+
     /// Starts a tool on `feature` after `f` edits the document, which may add it. Refused while another runs.
     pub fn begin_tool(
         &mut self,

@@ -116,6 +116,7 @@ pub fn entry(pick: &Pick) -> Option<Value> {
     match pick {
         Pick::Body { body } => Some(json!(body)),
         Pick::Area { sketch, point } => Some(json!({"sketch": sketch, "point": point})),
+        Pick::Plane { id } => Some(json!({"plane": id})),
         _ => pick.selector(),
     }
 }
