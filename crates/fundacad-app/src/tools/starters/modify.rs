@@ -1,5 +1,6 @@
 //! The Modify tools, FundaCAD 1's draft, face offset, split, pattern, mirror, move and scale starters.
 
+pub mod fit;
 #[cfg(test)]
 mod tests;
 
@@ -114,6 +115,12 @@ pub fn mirror(_: &Doc, s: &Selection) -> Result<Start, String> {
 
 pub fn move_bodies(_: &Doc, s: &Selection) -> Result<Start, String> {
     start(with_bodies(json!({"type": "move"}), bodies(s)), Vec::new())
+}
+
+/// The selected bodies, or the only one there is (`fit`), else a click picks them.
+pub fn separate(_: &Doc, s: &Selection) -> Result<Start, String> {
+    let need = vec![Target { field: "bodies", kind: PickKind::Body, many: true }];
+    start(json!({"type": "separate", "bodies": bodies(s)}), need)
 }
 
 pub fn scale(_: &Doc, s: &Selection) -> Result<Start, String> {

@@ -3,6 +3,8 @@
 
 mod modify;
 
+pub use modify::fit::{fit, Fitted};
+
 use serde_json::{json, Value};
 
 use super::{bodies, Doc, Start, Target, Tool};
@@ -34,6 +36,7 @@ pub const TOOLS: &[Tool] = &[
     t("draft", "Draft", modify::draft),
     t("offset-face", "Offset Face", modify::offset_face),
     t("split", "Split Body", modify::split),
+    t("separate", "Separate", modify::separate),
     t("pattern-linear", "Linear Pattern", modify::pattern_linear),
     t("pattern-circular", "Circular Pattern", modify::pattern_circular),
     t("pattern-rect", "Rectangular Pattern", modify::pattern_rect),

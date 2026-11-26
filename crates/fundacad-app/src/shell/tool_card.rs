@@ -48,13 +48,17 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
         Ok(s) => s,
         Err(why) => return toast(cx, why),
     };
+    let tools::Fitted { start, before } = tools::fit(tool.id, start, doc, v.selection(), &v.shown_bodies());
     let mut shown = doc.clone();
     let _ = tools::insert(&mut shown, start.feature.clone());
     let label = format!("Add {}", crate::timeline::labels::name_of(&shown, &id));
     let feature = start.feature.clone();
     let begun = viewport.update(cx, |v, cx| {
         let need = start.need.clone();
-        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| tools::insert(d, feature.clone()), cx)?;
+        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| {
+            before.iter().try_for_each(|b| tools::insert(d, b.clone()))?;
+            tools::insert(d, feature.clone())
+        }, cx)?;
         v.clear_selection(cx);
         match start.arm() {
             // A boolean with its bodies picked is done at once, as in FundaCAD 1.
