@@ -3,11 +3,11 @@
 
 mod place;
 mod rows;
+mod state;
 
 use std::collections::HashMap;
 
 use fundacad_client::Doc;
-use fundacad_core::params::edit;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -16,6 +16,7 @@ use crate::theme::{ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMA
 use crate::ui::{icon_button, solid_card, text};
 use crate::viewport::Viewport;
 use rows::{value_text, Row, Rows};
+use state::{Change, Col, Key, Notes};
 
 actions!(params, [OpenParameters]);
 
@@ -26,20 +27,6 @@ const NAME_W: f32 = 110.;
 const VALUE_W: f32 = 90.;
 const DEL_W: f32 = 24.;
 const FIELD_H: f32 = 28.;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Col {
-    Name,
-    Expr,
-    Comment,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Key {
-    Row(String, Col),
-    NewName,
-    NewExpr,
-}
 
 struct Field {
     input: Entity<InputState>,
@@ -53,12 +40,7 @@ pub struct ParamsPanel {
     source: Option<Doc>,
     rows: Rows,
     fields: HashMap<Key, Field>,
-    /// Why a typed text was refused or will not evaluate, kept until it is fixed.
-    problems: HashMap<Key, String>,
-    /// What an expression being typed evaluates to.
-    preview: HashMap<Key, f64>,
-    /// A refused delete, by parameter.
-    refused: HashMap<String, String>,
+    notes: Notes,
     unit: &'static str,
     _observe: Subscription,
     _escape: Subscription,
@@ -66,7 +48,11 @@ pub struct ParamsPanel {
 
 impl ParamsPanel {
     pub fn new(viewport: Entity<Viewport>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let observe = cx.observe_in(&viewport, window, |this, _, window, cx| this.sync(window, cx));
+        let observe = cx.observe_in(&viewport, window, |this, _, window, cx| {
+            if this.open && this.refresh(window, cx) {
+                cx.notify();
+            }
+        });
         // Before dispatch and without stopping it, as FundaCAD 1's panels did: Esc closes whatever has focus.
         let panel = cx.entity().downgrade();
         let escape = cx.intercept_keystrokes(move |e, _, cx| {
@@ -78,22 +64,18 @@ impl ParamsPanel {
                 });
             }
         });
-        let mut panel = Self {
+        Self {
             viewport,
             // FUNDA_PANEL=params opens it at start, for captures.
             open: std::env::var("FUNDA_PANEL").is_ok_and(|p| p == "params"),
             source: None,
             rows: Rows::default(),
             fields: HashMap::new(),
-            problems: HashMap::new(),
-            preview: HashMap::new(),
-            refused: HashMap::new(),
+            notes: Notes::default(),
             unit: "mm",
             _observe: observe,
             _escape: escape,
-        };
-        panel.sync(window, cx);
-        panel
+        }
     }
 
     pub fn toggle(&mut self, cx: &mut Context<Self>) {
@@ -101,47 +83,32 @@ impl ParamsPanel {
         cx.notify();
     }
 
-    fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Reads the rows again when the document changed, true when it did.
+    fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let viewport = self.viewport.read(cx);
-        let Some(doc) = viewport.doc() else { return };
+        let Some(doc) = viewport.doc() else { return false };
         if self.source.as_ref() == Some(doc) {
-            return;
+            return false;
         }
         let doc = doc.clone();
         self.rows = rows::rows(&doc);
         self.source = Some(doc);
-        let texts = self.texts();
-        let kept = |k: &Key| matches!(k, Key::NewName | Key::NewExpr) || texts.contains_key(k);
-        self.fields.retain(|k, _| kept(k));
-        self.problems.retain(|k, _| kept(k));
-        self.preview.retain(|k, _| kept(k));
-        let rows = &self.rows;
-        self.refused.retain(|n, _| rows.find(n).is_some());
+        let texts = state::texts(&self.rows);
+        self.fields.retain(|k, _| !matches!(k, Key::Row(..)) || texts.contains_key(k));
+        self.notes.retain(&self.rows);
         for (key, text) in texts {
             let Some(field) = self.fields.get(&key) else { continue };
             let focused = field.input.focus_handle(cx).is_focused(window);
-            if !focused && !self.problems.contains_key(&key) && field.input.read(cx).value() != text {
+            let shown = field.input.read(cx).value().to_string();
+            if self.notes.resets(&key, focused, &shown, &text) {
                 field.input.update(cx, |i, cx| i.set_value(text, window, cx));
             }
         }
-        cx.notify();
-    }
-
-    /// The text each row field shows when nothing is typed in it.
-    fn texts(&self) -> HashMap<Key, String> {
-        let mut out = HashMap::new();
-        for r in self.rows.user.iter().chain(&self.rows.model) {
-            out.insert(Key::Row(r.name.clone(), Col::Name), r.name.clone());
-            out.insert(Key::Row(r.name.clone(), Col::Expr), r.expr.clone());
-            if r.drives.is_none() {
-                out.insert(Key::Row(r.name.clone(), Col::Comment), r.comment.clone());
-            }
-        }
-        out
+        true
     }
 
     fn ensure_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        for (key, text) in self.texts() {
+        for (key, text) in state::texts(&self.rows) {
             self.field(key, &text, window, cx);
         }
         self.field(Key::NewName, "", window, cx);
@@ -163,7 +130,12 @@ impl ParamsPanel {
         let events = cx.subscribe_in(&input, window, move |this, _, event: &InputEvent, window, cx| match event {
             InputEvent::PressEnter { .. } => this.commit(&owner, window, cx),
             InputEvent::Blur if matches!(owner, Key::Row(..)) => this.commit(&owner, window, cx),
-            InputEvent::Change => this.check(&owner, cx),
+            InputEvent::Change => {
+                let typed = this.typed(&owner, cx);
+                let doc = this.viewport.read(cx).doc();
+                this.notes.check(doc, &this.rows, &owner, &typed);
+                cx.notify();
+            }
             _ => {}
         });
         self.fields.insert(key, Field { input, _events: events });
@@ -173,112 +145,43 @@ impl ParamsPanel {
         self.fields.get(key).map(|f| f.input.read(cx).value().trim().to_string()).unwrap_or_default()
     }
 
-    /// Evaluates an expression as it is typed.
-    fn check(&mut self, key: &Key, cx: &mut Context<Self>) {
-        let name = match key {
-            Key::Row(name, Col::Expr) => Some(name.clone()),
-            Key::NewExpr => None,
-            _ => return,
-        };
-        let typed = self.typed(key, cx);
-        let unchanged = name.as_ref().and_then(|n| self.rows.find(n)).is_some_and(|r| r.expr == typed);
-        let result = match self.viewport.read(cx).doc() {
-            Some(doc) if !typed.is_empty() && !unchanged => Some(edit::check_expr(doc, name.as_deref(), &typed)),
-            _ => None,
-        };
-        self.preview.remove(key);
-        self.problems.remove(key);
-        match result {
-            Some(Ok(v)) => {
-                self.preview.insert(key.clone(), v);
-            }
-            Some(Err(why)) => {
-                self.problems.insert(key.clone(), why);
-            }
-            None => {}
-        }
-        cx.notify();
-    }
-
-    fn edit(
-        &self,
-        f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        self.viewport.update(cx, |v, cx| v.edit(f, cx)).map(drop)
-    }
-
     fn commit(&mut self, key: &Key, window: &mut Window, cx: &mut Context<Self>) {
-        let Key::Row(name, col) = key else {
+        if !matches!(key, Key::Row(..)) {
             self.add(window, cx);
             return;
-        };
-        let Some(row) = self.rows.find(name) else { return };
+        }
         let typed = self.typed(key, cx);
-        let current = match col {
-            Col::Name => &row.name,
-            Col::Expr => &row.expr,
-            Col::Comment => &row.comment,
-        };
-        self.preview.remove(key);
-        if typed == *current {
-            self.problems.remove(key);
-            cx.notify();
-            return;
+        match self.notes.commit(&self.rows, key, &typed) {
+            Some(change) => self.run(change, window, cx),
+            None => cx.notify(),
         }
-        let name = name.clone();
-        let done = match col {
-            Col::Name => self.edit(move |d| edit::rename_param(d, &name, &typed).map(drop), cx),
-            Col::Expr => self.edit(move |d| edit::set_param_expr(d, &name, &typed).map(drop), cx),
-            Col::Comment => self.edit(move |d| edit::set_param_comment(d, &name, &typed), cx),
-        };
-        match done {
-            Ok(()) => {
-                self.problems.remove(key);
-            }
-            Err(why) => {
-                self.problems.insert(key.clone(), why);
-            }
-        }
-        self.sync(window, cx);
-        cx.notify();
     }
 
     fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (name, expr, unit) = (self.typed(&Key::NewName, cx), self.typed(&Key::NewExpr, cx), self.unit);
+        let (name, expr) = (self.typed(&Key::NewName, cx), self.typed(&Key::NewExpr, cx));
         if name.is_empty() || expr.is_empty() {
             return;
         }
-        match self.edit(move |d| edit::add_param(d, &name, &expr, unit).map(drop), cx) {
-            Ok(()) => {
-                self.problems.remove(&Key::NewName);
-                self.problems.remove(&Key::NewExpr);
-                self.preview.remove(&Key::NewExpr);
-                for key in [Key::NewName, Key::NewExpr] {
-                    if let Some(f) = self.fields.get(&key) {
-                        f.input.update(cx, |i, cx| i.set_value("", window, cx));
-                    }
-                }
-            }
-            Err(why) => {
-                self.problems.insert(Key::NewName, why);
-            }
-        }
-        self.sync(window, cx);
-        cx.notify();
+        self.run(Change::Add { name, expr, unit: self.unit }, window, cx);
     }
 
     fn delete(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
-        let target = name.clone();
-        match self.edit(move |d| edit::delete_param(d, &target).map(drop), cx) {
-            Ok(()) => {
-                self.refused.remove(&name);
-            }
-            Err(why) => {
-                self.refused.insert(name, why);
+        self.run(Change::Delete(name), window, cx);
+    }
+
+    fn run(&mut self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
+        let edit = change.clone();
+        let result = self.viewport.update(cx, |v, cx| v.edit(move |d| edit.apply(d), cx)).map(drop);
+        let added = matches!(change, Change::Add { .. }) && result.is_ok();
+        self.notes.settle(&change, result);
+        if added {
+            for key in [Key::NewName, Key::NewExpr] {
+                if let Some(f) = self.fields.get(&key) {
+                    f.input.update(cx, |i, cx| i.set_value("", window, cx));
+                }
             }
         }
-        self.sync(window, cx);
+        self.refresh(window, cx);
         cx.notify();
     }
 }
@@ -308,7 +211,7 @@ impl ParamsPanel {
     fn input(&self, t: &Theme, key: &Key, stale: bool, window: &Window, cx: &App) -> Div {
         let field = self.fields.get(key);
         let focused = field.is_some_and(|f| f.input.focus_handle(cx).is_focused(window));
-        let edge = if self.problems.contains_key(key) {
+        let edge = if self.notes.problems.contains_key(key) {
             t.error
         } else if focused {
             t.accent
@@ -342,7 +245,7 @@ impl ParamsPanel {
     /// The value cell: what a typed expression comes to, else the stored value.
     fn value(&self, t: &Theme, r: &Row) -> Div {
         let cell = text(t, FS_SMALL).w(px(VALUE_W)).flex_none().truncate();
-        match self.preview.get(&Key::Row(r.name.clone(), Col::Expr)) {
+        match self.notes.preview.get(&Key::Row(r.name.clone(), Col::Expr)) {
             Some(v) => cell.text_color(t.accent_hot).child(value_text(*v, &r.unit)),
             None => cell.text_color(if r.issue.is_some() { t.warn } else { t.text_dim }).child(r.value.clone()),
         }
@@ -352,8 +255,8 @@ impl ParamsPanel {
     fn note(&self, t: &Theme, r: &Row) -> Option<Div> {
         let typed = [Col::Name, Col::Expr, Col::Comment]
             .into_iter()
-            .find_map(|c| self.problems.get(&Key::Row(r.name.clone(), c)))
-            .or_else(|| self.refused.get(&r.name));
+            .find_map(|c| self.notes.problems.get(&Key::Row(r.name.clone(), c)))
+            .or_else(|| self.notes.refused.get(&r.name));
         let (line, colour) = match (typed, &r.issue) {
             (Some(why), _) => (why.clone(), t.error),
             (None, Some(issue)) => (issue.clone(), t.warn),
@@ -381,7 +284,7 @@ impl ParamsPanel {
         let del = match r.drives {
             Some(_) => div().w(px(DEL_W)).flex_none(),
             None => {
-                let refused = self.refused.contains_key(&r.name);
+                let refused = self.notes.refused.contains_key(&r.name);
                 let name = r.name.clone();
                 div().w(px(DEL_W)).flex_none().child(
                     icon_button(t, SharedString::from(format!("delete-{}", r.name)), "close", DEL_W, 12., {
@@ -434,7 +337,7 @@ impl ParamsPanel {
                     .child(label)
             }),
         );
-        let refused = self.problems.contains_key(&Key::NewName);
+        let refused = self.notes.problems.contains_key(&Key::Add);
         let (fill, hot, ink) = if refused { (t.error, t.error, t.on_accent) } else { (t.raised, t.raised_2, t.text) };
         let add = text(t, FS_SMALL)
             .id("params-add")
@@ -449,10 +352,10 @@ impl ParamsPanel {
             .hover(move |s| s.bg(hot))
             .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
             .child("+ Add");
-        let preview = self.preview.get(&Key::NewExpr).map(|v| {
+        let preview = self.notes.preview.get(&Key::NewExpr).map(|v| {
             text(t, FS_SMALL).flex_none().text_color(t.accent_hot).child(value_text(*v, self.unit))
         });
-        let note = self.problems.get(&Key::NewName).or_else(|| self.problems.get(&Key::NewExpr));
+        let note = self.notes.problems.get(&Key::Add).or_else(|| self.notes.problems.get(&Key::NewExpr));
         div()
             .flex()
             .flex_col()
@@ -479,6 +382,7 @@ impl Render for ParamsPanel {
         if !self.open {
             return div().into_any_element();
         }
+        self.refresh(window, cx);
         self.ensure_fields(window, cx);
         let (left, width) = place::place(window.viewport_size().width / px(1.));
         let t = cx.theme().clone();
