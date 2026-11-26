@@ -126,6 +126,7 @@ pub fn rows(doc: &Map<String, Value>, id: &str, issues: &[FeatureIssue]) -> Vec<
         let (options, current) = match (ty, c.field) {
             ("patternCircular", "axis") => options::pattern_axis_choice(f, &all),
             ("mechanism", "drive") => options::mechanism_drive_choice(f),
+            ("split", "plane") => options::modify::split_plane_choice(f, &all),
             _ => options::datum_choice_row(ty, f, c.field, &all).unwrap_or_else(|| {
                 (
                     c.options.iter().map(|&(v, l)| Choice { value: v.into(), label: l.into() }).collect(),
@@ -195,6 +196,12 @@ pub fn option_patch(doc: &Map<String, Value>, id: &str, field: &str, value: &Val
     let mut patch: options::Patch = vec![(field.to_string(), Some(value.clone()))];
     if ty == "patternCircular" && field == "axis" {
         patch = options::pattern_axis_patch(s)?;
+    }
+    if ty == "split" && field == "plane" {
+        patch = options::modify::split_plane_patch(s)?;
+    }
+    if matches!(ty, "move" | "duplicate") && field == "copy" {
+        patch = options::modify::copy_patch(value == &Value::Bool(true));
     }
     if ty == "mechanism" && field == "drive" {
         patch = options::mechanism_drive_patch(s);

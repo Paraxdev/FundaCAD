@@ -63,7 +63,7 @@ fn targets_of(ty: &str) -> &'static [TargetField] {
         "boolean" => {
             const { &[row("target", "Body kept", TargetKind::Body), row("tools", "Bodies used", TargetKind::Body)] }
         }
-        "move" | "mirror" | "patternRect" | "patternLinear" | "patternCircular" => const { &[BODIES_OR_ACTIVE] },
+        "move" | "duplicate" | "mirror" | "patternRect" | "patternLinear" | "patternCircular" => const { &[BODIES_OR_ACTIVE] },
         "removeBody" => const { &[BODIES] },
         "mechanism" => const { &[row("ground", "Ground", TargetKind::Body)] },
         "split" | "separate" => const { &[SPLIT_BODIES] },

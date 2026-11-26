@@ -5,6 +5,8 @@ use serde_json::{Map, Value};
 
 use super::hole::{self, HOLE_SIZES};
 
+pub mod modify;
+
 /// A value and the word a row shows for it.
 pub type Opt = (&'static str, &'static str);
 
@@ -131,6 +133,7 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
         }
         "thicken" => const { &[choice("operation", "Operation", &[("new", "New body"), ("join", "Join")], "join")] },
         "mirror" => const { &[choice("plane", "Plane", PLANES, "XY")] },
+        "split" => modify::SPLIT,
         "draft" => const { &[choice("axis", "Pull axis", AXES, "Z")] },
         "patternLinear" => const { &[choice("axis", "Direction", AXES, "X")] },
         "patternCircular" => const { &[choice("axis", "Axis", AXES, "Z")] },
@@ -217,6 +220,7 @@ pub fn toggle_fields(ty: &str) -> &'static [ToggleField] {
             }
         }
         "thicken" => const { &[toggle("symmetric", "Symmetric", false)] },
+        "move" | "duplicate" => modify::COPY,
         "fillet" | "chamfer" => const { &[toggle("tangentEdges", "Include Tangent Edges", true)] },
         "press-pull" | "offsetFace" => const { &[toggle("followTangent", "Tangent faces follow", true)] },
         "hole" => {
@@ -320,6 +324,9 @@ pub fn choice_value(ty: &str, f: &Map<String, Value>, c: &ChoiceField) -> String
 }
 
 pub fn toggle_value(f: &Map<String, Value>, t: &ToggleField) -> bool {
+    if t.field == "copy" {
+        return modify::is_copy(f);
+    }
     f.get(t.field).and_then(Value::as_bool).unwrap_or(t.fallback)
 }
 
