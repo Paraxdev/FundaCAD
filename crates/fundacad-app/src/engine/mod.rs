@@ -1,5 +1,8 @@
 //! A document open on the engine worker through fundacad-client, or a plain STL.
 
+#[cfg(test)]
+mod tests;
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Receiver;
@@ -57,7 +60,9 @@ pub fn open(path: &Path, wake: impl Fn() + Send + Sync + 'static) -> Result<Open
     let blob_dir = session_blob_dir();
     let read =
         fundacad_format::read_document(path, &blob_dir).and_then(|text| match serde_json::from_str::<Value>(&text) {
-            Ok(Value::Object(doc)) => Ok(doc),
+            Ok(Value::Object(mut doc)) => {
+                fundacad_core::migrate::migrate(&mut doc).map(|_| doc).map_err(|e| e.to_string())
+            }
             _ => Err(format!("{} is not a document", path.display())),
         });
     match read.and_then(|doc| start_in(doc, blob_dir.clone(), wake)) {
