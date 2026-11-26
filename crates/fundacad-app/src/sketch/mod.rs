@@ -182,6 +182,7 @@ impl Editor {
         let params = solve::params(doc);
         if es != self.entities || cs != self.constraints || params != self.params {
             (self.entities, self.constraints, self.params) = (es, cs, params);
+            self.clicks.clear();
             self.resolve(false);
         }
         true
@@ -389,6 +390,8 @@ impl Editor {
             }
             Tool::Arc => {
                 let (a, b) = (self.clicks[0].clone(), self.clicks[1].clone());
+                let v = |p: DVec2| fundacad_sketch::geom::v(p.x, p.y);
+                fundacad_sketch::geom::circumcenter(v(a.p), v(b.p), v(at.p))?;
                 self.clicks.clear();
                 let r = r3;
                 let e = json!({"type": "arc", "x1": r(a.p.x), "y1": r(a.p.y), "x2": r(b.p.x), "y2": r(b.p.y), "mx": r(at.p.x), "my": r(at.p.y)});
@@ -486,6 +489,10 @@ impl Editor {
         let (mut es, mut cs) = (self.entities.clone(), self.constraints.clone());
         let target = if list == "entities" { &mut es } else { &mut cs };
         let item = target.iter_mut().find(|e| e.get("id").and_then(Value::as_str) == Some(id)).ok_or_else(|| format!("no {id}"))?;
+        let stored = if field == "diameter" && list == "entities" { "radius" } else { field };
+        if let Some(name) = item.get(stored).and_then(Value::as_str) {
+            return Err(format!("this number is the parameter {name}, change it in the parameters table"));
+        }
         match field {
             "diameter" if list == "entities" => item["radius"] = json!(value / 2.0),
             _ => item[field] = json!(value),
@@ -602,8 +609,12 @@ pub fn add_extrude(doc: &mut Map<String, Value>, sketch: &str, distance: f64, re
 }
 
 /// A new full revolve of the sketch about `axis` (an `{origin, dir}` line in world mm). Its id.
-pub fn add_revolve(doc: &mut Map<String, Value>, sketch: &str, axis: Value) -> Result<String, String> {
-    add_feature(doc, "revolve", json!({"type": "revolve", "sketch": sketch, "axis": axis, "angle": 360, "operation": "new"}))
+pub fn add_revolve(doc: &mut Map<String, Value>, sketch: &str, axis: Value, regions: &[[f64; 3]]) -> Result<String, String> {
+    let mut f = json!({"type": "revolve", "sketch": sketch, "axis": axis, "angle": 360, "operation": "new"});
+    if !regions.is_empty() {
+        f["regions"] = json!(regions);
+    }
+    add_feature(doc, "revolve", f)
 }
 
 fn add_feature(doc: &mut Map<String, Value>, ty: &str, mut f: Value) -> Result<String, String> {

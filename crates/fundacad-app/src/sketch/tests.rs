@@ -215,7 +215,7 @@ fn a_circle_shows_and_takes_its_diameter_as_fc1_did() {
     f.insert("entities".into(), json!([{"type": "circle", "id": "c1", "x": 0, "y": 0, "radius": 5}]));
     let dim = dims::feature_dims(feature(&d, "sketch1").unwrap()).remove(0);
     assert_eq!((dim.key.as_str(), dim.label.as_str(), dim.value), ("entities.c1.diameter", "Diameter of Circle 1", 10.0));
-    assert_eq!(dims::virtual_field(feature(&d, "sketch1").unwrap(), &dim.key), Some(json!(10.0)));
+    assert_eq!(dims::virtual_field(feature(&d, "sketch1").unwrap(), &dim.key), Some((&json!(5), 2.0)));
     feature_mut(&mut d, "sketch1").unwrap()["entities"][0]["diameter"] = json!(16);
     solve::resolve_feature(&mut d, "sketch1", Some(&dim.key));
     let c = &feature(&d, "sketch1").unwrap()["entities"][0];
@@ -223,4 +223,39 @@ fn a_circle_shows_and_takes_its_diameter_as_fc1_did() {
     let mut e = Editor::open(&d, "sketch1").unwrap();
     e.set_dim("entities.c1.diameter", 30.0).unwrap();
     assert_eq!(e.entities[0]["radius"].as_f64(), Some(15.0));
+}
+
+#[test]
+fn a_dimension_held_by_a_parameter_keeps_its_name() {
+    let mut d = doc();
+    feature_mut(&mut d, "sketch1").unwrap().insert(
+        "entities".into(),
+        json!([{"type": "circle", "id": "c1", "x": 0, "y": 0, "radius": "w"},
+               {"type": "rectangle", "id": "r1", "x": 0, "y": 0, "width": "w", "height": 8}]),
+    );
+    let mut e = Editor::open(&d, "sketch1").unwrap();
+    let dia = e.dims(0.0).into_iter().find(|d| d.key == "entities.c1.diameter").unwrap();
+    assert_eq!(dia.expr.as_deref(), Some("w"));
+    assert!(e.set_dim("entities.c1.diameter", 30.0).is_err());
+    assert!(e.set_dim("entities.r1.width", 30.0).is_err());
+    assert_eq!((&e.entities[0]["radius"], &e.entities[1]["width"]), (&json!("w"), &json!("w")));
+}
+
+#[test]
+fn degenerate_shapes_make_no_region_and_no_arc() {
+    let mut e = editor();
+    e.entities = vec![json!({"type": "line", "id": "l1", "x1": 3, "y1": 3, "x2": 3, "y2": 3})];
+    e.resolve(false);
+    assert!(e.regions().is_empty());
+    e.set_tool(Tool::Arc);
+    e.click(p(0.0, 0.0), 10.0);
+    e.click(p(20.0, 0.0), 10.0);
+    assert_eq!(e.click(p(10.0, 0.0), 10.0), None, "three points in a row make no arc");
+}
+
+#[test]
+fn a_revolve_keeps_its_areas_as_fc1_wrote_them() {
+    let mut d = doc();
+    let id = add_revolve(&mut d, "sketch1", json!({"origin": [0, 0, 0], "dir": [0, 1, 0]}), &[[5.0, 1.0, 0.0]]).unwrap();
+    assert_eq!(feature(&d, &id).unwrap()["regions"], json!([[5.0, 1.0, 0.0]]));
 }

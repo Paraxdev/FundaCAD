@@ -92,7 +92,7 @@ pub fn regions(entities: &[Entity], construction: &[String]) -> Vec<Vec<DVec2>> 
             }
             loop_pts.extend(p.into_iter().skip(1));
         };
-        if closed {
+        if closed && loop_pts.len() > 3 {
             loop_pts.pop();
             out.push(loop_pts);
         }

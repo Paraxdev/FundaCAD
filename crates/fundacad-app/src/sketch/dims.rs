@@ -122,7 +122,8 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
             if covered.iter().any(|c| c == &format!("{id}.{field}")) {
                 return;
             }
-            let expr = e.get(field).and_then(Value::as_str).map(str::to_string);
+            let stored = if field == "diameter" { "radius" } else { field };
+            let expr = e.get(stored).and_then(Value::as_str).map(str::to_string);
             let key = format!("entities.{id}.{field}");
             let anchor = beside(from, to, gap);
             out.push(Dim { key, label, value, angle: false, expr, constraint: None, driven: false, from, to, anchor });
@@ -152,12 +153,13 @@ pub fn feature_dims(f: &Map<String, Value>) -> Vec<Dim> {
     dims(&es, &cs, &solved, 0.0)
 }
 
-/// A circle's `diameter`, which FC1 shows and edits while the file keeps `radius`. None for a stored field.
-pub fn virtual_field(f: &Map<String, Value>, key: &str) -> Option<Value> {
+/// A circle's `diameter`, which FC1 shows and edits while the file keeps `radius`: the stored radius, a number or a
+/// parameter name, and the factor the row shows it by. None for a stored field.
+pub fn virtual_field<'a>(f: &'a Map<String, Value>, key: &str) -> Option<(&'a Value, f64)> {
     let id = key.strip_prefix("entities.")?.strip_suffix(".diameter")?;
     let es = f.get("entities")?.as_array()?;
     let e = es.iter().find(|e| e.get("id").and_then(Value::as_str) == Some(id))?;
-    Some(serde_json::json!(e.get("radius")?.as_f64()? * 2.0))
+    Some((e.get("radius")?, 2.0))
 }
 
 /// Folds a written `diameter` back into the circle's `radius`.

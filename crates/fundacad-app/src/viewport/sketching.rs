@@ -205,7 +205,8 @@ impl Viewport {
         let plane = Plane::on_face(hit.point, hit.normal);
         let mut spec = plane.spec();
         spec["at"] = json!([hit.point.x, hit.point.y, hit.point.z]);
-        spec["face"] = face_selector(body, hit.face);
+        // FC1 resolves the face nearest the clicked point, an area centroid can lie off a ring or L shaped face.
+        spec["face"] = json!({"kind": "face", "by": "nearest", "point": [hit.point.x, hit.point.y, hit.point.z], "body": body.source.id});
         Some((plane, spec))
     }
 
@@ -277,12 +278,10 @@ impl Viewport {
     }
 
     /// Keeps the editor in step with the document after an undo or a panel edit.
-    pub(super) fn sketch_sync(&mut self) {
+    pub(super) fn sketch_sync(&mut self, cx: &mut Context<Self>) {
         let Some(doc) = self.session.as_ref().map(|s| &s.doc) else { return };
-        if let Some(e) = &mut self.sketch {
-            if !e.reload(doc) {
-                self.sketch = None;
-            }
+        if self.sketch.as_mut().is_some_and(|e| !e.reload(doc)) {
+            self.finish_sketch(cx);
         }
     }
 
@@ -372,7 +371,7 @@ impl Viewport {
         let id = e.feature.clone();
         let fill = e.fill_points();
         let axis = revolve.then(|| {
-            let line = e.solved.entities.iter().find(|x| e.is_construction(x.id())).and_then(|x| x.as_line_seg());
+            let line = e.solved.entities.iter().filter(|x| e.is_construction(x.id())).find_map(|x| x.as_line_seg());
             let (a, b) = line.map_or((DVec2::ZERO, DVec2::Y), |(a, b)| (DVec2::new(a.x, a.y), DVec2::new(b.x, b.y)));
             let (o, d) = (e.plane.to_3d(a), e.plane.to_3d(b) - e.plane.to_3d(a));
             json!({"origin": [o.x, o.y, o.z], "dir": [d.x, d.y, d.z]})
@@ -384,7 +383,7 @@ impl Viewport {
             Some(label.into()),
             move |d| {
                 match &axis {
-                    Some(axis) => sketch::add_revolve(d, &id, axis.clone()),
+                    Some(axis) => sketch::add_revolve(d, &id, axis.clone(), &fill),
                     None => sketch::add_extrude(d, &id, 10.0, &fill),
                 }
                 .map(drop)
@@ -406,7 +405,7 @@ impl Viewport {
 
     /// The labels and the toolbar over the view, positioned in the view's own coordinates.
     pub(super) fn sketch_layer(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        self.sketch_sync();
+        self.sketch_sync(cx);
         let e = self.sketch.as_ref()?;
         let origin = self.bounds.origin;
         let gap = 14.0 / self.px_per_mm();
@@ -695,21 +694,4 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     commands::register(cx, "delete", "Delete", Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| v.sketch_do(cx, Editor::delete_selected));
     });
-}
-
-/// FC1's face reference: the face nearest its area centroid, on its body.
-fn face_selector(body: &super::scene::SceneBody, face: u32) -> Value {
-    let (mut sum, mut area) = (Vec3::ZERO, 0.0);
-    for t in body.indices.chunks_exact(3) {
-        let [a, b, c] = [0, 1, 2].map(|k| &body.vertices[t[k] as usize]);
-        if a.face != face {
-            continue;
-        }
-        let (a, b, c) = (a.position(), b.position(), c.position());
-        let w = (b - a).cross(c - a).length() / 2.0;
-        sum += (a + b + c) / 3.0 * w;
-        area += w;
-    }
-    let c = sum / area.max(1e-12);
-    json!({"kind": "face", "by": "nearest", "point": [c.x, c.y, c.z], "body": body.source.id})
 }

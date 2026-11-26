@@ -412,3 +412,18 @@ fn a_sketch_lists_its_dimensions_and_an_edit_solves_it_again() {
     assert_eq!(feature(&d, "s1")["constraints"][1]["value"], json!(25));
     assert!((l["x2"].as_f64().unwrap() - 25.0).abs() < 1e-6, "{l}");
 }
+
+#[test]
+fn a_circle_diameter_held_by_a_parameter_reads_its_name_and_stays_read_only() {
+    let mut d = doc(json!([{"id": "s1", "type": "sketch", "plane": "XY",
+        "entities": [{"type": "circle", "id": "c1", "x": 0, "y": 0, "radius": "r"}]}]));
+    d.insert("parameters".into(), json!({"r": 6}));
+    let dia = rows(&d, "s1", &[])
+        .into_iter()
+        .find_map(|r| match r {
+            Row::Number(n) if n.field == "entities.c1.diameter" => Some(n),
+            _ => None,
+        })
+        .expect("a diameter row");
+    assert_eq!((dia.value, dia.expr.as_deref(), dia.target), (Some(12.0), Some("r"), None));
+}
