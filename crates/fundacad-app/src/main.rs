@@ -6,6 +6,7 @@ mod assets;
 mod commands;
 mod diag;
 mod document;
+mod edgedrag;
 mod engine;
 mod files;
 mod home;
