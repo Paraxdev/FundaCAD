@@ -120,6 +120,15 @@ struct Logger {
     ring: Mutex<VecDeque<Line>>,
 }
 
+/// A panic hook logs from the panicking thread, which may already hold the lock, so it never waits then.
+fn guard<T>(m: &Mutex<T>) -> Option<std::sync::MutexGuard<'_, T>> {
+    if std::thread::panicking() {
+        m.try_lock().ok()
+    } else {
+        Some(m.lock().unwrap_or_else(std::sync::PoisonError::into_inner))
+    }
+}
+
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 static WRITTEN: AtomicUsize = AtomicUsize::new(0);
 
@@ -135,12 +144,12 @@ impl log::Log for Logger {
         let text = format!("{:>8.3} [{}] {}", self.start.elapsed().as_secs_f64(), r.level(), r.args());
         // Note: a windows_subsystem build has no stderr, writing to it then fails and that is fine.
         let _ = writeln!(io::stderr(), "{text}");
-        if let Ok(mut file) = self.file.lock() {
+        if let Some(mut file) = guard(&self.file) {
             if let Some(f) = file.as_mut() {
                 let _ = f.write_line(&text);
             }
         }
-        if let Ok(mut ring) = self.ring.lock() {
+        if let Some(mut ring) = guard(&self.ring) {
             if ring.len() == RING {
                 ring.pop_front();
             }

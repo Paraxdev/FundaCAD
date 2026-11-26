@@ -34,7 +34,10 @@ fn redact_after(text: &str, needle: &str, ends: impl Fn(char) -> bool) -> String
 /// The user name after `\Users\`, `/home/` and `/Users/`, as FundaCAD 1's redact_user_paths.
 pub fn redact_user_paths(text: &str) -> String {
     let unix_end = |c: char| matches!(c, '/' | '\\' | '"' | '\'') || c.is_whitespace();
-    let s = redact_after(text, r"\users\", |c| matches!(c, '/' | '\\' | '"' | '\'' | '\n' | '\r'));
+    let win_end = |c: char| matches!(c, '/' | '\\' | '"' | '\'' | '\n' | '\r');
+    // A path printed with {:?} doubles its backslashes.
+    let s = redact_after(text, r"\\users\\", win_end);
+    let s = redact_after(&s, r"\users\", win_end);
     let s = redact_after(&s, "/home/", unix_end);
     redact_after(&s, "/users/", unix_end)
 }
@@ -63,7 +66,8 @@ pub fn redact_home(text: &str, home: &str) -> String {
 /// Everything a report shows passes here: the user's home folder and any user name in a path.
 pub fn redact(text: &str) -> String {
     let home = dirs::home_dir().map(|h| h.display().to_string()).unwrap_or_default();
-    redact_user_paths(&redact_home(text, &home))
+    let escaped = home.replace('\\', r"\\");
+    redact_user_paths(&redact_home(&redact_home(text, &escaped), &home))
 }
 
 #[derive(Clone, Debug, Default)]

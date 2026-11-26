@@ -99,3 +99,12 @@ fn a_long_description_is_cut_to_the_url_cap() {
     assert!(link.url.len() > URL_CAP - 20, "{}", link.url.len());
     assert!(link.url.ends_with(&encode(URL_CUT_MARKER)));
 }
+
+#[test]
+fn user_names_in_debug_printed_paths_are_hidden() {
+    assert_eq!(
+        redact_user_paths(r#"open "C:\Users\alice\a.funda" failed"#),
+        r#"open "C:\Users\[REDACTED]\a.funda" failed"#
+    );
+    assert_eq!(redact_home(r#""D:\Profiles\eve\x""#, r"D:\Profiles\eve"), r#""~\x""#);
+}

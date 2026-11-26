@@ -50,11 +50,12 @@ pub fn install(dir: Option<PathBuf>) {
         let thread = std::thread::current().name().unwrap_or("unnamed").to_string();
         let backtrace = std::backtrace::Backtrace::force_capture().to_string();
         let text = crash_text(&now_stamp(), &thread, &payload_text(info), &location, &backtrace);
-        log::error!("panic in '{thread}' at {location}: {}", payload_text(info));
+        // Note: the file goes first, a panic inside the logger would block log::error! on its own lock.
         if let Some(dir) = &dir {
             let _ = std::fs::create_dir_all(dir);
             let _ = std::fs::write(dir.join(NAME), &text);
         }
+        log::error!("panic in '{thread}' at {location}: {}", payload_text(info));
         previous(info);
     }));
 }

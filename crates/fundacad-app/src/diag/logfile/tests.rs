@@ -54,3 +54,22 @@ fn the_tail_hides_user_names() {
     assert_eq!(tail(&dir, 1000).unwrap(), "opened C:\\Users\\[REDACTED]\\part.funda\n");
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_panicking_thread_does_not_wait_on_a_held_lock() {
+    let m = std::sync::Mutex::new(0);
+    let held = m.lock().unwrap();
+    let got = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        struct Probe<'a>(&'a std::sync::Mutex<i32>);
+        impl Drop for Probe<'_> {
+            fn drop(&mut self) {
+                assert!(guard(self.0).is_none());
+            }
+        }
+        let _p = Probe(&m);
+        panic!("probe");
+    }));
+    assert!(got.is_err());
+    drop(held);
+    assert!(guard(&m).is_some());
+}
