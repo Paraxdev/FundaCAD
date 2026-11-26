@@ -106,10 +106,14 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on_family: &OnFamily) -
     }
     let f = on_family.clone();
     let label = e.label;
-    row.id(ElementId::Name(format!("rail:{label}").into()))
+    // The tile and the pill occlude the view, which would hide the row's own hitbox, so a cover on top takes the click.
+    let cover = div()
+        .id(ElementId::Name(format!("rail:{label}").into()))
+        .absolute()
+        .inset_0()
         .cursor_pointer()
-        .on_click(move |_, window, cx| f(label, window, cx))
-        .into_any_element()
+        .on_click(move |_, window, cx| f(label, window, cx));
+    row.relative().child(cover).into_any_element()
 }
 
 pub(super) fn rail(t: &Theme, open: Option<&str>, on_family: OnFamily) -> Div {
