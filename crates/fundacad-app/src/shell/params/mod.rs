@@ -274,7 +274,7 @@ fn caption(t: &Theme, label: &str) -> Div {
     text(t, FS_MICRO).text_color(t.text_dim).child(label.to_uppercase())
 }
 
-fn head_row(t: &Theme, last: &str) -> Div {
+fn head_row(t: &Theme) -> Div {
     div()
         .flex()
         .items_center()
@@ -283,7 +283,7 @@ fn head_row(t: &Theme, last: &str) -> Div {
         .child(caption(t, "Name").w(px(NAME_W)).flex_none())
         .child(caption(t, "Expression").flex_1().min_w_0())
         .child(caption(t, "Value").w(px(VALUE_W)).flex_none())
-        .child(caption(t, last).flex_1().min_w_0())
+        .child(caption(t, "Comment").flex_1().min_w_0())
         .child(div().w(px(DEL_W)).flex_none())
 }
 
@@ -353,7 +353,16 @@ impl ParamsPanel {
         let stale = r.issue.is_some();
         let key = |c| Key::Row(r.name.clone(), c);
         let last = match &r.drives {
-            Some(drives) => text(t, FS_SMALL).flex_1().min_w_0().truncate().text_color(t.text_dim).child(drives.clone()),
+            // The comment input's padding and border, so both sections' columns line up.
+            Some(drives) => text(t, FS_SMALL)
+                .flex_1()
+                .min_w_0()
+                .px(px(S_2))
+                .border_1()
+                .border_color(transparent_black())
+                .truncate()
+                .text_color(t.text_dim)
+                .child(drives.clone()),
             None => self.input(t, &key(Col::Comment), false, window, cx).flex_1(),
         };
         let del = match r.drives {
@@ -477,13 +486,13 @@ impl Render for ParamsPanel {
             .min_h_0()
             .overflow_y_scroll()
             .child(section(t, "User Parameters"))
-            .child(head_row(t, "Comment / drives"));
+            .child(head_row(t));
         for r in &self.rows.user {
             body = body.child(self.row(t, r, window, cx));
         }
         body = body.child(self.add_row(t, window, cx));
         if !self.rows.model.is_empty() {
-            body = body.child(section(t, "Model Parameters")).child(head_row(t, "Comment / drives"));
+            body = body.child(section(t, "Model Parameters")).child(head_row(t));
             for r in &self.rows.model {
                 body = body.child(self.row(t, r, window, cx));
             }
