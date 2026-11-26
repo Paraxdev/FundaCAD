@@ -163,3 +163,12 @@ fn the_panel_lines_fill_their_arguments() {
     assert_eq!(tr!("tool.target.click", many = "no", kind = "face"), "Click the face to use");
     assert_eq!(tr!("history.chip.yourNote", note = "ask Ana"), "Your note: ask Ana");
 }
+
+#[test]
+fn the_sketch_lines_fill_their_arguments() {
+    assert_eq!(tr!("sketch.step.construction", on = "yes", name = "Line 1"), "Construction Line 1");
+    assert_eq!(tr!("sketch.step.align", kind = "vertical", name = "Line 2"), "Vertical Line 2");
+    assert_eq!(tr!("sketch.problem.notSize", value = -1.5), "-1.5 is not a size");
+    assert_eq!(tr!("step.label.delete", n = 1, step = "Circle 1"), "Delete Circle 1");
+    assert_eq!(tr!("date.short", day = "12", month = "nov", year = "2026"), "12 Nov 2026");
+}

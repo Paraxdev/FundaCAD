@@ -101,7 +101,7 @@ fn dimensions_drive_the_sketch_and_fix_its_freedom() {
     assert_eq!(e.click(p(15.0, 0.2), 10.0).as_deref(), Some("Dimension Rectangle 1"));
     e.click(p(30.1, 10.0), 10.0);
     let dims = e.dims(5.0);
-    let len = dims.iter().find(|d| d.label == "Length of Rectangle 1 side 1").unwrap();
+    let len = dims.iter().find(|d| d.label == "Length of Rectangle 1 edge 1").unwrap();
     assert!(!dims.iter().any(|d| d.key == "entities.rect1.width"), "the constraint stands in for the width");
     let key = len.key.clone();
     e.set_dim(&key, 50.0).unwrap();
