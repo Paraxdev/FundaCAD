@@ -371,7 +371,8 @@ impl Viewport {
         let grip = p.grip.clone();
         if let Some(session) = &mut self.session {
             match session.edit(move |d| grip.apply(d, value)) {
-                Ok(()) => p.sent.push((session.revision, value)),
+                Ok(Some(revision)) => p.sent.push((revision, value)),
+                Ok(None) => {}
                 Err(e) => self.message = Some(e),
             }
         }

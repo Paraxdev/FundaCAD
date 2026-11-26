@@ -1,6 +1,6 @@
 //! A document open on the engine worker through fundacad-client, or a plain STL.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
@@ -20,17 +20,29 @@ pub struct Session {
     pub client: Client,
     pub events: Receiver<Event>,
     pub doc: Doc,
-    /// The client's revision for `doc`: 1 after the load, one up for every edit, as the client counts.
-    pub revision: u64,
+    blob_dir: PathBuf,
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.blob_dir);
+    }
 }
 
 impl Session {
-    pub fn edit(&mut self, f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static) -> Result<(), String> {
+    /// The revision the edit made, None when it left the document as it was.
+    pub fn edit(
+        &mut self,
+        f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
+    ) -> Result<Option<u64>, String> {
         let f = Arc::new(f);
+        let before = self.doc.clone();
         f(&mut self.doc)?;
-        self.client.edit(move |d| f(d));
-        self.revision += 1;
-        Ok(())
+        let edited = self.client.edit(move |d| f(d));
+        if edited.is_err() {
+            self.doc = before;
+        }
+        edited
     }
 }
 
@@ -42,7 +54,7 @@ pub fn open(path: &Path, wake: impl Fn() + Send + Sync + 'static) -> Result<Open
         return mesh::load_stl(&bytes).map(Opened::Stl);
     }
     let command = WorkerCommand::locate().map_err(|e| format!("no engine: {e}, set FUNDACAD_ENGINE_EXE"))?;
-    let blob_dir = std::env::temp_dir().join("fundacad-app-blobs");
+    let blob_dir = std::env::temp_dir().join("fundacad-app-blobs").join(std::process::id().to_string());
     let options = Options { blob_dir: Some(blob_dir.clone()), notify: Some(Arc::new(wake)), ..Default::default() };
     let text = fundacad_format::read_document(path, &blob_dir)?;
     let doc = match serde_json::from_str::<Value>(&text) {
@@ -50,6 +62,6 @@ pub fn open(path: &Path, wake: impl Fn() + Send + Sync + 'static) -> Result<Open
         _ => return Err(format!("{} is not a document", path.display())),
     };
     let (client, events) = Client::spawn(command, options).map_err(|e| format!("the engine did not start: {e}"))?;
-    client.load(doc.clone());
-    Ok(Opened::Doc(Session { client, events, doc, revision: 1 }))
+    client.load(doc.clone())?;
+    Ok(Opened::Doc(Session { client, events, doc, blob_dir }))
 }
