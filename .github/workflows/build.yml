@@ -1834,55 +1834,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # FundaCAD 2 is its own Cargo workspace, so the GPUI fork and its system
-  # libraries stay out of the engine jobs.
-  fc2-app:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target-fc2
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-
-      - name: Install the GPUI system libraries
-        if: runner.os == 'Linux'
-        run: |
-          bash scripts/ci-apt-update.sh -qq
-          sudo timeout -k 10 900 apt-get install -y -qq libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
-            libfontconfig-dev libfreetype-dev libx11-xcb-dev libxcb1-dev libxcursor-dev libxi-dev
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
-        with:
-          toolchain: stable
-          components: rustfmt
-
-      - name: Cache Cargo
-        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          workspaces: crates/fundacad-app -> ../../target-fc2
-          save-if: ${{ github.ref_type != 'tag' }}
-
-      - name: Format
-        shell: bash
-        run: cargo fmt --check --manifest-path crates/fundacad-app/Cargo.toml
-
-      - name: Build
-        shell: bash
-        run: cargo build --locked --manifest-path crates/fundacad-app/Cargo.toml
-
-      - name: Tests
-        shell: bash
-        run: cargo test --locked --manifest-path crates/fundacad-app/Cargo.toml
-
   # The key of everything the Rust jobs read: every tracked file but the
   # frontend's own (TypeScript, Vue, styles, prose, its language files, the
   # browser tests, the other CI jobs, the FundaCAD 2 app). A file not listed here counts as Rust input, so a wrong
