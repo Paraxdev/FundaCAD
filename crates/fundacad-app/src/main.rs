@@ -7,6 +7,7 @@ mod commands;
 mod document;
 mod engine;
 mod files;
+mod home;
 mod inspector;
 mod items;
 mod overlay;
@@ -42,6 +43,7 @@ fn main() {
         theme::kit::bind(cx);
         overlay::init(cx);
         commands::bind(cx);
+        home::init(cx, path.is_none());
         files::set_startup(cx, path);
         cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, None)]);
         let options = WindowOptions {

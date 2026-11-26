@@ -211,7 +211,11 @@ impl Files {
     }
 
     fn new_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.viewport.update(cx, |v, cx| v.open_doc(new_document(), cx)) {
+        self.new_with(new_document(), window, cx);
+    }
+
+    fn new_with(&mut self, doc: Doc, window: &mut Window, cx: &mut Context<Self>) {
+        match self.viewport.update(cx, |v, cx| v.open_doc(doc, cx)) {
             Ok(()) => self.mark_saved(None, window, cx),
             Err(e) => overlay::toast(cx, Toast::error(format!("Could not start a new document: {e}"))),
         }
@@ -268,6 +272,17 @@ pub fn new(files: Entity<Files>, window: &mut Window, cx: &mut App) {
         .spawn(cx, async move |cx| {
             if may_discard(&files, "Discard unsaved changes and start a new document?".into(), cx).await {
                 let _ = cx.update(|window, cx| files.update(cx, |f, cx| f.new_now(window, cx)));
+            }
+        })
+        .detach();
+}
+
+/// New, starting from `doc` instead of an empty document, as Home's examples do.
+pub fn new_from(files: Entity<Files>, doc: Doc, window: &mut Window, cx: &mut App) {
+    window
+        .spawn(cx, async move |cx| {
+            if may_discard(&files, "Discard unsaved changes and start a new document?".into(), cx).await {
+                let _ = cx.update(|window, cx| files.update(cx, |f, cx| f.new_with(doc, window, cx)));
             }
         })
         .detach();
