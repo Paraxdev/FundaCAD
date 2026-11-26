@@ -35,7 +35,7 @@ pub enum Problem {
         key: String,
         by: &'static str,
     },
-    /// Two rows that can be live at once share a key. The first one wins.
+    /// Two rows a person set share a key while both can be live. The first one wins.
     Conflict {
         key: String,
         first: &'static str,
@@ -100,7 +100,16 @@ pub fn apply(table: Vec<Shortcut>, user: &[UserKey]) -> (Vec<Shortcut>, Vec<Prob
             mine.push(rows[at].id.clone());
         }
     }
-    let (mut first, rest): (Vec<_>, Vec<_>) = rows.into_iter().partition(|r| mine.contains(&r.id));
+    let (mut first, mut rest): (Vec<_>, Vec<_>) = rows.into_iter().partition(|r| mine.contains(&r.id));
+    // A key a person chose leaves the shipped row that had it unbound, as FundaCAD 1's replace did.
+    for r in &mut rest {
+        let taken = first.iter().any(|m| {
+            m.combo.is_some() && m.combo == r.combo && m.action != r.action && m.context.overlaps(r.context)
+        });
+        if taken && !r.fixed {
+            r.combo = None;
+        }
+    }
     first.extend(rest);
     let clashes = conflicts(&first);
     problems.extend(clashes.into_iter().map(|(a, b)| Problem::Conflict {

@@ -66,8 +66,23 @@ fn one_user_key_moves_its_row_first_and_wins_a_clash() {
     assert_eq!(problems, vec![]);
 
     let (rows, problems) = apply(table(), &[user("extrude|model|E", "F")]);
-    assert_eq!(problems, vec![Problem::Conflict { key: "F".into(), first: "Extrude", second: "Fillet" }]);
+    assert_eq!(problems, vec![]);
     assert_eq!(resolve(&rows, &combo("F"), false).map(|r| r.action), Some("extrude"));
+    let fillet = rows.iter().find(|r| r.action == "fillet").unwrap();
+    assert_eq!(fillet.combo, None, "the shipped row that had F is unbound, so no clash is left to warn of");
+}
+
+#[test]
+fn two_user_keys_on_one_key_clash_and_a_fixed_row_keeps_its_key() {
+    let keys = [user("extrude|model|E", "J"), user("fillet|model|F", "J")];
+    let (rows, problems) = apply(table(), &keys);
+    assert_eq!(problems, vec![Problem::Conflict { key: "J".into(), first: "Extrude", second: "Fillet" }]);
+    assert_eq!(resolve(&rows, &combo("J"), false).map(|r| r.action), Some("extrude"));
+
+    let (rows, problems) = apply(table(), &[user("sketch|model|S", "Shift+H")]);
+    assert_eq!(problems, vec![]);
+    assert_eq!(rows.iter().find(|r| r.action == "show-all-bodies").unwrap().combo, None);
+    assert_eq!(rows.iter().find(|r| r.action == "hide-selected").unwrap().combo, Some(combo("H")));
 }
 
 #[test]
