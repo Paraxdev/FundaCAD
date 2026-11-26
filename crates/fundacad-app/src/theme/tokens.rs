@@ -65,14 +65,13 @@ pub const S_6: f32 = 28.;
 #[allow(dead_code)]
 pub const S_7: f32 = 36.;
 
-/// The circular values of --float-radius and friends. GPUI draws circular corners only, and the SCSS pairs these
-/// with the squircle sizes (26, 17, 12) as the same visual size.
+/// The squircle values of --float-radius and friends, as the fork's GPUI draws squircle corners.
 #[allow(dead_code)]
-pub const FLOAT_RADIUS: f32 = 16.;
+pub const FLOAT_RADIUS: f32 = 26.;
 #[allow(dead_code)]
-pub const FLOAT_TILE_RADIUS: f32 = 11.;
+pub const FLOAT_TILE_RADIUS: f32 = 17.;
 #[allow(dead_code)]
-pub const FLOAT_CHIP_RADIUS: f32 = 8.;
+pub const FLOAT_CHIP_RADIUS: f32 = 12.;
 #[allow(dead_code)]
 pub const FLOAT_GAP: f32 = 12.;
 #[allow(dead_code)]

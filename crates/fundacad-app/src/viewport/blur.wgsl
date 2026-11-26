@@ -78,7 +78,15 @@ fn fs_panel(in: Panel) -> @location(0) vec4<f32> {
   let half_size = in.rect.zw * 0.5;
   let r = min(in.radius, min(half_size.x, half_size.y));
   let q = abs(in.clip.xy - (in.rect.xy + half_size)) - half_size + r;
-  let d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
+  var d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
+  // The same squircle corner as GPUI's quads (squircle_corner_sdf in the fork's shaders.wgsl), so the frost fits its card.
+  let o = max(q, vec2<f32>(0.0));
+  let o2 = o * o;
+  let n4 = o2.x * o2.x + o2.y * o2.y;
+  if (in.radius < min(half_size.x, half_size.y) - 0.01 && n4 > 0.0) {
+    let n = sqrt(sqrt(n4));
+    d = (n - r) / (sqrt(o2.x * o2.x * o2.x + o2.y * o2.y * o2.y) / (n * n * n));
+  }
   let coverage = clamp(0.5 - d, 0.0, 1.0);
   let c = textureSampleLevel(src, samp, in.clip.xy / p.area.xy, 0.0).rgb;
   // The saturate() matrix of CSS filters.

@@ -1,4 +1,5 @@
-// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS, and rounded corners are
+// squircles unless the radius makes a pill or a circle.
 /* Functions useful for debugging:
 
 // A heat map color for debugging (blue -> cyan -> green -> yellow -> red).
@@ -364,13 +365,35 @@ fn quad_sdf(point: vec2<f32>, bounds: Bounds, corner_radii: Corners) -> f32 {
     let corner_radius = pick_corner_radius(center_to_point, corner_radii);
     let corner_to_point = abs(center_to_point) - half_size;
     let corner_center_to_point = corner_to_point + corner_radius;
-    return quad_sdf_impl(corner_center_to_point, corner_radius);
+    return quad_sdf_impl(corner_center_to_point, corner_radius, is_squircle(corner_radius, half_size));
 }
 
-fn quad_sdf_impl(corner_center_to_point: vec2<f32>, corner_radius: f32) -> f32 {
+// A radius that reaches half the short side draws a pill or a circle, which stays round. GPUI clamps radii to that.
+fn is_squircle(corner_radius: f32, half_size: vec2<f32>) -> bool {
+    return corner_radius < min(half_size.x, half_size.y) - 0.01;
+}
+
+// CSS corner-shape: squircle, the superellipse |x|^4 + |y|^4 = r^4. Its norm minus the radius is divided by the
+// norm's gradient length (between 0.84 and 1), so the antialiased edge stays a pixel wide all round the corner.
+fn squircle_corner_sdf(q: vec2<f32>, corner_radius: f32) -> f32 {
+    let q2 = q * q;
+    let n4 = q2.x * q2.x + q2.y * q2.y;
+    if (n4 == 0.0) {
+        return -corner_radius;
+    }
+    let n = sqrt(sqrt(n4));
+    let gradient = sqrt(q2.x * q2.x * q2.x + q2.y * q2.y * q2.y) / (n * n * n);
+    return (n - corner_radius) / gradient;
+}
+
+fn quad_sdf_impl(corner_center_to_point: vec2<f32>, corner_radius: f32, squircle: bool) -> f32 {
     if (corner_radius == 0.0) {
         // Fast path for unrounded corners.
         return max(corner_center_to_point.x, corner_center_to_point.y);
+    } else if (squircle) {
+        let outside = max(vec2<f32>(0.0), corner_center_to_point);
+        let inside = min(0.0, max(corner_center_to_point.x, corner_center_to_point.y));
+        return squircle_corner_sdf(outside, corner_radius) + inside;
     } else {
         // Signed distance of the point from a quad that is inset by corner_radius.
         // It is negative inside this quad, and positive outside.
@@ -675,7 +698,7 @@ fn fs_quad(input: QuadVarying) -> @location(0) vec4<f32> {
 
     // Signed distance of the point to the outside edge of the quad's border. It
     // is positive outside this edge, and negative inside.
-    let outer_sdf = quad_sdf_impl(corner_center_to_point, corner_radius);
+    let outer_sdf = quad_sdf_impl(corner_center_to_point, corner_radius, is_squircle(corner_radius, half_size));
 
     // Approximate signed distance of the point to the inside edge of the quad's
     // border. It is negative outside this edge (within the border), and
