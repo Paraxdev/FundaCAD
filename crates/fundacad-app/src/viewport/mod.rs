@@ -319,8 +319,16 @@ impl Viewport {
         }
         let expected = p.plane_at(p.value_at(revision));
         let tol = self.radius * 1e-4;
+        let unbuilt = p.grip.adds() && p.value_at(revision) == 0.0;
         let found = self.scene.body_index(&p.body).and_then(|bi| {
             let body = &self.scene.bodies[bi];
+            if unbuilt {
+                // The press-pull is not in this mesh, so the face is found again under the point it was picked at.
+                let hit = pick::pick(&self.scene, p.anchor + p.axis * tol * 10.0, -p.axis)
+                    .filter(|h| h.body == bi && drag::flat(body, h.face, p.axis))?;
+                let plane = drag::face_plane(body, hit.face, p.axis)?;
+                return Some((bi, plane, drag::face_mask(body, hit.face, p.axis, plane, tol * 0.1)));
+            }
             let (plane, mask) = drag::cap(body, &p.grip.feature, p.axis, expected, p.grip.mirror, tol)?;
             Some((bi, plane, mask))
         });
@@ -412,6 +420,11 @@ impl Viewport {
     }
 
     fn press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        // A released drag is still waiting for its mesh, a grip read off the old mesh would push a stale face.
+        if self.push.is_some() {
+            return;
+        }
+        self.hover = None;
         self.hover_at(position, cx);
         let Some((hit, Ok(grip))) = self.hover.clone() else {
             self.undo.close();
@@ -426,14 +439,17 @@ impl Viewport {
     fn begin(&mut self, hit: Hit, grip: Grip, grabbed: f32) -> bool {
         let body = &self.scene.bodies[hit.body];
         let axis = hit.normal;
-        let (plane, tol) = (hit.point.dot(axis), self.radius * 1e-4);
+        let tol = self.radius * 1e-4;
         let found = match grip.adds() {
-            true => Some((plane, drag::face_mask(body, hit.face, axis, plane, tol * 0.1))),
-            false => drag::cap(body, &grip.feature, axis, plane, grip.mirror, tol),
+            true => drag::face_plane(body, hit.face, axis)
+                .map(|plane| (plane, drag::face_mask(body, hit.face, axis, plane, tol * 0.1))),
+            false => drag::cap(body, &grip.feature, axis, hit.point.dot(axis), grip.mirror, tol),
         };
         let Some((plane, mask)) = found else { return false };
         let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
-        let key = format!("{} {:.2} {:.2} {:.2}", grip.label(), axis.x, axis.y, axis.z);
+        // Adding 0.0 turns -0.0 into 0.0, so a face hit from the other side keys the same.
+        let r = |v: f32| (v * 100.0).round() / 100.0 + 0.0;
+        let key = format!("{} {} {} {}", grip.label(), r(axis.x), r(axis.y), r(axis.z));
         self.push = Some(Push {
             value: grip.start,
             body: body.source.id.clone(),

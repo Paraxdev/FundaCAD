@@ -38,6 +38,11 @@ pub fn face_mask(body: &SceneBody, face: u32, axis: Vec3, plane: f32, tolerance:
     mask(body, axis, plane, tolerance, |v| v.face == face)
 }
 
+/// The plane of a flat `face`, as an offset along `axis`, read off its own vertices.
+pub fn face_plane(body: &SceneBody, face: u32, axis: Vec3) -> Option<f32> {
+    body.vertices.iter().find(|v| v.face == face).map(|v| v.position().dot(axis))
+}
+
 /// Whether every vertex of `face` faces `normal`.
 pub fn flat(body: &SceneBody, face: u32, normal: Vec3) -> bool {
     body.vertices.iter().filter(|v| v.face == face).all(|v| v.normal().dot(normal) > PARALLEL)

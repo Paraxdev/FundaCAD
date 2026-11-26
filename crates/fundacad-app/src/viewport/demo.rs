@@ -153,18 +153,17 @@ impl Viewport {
         let mut best: Option<(usize, Hit, Grip)> = None;
         let mut refused: std::collections::BTreeSet<(String, String)> = Default::default();
         for (bi, body) in self.scene.bodies.iter().enumerate() {
-            let mut faces: BTreeMap<u32, (Vec3, Vec3, u32)> = BTreeMap::new();
-            for v in &body.vertices {
-                let e = faces.entry(v.face).or_insert((Vec3::ZERO, v.normal(), 0));
-                e.0 += v.position();
-                e.2 += 1;
+            // The centre of each face's first triangle, which lies on the face even where the face is concave.
+            let mut faces: BTreeMap<u32, (Vec3, Vec3)> = BTreeMap::new();
+            for tri in body.indices.chunks_exact(3) {
+                let [a, b, c] = [tri[0], tri[1], tri[2]].map(|i| &body.vertices[i as usize]);
+                faces.entry(a.face).or_insert(((a.position() + b.position() + c.position()) / 3.0, a.normal()));
             }
-            for (face, (sum, normal, n)) in faces {
+            for (face, (point, normal)) in faces {
                 let owner = body.owner(face);
                 if wanted.is_some_and(|w| Some(w) != owner) || (!press && owner.is_none()) {
                     continue;
                 }
-                let point = sum / n as f32;
                 let grip = match press {
                     true => plastic::pick(doc, owner, &body.source.id, normal, point, drag::flat(body, face, normal))
                         .and_then(|g| if g.adds() { Ok(g) } else { Err("it pushes, no press pull".into()) }),

@@ -213,6 +213,12 @@ fn pressed(doc: &Doc, f: &Value, index: usize, owner: &str, normal: Vec3) -> Res
     if f.get("direction").and_then(Value::as_str) == Some("axis") {
         return Err("a press pull along an axis does not push yet".into());
     }
+    if f.get("mode").and_then(Value::as_str).is_some_and(|m| !m.is_empty() && m != "auto") {
+        return Err("a press pull with a set mode does not push yet".into());
+    }
+    if f.get("taper").is_some_and(|t| !t.is_null() && t.as_f64() != Some(0.0)) {
+        return Err("a tapered press pull does not push yet".into());
+    }
     let face = f.get("face").ok_or_else(|| format!("{owner} has no face"))?;
     let facing = match face.get("by").and_then(Value::as_str) {
         Some("tracked") => face.get("normal"),
@@ -392,13 +398,16 @@ fn sketch_plane(sketch: &Value) -> Option<(Vec3, Vec3)> {
 
 /// Keeps the rollback marker after the same features once one is put in or taken out at `index`.
 fn shift_rollback(doc: &mut Doc, index: usize, inserted: bool) {
-    let Some(r) = doc.get("rollback").and_then(Value::as_f64).map(|r| r.max(0.0) as usize) else { return };
+    let Some(marker) = doc.get("rollback").filter(|v| v.is_number()) else { return };
+    let whole = marker.is_u64();
+    let r = marker.as_f64().unwrap_or(0.0).max(0.0) as usize;
     let r = match inserted {
         true if index <= r => r + 1,
         false if index < r => r - 1,
         _ => return,
     };
-    doc.insert("rollback".into(), Value::from(r));
+    // Written back as the kind of number it was, so taking the press-pull out again gives an equal document.
+    doc.insert("rollback".into(), if whole { Value::from(r) } else { Value::from(r as f64) });
 }
 
 fn id(f: &Value) -> Option<&str> {
@@ -607,5 +616,23 @@ mod tests {
         assert_eq!(d["features"][3]["operation"], "cut");
         let wall = pick(&d, Some("pp1"), "body1", Vec3::Y, Vec3::new(6.0, 3.0, 6.0), true).unwrap();
         assert!(wall.adds(), "a wall of the press-pull gets its own");
+    }
+
+    #[test]
+    fn a_float_marker_comes_back_equal_and_set_modes_do_not_push() {
+        let mut d = doc(json!(12));
+        d.insert("rollback".into(), json!(2.0));
+        let g = press_pull(&d, "body1", Vec3::Z, Vec3::ZERO).unwrap();
+        let mut e = d.clone();
+        g.apply(&mut e, 3.0).unwrap();
+        assert_eq!(e["rollback"], json!(3.0));
+        g.apply(&mut e, 0.0).unwrap();
+        assert_eq!(e, d);
+        g.apply(&mut e, 3.0).unwrap();
+        e["features"][2]["mode"] = json!("join");
+        assert!(pick(&e, Some("pp1"), "body1", Vec3::Z, Vec3::ZERO, false).is_err());
+        e["features"][2]["mode"] = json!("auto");
+        e["features"][2]["taper"] = json!(5);
+        assert!(pick(&e, Some("pp1"), "body1", Vec3::Z, Vec3::ZERO, false).is_err());
     }
 }
