@@ -34,6 +34,11 @@ fn main() {
         }
         theme::init(settings, vec![], cx);
         theme::kit::bind(cx);
+        cx.bind_keys([
+            KeyBinding::new("ctrl-z", viewport::Undo, None),
+            KeyBinding::new("ctrl-y", viewport::Redo, None),
+            KeyBinding::new("ctrl-shift-z", viewport::Redo, None),
+        ]);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             // Below this the left and right float clusters overlap.

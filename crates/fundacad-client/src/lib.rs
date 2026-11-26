@@ -9,6 +9,9 @@
 //! Nothing else moves it, so a resend after a resync or a restart, and [`Client::rebuild`], carry the revision the
 //! document is at. [`Mesh::revision`] and [`Event::Failed`] name the revision that was built. A mesh built from a
 //! document that a later load replaced is dropped.
+//!
+//! The worker builds only the features before the rollback marker that are not suppressed, as `doc::built` cuts
+//! them. The document the client keeps, and edits, is whole.
 
 mod doc;
 mod mesh;
@@ -359,6 +362,8 @@ impl Driver {
             return;
         }
         let Some(doc) = self.doc.as_ref() else { return };
+        let doc = doc::built(doc);
+        let doc = doc.as_ref();
         self.next_id += 1;
         let id = format!("fc{}", self.next_id);
         let common = |req: &mut Map<String, Value>| {

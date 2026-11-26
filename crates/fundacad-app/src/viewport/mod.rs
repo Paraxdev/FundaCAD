@@ -2,10 +2,12 @@ mod blur;
 mod camera;
 mod demo;
 mod drag;
+mod issues;
 pub mod mesh;
 mod pick;
 mod renderer;
 pub mod scene;
+mod undo;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -16,12 +18,17 @@ use gpui::*;
 
 pub use blur::Frost;
 pub use camera::Camera;
+#[allow(unused_imports, reason = "fc2/shell reads it for History")]
+pub use issues::FeatureIssue;
 use pick::Hit;
 use renderer::{Overlay, Renderer};
 use scene::Scene;
+use undo::UndoStack;
 
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
+
+actions!(viewport, [Undo, Redo]);
 
 /// Index GPUI samples the main 3D view from.
 const MAIN_TEXTURE: u32 = gpui_wgpu::EXTERNAL_TEXTURE_BASE;
@@ -51,6 +58,10 @@ struct Push {
     /// The revision of the mesh on screen.
     shown: u64,
     released: bool,
+    /// The document before the drag, the undo step it makes.
+    before: Doc,
+    /// Drags of the same face under the same driver merge into one undo step.
+    key: String,
 }
 
 impl Push {
@@ -88,6 +99,8 @@ pub struct Viewport {
     mask_revision: u64,
     background: [u8; 3],
     frosted: Vec<Frost>,
+    issues: Vec<FeatureIssue>,
+    undo: UndoStack,
     message: Option<String>,
     rebuild_ms: Option<f64>,
     _wake: Option<Task<()>>,
@@ -127,6 +140,8 @@ impl Viewport {
             mask_revision: 0,
             background: [23, 26, 31],
             frosted: Vec::new(),
+            issues: Vec::new(),
+            undo: UndoStack::default(),
             message: None,
             rebuild_ms: None,
             _wake: None,
@@ -135,6 +150,8 @@ impl Viewport {
     }
 
     pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) {
+        self.issues.clear();
+        self.undo = UndoStack::default();
         let (tx, rx) = async_channel::bounded::<()>(1);
         match engine::open(path, move || {
             let _ = tx.try_send(());
@@ -167,6 +184,12 @@ impl Viewport {
         self.session.as_ref().map(|s| &s.doc)
     }
 
+    /// What the latest rebuild said of each feature it could not build whole, empty when all built.
+    #[allow(dead_code, reason = "fc2/shell reads it for History")]
+    pub fn feature_issues(&self) -> &[FeatureIssue] {
+        &self.issues
+    }
+
     /// Edits the open document, for panels beside the view. The revision it made, None when nothing changed.
     pub fn edit(
         &mut self,
@@ -177,10 +200,50 @@ impl Viewport {
             return Err("a face is being pushed".into());
         }
         let session = self.session.as_mut().ok_or("no document is open")?;
+        let before = session.doc.clone();
         let edited = session.edit(f)?;
+        if edited.is_some() {
+            self.undo.record(before, None);
+        }
         self.hover = None;
         cx.notify();
         Ok(edited)
+    }
+
+    #[allow(dead_code, reason = "fc2/shell greys its undo button with it")]
+    pub fn can_undo(&self) -> bool {
+        self.undo.can_undo()
+    }
+
+    #[allow(dead_code, reason = "fc2/shell greys its redo button with it")]
+    pub fn can_redo(&self) -> bool {
+        self.undo.can_redo()
+    }
+
+    /// Steps the document back one change, a run of drags of one face counting as one.
+    pub fn undo(&mut self, cx: &mut Context<Self>) {
+        self.step(UndoStack::undo, cx);
+    }
+
+    pub fn redo(&mut self, cx: &mut Context<Self>) {
+        self.step(UndoStack::redo, cx);
+    }
+
+    fn step(&mut self, take: fn(&mut UndoStack, Doc) -> Option<Doc>, cx: &mut Context<Self>) {
+        if self.push.as_ref().is_some_and(|p| !p.released) {
+            return;
+        }
+        let Some(session) = self.session.as_mut() else { return };
+        let Some(doc) = take(&mut self.undo, session.doc.clone()) else { return };
+        if let Err(e) = session.edit(move |d| {
+            d.clone_from(&doc);
+            Ok(())
+        }) {
+            self.message = Some(e);
+        }
+        self.push = None;
+        self.hover = None;
+        cx.notify();
     }
 
     /// One line for the status bar.
@@ -194,6 +257,7 @@ impl Viewport {
         }
         match (&self.push, &self.hover) {
             (Some(p), _) => parts.push(format!("{} {:.1} mm", p.grip.label(), p.value)),
+            (None, Some((_, Ok(g)))) if g.adds() => parts.push("drag to press pull this face".into()),
             (None, Some((_, Ok(g)))) => parts.push(format!("drag to push {} ({} mm)", g.label(), g.start)),
             (None, Some((_, Err(why)))) => parts.push(why.clone()),
             (None, None) => {}
@@ -221,9 +285,15 @@ impl Viewport {
         let mut latest: Option<Arc<EngineMesh>> = None;
         for event in events {
             match event {
-                Event::Mesh(mesh) => latest = Some(mesh),
-                Event::Failed { message, .. } => {
+                Event::Mesh(mesh) => {
+                    self.issues = issues::of_result(&mesh.result);
+                    latest = Some(mesh);
+                }
+                Event::Failed { message, feature_id, .. } => {
                     log::warn!("{message}");
+                    if let Some(id) = &feature_id {
+                        issues::failed(&mut self.issues, id, &message);
+                    }
                     self.message = Some(message);
                     if self.push.as_ref().is_some_and(|p| p.released) {
                         self.push = None;
@@ -236,10 +306,8 @@ impl Viewport {
         }
         if let Some(mesh) = latest {
             log::info!("mesh {mesh}");
-            if let Some(errors) =
-                mesh.result.get("featureErrors").filter(|e| e.as_array().is_none_or(|a| !a.is_empty()) && !e.is_null())
-            {
-                log::warn!("feature errors {errors}");
+            for i in &self.issues {
+                log::warn!("{}: {}", i.feature_id, i.message);
             }
             self.rebuild_ms = Some(mesh.timing.total.as_secs_f64() * 1000.0);
             self.message = None;
@@ -260,8 +328,16 @@ impl Viewport {
         }
         let expected = p.plane_at(p.value_at(revision));
         let tol = self.radius * 1e-4;
+        let unbuilt = p.grip.adds() && p.value_at(revision) == 0.0;
         let found = self.scene.body_index(&p.body).and_then(|bi| {
             let body = &self.scene.bodies[bi];
+            if unbuilt {
+                // The press-pull is not in this mesh, so the face is found again under the point it was picked at.
+                let hit = pick::pick(&self.scene, p.anchor + p.axis * tol * 10.0, -p.axis)
+                    .filter(|h| h.body == bi && drag::flat(body, h.face, p.axis))?;
+                let plane = drag::face_plane(body, hit.face, p.axis)?;
+                return Some((bi, plane, drag::face_mask(body, hit.face, p.axis, plane, tol * 0.1)));
+            }
             let (plane, mask) = drag::cap(body, &p.grip.feature, p.axis, expected, p.grip.mirror, tol)?;
             Some((bi, plane, mask))
         });
@@ -343,21 +419,28 @@ impl Viewport {
         if same {
             return;
         }
-        self.hover = hit.map(|hit| {
-            let body = &self.scene.bodies[hit.body];
-            let grip = match (&self.session, body.owner(hit.face)) {
-                (Some(s), Some(owner)) => plastic::grip(&s.doc, owner, &body.source.id, hit.normal, hit.point),
-                (Some(_), None) => Err("this face has no feature behind it".into()),
-                (None, _) => Err("open a FundaCAD document to push faces".into()),
-            };
-            (hit, grip)
-        });
+        self.hover = hit.map(|hit| (hit, self.grip_at(&hit)));
         cx.notify();
     }
 
+    fn grip_at(&self, hit: &Hit) -> Result<Grip, String> {
+        let Some(s) = &self.session else { return Err("open a FundaCAD document to push faces".into()) };
+        let body = &self.scene.bodies[hit.body];
+        let flat = drag::flat(body, hit.face, hit.normal);
+        plastic::pick(&s.doc, body.owner(hit.face), &body.source.id, hit.normal, hit.point, flat)
+    }
+
     fn press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        // A released drag is still waiting for its mesh, a grip read off the old mesh would push a stale face.
+        if self.push.is_some() {
+            return;
+        }
+        self.hover = None;
         self.hover_at(position, cx);
-        let Some((hit, Ok(grip))) = self.hover.clone() else { return };
+        let Some((hit, Ok(grip))) = self.hover.clone() else {
+            self.undo.close();
+            return;
+        };
         let (origin, dir) = self.ray_at(position);
         let grabbed = drag::axis_travel(hit.point, hit.normal, origin, dir).unwrap_or(0.0);
         self.begin(hit, grip, grabbed);
@@ -367,8 +450,17 @@ impl Viewport {
     fn begin(&mut self, hit: Hit, grip: Grip, grabbed: f32) -> bool {
         let body = &self.scene.bodies[hit.body];
         let axis = hit.normal;
-        let found = drag::cap(body, &grip.feature, axis, hit.point.dot(axis), grip.mirror, self.radius * 1e-4);
+        let tol = self.radius * 1e-4;
+        let found = match grip.adds() {
+            true => drag::face_plane(body, hit.face, axis)
+                .map(|plane| (plane, drag::face_mask(body, hit.face, axis, plane, tol * 0.1))),
+            false => drag::cap(body, &grip.feature, axis, hit.point.dot(axis), grip.mirror, tol),
+        };
         let Some((plane, mask)) = found else { return false };
+        let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
+        // Adding 0.0 turns -0.0 into 0.0, so a face hit from the other side keys the same.
+        let r = |v: f32| (v * 100.0).round() / 100.0 + 0.0;
+        let key = format!("{} {} {} {}", grip.label(), r(axis.x), r(axis.y), r(axis.z));
         self.push = Some(Push {
             value: grip.start,
             body: body.source.id.clone(),
@@ -383,6 +475,8 @@ impl Viewport {
             anchor: hit.point,
             grabbed,
             released: false,
+            before,
+            key,
         });
         self.mask_revision += 1;
         true
@@ -414,8 +508,11 @@ impl Viewport {
     }
 
     fn release(&mut self, cx: &mut Context<Self>) {
-        if let Some(p) = &mut self.push {
+        if let Some(p) = self.push.as_mut().filter(|p| !p.released) {
             p.released = true;
+            if self.session.as_ref().is_some_and(|s| s.doc != p.before) {
+                self.undo.record(p.before.clone(), Some(p.key.clone()));
+            }
             if p.settled() {
                 self.push = None;
             }

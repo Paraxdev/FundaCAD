@@ -33,6 +33,7 @@ pub struct Shell {
     items_tab: usize,
     /// The History step whose values show under it.
     open: Option<usize>,
+    focus: FocusHandle,
     _system: Subscription,
 }
 
@@ -51,6 +52,7 @@ impl Shell {
             fields: HashMap::new(),
             items_tab: 0,
             open: None,
+            focus: cx.focus_handle(),
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -186,8 +188,17 @@ impl Render for Shell {
                 .child(text(t, FS_SMALL).min_w_0().truncate().text_color(t.text_dim).child(status)),
         );
 
+        // Actions go only to the window root while nothing has focus, so the shell takes it.
+        if window.focused(cx).is_none() {
+            window.focus(&self.focus, cx);
+        }
+        let viewport = self.viewport.clone();
+        let redo = self.viewport.clone();
         div()
             .size_full()
+            .track_focus(&self.focus)
+            .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
+            .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
