@@ -7,6 +7,8 @@ mod document;
 mod engine;
 mod plastic;
 mod shell;
+#[cfg(feature = "shot")]
+mod shot;
 mod theme;
 mod ui;
 mod viewport;
@@ -22,10 +24,6 @@ fn main() {
         None => document::Document::sample(),
     };
     let title: SharedString = format!("{}, FundaCAD 2", doc.name).into();
-    // With --features shot, FUNDA_SHOT=out.png draws one frame at 1440x900, saves it and quits, for the side by side
-    // with the Vue app.
-    #[cfg(feature = "shot")]
-    let shot = std::env::var_os("FUNDA_SHOT").map(std::path::PathBuf::from);
 
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
@@ -55,17 +53,7 @@ fn main() {
         })
         .expect("open the main window");
         #[cfg(feature = "shot")]
-        if let Some(out) = shot {
-            cx.spawn(async move |cx| {
-                cx.background_executor().timer(std::time::Duration::from_millis(2500)).await;
-                let _ = _window.update(cx, |_, window, _| match window.render_to_image() {
-                    Ok(img) => img.save(&out).map_err(|e| log::error!("save {}: {e}", out.display())).unwrap_or(()),
-                    Err(e) => log::error!("render_to_image: {e}, FUNDA_GPUI_RENDERER=dx can capture"),
-                });
-                cx.update(|cx| cx.quit());
-            })
-            .detach();
-        }
+        shot::arm(_window, cx);
     });
 }
 

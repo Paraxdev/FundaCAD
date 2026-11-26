@@ -12,10 +12,11 @@ pulls them in through `[patch.crates-io]`. The `examples` folder and its `[[exam
 | gpui-pre-wgpu | src/gpui_wgpu.rs | `register_external_texture`, `shared_context` and `shared_context_generation`: the app draws on GPUI's device into textures GPUI composites |
 | gpui-pre-wgpu | src/wgpu_context.rs | each native context is published for `shared_context`; OpenGL 3.3 and GLES 3.0 adapters without storage buffers take the WebGL2 limits and the texture based instance data |
 | gpui-pre-wgpu | src/wgpu_atlas.rs | `WgpuTextureInfo` is `Clone` |
-| gpui-pre-wgpu | src/wgpu_renderer.rs | texture lookups fall back to the external textures; the record size test counts the larger `Shadow` |
+| gpui-pre-wgpu | src/wgpu_renderer.rs | texture lookups fall back to the external textures; `mod readback`; the record size test counts the larger `Shadow` |
+| gpui-pre-wgpu | src/wgpu_renderer/readback.rs | new: `WgpuRenderer::render_to_image` draws a scene offscreen and reads it back, behind `test-support` |
 | gpui-pre-wgpu | src/shaders.wgsl | drop shadows are clipped to outside the casting element, as in CSS |
 | gpui-pre-wgpu | src/shaders_webgl.wgsl | the `Shadow` record read is 32 words, with `caster_bounds` |
-| gpui-pre-windows | Cargo.toml | depends on gpui-pre-wgpu |
+| gpui-pre-windows | Cargo.toml | depends on gpui-pre-wgpu; `test-support` turns on its readback |
 | gpui-pre-windows | src/win_renderer.rs | new: windows draw through gpui-pre-wgpu, `FUNDA_GPUI_RENDERER=dx` keeps DirectX 11 |
 | gpui-pre-windows | src/window.rs | uses `WinRenderer`; no `WS_EX_NOREDIRECTIONBITMAP` with wgpu, since Vulkan and GL cannot present without it |
 | gpui-pre-windows | src/gpui_windows.rs | wires `win_renderer` in |
