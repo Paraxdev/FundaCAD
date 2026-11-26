@@ -42,6 +42,7 @@ enum Act {
     Invert,
     Rename(String),
     Filter(Filter),
+    Plugin(Rc<dyn Fn(&mut Window, &mut App)>),
 }
 
 /// Local stand-ins for the shared menu component, each a list of labelled acts, easy to swap later.
@@ -262,6 +263,7 @@ impl Shell {
             }
             Act::Rename(key) => self.start_rename(&key, window, cx),
             Act::Filter(f) => self.items.filter = f,
+            Act::Plugin(run) => run(window, cx),
         }
         cx.notify();
     }
@@ -352,6 +354,19 @@ impl Shell {
         }
         if node.rename.is_some() {
             acts.push(("Rename".to_string(), Act::Rename(node.k.clone())));
+        }
+        if let (Some(body), Some(doc)) = (node.k.strip_prefix("b:"), self.source.clone()) {
+            let mut owners: Vec<String> = Vec::new();
+            for b in self.viewport.read(cx).bodies().iter().filter(|b| b.id == body) {
+                for o in b.face_owners.iter().flatten() {
+                    if !owners.contains(o) {
+                        owners.push(o.clone());
+                    }
+                }
+            }
+            for row in crate::plugins::body_menu(cx, &doc, &owners) {
+                acts.push((row.label.to_string(), Act::Plugin(row.run)));
+            }
         }
         self.items.menu = (!acts.is_empty()).then_some(Menu::Row(pos, acts));
         cx.notify();
