@@ -6,6 +6,13 @@ use fundacad_client::transfer::insert::{InsertError, StaleLinks};
 use fundacad_client::Doc;
 use serde_json::Value;
 
+/// A typed number in a language that writes `mark`: None for text that is no number, an error for a point that
+/// could be either mark.
+pub fn typed_number(text: &str, mark: char) -> Result<Option<f64>, String> {
+    let text = crate::i18n::read_typed(text.trim(), mark).map_err(|e| e.to_string())?;
+    Ok(text.parse::<f64>().ok())
+}
+
 /// Every sketch of the document, which a DXF or SVG export can draw.
 pub fn flat_sources(doc: &Doc) -> Vec<FlatSource> {
     let features = doc.get("features").and_then(Value::as_array).into_iter().flatten();

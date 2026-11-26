@@ -4,6 +4,8 @@ mod geometry;
 mod history;
 mod history_menu;
 mod inspector;
+#[cfg(test)]
+mod inspector_tests;
 mod items;
 pub mod modal;
 mod params;
@@ -199,7 +201,7 @@ impl Render for Shell {
         let t = &t;
         let gap = px(FLOAT_GAP);
         self.ensure_fields(window, cx);
-        self.viewport.update(cx, |v, cx| v.set_background(t.viewport_bg.bytes(), cx));
+        self.viewport.update(cx, |v, cx| v.set_background(crate::prefs::viewport_bg(t), cx));
 
         let left = div()
             .absolute()
@@ -272,6 +274,7 @@ impl Render for Shell {
             )
             .children(self.history_menu(t, cx))
             .children(self.transfer_modal(t, cx))
+            .children(crate::prefs::view(cx))
             .child(frost_flush(self.viewport.clone()))
             .child(crate::files::drop::hint(t))
             .children(crate::diag::view(cx))

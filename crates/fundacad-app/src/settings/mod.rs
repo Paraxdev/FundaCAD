@@ -6,8 +6,10 @@ mod tests;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+#[cfg(not(test))]
+use std::sync::{LazyLock, Mutex, PoisonError};
 
-use gpui::{App, Global};
+use gpui::App;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -83,25 +85,46 @@ impl Store {
     }
 }
 
-struct Settings(Store);
+/// A static rather than a GPUI global, so code off the `App`, such as the transfer dialogs' memory, reads and writes it.
+#[cfg(not(test))]
+static STORE: LazyLock<Mutex<Store>> = LazyLock::new(Mutex::default);
 
-impl Global for Settings {}
-
-pub fn init(cx: &mut App) {
-    let store = Store::load(config_dir().as_deref());
-    cx.set_global(Settings(store));
+#[cfg(not(test))]
+fn with_store<R>(f: impl FnOnce(&mut Store) -> R) -> R {
+    f(&mut STORE.lock().unwrap_or_else(PoisonError::into_inner))
 }
 
-pub fn get<T: DeserializeOwned>(cx: &App, key: &str) -> Option<T> {
-    cx.try_global::<Settings>()?.0.get(key)
+// Each test runs on its own thread, so each gets its own settings.
+#[cfg(test)]
+thread_local! {
+    static STORE: std::cell::RefCell<Store> = std::cell::RefCell::default();
+}
+
+#[cfg(test)]
+fn with_store<R>(f: impl FnOnce(&mut Store) -> R) -> R {
+    STORE.with_borrow_mut(f)
+}
+
+pub fn init(_cx: &mut App) {
+    let loaded = Store::load(config_dir().as_deref());
+    with_store(|s| *s = loaded);
+}
+
+pub fn get<T: DeserializeOwned>(_cx: &App, key: &str) -> Option<T> {
+    read(key)
 }
 
 /// Logs a failed write: the value still holds for this run.
-pub fn set<T: Serialize>(cx: &mut App, key: &str, value: &T) {
-    if !cx.has_global::<Settings>() {
-        cx.set_global(Settings(Store::default()));
-    }
-    if let Err(e) = cx.global_mut::<Settings>().0.set(key, value) {
+pub fn set<T: Serialize>(_cx: &mut App, key: &str, value: &T) {
+    write(key, value);
+}
+
+pub fn read<T: DeserializeOwned>(key: &str) -> Option<T> {
+    with_store(|s| s.get(key))
+}
+
+pub fn write<T: Serialize>(key: &str, value: &T) {
+    if let Err(e) = with_store(|s| s.set(key, value)) {
         log::warn!("the settings were not saved: {e}");
     }
 }

@@ -13,9 +13,10 @@ use gpui::*;
 use gpui_kit::component::input::{Input, InputState};
 use serde_json::{json, Value};
 
-use super::logic::{flat_sources, scope_choices, stamp_now, with_ext, written_summary};
+use super::logic::{flat_sources, scope_choices, stamp_now, typed_number, with_ext, written_summary};
 use super::modal::{button, choice, note, row};
 use super::{picker, prefs, Modal, Shell};
+use crate::i18n::{self, tr};
 use crate::overlay::{self, Toast};
 use crate::theme::{Theme, FS_SMALL};
 
@@ -33,29 +34,38 @@ pub(super) struct ExportDialog {
 }
 
 fn number(v: f64) -> String {
-    format!("{v}")
+    i18n::show_stored(&format!("{v}"), i18n::decimal_mark())
 }
 
-fn typed(input: &Entity<InputState>, cx: &App) -> Option<f64> {
-    input.read(cx).value().trim().parse::<f64>().ok()
+fn typed(input: &Entity<InputState>, cx: &App) -> Result<Option<f64>, String> {
+    typed_number(&input.read(cx).value(), i18n::decimal_mark())
 }
 
 impl ExportDialog {
-    fn read_inputs(&mut self, cx: &App) {
+    /// Takes the typed numbers, keeping the earlier value for text that is no number. Returns the first ambiguous one.
+    fn read_inputs(&mut self, cx: &App) -> Result<(), String> {
+        let mut problem = None;
+        let mut read = |input: &Entity<InputState>| {
+            typed(input, cx).unwrap_or_else(|why| {
+                problem.get_or_insert(why);
+                None
+            })
+        };
         if self.settings.show_advanced {
-            if let Some(v) = typed(&self.surface, cx) {
+            if let Some(v) = read(&self.surface) {
                 self.settings.set_faceting(v, |f| &mut f.surface_deviation);
             }
-            if let Some(v) = typed(&self.normal, cx) {
+            if let Some(v) = read(&self.normal) {
                 self.settings.set_faceting(v, |f| &mut f.normal_deviation);
             }
-            if let Some(v) = typed(&self.edge, cx) {
+            if let Some(v) = read(&self.edge) {
                 self.settings.set_faceting(v, |f| &mut f.max_edge_length);
             }
         }
-        if let Some(v) = typed(&self.tolerance, cx) {
+        if let Some(v) = read(&self.tolerance) {
             self.settings.tolerance = clamp_tolerance(v);
         }
+        problem.map_or(Ok(()), Err)
     }
 
     fn flat(&self) -> Option<&FlatSource> {
@@ -100,7 +110,7 @@ impl Shell {
 
     fn pick_refinement(&mut self, r: Refinement, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::Export(d)) = &mut self.transfer.modal else { return };
-        d.read_inputs(cx);
+        let _ = d.read_inputs(cx);
         d.settings.pick_refinement(r);
         let f = d.settings.faceting;
         for (input, v) in
@@ -127,7 +137,7 @@ impl Shell {
             });
         let mut body = div().flex().flex_col().gap(px(8.)).child(row(
             t,
-            "Format",
+            tr!("export.format"),
             div().flex().flex_wrap().gap(px(4.)).children(formats),
         ));
         if !has_sources {
@@ -138,9 +148,9 @@ impl Shell {
                 choice(t, ("export-source", i), src.label().to_owned(), d.source == i, true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit_export(cx, |d| d.source = i)))
             });
-            body = body.child(row(t, "Sketch", div().flex().flex_wrap().gap(px(4.)).children(sources))).child(row(
+            body = body.child(row(t, tr!("tool.sketch"), div().flex().flex_wrap().gap(px(4.)).children(sources))).child(row(
                 t,
-                "Tolerance",
+                tr!("export.tolerance"),
                 field(t, &d.tolerance, "mm"),
             ));
         } else {
@@ -154,7 +164,7 @@ impl Shell {
                         },
                     ))
                 });
-            body = body.child(row(t, "Bodies", div().flex().flex_wrap().gap(px(4.)).children(scopes)));
+            body = body.child(row(t, tr!("export.bodies"), div().flex().flex_wrap().gap(px(4.)).children(scopes)));
         }
         if s.format.takes_unit() {
             let units = UNITS.iter().map(|u| {
@@ -163,10 +173,10 @@ impl Shell {
                     cx.listener(move |this, _: &ClickEvent, _, cx| this.edit_export(cx, |d| d.settings.unit = u)),
                 )
             });
-            body = body.child(row(t, "Unit", div().flex().gap(px(4.)).children(units)));
+            body = body.child(row(t, tr!("export.unit"), div().flex().gap(px(4.)).children(units)));
         }
         if s.format == ExportFormat::Stl {
-            let enc = [(true, "Binary"), (false, "ASCII")].map(|(binary, label)| {
+            let enc = [(true, tr!("export.binary")), (false, "ASCII".to_owned())].map(|(binary, label)| {
                 choice(t, ("export-binary", usize::from(binary)), label, s.binary == binary, true).on_click(
                     cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.edit_export(cx, |d| d.settings.binary = binary)
@@ -178,40 +188,43 @@ impl Shell {
         if s.format.is_mesh() {
             let presets = [Refinement::Low, Refinement::Medium, Refinement::High, Refinement::Custom].map(|r| {
                 let label = match r {
-                    Refinement::Low => "Low",
-                    Refinement::Medium => "Medium",
-                    Refinement::High => "High",
-                    Refinement::Custom => "Custom",
+                    Refinement::Low => tr!("export.refinement.low"),
+                    Refinement::Medium => tr!("export.refinement.medium"),
+                    Refinement::High => tr!("export.refinement.high"),
+                    Refinement::Custom => tr!("export.refinement.custom"),
                 };
                 choice(t, ("export-refine", r as usize), label, s.refinement == r, true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.pick_refinement(r, window, cx)))
             });
-            let advanced = choice(t, "export-advanced", "Advanced", s.show_advanced, true).on_click(cx.listener(
+            let advanced = choice(t, "export-advanced", tr!("export.advanced"), s.show_advanced, true).on_click(cx.listener(
                 |this, _: &ClickEvent, _, cx| {
                     if let Some(Modal::Export(d)) = &mut this.transfer.modal {
-                        d.read_inputs(cx);
+                        let _ = d.read_inputs(cx);
                         d.settings.show_advanced = !d.settings.show_advanced;
                         cx.notify();
                     }
                 },
             ));
-            body = body.child(row(t, "Refinement", div().flex().gap(px(4.)).children(presets).child(advanced)));
+            body = body.child(row(t, tr!("export.refinement.title"), div().flex().gap(px(4.)).children(presets).child(advanced)));
             if s.show_advanced {
                 body = body
-                    .child(row(t, "Deviation", field(t, &d.surface, "mm")))
-                    .child(row(t, "Angle", field(t, &d.normal, "deg")))
-                    .child(row(t, "Max edge", field(t, &d.edge, "mm, 0 is none")));
+                    .child(row(t, tr!("export.surfaceDeviation"), field(t, &d.surface, "mm")))
+                    .child(row(t, tr!("export.normalDeviation"), field(t, &d.normal, "deg")))
+                    .child(row(t, tr!("export.maxEdge"), field(t, &d.edge, "mm, 0 is none")));
             }
         }
         let ready = !s.format.is_flat() || d.flat().is_some();
-        let ok = button(t, "export-run", "Export...", true, ready)
+        let ok = button(t, "export-run", tr!("export.confirm"), true, ready)
             .when(ready, |b| b.on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.run_export(window, cx))));
         (body.into_any_element(), ok.into_any_element())
     }
 
     fn run_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::Export(d)) = &mut self.transfer.modal else { return };
-        d.read_inputs(cx);
+        if let Err(why) = d.read_inputs(cx) {
+            overlay::toast(cx, Toast::error(why));
+            return;
+        }
         let (settings, before, scope, start) = (d.settings.clone(), d.before.clone(), d.scope.clone(), d.start.clone());
         let flat = d.flat().cloned().filter(|_| settings.format.is_flat());
         let path = self.bench.files.read(cx).path().map(Path::to_path_buf);
@@ -222,6 +235,7 @@ impl Shell {
             .and_then(|doc| Some((doc.get("palette")?.clone(), doc.get("bodyColors").cloned().unwrap_or(json!({})))));
         let base = flat.as_ref().map_or(start.base.as_str(), FlatSource::label);
         let name = export_file_name(base, settings.format.ext(), stamp_now());
+        let base_name = name.clone();
         let dir = prefs()
             .export_dir
             .clone()
@@ -238,7 +252,7 @@ impl Shell {
             let colors = colors.as_ref().map(|(palette, body_colors)| Colors { palette, body_colors });
             let fields = export_fields(&settings, &scope, &start, flat.as_ref(), &path, colors);
             let client = link.client.clone();
-            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| s.set_busy("Exporting", link.client.clone(), w, cx))
+            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| s.set_busy(tr!("export.busy", name = base_name.clone()), link.client.clone(), w, cx))
             else {
                 return;
             };
@@ -269,7 +283,7 @@ impl Shell {
                         }
                     }
                     Err(r) if r.cancelled => overlay::toast(cx, Toast::info("Export cancelled.")),
-                    Err(r) => overlay::toast(cx, Toast::error(format!("The export failed: {}", r.message))),
+                    Err(r) => overlay::toast(cx, Toast::error(tr!("export.failed", error = r.message))),
                 }
             });
         })

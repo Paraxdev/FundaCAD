@@ -9,10 +9,12 @@ mod document;
 mod engine;
 mod files;
 mod home;
+mod i18n;
 mod inspector;
 mod items;
 mod overlay;
 mod plastic;
+mod prefs;
 mod recovery;
 mod ribbon;
 mod selection;
@@ -39,19 +41,21 @@ fn main() {
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
         settings::init(cx);
-        let mut settings = theme::Settings::default();
-        // FUNDA_THEME=<palette id> picks a palette until the settings store lands, for the light capture.
+        i18n::init(cx);
+        let mut settings = prefs::theme_settings();
+        // FUNDA_THEME=<palette id> overrides the stored theme, for the light capture.
         if let Ok(id) = std::env::var("FUNDA_THEME") {
             settings.choice = id;
         }
         theme::init(settings, vec![], cx);
         theme::kit::bind(cx);
         overlay::init(cx);
+        prefs::install(cx);
         commands::bind(cx);
         diag::init(cx);
         home::init(cx, path.is_none());
         files::set_startup(cx, path);
-        cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, None)]);
+        cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, Some(commands::workspace_predicate()))]);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             // Below this the left and right float clusters overlap.
@@ -60,6 +64,7 @@ fn main() {
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
+            prefs::apply_size(window, cx);
             let viewport = cx.new(|_| viewport::Viewport::new());
             cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
         })

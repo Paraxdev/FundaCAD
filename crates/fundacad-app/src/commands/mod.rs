@@ -5,6 +5,8 @@ mod builtin;
 pub mod keymap;
 pub mod keys;
 #[cfg(test)]
+mod rebind_tests;
+#[cfg(test)]
 mod tests;
 
 use std::rc::Rc;
@@ -12,6 +14,7 @@ use std::rc::Rc;
 use gpui::*;
 
 pub use builtin::install;
+use crate::i18n::{tr, Label};
 use keys::{Ctx, Shortcut};
 
 /// Runs the command with this id.
@@ -49,15 +52,15 @@ pub enum Group {
 }
 
 impl Group {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> SharedString {
         match self {
-            Group::File => "File",
-            Group::Edit => "Edit",
-            Group::View => "View",
-            Group::Go => "Go",
-            Group::Help => "Help",
-            Group::Tools => "Tools",
-            Group::Sketch => "Sketch",
+            Group::File => tr!("menu.file").into(),
+            Group::Edit => tr!("menu.edit").into(),
+            Group::View => tr!("menu.view").into(),
+            Group::Go => "Go".into(),
+            Group::Help => tr!("menu.help").into(),
+            Group::Tools => "Tools".into(),
+            Group::Sketch => tr!("tool.sketch").into(),
         }
     }
 }
@@ -68,7 +71,9 @@ type Check = Rc<dyn Fn(&App) -> bool>;
 #[derive(Clone)]
 pub struct Command {
     pub id: &'static str,
+    /// The label in the language in use, filled from `source` each time the registry hands the command out.
     pub label: SharedString,
+    source: Label,
     pub group: Group,
     pub context: Ctx,
     run: Handler,
@@ -80,6 +85,8 @@ struct Registry {
     commands: Vec<Command>,
     rows: Vec<Shortcut>,
     problems: Vec<keymap::Problem>,
+    /// The keystroke and predicate of each binding `bind` made, so the next `bind` can switch them off.
+    bound: Vec<(String, String)>,
     mode: Mode,
 }
 
@@ -93,7 +100,7 @@ fn registry(cx: &mut App) -> &mut Registry {
 pub fn register(
     cx: &mut App,
     id: &'static str,
-    label: impl Into<SharedString>,
+    label: impl Into<Label>,
     group: Group,
     run: impl Fn(&mut Window, &mut App) + 'static,
 ) {
@@ -103,12 +110,13 @@ pub fn register(
 pub fn register_in(
     cx: &mut App,
     id: &'static str,
-    label: impl Into<SharedString>,
+    label: impl Into<Label>,
     group: Group,
     context: Ctx,
     run: impl Fn(&mut Window, &mut App) + 'static,
 ) {
-    let command = Command { id, label: label.into(), group, context, run: Rc::new(run), enabled: None };
+    let source = label.into();
+    let command = Command { id, label: source.text(), source, group, context, run: Rc::new(run), enabled: None };
     let commands = &mut registry(cx).commands;
     match commands.iter_mut().find(|c| c.id == id) {
         Some(c) => *c = command,
@@ -133,7 +141,7 @@ pub fn enabled(cx: &App, id: &str) -> bool {
 pub fn label(cx: &App, id: &str) -> SharedString {
     let r = cx.try_global::<Registry>();
     if let Some(c) = r.and_then(|r| r.commands.iter().find(|c| c.id == id)) {
-        return c.label.clone();
+        return c.source.text();
     }
     let table = r.map_or_else(keys::table, |r| if r.rows.is_empty() { keys::table() } else { r.rows.clone() });
     table.iter().find(|s| s.action == id).map_or_else(|| SharedString::from(id.to_string()), |s| s.label.into())
@@ -178,6 +186,11 @@ pub fn key_context(cx: &App) -> KeyContext {
     context
 }
 
+/// The predicate of a fixed key outside the table, which waits like the table's keys while an overlay is open.
+pub fn workspace_predicate() -> &'static str {
+    "Workspace && !Modal"
+}
+
 fn predicate(row: &Shortcut) -> String {
     let ctx = match row.context {
         Ctx::Model => "Model",
@@ -200,22 +213,27 @@ fn live(row: &Shortcut, single_keys: bool) -> bool {
 
 /// Binds the table with the person's keys from the settings, and toasts what clashes.
 pub fn bind(cx: &mut App) {
-    let user: Vec<keymap::UserKey> = crate::settings::get(cx, keymap::SETTING).unwrap_or_default();
-    let single = crate::settings::get::<bool>(cx, SINGLE_KEYS).unwrap_or(true);
+    let (user, single) = (user_keys(cx), single_keys(cx));
     let (rows, problems) = keymap::apply(keys::table(), &user);
+    let load = |keystroke: &str, action: Box<dyn Action>, pred: &str, cx: &App| {
+        let context = KeyBindingContextPredicate::parse(pred).ok()?;
+        KeyBinding::load(keystroke, action, Some(Rc::new(context)), false, None, cx)
+            .map_err(|e| log::warn!("shortcuts: {keystroke} is not a key GPUI reads: {e:?}"))
+            .ok()
+    };
+    // GPUI cannot take a binding back, so a rebind first puts NoAction over each earlier one, which outranks them.
+    let old = std::mem::take(&mut registry(cx).bound);
+    let mut bindings: Vec<KeyBinding> = old.iter().filter_map(|(k, p)| load(k, Box::new(NoAction), p, cx)).collect();
+    let mut bound = Vec::new();
     // The latest binding wins a key GPUI finds twice, so the rows go in backwards and the first row wins.
-    let bindings: Vec<KeyBinding> = rows
-        .iter()
-        .rev()
-        .filter(|r| live(r, single))
-        .filter_map(|r| {
-            let combo = r.combo.as_ref()?;
-            let context = KeyBindingContextPredicate::parse(&predicate(r)).ok()?;
-            KeyBinding::load(&combo.keystroke(), Box::new(Run::new(r.action)), Some(Rc::new(context)), false, None, cx)
-                .map_err(|e| log::warn!("shortcuts: {} is not a key GPUI reads: {e:?}", combo))
-                .ok()
-        })
-        .collect();
+    for r in rows.iter().rev().filter(|r| live(r, single)) {
+        let Some(combo) = r.combo.as_ref() else { continue };
+        let (keystroke, pred) = (combo.keystroke(), predicate(r));
+        if let Some(b) = load(&keystroke, Box::new(Run::new(r.action)), &pred, cx) {
+            bindings.push(b);
+            bound.push((keystroke, pred));
+        }
+    }
     cx.bind_keys(bindings);
     for p in &problems {
         log::warn!("shortcuts: {}", p.describe());
@@ -223,6 +241,27 @@ pub fn bind(cx: &mut App) {
     let r = registry(cx);
     r.rows = rows;
     r.problems = problems;
+    r.bound = bound;
+}
+
+/// The person's own keys as the settings hold them.
+pub fn user_keys(cx: &App) -> Vec<keymap::UserKey> {
+    crate::settings::get(cx, keymap::SETTING).unwrap_or_default()
+}
+
+/// Saves the person's keys and binds the table again with them.
+pub fn set_user_keys(cx: &mut App, user: &[keymap::UserKey]) {
+    crate::settings::set(cx, keymap::SETTING, &user);
+    bind(cx);
+}
+
+pub fn single_keys(cx: &App) -> bool {
+    crate::settings::get::<bool>(cx, SINGLE_KEYS).unwrap_or(true)
+}
+
+pub fn set_single_keys(cx: &mut App, on: bool) {
+    crate::settings::set(cx, SINGLE_KEYS, &on);
+    bind(cx);
 }
 
 /// One line for the problems binding found, None when there were none.
@@ -260,11 +299,14 @@ pub fn available(cx: &App) -> Vec<Command> {
         Mode::Model => Ctx::Model,
         Mode::Sketch => Ctx::Sketch,
     };
-    r.commands.iter().filter(|c| c.context.overlaps(ctx) && c.enabled.as_ref().is_none_or(|f| f(cx))).cloned().collect()
+    r.commands
+        .iter()
+        .filter(|c| c.context.overlaps(ctx) && c.enabled.as_ref().is_none_or(|f| f(cx)))
+        .map(|c| Command { label: c.source.text(), ..c.clone() })
+        .collect()
 }
 
 /// The table as bound and the problems binding it found, for the shortcuts sheet.
-#[allow(dead_code, reason = "the shortcuts sheet reads it")]
 pub fn rows(cx: &App) -> (Vec<Shortcut>, Vec<keymap::Problem>) {
     cx.try_global::<Registry>().map(|r| (r.rows.clone(), r.problems.clone())).unwrap_or_default()
 }

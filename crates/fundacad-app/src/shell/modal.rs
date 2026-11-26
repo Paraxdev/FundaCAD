@@ -40,12 +40,12 @@ pub fn modal(
 }
 
 /// A labelled row of the body.
-pub fn row(t: &Theme, label: &'static str, content: impl IntoElement) -> Div {
+pub fn row(t: &Theme, label: impl Into<SharedString>, content: impl IntoElement) -> Div {
     div()
         .flex()
         .items_center()
         .gap(px(S_3))
-        .child(text(t, FS_SMALL).w(px(96.)).flex_none().text_color(t.text_dim).child(label))
+        .child(text(t, FS_SMALL).w(px(96.)).flex_none().text_color(t.text_dim).child(label.into()))
         .child(div().flex_1().min_w_0().flex().flex_wrap().gap(px(S_1)).child(content))
 }
 

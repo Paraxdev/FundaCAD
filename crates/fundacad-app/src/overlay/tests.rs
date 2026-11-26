@@ -16,7 +16,7 @@ fn score_prefers_a_start_and_a_run() {
 }
 
 fn hit(id: &'static str, label: &str) -> Hit {
-    Hit { id, label: label.to_string().into(), group: "View" }
+    Hit { id, label: label.to_string().into(), group: "View".into() }
 }
 
 #[test]

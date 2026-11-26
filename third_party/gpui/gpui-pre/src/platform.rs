@@ -1,3 +1,4 @@
+// Modified by FundaCAD: PlatformInputHandler converts its bounds and points by Window::set_ui_zoom.
 mod app_menu;
 mod keyboard;
 mod keystroke;
@@ -2123,6 +2124,11 @@ pub struct PlatformInputHandler {
     focus_id: Option<crate::FocusId>,
 }
 
+/// Window pixels from the zoomed layout pixels an input handler measures in, see `Window::set_ui_zoom`.
+fn zoomed(bounds: Bounds<Pixels>, zoom: f32) -> Bounds<Pixels> {
+    Bounds::new(bounds.origin.map(|v| v * zoom), bounds.size.map(|v| v * zoom))
+}
+
 #[expect(missing_docs)]
 #[cfg_attr(
     all(
@@ -2232,7 +2238,12 @@ impl PlatformInputHandler {
 
     pub fn bounds_for_range(&mut self, range_utf16: Range<usize>) -> Option<Bounds<Pixels>> {
         self.cx
-            .update(|window, cx| self.handler.bounds_for_range(range_utf16, window, cx))
+            .update(|window, cx| {
+                let zoom = window.ui_zoom();
+                self.handler
+                    .bounds_for_range(range_utf16, window, cx)
+                    .map(|b| zoomed(b, zoom))
+            })
             .ok()
             .flatten()
     }
@@ -2240,8 +2251,12 @@ impl PlatformInputHandler {
     pub fn selection_bounds_for_range(&mut self, range_utf16: Range<usize>) -> Vec<Bounds<Pixels>> {
         self.cx
             .update(|window, cx| {
+                let zoom = window.ui_zoom();
                 self.handler
                     .selection_bounds_for_range(range_utf16, window, cx)
+                    .into_iter()
+                    .map(|b| zoomed(b, zoom))
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -2299,9 +2314,11 @@ impl PlatformInputHandler {
     pub fn selected_bounds(&mut self, window: &mut Window, cx: &mut App) -> Option<Bounds<Pixels>> {
         let marked_range = self.handler.marked_text_range(window, cx);
         let selection = self.handler.selected_text_range(true, window, cx)?;
+        let zoom = window.ui_zoom();
         Self::compute_ime_candidate_bounds(marked_range, &selection, |range| {
             self.handler.bounds_for_range(range, window, cx)
         })
+        .map(|b| zoomed(b, zoom))
     }
 
     pub fn ime_candidate_bounds(&mut self) -> Option<Bounds<Pixels>> {
@@ -2315,7 +2332,10 @@ impl PlatformInputHandler {
     #[allow(unused)]
     pub fn character_index_for_point(&mut self, point: Point<Pixels>) -> Option<usize> {
         self.cx
-            .update(|window, cx| self.handler.character_index_for_point(point, window, cx))
+            .update(|window, cx| {
+                let point = point.map(|v| v / window.ui_zoom());
+                self.handler.character_index_for_point(point, window, cx)
+            })
             .ok()
             .flatten()
     }
