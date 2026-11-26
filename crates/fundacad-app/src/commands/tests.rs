@@ -1,6 +1,6 @@
 use super::keymap::{apply, conflicts, resolve, Problem, UserKey};
 use super::keys::{table, Combo, Ctx};
-use super::{predicate, summary};
+use super::{live, predicate, summary};
 
 fn user(id: &str, key: &str) -> UserKey {
     UserKey { id: id.into(), key: key.into(), shift: false, ctrl: false }
@@ -126,6 +126,18 @@ fn keys_the_app_holds_outside_the_table_are_refused() {
     assert_eq!(rows, table(), "no refused key moved a row");
     let (_, problems) = apply(table(), &[user("move|model|M", "Ctrl+9")]);
     assert_eq!(problems, vec![]);
+}
+
+#[test]
+fn single_key_shortcuts_off_leaves_only_ctrl_and_named_keys() {
+    let rows = table();
+    let of = |action: &str| rows.iter().find(|r| r.action == action).unwrap();
+    let cases = [("sketch", false), ("show-all-bodies", false), ("shortcut-help", false), ("save", true), ("front", true),
+        ("fit", true), ("escape", true), ("region-next", true), ("next-face", true)];
+    for (action, kept) in cases {
+        assert_eq!(live(of(action), false), kept, "{action}");
+        assert!(live(of(action), true), "{action}");
+    }
 }
 
 #[test]

@@ -190,14 +190,24 @@ fn predicate(row: &Shortcut) -> String {
     format!("{ctx}{} && !{MODAL}", if bare { " && !Input" } else { "" })
 }
 
+/// The settings key that turns single key shortcuts off, false for off (WCAG 2.1.4).
+pub const SINGLE_KEYS: &str = "singleKeyShortcuts";
+
+/// Whether a row is bound: with single key shortcuts off, a character key without Ctrl binds nothing.
+fn live(row: &Shortcut, single_keys: bool) -> bool {
+    single_keys || row.combo.as_ref().is_none_or(|c| c.ctrl || c.key.chars().count() != 1)
+}
+
 /// Binds the table with the person's keys from the settings, and toasts what clashes.
 pub fn bind(cx: &mut App) {
     let user: Vec<keymap::UserKey> = crate::settings::get(cx, keymap::SETTING).unwrap_or_default();
+    let single = crate::settings::get::<bool>(cx, SINGLE_KEYS).unwrap_or(true);
     let (rows, problems) = keymap::apply(keys::table(), &user);
     // The latest binding wins a key GPUI finds twice, so the rows go in backwards and the first row wins.
     let bindings: Vec<KeyBinding> = rows
         .iter()
         .rev()
+        .filter(|r| live(r, single))
         .filter_map(|r| {
             let combo = r.combo.as_ref()?;
             let context = KeyBindingContextPredicate::parse(&predicate(r)).ok()?;
