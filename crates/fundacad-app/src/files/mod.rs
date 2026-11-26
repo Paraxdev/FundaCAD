@@ -16,6 +16,7 @@ use crate::viewport::Viewport;
 
 const DOC_EXT: &str = "funda";
 const UNTITLED: &str = "Untitled";
+const NOT_SAVABLE: &str = "Only a FundaCAD document can be saved, an STL is only shown";
 
 /// The empty document New makes and the app starts with.
 pub fn new_document() -> Doc {
@@ -219,7 +220,7 @@ impl Files {
     fn write_now(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let viewport = self.viewport.read(cx);
         let Some(doc) = viewport.doc() else {
-            overlay::toast(cx, Toast::warning("Only a FundaCAD document can be saved"));
+            overlay::toast(cx, Toast::warning(NOT_SAVABLE));
             return false;
         };
         match write(&path, doc, viewport.blob_dir()) {
@@ -316,12 +317,16 @@ pub fn open_recent(files: Entity<Files>, path: PathBuf, window: &mut Window, cx:
 
 /// Saves, through Save As when the document has no .funda of its own yet. True once it is written.
 async fn save_async(files: &Entity<Files>, force_ask: bool, cx: &mut AsyncWindowContext) -> bool {
-    let Ok((path, name)) = cx.update(|_, cx| {
+    let Ok((path, name, savable)) = cx.update(|_, cx| {
         let f = files.read(cx);
-        (f.path.clone(), f.name())
+        (f.path.clone(), f.name(), f.viewport.read(cx).doc().is_some())
     }) else {
         return false;
     };
+    if !savable {
+        let _ = cx.update(|_, cx| overlay::toast(cx, Toast::warning(NOT_SAVABLE)));
+        return false;
+    }
     let target = match path.filter(|p| !force_ask && saves_in_place(Some(p))) {
         Some(p) => p,
         None => {
