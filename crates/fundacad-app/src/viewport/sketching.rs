@@ -147,7 +147,7 @@ impl Viewport {
         }
     }
 
-    fn to_screen(&self, w: Vec3) -> Option<Point<Pixels>> {
+    pub(super) fn to_screen(&self, w: Vec3) -> Option<Point<Pixels>> {
         let b = self.bounds;
         let (wd, h) = (b.size.width.as_f32().max(1.0), b.size.height.as_f32().max(1.0));
         let clip = self.camera.projection(wd / h) * self.camera.view() * w.extend(1.0);

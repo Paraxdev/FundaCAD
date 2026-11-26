@@ -126,6 +126,7 @@ pub fn rows(doc: &Map<String, Value>, id: &str, issues: &[FeatureIssue]) -> Vec<
         let (options, current) = match (ty, c.field) {
             ("patternCircular", "axis") => options::pattern_axis_choice(f, &all),
             ("mechanism", "drive") => options::mechanism_drive_choice(f),
+            ("split", "plane") => options::modify::split_plane_choice(f, &all),
             _ => options::datum_choice_row(ty, f, c.field, &all).unwrap_or_else(|| {
                 (
                     c.options.iter().map(|&(v, l)| Choice { value: v.into(), label: l.into() }).collect(),
@@ -196,6 +197,12 @@ pub fn option_patch(doc: &Map<String, Value>, id: &str, field: &str, value: &Val
     if ty == "patternCircular" && field == "axis" {
         patch = options::pattern_axis_patch(s)?;
     }
+    if ty == "split" && field == "plane" {
+        patch = options::modify::split_plane_patch(s)?;
+    }
+    if matches!(ty, "move" | "duplicate") && field == "copy" {
+        patch = options::modify::copy_patch(value == &Value::Bool(true));
+    }
     if ty == "mechanism" && field == "drive" {
         patch = options::mechanism_drive_patch(s);
     }
@@ -226,6 +233,9 @@ pub fn set_option(doc: &mut Map<String, Value>, id: &str, field: &str, value: &V
     Ok(())
 }
 
+/// FundaCAD 1's draftTool limit, past it the faces fold over.
+const MAX_DRAFT_DEG: f64 = 60.0;
+
 /// A number written where its row points: a parameter through the table, a feature field rounded to what it holds,
 /// and left out again when it is the value an absent field means.
 pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> Result<(), String> {
@@ -242,7 +252,10 @@ pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> 
     if !num_fields(&ty, f).iter().any(|n| &n.key == key) {
         return Err(format!("{key} is no number of {feature}"));
     }
-    let v = fields::coerce(key, value);
+    let mut v = fields::coerce(key, value);
+    if ty == "draft" && key == "angle" {
+        v = v.clamp(-MAX_DRAFT_DEG, MAX_DRAFT_DEG);
+    }
     let left_out = fields::absent_value(&ty, key) == Some(v);
     let next = (!left_out).then(|| crate::document::number(v));
     if fields::read_field(f, key) == next.as_ref() {

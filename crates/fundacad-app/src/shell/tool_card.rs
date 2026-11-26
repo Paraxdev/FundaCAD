@@ -25,12 +25,38 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
         register(cx, id, filter.label(), Group::Edit, move |_, cx| v.update(cx, |v, cx| v.set_filter(filter, cx)));
     }
     let v = viewport.clone();
+    cx.intercept_keystrokes(move |e, window, cx| {
+        let k = &e.keystroke;
+        let m = k.modifiers;
+        // Shift = types + on most layouts.
+        let key = if m.shift && (k.key == "=" || k.key_char.as_deref() == Some("+")) { "+" } else { k.key.as_str() };
+        let held = m.control || m.alt || m.platform || m.function || (m.shift && key != "+");
+        if held || window.context_stack().iter().any(|c| c.contains("Input")) {
+            return;
+        }
+        if v.update(cx, |v, cx| tool_key(v, key, cx)) {
+            cx.stop_propagation();
+        }
+    })
+    .detach();
+    let v = viewport.clone();
     register(cx, "escape", "Cancel", Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| match v.running().is_some() {
             true => v.finish(false, cx),
             false => v.clear_selection(cx),
         })
     });
+}
+
+/// A key the running tool answers, kept from the key table: [ ] - + and up and down for a pattern's count, X for a draft's pull axis.
+fn tool_key(v: &mut Viewport, key: &str, cx: &mut Context<Viewport>) -> bool {
+    let Some(id) = v.running().map(|r| r.feature.clone()) else { return false };
+    let Some(f) = v.doc().and_then(|d| tools::feature(d, &id)).cloned() else { return false };
+    let Some(new) = tools::press(&f, key, &v.shown_bodies()) else { return false };
+    if let Err(why) = v.edit(move |d| tools::replace(d, &id, new.clone()), cx) {
+        cx.defer(move |cx| toast(cx, why));
+    }
+    true
 }
 
 fn toast(cx: &mut App, words: String) {
@@ -48,17 +74,26 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
         Ok(s) => s,
         Err(why) => return toast(cx, why),
     };
+    let tools::Fitted { start, before } = tools::fit(tool.id, start, doc, v.selection(), &v.shown_bodies());
     let mut shown = doc.clone();
     let _ = tools::insert(&mut shown, start.feature.clone());
     let label = format!("Add {}", crate::timeline::labels::name_of(&shown, &id));
     let feature = start.feature.clone();
+    let offered = tools::offer(tool.id, v.selection());
     let begun = viewport.update(cx, |v, cx| {
         let need = start.need.clone();
-        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| tools::insert(d, feature.clone()), cx)?;
+        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| {
+            before.iter().try_for_each(|b| tools::insert(d, b.clone()))?;
+            tools::insert(d, feature.clone())
+        }, cx)?;
         v.clear_selection(cx);
         match start.arm() {
             // A boolean with its bodies picked is done at once, as in FundaCAD 1.
             None if boolean => v.finish(true, cx),
+            None => match offered {
+                Some(t) => v.offer_arm(t, cx),
+                None => v.set_arm(None, cx),
+            },
             arm => v.set_arm(arm, cx),
         }
         Ok::<(), String>(())

@@ -1,6 +1,12 @@
 //! What each tool makes, featureStarters.ts with FundaCAD 1's defaults. A tool whose references are several kinds at
 //! once (a midplane's two planes, an angled plane's edge and face) reads them from the selection.
 
+mod modify;
+
+pub use modify::fit::{fit, sources_extent, Fitted};
+pub use modify::keys::{press, replace};
+pub use modify::place::{offer, place, places};
+
 use serde_json::{json, Value};
 
 use super::{bodies, Doc, Start, Target, Tool};
@@ -29,6 +35,16 @@ pub const TOOLS: &[Tool] = &[
         let need = vec![Target { field: "faces", kind: PickKind::Face, many: true }];
         Ok(Start { feature: json!({"type": "shell", "thickness": 2, "faces": faces}), need })
     }),
+    t("draft", "Draft", modify::draft),
+    t("offset-face", "Offset Face", modify::offset_face),
+    t("split", "Split Body", modify::split),
+    t("separate", "Separate", modify::separate),
+    t("pattern-linear", "Linear Pattern", modify::pattern_linear),
+    t("pattern-circular", "Circular Pattern", modify::pattern_circular),
+    t("pattern-rect", "Rectangular Pattern", modify::pattern_rect),
+    t("mirror", "Mirror", modify::mirror),
+    t("move", "Move", modify::move_bodies),
+    t("scale", "Scale", modify::scale),
     t("offset-plane", "Offset Plane", |_, s| datum_plane(s, 10.0, "Offset plane")),
     t("datum-plane", "Datum Plane", |_, s| datum_plane(s, 0.0, "Plane")),
     t("midplane", "Midplane", |_, s| {

@@ -5,6 +5,8 @@ use serde_json::{Map, Value};
 
 use super::hole::{self, HOLE_SIZES};
 
+pub mod modify;
+
 /// A value and the word a row shows for it.
 pub type Opt = (&'static str, &'static str);
 
@@ -131,6 +133,7 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
         }
         "thicken" => const { &[choice("operation", "Operation", &[("new", "New body"), ("join", "Join")], "join")] },
         "mirror" => const { &[choice("plane", "Plane", PLANES, "XY")] },
+        "split" => modify::SPLIT,
         "draft" => const { &[choice("axis", "Pull axis", AXES, "Z")] },
         "patternLinear" => const { &[choice("axis", "Direction", AXES, "X")] },
         "patternCircular" => const { &[choice("axis", "Axis", AXES, "Z")] },
@@ -217,6 +220,7 @@ pub fn toggle_fields(ty: &str) -> &'static [ToggleField] {
             }
         }
         "thicken" => const { &[toggle("symmetric", "Symmetric", false)] },
+        "move" | "duplicate" => modify::COPY,
         "fillet" | "chamfer" => const { &[toggle("tangentEdges", "Include Tangent Edges", true)] },
         "press-pull" | "offsetFace" => const { &[toggle("followTangent", "Tangent faces follow", true)] },
         "hole" => {
@@ -320,6 +324,9 @@ pub fn choice_value(ty: &str, f: &Map<String, Value>, c: &ChoiceField) -> String
 }
 
 pub fn toggle_value(f: &Map<String, Value>, t: &ToggleField) -> bool {
+    if t.field == "copy" {
+        return modify::is_copy(f);
+    }
     f.get(t.field).and_then(Value::as_bool).unwrap_or(t.fallback)
 }
 
@@ -410,7 +417,7 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
     let datum = pattern_axis_datum(axis);
     let placed = present(f, "axisRef") || (axis.is_some_and(|a| !a.is_string()) && datum.is_none());
     if placed {
-        options.push(Choice::new(PLACED_AXIS, if present(f, "axisRef") { "Picked" } else { "Line" }));
+        options.push(Choice::new(PLACED_AXIS, placed_axis_label(f)));
         return (options, PLACED_AXIS.into());
     }
     let name = datum.or(axis.and_then(Value::as_str)).unwrap_or("Z").to_string();
@@ -418,6 +425,24 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
         options.push(Choice::new(name.clone(), name.clone()));
     }
     (options, name)
+}
+
+/// "Picked", or for the line C moves to the middle the world axis it runs along, "Z through the middle".
+fn placed_axis_label(f: &Map<String, Value>) -> String {
+    if present(f, "axisRef") {
+        return "Picked".into();
+    }
+    let dir: Vec<f64> = f
+        .get("axis")
+        .and_then(|a| a.get("dir"))
+        .and_then(Value::as_array)
+        .map(|d| d.iter().filter_map(Value::as_f64).collect())
+        .unwrap_or_default();
+    let world = [("X", [1.0, 0.0, 0.0]), ("Y", [0.0, 1.0, 0.0]), ("Z", [0.0, 0.0, 1.0])];
+    match world.iter().find(|(_, w)| dir.len() == 3 && dir.iter().zip(w).all(|(a, b)| (a.abs() - b).abs() < 1e-6)) {
+        Some((name, _)) => format!("{name} through the middle"),
+        None => "Line".into(),
+    }
 }
 
 /// A key to set, or with None to remove.
