@@ -1,6 +1,6 @@
 # Install
 
-Download the file for your system from the [beta page](https://github.com/Paraxdev/fundacad/releases/tag/beta). There is no account to make.
+Download the file for your system from the [download page](https://fundacad.dev/download/). There is no account to make.
 
 The builds are not code signed, so each system warns you once.
 

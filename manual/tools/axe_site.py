@@ -82,7 +82,7 @@ def serve(site: Path) -> http.server.ThreadingHTTPServer:
 
 
 # A page fading in would be measured half transparent, so axe waits for the entrance to end (3 s at most).
-SETTLE = "() => Promise.race([Promise.all(document.getAnimations().map(a => a.finished)), new Promise(r => setTimeout(r, 3000))])"
+SETTLE = "() => Promise.race([Promise.allSettled(document.getAnimations().map(a => a.finished)), new Promise(r => setTimeout(r, 3000))])"
 
 
 def axe(page) -> dict[str, list[dict]]:

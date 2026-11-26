@@ -250,7 +250,7 @@ def atom(posts: list[Post], site: str) -> str:
     <id>{site}news/{p.slug}/</id>
     <updated>{p.date.isoformat()}T00:00:00Z</updated>
     <summary>{html.escape(p.summary)}</summary>
-    <content type="html">{html.escape(p.body)}</content>
+    <content type="html" xml:base="{site}news/{p.slug}/">{html.escape(p.body)}</content>
   </entry>
 """
         for p in posts

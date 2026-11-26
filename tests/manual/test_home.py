@@ -59,6 +59,10 @@ class Build(unittest.TestCase):
         feed = ET.parse(out / "news" / "feed.xml").getroot()
         entries = feed.findall("{http://www.w3.org/2005/Atom}entry")
         self.assertEqual(len(entries), len(paths) - 3)
+        for entry in entries:
+            link = entry.find("{http://www.w3.org/2005/Atom}link").get("href")
+            content = entry.find("{http://www.w3.org/2005/Atom}content")
+            self.assertEqual(content.get("{http://www.w3.org/XML/1998/namespace}base"), link)
         for name in ("site.css", "home.css", "home.js", "hero.jpg"):
             self.assertTrue((out / "static" / name).is_file(), name)
 
