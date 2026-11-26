@@ -6,6 +6,7 @@ pub mod mesh;
 mod pick;
 mod renderer;
 pub mod scene;
+mod undo;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -20,9 +21,12 @@ pub use issues::FeatureIssue;
 use pick::Hit;
 use renderer::{Overlay, Renderer};
 use scene::Scene;
+use undo::UndoStack;
 
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
+
+actions!(viewport, [Undo, Redo]);
 
 /// Index GPUI samples the main 3D view from.
 const MAIN_TEXTURE: u32 = gpui_wgpu::EXTERNAL_TEXTURE_BASE;
@@ -52,6 +56,10 @@ struct Push {
     /// The revision of the mesh on screen.
     shown: u64,
     released: bool,
+    /// The document before the drag, the undo step it makes.
+    before: Doc,
+    /// Drags of the same face under the same driver merge into one undo step.
+    key: String,
 }
 
 impl Push {
@@ -89,6 +97,7 @@ pub struct Viewport {
     mask_revision: u64,
     background: [u8; 3],
     issues: Vec<FeatureIssue>,
+    undo: UndoStack,
     message: Option<String>,
     rebuild_ms: Option<f64>,
     _wake: Option<Task<()>>,
@@ -121,6 +130,7 @@ impl Viewport {
             mask_revision: 0,
             background: [23, 26, 31],
             issues: Vec::new(),
+            undo: UndoStack::default(),
             message: None,
             rebuild_ms: None,
             _wake: None,
@@ -130,6 +140,7 @@ impl Viewport {
 
     pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) {
         self.issues.clear();
+        self.undo = UndoStack::default();
         let (tx, rx) = async_channel::bounded::<()>(1);
         match engine::open(path, move || {
             let _ = tx.try_send(());
@@ -180,10 +191,50 @@ impl Viewport {
             return Err("a face is being pushed".into());
         }
         let session = self.session.as_mut().ok_or("no document is open")?;
+        let before = session.doc.clone();
         let edited = session.edit(f)?;
+        if edited.is_some() {
+            self.undo.record(before, None);
+        }
         self.hover = None;
         cx.notify();
         Ok(edited)
+    }
+
+    #[allow(dead_code, reason = "fc2/shell greys its undo button with it")]
+    pub fn can_undo(&self) -> bool {
+        self.undo.can_undo()
+    }
+
+    #[allow(dead_code, reason = "fc2/shell greys its redo button with it")]
+    pub fn can_redo(&self) -> bool {
+        self.undo.can_redo()
+    }
+
+    /// Steps the document back one change, a run of drags of one face counting as one.
+    pub fn undo(&mut self, cx: &mut Context<Self>) {
+        self.step(UndoStack::undo, cx);
+    }
+
+    pub fn redo(&mut self, cx: &mut Context<Self>) {
+        self.step(UndoStack::redo, cx);
+    }
+
+    fn step(&mut self, take: fn(&mut UndoStack, Doc) -> Option<Doc>, cx: &mut Context<Self>) {
+        if self.push.as_ref().is_some_and(|p| !p.released) {
+            return;
+        }
+        let Some(session) = self.session.as_mut() else { return };
+        let Some(doc) = take(&mut self.undo, session.doc.clone()) else { return };
+        if let Err(e) = session.edit(move |d| {
+            d.clone_from(&doc);
+            Ok(())
+        }) {
+            self.message = Some(e);
+        }
+        self.push = None;
+        self.hover = None;
+        cx.notify();
     }
 
     /// One line for the status bar.
@@ -362,7 +413,10 @@ impl Viewport {
 
     fn press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
         self.hover_at(position, cx);
-        let Some((hit, Ok(grip))) = self.hover.clone() else { return };
+        let Some((hit, Ok(grip))) = self.hover.clone() else {
+            self.undo.close();
+            return;
+        };
         let (origin, dir) = self.ray_at(position);
         let grabbed = drag::axis_travel(hit.point, hit.normal, origin, dir).unwrap_or(0.0);
         self.begin(hit, grip, grabbed);
@@ -374,6 +428,8 @@ impl Viewport {
         let axis = hit.normal;
         let found = drag::cap(body, &grip.feature, axis, hit.point.dot(axis), grip.mirror, self.radius * 1e-4);
         let Some((plane, mask)) = found else { return false };
+        let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
+        let key = format!("{} {:.2} {:.2} {:.2}", grip.label(), axis.x, axis.y, axis.z);
         self.push = Some(Push {
             value: grip.start,
             body: body.source.id.clone(),
@@ -388,6 +444,8 @@ impl Viewport {
             anchor: hit.point,
             grabbed,
             released: false,
+            before,
+            key,
         });
         self.mask_revision += 1;
         true
@@ -419,8 +477,11 @@ impl Viewport {
     }
 
     fn release(&mut self, cx: &mut Context<Self>) {
-        if let Some(p) = &mut self.push {
+        if let Some(p) = self.push.as_mut().filter(|p| !p.released) {
             p.released = true;
+            if self.session.as_ref().is_some_and(|s| s.doc != p.before) {
+                self.undo.record(p.before.clone(), Some(p.key.clone()));
+            }
             if p.settled() {
                 self.push = None;
             }

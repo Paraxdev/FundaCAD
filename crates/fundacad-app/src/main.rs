@@ -23,6 +23,11 @@ fn main() {
 
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
+        cx.bind_keys([
+            KeyBinding::new("ctrl-z", viewport::Undo, None),
+            KeyBinding::new("ctrl-y", viewport::Redo, None),
+            KeyBinding::new("ctrl-shift-z", viewport::Redo, None),
+        ]);
         gpui_kit::component::Theme::change(gpui_kit::component::ThemeMode::Dark, None, cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1400.), px(900.)), cx))),

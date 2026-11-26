@@ -1,6 +1,7 @@
 //! FUNDA_PUSH_DEMO=<mm> pushes a cap by itself, so a push can be timed without a hand on the mouse.
 //! FUNDA_PUSH_FEATURE=<id> picks the feature, otherwise the latest pushable one in the timeline.
 //! FUNDA_PUSH_PREVIEW_ONLY=1 sends nothing to the engine and holds the stretched cap for a few seconds, for screenshots.
+//! FUNDA_PUSH_UNDO=1 pushes the same face a second time, then undoes once, which must bring back the first start.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -24,12 +25,46 @@ pub fn travel() -> Option<f64> {
 pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
     let wanted = std::env::var("FUNDA_PUSH_FEATURE").ok();
     let preview_only = std::env::var_os("FUNDA_PUSH_PREVIEW_ONLY").is_some();
+    let Some(first) = push(&this, cx, travel, wanted.as_deref(), preview_only).await else { return };
+    if std::env::var_os("FUNDA_PUSH_UNDO").is_none() {
+        return;
+    }
+    if push(&this, cx, travel, wanted.as_deref(), false).await.is_none() {
+        return;
+    }
+    if this.update(cx, |v, cx| v.undo(cx)).is_err() {
+        return;
+    }
+    let began = Instant::now();
+    while began.elapsed() < SETTLE_LIMIT {
+        cx.background_executor().timer(FRAME).await;
+        let Ok(now) = this.update(cx, |v, _| v.candidate(wanted.as_deref()).map(|(_, g)| (g.start, v.can_undo())))
+        else {
+            return;
+        };
+        if let Some((start, more)) = now.filter(|(s, _)| (s - first).abs() < 1e-9) {
+            log::info!("demo: one undo brought both pushes back to {start}, more to undo: {more}");
+            return;
+        }
+    }
+    log::error!("demo: one undo did not bring back {first}");
+}
+
+/// Pushes the candidate cap by `travel` and waits for it to settle. The value it started from.
+async fn push(
+    this: &WeakEntity<Viewport>,
+    cx: &mut AsyncApp,
+    travel: f64,
+    wanted: Option<&str>,
+    preview_only: bool,
+) -> Option<f64> {
     let found = loop {
         cx.background_executor().timer(FRAME).await;
         let Ok(state) = this.update(cx, |v, _| {
-            (v.rebuild_ms.is_some() && v.bounds.size.width.as_f32() > 0.0).then(|| v.candidate(wanted.as_deref()))
+            (v.rebuild_ms.is_some() && v.push.is_none() && v.bounds.size.width.as_f32() > 0.0)
+                .then(|| v.candidate(wanted))
         }) else {
-            return;
+            return None;
         };
         if let Some(found) = state {
             break found;
@@ -37,7 +72,7 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
     };
     let Some((hit, grip)) = found else {
         log::error!("demo: no pushable cap");
-        return;
+        return None;
     };
     let start = grip.start;
     let end = grip.value(travel as f32);
@@ -51,7 +86,7 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
         .unwrap_or(false)
     {
         log::error!("demo: the cap plane was not found");
-        return;
+        return None;
     }
     let began = Instant::now();
     loop {
@@ -66,7 +101,7 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
             _ => v.set_value(value, cx),
         });
         if sent.is_err() {
-            return;
+            return None;
         }
         if t >= 1.0 {
             break;
@@ -84,13 +119,14 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
         match this.update(cx, |v, _| v.push.is_none()) {
             Ok(true) => {
                 log::info!("demo: settled {} ms after release", released.elapsed().as_millis());
-                return;
+                return Some(start);
             }
             Ok(false) => {}
-            Err(_) => return,
+            Err(_) => return None,
         }
     }
     log::error!("demo: not settled {} s after release", SETTLE_LIMIT.as_secs());
+    None
 }
 
 impl Viewport {
