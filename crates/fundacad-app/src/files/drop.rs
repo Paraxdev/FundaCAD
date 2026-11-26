@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::*;
 
+use crate::i18n::{self, tr};
 use crate::overlay::{self, Toast};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_SMALL, S_1, S_3, S_4, W_SEMIBOLD};
 use crate::ui::text;
@@ -54,10 +55,10 @@ fn names(paths: &[PathBuf]) -> String {
 pub fn leftovers(plan: &Plan) -> Option<String> {
     let mut parts = Vec::new();
     if !plan.rejected.is_empty() {
-        parts.push(format!("FundaCAD cannot open {}.", names(&plan.rejected)));
+        parts.push(tr!("files.drop.cannotOpen", names = names(&plan.rejected)));
     }
     if !plan.skipped.is_empty() {
-        parts.push(format!("Only one document opens at a time, so {} stayed closed.", names(&plan.skipped)));
+        parts.push(tr!("files.drop.skipped", n = plan.skipped.len(), names = names(&plan.skipped)));
     }
     (!parts.is_empty()).then(|| parts.join(" "))
 }
@@ -90,10 +91,8 @@ fn layer(t: &Theme, on: impl Fn(&ExternalPaths, &mut Window, &mut App) + 'static
         .rounded(px(FLOAT_CHIP_RADIUS + 2.))
         .bg(t.float_bg_solid)
         .text_center()
-        .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.text).child("Drop to open"))
-        .child(
-            text(t, FS_SMALL).text_color(t.text_dim).child("A FundaCAD document or an STL opens in place of this one."),
-        );
+        .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.text).child(i18n::t("files.drop.title")))
+        .child(text(t, FS_SMALL).text_color(t.text_dim).child(i18n::t("files.drop.hint")));
     let frame = div()
         .absolute()
         .inset(px(INSET))

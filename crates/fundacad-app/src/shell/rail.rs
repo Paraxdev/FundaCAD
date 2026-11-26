@@ -7,6 +7,26 @@ use crate::ui::{chip, icon, text, tile};
 const GAP: f32 = 6.;
 const SEP: f32 = 4.;
 
+/// The labels stay English, the family callback matches on them.
+fn spoken(label: &str) -> String {
+    let key = match label {
+        "Search" => "rail.search",
+        "Sketch" => "tool.sketch",
+        "Create" => "tool.group.create",
+        "Modify" => "tool.group.modify",
+        "Construct" => "tool.group.construct",
+        "Inspect" => "tool.group.inspect",
+        "Insert" => "tool.group.insert",
+        "Print" => "rail.print",
+        "Isolate" => "rail.isolate",
+        "Section View" => "rail.sectionView",
+        "Measure" => "tool.measure",
+        "Off" => "rail.off",
+        other => return other.to_owned(),
+    };
+    crate::i18n::t(key)
+}
+
 struct Entry {
     glyph: &'static str,
     label: &'static str,
@@ -96,11 +116,18 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on_family: &OnFamily) -
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).line_height(px(16.)).child(e.label))
+                .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).line_height(px(16.)).child(spoken(e.label)))
                 .when(!e.keys.is_empty(), |d| d.child(div().flex().gap(px(3.)).children(e.keys.iter().map(key)))),
         )
-        .when_some(e.sub, |d, sub| d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(t.text_mute).child(sub)));
-    let row = div().flex().items_center().gap(px(6.)).child(tile.when(open == Some(e.label), |d| d.bg(t.accent_wash))).child(pill);
+        .when_some(e.sub, |d, sub| {
+            d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(t.text_mute).child(spoken(sub)))
+        });
+    let row = div()
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .child(tile.when(open == Some(e.label), |d| d.bg(t.accent_wash)))
+        .child(pill);
     if !e.family {
         return row.into_any_element();
     }

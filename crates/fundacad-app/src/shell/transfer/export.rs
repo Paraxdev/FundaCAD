@@ -141,29 +141,26 @@ impl Shell {
             div().flex().flex_wrap().gap(px(4.)).children(formats),
         ));
         if !has_sources {
-            body = body.child(note(t, "DXF and SVG draw a sketch, this document has none."));
+            body = body.child(note(t, tr!("export.flatNeedsSketch")));
         }
         if s.format.is_flat() {
             let sources = d.sources.iter().enumerate().map(|(i, src)| {
                 choice(t, ("export-source", i), src.label().to_owned(), d.source == i, true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit_export(cx, |d| d.source = i)))
             });
-            body = body.child(row(t, tr!("tool.sketch"), div().flex().flex_wrap().gap(px(4.)).children(sources))).child(row(
-                t,
-                tr!("export.tolerance"),
-                field(t, &d.tolerance, "mm"),
-            ));
+            body = body
+                .child(row(t, tr!("tool.sketch"), div().flex().flex_wrap().gap(px(4.)).children(sources)))
+                .child(row(t, tr!("export.tolerance"), field(t, &d.tolerance, "mm")));
         } else {
-            let scopes =
-                scope_choices(!d.start.selected.is_empty()).into_iter().enumerate().map(|(i, (scope, label))| {
-                    let on = d.scope == scope;
-                    choice(t, ("export-scope", i), label, on, true).on_click(cx.listener(
-                        move |this, _: &ClickEvent, _, cx| {
-                            let scope = scope.clone();
-                            this.edit_export(cx, |d| d.scope = scope)
-                        },
-                    ))
-                });
+            let scopes = scope_choices(d.start.selected.len()).into_iter().enumerate().map(|(i, (scope, label))| {
+                let on = d.scope == scope;
+                choice(t, ("export-scope", i), label, on, true).on_click(cx.listener(
+                    move |this, _: &ClickEvent, _, cx| {
+                        let scope = scope.clone();
+                        this.edit_export(cx, |d| d.scope = scope)
+                    },
+                ))
+            });
             body = body.child(row(t, tr!("export.bodies"), div().flex().flex_wrap().gap(px(4.)).children(scopes)));
         }
         if s.format.takes_unit() {
@@ -183,7 +180,7 @@ impl Shell {
                     }),
                 )
             });
-            body = body.child(row(t, "Encoding", div().flex().gap(px(4.)).children(enc)));
+            body = body.child(row(t, tr!("export.encoding"), div().flex().gap(px(4.)).children(enc)));
         }
         if s.format.is_mesh() {
             let presets = [Refinement::Low, Refinement::Medium, Refinement::High, Refinement::Custom].map(|r| {
@@ -196,16 +193,20 @@ impl Shell {
                 choice(t, ("export-refine", r as usize), label, s.refinement == r, true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.pick_refinement(r, window, cx)))
             });
-            let advanced = choice(t, "export-advanced", tr!("export.advanced"), s.show_advanced, true).on_click(cx.listener(
-                |this, _: &ClickEvent, _, cx| {
+            let advanced = choice(t, "export-advanced", tr!("export.advanced"), s.show_advanced, true).on_click(
+                cx.listener(|this, _: &ClickEvent, _, cx| {
                     if let Some(Modal::Export(d)) = &mut this.transfer.modal {
                         let _ = d.read_inputs(cx);
                         d.settings.show_advanced = !d.settings.show_advanced;
                         cx.notify();
                     }
-                },
+                }),
+            );
+            body = body.child(row(
+                t,
+                tr!("export.refinement.title"),
+                div().flex().gap(px(4.)).children(presets).child(advanced),
             ));
-            body = body.child(row(t, tr!("export.refinement.title"), div().flex().gap(px(4.)).children(presets).child(advanced)));
             if s.show_advanced {
                 body = body
                     .child(row(t, tr!("export.surfaceDeviation"), field(t, &d.surface, "mm")))
@@ -252,8 +253,9 @@ impl Shell {
             let colors = colors.as_ref().map(|(palette, body_colors)| Colors { palette, body_colors });
             let fields = export_fields(&settings, &scope, &start, flat.as_ref(), &path, colors);
             let client = link.client.clone();
-            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| s.set_busy(tr!("export.busy", name = base_name.clone()), link.client.clone(), w, cx))
-            else {
+            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| {
+                s.set_busy(tr!("export.busy", name = base_name.clone()), link.client.clone(), w, cx)
+            }) else {
                 return;
             };
             let task = stop.clone();
@@ -277,12 +279,11 @@ impl Shell {
                         let warnings = export_warnings(&result);
                         if let Some((_, first)) = warnings.first() {
                             let n = warnings.len();
-                            let text =
-                                format!("{n} feature(s) failed, their bodies are missing from the file: {first}");
+                            let text = tr!("export.failedFeatures", n = n, first = first);
                             overlay::toast(cx, Toast::error(text));
                         }
                     }
-                    Err(r) if r.cancelled => overlay::toast(cx, Toast::info("Export cancelled.")),
+                    Err(r) if r.cancelled => overlay::toast(cx, Toast::info(tr!("export.cancelled"))),
                     Err(r) => overlay::toast(cx, Toast::error(tr!("export.failed", error = r.message))),
                 }
             });

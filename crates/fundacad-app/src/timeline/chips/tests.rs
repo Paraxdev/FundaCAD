@@ -57,7 +57,9 @@ fn an_import_shows_its_file_and_a_step_its_note() {
 fn the_tooltip_reads_place_and_type_then_each_mark() {
     let d = doc();
     let all = features(&d);
-    let tip = |i: usize, m: &Marks| tooltip(all[i], i, m).strip_suffix(&format!("\n{HINT}")).map(str::to_owned);
+    let tip = |i: usize, m: &Marks| {
+        tooltip(all[i], i, m).strip_suffix(&format!("\n{}", crate::i18n::t(HINT))).map(str::to_owned)
+    };
     assert_eq!(tooltip(all[1], 1, &Marks::default()), "2 · Extrude\nclick to select · right-click for more");
     let full = Marks {
         failed: Some("no profile".into()),

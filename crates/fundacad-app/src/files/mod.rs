@@ -12,12 +12,12 @@ use fundacad_client::Doc;
 use gpui::*;
 use serde_json::{json, Value};
 
+use crate::i18n::{t, tr, Label};
 use crate::overlay::{self, Choice, Toast};
 use crate::viewport::Viewport;
 
 const DOC_EXT: &str = "funda";
-const UNTITLED: &str = "Untitled";
-const NOT_SAVABLE: &str = "Only a FundaCAD document can be saved, an STL is only shown";
+const NOT_SAVABLE: &str = "files.notSavable";
 
 /// The empty document New makes and the app starts with.
 pub fn new_document() -> Doc {
@@ -32,7 +32,8 @@ pub fn new_document() -> Doc {
 
 /// The name a document shows, its file's without the extension.
 pub fn shown_name(path: Option<&Path>) -> SharedString {
-    path.and_then(Path::file_stem).map_or(UNTITLED.into(), |s| s.to_string_lossy().to_string().into())
+    path.and_then(Path::file_stem)
+        .map_or_else(|| t("document.untitled").into(), |s| s.to_string_lossy().to_string().into())
 }
 
 pub fn window_title(name: &str, dirty: bool) -> String {
@@ -205,7 +206,7 @@ impl Files {
             }
             Err(e) => {
                 let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into());
-                overlay::toast(cx, Toast::error(format!("Could not open {name}: {e}")));
+                overlay::toast(cx, Toast::error(tr!("files.openFailed", name = name, error = e)));
                 false
             }
         }
@@ -222,7 +223,7 @@ impl Files {
                 true
             }
             Err(e) => {
-                overlay::toast(cx, Toast::error(format!("Could not recover the unsaved work: {e}")));
+                overlay::toast(cx, Toast::error(tr!("files.recoverFailed", error = e)));
                 false
             }
         }
@@ -239,7 +240,7 @@ impl Files {
                 true
             }
             Err(e) => {
-                overlay::toast(cx, Toast::error(format!("Could not start a new document: {e}")));
+                overlay::toast(cx, Toast::error(tr!("files.newFailed", error = e)));
                 false
             }
         }
@@ -248,7 +249,7 @@ impl Files {
     fn write_now(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let viewport = self.viewport.read(cx);
         let Some(doc) = viewport.doc() else {
-            overlay::toast(cx, Toast::warning(NOT_SAVABLE));
+            overlay::toast(cx, Toast::warning(t(NOT_SAVABLE)));
             return false;
         };
         match write(&path, doc, viewport.blob_dir()) {
@@ -258,7 +259,7 @@ impl Files {
                 true
             }
             Err(e) => {
-                overlay::toast(cx, Toast::error(format!("Could not save: {e}")));
+                overlay::toast(cx, Toast::error(tr!("files.saveFailed", path = path.display().to_string(), error = e)));
                 false
             }
         }
@@ -293,7 +294,10 @@ pub(crate) async fn ask_discard(dirty: bool, question: String, cx: &mut AsyncWin
     if !dirty {
         return true;
     }
-    let choices = vec![Choice::danger("Discard").hint("lose the unsaved changes"), Choice::plain("Cancel")];
+    let choices = vec![
+        Choice::danger(t("document.discard.label")).hint(t("document.discard.hint")),
+        Choice::plain(t("common.cancel")),
+    ];
     let Ok(answer) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else { return false };
     answer.recv().await.ok().flatten() == Some(0)
 }
@@ -301,7 +305,7 @@ pub(crate) async fn ask_discard(dirty: bool, question: String, cx: &mut AsyncWin
 pub fn new(files: Entity<Files>, window: &mut Window, cx: &mut App) {
     window
         .spawn(cx, async move |cx| {
-            if may_discard(&files, "Discard unsaved changes and start a new document?".into(), cx).await {
+            if may_discard(&files, t("document.discard.newDocument"), cx).await {
                 let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.new_now(window, cx)), cx));
             }
         })
@@ -312,7 +316,7 @@ pub fn new(files: Entity<Files>, window: &mut Window, cx: &mut App) {
 pub fn new_from(files: Entity<Files>, doc: Doc, window: &mut Window, cx: &mut App) {
     window
         .spawn(cx, async move |cx| {
-            if may_discard(&files, "Discard unsaved changes and start a new document?".into(), cx).await {
+            if may_discard(&files, t("document.discard.newDocument"), cx).await {
                 let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.new_with(doc, window, cx)), cx));
             }
         })
@@ -323,13 +327,13 @@ pub fn open(files: Entity<Files>, window: &mut Window, cx: &mut App) {
     let dir = files.read(cx).path.as_deref().and_then(Path::parent).map(Path::to_path_buf);
     window
         .spawn(cx, async move |cx| {
-            if !may_discard(&files, "Discard unsaved changes and open another document?".into(), cx).await {
+            if !may_discard(&files, t("document.discard.openAnother"), cx).await {
                 return;
             }
             let mut dialog = rfd::AsyncFileDialog::new()
-                .set_title("Open")
-                .add_filter("FundaCAD document", &["funda", "fundab"])
-                .add_filter("STL mesh", &["stl"]);
+                .set_title(Label::Command("command.open").text().to_string())
+                .add_filter(t("files.filter.document"), &["funda", "fundab"])
+                .add_filter(t("files.filter.stl"), &["stl"]);
             if let Some(dir) = dir {
                 dialog = dialog.set_directory(dir);
             }
@@ -346,15 +350,15 @@ pub fn open_recent(files: Entity<Files>, path: PathBuf, window: &mut Window, cx:
     if !path.exists() {
         let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into());
         let gone = path.clone();
-        let toast = Toast::warning(format!("{name} is not there any more"))
-            .with_action("Remove", move |_, cx| recent::forget(cx, &gone));
+        let toast = Toast::warning(tr!("home.missing.title", name = &name))
+            .with_action(t("home.missing.remove"), move |_, cx| recent::forget(cx, &gone));
         overlay::toast(cx, toast);
         return;
     }
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     window
         .spawn(cx, async move |cx| {
-            if may_discard(&files, format!("Discard unsaved changes and open {name}?"), cx).await {
+            if may_discard(&files, tr!("document.discard.open", name = &name), cx).await {
                 let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.open_now(&path, window, cx)), cx));
             }
         })
@@ -370,15 +374,15 @@ async fn save_async(files: &Entity<Files>, force_ask: bool, cx: &mut AsyncWindow
         return false;
     };
     if !savable {
-        let _ = cx.update(|_, cx| overlay::toast(cx, Toast::warning(NOT_SAVABLE)));
+        let _ = cx.update(|_, cx| overlay::toast(cx, Toast::warning(t(NOT_SAVABLE))));
         return false;
     }
     let target = match path.filter(|p| !force_ask && saves_in_place(Some(p))) {
         Some(p) => p,
         None => {
             let mut dialog = rfd::AsyncFileDialog::new()
-                .set_title("Save As")
-                .add_filter("FundaCAD document", &[DOC_EXT])
+                .set_title(Label::Command("command.saveAs").text().to_string())
+                .add_filter(t("files.filter.document"), &[DOC_EXT])
                 .set_file_name(format!("{name}.{DOC_EXT}"));
             if let Some(dir) = cx
                 .update(|_, cx| files.read(cx).path.as_deref().and_then(Path::parent).map(Path::to_path_buf))
@@ -404,11 +408,13 @@ pub fn save(files: Entity<Files>, as_new: bool, window: &mut Window, cx: &mut Ap
 
 pub(crate) async fn ask_close(question: String, cx: &mut AsyncWindowContext) -> Close {
     let choices = vec![
-        Choice::primary("Save"),
-        Choice::danger("Don't save").hint("close and lose the changes"),
-        Choice::plain("Cancel"),
+        Choice::primary(t("command.save")),
+        Choice::danger(t("unsaved.dontSave")).hint(t("unsaved.beforeCloseHint")),
+        Choice::plain(t("common.cancel")),
     ];
-    let Ok(answer) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else { return Close::Stay };
+    let Ok(answer) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else {
+        return Close::Stay;
+    };
     match answer.recv().await.ok().flatten() {
         Some(0) => Close::Save,
         Some(1) => Close::Discard,
@@ -423,7 +429,7 @@ pub fn should_close(files: &Entity<Files>, window: &mut Window, cx: &mut App) ->
         crate::recovery::give_up(cx);
         return true;
     }
-    let question = format!("Save changes to {} before closing?", f.name());
+    let question = tr!("unsaved.beforeClose", name = f.name().to_string());
     let files = files.clone();
     window
         .spawn(cx, async move |cx| {

@@ -8,6 +8,7 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 
 use super::geometry::GeoState;
 use super::Shell;
+use crate::i18n::{self, tr};
 use crate::items::{self, BodyRef, Category, Eye, Filter, Inputs, Kind, Mods, Node, Rename, Selection};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_PILL, S_1, S_2, W_SEMIBOLD};
 use crate::ui::{float_card, icon, icon_button, solid_card, text};
@@ -16,7 +17,7 @@ pub(super) const WIDTH: f32 = 264.;
 const ROW: f32 = 33.;
 
 /// The head every float card shares: a title and a close button.
-pub(super) fn card_head(t: &Theme, title: &'static str) -> Div {
+pub(super) fn card_head(t: &Theme, id: &'static str, title: String) -> Div {
     div()
         .flex()
         .items_center()
@@ -27,7 +28,7 @@ pub(super) fn card_head(t: &Theme, title: &'static str) -> Div {
         .pb(px(6.))
         .pl(px(14.))
         .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).child(title))
-        .child(icon_button(t, SharedString::from(format!("{title}-close")), "close", 28., 14., t.text_mute))
+        .child(icon_button(t, SharedString::from(format!("{id}-close")), "close", 28., 14., t.text_mute))
 }
 
 /// A visibility change for one category, `groups` holding the bodies behind each `g:` folder key.
@@ -104,12 +105,12 @@ fn folder_category(key: &str) -> Option<Category> {
 fn vis_label(edits: &[VisEdit]) -> String {
     let changes: Vec<bool> = edits.iter().flat_map(|(_, c, _)| c.iter().map(|(_, v)| *v)).collect();
     let n = changes.len();
-    let verb = match (changes.iter().all(|v| *v), changes.iter().all(|v| !v)) {
-        (true, _) => "Show",
-        (_, true) => "Hide",
-        _ => return "Visibility".into(),
+    let show = match (changes.iter().all(|v| *v), changes.iter().all(|v| !v)) {
+        (true, _) => "yes",
+        (_, true) => "no",
+        _ => return i18n::t("items.vis.title"),
     };
-    format!("{verb} {n} {}", if n == 1 { "item" } else { "items" })
+    tr!("items.vis.changed", show = show, n = n)
 }
 
 fn eye_edit(eye: &Eye, visible: bool) -> VisEdit {
@@ -134,12 +135,7 @@ pub(super) fn popup(
 ) -> impl IntoElement {
     deferred(
         anchored().position(pos).snap_to_window_with_margin(px(8.)).child(
-            solid_card(t)
-                .bg(t.float_bg_solid)
-                .min_w(px(180.))
-                .p(px(S_1))
-                .on_mouse_down_out(close)
-                .children(rows),
+            solid_card(t).bg(t.float_bg_solid).min_w(px(180.)).p(px(S_1)).on_mouse_down_out(close).children(rows),
         ),
     )
     .with_priority(1)
@@ -340,18 +336,18 @@ impl Shell {
                 Act::Vis(vec![(eye.category, changes, groups)])
             };
             let (show, hide) = if n > 1 {
-                (format!("Show these {n}"), format!("Hide these {n}"))
+                (tr!("items.vis.showThese", n = n), tr!("items.vis.hideThese", n = n))
             } else {
-                ("Show".to_string(), "Hide".to_string())
+                (i18n::t("items.row.show"), i18n::t("items.row.hide"))
             };
             acts.push((show, edit(true)));
             acts.push((hide, edit(false)));
             let only: Vec<String> = picked.iter().flat_map(|e| flat_ids(e)).collect();
-            acts.push(("Show only".to_string(), Act::ShowOnly(eye.category, only)));
+            acts.push((tr!("items.vis.showOnly", n = only.len()), Act::ShowOnly(eye.category, only)));
             acts.push((eye.category.show_all_label().to_string(), Act::ShowAll(eye.category)));
         }
         if node.rename.is_some() {
-            acts.push(("Rename".to_string(), Act::Rename(node.k.clone())));
+            acts.push((i18n::t("items.row.rename"), Act::Rename(node.k.clone())));
         }
         self.items.menu = (!acts.is_empty()).then_some(Menu::Row(pos, acts));
         cx.notify();
@@ -381,9 +377,10 @@ impl Shell {
         let name = r.input.read(cx).value().to_string();
         if name.trim() != r.before.trim() {
             let target = r.target.clone();
-            let label = Some(format!("Rename {}", r.before.trim()));
-            let edited =
-                self.viewport.update(cx, |v, cx| v.edit_step(None, label, move |d| items::rename(d, &target, &name), cx));
+            let label = Some(tr!("step.label.rename", step = r.before.trim()));
+            let edited = self
+                .viewport
+                .update(cx, |v, cx| v.edit_step(None, label, move |d| items::rename(d, &target, &name), cx));
             if let Err(why) = edited {
                 log::info!("the rename was not applied: {why}");
             }
@@ -590,10 +587,10 @@ impl Shell {
                 let hide: Vec<VisEdit> = by.into_iter().map(|(c, ch)| (c, ch, groups.clone())).collect();
                 let mut acts = Vec::new();
                 if !hide.is_empty() {
-                    acts.push(("Hide selected".to_string(), Act::Vis(hide), false));
+                    acts.push((i18n::t("items.more.hideSelected"), Act::Vis(hide), false));
                 }
-                acts.push(("Show hidden bodies".to_string(), Act::ShowHidden, false));
-                acts.push(("Invert visibility".to_string(), Act::Invert, false));
+                acts.push((i18n::t("items.more.showHidden"), Act::ShowHidden, false));
+                acts.push((i18n::t("items.more.invert"), Act::Invert, false));
                 (*pos, acts)
             }
             Menu::Row(pos, acts) => (*pos, acts.iter().map(|(l, a)| (l.clone(), a.clone(), false)).collect()),
@@ -644,10 +641,10 @@ impl Shell {
                     this.viewport.update(cx, |v, cx| v.set_highlight(None, cx));
                     cx.notify();
                 }))
-                .child(label)
+                .child(i18n::t(label))
         };
-        let tabs = div().flex().pl(px(5.)).child(tab(0, "Items", cx)).child(tab(1, "Geometry", cx));
-        let card = float_card(t).w(px(WIDTH)).h_full().child(card_head(t, "Items")).child(tabs);
+        let tabs = div().flex().pl(px(5.)).child(tab(0, "items.tab.items", cx)).child(tab(1, "items.tab.geometry", cx));
+        let card = float_card(t).w(px(WIDTH)).h_full().child(card_head(t, "Items", i18n::t("items.title"))).child(tabs);
         if self.items_tab == 1 {
             return card.child(self.geometry_tab(t, window, cx));
         }

@@ -9,6 +9,7 @@ use gpui::*;
 
 use super::items::{menu_row, picker, popup};
 use super::Shell;
+use crate::i18n;
 use crate::items::geometry::{self as geo, Facing, Filters, GeomKind, GeomRow, RowType, PAGE_SIZE};
 use crate::items::{self, features, str_of};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_PILL, S_1, S_2, W_SEMIBOLD};
@@ -98,17 +99,22 @@ impl Shell {
                 }
             }
             GeoMenu::Type => {
-                row(0, "All types".into(), g.filters.row_type.is_none(), Box::new(|g| g.filters.row_type = None));
+                row(
+                    0,
+                    i18n::t("geometry.list.any"),
+                    g.filters.row_type.is_none(),
+                    Box::new(|g| g.filters.row_type = None),
+                );
                 for (i, ty) in g.kind.types().iter().copied().enumerate() {
                     let on = g.filters.row_type == Some(ty);
-                    row(i + 1, ty.label().into(), on, Box::new(move |g| g.filters.row_type = Some(ty)));
+                    row(i + 1, ty.label(), on, Box::new(move |g| g.filters.row_type = Some(ty)));
                 }
             }
             GeoMenu::Facing => {
-                row(0, "Any facing".into(), g.filters.facing.is_none(), Box::new(|g| g.filters.facing = None));
+                row(0, i18n::t("geometry.list.any"), g.filters.facing.is_none(), Box::new(|g| g.filters.facing = None));
                 for (i, w) in geo::FACINGS.iter().copied().enumerate() {
                     let on = g.filters.facing == Some(w);
-                    row(i + 1, w.label().into(), on, Box::new(move |g| g.filters.facing = Some(w)));
+                    row(i + 1, w.label(), on, Box::new(move |g| g.filters.facing = Some(w)));
                 }
             }
         }
@@ -139,11 +145,18 @@ impl Shell {
         let page = g.page.min(pages - 1);
 
         let raised = t.raised;
-        let segment = div().mx(px(14.)).mt(px(S_2)).p(px(2.)).flex().gap(px(2.)).rounded(px(FLOAT_CHIP_RADIUS)).bg(t.field_bg).children(
-            geo::KINDS.iter().copied().map(|k| {
+        let segment = div()
+            .mx(px(14.))
+            .mt(px(S_2))
+            .p(px(2.))
+            .flex()
+            .gap(px(2.))
+            .rounded(px(FLOAT_CHIP_RADIUS))
+            .bg(t.field_bg)
+            .children(geo::KINDS.iter().copied().map(|k| {
                 let on = k == kind;
                 text(t, FS_SMALL)
-                    .id(k.label())
+                    .id(k.id())
                     .flex_1()
                     .h(px(26.))
                     .flex()
@@ -157,13 +170,13 @@ impl Shell {
                     .on_click(cx.listener(move |this, _, _, cx| {
                         let g = &mut this.items.geo;
                         if g.kind != k {
-                            *g = GeoState { kind: k, body: g.body.take(), cache: g.cache.take(), ..GeoState::default() };
+                            *g =
+                                GeoState { kind: k, body: g.body.take(), cache: g.cache.take(), ..GeoState::default() };
                         }
                         cx.notify();
                     }))
                     .child(k.label())
-            }),
-        );
+            }));
 
         let open = |which: GeoMenu| {
             cx.listener(move |this: &mut Self, ev: &ClickEvent, _, cx| {
@@ -171,18 +184,21 @@ impl Shell {
                 cx.notify();
             })
         };
-        let body_label = body.as_ref().map_or("No bodies".to_string(), |b| {
-            labels.iter().find(|(id, _)| *id == b.id).map_or(b.name.clone(), |(_, l)| l.clone())
-        });
-        let type_label = g.filters.row_type.map_or("All types", RowType::label);
-        let facing_label = g.filters.facing.map_or("Any facing", Facing::label);
+        let body_label = body.as_ref().map_or_else(
+            || i18n::t("geometry.list.noBodyReason"),
+            |b| labels.iter().find(|(id, _)| *id == b.id).map_or(b.name.clone(), |(_, l)| l.clone()),
+        );
+        let type_label = g.filters.row_type.map_or_else(|| i18n::t("geometry.list.any"), RowType::label);
+        let facing_label = g.filters.facing.map_or_else(|| i18n::t("geometry.list.any"), Facing::label);
         let pickers = div()
             .mx(px(14.))
             .mt(px(S_2))
             .flex()
             .flex_col()
             .gap(px(6.))
-            .when(kind != GeomKind::Planes, |d| d.child(picker(t, "geo-body", body_label).on_click(open(GeoMenu::Body))))
+            .when(kind != GeomKind::Planes, |d| {
+                d.child(picker(t, "geo-body", body_label).on_click(open(GeoMenu::Body)))
+            })
             .child(
                 div()
                     .flex()
@@ -195,7 +211,7 @@ impl Shell {
                     }),
             );
 
-        let pager = |id: &'static str, label: &'static str, to: Option<usize>, cx: &mut Context<Self>| {
+        let pager = |id: &'static str, label: String, to: Option<usize>, cx: &mut Context<Self>| {
             text(t, FS_MICRO)
                 .id(id)
                 .font_weight(W_SEMIBOLD)
@@ -228,9 +244,14 @@ impl Shell {
                         .flex()
                         .items_center()
                         .gap(px(S_1))
-                        .child(pager("geo-prev", "Prev", page.checked_sub(1), cx))
+                        .child(pager("geo-prev", i18n::t("geometry.list.prev"), page.checked_sub(1), cx))
                         .child(text(t, FS_MICRO).text_color(t.text_mute).child(geo::range_text(page, filtered.len())))
-                        .child(pager("geo-next", "Next", (page + 1 < pages).then_some(page + 1), cx)),
+                        .child(pager(
+                            "geo-next",
+                            i18n::t("geometry.list.next"),
+                            (page + 1 < pages).then_some(page + 1),
+                            cx,
+                        )),
                 )
             });
 

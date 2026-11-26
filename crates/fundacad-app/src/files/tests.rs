@@ -92,7 +92,10 @@ fn recent_files_store_as_fundacad_1_did() {
 fn a_bad_recent_entry_is_skipped_and_the_rest_kept() {
     use super::recent::readable;
     assert_eq!(readable(vec![]), vec![]);
-    assert_eq!(readable(vec![json!({"path": "D:/parts/lid.funda", "openedAt": 17})]), vec![r("D:/parts/lid.funda", 17)]);
+    assert_eq!(
+        readable(vec![json!({"path": "D:/parts/lid.funda", "openedAt": 17})]),
+        vec![r("D:/parts/lid.funda", 17)]
+    );
     let mixed = vec![
         json!({"path": "D:/parts/lid.funda", "openedAt": 17}),
         json!({"path": 4}),

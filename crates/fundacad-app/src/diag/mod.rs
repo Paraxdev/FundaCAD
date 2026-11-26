@@ -13,6 +13,7 @@ use gpui::*;
 use gpui_kit::component::input::{Textarea, TextareaState};
 
 use crate::commands::{register, Group, Run};
+use crate::i18n::{self, Label};
 use crate::overlay::{self, Toast};
 use crate::shell::modal::{button, modal, note};
 use crate::theme::{ActiveTheme as _, Theme, FS_BODY, FS_MICRO, FS_SMALL, MONO_FONT, R_MD, S_1, S_2, S_3, W_SEMIBOLD};
@@ -64,12 +65,16 @@ pub fn init(cx: &mut App) {
     });
     cx.set_global(Handle(diag.clone()));
     let d = diag.clone();
-    register(cx, "report-problem", "Report a Problem", Group::Help, move |window, cx| {
+    register(cx, "report-problem", Label::Command("command.reportProblem"), Group::Help, move |window, cx| {
         d.update(cx, |d, cx| d.open_report(window, cx))
     });
     let d = diag.clone();
-    register(cx, "console", "Console", Group::Help, move |_, cx| d.update(cx, |d, cx| d.toggle_console(cx)));
-    register(cx, "check-updates", "Check for Updates", Group::Help, |_, cx| check_updates(true, cx));
+    register(cx, "console", Label::Key("console.title"), Group::Help, move |_, cx| {
+        d.update(cx, |d, cx| d.toggle_console(cx))
+    });
+    register(cx, "check-updates", Label::Command("menu.help.checkUpdates"), Group::Help, |_, cx| {
+        check_updates(true, cx)
+    });
     cx.bind_keys([KeyBinding::new("ctrl-`", Run::new("console"), None)]);
 
     let shot = std::env::var_os("FUNDA_SHOT").is_some();
@@ -85,8 +90,10 @@ pub fn init(cx: &mut App) {
         cx.spawn(async move |cx| {
             cx.background_executor().timer(Duration::from_secs(2)).await;
             let _ = cx.update(|cx| {
-                let toast = Toast::warning("FundaCAD closed unexpectedly last time, a crash report was kept")
-                    .with_action("Report", |window, cx| crate::commands::run("report-problem", window, cx));
+                let toast = Toast::warning(i18n::t("diag.crashKept"))
+                    .with_action(i18n::t("diag.report"), |window, cx| {
+                        crate::commands::run("report-problem", window, cx)
+                    });
                 overlay::toast(cx, toast);
             });
         })
@@ -107,12 +114,12 @@ pub fn check_updates(interactive: bool, cx: &mut App) {
         let _ = cx.update(|cx| {
             let message = outcome.message(VERSION);
             let toast = match &outcome {
-                update::Outcome::Newer(_) => {
-                    Toast::info(message).with_action("Download", |_, cx| cx.open_url(update::DOWNLOAD_URL))
-                }
+                update::Outcome::Newer(_) => Toast::info(message)
+                    .with_action(i18n::t("updates.download"), |_, cx| cx.open_url(update::DOWNLOAD_URL)),
                 _ if !interactive => return,
                 update::Outcome::UpToDate | update::Outcome::NoRelease => Toast::info(message),
-                _ => Toast::warning(message).with_action("Download page", |_, cx| cx.open_url(update::DOWNLOAD_URL)),
+                _ => Toast::warning(message)
+                    .with_action(i18n::t("updates.downloadPage"), |_, cx| cx.open_url(update::DOWNLOAD_URL)),
             };
             overlay::toast(cx, toast);
         });
@@ -123,8 +130,7 @@ pub fn check_updates(interactive: bool, cx: &mut App) {
 impl Diag {
     fn open_report(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.form.is_none() {
-            let input =
-                cx.new(|cx| TextareaState::new(window, cx).placeholder("What happened, and what did you expect?"));
+            let input = cx.new(|cx| TextareaState::new(window, cx).placeholder(i18n::t("bugReport.placeholder")));
             let changed = cx.observe(&input, |_, _, cx| cx.notify());
             let log = logfile::log_dir().and_then(|d| logfile::tail(&d, LOG_TAIL));
             self.form = Some(Form { input, include_log: true, include_crash: true, log, _changed: changed });
@@ -207,11 +213,7 @@ impl Diag {
         });
         cx.write_to_clipboard(ClipboardItem::new_string(built.text));
         cx.open_url(&link.url);
-        let message = if link.report_in {
-            "The issue form opened with the report filled in, it is also copied"
-        } else {
-            "The report is too long for the link and is copied, paste it into the Report box of the form"
-        };
+        let message = if link.report_in { i18n::t("diag.reportOpened") } else { i18n::t("diag.reportTooLong") };
         overlay::toast(cx, Toast::info(message));
         self.close_report(cx);
     }
@@ -219,7 +221,7 @@ impl Diag {
     fn copy(&mut self, cx: &mut Context<Self>) {
         let Some(input) = self.input(cx) else { return };
         cx.write_to_clipboard(ClipboardItem::new_string(report::build(&input, report::REPORT_CAP).text));
-        overlay::toast(cx, Toast::info("The report is copied"));
+        overlay::toast(cx, Toast::info(i18n::t("bugReport.copied")));
     }
 
     fn report_view(&self, t: &Theme, cx: &mut Context<Self>) -> Option<Div> {
@@ -232,16 +234,15 @@ impl Diag {
             .flex_col()
             .gap(px(S_2))
             .child(Textarea::new(&f.input).h(px(84.)))
-            .child(self.check(t, "log", "Include the app log, user names and home folders hidden", f.include_log, cx));
+            .child(self.check(t, "log", i18n::t("diag.includeLog"), f.include_log, cx));
         if self.crash.is_some() {
-            body =
-                body.child(self.check(t, "crash", "Include the crash report from the last run", f.include_crash, cx));
+            body = body.child(self.check(t, "crash", i18n::t("diag.includeCrash"), f.include_crash, cx));
         }
         if built.log_cut {
-            body = body.child(note(t, "The log was cut from its start to fit GitHub's limit."));
+            body = body.child(note(t, i18n::t("diag.logCut")));
         }
         body = body
-            .child(text(t, FS_SMALL).text_color(t.text_dim).child("Preview, the full text the report holds"))
+            .child(text(t, FS_SMALL).text_color(t.text_dim).child(i18n::t("diag.preview")))
             .child(
                 div()
                     .id("report-preview")
@@ -255,32 +256,25 @@ impl Diag {
                     .text_color(t.text_dim)
                     .child(built.text),
             )
-            .child(note(t, "Nothing is sent from the app, the browser opens the form and you submit it."));
+            .child(note(t, i18n::t("diag.nothingSent")));
         let buttons = vec![
-            button(t, "report-cancel", "Cancel", false, true)
+            button(t, "report-cancel", i18n::t("common.cancel"), false, true)
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_report(cx)))
                 .into_any_element(),
-            button(t, "report-copy", "Copy report", false, true)
+            button(t, "report-copy", i18n::t("bugReport.copy"), false, true)
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.copy(cx)))
                 .into_any_element(),
-            button(t, "report-open", "Open GitHub issue", true, has_text)
+            button(t, "report-open", i18n::t("diag.openIssue"), true, has_text)
                 .when(has_text, |b| b.on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.send(cx))))
                 .into_any_element(),
         ];
         let weak = cx.weak_entity();
-        Some(modal(t, &self.focus, "Report a Problem", body, buttons, move |_, cx| {
+        Some(modal(t, &self.focus, Label::Command("command.reportProblem").text(), body, buttons, move |_, cx| {
             let _ = weak.update(cx, |d, cx| d.close_report(cx));
         }))
     }
 
-    fn check(
-        &self,
-        t: &Theme,
-        id: &'static str,
-        label: &'static str,
-        on: bool,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
+    fn check(&self, t: &Theme, id: &'static str, label: String, on: bool, cx: &mut Context<Self>) -> Stateful<Div> {
         let mark = div()
             .size(px(14.))
             .flex_none()
@@ -320,8 +314,8 @@ impl Diag {
             .flex()
             .items_center()
             .gap(px(S_2))
-            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).flex_1().child("Console"))
-            .child(button(t, "console-folder", "Open log folder", false, true).on_click(|_, _, cx| {
+            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).flex_1().child(i18n::t("console.title")))
+            .child(button(t, "console-folder", i18n::t("diag.openLogFolder"), false, true).on_click(|_, _, cx| {
                 if let Some(dir) = logfile::log_dir() {
                     cx.reveal_path(&logfile::generation(&dir, 0));
                 }

@@ -8,6 +8,8 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::{Map, Value};
 
+use crate::i18n::{t, tr};
+
 pub use edit::*;
 
 /// A built body as the browser lists it.
@@ -40,13 +42,14 @@ pub enum Category {
 }
 
 impl Category {
-    pub fn show_all_label(self) -> &'static str {
-        match self {
-            Category::Bodies => "Show all bodies",
-            Category::Sketches => "Show all sketches",
-            Category::Planes => "Show all planes",
-            Category::Datums => "Show all datums",
-        }
+    pub fn show_all_label(self) -> String {
+        let what = match self {
+            Category::Bodies => "bodies",
+            Category::Sketches => "sketches",
+            Category::Planes => "planes",
+            Category::Datums => "datums",
+        };
+        tr!("items.vis.showAll", what = what)
     }
 }
 
@@ -70,13 +73,17 @@ pub enum Section {
 pub const FILTERS: [Filter; 4] = [Filter::All, Filter::Bodies, Filter::Planes, Filter::Sketches];
 
 impl Filter {
-    pub fn label(self) -> &'static str {
+    pub fn key(self) -> &'static str {
         match self {
-            Filter::All => "All items",
-            Filter::Bodies => "Bodies",
-            Filter::Planes => "Planes and axes",
-            Filter::Sketches => "Sketches",
+            Filter::All => "items.filter.all",
+            Filter::Bodies => "items.filter.bodies",
+            Filter::Planes => "items.filter.planes",
+            Filter::Sketches => "items.filter.sketches",
         }
+    }
+
+    pub fn label(self) -> String {
+        t(self.key())
     }
 
     /// Origin and the construction planes are separate sections one filter shows together.
@@ -111,7 +118,11 @@ pub enum Rename {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     /// `members` are the body ids at or below an element or assembly head, which a click on it selects.
-    Folder { count: usize, collapsed: bool, members: Vec<String> },
+    Folder {
+        count: usize,
+        collapsed: bool,
+        members: Vec<String>,
+    },
     Row,
     Empty,
 }
@@ -229,7 +240,8 @@ pub fn body_list(doc: &Map<String, Value>, built: &[BodyRef]) -> Vec<BodyRef> {
         return built.to_vec();
     }
     let mut out: Vec<BodyRef> = Vec::new();
-    for id in doc.get("bodyIds").and_then(Value::as_object).into_iter().flat_map(|m| m.values().filter_map(Value::as_str))
+    for id in
+        doc.get("bodyIds").and_then(Value::as_object).into_iter().flat_map(|m| m.values().filter_map(Value::as_str))
     {
         if !out.iter().any(|b| b.id == id) {
             let mut name = id.to_string();
@@ -581,9 +593,12 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
     if show(Section::Origin) {
         let rows = ["XY", "XZ", "YZ"]
             .into_iter()
-            .map(|p| Node { dim: true, ..Node::row(format!("o:{p}"), 1, format!("{p} plane"), "plane") })
+            .map(|p| Node {
+                dim: true,
+                ..Node::row(format!("o:{p}"), 1, tr!("items.origin.plane", plane = p), "plane")
+            })
             .collect();
-        folder(&mut out, "Origin", "Origin", "origin", rows, "");
+        folder(&mut out, "Origin", &t("items.folder.origin"), "origin", rows, "");
     }
 
     let datums = features_of(doc, &["datumPlane"]);
@@ -597,7 +612,7 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
                 row
             })
             .collect();
-        folder(&mut out, "Planes", "Planes", "plane", rows, "");
+        folder(&mut out, "Planes", &t("items.folder.planes"), "plane", rows, "");
     }
 
     let refs = features_of(doc, &["datumPoint", "datumAxis"]);
@@ -616,7 +631,7 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
                 row
             })
             .collect();
-        folder(&mut out, "Datums", "Datums", "datumPoint", rows, "");
+        folder(&mut out, "Datums", &t("items.folder.datums"), "datumPoint", rows, "");
     }
 
     let bodies = body_list(doc, i.bodies);
@@ -632,10 +647,13 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
         let tree = body_tree(&bodies, &import_trees(doc), &elements_of(doc), &body_elements(doc));
         let collapsed = i.collapse.is_collapsed("f:Bodies");
         let kind = Kind::Folder { count: bodies.len(), collapsed, members: Vec::new() };
-        out.push(Node { kind, ..Node::row("f:Bodies".into(), 0, "Bodies".into(), "body") });
+        out.push(Node { kind, ..Node::row("f:Bodies".into(), 0, t("items.folder.bodies"), "body") });
         if !collapsed {
             if tree.groups.is_empty() && tree.loose.is_empty() {
-                out.push(Node { kind: Kind::Empty, ..Node::row("f:Bodies:empty".into(), 1, "No bodies yet".into(), "") });
+                out.push(Node {
+                    kind: Kind::Empty,
+                    ..Node::row("f:Bodies:empty".into(), 1, t("items.empty.bodies"), "")
+                });
             }
             fn group_node(
                 g: &TreeGroup,
@@ -694,7 +712,7 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
                 feature_row("j", f, label, "assembly")
             })
             .collect();
-        folder(&mut out, "Joints", "Joints", "assembly", rows, "");
+        folder(&mut out, "Joints", &t("items.folder.joints"), "assembly", rows, "");
     }
     let mechanisms = features_of(doc, &["mechanism"]);
     if !mechanisms.is_empty() && show(Section::Bodies) {
@@ -706,7 +724,7 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
                 feature_row("m", f, label, "mechanism")
             })
             .collect();
-        folder(&mut out, "Mechanisms", "Mechanisms", "mechanism", rows, "");
+        folder(&mut out, "Mechanisms", &t("items.folder.mechanisms"), "mechanism", rows, "");
     }
 
     if show(Section::Sketches) {
@@ -720,7 +738,7 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
                 row
             })
             .collect();
-        folder(&mut out, "Sketches", "Sketches", "sketch", rows, "No sketches yet");
+        folder(&mut out, "Sketches", &t("items.folder.sketches"), "sketch", rows, &t("items.empty.sketches"));
     }
     out
 }

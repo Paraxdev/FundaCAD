@@ -6,6 +6,7 @@ use glam::Vec3;
 use serde_json::{Map, Value};
 
 use super::{datum_plane_name, features, str_of, suppressed};
+use crate::i18n::{t, t_with, tr};
 use fundacad_client::Body;
 
 pub const PAGE_SIZE: usize = 100;
@@ -19,30 +20,24 @@ pub enum GeomKind {
 }
 
 impl GeomKind {
-    pub fn label(self) -> &'static str {
+    pub fn id(self) -> &'static str {
         match self {
-            GeomKind::Faces => "Faces",
-            GeomKind::Edges => "Edges",
-            GeomKind::Planes => "Planes",
+            GeomKind::Faces => "faces",
+            GeomKind::Edges => "edges",
+            GeomKind::Planes => "planes",
         }
     }
 
-    fn noun(self, n: usize) -> &'static str {
-        match (self, n == 1) {
-            (GeomKind::Faces, true) => "face",
-            (GeomKind::Faces, false) => "faces",
-            (GeomKind::Edges, true) => "edge",
-            (GeomKind::Edges, false) => "edges",
-            (GeomKind::Planes, true) => "plane",
-            (GeomKind::Planes, false) => "planes",
-        }
+    pub fn label(self) -> String {
+        t(match self {
+            GeomKind::Faces => "geometry.list.kind.faces",
+            GeomKind::Edges => "geometry.list.kind.edges",
+            GeomKind::Planes => "geometry.list.kind.planes",
+        })
     }
 
     pub fn count(self, n: usize) -> String {
-        match n {
-            0 => format!("No {}", self.noun(0)),
-            n => format!("{n} {}", self.noun(n)),
-        }
+        tr!("geometry.list.count", kind = self.id(), n = n, count = n)
     }
 
     pub fn types(self) -> &'static [RowType] {
@@ -67,14 +62,15 @@ pub enum RowType {
 }
 
 impl RowType {
-    pub fn label(self) -> &'static str {
-        match self {
-            RowType::Flat => "Flat",
-            RowType::Cylinder => "Cylinder",
-            RowType::Curved | RowType::CurvedEdge => "Curved",
-            RowType::Straight => "Straight",
-            RowType::Round => "Round",
-        }
+    pub fn label(self) -> String {
+        t(match self {
+            RowType::Flat => "geometry.list.type.flat",
+            RowType::Cylinder => "geometry.list.type.cylinder",
+            RowType::Curved => "geometry.list.type.curvedFace",
+            RowType::CurvedEdge => "geometry.list.type.curvedEdge",
+            RowType::Straight => "geometry.list.type.straight",
+            RowType::Round => "geometry.list.type.round",
+        })
     }
 }
 
@@ -91,15 +87,8 @@ pub enum Facing {
 pub const FACINGS: [Facing; 6] = [Facing::Up, Facing::Down, Facing::Front, Facing::Back, Facing::Left, Facing::Right];
 
 impl Facing {
-    pub fn label(self) -> &'static str {
-        match self {
-            Facing::Up => "Up",
-            Facing::Down => "Down",
-            Facing::Front => "Front",
-            Facing::Back => "Back",
-            Facing::Left => "Left",
-            Facing::Right => "Right",
-        }
+    pub fn label(self) -> String {
+        t(&format!("geometry.list.facing.{}", self.word()))
     }
 
     fn word(self) -> &'static str {
@@ -134,15 +123,28 @@ pub fn facing_of(n: Vec3) -> Option<(Facing, u32)> {
         _ if n.x > 0.0 => Facing::Right,
         _ => Facing::Left,
     };
-    let main = if on_z { a.z } else if on_y { a.y } else { a.x };
+    let main = if on_z {
+        a.z
+    } else if on_y {
+        a.y
+    } else {
+        a.x
+    };
     let tilt = if main >= MATCH_COS - NOISE { 0 } else { main.clamp(-1.0, 1.0).acos().to_degrees().round() as u32 };
     Some((word, tilt))
 }
 
+fn shape_name(key: &str, shape: &str, n: usize) -> String {
+    t_with(key, &[("type", shape.into()), ("n", n.into())])
+}
+
 fn facing_words(f: (Facing, u32)) -> String {
     match f {
-        (w, 0) => format!("facing {}", w.word()),
-        (w, deg) => format!("tilted {deg}° from {}", w.word()),
+        (w, 0) => tr!("pick.fact.facing", tilted = "no", dir = w.word()),
+        (w, deg) => t_with(
+            "pick.fact.facing",
+            &[("tilted", "yes".into()), ("as", "readout".into()), ("deg", deg.into()), ("dir", w.word().into())],
+        ),
     }
 }
 
@@ -195,7 +197,9 @@ pub fn face_rows(body: &Body, owner_name: impl Fn(&str) -> Option<String>) -> Ve
         }
         // The mesh's own normals win over the winding, which the engine does not promise.
         let given = body.normals.as_ref().map(|n| {
-            tri.iter().map(|&v| Vec3::new(n[v as usize * 3], n[v as usize * 3 + 1], n[v as usize * 3 + 2])).sum::<Vec3>()
+            tri.iter()
+                .map(|&v| Vec3::new(n[v as usize * 3], n[v as usize * 3 + 1], n[v as usize * 3 + 2]))
+                .sum::<Vec3>()
         });
         let normal = given.map(Vec3::normalize_or_zero).filter(|n| *n != Vec3::ZERO).unwrap_or(cross / (area * 2.0));
         let f = &mut faces[face];
@@ -211,9 +215,9 @@ pub fn face_rows(body: &Body, owner_name: impl Fn(&str) -> Option<String>) -> Ve
             let row_type = face_type(&f.normals);
             let facing = if row_type == RowType::Flat { facing_of(f.normal) } else { None };
             let label = match row_type {
-                RowType::Flat => format!("Flat face {}", i + 1),
-                RowType::Cylinder => format!("Cylinder {}", i + 1),
-                _ => format!("Curved face {}", i + 1),
+                RowType::Flat => shape_name("pick.name.face", "flat", i + 1),
+                RowType::Cylinder => shape_name("pick.name.face", "cylinder", i + 1),
+                _ => shape_name("pick.name.face", "curved", i + 1),
             };
             let mut hint = vec![fmt_area(f.area)];
             hint.extend(facing.map(facing_words));
@@ -348,10 +352,10 @@ pub fn edge_rows(body: &Body) -> Vec<GeomRow> {
         .enumerate()
         .map(|(slot, line)| {
             let curve = edge_curve(line);
-            let (row_type, label) = match curve {
-                Curve::Line => (RowType::Straight, "Straight edge"),
-                Curve::Circle(_) | Curve::Arc(_) => (RowType::Round, "Round edge"),
-                Curve::Other => (RowType::CurvedEdge, "Curved edge"),
+            let (row_type, shape) = match curve {
+                Curve::Line => (RowType::Straight, "straight"),
+                Curve::Circle(_) | Curve::Arc(_) => (RowType::Round, "round"),
+                Curve::Other => (RowType::CurvedEdge, "curved"),
             };
             let mut hint = vec![fmt_mm(polyline_length(line))];
             match curve {
@@ -363,7 +367,7 @@ pub fn edge_rows(body: &Body) -> Vec<GeomRow> {
                 key: format!("e:{}:{slot}", body.id),
                 kind: GeomKind::Edges,
                 index: slot,
-                label: format!("{label} {}", slot + 1),
+                label: shape_name("pick.name.edge", shape, slot + 1),
                 hint: hint.join(", "),
                 row_type: Some(row_type),
                 facing: None,
@@ -385,8 +389,12 @@ pub fn plane_rows(doc: &Map<String, Value>) -> Vec<GeomRow> {
                 key: format!("p:o:{p}"),
                 kind: GeomKind::Planes,
                 index: i,
-                label: format!("{p} plane"),
-                hint: ["origin".to_string()].into_iter().chain(facing.map(facing_words)).collect::<Vec<_>>().join(", "),
+                label: tr!("items.origin.plane", plane = *p),
+                hint: [t("items.origin.hint")]
+                    .into_iter()
+                    .chain(facing.map(facing_words))
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 row_type: None,
                 facing: facing.map(|f| f.0),
             }
@@ -403,7 +411,7 @@ pub fn plane_rows(doc: &Map<String, Value>) -> Vec<GeomRow> {
             kind: GeomKind::Planes,
             index: rows.len(),
             label: datum_plane_name(f, n),
-            hint: "datum plane".into(),
+            hint: t("items.datum.planeHint"),
             row_type: None,
             facing: None,
         });
@@ -427,7 +435,7 @@ pub fn filter_rows<'a>(rows: &'a [GeomRow], f: &Filters) -> Vec<&'a GeomRow> {
 pub fn range_text(page: usize, total: usize) -> String {
     let first = (page * PAGE_SIZE + 1).min(total);
     let last = ((page + 1) * PAGE_SIZE).min(total);
-    format!("{first} to {last} of {total}")
+    tr!("geometry.list.range", first = first, last = last, total = total)
 }
 
 pub fn page_count(total: usize) -> usize {

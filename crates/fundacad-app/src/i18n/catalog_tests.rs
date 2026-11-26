@@ -109,9 +109,16 @@ fn pseudo_stretches_english_between_brackets() {
 
 #[test]
 fn every_shipped_line_parses() {
+    // Note: FundaCAD 2 adds English lines ahead of their translations, a missing line falls back to English.
+    let translated = parse_table(LOCALES[1].1);
     for (code, text) in LOCALES {
         let table = parse_table(text);
-        assert_eq!(table.len(), english_table().len(), "{code} has the English keys");
+        for key in table.keys() {
+            assert!(english_table().contains_key(key), "{code} {key} has an English line");
+        }
+        if code != "en" {
+            assert_eq!(table.len(), translated.len(), "{code} has the same keys as {}", LOCALES[1].0);
+        }
         for (key, src) in &table {
             assert!(format::parse(src).is_ok(), "{code} {key}: {src}");
         }
@@ -129,4 +136,30 @@ fn a_command_label_drops_its_ellipsis() {
 fn tr_fills_named_arguments() {
     assert_eq!(tr!("export.done", n = 2), "Exported 2 files");
     assert_eq!(tr!("menu.help.about", name = "FundaCAD 2"), "About FundaCAD 2");
+}
+
+#[test]
+fn the_panel_lines_fill_their_arguments() {
+    assert_eq!(tr!("step.label.rollBefore", step = "Fillet1"), "Roll back before Fillet1");
+    assert_eq!(
+        tr!("history.move.staysAfter", name = "Fillet1", other = "Pad"),
+        "Fillet1 uses Pad, so it stays after it"
+    );
+    assert_eq!(
+        tr!("feature.deletedUsers", head = "Deleted Pad", users = "Fillet1", n = 1),
+        "Deleted Pad, Fillet1 used it"
+    );
+    assert_eq!(tr!("feature.deletedUsers", head = "Deleted Pad", users = "A, B", n = 2), "Deleted Pad, A, B used them");
+    assert_eq!(
+        tr!("export.failedFeatures", n = 2, first = "Pad"),
+        "2 features failed, their bodies are missing from the file: Pad"
+    );
+    assert_eq!(tr!("import.doneFiles", n = 1), "Imported 1 file.");
+    assert_eq!(tr!("import.busyMany", n = 3), "Importing 3 files");
+    assert_eq!(tr!("insert.refreshed", n = 2), "Refreshed 2 linked bodies.");
+    assert_eq!(tr!("items.vis.changed", show = "yes", n = 1), "Show 1 item");
+    assert_eq!(tr!("items.vis.changed", show = "no", n = 3), "Hide 3 items");
+    assert_eq!(tr!("tool.target.click", many = "yes", kind = "body"), "Click bodies to add or drop them");
+    assert_eq!(tr!("tool.target.click", many = "no", kind = "face"), "Click the face to use");
+    assert_eq!(tr!("history.chip.yourNote", note = "ask Ana"), "Your note: ask Ana");
 }

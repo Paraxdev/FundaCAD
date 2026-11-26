@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use gpui::*;
 
 use crate::files::Files;
+use crate::i18n::t;
 use crate::overlay::{self, Choice, Toast};
 use crate::viewport::Viewport;
 use clock::{Clock, Next, Wrote};
@@ -162,7 +163,7 @@ impl Autosave {
             Wrote::Kept { adopted: None } => {}
             Wrote::Failed { warn } => {
                 if warn {
-                    overlay::toast(cx, Toast::error("Autosave keeps failing, unsaved work may not be recoverable"));
+                    overlay::toast(cx, Toast::error(t("recovery.failing")));
                 }
             }
         }
@@ -180,7 +181,7 @@ fn recover(autosave: &Entity<Autosave>, first: &Leftover, window: &mut Window, c
 
 fn adopt(autosave: &Entity<Autosave>, id: String, cx: &mut App) {
     autosave.update(cx, |a, _| a.clock.adopted = Some(id));
-    overlay::toast(cx, Toast::info("Recovered unsaved work, use Save As to keep it"));
+    overlay::toast(cx, Toast::info(t("recovery.recovered")));
 }
 
 fn offer_leftover(autosave: Entity<Autosave>, dir: PathBuf, window: &mut Window, cx: &mut App) {
@@ -188,8 +189,10 @@ fn offer_leftover(autosave: Entity<Autosave>, dir: PathBuf, window: &mut Window,
     store::sweep(&dir, own.as_deref());
     let Some(first) = store::leftovers(&dir, own.as_deref()).into_iter().next() else { return };
     let question = store::question(&first.envelope, store::now_ms());
-    let choices =
-        vec![Choice::primary("Recover").hint("restore the snapshot"), Choice::danger("Discard").hint("delete it")];
+    let choices = vec![
+        Choice::primary(t("recovery.recover")).hint(t("recovery.recoverHint")),
+        Choice::danger(t("recovery.discard")).hint(t("recovery.discardHint")),
+    ];
     let answer = overlay::confirm(window, cx, question, choices);
     window
         .spawn(cx, async move |cx| {

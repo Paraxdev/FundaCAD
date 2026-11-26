@@ -4,6 +4,7 @@ use serde_json::{Map, Value};
 
 use super::labels::name_of;
 use super::{features, id_of, ids};
+use crate::i18n::tr;
 
 /// The features each feature uses, by index, each list in document order. Read generically, so a new feature type is
 /// covered: any string in it that is another feature's id, or a body id whose maker is that feature. A string that
@@ -98,12 +99,12 @@ pub fn can_move(doc: &Map<String, Value>, id: &str, to: usize) -> Result<(), Str
     let (uses, users) = (uses(doc), users(doc));
     for other in &uses[from] {
         if at(&order, other) < from && at(&next, other) > at(&next, id) {
-            return Err(format!("{} uses {}, so it stays after it", name_of(doc, id), name_of(doc, other)));
+            return Err(tr!("history.move.staysAfter", name = name_of(doc, id), other = name_of(doc, other)));
         }
     }
     for other in &users[from] {
         if at(&order, other) > from && at(&next, other) < at(&next, id) {
-            return Err(format!("{} uses {}, so it stays before it", name_of(doc, other), name_of(doc, id)));
+            return Err(tr!("history.move.staysBefore", name = name_of(doc, other), other = name_of(doc, id)));
         }
     }
     Ok(())

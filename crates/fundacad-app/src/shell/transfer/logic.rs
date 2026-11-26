@@ -6,6 +6,8 @@ use fundacad_client::transfer::insert::{InsertError, StaleLinks};
 use fundacad_client::Doc;
 use serde_json::Value;
 
+use crate::i18n::{t, tr};
+
 /// A typed number in a language that writes `mark`: None for text that is no number, an error for a point that
 /// could be either mark.
 pub fn typed_number(text: &str, mark: char) -> Result<Option<f64>, String> {
@@ -27,11 +29,11 @@ pub fn flat_sources(doc: &Doc) -> Vec<FlatSource> {
 }
 
 /// The scopes a 3D export offers, the selected ones only with bodies selected.
-pub fn scope_choices(has_selection: bool) -> Vec<(BodyScope, &'static str)> {
-    let mut out = vec![(BodyScope::All, "All bodies"), (BodyScope::Separate, "One file per body")];
-    if has_selection {
-        out.push((BodyScope::Selected, "Selected"));
-        out.push((BodyScope::SelectedSeparate, "Selected, one file each"));
+pub fn scope_choices(selected: usize) -> Vec<(BodyScope, String)> {
+    let mut out = vec![(BodyScope::All, t("export.scope.all")), (BodyScope::Separate, t("export.scope.separate"))];
+    if selected > 0 {
+        out.push((BodyScope::Selected, tr!("export.scope.selected", n = selected)));
+        out.push((BodyScope::SelectedSeparate, tr!("export.scope.selectedSeparate", n = selected)));
     }
     out
 }
@@ -75,16 +77,16 @@ pub fn stale_summary(s: &StaleLinks) -> String {
     let mut parts = Vec::new();
     let mut say = |n: usize, what: &str| {
         if n > 0 {
-            parts.push(format!("{n} {what}"));
+            parts.push(tr!("insert.stale.count", what = what, n = n));
         }
     };
     say(s.changed.len(), "changed");
     say(s.missing.len(), "missing");
-    say(s.unknown.len(), "may have changed");
+    say(s.unknown.len(), "unknown");
     if parts.is_empty() {
-        "Linked files are up to date.".into()
+        t("insert.stale.upToDate")
     } else {
-        format!("Linked files: {}.", parts.join(", "))
+        tr!("insert.stale.summary", list = parts.join(", "))
     }
 }
 
@@ -92,19 +94,19 @@ pub fn stale_summary(s: &StaleLinks) -> String {
 pub fn insert_error_text(e: &InsertError) -> Option<String> {
     match e {
         _ if e.cancelled() => None,
-        InsertError::Read(why) => Some(format!("The document does not read: {why}")),
-        InsertError::Empty => Some("The document has no features to insert.".into()),
-        InsertError::Build(r) => Some(format!("The document did not build: {}", r.message)),
-        InsertError::ReadBack(r) => Some(format!("Its geometry did not read back: {}", r.message)),
-        InsertError::NotLinked => Some("That body is no longer linked.".into()),
+        InsertError::Read(why) => Some(tr!("insert.problem.read", error = why)),
+        InsertError::Empty => Some(t("insert.problem.empty")),
+        InsertError::Build(r) => Some(tr!("insert.problem.build", error = &r.message)),
+        InsertError::ReadBack(r) => Some(tr!("insert.problem.readBack", error = &r.message)),
+        InsertError::NotLinked => Some(t("insert.problem.notLinked")),
     }
 }
 
 pub fn written_summary(paths: &[String]) -> String {
     match paths {
-        [] => "The export wrote nothing.".into(),
-        [one] => format!("Exported {}", files::base_name(one)),
-        many => format!("Exported {} files to {}", many.len(), parent_of(&many[0])),
+        [] => t("export.wroteNothing"),
+        [one] => tr!("export.wroteOne", name = files::base_name(one)),
+        many => tr!("export.wroteMany", n = many.len(), dir = parent_of(&many[0])),
     }
 }
 

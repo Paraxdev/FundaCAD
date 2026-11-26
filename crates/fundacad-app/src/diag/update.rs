@@ -6,6 +6,8 @@ mod tests;
 
 use std::cmp::Ordering;
 
+use crate::i18n::tr;
+
 pub const FEED: &str = "https://github.com/Paraxdev/fundacad/releases/latest/download/latest.json";
 pub const DOWNLOAD_URL: &str = "https://fundacad.dev/download/";
 /// FundaCAD 1's fundacad.updates.auto, false turns the check at launch off.
@@ -79,11 +81,11 @@ pub enum Outcome {
 impl Outcome {
     pub fn message(&self, current: &str) -> String {
         match self {
-            Outcome::Newer(v) => format!("FundaCAD {v} is out, this is {current}"),
-            Outcome::UpToDate => format!("FundaCAD {current} is the latest version"),
-            Outcome::NoRelease => "There is no FundaCAD release to check against yet".into(),
-            Outcome::Offline(why) => format!("Could not reach GitHub to check for updates, {why}"),
-            Outcome::Failed(why) => format!("The update check failed, {why}"),
+            Outcome::Newer(v) => tr!("updates.newer", version = v, current = current),
+            Outcome::UpToDate => tr!("updates.latest", current = current),
+            Outcome::NoRelease => crate::i18n::t("updates.noRelease"),
+            Outcome::Offline(why) => tr!("updates.offline", why = why),
+            Outcome::Failed(why) => tr!("updates.checkFailedWhy", why = why),
         }
     }
 }

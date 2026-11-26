@@ -2,6 +2,7 @@
 //! Expressions belong to the parameters lane, so anything else is refused here.
 
 use super::fields::Kind;
+use crate::i18n::{self, tr};
 
 struct Unit {
     label: &'static str,
@@ -89,27 +90,24 @@ fn number(t: &str) -> Option<f64> {
     plain(t).or_else(|| fraction(t))
 }
 
-fn dim_words(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Angle => "an angle",
-        _ => "a length",
-    }
-}
-
 /// The value in millimetres or degrees, or why the text is no value of this kind.
 pub fn parse(kind: Kind, raw: &str) -> Result<f64, String> {
     let typed = crate::i18n::read_typed(raw.trim(), crate::i18n::decimal_mark()).map_err(|e| e.to_string())?;
     let t = typed.as_str();
     if t.is_empty() {
-        return Err("empty value".into());
+        return Err(i18n::t("field.problem.empty"));
     }
     if let Some(v) = number(t) {
         return Ok(v);
     }
     match split_unit(t).and_then(|(rest, u)| Some((number(rest)?, u))) {
-        Some(_) if kind == Kind::Count => Err("this field is unitless, write a plain number".into()),
-        Some((_, u)) if u.kind != kind => Err(format!("{} is not {}", u.label, dim_words(kind))),
+        Some(_) if kind == Kind::Count => Err(i18n::t("field.problem.unitless")),
+        Some((_, u)) if u.kind != kind => Err(tr!(
+            "field.problem.wrongUnit",
+            unit = u.label,
+            dim = if kind == Kind::Angle { "angle" } else { "length" }
+        )),
         Some((v, u)) => Ok(v * u.factor),
-        None => Err("not a number or a measurement".into()),
+        None => Err(i18n::t("field.problem.notMeasurement")),
     }
 }

@@ -128,7 +128,7 @@ pub fn rows(doc: &Map<String, Value>, id: &str, issues: &[FeatureIssue]) -> Vec<
             ("mechanism", "drive") => options::mechanism_drive_choice(f),
             _ => options::datum_choice_row(ty, f, c.field, &all).unwrap_or_else(|| {
                 (
-                    c.options.iter().map(|&(v, l)| Choice { value: v.into(), label: l.into() }).collect(),
+                    c.options.iter().map(|&(v, l)| Choice { value: v.into(), label: crate::i18n::t(l) }).collect(),
                     options::choice_value(ty, f, c),
                 )
             }),
@@ -152,9 +152,10 @@ pub fn target_field(doc: &Map<String, Value>, id: &str, label: &str) -> Option<(
 
 fn num_row(doc: &Map<String, Value>, f: &Feature, ty: &str, n: fields::NumField) -> NumRow {
     let id = id_of(f);
-    let label = options::field_label(ty, &n.key, f).map_or(n.label, str::to_string);
+    let label = options::field_label(ty, &n.key, f).map_or(n.label, crate::i18n::t);
     let own = Target::Field { feature: id.to_string(), key: n.key.clone() };
-    let (cur, scale) = crate::sketch::dims::virtual_field(f, &n.key).map_or((fields::read_field(f, &n.key), 1.), |(v, k)| (Some(v), k));
+    let (cur, scale) = crate::sketch::dims::virtual_field(f, &n.key)
+        .map_or((fields::read_field(f, &n.key), 1.), |(v, k)| (Some(v), k));
     let (value, expr, target) = match (binding(doc, id, &n.key), cur) {
         (Some((name, d)), _) => {
             let expr = d.get("expr").and_then(Value::as_str).unwrap_or_default();

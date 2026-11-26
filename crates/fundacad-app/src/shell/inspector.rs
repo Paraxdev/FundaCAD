@@ -11,6 +11,7 @@ use serde_json::Value;
 use super::history::format_value;
 use super::Shell;
 use crate::document::Param;
+use crate::i18n::{self, tr};
 use crate::inspector::{self as model, ChoiceRow, Kind, NumRow, Row, Rule};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_SMALL, R_MD, R_PILL, S_0, S_1, S_2, S_3, W_SEMIBOLD};
 use crate::ui::{icon, text};
@@ -143,9 +144,10 @@ impl Shell {
             return true;
         }
         let step = self.open_rows(cx).map(|(id, _)| crate::timeline::labels::name_of(&self.timeline.doc, &id));
-        let label = step.map(|s| format!("{} of {s}", n.label.to_lowercase()));
-        let edited =
-            self.viewport.update(cx, |v, cx| v.edit_step(None, label, move |d| model::set_number(d, &target, value), cx));
+        let label = step.map(|s| tr!("sketch.name.of", label = &n.label, subject = s));
+        let edited = self
+            .viewport
+            .update(cx, |v, cx| v.edit_step(None, label, move |d| model::set_number(d, &target, value), cx));
         if let Err(why) = edited {
             log::info!("the edit was not applied: {why}");
         }
@@ -208,9 +210,9 @@ impl Shell {
                     .child(text(t, FS_SMALL).flex_1().min_w_0().text_color(t.text).child(words.clone()))
                     .into_any_element()
             }
-            Row::Repeats { names } => line(t, "Features", value(t, names, false)).into_any_element(),
+            Row::Repeats { names } => line(t, &i18n::t("field.features"), value(t, names, false)).into_any_element(),
             Row::Target { label, text: words, empty } => {
-                self.target_row(t, id, label, line(t, label, value(t, words, *empty)), cx)
+                self.target_row(t, id, label, line(t, &i18n::t(label), value(t, words, *empty)), cx)
             }
             Row::Choice(c) => self.choice(t, id, c, cx).into_any_element(),
             Row::Toggle { field, label, on } => {
@@ -220,7 +222,7 @@ impl Shell {
                         this.apply_option(id.clone(), field, Value::Bool(!on), cx);
                     }),
                 );
-                line(t, label, switch).into_any_element()
+                line(t, &i18n::t(label), switch).into_any_element()
             }
             Row::Number(n) => self.number(t, n, window, cx).into_any_element(),
         }
@@ -252,7 +254,7 @@ impl Shell {
                 ui.open_choice = if ui.open_choice.as_ref() == Some(&flip) { None } else { Some(flip.clone()) };
                 cx.notify();
             }));
-        let row = div().flex().flex_col().gap(px(S_1)).child(line(t, c.label, button));
+        let row = div().flex().flex_col().gap(px(S_1)).child(line(t, &i18n::t(c.label), button));
         if !open {
             return row;
         }

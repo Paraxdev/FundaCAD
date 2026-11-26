@@ -2,6 +2,8 @@
 
 use serde_json::{Map, Value};
 
+use crate::i18n::{t, tr};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Length,
@@ -25,86 +27,97 @@ use Kind::{Angle as A, Count as C, Length as L};
 type Fields = &'static [(&'static str, &'static str, Kind)];
 
 const MOVE: Fields = &[
-    ("dx", "Move X", L),
-    ("dy", "Move Y", L),
-    ("dz", "Move Z", L),
-    ("rx", "Rotate X", A),
-    ("ry", "Rotate Y", A),
-    ("rz", "Rotate Z", A),
+    ("dx", "field.moveX", L),
+    ("dy", "field.moveY", L),
+    ("dz", "field.moveZ", L),
+    ("rx", "field.rotateX", A),
+    ("ry", "field.rotateY", A),
+    ("rz", "field.rotateZ", A),
 ];
 
 /// `FEATURE_NUM_FIELDS`: the application's own feature types, a plugin's fields are whatever its code reads.
 fn table(ty: &str) -> Option<Fields> {
     Some(match ty {
         "extrude" => &[
-            ("distance", "Distance", L),
-            ("taper", "Taper", A),
-            ("startOffset", "Start offset", L),
-            ("endOffset", "End offset", L),
-            ("distance2", "Distance 2", L),
-            ("taper2", "Taper 2", A),
-            ("endOffset2", "End offset 2", L),
-            ("thickness", "Thickness", L),
-            ("thickness2", "Thickness 2", L),
+            ("distance", "field.distance", L),
+            ("taper", "field.taper", A),
+            ("startOffset", "field.startOffset", L),
+            ("endOffset", "field.endOffset", L),
+            ("distance2", "field.distance2", L),
+            ("taper2", "field.taper2", A),
+            ("endOffset2", "field.endOffset2", L),
+            ("thickness", "field.thickness", L),
+            ("thickness2", "field.thickness2", L),
         ],
-        "fillet" => &[("radius", "Radius", L), ("profile", "Profile", C)],
-        "chamfer" => &[("distance", "Distance", L), ("distance2", "Distance 2", L)],
-        "press-pull" => &[("distance", "Distance", L), ("taper", "Taper", A), ("upToOffset", "Up to offset", L)],
-        "revolve" => &[("angle", "Angle", A), ("pitch", "Pitch", L)],
+        "fillet" => &[("radius", "field.radius", L), ("profile", "field.profile", C)],
+        "chamfer" => &[("distance", "field.distance", L), ("distance2", "field.distance2", L)],
+        "press-pull" => {
+            &[("distance", "field.distance", L), ("taper", "field.taper", A), ("upToOffset", "field.upToOffset", L)]
+        }
+        "revolve" => &[("angle", "field.angle", A), ("pitch", "field.pitch", L)],
         "datumPlane" => &[
-            ("offset", "Offset", L),
-            ("tiltX", "Tilt X", A),
-            ("tiltY", "Tilt Y", A),
-            ("spin", "Spin", A),
-            ("shiftX", "Shift X", L),
-            ("shiftY", "Shift Y", L),
+            ("offset", "field.offset", L),
+            ("tiltX", "field.tiltX", A),
+            ("tiltY", "field.tiltY", A),
+            ("spin", "field.spin", A),
+            ("shiftX", "field.shiftX", L),
+            ("shiftY", "field.shiftY", L),
         ],
-        "box" => &[("length", "Length", L), ("width", "Width", L), ("height", "Height", L)],
-        "cylinder" => &[("radius", "Radius", L), ("height", "Height", L)],
-        "cone" => &[("bottomRadius", "Bottom radius", L), ("topRadius", "Top radius", L), ("height", "Height", L)],
-        "sphere" => &[("radius", "Radius", L)],
-        "torus" => &[("majorRadius", "Ring radius", L), ("minorRadius", "Tube radius", L)],
-        "shell" => &[("thickness", "Thickness", L)],
-        "offsetFace" => &[("distance", "Distance", L)],
-        "thicken" => &[("thickness", "Thickness", L)],
-        "draft" => &[("angle", "Angle", A)],
+        "box" => &[("length", "field.length", L), ("width", "field.width", L), ("height", "field.height", L)],
+        "cylinder" => &[("radius", "field.radius", L), ("height", "field.height", L)],
+        "cone" => &[
+            ("bottomRadius", "field.bottomRadius", L),
+            ("topRadius", "field.topRadius", L),
+            ("height", "field.height", L),
+        ],
+        "sphere" => &[("radius", "field.radius", L)],
+        "torus" => &[("majorRadius", "field.ringRadius", L), ("minorRadius", "field.tubeRadius", L)],
+        "shell" => &[("thickness", "field.thickness", L)],
+        "offsetFace" => &[("distance", "field.distance", L)],
+        "thicken" => &[("thickness", "field.thickness", L)],
+        "draft" => &[("angle", "field.angle", A)],
         "thread" => &[
-            ("pitch", "Pitch", L),
-            ("starts", "Starts", C),
-            ("offset", "Offset", L),
-            ("length", "Length", L),
-            ("clearance", "Print clearance", L),
+            ("pitch", "field.pitch", L),
+            ("starts", "field.starts", C),
+            ("offset", "field.offset", L),
+            ("length", "field.length", L),
+            ("clearance", "field.printClearance", L),
         ],
-        "textOnFace" => &[("height", "Height", L), ("depth", "Depth", L), ("angle", "Angle", A)],
+        "textOnFace" => &[("height", "field.height", L), ("depth", "field.depth", L), ("angle", "field.angle", A)],
         "hole" => &[
-            ("diameter", "Diameter", L),
-            ("depth", "Depth", L),
-            ("cbDiameter", "Counterbore diameter", L),
-            ("cbDepth", "Counterbore depth", L),
-            ("csDiameter", "Countersink diameter", L),
-            ("csAngle", "Countersink angle", A),
-            ("leadIn", "Lead-in", L),
+            ("diameter", "field.diameter", L),
+            ("depth", "field.depth", L),
+            ("cbDiameter", "field.counterboreDiameter", L),
+            ("cbDepth", "field.counterboreDepth", L),
+            ("csDiameter", "field.countersinkDiameter", L),
+            ("csAngle", "field.countersinkAngle", A),
+            ("leadIn", "field.leadIn", L),
         ],
         "patternRect" => &[
-            ("countX", "Count X", C),
-            ("countY", "Count Y", C),
-            ("spacingX", "Spacing X", L),
-            ("spacingY", "Spacing Y", L),
+            ("countX", "field.countX", C),
+            ("countY", "field.countY", C),
+            ("spacingX", "field.spacingX", L),
+            ("spacingY", "field.spacingY", L),
         ],
-        "patternLinear" => &[("count", "Count", C), ("spacing", "Spacing", L)],
-        "patternCircular" => &[("count", "Count", C), ("angle", "Angle", A)],
-        "simplifyMesh" => &[("tolerance", "Angle tol", A)],
-        "cleanUp" => &[("tolerance", "Tolerance", L)],
-        "scale" => &[("factor", "Factor", C), ("sx", "X factor", C), ("sy", "Y factor", C), ("sz", "Z factor", C)],
+        "patternLinear" => &[("count", "field.count", C), ("spacing", "field.spacing", L)],
+        "patternCircular" => &[("count", "field.count", C), ("angle", "field.angle", A)],
+        "simplifyMesh" => &[("tolerance", "field.angleTol", A)],
+        "cleanUp" => &[("tolerance", "field.tolerance", L)],
+        "scale" => &[
+            ("factor", "field.factor", C),
+            ("sx", "field.xFactor", C),
+            ("sy", "field.yFactor", C),
+            ("sz", "field.zFactor", C),
+        ],
         "move" | "duplicate" => MOVE,
-        "joint" => &[("offset", "Offset", L), ("angle", "Angle", A)],
-        "mechanism" => &[("offset", "Drive offset", L), ("angle", "Drive angle", A)],
+        "joint" => &[("offset", "field.offset", L), ("angle", "field.angle", A)],
+        "mechanism" => &[("offset", "field.driveOffset", L), ("angle", "field.driveAngle", A)],
         _ => return None,
     })
 }
 
 /// Only on the datum plane forms that read them: `t` is a 0..1 fraction along the edge, `angle` the turn about it.
-const DATUM_REF_FIELDS: Fields = &[("t", "Position", C), ("angle", "Angle", A)];
+const DATUM_REF_FIELDS: Fields = &[("t", "field.position", C), ("angle", "field.angle", A)];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NumField {
@@ -125,9 +138,12 @@ impl NumField {
 pub fn num_fields(ty: &str, values: &Map<String, Value>) -> Vec<NumField> {
     if ty == "sketch" {
         let kind = |angle: bool| if angle { Kind::Angle } else { Kind::Length };
-        return crate::sketch::dims::feature_dims(values).into_iter().map(|d| NumField::new(d.key, d.label, kind(d.angle))).collect();
+        return crate::sketch::dims::feature_dims(values)
+            .into_iter()
+            .map(|d| NumField::new(d.key, d.label, kind(d.angle)))
+            .collect();
     }
-    let spoken = |&(k, l, kind): &(&str, &str, Kind)| NumField::new(k, l, kind);
+    let spoken = |&(k, key, kind): &(&str, &str, Kind)| NumField::new(k, t(key), kind);
     let mut out: Vec<NumField> = match table(ty) {
         Some(own) => own.iter().map(spoken).collect(),
         None => raw_num_fields(values),
@@ -137,7 +153,7 @@ pub fn num_fields(ty: &str, values: &Map<String, Value>) -> Vec<NumField> {
     }
     // The build skips a feature while `activeWhen` is 0. Listed only when present, so "Remove condition" stays removed.
     if values.contains_key("activeWhen") {
-        out.push(NumField::new("activeWhen", "Active when", C));
+        out.push(NumField::new("activeWhen", t("field.activeWhen"), C));
     }
     out
 }
@@ -264,13 +280,13 @@ pub fn value_rule(ty: &str, field: &str) -> Rule {
 /// Why a value is refused, in the words of `field.problem.*`.
 pub fn value_problem(label: &str, rule: Rule, v: f64) -> Option<String> {
     if rule.integer && (v - v.round()).abs() > 1e-9 {
-        return Some(format!("{label} must be a whole number"));
+        return Some(tr!("field.problem.whole", label = label));
     }
     if rule.positive && !(v > 0.) {
-        return Some(format!("{label} must be more than 0"));
+        return Some(tr!("field.problem.positive", label = label));
     }
     match rule.at_least {
-        Some(min) if v < min => Some(format!("{label} must be at least {min}")),
+        Some(min) if v < min => Some(tr!("field.problem.atLeast", label = label, min = min)),
         _ => None,
     }
 }

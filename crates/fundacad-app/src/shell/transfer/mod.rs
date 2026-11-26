@@ -27,8 +27,8 @@ use gpui::*;
 use super::modal::{self, button, note};
 use super::Shell;
 use crate::commands::{register, Group};
-use crate::i18n::{tr, Label};
 use crate::engine::Link;
+use crate::i18n::{tr, Label};
 use crate::overlay::{self, Toast};
 use crate::settings;
 use crate::theme::Theme;
@@ -103,7 +103,8 @@ impl Drop for PrefsGuard {
 
 pub fn prefs() -> PrefsGuard {
     #[cfg(not(test))]
-    static PREFS: std::sync::LazyLock<Mutex<TransferPrefs>> = std::sync::LazyLock::new(|| Mutex::new(TransferPrefs::load()));
+    static PREFS: std::sync::LazyLock<Mutex<TransferPrefs>> =
+        std::sync::LazyLock::new(|| Mutex::new(TransferPrefs::load()));
     #[cfg(not(test))]
     let prefs: &'static Mutex<TransferPrefs> = &PREFS;
     // The settings store is per thread under test, so these are too.
@@ -142,7 +143,7 @@ pub fn install(shell: WeakEntity<Shell>, cx: &mut App) {
         ("import", Label::Key("feature.import"), Shell::start_import),
         ("insert-document", Label::Key("tool.insertDocument"), Shell::start_insert),
         ("export", Label::Command("command.export"), Shell::open_export),
-        ("check-links", "Check Linked Files".into(), |s, w, cx| s.check_links(false, w, cx)),
+        ("check-links", Label::Key("insert.checkLinks"), |s, w, cx| s.check_links(false, w, cx)),
     ];
     for (id, label, start) in commands {
         let shell = shell.clone();
@@ -172,7 +173,7 @@ impl Shell {
                 (tr!("export.title").into(), body, vec![cancel("export-cancel", cx), ok])
             }
             Modal::Busy { label, cancelling, .. } => {
-                let body = note(t, if *cancelling { "Cancelling..." } else { "Working, this can take a while." });
+                let body = note(t, tr!(if *cancelling { "files.busy.cancelling" } else { "files.busy.working" }));
                 (label.clone().into(), body.into_any_element(), vec![cancel("busy-cancel", cx)])
             }
         };
@@ -232,7 +233,7 @@ impl Shell {
         let path = self.bench.files.read(cx).path().map(std::path::Path::to_path_buf);
         let link = self.viewport.read(cx).session_link(path.as_deref());
         if link.is_none() {
-            overlay::toast(cx, Toast::error("Open a FundaCAD document first."));
+            overlay::toast(cx, Toast::error(tr!("files.openDocumentFirst")));
         }
         link
     }
