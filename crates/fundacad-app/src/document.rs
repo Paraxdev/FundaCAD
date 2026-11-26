@@ -251,7 +251,7 @@ fn num_fields(ty: &str) -> Fields {
 }
 
 /// The forge icon and the English name of a feature type, as featureMeta in src/ui/featureMeta.ts.
-fn meta(f: &Map<String, Value>) -> (&'static str, String) {
+pub(crate) fn meta(f: &Map<String, Value>) -> (&'static str, String) {
     let ty = f.get("type").and_then(Value::as_str).unwrap_or("");
     let (glyph, label) = match ty {
         "sketch" => ("sketch", "Sketch"),

@@ -2,6 +2,7 @@
 
 mod history;
 mod items;
+mod params;
 mod rail;
 mod titlebar;
 
@@ -15,6 +16,7 @@ use crate::document::{self, Document, Target};
 use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_1, S_3, UI_FONT};
 use crate::ui::{chip, frost_flush, text};
 use crate::viewport::Viewport;
+pub use params::OpenParameters;
 
 /// A History value being typed, keyed by its `Target::key`.
 struct Field {
@@ -34,6 +36,7 @@ pub struct Shell {
     /// The History step whose values show under it.
     open: Option<usize>,
     focus: FocusHandle,
+    params: Entity<params::ParamsPanel>,
     _system: Subscription,
 }
 
@@ -44,6 +47,7 @@ impl Shell {
             cx.notify();
         })
         .detach();
+        let params = cx.new(|cx| params::ParamsPanel::new(viewport.clone(), window, cx));
         let mut shell = Self {
             viewport,
             doc,
@@ -53,6 +57,7 @@ impl Shell {
             items_tab: 0,
             open: None,
             focus: cx.focus_handle(),
+            params,
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -194,11 +199,13 @@ impl Render for Shell {
         }
         let viewport = self.viewport.clone();
         let redo = self.viewport.clone();
+        let params = self.params.clone();
         div()
             .size_full()
             .track_focus(&self.focus)
             .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
             .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
+            .on_action(move |_: &OpenParameters, _, cx| params.update(cx, |p, cx| p.toggle(cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
@@ -214,7 +221,8 @@ impl Render for Shell {
                     .child(div().absolute().size_full().child(self.viewport.clone()))
                     .child(left)
                     .child(right)
-                    .child(status),
+                    .child(status)
+                    .child(self.params.clone()),
             )
             .child(frost_flush(self.viewport.clone()))
     }

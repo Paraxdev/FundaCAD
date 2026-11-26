@@ -1926,6 +1926,7 @@ dependencies = [
  "async-channel",
  "bytemuck",
  "fundacad-client",
+ "fundacad-core",
  "fundacad-format",
  "glam",
  "gpui-kit",
