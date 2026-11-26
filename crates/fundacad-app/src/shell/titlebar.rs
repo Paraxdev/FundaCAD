@@ -11,6 +11,7 @@ const LOCKUP_W: f32 = 640. * 22. / 124.;
 impl Shell {
     pub(super) fn titlebar(&self, t: &Theme, cx: &App) -> Div {
         let doc = &self.doc;
+        let home_ink = if crate::home::is_shown(cx) { t.accent_hot } else { t.text_dim };
         let (can_undo, can_redo) = (crate::commands::enabled(cx, "undo"), crate::commands::enabled(cx, "redo"));
 
         div()
@@ -33,7 +34,10 @@ impl Shell {
                 .w(px(LOCKUP_W))
                 .flex_none(),
             )
-            .child(icon_button(t, "home", "home", 24., 15., t.text_dim))
+            .child(
+                icon_button(t, "home", "home", 24., 15., home_ink)
+                    .on_click(|_, window, cx| crate::commands::run("home", window, cx)),
+            )
             .child(crate::overlay::menubar(t, cx))
             .child(
                 icon_button(t, "undo", "undo", 24., 15., t.text_dim)

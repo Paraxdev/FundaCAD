@@ -173,6 +173,7 @@ impl Autosave {
 fn recover(autosave: &Entity<Autosave>, first: &Leftover, window: &mut Window, cx: &mut App) {
     let files = autosave.read(cx).files.clone();
     if files.update(cx, |f, cx| f.open_unsaved(&first.doc, window, cx)) {
+        crate::home::set(cx, false);
         adopt(autosave, first.id.clone(), cx);
     }
 }

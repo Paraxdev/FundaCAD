@@ -267,7 +267,8 @@ impl Render for Shell {
                     .child(left)
                     .child(right)
                     .child(status)
-                    .child(self.params.clone()),
+                    .child(self.params.clone())
+                    .children(crate::home::view(t, window, cx)),
             )
             .children(self.history_menu(t, cx))
             .children(self.transfer_modal(t, cx))
