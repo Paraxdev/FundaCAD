@@ -103,9 +103,9 @@ pub fn apply(table: Vec<Shortcut>, user: &[UserKey]) -> (Vec<Shortcut>, Vec<Prob
     let (mut first, mut rest): (Vec<_>, Vec<_>) = rows.into_iter().partition(|r| mine.contains(&r.id));
     // A key a person chose leaves the shipped row that had it unbound, as FundaCAD 1's replace did.
     for r in &mut rest {
-        let taken = first.iter().any(|m| {
-            m.combo.is_some() && m.combo == r.combo && m.action != r.action && m.context.overlaps(r.context)
-        });
+        let taken = first
+            .iter()
+            .any(|m| m.combo.is_some() && m.combo == r.combo && m.action != r.action && m.context.overlaps(r.context));
         if taken && !r.fixed {
             r.combo = None;
         }
@@ -139,4 +139,67 @@ pub fn conflicts(rows: &[Shortcut]) -> Vec<(usize, usize)> {
 pub fn resolve<'a>(rows: &'a [Shortcut], combo: &Combo, sketching: bool) -> Option<&'a Shortcut> {
     let ctx = if sketching { super::keys::Ctx::Sketch } else { super::keys::Ctx::Model };
     rows.iter().find(|r| r.combo.as_ref() == Some(combo) && r.context.overlaps(ctx))
+}
+
+/// Why a key cannot simply go on a row, as FundaCAD 1's shortcut editor asked.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Clash {
+    /// A fixed row or a key the app holds outside the table has it.
+    Taken { by: &'static str },
+    /// Another row has it while both can be live, Replace moves it over.
+    Used { by: &'static str, id: String },
+}
+
+/// What stands in the way of putting `combo` on the row `id`, None when nothing does.
+pub fn clash(rows: &[Shortcut], id: &str, combo: &Combo) -> Option<Clash> {
+    let row = rows.iter().find(|r| r.id == id)?;
+    if let Some(f) = rows.iter().find(|r| r.fixed && r.combo.as_ref() == Some(combo)) {
+        return Some(Clash::Taken { by: f.label });
+    }
+    if let Some(&(_, by)) = RESERVED.iter().find(|(k, _)| Combo::parse(k).as_ref() == Ok(combo)) {
+        return Some(Clash::Taken { by });
+    }
+    rows.iter()
+        .find(|r| {
+            r.id != id && r.action != row.action && r.combo.as_ref() == Some(combo) && r.context.overlaps(row.context)
+        })
+        .map(|r| Clash::Used { by: r.label, id: r.id.clone() })
+}
+
+/// The person's list with the row `id` on `combo`, None unbinding it, and the row `replaced` unbound.
+pub fn rebind(user: &[UserKey], id: &str, combo: Option<&Combo>, replaced: Option<&str>) -> Vec<UserKey> {
+    let mut out = reset(user, id);
+    out.push(UserKey {
+        id: id.into(),
+        key: combo.map(Combo::to_string).unwrap_or_default(),
+        shift: false,
+        ctrl: false,
+    });
+    if let Some(other) = replaced {
+        out = reset(&out, other);
+        out.push(UserKey { id: other.into(), key: String::new(), shift: false, ctrl: false });
+    }
+    out
+}
+
+/// The person's list without their key for `id`, so the row goes back to the one it ships with.
+pub fn reset(user: &[UserKey], id: &str) -> Vec<UserKey> {
+    user.iter().filter(|u| u.id != id).cloned().collect()
+}
+
+/// The combo a key press makes, None for a modifier on its own. A shifted symbol is stored as the symbol it types.
+pub fn combo_of(key: &str, typed: Option<&str>, ctrl: bool, shift: bool, alt: bool) -> Result<Option<Combo>, String> {
+    if matches!(key, "shift" | "control" | "alt" | "platform" | "function" | "capslock") {
+        return Ok(None);
+    }
+    if alt {
+        return Err("Alt is read by the tools, pick a key without it".into());
+    }
+    let symbol = typed.filter(|t| t.chars().count() == 1 && !t.chars().all(char::is_alphanumeric));
+    let (key, shift) = match symbol {
+        Some(t) if shift && !ctrl => (t, false),
+        _ => (key, shift),
+    };
+    let text = format!("{}{}{key}", if ctrl { "Ctrl+" } else { "" }, if shift { "Shift+" } else { "" });
+    Combo::parse(&text).map(Some)
 }

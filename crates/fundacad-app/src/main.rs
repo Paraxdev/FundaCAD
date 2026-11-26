@@ -12,6 +12,7 @@ mod inspector;
 mod items;
 mod overlay;
 mod plastic;
+mod prefs;
 mod settings;
 mod shell;
 #[cfg(feature = "shot")]
@@ -34,14 +35,15 @@ fn main() {
         gpui_kit::init(cx);
         settings::init(cx);
         i18n::init(cx);
-        let mut settings = theme::Settings::default();
-        // FUNDA_THEME=<palette id> picks a palette until the settings store lands, for the light capture.
+        let mut settings = prefs::theme_settings();
+        // FUNDA_THEME=<palette id> overrides the stored theme, for the light capture.
         if let Ok(id) = std::env::var("FUNDA_THEME") {
             settings.choice = id;
         }
         theme::init(settings, vec![], cx);
         theme::kit::bind(cx);
         overlay::init(cx);
+        prefs::install(cx);
         commands::bind(cx);
         files::set_startup(cx, path);
         cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, None)]);
@@ -53,6 +55,7 @@ fn main() {
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
+            prefs::apply_size(window);
             let viewport = cx.new(|_| viewport::Viewport::new());
             cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
         })

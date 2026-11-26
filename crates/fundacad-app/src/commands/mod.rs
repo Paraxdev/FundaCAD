@@ -5,6 +5,8 @@ mod builtin;
 pub mod keymap;
 pub mod keys;
 #[cfg(test)]
+mod rebind_tests;
+#[cfg(test)]
 mod tests;
 
 use std::rc::Rc;
@@ -83,6 +85,8 @@ struct Registry {
     commands: Vec<Command>,
     rows: Vec<Shortcut>,
     problems: Vec<keymap::Problem>,
+    /// The keystroke and predicate of each binding `bind` made, so the next `bind` can switch them off.
+    bound: Vec<(String, String)>,
     mode: Mode,
 }
 
@@ -204,22 +208,27 @@ fn live(row: &Shortcut, single_keys: bool) -> bool {
 
 /// Binds the table with the person's keys from the settings, and toasts what clashes.
 pub fn bind(cx: &mut App) {
-    let user: Vec<keymap::UserKey> = crate::settings::get(cx, keymap::SETTING).unwrap_or_default();
-    let single = crate::settings::get::<bool>(cx, SINGLE_KEYS).unwrap_or(true);
+    let (user, single) = (user_keys(cx), single_keys(cx));
     let (rows, problems) = keymap::apply(keys::table(), &user);
+    let load = |keystroke: &str, action: Box<dyn Action>, pred: &str, cx: &App| {
+        let context = KeyBindingContextPredicate::parse(pred).ok()?;
+        KeyBinding::load(keystroke, action, Some(Rc::new(context)), false, None, cx)
+            .map_err(|e| log::warn!("shortcuts: {keystroke} is not a key GPUI reads: {e:?}"))
+            .ok()
+    };
+    // GPUI cannot take a binding back, so a rebind first puts NoAction over each earlier one, which outranks them.
+    let old = std::mem::take(&mut registry(cx).bound);
+    let mut bindings: Vec<KeyBinding> = old.iter().filter_map(|(k, p)| load(k, Box::new(NoAction), p, cx)).collect();
+    let mut bound = Vec::new();
     // The latest binding wins a key GPUI finds twice, so the rows go in backwards and the first row wins.
-    let bindings: Vec<KeyBinding> = rows
-        .iter()
-        .rev()
-        .filter(|r| live(r, single))
-        .filter_map(|r| {
-            let combo = r.combo.as_ref()?;
-            let context = KeyBindingContextPredicate::parse(&predicate(r)).ok()?;
-            KeyBinding::load(&combo.keystroke(), Box::new(Run::new(r.action)), Some(Rc::new(context)), false, None, cx)
-                .map_err(|e| log::warn!("shortcuts: {} is not a key GPUI reads: {e:?}", combo))
-                .ok()
-        })
-        .collect();
+    for r in rows.iter().rev().filter(|r| live(r, single)) {
+        let Some(combo) = r.combo.as_ref() else { continue };
+        let (keystroke, pred) = (combo.keystroke(), predicate(r));
+        if let Some(b) = load(&keystroke, Box::new(Run::new(r.action)), &pred, cx) {
+            bindings.push(b);
+            bound.push((keystroke, pred));
+        }
+    }
     cx.bind_keys(bindings);
     for p in &problems {
         log::warn!("shortcuts: {}", p.describe());
@@ -227,6 +236,27 @@ pub fn bind(cx: &mut App) {
     let r = registry(cx);
     r.rows = rows;
     r.problems = problems;
+    r.bound = bound;
+}
+
+/// The person's own keys as the settings hold them.
+pub fn user_keys(cx: &App) -> Vec<keymap::UserKey> {
+    crate::settings::get(cx, keymap::SETTING).unwrap_or_default()
+}
+
+/// Saves the person's keys and binds the table again with them.
+pub fn set_user_keys(cx: &mut App, user: &[keymap::UserKey]) {
+    crate::settings::set(cx, keymap::SETTING, &user);
+    bind(cx);
+}
+
+pub fn single_keys(cx: &App) -> bool {
+    crate::settings::get::<bool>(cx, SINGLE_KEYS).unwrap_or(true)
+}
+
+pub fn set_single_keys(cx: &mut App, on: bool) {
+    crate::settings::set(cx, SINGLE_KEYS, &on);
+    bind(cx);
 }
 
 /// One line for the problems binding found, None when there were none.
@@ -272,7 +302,6 @@ pub fn available(cx: &App) -> Vec<Command> {
 }
 
 /// The table as bound and the problems binding it found, for the shortcuts sheet.
-#[allow(dead_code, reason = "the shortcuts sheet reads it")]
 pub fn rows(cx: &App) -> (Vec<Shortcut>, Vec<keymap::Problem>) {
     cx.try_global::<Registry>().map(|r| (r.rows.clone(), r.problems.clone())).unwrap_or_default()
 }

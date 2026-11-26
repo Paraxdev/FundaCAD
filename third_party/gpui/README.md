@@ -7,6 +7,7 @@ pulls them in through `[patch.crates-io]`. The `examples` folder and its `[[exam
 | Crate | File | Change |
 |---|---|---|
 | gpui-pre | src/window.rs | `Window::paint_external_texture` paints an app rendered texture as a polychrome sprite, with clip, corner radii and opacity; drop shadows pass the casting element's bounds and corner radii so the shader paints them only outside it |
+| gpui-pre | src/window.rs | `Window::set_ui_zoom` scales the UI as a browser's page zoom: the scale factor is multiplied and the viewport, mouse position, mouse, scroll, pinch and file drop events and the IME position are divided or multiplied to match; touch gestures are not scaled |
 | gpui-pre | src/scene.rs | `Shadow` carries `caster_bounds`, the element that casts the shadow |
 | gpui-pre-wgpu | Cargo.toml | the wgpu backends (Vulkan, GL, Metal) are enabled on Windows too |
 | gpui-pre-wgpu | src/gpui_wgpu.rs | `register_external_texture`, `shared_context` and `shared_context_generation`: the app draws on GPUI's device into textures GPUI composites |

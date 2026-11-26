@@ -1,5 +1,6 @@
 // Modified by FundaCAD: Window::paint_external_texture paints a texture the app renders itself.
 // Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
+// Modified by FundaCAD: Window::set_ui_zoom scales the whole UI, as a browser's page zoom.
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -1284,6 +1285,7 @@ pub struct Window {
     modifiers: Modifiers,
     capslock: Capslock,
     scale_factor: f32,
+    ui_zoom: f32,
     pub(crate) bounds_observers: SingleSubscriberSet<AnyObserver>,
     appearance: WindowAppearance,
     pub(crate) appearance_observers: SingleSubscriberSet<AnyObserver>,
@@ -2475,6 +2477,7 @@ impl Window {
             modifiers,
             capslock,
             scale_factor,
+            ui_zoom: 1.,
             bounds_observers: SingleSubscriberSet::new(),
             appearance,
             appearance_observers: SingleSubscriberSet::new(),
@@ -3162,11 +3165,9 @@ impl Window {
     /// the platform window, then notifies observers. Normally called automatically
     /// by the platform's resize callback, but exposed publicly for test infrastructure.
     pub fn bounds_changed(&mut self, cx: &mut App) {
-        self.scale_factor = self.platform_window.scale_factor();
-        self.viewport_size = self.platform_window.content_size();
+        self.apply_ui_zoom();
         self.last_window_bounds = self.platform_window.window_bounds();
         cx.sync_window_update_entry(self);
-        self.mouse_position = self.platform_window.mouse_position();
 
         self.refresh();
 
@@ -3502,6 +3503,30 @@ impl Window {
     pub fn set_scale_factor(&mut self, scale_factor: f32) {
         self.scale_factor = scale_factor;
         self.refresh();
+    }
+
+    /// Scales every logical pixel by `zoom` on top of the display's scale, so the layout gets a smaller or larger
+    /// viewport and reflows, as a browser's page zoom.
+    pub fn set_ui_zoom(&mut self, zoom: f32) {
+        let zoom = if zoom.is_finite() && zoom > 0. { zoom } else { 1. };
+        if zoom == self.ui_zoom {
+            return;
+        }
+        self.ui_zoom = zoom;
+        self.apply_ui_zoom();
+        self.refresh();
+    }
+
+    /// The zoom `set_ui_zoom` set, 1 by default.
+    pub fn ui_zoom(&self) -> f32 {
+        self.ui_zoom
+    }
+
+    fn apply_ui_zoom(&mut self) {
+        let zoom = self.ui_zoom;
+        self.scale_factor = self.platform_window.scale_factor() * zoom;
+        self.viewport_size = self.platform_window.content_size().map(|v| v / zoom);
+        self.mouse_position = self.platform_window.mouse_position().map(|v| v / zoom);
     }
 
     /// The size of an em for the base font of the application. Adjusting this value allows the
@@ -6176,6 +6201,7 @@ impl Window {
         // Handlers may set this to true by calling `prevent_default`.
         self.default_prevented = false;
 
+        let event = if self.ui_zoom == 1. { event } else { unzoomed(event, self.ui_zoom) };
         let event = match event {
             // Track the mouse position with our own state, since accessing the platform
             // API for the mouse position can only occur on the main thread.
@@ -7240,6 +7266,8 @@ impl Window {
         self.on_next_frame(|window, cx| {
             if let Some(mut input_handler) = window.platform_window.take_input_handler() {
                 if let Some(bounds) = input_handler.selected_bounds(window, cx) {
+                    let zoom = window.ui_zoom;
+                    let bounds = Bounds::new(bounds.origin.map(|v| v * zoom), bounds.size.map(|v| v * zoom));
                     window.platform_window.update_ime_position(bounds);
                 }
                 window.platform_window.set_input_handler(input_handler);
@@ -11211,5 +11239,50 @@ mod inspector_tests {
             }
         })
         .expect("closed inspector has no bookkeeping and no style overrides");
+    }
+}
+
+/// An input event in the zoomed layout's pixels, from the platform's.
+fn unzoomed(event: PlatformInput, zoom: f32) -> PlatformInput {
+    let at = |p: Point<Pixels>| p.map(|v| v / zoom);
+    match event {
+        PlatformInput::MouseDown(mut e) => {
+            e.position = at(e.position);
+            PlatformInput::MouseDown(e)
+        }
+        PlatformInput::MouseUp(mut e) => {
+            e.position = at(e.position);
+            PlatformInput::MouseUp(e)
+        }
+        PlatformInput::MouseMove(mut e) => {
+            e.position = at(e.position);
+            PlatformInput::MouseMove(e)
+        }
+        PlatformInput::MousePressure(mut e) => {
+            e.position = at(e.position);
+            PlatformInput::MousePressure(e)
+        }
+        PlatformInput::MouseExited(mut e) => {
+            e.position = at(e.position);
+            PlatformInput::MouseExited(e)
+        }
+        PlatformInput::Scroll(mut e) => {
+            e.position = at(e.position);
+            if let crate::ScrollDelta::Pixels(d) = e.delta {
+                e.delta = crate::ScrollDelta::Pixels(at(d));
+            }
+            PlatformInput::Scroll(e)
+        }
+        PlatformInput::Pinch(mut e) => {
+            e.position = at(e.position);
+            PlatformInput::Pinch(e)
+        }
+        PlatformInput::FileDrop(e) => PlatformInput::FileDrop(match e {
+            FileDropEvent::Entered { position, paths } => FileDropEvent::Entered { position: at(position), paths },
+            FileDropEvent::Pending { position } => FileDropEvent::Pending { position: at(position) },
+            FileDropEvent::Submit { position } => FileDropEvent::Submit { position: at(position) },
+            other => other,
+        }),
+        other => other,
     }
 }
