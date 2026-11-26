@@ -205,6 +205,23 @@ fn indents_step_by_twenty_and_cap() {
     assert_eq!(folder_indent(9), folder_indent(6));
 }
 
+#[test]
+fn a_body_two_features_build_is_listed_once_and_same_names_get_numbers() {
+    let d = doc(json!({"bodyIds": {"box:0": "body1", "lid:0": "body2", "lip:0": "body2"}}));
+    let inputs = |built: &[BodyRef]| {
+        let rows = nodes(&Inputs {
+            doc: &d,
+            bodies: built,
+            collapse: &Collapse::default(),
+            filter: Filter::Bodies,
+            errors: &HashSet::new(),
+        });
+        rows.iter().filter(|n| n.k.starts_with("b:")).map(|n| n.label.clone()).collect::<Vec<_>>()
+    };
+    assert_eq!(inputs(&[]), ["Body1", "Body2"]);
+    assert_eq!(inputs(&[BodyRef::new("body1", "Box"), BodyRef::new("body2", "Box")]), ["Box", "Box 2"]);
+}
+
 fn sample() -> Map<String, Value> {
     doc(json!({
         "features": [
@@ -249,7 +266,7 @@ fn the_document_reads_as_folders_and_rows() {
     assert_eq!(by("b:body2").label, "Lid");
     assert_eq!(by("b:body2").depth, 2);
     assert_eq!(by("b:body1").eye.as_ref().unwrap().visible, false);
-    assert_eq!(by("j:j1").label, "Box → Box");
+    assert_eq!(by("j:j1").label, "Lid → Box");
     assert_eq!(by("m:m1").label, "Mechanism 1");
     assert_eq!(by("s:s2").label, "Sketch2");
     assert!(by("s:s1").error && by("s:s1").eye.as_ref().unwrap().visible);

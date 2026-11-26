@@ -620,8 +620,8 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
     }
 
     let bodies = body_list(doc, i.bodies);
+    let labels = body_labels(&bodies, |id| user_body_name(doc, id));
     if show(Section::Bodies) {
-        let labels = body_labels(&bodies, |id| user_body_name(doc, id));
         let body_row = |b: &BodyRef, depth: usize| {
             let label = labels.get(&b.id).cloned().unwrap_or_else(|| b.name.clone());
             let mut row = Node::row(format!("b:{}", b.id), depth, label, "body");
@@ -681,7 +681,7 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
 
     let name_of = |id: Option<&str>| {
         let id = id.unwrap_or("?");
-        bodies.iter().find(|b| b.id == id).map_or(id.to_string(), |b| b.name.clone())
+        labels.get(id).cloned().unwrap_or_else(|| id.to_string())
     };
     let joints = features_of(doc, &["joint"]);
     if !joints.is_empty() && show(Section::Bodies) {
