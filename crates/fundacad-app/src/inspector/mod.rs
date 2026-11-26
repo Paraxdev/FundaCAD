@@ -1,6 +1,5 @@
 //! The rows of one feature, FeatureProperties.vue's model: what the build said of it, what it is applied to, its
-//! choices, switches and numbers, and the document edit behind each. Sketch dimensions wait for the 2D solver lane,
-//! file rows come only from plugins.
+//! choices, switches and numbers, and the document edit behind each. A sketch's numbers are its dimensions, file rows come only from plugins.
 
 mod fields;
 mod hole;
@@ -223,7 +222,11 @@ pub fn set_option(doc: &mut Map<String, Value>, id: &str, field: &str, value: &V
 /// A number written where its row points: a parameter through the table, a feature field rounded to what it holds,
 /// and left out again when it is the value an absent field means.
 pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> Result<(), String> {
-    let Target::Field { feature, key } = target else { return crate::document::apply(doc, target, value) };
+    let Target::Field { feature, key } = target else {
+        crate::document::apply(doc, target, value)?;
+        crate::sketch::solve::resolve_sketches(doc);
+        return Ok(());
+    };
     if !value.is_finite() {
         return Err(format!("{value} is not a finite number"));
     }
@@ -240,6 +243,9 @@ pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> 
     }
     if !fields::write_field(f, key, next) {
         return Err(format!("the document has no {key} on {feature}"));
+    }
+    if ty == "sketch" {
+        crate::sketch::solve::resolve_feature(doc, feature, Some(key));
     }
     Ok(())
 }

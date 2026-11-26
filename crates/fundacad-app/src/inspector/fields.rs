@@ -124,7 +124,8 @@ impl NumField {
 /// editable and bound parameters keep resolving while the plugin is not running. A sketch's numbers are its entities'.
 pub fn num_fields(ty: &str, values: &Map<String, Value>) -> Vec<NumField> {
     if ty == "sketch" {
-        return Vec::new();
+        let kind = |angle: bool| if angle { Kind::Angle } else { Kind::Length };
+        return crate::sketch::dims::feature_dims(values).into_iter().map(|d| NumField::new(d.key, d.label, kind(d.angle))).collect();
     }
     let spoken = |&(k, l, kind): &(&str, &str, Kind)| NumField::new(k, l, kind);
     let mut out: Vec<NumField> = match table(ty) {

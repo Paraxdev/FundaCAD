@@ -26,6 +26,7 @@ async-channel = "2"
 fundacad-client = { path = "../fundacad-client" }
 fundacad-core = { path = "../fundacad-core" }
 fundacad-format = { path = "../fundacad-format" }
+fundacad-sketch = { path = "../fundacad-sketch" }
 serde = { version = "1", features = ["derive"] }
 dirs = "6"
 rfd = "0.17"
