@@ -177,7 +177,7 @@ impl Files {
             self.dirty
         } else {
             self.checked = Some(changes);
-            is_dirty(viewport.doc(), self.saved.as_ref())
+            is_dirty(viewport.doc_for_save().as_deref(), self.saved.as_ref())
         };
         let title = window_title(&self.name(), dirty);
         if dirty != self.dirty || title != self.title {
@@ -190,7 +190,7 @@ impl Files {
 
     /// The document shown now is the one on disk at `path`.
     fn mark_saved(&mut self, path: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
-        self.saved = self.viewport.read(cx).doc().cloned();
+        self.saved = self.viewport.read(cx).doc_for_save().map(|d| d.into_owned());
         self.path = path;
         self.checked = None;
         self.refresh(window, cx);
@@ -237,11 +237,11 @@ impl Files {
 
     fn write_now(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let viewport = self.viewport.read(cx);
-        let Some(doc) = viewport.doc() else {
+        let Some(doc) = viewport.doc_for_save() else {
             overlay::toast(cx, Toast::warning(NOT_SAVABLE));
             return false;
         };
-        match write(&path, doc, viewport.blob_dir()) {
+        match write(&path, &doc, viewport.blob_dir()) {
             Ok(()) => {
                 recent::note(cx, &path);
                 self.mark_saved(Some(path), window, cx);

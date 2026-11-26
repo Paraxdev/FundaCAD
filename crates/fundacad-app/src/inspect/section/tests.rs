@@ -60,3 +60,45 @@ fn isolate_keeps_the_named_bodies_or_all_when_none_match() {
     assert_eq!(ids(&isolated(all.clone(), Some(&["gone"]))), ["b1", "b2", "b3"]);
     assert_eq!(ids(&isolated::<&str>(all, Some(&[]))), ["b1", "b2", "b3"]);
 }
+
+fn doc_with(cut: serde_json::Value) -> serde_json::Map<String, serde_json::Value> {
+    let mut doc = serde_json::Map::new();
+    doc.insert("features".into(), serde_json::json!([]));
+    doc.insert(KEY.into(), cut);
+    doc
+}
+
+#[test]
+fn a_saved_fundacad_1_cut_reads_with_its_slide_and_side() {
+    let doc = doc_with(serde_json::json!({ "origin": [3.0, -2.0, 5.0], "normal": [0.0, 0.0, 2.0], "offset": 1.5, "side": 1, "ghost": "faint" }));
+    assert_eq!(read(&doc), Some(Section { normal: Vec3::Z, offset: 6.5, flip: true }));
+    let low = doc_with(serde_json::json!({ "origin": [3.0, -2.0, 5.0], "normal": [1.0, 0.0, 0.0], "side": -1 }));
+    assert_eq!(read(&low), Some(Section { normal: Vec3::X, offset: 3.0, flip: false }));
+}
+
+#[test]
+fn a_bad_or_missing_cut_reads_as_none() {
+    assert_eq!(read(&serde_json::Map::new()), None);
+    assert_eq!(read(&doc_with(serde_json::json!({ "origin": [3.0, -2.0, 5.0], "normal": [0.0, 0.0, 0.0] }))), None);
+    assert_eq!(read(&doc_with(serde_json::json!({ "origin": [3.0, -2.0], "normal": [0.0, 0.0, 1.0] }))), None);
+    assert_eq!(read(&doc_with(serde_json::json!({ "normal": [0.0, 0.0, 1.0] }))), None);
+    assert_eq!(read(&doc_with(serde_json::json!("cut"))), None);
+}
+
+#[test]
+fn writing_a_cut_keeps_unknown_fields_and_reads_back_the_same() {
+    let mut doc = doc_with(serde_json::json!({ "origin": [0.0, 0.0, 0.0], "normal": [0.0, 0.0, 1.0], "ghost": "strong", "dial": 7 }));
+    let s = Section { normal: Vec3::Y, offset: -2.0, flip: false };
+    write(&mut doc, Some(&s));
+    assert_eq!(
+        doc[KEY],
+        serde_json::json!({ "origin": [0.0, -2.0, 0.0], "normal": [0.0, 1.0, 0.0], "offset": 0.0, "side": -1, "ghost": "strong", "dial": 7 })
+    );
+    assert_eq!(read(&doc), Some(s));
+    let mut fresh = serde_json::Map::new();
+    write(&mut fresh, Some(&Section { flip: true, ..s }));
+    assert_eq!(fresh[KEY]["ghost"], "soft");
+    assert_eq!(fresh[KEY]["side"], 1);
+    write(&mut fresh, None);
+    assert!(fresh.is_empty());
+}

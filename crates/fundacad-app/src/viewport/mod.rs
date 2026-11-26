@@ -225,6 +225,10 @@ impl Viewport {
         self.fitted = false;
         self._wake = None;
         self._demo = None;
+        self.inspect = inspecting::Inspecting::opened(match &opened {
+            Opened::Doc(session) => Some(&session.doc),
+            Opened::Stl(_) => None,
+        });
         self.show(&[]);
         match opened {
             Opened::Stl(body) => {

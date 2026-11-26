@@ -10,7 +10,7 @@ use super::pick::{self, Hit};
 use super::Viewport;
 use crate::inspect::measure::{self, Probe};
 use crate::inspect::overhang;
-use crate::inspect::section::Section;
+use crate::inspect::section::{self, Section};
 use crate::selection::Pick;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +59,13 @@ pub struct Inspecting {
     _task: Option<Task<()>>,
 }
 
+impl Inspecting {
+    /// A fresh view of a newly opened document, with the cut it was saved with.
+    pub fn opened(doc: Option<&Map<String, Value>>) -> Self {
+        Self { section: doc.and_then(section::read), ..Self::default() }
+    }
+}
+
 /// Measure's picks after one more: a third starts over.
 pub fn add_probe(probes: &mut Vec<Probe>, p: Probe) {
     if probes.len() >= 2 {
@@ -100,10 +107,25 @@ impl Viewport {
     }
 
     pub fn set_section(&mut self, section: Option<Section>, cx: &mut Context<Self>) {
+        if self.inspect.section != section {
+            // Saved with the document, so Files looks again at whether it differs from the file.
+            self.changes += 1;
+        }
         self.inspect.section = section;
         self.inspect.section_face = false;
         self.hover = None;
         cx.notify();
+    }
+
+    /// The document as a save writes it, with the cut shown now.
+    pub fn doc_for_save(&self) -> Option<std::borrow::Cow<'_, Map<String, Value>>> {
+        let doc = self.doc()?;
+        if section::read(doc) == self.inspect.section {
+            return Some(std::borrow::Cow::Borrowed(doc));
+        }
+        let mut doc = doc.clone();
+        section::write(&mut doc, self.inspect.section.as_ref());
+        Some(std::borrow::Cow::Owned(doc))
     }
 
     pub fn pick_section_face(&mut self, on: bool, cx: &mut Context<Self>) {

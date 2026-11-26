@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use glam::Vec3;
+use serde_json::{json, Map, Value};
 
 #[cfg(test)]
 mod tests;
@@ -47,6 +48,41 @@ impl Section {
             _ => "Face",
         }
     }
+}
+
+/// The key FundaCAD 1 saved its cut under: a plane through `origin` slid `offset` along the unit `normal`, keeping the
+/// `side` (+1 or -1) of the normal.
+pub const KEY: &str = "sectionView";
+
+/// The cut a document was saved with. A bad one reads as none.
+pub fn read(doc: &Map<String, Value>) -> Option<Section> {
+    let raw = doc.get(KEY)?.as_object()?;
+    let vec = |k: &str| -> Option<Vec3> {
+        let a = raw.get(k)?.as_array()?;
+        let c: Vec<f32> = a.iter().map(|c| c.as_f64().filter(|c| c.is_finite()).map(|c| c as f32)).collect::<Option<_>>()?;
+        (c.len() == 3).then(|| Vec3::new(c[0], c[1], c[2]))
+    };
+    let normal = vec("normal")?.try_normalize()?;
+    let slide = raw.get("offset").and_then(Value::as_f64).filter(|o| o.is_finite()).unwrap_or(0.0) as f32;
+    let offset = vec("origin")?.dot(normal) + slide;
+    let flip = raw.get("side").and_then(Value::as_i64) != Some(-1);
+    Some(Section { normal, offset, flip })
+}
+
+/// Saves `section` on `doc`, keeping the fields of a saved cut this build does not read, or drops it when None.
+pub fn write(doc: &mut Map<String, Value>, section: Option<&Section>) {
+    let Some(s) = section else {
+        doc.remove(KEY);
+        return;
+    };
+    let mut raw = doc.get(KEY).and_then(Value::as_object).cloned().unwrap_or_default();
+    let at = s.normal * s.offset;
+    raw.insert("origin".into(), json!([at.x, at.y, at.z]));
+    raw.insert("normal".into(), json!([s.normal.x, s.normal.y, s.normal.z]));
+    raw.insert("offset".into(), json!(0.0));
+    raw.insert("side".into(), json!(if s.flip { 1 } else { -1 }));
+    raw.entry("ghost").or_insert_with(|| json!("soft"));
+    doc.insert(KEY.into(), Value::Object(raw));
 }
 
 /// A round step for nudging a plane through a model of `radius`: 1, 2 or 5 times a power of ten, near a tenth of it.
