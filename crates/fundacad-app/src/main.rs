@@ -16,6 +16,7 @@ mod items;
 mod overlay;
 mod plastic;
 mod prefs;
+mod plugins;
 mod recovery;
 mod ribbon;
 mod selection;

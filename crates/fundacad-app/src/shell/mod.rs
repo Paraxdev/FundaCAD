@@ -74,6 +74,7 @@ impl Shell {
         });
         tool_card::install(&viewport, cx);
         inspect::install(&viewport, cx);
+        crate::plugins::install(&viewport, window, cx);
         let mut shell = Self {
             viewport,
             doc,
@@ -277,6 +278,7 @@ impl Render for Shell {
                     .child(right)
                     .child(status)
                     .child(self.params.clone())
+                    .children(crate::plugins::views(cx))
                     .children(crate::home::view(t, window, cx)),
             )
             .children(self.history_menu(t, cx))
