@@ -169,8 +169,6 @@ fn a_refusal_holds_the_last_size_that_built() {
     assert_eq!(o.verdict(&feature_key(&blend(1.0, "f9"))), Verdict::Builds);
     assert_eq!(o.verdict(&feature_key(&blend(3.0, "f9"))), Verdict::Refused);
     assert_eq!(o.verdict(&feature_key(&blend(2.0, "f9"))), Verdict::Unknown);
-    assert_eq!(o.shown_for(&blend(2.0, "f9"), &["radius"]), Some(&blend(1.0, "f9")));
-    assert_eq!(o.shown_for(&json!({"id": "f9", "type": "chamfer"}), &["radius"]), None);
 }
 
 #[test]

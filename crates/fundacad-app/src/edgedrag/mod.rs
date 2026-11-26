@@ -351,16 +351,6 @@ pub fn feature_key(f: &Value) -> String {
     rest.to_string()
 }
 
-fn question_key(f: &Value, dragged: &[&str]) -> String {
-    let mut rest = f.clone();
-    if let Some(o) = rest.as_object_mut() {
-        for k in std::iter::once(&"id").chain(dragged) {
-            o.remove(*k);
-        }
-    }
-    rest.to_string()
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Reply {
     Built,
@@ -416,11 +406,6 @@ impl Outcomes {
     /// The reply for this very preview has landed and is on screen.
     pub fn settled(&self, key: &str) -> bool {
         self.shown.as_ref().is_some_and(|f| feature_key(f) == key)
-    }
-
-    /// Differs from `current` only in the `dragged` fields, so a value held from earlier in the drag still counts.
-    pub fn shown_for(&self, current: &Value, dragged: &[&str]) -> Option<&Value> {
-        self.shown.as_ref().filter(|f| question_key(f, dragged) == question_key(current, dragged))
     }
 
     /// None when nothing is pushed. Stays up until a value builds, so the box does not flicker; true when it changed.
