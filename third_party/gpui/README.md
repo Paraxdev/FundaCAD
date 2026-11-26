@@ -21,6 +21,8 @@ pulls them in through `[patch.crates-io]`. The `examples` folder and its `[[exam
 | gpui-pre-windows | src/gpui_windows.rs | wires `win_renderer` in |
 | gpui-pre-windows | src/shaders.hlsl | drop shadows are clipped to outside the casting element, as in CSS |
 
+Each changed file says so on its first line (`Modified by FundaCAD:`), as Apache 2.0 section 4(b) asks.
+
 Findings behind these: the spike notes in breadcrumb mcanqs62 (viewport) and fas3x9a9 (OpenGL).
 
 To move to a newer GPUI, diff this folder against the 0.3.14 sources from crates.io to list the changes, then carry

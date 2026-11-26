@@ -1,3 +1,4 @@
+// Modified by FundaCAD: texture lookups fall back to the app's external textures.
 // Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
 // Modified for gpui-pre (snapshot of zed@f126950): adapt device queues and sRGB detection to wgpu 30.0.1.
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};

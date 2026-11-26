@@ -1,3 +1,4 @@
+// Modified by FundaCAD: windows draw through WinRenderer, without WS_EX_NOREDIRECTIONBITMAP under wgpu.
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use std::{

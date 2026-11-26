@@ -1,3 +1,4 @@
+// Modified by FundaCAD: the app draws into textures on GPUI's device, see mod fundacad.
 mod cosmic_text_system;
 mod wgpu_atlas;
 mod wgpu_context;
