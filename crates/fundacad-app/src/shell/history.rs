@@ -52,7 +52,7 @@ impl Shell {
         list = list.child(marker(t));
 
         // `#timeline { background: var(--panel) }` outranks `.float-card` in the Vue cascade, so History is opaque.
-        crate::ui::float_card(t)
+        crate::ui::solid_card(t)
             .bg(t.panel)
             .w(px(WIDTH))
             .max_h_full()

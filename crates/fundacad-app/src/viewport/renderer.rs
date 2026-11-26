@@ -5,6 +5,7 @@ use gpui::{DevicePixels, Size};
 use gpui_wgpu::{wgpu, WgpuContext};
 use wgpu::util::DeviceExt;
 
+use super::blur::{Blur, Chain, Panel};
 use super::camera::Camera;
 use super::scene::{Body, Scene, Vertex};
 
@@ -43,6 +44,7 @@ struct Targets {
     msaa: wgpu::TextureView,
     depth: wgpu::TextureView,
     resolve: wgpu::TextureView,
+    blur: Chain,
 }
 
 struct GpuBody {
@@ -62,6 +64,8 @@ struct Drawn {
     scene_revision: u64,
     overlay: Overlay,
     background: [u8; 3],
+    frost: Vec<Panel>,
+    scale: f32,
 }
 
 /// Draws the scene into a texture on GPUI's device, which GPUI then composites like any element.
@@ -84,6 +88,11 @@ pub struct Renderer {
     context_generation: u64,
     texture_index: u32,
     background: [u8; 3],
+    blur: Blur,
+    frost: Vec<Panel>,
+    scale: f32,
+    #[cfg(feature = "shot")]
+    dump: Option<super::dump::Dump>,
 }
 
 impl Renderer {
@@ -187,7 +196,18 @@ impl Renderer {
             context_generation,
             texture_index,
             background: [23, 26, 31],
+            blur: Blur::new(&context.device, context.queue.clone(), format),
+            frost: Vec::new(),
+            scale: 1.0,
+            #[cfg(feature = "shot")]
+            dump: super::dump::Dump::from_env(),
         }
+    }
+
+    /// The view's dump still waits for its moment, so frames must keep coming.
+    #[cfg(feature = "shot")]
+    pub fn dump_pending(&self) -> bool {
+        self.dump.is_some()
     }
 
     pub fn context_generation(&self) -> u64 {
@@ -291,16 +311,20 @@ impl Renderer {
                 })
                 .create_view(&Default::default())
         };
+        let copy_src =
+            if cfg!(feature = "shot") { wgpu::TextureUsages::COPY_SRC } else { wgpu::TextureUsages::empty() };
+        let resolve = make(
+            "viewport resolve",
+            self.format,
+            1,
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | copy_src,
+        );
         let targets = Targets {
             size,
+            blur: self.blur.chain(&self.device, self.format, size, &resolve),
             msaa: make("viewport msaa", self.format, SAMPLES, wgpu::TextureUsages::RENDER_ATTACHMENT),
             depth: make("viewport depth", DEPTH, SAMPLES, wgpu::TextureUsages::RENDER_ATTACHMENT),
-            resolve: make(
-                "viewport resolve",
-                self.format,
-                1,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            ),
+            resolve,
         };
         self.texture_generation += 1;
         gpui_wgpu::register_external_texture(self.texture_index, targets.resolve.clone(), self.texture_generation);
@@ -312,6 +336,12 @@ impl Renderer {
     /// The colour behind the model, as sRGB bytes.
     pub fn set_background(&mut self, rgb: [u8; 3]) {
         self.background = rgb;
+    }
+
+    /// The panels floating over the view in device pixels from its origin, and the scale they were measured at.
+    pub fn set_frost(&mut self, panels: Vec<Panel>, scale: f32) {
+        self.frost = panels;
+        self.scale = scale;
     }
 
     fn clear(&self) -> wgpu::Color {
@@ -347,8 +377,14 @@ impl Renderer {
             scene_revision: scene.revision,
             overlay: overlay.clone(),
             background: self.background,
+            frost: self.frost.clone(),
+            scale: self.scale,
         };
-        if self.drawn.as_ref() == Some(&drawn) {
+        #[cfg(feature = "shot")]
+        let dumping = self.dump.as_ref().is_some_and(|d| d.due(!self.bodies.is_empty()));
+        #[cfg(not(feature = "shot"))]
+        let dumping = false;
+        if !dumping && self.drawn.as_ref() == Some(&drawn) {
             return self.texture_index;
         }
         let aspect = size.width.0.max(1) as f32 / size.height.0.max(1) as f32;
@@ -404,8 +440,20 @@ impl Renderer {
                 }
             }
         }
+        self.blur.run(&mut encoder, &targets.blur, &targets.resolve, size, &self.frost, self.scale);
         self.queue.submit(Some(encoder.finish()));
         self.drawn = Some(drawn);
+        #[cfg(feature = "shot")]
+        if dumping {
+            if let (Some(dump), Some(targets)) = (self.dump.take(), &self.targets) {
+                dump.save(
+                    &self.device,
+                    &self.queue,
+                    &targets.resolve,
+                    self.format.remove_srgb_suffix() == wgpu::TextureFormat::Bgra8Unorm,
+                );
+            }
+        }
         self.texture_index
     }
 }

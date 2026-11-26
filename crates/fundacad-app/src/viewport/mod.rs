@@ -1,6 +1,9 @@
+mod blur;
 mod camera;
 mod demo;
 mod drag;
+#[cfg(feature = "shot")]
+mod dump;
 pub mod mesh;
 mod pick;
 mod renderer;
@@ -13,6 +16,7 @@ use fundacad_client::{Doc, Event, Mesh as EngineMesh};
 use glam::{Vec2, Vec3};
 use gpui::*;
 
+pub use blur::Frost;
 pub use camera::Camera;
 use pick::Hit;
 use renderer::{Overlay, Renderer};
@@ -85,6 +89,7 @@ pub struct Viewport {
     push: Option<Push>,
     mask_revision: u64,
     background: [u8; 3],
+    frosted: Vec<Frost>,
     message: Option<String>,
     rebuild_ms: Option<f64>,
     _wake: Option<Task<()>>,
@@ -96,6 +101,14 @@ impl Viewport {
     pub fn set_background(&mut self, rgb: [u8; 3], cx: &mut Context<Self>) {
         if self.background != rgb {
             self.background = rgb;
+            cx.notify();
+        }
+    }
+
+    /// The panels floating over the view, in window space, to blur what is behind them.
+    pub fn set_frosted(&mut self, frosted: Vec<Frost>, cx: &mut Context<Self>) {
+        if self.frosted != frosted {
+            self.frosted = frosted;
             cx.notify();
         }
     }
@@ -115,6 +128,7 @@ impl Viewport {
             push: None,
             mask_revision: 0,
             background: [23, 26, 31],
+            frosted: Vec::new(),
             message: None,
             rebuild_ms: None,
             _wake: None,
@@ -305,7 +319,13 @@ impl Viewport {
         let mask = self.push.as_ref().filter(|p| !p.lost).map(|p| p.mask.as_slice());
         let renderer = self.renderer.as_mut().expect("made above");
         renderer.set_background(self.background);
+        let panels = self.frosted.iter().map(|f| blur::Panel::new(f, bounds.origin, scale)).collect();
+        renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, size);
+        #[cfg(feature = "shot")]
+        if renderer.dump_pending() {
+            window.request_animation_frame();
+        }
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
         had_backend != self.backend
     }

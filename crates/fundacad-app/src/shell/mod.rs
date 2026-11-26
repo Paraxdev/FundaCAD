@@ -13,7 +13,7 @@ use gpui_kit::component::input::{InputEvent, InputState};
 
 use crate::document::{self, Document, Target};
 use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_1, S_3, UI_FONT};
-use crate::ui::{chip, text};
+use crate::ui::{chip, frost_flush, text};
 use crate::viewport::Viewport;
 
 /// A History value being typed, keyed by its `Target::key`.
@@ -205,6 +205,7 @@ impl Render for Shell {
                     .child(right)
                     .child(status),
             )
+            .child(frost_flush(self.viewport.clone()))
     }
 }
 
