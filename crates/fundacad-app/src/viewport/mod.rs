@@ -248,6 +248,7 @@ impl Viewport {
         }
         match (&self.push, &self.hover) {
             (Some(p), _) => parts.push(format!("{} {:.1} mm", p.grip.label(), p.value)),
+            (None, Some((_, Ok(g)))) if g.adds() => parts.push("drag to press pull this face".into()),
             (None, Some((_, Ok(g)))) => parts.push(format!("drag to push {} ({} mm)", g.label(), g.start)),
             (None, Some((_, Err(why)))) => parts.push(why.clone()),
             (None, None) => {}
@@ -399,16 +400,15 @@ impl Viewport {
         if same {
             return;
         }
-        self.hover = hit.map(|hit| {
-            let body = &self.scene.bodies[hit.body];
-            let grip = match (&self.session, body.owner(hit.face)) {
-                (Some(s), Some(owner)) => plastic::grip(&s.doc, owner, &body.source.id, hit.normal, hit.point),
-                (Some(_), None) => Err("this face has no feature behind it".into()),
-                (None, _) => Err("open a FundaCAD document to push faces".into()),
-            };
-            (hit, grip)
-        });
+        self.hover = hit.map(|hit| (hit, self.grip_at(&hit)));
         cx.notify();
+    }
+
+    fn grip_at(&self, hit: &Hit) -> Result<Grip, String> {
+        let Some(s) = &self.session else { return Err("open a FundaCAD document to push faces".into()) };
+        let body = &self.scene.bodies[hit.body];
+        let flat = drag::flat(body, hit.face, hit.normal);
+        plastic::pick(&s.doc, body.owner(hit.face), &body.source.id, hit.normal, hit.point, flat)
     }
 
     fn press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
@@ -426,7 +426,11 @@ impl Viewport {
     fn begin(&mut self, hit: Hit, grip: Grip, grabbed: f32) -> bool {
         let body = &self.scene.bodies[hit.body];
         let axis = hit.normal;
-        let found = drag::cap(body, &grip.feature, axis, hit.point.dot(axis), grip.mirror, self.radius * 1e-4);
+        let (plane, tol) = (hit.point.dot(axis), self.radius * 1e-4);
+        let found = match grip.adds() {
+            true => Some((plane, drag::face_mask(body, hit.face, axis, plane, tol * 0.1))),
+            false => drag::cap(body, &grip.feature, axis, plane, grip.mirror, tol),
+        };
         let Some((plane, mask)) = found else { return false };
         let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
         let key = format!("{} {:.2} {:.2} {:.2}", grip.label(), axis.x, axis.y, axis.z);

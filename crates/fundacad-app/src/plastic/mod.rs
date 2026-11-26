@@ -1,10 +1,13 @@
-//! Plastic editing: a face pushed in the viewport edits the feature parameter behind it.
+//! Plastic editing: a face pushed in the viewport edits the feature parameter behind it, or press pulls it when that
+//! feature does not push.
 
 use fundacad_client::Doc;
 use glam::Vec3;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 const SNAP: f64 = 0.1;
+/// Steps of SNAP per mm, dividing by it keeps snapped values exact tenths in the file.
+const PER_MM: f64 = 10.0;
 const ALIGNED: f32 = 0.999;
 
 /// A number in the document: a feature's own field, or the parameter it reads.
@@ -43,6 +46,16 @@ pub struct Shift {
     pub per_value: f64,
 }
 
+/// The press-pull a grip makes or edits. Its distance crosses zero, the sign picks join or cut.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PressPull {
+    /// The feature before the drag, put back at `index` whenever the value leaves zero.
+    pub feature: Value,
+    pub index: usize,
+    /// Made by this grip, so a value of zero takes it out of the timeline again.
+    pub new: bool,
+}
+
 /// What a pushed face edits.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Grip {
@@ -55,13 +68,23 @@ pub struct Grip {
     pub shift: Option<Shift>,
     /// A point the face's opposite moves away from by as much as the face, for symmetric growth.
     pub mirror: Option<Vec3>,
+    pub press_pull: Option<PressPull>,
 }
 
 impl Grip {
     /// The value after pushing the face `travel` mm outward, snapped, never crossing zero.
+    /// A press-pull crosses zero, and only a new one stops at zero.
     pub fn value(&self, travel: f32) -> f64 {
+        let raw = self.start + self.rate * travel as f64;
+        let v = (raw * PER_MM).round() / PER_MM;
+        if let Some(pp) = &self.press_pull {
+            return match (v.abs() < SNAP * 0.5, pp.new) {
+                (false, _) => v,
+                (true, true) => 0.0,
+                (true, false) => SNAP.copysign(raw),
+            };
+        }
         let sign = if self.start < 0.0 { -1.0 } else { 1.0 };
-        let v = ((self.start + self.rate * travel as f64) / SNAP).round() * SNAP;
         if v * sign < SNAP {
             sign * SNAP
         } else {
@@ -81,13 +104,91 @@ impl Grip {
         }
     }
 
+    /// Whether dragging adds a press-pull rather than editing a feature already there.
+    pub fn adds(&self) -> bool {
+        self.press_pull.as_ref().is_some_and(|p| p.new)
+    }
+
     pub fn apply(&self, doc: &mut Doc, value: f64) -> Result<(), String> {
+        if let Some(pp) = &self.press_pull {
+            let fs = features_mut(doc).ok_or("the document has no features")?;
+            let at = fs.iter().position(|f| id(f) == Some(&self.feature));
+            match at {
+                Some(i) if value == 0.0 && pp.new => {
+                    fs.remove(i);
+                    shift_rollback(doc, i, false);
+                    return Ok(());
+                }
+                None if value == 0.0 && pp.new => return Ok(()),
+                None => {
+                    let i = pp.index.min(fs.len());
+                    fs.insert(i, pp.feature.clone());
+                    shift_rollback(doc, i, true);
+                }
+                Some(_) => {}
+            }
+            self.driver.set(doc, value)?;
+            let f = features_mut(doc).and_then(|fs| fs.iter_mut().find(|f| id(f) == Some(&self.feature)));
+            if let Some(f) = f.and_then(Value::as_object_mut).filter(|f| f.contains_key("operation")) {
+                f.insert("operation".into(), Value::from(if value < 0.0 { "cut" } else { "join" }));
+            }
+            return Ok(());
+        }
         self.driver.set(doc, value)?;
         if let Some(s) = &self.shift {
             s.driver.set(doc, s.start + s.per_value * (value - self.start))?;
         }
         Ok(())
     }
+}
+
+/// The grip for a face of `body` picked at `at`: the value of `owner` where that pushes, otherwise a new press-pull
+/// when the face is `flat`.
+pub fn pick(doc: &Doc, owner: Option<&str>, body: &str, normal: Vec3, at: Vec3, flat: bool) -> Result<Grip, String> {
+    let refused = match owner {
+        Some(owner) => match grip(doc, owner, body, normal, at) {
+            Ok(g) => return Ok(g),
+            Err(why) => why,
+        },
+        None => "this face has no feature behind it".into(),
+    };
+    if !flat {
+        return Err(format!("{refused}, and a curved face does not press pull yet"));
+    }
+    press_pull(doc, body, normal, at)
+}
+
+/// A press-pull of the flat face of `body` facing `normal` through `at`, added at the rollback marker.
+pub fn press_pull(doc: &Doc, body: &str, normal: Vec3, at: Vec3) -> Result<Grip, String> {
+    let features = doc.get("features").and_then(Value::as_array).ok_or("the document has no features")?;
+    let taken = |n: &usize| features.iter().any(|f| id(f) == Some(format!("pp{n}").as_str()));
+    let name = format!("pp{}", (1..).find(|n| !taken(n)).unwrap_or(1));
+    let rollback = doc.get("rollback").and_then(Value::as_f64).map(|r| r.max(0.0) as usize);
+    let index = rollback.map_or(features.len(), |r| r.min(features.len()));
+    let round = |v: f32, places: f64| ((v as f64) * places).round() / places;
+    let normal = normal.normalize_or_zero();
+    let feature = json!({
+        "id": name,
+        "type": "press-pull",
+        "face": {
+            "kind": "face",
+            "by": "tracked",
+            "point": [round(at.x, 1e4), round(at.y, 1e4), round(at.z, 1e4)],
+            "normal": [round(normal.x, 1e6), round(normal.y, 1e6), round(normal.z, 1e6)],
+        },
+        "distance": 0.0,
+        "operation": "join",
+        "body": body,
+    });
+    Ok(Grip {
+        driver: Driver::Field { feature: name.clone(), field: "distance".into() },
+        feature: name,
+        start: 0.0,
+        rate: 1.0,
+        shift: None,
+        mirror: None,
+        press_pull: Some(PressPull { feature, index, new: true }),
+    })
 }
 
 /// The grip for a face of `owner` in `body` with outward `normal`, picked at `at`.
@@ -99,8 +200,38 @@ pub fn grip(doc: &Doc, owner: &str, body: &str, normal: Vec3, at: Vec3) -> Resul
         "extrude" => extrude(doc, features, f, owner, normal, at),
         "box" => primitive(doc, &features[index..], owner, body, normal, at),
         "cylinder" => primitive(doc, &features[index..], owner, body, normal, at),
+        "press-pull" => pressed(doc, f, index, owner, normal),
         kind => Err(format!("{kind} faces do not push yet")),
     }
+}
+
+/// The pushed face of a press-pull moves on with its distance, its walls do not.
+fn pressed(doc: &Doc, f: &Value, index: usize, owner: &str, normal: Vec3) -> Result<Grip, String> {
+    if ["upTo", "upToPlane", "upToPoint"].iter().any(|k| f.get(*k).is_some_and(|v| !v.is_null())) {
+        return Err("an up to press pull does not push yet".into());
+    }
+    if f.get("direction").and_then(Value::as_str) == Some("axis") {
+        return Err("a press pull along an axis does not push yet".into());
+    }
+    let face = f.get("face").ok_or_else(|| format!("{owner} has no face"))?;
+    let facing = match face.get("by").and_then(Value::as_str) {
+        Some("tracked") => face.get("normal"),
+        Some("normal") => face.get("dir"),
+        _ => None,
+    };
+    let facing = facing
+        .and_then(Value::as_array)
+        .and_then(|a| {
+            let n = |i: usize| a.get(i).and_then(Value::as_f64).map(|x| x as f32);
+            Vec3::new(n(0)?, n(1)?, n(2)?).try_normalize()
+        })
+        .ok_or("a press pull of a face picked by point or of many faces does not push yet")?;
+    if normal.dot(facing) < ALIGNED {
+        return Err(format!("this is a wall of {owner}, push its face"));
+    }
+    let (driver, start) = number(doc, owner, "distance", f.get("distance"))?;
+    let press_pull = Some(PressPull { feature: f.clone(), index, new: false });
+    Ok(Grip { feature: owner.into(), driver, start, rate: 1.0, shift: None, mirror: None, press_pull })
 }
 
 /// Only the far cap of an extrude pushes, or either cap of a symmetric one.
@@ -141,7 +272,7 @@ fn extrude(doc: &Doc, features: &[Value], f: &Value, owner: &str, normal: Vec3, 
         (true, None) => return Err("a symmetric extrude on a face does not push yet".into()),
     };
     let rate = if start < 0.0 { -1.0 } else { 1.0 };
-    Ok(Grip { feature: owner.into(), driver, start, rate, shift: None, mirror })
+    Ok(Grip { feature: owner.into(), driver, start, rate, shift: None, mirror, press_pull: None })
 }
 
 /// A box or cylinder centred on the origin. The face grows the size along its axis, and the move right after the
@@ -198,7 +329,7 @@ fn primitive(doc: &Doc, from: &[Value], owner: &str, body: &str, normal: Vec3, a
         Some(_) => (1.0, None),
         None => (2.0, Some(at - normal * (start as f32 * 0.5))),
     };
-    Ok(Grip { feature: owner.into(), driver, start, rate, shift, mirror })
+    Ok(Grip { feature: owner.into(), driver, start, rate, shift, mirror, press_pull: None })
 }
 
 /// A field read as a literal or through a parameter.
@@ -259,6 +390,17 @@ fn sketch_plane(sketch: &Value) -> Option<(Vec3, Vec3)> {
     }
 }
 
+/// Keeps the rollback marker after the same features once one is put in or taken out at `index`.
+fn shift_rollback(doc: &mut Doc, index: usize, inserted: bool) {
+    let Some(r) = doc.get("rollback").and_then(Value::as_f64).map(|r| r.max(0.0) as usize) else { return };
+    let r = match inserted {
+        true if index <= r => r + 1,
+        false if index < r => r - 1,
+        _ => return,
+    };
+    doc.insert("rollback".into(), Value::from(r));
+}
+
 fn id(f: &Value) -> Option<&str> {
     f.get("id").and_then(Value::as_str)
 }
@@ -305,6 +447,7 @@ mod tests {
             rate: 1.0,
             shift: None,
             mirror: None,
+            press_pull: None,
         };
         assert_eq!(g, want);
         assert!(grip(&d, "ex1", "body1", -Vec3::Z, Vec3::new(1.0, 1.0, 0.0)).is_err());
@@ -417,5 +560,52 @@ mod tests {
         let own = features(json!({"id": "m", "type": "move", "dx": 1, "bodies": ["body1"]}));
         assert!(grip(&own, "b", "body1", Vec3::X, at).is_ok());
         assert!(grip(&own, "b", "body1", Vec3::new(1.0, 1.0, 0.0).normalize(), at).is_err());
+    }
+
+    fn ids(d: &Doc) -> Vec<&str> {
+        d["features"].as_array().unwrap().iter().filter_map(id).collect()
+    }
+
+    #[test]
+    fn a_face_that_does_not_push_press_pulls_at_the_rollback_marker() {
+        let mut d = doc(json!(12));
+        d["features"][1]["operation"] = json!("cut");
+        d.insert("rollback".into(), json!(2));
+        let at = Vec3::new(1.0, 1.0, 12.0);
+        let g = pick(&d, Some("ex1"), "body1", Vec3::Z, at, true).unwrap();
+        assert!(g.adds());
+        assert_eq!((g.feature.as_str(), g.start, g.label().as_str()), ("pp1", 0.0, "pp1 distance"));
+        let mut e = d.clone();
+        g.apply(&mut e, g.value(-3.0)).unwrap();
+        assert_eq!(ids(&e), ["sk1", "ex1", "pp1", "f1"]);
+        assert_eq!(e["rollback"], json!(3));
+        let pp = &e["features"][2];
+        assert_eq!((pp["distance"].as_f64(), pp["operation"].as_str()), (Some(-3.0), Some("cut")));
+        assert_eq!(pp["face"]["by"], "tracked");
+        assert_eq!(pp["face"]["normal"], json!([0.0, 0.0, 1.0]));
+        g.apply(&mut e, g.value(2.0)).unwrap();
+        assert_eq!(e["features"][2]["operation"], "join");
+        g.apply(&mut e, g.value(0.02)).unwrap();
+        assert_eq!(e, d, "back at zero the press-pull is gone and the marker is where it was");
+        assert!(pick(&d, Some("ex1"), "body1", Vec3::Z, at, false).is_err());
+        assert!(pick(&d, None, "body1", Vec3::Z, at, true).is_ok());
+    }
+
+    #[test]
+    fn a_second_drag_edits_the_press_pull_and_skips_zero() {
+        let mut d = doc(json!(12));
+        let g = press_pull(&d, "body1", Vec3::X, Vec3::new(5.0, 1.0, 6.0)).unwrap();
+        assert_eq!(g.press_pull.as_ref().unwrap().index, 3);
+        g.apply(&mut d, 2.0).unwrap();
+        assert_eq!(press_pull(&d, "body1", Vec3::X, Vec3::ZERO).unwrap().feature, "pp2");
+        let again = pick(&d, Some("pp1"), "body1", Vec3::X, Vec3::new(7.0, 1.0, 6.0), true).unwrap();
+        assert!(!again.adds());
+        assert_eq!((again.feature.as_str(), again.start, again.label()), ("pp1", 2.0, g.label()));
+        assert_eq!((again.value(-1.98), again.value(-2.02)), (0.1, -0.1), "an older press-pull steps over zero");
+        again.apply(&mut d, -1.5).unwrap();
+        assert_eq!(ids(&d), ["sk1", "ex1", "f1", "pp1"]);
+        assert_eq!(d["features"][3]["operation"], "cut");
+        let wall = pick(&d, Some("pp1"), "body1", Vec3::Y, Vec3::new(6.0, 3.0, 6.0), true).unwrap();
+        assert!(wall.adds(), "a wall of the press-pull gets its own");
     }
 }

@@ -30,8 +30,22 @@ pub fn cap_plane(body: &SceneBody, owner: &str, axis: Vec3, near: f32) -> Option
 /// 1 for every vertex that rides with the cap at `plane`: the caps `owner` made facing `axis`, and the wall vertices
 /// on their edges. Other features' faces on the same plane stay put, walls included.
 pub fn stretch_mask(body: &SceneBody, owner: &str, axis: Vec3, plane: f32, tolerance: f32) -> Vec<f32> {
+    mask(body, axis, plane, tolerance, |v| body.owner(v.face) == Some(owner))
+}
+
+/// The stretch mask of the one flat `face` at `plane`, for a face no feature can push yet.
+pub fn face_mask(body: &SceneBody, face: u32, axis: Vec3, plane: f32, tolerance: f32) -> Vec<f32> {
+    mask(body, axis, plane, tolerance, |v| v.face == face)
+}
+
+/// Whether every vertex of `face` faces `normal`.
+pub fn flat(body: &SceneBody, face: u32, normal: Vec3) -> bool {
+    body.vertices.iter().filter(|v| v.face == face).all(|v| v.normal().dot(normal) > PARALLEL)
+}
+
+fn mask(body: &SceneBody, axis: Vec3, plane: f32, tolerance: f32, picked: impl Fn(&Vertex) -> bool) -> Vec<f32> {
     let on_plane = |v: &Vertex| (v.position().dot(axis) - plane).abs() <= tolerance;
-    let is_cap = |v: &Vertex| v.normal().dot(axis) > PARALLEL && body.owner(v.face) == Some(owner);
+    let is_cap = |v: &Vertex| v.normal().dot(axis) > PARALLEL && picked(v);
     let key = |p: Vec3| (p / tolerance.max(1e-6)).round().as_ivec3();
     let edge: HashSet<IVec3> =
         body.vertices.iter().filter(|v| on_plane(v) && is_cap(v)).map(|v| key(v.position())).collect();

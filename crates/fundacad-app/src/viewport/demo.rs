@@ -2,6 +2,8 @@
 //! FUNDA_PUSH_FEATURE=<id> picks the feature, otherwise the latest pushable one in the timeline.
 //! FUNDA_PUSH_PREVIEW_ONLY=1 sends nothing to the engine and holds the stretched cap for a few seconds, for screenshots.
 //! FUNDA_PUSH_UNDO=1 pushes the same face a second time, then undoes once, which must bring back the first start.
+//! FUNDA_PUSH_PRESS=1 press pulls a flat face whose feature does not push, with FUNDA_PUSH_UNDO the second drag edits
+//! that press-pull and the one undo takes it out.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -10,7 +12,7 @@ use glam::Vec3;
 use gpui::{AsyncApp, WeakEntity};
 
 use super::pick::Hit;
-use super::Viewport;
+use super::{drag, Viewport};
 use crate::plastic::{self, Grip};
 
 const FRAME: Duration = Duration::from_millis(16);
@@ -25,11 +27,13 @@ pub fn travel() -> Option<f64> {
 pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
     let wanted = std::env::var("FUNDA_PUSH_FEATURE").ok();
     let preview_only = std::env::var_os("FUNDA_PUSH_PREVIEW_ONLY").is_some();
-    let Some(first) = push(&this, cx, travel, wanted.as_deref(), preview_only).await else { return };
+    let press = std::env::var_os("FUNDA_PUSH_PRESS").is_some();
+    let Some(first) = push(&this, cx, travel, wanted.as_deref(), preview_only, press).await else { return };
     if std::env::var_os("FUNDA_PUSH_UNDO").is_none() {
         return;
     }
-    if push(&this, cx, travel, wanted.as_deref(), false).await.is_none() {
+    let again = if press { Some(first.feature.as_str()) } else { wanted.as_deref() };
+    if push(&this, cx, travel, again, false, false).await.is_none() {
         return;
     }
     if this.update(cx, |v, cx| v.undo(cx)).is_err() {
@@ -38,31 +42,39 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
     let began = Instant::now();
     while began.elapsed() < SETTLE_LIMIT {
         cx.background_executor().timer(FRAME).await;
-        let Ok(now) = this.update(cx, |v, _| v.candidate(wanted.as_deref()).map(|(_, g)| (g.start, v.can_undo())))
-        else {
+        let Ok(now) = this.update(cx, |v, _| {
+            let back = match press {
+                true => v.doc().is_some_and(|d| !d["features"].as_array().is_some_and(|fs| {
+                    fs.iter().any(|f| f["id"].as_str() == Some(&first.feature))
+                })),
+                false => v.candidate(wanted.as_deref(), false).is_some_and(|(_, g)| (g.start - first.start).abs() < 1e-9),
+            };
+            back.then(|| v.can_undo())
+        }) else {
             return;
         };
-        if let Some((start, more)) = now.filter(|(s, _)| (s - first).abs() < 1e-9) {
-            log::info!("demo: one undo brought both pushes back to {start}, more to undo: {more}");
+        if let Some(more) = now {
+            log::info!("demo: one undo took both drags of {} back, more to undo: {more}", first.label());
             return;
         }
     }
-    log::error!("demo: one undo did not bring back {first}");
+    log::error!("demo: one undo did not take both drags of {} back", first.label());
 }
 
-/// Pushes the candidate cap by `travel` and waits for it to settle. The value it started from.
+/// Pushes the candidate cap by `travel` and waits for it to settle. The grip it pushed.
 async fn push(
     this: &WeakEntity<Viewport>,
     cx: &mut AsyncApp,
     travel: f64,
     wanted: Option<&str>,
     preview_only: bool,
-) -> Option<f64> {
+    press: bool,
+) -> Option<Grip> {
     let found = loop {
         cx.background_executor().timer(FRAME).await;
         let Ok(state) = this.update(cx, |v, _| {
             (v.rebuild_ms.is_some() && v.push.is_none() && v.bounds.size.width.as_f32() > 0.0)
-                .then(|| v.candidate(wanted))
+                .then(|| v.candidate(wanted, press))
         }) else {
             return None;
         };
@@ -74,9 +86,8 @@ async fn push(
         log::error!("demo: no pushable cap");
         return None;
     };
-    let start = grip.start;
     let end = grip.value(travel as f32);
-    log::info!("demo: pushing {} from {start} to {end} over {} ms", grip.label(), DRAG.as_millis());
+    log::info!("demo: pushing {} from {} to {end} over {} ms", grip.label(), grip.start, DRAG.as_millis());
     if !this
         .update(cx, |v, cx| {
             let ok = v.begin(hit, grip.clone(), 0.0);
@@ -119,7 +130,7 @@ async fn push(
         match this.update(cx, |v, _| v.push.is_none()) {
             Ok(true) => {
                 log::info!("demo: settled {} ms after release", released.elapsed().as_millis());
-                return Some(start);
+                return Some(grip);
             }
             Ok(false) => {}
             Err(_) => return None,
@@ -130,8 +141,9 @@ async fn push(
 }
 
 impl Viewport {
-    /// The pushable cap of the latest feature (or `wanted`), as a hit at its centre.
-    fn candidate(&self, wanted: Option<&str>) -> Option<(Hit, Grip)> {
+    /// The pushable cap of the latest feature (or `wanted`), as a hit at its centre. With `press`, a flat face that
+    /// only press pulls.
+    fn candidate(&self, wanted: Option<&str>, press: bool) -> Option<(Hit, Grip)> {
         let doc = &self.session.as_ref()?.doc;
         let order: Vec<&str> = doc
             .get("features")
@@ -148,19 +160,24 @@ impl Viewport {
                 e.2 += 1;
             }
             for (face, (sum, normal, n)) in faces {
-                let Some(owner) = body.owner(face) else { continue };
-                if wanted.is_some_and(|w| w != owner) {
+                let owner = body.owner(face);
+                if wanted.is_some_and(|w| Some(w) != owner) || (!press && owner.is_none()) {
                     continue;
                 }
                 let point = sum / n as f32;
-                let grip = match plastic::grip(doc, owner, &body.source.id, normal, point) {
+                let grip = match press {
+                    true => plastic::pick(doc, owner, &body.source.id, normal, point, drag::flat(body, face, normal))
+                        .and_then(|g| if g.adds() { Ok(g) } else { Err("it pushes, no press pull".into()) }),
+                    false => plastic::grip(doc, owner.unwrap_or_default(), &body.source.id, normal, point),
+                };
+                let grip = match grip {
                     Ok(grip) => grip,
                     Err(why) => {
-                        refused.insert((owner.to_string(), why));
+                        refused.insert((owner.unwrap_or("?").to_string(), why));
                         continue;
                     }
                 };
-                let rank = order.iter().position(|id| *id == owner).unwrap_or(0);
+                let rank = order.iter().position(|id| Some(*id) == owner).unwrap_or(0);
                 if best.as_ref().is_none_or(|(r, ..)| rank > *r) {
                     best = Some((rank, Hit { body: bi, face, point, normal }, grip));
                 }
