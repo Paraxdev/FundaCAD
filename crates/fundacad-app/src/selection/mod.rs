@@ -15,6 +15,8 @@ pub enum Pick {
     Sketch { feature: String },
     /// A world plane (XY, XZ, YZ) or a datum plane's feature id.
     Plane { id: String },
+    /// A closed area of a finished sketch, `point` the world point inside it a feature stores.
+    Area { sketch: String, point: [f64; 3] },
 }
 
 impl Pick {
@@ -41,6 +43,7 @@ impl Pick {
             Pick::Body { .. } => PickKind::Body,
             Pick::Sketch { .. } => PickKind::Sketch,
             Pick::Plane { .. } => PickKind::Plane,
+            Pick::Area { .. } => PickKind::Area,
         }
     }
 
@@ -62,6 +65,9 @@ pub enum PickKind {
     Body,
     Sketch,
     Plane,
+    Area,
+    /// A spot on a face, as a hole's points.
+    Point,
 }
 
 impl PickKind {
@@ -72,6 +78,8 @@ impl PickKind {
             PickKind::Body => ("body", "bodies"),
             PickKind::Sketch => ("sketch", "sketches"),
             PickKind::Plane => ("plane", "planes"),
+            PickKind::Area => ("profile", "profiles"),
+            PickKind::Point => ("point", "points"),
         };
         format!("{n} {}", if n == 1 { one } else { many })
     }
@@ -140,7 +148,7 @@ impl Selection {
 
     /// One line for the status bar, "2 faces, 1 edge", None when empty.
     pub fn describe(&self) -> Option<String> {
-        let kinds = [PickKind::Face, PickKind::Edge, PickKind::Body, PickKind::Sketch, PickKind::Plane];
+        let kinds = [PickKind::Face, PickKind::Edge, PickKind::Body, PickKind::Sketch, PickKind::Plane, PickKind::Area];
         let parts: Vec<String> = kinds
             .into_iter()
             .map(|k| (k, self.of(k).len()))

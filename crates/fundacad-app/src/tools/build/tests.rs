@@ -1,0 +1,216 @@
+use serde_json::{json, Value};
+
+use super::*;
+use crate::tools::run::Run;
+use crate::tools::{insert, started, tool};
+
+fn doc(v: Value) -> Doc {
+    v.as_object().unwrap().clone()
+}
+
+fn sel(picks: Vec<Pick>) -> Selection {
+    Selection { picks }
+}
+
+fn face(point: [f32; 3]) -> Pick {
+    Pick::Face { body: "body2".into(), face: 3, point, normal: [0., 0., 1.] }
+}
+
+fn area(sketch: &str, point: [f64; 3]) -> Pick {
+    Pick::Area { sketch: sketch.into(), point }
+}
+
+fn rect_sketch(id: &str, plane: &str, construction: bool) -> Value {
+    let mut entities = vec![json!({"type": "rectangle", "id": "r1", "x": 12, "y": 4, "width": 10, "height": 6})];
+    if construction {
+        entities.push(json!({"type": "line", "id": "l1", "x1": 30, "y1": -2, "x2": 30, "y2": 9, "construction": true}));
+    }
+    json!({"id": id, "type": "sketch", "plane": plane, "entities": entities})
+}
+
+fn path_sketch(id: &str) -> Value {
+    json!({"id": id, "type": "sketch", "plane": "XZ", "entities": [{"type": "line", "id": "l1", "x1": 0, "y1": 0, "x2": 0, "y2": 25}]})
+}
+
+fn feat(start: &Start) -> Value {
+    let mut f = start.feature.clone();
+    f.as_object_mut().unwrap().remove("id");
+    f
+}
+
+fn run_of(d: &Doc, id: &str, picks: Vec<Pick>) -> (Run, Doc, Start) {
+    let (fid, start) = started(tool(id).unwrap(), d, &sel(picks)).unwrap();
+    let mut now = d.clone();
+    insert(&mut now, start.feature.clone()).unwrap();
+    let mut r = Run::new(d.clone(), id.into(), format!("Add {id}"), fid, start.need.clone());
+    r.set_arm(&mut now, start.arm());
+    (r, now, start)
+}
+
+/// The feature the run added, the last in the list.
+fn last(d: &Doc) -> Value {
+    let mut f = d["features"].as_array().unwrap().last().unwrap().clone();
+    f.as_object_mut().unwrap().remove("id");
+    f
+}
+
+#[test]
+fn operation_is_new_until_something_makes_a_solid() {
+    assert_eq!(operation(&doc(json!({}))), "new");
+    assert_eq!(operation(&doc(json!({"features": [rect_sketch("s1", "XY", false), {"id": "d1", "type": "datumPlane"}]}))), "new");
+    let boxed = json!({"features": [{"id": "b1", "type": "box"}, rect_sketch("s1", "XY", false)]});
+    assert_eq!(operation(&doc(boxed.clone())), "join");
+    let mut d = doc(boxed);
+    d.insert("suppressed".into(), json!(["b1"]));
+    assert_eq!(operation(&d), "new");
+    d.remove("suppressed");
+    d.insert("rollback".into(), json!(0));
+    assert_eq!(operation(&d), "new");
+}
+
+#[test]
+fn extrude_takes_a_face_as_press_pull_a_sketch_whole_its_areas_or_waits_for_areas() {
+    let d = doc(json!({"features": [{"id": "b1", "type": "box"}, rect_sketch("s1", "XY", false)]}));
+    let (_, s) = started(tool("extrude").unwrap(), &d, &sel(vec![face([4.5, -2.0, 7.0])])).unwrap();
+    assert_eq!(
+        feat(&s),
+        json!({"type": "press-pull", "distance": 10, "mode": "auto", "body": "body2",
+            "face": {"kind": "face", "by": "nearest", "point": [4.5, -2.0, 7.0], "body": "body2"}})
+    );
+    assert_eq!(s.need, vec![Target { field: "face", kind: PickKind::Face, many: false }]);
+    assert_eq!(s.arm(), None);
+    let (_, s) = started(tool("extrude").unwrap(), &d, &sel(vec![Pick::Sketch { feature: "s1".into() }])).unwrap();
+    assert_eq!(feat(&s), json!({"type": "extrude", "distance": 10, "operation": "join", "sketch": "s1"}));
+    assert!(s.need.is_empty());
+    let picks = vec![area("s1", [13.0, 5.0, 0.0]), area("s9", [1.0, 1.0, 1.0]), area("s1", [15.0, 6.0, 0.0])];
+    let (_, s) = started(tool("extrude").unwrap(), &d, &sel(picks)).unwrap();
+    assert_eq!(
+        feat(&s),
+        json!({"type": "extrude", "distance": 10, "operation": "join", "sketch": "s1", "regions": [[13.0, 5.0, 0.0], [15.0, 6.0, 0.0]]})
+    );
+    assert_eq!(s.arm(), None);
+    let (_, s) = started(tool("extrude").unwrap(), &doc(json!({})), &sel(vec![])).unwrap();
+    assert_eq!(feat(&s), json!({"type": "extrude", "distance": 10, "operation": "new", "regions": []}));
+    assert_eq!(s.arm(), Some(REGIONS));
+}
+
+#[test]
+fn area_clicks_name_the_sketch_add_and_drop_regions_and_refuse_another_sketch() {
+    let d = doc(json!({"features": [rect_sketch("s1", "XY", false), rect_sketch("s2", "XZ", false)]}));
+    let (mut r, mut now, _) = run_of(&d, "extrude", vec![]);
+    assert_eq!(r.missing(&now), Some("Pick the profiles first".into()));
+    let pick = |sketch: &str, p: [f64; 3]| json!({"sketch": sketch, "point": p});
+    r.pick(&mut now, pick("s1", [13.0, 5.0, 0.0]), None).unwrap();
+    assert_eq!(last(&now)["sketch"], "s1");
+    assert_eq!(last(&now)["regions"], json!([[13.0, 5.0, 0.0]]));
+    r.pick(&mut now, pick("s1", [16.0, 3.0, 0.0]), None).unwrap();
+    let err = r.pick(&mut now, pick("s2", [13.0, 0.0, 5.0]), None).unwrap_err();
+    assert_eq!(err, "Pick areas of one sketch");
+    assert_eq!(last(&now)["regions"], json!([[13.0, 5.0, 0.0], [16.0, 3.0, 0.0]]));
+    r.pick(&mut now, Value::Null, Some(json!([13.0, 5.0, 0.0]))).unwrap();
+    r.pick(&mut now, Value::Null, Some(json!([16.0, 3.0, 0.0]))).unwrap();
+    assert_eq!(last(&now)["regions"], json!([]));
+    r.pick(&mut now, pick("s2", [13.0, 0.0, 5.0]), None).unwrap();
+    assert_eq!(last(&now)["sketch"], "s2", "an empty list takes another sketch");
+    assert_eq!(r.missing(&now), None);
+    let err = r.pick(&mut now, json!({"point": [0, 0, 0]}), None).unwrap_err();
+    assert_eq!(err, "Click inside a closed sketch area");
+}
+
+#[test]
+fn revolve_turns_about_the_construction_line_an_edge_or_z() {
+    let d = doc(json!({"features": [rect_sketch("s1", "XZ", true), rect_sketch("s2", "XY", false)]}));
+    let (_, s) = started(tool("revolve").unwrap(), &d, &sel(vec![Pick::Sketch { feature: "s1".into() }])).unwrap();
+    assert_eq!(
+        feat(&s),
+        json!({"type": "revolve", "angle": 360, "operation": "new", "sketch": "s1",
+            "axis": {"origin": [30.0, 0.0, -2.0], "dir": [0.0, 0.0, 11.0]}})
+    );
+    assert!(s.need.is_empty());
+    let picks = vec![Pick::Sketch { feature: "s2".into() }, Pick::Edge { body: "b".into(), edge: 2, mid: [1.5, 2.0, -3.0] }];
+    let (_, s) = started(tool("revolve").unwrap(), &d, &sel(picks)).unwrap();
+    assert_eq!(s.feature["axis"], json!({"origin": [1.5, 2.0, -3.0], "dir": [0, 0, 1]}));
+    assert_eq!(s.feature["axisEdge"], json!({"kind": "edge", "by": "nearest", "point": [1.5, 2.0, -3.0], "body": "b"}));
+    let (mut r, mut now, s) = run_of(&d, "revolve", vec![]);
+    assert_eq!(s.feature["axis"], "Z");
+    r.pick(&mut now, json!({"sketch": "s2", "point": [13.0, 5.0, 0.0]}), None).unwrap();
+    assert_eq!(last(&now)["axis"], "Z", "a sketch with no construction line keeps the axis");
+    r.pick(&mut now, Value::Null, Some(json!([13.0, 5.0, 0.0]))).unwrap();
+    r.pick(&mut now, json!({"sketch": "s1", "point": [13.0, 0.0, 5.0]}), None).unwrap();
+    assert_eq!(last(&now)["axis"], json!({"origin": [30.0, 0.0, -2.0], "dir": [0.0, 0.0, 11.0]}));
+}
+
+#[test]
+fn loft_takes_one_profile_per_sketch_and_waits_for_two() {
+    let d = doc(json!({"features": [rect_sketch("s1", "XY", false), rect_sketch("s2", "XZ", false)]}));
+    let picks = vec![area("s1", [13.0, 5.0, 0.0]), area("s1", [14.0, 5.0, 0.0]), area("s2", [13.0, 0.0, 5.0])];
+    let (_, s) = started(tool("loft").unwrap(), &d, &sel(picks)).unwrap();
+    assert_eq!(
+        feat(&s),
+        json!({"type": "loft", "operation": "new", "profiles": [{"sketch": "s1", "region": [13.0, 5.0, 0.0]},
+            {"sketch": "s2", "region": [13.0, 0.0, 5.0]}]})
+    );
+    let (mut r, mut now, _) = run_of(&d, "loft", vec![]);
+    assert_eq!(r.missing(&now), Some("Pick the profiles first".into()));
+    r.pick(&mut now, json!({"sketch": "s1", "point": [13.0, 5.0, 0.0]}), None).unwrap();
+    assert_eq!(r.missing(&now), Some("Pick two profiles first".into()));
+    let err = r.pick(&mut now, json!({"sketch": "s1", "point": [20.0, 5.0, 0.0]}), None).unwrap_err();
+    assert_eq!(err, "Pick one profile of each sketch");
+    r.pick(&mut now, json!({"sketch": "s2", "point": [13.0, 0.0, 5.0]}), None).unwrap();
+    assert_eq!(last(&now)["profiles"].as_array().unwrap().len(), 2);
+    assert_eq!(r.missing(&now), None);
+    assert!(r.finish(&mut now, true).unwrap().is_some());
+}
+
+#[test]
+fn sweep_follows_an_open_sketch_and_waits_for_a_path() {
+    let lone = doc(json!({"features": [rect_sketch("s1", "XY", false)]}));
+    let (mut r, mut now, s) = run_of(&lone, "sweep", vec![]);
+    assert_eq!(feat(&s), json!({"type": "sweep", "operation": "new"}));
+    r.pick(&mut now, json!({"sketch": "s1", "point": [13.0, 5.0, 0.0]}), None).unwrap();
+    assert_eq!(last(&now)["profile"], "s1");
+    assert_eq!(r.missing(&now), Some("Draw a path sketch first".into()));
+    let d = doc(json!({"features": [path_sketch("p1"), rect_sketch("s1", "XY", false), rect_sketch("s2", "XZ", false)]}));
+    let (_, s) = started(tool("sweep").unwrap(), &d, &sel(vec![area("s2", [13.0, 0.0, 5.0])])).unwrap();
+    assert_eq!(feat(&s), json!({"type": "sweep", "operation": "new", "profile": "s2", "path": "p1"}));
+    let picks = vec![Pick::Sketch { feature: "s1".into() }, Pick::Sketch { feature: "s2".into() }];
+    let (_, s) = started(tool("sweep").unwrap(), &d, &sel(picks)).unwrap();
+    assert_eq!(s.feature["path"], "s2");
+}
+
+#[test]
+fn a_hole_takes_its_face_then_a_point_per_click() {
+    let (_, s) = started(tool("hole").unwrap(), &doc(json!({})), &sel(vec![face([3.25, -8.0, 12.0])])).unwrap();
+    assert_eq!(
+        feat(&s),
+        json!({"type": "hole", "holeType": "simple", "standard": "clearance", "size": "M3", "fit": "normal",
+            "extent": "through", "depth": 10, "points": [[3.25, -8.0, 12.0]],
+            "face": {"kind": "face", "by": "nearest", "point": [3.25, -8.0, 12.0], "body": "body2"}})
+    );
+    let d = doc(json!({"features": [{"id": "f1", "type": "box"}]}));
+    let (mut r, mut now, s) = run_of(&d, "hole", vec![]);
+    assert_eq!(s.arm().map(|t| t.field), Some("face"));
+    let at = |x: f64| json!({"kind": "face", "by": "nearest", "point": [x, 2.0, 20.0], "body": "body1"});
+    r.pick(&mut now, at(4.0), None).unwrap();
+    assert_eq!(r.arm.map(|t| t.field), Some("points"));
+    assert_eq!(last(&now)["points"], json!([[4.0, 2.0, 20.0]]));
+    r.pick(&mut now, at(9.0), None).unwrap();
+    r.pick(&mut now, at(-6.5), None).unwrap();
+    assert_eq!(last(&now)["points"], json!([[4.0, 2.0, 20.0], [9.0, 2.0, 20.0], [-6.5, 2.0, 20.0]]));
+    assert_eq!(last(&now)["face"], at(4.0));
+    assert_eq!(r.pick(&mut now, json!("body1"), None).unwrap_err(), "Click on a face");
+}
+
+#[test]
+fn a_face_picked_into_a_datum_plane_brings_its_plane_and_spot() {
+    let mut d = doc(json!({"features": [{"id": "f1", "type": "datumPlane", "plane": "XY", "offset": 10}, {"id": "f2", "type": "hole"}]}));
+    let tilted = Pick::Face { body: "body1".into(), face: 2, point: [4.5, -3.0, 8.0], normal: [1.0, 0.0, 0.0] };
+    after_pick(&mut d, "f1", "face", &tilted);
+    assert_eq!(d["features"][0]["plane"], json!({"origin": [4.5, -3.0, 8.0], "normal": [1.0, 0.0, 0.0], "xdir": [0.0, 1.0, 0.0]}));
+    assert_eq!(d["features"][0]["at"], json!([4.5, -3.0, 8.0]));
+    let before = d.clone();
+    after_pick(&mut d, "f2", "face", &tilted);
+    after_pick(&mut d, "f1", "upTo", &tilted);
+    after_pick(&mut d, "f1", "face", &Pick::Body { body: "body1".into() });
+    assert_eq!(d, before);
+}

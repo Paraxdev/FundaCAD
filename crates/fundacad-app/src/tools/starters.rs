@@ -3,7 +3,7 @@
 
 use serde_json::{json, Value};
 
-use super::{bodies, Doc, Start, Target, Tool};
+use super::{bodies, build, Doc, Start, Target, Tool};
 use crate::selection::{Pick, PickKind, Selection};
 
 const fn t(id: &'static str, label: &'static str, start: fn(&Doc, &Selection) -> Result<Start, String>) -> Tool {
@@ -29,6 +29,12 @@ pub const TOOLS: &[Tool] = &[
         let need = vec![Target { field: "faces", kind: PickKind::Face, many: true }];
         Ok(Start { feature: json!({"type": "shell", "thickness": 2, "faces": faces}), need })
     }),
+    t("extrude", "Extrude", build::extrude),
+    t("presspull", "Press/Pull", build::press_pull),
+    t("revolve", "Revolve", build::revolve),
+    t("loft", "Loft", build::loft),
+    t("sweep", "Sweep", build::sweep),
+    t("hole", "Hole", build::hole),
     t("offset-plane", "Offset Plane", |_, s| datum_plane(s, 10.0, "Offset plane")),
     t("datum-plane", "Datum Plane", |_, s| datum_plane(s, 0.0, "Plane")),
     t("midplane", "Midplane", |_, s| {
@@ -65,14 +71,14 @@ pub const TOOLS: &[Tool] = &[
         })
     }),
     t("plane-points", "Plane Through Points", |_, s| {
-        let words = "Select three faces or edges to lay the plane through, then Plane Through Points";
-        let mut points = point_refs(s);
-        if points.len() < 3 {
+        // The engine takes a face's centre, not the spot clicked, so only edge middles can be checked for a line.
+        let words = "Select three edges to lay the plane through, then Plane Through Points";
+        let edges: Vec<&Pick> = s.of(PickKind::Edge).into_iter().take(3).collect();
+        if edges.len() < 3 {
             return Err(words.into());
         }
-        points.truncate(3);
-        let spots: Vec<glam::Vec3> =
-            s.picks.iter().filter(|p| p.selector().is_some()).take(3).map(|p| spot(p).into()).collect();
+        let points = point_refs(&edges);
+        let spots: Vec<glam::Vec3> = edges.iter().map(|p| spot(p).into()).collect();
         let n = (spots[1] - spots[0]).cross(spots[2] - spots[0]);
         if n.length() < 1e-6 {
             return Err("The three points are in a line, pick one off it".into());
@@ -97,10 +103,13 @@ pub const TOOLS: &[Tool] = &[
         Ok(Start { feature: f, need: Vec::new() })
     }),
     t("datum-axis", "Datum Axis", |_, s| {
-        let points = point_refs(s);
-        let [a, b] = two(points, "Select two faces or edges to run the axis through, then Datum Axis")?;
-        let (pa, pb) = (spot(&s.picks[0]), spot(&s.picks[1]));
+        let on: Vec<&Pick> = s.picks.iter().filter(|p| p.selector().is_some()).take(2).collect();
+        let [a, b] = two(point_refs(&on), "Select two faces or edges to run the axis through, then Datum Axis")?;
+        let (pa, pb) = (spot(on[0]), spot(on[1]));
         let dir = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
+        if dir.iter().all(|c| c.abs() < 1e-6) {
+            return Err("Pick two different spots".into());
+        }
         Ok(Start {
             feature: json!({"type": "datumAxis", "origin": round(pa), "dir": round(dir), "name": "Axis",
                 "through": {"kind": "points", "a": a, "b": b}}),
@@ -171,9 +180,10 @@ fn plane_refs(s: &Selection) -> Vec<Value> {
         .collect()
 }
 
-fn point_refs(s: &Selection) -> Vec<Value> {
-    s.picks
+fn point_refs(picks: &[&Pick]) -> Vec<Value> {
+    picks
         .iter()
+        .copied()
         .filter_map(|p| match p {
             Pick::Face { .. } => Some(json!({"face": p.selector()})),
             Pick::Edge { .. } => Some(json!({"edge": p.selector(), "t": 0.5})),
@@ -211,7 +221,7 @@ fn face_plane(p: &Pick) -> Option<([f32; 3], [f32; 3])> {
 }
 
 /// `{origin, normal, xdir}` with an x direction square to the normal.
-fn plane_def(origin: [f32; 3], normal: [f32; 3]) -> Value {
+pub(super) fn plane_def(origin: [f32; 3], normal: [f32; 3]) -> Value {
     let n = glam::Vec3::from(normal).normalize_or(glam::Vec3::Z);
     let x = if n.z.abs() < 0.9 { glam::Vec3::Z.cross(n) } else { glam::Vec3::X - n * n.x }.normalize();
     json!({"origin": round(origin), "normal": round(n.to_array()), "xdir": round(x.to_array())})

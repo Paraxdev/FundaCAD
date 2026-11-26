@@ -37,6 +37,10 @@ pub fn noun(kind: PickKind, many: bool) -> &'static str {
         (PickKind::Sketch, true) => "sketches",
         (PickKind::Plane, false) => "plane",
         (PickKind::Plane, true) => "planes",
+        (PickKind::Area, false) => "profile",
+        (PickKind::Area, true) => "profiles",
+        (PickKind::Point, false) => "point",
+        (PickKind::Point, true) => "points",
     }
 }
 
@@ -100,12 +104,14 @@ impl Run {
         match had {
             Some(old) => set_target(doc, &id, arm.field, old, arm.many, true)?,
             None => {
+                let value = super::build::placed(doc, &id, arm, value)?;
                 if let Some(why) = self.refuse(doc, arm.field, &value) {
                     return Err(why);
                 }
                 set_target(doc, &id, arm.field, value, arm.many, false)?;
                 if !arm.many {
-                    let next = self.next_empty(doc);
+                    let then = super::build::then(doc, &id, arm.field);
+                    let next = self.next_empty(doc).or_else(|| self.need.iter().copied().find(|t| Some(t.field) == then));
                     self.set_arm(doc, next);
                 }
             }
@@ -125,7 +131,7 @@ impl Run {
     /// What OK still waits for, as the words to show.
     pub fn missing(&self, doc: &Doc) -> Option<String> {
         let f = feature(doc, &self.feature)?;
-        let t = self.need.iter().find(|t| empty(f, t.field))?;
+        let Some(t) = self.need.iter().find(|t| empty(f, t.field)) else { return super::build::short(doc, &self.feature) };
         Some(format!("Pick the {} first", noun(t.kind, t.many)))
     }
 

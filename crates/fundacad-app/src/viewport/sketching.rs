@@ -147,7 +147,7 @@ impl Viewport {
         }
     }
 
-    fn to_screen(&self, w: Vec3) -> Option<Point<Pixels>> {
+    pub(super) fn to_screen(&self, w: Vec3) -> Option<Point<Pixels>> {
         let b = self.bounds;
         let (wd, h) = (b.size.width.as_f32().max(1.0), b.size.height.as_f32().max(1.0));
         let clip = self.camera.projection(wd / h) * self.camera.view() * w.extend(1.0);
@@ -393,6 +393,10 @@ impl Viewport {
         if let Err(e) = r {
             self.say(e, cx);
         }
+    }
+
+    pub fn sketching(&self) -> bool {
+        self.sketch.is_some()
     }
 
     pub(super) fn sketch_focus(&mut self, cx: &mut Context<Self>) -> FocusHandle {
@@ -651,16 +655,6 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     on("finish-sketch", "Finish Sketch", Viewport::finish_sketch, cx);
     on("sketch-extrude", "Finish & Extrude", |v, cx| v.sketch_extrude(false, cx), cx);
     on("sketch-revolve", "Finish & Revolve", |v, cx| v.sketch_extrude(true, cx), cx);
-    // FC1's E in a sketch is the `extrude` row: finish the sketch and extrude it. The model's own Extrude is not built.
-    on(
-        "extrude",
-        "Extrude",
-        |v, cx| match v.sketch.is_some() {
-            true => v.sketch_extrude(false, cx),
-            false => v.say("Extrude a sketch with E while it is open".into(), cx),
-        },
-        cx,
-    );
     let tools = [
         ("line", "Line", Tool::Line),
         ("rectangle", "Rectangle", Tool::Rectangle),

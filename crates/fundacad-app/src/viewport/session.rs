@@ -79,9 +79,18 @@ impl Viewport {
         let Some(arm) = tool.arm else { return };
         let had = self.doc().and_then(|d| {
             let held = tools::entries(d, &tool.feature, arm.field);
-            held.into_iter().find(|e| resolve(&self.scene, self.picking.lines(), e).is_some_and(|p| p.same(&pick)))
+            held.into_iter().find(|e| {
+                resolve(&self.scene, self.picking.lines(), e).is_some_and(|p| p.same(&pick))
+                    || self.holds_area(&tool.feature, e, &pick)
+            })
         });
-        if let Some(Err(why)) = self.run_edit(|r, d| r.pick(d, value, had), cx) {
+        let field = arm.field;
+        let picked = pick.clone();
+        let edit = |r: &mut ToolRun, d: &mut tools::Doc| {
+            let feature = r.feature.clone();
+            r.pick(d, value, had.clone()).map(|_| if had.is_none() { tools::build::after_pick(d, &feature, field, &picked) })
+        };
+        if let Some(Err(why)) = self.run_edit(edit, cx) {
             self.say(why, cx);
         }
     }

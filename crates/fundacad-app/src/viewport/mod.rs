@@ -7,6 +7,7 @@ mod edges;
 mod issues;
 pub mod mesh;
 mod pick;
+mod profiles;
 mod renderer;
 mod resolve;
 pub mod scene;
@@ -125,6 +126,7 @@ pub struct Viewport {
     highlight: Option<(String, u32)>,
     sketch: Option<crate::sketch::Editor>,
     sketch_ui: sketching::Ui,
+    profiles: profiles::Profiles,
     datums: datums::Datums,
     picking: select::Picking,
     tool: Option<ToolRun>,
@@ -176,6 +178,7 @@ impl Viewport {
             highlight: None,
             sketch: None,
             sketch_ui: Default::default(),
+            profiles: Default::default(),
             datums: Default::default(),
             picking: Default::default(),
             tool: None,
@@ -540,6 +543,7 @@ impl Viewport {
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
         self.paint_datums(window);
+        self.paint_profiles(window);
         self.paint_sketch(window);
         had_backend != self.backend
     }
@@ -708,6 +712,7 @@ impl Viewport {
             self.picking.pressed = None;
             self.hover_at(event.position, cx);
             self.hover_edge_at(event.position, cx);
+            self.hover_area_at(event.position, cx);
         }
     }
 

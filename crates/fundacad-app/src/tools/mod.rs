@@ -1,6 +1,7 @@
 //! The feature tools, featureStarters.ts: each makes its feature from what is selected and names the target field a
 //! click picks into when the selection did not fill it. The viewport runs the session, the shell shows the card.
 
+pub mod build;
 pub mod run;
 mod starters;
 #[cfg(test)]
@@ -30,21 +31,8 @@ impl Start {
     }
 }
 
-/// The datum tools wait for the view to draw datums, a datum nobody can see cannot be checked.
-pub const HELD: &[&str] = &[
-    "offset-plane",
-    "datum-plane",
-    "midplane",
-    "plane-normal-edge",
-    "plane-two-edges",
-    "plane-angle",
-    "plane-points",
-    "datum-point",
-    "datum-axis",
-    "datum-axis-edge",
-    "axis-cylinder",
-    "axis-planes",
-];
+/// Tools kept off the command list until the view can show what they make.
+pub const HELD: &[&str] = &[];
 
 /// Whether a feature's field holds nothing.
 pub fn empty(feature: &Value, field: &str) -> bool {
@@ -127,6 +115,7 @@ fn feature_mut<'a>(doc: &'a mut Doc, id: &str) -> Result<&'a mut Map<String, Val
 pub fn entry(pick: &Pick) -> Option<Value> {
     match pick {
         Pick::Body { body } => Some(json!(body)),
+        Pick::Area { sketch, point } => Some(json!({"sketch": sketch, "point": point})),
         _ => pick.selector(),
     }
 }
