@@ -83,9 +83,10 @@ fn fs_panel(in: Panel) -> @location(0) vec4<f32> {
   let o = max(q, vec2<f32>(0.0));
   let o2 = o * o;
   let n4 = o2.x * o2.x + o2.y * o2.y;
-  if (in.radius < min(half_size.x, half_size.y) - 0.01 && n4 > 0.0) {
+  let squareness = saturate((min(half_size.x, half_size.y) - in.radius - 2.0) / 1.5);
+  if (squareness > 0.0 && n4 >= 1e-12) {
     let n = sqrt(sqrt(n4));
-    d = (n - r) / (sqrt(o2.x * o2.x * o2.x + o2.y * o2.y * o2.y) / (n * n * n));
+    d = mix(d, (n - r) / (sqrt(o2.x * o2.x * o2.x + o2.y * o2.y * o2.y) / (n * n * n)), squareness);
   }
   let coverage = clamp(0.5 - d, 0.0, 1.0);
   let c = textureSampleLevel(src, samp, in.clip.xy / p.area.xy, 0.0).rgb;

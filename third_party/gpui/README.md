@@ -14,7 +14,7 @@ pulls them in through `[patch.crates-io]`. The `examples` folder and its `[[exam
 | gpui-pre-wgpu | src/wgpu_atlas.rs | `WgpuTextureInfo` is `Clone` |
 | gpui-pre-wgpu | src/wgpu_renderer.rs | texture lookups fall back to the external textures; `mod readback`; the record size test counts the larger `Shadow` |
 | gpui-pre-wgpu | src/wgpu_renderer/readback.rs | new: `WgpuRenderer::render_to_image` draws a scene offscreen and reads it back, behind `test-support` |
-| gpui-pre-wgpu | src/shaders.wgsl | drop shadows are clipped to outside the casting element, as in CSS; rounded corners are squircles (CSS `corner-shape: squircle`) unless the radius makes a pill or a circle, the DirectX path keeps circles |
+| gpui-pre-wgpu | src/shaders.wgsl | drop shadows are clipped to outside the casting element, as in CSS; rounded corners are squircles (CSS `corner-shape: squircle`) unless the radius makes a pill or a circle; blurred and inset shadows and dashed border spacing still model circular corners, close enough at UI sizes; the DirectX path keeps circles |
 | gpui-pre-wgpu | src/shaders_webgl.wgsl | the `Shadow` record read is 32 words, with `caster_bounds` |
 | gpui-pre-windows | Cargo.toml | depends on gpui-pre-wgpu; `test-support` turns on its readback |
 | gpui-pre-windows | src/win_renderer.rs | new: windows draw through gpui-pre-wgpu, `FUNDA_GPUI_RENDERER=dx` keeps DirectX 11 |
