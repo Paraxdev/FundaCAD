@@ -7,6 +7,7 @@ mod commands;
 mod document;
 mod engine;
 mod files;
+mod inspect;
 mod inspector;
 mod items;
 mod overlay;
