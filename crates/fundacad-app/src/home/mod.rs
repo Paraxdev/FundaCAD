@@ -170,16 +170,12 @@ fn now() -> u64 {
 
 fn start_example(doc: Doc, window: &mut Window, cx: &mut App) {
     if let Some(files) = crate::files::current(cx) {
-        set(cx, false);
         crate::files::new_from(files, doc, window, cx);
     }
 }
 
 fn run(id: &'static str) -> impl Fn(&ClickEvent, &mut Window, &mut App) {
-    move |_, window, cx| {
-        set(cx, false);
-        crate::commands::run(id, window, cx);
-    }
+    move |_, window, cx| crate::commands::run(id, window, cx)
 }
 
 /// Home over the stage, None while it is closed.
@@ -381,9 +377,6 @@ fn recent_card(t: &Theme, i: usize, r: &Recent, now: u64) -> Stateful<Div> {
 }
 
 fn open_path(path: PathBuf, window: &mut Window, cx: &mut App) {
-    if path.exists() {
-        set(cx, false);
-    }
     crate::files::open_recent_path(path, window, cx);
 }
 

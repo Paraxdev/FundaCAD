@@ -210,14 +210,20 @@ impl Files {
         }
     }
 
-    fn new_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.new_with(new_document(), window, cx);
+    fn new_now(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.new_with(new_document(), window, cx)
     }
 
-    fn new_with(&mut self, doc: Doc, window: &mut Window, cx: &mut Context<Self>) {
+    fn new_with(&mut self, doc: Doc, window: &mut Window, cx: &mut Context<Self>) -> bool {
         match self.viewport.update(cx, |v, cx| v.open_doc(doc, cx)) {
-            Ok(()) => self.mark_saved(None, window, cx),
-            Err(e) => overlay::toast(cx, Toast::error(format!("Could not start a new document: {e}"))),
+            Ok(()) => {
+                self.mark_saved(None, window, cx);
+                true
+            }
+            Err(e) => {
+                overlay::toast(cx, Toast::error(format!("Could not start a new document: {e}")));
+                false
+            }
         }
     }
 
@@ -252,6 +258,13 @@ pub fn start(files: &Entity<Files>, window: &mut Window, cx: &mut App) {
     });
 }
 
+/// Any New or Open the person asked for closes Home, once it went through, as in FC1.
+fn opened(done: bool, cx: &mut App) {
+    if done {
+        crate::home::set(cx, false);
+    }
+}
+
 async fn may_discard(files: &Entity<Files>, question: String, cx: &mut AsyncWindowContext) -> bool {
     let dirty = cx.update(|_, cx| files.read(cx).dirty).unwrap_or(false);
     ask_discard(dirty, question, cx).await
@@ -271,7 +284,7 @@ pub fn new(files: Entity<Files>, window: &mut Window, cx: &mut App) {
     window
         .spawn(cx, async move |cx| {
             if may_discard(&files, "Discard unsaved changes and start a new document?".into(), cx).await {
-                let _ = cx.update(|window, cx| files.update(cx, |f, cx| f.new_now(window, cx)));
+                let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.new_now(window, cx)), cx));
             }
         })
         .detach();
@@ -282,7 +295,7 @@ pub fn new_from(files: Entity<Files>, doc: Doc, window: &mut Window, cx: &mut Ap
     window
         .spawn(cx, async move |cx| {
             if may_discard(&files, "Discard unsaved changes and start a new document?".into(), cx).await {
-                let _ = cx.update(|window, cx| files.update(cx, |f, cx| f.new_with(doc, window, cx)));
+                let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.new_with(doc, window, cx)), cx));
             }
         })
         .detach();
@@ -304,7 +317,7 @@ pub fn open(files: Entity<Files>, window: &mut Window, cx: &mut App) {
             }
             let Some(picked) = dialog.pick_file().await else { return };
             let path = picked.path().to_path_buf();
-            let _ = cx.update(|window, cx| files.update(cx, |f, cx| f.open_now(&path, window, cx)));
+            let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.open_now(&path, window, cx)), cx));
         })
         .detach();
 }
@@ -324,7 +337,7 @@ pub fn open_recent(files: Entity<Files>, path: PathBuf, window: &mut Window, cx:
     window
         .spawn(cx, async move |cx| {
             if may_discard(&files, format!("Discard unsaved changes and open {name}?"), cx).await {
-                let _ = cx.update(|window, cx| files.update(cx, |f, cx| f.open_now(&path, window, cx)));
+                let _ = cx.update(|window, cx| opened(files.update(cx, |f, cx| f.open_now(&path, window, cx)), cx));
             }
         })
         .detach();
