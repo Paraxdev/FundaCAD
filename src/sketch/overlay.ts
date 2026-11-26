@@ -183,6 +183,10 @@ export class SketchOverlay {
   private planeCache = new Map<string, SketchPlane>();
   regions: WorldRegion[] = []; // committed-sketch regions
   private activeRegions: WorldRegion[] = []; // active-sketch regions (sketch mode)
+  /** Closed areas in the open sketch, for a tour step to check. */
+  get activeRegionCount(): number {
+    return this.activeRegions.length;
+  }
   // selection is a set of world interior points (parametric: re-resolved each rebuild
   // against region material, so it survives sketch edits and the sketch→model swap)
   private selectedRegionPoints: [number, number, number][] = [];

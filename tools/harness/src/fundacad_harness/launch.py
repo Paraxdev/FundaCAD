@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
@@ -260,7 +261,34 @@ def wait_ready(proc: Proc, timeout: float) -> None:
     raise LaunchError(f"{proc.name} did not get ready in {int(timeout)} s", proc.tail())
 
 
+def missing_geometry_wasm(repo: Path) -> list[str]:
+    """Plugins in repo/plugins whose manifest names a geometry component that is not built there."""
+    out: list[str] = []
+    for man in sorted((repo / "plugins").glob("*/manifest.json")):
+        try:
+            data = json.loads(man.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        name = data.get("geometryWasm") if isinstance(data, dict) else None
+        if isinstance(name, str) and name and not (man.parent / name).is_file():
+            out.append(man.parent.name)
+    return out
+
+
+def check_geometry_wasm(cmd: list[str], repo: Path) -> None:
+    # Only a release build: a debug engine built elsewhere skips these plugins, which have no install records, for
+    # its own checkout's. A release build takes them only from the checkout it was built from.
+    if Path(cmd[0]).parent.name != "release":
+        return
+    missing = missing_geometry_wasm(repo)
+    if missing:
+        raise LaunchError(f"no geometry.wasm built for {', '.join(missing)} in {repo / 'plugins'}, where a release"
+                          f" engine built from {repo} reads them, run python scripts/build-plugin-wasm.py there; an engine"
+                          " built from another checkout loads none of these plugins")
+
+
 def start_engine(cmd: list[str], repo: Path, work: Path, vite_port: int, timeout: float = 60) -> tuple[Proc, int, str]:
+    check_geometry_wasm(cmd, repo)
     token = secrets.token_hex(16)
     for attempt in range(2):
         port = free_port()

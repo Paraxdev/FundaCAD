@@ -1,22 +1,30 @@
 <script setup lang="ts">
-// Guide mode overlay: a ring on what an assistant points at and a caption bubble (manual/docs/ai/guide.md).
+// Guide mode overlay: a ring on what an assistant or a tour points at and a caption bubble (manual/docs/ai/guide.md).
 // Model outlines are SVG, not three.js, so Clean view and the pick mask never see them.
 import * as THREE from "three";
-import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
+import { computed, nextTick, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { t } from "../../i18n";
 import { announce } from "../../ui/announce";
 import { labelOf } from "../../ui/controlRefs";
 import { resolveControl } from "../../ui/guide/controls";
-import type { GuideState, StepState } from "../../ui/guide/guideSession";
-import { placeBubble, ringRect, type Placed } from "../../ui/guide/placement";
+import type { GuideSession, GuideState, GuideTarget, StepState } from "../../ui/guide/guideSession";
+import { placeBubble, placeCaption, ringRect, type Placed } from "../../ui/guide/placement";
 import { modelShape, type ModelShape } from "../../ui/guide/probe";
 import type { Box } from "../../ui/controlRefs";
 import { pageZoom } from "../../ui/interfaceSize";
+import { cubeSize, MARGIN as CUBE_MARGIN } from "../../viewport/viewCube";
 import Button from "../ui/Button.vue";
 
+const props = defineProps<{
+  /** The assistant's guide when left out. */
+  session?: GuideSession;
+  /** Hides the bubble and ring while the wait stays open, as under Home. */
+  hidden?: boolean;
+}>();
+
 const engine = useEngine();
-const guide = engine.guide;
+const guide = props.session ?? engine.guide;
 
 const state = shallowRef<GuideState>(guide.state);
 const ring = ref<Box | null>(null);
@@ -32,6 +40,9 @@ const step = computed<StepState | null>(() => {
   const s = state.value.step;
   return s && !s.next ? s : null;
 });
+const shown = computed(() => (props.hidden ? null : step.value));
+const captionOnly = (g: GuideTarget) => g.ui === undefined && g.model === undefined && !g.region;
+const shownHint = computed(() => hint.value || shown.value?.hint || "");
 
 let raf = 0;
 let frame = 0;
@@ -43,6 +54,18 @@ let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null 
 const RETRY_FRAMES = 30;
 
 const AVOID = ".modal-panel, .cmdk-card";
+/** Read every frame, so a menu that opens moves the bubble at once. */
+const MENUS = ".ui-menu";
+const CHROME = ".float-left-stack > *, .tool-rail, .float-right > *, .prompt:not(.hidden)";
+/** A new sketch grows from its origin, so a caption keeps off the square this far past it before it is drawn. */
+const SKETCH_START_MM = 50;
+const REREAD_FRAMES = 15;
+/** What is drawn and the shell's panels, read again every REREAD_FRAMES and as a sketch opens or closes. */
+let drawn: { minx: number; miny: number; maxx: number; maxy: number } | null = null;
+let chrome: Box[] = [];
+let readFrame = -1;
+let sketchOpen = false;
+const corner = new THREE.Vector3();
 
 function sameBox(a: Box | null, b: Box | null): boolean {
   return !!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
@@ -55,7 +78,7 @@ function locateUi(s: StepState): void {
   radius.value = Number.isFinite(own) && own > 0 ? `${own + 4}px` : null;
   ref_.value = r.el ? (r.via ?? r.ref) : "";
   hint.value =
-    r.el && r.via ? t("guide.openFirst", { control: labelOf(r.el) || r.via }) : r.el ? "" : (r.missing ?? "");
+    r.el && r.via ? t("guide.openFirst", { control: labelOf(r.el) || r.via }) : r.el ? "" : t("guide.controlMissing");
   guide.updateResolution(r.el ? { found: true, via: r.via } : { found: false, missing: r.missing, near: r.near });
   if (target && !r.via && scrolledFor !== s.seq) {
     scrolledFor = s.seq;
@@ -94,7 +117,8 @@ function modelBox(s: StepState): Box | null {
   const shape = shapeFor!.shape;
   if (shape instanceof Error) {
     paths.value = [];
-    hint.value = s.missing ?? shape.message;
+    // The selector's English detail stays in the guide state for the assistant.
+    hint.value = t("guide.modelMissing");
     return null;
   }
   ref_.value = shape.name;
@@ -123,6 +147,66 @@ function modelBox(s: StepState): Box | null {
   return out.length ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
 }
 
+/** The open sketch's box in window pixels: what is drawn, and the first square past its origin. */
+function sketchBox(): Box | null {
+  const sk = engine.sketch;
+  const xs = [Math.min(0, drawn?.minx ?? 0), Math.max(SKETCH_START_MM, drawn?.maxx ?? 0)];
+  const ys = [Math.min(0, drawn?.miny ?? 0), Math.max(SKETCH_START_MM, drawn?.maxy ?? 0)];
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const x of xs) {
+    for (const y of ys) {
+      const p = engine.viewport.projectToScreen(sk.activePlane.to3D(x, y, corner));
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  return minX <= maxX ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
+}
+
+/** The view cube is drawn into the canvas, left of the right column. */
+function cubeBox(): Box | null {
+  const right = document.querySelector(".float-right");
+  if (!right) return null;
+  const size = cubeSize();
+  const top = engine.viewport.domElement.getBoundingClientRect().top + CUBE_MARGIN;
+  return { left: right.getBoundingClientRect().left - size - CUBE_MARGIN, top, width: size, height: size };
+}
+
+/** What a caption keeps off while a sketch is open, in window pixels. */
+function captionKeep(): { work?: Box; chrome?: Box[] } {
+  const sk = engine.sketch;
+  if (sk.active !== sketchOpen) {
+    sketchOpen = sk.active;
+    readFrame = -1;
+  }
+  if (!sk.active) return {};
+  if (readFrame < 0 || frame - readFrame >= REREAD_FRAMES) {
+    readFrame = frame;
+    drawn = sk.drawnBounds();
+    chrome = [...document.querySelectorAll(CHROME)]
+      .map((d) => d.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const cube = cubeBox();
+    if (cube) chrome.push(cube);
+  }
+  const work = sketchBox();
+  return work ? { work, chrome } : {};
+}
+
+/** Open menus and submenus, a menu not yet placed left out. */
+function openMenus(): Box[] {
+  return [...document.querySelectorAll<HTMLElement>(MENUS)]
+    .filter((m) => m.style.visibility !== "hidden")
+    .map((m) => m.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+}
+
 function follow(s: StepState): void {
   if (s.target.ui !== undefined) {
     if (frame % 15 === 0 || !target?.isConnected) locateUi(s);
@@ -131,7 +215,9 @@ function follow(s: StepState): void {
   // Window pixels in, the CSS pixels of the root zoom out.
   const z = pageZoom();
   const css = (b: Box): Box => ({ left: b.left / z, top: b.top / z, width: b.width / z, height: b.height / z });
-  const seen = s.target.ui !== undefined ? (target?.isConnected ? target.getBoundingClientRect() : null) : modelBox(s);
+  let seen: Box | null = null;
+  if (s.target.ui !== undefined) seen = target?.isConnected ? target.getBoundingClientRect() : null;
+  else if (!captionOnly(s.target)) seen = modelBox(s);
   const box = seen ? css(seen) : null;
   const r = box ? ringRect(box) : null;
   if (!sameBox(r, ring.value)) ring.value = r;
@@ -140,9 +226,19 @@ function follow(s: StepState): void {
     const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
     const view = { width: window.innerWidth / z, height: window.innerHeight / z };
     const avoid = [...document.querySelectorAll(AVOID)].map((d) => css(d.getBoundingClientRect()));
-    const at = box
-      ? placeBubble(box, view, size, avoid)
-      : { side: "below" as const, left: view.width / 2 - size.width / 2, top: 72, ...size };
+    const menus = openMenus().map(css);
+    let at: Placed | null;
+    if (box) at = placeBubble(box, view, size, avoid, menus);
+    else {
+      const keep = captionKeep();
+      at = placeCaption(
+        view,
+        size,
+        avoid,
+        { work: keep.work ? css(keep.work) : null, chrome: keep.chrome?.map(css) ?? [] },
+        menus,
+      );
+    }
     if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
   }
 }
@@ -151,7 +247,7 @@ function follow(s: StepState): void {
 // second loop started from in here would double every frame.
 function loop(): void {
   raf = 0;
-  const s = step.value;
+  const s = shown.value;
   if (s) follow(s);
   guide.observe();
   schedule();
@@ -172,6 +268,7 @@ function restart(): void {
   ref_.value = "";
   radius.value = null;
   shapeFor = null;
+  readFrame = -1;
   void nextTick(schedule);
 }
 
@@ -183,7 +280,7 @@ const sentence = (s: string) =>
 let spokenSeq = -1;
 function speak(s: StepState | null): void {
   if (!s) spokenSeq = -1;
-  if (!s || s.next || s.seq === spokenSeq) return;
+  if (!s || s.next || s.seq === spokenSeq || props.hidden) return;
   spokenSeq = s.seq;
   const keys = s.keys ? ` ${t("guide.keysLabel")} ${s.keys}` : "";
   announce(`${sentence(counterOf(s))} ${sentence(s.caption)}${keys}`, "polite", { key: "guide" });
@@ -196,6 +293,12 @@ const stopWatching = guide.subscribe((s) => {
   if (s.step?.seq !== before?.seq || !!s.step?.next !== !!before?.next) restart();
   else schedule();
 });
+watch(
+  () => props.hidden,
+  (hidden) => {
+    if (!hidden) speak(state.value.step);
+  },
+);
 onUnmounted(() => {
   stopWatching();
   if (raf) cancelAnimationFrame(raf);
@@ -216,15 +319,15 @@ const counter = computed(() => (step.value ? counterOf(step.value) : t("guide.ti
 
 <template>
   <Teleport to="body">
-    <div v-if="step" class="guide-layer" data-testid="guide-layer" :data-ref="ref_">
+    <div v-if="shown" class="guide-layer" data-testid="guide-layer" :data-ref="ref_">
       <svg v-if="paths.length" class="guide-model" aria-hidden="true">
         <polyline v-for="(p, i) in paths" :key="i" :points="p" />
       </svg>
       <!-- A model area is its own outline; a box around it would ring empty space. -->
       <div
-        v-if="ring && step.target.model === undefined"
+        v-if="ring && shown.target.model === undefined"
         class="guide-ring"
-        :class="{ 'guide-region': !!step.target.region }"
+        :class="{ 'guide-region': !!shown.target.region }"
         :style="ringStyle"
         aria-hidden="true"
       ></div>
@@ -237,11 +340,11 @@ const counter = computed(() => (step.value ? counterOf(step.value) : t("guide.ti
         :style="bubbleStyle"
       >
         <div class="guide-count">{{ counter }}</div>
-        <p class="guide-caption">{{ step.caption }}</p>
-        <p v-if="step.keys" class="guide-keys" data-guide-keys>
-          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ step.keys }}
+        <p class="guide-caption">{{ shown.caption }}</p>
+        <p v-if="shown.keys" class="guide-keys" data-guide-keys>
+          <span class="guide-keys-label">{{ t("guide.keysLabel") }}</span> {{ shown.keys }}
         </p>
-        <p v-if="hint" class="guide-hint">{{ hint }}</p>
+        <p v-if="shownHint" class="guide-hint">{{ shownHint }}</p>
         <div class="guide-actions">
           <Button id="guide-stop" @click="guide.stop()">{{ t("guide.stop") }}</Button>
           <Button id="guide-next" variant="primary" @click="guide.next()">{{ t("guide.next") }}</Button>

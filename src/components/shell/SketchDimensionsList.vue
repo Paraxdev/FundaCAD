@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import FieldRow from "../ui/FieldRow.vue";
 import NumberField from "../ui/NumberField.vue";
-import { valueProblem } from "../../document/numFields";
+import { exprProblem, valueProblem } from "../../document/numFields";
 import { t } from "../../i18n";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import { distinctNames } from "../../sketch/sketchNames";
@@ -109,7 +109,8 @@ function commit(r: Row, mm: number | null) {
 
 function expression(r: Row, raw: string): string | null {
   committed(r.key);
-  return itemOf(r.key)?.commitExpr?.(raw) ?? t("sketchPalette.dim.notEditable");
+  const commitExpr = itemOf(r.key)?.commitExpr;
+  return commitExpr ? exprProblem(commitExpr(raw)) : t("sketchPalette.dim.notEditable");
 }
 
 // A rebuild redraws the badges and may swap the list's elements, keep focus on the row the user committed.

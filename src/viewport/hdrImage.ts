@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import { unzlibSync, zlibSync } from "three/examples/jsm/libs/fflate.module.js";
+import { WordedError } from "../ui/wordedError";
 
 /** Linear RGBA floats, row 0 at the top (the sky of an equirect). */
 export interface HdrImage {
@@ -15,7 +16,7 @@ export interface HdrImage {
  *  typed array is refused or the window runs out of memory. */
 export const MAX_EXR_DECODE_BYTES = 2 ** 31;
 
-export class HdrRefusal extends Error {}
+export class HdrRefusal extends WordedError {}
 
 export function isHdrName(name: string): boolean {
   return /\.(hdr|exr)$/i.test(name);
@@ -74,7 +75,7 @@ function flipRows(data: Float32Array, width: number, height: number) {
 }
 
 function refuseEmpty(name: string, width: number, height: number) {
-  if (width < 2 || height < 1) throw new HdrRefusal(`${name} has no pixels.`);
+  if (width < 2 || height < 1) throw new HdrRefusal("render.hdr.noPixels", { name });
 }
 
 /** The halving a `width` panorama needs to fit `maxWidth`, a power of two, so the result matches downscaleEquirect. */
@@ -164,7 +165,7 @@ const yieldToPage = () => new Promise<void>((r) => setTimeout(r, 0));
 /** A Radiance file read one scanline at a time into a box downscale, so a 16k panorama never sits whole in memory
  *  as floats. */
 async function decodeRadiance(bytes: Uint8Array, name: string, maxWidth: number): Promise<HdrImage> {
-  const notOne = () => new HdrRefusal(`${name} is not a Radiance HDR image.`);
+  const notOne = () => new HdrRefusal("render.hdr.notRadiance", { name });
   if (bytes[0] !== 0x23 || bytes[1] !== 0x3f) throw notOne();
   let p = 0;
   const latin = new TextDecoder("latin1");
@@ -179,19 +180,19 @@ async function decodeRadiance(bytes: Uint8Array, name: string, maxWidth: number)
     if (p >= bytes.length || n > 1000) throw notOne();
     const text = line();
     if (/^\s*FORMAT=/.test(text) && !/32-bit_rle_rgbe/.test(text)) {
-      throw new HdrRefusal(`${name} is a Radiance file in ${text.split("=")[1]}, only RGBE is read.`);
+      throw new HdrRefusal("render.hdr.notRgbe", { name, format: text.split("=")[1] ?? "" });
     }
     if (text.trim() === "" && n > 0) break;
   }
   const res = /^\s*-Y\s+(\d+)\s+\+X\s+(\d+)\s*$/.exec(line());
-  if (!res) throw new HdrRefusal(`${name} is a Radiance file stored turned or flipped, which is not read.`);
+  if (!res) throw new HdrRefusal("render.hdr.turned", { name });
   const height = Number(res[1]);
   const width = Number(res[2]);
   refuseEmpty(name, width, height);
   const shrink = new BoxShrink(width, height, shrinkFactor(width, maxWidth));
   const scan = new Uint8Array(width * 4);
-  const short = () => new HdrRefusal(`${name} ends before its last scanline.`);
-  const broken = () => new HdrRefusal(`${name} has a broken scanline.`);
+  const short = () => new HdrRefusal("render.hdr.endsEarly", { name });
+  const broken = () => new HdrRefusal("render.hdr.brokenScanline", { name });
   let lastYield = performance.now();
   for (let y = 0; y < height; y++) {
     if (p + 4 > bytes.length) throw short();
@@ -245,13 +246,10 @@ async function decodeRadiance(bytes: Uint8Array, name: string, maxWidth: number)
 
 async function decodeExr(bytes: Uint8Array, name: string, maxWidth: number): Promise<HdrImage> {
   const size = exrSize(bytes);
-  if (!size) throw new HdrRefusal(`${name} is not an OpenEXR image.`);
+  if (!size) throw new HdrRefusal("render.hdr.notExr", { name });
   refuseEmpty(name, size.width, size.height);
   if (size.width * size.height * 8 > MAX_EXR_DECODE_BYTES) {
-    throw new HdrRefusal(
-      `${name} is ${size.width} x ${size.height}, more than an OpenEXR can be unpacked whole in memory. ` +
-        `Saved as an .hdr it imports, since that is read a line at a time.`,
-    );
+    throw new HdrRefusal("render.hdr.exrTooBig", { name, width: size.width, height: size.height });
   }
   const buf =
     bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
@@ -266,7 +264,7 @@ async function decodeExr(bytes: Uint8Array, name: string, maxWidth: number): Pro
     data: ArrayLike<number>;
   };
   const { width, height, data } = parsed;
-  if (!data || width * height * 4 > data.length) throw new HdrRefusal(`${name} could not be read as an HDR image.`);
+  if (!data || width * height * 4 > data.length) throw new HdrRefusal("render.hdr.unreadable", { name });
   const f = shrinkFactor(width, maxWidth);
   if (f === 1 && data instanceof Float32Array) {
     flipRows(data, width, height);
@@ -301,9 +299,10 @@ export async function decodeHdr(bytes: Uint8Array, name: string, maxWidth = Infi
     return /\.exr$/i.test(name) ? await decodeExr(bytes, name, maxWidth) : await decodeRadiance(bytes, name, maxWidth);
   } catch (err) {
     if (err instanceof HdrRefusal) throw err;
-    throw new HdrRefusal(
-      `${name} could not be read as an HDR image: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throw new HdrRefusal("render.hdr.unreadableWhy", {
+      name,
+      detail: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

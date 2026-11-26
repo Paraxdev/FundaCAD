@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GuideSession, type Resolution } from "../../../src/ui/guide/guideSession";
+import { resolveTarget, type ProbeHost } from "../../../src/ui/guide/probe";
 import { describeEvent, diffSnapshot, emptySnapshot, matchWait, type Snapshot } from "../../../src/ui/guide/wait";
 
 const snap = (p: Partial<Snapshot> = {}): Snapshot => ({ ...emptySnapshot(), ...p });
@@ -97,5 +98,32 @@ describe("GuideSession waits", () => {
     g.apply([{ kind: "highlight", seq: 3, target: { ui: "a" }, caption: "one" }]);
     g.apply([{ kind: "highlight", seq: 3, target: { ui: "b" }, caption: "two" }]);
     expect(g.state.step?.caption).toBe("one");
+  });
+
+  it("reads a step with no target, or an empty ref, as a caption alone that is found", () => {
+    const seen: unknown[] = [];
+    const g = new GuideSession(
+      (t) => {
+        seen.push(t);
+        return resolveTarget({} as ProbeHost, t, {} as Document);
+      },
+      () => snap(),
+    );
+    g.apply([{ kind: "highlight", seq: 1, caption: "Read this" }]);
+    expect([g.state.step?.target, g.state.step?.found]).toEqual([{}, true]);
+    g.apply([{ kind: "highlight", seq: 2, target: { ui: "" }, caption: "And this" }]);
+    expect([g.state.step?.target, g.state.step?.found]).toEqual([{}, true]);
+    expect(seen).toEqual([{}, {}]);
+  });
+
+  it("puts a hint on the step on screen, and none once there is no step", () => {
+    const { g } = rig();
+    g.setHint("Close the L first");
+    expect(g.state.step).toBeNull();
+    g.apply([{ kind: "highlight", seq: 1, target: { ui: "a" }, caption: "one" }]);
+    g.setHint("Close the L first");
+    expect(g.state.step?.hint).toBe("Close the L first");
+    g.setHint(undefined);
+    expect(g.state.step?.hint).toBeUndefined();
   });
 });

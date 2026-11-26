@@ -82,6 +82,7 @@ import {
   savedFaceRefs,
 } from "./faceRefs";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
+import { WordedError } from "../ui/wordedError";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { withFacelessFailures } from "./facelessBodies";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
@@ -103,6 +104,7 @@ import { STEP_LABEL, stepLabel, stepText, type StepLabel, type StepName } from "
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
+import { UNTITLED } from "./untitled";
 
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
@@ -943,7 +945,7 @@ export class DocumentStore {
     return this.isDirty;
   }
   get fileName(): string {
-    if (!this.path) return this.pathlessName ?? "Untitled";
+    if (!this.path) return this.pathlessName ?? UNTITLED;
     return this.path.split(/[\\/]/).pop() || this.path;
   }
   /** `clean` false: the file lacks a change made while it was written, so the document stays unsaved. */
@@ -2960,7 +2962,7 @@ export class DocumentStore {
   }
 
   branchFromVersion(id: string, name: string): string {
-    if (!this.repo) throw new Error("save a version first");
+    if (!this.repo) throw new WordedError("versions.error.saveFirst");
     const clean = createVersionBranch(this.repo, name, id);
     this.switchVersionBranch(clean);
     return clean;
@@ -3039,12 +3041,12 @@ export class DocumentStore {
       raw = JSON.parse(json);
     } catch (e) {
       throw new UnreadableDocumentError(
-        t("files.unreadable.garbled"),
+        "files.unreadable.garbled",
         `could not read document: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
     const problem = documentShapeProblem(raw);
-    if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
+    if (problem) throw new UnreadableDocumentError(problem.key, problem.detail, problem.args);
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     if (!replace) {

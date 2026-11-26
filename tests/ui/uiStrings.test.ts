@@ -254,6 +254,44 @@ describe("message keys in use", () => {
       "toast.saved",
     ]);
   });
+
+  it("collects the keys a thrown error carries, and no sentence it throws", () => {
+    const code = [
+      `throw new OnshapeError(ok ? "error.assembly" : "error.tab", {}, { lines: { reason: "error.noReason" } });`,
+      `throw new WordedError("versions.error.saveFirst");`,
+      `throw new Error("the file a.json is gone");`,
+      `throw new Error(message);`,
+    ].join("\n");
+    expect([...usedKeys({ "src/a.ts": code })].sort()).toEqual([
+      "error.assembly",
+      "error.noReason",
+      "error.tab",
+      "versions.error.saveFirst",
+    ]);
+  });
+
+  it("counts only a keyed error's first argument and its lines, not text beside them that looks like a key", () => {
+    const code = [
+      `throw new WordedError("plugins.notInstallable", { why: "see.the.log" }, { lines: { why: "plugins.manifest.noName" } });`,
+      `throw new ExprRefusal("expr.unexpected", { token: "a.b" });`,
+      `throw new OnshapeError("error.tab", { name: "part.one" }, { status: 404 });`,
+      `throw new TracerRefused("render.trace.selfCheckWrong", { file: "a.png" });`,
+      `throw new Error("the.file.json");`,
+      `throw new TypeError("config.json");`,
+    ].join("\n");
+    expect([...usedKeys({ "src/a.ts": code })].sort()).toEqual([
+      "error.tab",
+      "expr.unexpected",
+      "plugins.manifest.noName",
+      "plugins.notInstallable",
+      "render.trace.selfCheckWrong",
+    ]);
+  });
+
+  it("counts a subclass of a keyed error, as a plugin's own", () => {
+    const code = `class PartRefusal extends WordedError {}\nthrow new PartRefusal("myplugin.part.tooThin", { mm: 0.2 });`;
+    expect([...usedKeys({ "src/a.ts": code })]).toEqual(["myplugin.part.tooThin"]);
+  });
 });
 
 describe("the allowlist", () => {

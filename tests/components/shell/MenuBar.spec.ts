@@ -290,17 +290,18 @@ describe("menubar language switch", () => {
     await w.findAll(".menu-btn")[3]!.trigger("click");
     await flushPromises();
     const rows = () => [...document.body.querySelectorAll(".menu-item")].map((r) => r.textContent ?? "");
-    expect(rows()[1]).toContain("Manual");
-    expect(rows()[7]).toContain("About FundaCAD");
+    expect(rows()[2]).toContain("Manual");
+    expect(rows()[8]).toContain("About FundaCAD");
     await setLanguage("de");
     await flushPromises();
-    expect([0, 1, 7].map((n) => rows()[n]!)).toEqual([
+    expect([0, 1, 2, 8].map((n) => rows()[n]!)).toEqual([
       expect.stringContaining("Tastenkürzel"),
+      expect.stringContaining("Geführte erste Halterung"),
       expect.stringContaining("Handbuch"),
       expect.stringContaining("Über FundaCAD"),
     ]);
     await setLanguage("system");
     await flushPromises();
-    expect(rows()[7]).toContain("About FundaCAD");
+    expect(rows()[8]).toContain("About FundaCAD");
   });
 });

@@ -96,7 +96,8 @@ export function resolveTarget(h: ProbeHost, t: GuideTarget, doc: Document = docu
       return { found: false, missing: err instanceof Error ? err.message : String(err), near };
     }
   }
-  const r = resolveControl(t.ui ?? "", doc);
+  if (t.ui === undefined) return { found: true };
+  const r = resolveControl(t.ui, doc);
   if (r.el) return r.via ? { found: true, via: r.via } : { found: true };
   return { found: false, missing: r.missing, near: r.near };
 }

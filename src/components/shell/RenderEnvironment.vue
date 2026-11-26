@@ -48,6 +48,7 @@ import {
   saveEnvironmentAs,
 } from "../../ui/environmentImport";
 import type { EnvEntry } from "../../ui/environmentLibrary";
+import { shownMessage } from "../../ui/wordedError";
 import { t } from "../../i18n";
 import { onHdrRegistered } from "../../viewport/hdrRegistry";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
@@ -130,7 +131,7 @@ onUnmounted(() => {
 });
 
 const fail = (err: unknown) => {
-  notice.value = err instanceof Error ? err.message : String(err);
+  notice.value = shownMessage(err);
 };
 
 const importFile = async (file: File) => {

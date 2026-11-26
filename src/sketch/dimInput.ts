@@ -19,9 +19,10 @@ import { isEditableTarget, isHistoryKey, isLiveFocusTarget, isMenuKey } from "..
 import { claimEscape } from "../ui/escapeClaim";
 import { regionStep } from "../ui/regions";
 import { underZoom } from "../ui/anchor";
+import { englishLine } from "../ui/englishLines";
 import { pageZoom } from "../ui/interfaceSize";
 import { onPreviewError } from "../ui/previewError";
-import { storedExpr, typedExprProblem } from "../ui/measure";
+import { namesUnknown, storedExpr, typedExprProblem } from "../ui/measure";
 import { getUnit, niceStep, parseField } from "../ui/units";
 import {
   commonUnits,
@@ -220,6 +221,14 @@ function spokenValue(n: number, unit: UnitDef | null): string {
   const a = Math.abs(n);
   const amount = unit ? `${spellNumber(a)} ${spokenUnit(unit.id, a11yPrefs().unitsInFull, a === 1)}` : spellNumber(a);
   return n < 0 ? t("dim.negative", { amount }) : amount;
+}
+
+/** The parameter engine's English refusal as the box says it, an unknown name in its own words. Text the box already
+ *  worded passes through. */
+function boxExprProblem(error: string): string {
+  const said = englishLine(error);
+  if (!said) return error;
+  return t(said.key === "field.problem.unknownName" ? "field.problem.noParameterNamed" : said.key, said.args);
 }
 
 /** Replaces the field's text as one edit the browser's own undo takes back, as a paste does. */
@@ -864,11 +873,15 @@ export class DimInput {
     const v = this.parse(f);
     if (v === null) {
       const err = measureError(raw, f.unit);
-      if (err === null) return `${f.def.label} takes a plain number, no unit`;
+      if (err === null) return t("field.problem.plainNumberOnly", { label: f.def.label });
       const expr = this.typedExpr(f);
-      if (expr && !expr.ok)
-        return `${f.def.label}: ${expr.error.replace(/^unknown parameter /, "no parameter named ")}`;
-      return `${f.def.label}: ${/unknown parameter/.test(err) ? `"${raw}" is not a number` : err}`;
+      const problem =
+        expr && !expr.ok
+          ? boxExprProblem(expr.error)
+          : namesUnknown(raw, f.unit)
+            ? t("sketch.point.notNumberText", { text: raw })
+            : err;
+      return t("field.problem.labelled", { label: f.def.label, problem });
     }
     return this.rangeProblem(f.def, v);
   }
@@ -908,8 +921,7 @@ export class DimInput {
     const doc = this.doc();
     const text = this.numberText(f).trim();
     if (!doc || !text || this.parseMeasure(f) !== null) return null;
-    const err = measureError(text, f.unit);
-    if (!(err && /unknown parameter/.test(err)) && !splitNameValue(text)) return null;
+    if (!namesUnknown(text, f.unit) && !splitNameValue(text)) return null;
     const refused = typedExprProblem(text);
     if (refused) return { ok: false, error: refused };
     return doc.classifyTargetExpr(null, null, storedExpr(text), f.def.kind ?? "length");

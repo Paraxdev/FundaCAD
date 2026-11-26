@@ -12,6 +12,7 @@ import type { Engine } from "../../../src/app/engine";
 import { GuideSession } from "../../../src/ui/guide/guideSession";
 import { emptySnapshot, type Snapshot } from "../../../src/ui/guide/wait";
 import { announce } from "../../../src/ui/announce";
+import { SketchPlane } from "../../../src/sketch/plane";
 
 vi.mock(import("../../../src/ui/announce"), async (orig) => ({ ...(await orig()), announce: vi.fn() }));
 
@@ -47,7 +48,7 @@ function frame(): number {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-function setup() {
+function setup(props: { session?: GuideSession; hidden?: boolean } = {}) {
   let snap: Snapshot = emptySnapshot();
   let faceCalls = 0;
   /** The body's live pose: the Move tool's ghost sets it on the mesh and never touches the store. */
@@ -75,9 +76,15 @@ function setup() {
     () => ({ found: true }),
     () => snap,
   );
+  const sketch = {
+    active: false,
+    activePlane: new SketchPlane("XY"),
+    drawnBounds: (): { minx: number; miny: number; maxx: number; maxy: number } | null => null,
+  };
   const engine = {
     guide,
     store,
+    sketch,
     viewport: {
       domElement: canvas,
       projectToScreen: (v: THREE.Vector3) => ({ x: v.x * 10, y: v.y * 10 }),
@@ -93,13 +100,15 @@ function setup() {
   const btn = document.createElement("button");
   btn.id = "guide-spec-target";
   document.body.appendChild(btn);
-  mount(GuideLayer, { global: { provide: { [ENGINE as symbol]: engine } } });
+  const wrapper = mount(GuideLayer, { props, global: { provide: { [ENGINE as symbol]: engine } } });
   return {
+    wrapper,
     guide,
     store,
     setTool: (t: string) => (snap = { ...snap, tool: t }),
     faceCalls: () => faceCalls,
     pose,
+    sketch,
   };
 }
 
@@ -231,6 +240,210 @@ describe("GuideLayer bubble", () => {
     await tick();
     expect(document.querySelector(".guide-caption")!.textContent).toBe("There");
     expect(document.querySelector("[data-guide-keys]")).toBeNull();
+  });
+
+  it("says a model part or control is not on screen in the user's language, and keeps the English detail for the assistant", async () => {
+    const g = setup();
+    const hintText = () => document.querySelector(".guide-hint")?.textContent?.trim();
+    try {
+      g.guide.apply([{ kind: "highlight", seq: 1, target: { model: "body9:index=0" }, caption: "Here" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("That part of the model is not on screen");
+
+      g.guide.apply([{ kind: "highlight", seq: 2, target: { ui: "no-such-control" }, caption: "Here" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("That control is not on screen");
+      expect(g.guide.state.step?.missing).toMatch(/^no control "no-such-control" on screen/);
+
+      await setLanguage("de");
+      g.guide.apply([{ kind: "highlight", seq: 3, target: { ui: "no-such-control" }, caption: "Hier" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("Dieses Bedienelement ist gerade nicht zu sehen");
+      expect(g.guide.state.step?.missing).toMatch(/^no control "no-such-control" on screen/);
+
+      g.guide.apply([{ kind: "highlight", seq: 4, target: { model: "body9:index=0" }, caption: "Hier" }]);
+      await tick();
+      frame();
+      await tick();
+      expect(hintText()).toBe("Dieser Teil des Modells ist gerade nicht zu sehen");
+    } finally {
+      await setLanguage("system");
+    }
+  });
+});
+
+describe("GuideLayer for a tour", () => {
+  const tourSession = () =>
+    new GuideSession(
+      () => ({ found: true }),
+      () => emptySnapshot(),
+    );
+  const shown = () => [!!document.querySelector(".guide-bubble"), !!document.querySelector(".guide-ring")];
+
+  it("shows its own session's step, not the assistant's", async () => {
+    const session = tourSession();
+    const g = setup({ session });
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Theirs" }]);
+    session.apply([{ kind: "highlight", seq: 1, target: { ui: "guide-spec-target" }, caption: "Ours" }]);
+    await tick();
+    expect([...document.querySelectorAll(".guide-caption")].map((c) => c.textContent)).toEqual(["Ours"]);
+    document.getElementById("guide-next")!.click();
+    expect([session.state.step?.next, g.guide.state.step?.next]).toEqual([true, false]);
+  });
+
+  it("puts a caption alone at the top centre, with no ring and no hint", async () => {
+    const session = tourSession();
+    setup({ session });
+    session.apply([{ kind: "highlight", seq: 1, step: 2, of: 14, caption: "Click the tile labelled XZ." }]);
+    await tick();
+    frame();
+    await tick();
+    const bubble = document.querySelector<HTMLElement>(".guide-bubble")!;
+    expect([bubble.style.left, bubble.style.top]).toEqual([`${window.innerWidth / 2 - 140}px`, "72px"]);
+    expect([document.querySelector(".guide-ring"), document.querySelector(".guide-hint")]).toEqual([null, null]);
+    expect(document.querySelector(".guide-caption")!.textContent).toBe("Click the tile labelled XZ.");
+  });
+
+  it("moves a caption off the open sketch, its first 50 mm square and what is drawn past it", async () => {
+    const session = tourSession();
+    const g = setup({ session });
+    g.sketch.active = true;
+    session.apply([{ kind: "highlight", seq: 1, step: 4, of: 14, caption: "Draw the L." }]);
+    await tick();
+    frame();
+    await tick();
+    const bubble = document.querySelector<HTMLElement>(".guide-bubble")!;
+    // The stub projects 1 mm to 10 px, so the square is 0 to 500 px.
+    const at = () => [parseFloat(bubble.style.left), parseFloat(bubble.style.top)];
+    const [left, top] = at();
+    expect(left! >= 504 || top! >= 504).toBe(true);
+
+    g.sketch.drawnBounds = () => ({ minx: 0, miny: 0, maxx: 60, maxy: 20 });
+    for (let i = 0; i < 16; i++) frame();
+    await tick();
+    const [left2, top2] = at();
+    expect(left2! >= 604 || top2! >= 504).toBe(true);
+  });
+
+  it("shows the tour's hint under the caption", async () => {
+    const session = tourSession();
+    setup({ session });
+    session.apply([{ kind: "highlight", seq: 1, caption: "Draw the L." }]);
+    session.setHint("The L is not closed yet, click its first corner again.");
+    await tick();
+    expect(document.querySelector(".guide-hint")!.textContent).toBe(
+      "The L is not closed yet, click its first corner again.",
+    );
+  });
+
+  it("hides the bubble and ring while hidden and keeps the wait open, then shows them again", async () => {
+    const session = tourSession();
+    const g = setup({ session, hidden: true });
+    session.apply([
+      { kind: "highlight", seq: 1, target: { region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }, caption: "Here" },
+      { kind: "wait", seq: 2, until: "next" },
+    ]);
+    await tick();
+    for (let i = 0; i < 3; i++) expect(frame()).toBe(1);
+    expect(shown()).toEqual([false, false]);
+    expect([session.state.wait?.done, session.active]).toEqual([null, true]);
+    expect(vi.mocked(announce)).not.toHaveBeenCalled();
+
+    await g.wrapper.setProps({ hidden: false });
+    frame();
+    await tick();
+    expect(shown()).toEqual([true, true]);
+    expect(vi.mocked(announce).mock.calls.map((c) => c[0])).toEqual(["Guide. Here."]);
+  });
+});
+
+function rectOf(el: Element, b: { left: number; top: number; width: number; height: number }): void {
+  const r = { ...b, x: b.left, y: b.top, right: b.left + b.width, bottom: b.top + b.height };
+  el.getBoundingClientRect = () => ({ ...r, toJSON: () => r }) as DOMRect;
+}
+
+describe("GuideLayer over an open menu", () => {
+  const bubbleAt = () => {
+    const b = document.querySelector<HTMLElement>(".guide-bubble")!;
+    return { left: b.style.left, side: b.dataset.side, hidden: b.style.visibility === "hidden" };
+  };
+  const step = async () => {
+    frame();
+    await tick();
+  };
+
+  it("moves the bubble off a menu the frame it opens, hides it with the ring kept while nothing is clear", async () => {
+    const g = setup();
+    const btn = document.createElement("button");
+    btn.id = "guide-menu-target";
+    document.body.appendChild(btn);
+    rectOf(btn, { left: 360, top: 40, width: 80, height: 28 });
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { ui: "#guide-menu-target" }, caption: "Finish" }]);
+    await tick();
+    await step();
+    expect(bubbleAt()).toEqual({ left: "456px", side: "right", hidden: false });
+
+    const menu = document.createElement("div");
+    menu.className = "ui-menu";
+    document.body.appendChild(menu);
+    rectOf(menu, { left: 430, top: 32, width: 240, height: 300 });
+    await step();
+    expect(bubbleAt()).toEqual({ left: "64px", side: "left", hidden: false });
+
+    rectOf(menu, { left: 0, top: 80, width: 1024, height: 600 });
+    await step();
+    expect(bubbleAt().hidden).toBe(true);
+    expect(document.querySelector(".guide-ring")).not.toBeNull();
+
+    menu.remove();
+    await step();
+    expect(bubbleAt()).toEqual({ left: "456px", side: "right", hidden: false });
+    btn.remove();
+  });
+});
+
+describe("GuideLayer in a sketch", () => {
+  it("forgets the last sketch's drawing when a sketch opens again", async () => {
+    const g = setup();
+    g.sketch.active = true;
+    g.sketch.drawnBounds = () => ({ minx: 0, miny: 0, maxx: 70, maxy: 20 });
+    g.guide.apply([{ kind: "highlight", seq: 1, caption: "Draw the L." }]);
+    await tick();
+    const left = async () => {
+      frame();
+      await tick();
+      return document.querySelector<HTMLElement>(".guide-bubble")!.style.left;
+    };
+    // The stub projects 1 mm to 10 px: the 70 mm drawing ends at 700 px, the first 50 mm square at 500.
+    expect(await left()).toBe("716px");
+    g.sketch.active = false;
+    expect(await left()).toBe(`${window.innerWidth / 2 - 140}px`);
+    g.sketch.active = true;
+    g.sketch.drawnBounds = () => null;
+    expect(await left()).toBe("516px");
+  });
+
+  it("reads the shell's panels every 15 frames and as a sketch opens, and open menus every frame", async () => {
+    const qsa = vi.spyOn(document, "querySelectorAll");
+    const reads = (part: string) => qsa.mock.calls.filter(([sel]) => String(sel).includes(part)).length;
+    const g = setup();
+    g.sketch.active = true;
+    g.guide.apply([{ kind: "highlight", seq: 1, caption: "Draw the L." }]);
+    await tick();
+    for (let i = 0; i < 30; i++) frame();
+    expect([reads(".tool-rail"), reads(".ui-menu")]).toEqual([2, 30]);
+    g.sketch.active = false;
+    frame();
+    g.sketch.active = true;
+    frame();
+    expect([reads(".tool-rail"), reads(".ui-menu")]).toEqual([3, 32]);
+    qsa.mockRestore();
   });
 });
 

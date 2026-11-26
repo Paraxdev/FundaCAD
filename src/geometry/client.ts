@@ -25,6 +25,7 @@ import type {
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { tEnglish } from "../i18n";
+import { WordedError } from "../ui/wordedError";
 import type { EngineTiming } from "../diagnostics/editTiming";
 import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -1576,11 +1577,13 @@ export class Geometry implements GeometryBackend {
         undefined,
         scope,
       );
-      if (!msg.ok) throw new Error(msg.error?.message ?? "the engine refused the bytes");
+      if (!msg.ok) {
+        throw msg.error?.message != null ? new Error(msg.error.message) : new WordedError("engine.blobRefused");
+      }
       if (msg.result.stored) return hash;
       offset += piece.length;
     } while (offset < total);
-    throw new Error("the engine did not store the bytes");
+    throw new WordedError("engine.blobNotStored");
   }
 
   async blobGet(hash: string): Promise<Uint8Array | null> {

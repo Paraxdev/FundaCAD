@@ -27,7 +27,6 @@
   { "path": "src/components/shell/BrowserPane.vue", "kind": "script", "count": 4, "reason": "default names (Sketch1, Axis1, Mechanism 1) stay as they are, see docs/I18N.md" },
   { "path": "src/components/shell/SurfaceNodeEditor.vue", "kind": "template", "count": 1, "reason": "the Shift+A shortcut hint, a key name that reads the same in every language" },
   { "path": "src/components/shell/ViewportPane.vue", "kind": "template", "count": 1, "reason": "the Shift key name in the material drop hint, it reads the same in every language" },
-  { "path": "src/document/documentShape.ts", "kind": "script", "count": 6, "reason": "the technical detail that goes to the log beside the translated reason, a developer reads it, stays English" },
   { "path": "src/document/materials.ts", "kind": "script", "count": 9, "reason": "built-in material names and \"Imported …\" are saved into the document's material library, values, stay English" },
   { "path": "src/document/store.ts", "kind": "script", "count": 1, "reason": "the palette slot's default name \"Colour …\" is saved into the document, a value, stays English" },
   { "path": "src/document/versions.ts", "kind": "script", "count": 1, "reason": "\"Saved version\" is the message stored in the version repo, a value, stays English" },

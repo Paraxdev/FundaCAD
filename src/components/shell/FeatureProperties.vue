@@ -13,7 +13,7 @@ import ToggleRow from "./ToggleRow.vue";
 import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { plainNumber } from "../../ui/units";
-import { shownExpr, storedExpr, typedExprProblem } from "../../ui/measure";
+import { MeasureRefusal, shownExpr, storedExpr, typedExprProblem } from "../../ui/measure";
 import { onPreviewError } from "../../ui/previewError";
 import {
   canonicalTyping,
@@ -235,9 +235,10 @@ const sketchRows = useDocValue((doc) => {
 
 /** Any measurement, a bare number in the shown unit. */
 function parseSketchDim(key: string, raw: string): number {
-  const m = measure(raw, unitOf(key, "length"), "length");
-  if (typeof m === "string") throw new Error(m);
-  if (!m) throw new Error(t("field.problem.notValue"));
+  const m = tryParseMeasure(raw, unitOf(key, "length"), {});
+  if (!m) throw new MeasureRefusal("field.problem.notValue");
+  if (m.unit && m.unit.dim !== "length")
+    throw new MeasureRefusal("field.problem.wrongUnit", { unit: m.unit.label, dim: "length" });
   return m.value;
 }
 

@@ -1,6 +1,8 @@
 // Settings a plugin declares, drawn under its row in Preferences > Plugins, stored under one localStorage key per id.
 // Synchronous on purpose: plugins read them at module scope, and an async store would start them all on defaults.
 
+import { WordedError } from "../ui/wordedError";
+
 export interface SettingBase {
   /** Stable within the plugin; the name the plugin reads the value by. */
   key: string;
@@ -257,7 +259,8 @@ export function removePluginSettings(pluginId: string) {
  *  stored. */
 export function definePluginSettings(pluginId: string, schema: SettingsSchema): PluginSettings {
   const problems = validateSchema(schema);
-  if (problems.length) throw new Error(`${pluginId} settings: ${problems.join("; ")}`);
+  if (problems.length)
+    throw new WordedError("plugins.error.badSettings", { plugin: pluginId, problems: problems.join("; ") });
   const props = new Map(schema.props.map((p) => [p.key, p]));
   const values: SettingValues = {};
   const listeners = new Set<(keys: string[]) => void>();
@@ -304,7 +307,7 @@ export function definePluginSettings(pluginId: string, schema: SettingsSchema): 
 
   const prop = (key: string) => {
     const p = props.get(key);
-    if (!p) throw new Error(`${pluginId} has no setting "${key}"`);
+    if (!p) throw new WordedError("plugins.error.noSetting", { plugin: pluginId, key });
     return p;
   };
   const emit = (keys: string[]) => {

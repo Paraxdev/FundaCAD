@@ -229,6 +229,24 @@ describe("Dimensions list commits", () => {
     expect(rowsOf(w)[0]!.get(".ui-field-hint").text()).toBe("Unknown name Q");
   });
 
+  it("shows the English line an expression is refused with in German", async () => {
+    onEditExpr.mockReturnValue('"width" already exists');
+    const { w } = await open([RECT]);
+    await setLanguage("de");
+    try {
+      await type(w, 0, "width = 12");
+      expect(rowsOf(w)[0]!.get(".ui-field-hint").text()).toBe("„width“ existiert bereits");
+    } finally {
+      await setLanguage("system");
+    }
+  });
+
+  it("takes an expression the sketch accepts without a refusal", async () => {
+    const { w } = await open([RECT]);
+    await type(w, 0, "W/2");
+    expect(inputOf(w, 0).attributes("aria-invalid")).toBeUndefined();
+  });
+
   it("reverts on Escape", async () => {
     const { w } = await open([RECT]);
     await type(w, 0, "99", "Escape");

@@ -68,6 +68,7 @@ function mountHome() {
     currentVersions: () => null,
     openVersion: async () => true,
     openBranch: async () => true,
+    startTour: async () => {},
   } satisfies HomeCallbacks);
   home.visible = true;
   return mount(HomeScreen, { attachTo: document.body });

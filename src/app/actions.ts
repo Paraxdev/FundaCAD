@@ -31,6 +31,7 @@ import type { ZoomChord } from "../input/platform";
 import type { StandardView } from "../viewport/cameras";
 import { speakCameraWhenSettled } from "./cameraSpeech";
 import { carryCommand } from "./carryOn";
+import { startFirstBracket } from "./tourActions";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
 const VIEWS: ReadonlySet<string> = new Set(STANDARD_VIEWS);
@@ -138,6 +139,7 @@ export function createActions(e: Engine): (action: string) => void {
     // Before the sketch finish below, so a sketch open when the problem showed is reported open.
     if (action === "report-problem") return openReportDialog();
     if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "first-bracket") return void startFirstBracket(e);
     if (action === "describe-model") return openDescribeModel(e);
     if (action === "describe-selection") return describeSelectionAloud(e);
     if (action === "preferences") return void useDialogStore().openPreferences();

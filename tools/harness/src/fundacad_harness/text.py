@@ -105,6 +105,11 @@ def guide(v: dict) -> str:
     return "\n".join(lines)
 
 
+def tour(v: dict) -> str:
+    at = f"{v.get('id')} step {v.get('step')} of {v.get('of')}"
+    return f"{at}, ended {v['ended']}" if v.get("ended") else at
+
+
 def selection(v: dict) -> str:
     parts = []
     if v.get("bodies"):

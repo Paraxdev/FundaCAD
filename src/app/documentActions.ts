@@ -8,6 +8,7 @@ import {
 } from "../io/files";
 import { choose } from "../ui/choice";
 import { t } from "../i18n";
+import { shownFileName } from "../document/untitled";
 import { toast } from "../ui/toast";
 import { announce } from "../ui/announce";
 import { stepLabelFor } from "../ui/canStep";
@@ -187,7 +188,7 @@ export async function importFromHome(
     await importNamed(e, importedName(first), names, run);
     return true;
   }
-  const doc = displayName(e.store.fileName);
+  const doc = displayName(shownFileName(e.store.fileName));
   const pick = await choose(t("document.import.ask", { first, more: names.length - 1, doc }), [
     { value: "add", label: t("document.import.addTo", { doc }) },
     { value: "new", label: t("document.import.newDocument") },

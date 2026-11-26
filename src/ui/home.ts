@@ -13,6 +13,8 @@ export interface HomeCallbacks {
   /** True once the document shows that version (a copy: as a new untitled document). */
   openVersion: (path: string, id: string, copy: boolean) => Promise<boolean>;
   openBranch: (path: string, name: string) => Promise<boolean>;
+  /** The guided first bracket, in a new document. */
+  startTour: () => Promise<void>;
 }
 
 let shown: Home | null = null;

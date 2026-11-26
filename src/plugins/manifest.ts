@@ -1,7 +1,7 @@
 // The grant vocabulary and how it is worded for the person deciding. Pure and Vue-free. An unknown grant is refused,
 // and consent is recorded against `promiseOf()`, so a version asking for more has to ask again.
 
-import { t, type MessageKey } from "../i18n";
+import { t, tEnglish, type MessageArgs, type MessageKey } from "../i18n";
 import { LANGUAGE_CODE } from "../i18n/languages";
 import { checkLine } from "../i18n/overrides";
 
@@ -102,7 +102,18 @@ export interface PluginManifest {
   translations: ReadonlyMap<string, ManifestText>;
 }
 
-export type ParseResult = { ok: true; manifest: PluginManifest } | { ok: false; why: string };
+/** A refusal keeps `why` English for the log and the build checks, `key` and `args` word it where it is shown. */
+export type ParseResult =
+  { ok: true; manifest: PluginManifest } | { ok: false; why: string; key: MessageKey; args: MessageArgs };
+
+const refuse = (key: MessageKey, args: MessageArgs = {}): ParseResult => ({
+  ok: false,
+  why: tEnglish(key, args),
+  key,
+  args,
+});
+// JSON.stringify(undefined) is undefined, so a missing field reads "undefined".
+const json = (v: unknown): string => String(JSON.stringify(v));
 
 // `Publisher.Name`, two halves so two publishers' `exporter` cannot collide. It is a directory name: every segment
 // starts with an ASCII letter, so `.`, `..` and `.ssh` cannot be spelled. Case is left to `sameId()`.
@@ -139,69 +150,69 @@ function parseTranslations(raw: unknown): Map<string, ManifestText> {
 
 /** Every rejection names its reason, so a publisher knows which line to fix. */
 export function parseManifest(raw: unknown): ParseResult {
-  if (!raw || typeof raw !== "object") return { ok: false, why: "not an object" };
+  if (!raw || typeof raw !== "object") return refuse("plugins.manifest.notObject");
   const r = raw as Record<string, unknown>;
 
   const id = str(r.id);
-  if (!ID.test(id)) return { ok: false, why: `not a plugin id: ${JSON.stringify(r.id)}` };
+  if (!ID.test(id)) return refuse("plugins.manifest.notId", { value: json(r.id) });
   const name = str(r.name);
-  if (!name) return { ok: false, why: "no name" };
-  if (!name.trim()) return { ok: false, why: "the name is empty, a screen reader would read the plugin as nothing" };
+  if (!name) return refuse("plugins.manifest.noName");
+  if (!name.trim()) return refuse("plugins.manifest.emptyName");
   const version = str(r.version);
-  if (!version) return { ok: false, why: "no version" };
-  if (!isKind(r.kind)) return { ok: false, why: `not a plugin kind: ${JSON.stringify(r.kind)}` };
+  if (!version) return refuse("plugins.manifest.noVersion");
+  if (!isKind(r.kind)) return refuse("plugins.manifest.notKind", { value: json(r.kind) });
 
-  if (!Array.isArray(r.grants)) return { ok: false, why: "grants must be a list" };
+  if (!Array.isArray(r.grants)) return refuse("plugins.manifest.notList", { field: "grants" });
   const grants: Grant[] = [];
   for (const g of r.grants) {
-    if (!isGrant(g)) return { ok: false, why: `unknown permission: ${JSON.stringify(g)}` };
-    if (grants.includes(g)) return { ok: false, why: `permission asked for twice: ${g}` };
+    if (!isGrant(g)) return refuse("plugins.manifest.unknownGrant", { value: json(g) });
+    if (grants.includes(g)) return refuse("plugins.manifest.grantTwice", { grant: g });
     grants.push(g);
   }
 
   if (r.enabledByDefault !== undefined && typeof r.enabledByDefault !== "boolean") {
-    return { ok: false, why: "enabledByDefault must be true or false" };
+    return refuse("plugins.manifest.notBoolean", { field: "enabledByDefault" });
   }
 
   // Not run through the id pattern: these predate the convention, and those most need their stored setting found.
   const formerRaw = r.formerIds === undefined ? [] : r.formerIds;
-  if (!Array.isArray(formerRaw)) return { ok: false, why: "formerIds must be a list" };
+  if (!Array.isArray(formerRaw)) return refuse("plugins.manifest.notList", { field: "formerIds" });
   const formerIds: string[] = [];
   for (const f of formerRaw) {
     if (typeof f !== "string" || !f) {
-      return { ok: false, why: `not a former id: ${JSON.stringify(f)}` };
+      return refuse("plugins.manifest.notFormerId", { value: json(f) });
     }
-    if (f === id) return { ok: false, why: "formerIds repeats the current id" };
+    if (f === id) return refuse("plugins.manifest.formerIsCurrent");
     formerIds.push(f);
   }
 
   // Not the id pattern either: a feature type is a document token ("press-pull"), only required to be non-empty.
   const typesRaw = r.featureTypes === undefined ? [] : r.featureTypes;
-  if (!Array.isArray(typesRaw)) return { ok: false, why: "featureTypes must be a list" };
+  if (!Array.isArray(typesRaw)) return refuse("plugins.manifest.notList", { field: "featureTypes" });
   const featureTypes: string[] = [];
   for (const type of typesRaw) {
     if (typeof type !== "string" || !type) {
-      return { ok: false, why: `not a feature type: ${JSON.stringify(type)}` };
+      return refuse("plugins.manifest.notFeatureType", { value: json(type) });
     }
     if (featureTypes.includes(type)) {
-      return { ok: false, why: `featureTypes repeats ${JSON.stringify(type)}` };
+      return refuse("plugins.manifest.typeTwice", { value: json(type) });
     }
     featureTypes.push(type);
   }
 
   const hostsRaw = r.hosts === undefined ? [] : r.hosts;
-  if (!Array.isArray(hostsRaw)) return { ok: false, why: "hosts must be a list" };
+  if (!Array.isArray(hostsRaw)) return refuse("plugins.manifest.notList", { field: "hosts" });
   const hosts = hostsRaw.map(str);
   for (const h of hosts) {
-    if (!HOST.test(h)) return { ok: false, why: `not a host name: ${JSON.stringify(h)}` };
+    if (!HOST.test(h)) return refuse("plugins.manifest.notHost", { value: json(h) });
   }
 
   // Both directions are errors: a permission and its scope arrive together, or the screen shows what is not enforced.
   if (grants.includes("network") && hosts.length === 0) {
-    return { ok: false, why: "network was asked for without naming any hosts" };
+    return refuse("plugins.manifest.networkNoHosts");
   }
   if (!grants.includes("network") && hosts.length > 0) {
-    return { ok: false, why: "hosts were named without asking for network" };
+    return refuse("plugins.manifest.hostsNoNetwork");
   }
 
   return {

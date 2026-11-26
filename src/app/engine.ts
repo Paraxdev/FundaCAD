@@ -76,6 +76,7 @@ import {
   openOnBranch,
   openPathGuarded,
 } from "./documentActions";
+import { startFirstBracket } from "./tourActions";
 import { endRewoundPick } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -104,6 +105,8 @@ import { LiveSessionHost } from "../live/liveSession";
 import { loadMcpSwitch, mcpEnabled, onMcpChange } from "../live/mcpSwitch";
 import { GuideSession } from "../ui/guide/guideSession";
 import { resolveTarget, takeSnapshot } from "../ui/guide/probe";
+import { tourContext } from "../ui/tour/context";
+import { TourRunner } from "../ui/tour/tourRunner";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
 import type { Feature, PlaneDef, PlaneSpec, Vec3 } from "../types";
@@ -147,6 +150,8 @@ export interface Engine {
   /** Shares the document with an attached assistant; always constructed, running only while live editing is on. */
   live: LiveSessionHost;
   guide: GuideSession;
+  /** A guided tour, on a guide session of its own that the live session never touches. */
+  tour: TourRunner;
   overlay: SketchOverlay;
   sketch: SketchMode;
   tools: EngineTools;
@@ -283,6 +288,16 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     () => takeSnapshot(e),
   );
   e.live.attachGuide(e.guide);
+  e.tour = new TourRunner(
+    new GuideSession(
+      (t) => resolveTarget(e, t),
+      () => takeSnapshot(e),
+    ),
+    tourContext(e),
+    e.guide,
+    (m) => toast(m),
+  );
+  e.store.onOpen(() => e.tour.documentOpened());
   const syncLive = () => {
     if (mcpEnabled() === true && liveSharingEnabled()) e.live.start();
     else void e.live.stop();
@@ -477,6 +492,7 @@ export function mountUi(e: Engine): void {
     currentVersions: () => e.store.versionRepo,
     openVersion: (path, id, copy) => openAtVersion(e, path, id, copy),
     openBranch: (path, name) => openOnBranch(e, path, name),
+    startTour: async () => void (await startFirstBracket(e)),
   });
   wireHomeOnOpen(e.store, e.ui.home);
   setThumbnailSource(() => e.viewport.renderThumbnail(480, 300));

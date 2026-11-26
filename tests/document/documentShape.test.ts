@@ -29,7 +29,7 @@ describe("documentShapeProblem", () => {
   });
 
   it("names what is wrong, in words and in detail", () => {
-    expect(documentShapeProblem({ features: "not-an-array", bodyIds: null })).toEqual({
+    expect(documentShapeProblem({ features: "not-an-array", bodyIds: null })).toMatchObject({
       reason: "its list of modelling steps is damaged",
       detail: `"features" is a string, expected an array`,
     });

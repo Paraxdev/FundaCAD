@@ -34,6 +34,17 @@ def test_extrude_reedit(s):
     example("extrude_reedit").run(s)
 
 
+def test_first_bracket_tour(s):
+    walk = example("first_bracket_tour")
+    walk.run(s)
+    walk.run_stop(s)
+
+
+@pytest.mark.heavy
+def test_first_ten_minutes(s):
+    example("first_ten_minutes").run(s)
+
+
 @pytest.mark.heavy
 def test_big_model_orbit(s, tmp_path):
     example("big_model_orbit").run(s, tmp_path)

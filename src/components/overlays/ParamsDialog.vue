@@ -9,6 +9,7 @@ import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
 import { getUnit, toDisplay } from "../../ui/units";
 import { shownExpr, spellRounded, storedExpr, typedExprProblem } from "../../ui/measure";
+import { exprProblem } from "../../document/numFields";
 import Panel from "../ui/Panel.vue";
 import TextField from "../ui/TextField.vue";
 import Select from "../ui/Select.vue";
@@ -37,7 +38,7 @@ const rows = useDocValue((doc) => {
     def,
     value: formatValue(def),
     drives: def.target ? targetLabel(doc, def.target) : null,
-    issue: store.paramIssues[name],
+    issue: exprProblem(store.paramIssues[name] ?? null) ?? undefined,
   })) as Row[];
 });
 
@@ -71,7 +72,7 @@ function targetLabel(doc: CadDocument, target: ParamTarget): string {
 // button.
 const delError = ref<Record<string, string>>({});
 function del(name: string) {
-  const err = store.deleteParam(name);
+  const err = exprProblem(store.deleteParam(name));
   if (err) delError.value = { ...delError.value, [name]: err };
 }
 
@@ -89,12 +90,13 @@ const addError = ref("");
  *  refused text. */
 const commitWith = (fn: (raw: string) => string | null) => (raw: string) => fn(raw.trim());
 const commitExpr = (fn: (expr: string) => string | null) =>
-  commitWith((raw) => typedExprProblem(raw) ?? fn(storedExpr(raw)));
+  commitWith((raw) => typedExprProblem(raw) ?? exprProblem(fn(storedExpr(raw))));
 
 function add() {
   if (!newName.value.trim() || !newExpr.value.trim()) return;
   const expr = newExpr.value.trim();
-  const err = typedExprProblem(expr) ?? store.addParam(newName.value.trim(), storedExpr(expr), newUnit.value);
+  const err =
+    typedExprProblem(expr) ?? exprProblem(store.addParam(newName.value.trim(), storedExpr(expr), newUnit.value));
   addError.value = err ?? "";
   if (err) return;
   newName.value = "";
@@ -130,7 +132,7 @@ function add() {
           commit="change"
           :label="t('params.nameOf', { name: r.name })"
           :model-value="r.name"
-          :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
+          :validate="commitWith((raw) => (raw === r.name ? null : exprProblem(store.renameParam(r.name, raw))))"
         />
         <TextField
           commit="change"
@@ -190,7 +192,7 @@ function add() {
             commit="change"
             :label="t('params.nameOf', { name: r.name })"
             :model-value="r.name"
-            :validate="commitWith((raw) => (raw === r.name ? null : store.renameParam(r.name, raw)))"
+            :validate="commitWith((raw) => (raw === r.name ? null : exprProblem(store.renameParam(r.name, raw))))"
           />
           <TextField
             commit="change"

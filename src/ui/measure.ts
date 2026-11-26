@@ -2,7 +2,7 @@
 // `x` as multiply and parameters are normalised into the expression language of params/parse.ts, the one evaluator.
 // No dimensional analysis: "2mm * 3mm" is 6.
 
-import { ExprError, parseExpr } from "../params/parse";
+import { ExprError, ExprRefusal, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
 import { commasToPoints, pointsToCommas, TypedNumberError } from "../params/decimalForm";
 import { decimalMark, t, type DecimalMark } from "../i18n";
@@ -226,9 +226,12 @@ function refuseThousandsComma(src: string, m: RegExpExecArray): void {
   }
 }
 
+/** A value box's refusal, English in its message like every ExprError, worded from its key where a box shows it. */
+export class MeasureRefusal extends ExprRefusal {}
+
 /** "1 000" or "1 5", two numbers with only a space between. Its hint names both on screen, so a box refuses it rather
  *  than fall back to the value typed before. */
-export class JoinedNumbersError extends ExprError {}
+export class JoinedNumbersError extends MeasureRefusal {}
 
 export function joinsNumbers(raw: string): boolean {
   try {
@@ -243,7 +246,7 @@ export function joinsNumbers(raw: string): boolean {
  *  for, travel the same path as mm. */
 export function normalise(raw: string): Normalised {
   const src = canonicalTyping(raw);
-  if (!src) throw new ExprError("empty value");
+  if (!src) throw new MeasureRefusal("field.problem.empty");
 
   const frac = FRACTION.exec(src);
   if (frac) {
@@ -301,14 +304,15 @@ export function normalise(raw: string): Normalised {
         const digits = groups && /\d+$/.exec(out)?.[0];
         if (digits) {
           const whole = `${digits}${groups.replace(/\s/g, "")}`;
-          throw new JoinedNumbersError(
-            `write "${decimalMark() === "," ? whole.replace(".", ",") : whole}" without the space, a space does not group digits`,
-          );
+          throw new JoinedNumbersError("field.problem.spaceInNumber", {
+            number: decimalMark() === "," ? whole.replace(".", ",") : whole,
+          });
         }
-        throw new JoinedNumbersError(`put an operator between "${out}" and "${src.slice(i)}"`);
+        throw new JoinedNumbersError("field.problem.joinedNumbers", { before: out, after: src.slice(i) });
       }
       // A bare number right after a unit group (`2"5`, `2mm 3`) is half finished; joining it would invent a number.
-      if (!u && pendingJoin) throw new JoinedNumbersError(`put an operator between "${out}" and "${src.slice(i)}"`);
+      if (!u && pendingJoin)
+        throw new JoinedNumbersError("field.problem.joinedNumbers", { before: out, after: src.slice(i) });
       if (u) {
         // Two unit groups with nothing between them is a compound: 2'5", 1m 20cm.
         if (pendingJoin) {
@@ -330,7 +334,7 @@ export function normalise(raw: string): Normalised {
       continue;
     }
 
-    if (SYMBOLIC.has(ch)) throw new ExprError(`"${ch}" needs a number in front of it`);
+    if (SYMBOLIC.has(ch)) throw new MeasureRefusal("field.problem.needsNumberBefore", { symbol: ch });
     // anything else, operators, parens, parameter names, is the expression
     // language's business, not ours
     out += ch;
@@ -362,7 +366,7 @@ export function normalise(raw: string): Normalised {
 export function parseMeasure(raw: string, displayUnit: UnitDef | null, params: Record<string, number> = {}): Measured {
   const n = normalise(raw);
   const value = evalNode(parseExpr(n.expr), params);
-  if (!Number.isFinite(value)) throw new ExprError("that works out to nothing finite");
+  if (!Number.isFinite(value)) throw new MeasureRefusal("field.problem.notFinite");
   // A bare number is in whatever the field is showing. A written unit has
   // already been folded into the canonical one by normalise().
   const scaled = n.unit ? value : value * (displayUnit?.factor ?? 1);
@@ -387,31 +391,43 @@ export function measureError(
   displayUnit: UnitDef | null,
   params: Record<string, number> = {},
 ): string | null {
+  const e = measureFault(raw, displayUnit, params);
+  if (e === null) return null;
+  return e instanceof Error && e.message ? refusalText(e) : t("field.problem.notValue");
+}
+
+/** What parseMeasure throws for the text, null when it reads. */
+export function measureFault(raw: string, displayUnit: UnitDef | null, params: Record<string, number> = {}): unknown {
   try {
     parseMeasure(raw, displayUnit, params);
     return null;
   } catch (e) {
-    return e instanceof Error && e.message ? refusalText(e) : "not a value";
+    return e;
   }
+}
+
+/** True when the text reads as a name the parameters do not hold, which a tool words as its own line. */
+export function namesUnknown(raw: string, displayUnit: UnitDef | null): boolean {
+  const fault = measureFault(raw, displayUnit);
+  return fault instanceof ExprRefusal && fault.key === "field.problem.unknownName";
 }
 
 /** A value box's reason for refusing text: a typed number it will not guess in the chosen language, any other as
  *  written. */
 export function refusalText(e: Error): string {
+  if (e instanceof ExprRefusal) return t(e.key, e.args);
   if (!(e instanceof TypedNumberError)) return e.message;
   return e.kind === "invalid"
     ? t("field.problem.invalidNumber", { number: e.number })
     : t("field.problem.ambiguousNumber", { number: e.number, mark: e.mark === "," ? "comma" : "point" });
 }
 
-const DIM_WORD: Record<Dim, string> = { length: "a length", angle: "an angle" };
-
 /** A NumberField `parse` for one kind of value, null for a plain count: fractions, a comma and arithmetic read as ever,
  *  and a written unit of another kind is refused, since folding it would turn "1 in" into 25.4 degrees. */
 export function readAs(dim: Dim | null): (raw: string) => number {
   return (raw) => {
     const wrong = normalise(raw).units.find((u) => u.dim !== dim);
-    if (wrong) throw new ExprError(`This takes ${dim ? DIM_WORD[dim] : "a plain number"}, not ${wrong.label}`);
+    if (wrong) throw new MeasureRefusal("field.problem.takesOnly", { dim: dim ?? "plain", unit: wrong.label });
     return parseMeasure(raw, null).value;
   };
 }

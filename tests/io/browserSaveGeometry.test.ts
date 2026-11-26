@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import { blake2b128Hex } from "../../src/document/blake2b";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { setLanguage } from "../../src/i18n";
+import { WordedError } from "../../src/ui/wordedError";
 
 // Mocked once for the file: a doMock or doUnmock per test is applied by whichever
 // import resolves mocks next, so it can land in the middle of another test.
@@ -224,6 +226,40 @@ describe("a document with an imported body in the browser build", () => {
     expect(store.document.parameters).toEqual({ kept: 1 });
     expect(ui.toasts).toHaveLength(1);
     expect(ui.toasts[0]!.kind).toBe("error");
+  });
+
+  it("says why in the chosen language when the hash is wrong or the engine does not take the bytes", async () => {
+    const { openDocumentText } = await import("../../src/io/files");
+    const wrong = JSON.stringify({ ...importDoc(), geometry: { [HASH]: b64(new Uint8Array([1, 2, 3])) } });
+    const good = JSON.stringify({ ...importDoc(), geometry: { [HASH]: b64(BREP) } });
+    const refusing = () => {
+      const { geometry } = engine(new Map());
+      (geometry as { blobPut: unknown }).blobPut = async () => {
+        throw new WordedError("engine.blobNotStored");
+      };
+      return new DocumentStore(geometry, { parameters: {}, features: [] });
+    };
+    const open = async (
+      text: string,
+      store = new DocumentStore(engine(new Map()).geometry, { parameters: {}, features: [] }),
+    ) => {
+      ui.toasts = [];
+      await openDocumentText(store, "bracket.funda", text);
+      return ui.toasts.map((x) => x.message);
+    };
+    expect(await open(wrong)).toEqual([
+      "This file is not a FundaCAD document, or it is damaged: its geometry does not match its hash, so it was changed or damaged.",
+    ]);
+    expect((await open(good, refusing()))[0]).toMatch(/: the engine did not store the bytes\.$/);
+    await setLanguage("de");
+    try {
+      expect(await open(wrong)).toEqual([
+        "Diese Datei ist kein FundaCAD-Dokument oder sie ist beschädigt: die Geometrie passt nicht zu ihrem Hash, sie wurde also verändert oder beschädigt.",
+      ]);
+      expect((await open(good, refusing()))[0]).toMatch(/: die Engine hat die Daten nicht gespeichert\.$/);
+    } finally {
+      await setLanguage("system");
+    }
   });
 
   it("opens a dropped file's embedded geometry through the same path", async () => {

@@ -4,6 +4,7 @@
 import type { CadDocument, Feature, ParamTarget, ParamUnit, SketchEntity, SketchPattern } from "../types";
 import { isDimConstraint } from "../sketch/id";
 import { t, type MessageKey } from "../i18n";
+import { shownLine } from "../ui/englishLines";
 import { contributedFeature } from "../plugins/contrib";
 import { asFeature } from "../types";
 
@@ -373,11 +374,10 @@ export function valueProblem(label: string, rule: ValueRule, v: number): string 
   return null;
 }
 
-// The parameter engine words its problems in English for the MCP tools too, so a row translates the one a mistype
-// gives and passes every other through as sent.
+// The parameter engine words its problems in English for the MCP tools too, so a row words the ones the app wrote and
+// passes any other through as sent.
 export function exprProblem(problem: string | null): string | null {
-  const unknown = problem === null ? null : /^unknown parameter "(.*)"$/.exec(problem);
-  return unknown ? t("field.problem.unknownName", { name: unknown[1]! }) : problem;
+  return problem === null ? null : shownLine(problem);
 }
 
 // String fields that can never hold a bare parameter name, skipped by the legacy scans. Keep in sync with the unions.

@@ -6,6 +6,10 @@ vi.mock("../../src/ui/welcome", async (orig) => ({
   ...(await orig<typeof import("../../src/ui/welcome")>()),
   openExternal: async (url: string) => void opened.push(url),
 }));
+const toured = vi.hoisted(() => [] as unknown[]);
+vi.mock("../../src/app/tourActions", () => ({
+  startFirstBracket: async (e: unknown) => (toured.push(e), true),
+}));
 
 import { buildMenubar } from "../../src/app/menubarDef";
 import { createActions } from "../../src/app/actions";
@@ -38,11 +42,13 @@ describe("the Help menu", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     opened.length = 0;
+    toured.length = 0;
   });
 
   it("lists the manual, the report, the idea form and the issue tracker", () => {
     expect(help().items.map((i) => (i.separator ? "---" : text(i)))).toEqual([
       "Keyboard Shortcuts",
+      "Guided First Bracket",
       "Manual",
       "Accessibility",
       "---",
@@ -92,6 +98,15 @@ describe("the Help menu", () => {
     expect(text(row)).toBe("Accessibility");
   });
 
+  it("starts the guided bracket through the same action as the palette", () => {
+    const handleAction = vi.fn();
+    const menu = buildMenubar({ ui: { home: { open: () => {} } }, handleAction } as unknown as Engine);
+    const row = menu.find((m) => menuName(m) === "Help")!.items.find((i) => i.refName === "Guided First Bracket")!;
+    expect(text(row)).toBe("Guided First Bracket");
+    row.onClick!();
+    expect(handleAction).toHaveBeenCalledWith("first-bracket");
+  });
+
   it("opens the report only once the reporter is bound", () => {
     const dialogs = useDialogStore();
     item("Report a Problem…").onClick!();
@@ -106,14 +121,16 @@ describe("the palette's Help commands", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     opened.length = 0;
+    toured.length = 0;
   });
 
   it("are listed under Help", () => {
-    const ids = ["manual", "report-problem", "suggest-idea"];
+    const ids = ["first-bracket", "manual", "report-problem", "suggest-idea"];
     expect(allCommands().filter((c) => ids.includes(c.id))).toEqual([
       { id: "manual", label: "Manual", group: "Help", context: "global" },
       { id: "report-problem", label: "Report a Problem…", group: "Help", context: "global" },
       { id: "suggest-idea", label: "Suggest an Idea", group: "Help", context: "global" },
+      { id: "first-bracket", label: "Guided First Bracket", group: "Help", context: "global" },
     ]);
     expect(ids.filter((id) => !NON_REPEATABLE.has(id))).toEqual([]);
   });
@@ -133,5 +150,12 @@ describe("the palette's Help commands", () => {
       [ideaUrl(), MANUAL_URL],
       "extrude",
     ]);
+  });
+
+  it("starts the guided bracket without committing an open sketch first", () => {
+    const finish = vi.fn();
+    const e = { sketch: { active: true, finish }, lastAction: "extrude" } as unknown as Engine;
+    createActions(e)("first-bracket");
+    expect([toured, finish.mock.calls.length, e.lastAction]).toEqual([[e], 0, "extrude"]);
   });
 });

@@ -19,7 +19,7 @@ from=0
 if [ -n "$applog" ] && [ -f "$applog" ]; then from=$(size "$applog"); fi
 app=
 bus=
-trap '[ -z "$app" ] || kill -- -"$app" 2>/dev/null || true; [ -z "$bus" ] || kill "$bus" 2>/dev/null || true' EXIT
+trap '[ -z "$app" ] || kill -- -"$app" 2>/dev/null || true; [ -z "$bus" ] || kill "$bus" 2>/dev/null || true; [ -z "${busdir:-}" ] || rm -rf "$busdir"' EXIT
 
 # The app starts itself again when its first paint stalls, and dbus-run-session would end
 # the bus with the first process, so the bus lives as long as this script, as a desktop's does.

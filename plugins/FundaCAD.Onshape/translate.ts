@@ -1,5 +1,4 @@
 import { OnshapeError, type OnshapeClient } from "./client";
-import { t } from "./lines";
 import type { OnshapeLink, Wvm } from "./url";
 
 export interface Translation {
@@ -29,14 +28,16 @@ export async function pollTranslation(
   for (let i = 0; ; i++) {
     if (tr.requestState === "DONE") {
       const id = tr.resultExternalDataIds?.[0];
-      if (!id) throw new OnshapeError(t("error.exportNoFile"));
+      if (!id) throw new OnshapeError("error.exportNoFile");
       return id;
     }
     if (tr.requestState === "FAILED") {
-      throw new OnshapeError(t("error.exportFailed", { reason: tr.failureReason || t("error.noReason") }));
+      throw tr.failureReason
+        ? new OnshapeError("error.exportFailed", { reason: tr.failureReason })
+        : new OnshapeError("error.exportFailed", {}, { lines: { reason: "error.noReason" } });
     }
     if (now() - start > timeoutMs) {
-      throw new OnshapeError(t("error.exportTimeout", { minutes: Math.round(timeoutMs / 60000) }));
+      throw new OnshapeError("error.exportTimeout", { minutes: Math.round(timeoutMs / 60000) });
     }
     await sleep(DELAYS[Math.min(i, DELAYS.length - 1)]!);
     tr = await get(first.id);
@@ -69,7 +70,7 @@ export async function studiosOf(client: OnshapeClient, link: OnshapeLink): Promi
     );
     wvmid = doc.defaultWorkspace?.id;
     wvm = "w";
-    if (!wvmid) throw new OnshapeError(t("error.noWorkspace"));
+    if (!wvmid) throw new OnshapeError("error.noWorkspace");
   }
   const elements = await client.json<Element[]>(
     "GET",
@@ -85,18 +86,14 @@ export async function studiosOf(client: OnshapeClient, link: OnshapeLink): Promi
   });
   if (link.eid) {
     const e = elements.find((x) => x.id === link.eid);
-    if (!e) throw new OnshapeError(t("error.tabGone"));
+    if (!e) throw new OnshapeError("error.tabGone");
     if (e.elementType !== "PARTSTUDIO") {
-      throw new OnshapeError(
-        e.elementType === "ASSEMBLY"
-          ? t("error.assembly", { name: e.name })
-          : t("error.notPartStudio", { name: e.name }),
-      );
+      throw new OnshapeError(e.elementType === "ASSEMBLY" ? "error.assembly" : "error.notPartStudio", { name: e.name });
     }
     return [studio(e)];
   }
   const all = elements.filter((e) => e.elementType === "PARTSTUDIO").map(studio);
-  if (!all.length) throw new OnshapeError(t("error.noPartStudio"));
+  if (!all.length) throw new OnshapeError("error.noPartStudio");
   return all;
 }
 
@@ -130,6 +127,6 @@ export async function downloadStep(client: OnshapeClient, s: Studio, deps: PollD
   const res = await client.send("GET", `${base}/api/documents/d/${did}/externaldata/${xid}`, {
     saveAs: downloadName(s.name),
   });
-  if (!res.path) throw new OnshapeError(t("error.exportNotSaved"));
+  if (!res.path) throw new OnshapeError("error.exportNotSaved");
   return res.path;
 }

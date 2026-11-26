@@ -378,6 +378,11 @@ class Session(Actions):
         v = self.call("guide")
         return v if raw or v is None else text.guide(v)
 
+    def tour(self, raw: bool = False):
+        """The tour running or the last one to end: its id, step, count and how it ended, or None."""
+        v = self.call("tour")
+        return v if raw or v is None else text.tour(v)
+
     def selection(self, raw: bool = False):
         """The selected bodies, faces and edges."""
         v = self.call("selection")

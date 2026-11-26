@@ -3,10 +3,12 @@
 
 import { suggestedSavePath } from "./saveFolder";
 import { decimalMark, t } from "../i18n";
+import { shownMessage } from "../ui/wordedError";
 import { nameList } from "./nameList";
 import { andWords } from "../sketch/sketchNames";
 import { pickFile } from "../components/ui/dom";
 import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
+import { shownFileName, UNTITLED } from "../document/untitled";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
@@ -152,7 +154,10 @@ export async function saveDocumentAs(store: DocumentStore, beforeWrite?: () => v
         { name: t("files.filter.documentJson"), extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
         { name: t("files.filter.documentBinary"), extensions: [BINARY_DOC_EXT] },
       ],
-      defaultPath: suggestedSavePath(store.filePath && savableName(store.filePath), savableName(store.fileName)),
+      defaultPath: suggestedSavePath(
+        store.filePath && savableName(store.filePath),
+        savableName(shownFileName(store.fileName)),
+      ),
     });
     // A path picked for a document that was closed or swapped for an assistant's meanwhile is not where the next one goes.
     if (path && session.alive && store.untitledSwapCount === swaps) {
@@ -249,7 +254,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
   }
   const embedded = raw && typeof raw === "object" ? (raw as { geometry?: unknown }).geometry : undefined;
   if (embedded === undefined) return null;
-  const damaged = (detail: string) => new UnreadableDocumentError(t("files.unreadable.geometryDamaged"), detail);
+  const damaged = (detail: string) => new UnreadableDocumentError("files.unreadable.geometryDamaged", detail);
   if (!embedded || typeof embedded !== "object" || Array.isArray(embedded)) throw damaged("geometry is not an object");
   const blobs: Uint8Array[] = [];
   for (const [hash, data] of Object.entries(embedded)) {
@@ -261,10 +266,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
       throw damaged(`geometry ${hash} is not base64`);
     }
     if (blake2b128Hex(bytes) !== hash) {
-      throw new UnreadableDocumentError(
-        t("files.unreadable.geometryHash"),
-        `geometry ${hash} does not match its bytes`,
-      );
+      throw new UnreadableDocumentError("files.unreadable.geometryHash", `geometry ${hash} does not match its bytes`);
     }
     blobs.push(bytes);
   }
@@ -274,7 +276,7 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
   try {
     for (const b of blobs) await backend.blobPut(b);
   } catch (e) {
-    return errMsg(e);
+    return shownMessage(e);
   }
   return null;
 }
@@ -438,7 +440,7 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
     if (store.userEditCount === ticket.edits || !store.dirty) return true;
     ticket.edits = store.userEditCount;
     const { choose } = await import("../ui/choice");
-    const pick = await choose(t("files.changedWhileRead", { doc: store.fileName, name }), [
+    const pick = await choose(t("files.changedWhileRead", { doc: shownFileName(store.fileName), name }), [
       {
         value: "discard",
         label: t("files.changedWhileRead.discard"),
@@ -656,7 +658,7 @@ export async function exportModel(
   const session = store.session;
   const built = store.buildState.result?.bodies ?? [];
   const bodies = labelledBodies(store);
-  const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
+  const docName = store.fileName === UNTITLED ? "" : store.fileName.replace(/\.[^.]+$/, "");
   const { groups } = buildBodyTree(built, importTrees(store.document), store.bodyElements, store.bodyElementMap());
   const start = exportScopeFromSelection(selected, bodies, groups, docName);
   const { useExportDialogStore } = await import("../stores/exportDialog");
@@ -1280,7 +1282,7 @@ export const MATERIAL_LIB_EXT = "fcmat.json";
 /** Write the document's material library to a file the user picks. */
 export async function exportMaterialLibrary(store: DocumentStore) {
   const text = serializeLibrary(store.materialLibrary);
-  const name = `${store.fileName === "Untitled" ? "materials" : store.fileName}.${MATERIAL_LIB_EXT}`;
+  const name = `${store.fileName === UNTITLED ? "materials" : store.fileName}.${MATERIAL_LIB_EXT}`;
   if (!isTauri()) {
     downloadText(name, text);
     return;

@@ -4,6 +4,7 @@ import {
   checkResults,
   clampToControl,
   configurationDrift,
+  exprProblem,
   readAs,
   shownExpr,
   spellNumber,
@@ -55,7 +56,7 @@ seen = new Set(failing.value.map((r) => r.check.id));
 function commit(row: TuneRow, value: number) {
   const v = clampToControl(row.control, value);
   const err = store.setParamExpr(row.name, String(v));
-  if (err) toast(`${row.name}: ${err}`, { kind: "error" });
+  if (err) toast(`${row.name}: ${exprProblem(err)}`, { kind: "error" });
 }
 
 function pick(id: string) {

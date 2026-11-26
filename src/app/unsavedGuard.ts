@@ -1,7 +1,8 @@
 import { clearRecovery } from "../io/recovery";
 import { choose } from "../ui/choice";
 import { PRODUCT_NAME } from "./channel";
-import { t } from "../i18n";
+import { onLanguageChange, t } from "../i18n";
+import { shownFileName } from "../document/untitled";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
 import { heldEdits, needsSave, saveWork, type SaveEngine } from "./documentActions";
@@ -35,7 +36,7 @@ export async function saveFirst(e: SaveEngine, question: string, discardHint: st
 export function beforeUpdate(e: Pick<Engine, "store" | "sketch"> & SaveEngine): BeforeInstall {
   return async () => {
     if (e.sketch.hasUncommittedEdits) return "sketch";
-    const question = t("unsaved.beforeUpdate", { name: e.store.fileName });
+    const question = t("unsaved.beforeUpdate", { name: shownFileName(e.store.fileName) });
     return (await saveFirst(e, question, t("unsaved.beforeUpdateHint"))) ? "go" : "stop";
   };
 }
@@ -45,7 +46,7 @@ export function beforeUpdate(e: Pick<Engine, "store" | "sketch"> & SaveEngine): 
 export function installUnsavedGuard(e: Engine): void {
   let shown = "";
   const applyTitle = () => {
-    const title = windowTitle(e.store.fileName, needsSave(e));
+    const title = windowTitle(shownFileName(e.store.fileName), needsSave(e));
     if (title === shown) return;
     shown = title;
     document.title = title;
@@ -56,6 +57,7 @@ export function installUnsavedGuard(e: Engine): void {
     }
   };
   e.store.onMeta(applyTitle);
+  onLanguageChange(applyTitle);
   for (const h of heldEdits(e.tools)) h.onHeldChange(applyTitle);
   applyTitle();
 
@@ -92,7 +94,7 @@ export function closeRequestHandler(e: SaveEngine): (ev: { preventDefault(): voi
 /** A close with unsaved work: Save, Don't save or Cancel. Don't save gives the work up, so the next start must not
  *  offer its snapshot back. */
 export async function confirmClose(e: SaveEngine, ev: { preventDefault(): void }): Promise<void> {
-  const question = t("unsaved.beforeClose", { name: e.store.fileName });
+  const question = t("unsaved.beforeClose", { name: shownFileName(e.store.fileName) });
   if (!(await saveFirst(e, question, t("unsaved.beforeCloseHint")))) ev.preventDefault();
   else if (needsSave(e)) await clearRecovery(e.store.filePath);
 }

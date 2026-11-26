@@ -104,6 +104,7 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.status()` | mode, running tool, workspace, document, undo and redo, what the app is busy with (an import and how far it got), prompt, selection, the newest message and error since the last action began, and a warning the view raised itself (Low performance in a headless browser) |
 | `s.selection()` | selected bodies, faces and edges |
 | `s.guide()` | the guide mode step on screen: its caption, the ref or model area the ring is on, and where the ring, the bubble and a model outline are; `None` when no step is up. Next and Stop are `#guide-next` and `#guide-stop` |
+| `s.tour()` | the guided tour running or the last one to end: its id, the step it is on or ended on, the step count, and how it ended (`finished`, `stopped`, `assistant` or `opened`); `None` before any. Its bubble reads through `s.guide()` |
 | `s.handles()` | the named handles a tool has up, with their screen point or `covered` |
 | `s.last_error()` | a failed build or refused preview, else an error logged since the last action began, or `none` |
 | `s.messages(since=seq)` | log and toast lines after a sequence number |
@@ -238,8 +239,10 @@ that opens its own session: `assembly_tree.py` (a dropped STEP assembly in Items
 eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open),
 `extrude_reedit.py` (reopening a whole sketch extrude), `shipped_examples.py` (every Home
 example opens untitled, builds and holds its bodies, the box keeps its lid's fit when its parameters
-change, and the capsule holder's cap screws on without touching the tube), and `big_printer_import.py` (a 3,000 part printer
-STEP dropped on a blank document, its import, first frame and orbit times printed to the test log).
+change, and the capsule holder's cap screws on without touching the tube), `big_printer_import.py` (a 3,000 part printer
+STEP dropped on a blank document, its import, first frame and orbit times printed to the test log), and
+`first_ten_minutes.py` (a new maker's walk: Home, each example, the guided bracket by Next, an STL export,
+the printer import and Report a problem, with time budgets and the times printed to the test log).
 `tests/browser/test_examples.py` runs them in the smoke set, the ones marked `heavy` in CI's `e2e-heavy` job beside `e2e`. The fixtures they
 open are described in `tools/harness/fixtures/README.md`.
 

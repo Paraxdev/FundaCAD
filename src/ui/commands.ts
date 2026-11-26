@@ -89,6 +89,7 @@ const GLOBAL: Command[] = [
   cmd("manual", "Help", "command.manual"),
   cmd("report-problem", "Help", "command.reportProblem"),
   cmd("suggest-idea", "Help", "command.suggestIdea"),
+  cmd("first-bracket", "Help", "command.firstBracket"),
   // Pinned ribbon groups (FINISH, PALETTE) live outside SKETCH, so the palette lists them explicitly.
   cmd("finish", "SKETCH", "command.finish", { context: "sketch" }),
   cmd("palette", "SKETCH", "command.palette", { context: "sketch" }),
