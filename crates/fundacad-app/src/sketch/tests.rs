@@ -207,3 +207,20 @@ fn a_face_sketch_keeps_its_face_reference_beside_the_plane() {
     assert!(f["plane"].get("face").is_none() && f["plane"].get("at").is_none());
     assert!(Plane::from_spec(&f["plane"]).is_some());
 }
+
+#[test]
+fn a_circle_shows_and_takes_its_diameter_as_fc1_did() {
+    let mut d = doc();
+    let f = feature_mut(&mut d, "sketch1").unwrap();
+    f.insert("entities".into(), json!([{"type": "circle", "id": "c1", "x": 0, "y": 0, "radius": 5}]));
+    let dim = dims::feature_dims(feature(&d, "sketch1").unwrap()).remove(0);
+    assert_eq!((dim.key.as_str(), dim.label.as_str(), dim.value), ("entities.c1.diameter", "Diameter of Circle 1", 10.0));
+    assert_eq!(dims::virtual_field(feature(&d, "sketch1").unwrap(), &dim.key), Some(json!(10.0)));
+    feature_mut(&mut d, "sketch1").unwrap()["entities"][0]["diameter"] = json!(16);
+    solve::resolve_feature(&mut d, "sketch1", Some(&dim.key));
+    let c = &feature(&d, "sketch1").unwrap()["entities"][0];
+    assert_eq!((c["radius"].as_f64(), c.get("diameter")), (Some(8.0), None));
+    let mut e = Editor::open(&d, "sketch1").unwrap();
+    e.set_dim("entities.c1.diameter", 30.0).unwrap();
+    assert_eq!(e.entities[0]["radius"].as_f64(), Some(15.0));
+}

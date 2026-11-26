@@ -147,7 +147,8 @@ fn num_row(doc: &Map<String, Value>, f: &Feature, ty: &str, n: fields::NumField)
     let id = id_of(f);
     let label = options::field_label(ty, &n.key, f).map_or(n.label, str::to_string);
     let own = Target::Field { feature: id.to_string(), key: n.key.clone() };
-    let cur = fields::read_field(f, &n.key);
+    let shown = crate::sketch::dims::virtual_field(f, &n.key);
+    let cur = shown.as_ref().or_else(|| fields::read_field(f, &n.key));
     let (value, expr, target) = match (binding(doc, id, &n.key), cur) {
         (Some((name, d)), _) => {
             let expr = d.get("expr").and_then(Value::as_str).unwrap_or_default();

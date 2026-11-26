@@ -416,7 +416,11 @@ impl Viewport {
             let typing = self.sketch_ui.typing.as_ref().filter(|(k, _)| *k == d.key).map(|(_, t)| format!("{t}|"));
             let conflict = d.constraint.is_some_and(|i| e.solved.conflicts.contains(&i));
             let text = typing.clone().unwrap_or_else(|| {
-                let v = if d.angle { format!("{}°", fmt(d.value)) } else { fmt(d.value) };
+                let v = match () {
+                    _ if d.angle => format!("{}°", fmt(d.value)),
+                    _ if d.label.starts_with("Diameter") => format!("⌀{}", fmt(d.value)),
+                    _ => fmt(d.value),
+                };
                 match (&d.expr, d.driven) {
                     (Some(x), _) => format!("{x} = {v}"),
                     (None, true) => format!("({v})"),

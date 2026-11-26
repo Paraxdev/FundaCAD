@@ -480,7 +480,10 @@ impl Editor {
         let (mut es, mut cs) = (self.entities.clone(), self.constraints.clone());
         let target = if list == "entities" { &mut es } else { &mut cs };
         let item = target.iter_mut().find(|e| e.get("id").and_then(Value::as_str) == Some(id)).ok_or_else(|| format!("no {id}"))?;
-        item[field] = json!(value);
+        match field {
+            "diameter" if list == "entities" => item["radius"] = json!(value / 2.0),
+            _ => item[field] = json!(value),
+        }
         let anchor = self.dims(0.0).into_iter().find(|d| d.key == key).map(|d| d.from);
         let (out, solved) = solve::solve(&es, &cs, &self.params, How::Typed(anchor), true);
         if !solved.ok || !solved.conflicts.is_empty() {

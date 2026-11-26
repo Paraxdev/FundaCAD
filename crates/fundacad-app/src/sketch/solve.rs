@@ -128,6 +128,9 @@ pub fn resolve_feature(doc: &mut Map<String, Value>, id: &str, key: Option<&str>
     else {
         return;
     };
+    if let Some(es) = f.get_mut("entities").and_then(Value::as_array_mut) {
+        super::dims::fold_diameters(es);
+    }
     let list = |k: &str| f.get(k).and_then(Value::as_array).cloned().unwrap_or_default();
     let (entities, cs) = (list("entities"), list("constraints"));
     let anchor = key.and_then(|k| super::dims::feature_dims(f).into_iter().find(|d| d.key == k)).map(|d| d.from);

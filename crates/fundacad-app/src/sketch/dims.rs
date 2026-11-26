@@ -1,4 +1,4 @@
-//! The numbers a sketch shows and edits: entity dimensions (a rectangle's width and height, a circle's radius) and
+//! The numbers a sketch shows and edits: entity dimensions (a rectangle's width and height, a circle's diameter) and
 //! dimension constraints, each addressed by a path into the feature the inspector's number rows also use.
 
 use fundacad_sketch::geom::rect_corners;
@@ -95,7 +95,7 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
             }
             "diameter" | "radius" => {
                 let e = if ty == "diameter" { s(c, "circle") } else { s(c, "e") };
-                covered.push(format!("{e}.radius"));
+                covered.push(format!("{e}.diameter"));
                 let word = if ty == "diameter" { "Diameter" } else { "Radius" };
                 solved.iter().find(|x| x.id() == e).and_then(Entity::as_round).map(|(c, r)| {
                     (format!("{word} of {}", shape_name(entities, &e)), d2(c.x, c.y), d2(c.x + r, c.y), false)
@@ -135,8 +135,8 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
                 push("height", format!("Height of {name}"), *height, d2(c[1].x, c[1].y), d2(c[2].x, c[2].y));
             }
             Entity::Circle { x, y, radius, .. } => {
-                let (a, b) = (d2(*x, *y), d2(x + radius, *y));
-                push("radius", format!("Radius of {}", shape_name(entities, id)), *radius, a, b);
+                let (a, b) = (d2(x - radius, *y), d2(x + radius, *y));
+                push("diameter", format!("Diameter of {}", shape_name(entities, id)), radius * 2.0, a, b);
             }
             _ => {}
         }
@@ -150,4 +150,23 @@ pub fn feature_dims(f: &Map<String, Value>) -> Vec<Dim> {
     let (es, cs) = (list("entities"), list("constraints"));
     let solved = super::solve::resolve(&es, &Default::default());
     dims(&es, &cs, &solved, 0.0)
+}
+
+/// A circle's `diameter`, which FC1 shows and edits while the file keeps `radius`. None for a stored field.
+pub fn virtual_field(f: &Map<String, Value>, key: &str) -> Option<Value> {
+    let id = key.strip_prefix("entities.")?.strip_suffix(".diameter")?;
+    let es = f.get("entities")?.as_array()?;
+    let e = es.iter().find(|e| e.get("id").and_then(Value::as_str) == Some(id))?;
+    Some(serde_json::json!(e.get("radius")?.as_f64()? * 2.0))
+}
+
+/// Folds a written `diameter` back into the circle's `radius`.
+pub fn fold_diameters(entities: &mut [Value]) {
+    for e in entities {
+        if let Some(d) = e.as_object_mut().and_then(|o| o.remove("diameter")) {
+            if let Some(d) = d.as_f64() {
+                e["radius"] = serde_json::json!(d / 2.0);
+            }
+        }
+    }
 }
