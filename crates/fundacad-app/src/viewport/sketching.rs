@@ -139,16 +139,7 @@ impl Viewport {
         let r = self.edit_step(
             None,
             Some(label),
-            move |d| {
-                let f = sketch::feature_mut(d, &id).ok_or("the sketch is gone")?;
-                f.insert("entities".into(), Value::Array(es.clone()));
-                if cs.is_empty() {
-                    f.remove("constraints");
-                } else {
-                    f.insert("constraints".into(), Value::Array(cs.clone()));
-                }
-                Ok(())
-            },
+            move |d| sketch::write(d, &id, &es, &cs),
             cx,
         );
         if let Err(e) = r {

@@ -92,6 +92,18 @@ pub fn fresh_id(prefix: &str, taken: &[&str]) -> String {
     (1..).map(|n| format!("{prefix}{n}")).find(|id| !taken.contains(&id.as_str())).expect("an unused id")
 }
 
+/// Writes a sketch's entities and constraints into its feature.
+pub fn write(doc: &mut Map<String, Value>, id: &str, entities: &[Value], constraints: &[Value]) -> Result<(), String> {
+    let f = feature_mut(doc, id).ok_or("the sketch is gone")?;
+    f.insert("entities".into(), Value::Array(entities.to_vec()));
+    if constraints.is_empty() {
+        f.remove("constraints");
+    } else {
+        f.insert("constraints".into(), Value::Array(constraints.to_vec()));
+    }
+    Ok(())
+}
+
 fn ids(vals: &[Value]) -> Vec<&str> {
     vals.iter().filter_map(|v| v.get("id").and_then(Value::as_str)).collect()
 }
@@ -185,15 +197,9 @@ impl Editor {
     }
 
     /// The sketch's entities and constraints written into its feature.
+    #[cfg(test)]
     pub fn write(&self, doc: &mut Map<String, Value>) -> Result<(), String> {
-        let f = feature_mut(doc, &self.feature).ok_or("the sketch is gone")?;
-        f.insert("entities".into(), Value::Array(self.entities.clone()));
-        if self.constraints.is_empty() {
-            f.remove("constraints");
-        } else {
-            f.insert("constraints".into(), Value::Array(self.constraints.clone()));
-        }
-        Ok(())
+        write(doc, &self.feature, &self.entities, &self.constraints)
     }
 
     pub fn is_construction(&self, id: &str) -> bool {
