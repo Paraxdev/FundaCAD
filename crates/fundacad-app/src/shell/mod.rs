@@ -4,6 +4,7 @@ mod geometry;
 mod history;
 mod inspector;
 mod items;
+mod params;
 mod rail;
 mod titlebar;
 
@@ -17,6 +18,7 @@ use crate::document::{self, Document, Target};
 use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_1, S_3, UI_FONT};
 use crate::ui::{chip, frost_flush, text};
 use crate::viewport::Viewport;
+pub use params::OpenParameters;
 
 /// A History value being typed, keyed by its `Target::key`.
 struct Field {
@@ -41,6 +43,7 @@ pub struct Shell {
     open: Option<usize>,
     focus: FocusHandle,
     bench: crate::workbench::Bench,
+    params: Entity<params::ParamsPanel>,
     _system: Subscription,
 }
 
@@ -54,6 +57,11 @@ impl Shell {
         let bench = crate::workbench::Bench::new(&viewport, window, cx);
         cx.observe(&bench.overlay, |_, _, cx| cx.notify()).detach();
         cx.observe(&bench.files, |_, _, cx| cx.notify()).detach();
+        let params = cx.new(|cx| params::ParamsPanel::new(viewport.clone(), window, cx));
+        let p = params.clone();
+        crate::commands::register(cx, "parameters", "Parameters", crate::commands::Group::Tools, move |_, cx| {
+            p.update(cx, |p, cx| p.toggle(cx))
+        });
         let mut shell = Self {
             viewport,
             doc,
@@ -67,6 +75,7 @@ impl Shell {
             open: None,
             focus: cx.focus_handle(),
             bench,
+            params,
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -217,6 +226,7 @@ impl Render for Shell {
         if window.focused(cx).is_none() {
             window.focus(&self.focus, cx);
         }
+        let params = self.params.clone();
         let files = self.bench.files.read(cx);
         (self.doc.name, self.doc.dirty) = (files.name(), files.dirty());
         div()
@@ -224,6 +234,7 @@ impl Render for Shell {
             .track_focus(&self.focus)
             .key_context(crate::commands::key_context(cx))
             .on_action(crate::commands::on_run)
+            .on_action(move |_: &OpenParameters, _, cx| params.update(cx, |p, cx| p.toggle(cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
@@ -239,7 +250,8 @@ impl Render for Shell {
                     .child(div().absolute().size_full().child(self.viewport.clone()))
                     .child(left)
                     .child(right)
-                    .child(status),
+                    .child(status)
+                    .child(self.params.clone()),
             )
             .child(frost_flush(self.viewport.clone()))
             .child(self.bench.overlay.clone())

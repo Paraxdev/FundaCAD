@@ -1,6 +1,7 @@
 //! Parameters and their expression language, the Rust twin of `src/params/`: what a headless engine needs, evaluation,
-//! validation, checks and writing values into the fields they drive. Cleanup, renames and deletes stay in the app.
+//! validation, checks, writing values into the fields they drive, and the table edits with their cleanup.
 
+pub mod edit;
 pub mod eval;
 pub mod parse;
 pub mod targets;

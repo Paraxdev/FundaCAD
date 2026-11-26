@@ -41,6 +41,7 @@ fn main() {
         overlay::init(cx);
         commands::bind(cx);
         files::set_startup(cx, path);
+        cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, None)]);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             // Below this the left and right float clusters overlap.
