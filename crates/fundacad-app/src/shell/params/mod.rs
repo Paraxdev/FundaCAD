@@ -61,11 +61,23 @@ pub struct ParamsPanel {
     refused: HashMap<String, String>,
     unit: &'static str,
     _observe: Subscription,
+    _escape: Subscription,
 }
 
 impl ParamsPanel {
     pub fn new(viewport: Entity<Viewport>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let observe = cx.observe_in(&viewport, window, |this, _, window, cx| this.sync(window, cx));
+        // Before dispatch and without stopping it, as FundaCAD 1's panels did: Esc closes whatever has focus.
+        let panel = cx.entity().downgrade();
+        let escape = cx.intercept_keystrokes(move |e, _, cx| {
+            if e.keystroke.key == "escape" && !e.keystroke.modifiers.modified() {
+                let _ = panel.update(cx, |p, cx| {
+                    if p.open {
+                        p.toggle(cx);
+                    }
+                });
+            }
+        });
         let mut panel = Self {
             viewport,
             // FUNDA_PANEL=params opens it at start, for captures.
@@ -78,6 +90,7 @@ impl ParamsPanel {
             refused: HashMap::new(),
             unit: "mm",
             _observe: observe,
+            _escape: escape,
         };
         panel.sync(window, cx);
         panel
@@ -506,11 +519,6 @@ impl Render for ParamsPanel {
             .w(px(width))
             .max_h(window.viewport_size().height * 0.7)
             .p(px(S_4))
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
-                if e.keystroke.key == "escape" {
-                    this.toggle(cx);
-                }
-            }))
             .child(head)
             .child(body)
             .into_any_element()
