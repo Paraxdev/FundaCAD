@@ -40,8 +40,9 @@ fn put_list(doc: &mut Map<String, Value>, key: &str, list: Vec<String>) {
     }
 }
 
-/// Deletes the steps as one change. The rollback marker stays on the step it was on, and what named them goes with
-/// them: their suppression, their notes, and a parameter bound to one of their fields that nothing else reads.
+/// Deletes the steps as one change. The rollback marker stays on the step it was on, and their suppression and notes
+/// go with them. Parameters stay, as in FundaCAD 1: other steps may type them into a field, and a target whose step
+/// is gone is never written.
 pub fn delete(doc: &mut Map<String, Value>, gone: &[String]) -> Result<(), String> {
     let order = ids(doc);
     if !gone.iter().any(|g| order.contains(g)) {
@@ -65,45 +66,7 @@ pub fn delete(doc: &mut Map<String, Value>, gone: &[String]) -> Result<(), Strin
             doc.remove(NOTES);
         }
     }
-    drop_bound_params(doc, gone);
     Ok(())
-}
-
-fn drop_bound_params(doc: &mut Map<String, Value>, gone: &[String]) {
-    let Some(defs) = doc.get("paramDefs").and_then(Value::as_object) else { return };
-    let bound: Vec<String> = defs
-        .iter()
-        .filter(|(_, d)| {
-            let t = d.get("target");
-            t.and_then(|t| t.get("kind")).and_then(Value::as_str) == Some("feature")
-                && t.and_then(|t| t.get("feature")).and_then(Value::as_str).is_some_and(|f| gone.iter().any(|g| g == f))
-        })
-        .map(|(n, _)| n.clone())
-        .collect();
-    let read = |name: &str| {
-        defs.iter().any(|(n, d)| {
-            n != name && d.get("expr").and_then(Value::as_str).is_some_and(|e| words(e).any(|w| w == name))
-        })
-    };
-    let (kept, dropped): (Vec<String>, Vec<String>) = bound.into_iter().partition(|n| read(n));
-    let defs = doc.get_mut("paramDefs").and_then(Value::as_object_mut).expect("read above");
-    for n in &kept {
-        if let Some(d) = defs.get_mut(n).and_then(Value::as_object_mut) {
-            d.remove("target");
-        }
-    }
-    for n in &dropped {
-        defs.remove(n);
-    }
-    if let Some(table) = doc.get_mut("parameters").and_then(Value::as_object_mut) {
-        for n in &dropped {
-            table.remove(n);
-        }
-    }
-}
-
-fn words(expr: &str) -> impl Iterator<Item = &str> {
-    expr.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|w| !w.is_empty())
 }
 
 /// Suppresses or unsuppresses the steps; ids the document does not hold are never written, a later step given that

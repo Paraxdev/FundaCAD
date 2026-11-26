@@ -25,10 +25,18 @@ fn a_delete_keeps_the_marker_on_its_step_and_drops_what_named_the_steps() {
     assert_eq!(d["rollback"], json!(4));
     assert_eq!(d["suppressed"], json!(["lone"]));
     assert_eq!(d[NOTES], json!({"lid": "for the lid"}));
-    let defs = d["paramDefs"].as_object().unwrap();
-    assert!(!defs.contains_key("d1") && d["parameters"].get("d1").is_none(), "nothing read d1");
-    assert_eq!(defs["r1"], json!({"expr": "1.5", "value": 1.5, "unit": "mm"}), "r2 reads r1, so it stays, unbound");
-    assert_eq!(d["parameters"]["r1"], json!(1.5));
+}
+
+#[test]
+fn a_delete_keeps_every_parameter_even_one_bound_to_a_deleted_field() {
+    let mut d = doc();
+    d["paramDefs"]["w"]["target"] = json!({"kind": "feature", "feature": "lid", "field": "length"});
+    let (defs, table) = (d["paramDefs"].clone(), d["parameters"].clone());
+    delete(&mut d, &strings(&["pad", "round", "lid"])).unwrap();
+    assert_eq!(d["paramDefs"], defs, "w is bound to the lid and typed into the outline, d1 and r1 are bound alone");
+    assert_eq!(d["parameters"], table);
+    assert_eq!(d["features"][0]["entities"][0]["x1"], json!("w"));
+    assert_eq!(d["features"][2]["distance"], json!("h"));
 }
 
 #[test]
