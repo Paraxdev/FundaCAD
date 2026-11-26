@@ -3,7 +3,7 @@
 
 mod modify;
 
-pub use modify::fit::{fit, Fitted};
+pub use modify::fit::{fit, sources_extent, Fitted};
 pub use modify::keys::{press, replace};
 
 use serde_json::{json, Value};

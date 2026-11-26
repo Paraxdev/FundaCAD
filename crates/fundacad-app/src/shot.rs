@@ -1,7 +1,7 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
 //! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
 //! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` (`,ctrl` or `,shift` to add),
-//! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, or `wait:<ms>`.
+//! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:` and `up:` for a held left button, or `wait:<ms>`.
 
 use std::time::Duration;
 
@@ -50,6 +50,12 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
         crate::overlay::toast(cx, toast);
     } else if let Some(at) = step.strip_prefix("move:") {
         mouse(at, None, window, cx);
+    } else if let Some(at) = step.strip_prefix("down:") {
+        mouse(at, Some(true), window, cx);
+    } else if let Some(at) = step.strip_prefix("up:") {
+        mouse(at, Some(false), window, cx);
+    } else if let Some(at) = step.strip_prefix("drag:") {
+        mouse(&format!("{at},held"), None, window, cx);
     } else if let Some(key) = step.strip_prefix("key:") {
         match gpui::Keystroke::parse_with_os(key, cx.platform_info().os) {
             Ok(k) => drop(window.dispatch_keystroke(k, cx)),
@@ -81,10 +87,11 @@ fn mouse(at: &str, press: Option<bool>, window: &mut gpui::Window, cx: &mut App)
         Some("shift") => Modifiers { shift: true, ..Default::default() },
         _ => Modifiers::default(),
     };
+    let held = at.ends_with(",held").then_some(MouseButton::Left);
     let position = point(px(x), px(y));
     let button = MouseButton::Left;
     let event = match press {
-        None => PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }),
+        None => PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: held }),
         Some(true) => {
             window.dispatch_event(PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }), cx);
             PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count: 1, first_mouse: false })

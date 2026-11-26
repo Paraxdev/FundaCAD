@@ -3,6 +3,7 @@ mod camera;
 mod demo;
 mod drag;
 mod edges;
+mod gizmo;
 mod issues;
 pub mod mesh;
 mod pick;
@@ -126,6 +127,7 @@ pub struct Viewport {
     sketch_ui: sketching::Ui,
     picking: select::Picking,
     tool: Option<ToolRun>,
+    gizmo: gizmo::Gizmo,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -176,6 +178,7 @@ impl Viewport {
             sketch_ui: Default::default(),
             picking: Default::default(),
             tool: None,
+            gizmo: Default::default(),
             _wake: None,
             _demo: None,
         }
@@ -731,7 +734,7 @@ impl Render for Viewport {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, w, cx| {
-                    if !this.sketch_press(e.position, w, cx) {
+                    if !this.sketch_press(e.position, w, cx) && !this.gizmo_press(e.position, cx) {
                         this.picking.pressed = Some((e.position, select::mods(&e.modifiers)));
                     }
                 }),
@@ -740,6 +743,7 @@ impl Render for Viewport {
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
                     this.sketch_release(cx);
+                    this.gizmo_release(cx);
                     this.release(cx)
                 }),
             )
@@ -757,7 +761,7 @@ impl Render for Viewport {
             .on_mouse_up(MouseButton::Right, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_up(MouseButton::Middle, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
-                if this.nav.is_some() || !this.sketch_move(e, cx) {
+                if this.nav.is_some() || !(this.sketch_move(e, cx) || this.gizmo_move(e, cx)) {
                     this.mouse_move(e, cx)
                 }
             }))
@@ -768,11 +772,13 @@ impl Render for Viewport {
                     move |bounds, _, window, cx| {
                         let t = crate::theme::ActiveTheme::theme(cx);
                         let (picked, hover) = (Hsla::from(t.accent), Hsla::from(t.accent_hot));
+                        let axes = [t.axis_x, t.axis_y, t.axis_z].map(Hsla::from);
                         entity.update(cx, |this, cx| {
                             if this.paint(bounds, window) {
                                 cx.notify();
                             }
                             this.paint_edges(bounds, picked, hover, window);
+                            this.paint_gizmo(axes, hover, window);
                         });
                     },
                 )

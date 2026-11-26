@@ -45,6 +45,7 @@ impl Viewport {
         self.changes += 1;
         self.undo.close();
         self.tool = Some(ToolRun::new(before, title, label, feature, need));
+        self.gizmo_reset();
         self.hover = None;
         cx.notify();
         Ok(())

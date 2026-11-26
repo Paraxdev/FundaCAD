@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 #[cfg(test)]
 pub use starters::tool;
 pub use starters::TOOLS;
-pub use starters::{fit, Fitted};
+pub use starters::{fit, sources_extent, Fitted};
 pub use starters::{press, replace};
 
 use crate::selection::{Pick, PickKind, Selection};
