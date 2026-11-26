@@ -1,0 +1,16 @@
+[package]
+name = "fundacad-sketch"
+description = "FundaCAD 2D sketch solver: FreeCAD's planegcs bound natively, compiled from third_party/planegcs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+fundacad-core = { path = "../fundacad-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+cc = "1"

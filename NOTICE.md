@@ -19,6 +19,17 @@ distributing FundaCAD under its own terms.
 - **opencascade-rs / opencascade-sys / occt-sys** (vendored fork,
   `third_party/opencascade-rs/`), LGPL-2.1. Upstream: https://github.com/bschwind/opencascade-rs.
 
+## Sketch solver
+
+- **planegcs**, FreeCAD's PlaneGCS 2D constraint solver, LGPL-2.1-or-later. Vendored in
+  `third_party/planegcs/` from https://github.com/Salusoft89/planegcs (commit 9d26baef),
+  which carries FreeCAD's `src/Mod/Sketcher/App/planegcs` at commit 5f8eac49f316. Compiled
+  from source and linked **statically**. The changes, which drop its Boost dependency, are
+  listed in `third_party/planegcs/PATCHES.md`.
+- **Eigen** 3.4.0 (planegcs's linear algebra, headers only), MPL-2.0, vendored unchanged in
+  `third_party/eigen/` from https://gitlab.com/libeigen/eigen and built with
+  `EIGEN_MPL2_ONLY`, so no LGPL parts of Eigen are used.
+
 ## Permissively licensed components
 
 - **wasmtime** (the plugin host), Apache-2.0 WITH LLVM-exception,
@@ -58,8 +69,8 @@ distributing FundaCAD under its own terms.
 
 ## Written offer (LGPL source availability)
 
-For the LGPL components above (OCCT, opencascade-rs), the corresponding source
+For the LGPL components above (OCCT, opencascade-rs, planegcs), the corresponding source
 code is available at the URLs listed. For any distributed binary build, the complete
 corresponding source of these libraries is also available from the project for a period of
-at least three (3) years upon request. FundaCAD's own source, which links OCCT statically,
-is public, so users may rebuild it with compatible modified versions of these libraries.
+at least three (3) years upon request. FundaCAD's own source, which links OCCT and planegcs
+statically, is public, so users may rebuild it with compatible modified versions of these libraries.

@@ -17,6 +17,7 @@ members = [
     "crates/fundacad-engine",
     "crates/fundacad-format",
     "crates/fundacad-protocol",
+    "crates/fundacad-sketch",
 ]
 exclude = ["third_party/opencascade-rs", "crates/fundacad-app", "third_party/gpui"]
 
@@ -43,6 +44,10 @@ codegen-units = 1
 opt-level = 3
 [profile.dev.package.occt-sys]
 opt-level = 3
+
+# planegcs and Eigen are header heavy C++ that cc compiles at the package's level, at 0 a sketch drag would crawl.
+[profile.dev.package.fundacad-sketch]
+opt-level = 2
 
 # golden-check compares meshes of a million vertices in the debug build CI runs.
 [profile.dev.package.fundacad-cli]
