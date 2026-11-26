@@ -13,6 +13,8 @@ use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_SMALL, S_1, S_3, S_4, W
 use crate::ui::text;
 
 const OPENS: &[&str] = &["funda", "fundab", "stl"];
+/// FundaCAD 1's outline-offset, the dashed outline sits this far inside the window.
+const INSET: f32 = 10.;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Plan {
@@ -70,8 +72,13 @@ pub fn on_drop(paths: &ExternalPaths, window: &mut Window, cx: &mut App) {
     }
 }
 
-/// Covers the window while files are dragged over it. It has no listeners, so it never takes the drop itself.
+/// Covers the window while files are dragged over it. The panels and cards occlude the shell below, so the drop is
+/// taken here, above them.
 pub fn hint(t: &Theme) -> impl IntoElement {
+    layer(t, on_drop)
+}
+
+fn layer(t: &Theme, on: impl Fn(&ExternalPaths, &mut Window, &mut App) + 'static) -> impl IntoElement {
     let card = div()
         .flex()
         .flex_col()
@@ -82,23 +89,29 @@ pub fn hint(t: &Theme) -> impl IntoElement {
         .py(px(S_4))
         .rounded(px(FLOAT_CHIP_RADIUS + 2.))
         .bg(t.float_bg_solid)
+        .text_center()
         .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.text).child("Drop to open"))
         .child(
             text(t, FS_SMALL).text_color(t.text_dim).child("A FundaCAD document or an STL opens in place of this one."),
         );
-    let accent = t.accent;
+    let frame = div()
+        .absolute()
+        .inset(px(INSET))
+        .flex()
+        .items_center()
+        .justify_center()
+        .p(px(S_3 - 2.))
+        .border_2()
+        .border_dashed()
+        .border_color(t.accent)
+        .child(card);
     let tint = t.accent_tint;
     div()
         .id("drop-hint")
         .absolute()
         .inset_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .p(px(S_3 - 2.))
         .opacity(0.)
-        .drag_over::<ExternalPaths>(move |s, _, _, _| {
-            s.opacity(1.).bg(tint).border_2().border_dashed().border_color(accent)
-        })
-        .child(card)
+        .drag_over::<ExternalPaths>(move |s, _, _, _| s.opacity(1.).bg(tint))
+        .on_drop(on)
+        .child(frame)
 }
