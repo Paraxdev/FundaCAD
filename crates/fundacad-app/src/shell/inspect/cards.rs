@@ -195,6 +195,11 @@ impl Shell {
             .children(overhang::rows(areas).into_iter().zip(tints).map(|((k, val), tint)| {
                 div().flex().items_center().gap(px(S_2)).child(swatch(tint.rgb())).child(line(t, k, val).flex_1())
             }))
+            .child(
+                text(t, FS_SMALL)
+                    .text_color(t.text_mute)
+                    .child("Downward faces flatter than the threshold need support, Esc to close"),
+            )
     }
 
     fn interference_card(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -253,7 +258,9 @@ impl Shell {
             card = card.child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child("Not checked"));
             card = card.children(report.unchecked.iter().map(|u| text(t, FS_SMALL).text_color(t.text_mute).child(u.clone())));
         }
+        let footer = clash::footer(&report, gap);
         card.children(report.note.map(|n| text(t, FS_SMALL).text_color(t.text_mute).child(n)))
+            .children(footer.into_iter().map(|l| text(t, FS_SMALL).text_color(t.text_mute).child(l)))
     }
 
     fn printability_card(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {

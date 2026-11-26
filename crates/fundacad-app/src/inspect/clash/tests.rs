@@ -52,3 +52,20 @@ fn close_pairs_alone_still_say_no_clashes() {
     ]})));
     assert_eq!(summary(&r), "No clashes, 2 close pairs");
 }
+
+fn pair(close: bool) -> Clash {
+    Clash { a: "b1".into(), b: "b2".into(), pair: "Box and Lid".into(), detail: String::new(), close }
+}
+
+#[test]
+fn the_footer_says_how_close_was_looked_for_only_when_no_pair_was_that_close() {
+    let none = Report::default();
+    assert_eq!(footer(&none, None), ["Esc to close"]);
+    assert_eq!(footer(&none, Some(0.25)), ["No pairs closer than 0.25 mm", "Esc to close"]);
+    let clash = Report { rows: vec![pair(false)], ..Report::default() };
+    let hint = "Click a row to select the pair, Esc to close";
+    assert_eq!(footer(&clash, None), [hint]);
+    assert_eq!(footer(&clash, Some(0.2)), ["No pairs closer than 0.2 mm", hint]);
+    let close = Report { rows: vec![pair(false), pair(true)], ..Report::default() };
+    assert_eq!(footer(&close, Some(0.2)), [hint]);
+}

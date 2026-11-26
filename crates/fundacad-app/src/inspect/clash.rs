@@ -79,3 +79,13 @@ pub fn summary(r: &Report) -> String {
     }
     parts.join(", ")
 }
+
+/// The lines under the rows: in clearance mode with no close pair, how close was looked for, then the hint.
+pub fn footer(r: &Report, gap: Option<f64>) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(g) = gap.filter(|_| !r.rows.iter().any(|c| c.close)) {
+        out.push(format!("No pairs closer than {} mm", crate::inspect::spell(g)));
+    }
+    out.push(if r.rows.is_empty() { "Esc to close" } else { "Click a row to select the pair, Esc to close" }.into());
+    out
+}
