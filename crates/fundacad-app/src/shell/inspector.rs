@@ -53,6 +53,10 @@ fn shown(n: &NumRow) -> String {
 impl Shell {
     /// The open step's feature id and rows.
     fn open_rows(&self, cx: &App) -> Option<(String, Vec<Row>)> {
+        if let (Some(id), Some(doc)) = (self.tool_feature(cx), &self.source) {
+            let rows = model::rows(doc, &id, self.viewport.read(cx).feature_issues());
+            return Some((id, rows));
+        }
         let f = &self.doc.features[self.open_step()?];
         let rows = match &self.source {
             Some(doc) => model::rows(doc, &f.id, self.viewport.read(cx).feature_issues()),
@@ -145,7 +149,7 @@ impl Shell {
 
     /// `.timeline-props`: the rows of the open step, indented under it.
     pub(super) fn inspector(&self, t: &Theme, i: usize, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
-        if self.open_step() != Some(i) {
+        if self.open_step() != Some(i) || self.tool_feature(cx).is_some() {
             return None;
         }
         let (id, rows) = self.open_rows(cx)?;
@@ -170,7 +174,7 @@ impl Shell {
         )
     }
 
-    fn row(&self, t: &Theme, id: &str, row: &Row, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn row(&self, t: &Theme, id: &str, row: &Row, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         match row {
             Row::Note { text: words, warning } => {
                 let c = if *warning { t.warn } else { t.error };
@@ -187,7 +191,9 @@ impl Shell {
                     .into_any_element()
             }
             Row::Repeats { names } => line(t, "Features", value(t, names, false)).into_any_element(),
-            Row::Target { label, text: words, empty } => line(t, label, value(t, words, *empty)).into_any_element(),
+            Row::Target { label, text: words, empty } => {
+                self.target_row(t, id, label, line(t, label, value(t, words, *empty)), cx)
+            }
             Row::Choice(c) => self.choice(t, id, c, cx).into_any_element(),
             Row::Toggle { field, label, on } => {
                 let (id, field, on) = (id.to_string(), *field, *on);

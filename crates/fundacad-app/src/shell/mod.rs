@@ -9,6 +9,7 @@ mod params;
 mod rail;
 mod timeline;
 mod titlebar;
+mod tool_card;
 
 use std::collections::HashMap;
 
@@ -61,6 +62,7 @@ impl Shell {
         crate::commands::register(cx, "parameters", "Parameters", crate::commands::Group::Tools, move |_, cx| {
             p.update(cx, |p, cx| p.toggle(cx))
         });
+        tool_card::install(&viewport, cx);
         let mut shell = Self {
             viewport,
             doc,
@@ -206,6 +208,7 @@ impl Render for Shell {
             .items_start()
             .gap(gap)
             .child(self.view_controls(t))
+            .children(self.tool_card(t, window, cx))
             .child(self.history_card(t, window, cx));
         let status = self.viewport.read(cx).status();
         let status = div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(

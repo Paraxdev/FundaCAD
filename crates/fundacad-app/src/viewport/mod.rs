@@ -2,11 +2,14 @@ mod blur;
 mod camera;
 mod demo;
 mod drag;
+mod edges;
 mod issues;
 pub mod mesh;
 mod pick;
 mod renderer;
 pub mod scene;
+mod select;
+mod session;
 mod undo;
 mod visible;
 mod views;
@@ -28,6 +31,8 @@ use pick::Hit;
 use renderer::{Overlay, Renderer};
 use scene::Scene;
 use undo::UndoStack;
+#[allow(unused_imports, reason = "the shell and the tools read it")]
+pub use session::{Arm, ToolRun};
 
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
@@ -113,6 +118,8 @@ pub struct Viewport {
     /// The latest mesh's bodies, hidden ones included.
     built: Vec<Arc<scene::Body>>,
     highlight: Option<(String, u32)>,
+    picking: select::Picking,
+    tool: Option<ToolRun>,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -159,6 +166,8 @@ impl Viewport {
             rebuild_ms: None,
             built: Vec::new(),
             highlight: None,
+            picking: Default::default(),
+            tool: None,
             _wake: None,
             _demo: None,
         }
@@ -198,6 +207,8 @@ impl Viewport {
         self.undo = UndoStack::default();
         self.push = None;
         self.hover = None;
+        self.tool = None;
+        self.picking = Default::default();
         self.message = None;
         self.rebuild_ms = None;
         self.fitted = false;
@@ -278,7 +289,10 @@ impl Viewport {
         let edited = session.edit(f)?;
         if edited.is_some() {
             self.changes += 1;
-            self.undo.record(before, key, label);
+            // A running tool's edits are one step, recorded when it finishes.
+            if self.tool.is_none() {
+                self.undo.record(before, key, label);
+            }
         }
         self.hover = None;
         self.show_built();
@@ -322,6 +336,10 @@ impl Viewport {
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return;
         }
+        if self.tool.is_some() {
+            self.finish(false, cx);
+            return;
+        }
         let Some(session) = self.session.as_mut() else { return };
         let label = self.undo.label(undo, &session.doc);
         let taken = if undo { self.undo.undo(session.doc.clone()) } else { self.undo.redo(session.doc.clone()) };
@@ -362,6 +380,9 @@ impl Viewport {
         if let Some(s) = &self.said {
             parts.push(s.clone());
         }
+        if let Some(s) = self.picking.selection.describe().filter(|_| self.tool.is_none()) {
+            parts.push(format!("{s} selected"));
+        }
         parts.join(", ")
     }
 
@@ -374,6 +395,7 @@ impl Viewport {
                 self.fitted = true;
             }
         }
+        self.picking.rescan(&self.scene);
     }
 
     fn drain(&mut self, cx: &mut Context<Self>) {
@@ -458,7 +480,7 @@ impl Viewport {
         };
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
-        Overlay { hover, stretch, mask_revision: self.mask_revision }
+        Overlay { hover, stretch, mask_revision: self.mask_revision, selection_revision: self.picking.revision }
     }
 
     /// Makes or remakes the renderer whenever GPUI has a new device.
@@ -489,11 +511,12 @@ impl Viewport {
             return false;
         }
         let mask = self.push.as_ref().filter(|p| !p.lost).map(|p| p.mask.as_slice());
+        let tint = self.tint();
         let renderer = self.renderer.as_mut().expect("made above");
         renderer.set_background(self.background);
         let panels = self.frosted.iter().map(|f| blur::Panel::new(f, bounds.origin, scale)).collect();
         renderer.set_frost(panels, scale);
-        let index = renderer.render(&self.scene, &self.camera, &overlay, mask, size);
+        let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
         had_backend != self.backend
     }
@@ -529,6 +552,10 @@ impl Viewport {
     }
 
     fn press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        // An armed target pick only clicks.
+        if self.tool.as_ref().is_some_and(|t| t.arm.is_some()) {
+            return;
+        }
         // A released drag is still waiting for its mesh, a grip read off the old mesh would push a stale face.
         if self.push.is_some() {
             return;
@@ -609,6 +636,9 @@ impl Viewport {
     }
 
     fn release(&mut self, cx: &mut Context<Self>) {
+        if let Some((at, mods)) = self.picking.pressed.take() {
+            self.click(at, mods, cx);
+        }
         if let Some(p) = self.push.as_mut().filter(|p| !p.released) {
             p.released = true;
             if self.session.as_ref().is_some_and(|s| s.doc != p.before) {
@@ -639,6 +669,12 @@ impl Viewport {
                 _ => self.camera.pan(delta, self.bounds.size.height.as_f32()),
             }
             cx.notify();
+        } else if let Some((at, _)) = self.picking.pressed.filter(|_| event.pressed_button == Some(MouseButton::Left)) {
+            if Self::dragged(at, event.position) {
+                self.picking.pressed = None;
+                self.press(at, cx);
+                self.push_to(event.position, cx);
+            }
         } else if self.push.as_ref().is_some_and(|p| !p.released) {
             if event.pressed_button == Some(MouseButton::Left) {
                 self.push_to(event.position, cx);
@@ -646,7 +682,9 @@ impl Viewport {
                 self.release(cx);
             }
         } else if event.pressed_button.is_none() {
+            self.picking.pressed = None;
             self.hover_at(event.position, cx);
+            self.hover_edge_at(event.position, cx);
         }
     }
 
@@ -667,7 +705,12 @@ impl Render for Viewport {
         div()
             .id("viewport")
             .size_full()
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| this.press(e.position, cx)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseDownEvent, _, _| {
+                    this.picking.pressed = Some((e.position, select::mods(&e.modifiers)));
+                }),
+            )
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.release(cx)))
             .on_mouse_down(
                 MouseButton::Right,
@@ -688,10 +731,13 @@ impl Render for Viewport {
                 canvas(
                     |_, _, _| {},
                     move |bounds, _, window, cx| {
+                        let t = crate::theme::ActiveTheme::theme(cx);
+                        let (picked, hover) = (Hsla::from(t.accent), Hsla::from(t.accent_hot));
                         entity.update(cx, |this, cx| {
                             if this.paint(bounds, window) {
                                 cx.notify();
                             }
+                            this.paint_edges(bounds, picked, hover, window);
                         });
                     },
                 )

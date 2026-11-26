@@ -62,7 +62,7 @@ struct Renaming {
 pub(super) struct ItemsState {
     collapse: items::Collapse,
     filter: Filter,
-    selection: Selection,
+    pub(super) selection: Selection,
     solo: items::Solo,
     menu: Option<Menu>,
     renaming: Option<Renaming>,
@@ -308,6 +308,7 @@ impl Shell {
             }
             Kind::Empty => {}
         }
+        self.picks_from_items(cx);
         cx.notify();
     }
 
