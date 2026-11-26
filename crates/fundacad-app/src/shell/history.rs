@@ -315,7 +315,9 @@ impl Shell {
                     .child(button("versions", false))
                     .child(button("history", true)),
             )
-            .child(float_group(t).child(button("bug", false)))
+            .child(float_group(t).child(
+                button("bug", false).on_click(|_, window, cx| crate::commands::run("report-problem", window, cx)),
+            ))
     }
 }
 
