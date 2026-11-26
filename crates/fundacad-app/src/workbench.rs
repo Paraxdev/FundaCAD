@@ -18,6 +18,7 @@ impl Bench {
         let files = cx.new(|cx| Files::new(viewport.clone(), window, cx));
         files::set_current(cx, &files);
         crate::commands::install(viewport, &files, cx);
+        crate::viewport::install_sketch(viewport, cx);
         crate::commands::report_problems(cx);
         let guard = files.clone();
         window.on_window_should_close(cx, move |window, cx| files::should_close(&guard, window, cx));

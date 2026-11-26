@@ -7,10 +7,12 @@ pub mod mesh;
 mod pick;
 mod renderer;
 pub mod scene;
+mod sketching;
 mod undo;
 mod visible;
 mod views;
 
+pub use sketching::install as install_sketch;
 pub use views::View;
 
 use std::path::Path;
@@ -18,6 +20,7 @@ use std::sync::Arc;
 
 use fundacad_client::{Doc, Event, Mesh as EngineMesh};
 use glam::{Vec2, Vec3};
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 pub use blur::Frost;
@@ -113,6 +116,8 @@ pub struct Viewport {
     /// The latest mesh's bodies, hidden ones included.
     built: Vec<Arc<scene::Body>>,
     highlight: Option<(String, u32)>,
+    sketch: Option<crate::sketch::Editor>,
+    sketch_ui: sketching::Ui,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -159,6 +164,8 @@ impl Viewport {
             rebuild_ms: None,
             built: Vec::new(),
             highlight: None,
+            sketch: None,
+            sketch_ui: Default::default(),
             _wake: None,
             _demo: None,
         }
@@ -361,6 +368,7 @@ impl Viewport {
             (None, Some((_, Err(why)))) => parts.push(why.clone()),
             (None, None) => {}
         }
+        parts.extend(self.sketch_status());
         if let Some(m) = &self.message {
             parts.push(m.clone());
         }
@@ -500,6 +508,7 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
+        self.paint_sketch(window);
         had_backend != self.backend
     }
 
@@ -669,11 +678,29 @@ impl Viewport {
 impl Render for Viewport {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
+        let focus = self.sketch_focus(cx);
+        let layer = self.sketch_layer(cx);
         div()
             .id("viewport")
             .size_full()
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| this.press(e.position, cx)))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.release(cx)))
+            .track_focus(&focus)
+            .when(self.sketch_typing(), |d| d.key_context("Input"))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.sketch_key(e, cx)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseDownEvent, w, cx| {
+                    if !this.sketch_press(e.position, w, cx) {
+                        this.press(e.position, cx)
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.sketch_release(cx);
+                    this.release(cx)
+                }),
+            )
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, e: &MouseDownEvent, _, _| {
@@ -687,7 +714,11 @@ impl Render for Viewport {
             )
             .on_mouse_up(MouseButton::Right, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_up(MouseButton::Middle, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
-            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| this.mouse_move(e, cx)))
+            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
+                if this.nav.is_some() || !this.sketch_move(e, cx) {
+                    this.mouse_move(e, cx)
+                }
+            }))
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| this.zoom(e, cx)))
             .child(
                 canvas(
@@ -702,5 +733,6 @@ impl Render for Viewport {
                 )
                 .size_full(),
             )
+            .children(layer)
     }
 }

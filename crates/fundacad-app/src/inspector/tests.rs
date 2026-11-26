@@ -388,3 +388,42 @@ fn the_box_with_lid_cavity_shows_its_choices_switches_and_numbers() {
     assert_eq!(taper.target, Some(Target::Field { feature: "cavity".into(), key: "taper".into() }));
     assert!(number(&r, "thickness").is_none());
 }
+
+#[test]
+fn a_sketch_lists_its_dimensions_and_an_edit_solves_it_again() {
+    let mut d = doc(json!([{"id": "s1", "type": "sketch", "plane": "XY",
+        "entities": [{"type": "line", "id": "l1", "x1": 0, "y1": 0, "x2": 10, "y2": 0},
+                     {"type": "rectangle", "id": "r1", "x": 0, "y": 0, "width": "w", "height": 8}],
+        "constraints": [{"type": "horizontal", "line": "l1"}, {"type": "distance", "id": "d1", "line": "l1", "value": 10}]}]));
+    d.insert("parameters".into(), json!({"w": 30}));
+    let nums: Vec<NumRow> = rows(&d, "s1", &[])
+        .into_iter()
+        .filter_map(|r| match r {
+            Row::Number(n) => Some(n),
+            _ => None,
+        })
+        .collect();
+    let labels: Vec<&str> = nums.iter().map(|n| n.label.as_str()).collect();
+    assert_eq!(labels, ["Length of Line 1", "Width of Rectangle 1", "Height of Rectangle 1"]);
+    assert_eq!(nums[1].expr.as_deref(), Some("w"), "a parameter name reads as its expression");
+    let target = nums[0].target.clone().expect("an editable length");
+    set_number(&mut d, &target, 25.0).unwrap();
+    let l = &feature(&d, "s1")["entities"][0];
+    assert_eq!(feature(&d, "s1")["constraints"][1]["value"], json!(25));
+    assert!((l["x2"].as_f64().unwrap() - 25.0).abs() < 1e-6, "{l}");
+}
+
+#[test]
+fn a_circle_diameter_held_by_a_parameter_reads_its_name_and_stays_read_only() {
+    let mut d = doc(json!([{"id": "s1", "type": "sketch", "plane": "XY",
+        "entities": [{"type": "circle", "id": "c1", "x": 0, "y": 0, "radius": "r"}]}]));
+    d.insert("parameters".into(), json!({"r": 6}));
+    let dia = rows(&d, "s1", &[])
+        .into_iter()
+        .find_map(|r| match r {
+            Row::Number(n) if n.field == "entities.c1.diameter" => Some(n),
+            _ => None,
+        })
+        .expect("a diameter row");
+    assert_eq!((dia.value, dia.expr.as_deref(), dia.target), (Some(12.0), Some("r"), None));
+}

@@ -207,6 +207,10 @@ impl Shell {
         self.timeline.rows = pick(&self.timeline.rows, &order, id, m.control || m.platform, m.shift);
         self.timeline.menu = None;
         window.focus(&self.focus, cx);
+        if ev.click_count() >= 2 {
+            let id = id.to_string();
+            self.viewport.update(cx, |v, cx| v.open_sketch_step(&id, cx));
+        }
         cx.notify();
     }
 

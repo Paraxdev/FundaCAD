@@ -15,6 +15,7 @@ mod settings;
 mod shell;
 #[cfg(feature = "shot")]
 mod shot;
+mod sketch;
 mod theme;
 mod timeline;
 mod ui;

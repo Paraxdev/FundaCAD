@@ -1,6 +1,5 @@
 //! The rows of one feature, FeatureProperties.vue's model: what the build said of it, what it is applied to, its
-//! choices, switches and numbers, and the document edit behind each. Sketch dimensions wait for the 2D solver lane,
-//! file rows come only from plugins.
+//! choices, switches and numbers, and the document edit behind each. A sketch's numbers are its dimensions, file rows come only from plugins.
 
 mod fields;
 mod hole;
@@ -148,7 +147,7 @@ fn num_row(doc: &Map<String, Value>, f: &Feature, ty: &str, n: fields::NumField)
     let id = id_of(f);
     let label = options::field_label(ty, &n.key, f).map_or(n.label, str::to_string);
     let own = Target::Field { feature: id.to_string(), key: n.key.clone() };
-    let cur = fields::read_field(f, &n.key);
+    let (cur, scale) = crate::sketch::dims::virtual_field(f, &n.key).map_or((fields::read_field(f, &n.key), 1.), |(v, k)| (Some(v), k));
     let (value, expr, target) = match (binding(doc, id, &n.key), cur) {
         (Some((name, d)), _) => {
             let expr = d.get("expr").and_then(Value::as_str).unwrap_or_default();
@@ -159,11 +158,11 @@ fn num_row(doc: &Map<String, Value>, f: &Feature, ty: &str, n: fields::NumField)
                 (value, Some(expr.to_string()), None)
             }
         }
-        (None, Some(Value::Number(v))) => (v.as_f64(), None, Some(own)),
+        (None, Some(Value::Number(v))) => (v.as_f64().map(|v| v * scale), None, Some(own)),
         // A field holding a parameter's name, as files from before the table were written.
         (None, Some(Value::String(name))) => {
             let v = doc.get("parameters").and_then(|p| p.get(name)).and_then(Value::as_f64);
-            (Some(v.unwrap_or(0.)), Some(name.clone()), None)
+            (Some(v.unwrap_or(0.) * scale), Some(name.clone()), None)
         }
         (None, _) => (fields::absent_value(ty, &n.key), None, Some(own)),
     };
@@ -223,7 +222,11 @@ pub fn set_option(doc: &mut Map<String, Value>, id: &str, field: &str, value: &V
 /// A number written where its row points: a parameter through the table, a feature field rounded to what it holds,
 /// and left out again when it is the value an absent field means.
 pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> Result<(), String> {
-    let Target::Field { feature, key } = target else { return crate::document::apply(doc, target, value) };
+    let Target::Field { feature, key } = target else {
+        crate::document::apply(doc, target, value)?;
+        crate::sketch::solve::resolve_sketches(doc);
+        return Ok(());
+    };
     if !value.is_finite() {
         return Err(format!("{value} is not a finite number"));
     }
@@ -240,6 +243,9 @@ pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> 
     }
     if !fields::write_field(f, key, next) {
         return Err(format!("the document has no {key} on {feature}"));
+    }
+    if ty == "sketch" {
+        crate::sketch::solve::resolve_feature(doc, feature, Some(key));
     }
     Ok(())
 }

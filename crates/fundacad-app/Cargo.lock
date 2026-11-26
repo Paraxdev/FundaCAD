@@ -1930,6 +1930,7 @@ dependencies = [
  "fundacad-client",
  "fundacad-core",
  "fundacad-format",
+ "fundacad-sketch",
  "glam",
  "gpui-kit",
  "gpui-pre",
@@ -1999,6 +2000,16 @@ name = "fundacad-protocol"
 version = "0.2.0"
 dependencies = [
  "bytemuck",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fundacad-sketch"
+version = "0.2.0"
+dependencies = [
+ "cc",
+ "fundacad-core",
  "serde",
  "serde_json",
 ]
