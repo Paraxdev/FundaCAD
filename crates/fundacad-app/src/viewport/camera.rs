@@ -33,6 +33,14 @@ impl Camera {
         Mat4::perspective_rh(FOV_Y, aspect, near, self.distance * 100.0)
     }
 
+    /// The world ray through `ndc` (-1..1, y up): origin on the near plane and unit direction.
+    pub fn ray(&self, ndc: Vec2, aspect: f32) -> (Vec3, Vec3) {
+        let inverse = (self.projection(aspect) * self.view()).inverse();
+        let near = inverse.project_point3(ndc.extend(0.0));
+        let far = inverse.project_point3(ndc.extend(1.0));
+        (near, (far - near).normalize())
+    }
+
     /// Orbit by a drag of `delta` logical pixels.
     pub fn orbit(&mut self, delta: Vec2) {
         self.yaw -= delta.x * 0.008;
@@ -86,6 +94,14 @@ mod tests {
         let after =
             cam.target + view.row(0).truncate() * (ndc.x * half_h * aspect) + view.row(1).truncate() * (ndc.y * half_h);
         assert!((before - after).length() < 1e-4, "{before} vs {after}");
+    }
+
+    #[test]
+    fn the_centre_ray_points_at_the_target() {
+        let cam = Camera::default();
+        let (origin, dir) = cam.ray(Vec2::ZERO, 1.5);
+        let to_target = (cam.target - origin).normalize();
+        assert!(dir.dot(to_target) > 0.9999, "{dir} vs {to_target}");
     }
 
     #[test]

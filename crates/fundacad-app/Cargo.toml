@@ -22,6 +22,10 @@ gpui_wgpu = { package = "gpui-pre-wgpu", version = "=0.3.14" }
 bytemuck = { version = "1", features = ["derive"] }
 glam = "0.30"
 log = "0.4"
+async-channel = "2"
+fundacad-client = { path = "../fundacad-client" }
+fundacad-format = { path = "../fundacad-format" }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 rust-embed = "8.14"
 
 [features]

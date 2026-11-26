@@ -5,6 +5,7 @@
 mod assets;
 mod document;
 mod engine;
+mod plastic;
 mod shell;
 mod theme;
 mod ui;
@@ -15,16 +16,6 @@ use gpui::*;
 fn main() {
     init_logger();
     let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
-    let mut notice = None;
-    let mesh = match &path {
-        Some(path) => engine::open(path).unwrap_or_else(|e| {
-            log::error!("{e}");
-            notice = Some(SharedString::from(e.to_string()));
-            Default::default()
-        }),
-        None => Default::default(),
-    };
-    log::info!("{} triangles", mesh.triangles());
     // The sample history stands in for the Vue capture until the engine link reads a file's own.
     let doc = match path.as_ref().and_then(|p| p.file_stem()) {
         Some(name) => document::Document::named(name.to_string_lossy().to_string().into()),
@@ -53,8 +44,14 @@ fn main() {
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
-            let viewport = cx.new(|_| viewport::Viewport::new(mesh));
-            cx.new(|cx| shell::Shell::new(viewport, doc, notice, window, cx))
+            let viewport = cx.new(|cx| {
+                let mut viewport = viewport::Viewport::new();
+                if let Some(path) = &path {
+                    viewport.open(path, cx);
+                }
+                viewport
+            });
+            cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
         })
         .expect("open the main window");
         #[cfg(feature = "shot")]
@@ -72,6 +69,8 @@ fn main() {
     });
 }
 
+static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
 fn init_logger() {
     struct Stderr;
     impl log::Log for Stderr {
@@ -80,11 +79,13 @@ fn init_logger() {
         }
         fn log(&self, r: &log::Record) {
             if self.enabled(r.metadata()) {
-                eprintln!("[{}] {}", r.level(), r.args());
+                let start = START.get_or_init(std::time::Instant::now);
+                eprintln!("{:>8.3} [{}] {}", start.elapsed().as_secs_f64(), r.level(), r.args());
             }
         }
         fn flush(&self) {}
     }
     static LOGGER: Stderr = Stderr;
+    START.get_or_init(std::time::Instant::now);
     let _ = log::set_logger(&LOGGER).map(|_| log::set_max_level(log::LevelFilter::Info));
 }

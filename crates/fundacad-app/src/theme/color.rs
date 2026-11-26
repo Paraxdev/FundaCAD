@@ -27,6 +27,11 @@ impl Rgb {
         Self { r: r as f32 / 255., g: g as f32 / 255., b: b as f32 / 255., a }
     }
 
+    /// sRGB bytes, the alpha dropped, for the 3D view's clear colour.
+    pub fn bytes(self) -> [u8; 3] {
+        [self.r, self.g, self.b].map(|c| (c * 255.).round().clamp(0., 255.) as u8)
+    }
+
     pub fn alpha(self, a: f32) -> Self {
         Self { a: self.a * a, ..self }
     }

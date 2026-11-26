@@ -8,8 +8,8 @@ mod titlebar;
 use gpui::*;
 
 use crate::document::Document;
-use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_2, S_3, UI_FONT};
-use crate::ui::{chip, icon, text};
+use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_1, S_3, UI_FONT};
+use crate::ui::{chip, text};
 use crate::viewport::Viewport;
 
 pub struct Shell {
@@ -18,21 +18,13 @@ pub struct Shell {
     items_tab: usize,
     /// The History step whose values show under it.
     open: Option<usize>,
-    /// Why the file did not open, shown over the view.
-    notice: Option<SharedString>,
     _system: Subscription,
 }
 
 impl Shell {
-    pub fn new(
-        viewport: Entity<Viewport>,
-        doc: Document,
-        notice: Option<SharedString>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(viewport: Entity<Viewport>, doc: Document, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.observe(&viewport, |_, _, cx| cx.notify()).detach();
-        Self { viewport, doc, items_tab: 0, open: None, notice, _system: theme::follow_system(window, cx) }
+        Self { viewport, doc, items_tab: 0, open: None, _system: theme::follow_system(window, cx) }
     }
 }
 
@@ -41,6 +33,7 @@ impl Render for Shell {
         let t = cx.theme().clone();
         let t = &t;
         let gap = px(FLOAT_GAP);
+        self.viewport.update(cx, |v, cx| v.set_background(t.viewport_bg.bytes(), cx));
 
         let left = div()
             .absolute()
@@ -61,19 +54,14 @@ impl Render for Shell {
             .gap(gap)
             .child(self.view_controls(t))
             .child(self.history_card(t, cx));
-        let notice = self.notice.clone().map(|msg| {
-            div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(
-                chip(t)
-                    .max_w(px(560.))
-                    .px(px(S_3))
-                    .py(px(S_2))
-                    .flex()
-                    .items_center()
-                    .gap(px(S_2))
-                    .child(icon("error", 14., t.error))
-                    .child(text(t, FS_SMALL).min_w_0().child(msg)),
-            )
-        });
+        let status = self.viewport.read(cx).status();
+        let status = div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(
+            chip(t)
+                .max_w(px(560.))
+                .px(px(S_3))
+                .py(px(S_1))
+                .child(text(t, FS_SMALL).min_w_0().truncate().text_color(t.text_dim).child(status)),
+        );
 
         div()
             .size_full()
@@ -92,7 +80,7 @@ impl Render for Shell {
                     .child(div().absolute().size_full().child(self.viewport.clone()))
                     .child(left)
                     .child(right)
-                    .children(notice),
+                    .child(status),
             )
     }
 }

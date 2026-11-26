@@ -15,6 +15,7 @@
 resolver = "2"
 members = [
     "crates/fundacad-cli",
+    "crates/fundacad-client",
     "crates/fundacad-core",
     "crates/fundacad-geom",
     "crates/fundacad-mcp",
