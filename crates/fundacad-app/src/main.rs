@@ -4,6 +4,8 @@
 
 mod engine;
 mod shell;
+// The full token set lands ahead of the panels that use it.
+#[allow(dead_code)]
 mod theme;
 mod viewport;
 
@@ -27,18 +29,32 @@ fn main() {
 
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        gpui_kit::component::Theme::change(gpui_kit::component::ThemeMode::Dark, None, cx);
+        theme::init(theme::Settings::default(), vec![], cx);
+        sync_kit_theme(cx);
+        cx.observe_global::<theme::ThemeState>(sync_kit_theme).detach();
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1400.), px(900.)), cx))),
             titlebar: Some(TitlebarOptions { title: Some(title.clone()), ..Default::default() }),
             ..Default::default()
         };
-        gpui_kit::open_window(options, cx, move |_, cx| {
+        gpui_kit::open_window(options, cx, move |window, cx| {
             let viewport = cx.new(|_| viewport::Viewport::new(mesh));
-            cx.new(|cx| shell::Shell::new(viewport, title, cx))
+            cx.new(|cx| shell::Shell::new(viewport, title, window, cx))
         })
         .expect("open the main window");
     });
+}
+
+/// The kit's own controls (inputs, popups, scrollbars) follow our light or dark mode.
+fn sync_kit_theme(cx: &mut App) {
+    use gpui_kit::component::{Theme, ThemeMode};
+    let mode = match theme::state(cx).theme().mode {
+        theme::Mode::Dark => ThemeMode::Dark,
+        theme::Mode::Light => ThemeMode::Light,
+    };
+    if Theme::global(cx).mode != mode {
+        Theme::change(mode, None, cx);
+    }
 }
 
 fn init_logger() {
