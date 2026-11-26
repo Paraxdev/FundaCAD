@@ -26,6 +26,7 @@ fn main() {
         ("a_reply_for_a_replaced_document_is_dropped", a_reply_for_a_replaced_document_is_dropped),
         ("a_corrupt_frame_fails_and_the_next_edit_goes_whole", a_corrupt_frame_fails_and_the_next_edit_goes_whole),
         ("an_engine_error_names_its_revision_and_feature", an_engine_error_names_its_revision_and_feature),
+        ("the_worker_builds_up_to_the_rollback_without_suppressed", the_worker_builds_up_to_the_rollback_without_suppressed),
     ];
     let only = std::env::args().skip(1).find(|a| !a.starts_with('-'));
     let mut ran = 0;
@@ -54,6 +55,10 @@ fn fake_worker(script: &str, log: &PathBuf) {
             "base": req.get("baseRevision"),
             "full": doc.is_some(),
             "bodyIds": doc.and_then(|d| d.get("bodyIds")).is_some(),
+            "features": match doc {
+                Some(d) => json!(d["features"].as_array().map_or(0, Vec::len)),
+                None => req["ops"]["length"].clone(),
+            },
         });
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(log).unwrap();
         writeln!(f, "{entry}").unwrap();
@@ -150,6 +155,15 @@ impl Fake {
                 let v: Value = serde_json::from_str(l).unwrap();
                 (v["revision"].as_u64().unwrap(), v["base"].as_u64(), v["full"] == true, v["bodyIds"] == true)
             })
+            .collect()
+    }
+
+    /// How many features each request carried, the document's or the delta's length.
+    fn features_sent(&self) -> Vec<u64> {
+        std::fs::read_to_string(&self.log)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str::<Value>(l).unwrap()["features"].as_u64().unwrap())
             .collect()
     }
 
@@ -301,4 +315,20 @@ fn an_engine_error_names_its_revision_and_feature() {
     assert_eq!(f.grow(), Some(3));
     let m = f.mesh();
     assert_eq!((m.revision, m.timing.full_send), (3, false));
+}
+
+fn the_worker_builds_up_to_the_rollback_without_suppressed() {
+    let f = fake("");
+    let mut d = doc("a");
+    d["features"].as_array_mut().unwrap().extend([json!({"id": "f2", "type": "box"}), json!({"id": "f3", "type": "box"})]);
+    d.insert("rollback".into(), json!(2));
+    f.client.load(d).unwrap();
+    f.mesh();
+    f.client.edit(|d| Ok(drop(d.insert("suppressed".into(), json!(["f1"]))))).unwrap();
+    f.mesh();
+    f.client.edit(|d| Ok(drop(d.insert("rollback".into(), Value::Null)))).unwrap();
+    f.mesh();
+    assert_eq!(f.features_sent(), [2, 1, 2]);
+    let kept = f.client.edit(|d| if d["features"].as_array().unwrap().len() == 3 { Ok(()) } else { Err("cut".into()) });
+    assert_eq!(kept, Ok(None), "the client keeps every feature");
 }

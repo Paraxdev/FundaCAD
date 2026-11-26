@@ -1,6 +1,7 @@
 mod camera;
 mod demo;
 mod drag;
+mod issues;
 pub mod mesh;
 mod pick;
 mod renderer;
@@ -14,6 +15,8 @@ use glam::{Vec2, Vec3};
 use gpui::*;
 
 pub use camera::Camera;
+#[allow(unused_imports, reason = "fc2/shell reads it for History")]
+pub use issues::FeatureIssue;
 use pick::Hit;
 use renderer::{Overlay, Renderer};
 use scene::Scene;
@@ -85,6 +88,7 @@ pub struct Viewport {
     push: Option<Push>,
     mask_revision: u64,
     background: [u8; 3],
+    issues: Vec<FeatureIssue>,
     message: Option<String>,
     rebuild_ms: Option<f64>,
     _wake: Option<Task<()>>,
@@ -116,6 +120,7 @@ impl Viewport {
             push: None,
             mask_revision: 0,
             background: [23, 26, 31],
+            issues: Vec::new(),
             message: None,
             rebuild_ms: None,
             _wake: None,
@@ -124,6 +129,7 @@ impl Viewport {
     }
 
     pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) {
+        self.issues.clear();
         let (tx, rx) = async_channel::bounded::<()>(1);
         match engine::open(path, move || {
             let _ = tx.try_send(());
@@ -155,6 +161,12 @@ impl Viewport {
     #[allow(dead_code, reason = "fc2/shell reads it for History")]
     pub fn doc(&self) -> Option<&Doc> {
         self.session.as_ref().map(|s| &s.doc)
+    }
+
+    /// What the latest rebuild said of each feature it could not build whole, empty when all built.
+    #[allow(dead_code, reason = "fc2/shell reads it for History")]
+    pub fn feature_issues(&self) -> &[FeatureIssue] {
+        &self.issues
     }
 
     /// Edits the open document, for panels beside the view. The revision it made, None when nothing changed.
@@ -212,9 +224,15 @@ impl Viewport {
         let mut latest: Option<Arc<EngineMesh>> = None;
         for event in events {
             match event {
-                Event::Mesh(mesh) => latest = Some(mesh),
-                Event::Failed { message, .. } => {
+                Event::Mesh(mesh) => {
+                    self.issues = issues::of_result(&mesh.result);
+                    latest = Some(mesh);
+                }
+                Event::Failed { message, feature_id, .. } => {
                     log::warn!("{message}");
+                    if let Some(id) = &feature_id {
+                        issues::failed(&mut self.issues, id, &message);
+                    }
                     self.message = Some(message);
                     if self.push.as_ref().is_some_and(|p| p.released) {
                         self.push = None;
@@ -227,10 +245,8 @@ impl Viewport {
         }
         if let Some(mesh) = latest {
             log::info!("mesh {mesh}");
-            if let Some(errors) =
-                mesh.result.get("featureErrors").filter(|e| e.as_array().is_none_or(|a| !a.is_empty()) && !e.is_null())
-            {
-                log::warn!("feature errors {errors}");
+            for i in &self.issues {
+                log::warn!("{}: {}", i.feature_id, i.message);
             }
             self.rebuild_ms = Some(mesh.timing.total.as_secs_f64() * 1000.0);
             self.message = None;

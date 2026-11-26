@@ -4,6 +4,7 @@ use fundacad_core::params::{resolve, targets::write_targets};
 use fundacad_core::schema::ParamDef;
 use indexmap::IndexMap;
 use serde_json::{json, Map, Value};
+use std::borrow::Cow;
 
 /// The keys a delta rebuild replaces whole, beside the feature list.
 const SIDE_KEYS: [&str; 3] = ["parameters", "bodyVisibility", "bodyIds"];
@@ -48,6 +49,27 @@ impl Held {
         }
         Some(Value::Object(ops))
     }
+}
+
+/// The document the worker builds: the features before the rollback marker that are not suppressed. `rollback` is
+/// the count of active features, absent or null for all. The full document is the one saved.
+pub fn built(doc: &Map<String, Value>) -> Cow<'_, Map<String, Value>> {
+    let rollback = doc.get("rollback").and_then(Value::as_f64).map(|r| r.max(0.0) as usize);
+    let suppressed: Vec<&str> =
+        doc.get("suppressed").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+    let Some(features) = doc.get("features").and_then(Value::as_array) else { return Cow::Borrowed(doc) };
+    if rollback.is_none_or(|r| r >= features.len()) && suppressed.is_empty() {
+        return Cow::Borrowed(doc);
+    }
+    let kept = features
+        .iter()
+        .take(rollback.unwrap_or(usize::MAX))
+        .filter(|f| f.get("id").and_then(Value::as_str).is_none_or(|id| !suppressed.contains(&id)))
+        .cloned()
+        .collect();
+    let mut out = doc.clone();
+    out.insert("features".into(), Value::Array(kept));
+    Cow::Owned(out)
 }
 
 /// A number as the parameter table writes it, an integral value without a fraction.
@@ -142,6 +164,26 @@ mod tests {
         e["features"].as_array_mut().unwrap()[1] = json!({"id": "b", "type": "move", "dx": 1});
         let ops = held.delta_to(&e).unwrap();
         assert_eq!(ops["set"], json!([[1, {"id": "b", "type": "move", "dx": 1}]]));
+    }
+
+    #[test]
+    fn built_drops_features_past_the_rollback_and_suppressed_ones() {
+        let ids = |d: &Map<String, Value>| -> Vec<String> {
+            d["features"].as_array().unwrap().iter().map(|f| f["id"].as_str().unwrap().to_owned()).collect()
+        };
+        let mut d = doc();
+        d["features"].as_array_mut().unwrap().push(json!({"id": "c", "type": "box"}));
+        assert!(matches!(built(&d), Cow::Borrowed(_)));
+
+        d.insert("rollback".into(), json!(2));
+        assert_eq!(ids(&built(&d)), ["a", "b"]);
+        d.insert("suppressed".into(), json!(["a"]));
+        assert_eq!(ids(&built(&d)), ["b"]);
+        d.insert("rollback".into(), Value::Null);
+        assert_eq!(ids(&built(&d)), ["b", "c"]);
+        d.insert("rollback".into(), json!(0));
+        assert!(ids(&built(&d)).is_empty());
+        assert_eq!(ids(&d), ["a", "b", "c"], "the saved document keeps every feature");
     }
 
     #[test]
