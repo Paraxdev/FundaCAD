@@ -303,6 +303,7 @@ impl Viewport {
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return Err("a face is being pushed".into());
         }
+        self.blend_settle();
         if self.blend.is_some() {
             return Err("an edge is being dragged".into());
         }
@@ -358,7 +359,7 @@ impl Viewport {
         if self.push.as_ref().is_some_and(|p| !p.released) || self.blend_held() {
             return;
         }
-        self.blend_drop();
+        self.blend_before_step(cx);
         // Undo during a tool cancels it, redo has nothing to bring back yet.
         if self.tool.is_some() {
             if undo {
@@ -591,7 +592,7 @@ impl Viewport {
         if self.push.is_some() {
             return;
         }
-        if self.blend_press(position, cx) {
+        if self.blend_press(position, cx) || self.blend.is_some() {
             return;
         }
         self.hover = None;

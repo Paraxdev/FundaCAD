@@ -51,6 +51,8 @@ pub(super) struct Blend {
     outcomes: Outcomes,
     /// Each preview sent, with the document revision it made, None for the bare model.
     sent: Vec<(u64, Option<Value>)>,
+    /// The latest revision the engine answered.
+    replied: u64,
     before: Doc,
 }
 
@@ -245,13 +247,14 @@ impl Viewport {
         if self.blend.as_ref().is_some_and(|b| b.open) {
             self.blend_commit(false, cx);
         }
+        self.blend_settle();
         if self.blend.is_some() {
             return false;
         }
         let at = self.local(position);
         let on_knob = self.blend_target().filter(|t| self.knob_at(t).is_some_and(|k| k.distance(at) <= GRAB_PX));
         let target = on_knob.or_else(|| {
-            if self.picking.filter == Filter::Bodies {
+            if matches!(self.picking.filter, Filter::Bodies | Filter::Faces) {
                 return None;
             }
             let (_, _, pick) = self.picks_at(position).1?;
@@ -299,6 +302,7 @@ impl Viewport {
                     range: BlendRange::default(),
                     outcomes: Outcomes::default(),
                     sent: Vec::new(),
+                    replied: 0,
                     before,
                 }
             }
@@ -333,6 +337,7 @@ impl Viewport {
                     range: BlendRange::default().note(value, true),
                     outcomes,
                     sent: Vec::new(),
+                    replied: 0,
                     before,
                 }
             }
@@ -424,6 +429,7 @@ impl Viewport {
     /// puts back the one that built.
     pub(super) fn blend_reply(&mut self, revision: u64, result: Option<&Map<String, Value>>, cx: &mut Context<Self>) {
         let Some(b) = self.blend.as_mut() else { return };
+        b.replied = b.replied.max(revision);
         let Some(sent) = b.sent_at(revision).cloned() else { return };
         let reply = match (&sent, result) {
             (_, None) => Reply::Failed,
@@ -455,7 +461,12 @@ impl Viewport {
             if b.released {
                 b.signed = b.shown_value().unwrap_or(0.0);
             }
-            if let Ok(doc) = b.doc_with(shown.as_ref()) {
+            // A resize refused with nothing of its own on screen keeps the feature as it was.
+            let doc = match (&shown, &b.original) {
+                (None, Some(_)) => Ok(b.before.clone()),
+                _ => b.doc_with(shown.as_ref()),
+            };
+            if let Ok(doc) = doc {
                 self.blend_send(doc, shown, cx);
             }
         }
@@ -473,13 +484,36 @@ impl Viewport {
     fn blend_record(&mut self) {
         let (Some(b), Some(session)) = (self.blend.as_ref(), self.session.as_ref()) else { return };
         if session.doc != b.before {
-            self.undo.record(b.before.clone(), Some(format!("blend {}", b.id)), None);
+            self.undo.record(b.before.clone(), None, None);
         }
+        self.blend_hover = None;
+    }
+
+    /// Ends a released blend still waiting for its reply, keeping what the document holds now.
+    pub(super) fn blend_settle(&mut self) {
+        if self.blend.as_ref().is_some_and(|b| b.released) {
+            self.blend_record();
+            self.blend = None;
+        }
+    }
+
+    /// Before an undo or redo: a released blend is kept as its own step, an open one is put back as Esc would.
+    pub(super) fn blend_before_step(&mut self, cx: &mut Context<Self>) {
+        self.blend_settle();
+        if let Some(before) = self.blend.as_ref().map(|b| b.before.clone()) {
+            self.blend_send(before, None, cx);
+            self.blend = None;
+        }
+        self.blend_hover = None;
     }
 
     pub(super) fn blend_release(&mut self, cx: &mut Context<Self>) {
         let Some(b) = self.blend.as_mut().filter(|b| b.grab.is_some()) else { return };
         b.grab = None;
+        if !b.moved && b.original.is_some() {
+            self.blend = None;
+            return cx.notify();
+        }
         if !b.moved && b.original.is_none() {
             // A press that never travelled opens the value box at the usual size.
             b.signed = ed::seed_value(b.kind, ed::value_bounds(Some(self.radius as f64 * 2.0)));
@@ -521,7 +555,8 @@ impl Viewport {
                     self.blend_send(doc, current, cx);
                 }
                 let b = self.blend.as_mut().expect("still there");
-                if unverified && !b.neutral() {
+                let waiting = b.sent.last().is_some_and(|(r, _)| *r > b.replied);
+                if unverified && waiting && !b.neutral() {
                     b.released = true;
                 } else {
                     self.blend_record();
@@ -549,7 +584,10 @@ impl Viewport {
                 let text = b.typing.take().unwrap_or_default();
                 if !text.trim().is_empty() {
                     match crate::inspector::parse(crate::inspector::Kind::Length, &text) {
-                        Ok(v) => b.signed = v.max(ed::MIN_EDGE_VALUE) * if b.kind == b.positive { 1.0 } else { -1.0 },
+                        Ok(v) => {
+                            b.signed = v.max(ed::MIN_EDGE_VALUE) * if b.kind == b.positive { 1.0 } else { -1.0 };
+                            b.moved = true;
+                        }
                         Err(e) => {
                             b.typing = Some(text);
                             self.say(e, cx);
@@ -563,9 +601,16 @@ impl Viewport {
                 }
             }
             "tab" => {
-                let (kind, value) = ed::switch_treatment(b.kind, b.value().max(ed::seed_value(b.kind.other(), bounds)), bounds);
+                let (kind, value) = ed::switch_treatment(b.kind, if b.neutral() { ed::seed_value(b.kind.other(), bounds) } else { b.value() }, bounds);
                 b.kind = kind;
-                b.signed = value * if kind == b.positive { 1.0 } else { -1.0 };
+                b.positive = kind;
+                b.signed = value;
+                // Tab while held lets go of the handle and leaves the value to the box.
+                if b.grab.is_some() {
+                    b.grab = None;
+                    b.moved = true;
+                    b.open = true;
+                }
                 b.range = BlendRange::default();
                 b.outcomes.forget();
                 self.blend_preview(cx);
