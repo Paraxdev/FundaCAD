@@ -652,6 +652,16 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     on("finish-sketch", "Finish Sketch", Viewport::finish_sketch, cx);
     on("sketch-extrude", "Finish & Extrude", |v, cx| v.sketch_extrude(false, cx), cx);
     on("sketch-revolve", "Finish & Revolve", |v, cx| v.sketch_extrude(true, cx), cx);
+    // FC1's E in a sketch is the `extrude` row: finish the sketch and extrude it. The model's own Extrude is not built.
+    on(
+        "extrude",
+        "Extrude",
+        |v, cx| match v.sketch.is_some() {
+            true => v.sketch_extrude(false, cx),
+            false => v.say("Extrude a sketch with E while it is open".into(), cx),
+        },
+        cx,
+    );
     let tools = [
         ("line", "Line", Tool::Line),
         ("rectangle", "Rectangle", Tool::Rectangle),
