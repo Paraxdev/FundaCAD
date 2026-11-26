@@ -10,7 +10,6 @@ use super::scene::{Body, Scene, Vertex};
 
 const SAMPLES: u32 = 4;
 const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-const CLEAR: wgpu::Color = wgpu::Color { r: 0.09, g: 0.1, b: 0.12, a: 1.0 };
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -62,6 +61,7 @@ struct Drawn {
     size: Size<DevicePixels>,
     scene_revision: u64,
     overlay: Overlay,
+    background: [u8; 3],
 }
 
 /// Draws the scene into a texture on GPUI's device, which GPUI then composites like any element.
@@ -83,6 +83,7 @@ pub struct Renderer {
     drawn: Option<Drawn>,
     context_generation: u64,
     texture_index: u32,
+    background: [u8; 3],
 }
 
 impl Renderer {
@@ -185,6 +186,7 @@ impl Renderer {
             drawn: None,
             context_generation,
             texture_index,
+            background: [23, 26, 31],
         }
     }
 
@@ -307,6 +309,25 @@ impl Renderer {
 
     /// Draws a frame if anything changed since the last one and returns the texture index to paint.
     /// The submit lands on the shared queue before GPUI's own, so GPUI samples the finished frame.
+    /// The colour behind the model, as sRGB bytes.
+    pub fn set_background(&mut self, rgb: [u8; 3]) {
+        self.background = rgb;
+    }
+
+    fn clear(&self) -> wgpu::Color {
+        let srgb = self.format.is_srgb();
+        let c = |b: u8| {
+            let v = b as f64 / 255.0;
+            match srgb {
+                false => v,
+                true if v <= 0.04045 => v / 12.92,
+                true => ((v + 0.055) / 1.055).powf(2.4),
+            }
+        };
+        let [r, g, b] = self.background;
+        wgpu::Color { r: c(r), g: c(g), b: c(b), a: 1.0 }
+    }
+
     pub fn render(
         &mut self,
         scene: &Scene,
@@ -320,7 +341,13 @@ impl Renderer {
         if let (Some((body, _)), Some(mask)) = (overlay.stretch, mask) {
             self.set_mask(body, mask, overlay.mask_revision);
         }
-        let drawn = Drawn { camera: camera.clone(), size, scene_revision: scene.revision, overlay: overlay.clone() };
+        let drawn = Drawn {
+            camera: camera.clone(),
+            size,
+            scene_revision: scene.revision,
+            overlay: overlay.clone(),
+            background: self.background,
+        };
         if self.drawn.as_ref() == Some(&drawn) {
             return self.texture_index;
         }
@@ -347,6 +374,7 @@ impl Renderer {
         }
 
         let targets = self.targets.as_ref().expect("targets were just ensured");
+        let clear = self.clear();
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -355,7 +383,7 @@ impl Renderer {
                     view: &targets.msaa,
                     depth_slice: None,
                     resolve_target: Some(&targets.resolve),
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(CLEAR), store: wgpu::StoreOp::Discard },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(clear), store: wgpu::StoreOp::Discard },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &targets.depth,

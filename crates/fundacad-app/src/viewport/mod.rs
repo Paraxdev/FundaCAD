@@ -46,6 +46,8 @@ struct Push {
     lost: bool,
     /// Each value sent, with the document revision it made.
     sent: Vec<(u64, f64)>,
+    /// The revision of the mesh on screen.
+    shown: u64,
     released: bool,
 }
 
@@ -55,8 +57,12 @@ impl Push {
     }
 
     fn plane_at(&self, value: f64) -> f32 {
-        let sign = if self.grip.start < 0.0 { -1.0 } else { 1.0 };
-        self.anchor.dot(self.axis) + (sign * (value - self.grip.start)) as f32
+        self.anchor.dot(self.axis) + self.grip.travel(value)
+    }
+
+    /// Released, and the mesh of the last value sent is on screen.
+    fn settled(&self) -> bool {
+        self.released && self.sent.last().is_none_or(|(r, _)| self.shown >= *r)
     }
 
     /// The value the mesh of `revision` was built with.
@@ -78,6 +84,7 @@ pub struct Viewport {
     hover: Option<(Hit, Result<Grip, String>)>,
     push: Option<Push>,
     mask_revision: u64,
+    background: [u8; 3],
     message: Option<String>,
     rebuild_ms: Option<f64>,
     _wake: Option<Task<()>>,
@@ -85,6 +92,15 @@ pub struct Viewport {
 }
 
 impl Viewport {
+    /// The colour behind the model, as sRGB bytes, usually the theme's viewport background.
+    #[allow(dead_code, reason = "fc2/shell calls it from the theme")]
+    pub fn set_background(&mut self, rgb: [u8; 3], cx: &mut Context<Self>) {
+        if self.background != rgb {
+            self.background = rgb;
+            cx.notify();
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             camera: Camera::default(),
@@ -99,6 +115,7 @@ impl Viewport {
             hover: None,
             push: None,
             mask_revision: 0,
+            background: [23, 26, 31],
             message: None,
             rebuild_ms: None,
             _wake: None,
@@ -204,8 +221,8 @@ impl Viewport {
     /// Finds the pushed cap in the mesh of `revision` and remasks it.
     fn retarget(&mut self, revision: u64) {
         let Some(p) = &mut self.push else { return };
-        let settled = p.released && p.sent.last().is_none_or(|(r, _)| revision >= *r);
-        if settled {
+        p.shown = revision;
+        if p.settled() {
             self.push = None;
             return;
         }
@@ -267,6 +284,7 @@ impl Viewport {
         }
         let mask = self.push.as_ref().filter(|p| !p.lost).map(|p| p.mask.as_slice());
         let renderer = self.renderer.as_mut().expect("made above");
+        renderer.set_background(self.background);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
         had_backend != self.backend
@@ -294,7 +312,7 @@ impl Viewport {
         self.hover = hit.map(|hit| {
             let body = &self.scene.bodies[hit.body];
             let grip = match (&self.session, body.owner(hit.face)) {
-                (Some(s), Some(owner)) => plastic::grip(&s.doc, owner, hit.normal, hit.point),
+                (Some(s), Some(owner)) => plastic::grip(&s.doc, owner, &body.source.id, hit.normal, hit.point),
                 (Some(_), None) => Err("this face has no feature behind it".into()),
                 (None, _) => Err("open a FundaCAD document to push faces".into()),
             };
@@ -325,6 +343,7 @@ impl Viewport {
             mesh_plane: plane,
             lost: false,
             sent: Vec::new(),
+            shown: 0,
             grip,
             axis,
             anchor: hit.point,
@@ -362,7 +381,7 @@ impl Viewport {
     fn release(&mut self, cx: &mut Context<Self>) {
         if let Some(p) = &mut self.push {
             p.released = true;
-            if p.sent.is_empty() {
+            if p.settled() {
                 self.push = None;
             }
         }

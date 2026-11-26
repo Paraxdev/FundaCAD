@@ -40,11 +40,11 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
         return;
     };
     let start = grip.start;
-    let sign = start.signum();
-    log::info!("demo: pushing {} from {start} by {travel} mm over {} ms", grip.label(), DRAG.as_millis());
+    let end = grip.value(travel as f32);
+    log::info!("demo: pushing {} from {start} to {end} over {} ms", grip.label(), DRAG.as_millis());
     if !this
         .update(cx, |v, cx| {
-            let ok = v.begin(hit, grip, 0.0);
+            let ok = v.begin(hit, grip.clone(), 0.0);
             cx.notify();
             ok
         })
@@ -57,7 +57,7 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
     loop {
         cx.background_executor().timer(FRAME).await;
         let t = (began.elapsed().as_secs_f64() / DRAG.as_secs_f64()).min(1.0);
-        let value = ((start + sign * travel * t) * 10.0).round() / 10.0;
+        let value = grip.value((travel * t) as f32);
         let sent = this.update(cx, |v, cx| match (&mut v.push, preview_only) {
             (Some(p), true) => {
                 p.value = value;
@@ -77,7 +77,7 @@ pub async fn run(this: WeakEntity<Viewport>, cx: &mut AsyncApp, travel: f64) {
         cx.background_executor().timer(HOLD).await;
     }
     let released = Instant::now();
-    log::info!("demo: released at {:.1}", start + sign * travel);
+    log::info!("demo: released at {end:.1}");
     let _ = this.update(cx, |v, cx| v.release(cx));
     while released.elapsed() < SETTLE_LIMIT {
         cx.background_executor().timer(FRAME).await;
@@ -117,7 +117,7 @@ impl Viewport {
                     continue;
                 }
                 let point = sum / n as f32;
-                let grip = match plastic::grip(doc, owner, normal, point) {
+                let grip = match plastic::grip(doc, owner, &body.source.id, normal, point) {
                     Ok(grip) => grip,
                     Err(why) => {
                         refused.insert((owner.to_string(), why));
