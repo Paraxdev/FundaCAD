@@ -9,7 +9,7 @@ pub mod scene;
 use std::path::Path;
 use std::sync::Arc;
 
-use fundacad_client::{Event, Mesh as EngineMesh};
+use fundacad_client::{Doc, Event, Mesh as EngineMesh};
 use glam::{Vec2, Vec3};
 use gpui::*;
 
@@ -148,6 +148,29 @@ impl Viewport {
             }
         }
         cx.notify();
+    }
+
+    /// The open document as the app sees it, edits included before the engine has built them.
+    #[allow(dead_code, reason = "fc2/shell reads it for History")]
+    pub fn doc(&self) -> Option<&Doc> {
+        self.session.as_ref().map(|s| &s.doc)
+    }
+
+    /// Edits the open document, for panels beside the view. The revision it made, None when nothing changed.
+    #[allow(dead_code, reason = "fc2/shell edits through it")]
+    pub fn edit(
+        &mut self,
+        f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
+        cx: &mut Context<Self>,
+    ) -> Result<Option<u64>, String> {
+        if self.push.as_ref().is_some_and(|p| !p.released) {
+            return Err("a face is being pushed".into());
+        }
+        let session = self.session.as_mut().ok_or("no document is open")?;
+        let edited = session.edit(f)?;
+        self.hover = None;
+        cx.notify();
+        Ok(edited)
     }
 
     /// One line for the status bar.
