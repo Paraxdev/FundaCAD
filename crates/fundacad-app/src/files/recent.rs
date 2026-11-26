@@ -38,7 +38,12 @@ pub fn forgotten(mut list: Vec<Recent>, path: &Path) -> Vec<Recent> {
 }
 
 pub fn list(cx: &App) -> Vec<Recent> {
-    crate::settings::get(cx, SETTING).unwrap_or_default()
+    readable(crate::settings::get(cx, SETTING).unwrap_or_default())
+}
+
+/// The entries that read as a recent file, one that does not is skipped instead of losing the list.
+pub fn readable(values: Vec<serde_json::Value>) -> Vec<Recent> {
+    values.into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect()
 }
 
 fn now() -> u64 {

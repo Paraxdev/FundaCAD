@@ -87,3 +87,17 @@ fn recent_files_store_as_fundacad_1_did() {
     let text = serde_json::to_value(vec![r("D:/a.funda", 3)]).unwrap();
     assert_eq!(text, json!([{"path": "D:/a.funda", "openedAt": 3}]));
 }
+
+#[test]
+fn a_bad_recent_entry_is_skipped_and_the_rest_kept() {
+    use super::recent::readable;
+    assert_eq!(readable(vec![]), vec![]);
+    assert_eq!(readable(vec![json!({"path": "D:/parts/lid.funda", "openedAt": 17})]), vec![r("D:/parts/lid.funda", 17)]);
+    let mixed = vec![
+        json!({"path": "D:/parts/lid.funda", "openedAt": 17}),
+        json!({"path": 4}),
+        json!("E:/loose.funda"),
+        json!({"path": "E:/box.fundab", "openedAt": 3}),
+    ];
+    assert_eq!(readable(mixed), vec![r("D:/parts/lid.funda", 17), r("E:/box.fundab", 3)]);
+}
