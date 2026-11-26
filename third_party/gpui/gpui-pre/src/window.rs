@@ -1,3 +1,4 @@
+// Modified by FundaCAD: Window::paint_external_texture paints a texture the app renders itself.
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -5642,7 +5643,7 @@ impl Window {
         Ok(())
     }
 
-    /// FundaCAD spike: paints a texture the app renders itself, registered with the renderer under
+    /// Paints a texture the app renders itself, registered with the renderer under
     /// `texture_index`, as a sprite at the current z-index. `texture_size` is its size in pixels.
     pub fn paint_external_texture(
         &mut self,

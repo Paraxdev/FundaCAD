@@ -1,4 +1,4 @@
-// FundaCAD: Windows windows draw through gpui_wgpu (Vulkan, GL fallback) like Linux, instead of
+// Added by FundaCAD: Windows windows draw through gpui_wgpu (Vulkan, GL fallback) like Linux, instead of
 // DirectX 11. FUNDA_GPUI_RENDERER=dx keeps the stock DirectX renderer.
 
 use std::{cell::RefCell, rc::Rc, sync::Arc};

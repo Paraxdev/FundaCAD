@@ -1,3 +1,4 @@
+// Modified by FundaCAD: contexts are shared with the app, and GL adapters without storage buffers take the WebGL2 limits.
 // Modified for gpui-pre (snapshot of zed@f126950): adapt device queues and sRGB detection to wgpu 30.0.1.
 #[cfg(not(target_family = "wasm"))]
 use crate::{WgpuRenderer, WgpuSurfaceConfig};

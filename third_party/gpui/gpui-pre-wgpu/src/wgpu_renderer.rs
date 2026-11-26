@@ -1,3 +1,4 @@
+// Modified by FundaCAD: texture lookups fall back to the app's external textures.
 // Modified for gpui-pre (snapshot of zed@f126950): adapt device queues and sRGB detection to wgpu 30.0.1.
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};
 use anyhow::{Context as _, Result};
