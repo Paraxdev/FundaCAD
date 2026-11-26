@@ -98,15 +98,15 @@ fn a_plain_click_on_the_open_row_folds_it_and_a_modified_one_does_not() {
 }
 
 #[test]
-fn the_filter_shows_the_related_rows_while_on_and_something_is_picked() {
+fn the_filter_shows_what_the_viewport_pick_relates_to_while_on() {
     let d = doc();
     let every = strings(&["base", "pad", "hole", "bore", "round", "lid", "lone"]);
-    assert_eq!(shown(&d, &Rows::default(), false), every);
-    assert_eq!(shown(&d, &rows(&["round"]), false), strings(&["pad", "round"]));
-    assert_eq!(shown(&d, &rows(&["round"]), true), every);
-    assert_eq!(shown(&d, &rows(&["gone"]), false), every, "a pick the document lost filters nothing");
-    assert_eq!(related(&d, &Rows::default()), None);
-    assert_eq!(related(&d, &rows(&["hole", "lid"])), Some(strings(&["hole", "bore", "lid"])));
+    assert_eq!(shown(&d, &[], false), every, "nothing picked in the viewport filters nothing");
+    assert_eq!(shown(&d, &strings(&["round"]), false), strings(&["pad", "round"]));
+    assert_eq!(shown(&d, &strings(&["round"]), true), every);
+    assert_eq!(shown(&d, &strings(&["gone"]), false), every, "a seed the document lost filters nothing");
+    assert_eq!(related(&d, &[]), None);
+    assert_eq!(related(&d, &strings(&["lid", "hole"])), Some(strings(&["hole", "bore", "lid"])));
 }
 
 #[test]

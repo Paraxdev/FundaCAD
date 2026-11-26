@@ -16,7 +16,7 @@ pub(super) struct Timeline {
     pub rows: Rows,
     pub menu: Option<Menu>,
     pub field: Option<RowField>,
-    /// The related filter is on unless turned off, as in FundaCAD 1.
+    /// The related filter is on unless turned off, as in FundaCAD 1. It filters only while the viewport has a pick.
     pub related_off: bool,
     /// Which failed step the error chip picks next.
     pub err_cycle: usize,
@@ -125,17 +125,18 @@ pub(super) fn pick(rows: &Rows, order: &[String], id: &str, toggle: bool, range:
     rows.click(order, id, toggle, range)
 }
 
-/// The rows drawn: all of them, or the picked ones and what they relate to while the filter is on.
-pub(super) fn shown(doc: &Doc, rows: &Rows, related_off: bool) -> Vec<String> {
-    match related(doc, rows) {
+/// The rows drawn: all of them, or what the steps behind the viewport pick relate to while the filter is on. Picked
+/// rows never seed it, so picking rows hides none.
+pub(super) fn shown(doc: &Doc, seeds: &[String], related_off: bool) -> Vec<String> {
+    match related(doc, seeds) {
         Some(near) if !related_off => near,
         _ => steps::ids(doc),
     }
 }
 
-/// What the picked rows use and are used by, themselves included, None while nothing is picked.
-pub(super) fn related(doc: &Doc, rows: &Rows) -> Option<Vec<String>> {
-    let seeds = steps::in_order(doc, &rows.keys);
+/// What the seed steps use and are used by, themselves included, None while no seed is in the document.
+pub(super) fn related(doc: &Doc, seeds: &[String]) -> Option<Vec<String>> {
+    let seeds = steps::in_order(doc, seeds);
     (!seeds.is_empty()).then(|| deps::related(doc, &seeds))
 }
 
@@ -157,6 +158,12 @@ impl Shell {
         } else {
             (0..self.doc.features.len()).map(|i| format!("#{i}")).collect()
         }
+    }
+
+    /// The steps that made the faces, bodies and sketch regions picked in the viewport, as TimelineBar.vue seeds the
+    /// related filter. The viewport picks nothing yet, so the filter waits for it.
+    pub(super) fn related_seeds(&self) -> Vec<String> {
+        Vec::new()
     }
 
     /// Called from sync once the document changed.
@@ -191,7 +198,7 @@ impl Shell {
 
     pub(super) fn click_row(&mut self, id: &str, ev: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         let m = ev.modifiers();
-        let order = shown(&self.timeline.doc, &self.timeline.rows, self.timeline.related_off);
+        let order = shown(&self.timeline.doc, &self.related_seeds(), self.timeline.related_off);
         let order = if self.source.is_some() { order } else { self.row_ids() };
         self.timeline.rows = pick(&self.timeline.rows, &order, id, m.control || m.platform, m.shift);
         self.timeline.menu = None;

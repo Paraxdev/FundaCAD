@@ -26,7 +26,7 @@ struct Row<'a> {
     name: SharedString,
     marks: Marks,
     open: bool,
-    /// Related to the picked rows while the filter is off.
+    /// Related to the viewport pick while the filter is off.
     lit: bool,
 }
 
@@ -55,9 +55,9 @@ impl Shell {
         let ids = self.row_ids();
         let fc = self.source.is_some();
         let source = &*self.timeline.doc;
-        let shown =
-            if fc { timeline::shown(source, &self.timeline.rows, self.timeline.related_off) } else { ids.clone() };
-        let related = if fc { timeline::related(source, &self.timeline.rows) } else { None };
+        let seeds = self.related_seeds();
+        let shown = if fc { timeline::shown(source, &seeds, self.timeline.related_off) } else { ids.clone() };
+        let related = if fc { timeline::related(source, &seeds) } else { None };
         let marks = if fc { chips::marks(source, self.viewport.read(cx).feature_issues()) } else { Vec::new() };
         let names: Vec<SharedString> = if fc {
             let all = steps::features(source);
