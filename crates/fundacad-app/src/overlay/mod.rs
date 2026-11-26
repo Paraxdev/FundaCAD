@@ -22,6 +22,9 @@ pub use toast::Toast;
 use crate::commands::MODAL;
 use crate::theme::ActiveTheme as _;
 
+/// Drawn here rather than with gpui-kit's menu, dialog and notification: those carry the kit's own look and focus rules,
+/// these copy FundaCAD 1's (ContextMenu.vue, ConfirmDialog.vue, the toast stack), give the keyboard back to where it
+/// was, and keep the table's keys waiting through the `Modal` key context.
 pub struct Overlay {
     menu: Option<menu::OpenMenu>,
     palette: Option<palette::Palette>,
