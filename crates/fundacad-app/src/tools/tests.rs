@@ -162,6 +162,33 @@ fn reference_datums_need_their_selection() {
 }
 
 #[test]
+fn plane_through_points_needs_three_off_a_line() {
+    let d = doc(json!({}));
+    let words = "Select three faces or edges to lay the plane through, then Plane Through Points";
+    assert_eq!(run("plane-points", &d, vec![]).unwrap_err(), words);
+    assert_eq!(run("plane-points", &d, vec![face("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.])]).unwrap_err(), words);
+    let in_line = vec![face("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.]), face("b1", 3, [11., 1., 5.])];
+    assert_eq!(run("plane-points", &d, in_line).unwrap_err(), "The three points are in a line, pick one off it");
+    let picks = vec![
+        face("b1", 1, [3., 1., 5.]),
+        Pick::Body { body: "b2".into() },
+        edge("b1", 2, [7., 1., 5.]),
+        face("b1", 3, [3., 6., 5.]),
+        face("b1", 4, [9., 9., 9.]),
+    ];
+    let (_, s) = run("plane-points", &d, picks).unwrap();
+    assert_eq!(
+        s.feature,
+        json!({"id": "f1", "type": "datumPlane", "name": "Plane",
+            "plane": {"origin": [0.0, 0.0, 5.0], "normal": [0.0, 0.0, 1.0], "xdir": [1.0, 0.0, 0.0]},
+            "through": {"kind": "points", "points": [
+                {"face": {"kind": "face", "by": "nearest", "point": [3.0, 1.0, 5.0], "body": "b1"}},
+                {"edge": {"kind": "edge", "by": "nearest", "point": [7.0, 1.0, 5.0], "body": "b1"}, "t": 0.5},
+                {"face": {"kind": "face", "by": "nearest", "point": [3.0, 6.0, 5.0], "body": "b1"}}]}})
+    );
+}
+
+#[test]
 fn every_tool_id_is_its_own() {
     let mut ids: Vec<&str> = TOOLS.iter().map(|t| t.id).collect();
     ids.sort();

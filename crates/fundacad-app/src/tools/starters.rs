@@ -64,6 +64,26 @@ pub const TOOLS: &[Tool] = &[
             arm: None,
         })
     }),
+    t("plane-points", "Plane Through Points", |_, s| {
+        let words = "Select three faces or edges to lay the plane through, then Plane Through Points";
+        let mut points = point_refs(s);
+        if points.len() < 3 {
+            return Err(words.into());
+        }
+        points.truncate(3);
+        let spots: Vec<glam::Vec3> =
+            s.picks.iter().filter(|p| p.selector().is_some()).take(3).map(|p| spot(p).into()).collect();
+        let n = (spots[1] - spots[0]).cross(spots[2] - spots[0]);
+        if n.length() < 1e-6 {
+            return Err("The three points are in a line, pick one off it".into());
+        }
+        let n = n.normalize();
+        Ok(Start {
+            feature: json!({"type": "datumPlane", "plane": plane_def((n * n.dot(spots[0])).to_array(), n.to_array()),
+                "name": "Plane", "through": {"kind": "points", "points": points}}),
+            arm: None,
+        })
+    }),
     t("datum-point", "Datum Point", |_, s| {
         let (point, at) = match s.picks.first() {
             Some(p @ Pick::Face { point, .. }) => (*point, Some(json!({"face": p.selector()}))),
