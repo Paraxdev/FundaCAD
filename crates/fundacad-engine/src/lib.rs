@@ -692,6 +692,7 @@ fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queue
 
     let answered_elsewhere = claimed.swap(true, Ordering::SeqCst);
     ticking.store(false, Ordering::SeqCst);
+    watchdog.thread().unpark();
     let _ = watchdog.join();
     if answered_elsewhere {
         clear_running(pool, serial);
@@ -769,10 +770,14 @@ fn spawn_watchdog(
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let step = Duration::from_millis(50);
-        let mut waited = Duration::ZERO;
+        let mut last_frame = std::time::Instant::now();
         while job.ticking.load(Ordering::SeqCst) {
-            std::thread::sleep(step);
-            waited += step;
+            // Parked rather than slept: the job unparks it when it ends and joins it before replying, so a sleep
+            // would hold every reply until the step ran out.
+            std::thread::park_timeout(step);
+            if !job.ticking.load(Ordering::SeqCst) {
+                break;
+            }
             let breach = job.watchdog.poll(
                 job.progress.beats.load(Ordering::Relaxed),
                 job.cancel.is_cancelled(),
@@ -798,10 +803,10 @@ fn spawn_watchdog(
                 on_breach(Message::Text(text));
                 return;
             }
-            if job.frames == Frames::None || waited < PROGRESS_EVERY {
+            if job.frames == Frames::None || last_frame.elapsed() < PROGRESS_EVERY {
                 continue;
             }
-            waited = Duration::ZERO;
+            last_frame = std::time::Instant::now();
             if !job.ticking.load(Ordering::SeqCst) {
                 break;
             }
