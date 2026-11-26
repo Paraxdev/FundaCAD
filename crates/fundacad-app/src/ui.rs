@@ -79,7 +79,7 @@ pub fn icon_button(
     let hover_text = t.text;
     div()
         .id(id)
-        .size(px(box_size))
+        .size(px(t.hit(box_size)))
         .flex_none()
         .flex()
         .items_center()

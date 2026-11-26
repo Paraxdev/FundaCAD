@@ -141,6 +141,13 @@ impl From<Rgb> for Hsla {
     }
 }
 
+impl From<Hsla> for Rgb {
+    fn from(c: Hsla) -> Self {
+        let c = Rgba::from(c);
+        Rgb { r: c.r, g: c.g, b: c.b, a: c.a }
+    }
+}
+
 impl From<Rgb> for Fill {
     fn from(c: Rgb) -> Self {
         Hsla::from(c).into()

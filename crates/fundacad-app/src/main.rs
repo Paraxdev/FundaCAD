@@ -6,8 +6,6 @@ mod assets;
 mod document;
 mod engine;
 mod shell;
-// The full token set lands ahead of the panels that use it.
-#[allow(dead_code)]
 mod theme;
 mod ui;
 mod viewport;
@@ -41,8 +39,7 @@ fn main() {
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
         theme::init(theme::Settings::default(), vec![], cx);
-        sync_kit_theme(cx);
-        cx.observe_global::<theme::ThemeState>(sync_kit_theme).detach();
+        theme::kit::bind(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             // Below this the left and right float clusters overlap.
@@ -68,18 +65,6 @@ fn main() {
             .detach();
         }
     });
-}
-
-/// The kit's own controls (inputs, popups, scrollbars) follow our light or dark mode.
-fn sync_kit_theme(cx: &mut App) {
-    use gpui_kit::component::{Theme, ThemeMode};
-    let mode = match theme::state(cx).theme().mode {
-        theme::Mode::Dark => ThemeMode::Dark,
-        theme::Mode::Light => ThemeMode::Light,
-    };
-    if Theme::global(cx).mode != mode {
-        Theme::change(mode, None, cx);
-    }
 }
 
 fn init_logger() {

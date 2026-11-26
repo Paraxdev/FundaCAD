@@ -1902,6 +1902,7 @@ dependencies = [
  "gpui-pre-windows",
  "log",
  "rust-embed",
+ "windows 0.62.2",
 ]
 
 [[package]]
