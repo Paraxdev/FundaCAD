@@ -509,7 +509,7 @@ fn an_axis_aligned_rectangle_stays_exactly_as_it_was() {
 fn no_angle_is_written_into_a_plain_rectangle_document_entity() {
     let doc: fundacad_core::schema::sketch::SketchEntity =
         serde_json::from_value(json!({ "type": "rectangle", "id": "r1", "x": -7, "y": 2, "width": 10, "height": 4 })).unwrap();
-    let ents = resolve_entities(std::slice::from_ref(&doc), &|_| None).unwrap();
+    let ents = resolve_entities(std::slice::from_ref(&doc), &|_| None);
     let solved = solve(&ents, &[]);
     let out = serde_json::to_value(write_back(&doc, &solved.entities[0])).unwrap();
     assert!(out.get("angle").is_none(), "{out}");
@@ -813,11 +813,11 @@ fn a_closed_sketchs_rotated_rectangle_keeps_its_angle_through_the_headless_solve
     let doc: fundacad_core::schema::sketch::SketchEntity =
         serde_json::from_value(json!({ "type": "rectangle", "id": "r1", "width": 10, "height": 4, "x": 3, "y": -2, "angle": 30 }))
             .unwrap();
-    let ents = resolve_entities(std::slice::from_ref(&doc), &|_| None).unwrap();
+    let ents = resolve_entities(std::slice::from_ref(&doc), &|_| None);
     let r = solve_keeping_axes(&ents, &[], None).unwrap();
     assert!(r.ok && r.conflicts.is_empty());
     let out = write_back(&doc, &r.entities[0]);
-    let (_, _, w, h, a) = rect_out(&resolve_entities(&[out], &|_| None).unwrap()[0]);
+    let (_, _, w, h, a) = rect_out(&resolve_entities(&[out], &|_| None)[0]);
     near(a, 30.0, digits(6));
     near(w, 10.0, digits(6));
     near(h, 4.0, digits(6));

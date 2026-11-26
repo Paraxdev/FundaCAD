@@ -137,7 +137,7 @@ impl std::fmt::Display for SolveError {
             SolveError::UnknownPrimitive(id) => write!(f, "sketch object {id} not found"),
             SolveError::Duplicate(id) => write!(f, "object with id {id} already exists"),
             SolveError::Rejected(id) => write!(f, "planegcs rejected constraint {id}"),
-            SolveError::Native => write!(f, "planegcs failed to start"),
+            SolveError::Native => write!(f, "planegcs failed"),
         }
     }
 }
@@ -554,9 +554,14 @@ pub fn solve_sketch(input: &SolveInput) -> Result<SolveResult, SolveError> {
             return Err(SolveError::Rejected(id));
         }
     }
+    // SAFETY: h is a live handle.
+    let status = unsafe { ffi::fc_gcs_solve(h.0, DOG_LEG) };
+    // GCS threw, FundaCAD 1's wasm call threw there too and the caller kept the old geometry.
+    if status < 0 {
+        return Err(SolveError::Native);
+    }
     // SAFETY: h is a live handle for the calls below, `out` holds n params.
-    let (status, dof, values, lists) = unsafe {
-        let status = ffi::fc_gcs_solve(h.0, DOG_LEG);
+    let (dof, values, lists) = unsafe {
         ffi::fc_gcs_apply(h.0);
         let dof = ffi::fc_gcs_dof(h.0);
         let mut out = vec![0.0; n as usize];
@@ -568,7 +573,7 @@ pub fn solve_sketch(input: &SolveInput) -> Result<SolveResult, SolveError> {
             ffi::fc_gcs_tags(h.0, which as i32, tags.as_mut_ptr(), count);
             *list = tags;
         }
-        (status, dof, out, lists)
+        (dof, out, lists)
     };
     let name = |tags: &[i32]| -> Vec<String> {
         tags.iter().filter_map(|&t| (t >= 1).then(|| b.ids.get(t as usize - 1).cloned()).flatten()).collect()

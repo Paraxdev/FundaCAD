@@ -23,8 +23,10 @@ pub fn js_round(x: f64) -> f64 {
 
 /// Two points merge iff their keys match, 0.001 mm buckets.
 pub fn coinc_key(x: f64, y: f64) -> (i64, i64) {
+    // NaN casts to 0 and would merge with points at the origin, in FundaCAD 1 it keyed as "NaN".
     #[allow(clippy::cast_possible_truncation)]
-    (js_round(x * 1000.0) as i64, js_round(y * 1000.0) as i64)
+    let k = |c: f64| if c.is_nan() { i64::MIN } else { js_round(c * 1000.0) as i64 };
+    (k(x), k(y))
 }
 
 pub fn circumcenter(a: V, b: V, c: V) -> Option<V> {

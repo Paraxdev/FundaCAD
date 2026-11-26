@@ -15,6 +15,8 @@ pub use model::{constraints_from_core, resolve_entities, write_back, Constraint,
 
 #[cfg(test)]
 mod solver_tests;
+#[cfg(test)]
+mod solver_variant_tests;
 
 #[cfg(test)]
 mod test_fixtures;

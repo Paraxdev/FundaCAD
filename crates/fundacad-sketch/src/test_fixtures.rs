@@ -175,11 +175,11 @@ pub fn headless_solve(entities: Value, constraints: Value) -> Option<Vec<Entity>
 
     let docs: Vec<SketchEntity> = serde_json::from_value(entities).unwrap();
     let cs: Vec<SketchConstraint> = serde_json::from_value(constraints).unwrap();
-    let ents = resolve_entities(&docs, &|_| None).unwrap();
+    let ents = resolve_entities(&docs, &|_| None);
     let r = solve_keeping_axes(&ents, &constraints_from_core(&cs), None).ok()?;
     if !r.ok || !r.conflicts.is_empty() {
         return None;
     }
     let out: Vec<SketchEntity> = docs.iter().zip(&r.entities).map(|(d, e)| write_back(d, e)).collect();
-    Some(resolve_entities(&out, &|_| None).unwrap())
+    Some(resolve_entities(&out, &|_| None))
 }

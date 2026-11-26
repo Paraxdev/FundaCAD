@@ -2,7 +2,7 @@
 //! back to the document schema.
 
 use fundacad_core::schema::sketch::{ProjectedCurve, SketchConstraint, SketchEntity};
-use fundacad_core::schema::{Num, UnresolvedNum};
+use fundacad_core::schema::Num;
 use serde::Deserialize;
 
 use crate::geom::{circumcenter, pole_ref, rect_corners, v, V};
@@ -204,46 +204,94 @@ pub fn constraints_from_core(cs: &[SketchConstraint]) -> Vec<Constraint> {
     cs.iter().map(Constraint::from_core).collect()
 }
 
+/// JavaScript's `parseFloat`: the longest leading decimal number, after leading whitespace.
+fn parse_float_prefix(s: &str) -> Option<f64> {
+    let t = s.trim_start();
+    for (name, val) in [("Infinity", f64::INFINITY), ("+Infinity", f64::INFINITY), ("-Infinity", f64::NEG_INFINITY)] {
+        if t.starts_with(name) {
+            return Some(val);
+        }
+    }
+    let b = t.as_bytes();
+    let mut i = usize::from(matches!(b.first(), Some(b'+' | b'-')));
+    let digits = |i: &mut usize| {
+        let s = *i;
+        while b.get(*i).is_some_and(u8::is_ascii_digit) {
+            *i += 1;
+        }
+        *i > s
+    };
+    let mut any = digits(&mut i);
+    if b.get(i) == Some(&b'.') {
+        let mut j = i + 1;
+        if digits(&mut j) || any {
+            any = true;
+            i = j;
+        }
+    }
+    if !any {
+        return None;
+    }
+    if matches!(b.get(i), Some(b'e' | b'E')) {
+        let mut j = i + 1;
+        if matches!(b.get(j), Some(b'+' | b'-')) {
+            j += 1;
+        }
+        if digits(&mut j) {
+            i = j;
+        }
+    }
+    t[..i].parse().ok()
+}
+
+pub(crate) fn resolve_num(n: &Num, params: &dyn Fn(&str) -> Option<f64>) -> f64 {
+    match n {
+        Num::Number(r) => r.get(),
+        Num::Expr(name) => params(name).or_else(|| parse_float_prefix(name)).unwrap_or(0.0),
+    }
+}
+
 /// Resolves every number, the counterpart of FundaCAD 1's resolveRealEntities. An entity without an id gets `_e<n>`.
+/// A name that is no parameter falls back to its leading number, then 0, as FundaCAD 1's resolveNum did.
 pub fn resolve_entities(
     entities: &[SketchEntity],
     params: &dyn Fn(&str) -> Option<f64>,
-) -> Result<Vec<Entity>, UnresolvedNum> {
-    let r = |n: &Num| n.resolve(params);
-    let opt = |n: &Option<Num>| n.as_ref().map_or(Ok(0.0), |n| n.resolve(params));
-    let pts = |ps: &[fundacad_core::schema::sketch::SplinePoint]| -> Result<Vec<V>, UnresolvedNum> {
-        ps.iter().map(|p| Ok(v(p.x.resolve(params)?, p.y.resolve(params)?))).collect()
+) -> Vec<Entity> {
+    let r = |n: &Num| resolve_num(n, params);
+    let opt = |n: &Option<Num>| n.as_ref().map_or(0.0, |n| resolve_num(n, params));
+    let pts = |ps: &[fundacad_core::schema::sketch::SplinePoint]| -> Vec<V> {
+        ps.iter().map(|p| v(resolve_num(&p.x, params), resolve_num(&p.y, params))).collect()
     };
     entities
         .iter()
         .enumerate()
         .map(|(n, e)| {
             let id = e.id().map_or_else(|| format!("_e{n}"), str::to_string);
-            Ok(match e {
-                SketchEntity::Line(l) => Entity::Line { id, x1: r(&l.x1)?, y1: r(&l.y1)?, x2: r(&l.x2)?, y2: r(&l.y2)? },
-                SketchEntity::Circle(c) => Entity::Circle { id, x: opt(&c.x)?, y: opt(&c.y)?, radius: r(&c.radius)? },
+            match e {
+                SketchEntity::Line(l) => Entity::Line { id, x1: r(&l.x1), y1: r(&l.y1), x2: r(&l.x2), y2: r(&l.y2) },
+                SketchEntity::Circle(c) => Entity::Circle { id, x: opt(&c.x), y: opt(&c.y), radius: r(&c.radius) },
                 SketchEntity::Rectangle(c) => Entity::Rectangle {
                     id,
-                    x: opt(&c.x)?,
-                    y: opt(&c.y)?,
-                    width: r(&c.width)?,
-                    height: r(&c.height)?,
-                    angle: opt(&c.angle)?,
+                    x: opt(&c.x),
+                    y: opt(&c.y),
+                    width: r(&c.width),
+                    height: r(&c.height),
+                    angle: opt(&c.angle),
                 },
                 SketchEntity::Arc(a) => Entity::Arc {
                     id,
-                    x1: r(&a.x1)?,
-                    y1: r(&a.y1)?,
-                    x2: r(&a.x2)?,
-                    y2: r(&a.y2)?,
-                    mx: r(&a.mx)?,
-                    my: r(&a.my)?,
+                    x1: r(&a.x1),
+                    y1: r(&a.y1),
+                    x2: r(&a.x2),
+                    y2: r(&a.y2),
+                    mx: r(&a.mx),
+                    my: r(&a.my),
                 },
-                SketchEntity::Spline(s) => Entity::Spline { id, points: pts(&s.points)? },
+                SketchEntity::Spline(s) => Entity::Spline { id, points: pts(&s.points) },
                 SketchEntity::Bspline(b) => {
-                    Entity::Bspline { id, poles: pts(&b.poles)?, closed: b.closed.unwrap_or(false) }
+                    Entity::Bspline { id, poles: pts(&b.poles), closed: b.closed.unwrap_or(false) }
                 }
-                SketchEntity::Point(p) => Entity::Point { id, x: r(&p.x)?, y: r(&p.y)? },
+                SketchEntity::Point(p) => Entity::Point { id, x: r(&p.x), y: r(&p.y) },
                 SketchEntity::Projected(p) => {
                     let curve = match &p.curve {
                         ProjectedCurve::Line(l) => {
@@ -259,12 +307,12 @@ pub fn resolve_entities(
                             my: a.my.get(),
                         },
                         ProjectedCurve::Poly(p) => Curve::Poly(p.pts.iter().map(|[x, y]| v(x.get(), y.get())).collect()),
-                        _ => return Ok(Entity::Other { id }),
+                        _ => return Entity::Other { id },
                     };
                     Entity::Projected { id, curve }
                 }
                 _ => Entity::Other { id },
-            })
+            }
         })
         .collect()
 }
