@@ -38,8 +38,12 @@ fn toast(cx: &mut App, words: String) {
 }
 
 fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) {
-    if tool.id == "extrude" && viewport.read(cx).sketching() {
-        return viewport.update(cx, |v, cx| v.sketch_extrude(false, cx));
+    if viewport.read(cx).sketching() {
+        match tool.id {
+            "extrude" => return viewport.update(cx, |v, cx| v.sketch_extrude(false, cx)),
+            "presspull" => viewport.update(cx, |v, cx| v.finish_sketch(cx)),
+            _ => return toast(cx, "Finish the sketch first".into()),
+        }
     }
     let v = viewport.read(cx);
     let Some(doc) = v.doc() else { return toast(cx, "Open a document first".into()) };

@@ -39,6 +39,9 @@ impl Viewport {
         if self.push.is_some() {
             return Err("a face is being pushed".into());
         }
+        if self.sketching() {
+            return Err("finish the sketch first".into());
+        }
         let session = self.session.as_mut().ok_or("no document is open")?;
         let before = session.doc.clone();
         session.edit(f)?;
