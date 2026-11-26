@@ -86,7 +86,10 @@ pub fn menus(cx: &App) -> [Vec<MenuRow>; 4] {
             MenuRow::Separator,
             item(cx, "manual"),
             item(cx, "issues"),
+            item(cx, "report-problem").label_more(),
+            item(cx, "console"),
             MenuRow::Separator,
+            item(cx, "check-updates"),
             item(cx, "about"),
         ],
     ]

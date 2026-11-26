@@ -5,7 +5,7 @@ mod history;
 mod history_menu;
 mod inspector;
 mod items;
-mod modal;
+pub mod modal;
 mod params;
 mod rail;
 mod rail_menu;
@@ -274,6 +274,7 @@ impl Render for Shell {
             .children(self.transfer_modal(t, cx))
             .child(frost_flush(self.viewport.clone()))
             .child(crate::files::drop::hint(t))
+            .children(crate::diag::view(cx))
             .child(self.bench.overlay.clone())
     }
 }

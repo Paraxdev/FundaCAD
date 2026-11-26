@@ -1,4 +1,4 @@
-# The app opens this form by its file name and fills the ids what, version and os, so keep both.
+# The app opens this form by its file name and fills the ids what, version, os and report, so keep both.
 name: Problem report
 description: Something in FundaCAD went wrong or did not do what you expected.
 labels: ["bug"]
