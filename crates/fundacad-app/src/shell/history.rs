@@ -1,5 +1,6 @@
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
+use gpui_kit::component::input::{Input, InputState};
 
 use super::items::card_head;
 use super::Shell;
@@ -14,7 +15,7 @@ pub(super) const WIDTH: f32 = 288.;
 const ROW: f32 = 34.;
 
 impl Shell {
-    pub(super) fn history_card(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
+    pub(super) fn history_card(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Div {
         let doc = &self.doc;
         let (back, forward) = (doc.can_step_back(), doc.can_step_forward());
         let m = doc.marker;
@@ -30,6 +31,7 @@ impl Shell {
                     if on {
                         d.bg(t.float_chip_bg).on_click(cx.listener(move |this, _, _, cx| {
                             this.doc.set_marker(to);
+                            this.marker_moved = true;
                             cx.notify();
                         }))
                     } else {
@@ -44,7 +46,7 @@ impl Shell {
         for (i, f) in self.doc.features.iter().enumerate() {
             list = list.child(self.step(t, i, f, cx));
             if open == Some(i) && !f.params.is_empty() {
-                list = list.child(props(t, &f.params));
+                list = list.child(self.props(t, &f.params, window, cx));
             }
         }
         list = list.child(marker(t));
@@ -164,34 +166,47 @@ impl Shell {
     }
 }
 
-/// `.timeline-props`: the values of the open step, indented under it.
-fn props(t: &Theme, params: &[Param]) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(S_2))
-        .ml(px(S_3))
-        .mb(px(S_2))
-        .py(px(S_2))
-        .pr(px(S_2))
-        .pl(px(S_3))
-        .flex_none()
-        .border_l_1()
-        .border_color(t.line)
-        .children(params.iter().map(|p| param_row(t, p)))
+impl Shell {
+    /// `.timeline-props`: the values of the open step, indented under it.
+    fn props(&self, t: &Theme, params: &[Param], window: &Window, cx: &App) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(S_2))
+            .ml(px(S_3))
+            .mb(px(S_2))
+            .py(px(S_2))
+            .pr(px(S_2))
+            .pl(px(S_3))
+            .flex_none()
+            .border_l_1()
+            .border_color(t.line)
+            .children(params.iter().map(|p| {
+                let input = p.target.as_ref().and_then(|target| self.fields.get(&target.key())).map(|f| &f.input);
+                param_row(t, p, input.map(|i| (i, i.focus_handle(cx).is_focused(window))))
+            }))
+    }
 }
 
-fn param_row(t: &Theme, p: &Param) -> Div {
-    let value = match &p.expr {
-        Some(expr) => expr.to_string(),
-        None => format_value(p.value),
-    };
+fn param_row(t: &Theme, p: &Param, input: Option<(&Entity<InputState>, bool)>) -> Div {
     let label = text(t, FS_SMALL).flex_1().text_color(t.text_dim).map(|d| match p.expr {
         Some(_) => {
             d.flex().gap(px(3.)).child(div().italic().text_color(t.accent_hot).child("fx:")).child(p.label.clone())
         }
         None => d.child(p.label.clone()),
     });
+    let shown = match (&input, &p.expr) {
+        (Some((input, _)), _) => div()
+            .flex_1()
+            .min_w_0()
+            .child(
+                Input::new(input).appearance(false).bordered(false).focus_bordered(false).text_size(px(FS_SMALL)).p_0(),
+            )
+            .into_any_element(),
+        (None, Some(expr)) => div().child(expr.to_string()).into_any_element(),
+        (None, None) => div().child(format_value(p.value)).into_any_element(),
+    };
+    let edge = if input.is_some_and(|(_, focused)| focused) { t.accent } else { t.control_edge };
     let field = text(t, FS_SMALL)
         .w(px(120.))
         .h(px(32.))
@@ -202,9 +217,11 @@ fn param_row(t: &Theme, p: &Param) -> Div {
         .rounded(px(FLOAT_CHIP_RADIUS))
         .bg(t.field_bg)
         .border_1()
-        .border_color(t.control_edge)
-        .child(value)
-        .child(div().px(px(S_1)).py(px(2.)).font_weight(W_SEMIBOLD).text_color(t.text_mute).child(p.unit));
+        .border_color(edge)
+        .child(shown)
+        .when(!p.unit.is_empty(), |d| {
+            d.child(div().px(px(S_1)).py(px(2.)).font_weight(W_SEMIBOLD).text_color(t.text_mute).child(p.unit))
+        });
     div().flex().items_center().gap(px(S_3)).child(label).child(field)
 }
 
@@ -221,7 +238,7 @@ fn marker(t: &Theme) -> Div {
 
 impl Shell {
     /// The open step, dropped once the document no longer has it.
-    fn open_step(&self) -> Option<usize> {
+    pub(super) fn open_step(&self) -> Option<usize> {
         self.open.filter(|&i| i < self.doc.features.len())
     }
 }
@@ -246,7 +263,7 @@ fn step_opacity(rolled: bool, suppressed: bool) -> f32 {
 }
 
 /// A parameter value without trailing zeros, as the Vue fields print it.
-fn format_value(v: f64) -> String {
+pub(super) fn format_value(v: f64) -> String {
     if !v.is_finite() {
         return v.to_string();
     }

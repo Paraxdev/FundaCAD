@@ -151,13 +151,11 @@ impl Viewport {
     }
 
     /// The open document as the app sees it, edits included before the engine has built them.
-    #[allow(dead_code, reason = "fc2/shell reads it for History")]
     pub fn doc(&self) -> Option<&Doc> {
         self.session.as_ref().map(|s| &s.doc)
     }
 
     /// Edits the open document, for panels beside the view. The revision it made, None when nothing changed.
-    #[allow(dead_code, reason = "fc2/shell edits through it")]
     pub fn edit(
         &mut self,
         f: impl Fn(&mut Doc) -> Result<(), String> + Send + Sync + 'static,
