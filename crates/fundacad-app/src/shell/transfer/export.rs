@@ -15,7 +15,8 @@ use serde_json::{json, Value};
 
 use super::logic::{flat_sources, scope_choices, stamp_now, with_ext, written_summary};
 use super::modal::{button, choice, note, row};
-use super::{picker, prefs, Kind, Modal, Shell};
+use super::{picker, prefs, Modal, Shell};
+use crate::overlay::{self, Toast};
 use crate::theme::{Theme, FS_SMALL};
 
 pub(super) struct ExportDialog {
@@ -213,7 +214,8 @@ impl Shell {
         d.read_inputs(cx);
         let (settings, before, scope, start) = (d.settings.clone(), d.before.clone(), d.scope.clone(), d.start.clone());
         let flat = d.flat().cloned().filter(|_| settings.format.is_flat());
-        let Some(link) = self.viewport.read(cx).session_link() else { return };
+        let path = self.bench.files.read(cx).path().map(Path::to_path_buf);
+        let Some(link) = self.viewport.read(cx).session_link(path.as_deref()) else { return };
         let colors: Option<(Value, Value)> = (settings.format == ExportFormat::Glb)
             .then(|| self.viewport.read(cx).doc())
             .flatten()
@@ -224,9 +226,9 @@ impl Shell {
             .export_dir
             .clone()
             .map(PathBuf::from)
-            .or_else(|| link.path.parent().map(Path::to_path_buf))
+            .or_else(|| link.path.as_deref().and_then(Path::parent).map(Path::to_path_buf))
             .unwrap_or_else(std::env::temp_dir);
-        let pick = picker::pick_save_path(cx, &dir, &name);
+        let pick = picker::pick_save_path(&dir, &name);
         self.transfer.modal = None;
         window.focus(&self.focus, cx);
         cx.notify();
@@ -257,17 +259,17 @@ impl Shell {
                         p.export = settings.remembered(&before);
                         p.export_dir = export_dir_of(&path).map(str::to_owned);
                         drop(p);
-                        s.toast(Kind::Info, written_summary(&written_paths(&result)), cx);
+                        overlay::toast(cx, Toast::info(written_summary(&written_paths(&result))));
                         let warnings = export_warnings(&result);
                         if let Some((_, first)) = warnings.first() {
                             let n = warnings.len();
                             let text =
                                 format!("{n} feature(s) failed, their bodies are missing from the file: {first}");
-                            s.toast(Kind::Error, text, cx);
+                            overlay::toast(cx, Toast::error(text));
                         }
                     }
-                    Err(r) if r.cancelled => s.toast(Kind::Info, "Export cancelled.", cx),
-                    Err(r) => s.toast(Kind::Error, format!("The export failed: {}", r.message), cx),
+                    Err(r) if r.cancelled => overlay::toast(cx, Toast::info("Export cancelled.")),
+                    Err(r) => overlay::toast(cx, Toast::error(format!("The export failed: {}", r.message))),
                 }
             });
         })

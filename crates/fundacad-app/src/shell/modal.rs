@@ -1,4 +1,5 @@
 //! A minimal modal: a scrim over the window, a card with a title, a body and a row of buttons. Escape closes it.
+//! The overlay's question holds plain choices, this holds a form and the busy dialog that waits on a task.
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
@@ -14,10 +15,13 @@ pub fn modal(
     buttons: Vec<AnyElement>,
     on_close: impl Fn(&mut Window, &mut App) + 'static,
 ) -> Div {
+    let mut context = KeyContext::default();
+    context.add(crate::commands::MODAL);
     div().absolute().inset_0().flex().items_center().justify_center().bg(hsla(0., 0., 0., 0.45)).occlude().child(
         solid_card(t)
             .id("modal")
             .track_focus(focus)
+            .key_context(context)
             .on_key_down(move |e: &KeyDownEvent, window, cx| {
                 if e.keystroke.key == "escape" {
                     cx.stop_propagation();

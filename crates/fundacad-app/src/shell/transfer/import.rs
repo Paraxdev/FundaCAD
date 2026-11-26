@@ -16,9 +16,8 @@ use gpui::*;
 use serde_json::{Map, Value};
 
 use super::logic::{append_features, insert_error_text, link_path, refreshable, stale_count, stale_summary};
-use super::modal::{button, choice, note, row};
-use super::{picker, prefs, Kind, Modal, Shell, Stop};
-use crate::theme::Theme;
+use super::{picker, prefs, Shell, Stop};
+use crate::overlay::{self, Choice, Toast};
 
 type Baked = (String, LinkStat, Map<String, Value>);
 
@@ -50,57 +49,35 @@ impl Shell {
         if self.transfer_link(cx).is_none() {
             return;
         }
-        let pick = picker::pick_open_paths(cx, &IMPORT_EXTS, true);
+        let pick = picker::pick_open_paths(&IMPORT_EXTS, true);
         cx.spawn_in(window, async move |this, cx| {
             let paths = pick.await;
             if paths.is_empty() {
                 return;
             }
-            let _ = this.update_in(cx, |s, window, cx| {
-                if paths.iter().any(|p| asks_for_unit(import_format(p))) {
-                    let unit = unit_choices(prefs().import_unit)[0];
-                    s.open_modal(Modal::ImportUnit { paths, unit }, window, cx);
-                } else {
-                    s.run_import(paths, None, window, cx);
-                }
-            });
+            let asking: Vec<&str> =
+                paths.iter().filter(|p| asks_for_unit(import_format(p))).map(|p| base_name(p)).collect();
+            let unit = if asking.is_empty() {
+                None
+            } else {
+                let units = unit_choices(prefs().import_unit);
+                let question = format!("Which unit is {} in? The file does not say reliably.", asking.join(", "));
+                let choices = units
+                    .iter()
+                    .enumerate()
+                    .map(|(i, u)| if i == 0 { Choice::primary(*u) } else { Choice::plain(*u) })
+                    .chain([Choice::plain("Cancel")])
+                    .collect();
+                let Ok(asked) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else {
+                    return;
+                };
+                let Some(&unit) = asked.recv().await.ok().flatten().and_then(|i| units.get(i)) else { return };
+                prefs().import_unit = unit;
+                Some(unit)
+            };
+            let _ = this.update_in(cx, |s, window, cx| s.run_import(paths, unit, window, cx));
         })
         .detach();
-    }
-
-    pub(super) fn import_unit_view(
-        &self,
-        paths: &[String],
-        unit: &'static str,
-        t: &Theme,
-        cx: &mut Context<Self>,
-    ) -> (AnyElement, AnyElement) {
-        let asking: Vec<&str> =
-            paths.iter().filter(|p| asks_for_unit(import_format(p))).map(|p| base_name(p)).collect();
-        let units = unit_choices(prefs().import_unit).into_iter().map(|u| {
-            choice(t, SharedString::from(format!("import-unit-{u}")), u, u == unit, true).on_click(cx.listener(
-                move |this, _: &ClickEvent, _, cx| {
-                    if let Some(Modal::ImportUnit { unit, .. }) = &mut this.transfer.modal {
-                        *unit = u;
-                        cx.notify();
-                    }
-                },
-            ))
-        });
-        let body = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .child(note(t, format!("{} may be in any unit, the file does not say reliably.", asking.join(", "))))
-            .child(row(t, "Unit", div().flex().gap(px(4.)).children(units)));
-        let ok =
-            button(t, "unit-ok", "Import", true, true).on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                if let Some(Modal::ImportUnit { paths, unit }) = this.transfer.modal.take() {
-                    prefs().import_unit = unit;
-                    this.run_import(paths, Some(unit), window, cx);
-                }
-            }));
-        (body.into_any_element(), ok.into_any_element())
     }
 
     fn run_import(
@@ -110,7 +87,6 @@ impl Shell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.modal = None;
         let Some(link) = self.transfer_link(cx) else { return };
         let label = match paths.as_slice() {
             [one] => format!("Importing {}", base_name(one)),
@@ -145,13 +121,13 @@ impl Shell {
             let _ = this.update_in(cx, |s, w, cx| {
                 s.end_busy(token, w, cx);
                 if added > 0 {
-                    s.toast(Kind::Info, format!("Imported {added} file(s)."), cx);
+                    overlay::toast(cx, Toast::info(format!("Imported {added} file(s).")));
                 }
                 if stop.is_set() {
-                    s.toast(Kind::Info, "Import cancelled.", cx);
+                    overlay::toast(cx, Toast::info("Import cancelled."));
                 }
                 for f in failed {
-                    s.toast(Kind::Error, format!("The import failed, {f}"), cx);
+                    overlay::toast(cx, Toast::error(format!("The import failed, {f}")));
                 }
             });
         })
@@ -177,44 +153,30 @@ impl Shell {
 
     pub(super) fn start_insert(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(link) = self.transfer_link(cx) else { return };
-        let pick = picker::pick_open_paths(cx, &DOC_EXTS, false);
+        let pick = picker::pick_open_paths(&DOC_EXTS, false);
         cx.spawn_in(window, async move |this, cx| {
             let Some(path) = pick.await.into_iter().next() else { return };
-            let _ = this.update_in(cx, |s, window, cx| {
-                if same_path(&path, &link.path.to_string_lossy()) {
-                    s.toast(Kind::Error, "A document cannot be inserted into itself.", cx);
-                } else {
-                    s.open_modal(Modal::InsertMode { path }, window, cx);
-                }
-            });
+            if link.path.as_deref().is_some_and(|own| same_path(&path, &own.to_string_lossy())) {
+                let _ =
+                    cx.update(|_, cx| overlay::toast(cx, Toast::error("A document cannot be inserted into itself.")));
+                return;
+            }
+            let question =
+                format!("How should {} come in? It becomes one body built from its own history.", base_name(&path));
+            let choices = vec![
+                Choice::primary("Append").hint("Copies it once"),
+                Choice::plain("Link").hint("Refreshes when the file changes"),
+                Choice::plain("Cancel"),
+            ];
+            let Ok(asked) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else { return };
+            let mode = match asked.recv().await.ok().flatten() {
+                Some(0) => InsertMode::Append,
+                Some(1) => InsertMode::Link,
+                _ => return,
+            };
+            let _ = this.update_in(cx, |s, window, cx| s.run_insert(path, mode, window, cx));
         })
         .detach();
-    }
-
-    pub(super) fn insert_view(&self, path: &str, t: &Theme, cx: &mut Context<Self>) -> (AnyElement, Vec<AnyElement>) {
-        let body = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .child(note(t, format!("{} comes in as one body built from its own history.", base_name(path))))
-            .child(note(
-                t,
-                "Append copies it once. Link also keeps the file, so the body can refresh when it changes.",
-            ));
-        let mode = |id: &'static str, label: &'static str, primary: bool, mode: InsertMode| {
-            button(t, id, label, primary, true)
-                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                    if let Some(Modal::InsertMode { path }) = this.transfer.modal.take() {
-                        this.run_insert(path, mode, window, cx);
-                    }
-                }))
-                .into_any_element()
-        };
-        let buttons = vec![
-            mode("insert-link", "Link", false, InsertMode::Link),
-            mode("insert-append", "Append", true, InsertMode::Append),
-        ];
-        (body.into_any_element(), buttons)
     }
 
     fn run_insert(&mut self, path: String, mode: InsertMode, window: &mut Window, cx: &mut Context<Self>) {
@@ -238,9 +200,9 @@ impl Shell {
                         .map_err(Some)
                 });
                 match added {
-                    Ok(_) => s.toast(Kind::Info, format!("Inserted {}.", base_name(&path)), cx),
-                    Err(Some(why)) => s.toast(Kind::Error, why, cx),
-                    Err(None) => s.toast(Kind::Info, "Insert cancelled.", cx),
+                    Ok(_) => overlay::toast(cx, Toast::info(format!("Inserted {}.", base_name(&path)))),
+                    Err(Some(why)) => overlay::toast(cx, Toast::error(why)),
+                    Err(None) => overlay::toast(cx, Toast::info("Insert cancelled.")),
                 }
             });
         })
@@ -254,57 +216,46 @@ impl Shell {
         }
         let Some(doc) = self.viewport.read(cx).doc() else { return };
         let stale = stale_links(doc, stat_file);
-        if stale_count(&stale) > 0 {
-            self.open_modal(Modal::Links(stale), window, cx);
-        } else if !quiet {
-            self.toast(Kind::Info, stale_summary(&stale), cx);
+        if stale_count(&stale) == 0 {
+            if !quiet {
+                overlay::toast(cx, Toast::info(stale_summary(&stale)));
+            }
+            return;
         }
+        let refresh = refreshable(&stale);
+        let mut choices = Vec::new();
+        if !refresh.is_empty() {
+            choices.push(Choice::primary("Refresh").hint("Reads the changed files again"));
+        }
+        choices.push(Choice::danger("Unlink").hint("Keeps the bodies, forgets the files"));
+        choices.push(Choice::plain("Later"));
+        let unlink_at = choices.len() - 2;
+        let asked = overlay::confirm(window, cx, stale_summary(&stale), choices);
+        cx.spawn_in(window, async move |this, cx| {
+            let pick = asked.recv().await.ok().flatten();
+            let _ = this.update_in(cx, |s, window, cx| match pick {
+                Some(i) if i == unlink_at => s.unlink_links(stale, cx),
+                Some(0) if !refresh.is_empty() => s.refresh_links(refresh, window, cx),
+                _ => {}
+            });
+        })
+        .detach();
     }
 
-    pub(super) fn links_view(
-        &self,
-        stale: &StaleLinks,
-        t: &Theme,
-        cx: &mut Context<Self>,
-    ) -> (AnyElement, Vec<AnyElement>) {
-        let body = div().flex().flex_col().gap(px(8.)).child(note(t, stale_summary(stale))).child(note(
-            t,
-            "Refresh reads the changed files again. Unlink keeps the bodies as they are and forgets the files.",
-        ));
-        let can_refresh = !refreshable(stale).is_empty();
-        let unlink_all = button(t, "links-unlink", "Unlink", false, true).on_click(cx.listener(
-            |this, _: &ClickEvent, window, cx| {
-                if let Some(Modal::Links(stale)) = this.transfer.modal.take() {
-                    let ids: Vec<String> =
-                        stale.changed.into_iter().chain(stale.missing).chain(stale.unknown).collect();
-                    let edited = this.viewport.update(cx, |v, cx| {
-                        v.edit(
-                            move |d| {
-                                ids.iter().for_each(|id| unlink(d, id));
-                                Ok(())
-                            },
-                            cx,
-                        )
-                    });
-                    if let Err(e) = edited {
-                        this.toast(Kind::Error, e, cx);
-                    }
-                    window.focus(&this.focus, cx);
-                    cx.notify();
-                }
-            },
-        ));
-        let refresh = button(t, "links-refresh", "Refresh", true, can_refresh);
-        let refresh = if can_refresh {
-            refresh.on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                if let Some(Modal::Links(stale)) = this.transfer.modal.take() {
-                    this.refresh_links(refreshable(&stale), window, cx);
-                }
-            }))
-        } else {
-            refresh
-        };
-        (body.into_any_element(), vec![unlink_all.into_any_element(), refresh.into_any_element()])
+    fn unlink_links(&mut self, stale: StaleLinks, cx: &mut Context<Self>) {
+        let ids: Vec<String> = stale.changed.into_iter().chain(stale.missing).chain(stale.unknown).collect();
+        let edited = self.viewport.update(cx, |v, cx| {
+            v.edit(
+                move |d| {
+                    ids.iter().for_each(|id| unlink(d, id));
+                    Ok(())
+                },
+                cx,
+            )
+        });
+        if let Err(e) = edited {
+            overlay::toast(cx, Toast::error(e));
+        }
     }
 
     fn refresh_links(&mut self, ids: Vec<String>, window: &mut Window, cx: &mut Context<Self>) {
@@ -341,17 +292,16 @@ impl Shell {
             let _ = this.update_in(cx, |s, w, cx| {
                 s.end_busy(token, w, cx);
                 if stop.is_set() {
-                    s.toast(Kind::Info, "Refresh cancelled.", cx);
+                    overlay::toast(cx, Toast::info("Refresh cancelled."));
                 }
                 if done > 0 {
-                    s.toast(
-                        Kind::Info,
-                        format!("Refreshed {done} linked bod{}.", if done == 1 { "y" } else { "ies" }),
+                    overlay::toast(
                         cx,
+                        Toast::info(format!("Refreshed {done} linked bod{}.", if done == 1 { "y" } else { "ies" })),
                     );
                 }
                 for f in failed {
-                    s.toast(Kind::Error, f, cx);
+                    overlay::toast(cx, Toast::error(f));
                 }
             });
         })

@@ -1,4 +1,4 @@
-//! Import, export and insert: the File menu, the dialogs they ask through, and the requests they send off the UI
+//! Import, export and insert: the File commands, the dialogs they ask through, and the requests they send off the UI
 //! thread. The decisions are fundacad_client::transfer's.
 
 mod busy;
@@ -18,19 +18,16 @@ use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
 use fundacad_client::transfer::export::ExportSettings;
 use fundacad_client::transfer::import::SPEC_UNIT;
-use fundacad_client::transfer::insert::StaleLinks;
 use fundacad_client::Client;
 use gpui::*;
 
 use super::modal::{self, button, note};
-use super::toast::{self, Kind, Toasts};
 use super::Shell;
+use crate::commands::{register, Group};
 use crate::engine::Link;
-use crate::theme::{Theme, FS_BODY, FS_SMALL, R_MD, S_1, S_3};
-use crate::ui::{solid_card, text};
+use crate::overlay::{self, Toast};
+use crate::theme::Theme;
 use busy::Stop;
-
-actions!(file, [Export, Import, InsertDocument, CheckLinks, FileMenu]);
 
 /// What the transfer dialogs remember between uses.
 pub struct TransferPrefs {
@@ -48,146 +45,64 @@ pub fn prefs() -> MutexGuard<'static, TransferPrefs> {
     PREFS.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// What the overlay's question cannot hold: the export form and the busy dialog with its Cancel.
 enum Modal {
     Export(Box<export::ExportDialog>),
     Busy { label: String, client: Arc<Client>, cancelling: bool, stop: Stop, token: u64 },
-    ImportUnit { paths: Vec<String>, unit: &'static str },
-    InsertMode { path: String },
-    Links(StaleLinks),
 }
 
 pub struct Transfer {
     modal: Option<Modal>,
     focus: FocusHandle,
-    toasts: Toasts,
-    menu_open: bool,
     tokens: busy::Tokens,
 }
 
 impl Transfer {
     pub fn new(cx: &mut App) -> Self {
-        Self {
-            modal: None,
-            focus: cx.focus_handle(),
-            toasts: Toasts::default(),
-            menu_open: false,
-            tokens: busy::Tokens::default(),
-        }
+        Self { modal: None, focus: cx.focus_handle(), tokens: busy::Tokens::default() }
     }
 }
 
-type MenuEntry = (&'static str, &'static str, fn() -> Box<dyn Action>);
+type Start = fn(&mut Shell, &mut Window, &mut Context<Shell>);
 
-const MENU: [MenuEntry; 4] = [
-    ("Import...", "Ctrl+I", || Box::new(Import)),
-    ("Insert FundaCAD document...", "Ctrl+Shift+I", || Box::new(InsertDocument)),
-    ("Export...", "Ctrl+E", || Box::new(Export)),
-    ("Check linked files", "", || Box::new(CheckLinks)),
-];
+/// The File commands that go through the shell.
+pub fn install(shell: WeakEntity<Shell>, cx: &mut App) {
+    let commands: [(&'static str, &'static str, Start); 4] = [
+        ("import", "Import", Shell::start_import),
+        ("insert-document", "Insert FundaCAD Document", Shell::start_insert),
+        ("export", "Export", Shell::open_export),
+        ("check-links", "Check Linked Files", |s, w, cx| s.check_links(false, w, cx)),
+    ];
+    for (id, label, start) in commands {
+        let shell = shell.clone();
+        register(cx, id, label, Group::File, move |w, cx| {
+            let _ = shell.update(cx, |s, cx| start(s, w, cx));
+        });
+    }
+}
 
 impl Shell {
-    pub(super) fn transfer_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
-        root.on_action(cx.listener(|this, _: &Export, window, cx| this.open_export(window, cx)))
-            .on_action(cx.listener(|this, _: &Import, window, cx| this.start_import(window, cx)))
-            .on_action(cx.listener(|this, _: &InsertDocument, window, cx| this.start_insert(window, cx)))
-            .on_action(cx.listener(|this, _: &CheckLinks, window, cx| this.check_links(false, window, cx)))
-            .on_action(cx.listener(|this, _: &FileMenu, _, cx| {
-                this.transfer.menu_open = !this.transfer.menu_open;
-                cx.notify();
-            }))
-    }
-
-    /// The File menu, the open dialog and the toasts, over everything else.
-    pub(super) fn transfer_overlay(&mut self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let mut layer = div().absolute().inset_0().child(toast::stack(t, &self.transfer.toasts));
-        if self.transfer.menu_open {
-            layer = layer.child(self.file_menu(t, cx));
-        }
-        if let Some(m) = self.modal_view(t, cx) {
-            layer = layer.child(m);
-        }
-        layer
-    }
-
-    fn file_menu(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let hover = t.hover_wash;
-        let entries = MENU.iter().enumerate().map(|(i, (label, keys, action))| {
-            let action = *action;
-            text(t, FS_BODY)
-                .id(("file-menu", i))
-                .h(px(t.hit(26.)))
-                .px(px(S_3))
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap(px(S_3))
-                .rounded(px(R_MD))
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover))
-                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                    this.transfer.menu_open = false;
-                    window.dispatch_action(action(), cx);
-                    cx.notify();
-                }))
-                .child(*label)
-                .child(text(t, FS_SMALL).text_color(t.text_mute).child(*keys))
-        });
-        div()
-            .absolute()
-            .inset_0()
-            .child(div().absolute().inset_0().occlude().on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                    this.transfer.menu_open = false;
-                    cx.notify();
-                }),
-            ))
-            .child(
-                solid_card(t)
-                    .absolute()
-                    .top(px(34.))
-                    .left(px(super::titlebar::file_menu_left(t)))
-                    .min_w(px(280.))
-                    .bg(t.float_bg_solid)
-                    .p(px(S_1))
-                    .children(entries),
-            )
-    }
-
-    fn modal_view(&mut self, t: &Theme, cx: &mut Context<Self>) -> Option<Div> {
+    /// The open dialog, over everything but the overlay.
+    pub(super) fn transfer_modal(&mut self, t: &Theme, cx: &mut Context<Self>) -> Option<Div> {
         let close = {
             let this = cx.entity().downgrade();
             move |window: &mut Window, cx: &mut App| {
                 let _ = this.update(cx, |s, cx| s.close_modal(window, cx));
             }
         };
-        let cancel = |id: &'static str, label: &'static str, cx: &mut Context<Self>| {
-            button(t, id, label, false, true)
+        let cancel = |id: &'static str, cx: &mut Context<Self>| {
+            button(t, id, "Cancel", false, true)
                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.close_modal(window, cx)))
                 .into_any_element()
         };
         let (title, body, buttons): (SharedString, AnyElement, Vec<AnyElement>) = match self.transfer.modal.as_ref()? {
             Modal::Export(d) => {
                 let (body, ok) = self.export_view(d, t, cx);
-                ("Export".into(), body, vec![cancel("export-cancel", "Cancel", cx), ok])
+                ("Export".into(), body, vec![cancel("export-cancel", cx), ok])
             }
             Modal::Busy { label, cancelling, .. } => {
                 let body = note(t, if *cancelling { "Cancelling..." } else { "Working, this can take a while." });
-                (label.clone().into(), body.into_any_element(), vec![cancel("busy-cancel", "Cancel", cx)])
-            }
-            Modal::ImportUnit { paths, unit } => {
-                let (body, ok) = self.import_unit_view(paths, unit, t, cx);
-                ("Import units".into(), body, vec![cancel("unit-cancel", "Cancel", cx), ok])
-            }
-            Modal::InsertMode { path } => {
-                let (body, mut buttons) = self.insert_view(path, t, cx);
-                buttons.insert(0, cancel("insert-cancel", "Cancel", cx));
-                ("Insert FundaCAD document".into(), body, buttons)
-            }
-            Modal::Links(stale) => {
-                let (body, mut buttons) = self.links_view(stale, t, cx);
-                buttons.insert(0, cancel("links-later", "Later", cx));
-                ("Linked files".into(), body, buttons)
+                (label.clone().into(), body.into_any_element(), vec![cancel("busy-cancel", cx)])
             }
         };
         Some(modal::modal(t, &self.transfer.focus, title, body, buttons, close))
@@ -195,7 +110,6 @@ impl Shell {
 
     fn open_modal(&mut self, m: Modal, window: &mut Window, cx: &mut Context<Self>) {
         self.transfer.modal = Some(m);
-        self.transfer.menu_open = false;
         window.focus(&self.transfer.focus, cx);
         cx.notify();
     }
@@ -211,10 +125,6 @@ impl Shell {
             window.focus(&self.focus, cx);
         }
         cx.notify();
-    }
-
-    pub(in crate::shell) fn busy(&self) -> bool {
-        matches!(self.transfer.modal, Some(Modal::Busy { .. }))
     }
 
     /// Opens the busy dialog, the task keeps its token to end it and the stop to see Cancel.
@@ -243,27 +153,15 @@ impl Shell {
         cx.notify();
     }
 
-    fn toast(&mut self, kind: Kind, text: impl Into<String>, cx: &mut Context<Self>) {
-        let id = self.transfer.toasts.push(kind, text);
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(toast::SHOWN_FOR).await;
-            let _ = this.update(cx, |s, cx| {
-                s.transfer.toasts.dismiss(id);
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
     /// The open document's engine link, or a toast saying there is none. Nothing starts while a dialog is open.
     fn transfer_link(&mut self, cx: &mut Context<Self>) -> Option<Link> {
         if self.transfer.modal.is_some() {
             return None;
         }
-        let link = self.viewport.read(cx).session_link();
+        let path = self.bench.files.read(cx).path().map(std::path::Path::to_path_buf);
+        let link = self.viewport.read(cx).session_link(path.as_deref());
         if link.is_none() {
-            self.toast(Kind::Error, "Open a FundaCAD document first.", cx);
+            overlay::toast(cx, Toast::error("Open a FundaCAD document first."));
         }
         link
     }

@@ -63,7 +63,10 @@ pub fn menus(cx: &App) -> [Vec<MenuRow>; 4] {
             item(cx, "save"),
             item(cx, "save-as").label_more(),
             MenuRow::Separator,
+            item(cx, "import").label_more(),
+            item(cx, "insert-document").label_more(),
             item(cx, "export").label_more(),
+            item(cx, "check-links"),
         ],
         vec![
             item(cx, "undo"),
