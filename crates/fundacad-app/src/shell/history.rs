@@ -1,13 +1,11 @@
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
-use gpui_kit::component::input::{Input, InputState};
 
 use super::items::card_head;
 use super::Shell;
-use crate::document::{Feature, Health, Param};
+use crate::document::{Feature, Health};
 use crate::theme::{
-    Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, MONO_FONT, R_PILL, S_0, S_1, S_2,
-    S_3, W_SEMIBOLD,
+    Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, MONO_FONT, R_PILL, S_0, S_2, S_3, W_SEMIBOLD,
 };
 use crate::ui::{float_group, icon, icon_button, text};
 
@@ -40,14 +38,11 @@ impl Shell {
                 })
             }),
         );
-        let open = self.open_step();
         let mut list =
             div().id("history-steps").flex().flex_col().min_h_0().overflow_y_scroll().px(px(S_2)).pb(px(S_2));
         for (i, f) in self.doc.features.iter().enumerate() {
             list = list.child(self.step(t, i, f, cx));
-            if open == Some(i) && !f.params.is_empty() {
-                list = list.child(self.props(t, &f.params, window, cx));
-            }
+            list = list.children(self.inspector(t, i, window, cx));
         }
         list = list.child(marker(t));
 
@@ -164,65 +159,6 @@ impl Shell {
             )
             .child(float_group(t).child(button("bug", false)))
     }
-}
-
-impl Shell {
-    /// `.timeline-props`: the values of the open step, indented under it.
-    fn props(&self, t: &Theme, params: &[Param], window: &Window, cx: &App) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(S_2))
-            .ml(px(S_3))
-            .mb(px(S_2))
-            .py(px(S_2))
-            .pr(px(S_2))
-            .pl(px(S_3))
-            .flex_none()
-            .border_l_1()
-            .border_color(t.line)
-            .children(params.iter().map(|p| {
-                let input = p.target.as_ref().and_then(|target| self.fields.get(&target.key())).map(|f| &f.input);
-                param_row(t, p, input.map(|i| (i, i.focus_handle(cx).is_focused(window))))
-            }))
-    }
-}
-
-fn param_row(t: &Theme, p: &Param, input: Option<(&Entity<InputState>, bool)>) -> Div {
-    let label = text(t, FS_SMALL).flex_1().text_color(t.text_dim).map(|d| match p.expr {
-        Some(_) => {
-            d.flex().gap(px(3.)).child(div().italic().text_color(t.accent_hot).child("fx:")).child(p.label.clone())
-        }
-        None => d.child(p.label.clone()),
-    });
-    let shown = match (&input, &p.expr) {
-        (Some((input, _)), _) => div()
-            .flex_1()
-            .min_w_0()
-            .child(
-                Input::new(input).appearance(false).bordered(false).focus_bordered(false).text_size(px(FS_SMALL)).p_0(),
-            )
-            .into_any_element(),
-        (None, Some(expr)) => div().child(expr.to_string()).into_any_element(),
-        (None, None) => div().child(format_value(p.value)).into_any_element(),
-    };
-    let edge = if input.is_some_and(|(_, focused)| focused) { t.accent } else { t.control_edge };
-    let field = text(t, FS_SMALL)
-        .w(px(120.))
-        .h(px(32.))
-        .px(px(S_3))
-        .flex()
-        .items_center()
-        .justify_between()
-        .rounded(px(FLOAT_CHIP_RADIUS))
-        .bg(t.field_bg)
-        .border_1()
-        .border_color(edge)
-        .child(shown)
-        .when(!p.unit.is_empty(), |d| {
-            d.child(div().px(px(S_1)).py(px(2.)).font_weight(W_SEMIBOLD).text_color(t.text_mute).child(p.unit))
-        });
-    div().flex().items_center().gap(px(S_3)).child(label).child(field)
 }
 
 /// The rollback marker after the last step that is played.
