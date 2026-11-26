@@ -51,7 +51,10 @@ fn file_of(f: &Map<String, Value>) -> Option<String> {
     source.rsplit(['/', '\\']).next().filter(|n| !n.is_empty()).map(str::to_owned)
 }
 
-/// The tooltip of row `i`: its place and type, then each mark as a line.
+/// FundaCAD 1's hintPlain, until a double click opens the inspector and hintEdit applies.
+pub const HINT: &str = "click to select · right-click for more";
+
+/// The tooltip of row `i`: its place and type, then each mark as a line, then the hint.
 pub fn tooltip(f: &Map<String, Value>, i: usize, m: &Marks) -> String {
     let mut lines = vec![format!("{} · {}", i + 1, type_label(f))];
     if let Some(file) = &m.file {
@@ -69,6 +72,7 @@ pub fn tooltip(f: &Map<String, Value>, i: usize, m: &Marks) -> String {
     if let Some(note) = &m.note {
         lines.push(format!("Your note: {note}"));
     }
+    lines.push(HINT.into());
     lines.join("\n")
 }
 

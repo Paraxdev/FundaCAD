@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{marks, tooltip, Marks};
+use super::{marks, tooltip, Marks, HINT};
 use crate::timeline::fixture::doc;
 use crate::timeline::{features, ops};
 use crate::viewport::FeatureIssue;
@@ -57,7 +57,8 @@ fn an_import_shows_its_file_and_a_step_its_note() {
 fn the_tooltip_reads_place_and_type_then_each_mark() {
     let d = doc();
     let all = features(&d);
-    assert_eq!(tooltip(all[1], 1, &Marks::default()), "2 · Extrude");
+    let tip = |i: usize, m: &Marks| tooltip(all[i], i, m).strip_suffix(&format!("\n{HINT}")).map(str::to_owned);
+    assert_eq!(tooltip(all[1], 1, &Marks::default()), "2 · Extrude\nclick to select · right-click for more");
     let full = Marks {
         failed: Some("no profile".into()),
         warning: Some("ignored".into()),
@@ -67,11 +68,11 @@ fn the_tooltip_reads_place_and_type_then_each_mark() {
         note: Some("ask Ana".into()),
     };
     assert_eq!(
-        tooltip(all[0], 0, &full),
-        "1 · Sketch\nFile: clip.step\nFailed: no profile\nSuppressed\nYour note: ask Ana"
+        tip(0, &full).as_deref(),
+        Some("1 · Sketch\nFile: clip.step\nFailed: no profile\nSuppressed\nYour note: ask Ana")
     );
     let advisory = Marks { warning: Some("sealed a void".into()), advisory: true, ..Marks::default() };
-    assert_eq!(tooltip(all[3], 3, &advisory), "4 · Extrude\nNote: sealed a void");
+    assert_eq!(tip(3, &advisory).as_deref(), Some("4 · Extrude\nNote: sealed a void"));
     let warned = Marks { warning: Some("faces left plain".into()), ..Marks::default() };
-    assert_eq!(tooltip(all[3], 3, &warned), "4 · Extrude\nWarning: faces left plain");
+    assert_eq!(tip(3, &warned).as_deref(), Some("4 · Extrude\nWarning: faces left plain"));
 }
