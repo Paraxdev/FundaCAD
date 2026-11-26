@@ -1,6 +1,7 @@
 //! The feature tools, featureStarters.ts: each makes its feature from what is selected and names the target field a
 //! click picks into when the selection did not fill it. The viewport runs the session, the shell shows the card.
 
+pub mod run;
 mod starters;
 #[cfg(test)]
 mod tests;
@@ -15,11 +16,45 @@ use crate::selection::{Pick, PickKind, Selection};
 
 pub type Doc = Map<String, Value>;
 
-/// A tool's feature before it is added, and the field to pick into first.
+/// A tool's feature before it is added, and the targets it cannot build without, in the order they are picked.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Start {
     pub feature: Value,
-    pub arm: Option<Target>,
+    pub need: Vec<Target>,
+}
+
+impl Start {
+    /// The first needed field the selection left empty.
+    pub fn arm(&self) -> Option<Target> {
+        self.need.iter().copied().find(|t| empty(&self.feature, t.field))
+    }
+}
+
+/// Whether a feature's field holds nothing.
+pub fn empty(feature: &Value, field: &str) -> bool {
+    match feature.get(field) {
+        None | Some(Value::Null) => true,
+        Some(Value::Array(a)) => a.is_empty(),
+        Some(Value::String(s)) => s.is_empty(),
+        Some(_) => false,
+    }
+}
+
+/// What a field holds, a single value as a list of one.
+pub fn entries(doc: &Doc, id: &str, field: &str) -> Vec<Value> {
+    match feature(doc, id).and_then(|f| f.get(field)) {
+        Some(Value::Array(a)) => a.clone(),
+        None | Some(Value::Null) => Vec::new(),
+        Some(one) => vec![one.clone()],
+    }
+}
+
+pub fn feature<'a>(doc: &'a Doc, id: &str) -> Option<&'a Value> {
+    features(doc).iter().find(|f| f.get("id").and_then(Value::as_str) == Some(id))
+}
+
+pub fn index_of(doc: &Doc, id: &str) -> Option<usize> {
+    features(doc).iter().position(|f| f.get("id").and_then(Value::as_str) == Some(id))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,23 +95,6 @@ pub fn insert(doc: &mut Doc, feature: Value) -> Result<(), String> {
     doc.get_mut("features").and_then(Value::as_array_mut).expect("made above").insert(at, feature);
     if let Some(r) = rollback.filter(|r| at <= *r) {
         doc.insert("rollback".into(), json!(r + 1));
-    }
-    Ok(())
-}
-
-/// Leaves the feature out of the build or puts it back, dropping the list when it empties.
-pub fn set_suppressed(doc: &mut Doc, id: &str, on: bool) -> Result<(), String> {
-    let mut list: Vec<Value> = doc.get("suppressed").and_then(Value::as_array).cloned().unwrap_or_default();
-    let has = list.iter().any(|v| v.as_str() == Some(id));
-    match (on, has) {
-        (true, false) => list.push(json!(id)),
-        (false, true) => list.retain(|v| v.as_str() != Some(id)),
-        _ => return Ok(()),
-    }
-    if list.is_empty() {
-        doc.remove("suppressed");
-    } else {
-        doc.insert("suppressed".into(), Value::Array(list));
     }
     Ok(())
 }

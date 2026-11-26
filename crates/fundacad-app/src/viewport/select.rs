@@ -6,6 +6,7 @@ use gpui::*;
 use super::edges;
 use super::pick;
 use super::renderer::Selected;
+use super::resolve::resolve;
 use super::scene::Scene;
 use super::Viewport;
 use crate::selection::{self, Filter, Mods, Pick, PickKind, Selection};
@@ -31,11 +32,20 @@ impl Picking {
     pub fn rescan(&mut self, scene: &Scene) {
         self.lines = scene.bodies.iter().map(|b| edges::polylines(&b.source)).collect();
         self.hover_edge = None;
-        let before = self.selection.picks.len();
+        let before = self.selection.picks.clone();
         self.selection.retain_bodies(|id| scene.body_index(id).is_some());
-        if self.selection.picks.len() != before {
+        let lines = &self.lines;
+        self.selection.picks.retain_mut(|p| match p.selector() {
+            Some(s) => resolve(scene, lines, &s).map(|found| *p = found).is_some(),
+            None => true,
+        });
+        if self.selection.picks != before {
             self.revision += 1;
         }
+    }
+
+    pub fn lines(&self) -> &[Vec<Vec<Vec3>>] {
+        &self.lines
     }
 
     /// The faces and bodies of `picks` by scene index, for the renderer's tint.
@@ -67,7 +77,8 @@ pub fn mods(m: &Modifiers) -> Mods {
 
 impl Viewport {
     pub(super) fn tint(&self) -> Vec<Selected> {
-        Picking::tinted(self.picking.selection.picks.iter().chain(self.arm_picks()), &self.scene)
+        let armed = self.arm_picks();
+        Picking::tinted(self.picking.selection.picks.iter().chain(&armed), &self.scene)
     }
 
     pub fn selection(&self) -> &Selection {
@@ -148,7 +159,7 @@ impl Viewport {
     pub(super) fn click(&mut self, position: Point<Pixels>, mods: Mods, cx: &mut Context<Self>) {
         let (face, edge) = self.picks_at(position);
         let edge = edge.map(|(_, _, p)| p);
-        if let Some(arm) = self.arm().cloned() {
+        if let Some(arm) = self.arm() {
             let body = face.as_ref().or(edge.as_ref()).and_then(|p| p.body()).map(|b| Pick::Body { body: b.into() });
             let pick = match arm.kind {
                 PickKind::Edge => edge,
@@ -157,7 +168,7 @@ impl Viewport {
                 PickKind::Sketch | PickKind::Plane => None,
             };
             if let Some(pick) = pick {
-                self.pick_target(&arm, pick, cx);
+                self.pick_target(pick, cx);
             }
             return;
         }

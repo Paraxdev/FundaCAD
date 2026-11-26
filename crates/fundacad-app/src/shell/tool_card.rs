@@ -12,7 +12,7 @@ use crate::selection::{Filter, Pick, PickKind};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_SMALL, S_1, S_2, S_3, W_SEMIBOLD};
 use crate::tools::{self, Target};
 use crate::ui::{chip, text};
-use crate::viewport::{Arm, Viewport};
+use crate::viewport::Viewport;
 
 pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     for tool in tools::TOOLS {
@@ -40,6 +40,10 @@ fn toast(cx: &mut App, words: String) {
 fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) {
     let v = viewport.read(cx);
     let Some(doc) = v.doc() else { return toast(cx, "Open a document first".into()) };
+    let boolean = tool.id.starts_with("boolean-");
+    if boolean && v.body_count() < 2 {
+        return toast(cx, format!("{} needs two bodies", tool.label));
+    }
     let (id, start) = match tools::started(tool, doc, v.selection()) {
         Ok(s) => s,
         Err(why) => return toast(cx, why),
@@ -49,18 +53,19 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     let label = format!("Add {}", crate::timeline::labels::name_of(&shown, &id));
     let feature = start.feature.clone();
     let begun = viewport.update(cx, |v, cx| {
-        v.begin_tool(tool.label.into(), label, id.clone(), move |d| tools::insert(d, feature.clone()), cx)?;
+        let need = start.need.clone();
+        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| tools::insert(d, feature.clone()), cx)?;
         v.clear_selection(cx);
-        v.set_arm(start.arm.map(|t| arm(&id, t)), cx);
+        match start.arm() {
+            // A boolean with its bodies picked is done at once, as in FundaCAD 1.
+            None if boolean => v.finish(true, cx),
+            arm => v.set_arm(arm, cx),
+        }
         Ok::<(), String>(())
     });
     if let Err(why) = begun {
         toast(cx, why);
     }
-}
-
-fn arm(feature: &str, t: Target) -> Arm {
-    Arm { feature: feature.into(), field: t.field, kind: t.kind, many: t.many }
 }
 
 /// The pick a target row takes, None for a sketch area the sketch tools pick.
@@ -75,17 +80,11 @@ fn target_of(field: &'static str, kind: model::TargetKind) -> Option<Target> {
     Some(Target { field, kind, many: !single })
 }
 
-fn prompt(arm: &Arm) -> String {
-    let what = match arm.kind {
-        PickKind::Edge => "edges",
-        PickKind::Face => "faces",
-        PickKind::Body => "bodies",
-        PickKind::Sketch => "sketches",
-        PickKind::Plane => "planes",
-    };
+pub(super) fn prompt(arm: &Target) -> String {
+    let what = tools::run::noun(arm.kind, arm.many);
     match arm.many {
         true => format!("Click {what} to add or drop them"),
-        false => format!("Click the {} to use", what.trim_end_matches("es").trim_end_matches('s')),
+        false => format!("Click the {what} to use"),
     }
 }
 
@@ -104,32 +103,18 @@ impl Shell {
         let name = crate::timeline::labels::name_of(doc, id);
         let id = id.to_string();
         self.viewport.update(cx, |v, cx| {
-            let armed = v.running().and_then(|s| s.arm.as_ref()).is_some_and(|a| a.field == field);
+            if v.running().is_some_and(|s| s.feature != id) {
+                return v.say("Finish the tool that is running first".into(), cx);
+            }
+            let armed = v.running().and_then(|s| s.arm).is_some_and(|a| a.field == field);
             if v.running().is_none() {
                 let words = format!("{} of {name}", label.to_lowercase());
-                if let Err(why) = v.begin_tool(format!("{label} of {name}"), words, id.clone(), |_| Ok(()), cx) {
-                    v.say(why, cx);
-                    return;
+                let title = format!("{label} of {name}");
+                if let Err(why) = v.begin_tool(title, words, id.clone(), Vec::new(), |_| Ok(()), cx) {
+                    return v.say(why, cx);
                 }
             }
-            v.set_arm((!armed).then(|| arm(&id, target)), cx);
-        });
-    }
-
-    fn clear_target(&mut self, cx: &mut Context<Self>) {
-        let Some(a) = self.viewport.read(cx).running().and_then(|s| s.arm.clone()) else { return };
-        let empty = if a.many { serde_json::json!([]) } else { serde_json::Value::Null };
-        self.viewport.update(cx, |v, cx| {
-            let edited = v.edit(
-                move |d| {
-                    let (id, field) = (a.feature.as_str(), a.field);
-                    tools::set_target(d, id, field, empty.clone(), false, empty.is_null())
-                },
-                cx,
-            );
-            if let Err(why) = edited {
-                v.say(why, cx);
-            }
+            v.set_arm((!armed).then_some(target), cx);
         });
     }
 
@@ -168,7 +153,7 @@ impl Shell {
     /// A Target row, which a click arms for picking, lit while armed.
     pub(super) fn target_row(&self, t: &Theme, id: &str, label: &'static str, line: Div, cx: &mut Context<Self>) -> AnyElement {
         let v = self.viewport.read(cx);
-        let armed = v.running().filter(|s| s.feature == id).and_then(|s| s.arm.as_ref()).map(|a| a.field);
+        let armed = v.running().filter(|s| s.feature == id).and_then(|s| s.arm).map(|a| a.field);
         let on = armed.is_some_and(|field| {
             self.source.as_ref().is_some_and(|d| model::target_field(d, id, label).is_some_and(|(f, _)| f == field))
         });
@@ -191,7 +176,8 @@ impl Shell {
     pub(super) fn tool_card(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         let v = self.viewport.read(cx);
         let s = v.running()?;
-        let (title, feature, arm) = (s.title.clone(), s.feature.clone(), s.arm.clone());
+        let (title, feature, arm) = (s.title.clone(), s.feature.clone(), s.arm);
+        let missing = v.doc().and_then(|d| s.missing(d));
         let rows = self.source.as_ref().map(|d| model::rows(d, &feature, v.feature_issues())).unwrap_or_default();
         let rows: Vec<AnyElement> = rows.iter().map(|r| self.row(t, &feature, r, window, cx)).collect();
         let button = |label: &'static str, primary: bool| {
@@ -222,9 +208,20 @@ impl Shell {
                 .items_center()
                 .justify_between()
                 .gap(px(S_2))
-                .child(text(t, FS_SMALL).text_color(t.accent).child(prompt(a)))
+                .child(text(t, FS_SMALL).flex_1().min_w_0().text_color(t.accent).child(prompt(a)))
                 .child(
-                    button("Clear", false).on_click(cx.listener(|this, _, _, cx| this.clear_target(cx))),
+                    div()
+                        .flex_none()
+                        .flex()
+                        .gap(px(S_1))
+                        .child(button("Clear", false).on_click(cx.listener(|this, _, _, cx| {
+                            this.viewport.update(cx, |v, cx| v.clear_target(cx));
+                        })))
+                        .when(a.many, |d| {
+                            d.child(button("Done", false).on_click(cx.listener(|this, _, _, cx| {
+                                this.viewport.update(cx, |v, cx| v.set_arm(None, cx));
+                            })))
+                        }),
                 )
         });
         let foot = div()
@@ -234,9 +231,11 @@ impl Shell {
             .child(button("Cancel", false).on_click(cx.listener(|this, _, _, cx| {
                 this.viewport.update(cx, |v, cx| v.finish(false, cx));
             })))
-            .child(button("OK", true).on_click(cx.listener(|this, _, _, cx| {
-                this.viewport.update(cx, |v, cx| v.finish(true, cx));
-            })));
+            .child(button("OK", true).when(missing.is_some(), |d| d.opacity(0.5)).on_click(cx.listener(
+                |this, _, _, cx| {
+                    this.viewport.update(cx, |v, cx| v.finish(true, cx));
+                },
+            )));
         Some(
             chip(t)
                 .id("tool-card")

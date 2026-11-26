@@ -41,17 +41,6 @@ fn inserts_at_the_rollback_marker() {
 }
 
 #[test]
-fn suppressing_adds_once_and_drops_the_empty_list() {
-    let mut d = doc(json!({"suppressed": ["x"]}));
-    set_suppressed(&mut d, "f3", true).unwrap();
-    set_suppressed(&mut d, "f3", true).unwrap();
-    assert_eq!(d["suppressed"], json!(["x", "f3"]));
-    set_suppressed(&mut d, "x", false).unwrap();
-    set_suppressed(&mut d, "f3", false).unwrap();
-    assert!(d.get("suppressed").is_none());
-}
-
-#[test]
 fn targets_add_drop_and_replace() {
     let mut d = doc(json!({"features": [{"id": "f2", "type": "fillet", "edges": []}, {"id": "f3", "type": "boolean"}]}));
     set_target(&mut d, "f2", "edges", json!("e1"), true, false).unwrap();
@@ -74,7 +63,7 @@ fn a_box_starts_whole_with_its_id_first() {
     assert_eq!(id, "f2");
     assert_eq!(s.feature, json!({"id": "f2", "type": "box", "length": 20, "width": 20, "height": 20}));
     assert_eq!(serde_json::to_string(&s.feature).unwrap().find("\"id\""), Some(1));
-    assert_eq!(s.arm, None);
+    assert_eq!(s.arm(), None);
 }
 
 #[test]
@@ -82,7 +71,7 @@ fn fillet_takes_the_selected_edges_or_picks_them() {
     let d = doc(json!({}));
     let (_, s) = run("fillet", &d, vec![]).unwrap();
     assert_eq!(s.feature, json!({"id": "f1", "type": "fillet", "radius": 2, "edges": []}));
-    assert_eq!(s.arm, Some(Target { field: "edges", kind: PickKind::Edge, many: true }));
+    assert_eq!(s.arm(), Some(Target { field: "edges", kind: PickKind::Edge, many: true }));
     let picks = vec![edge("b1", 3, [12.5, -4., 7.]), face("b1", 2, [1., 2., 3.]), edge("b1", 8, [3., 9.5, -2.])];
     let (_, s) = run("chamfer", &d, picks).unwrap();
     assert_eq!(
@@ -93,22 +82,22 @@ fn fillet_takes_the_selected_edges_or_picks_them() {
         ])
     );
     assert_eq!(s.feature["distance"], json!(1));
-    assert_eq!(s.arm, None);
+    assert_eq!(s.arm(), None);
 }
 
 #[test]
 fn booleans_keep_the_first_body() {
     let d = doc(json!({}));
     let (_, s) = run("boolean-subtract", &d, vec![]).unwrap();
-    assert_eq!(s.arm, Some(Target { field: "target", kind: PickKind::Body, many: false }));
+    assert_eq!(s.arm(), Some(Target { field: "target", kind: PickKind::Body, many: false }));
     let (_, s) = run("boolean-union", &d, vec![Pick::Body { body: "b2".into() }]).unwrap();
     assert_eq!(s.feature, json!({"id": "f1", "type": "boolean", "operation": "union", "tools": [], "target": "b2"}));
-    assert_eq!(s.arm, Some(Target { field: "tools", kind: PickKind::Body, many: true }));
+    assert_eq!(s.arm(), Some(Target { field: "tools", kind: PickKind::Body, many: true }));
     let picks = vec![face("b4", 1, [0., 0., 0.]), Pick::Body { body: "b1".into() }, edge("b4", 2, [1., 1., 1.]), Pick::Body { body: "b7".into() }];
     let (_, s) = run("boolean-intersect", &d, picks).unwrap();
     assert_eq!(s.feature["target"], json!("b4"));
     assert_eq!(s.feature["tools"], json!(["b1", "b7"]));
-    assert_eq!(s.arm, None);
+    assert_eq!(s.arm(), None);
 }
 
 #[test]
@@ -119,9 +108,9 @@ fn shell_opens_the_selected_faces() {
         json!({"id": "f1", "type": "shell", "thickness": 2,
             "faces": [{"kind": "face", "by": "nearest", "point": [4.0, 6.0, 20.0], "body": "b1"}]})
     );
-    assert_eq!(s.arm, None);
+    assert_eq!(s.arm(), None);
     let (_, s) = run("shell", &doc(json!({})), vec![]).unwrap();
-    assert_eq!(s.arm, Some(Target { field: "faces", kind: PickKind::Face, many: true }));
+    assert_eq!(s.arm(), Some(Target { field: "faces", kind: PickKind::Face, many: true }));
 }
 
 #[test]
@@ -140,7 +129,7 @@ fn an_offset_plane_follows_a_face_a_plane_or_waits_for_one() {
     let (_, s) = run("datum-plane", &d, vec![Pick::Plane { id: "f4".into() }]).unwrap();
     assert_eq!((s.feature["plane"].clone(), s.feature["planeId"].clone()), (json!("XY"), json!("f4")));
     let (_, s) = run("offset-plane", &d, vec![]).unwrap();
-    assert_eq!(s.arm, Some(Target { field: "face", kind: PickKind::Face, many: false }));
+    assert_eq!(s.arm(), Some(Target { field: "face", kind: PickKind::Face, many: false }));
 }
 
 #[test]

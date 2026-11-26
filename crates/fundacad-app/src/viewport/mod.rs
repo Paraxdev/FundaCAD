@@ -7,6 +7,7 @@ mod issues;
 pub mod mesh;
 mod pick;
 mod renderer;
+mod resolve;
 pub mod scene;
 mod select;
 mod session;
@@ -32,7 +33,7 @@ use renderer::{Overlay, Renderer};
 use scene::Scene;
 use undo::UndoStack;
 #[allow(unused_imports, reason = "the shell and the tools read it")]
-pub use session::{Arm, ToolRun};
+pub use session::ToolRun;
 
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
@@ -336,8 +337,11 @@ impl Viewport {
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return;
         }
+        // Undo during a tool cancels it, redo has nothing to bring back yet.
         if self.tool.is_some() {
-            self.finish(false, cx);
+            if undo {
+                self.finish(false, cx);
+            }
             return;
         }
         let Some(session) = self.session.as_mut() else { return };
@@ -369,7 +373,7 @@ impl Viewport {
         }
         match (&self.push, &self.hover) {
             (Some(p), _) => parts.push(format!("{} {:.1} mm", p.grip.label(), p.value)),
-            (None, Some((_, Ok(g)))) if g.adds() => parts.push("drag to press pull this face".into()),
+            (None, Some((_, Ok(g)))) if g.adds() && self.tool.is_none() => parts.push("drag to press pull this face".into()),
             (None, Some((_, Ok(g)))) => parts.push(format!("drag to push {} ({} mm)", g.label(), g.start)),
             (None, Some((_, Err(why)))) => parts.push(why.clone()),
             (None, None) => {}
@@ -552,8 +556,8 @@ impl Viewport {
     }
 
     fn press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
-        // An armed target pick only clicks.
-        if self.tool.as_ref().is_some_and(|t| t.arm.is_some()) {
+        // A running tool's edits are one step, a push would make another the tool's Cancel cannot take back.
+        if self.tool.is_some() {
             return;
         }
         // A released drag is still waiting for its mesh, a grip read off the old mesh would push a stale face.
