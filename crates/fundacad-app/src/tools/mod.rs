@@ -12,6 +12,7 @@ use serde_json::{json, Map, Value};
 pub use starters::tool;
 pub use starters::TOOLS;
 pub use starters::{fit, Fitted};
+pub use starters::{press, replace};
 
 use crate::selection::{Pick, PickKind, Selection};
 

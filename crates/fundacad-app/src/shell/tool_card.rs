@@ -25,12 +25,34 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
         register(cx, id, filter.label(), Group::Edit, move |_, cx| v.update(cx, |v, cx| v.set_filter(filter, cx)));
     }
     let v = viewport.clone();
+    cx.intercept_keystrokes(move |e, window, cx| {
+        let k = &e.keystroke;
+        if k.modifiers.modified() || window.context_stack().iter().any(|c| c.contains("Input")) {
+            return;
+        }
+        if v.update(cx, |v, cx| tool_key(v, &k.key, cx)) {
+            cx.stop_propagation();
+        }
+    })
+    .detach();
+    let v = viewport.clone();
     register(cx, "escape", "Cancel", Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| match v.running().is_some() {
             true => v.finish(false, cx),
             false => v.clear_selection(cx),
         })
     });
+}
+
+/// A key the running tool answers, kept from the key table: [ ] for a pattern's count, X for a draft's pull axis.
+fn tool_key(v: &mut Viewport, key: &str, cx: &mut Context<Viewport>) -> bool {
+    let Some(id) = v.running().map(|r| r.feature.clone()) else { return false };
+    let Some(f) = v.doc().and_then(|d| tools::feature(d, &id)).cloned() else { return false };
+    let Some(new) = tools::press(&f, key, &v.shown_bodies()) else { return false };
+    if let Err(why) = v.edit(move |d| tools::replace(d, &id, new.clone()), cx) {
+        cx.defer(move |cx| toast(cx, why));
+    }
+    true
 }
 
 fn toast(cx: &mut App, words: String) {

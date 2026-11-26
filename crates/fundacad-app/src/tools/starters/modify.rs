@@ -1,6 +1,7 @@
 //! The Modify tools, FundaCAD 1's draft, face offset, split, pattern, mirror, move and scale starters.
 
 pub mod fit;
+pub mod keys;
 #[cfg(test)]
 mod tests;
 

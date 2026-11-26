@@ -65,21 +65,12 @@ fn pattern(f: &mut Value, doc: &Doc, s: &Selection, shown: &[Arc<Body>]) {
         }
     }
     owners.sort_by_key(|o| tools::index_of(doc, o));
-    let extent = if owners.is_empty() {
-        let named: Vec<String> = f.get("bodies").and_then(Value::as_array).map_or_else(Vec::new, |a| {
-            a.iter().filter_map(Value::as_str).map(str::to_string).collect()
-        });
-        let reached: Vec<&Body> = match named.is_empty() {
-            true => shown.last().map(|b| &**b).into_iter().collect(),
-            false => shown.iter().filter(|b| named.contains(&b.id)).map(|b| &**b).collect(),
-        };
-        extent(&reached, None)
-    } else {
+    if !owners.is_empty() {
         let obj = f.as_object_mut().expect("an object");
         obj.remove("bodies");
         obj.insert("features".into(), json!(owners));
-        extent(&shown.iter().map(|b| &**b).collect::<Vec<_>>(), Some(&owners))
-    };
+    }
+    let extent = sources_extent(f, shown);
     let span = |axis: usize| {
         extent.map(|(lo, hi)| ((hi[axis] - lo[axis]) as f64 * 100.0).round() / 100.0).filter(|d| *d > 0.0).unwrap_or(SPACING)
     };
@@ -91,6 +82,24 @@ fn pattern(f: &mut Value, doc: &Doc, s: &Selection, shown: &[Arc<Body>]) {
         }
         _ => {}
     }
+}
+
+/// The box around what a pattern repeats: the faces its `features` made, its `bodies`, else the active body.
+pub fn sources_extent(f: &Value, shown: &[Arc<Body>]) -> Option<([f32; 3], [f32; 3])> {
+    let list = |field: &str| -> Vec<String> {
+        f.get(field).and_then(Value::as_array).map_or_else(Vec::new, |a| {
+            a.iter().filter_map(Value::as_str).map(str::to_string).collect()
+        })
+    };
+    let (owners, named) = (list("features"), list("bodies"));
+    if !owners.is_empty() {
+        return extent(&shown.iter().map(|b| &**b).collect::<Vec<_>>(), Some(&owners));
+    }
+    let reached: Vec<&Body> = match named.is_empty() {
+        true => shown.last().map(|b| &**b).into_iter().collect(),
+        false => shown.iter().filter(|b| named.contains(&b.id)).map(|b| &**b).collect(),
+    };
+    extent(&reached, None)
 }
 
 fn owner(shown: &[Arc<Body>], body: &str, face: u32) -> Option<String> {
