@@ -57,3 +57,12 @@ fn a_store_without_a_folder_keeps_values_in_memory() {
     store.set("k", &"v").unwrap();
     assert_eq!(store.get::<String>("k"), Some("v".into()));
 }
+
+#[test]
+fn a_file_with_a_byte_order_mark_still_reads() {
+    let dir = temp_dir("bom");
+    std::fs::write(dir.join(FILE), "\u{feff}{\"zoom\": 1.75, \"name\": \"Lid\"}").unwrap();
+    let store = Store::load(Some(&dir));
+    assert_eq!((store.get::<f64>("zoom"), store.get::<String>("name")), (Some(1.75), Some("Lid".into())));
+    assert!(!dir.join("settings.json.bad").exists());
+}

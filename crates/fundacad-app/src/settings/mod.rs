@@ -41,7 +41,8 @@ impl Store {
         let Some(dir) = dir else { return Self::default() };
         let path = dir.join(FILE);
         let values = match std::fs::read_to_string(&path) {
-            Ok(text) => match serde_json::from_str::<Value>(&text) {
+            // Notepad may save the file with a byte order mark.
+            Ok(text) => match serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) {
                 Ok(Value::Object(values)) => values,
                 _ => {
                     log::warn!("{} is not a settings file, moved aside", path.display());
