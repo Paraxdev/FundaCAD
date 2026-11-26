@@ -206,6 +206,16 @@ pub fn hole(_: &Doc, s: &Selection) -> Result<Start, String> {
     Ok(Start { feature: f, need })
 }
 
+/// The point of `held` nearest `at` within `reach`, which a click there drops, as FundaCAD 1's hole pointNear.
+pub fn point_near(held: &[Value], at: [f32; 3], reach: f64) -> Option<Value> {
+    let d = |e: &Value| {
+        let p: Vec<f64> = e.as_array()?.iter().filter_map(Value::as_f64).collect();
+        let [x, y, z] = <[f64; 3]>::try_from(p).ok()?;
+        Some(((x - at[0] as f64).powi(2) + (y - at[1] as f64).powi(2) + (z - at[2] as f64).powi(2)).sqrt())
+    };
+    held.iter().filter_map(|e| Some((d(e)?, e))).filter(|(d, _)| *d <= reach).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, e)| e.clone())
+}
+
 fn round(v: [f32; 3]) -> [f64; 3] {
     v.map(|c| ((c as f64) * 1e4).round() / 1e4 + 0.0)
 }

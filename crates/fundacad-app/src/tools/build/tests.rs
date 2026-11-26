@@ -258,3 +258,20 @@ fn a_face_picked_into_a_datum_plane_brings_its_plane_and_spot() {
     after_pick(&mut d, "f1", "face", &Pick::Body { body: "body1".into() });
     assert_eq!(d, before);
 }
+
+#[test]
+fn a_click_near_a_hole_point_finds_the_nearest_within_reach() {
+    let held = vec![json!([4.0, 2.0, 20.0]), json!([9.0, 2.0, 20.0]), json!("f1"), json!([5.0, 2.0])];
+    assert_eq!(point_near(&held, [4.5, 2.5, 20.0], 1.0), Some(json!([4.0, 2.0, 20.0])));
+    assert_eq!(point_near(&held, [7.0, 2.0, 20.0], 2.0), Some(json!([9.0, 2.0, 20.0])), "both reach, the nearer wins");
+    assert_eq!(point_near(&held, [7.0, 2.0, 20.0], 2.5), Some(json!([9.0, 2.0, 20.0])));
+    assert_eq!(point_near(&held, [6.5, 2.0, 20.0], 2.5), Some(json!([4.0, 2.0, 20.0])));
+    assert_eq!(point_near(&held, [6.5, 2.0, 20.0], 2.49), None);
+    assert_eq!(point_near(&[], [4.0, 2.0, 20.0], 5.0), None);
+    let (mut r, mut now, _) = run_of(&doc(json!({})), "hole", vec![face([3.25, -8.0, 12.0])]);
+    r.set_arm(&mut now, Some(Target { field: "points", kind: PickKind::Point, many: true }));
+    r.pick(&mut now, json!({"point": [6.0, -8.0, 12.0]}), None).unwrap();
+    let had = point_near(&entries(&now, &r.feature, "points"), [3.5, -8.0, 12.0], 1.7);
+    r.pick(&mut now, json!({"point": [3.5, -8.0, 12.0]}), had).unwrap();
+    assert_eq!(last(&now)["points"], json!([[6.0, -8.0, 12.0]]));
+}

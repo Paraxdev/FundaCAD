@@ -4,7 +4,7 @@ use gpui::*;
 
 use super::resolve::resolve;
 use super::Viewport;
-use crate::selection::Pick;
+use crate::selection::{Pick, PickKind};
 use crate::tools::{self, Target};
 
 pub use crate::tools::run::Run as ToolRun;
@@ -82,6 +82,11 @@ impl Viewport {
         let Some(arm) = tool.arm else { return };
         let had = self.doc().and_then(|d| {
             let held = tools::entries(d, &tool.feature, arm.field);
+            if let (PickKind::Point, Pick::Face { point, .. }) = (arm.kind, &pick) {
+                // At least 8 pixels, so a small hole is still a target, and about an M3 hole's radius.
+                let reach = (self.camera.per_pixel(self.bounds.size.height.as_f32()) * 8.0).max(1.7);
+                return tools::build::point_near(&held, *point, reach as f64);
+            }
             held.into_iter().find(|e| {
                 resolve(&self.scene, self.picking.lines(), e).is_some_and(|p| p.same(&pick))
                     || self.holds_area(&tool.feature, e, &pick)
