@@ -13,6 +13,11 @@ pub struct Hit {
 
 /// The nearest triangle the ray crosses, from either side.
 pub fn pick(scene: &Scene, origin: Vec3, dir: Vec3) -> Option<Hit> {
+    pick_kept(scene, origin, dir, |_| true)
+}
+
+/// The nearest hit at a point `keep` allows, so a click goes through what a Section cuts away.
+pub fn pick_kept(scene: &Scene, origin: Vec3, dir: Vec3, keep: impl Fn(Vec3) -> bool) -> Option<Hit> {
     let mut best: Option<(f32, Hit)> = None;
     for (bi, body) in scene.bodies.iter().enumerate() {
         for tri in body.indices.chunks_exact(3) {
@@ -20,7 +25,7 @@ pub fn pick(scene: &Scene, origin: Vec3, dir: Vec3) -> Option<Hit> {
             let Some((t, u, v)) = intersect(origin, dir, a.position(), b.position(), c.position()) else {
                 continue;
             };
-            if best.as_ref().is_some_and(|(d, _)| *d <= t) {
+            if best.as_ref().is_some_and(|(d, _)| *d <= t) || !keep(origin + dir * t) {
                 continue;
             }
             let normal = (a.normal() * (1.0 - u - v) + b.normal() * u + c.normal() * v).normalize_or_zero();

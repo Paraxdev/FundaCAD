@@ -2,10 +2,13 @@
 //! and Bed Fit. They read the tessellation the view draws, so curved geometry is close, not exact.
 
 pub mod bedfit;
+pub mod clash;
 pub mod filament;
 pub mod measure;
 pub mod overhang;
+pub mod printcheck;
 pub mod props;
+pub mod section;
 
 #[cfg(test)]
 mod tests;

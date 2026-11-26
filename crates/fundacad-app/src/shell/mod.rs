@@ -3,6 +3,7 @@
 mod geometry;
 mod history;
 mod history_menu;
+mod inspect;
 mod inspector;
 mod items;
 mod modal;
@@ -70,6 +71,7 @@ impl Shell {
             p.update(cx, |p, cx| p.toggle(cx))
         });
         tool_card::install(&viewport, cx);
+        inspect::install(&viewport, cx);
         let mut shell = Self {
             viewport,
             doc,
@@ -227,6 +229,7 @@ impl Render for Shell {
             .gap(gap)
             .child(self.view_controls(t))
             .children(self.tool_card(t, window, cx))
+            .children(self.inspect_card(t, cx))
             .child(self.history_card(t, window, cx));
         let status = self.viewport.read(cx).status();
         let status = div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(

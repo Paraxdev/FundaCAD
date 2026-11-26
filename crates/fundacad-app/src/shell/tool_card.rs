@@ -28,6 +28,7 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     register(cx, "escape", "Cancel", Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| match v.running().is_some() {
             true => v.finish(false, cx),
+            false if v.inspecting().card.is_some() => v.open_card(None, cx),
             false => v.clear_selection(cx),
         })
     });

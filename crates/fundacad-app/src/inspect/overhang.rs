@@ -56,3 +56,25 @@ pub fn classify(normal: Vec3, build: Vec3, threshold: f32) -> Tint {
         Tint::Wall
     }
 }
+
+/// Area in mm² that needs support, prints as is and faces up, over the triangles of `bodies`.
+pub fn areas<'a>(bodies: impl IntoIterator<Item = &'a crate::viewport::scene::SceneBody>, build: Vec3, threshold: f32) -> [f64; 3] {
+    let mut out = [0.0; 3];
+    for b in bodies {
+        for t in b.indices.chunks_exact(3) {
+            let [p, q, r] = [t[0], t[1], t[2]].map(|i| b.vertices[i as usize]);
+            let area = (q.position() - p.position()).cross(r.position() - p.position()).length() as f64 / 2.0;
+            let slot = match classify(p.normal() + q.normal() + r.normal(), build, threshold) {
+                Tint::Overhang => 0,
+                Tint::Wall => 1,
+                Tint::Top => 2,
+            };
+            out[slot] += area;
+        }
+    }
+    out
+}
+
+pub fn rows(areas: [f64; 3]) -> Vec<super::Row> {
+    [Tint::Overhang, Tint::Wall, Tint::Top].iter().zip(areas).map(|(t, a)| (t.label().into(), format!("{} mm²", super::spell(a)))).collect()
+}

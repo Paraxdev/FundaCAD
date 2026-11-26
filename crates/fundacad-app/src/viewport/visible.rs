@@ -26,7 +26,7 @@ impl Viewport {
     }
 
     pub(super) fn show_built(&mut self) {
-        let bodies = shown(self.doc(), &self.built);
+        let bodies = crate::inspect::section::isolated(shown(self.doc(), &self.built), self.inspect.isolate.as_deref());
         if bodies.len() != self.scene.bodies.len()
             || bodies.iter().zip(&self.scene.bodies).any(|(a, b)| !Arc::ptr_eq(a, &b.source))
         {
