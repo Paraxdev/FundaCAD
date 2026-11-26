@@ -11,7 +11,7 @@ fn face(body: &str, face: u32, point: [f32; 3]) -> Pick {
 }
 
 fn edge(body: &str, edge: u32, mid: [f32; 3]) -> Pick {
-    Pick::Edge { body: body.into(), edge, mid }
+    Pick::Edge { body: body.into(), edge, mid, dir: None }
 }
 
 fn run(id: &str, d: &Doc, picks: Vec<Pick>) -> Result<(String, Start), String> {
@@ -191,4 +191,19 @@ fn every_tool_id_is_its_own() {
     ids.sort();
     ids.dedup();
     assert_eq!(ids.len(), TOOLS.len());
+}
+
+#[test]
+fn an_axis_on_edge_follows_a_straight_edge_and_refuses_a_curved_one() {
+    let d = doc(json!({}));
+    let words = "Select a straight edge, then Axis on Edge";
+    assert_eq!(run("datum-axis-edge", &d, vec![]).unwrap_err(), words);
+    assert_eq!(run("datum-axis-edge", &d, vec![edge("b1", 2, [3., -1., 6.])]).unwrap_err(), words);
+    let tilted = Pick::Edge { body: "b1".into(), edge: 2, mid: [3., -1., 6.], dir: Some([0.6, 0.0, -0.8]) };
+    let (_, s) = run("datum-axis-edge", &d, vec![tilted]).unwrap();
+    assert_eq!(
+        s.feature,
+        json!({"id": "f1", "type": "datumAxis", "origin": [3.0, -1.0, 6.0], "dir": [0.6, 0.0, -0.8], "name": "Axis",
+            "axisEdge": {"kind": "edge", "by": "nearest", "point": [3.0, -1.0, 6.0], "body": "b1"}})
+    );
 }

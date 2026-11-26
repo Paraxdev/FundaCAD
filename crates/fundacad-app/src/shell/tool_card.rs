@@ -79,7 +79,10 @@ fn target_of(field: &'static str, kind: model::TargetKind) -> Target {
         model::TargetKind::Body => PickKind::Body,
         model::TargetKind::Area => PickKind::Area,
     };
-    let single = matches!(field, "face" | "profile" | "upTo" | "target" | "ground" | "startFace" | "upToFace" | "upToFace2");
+    let single = matches!(
+        field,
+        "face" | "profile" | "upTo" | "target" | "ground" | "startFace" | "upToFace" | "upToFace2" | "axisEdge"
+    );
     Target { field, kind, many: !single }
 }
 

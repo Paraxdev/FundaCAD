@@ -10,7 +10,8 @@ use serde_json::{json, Value};
 pub enum Pick {
     /// `point` is where it was clicked, which a `nearest` selector finds it again by.
     Face { body: String, face: u32, point: [f32; 3], normal: [f32; 3] },
-    Edge { body: String, edge: u32, mid: [f32; 3] },
+    /// `dir` the unit direction of a straight edge, None for a curved one.
+    Edge { body: String, edge: u32, mid: [f32; 3], dir: Option<[f32; 3]> },
     Body { body: String },
     Sketch { feature: String },
     /// A world plane (XY, XZ, YZ) or a datum plane's feature id.

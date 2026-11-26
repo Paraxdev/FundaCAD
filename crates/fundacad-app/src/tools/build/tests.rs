@@ -118,26 +118,52 @@ fn area_clicks_name_the_sketch_add_and_drop_regions_and_refuse_another_sketch() 
 }
 
 #[test]
-fn revolve_turns_about_the_construction_line_an_edge_or_z() {
+fn revolve_turns_about_the_construction_line_the_sketch_y_axis_or_a_straight_edge() {
     let d = doc(json!({"features": [rect_sketch("s1", "XZ", true), rect_sketch("s2", "XY", false)]}));
+    let line = json!({"origin": [30.0, 0.0, -2.0], "dir": [0.0, 0.0, 11.0]});
+    let y_axis = json!({"origin": [0.0, 0.0, 0.0], "dir": [0.0, 1.0, 0.0]});
     let (_, s) = started(tool("revolve").unwrap(), &d, &sel(vec![Pick::Sketch { feature: "s1".into() }])).unwrap();
-    assert_eq!(
-        feat(&s),
-        json!({"type": "revolve", "angle": 360, "operation": "new", "sketch": "s1",
-            "axis": {"origin": [30.0, 0.0, -2.0], "dir": [0.0, 0.0, 11.0]}})
-    );
+    assert_eq!(feat(&s), json!({"type": "revolve", "angle": 360, "operation": "new", "sketch": "s1", "axis": line}));
     assert!(s.need.is_empty());
-    let picks = vec![Pick::Sketch { feature: "s2".into() }, Pick::Edge { body: "b".into(), edge: 2, mid: [1.5, 2.0, -3.0] }];
+    let (_, s) = started(tool("revolve").unwrap(), &d, &sel(vec![Pick::Sketch { feature: "s2".into() }])).unwrap();
+    assert_eq!(feat(&s), json!({"type": "revolve", "angle": 360, "operation": "new", "sketch": "s2", "axis": y_axis}));
+    let edge = |dir| Pick::Edge { body: "b".into(), edge: 2, mid: [1.5, 2.0, -3.0], dir };
+    let picks = vec![Pick::Sketch { feature: "s2".into() }, edge(Some([0.0, 0.6, 0.8]))];
     let (_, s) = started(tool("revolve").unwrap(), &d, &sel(picks)).unwrap();
-    assert_eq!(s.feature["axis"], json!({"origin": [1.5, 2.0, -3.0], "dir": [0, 0, 1]}));
+    assert_eq!(s.feature["axis"], json!({"origin": [1.5, 2.0, -3.0], "dir": [0.0, 0.6, 0.8]}));
     assert_eq!(s.feature["axisEdge"], json!({"kind": "edge", "by": "nearest", "point": [1.5, 2.0, -3.0], "body": "b"}));
+    let picks = vec![Pick::Sketch { feature: "s2".into() }, edge(None)];
+    assert_eq!(started(tool("revolve").unwrap(), &d, &sel(picks)).unwrap_err(), STRAIGHT);
+
     let (mut r, mut now, s) = run_of(&d, "revolve", vec![]);
     assert_eq!(s.feature["axis"], "Z");
     r.pick(&mut now, json!({"sketch": "s2", "point": [13.0, 5.0, 0.0]}), None).unwrap();
-    assert_eq!(last(&now)["axis"], "Z", "a sketch with no construction line keeps the axis");
+    assert_eq!(last(&now)["axis"], y_axis, "a sketch with no construction line turns about its Y axis");
     r.pick(&mut now, Value::Null, Some(json!([13.0, 5.0, 0.0]))).unwrap();
     r.pick(&mut now, json!({"sketch": "s1", "point": [13.0, 0.0, 5.0]}), None).unwrap();
-    assert_eq!(last(&now)["axis"], json!({"origin": [30.0, 0.0, -2.0], "dir": [0.0, 0.0, 11.0]}));
+    assert_eq!(last(&now)["axis"], line);
+}
+
+#[test]
+fn a_revolve_axis_edge_picked_in_the_card_must_be_straight_and_stays_with_another_sketch() {
+    let d = doc(json!({"features": [rect_sketch("s1", "XZ", true), rect_sketch("s2", "XY", false)]}));
+    let (mut r, mut now, _) = run_of(&d, "revolve", vec![area("s2", [13.0, 5.0, 0.0])]);
+    let id = r.feature.clone();
+    r.set_arm(&mut now, Some(Target { field: "axisEdge", kind: PickKind::Edge, many: false }));
+    let curved = Pick::Edge { body: "body1".into(), edge: 4, mid: [6.0, -2.5, 3.0], dir: None };
+    assert_eq!(fits(&now, &id, "axisEdge", &curved).unwrap_err(), STRAIGHT);
+    let straight = Pick::Edge { body: "body1".into(), edge: 5, mid: [6.0, -2.5, 3.0], dir: Some([0.0, 0.0, -1.0]) };
+    assert_eq!(fits(&now, &id, "axisEdge", &straight), Ok(()));
+    assert_eq!(fits(&now, &id, "regions", &curved), Ok(()), "only the axis edge is checked");
+    r.pick(&mut now, straight.selector().unwrap(), None).unwrap();
+    after_pick(&mut now, &id, "axisEdge", &straight);
+    let edge_line = json!({"origin": [6.0, -2.5, 3.0], "dir": [0.0, 0.0, -1.0]});
+    assert_eq!(last(&now)["axis"], edge_line);
+    assert_eq!(last(&now)["axisEdge"], straight.selector().unwrap());
+    r.set_arm(&mut now, Some(REGIONS));
+    r.pick(&mut now, Value::Null, Some(json!([13.0, 5.0, 0.0]))).unwrap();
+    r.pick(&mut now, json!({"sketch": "s1", "point": [13.0, 0.0, 5.0]}), None).unwrap();
+    assert_eq!((last(&now)["sketch"].clone(), last(&now)["axis"].clone()), (json!("s1"), edge_line));
 }
 
 #[test]

@@ -81,16 +81,19 @@ pub fn press_pull(_: &Doc, s: &Selection) -> Result<Start, String> {
     Ok(Start { feature: f, need })
 }
 
-/// The sketch's first construction line as a revolve axis in world mm.
+/// The sketch's first construction line as a revolve axis in world mm, else the sketch's own Y axis, as Finish &
+/// Revolve turns.
 pub fn sketch_axis(doc: &Doc, sketch: &str) -> Option<Value> {
     let e = crate::sketch::Editor::open(doc, sketch)?;
-    let (a, b) = e.solved.entities.iter().filter(|x| e.is_construction(x.id())).find_map(|x| x.as_line_seg())?;
-    let (o, t) = (e.plane.to_3d(glam::DVec2::new(a.x, a.y)), e.plane.to_3d(glam::DVec2::new(b.x, b.y)));
+    let line = e.solved.entities.iter().filter(|x| e.is_construction(x.id())).find_map(|x| x.as_line_seg());
+    let line = line.map(|(a, b)| (glam::DVec2::new(a.x, a.y), glam::DVec2::new(b.x, b.y)));
+    let (a, b) = line.filter(|(a, b)| a.distance(*b) > 1e-9).unwrap_or((glam::DVec2::ZERO, glam::DVec2::Y));
+    let (o, t) = (e.plane.to_3d(a), e.plane.to_3d(b));
     let r = |v: glam::DVec3| [v.x, v.y, v.z].map(|c| (c * 1e4).round() / 1e4 + 0.0);
-    (t.distance(o) > 1e-9).then(|| json!({"origin": r(o), "dir": r(t - o)}))
+    Some(json!({"origin": r(o), "dir": r(t - o)}))
 }
 
-/// Revolve about the sketch's construction line, else the Z axis, or the straight edge picked with it.
+/// Revolve about the sketch's construction line or its Y axis, or the straight edge picked with it.
 pub fn revolve(doc: &Doc, s: &Selection) -> Result<Start, String> {
     let mut f = json!({"type": "revolve", "axis": "Z", "angle": 360, "operation": operation(doc), "regions": []});
     let mut need = vec![REGIONS];
@@ -105,11 +108,21 @@ pub fn revolve(doc: &Doc, s: &Selection) -> Result<Start, String> {
     if let Some(axis) = f.get("sketch").and_then(Value::as_str).and_then(|k| sketch_axis(doc, k)) {
         f["axis"] = axis;
     }
-    if let Some(p @ Pick::Edge { mid, .. }) = s.of(PickKind::Edge).first().copied() {
+    if let Some(p) = s.of(PickKind::Edge).first().copied() {
+        f["axis"] = edge_axis(p).ok_or(STRAIGHT)?;
         f["axisEdge"] = p.selector().unwrap_or_default();
-        f["axis"] = json!({"origin": round(*mid), "dir": [0, 0, 1]});
     }
     Ok(Start { feature: f, need })
+}
+
+pub const STRAIGHT: &str = "Pick a straight edge for the axis";
+
+/// A straight edge as an `{origin, dir}` line, which the engine keeps as the axis an `axisEdge` caches.
+pub fn edge_axis(p: &Pick) -> Option<Value> {
+    match p {
+        Pick::Edge { mid, dir: Some(dir), .. } => Some(json!({"origin": round(*mid), "dir": round(*dir)})),
+        _ => None,
+    }
 }
 
 pub fn loft(_: &Doc, s: &Selection) -> Result<Start, String> {
@@ -227,7 +240,8 @@ pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<V
             }
             if had.as_deref() != Some(sketch.as_str()) {
                 set(doc, id, "sketch", json!(sketch));
-                if let Some(axis) = (kind == "revolve").then(|| sketch_axis(doc, &sketch)).flatten() {
+                let on_edge = !entries(doc, id, "axisEdge").is_empty();
+                if let Some(axis) = (kind == "revolve" && !on_edge).then(|| sketch_axis(doc, &sketch)).flatten() {
                     set(doc, id, "axis", axis);
                 }
             }
@@ -236,13 +250,29 @@ pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<V
     }
 }
 
-/// What a face click writes beside the field it fills: a datum plane on a face takes the face's plane and the spot,
-/// as the starter does for a face picked first.
+/// Why `pick` cannot go in `field` before anything is written: a revolve axis edge must be straight.
+pub fn fits(doc: &Doc, id: &str, field: &str, pick: &Pick) -> Result<(), String> {
+    match (ty(doc, id), field) {
+        ("revolve", "axisEdge") if edge_axis(pick).is_none() => Err(STRAIGHT.into()),
+        _ => Ok(()),
+    }
+}
+
+/// What a click writes beside the field it fills: a datum plane on a face takes the face's plane and the spot, as the
+/// starter does for a face picked first, and a revolve's axis edge its line.
 pub fn after_pick(doc: &mut Doc, id: &str, field: &str, pick: &Pick) {
-    if let (Pick::Face { point, normal, .. }, "datumPlane", "face") = (pick, ty(doc, id), field) {
-        let (plane, at) = (super::starters::plane_def(*point, *normal), json!(round(*point)));
-        set(doc, id, "plane", plane);
-        set(doc, id, "at", at);
+    match (pick, ty(doc, id), field) {
+        (Pick::Face { point, normal, .. }, "datumPlane", "face") => {
+            let (plane, at) = (super::starters::plane_def(*point, *normal), json!(round(*point)));
+            set(doc, id, "plane", plane);
+            set(doc, id, "at", at);
+        }
+        (_, "revolve", "axisEdge") => {
+            if let Some(axis) = edge_axis(pick) {
+                set(doc, id, "axis", axis);
+            }
+        }
+        _ => {}
     }
 }
 

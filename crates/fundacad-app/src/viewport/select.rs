@@ -138,7 +138,8 @@ impl Viewport {
         let edge = best.and_then(|(bi, n)| {
             let mid = edges::midpoint(&self.picking.lines[bi][n.edge])?;
             let body = self.scene.bodies[bi].source.id.clone();
-            Some((bi, n.edge, Pick::Edge { body, edge: n.edge as u32, mid: mid.to_array() }))
+            let dir = edges::straight(&self.picking.lines[bi][n.edge]).map(|d| d.to_array());
+            Some((bi, n.edge, Pick::Edge { body, edge: n.edge as u32, mid: mid.to_array(), dir }))
         });
         (face, edge)
     }

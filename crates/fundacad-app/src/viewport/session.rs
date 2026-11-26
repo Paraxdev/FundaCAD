@@ -88,6 +88,9 @@ impl Viewport {
         let picked = pick.clone();
         let edit = |r: &mut ToolRun, d: &mut tools::Doc| {
             let feature = r.feature.clone();
+            if had.is_none() {
+                tools::build::fits(d, &feature, field, &picked)?;
+            }
             r.pick(d, value, had.clone()).map(|_| if had.is_none() { tools::build::after_pick(d, &feature, field, &picked) })
         };
         if let Some(Err(why)) = self.run_edit(edit, cx) {

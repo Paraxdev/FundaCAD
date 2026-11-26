@@ -117,10 +117,11 @@ pub const TOOLS: &[Tool] = &[
         })
     }),
     t("datum-axis-edge", "Axis on Edge", |_, s| {
-        let [edge] = one(selectors(s, PickKind::Edge), "Select a straight edge, then Axis on Edge")?;
-        let mid = s.of(PickKind::Edge).first().map_or([0.0; 3], |p| spot(p));
+        let words = "Select a straight edge, then Axis on Edge";
+        let [edge] = one(selectors(s, PickKind::Edge), words)?;
+        let line = s.of(PickKind::Edge).first().and_then(|p| build::edge_axis(p)).ok_or(words)?;
         Ok(Start {
-            feature: json!({"type": "datumAxis", "origin": round(mid), "dir": [0, 0, 1], "axisEdge": edge, "name": "Axis"}),
+            feature: json!({"type": "datumAxis", "origin": line["origin"], "dir": line["dir"], "axisEdge": edge, "name": "Axis"}),
             need: Vec::new(),
         })
     }),
