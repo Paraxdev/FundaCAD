@@ -1,6 +1,6 @@
 # FundaCAD 2: native and plastic
 
-Status: direction agreed on 2026-11-26, the spike is running. Supersedes the 2026-09 decision to keep Tauri and Vue.
+Status: direction agreed on 2026-11-26, the spike passed the same day (see Order of work, step 0). Supersedes the 2026-09 decision to keep Tauri and Vue.
 
 ## Why
 
@@ -41,10 +41,11 @@ The niche on top is printing: live printability, fit clearances and the plugin e
 Rules:
 
 - Our code is OS agnostic. Anything per OS lives behind one small trait in one crate.
-- Our code never calls DirectX. GPUI itself draws its Windows UI with DirectX 11, which every Windows GPU since about
-  2009 has, and that stays inside the toolkit.
-- GPU floor is OpenGL 3.3 with the path tracer off. GPUI's Linux renderer has been wgpu since February 2026 (Zed PR
-  #46758), and one report has it panicking without Vulkan, so the fork may need a GL fallback patch.
+- Our code never calls DirectX. Stock GPUI draws Windows with DirectX 11; our fork runs its wgpu renderer there too, so
+  Windows and Linux share one renderer (Vulkan, GL fallback). The 3D view renders into a texture on GPUI's device and
+  GPUI composites it like any other element.
+- GPU floor is OpenGL 3.3 with the path tracer off. That takes a small patch to GPUI's wgpu device setup, and the
+  viewport sticks to vertex buffers and uniforms there.
 - The engine stays a supervised worker process, so an OCCT crash or a wedged fillet never takes the window down. Meshes
   move through shared memory instead of serialized frames. To be confirmed by the spike.
 
@@ -107,6 +108,17 @@ For FundaCAD 2:
      Linux
    - the same window running on OpenGL only (a Linux VM without Vulkan)
    - one Funda panel rebuilt beside the Vue one, compared side by side, backdrop blur included
+
+   Result, 2026-11-26:
+
+   | Spike | Verdict | Branch | Outcome |
+   |---|---|---|---|
+   | A, viewport | GO | spike/gpui-viewport | 165 fps (monitor cap) on Vulkan and GL, 4M triangles included, about 390 lines of GPUI fork |
+   | B, look | CLOSE | spike/gpui-look | Preferences page within 2.3 of 255 mean pixel diff; GPUI has no backdrop blur |
+   | C, OpenGL | GO | spike/gpui-gl | GPUI runs on GL alone, GL 3.3 needs a small patch, WGL needs a frame cap |
+
+   Blur: panels over the 3D view blur it in our own viewport pass, dialogs over the chrome use the flat scrim. A real
+   backdrop blur primitive in the fork is 1 to 2 weeks and can wait.
 1. Shell, document, timeline and the parameter panel.
 2. Sketching on the native solver, curves in 3D.
 3. Feature tools and the inspector.
