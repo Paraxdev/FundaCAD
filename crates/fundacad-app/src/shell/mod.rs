@@ -209,15 +209,11 @@ impl Render for Shell {
         }
         let files = self.bench.files.read(cx);
         (self.doc.name, self.doc.dirty) = (files.name(), files.dirty());
-        let viewport = self.viewport.clone();
-        let redo = self.viewport.clone();
         div()
             .size_full()
             .track_focus(&self.focus)
             .key_context(crate::commands::key_context(cx))
             .on_action(crate::commands::on_run)
-            .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
-            .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)

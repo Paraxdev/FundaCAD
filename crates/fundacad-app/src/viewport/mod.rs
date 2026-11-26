@@ -31,8 +31,6 @@ use undo::UndoStack;
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
 
-actions!(viewport, [Undo, Redo]);
-
 /// Index GPUI samples the main 3D view from.
 const MAIN_TEXTURE: u32 = gpui_wgpu::EXTERNAL_TEXTURE_BASE;
 
