@@ -1,9 +1,8 @@
-//! FUNDA_PUSH_DEMO=<mm> pushes a cap by itself, so a push can be timed without a hand on the mouse.
-//! FUNDA_PUSH_FEATURE=<id> picks the feature, otherwise the latest pushable one in the timeline.
-//! FUNDA_PUSH_PREVIEW_ONLY=1 sends nothing to the engine and holds the stretched cap for a few seconds, for screenshots.
-//! FUNDA_PUSH_UNDO=1 pushes the same face a second time, then undoes once, which must bring back the first start.
-//! FUNDA_PUSH_PRESS=1 press pulls a flat face whose feature does not push, with FUNDA_PUSH_UNDO the second drag edits
-//! that press-pull and the one undo takes it out.
+//! Pushes that run by themselves, so they can be timed without a hand on the mouse. FUNDA_PUSH_DEMO=<mm> pushes a
+//! cap, FUNDA_PUSH_FEATURE=<id> picks its feature (else the latest pushable one), FUNDA_PUSH_PREVIEW_ONLY=1 sends
+//! nothing and holds the stretched cap for screenshots, FUNDA_PUSH_UNDO=1 pushes again and undoes once, which must
+//! bring back the first start, FUNDA_PUSH_PRESS=1 press pulls a flat face whose feature does not push (with UNDO the
+//! second drag edits that press-pull and the undo takes it out).
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};

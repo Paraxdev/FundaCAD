@@ -1,9 +1,7 @@
-//! The Funda theme: src/styles/_tokens.scss, _contrast.scss and src/ui/theme.ts in Rust.
-//!
-//! `init` once at startup, then read `cx.theme()` in render. A change goes through `update`, which resolves the
-//! theme again and redraws every window, so dark and light switch live. While the choice is System, a root view
-//! keeps the `follow_system` subscription so an OS switch comes through too. `kit` carries the result onto the
-//! gpui-kit controls.
+//! The Funda theme, FundaCAD 1's _tokens.scss, _contrast.scss and theme.ts in Rust. `init` once at startup and read
+//! `cx.theme()` in render, a change goes through `update`, which resolves the theme again and redraws every window.
+//! While the choice is System a root view keeps the `follow_system` subscription, so an OS switch comes through too.
+//! `kit` carries the result onto the gpui-kit controls.
 
 pub mod color;
 pub mod fonts;

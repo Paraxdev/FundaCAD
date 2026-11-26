@@ -1,17 +1,5 @@
 //! The native app's link to the engine: one supervised worker process over stdio (docs/ENGINE.md 2.1), a document
 //! the app edits, and every rebuild handed back as plain buffers on an event channel.
-//!
-//! One rebuild runs at a time. Edits made while it runs fold into the next one, so a drag rebuilds the latest value
-//! as soon as the worker is free and never queues up stale ones. A worker that dies is restarted and the rebuild it
-//! was on is sent again, once.
-//!
-//! Revisions: [`Client::load`] and every [`Client::edit`] that changes the document take the next one and return it.
-//! Nothing else moves it, so a resend after a resync or a restart, and [`Client::rebuild`], carry the revision the
-//! document is at. [`Mesh::revision`] and [`Event::Failed`] name the revision that was built. A mesh built from a
-//! document that a later load replaced is dropped.
-//!
-//! The worker builds only the features before the rollback marker that are not suppressed, as `doc::built` cuts
-//! them. The document the client keeps, and edits, is whole.
 
 mod doc;
 mod mesh;
@@ -87,6 +75,17 @@ pub(crate) enum Input {
     Worker(FromWorker),
 }
 
+/// One rebuild runs at a time. Edits made while it runs fold into the next one, so a drag rebuilds the latest value
+/// as soon as the worker is free and never queues up stale ones. A worker that dies is restarted and the rebuild it
+/// was on is sent again, once.
+///
+/// Revisions: [`Client::load`] and every [`Client::edit`] that changes the document take the next one and return it.
+/// Nothing else moves it, so a resend after a resync or a restart, and [`Client::rebuild`], carry the revision the
+/// document is at. [`Mesh::revision`] and [`Event::Failed`] name the revision that was built. A mesh built from a
+/// document that a later load replaced is dropped.
+///
+/// The worker builds only the features before the rollback marker that are not suppressed, as `doc::built` cuts
+/// them. The document the client keeps, and edits, is whole.
 pub struct Client {
     tx: Sender<Input>,
     blob_dir: PathBuf,
