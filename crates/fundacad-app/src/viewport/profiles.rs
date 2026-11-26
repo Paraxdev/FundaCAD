@@ -1,6 +1,9 @@
 //! Finished sketches in the view: the ones shown in Items, and every one while a tool picks their areas, with the area
 //! under the cursor and the ones the running feature holds lit.
 
+#[cfg(test)]
+mod tests;
+
 use glam::DVec2;
 use gpui::*;
 use serde_json::Value;
