@@ -3,7 +3,7 @@ use super::keys::{table, Combo, Ctx};
 use super::{predicate, summary};
 
 fn user(id: &str, key: &str) -> UserKey {
-    UserKey { id: id.into(), key: key.into() }
+    UserKey { id: id.into(), key: key.into(), shift: false, ctrl: false }
 }
 
 fn combo(text: &str) -> Combo {
@@ -68,6 +68,20 @@ fn one_user_key_moves_its_row_first_and_wins_a_clash() {
     let (rows, problems) = apply(table(), &[user("extrude|model|E", "F")]);
     assert_eq!(problems, vec![Problem::Conflict { key: "F".into(), first: "Extrude", second: "Fillet" }]);
     assert_eq!(resolve(&rows, &combo("F"), false).map(|r| r.action), Some("extrude"));
+}
+
+#[test]
+fn fundacad_1_entries_keep_their_modifiers() {
+    let read: Vec<UserKey> = serde_json::from_str(
+        r#"[{"id": "extrude|model|E", "key": "j", "ctrl": true, "shift": true}, {"id": "fillet|model|F", "key": "g"}]"#,
+    )
+    .unwrap();
+    assert_eq!(read[0], UserKey { id: "extrude|model|E".into(), key: "j".into(), shift: true, ctrl: true });
+    let (rows, problems) = apply(table(), &read);
+    assert_eq!(problems, vec![]);
+    let got: Vec<_> = rows.iter().take(2).map(|r| (r.action, r.combo.clone())).collect();
+    assert_eq!(got, vec![("extrude", Some(combo("Ctrl+Shift+J"))), ("fillet", Some(combo("G")))]);
+    assert_eq!(serde_json::to_string(&user("a|model|Q", "Ctrl+Q")).unwrap(), r#"{"id":"a|model|Q","key":"Ctrl+Q"}"#);
 }
 
 #[test]

@@ -12,6 +12,11 @@ pub const SETTING: &str = "keymap";
 pub struct UserKey {
     pub id: String,
     pub key: String,
+    /// FundaCAD 1 stored the modifiers beside a bare key, as `{"key": "b", "ctrl": true}`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub shift: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ctrl: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -69,7 +74,11 @@ pub fn apply(table: Vec<Shortcut>, user: &[UserKey]) -> (Vec<Shortcut>, Vec<Prob
             None
         } else {
             match Combo::parse(&u.key) {
-                Ok(c) => Some(c),
+                Ok(mut c) => {
+                    c.shift |= u.shift;
+                    c.ctrl |= u.ctrl;
+                    Some(c)
+                }
                 Err(why) => {
                     problems.push(Problem::Unreadable { id: u.id.clone(), why });
                     continue;
