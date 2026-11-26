@@ -33,8 +33,20 @@ impl Shell {
                 .pt(px(S_1))
                 .px(px(S_2))
                 .pb(px(6.))
+                .relative()
                 .text_color(if on { t.text } else { t.text_dim })
-                .when(on, |d| d.border_b_2().border_color(t.accent))
+                .when(on, |d| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .left(relative(0.25))
+                            .right(relative(0.25))
+                            .bottom_0()
+                            .h(px(2.))
+                            .rounded(px(R_PILL))
+                            .bg(t.accent),
+                    )
+                })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.items_tab = i;
                     cx.notify();

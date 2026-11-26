@@ -38,7 +38,12 @@ fn main() {
 
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
-        theme::init(theme::Settings::default(), vec![], cx);
+        let mut settings = theme::Settings::default();
+        // FUNDA_THEME=<palette id> picks a palette until the settings store lands, for the light capture.
+        if let Ok(id) = std::env::var("FUNDA_THEME") {
+            settings.choice = id;
+        }
+        theme::init(settings, vec![], cx);
         theme::kit::bind(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),

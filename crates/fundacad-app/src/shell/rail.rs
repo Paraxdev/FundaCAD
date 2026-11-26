@@ -37,7 +37,8 @@ const TOP: &[&[Entry]] = &[
         family("datumPlane", "Construct"),
         family("measure", "Inspect"),
         family("import", "Insert"),
-        family("filament", "Print"),
+        // A plugin group shows its first tool's icon, FundaCAD.Printing's print.
+        family("printing/print", "Print"),
     ],
 ];
 

@@ -147,7 +147,7 @@ mod tests {
             .into_iter()
             .chain(from_doc)
             .chain(super::rail::glyphs())
-            .filter(|g| Assets.load(&format!("icons/forge/{g}.svg")).ok().flatten().is_none())
+            .filter(|g| Assets.load(&crate::ui::icon_path(g)).ok().flatten().is_none())
             .collect();
         assert!(missing.is_empty(), "missing icons: {missing:?}");
     }

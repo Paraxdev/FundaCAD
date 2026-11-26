@@ -10,9 +10,18 @@ pub fn text(t: &Theme, fs: f32) -> Div {
     div().text_size(px(fs)).line_height(line_normal(fs)).text_color(t.text)
 }
 
-/// An icon from the forge pack. An svg does not inherit the text colour, so it takes its own.
+/// A bare name is a forge icon, `pack/name` one a plugin ships, as `printing/print`.
+pub fn icon_path(name: &str) -> String {
+    if name.contains('/') {
+        format!("icons/{name}.svg")
+    } else {
+        format!("icons/forge/{name}.svg")
+    }
+}
+
+/// An svg does not inherit the text colour, so an icon takes its own.
 pub fn icon(name: &str, size: f32, color: impl Into<Hsla>) -> Svg {
-    svg().path(SharedString::from(format!("icons/forge/{name}.svg"))).size(px(size)).flex_none().text_color(color)
+    svg().path(SharedString::from(icon_path(name))).size(px(size)).flex_none().text_color(color)
 }
 
 const ICON_BUTTON: &str = "icon-button";
