@@ -185,9 +185,9 @@ fn predicate(row: &Shortcut) -> String {
         Ctx::Global => "Workspace",
     };
     let combo = row.combo.as_ref();
-    // A bare key or Escape types into or belongs to a focused field, Ctrl combos reach the table from a field too.
-    let bare = combo.is_some_and(|c| !c.ctrl);
-    format!("{ctx}{} && !{MODAL}", if bare { " && !Input" } else { "" })
+    // A focused field keeps every key but the fixed Ctrl ones (save, palette) and the Ctrl digit views, as in FundaCAD 1.
+    let through = combo.is_some_and(|c| c.ctrl && (row.fixed || c.key.chars().all(|k| k.is_ascii_digit())));
+    format!("{ctx}{} && !{MODAL}", if through { "" } else { " && !Input" })
 }
 
 /// The settings key that turns single key shortcuts off, false for off (WCAG 2.1.4).

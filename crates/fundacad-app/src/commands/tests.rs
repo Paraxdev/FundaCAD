@@ -185,6 +185,10 @@ fn bare_keys_wait_for_text_fields_and_every_key_for_overlays() {
     assert_eq!(of("sketch", Ctx::Model), "Model && !Input && !Modal");
     assert_eq!(of("line", Ctx::Sketch), "Sketch && !Input && !Modal");
     assert_eq!(of("save", Ctx::Global), "Workspace && !Modal");
+    assert_eq!(of("palette", Ctx::Global), "Workspace && !Modal");
+    assert_eq!(of("front", Ctx::Global), "Workspace && !Modal");
+    assert_eq!(of("boolean-subtract", Ctx::Model), "Model && !Input && !Modal");
+    assert_eq!(of("show-all-bodies", Ctx::Model), "Model && !Input && !Modal");
     assert_eq!(of("escape", Ctx::Global), "Workspace && !Input && !Modal");
 }
 
