@@ -121,7 +121,9 @@ pub fn rows(doc: &Map<String, Value>, id: &str, issues: &[FeatureIssue]) -> Vec<
     }
     for t in targets::targets_for(ty, f) {
         let entries = targets::read_target(f, &t);
-        out.push(Row::Target { label: t.label, text: targets::describe(&t, &entries), empty: entries.is_empty() });
+        let unset = t.region && entries.is_empty() && f.get("sketch").is_none_or(|k| k.as_str().is_none_or(str::is_empty));
+        let text = if unset { "nothing selected".into() } else { targets::describe(&t, &entries) };
+        out.push(Row::Target { label: t.label, text, empty: entries.is_empty() });
     }
     for c in options::choice_fields(ty).iter().filter(|c| options::field_applies(ty, c.field, f)) {
         let (options, current) = match (ty, c.field) {

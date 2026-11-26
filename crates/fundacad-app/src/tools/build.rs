@@ -54,7 +54,27 @@ fn picked_areas(s: &Selection) -> Option<(String, Vec<Value>)> {
     Some((sketch, points))
 }
 
-/// Extrude on a sketch or its areas, Press/Pull on a face, else an extrude that waits for areas.
+/// The curves a thin wall can follow, FundaCAD 1's WALL_CURVES.
+const WALL_CURVES: &[&str] = &["line", "arc", "circle", "rectangle", "polygon", "slot", "projected"];
+
+/// FundaCAD 1's thinExtrudeOf: a wall 2 mm thick along every curve of a sketch with no closed area.
+fn thin_wall(doc: &Doc, sketch: &str) -> Option<Value> {
+    let curves: Vec<&str> = feature(doc, sketch)?
+        .get("entities")?
+        .as_array()?
+        .iter()
+        .filter(|e| e.get("type").and_then(Value::as_str).is_some_and(|t| WALL_CURVES.contains(&t)))
+        .filter(|e| e.get("construction") != Some(&Value::Bool(true)))
+        .filter_map(|e| e.get("id").and_then(Value::as_str).filter(|id| !id.is_empty()))
+        .collect();
+    (!curves.is_empty()).then(|| {
+        json!({"type": "extrude", "sketch": sketch, "distance": 10, "operation": "new", "thin": true, "curves": curves,
+            "thickness": 2, "side": "center"})
+    })
+}
+
+/// Extrude on a sketch or its areas, a thin wall on a sketch with no closed area, Press/Pull on a face, else an
+/// extrude that waits for areas, refused when no sketch has one.
 pub fn extrude(doc: &Doc, s: &Selection) -> Result<Start, String> {
     if let Some(face) = s.of(PickKind::Face).first() {
         return press_pull(doc, &Selection { picks: vec![(*face).clone()] });
@@ -64,9 +84,15 @@ pub fn extrude(doc: &Doc, s: &Selection) -> Result<Start, String> {
         f["sketch"] = json!(sketch);
         f["regions"] = json!(regions);
     } else if let Some(sketch) = picked_sketch(s) {
+        if crate::sketch::Editor::open(doc, sketch).is_some_and(|e| e.regions().is_empty()) {
+            let wall = thin_wall(doc, sketch).ok_or("The sketch has no curve to extrude")?;
+            return Ok(Start { feature: wall, need: Vec::new() });
+        }
         f["sketch"] = json!(sketch);
         f.as_object_mut().expect("an object").remove("regions");
         return Ok(Start { feature: f, need: Vec::new() });
+    } else if crate::sketch::areas::shown(doc, true, None).iter().all(|k| k.areas.is_empty()) {
+        return Err("Extrude needs a profile, draw a closed sketch first".into());
     }
     Ok(Start { feature: f, need: vec![REGIONS] })
 }

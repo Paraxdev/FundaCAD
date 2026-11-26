@@ -89,9 +89,27 @@ fn extrude_takes_a_face_as_press_pull_a_sketch_whole_its_areas_or_waits_for_area
         json!({"type": "extrude", "distance": 10, "operation": "join", "sketch": "s1", "regions": [[13.0, 5.0, 0.0], [15.0, 6.0, 0.0]]})
     );
     assert_eq!(s.arm(), None);
-    let (_, s) = started(tool("extrude").unwrap(), &doc(json!({})), &sel(vec![])).unwrap();
-    assert_eq!(feat(&s), json!({"type": "extrude", "distance": 10, "operation": "new", "regions": []}));
+    let (_, s) = started(tool("extrude").unwrap(), &d, &sel(vec![])).unwrap();
+    assert_eq!(feat(&s), json!({"type": "extrude", "distance": 10, "operation": "join", "regions": []}));
     assert_eq!(s.arm(), Some(REGIONS));
+}
+
+#[test]
+fn extrude_needs_a_profile_and_walls_an_open_sketch() {
+    let words = "Extrude needs a profile, draw a closed sketch first";
+    assert_eq!(started(tool("extrude").unwrap(), &doc(json!({})), &sel(vec![])).unwrap_err(), words);
+    let d = doc(json!({"features": [path_sketch("p1"), {"id": "p2", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "line", "id": "c1", "x1": 3, "y1": 1, "x2": 9, "y2": 1, "construction": true}]}]}));
+    assert_eq!(started(tool("extrude").unwrap(), &d, &sel(vec![])).unwrap_err(), words);
+    let (_, s) = started(tool("extrude").unwrap(), &d, &sel(vec![Pick::Sketch { feature: "p1".into() }])).unwrap();
+    assert_eq!(
+        feat(&s),
+        json!({"type": "extrude", "sketch": "p1", "distance": 10, "operation": "new", "thin": true, "curves": ["l1"],
+            "thickness": 2, "side": "center"})
+    );
+    assert!(s.need.is_empty());
+    let err = started(tool("extrude").unwrap(), &d, &sel(vec![Pick::Sketch { feature: "p2".into() }])).unwrap_err();
+    assert_eq!(err, "The sketch has no curve to extrude");
 }
 
 #[test]
