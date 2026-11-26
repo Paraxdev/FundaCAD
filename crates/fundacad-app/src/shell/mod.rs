@@ -258,6 +258,7 @@ impl Render for Shell {
             .children(self.history_menu(t, cx))
             .children(self.transfer_modal(t, cx))
             .child(frost_flush(self.viewport.clone()))
+            .child(crate::files::drop::hint(t))
             .child(self.bench.overlay.clone())
     }
 }

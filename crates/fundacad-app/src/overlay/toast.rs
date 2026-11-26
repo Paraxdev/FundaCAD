@@ -148,7 +148,7 @@ impl super::Overlay {
                     .border_1()
                     .border_color(border)
                     .shadow(t.shadow_3.clone())
-                    .child(div().flex_1().child(item.toast.message.clone()))
+                    .child(div().flex_1().min_w_0().child(item.toast.message.clone()))
                     .when_some(action, |d, a| {
                         let accent = t.accent;
                         let wash = t.accent_wash;
