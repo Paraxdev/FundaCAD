@@ -233,6 +233,9 @@ pub fn set_option(doc: &mut Map<String, Value>, id: &str, field: &str, value: &V
     Ok(())
 }
 
+/// FundaCAD 1's draftTool limit, past it the faces fold over.
+const MAX_DRAFT_DEG: f64 = 60.0;
+
 /// A number written where its row points: a parameter through the table, a feature field rounded to what it holds,
 /// and left out again when it is the value an absent field means.
 pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> Result<(), String> {
@@ -249,7 +252,10 @@ pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> 
     if !num_fields(&ty, f).iter().any(|n| &n.key == key) {
         return Err(format!("{key} is no number of {feature}"));
     }
-    let v = fields::coerce(key, value);
+    let mut v = fields::coerce(key, value);
+    if ty == "draft" && key == "angle" {
+        v = v.clamp(-MAX_DRAFT_DEG, MAX_DRAFT_DEG);
+    }
     let left_out = fields::absent_value(&ty, key) == Some(v);
     let next = (!left_out).then(|| crate::document::number(v));
     if fields::read_field(f, key) == next.as_ref() {

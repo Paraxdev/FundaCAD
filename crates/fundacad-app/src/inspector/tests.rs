@@ -427,3 +427,15 @@ fn a_circle_diameter_held_by_a_parameter_reads_its_name_and_stays_read_only() {
         .expect("a diameter row");
     assert_eq!((dia.value, dia.expr.as_deref(), dia.target), (Some(12.0), Some("r"), None));
 }
+
+#[test]
+fn a_draft_angle_is_held_to_sixty_degrees_either_way() {
+    let field = |key: &str| Target::Field { feature: "f2".into(), key: key.into() };
+    let mut d = doc(json!([{"id": "f1", "type": "box"}, {"id": "f2", "type": "draft", "faces": [], "angle": 3, "axis": "Z"}]));
+    set_number(&mut d, &field("angle"), 75.0).unwrap();
+    assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(60)));
+    set_number(&mut d, &field("angle"), -61.5).unwrap();
+    assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(-60)));
+    set_number(&mut d, &field("angle"), 59.5).unwrap();
+    assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(59.5)));
+}
