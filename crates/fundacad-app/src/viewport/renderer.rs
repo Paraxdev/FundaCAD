@@ -37,7 +37,12 @@ pub struct Overlay {
     pub stretch: Option<(usize, Vec3)>,
     /// Bumped whenever the mask changes.
     pub mask_revision: u64,
+    /// Bumped whenever what is selected changes.
+    pub selection_revision: u64,
 }
+
+/// A selected body by scene index, with the faces of it selected, None for the whole body.
+pub type Selected = (usize, Option<Vec<u32>>);
 
 struct Targets {
     size: Size<DevicePixels>,
@@ -51,6 +56,7 @@ struct GpuBody {
     source: Arc<Body>,
     vertices: wgpu::Buffer,
     mask: wgpu::Buffer,
+    selected: wgpu::Buffer,
     vertex_count: usize,
     indices: wgpu::Buffer,
     index_count: u32,
@@ -82,6 +88,7 @@ pub struct Renderer {
     bodies: Vec<GpuBody>,
     scene_revision: u64,
     masked: Option<(usize, u64)>,
+    selected_revision: u64,
     targets: Option<Targets>,
     texture_generation: u64,
     drawn: Option<Drawn>,
@@ -153,6 +160,11 @@ impl Renderer {
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &wgpu::vertex_attr_array![3 => Float32],
                     }),
+                    Some(wgpu::VertexBufferLayout {
+                        array_stride: 4,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![4 => Float32],
+                    }),
                 ],
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -188,6 +200,7 @@ impl Renderer {
             bodies: Vec::new(),
             scene_revision: u64::MAX,
             masked: None,
+            selected_revision: u64::MAX,
             targets: None,
             texture_generation: 0,
             drawn: None,
@@ -210,6 +223,7 @@ impl Renderer {
         }
         self.scene_revision = scene.revision;
         self.masked = None;
+        self.selected_revision = u64::MAX;
         let mut old: Vec<Option<GpuBody>> = std::mem::take(&mut self.bodies).into_iter().map(Some).collect();
         for body in &scene.bodies {
             let kept = old.iter_mut().find(|o| o.as_ref().is_some_and(|o| Arc::ptr_eq(&o.source, &body.source)));
@@ -258,6 +272,11 @@ impl Renderer {
                 bytemuck::cast_slice(&vec![0f32; body.vertices.len().max(1)]),
                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             ),
+            selected: init(
+                "body selection",
+                bytemuck::cast_slice(&vec![0f32; body.vertices.len().max(1)]),
+                wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            ),
             vertex_count: body.vertices.len().max(1),
             indices: init("body indices", bytemuck::cast_slice(&body.indices), wgpu::BufferUsages::INDEX),
             index_count: body.indices.len() as u32,
@@ -275,6 +294,28 @@ impl Renderer {
         if let Some(gpu) = self.bodies.get(body).filter(|g| g.vertex_count == mask.len()) {
             self.queue.write_buffer(&gpu.mask, 0, bytemuck::cast_slice(mask));
             self.masked = Some((body, revision));
+        }
+    }
+
+    fn set_selected(&mut self, scene: &Scene, selected: &[Selected], revision: u64) {
+        if self.selected_revision == revision {
+            return;
+        }
+        self.selected_revision = revision;
+        for (i, gpu) in self.bodies.iter().enumerate() {
+            let Some(body) = scene.bodies.get(i) else { continue };
+            let entry = selected.iter().find(|(b, _)| *b == i);
+            let mut flags: Vec<f32> = body
+                .vertices
+                .iter()
+                .map(|v| match entry {
+                    Some((_, None)) => 1.0,
+                    Some((_, Some(faces))) if faces.contains(&v.face) => 1.0,
+                    _ => 0.0,
+                })
+                .collect();
+            flags.resize(gpu.vertex_count, 0.0);
+            self.queue.write_buffer(&gpu.selected, 0, bytemuck::cast_slice(&flags));
         }
     }
 
@@ -352,10 +393,12 @@ impl Renderer {
         camera: &Camera,
         overlay: &Overlay,
         mask: Option<&[f32]>,
+        selected: &[Selected],
         size: Size<DevicePixels>,
     ) -> u32 {
         self.ensure_targets(size);
         self.sync(scene);
+        self.set_selected(scene, selected, overlay.selection_revision);
         if let (Some((body, _)), Some(mask)) = (overlay.stretch, mask) {
             self.set_mask(body, mask, overlay.mask_revision);
         }
@@ -419,6 +462,7 @@ impl Renderer {
                     pass.set_bind_group(1, group, &[(self.body_stride * i as u64) as u32]);
                     pass.set_vertex_buffer(0, body.vertices.slice(..));
                     pass.set_vertex_buffer(1, body.mask.slice(..));
+                    pass.set_vertex_buffer(2, body.selected.slice(..));
                     pass.set_index_buffer(body.indices.slice(..), wgpu::IndexFormat::Uint32);
                     pass.draw_indexed(0..body.index_count, 0, 0..1);
                 }

@@ -12,6 +12,8 @@ mod items;
 mod overlay;
 mod plastic;
 mod recovery;
+mod ribbon;
+mod selection;
 mod settings;
 mod shell;
 #[cfg(feature = "shot")]
@@ -19,6 +21,7 @@ mod shot;
 mod sketch;
 mod theme;
 mod timeline;
+mod tools;
 mod ui;
 mod viewport;
 mod workbench;

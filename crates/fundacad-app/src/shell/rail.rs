@@ -45,7 +45,9 @@ const TOP: &[&[Entry]] = &[
 const FOOT: &[Entry] =
     &[toggle("isolate", "Isolate", "Off"), toggle("section", "Section View", "Off"), tool("measure", "Measure", &[])];
 
-fn row(t: &Theme, e: &Entry) -> Div {
+type OnFamily = std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)>;
+
+fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on_family: &OnFamily) -> AnyElement {
     let corner = t.text_mute;
     let tile = tile(t, RAIL_TILE).relative().child(icon(e.glyph, 22., t.text)).when(e.family, |d| {
         d.child(
@@ -98,11 +100,26 @@ fn row(t: &Theme, e: &Entry) -> Div {
                 .when(!e.keys.is_empty(), |d| d.child(div().flex().gap(px(3.)).children(e.keys.iter().map(key)))),
         )
         .when_some(e.sub, |d, sub| d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(t.text_mute).child(sub)));
-    div().flex().items_center().gap(px(6.)).child(tile).child(pill)
+    let row = div().flex().items_center().gap(px(6.)).child(tile.when(open == Some(e.label), |d| d.bg(t.accent_wash))).child(pill);
+    if !e.family {
+        return row.into_any_element();
+    }
+    let f = on_family.clone();
+    let label = e.label;
+    // The tile and the pill occlude the view, which would hide the row's own hitbox, so a cover on top takes the click.
+    let cover = div()
+        .id(ElementId::Name(format!("rail:{label}").into()))
+        .absolute()
+        .inset_0()
+        .cursor_pointer()
+        .on_click(move |_, window, cx| f(label, window, cx));
+    row.relative().child(cover).into_any_element()
 }
 
-pub(super) fn rail(t: &Theme) -> Div {
-    let section = |entries: &[Entry]| div().flex().flex_col().gap(px(GAP)).children(entries.iter().map(|e| row(t, e)));
+pub(super) fn rail(t: &Theme, open: Option<&str>, on_family: OnFamily) -> Div {
+    let section = |entries: &'static [Entry]| {
+        div().flex().flex_col().gap(px(GAP)).children(entries.iter().map(|e| row(t, e, open, &on_family)))
+    };
     div()
         .h_full()
         .flex()

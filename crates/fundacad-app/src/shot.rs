@@ -1,7 +1,7 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
 //! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
-//! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` and `move:<x>,<y>` in window
-//! pixels, or `wait:<ms>`.
+//! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` (`,ctrl` or `,shift` to add),
+//! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, or `wait:<ms>`.
 
 use std::time::Duration;
 
@@ -16,6 +16,13 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
         for step in steps.split(';').map(str::trim).filter(|s| !s.is_empty()) {
             if let Some(ms) = step.strip_prefix("wait:").and_then(|ms| ms.parse().ok()) {
                 cx.background_executor().timer(Duration::from_millis(ms)).await;
+                continue;
+            }
+            if let Some(at) = step.strip_prefix("click:") {
+                // A frame between press and release, GPUI's on_click only sees a release once a press was painted.
+                let _ = window.update(cx, |_, window, cx| mouse(at, Some(true), window, cx));
+                cx.background_executor().timer(Duration::from_millis(100)).await;
+                let _ = window.update(cx, |_, window, cx| mouse(at, Some(false), window, cx));
                 continue;
             }
             let _ = window.update(cx, |_, window, cx| run_step(step, window, cx));
@@ -41,27 +48,15 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     } else if let Some(text) = step.strip_prefix("toast:") {
         let toast = crate::overlay::Toast::info(text.to_string()).with_action("Undo", |_, _| {});
         crate::overlay::toast(cx, toast);
-    } else if let Some(at) = step.strip_prefix("click:").or_else(|| step.strip_prefix("move:")) {
-        use gpui::{px, point, MouseButton, PlatformInput};
-        let Some((x, y)) = at.split_once(',').and_then(|(x, y)| Some((x.trim().parse::<f32>().ok()?, y.trim().parse::<f32>().ok()?))) else {
-            return log::error!("shot: {step}: not x,y");
-        };
-        let position = point(px(x), px(y));
-        let modifiers = gpui::Modifiers::default();
-        let moved = gpui::MouseMoveEvent { position, pressed_button: None, modifiers };
-        window.dispatch_event(PlatformInput::MouseMove(moved), cx);
-        if step.starts_with("click:") {
-            let (button, click_count, first_mouse) = (MouseButton::Left, 1, false);
-            let down = gpui::MouseDownEvent { button, position, modifiers, click_count, first_mouse };
-            window.dispatch_event(PlatformInput::MouseDown(down), cx);
-            let up = gpui::MouseUpEvent { button, position, modifiers, click_count };
-            window.dispatch_event(PlatformInput::MouseUp(up), cx);
-        }
+    } else if let Some(at) = step.strip_prefix("move:") {
+        mouse(at, None, window, cx);
     } else if let Some(key) = step.strip_prefix("key:") {
         match gpui::Keystroke::parse_with_os(key, cx.platform_info().os) {
             Ok(k) => drop(window.dispatch_keystroke(k, cx)),
             Err(e) => log::error!("shot: {key}: {e:?}"),
         }
+    } else if let Some(at) = step.strip_prefix("hover:") {
+        mouse(at, None, window, cx);
     } else if let Some(question) = step.strip_prefix("ask:") {
         use crate::overlay::Choice;
         let choices = vec![
@@ -73,4 +68,28 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     } else {
         crate::commands::run(step, window, cx);
     }
+}
+
+fn mouse(at: &str, press: Option<bool>, window: &mut gpui::Window, cx: &mut App) {
+    use gpui::{point, px, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput};
+    let mut parts = at.split(',').map(str::trim);
+    let (Some(Ok(x)), Some(Ok(y))) = (parts.next().map(str::parse::<f32>), parts.next().map(str::parse::<f32>)) else {
+        return log::error!("shot: click:{at} wants x,y");
+    };
+    let modifiers = match parts.next() {
+        Some("ctrl") => Modifiers { control: true, ..Default::default() },
+        Some("shift") => Modifiers { shift: true, ..Default::default() },
+        _ => Modifiers::default(),
+    };
+    let position = point(px(x), px(y));
+    let button = MouseButton::Left;
+    let event = match press {
+        None => PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }),
+        Some(true) => {
+            window.dispatch_event(PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }), cx);
+            PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count: 1, first_mouse: false })
+        }
+        Some(false) => PlatformInput::MouseUp(MouseUpEvent { button, position, modifiers, click_count: 1 }),
+    };
+    window.dispatch_event(event, cx);
 }

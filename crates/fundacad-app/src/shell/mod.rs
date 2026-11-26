@@ -8,9 +8,11 @@ mod items;
 mod modal;
 mod params;
 mod rail;
+mod rail_menu;
 mod timeline;
 mod titlebar;
 mod transfer;
+mod tool_card;
 
 use std::collections::HashMap;
 
@@ -46,6 +48,8 @@ pub struct Shell {
     bench: crate::workbench::Bench,
     params: Entity<params::ParamsPanel>,
     transfer: transfer::Transfer,
+    /// The rail family whose tools are listed.
+    rail_open: Option<&'static str>,
     _system: Subscription,
 }
 
@@ -65,6 +69,7 @@ impl Shell {
         crate::commands::register(cx, "parameters", "Parameters", crate::commands::Group::Tools, move |_, cx| {
             p.update(cx, |p, cx| p.toggle(cx))
         });
+        tool_card::install(&viewport, cx);
         let mut shell = Self {
             viewport,
             doc,
@@ -79,6 +84,7 @@ impl Shell {
             bench,
             params,
             transfer: transfer::Transfer::new(cx),
+            rail_open: None,
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -203,7 +209,14 @@ impl Render for Shell {
             .flex()
             .gap(gap)
             .child(self.items_card(t, window, cx))
-            .child(rail::rail(t));
+            .child({
+                let e = cx.entity();
+                let on_family: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
+                    std::rc::Rc::new(move |label, _, cx| e.update(cx, |s, cx| s.toggle_family(label, cx)));
+                div().relative().h_full().child(rail::rail(t, self.rail_open, on_family)).children(
+                    self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
+                )
+            });
         let right = div()
             .absolute()
             .top(gap)
@@ -213,6 +226,7 @@ impl Render for Shell {
             .items_start()
             .gap(gap)
             .child(self.view_controls(t))
+            .children(self.tool_card(t, window, cx))
             .child(self.history_card(t, window, cx));
         let status = self.viewport.read(cx).status();
         let status = div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(

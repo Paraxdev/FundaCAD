@@ -17,6 +17,7 @@ struct Varying {
   @location(0) world: vec3<f32>,
   @location(1) normal: vec3<f32>,
   @location(2) @interpolate(flat) face: u32,
+  @location(3) selected: f32,
 }
 
 @vertex
@@ -25,6 +26,7 @@ fn vs(
   @location(1) normal: vec3<f32>,
   @location(2) face: u32,
   @location(3) mask: f32,
+  @location(4) selected: f32,
 ) -> Varying {
   var out: Varying;
   let world = position + body.offset.xyz * mask;
@@ -32,6 +34,7 @@ fn vs(
   out.world = world;
   out.normal = normal;
   out.face = face;
+  out.selected = selected;
   return out;
 }
 
@@ -45,6 +48,9 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
   let key = normalize(vec3<f32>(0.4, -0.5, 0.8));
   let fill = normalize(vec3<f32>(-0.6, 0.4, 0.2));
   var base = vec3<f32>(0.62, 0.66, 0.72);
+  if (in.selected > 0.5) {
+    base = vec3<f32>(0.36, 0.56, 0.98);
+  }
   if (body.hover.x >= 0 && u32(body.hover.x) == in.face) {
     if (body.hover.y == 1) {
       base = vec3<f32>(0.6, 0.62, 0.94);

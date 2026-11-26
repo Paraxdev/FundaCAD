@@ -12,6 +12,7 @@ use serde_json::{Map, Value};
 pub use fields::{num_fields, value_problem, Kind, Rule};
 pub use options::Choice;
 pub use parse::parse;
+pub use targets::TargetKind;
 
 use crate::document::Target;
 use crate::viewport::FeatureIssue;
@@ -141,6 +142,12 @@ pub fn rows(doc: &Map<String, Value>, id: &str, issues: &[FeatureIssue]) -> Vec<
         out.push(Row::Number(num_row(doc, f, ty, n)));
     }
     out
+}
+
+/// The field and kind behind the Target row labelled `label` of feature `id`.
+pub fn target_field(doc: &Map<String, Value>, id: &str, label: &str) -> Option<(&'static str, TargetKind)> {
+    let f = features(doc).into_iter().find(|f| id_of(f) == id)?;
+    targets::targets_for(type_of(f), f).into_iter().find(|t| t.label == label).map(|t| (t.field, t.kind))
 }
 
 fn num_row(doc: &Map<String, Value>, f: &Feature, ty: &str, n: fields::NumField) -> NumRow {
