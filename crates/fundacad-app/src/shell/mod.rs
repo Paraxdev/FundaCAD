@@ -29,6 +29,8 @@ pub struct Shell {
     source: Option<Doc>,
     /// The transport moved the marker, so it is the shell's until the document says otherwise.
     marker_moved: bool,
+    /// The viewport's count of documents opened when `doc` was read, so a new one starts with the marker at its end.
+    opened: u64,
     fields: HashMap<String, Field>,
     items_tab: usize,
     /// The History step whose values show under it.
@@ -53,6 +55,7 @@ impl Shell {
             doc,
             source: None,
             marker_moved: false,
+            opened: 0,
             fields: HashMap::new(),
             items_tab: 0,
             open: None,
@@ -67,7 +70,14 @@ impl Shell {
     /// Reads the shown document again when the viewport's has changed.
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let viewport = self.viewport.read(cx);
-        let Some(doc) = viewport.doc() else { return };
+        if viewport.opened() != self.opened {
+            self.opened = viewport.opened();
+            self.marker_moved = false;
+            self.open = None;
+        }
+        // An STL has no steps, so History empties instead of keeping the last document's.
+        let empty = Doc::new();
+        let doc = viewport.doc().unwrap_or(&empty);
         if self.source.as_ref() == Some(doc) {
             return;
         }

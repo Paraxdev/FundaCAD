@@ -100,8 +100,9 @@ pub struct Viewport {
     hover: Option<(Hit, Result<Grip, String>)>,
     push: Option<Push>,
     mask_revision: u64,
-    /// Counts every change to the open document, so a watcher can skip a redraw.
+    /// Counts every change to the open document, and `opened` every document opened, so watchers skip a redraw.
     changes: u64,
+    opened: u64,
     background: [u8; 3],
     frosted: Vec<Frost>,
     issues: Vec<FeatureIssue>,
@@ -144,6 +145,7 @@ impl Viewport {
             push: None,
             mask_revision: 0,
             changes: 0,
+            opened: 0,
             background: [23, 26, 31],
             frosted: Vec::new(),
             issues: Vec::new(),
@@ -184,6 +186,7 @@ impl Viewport {
             }
         };
         self.changes += 1;
+        self.opened += 1;
         self.issues.clear();
         self.undo = UndoStack::default();
         self.push = None;
@@ -225,6 +228,10 @@ impl Viewport {
 
     pub fn changes(&self) -> u64 {
         self.changes
+    }
+
+    pub fn opened(&self) -> u64 {
+        self.opened
     }
 
     /// The open document as the app sees it, edits included before the engine has built them.
