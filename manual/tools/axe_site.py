@@ -1,6 +1,6 @@
 """Runs axe-core over every page of the built manual, once light with motion and once dark with reduced motion.
 
-    python manual/tools/axe_site.py manual/site [--chrome /usr/bin/google-chrome] [--lower]
+    python manual/tools/axe_site.py manual/site [--chrome /usr/bin/google-chrome] [--lower] [--baseline <json>]
 
 Each page must stay within manual/tools/axe-baseline.json, which only shrinks: --lower writes what is found. It also
 checks that the site starts dark on a light or a dark system, that a light choice made on the first page holds on
@@ -81,7 +81,12 @@ def serve(site: Path) -> http.server.ThreadingHTTPServer:
     return server
 
 
+# A page fading in would be measured half transparent, so axe waits for the entrance to end (3 s at most).
+SETTLE = "() => Promise.race([Promise.all(document.getAnimations().map(a => a.finished)), new Promise(r => setTimeout(r, 3000))])"
+
+
 def axe(page) -> dict[str, list[dict]]:
+    page.evaluate(SETTLE)
     load_axe(page)
     return page.evaluate(RUN, list(AXE_TAGS))
 
@@ -140,17 +145,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("site", type=Path, help="the folder zensical build wrote")
     ap.add_argument("--chrome", default=os.environ.get("FUNDACAD_CHROME"), help="a Chrome to run, Playwright's own by default")
     ap.add_argument("--lower", action="store_true", help="lower the baseline to what is found, never raise it")
+    ap.add_argument("--baseline", type=Path, default=BASELINE, help="the baseline to hold the pages to")
     args = ap.parse_args(argv)
+    baseline = args.baseline
 
     if not page_urls(args.site):
-        print(f"no pages in {args.site}, run zensical build first")
+        print(f"no pages in {args.site}, build the site first")
         return 1
-    allowed: dict[str, dict[str, int]] = json.loads(BASELINE.read_text(encoding="utf-8")) if BASELINE.exists() else {}
+    allowed: dict[str, dict[str, int]] = json.loads(baseline.read_text(encoding="utf-8")) if baseline.exists() else {}
     found, problems, details = walk(args.site, args.chrome)
 
     if args.lower:
         allowed = {k: c for k in sorted(allowed) if (c := lowered(found.get(k, {}), allowed[k]))}
-        BASELINE.write_text(json.dumps(allowed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        baseline.write_text(json.dumps(allowed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     lines = list(problems)
     for key in sorted(set(found) | set(allowed)):
@@ -170,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"manual axe: {len(problems)} problem(s) over {pages} pages in {len(MODES)} modes\n")
         print("\n".join(lines))
         return 1
-    print(f"manual axe: {pages} pages in {len(MODES)} modes, nothing over manual/tools/axe-baseline.json")
+    print(f"manual axe: {pages} pages in {len(MODES)} modes, nothing over {baseline.as_posix()}")
     return 0
 
 
