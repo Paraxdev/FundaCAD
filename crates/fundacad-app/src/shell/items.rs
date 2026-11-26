@@ -100,6 +100,18 @@ fn folder_category(key: &str) -> Option<Category> {
 }
 
 /// The change an eye makes, a folder head's eye standing for every body under it.
+/// "Hide 2 items" for undo, which a diff of the document cannot word.
+fn vis_label(edits: &[VisEdit]) -> String {
+    let changes: Vec<bool> = edits.iter().flat_map(|(_, c, _)| c.iter().map(|(_, v)| *v)).collect();
+    let n = changes.len();
+    let verb = match (changes.iter().all(|v| *v), changes.iter().all(|v| !v)) {
+        (true, _) => "Show",
+        (_, true) => "Hide",
+        _ => return "Visibility".into(),
+    };
+    format!("{verb} {n} {}", if n == 1 { "item" } else { "items" })
+}
+
 fn eye_edit(eye: &Eye, visible: bool) -> VisEdit {
     let groups = if eye.ids.is_empty() { HashMap::new() } else { HashMap::from([(eye.key.clone(), eye.ids.clone())]) };
     (eye.category, vec![(eye.key.clone(), visible)], groups)
@@ -195,8 +207,11 @@ impl Shell {
     }
 
     fn set_vis(&mut self, edits: Vec<VisEdit>, cx: &mut Context<Self>) {
+        let label = vis_label(&edits);
         let edited = self.viewport.update(cx, |v, cx| {
-            v.edit(
+            v.edit_step(
+                None,
+                Some(label),
                 move |d| {
                     for (category, changes, groups) in &edits {
                         items::set_visibility(d, *category, changes, groups)?;
@@ -365,7 +380,9 @@ impl Shell {
         let name = r.input.read(cx).value().to_string();
         if name.trim() != r.before.trim() {
             let target = r.target.clone();
-            let edited = self.viewport.update(cx, |v, cx| v.edit(move |d| items::rename(d, &target, &name), cx));
+            let label = Some(format!("Rename {}", r.before.trim()));
+            let edited =
+                self.viewport.update(cx, |v, cx| v.edit_step(None, label, move |d| items::rename(d, &target, &name), cx));
             if let Err(why) = edited {
                 log::info!("the rename was not applied: {why}");
             }
@@ -666,5 +683,20 @@ impl Shell {
             )
             .child(div().flex().justify_end().p(px(S_2)).child(more))
             .children(menu)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{vis_label, Category};
+
+    #[test]
+    fn a_visibility_change_is_worded_for_undo() {
+        let edit = |c: &[bool]| (Category::Bodies, c.iter().map(|v| ("b".to_string(), *v)).collect(), HashMap::new());
+        assert_eq!(vis_label(&[edit(&[false])]), "Hide 1 item");
+        assert_eq!(vis_label(&[edit(&[true, true])]), "Show 2 items");
+        assert_eq!(vis_label(&[edit(&[true]), edit(&[false])]), "Visibility");
     }
 }

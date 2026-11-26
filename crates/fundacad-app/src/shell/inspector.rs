@@ -120,7 +120,10 @@ impl Shell {
             }
         };
         self.inspector.problems.remove(key);
-        let edited = self.viewport.update(cx, |v, cx| v.edit(move |d| model::set_number(d, &target, value), cx));
+        let step = self.open_rows(cx).map(|(id, _)| crate::timeline::labels::name_of(&self.timeline.doc, &id));
+        let label = step.map(|s| format!("{} of {s}", n.label.to_lowercase()));
+        let edited =
+            self.viewport.update(cx, |v, cx| v.edit_step(None, label, move |d| model::set_number(d, &target, value), cx));
         if let Err(why) = edited {
             log::info!("the edit was not applied: {why}");
         }
