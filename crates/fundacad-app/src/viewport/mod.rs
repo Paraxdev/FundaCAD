@@ -100,6 +100,8 @@ pub struct Viewport {
     hover: Option<(Hit, Result<Grip, String>)>,
     push: Option<Push>,
     mask_revision: u64,
+    /// Counts every change to the open document, so a watcher can skip a redraw.
+    changes: u64,
     background: [u8; 3],
     frosted: Vec<Frost>,
     issues: Vec<FeatureIssue>,
@@ -141,6 +143,7 @@ impl Viewport {
             hover: None,
             push: None,
             mask_revision: 0,
+            changes: 0,
             background: [23, 26, 31],
             frosted: Vec::new(),
             issues: Vec::new(),
@@ -180,6 +183,7 @@ impl Viewport {
                 return Err(e);
             }
         };
+        self.changes += 1;
         self.issues.clear();
         self.undo = UndoStack::default();
         self.push = None;
@@ -219,6 +223,10 @@ impl Viewport {
         self.session.as_ref().map(|s| s.blob_dir.as_path())
     }
 
+    pub fn changes(&self) -> u64 {
+        self.changes
+    }
+
     /// The open document as the app sees it, edits included before the engine has built them.
     pub fn doc(&self) -> Option<&Doc> {
         self.session.as_ref().map(|s| &s.doc)
@@ -243,6 +251,7 @@ impl Viewport {
         let before = session.doc.clone();
         let edited = session.edit(f)?;
         if edited.is_some() {
+            self.changes += 1;
             self.undo.record(before, None);
         }
         self.hover = None;
@@ -281,6 +290,7 @@ impl Viewport {
         }) {
             self.message = Some(e);
         }
+        self.changes += 1;
         self.push = None;
         self.hover = None;
         cx.notify();
@@ -539,7 +549,10 @@ impl Viewport {
         let grip = p.grip.clone();
         if let Some(session) = &mut self.session {
             match session.edit(move |d| grip.apply(d, value)) {
-                Ok(Some(revision)) => p.sent.push((revision, value)),
+                Ok(Some(revision)) => {
+                    p.sent.push((revision, value));
+                    self.changes += 1;
+                }
                 Ok(None) => {}
                 Err(e) => self.message = Some(e),
             }

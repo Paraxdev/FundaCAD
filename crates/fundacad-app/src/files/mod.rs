@@ -146,12 +146,14 @@ pub struct Files {
     /// The window may close without asking, the person has answered already.
     closing: bool,
     title: String,
+    /// The viewport's change count `dirty` was worked out at, None when it must be worked out again.
+    checked: Option<u64>,
 }
 
 impl Files {
     pub fn new(viewport: Entity<Viewport>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.observe_in(&viewport, window, |this, _, window, cx| this.refresh(window, cx)).detach();
-        Self { viewport, path: None, saved: None, dirty: false, closing: false, title: String::new() }
+        Self { viewport, path: None, saved: None, dirty: false, closing: false, title: String::new(), checked: None }
     }
 
     pub fn name(&self) -> SharedString {
@@ -167,7 +169,14 @@ impl Files {
     }
 
     fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let dirty = is_dirty(self.viewport.read(cx).doc(), self.saved.as_ref());
+        let viewport = self.viewport.read(cx);
+        let changes = viewport.changes();
+        let dirty = if self.checked == Some(changes) {
+            self.dirty
+        } else {
+            self.checked = Some(changes);
+            is_dirty(viewport.doc(), self.saved.as_ref())
+        };
         let title = window_title(&self.name(), dirty);
         if dirty != self.dirty || title != self.title {
             self.dirty = dirty;
@@ -181,6 +190,7 @@ impl Files {
     fn mark_saved(&mut self, path: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
         self.saved = self.viewport.read(cx).doc().cloned();
         self.path = path;
+        self.checked = None;
         self.refresh(window, cx);
     }
 
