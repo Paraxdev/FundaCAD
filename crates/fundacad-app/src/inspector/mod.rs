@@ -1,6 +1,7 @@
 //! The rows of one feature, FeatureProperties.vue's model: what the build said of it, what it is applied to, its
 //! choices, switches and numbers, and the document edit behind each. A sketch's numbers are its dimensions, file rows come only from plugins.
 
+mod build_rows;
 mod fields;
 mod hole;
 mod options;
@@ -120,13 +121,17 @@ pub fn rows(doc: &Map<String, Value>, id: &str, issues: &[FeatureIssue]) -> Vec<
     }
     for t in targets::targets_for(ty, f) {
         let entries = targets::read_target(f, &t);
-        out.push(Row::Target { label: t.label, text: targets::describe(&t, &entries), empty: entries.is_empty() });
+        let unset = t.region && entries.is_empty() && f.get("sketch").is_none_or(|k| k.as_str().is_none_or(str::is_empty));
+        let text = if unset { "nothing selected".into() } else { targets::describe(&t, &entries) };
+        out.push(Row::Target { label: t.label, text, empty: entries.is_empty() });
     }
     for c in options::choice_fields(ty).iter().filter(|c| options::field_applies(ty, c.field, f)) {
         let (options, current) = match (ty, c.field) {
             ("patternCircular", "axis") => options::pattern_axis_choice(f, &all),
             ("mechanism", "drive") => options::mechanism_drive_choice(f),
             ("split", "plane") => options::modify::split_plane_choice(f, &all),
+            ("revolve", "axis") => build_rows::revolve_axis_choice(doc, f, &all),
+            ("sweep", "path") => build_rows::sweep_path_choice(f, &all),
             _ => options::datum_choice_row(ty, f, c.field, &all).unwrap_or_else(|| {
                 (
                     c.options.iter().map(|&(v, l)| Choice { value: v.into(), label: l.into() }).collect(),
@@ -202,6 +207,12 @@ pub fn option_patch(doc: &Map<String, Value>, id: &str, field: &str, value: &Val
     }
     if matches!(ty, "move" | "duplicate") && field == "copy" {
         patch = options::modify::copy_patch(value == &Value::Bool(true));
+    }
+    if ty == "revolve" && field == "axis" {
+        patch = build_rows::revolve_axis_patch(doc, f, &features(doc), s)?;
+    }
+    if ty == "sweep" && field == "path" && s.is_empty() {
+        return None;
     }
     if ty == "mechanism" && field == "drive" {
         patch = options::mechanism_drive_patch(s);

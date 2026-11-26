@@ -36,7 +36,7 @@ fn an_edge_selector_finds_the_nearest_edge_and_its_midpoint() {
     let at = json!({"kind": "edge", "by": "nearest", "point": [7.0, 2.5, 5.0], "body": "body1"});
     assert_eq!(
         resolve(&scene(), &lines(), &at),
-        Some(Pick::Edge { body: "body1".into(), edge: 1, mid: [7.0, 1.5, 5.0] })
+        Some(Pick::Edge { body: "body1".into(), edge: 1, mid: [7.0, 1.5, 5.0], dir: Some([0.0, 1.0, 0.0]) })
     );
     let bent = json!({"kind": "edge", "by": "nearest", "point": [2.1, 4.0, 3.25], "body": "body1"});
     assert!(matches!(resolve(&scene(), &lines(), &bent), Some(Pick::Edge { edge: 2, .. })));

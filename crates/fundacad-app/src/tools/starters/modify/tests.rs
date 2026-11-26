@@ -12,7 +12,7 @@ fn face(body: &str, face: u32, point: [f32; 3], normal: [f32; 3]) -> Pick {
 }
 
 fn edge(body: &str, edge: u32, mid: [f32; 3]) -> Pick {
-    Pick::Edge { body: body.into(), edge, mid }
+    Pick::Edge { body: body.into(), edge, mid, dir: None }
 }
 
 fn body(b: &str) -> Pick {

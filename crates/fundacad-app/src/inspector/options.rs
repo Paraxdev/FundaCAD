@@ -129,7 +129,12 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
         "loft" => const { &[choice("operation", "Operation", BOOLEAN_OPS, "new")] },
         // The builder has no sweep intersect.
         "sweep" => {
-            const { &[choice("operation", "Operation", &[("new", "New body"), ("join", "Join"), ("cut", "Cut")], "new")] }
+            const {
+                &[
+                    choice("operation", "Operation", &[("new", "New body"), ("join", "Join"), ("cut", "Cut")], "new"),
+                    choice("path", "Path", &[], ""),
+                ]
+            }
         }
         "thicken" => const { &[choice("operation", "Operation", &[("new", "New body"), ("join", "Join")], "join")] },
         "mirror" => const { &[choice("plane", "Plane", PLANES, "XY")] },

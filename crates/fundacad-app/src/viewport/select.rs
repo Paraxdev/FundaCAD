@@ -138,7 +138,8 @@ impl Viewport {
         let edge = best.and_then(|(bi, n)| {
             let mid = edges::midpoint(&self.picking.lines[bi][n.edge])?;
             let body = self.scene.bodies[bi].source.id.clone();
-            Some((bi, n.edge, Pick::Edge { body, edge: n.edge as u32, mid: mid.to_array() }))
+            let dir = edges::straight(&self.picking.lines[bi][n.edge]).map(|d| d.to_array());
+            Some((bi, n.edge, Pick::Edge { body, edge: n.edge as u32, mid: mid.to_array(), dir }))
         });
         (face, edge)
     }
@@ -164,8 +165,11 @@ impl Viewport {
             let pick = match arm.kind {
                 PickKind::Edge if arm.field == "axisRef" => edge.or(face),
                 PickKind::Edge => edge,
-                PickKind::Face | PickKind::Plane => face,
+                PickKind::Face if self.arm_takes_plane() => self.plane_pick(position).or(face),
+                PickKind::Face | PickKind::Point => face,
                 PickKind::Body => body,
+                PickKind::Area => self.area_pick(position),
+                PickKind::Plane => self.plane_pick(position).or(face),
                 PickKind::Sketch => None,
             };
             if let Some(pick) = pick {
@@ -173,7 +177,7 @@ impl Viewport {
             }
             return;
         }
-        let pick = selection::resolve(self.picking.filter, &self.picking.selection, face, edge);
+        let pick = self.plane_pick(position).or_else(|| selection::resolve(self.picking.filter, &self.picking.selection, face, edge));
         let before = self.picking.selection.clone();
         self.picking.selection.click(pick, mods);
         if before != self.picking.selection {

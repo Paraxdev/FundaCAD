@@ -7,7 +7,7 @@ fn face(body: &str, face: u32) -> Pick {
 }
 
 fn edge(body: &str, edge: u32) -> Pick {
-    Pick::Edge { body: body.into(), edge, mid: [12.0, 4.5, -1.0] }
+    Pick::Edge { body: body.into(), edge, mid: [12.0, 4.5, -1.0], dir: None }
 }
 
 const PLAIN: Mods = Mods { ctrl: false, shift: false };

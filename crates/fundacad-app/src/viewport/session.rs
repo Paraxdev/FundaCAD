@@ -4,7 +4,7 @@ use gpui::*;
 
 use super::resolve::resolve;
 use super::Viewport;
-use crate::selection::Pick;
+use crate::selection::{Pick, PickKind};
 use crate::tools::{self, Target};
 
 pub use crate::tools::run::Run as ToolRun;
@@ -23,6 +23,11 @@ impl Viewport {
         self.tool.as_ref()?.arm
     }
 
+    pub(super) fn arm_takes_plane(&self) -> bool {
+        let (Some(tool), Some(doc)) = (self.tool.as_ref(), self.doc()) else { return false };
+        tool.arm.is_some_and(|a| tools::build::takes_plane(doc, &tool.feature, a.field))
+    }
+
     /// Starts a tool on `feature` after `f` edits the document, which may add it. Refused while another runs.
     pub fn begin_tool(
         &mut self,
@@ -38,6 +43,9 @@ impl Viewport {
         }
         if self.push.is_some() {
             return Err("a face is being pushed".into());
+        }
+        if self.sketching() {
+            return Err("finish the sketch first".into());
         }
         let session = self.session.as_mut().ok_or("no document is open")?;
         let before = session.doc.clone();
@@ -115,9 +123,26 @@ impl Viewport {
         let Some(arm) = tool.arm else { return };
         let had = self.doc().and_then(|d| {
             let held = tools::entries(d, &tool.feature, arm.field);
-            held.into_iter().find(|e| resolve(&self.scene, self.picking.lines(), e).is_some_and(|p| p.same(&pick)))
+            if let (PickKind::Point, Pick::Face { point, .. }) = (arm.kind, &pick) {
+                // At least 8 pixels, so a small hole is still a target, and about an M3 hole's radius.
+                let reach = (self.camera.per_pixel(self.bounds.size.height.as_f32()) * 8.0).max(1.7);
+                return tools::build::point_near(&held, *point, reach as f64);
+            }
+            held.into_iter().find(|e| {
+                resolve(&self.scene, self.picking.lines(), e).is_some_and(|p| p.same(&pick))
+                    || self.holds_area(&tool.feature, e, &pick)
+            })
         });
-        if let Some(Err(why)) = self.run_edit(|r, d| r.pick(d, value, had), cx) {
+        let field = arm.field;
+        let picked = pick.clone();
+        let edit = |r: &mut ToolRun, d: &mut tools::Doc| {
+            let feature = r.feature.clone();
+            if had.is_none() {
+                tools::build::fits(d, &feature, field, &picked)?;
+            }
+            r.pick(d, value, had.clone()).map(|_| if had.is_none() { tools::build::after_pick(d, &feature, field, &picked) })
+        };
+        if let Some(Err(why)) = self.run_edit(edit, cx) {
             self.say(why, cx);
         }
     }

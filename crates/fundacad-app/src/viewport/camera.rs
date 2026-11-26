@@ -47,9 +47,14 @@ impl Camera {
         self.pitch = (self.pitch + delta.y * 0.008).clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
+    /// The world size of one logical pixel at the orbit target, for a viewport `height` pixels tall.
+    pub fn per_pixel(&self, height: f32) -> f32 {
+        2.0 * self.distance * (FOV_Y * 0.5).tan() / height.max(1.0)
+    }
+
     /// Pan so the point under the cursor follows it, for a viewport `height` logical pixels tall.
     pub fn pan(&mut self, delta: Vec2, height: f32) {
-        let per_pixel = 2.0 * self.distance * (FOV_Y * 0.5).tan() / height.max(1.0);
+        let per_pixel = self.per_pixel(height);
         let view = self.view();
         let right = view.row(0).truncate();
         let up = view.row(1).truncate();

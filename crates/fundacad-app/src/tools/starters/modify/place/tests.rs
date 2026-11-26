@@ -12,7 +12,7 @@ fn face(point: [f32; 3], normal: [f32; 3]) -> Pick {
 }
 
 fn edge(mid: [f32; 3]) -> Pick {
-    Pick::Edge { body: "b1".into(), edge: 7, mid }
+    Pick::Edge { body: "b1".into(), edge: 7, mid, dir: None }
 }
 
 fn sel(picks: Vec<Pick>) -> Selection {

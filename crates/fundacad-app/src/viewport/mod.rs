@@ -1,5 +1,6 @@
 mod blur;
 mod camera;
+mod datums;
 mod demo;
 mod drag;
 mod edges;
@@ -7,6 +8,7 @@ mod gizmo;
 mod issues;
 pub mod mesh;
 mod pick;
+mod profiles;
 mod renderer;
 mod resolve;
 pub mod scene;
@@ -125,6 +127,8 @@ pub struct Viewport {
     highlight: Option<(String, u32)>,
     sketch: Option<crate::sketch::Editor>,
     sketch_ui: sketching::Ui,
+    profiles: profiles::Profiles,
+    datums: datums::Datums,
     picking: select::Picking,
     tool: Option<ToolRun>,
     gizmo: gizmo::Gizmo,
@@ -176,6 +180,8 @@ impl Viewport {
             highlight: None,
             sketch: None,
             sketch_ui: Default::default(),
+            profiles: Default::default(),
+            datums: Default::default(),
             picking: Default::default(),
             tool: None,
             gizmo: Default::default(),
@@ -453,6 +459,7 @@ impl Viewport {
             self.message = None;
             self.hover = None;
             self.built = mesh.bodies.clone();
+            self.datums.mesh = Some(mesh.clone());
             self.show_built();
             self.retarget(mesh.revision);
         }
@@ -539,6 +546,8 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
+        self.paint_datums(window);
+        self.paint_profiles(window);
         self.paint_sketch(window);
         had_backend != self.backend
     }
@@ -707,6 +716,7 @@ impl Viewport {
             self.picking.pressed = None;
             self.hover_at(event.position, cx);
             self.hover_edge_at(event.position, cx);
+            self.hover_area_at(event.position, cx);
         }
     }
 

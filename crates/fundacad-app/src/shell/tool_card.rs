@@ -64,6 +64,13 @@ fn toast(cx: &mut App, words: String) {
 }
 
 fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) {
+    if viewport.read(cx).sketching() {
+        match tool.id {
+            "extrude" => return viewport.update(cx, |v, cx| v.sketch_extrude(false, cx)),
+            "presspull" => viewport.update(cx, |v, cx| v.finish_sketch(cx)),
+            _ => return toast(cx, "Finish the sketch first".into()),
+        }
+    }
     let v = viewport.read(cx);
     let Some(doc) = v.doc() else { return toast(cx, "Open a document first".into()) };
     let boolean = tool.id.starts_with("boolean-");
@@ -103,16 +110,19 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     }
 }
 
-/// The pick a target row takes, None for a sketch area the sketch tools pick.
-fn target_of(field: &'static str, kind: model::TargetKind) -> Option<Target> {
+/// The pick a target row takes.
+fn target_of(field: &'static str, kind: model::TargetKind) -> Target {
     let kind = match kind {
         model::TargetKind::Edge => PickKind::Edge,
         model::TargetKind::Face => PickKind::Face,
         model::TargetKind::Body => PickKind::Body,
-        model::TargetKind::Area => return None,
+        model::TargetKind::Area => PickKind::Area,
     };
-    let single = matches!(field, "face" | "upTo" | "target" | "ground" | "startFace" | "upToFace" | "upToFace2");
-    Some(Target { field, kind, many: !single })
+    let single = matches!(
+        field,
+        "face" | "profile" | "upTo" | "target" | "ground" | "startFace" | "upToFace" | "upToFace2" | "axisEdge"
+    );
+    Target { field, kind, many: !single }
 }
 
 pub(super) fn prompt(arm: &Target) -> String {
@@ -132,9 +142,7 @@ impl Shell {
     pub(super) fn target_click(&mut self, id: &str, label: &str, cx: &mut Context<Self>) {
         let Some(doc) = self.source.as_ref() else { return };
         let Some((field, kind)) = model::target_field(doc, id, label) else { return };
-        let Some(target) = target_of(field, kind) else {
-            return toast(cx, "Areas are picked in the sketch".into());
-        };
+        let target = target_of(field, kind);
         let name = crate::timeline::labels::name_of(doc, id);
         let id = id.to_string();
         self.viewport.update(cx, |v, cx| {

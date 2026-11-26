@@ -23,6 +23,16 @@ pub fn polylines(body: &Body) -> Vec<Vec<Vec3>> {
 }
 
 /// The point halfway along the polyline by length, the first point of one with no length.
+/// The unit direction from the first point to the last when every point lies on that line, FundaCAD 1's
+/// axisFromEdge: a straight edge tessellates to its ends, while a 90 degree arc bulges by 0.29 of its chord.
+pub fn straight(line: &[Vec3]) -> Option<Vec3> {
+    let (a, b) = (*line.first()?, *line.last()?);
+    let chord = a.distance(b);
+    let dir = (b - a).try_normalize()?;
+    let tol = chord * 1e-4;
+    line.iter().all(|p| (*p - a).reject_from_normalized(dir).length() <= tol).then_some(dir)
+}
+
 pub fn midpoint(line: &[Vec3]) -> Option<Vec3> {
     let first = *line.first()?;
     let total: f32 = line.windows(2).map(|w| w[0].distance(w[1])).sum();
