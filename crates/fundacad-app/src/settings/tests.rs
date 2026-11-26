@@ -66,3 +66,15 @@ fn a_file_with_a_byte_order_mark_still_reads() {
     assert_eq!((store.get::<f64>("zoom"), store.get::<String>("name")), (Some(1.75), Some("Lid".into())));
     assert!(!dir.join("settings.json.bad").exists());
 }
+
+#[test]
+fn a_file_that_cannot_be_read_is_never_written_over() {
+    let dir = temp_dir("unreadable");
+    let utf16: Vec<u8> = [0xff, 0xfe, b'{', 0, b'}', 0].to_vec();
+    std::fs::write(dir.join(FILE), &utf16).unwrap();
+    let mut store = Store::load(Some(&dir));
+    assert_eq!((store.path.clone(), store.values.len()), (None, 0));
+    store.set("recentFiles", &vec!["D:/a.funda"]).unwrap();
+    assert_eq!(std::fs::read(dir.join(FILE)).unwrap(), utf16);
+    assert!(!dir.join("settings.json.bad").exists());
+}

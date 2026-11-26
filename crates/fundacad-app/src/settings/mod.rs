@@ -50,7 +50,12 @@ impl Store {
                     Map::new()
                 }
             },
-            Err(_) => Map::new(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Map::new(),
+            // A file that is there but cannot be read now, locked or not UTF-8, is left alone and never written over.
+            Err(e) => {
+                log::warn!("{} could not be read, settings stay unsaved this run: {e}", path.display());
+                return Self { path: None, values: Map::new() };
+            }
         };
         Self { path: Some(path), values }
     }
