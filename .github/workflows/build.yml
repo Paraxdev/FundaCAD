@@ -116,7 +116,7 @@ jobs:
           # Harness files the Rust tests read all the same.
           read='tools/harness/fixtures'
           sum=$( {
-            git ls-tree -r HEAD | grep -v -E $'\t(\\.github/workflows|docs|manual|tools/harness|tests/build|tests/manual)/|\tplugins/[^/]+/locales/|\\.md$'
+            git ls-tree -r HEAD | grep -v -E $'\t(\\.github/workflows|docs|crates/fundacad-app|third_party/gpui|manual|tools/harness|tests/build|tests/manual)/|\tplugins/[^/]+/locales/|\\.md$'
             git ls-tree -r HEAD -- $read
             # Of the workflows, only these two jobs build and test Rust.
             awk '/^  [a-z][a-z0-9-]*:\r?$/ { on = $1 ~ /^rust-(key|geom):/ } on' .github/workflows/build.yml

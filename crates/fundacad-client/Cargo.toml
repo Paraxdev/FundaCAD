@@ -1,0 +1,22 @@
+[package]
+name = "fundacad-client"
+description = "The native app's link to the engine worker: spawns and supervises it over stdio, rebuilds, and hands meshes over as plain buffers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+fundacad-protocol = { path = "../fundacad-protocol" }
+fundacad-core = { path = "../fundacad-core" }
+fundacad-format = { path = "../fundacad-format" }
+# For the worker's sandbox and Windows job only, it has no kernel in it.
+fundacad-engine = { path = "../fundacad-engine" }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+indexmap = "2"
+
+# Runs itself as a scripted fake worker, so it has its own main.
+[[test]]
+name = "driver"
+harness = false

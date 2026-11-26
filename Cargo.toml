@@ -4,10 +4,13 @@
 # the engine server, the CLI and the MCP server.
 #
 # `third_party/opencascade-rs` is its own workspace (vendored bindings).
+# `crates/fundacad-app` (FundaCAD 2, docs/dev/NATIVE-DIRECTION.md) is its own workspace too, so the GPUI
+# fork in `third_party/gpui` and its system libraries stay out of the engine jobs.
 [workspace]
 resolver = "2"
 members = [
     "crates/fundacad-cli",
+    "crates/fundacad-client",
     "crates/fundacad-core",
     "crates/fundacad-geom",
     "crates/fundacad-mcp",
@@ -15,7 +18,7 @@ members = [
     "crates/fundacad-format",
     "crates/fundacad-protocol",
 ]
-exclude = ["third_party/opencascade-rs"]
+exclude = ["third_party/opencascade-rs", "crates/fundacad-app", "third_party/gpui"]
 
 [workspace.package]
 version = "0.2.0"
