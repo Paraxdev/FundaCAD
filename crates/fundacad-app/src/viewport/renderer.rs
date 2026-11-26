@@ -9,7 +9,6 @@ use super::mesh::Mesh;
 
 const SAMPLES: u32 = 4;
 const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-const CLEAR: wgpu::Color = wgpu::Color { r: 0.09, g: 0.1, b: 0.12, a: 1.0 };
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -38,6 +37,7 @@ struct Drawn {
     camera: Camera,
     size: Size<DevicePixels>,
     mesh_revision: u64,
+    clear: [u8; 3],
 }
 
 /// Draws the scene into a texture on GPUI's device, which GPUI then composites like any element.
@@ -206,9 +206,9 @@ impl Renderer {
 
     /// Draws a frame if anything changed since the last one and returns the texture index to paint.
     /// The submit lands on the shared queue before GPUI's own, so GPUI samples the finished frame.
-    pub fn render(&mut self, camera: &Camera, size: Size<DevicePixels>) -> u32 {
+    pub fn render(&mut self, camera: &Camera, size: Size<DevicePixels>, clear: [u8; 3]) -> u32 {
         self.ensure_targets(size);
-        let drawn = Drawn { camera: camera.clone(), size, mesh_revision: self.mesh_revision };
+        let drawn = Drawn { camera: camera.clone(), size, mesh_revision: self.mesh_revision, clear };
         if self.drawn.as_ref() == Some(&drawn) {
             return self.texture_index;
         }
@@ -230,7 +230,10 @@ impl Renderer {
                     view: &targets.msaa,
                     depth_slice: None,
                     resolve_target: Some(&targets.resolve),
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(CLEAR), store: wgpu::StoreOp::Discard },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(clear_color(clear)),
+                        store: wgpu::StoreOp::Discard,
+                    },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &targets.depth,
@@ -251,4 +254,9 @@ impl Renderer {
         self.drawn = Some(drawn);
         self.texture_index
     }
+}
+
+/// The view texture is not sRGB, so the theme's hex values pass through as they are.
+fn clear_color([r, g, b]: [u8; 3]) -> wgpu::Color {
+    wgpu::Color { r: r as f64 / 255.0, g: g as f64 / 255.0, b: b as f64 / 255.0, a: 1.0 }
 }

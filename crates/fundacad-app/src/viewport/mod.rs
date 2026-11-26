@@ -8,6 +8,8 @@ pub use camera::Camera;
 use mesh::Mesh;
 use renderer::Renderer;
 
+use crate::theme::ActiveTheme as _;
+
 /// Index GPUI samples the main 3D view from.
 const MAIN_TEXTURE: u32 = gpui_wgpu::EXTERNAL_TEXTURE_BASE;
 
@@ -35,15 +37,6 @@ impl Viewport {
         Self { camera, mesh, renderer: None, drag: None, bounds: Bounds::default(), backend: None }
     }
 
-    /// The GPU the viewport draws on, once the first frame ran.
-    pub fn backend(&self) -> Option<&str> {
-        self.backend.as_deref()
-    }
-
-    pub fn triangles(&self) -> usize {
-        self.mesh.triangles()
-    }
-
     /// Makes or remakes the renderer whenever GPUI has a new device.
     fn renderer(&mut self) -> Option<&mut Renderer> {
         let generation = gpui_wgpu::shared_context_generation();
@@ -61,7 +54,7 @@ impl Viewport {
     }
 
     /// Returns true when a new renderer was made, so views showing the backend can update.
-    fn paint(&mut self, bounds: Bounds<Pixels>, window: &mut Window) -> bool {
+    fn paint(&mut self, bounds: Bounds<Pixels>, window: &mut Window, clear: [u8; 3]) -> bool {
         self.bounds = bounds;
         let had_backend = self.backend.clone();
         let scale = window.scale_factor();
@@ -71,8 +64,8 @@ impl Viewport {
         );
         let camera = self.camera.clone();
         let Some(renderer) = self.renderer() else { return false };
-        let index = renderer.render(&camera, size);
-        window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
+        let index = renderer.render(&camera, size, clear);
+        window.paint_external_texture(bounds, Corners::default(), index, size);
         had_backend != self.backend
     }
 
@@ -136,8 +129,10 @@ impl Render for Viewport {
                 canvas(
                     |_, _, _| {},
                     move |bounds, _, window, cx| {
+                        let bg = cx.theme().viewport_bg;
+                        let clear = [bg.r, bg.g, bg.b].map(|c| (c * 255.0).round() as u8);
                         entity.update(cx, |this, cx| {
-                            if this.paint(bounds, window) {
+                            if this.paint(bounds, window, clear) {
                                 cx.notify();
                             }
                         });

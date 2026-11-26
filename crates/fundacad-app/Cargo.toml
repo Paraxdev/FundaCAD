@@ -22,6 +22,11 @@ gpui_wgpu = { package = "gpui-pre-wgpu", version = "=0.3.14" }
 bytemuck = { version = "1", features = ["derive"] }
 glam = "0.30"
 log = "0.4"
+rust-embed = "8.14"
+
+[features]
+# FUNDA_SHOT=out.png captures a frame, which needs GPUI's test support.
+shot = ["gpui/test-support", "gpui_windows/test-support"]
 
 [target.'cfg(windows)'.dependencies]
 gpui_windows = { package = "gpui-pre-windows", version = "=0.3.14" }

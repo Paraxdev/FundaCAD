@@ -2,11 +2,14 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assets;
+mod document;
 mod engine;
 mod shell;
 // The full token set lands ahead of the panels that use it.
 #[allow(dead_code)]
 mod theme;
+mod ui;
 mod viewport;
 
 use gpui::*;
@@ -21,27 +24,45 @@ fn main() {
         }),
         None => Default::default(),
     };
-    let title: SharedString = match &path {
-        Some(path) => format!("FundaCAD 2, {}", path.file_name().unwrap_or_default().to_string_lossy()),
-        None => "FundaCAD 2".into(),
+    log::info!("{} triangles", mesh.triangles());
+    let mut doc = document::Document::sample();
+    if let Some(name) = path.as_ref().and_then(|p| p.file_stem()) {
+        doc.name = name.to_string_lossy().to_string().into();
+        doc.dirty = false;
     }
-    .into();
+    let title: SharedString = format!("{}, FundaCAD 2", doc.name).into();
+    // With --features shot, FUNDA_SHOT=out.png draws one frame at 1440x900, saves it and quits, for the side by side
+    // with the Vue app.
+    #[cfg(feature = "shot")]
+    let shot = std::env::var_os("FUNDA_SHOT").map(std::path::PathBuf::from);
 
-    gpui_kit::application().run(move |cx| {
+    gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
         theme::init(theme::Settings::default(), vec![], cx);
         sync_kit_theme(cx);
         cx.observe_global::<theme::ThemeState>(sync_kit_theme).detach();
         let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1400.), px(900.)), cx))),
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             titlebar: Some(TitlebarOptions { title: Some(title.clone()), ..Default::default() }),
             ..Default::default()
         };
-        gpui_kit::open_window(options, cx, move |window, cx| {
+        let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
             let viewport = cx.new(|_| viewport::Viewport::new(mesh));
-            cx.new(|cx| shell::Shell::new(viewport, title, window, cx))
+            cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
         })
         .expect("open the main window");
+        #[cfg(feature = "shot")]
+        if let Some(out) = shot {
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(std::time::Duration::from_millis(2500)).await;
+                let _ = _window.update(cx, |_, window, _| match window.render_to_image() {
+                    Ok(img) => img.save(&out).map_err(|e| log::error!("save {}: {e}", out.display())).unwrap_or(()),
+                    Err(e) => log::error!("render_to_image: {e}, FUNDA_GPUI_RENDERER=dx can capture"),
+                });
+                cx.update(|cx| cx.quit());
+            })
+            .detach();
+        }
     });
 }
 

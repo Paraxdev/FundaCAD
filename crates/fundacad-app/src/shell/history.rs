@@ -1,0 +1,225 @@
+use gpui::prelude::FluentBuilder as _;
+use gpui::*;
+
+use super::items::card_head;
+use super::Shell;
+use crate::document::{Feature, Health, Param};
+use crate::theme::{
+    Theme, FLOAT_CHIP_RADIUS, FLOAT_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, MONO_FONT, R_PILL, S_0, S_1, S_2, S_3,
+    W_SEMIBOLD,
+};
+use crate::ui::{float_group, icon, icon_button, text};
+
+pub(super) const WIDTH: f32 = 288.;
+const ROW: f32 = 34.;
+
+impl Shell {
+    pub(super) fn history_card(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
+        let (back, forward) = (self.doc.marker > 0, self.doc.marker < self.doc.features.len());
+        let transport = div().flex().gap(px(S_0)).px(px(S_3)).pb(px(S_2)).children(
+            [("skipStart", back), ("stepBack", back), ("stepForward", forward), ("skipEnd", forward)].map(
+                |(name, on)| {
+                    icon_button(t, name, name, 24., 12., t.text_mute).rounded(px(4.)).map(|d| {
+                        if on {
+                            d.bg(t.float_chip_bg)
+                        } else {
+                            d.opacity(0.4)
+                        }
+                    })
+                },
+            ),
+        );
+        let mut list = div().flex().flex_col().px(px(S_2)).pb(px(S_2));
+        for (i, f) in self.doc.features.iter().enumerate() {
+            list = list.child(self.step(t, i, f, cx));
+            if self.open == Some(i) && !f.params.is_empty() {
+                list = list.child(props(t, &f.params));
+            }
+        }
+        list = list.child(marker(t));
+
+        // `#timeline { background: var(--panel) }` outranks `.float-card` in the Vue cascade, so History is opaque.
+        crate::ui::float_card(t)
+            .bg(t.panel)
+            .w(px(WIDTH))
+            .max_h_full()
+            .child(card_head(t, "History"))
+            .child(transport)
+            .child(list)
+    }
+
+    fn step(&self, t: &Theme, i: usize, f: &Feature, cx: &mut Context<Self>) -> impl IntoElement {
+        let on = self.open == Some(i);
+        let colour = match f.health {
+            Health::Error => t.error,
+            Health::Warning => t.warn,
+            Health::Ok if on => t.accent_hot,
+            Health::Ok => t.text,
+        };
+        let hover = t.raised;
+        let selected = t.accent.fade(0.16);
+        let bar = t.accent_hot;
+        div()
+            .id(("step", i))
+            .relative()
+            .h(px(ROW))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .px(px(S_2))
+            .rounded(px(FLOAT_CHIP_RADIUS))
+            .text_color(colour)
+            .when(i >= self.doc.marker, |d| d.opacity(0.38))
+            .when(f.suppressed, |d| d.opacity(0.6))
+            .map(|d| if on { d.bg(selected) } else { d.hover(move |s| s.bg(hover)) })
+            .when(on, |d| {
+                d.child(div().absolute().left_0().top(px(8.)).bottom(px(8.)).w(px(3.)).rounded(px(R_PILL)).bg(bar))
+            })
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.open = if this.open == Some(i) { None } else { Some(i) };
+                cx.notify();
+            }))
+            .child(icon(f.glyph, 18., colour))
+            .child(
+                text(t, FS_BODY)
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .text_color(colour)
+                    .when(f.suppressed, |d| d.line_through())
+                    .child(f.name.clone()),
+            )
+            .map(|d| match f.health {
+                Health::Error => d.child(icon("error", 14., colour)),
+                Health::Warning => d.child(icon("warning", 14., colour)),
+                Health::Ok => d,
+            })
+            .child(icon(if on { "caretDown" } else { "caretRight" }, 12., t.text_mute))
+    }
+
+    pub(super) fn view_controls(&self, t: &Theme) -> Div {
+        let button = |name: &'static str, on: bool| {
+            let hover = t.raised;
+            let text_hover = t.text;
+            let glyph = icon(name, 18., if on { t.accent_hot } else { t.text_dim });
+            div()
+                .id(name)
+                .size(px(40.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(FLOAT_RADIUS - 4.))
+                .group(name)
+                .map(|d| if on { d.bg(t.accent_wash) } else { d.hover(move |s| s.bg(hover)) })
+                .child(if on { glyph } else { glyph.group_hover(name, move |s| s.text_color(text_hover)) })
+        };
+        let grid = div()
+            .h(px(32.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .font_family(MONO_FONT)
+            .text_size(px(FS_MICRO))
+            .font_weight(W_SEMIBOLD)
+            .text_color(t.text_dim)
+            .child("10mm");
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(14.))
+            .child(
+                float_group(t)
+                    .child(button("magnet", false))
+                    .child(grid)
+                    .child(button("views", false))
+                    .child(button("view-reset", false)),
+            )
+            .child(
+                float_group(t)
+                    .child(button("view-matcap", false))
+                    .child(button("view-realtime", true))
+                    .child(button("view-pathtraced", false)),
+            )
+            .child(
+                float_group(t)
+                    .child(button("shaded", false))
+                    .child(button("camera", false))
+                    .child(button("versions", false))
+                    .child(button("history", true)),
+            )
+            .child(float_group(t).child(button("bug", false)))
+    }
+}
+
+/// `.timeline-props`: the values of the open step, indented under it.
+fn props(t: &Theme, params: &[Param]) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(S_2))
+        .ml(px(S_3))
+        .mb(px(S_2))
+        .py(px(S_2))
+        .pr(px(S_2))
+        .pl(px(S_3))
+        .border_l_1()
+        .border_color(t.line)
+        .children(params.iter().map(|p| param_row(t, p)))
+}
+
+fn param_row(t: &Theme, p: &Param) -> Div {
+    let value = match &p.expr {
+        Some(expr) => expr.to_string(),
+        None => format_value(p.value),
+    };
+    let label = text(t, FS_SMALL).flex_1().text_color(t.text_dim).map(|d| match p.expr {
+        Some(_) => {
+            d.flex().gap(px(3.)).child(div().italic().text_color(t.accent_hot).child("fx:")).child(p.label.clone())
+        }
+        None => d.child(p.label.clone()),
+    });
+    let field = text(t, FS_SMALL)
+        .w(px(120.))
+        .h(px(32.))
+        .px(px(S_3))
+        .flex()
+        .items_center()
+        .justify_between()
+        .rounded(px(FLOAT_CHIP_RADIUS))
+        .bg(t.field_bg)
+        .border_1()
+        .border_color(t.control_edge)
+        .child(value)
+        .child(div().px(px(S_1)).py(px(2.)).font_weight(W_SEMIBOLD).text_color(t.text_mute).child(p.unit));
+    div().flex().items_center().gap(px(S_3)).child(label).child(field)
+}
+
+/// The rollback marker after the last step that is played.
+fn marker(t: &Theme) -> Div {
+    div()
+        .h(px(14.))
+        .relative()
+        .mx(px(2.))
+        .child(div().absolute().left_0().right_0().top(px(6.)).h(px(2.)).rounded(px(1.)).bg(t.accent))
+        .child(div().absolute().left_0().top(px(2.)).w(px(13.)).h(px(10.)).rounded(px(2.)).bg(t.accent))
+}
+
+/// A parameter value without trailing zeros, as the Vue fields print it.
+fn format_value(v: f64) -> String {
+    let s = format!("{v:.3}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_value;
+
+    #[test]
+    fn values_drop_trailing_zeros() {
+        assert_eq!(format_value(10.), "10");
+        assert_eq!(format_value(2.5), "2.5");
+        assert_eq!(format_value(0.125), "0.125");
+    }
+}
