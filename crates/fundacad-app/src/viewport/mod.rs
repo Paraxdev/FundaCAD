@@ -1,5 +1,6 @@
 mod blur;
 mod camera;
+mod datums;
 mod demo;
 mod drag;
 mod edges;
@@ -124,6 +125,7 @@ pub struct Viewport {
     highlight: Option<(String, u32)>,
     sketch: Option<crate::sketch::Editor>,
     sketch_ui: sketching::Ui,
+    datums: datums::Datums,
     picking: select::Picking,
     tool: Option<ToolRun>,
     _wake: Option<Task<()>>,
@@ -174,6 +176,7 @@ impl Viewport {
             highlight: None,
             sketch: None,
             sketch_ui: Default::default(),
+            datums: Default::default(),
             picking: Default::default(),
             tool: None,
             _wake: None,
@@ -449,6 +452,7 @@ impl Viewport {
             self.message = None;
             self.hover = None;
             self.built = mesh.bodies.clone();
+            self.datums.mesh = Some(mesh.clone());
             self.show_built();
             self.retarget(mesh.revision);
         }
@@ -535,6 +539,7 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
+        self.paint_datums(window);
         self.paint_sketch(window);
         had_backend != self.backend
     }

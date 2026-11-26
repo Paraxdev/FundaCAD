@@ -165,7 +165,8 @@ impl Viewport {
                 PickKind::Edge => edge,
                 PickKind::Face => face,
                 PickKind::Body => body,
-                PickKind::Sketch | PickKind::Plane => None,
+                PickKind::Plane => self.plane_pick(position),
+                PickKind::Sketch => None,
             };
             if let Some(pick) = pick {
                 self.pick_target(pick, cx);
@@ -173,6 +174,7 @@ impl Viewport {
             return;
         }
         let pick = selection::resolve(self.picking.filter, &self.picking.selection, face, edge);
+        let pick = pick.or_else(|| self.plane_pick(position));
         let before = self.picking.selection.clone();
         self.picking.selection.click(pick, mods);
         if before != self.picking.selection {
