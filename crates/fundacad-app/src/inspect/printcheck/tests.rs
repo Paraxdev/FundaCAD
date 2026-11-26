@@ -72,3 +72,24 @@ fn many_findings_group_by_body_and_name_both_faces_of_a_gap() {
     assert_eq!(r.faults, ["b2: 2 open edges"]);
     assert_eq!(summary(&r), "4 things to look at");
 }
+
+#[test]
+fn a_gap_to_another_body_names_that_body_or_its_id() {
+    let r = read(&reply(json!({
+        "bodies": [{"id": "b1", "name": "Box", "bed": 3.0}, {"id": "b3", "name": "Pin", "bed": 0.0}],
+        "findings": [
+            {"kind": "gap", "body": "b1", "face": 4, "other": {"body": "b3", "face": 9}, "value": 0.2, "at": [0, 0, 5.0], "note": ""},
+            {"kind": "fused", "body": "b1", "face": 2, "other": {"body": "b7", "face": 1}, "value": 0.1, "at": [0, 0, 4.0], "note": ""},
+            {"kind": "gap", "body": "b1", "face": 5, "other": {"face": 3}, "value": 0.3, "at": [0, 0, 6.0], "note": ""},
+        ],
+    })));
+    let places: Vec<&str> = r.bodies[0].1.iter().map(|f| f.place.as_str()).collect();
+    assert_eq!(
+        places,
+        [
+            "Face 4, and face 9 on Pin, 2 mm above the bed",
+            "Face 2, and face 1 on b7, 1 mm above the bed",
+            "Faces 5 and 3, 3 mm above the bed",
+        ]
+    );
+}

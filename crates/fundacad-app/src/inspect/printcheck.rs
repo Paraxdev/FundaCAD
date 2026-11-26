@@ -70,7 +70,7 @@ fn text<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or_default()
 }
 
-fn finding(f: &Value, bed: f64) -> Finding {
+fn finding(f: &Value, bed: f64, name_of: &dyn Fn(&str) -> String) -> Finding {
     let kind = text(f, "kind");
     let (label, rgb) = KINDS.iter().find(|k| k.0 == kind).map_or((kind, 0x8a8f98), |k| (k.1, k.2));
     let size = match kind {
@@ -83,9 +83,11 @@ fn finding(f: &Value, bed: f64) -> Finding {
         None => label.to_string(),
     };
     let face = num(f, "face") as u32;
-    let faces = match f.get("other").and_then(|o| o.get("face")).and_then(Value::as_u64) {
-        Some(o) => format!("Faces {face} and {o}"),
-        None => format!("Face {face}"),
+    let other = f.get("other").filter(|o| o.is_object());
+    let faces = match (other.and_then(|o| o.get("face")).and_then(Value::as_u64), other.map(|o| text(o, "body"))) {
+        (Some(o), Some(b)) if !b.is_empty() && b != text(f, "body") => format!("Face {face}, and face {o} on {}", name_of(b)),
+        (Some(o), _) => format!("Faces {face} and {o}"),
+        (None, _) => format!("Face {face}"),
     };
     let z = f.get("at").and_then(Value::as_array).and_then(|a| a.get(2)).and_then(Value::as_f64).unwrap_or(bed);
     let height = if kind == "overhang" { num(f, "low") } else { z - bed };
@@ -100,12 +102,16 @@ pub fn read(reply: &Map<String, Value>) -> Report {
     let list = |k: &str| reply.get(k).and_then(Value::as_array).cloned().unwrap_or_default();
     let bodies = list("bodies");
     let findings = list("findings");
+    let name_of = |id: &str| {
+        let b = bodies.iter().find(|b| text(b, "id") == id);
+        b.map(|b| text(b, "name")).filter(|n| !n.is_empty()).unwrap_or(id).to_string()
+    };
     let mut out = Report::default();
     for b in &bodies {
         let id = text(b, "id");
         let name = if text(b, "name").is_empty() { id } else { text(b, "name") };
         let bed = num(b, "bed");
-        let mine: Vec<Finding> = findings.iter().filter(|f| text(f, "body") == id).map(|f| finding(f, bed)).collect();
+        let mine: Vec<Finding> = findings.iter().filter(|f| text(f, "body") == id).map(|f| finding(f, bed, &name_of)).collect();
         if let Some(why) = b.get("fault").and_then(Value::as_str) {
             out.faults.push(format!("{name}: {why}"));
         }
