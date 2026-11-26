@@ -236,7 +236,7 @@ pub fn write_feature_target(features: &mut [Value], feature: &str, field: &str, 
 }
 
 /// A whole number is written without a fraction, as the app's JSON is.
-fn number(v: f64) -> Value {
+pub(crate) fn number(v: f64) -> Value {
     if v.fract() == 0.0 && v.abs() < 9_007_199_254_740_992.0 {
         Value::from(v as i64)
     } else {
@@ -273,4 +273,118 @@ pub fn feature_target(def: &Value) -> Option<(&str, &str)> {
         return None;
     }
     Some((t.get("feature")?.as_str()?, t.get("field")?.as_str()?))
+}
+
+/// `RIGID_ENTITY_NUM_FIELDS`: the sketch shapes the solver keeps rigid, the only entities a parameter may own directly.
+pub const RIGID_ENTITY_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
+    ("polygon", &[("x", Length), ("y", Length), ("radius", Length), ("sides", Count), ("angle", Angle)]),
+    ("slot", &[("x1", Length), ("y1", Length), ("x2", Length), ("y2", Length), ("width", Length)]),
+    (
+        "text",
+        &[
+            ("x", Length),
+            ("y", Length),
+            ("height", Length),
+            ("angle", Angle),
+            ("positionOnPath", Count),
+            ("boxWidth", Length),
+        ],
+    ),
+];
+
+pub const PATTERN_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
+    ("patternRect", &[("countX", Count), ("countY", Count), ("spacingX", Length), ("spacingY", Length), ("angle", Angle)]),
+    ("patternCircular", &[("cx", Length), ("cy", Length), ("count", Count), ("angle", Angle)]),
+    ("hexHoles", &[("cx", Length), ("cy", Length), ("diameter", Length), ("spacing", Length), ("rings", Count)]),
+    ("honeycomb", &[("cx", Length), ("cy", Length), ("diameter", Length), ("spacing", Length), ("rings", Count)]),
+    ("boltCircle", &[("cx", Length), ("cy", Length), ("bcd", Length), ("count", Count), ("diameter", Length)]),
+    (
+        "gridHoles",
+        &[
+            ("cx", Length),
+            ("cy", Length),
+            ("diameter", Length),
+            ("countX", Count),
+            ("countY", Count),
+            ("spacingX", Length),
+            ("spacingY", Length),
+        ],
+    ),
+];
+
+fn lists(table: &[(&str, &[(&str, FieldKind)])], kind: &str, field: &str) -> bool {
+    table.iter().any(|(k, fields)| *k == kind && fields.iter().any(|(f, _)| *f == field))
+}
+
+/// A sketch target's place: the sketch's index in `features`, its list, the entry's index and the field.
+fn sketch_spot(features: &[Value], target: &Value) -> Option<(usize, &'static str, usize, String)> {
+    let kind = target.get("kind")?.as_str()?;
+    let sketch = target.get("sketch")?.as_str()?;
+    let (list, id_key) = match kind {
+        "constraint" => ("constraints", "constraint"),
+        "entity" => ("entities", "entity"),
+        "pattern" => ("patterns", "pattern"),
+        _ => return None,
+    };
+    let at = features.iter().position(|f| {
+        f.get("id").and_then(Value::as_str) == Some(sketch) && f.get("type").and_then(Value::as_str) == Some("sketch")
+    })?;
+    let id = target.get(id_key)?.as_str()?;
+    let items = features[at].get(list)?.as_array()?;
+    let i = items.iter().position(|e| e.get("id").and_then(Value::as_str) == Some(id))?;
+    let item = &items[i];
+    let ty = item.get("type").and_then(Value::as_str).unwrap_or_default();
+    let field = match kind {
+        "constraint" => item.get("value").map(|_| "value".to_owned()),
+        "entity" => target.get("field")?.as_str().filter(|f| lists(RIGID_ENTITY_NUM_FIELDS, ty, f)).map(str::to_owned),
+        _ => target.get("field")?.as_str().filter(|f| lists(PATTERN_NUM_FIELDS, ty, f)).map(str::to_owned),
+    }?;
+    Some((at, list, i, field))
+}
+
+/// `resolveTarget`: whether a parameter's target still lands on a field, any of the four kinds.
+pub fn target_resolves(features: &[Value], target: &Value) -> bool {
+    match target.get("kind").and_then(Value::as_str) {
+        Some("feature") => match (target.get("feature").and_then(Value::as_str), target.get("field").and_then(Value::as_str))
+        {
+            (Some(feature), Some(field)) => feature_target_resolves(features, feature, field),
+            _ => false,
+        },
+        _ => sketch_spot(features, target).is_some(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Wrote {
+    Nothing,
+    Feature,
+    /// Written into this sketch, which wants a re-solve.
+    Sketch(String),
+}
+
+/// `writeTarget` for any kind of target.
+pub fn write_target(features: &mut [Value], target: &Value, value: f64) -> Wrote {
+    if target.get("kind").and_then(Value::as_str) == Some("feature") {
+        let (Some(feature), Some(field)) =
+            (target.get("feature").and_then(Value::as_str), target.get("field").and_then(Value::as_str))
+        else {
+            return Wrote::Nothing;
+        };
+        return if write_feature_target(features, feature, field, value) { Wrote::Feature } else { Wrote::Nothing };
+    }
+    if !value.is_finite() {
+        return Wrote::Nothing;
+    }
+    let Some((at, list, i, field)) = sketch_spot(features, target) else {
+        return Wrote::Nothing;
+    };
+    let Some(item) = features[at].get_mut(list).and_then(|l| l.get_mut(i)).and_then(Value::as_object_mut) else {
+        return Wrote::Nothing;
+    };
+    let v = coerce_for_field(&field, value);
+    if item.get(&field).and_then(Value::as_f64) == Some(v) {
+        return Wrote::Nothing;
+    }
+    item.insert(field, number(v));
+    Wrote::Sketch(features[at].get("id").and_then(Value::as_str).unwrap_or_default().to_owned())
 }
