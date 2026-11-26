@@ -8,6 +8,7 @@ mod pick;
 mod renderer;
 pub mod scene;
 mod undo;
+mod visible;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -103,6 +104,9 @@ pub struct Viewport {
     undo: UndoStack,
     message: Option<String>,
     rebuild_ms: Option<f64>,
+    /// The latest mesh's bodies, hidden ones included.
+    built: Vec<Arc<scene::Body>>,
+    highlight: Option<(String, u32)>,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -144,6 +148,8 @@ impl Viewport {
             undo: UndoStack::default(),
             message: None,
             rebuild_ms: None,
+            built: Vec::new(),
+            highlight: None,
             _wake: None,
             _demo: None,
         }
@@ -206,6 +212,7 @@ impl Viewport {
             self.undo.record(before, None);
         }
         self.hover = None;
+        self.show_built();
         cx.notify();
         Ok(edited)
     }
@@ -243,6 +250,7 @@ impl Viewport {
         }
         self.push = None;
         self.hover = None;
+        self.show_built();
         cx.notify();
     }
 
@@ -312,7 +320,8 @@ impl Viewport {
             self.rebuild_ms = Some(mesh.timing.total.as_secs_f64() * 1000.0);
             self.message = None;
             self.hover = None;
-            self.show(&mesh.bodies);
+            self.built = mesh.bodies.clone();
+            self.show_built();
             self.retarget(mesh.revision);
         }
         cx.notify();
@@ -356,7 +365,7 @@ impl Viewport {
         let hover = match (&self.push, &self.hover) {
             (Some(_), _) => None,
             (None, Some((hit, grip))) => Some((hit.body, hit.face, grip.is_ok())),
-            (None, None) => None,
+            (None, None) => self.highlighted(),
         };
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));

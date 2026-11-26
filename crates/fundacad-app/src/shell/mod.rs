@@ -1,5 +1,6 @@
 //! The workspace: a 36px title bar over the stage, where the 3D view runs full bleed and every panel floats over it.
 
+mod geometry;
 mod history;
 mod inspector;
 mod items;
@@ -33,6 +34,7 @@ pub struct Shell {
     fields: HashMap<String, Field>,
     inspector: inspector::Ui,
     items_tab: usize,
+    items: items::ItemsState,
     /// The History step whose values show under it.
     open: Option<usize>,
     focus: FocusHandle,
@@ -54,6 +56,7 @@ impl Shell {
             fields: HashMap::new(),
             inspector: Default::default(),
             items_tab: 0,
+            items: items::ItemsState::new(cx),
             open: None,
             focus: cx.focus_handle(),
             _system: theme::follow_system(window, cx),
@@ -174,7 +177,7 @@ impl Render for Shell {
             .left(gap)
             .flex()
             .gap(gap)
-            .child(self.items_card(t, cx))
+            .child(self.items_card(t, window, cx))
             .child(rail::rail(t));
         let right = div()
             .absolute()

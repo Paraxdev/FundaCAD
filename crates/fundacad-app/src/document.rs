@@ -55,6 +55,7 @@ pub struct Feature {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Item {
     pub glyph: &'static str,
     pub name: SharedString,
@@ -62,6 +63,7 @@ pub struct Item {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Group {
     pub glyph: &'static str,
     pub name: SharedString,
@@ -75,6 +77,8 @@ pub struct Document {
     pub features: Vec<Feature>,
     /// Features at and past this index are rolled back.
     pub marker: usize,
+    /// Superseded by `crate::items`, which the Items card reads.
+    #[allow(dead_code)]
     pub groups: Vec<Group>,
     /// The document's named parameters, the ones no feature field owns.
     #[allow(dead_code)]
