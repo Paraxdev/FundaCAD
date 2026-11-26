@@ -4,6 +4,7 @@
 
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use fundacad_client::Doc;
@@ -36,6 +37,12 @@ fn doc_path(dir: &Path, id: &str) -> PathBuf {
 fn meta_path(dir: &Path, id: &str) -> PathBuf {
     dir.join(format!("{id}.json"))
 }
+
+fn tmp_path(dir: &Path, id: &str) -> PathBuf {
+    dir.join(format!("{id}{TMP}"))
+}
+
+const TMP: &str = ".tmp.funda";
 
 fn lock_path(dir: &Path, id: &str) -> PathBuf {
     dir.join(format!("{id}.lock"))
@@ -81,10 +88,22 @@ impl Drop for Own {
     }
 }
 
-/// Writes a slot's snapshot, the document first, so an envelope always has a whole document beside it.
-pub fn write_slot(dir: &Path, id: &str, doc: &Doc, blob_dir: Option<&Path>, envelope: &Envelope) -> Result<(), String> {
-    let tmp = dir.join(format!("{id}.tmp.funda"));
+/// Writes a slot's snapshot, the document first, so an envelope always has a whole document beside it. Once `stop`
+/// is set the write leaves nothing behind, as the work was given up while it ran.
+pub fn write_slot(
+    dir: &Path,
+    id: &str,
+    doc: &Doc,
+    blob_dir: Option<&Path>,
+    envelope: &Envelope,
+    stop: &AtomicBool,
+) -> Result<(), String> {
+    let tmp = tmp_path(dir, id);
     crate::files::write(&tmp, doc, blob_dir)?;
+    if stop.load(Ordering::SeqCst) {
+        let _ = std::fs::remove_file(&tmp);
+        return Ok(());
+    }
     let target = doc_path(dir, id);
     std::fs::rename(&tmp, &target).map_err(|e| format!("{}: {e}", target.display()))?;
     let meta = meta_path(dir, id);
@@ -124,6 +143,36 @@ pub fn leftovers(dir: &Path, own: Option<&str>) -> Vec<Leftover> {
         .collect();
     out.sort_by(|a, b| b.envelope.saved_at.cmp(&a.envelope.saved_at).then_with(|| a.id.cmp(&b.id)));
     out
+}
+
+/// Deletes what apps that are gone left and cannot be recovered: a lock with no snapshot, a half written document,
+/// an envelope or a document without the other.
+pub fn sweep(dir: &Path, own: Option<&str>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut ids: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            let id = name
+                .strip_suffix(TMP)
+                .or_else(|| name.strip_suffix(".funda"))
+                .or_else(|| name.strip_suffix(".json"))
+                .or_else(|| name.strip_suffix(".lock"))?;
+            Some(id.to_owned())
+        })
+        .collect();
+    ids.sort();
+    ids.dedup();
+    for id in ids {
+        if Some(id.as_str()) == own || alive(dir, &id) {
+            continue;
+        }
+        let _ = std::fs::remove_file(tmp_path(dir, &id));
+        if !(meta_path(dir, &id).is_file() && doc_path(dir, &id).is_file()) {
+            remove_snapshot(dir, &id);
+            let _ = std::fs::remove_file(lock_path(dir, &id));
+        }
+    }
 }
 
 /// Deletes a leftover snapshot, unless its app has come back.

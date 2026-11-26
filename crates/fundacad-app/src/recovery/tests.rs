@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 
-use super::store::{discard, leftovers, question, write_slot, Envelope, Leftover, Own};
+use super::store::{discard, leftovers, question, sweep, write_slot, Envelope, Leftover, Own};
 use super::{due, warn_now};
 
 fn temp(name: &str) -> PathBuf {
@@ -72,9 +72,9 @@ fn an_empty_or_missing_folder_has_no_leftovers() {
 fn a_running_apps_slot_is_never_a_leftover_and_a_gone_apps_is() {
     let dir = temp("alive");
     let own = Own::claim(&dir, "41-7".into()).unwrap();
-    write_slot(&dir, own.id(), &doc(8.0), None, &envelope(Some("C:/a/plate.funda"), 900)).unwrap();
+    write_slot(&dir, own.id(), &doc(8.0), None, &envelope(Some("C:/a/plate.funda"), 900), &Default::default()).unwrap();
     let other = Own::claim(&dir, "52-3".into()).unwrap();
-    write_slot(&dir, other.id(), &doc(9.0), None, &envelope(None, 950)).unwrap();
+    write_slot(&dir, other.id(), &doc(9.0), None, &envelope(None, 950), &Default::default()).unwrap();
     assert_eq!(leftovers(&dir, Some("41-7")), [], "the other app still runs");
     assert!(Own::claim(&dir, "52-3".into()).is_err(), "a slot is claimed once");
     drop(other);
@@ -90,7 +90,15 @@ fn leftovers_come_newest_first_and_broken_slots_are_skipped() {
     let dir = temp("many");
     for (id, at) in [("1-1", 300), ("2-2", 700), ("3-3", 500)] {
         let own = Own::claim(&dir, id.into()).unwrap();
-        write_slot(&dir, id, &doc(at as f64), None, &envelope(Some(&format!("E:/m/{id}.funda")), at)).unwrap();
+        write_slot(
+            &dir,
+            id,
+            &doc(at as f64),
+            None,
+            &envelope(Some(&format!("E:/m/{id}.funda")), at),
+            &Default::default(),
+        )
+        .unwrap();
         drop(own);
     }
     std::fs::write(dir.join("4-4.json"), "not json").unwrap();
@@ -104,12 +112,12 @@ fn leftovers_come_newest_first_and_broken_slots_are_skipped() {
 fn a_cleared_or_discarded_slot_is_gone_and_a_running_one_is_kept() {
     let dir = temp("clear");
     let own = Own::claim(&dir, "7-1".into()).unwrap();
-    write_slot(&dir, "7-1", &doc(3.0), None, &envelope(None, 10)).unwrap();
+    write_slot(&dir, "7-1", &doc(3.0), None, &envelope(None, 10), &Default::default()).unwrap();
     discard(&dir, "7-1");
     assert!(dir.join("7-1.funda").is_file(), "its app still runs");
     own.clear();
     assert!(!dir.join("7-1.funda").exists() && !dir.join("7-1.json").exists());
-    write_slot(&dir, "7-1", &doc(3.0), None, &envelope(None, 10)).unwrap();
+    write_slot(&dir, "7-1", &doc(3.0), None, &envelope(None, 10), &Default::default()).unwrap();
     drop(own);
     assert!(!dir.join("7-1.lock").exists(), "a clean exit frees its lock");
     discard(&dir, "7-1");
@@ -121,8 +129,8 @@ fn a_cleared_or_discarded_slot_is_gone_and_a_running_one_is_kept() {
 fn a_snapshot_written_again_replaces_the_last() {
     let dir = temp("again");
     let own = Own::claim(&dir, "8-2".into()).unwrap();
-    write_slot(&dir, "8-2", &doc(1.5), None, &envelope(None, 10)).unwrap();
-    write_slot(&dir, "8-2", &doc(6.25), None, &envelope(Some("F:/x/y.funda"), 20)).unwrap();
+    write_slot(&dir, "8-2", &doc(1.5), None, &envelope(None, 10), &Default::default()).unwrap();
+    write_slot(&dir, "8-2", &doc(6.25), None, &envelope(Some("F:/x/y.funda"), 20), &Default::default()).unwrap();
     drop(own);
     let left = leftovers(&dir, None);
     assert_eq!(left.len(), 1);
@@ -132,15 +140,57 @@ fn a_snapshot_written_again_replaces_the_last() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+fn listing(dir: &Path) -> Vec<String> {
+    let mut n: Vec<String> =
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    n.sort();
+    n
+}
+
+#[test]
+fn a_write_given_up_while_it_ran_leaves_nothing() {
+    let dir = temp("stopped");
+    let own = Own::claim(&dir, "9-4".into()).unwrap();
+    let stop = std::sync::atomic::AtomicBool::new(true);
+    write_slot(&dir, "9-4", &doc(2.5), None, &envelope(None, 30), &stop).unwrap();
+    assert_eq!(listing(&dir), ["9-4.lock"]);
+    drop(own);
+    assert_eq!(listing(&dir), Vec::<String>::new());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn sweep_deletes_what_gone_apps_left_half_and_keeps_whole_or_running_slots() {
+    let dir = temp("sweep");
+    sweep(&dir, None);
+    let own = Own::claim(&dir, "1-1".into()).unwrap();
+    let running = Own::claim(&dir, "2-2".into()).unwrap();
+    std::fs::write(dir.join("2-2.tmp.funda"), "{").unwrap();
+    let whole = Own::claim(&dir, "3-3".into()).unwrap();
+    write_slot(&dir, "3-3", &doc(4.0), None, &envelope(None, 40), &Default::default()).unwrap();
+    std::fs::write(dir.join("3-3.tmp.funda"), "{").unwrap();
+    drop(whole);
+    std::fs::write(dir.join("4-4.lock"), "").unwrap();
+    std::fs::write(dir.join("5-5.json"), "{}").unwrap();
+    std::fs::write(dir.join("6-6.funda"), "{}").unwrap();
+    std::fs::write(dir.join("7-7.tmp.funda"), "{").unwrap();
+    std::fs::write(dir.join("notes.txt"), "kept").unwrap();
+    sweep(&dir, Some("1-1"));
+    assert_eq!(listing(&dir), ["1-1.lock", "2-2.lock", "2-2.tmp.funda", "3-3.funda", "3-3.json", "notes.txt"]);
+    assert_eq!(leftovers(&dir, Some("1-1")).iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), ["3-3"]);
+    drop((own, running));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 mod app {
     use std::path::Path;
 
     use gpui::{AppContext as _, SharedString, TestAppContext, VisualTestContext};
 
-    use super::super::{give_up, install_in, store};
+    use super::super::{adopt, give_up, install_in, store, Current};
     use super::{doc, envelope, temp};
     use crate::files::Files;
-    use crate::overlay::{asking, press, test_window};
+    use crate::overlay::{asking, press, test_window, toasts};
     use crate::viewport::Viewport;
 
     fn start(cx: &mut VisualTestContext, dir: &Path) {
@@ -162,7 +212,15 @@ mod app {
 
     fn leave(dir: &Path, id: &str, saved_at: u64) {
         let slot = store::Own::claim(dir, id.into()).unwrap();
-        store::write_slot(dir, id, &doc(2.0), None, &envelope(Some("G:/k/bracket.funda"), saved_at)).unwrap();
+        store::write_slot(
+            dir,
+            id,
+            &doc(2.0),
+            None,
+            &envelope(Some("G:/k/bracket.funda"), saved_at),
+            &Default::default(),
+        )
+        .unwrap();
         drop(slot);
     }
 
@@ -219,6 +277,98 @@ mod app {
         assert_eq!(cx.update(|_, cx| asking(cx)), None);
         let left: Vec<String> = store::leftovers(&dir, None).into_iter().map(|l| l.id).collect();
         assert_eq!(left, ["71-1", "70-1"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn autosave(cx: &mut VisualTestContext) -> gpui::Entity<super::super::Autosave> {
+        cx.update(|_, cx| cx.global::<Current>().0.clone())
+    }
+
+    #[test]
+    fn recover_with_a_broken_snapshot_says_why_and_keeps_it() {
+        let dir = temp("recover-broken");
+        let saved_at = store::now_ms() - 4 * 60_000;
+        leave(&dir, "62-8", saved_at);
+        std::fs::write(dir.join("62-8.funda"), "[1, 2]").unwrap();
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        start(cx, &dir);
+        assert_eq!(cx.update(|_, cx| asking(cx)), question(saved_at));
+        cx.update(|window, cx| press(window, cx, "enter"));
+        cx.run_until_parked();
+        let toasts = cx.update(|_, cx| toasts(cx));
+        assert_eq!(toasts.len(), 1, "{toasts:?}");
+        assert!(toasts[0].starts_with("Could not recover the unsaved work: "), "{toasts:?}");
+        assert!(toasts[0].ends_with("62-8.funda is not a document"), "{toasts:?}");
+        let a = autosave(cx);
+        assert_eq!(cx.update(|_, cx| a.read(cx).clock.adopted.clone()), None);
+        assert_eq!(store::leftovers(&dir, None).into_iter().map(|l| l.id).collect::<Vec<_>>(), ["62-8"]);
+        cx.update(|_, cx| give_up(cx));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_adopted_slot_goes_once_this_app_writes_its_own() {
+        let dir = temp("adopt-write");
+        leave(&dir, "63-1", store::now_ms() - 60_000);
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        start(cx, &dir);
+        cx.update(|window, cx| press(window, cx, "escape"));
+        cx.run_until_parked();
+        let a = autosave(cx);
+        cx.update(|_, cx| adopt(&a, "63-1".into(), cx));
+        assert_eq!(cx.update(|_, cx| toasts(cx)), ["Recovered unsaved work, use Save As to keep it"]);
+        assert_eq!(cx.update(|_, cx| a.read(cx).clock.adopted.clone()).as_deref(), Some("63-1"));
+        a.update(cx, |a, cx| {
+            a.clock.writing = true;
+            a.wrote(3, Err("disk full".into()), cx);
+        });
+        assert!(names(&dir).iter().any(|n| n == "63-1.funda"), "a failed write keeps it");
+        a.update(cx, |a, cx| {
+            a.clock.writing = true;
+            a.wrote(4, Ok(()), cx);
+        });
+        assert!(names(&dir).iter().all(|n| !n.starts_with("63-1")), "{:?}", names(&dir));
+        assert_eq!(cx.update(|_, cx| a.read(cx).clock.written), Some(4));
+        cx.update(|_, cx| give_up(cx));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_clean_document_clears_the_adopted_slot_on_the_next_tick() {
+        let dir = temp("adopt-clean");
+        leave(&dir, "64-2", store::now_ms() - 60_000);
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        start(cx, &dir);
+        cx.update(|window, cx| press(window, cx, "escape"));
+        cx.run_until_parked();
+        let a = autosave(cx);
+        cx.update(|_, cx| adopt(&a, "64-2".into(), cx));
+        a.update(cx, |a, cx| a.tick(cx));
+        assert_eq!(cx.update(|_, cx| a.read(cx).clock.clone()), super::super::Clock::default());
+        let left = names(&dir);
+        assert_eq!(left.len(), 1, "{left:?}");
+        assert!(left[0].ends_with(".lock") && !left[0].starts_with("64-2"), "{left:?}");
+        cx.update(|_, cx| give_up(cx));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_third_failure_in_a_row_warns() {
+        let dir = temp("warn");
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        start(cx, &dir);
+        let a = autosave(cx);
+        for n in 1..=4 {
+            a.update(cx, |a, cx| a.wrote(n, Err("denied".into()), cx));
+            let want: &[&str] =
+                if n < 3 { &[] } else { &["Autosave keeps failing, unsaved work may not be recoverable"] };
+            assert_eq!(cx.update(|_, cx| toasts(cx)), want, "after {n}");
+        }
+        cx.update(|_, cx| give_up(cx));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
