@@ -1,4 +1,5 @@
-//! The small building blocks every Funda surface shares, drawn from the theme tokens.
+//! The small building blocks every Funda surface shares, drawn from the theme tokens. Whatever floats over the 3D
+//! view occludes it, so a scroll or click on a card never reaches the camera or the model behind.
 
 use gpui::*;
 
@@ -27,6 +28,7 @@ pub fn float_card(t: &Theme) -> Div {
         .border_1()
         .border_color(transparent_black())
         .shadow(t.float_shadow.clone())
+        .occlude()
 }
 
 /// `.float-group`: the column of view controls.
@@ -38,7 +40,10 @@ pub fn float_group(t: &Theme) -> Div {
         .p(px(3.))
         .rounded(px(FLOAT_RADIUS))
         .bg(t.float_bg)
+        .border_1()
+        .border_color(transparent_black())
         .shadow(t.float_shadow.clone())
+        .occlude()
 }
 
 /// `.rail-tile`: one glass tile of the tool rail.
@@ -53,11 +58,12 @@ pub fn tile(t: &Theme, size: f32) -> Div {
         .bg(t.float_tile_bg)
         .shadow(t.float_shadow.clone())
         .text_color(t.text)
+        .occlude()
 }
 
 /// `.rail-pill` and chips: the small glass label beside a tile.
 pub fn chip(t: &Theme) -> Div {
-    div().rounded(px(FLOAT_CHIP_RADIUS)).bg(t.float_chip_bg).shadow(t.float_shadow.clone())
+    div().rounded(px(FLOAT_CHIP_RADIUS)).bg(t.float_chip_bg).shadow(t.float_shadow.clone()).occlude()
 }
 
 /// A square icon button, `IconButton` in the Vue app.

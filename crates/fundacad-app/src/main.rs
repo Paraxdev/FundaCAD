@@ -17,19 +17,21 @@ use gpui::*;
 fn main() {
     init_logger();
     let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
+    let mut notice = None;
     let mesh = match &path {
         Some(path) => engine::open(path).unwrap_or_else(|e| {
             log::error!("{e}");
+            notice = Some(SharedString::from(e.to_string()));
             Default::default()
         }),
         None => Default::default(),
     };
     log::info!("{} triangles", mesh.triangles());
-    let mut doc = document::Document::sample();
-    if let Some(name) = path.as_ref().and_then(|p| p.file_stem()) {
-        doc.name = name.to_string_lossy().to_string().into();
-        doc.dirty = false;
-    }
+    // The sample history stands in for the Vue capture until the engine link reads a file's own.
+    let doc = match path.as_ref().and_then(|p| p.file_stem()) {
+        Some(name) => document::Document::named(name.to_string_lossy().to_string().into()),
+        None => document::Document::sample(),
+    };
     let title: SharedString = format!("{}, FundaCAD 2", doc.name).into();
     // With --features shot, FUNDA_SHOT=out.png draws one frame at 1440x900, saves it and quits, for the side by side
     // with the Vue app.
@@ -43,12 +45,14 @@ fn main() {
         cx.observe_global::<theme::ThemeState>(sync_kit_theme).detach();
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
+            // Below this the left and right float clusters overlap.
+            window_min_size: Some(size(px(1000.), px(640.))),
             titlebar: Some(TitlebarOptions { title: Some(title.clone()), ..Default::default() }),
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
             let viewport = cx.new(|_| viewport::Viewport::new(mesh));
-            cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
+            cx.new(|cx| shell::Shell::new(viewport, doc, notice, window, cx))
         })
         .expect("open the main window");
         #[cfg(feature = "shot")]

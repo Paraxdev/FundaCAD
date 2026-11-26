@@ -5,8 +5,8 @@ use super::items::card_head;
 use super::Shell;
 use crate::document::{Feature, Health, Param};
 use crate::theme::{
-    Theme, FLOAT_CHIP_RADIUS, FLOAT_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, MONO_FONT, R_PILL, S_0, S_1, S_2, S_3,
-    W_SEMIBOLD,
+    Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, MONO_FONT, R_PILL, S_0, S_1, S_2,
+    S_3, W_SEMIBOLD,
 };
 use crate::ui::{float_group, icon, icon_button, text};
 
@@ -15,24 +15,35 @@ const ROW: f32 = 34.;
 
 impl Shell {
     pub(super) fn history_card(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let (back, forward) = (self.doc.marker > 0, self.doc.marker < self.doc.features.len());
+        let doc = &self.doc;
+        let (back, forward) = (doc.can_step_back(), doc.can_step_forward());
+        let m = doc.marker;
         let transport = div().flex().gap(px(S_0)).px(px(S_3)).pb(px(S_2)).children(
-            [("skipStart", back), ("stepBack", back), ("stepForward", forward), ("skipEnd", forward)].map(
-                |(name, on)| {
-                    icon_button(t, name, name, 24., 12., t.text_mute).rounded(px(4.)).map(|d| {
-                        if on {
-                            d.bg(t.float_chip_bg)
-                        } else {
-                            d.opacity(0.4)
-                        }
-                    })
-                },
-            ),
+            [
+                ("skipStart", back, 0),
+                ("stepBack", back, m.saturating_sub(1)),
+                ("stepForward", forward, m + 1),
+                ("skipEnd", forward, doc.features.len()),
+            ]
+            .map(|(name, on, to)| {
+                icon_button(t, name, name, 24., 12., t.text_mute).rounded(px(4.)).map(|d| {
+                    if on {
+                        d.bg(t.float_chip_bg).on_click(cx.listener(move |this, _, _, cx| {
+                            this.doc.set_marker(to);
+                            cx.notify();
+                        }))
+                    } else {
+                        d.opacity(0.4)
+                    }
+                })
+            }),
         );
-        let mut list = div().flex().flex_col().px(px(S_2)).pb(px(S_2));
+        let open = self.open_step();
+        let mut list =
+            div().id("history-steps").flex().flex_col().min_h_0().overflow_y_scroll().px(px(S_2)).pb(px(S_2));
         for (i, f) in self.doc.features.iter().enumerate() {
             list = list.child(self.step(t, i, f, cx));
-            if self.open == Some(i) && !f.params.is_empty() {
+            if open == Some(i) && !f.params.is_empty() {
                 list = list.child(props(t, &f.params));
             }
         }
@@ -49,7 +60,7 @@ impl Shell {
     }
 
     fn step(&self, t: &Theme, i: usize, f: &Feature, cx: &mut Context<Self>) -> impl IntoElement {
-        let on = self.open == Some(i);
+        let on = self.open_step() == Some(i);
         let colour = match f.health {
             Health::Error => t.error,
             Health::Warning => t.warn,
@@ -57,7 +68,9 @@ impl Shell {
             Health::Ok => t.text,
         };
         let hover = t.raised;
+        // `color-mix(in srgb, var(--accent) 16%, transparent)` in _glass.scss, no token carries it.
         let selected = t.accent.fade(0.16);
+        let fade = step_opacity(i >= self.doc.marker, f.suppressed);
         let bar = t.accent_hot;
         div()
             .id(("step", i))
@@ -70,14 +83,13 @@ impl Shell {
             .px(px(S_2))
             .rounded(px(FLOAT_CHIP_RADIUS))
             .text_color(colour)
-            .when(i >= self.doc.marker, |d| d.opacity(0.38))
-            .when(f.suppressed, |d| d.opacity(0.6))
+            .when(fade < 1., |d| d.opacity(fade))
             .map(|d| if on { d.bg(selected) } else { d.hover(move |s| s.bg(hover)) })
             .when(on, |d| {
                 d.child(div().absolute().left_0().top(px(8.)).bottom(px(8.)).w(px(3.)).rounded(px(R_PILL)).bg(bar))
             })
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.open = if this.open == Some(i) { None } else { Some(i) };
+                this.open = toggle(this.open_step(), i);
                 cx.notify();
             }))
             .child(icon(f.glyph, 18., colour))
@@ -85,8 +97,7 @@ impl Shell {
                 text(t, FS_BODY)
                     .flex_1()
                     .min_w_0()
-                    .overflow_hidden()
-                    .text_ellipsis()
+                    .truncate()
                     .text_color(colour)
                     .when(f.suppressed, |d| d.line_through())
                     .child(f.name.clone()),
@@ -128,7 +139,7 @@ impl Shell {
         div()
             .flex()
             .flex_col()
-            .gap(px(14.))
+            .gap(px(FLOAT_GAP))
             .child(
                 float_group(t)
                     .child(button("magnet", false))
@@ -164,6 +175,7 @@ fn props(t: &Theme, params: &[Param]) -> Div {
         .py(px(S_2))
         .pr(px(S_2))
         .pl(px(S_3))
+        .flex_none()
         .border_l_1()
         .border_color(t.line)
         .children(params.iter().map(|p| param_row(t, p)))
@@ -200,26 +212,76 @@ fn param_row(t: &Theme, p: &Param) -> Div {
 fn marker(t: &Theme) -> Div {
     div()
         .h(px(14.))
+        .flex_none()
         .relative()
         .mx(px(2.))
         .child(div().absolute().left_0().right_0().top(px(6.)).h(px(2.)).rounded(px(1.)).bg(t.accent))
         .child(div().absolute().left_0().top(px(2.)).w(px(13.)).h(px(10.)).rounded(px(2.)).bg(t.accent))
 }
 
+impl Shell {
+    /// The open step, dropped once the document no longer has it.
+    fn open_step(&self) -> Option<usize> {
+        self.open.filter(|&i| i < self.doc.features.len())
+    }
+}
+
+fn toggle(open: Option<usize>, i: usize) -> Option<usize> {
+    if open == Some(i) {
+        None
+    } else {
+        Some(i)
+    }
+}
+
+/// `.suppressed` comes after `.rolled` in _timeline.scss, so a suppressed step past the marker shows at 0.6.
+fn step_opacity(rolled: bool, suppressed: bool) -> f32 {
+    if suppressed {
+        0.6
+    } else if rolled {
+        0.38
+    } else {
+        1.
+    }
+}
+
 /// A parameter value without trailing zeros, as the Vue fields print it.
 fn format_value(v: f64) -> String {
+    if !v.is_finite() {
+        return v.to_string();
+    }
     let s = format!("{v:.3}");
-    s.trim_end_matches('0').trim_end_matches('.').to_string()
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    if s == "-0" { "0" } else { s }.to_string()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::format_value;
+    use super::{format_value, step_opacity, toggle};
 
     #[test]
     fn values_drop_trailing_zeros() {
         assert_eq!(format_value(10.), "10");
         assert_eq!(format_value(2.5), "2.5");
         assert_eq!(format_value(0.125), "0.125");
+        assert_eq!(format_value(-2.5), "-2.5");
+        assert_eq!(format_value(0.0004), "0");
+        assert_eq!(format_value(-0.0004), "0");
+        assert_eq!(format_value(f64::NAN), "NaN");
+    }
+
+    #[test]
+    fn a_click_opens_a_step_and_a_second_closes_it() {
+        assert_eq!(toggle(None, 2), Some(2));
+        assert_eq!(toggle(Some(1), 2), Some(2));
+        assert_eq!(toggle(Some(2), 2), None);
+    }
+
+    #[test]
+    fn suppressed_outranks_rolled_back_as_in_the_vue_cascade() {
+        assert_eq!(step_opacity(true, false), 0.38);
+        assert_eq!(step_opacity(true, true), 0.6);
+        assert_eq!(step_opacity(false, true), 0.6);
+        assert_eq!(step_opacity(false, false), 1.);
     }
 }

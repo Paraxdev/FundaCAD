@@ -110,3 +110,8 @@ pub(super) fn rail(t: &Theme) -> Div {
         .child(div().flex().flex_col().gap(px(GAP + SEP + GAP)).children(TOP.iter().map(|s| section(s))))
         .child(section(FOOT))
 }
+
+#[cfg(test)]
+pub(super) fn glyphs() -> impl Iterator<Item = &'static str> {
+    TOP.iter().flat_map(|s| s.iter()).chain(FOOT).map(|e| e.glyph)
+}

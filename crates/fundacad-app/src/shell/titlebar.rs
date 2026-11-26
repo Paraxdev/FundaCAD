@@ -2,12 +2,11 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use super::Shell;
-use crate::theme::{Theme, FS_BODY, FS_MICRO, FS_SMALL, R_SM, S_1, S_2, S_3, S_4, W_BOLD, W_MEDIUM, W_SEMIBOLD};
+use crate::theme::{Mode, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_SM, S_1, S_2, S_3, S_4, W_BOLD, W_MEDIUM, W_SEMIBOLD};
 use crate::ui::{icon, icon_button, text};
 
-/// The lockup's wordmark colours, fixed in the brand SVG rather than themed.
-const BRAND_TEXT: u32 = 0xe9eff6;
-const BRAND_ACCENT: u32 = 0x4ca5e0;
+/// The lockup's viewBox is 640 by 124, shown 22 high as in the Vue title bar.
+const LOCKUP_W: f32 = 640. * 22. / 124.;
 
 impl Shell {
     pub(super) fn titlebar(&self, t: &Theme) -> Div {
@@ -25,7 +24,6 @@ impl Shell {
                 .child(label)
         };
         let doc = &self.doc;
-        let docname = format!("{}{}", doc.name, if doc.dirty { "*" } else { "" });
 
         div()
             .h(px(36.))
@@ -38,20 +36,14 @@ impl Shell {
             .border_b_1()
             .border_color(t.line)
             .child(
-                div()
-                    .w(px(113.))
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .child(img("brand/fundacad-mark.svg").size(px(22.)))
-                    .child(
-                        div()
-                            .flex()
-                            .text_size(px(10.))
-                            .font_weight(W_BOLD)
-                            .child(div().text_color(rgb(BRAND_TEXT)).child("Funda"))
-                            .child(div().text_color(rgb(BRAND_ACCENT)).child("CAD")),
-                    ),
+                // The wordmark ink is fixed in the SVG, so the light themes get the dark ink asset.
+                img(match t.mode {
+                    Mode::Dark => "brand/fundacad-lockup-app.svg",
+                    Mode::Light => "brand/fundacad-lockup-app-light.svg",
+                })
+                .h(px(22.))
+                .w(px(LOCKUP_W))
+                .flex_none(),
             )
             .child(icon_button(t, "home", "home", 24., 15., t.text_dim))
             .child(div().flex().items_center().children(["File", "Edit", "View", "Help"].map(menu)))
@@ -70,9 +62,12 @@ impl Shell {
             )
             .child(
                 text(t, FS_SMALL)
+                    .min_w_0()
+                    .flex()
                     .font_weight(W_MEDIUM)
                     .text_color(if doc.dirty { t.text } else { t.text_mute })
-                    .child(docname),
+                    .child(div().min_w_0().truncate().child(doc.name.clone()))
+                    .when(doc.dirty, |d| d.child(div().flex_none().text_color(t.accent).child("*"))),
             )
             .child(div().flex_1())
             .child(self.workspace_toggle(t))

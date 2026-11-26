@@ -67,7 +67,7 @@ impl Shell {
                 .gap(px(8.))
                 .child(icon("caretDown", 12., t.text_mute))
                 .child(icon(g.glyph, 14., t.text_dim))
-                .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).flex_1().child(g.name.clone()))
+                .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).flex_1().min_w_0().truncate().child(g.name.clone()))
                 .child(
                     text(t, FS_MICRO)
                         .font_weight(W_SEMIBOLD)
@@ -91,10 +91,10 @@ impl Shell {
                     .gap(px(10.))
                     .rounded(px(FLOAT_CHIP_RADIUS))
                     .child(icon(it.glyph, 14., t.text_dim))
-                    .child(text(t, FS_BODY).flex_1().text_color(t.text_dim).child(it.name.clone()))
+                    .child(text(t, FS_BODY).flex_1().min_w_0().truncate().text_color(t.text_dim).child(it.name.clone()))
                     .child(icon(if it.visible { "visible" } else { "hidden" }, 14., t.text_mute))
             });
-            div().flex().flex_col().child(head).children(rows)
+            div().flex_none().flex().flex_col().child(head).children(rows)
         });
 
         float_card(t)
@@ -103,7 +103,18 @@ impl Shell {
             .child(card_head(t, "Items"))
             .child(div().flex().pl(px(5.)).child(tab(0, "Items", cx)).child(tab(1, "Geometry", cx)))
             .child(filter)
-            .child(div().flex_1().min_h_0().pt(px(14.)).px(px(S_2)).flex().flex_col().children(groups))
+            .child(
+                div()
+                    .id("items-groups")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .pt(px(14.))
+                    .px(px(S_2))
+                    .flex()
+                    .flex_col()
+                    .children(groups),
+            )
             .child(div().flex().justify_end().p(px(S_2)).child(icon_button(
                 t,
                 "items-more",

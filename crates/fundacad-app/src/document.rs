@@ -57,6 +57,23 @@ pub struct Document {
 }
 
 impl Document {
+    /// An opened file until the engine link reads its history: its name and nothing else.
+    pub fn named(name: SharedString) -> Self {
+        Self { name, ..Default::default() }
+    }
+
+    pub fn can_step_back(&self) -> bool {
+        self.marker > 0
+    }
+
+    pub fn can_step_forward(&self) -> bool {
+        self.marker < self.features.len()
+    }
+
+    pub fn set_marker(&mut self, at: usize) {
+        self.marker = at.min(self.features.len());
+    }
+
     pub fn sample() -> Self {
         let mm = |label: &str, value: f64| Param { label: label.to_string().into(), value, unit: "mm", expr: None };
         let sketch =
@@ -101,5 +118,23 @@ impl Document {
                 },
             ],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Document;
+
+    #[test]
+    fn the_marker_stays_within_the_history() {
+        let mut d = Document::sample();
+        let n = d.features.len();
+        assert!(d.can_step_back() && !d.can_step_forward());
+        d.set_marker(n + 5);
+        assert_eq!(d.marker, n);
+        d.set_marker(0);
+        assert!(!d.can_step_back() && d.can_step_forward());
+        let empty = Document::named("bracket".into());
+        assert!(!empty.can_step_back() && !empty.can_step_forward());
     }
 }
