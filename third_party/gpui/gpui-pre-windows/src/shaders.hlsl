@@ -1,3 +1,4 @@
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
 #include "alpha_correction.hlsl"
 
 cbuffer GlobalParams: register(b0) {
@@ -885,6 +886,7 @@ struct Shadow {
     Hsla color;
     Bounds shape_bounds;
     Corners shape_corner_radii;
+    Bounds caster_bounds;
     uint inset;
     uint pad; // align to 8 bytes
 };
@@ -993,7 +995,11 @@ float4 shadow_fragment(ShadowFragmentInput input): SV_TARGET {
         alpha = blurred_rounded_rect(input.position.xy - center, input.blur);
     }
 
-    if (shadow.inset != 0u) {
+    if (shadow.inset == 0u) {
+        // CSS paints a drop shadow only outside the element's border box.
+        float caster_distance = quad_sdf(input.position.xy, shadow.caster_bounds, shadow.corner_radii);
+        alpha *= saturate(0.5 + caster_distance);
+    } else {
         // The inset shadow is the complement of the (blurred) hole rect, clipped to the element.
         // `saturate(0.5 - d)` gives a 1-pixel antialiased edge: d <= -0.5 -> 1, d >= 0.5 -> 0.
         alpha = 1.0 - alpha;

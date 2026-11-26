@@ -1,3 +1,4 @@
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -4987,6 +4988,8 @@ impl Window {
         let scale_factor = self.scale_factor();
         let content_mask = self.snapped_content_mask();
         let opacity = self.element_opacity();
+        let caster_bounds = self.cover_bounds(bounds);
+        let caster_corner_radii = corner_radii.scale(scale_factor);
         for shadow in shadows {
             if shadow.inset {
                 continue;
@@ -5003,10 +5006,11 @@ impl Window {
                 // Leave room for the tail of the blur.
                 bounds: shape_bounds.dilate(blur_radius * 3.),
                 content_mask,
-                corner_radii: Corners::default(),
+                corner_radii: caster_corner_radii,
                 color: shadow.color.opacity(opacity),
                 shape_bounds,
-                shape_corner_radii: corner_radii.scale(scale_factor),
+                shape_corner_radii: caster_corner_radii,
+                caster_bounds,
                 inset: false.into(),
                 pad: 0,
             });
@@ -5052,6 +5056,7 @@ impl Window {
                 color: shadow.color.opacity(opacity),
                 shape_bounds: self.cover_bounds(hole),
                 shape_corner_radii: hole_corner_radii.scale(scale_factor),
+                caster_bounds: element_bounds,
                 inset: true.into(),
                 pad: 0,
             });

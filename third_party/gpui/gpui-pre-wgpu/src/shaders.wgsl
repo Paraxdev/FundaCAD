@@ -1,3 +1,4 @@
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
 /* Functions useful for debugging:
 
 // A heat map color for debugging (blue -> cyan -> green -> yellow -> red).
@@ -1007,6 +1008,9 @@ struct Shadow {
     // inset shadow.
     shape_bounds: Bounds,
     shape_corner_radii: Corners,
+    // The element casting the shadow, which a drop shadow does not paint under. Its
+    // corner radii are `corner_radii`.
+    caster_bounds: Bounds,
     // 0 = drop shadow, 1 = inset shadow.
     inset: u32,
     pad: u32, // align to 8 bytes
@@ -1120,7 +1124,11 @@ fn fs_shadow(input: ShadowVarying) -> @location(0) vec4<f32> {
         alpha = blurred_rounded_rect(input.position.xy - center, blur);
     }
 
-    if (shadow.inset != 0u) {
+    if (shadow.inset == 0u) {
+        // CSS paints a drop shadow only outside the element's border box.
+        let caster_distance = quad_sdf(input.position.xy, shadow.caster_bounds, shadow.corner_radii);
+        alpha *= saturate(0.5 + caster_distance);
+    } else {
         // The inset shadow is the complement of the (blurred) hole rect, clipped to the element.
         // `saturate(0.5 - d)` gives a 1-pixel antialiased edge: d <= -0.5 -> 1, d >= 0.5 -> 0.
         alpha = 1.0 - alpha;

@@ -1,3 +1,4 @@
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
 // todo("windows"): remove
 #![cfg_attr(windows, allow(dead_code))]
 
@@ -911,6 +912,7 @@ pub struct Shadow {
     pub color: Hsla,
     pub shape_bounds: Bounds<ScaledPixels>,
     pub shape_corner_radii: Corners<ScaledPixels>,
+    pub caster_bounds: Bounds<ScaledPixels>,
     pub inset: PaddedBool32,
     pub pad: u32, // align to 8 bytes
 }
