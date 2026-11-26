@@ -13,6 +13,7 @@ mod inspector;
 mod items;
 mod overlay;
 mod plastic;
+mod plugins;
 mod recovery;
 mod ribbon;
 mod selection;

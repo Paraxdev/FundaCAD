@@ -101,6 +101,7 @@ fn session_blob_dir() -> PathBuf {
 
 fn start_in(doc: Doc, blob_dir: PathBuf, wake: impl Fn() + Send + Sync + 'static) -> Result<Session, String> {
     let command = WorkerCommand::locate().map_err(|e| format!("no engine: {e}, set FUNDACAD_ENGINE_EXE"))?;
+    let command = crate::plugins::worker(command);
     let options = Options { blob_dir: Some(blob_dir.clone()), notify: Some(Arc::new(wake)), ..Default::default() };
     let (client, events) = Client::spawn(command, options).map_err(|e| format!("the engine did not start: {e}"))?;
     client.load(doc.clone())?;
