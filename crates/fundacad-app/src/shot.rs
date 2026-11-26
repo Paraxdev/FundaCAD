@@ -1,7 +1,8 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
 //! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
 //! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` (`,ctrl` or `,shift` to add),
-//! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, or `wait:<ms>`.
+//! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `drag:<x>,<y>,<x2>,<y2>` with the left button held (`,hold` keeps it down), or
+//! `wait:<ms>`.
 
 use std::time::Duration;
 
@@ -23,6 +24,33 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
                 let _ = window.update(cx, |_, window, cx| mouse(at, Some(true), window, cx));
                 cx.background_executor().timer(Duration::from_millis(100)).await;
                 let _ = window.update(cx, |_, window, cx| mouse(at, Some(false), window, cx));
+                continue;
+            }
+            if let Some(at) = step.strip_prefix("drag:") {
+                let hold = at.ends_with(",hold");
+                let n: Vec<f32> = at.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+                let [x, y, x2, y2] = n[..] else {
+                    log::error!("shot: drag:{at} wants x,y,x2,y2");
+                    continue;
+                };
+                let _ = window.update(cx, |_, window, cx| mouse(&format!("{x},{y}"), Some(true), window, cx));
+                for i in 1..=10 {
+                    cx.background_executor().timer(Duration::from_millis(60)).await;
+                    let t = i as f32 / 10.0;
+                    let p = gpui::point(gpui::px(x + (x2 - x) * t), gpui::px(y + (y2 - y) * t));
+                    let _ = window.update(cx, |_, window, cx| {
+                        let event = gpui::MouseMoveEvent {
+                            position: p,
+                            modifiers: Default::default(),
+                            pressed_button: Some(gpui::MouseButton::Left),
+                        };
+                        window.dispatch_event(gpui::PlatformInput::MouseMove(event), cx);
+                    });
+                }
+                if !hold {
+                    cx.background_executor().timer(Duration::from_millis(100)).await;
+                    let _ = window.update(cx, |_, window, cx| mouse(&format!("{x2},{y2}"), Some(false), window, cx));
+                }
                 continue;
             }
             let _ = window.update(cx, |_, window, cx| run_step(step, window, cx));
