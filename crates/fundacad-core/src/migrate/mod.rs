@@ -186,8 +186,8 @@ fn bind(
     let Some((h, key)) = field_holder_mut(holder, field) else { return };
     let Some(Value::String(raw)) = h.get(key) else { return };
     let raw = raw.clone();
-    // A name that is no parameter is left for the engine to report.
-    let Some(value) = params.get(&raw).filter(|v| !v.is_null()) else { return };
+    // A name that is no parameter is left for the engine to report. A null parameter still binds, as in FundaCAD 1.
+    let Some(value) = params.get(&raw) else { return };
     h.insert(key.to_owned(), value.clone());
     // One definition per target: a second would override the one the panel edits.
     if let Some(existing) =

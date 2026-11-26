@@ -189,6 +189,30 @@ fn bare_names_bind_to_model_parameters_once_per_target() {
 }
 
 #[test]
+fn a_null_parameter_still_binds_as_fundacad_1_bound_it() {
+    let mut d = obj(json!({"version": 4, "parameters": {"gap": null, "w": 7.5},
+    "features": [
+        {"id": "x4", "type": "extrude", "sketch": "s2", "distance": "gap"},
+        {"id": "x5", "type": "extrude", "sketch": "s2", "distance": "w"}
+    ]}));
+    migrate(&mut d).unwrap();
+    assert_eq!(
+        Value::Object(d),
+        json!({"version": DOCUMENT_VERSION, "parameters": {"gap": null, "w": 7.5},
+        "paramDefs": {
+            "gap": {"expr": "null", "value": null, "unit": "mm"},
+            "w": {"expr": "7.5", "value": 7.5, "unit": "mm"},
+            "d1": {"expr": "gap", "value": null, "unit": "mm", "target": {"kind": "feature", "feature": "x4", "field": "distance"}},
+            "d2": {"expr": "w", "value": 7.5, "unit": "mm", "target": {"kind": "feature", "feature": "x5", "field": "distance"}}
+        },
+        "features": [
+            {"id": "x4", "type": "extrude", "sketch": "s2", "distance": null},
+            {"id": "x5", "type": "extrude", "sketch": "s2", "distance": 7.5}
+        ]})
+    );
+}
+
+#[test]
 fn a_parameter_value_is_written_as_javascript_would() {
     assert_eq!(js_string(&json!(5)), "5");
     assert_eq!(js_string(&json!(5.0)), "5");
