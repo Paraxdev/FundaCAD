@@ -114,10 +114,6 @@ impl Selection {
         self.picks.iter().any(|q| q.same(p))
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.picks.is_empty()
-    }
-
     pub fn of(&self, kind: PickKind) -> Vec<&Pick> {
         self.picks.iter().filter(|p| p.kind() == kind).collect()
     }

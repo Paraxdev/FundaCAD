@@ -114,6 +114,7 @@ pub const TOOLS: &[Tool] = &[
     }),
 ];
 
+#[cfg(test)]
 pub fn tool(id: &str) -> Option<&'static Tool> {
     TOOLS.iter().find(|t| t.id == id)
 }

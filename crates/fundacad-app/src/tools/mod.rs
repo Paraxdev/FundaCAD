@@ -7,7 +7,9 @@ mod tests;
 
 use serde_json::{json, Map, Value};
 
-pub use starters::{tool, TOOLS};
+#[cfg(test)]
+pub use starters::tool;
+pub use starters::TOOLS;
 
 use crate::selection::{Pick, PickKind, Selection};
 

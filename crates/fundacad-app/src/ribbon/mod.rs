@@ -160,7 +160,8 @@ pub fn group(label: &str) -> Option<&'static Group> {
     MODEL.iter().find(|g| g.label == label)
 }
 
-/// Every tool of a group, split families flattened, for the palette and the tests.
+/// Every tool of a group, split families flattened.
+#[cfg(test)]
 pub fn leaves(g: &Group) -> Vec<ToolItem> {
     g.items
         .iter()

@@ -20,7 +20,7 @@ fn a_plain_click_takes_only_what_it_hit() {
     s.click(Some(face("b2", 7)), PLAIN);
     assert_eq!(s.picks, vec![face("b2", 7)]);
     s.click(None, PLAIN);
-    assert!(s.is_empty());
+    assert!(s.picks.is_empty());
 }
 
 #[test]
