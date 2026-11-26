@@ -95,6 +95,15 @@ impl Viewport {
     }
 
     /// The last sketch in the document, for Edit Sketch until History opens one by double click.
+    /// Opens History's double clicked step when it is a sketch, as FC1 did.
+    pub fn open_sketch_step(&mut self, id: &str, cx: &mut Context<Self>) {
+        let is_sketch = self.session.as_ref().and_then(|s| sketch::feature(&s.doc, id)).is_some_and(|f| f.get("type").and_then(Value::as_str) == Some("sketch"));
+        if is_sketch && self.sketch.as_ref().is_none_or(|e| e.feature != id) {
+            self.finish_sketch(cx);
+            self.edit_sketch(id, cx);
+        }
+    }
+
     pub fn edit_last_sketch(&mut self, cx: &mut Context<Self>) {
         let id = self.session.as_ref().and_then(|s| {
             s.doc.get("features")?.as_array()?.iter().rev().find(|f| f["type"] == "sketch")?.get("id")?.as_str().map(String::from)
