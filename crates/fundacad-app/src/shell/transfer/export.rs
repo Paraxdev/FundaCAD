@@ -7,6 +7,7 @@ use fundacad_client::transfer::export::{
     written_paths, BodyScope, Colors, ExportFormat, ExportSettings, ExportStart, FlatSource, Refinement, FORMATS,
     UNITS,
 };
+use fundacad_client::Refused;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{Input, InputState};
@@ -98,6 +99,7 @@ impl Shell {
 
     fn pick_refinement(&mut self, r: Refinement, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::Export(d)) = &mut self.transfer.modal else { return };
+        d.read_inputs(cx);
         d.settings.pick_refinement(r);
         let f = d.settings.faceting;
         for (input, v) in
@@ -185,7 +187,11 @@ impl Shell {
             });
             let advanced = choice(t, "export-advanced", "Advanced", s.show_advanced, true).on_click(cx.listener(
                 |this, _: &ClickEvent, _, cx| {
-                    this.edit_export(cx, |d| d.settings.show_advanced = !d.settings.show_advanced)
+                    if let Some(Modal::Export(d)) = &mut this.transfer.modal {
+                        d.read_inputs(cx);
+                        d.settings.show_advanced = !d.settings.show_advanced;
+                        cx.notify();
+                    }
                 },
             ));
             body = body.child(row(t, "Refinement", div().flex().gap(px(4.)).children(presets).child(advanced)));
@@ -230,12 +236,21 @@ impl Shell {
             let colors = colors.as_ref().map(|(palette, body_colors)| Colors { palette, body_colors });
             let fields = export_fields(&settings, &scope, &start, flat.as_ref(), &path, colors);
             let client = link.client.clone();
-            if this.update_in(cx, |s, w, cx| s.set_busy("Exporting", link.client.clone(), w, cx)).is_err() {
+            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| s.set_busy("Exporting", link.client.clone(), w, cx))
+            else {
                 return;
-            }
-            let answer = cx.background_spawn(async move { client.export(fields) }).await;
+            };
+            let task = stop.clone();
+            let answer = cx
+                .background_spawn(async move {
+                    if task.is_set() {
+                        return Err(Refused { message: "cancelled".into(), cancelled: true });
+                    }
+                    client.export(fields)
+                })
+                .await;
             let _ = this.update_in(cx, |s, w, cx| {
-                s.end_busy(w, cx);
+                s.end_busy(token, w, cx);
                 match answer {
                     Ok(result) => {
                         let mut p = prefs();

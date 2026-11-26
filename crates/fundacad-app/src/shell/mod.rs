@@ -205,13 +205,19 @@ impl Render for Shell {
             window.focus(&self.focus, cx);
         }
         let overlay = self.transfer_overlay(t, cx);
-        let viewport = self.viewport.clone();
-        let redo = self.viewport.clone();
         div()
             .size_full()
             .track_focus(&self.focus)
-            .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
-            .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
+            .on_action(cx.listener(|this, _: &crate::viewport::Undo, _, cx| {
+                if !this.busy() {
+                    this.viewport.update(cx, |v, cx| v.undo(cx));
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::viewport::Redo, _, cx| {
+                if !this.busy() {
+                    this.viewport.update(cx, |v, cx| v.redo(cx));
+                }
+            }))
             .map(|d| self.transfer_actions(d, cx))
             .flex()
             .flex_col()

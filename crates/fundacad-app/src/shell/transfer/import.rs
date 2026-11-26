@@ -11,26 +11,36 @@ use fundacad_client::transfer::insert::{
     bake, insert_feature, refresh_link, same_path, stale_links, stat_file, unlink, InsertError, InsertMode, LinkStat,
     Source, StaleLinks,
 };
-use fundacad_client::Client;
+use fundacad_client::{Client, Refused};
 use gpui::*;
 use serde_json::{Map, Value};
 
 use super::logic::{append_features, insert_error_text, link_path, refreshable, stale_count, stale_summary};
 use super::modal::{button, choice, note, row};
-use super::{picker, prefs, Kind, Modal, Shell};
+use super::{picker, prefs, Kind, Modal, Shell, Stop};
 use crate::theme::Theme;
 
 type Baked = (String, LinkStat, Map<String, Value>);
 
+fn stopped() -> InsertError {
+    InsertError::Build(Refused { message: "cancelled".into(), cancelled: true })
+}
+
 /// Reads a source document and bakes its geometry, on a background thread.
-fn read_and_bake(client: &Client, path: &str, blob_dir: &Path) -> Result<Baked, InsertError> {
+fn read_and_bake(client: &Client, path: &str, blob_dir: &Path, stop: &Stop) -> Result<Baked, InsertError> {
     static N: AtomicU64 = AtomicU64::new(0);
+    if stop.is_set() {
+        return Err(stopped());
+    }
     let stat = stat_file(path);
     let text = fundacad_format::read_document(Path::new(path), blob_dir).map_err(InsertError::Read)?;
+    if stop.is_set() {
+        return Err(stopped());
+    }
     let n = N.fetch_add(1, Ordering::Relaxed);
     let temp = std::env::temp_dir().join(format!("fundacad-insert-{}-{n}.step", std::process::id()));
     let temp = temp.to_string_lossy().into_owned();
-    let baked = bake(client, &Source { path, text: &text, stat }, &temp);
+    let baked = bake(client, &Source { path, text: &text, stat }, &temp, || stop.is_set());
     let _ = std::fs::remove_file(&temp);
     baked.map(|b| (text, stat, b))
 }
@@ -106,15 +116,19 @@ impl Shell {
             [one] => format!("Importing {}", base_name(one)),
             many => format!("Importing {} files", many.len()),
         };
-        self.set_busy(label, link.client.clone(), window, cx);
+        let (token, stop) = self.set_busy(label, link.client.clone(), window, cx);
         cx.spawn_in(window, async move |this, cx| {
             let (mut added, mut failed) = (0, Vec::new());
             for path in paths {
+                if stop.is_set() {
+                    break;
+                }
                 let format = import_format(&path);
                 let fields = import_fields(&path, format, unit);
                 let client = link.client.clone();
                 let answer = cx.background_spawn(async move { client.request("import", fields) }).await;
                 let reply = match answer {
+                    Ok(_) if stop.is_set() => break,
                     Ok(reply) => reply,
                     Err(r) if r.cancelled => break,
                     Err(r) => {
@@ -129,9 +143,12 @@ impl Shell {
                 }
             }
             let _ = this.update_in(cx, |s, w, cx| {
-                s.end_busy(w, cx);
+                s.end_busy(token, w, cx);
                 if added > 0 {
                     s.toast(Kind::Info, format!("Imported {added} file(s)."), cx);
+                }
+                if stop.is_set() {
+                    s.toast(Kind::Info, "Import cancelled.", cx);
                 }
                 for f in failed {
                     s.toast(Kind::Error, format!("The import failed, {f}"), cx);
@@ -202,12 +219,14 @@ impl Shell {
 
     fn run_insert(&mut self, path: String, mode: InsertMode, window: &mut Window, cx: &mut Context<Self>) {
         let Some(link) = self.transfer_link(cx) else { return };
-        self.set_busy(format!("Inserting {}", base_name(&path)), link.client.clone(), window, cx);
+        let (token, stop) = self.set_busy(format!("Inserting {}", base_name(&path)), link.client.clone(), window, cx);
         cx.spawn_in(window, async move |this, cx| {
-            let (client, blob_dir, read) = (link.client.clone(), link.blob_dir.clone(), path.clone());
-            let baked = cx.background_spawn(async move { read_and_bake(&client, &read, &blob_dir) }).await;
+            let (client, blob_dir, read, task) =
+                (link.client.clone(), link.blob_dir.clone(), path.clone(), stop.clone());
+            let baked = cx.background_spawn(async move { read_and_bake(&client, &read, &blob_dir, &task) }).await;
             let _ = this.update_in(cx, |s, w, cx| {
-                s.end_busy(w, cx);
+                s.end_busy(token, w, cx);
+                let baked = baked.and_then(|b| if stop.is_set() { Err(stopped()) } else { Ok(b) });
                 let added = baked.map_err(|e| insert_error_text(&e)).and_then(|(text, stat, baked)| {
                     let feature = {
                         let doc = s.viewport.read(cx).doc().ok_or(Some("no document is open".to_owned()))?;
@@ -230,7 +249,7 @@ impl Shell {
 
     /// Linked bodies whose file changed. `quiet` says nothing when all are current, for the check on open.
     pub(in crate::shell) fn check_links(&mut self, quiet: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy() {
+        if self.transfer.modal.is_some() {
             return;
         }
         let Some(doc) = self.viewport.read(cx).doc() else { return };
@@ -293,13 +312,15 @@ impl Shell {
         let Some(doc) = self.viewport.read(cx).doc() else { return };
         let targets: Vec<(String, String)> =
             ids.into_iter().filter_map(|id| Some((link_path(doc, &id)?, id))).collect();
-        self.set_busy("Refreshing linked files", link.client.clone(), window, cx);
+        let (token, stop) = self.set_busy("Refreshing linked files", link.client.clone(), window, cx);
         cx.spawn_in(window, async move |this, cx| {
             let (mut done, mut failed) = (0, Vec::new());
             for (path, id) in targets {
-                let (client, blob_dir, read) = (link.client.clone(), link.blob_dir.clone(), path.clone());
-                let baked = cx.background_spawn(async move { read_and_bake(&client, &read, &blob_dir) }).await;
+                let (client, blob_dir, read, task) =
+                    (link.client.clone(), link.blob_dir.clone(), path.clone(), stop.clone());
+                let baked = cx.background_spawn(async move { read_and_bake(&client, &read, &blob_dir, &task) }).await;
                 let (text, stat, baked) = match baked {
+                    Ok(_) if stop.is_set() => break,
                     Ok(b) => b,
                     Err(e) if e.cancelled() => break,
                     Err(e) => {
@@ -318,7 +339,10 @@ impl Shell {
                 }
             }
             let _ = this.update_in(cx, |s, w, cx| {
-                s.end_busy(w, cx);
+                s.end_busy(token, w, cx);
+                if stop.is_set() {
+                    s.toast(Kind::Info, "Refresh cancelled.", cx);
+                }
                 if done > 0 {
                     s.toast(
                         Kind::Info,

@@ -1,11 +1,14 @@
 //! Import, export and insert: the File menu, the dialogs they ask through, and the requests they send off the UI
 //! thread. The decisions are fundacad_client::transfer's.
 
+mod busy;
 mod export;
 mod import;
 mod logic;
 mod picker;
 
+#[cfg(test)]
+mod busy_tests;
 #[cfg(test)]
 mod logic_tests;
 #[cfg(test)]
@@ -25,6 +28,7 @@ use super::Shell;
 use crate::engine::Link;
 use crate::theme::{Theme, FS_BODY, FS_SMALL, R_MD, S_1, S_3};
 use crate::ui::{solid_card, text};
+use busy::Stop;
 
 actions!(file, [Export, Import, InsertDocument, CheckLinks, FileMenu]);
 
@@ -46,7 +50,7 @@ pub fn prefs() -> MutexGuard<'static, TransferPrefs> {
 
 enum Modal {
     Export(Box<export::ExportDialog>),
-    Busy { label: String, client: Arc<Client>, cancelling: bool },
+    Busy { label: String, client: Arc<Client>, cancelling: bool, stop: Stop, token: u64 },
     ImportUnit { paths: Vec<String>, unit: &'static str },
     InsertMode { path: String },
     Links(StaleLinks),
@@ -57,11 +61,18 @@ pub struct Transfer {
     focus: FocusHandle,
     toasts: Toasts,
     menu_open: bool,
+    tokens: busy::Tokens,
 }
 
 impl Transfer {
     pub fn new(cx: &mut App) -> Self {
-        Self { modal: None, focus: cx.focus_handle(), toasts: Toasts::default(), menu_open: false }
+        Self {
+            modal: None,
+            focus: cx.focus_handle(),
+            toasts: Toasts::default(),
+            menu_open: false,
+            tokens: busy::Tokens::default(),
+        }
     }
 }
 
@@ -191,7 +202,8 @@ impl Shell {
 
     /// Escape or Cancel. While a request runs it asks the engine to stop, the reply then closes the dialog.
     fn close_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(Modal::Busy { client, cancelling, .. }) = &mut self.transfer.modal {
+        if let Some(Modal::Busy { client, cancelling, stop, .. }) = &mut self.transfer.modal {
+            stop.set();
             client.cancel_requests();
             *cancelling = true;
         } else {
@@ -201,16 +213,30 @@ impl Shell {
         cx.notify();
     }
 
-    fn busy(&self) -> bool {
+    pub(in crate::shell) fn busy(&self) -> bool {
         matches!(self.transfer.modal, Some(Modal::Busy { .. }))
     }
 
-    fn set_busy(&mut self, label: impl Into<String>, client: Arc<Client>, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_modal(Modal::Busy { label: label.into(), client, cancelling: false }, window, cx);
+    /// Opens the busy dialog, the task keeps its token to end it and the stop to see Cancel.
+    fn set_busy(
+        &mut self,
+        label: impl Into<String>,
+        client: Arc<Client>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (u64, Stop) {
+        let (token, stop) = (self.transfer.tokens.next(), Stop::default());
+        let busy = Modal::Busy { label: label.into(), client, cancelling: false, stop: stop.clone(), token };
+        self.open_modal(busy, window, cx);
+        (token, stop)
     }
 
-    fn end_busy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy() {
+    fn end_busy(&mut self, token: u64, window: &mut Window, cx: &mut Context<Self>) {
+        let open = match &self.transfer.modal {
+            Some(Modal::Busy { token, .. }) => Some(*token),
+            _ => None,
+        };
+        if busy::ends(open, token) {
             self.transfer.modal = None;
             window.focus(&self.focus, cx);
         }
@@ -230,9 +256,9 @@ impl Shell {
         cx.notify();
     }
 
-    /// The open document's engine link, or a toast saying there is none. Nothing starts while a request runs.
+    /// The open document's engine link, or a toast saying there is none. Nothing starts while a dialog is open.
     fn transfer_link(&mut self, cx: &mut Context<Self>) -> Option<Link> {
-        if self.busy() {
+        if self.transfer.modal.is_some() {
             return None;
         }
         let link = self.viewport.read(cx).session_link();

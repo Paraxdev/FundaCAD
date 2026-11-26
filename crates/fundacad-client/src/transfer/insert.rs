@@ -123,8 +123,15 @@ impl InsertError {
     }
 }
 
-/// Builds the source on its own, writes it to `temp_path` as STEP and reads that back as geometry.
-pub fn bake(client: &Client, source: &Source<'_>, temp_path: &str) -> Result<Map<String, Value>, InsertError> {
+/// Builds the source on its own, writes it to `temp_path` as STEP and reads that back as geometry. `stop` is
+/// checked between the two requests, the engine only cancels one in flight. The caller deletes `temp_path`, a
+/// different path the engine wrote to is deleted here.
+pub fn bake(
+    client: &Client,
+    source: &Source<'_>,
+    temp_path: &str,
+    stop: impl Fn() -> bool,
+) -> Result<Map<String, Value>, InsertError> {
     let doc = buildable_source(source.text).map_err(InsertError::Read)?;
     if doc.get("features").and_then(Value::as_array).is_none_or(Vec::is_empty) {
         return Err(InsertError::Empty);
@@ -135,7 +142,14 @@ pub fn bake(client: &Client, source: &Source<'_>, temp_path: &str) -> Result<Map
     req.insert("path".into(), json!(temp_path));
     let exported = client.request("export", req).map_err(InsertError::Build)?;
     let written = exported.get("path").and_then(Value::as_str).unwrap_or(temp_path);
-    let read: Answer = client.request("import", super::import::import_fields(written, "step", None));
+    let read: Answer = if stop() {
+        Err(Refused { message: "cancelled".into(), cancelled: true })
+    } else {
+        client.request("import", super::import::import_fields(written, "step", None))
+    };
+    if written != temp_path {
+        let _ = std::fs::remove_file(written);
+    }
     read.map_err(InsertError::ReadBack)
 }
 
