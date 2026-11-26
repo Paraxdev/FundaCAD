@@ -1,6 +1,7 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
 //! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
-//! `ask:<question>` or `key:<keystroke>` such as `key:ctrl-k`.
+//! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` (`,ctrl` or `,shift` to add), `hover:<x>,<y>`
+//! or `wait:<ms>`.
 
 use std::time::Duration;
 
@@ -13,6 +14,17 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
         cx.background_executor().timer(Duration::from_millis(after / 2)).await;
         let steps = std::env::var("FUNDA_SHOT_RUN").unwrap_or_default();
         for step in steps.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+            if let Some(ms) = step.strip_prefix("wait:").and_then(|ms| ms.parse().ok()) {
+                cx.background_executor().timer(Duration::from_millis(ms)).await;
+                continue;
+            }
+            if let Some(at) = step.strip_prefix("click:") {
+                // A frame between press and release, GPUI's on_click only sees a release once a press was painted.
+                let _ = window.update(cx, |_, window, cx| mouse(at, Some(true), window, cx));
+                cx.background_executor().timer(Duration::from_millis(100)).await;
+                let _ = window.update(cx, |_, window, cx| mouse(at, Some(false), window, cx));
+                continue;
+            }
             let _ = window.update(cx, |_, window, cx| run_step(step, window, cx));
         }
         cx.background_executor().timer(Duration::from_millis(after - after / 2)).await;
@@ -41,6 +53,8 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
             Ok(k) => drop(window.dispatch_keystroke(k, cx)),
             Err(e) => log::error!("shot: {key}: {e:?}"),
         }
+    } else if let Some(at) = step.strip_prefix("hover:") {
+        mouse(at, None, window, cx);
     } else if let Some(question) = step.strip_prefix("ask:") {
         use crate::overlay::Choice;
         let choices = vec![
@@ -52,4 +66,28 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     } else {
         crate::commands::run(step, window, cx);
     }
+}
+
+fn mouse(at: &str, press: Option<bool>, window: &mut gpui::Window, cx: &mut App) {
+    use gpui::{point, px, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput};
+    let mut parts = at.split(',').map(str::trim);
+    let (Some(Ok(x)), Some(Ok(y))) = (parts.next().map(str::parse::<f32>), parts.next().map(str::parse::<f32>)) else {
+        return log::error!("shot: click:{at} wants x,y");
+    };
+    let modifiers = match parts.next() {
+        Some("ctrl") => Modifiers { control: true, ..Default::default() },
+        Some("shift") => Modifiers { shift: true, ..Default::default() },
+        _ => Modifiers::default(),
+    };
+    let position = point(px(x), px(y));
+    let button = MouseButton::Left;
+    let event = match press {
+        None => PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }),
+        Some(true) => {
+            window.dispatch_event(PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }), cx);
+            PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count: 1, first_mouse: false })
+        }
+        Some(false) => PlatformInput::MouseUp(MouseUpEvent { button, position, modifiers, click_count: 1 }),
+    };
+    window.dispatch_event(event, cx);
 }
