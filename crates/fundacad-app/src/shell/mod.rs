@@ -1,6 +1,8 @@
 //! The workspace: a 36px title bar over the stage, where the 3D view runs full bleed and every panel floats over it.
 
+mod geometry;
 mod history;
+mod inspector;
 mod items;
 mod rail;
 mod titlebar;
@@ -30,7 +32,9 @@ pub struct Shell {
     /// The transport moved the marker, so it is the shell's until the document says otherwise.
     marker_moved: bool,
     fields: HashMap<String, Field>,
+    inspector: inspector::Ui,
     items_tab: usize,
+    items: items::ItemsState,
     /// The History step whose values show under it.
     open: Option<usize>,
     focus: FocusHandle,
@@ -50,7 +54,9 @@ impl Shell {
             source: None,
             marker_moved: false,
             fields: HashMap::new(),
+            inspector: Default::default(),
             items_tab: 0,
+            items: items::ItemsState::new(cx),
             open: None,
             focus: cx.focus_handle(),
             _system: theme::follow_system(window, cx),
@@ -87,6 +93,7 @@ impl Shell {
     }
 
     fn ensure_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.ensure_inspector_fields(window, cx);
         let Some(open) = self.open_step() else { return };
         let wanted: Vec<(String, String)> = self.doc.features[open]
             .params
@@ -122,6 +129,9 @@ impl Shell {
 
     /// Applies what was typed, or puts the value back when it is not a number.
     fn commit(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.inspector_commit(key, window, cx) {
+            return;
+        }
         let Some(field) = self.fields.get(key) else { return };
         let typed = field.input.read(cx).value();
         let current = self
@@ -167,7 +177,7 @@ impl Render for Shell {
             .left(gap)
             .flex()
             .gap(gap)
-            .child(self.items_card(t, cx))
+            .child(self.items_card(t, window, cx))
             .child(rail::rail(t));
         let right = div()
             .absolute()
@@ -261,11 +271,7 @@ mod tests {
             "bug",
         ];
         let doc = Document::sample();
-        let from_doc = doc
-            .features
-            .iter()
-            .map(|f| f.glyph)
-            .chain(doc.groups.iter().flat_map(|g| std::iter::once(g.glyph).chain(g.items.iter().map(|i| i.glyph))));
+        let from_doc = doc.features.iter().map(|f| f.glyph);
         let missing: Vec<_> = fixed
             .into_iter()
             .chain(from_doc)
