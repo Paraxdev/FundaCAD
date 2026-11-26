@@ -27,8 +27,8 @@ fn an_opened_document_starts_a_fresh_view_with_its_saved_cut() {
     let mut doc = serde_json::Map::new();
     doc.insert("sectionView".into(), serde_json::json!({ "origin": [3.0, -2.0, 5.0], "normal": [0.0, 1.0, 0.0], "side": -1 }));
     let i = Inspecting::opened(Some(&doc));
-    assert_eq!(i.section, Some(Section { normal: Vec3::Y, offset: -2.0, flip: false }));
-    assert_eq!((i.card, i.probes.len(), i.isolate.is_none(), i.marker), (None, 0, true, None));
+    assert_eq!(i.section, Some(Section { normal: Vec3::Y, offset: -2.0, anchor: -2.0, flip: false }));
+    assert_eq!((i.card, i.probes.len(), i.isolate.is_none()), (None, 0, true));
     assert_eq!(Inspecting::opened(Some(&serde_json::Map::new())).section, None);
     assert_eq!(Inspecting::opened(None).section, None);
 }

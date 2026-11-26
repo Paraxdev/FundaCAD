@@ -96,7 +96,7 @@ impl Shell {
             move |this, _, _, cx| this.viewport.update(cx, |v, cx| v.pick_section_face(!picking, cx)),
         )));
         let vp = self.viewport.clone();
-        let offset = s.map_or("Off".into(), |s| format!("{} mm", spell(s.offset as f64)));
+        let offset = s.map_or("Off".into(), |s| format!("{} mm", spell(s.slide() as f64)));
         frame(t, "Section View", "inspect-section", cx)
             .child(axes)
             .when(picking, |d| d.child(text(t, FS_SMALL).text_color(t.accent).child("Click the face to cut along")))
