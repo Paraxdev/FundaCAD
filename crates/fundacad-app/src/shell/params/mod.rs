@@ -1,6 +1,7 @@
 //! The Parameters panel, ParamsDialog.vue: user and model parameters with their expressions, values and what they
 //! drive. Every change is one edit of the viewport's document, so one undo step, and the model rebuilds.
 
+mod place;
 mod rows;
 
 use std::collections::HashMap;
@@ -25,8 +26,6 @@ const NAME_W: f32 = 110.;
 const VALUE_W: f32 = 90.;
 const DEL_W: f32 = 24.;
 const FIELD_H: f32 = 28.;
-/// Clear of the History card and the view controls on the right.
-const RIGHT: f32 = 372.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Col {
@@ -459,6 +458,7 @@ impl Render for ParamsPanel {
             return div().into_any_element();
         }
         self.ensure_fields(window, cx);
+        let (left, width) = place::place(window.viewport_size().width / px(1.));
         let t = cx.theme().clone();
         let t = &t;
         let head = div()
@@ -493,8 +493,8 @@ impl Render for ParamsPanel {
             .bg(t.float_bg_solid)
             .absolute()
             .top(px(FLOAT_GAP))
-            .right(px(RIGHT))
-            .w(px(640.))
+            .left(px(left))
+            .w(px(width))
             .max_h(window.viewport_size().height * 0.7)
             .p(px(S_4))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
