@@ -138,6 +138,22 @@ const FIXED: &[Row] = &[
     ("escape", "", "escape", G, "Cancel"),
     ("delete", "", "delete", G, "Delete"),
     ("backspace", "", "delete", G, "Delete"),
+    ("?", "", "shortcut-help", G, "Shortcut help"),
+];
+
+/// Keys the app holds outside the table, which no row may take, as FundaCAD 1's RESERVED.
+pub const RESERVED: &[(&str, &str)] = &[
+    ("Ctrl+Shift+1", "Items"),
+    ("Ctrl+Shift+2", "History"),
+    ("Ctrl+`", "Console"),
+    ("Ctrl+Shift+`", "Console"),
+    ("Ctrl+=", "Interface size"),
+    ("Ctrl++", "Interface size"),
+    ("Ctrl+Shift+=", "Interface size"),
+    ("Ctrl+Shift++", "Interface size"),
+    ("Ctrl+-", "Interface size"),
+    ("Ctrl+0", "Interface size"),
+    ("Tab", "Box select filter"),
 ];
 
 const TABLE: &[Row] = &[
@@ -216,7 +232,6 @@ const TABLE: &[Row] = &[
     ("arrowright", "s", "view-step-right-fine", G, "Turn the view right 5°"),
     ("arrowup", "s", "view-step-up-fine", G, "Tilt the view up 5°"),
     ("arrowdown", "s", "view-step-down-fine", G, "Tilt the view down 5°"),
-    ("?", "", "shortcut-help", G, "Shortcut help"),
     ("z", "", "viewmode-cycle", G, "Next View Mode"),
     ("z", "s", "viewmode-cycle-back", G, "Previous view mode"),
     ("v", "s", "clean-view", G, "Clean view (hide every overlay, again to bring them back)"),

@@ -41,7 +41,7 @@ fn the_shipped_table_has_no_clash_and_fixed_rows_first() {
     let rows = table();
     assert_eq!(conflicts(&rows), Vec::<(usize, usize)>::new());
     let fixed = rows.iter().take_while(|r| r.fixed).count();
-    assert_eq!(fixed, 14);
+    assert_eq!(fixed, 15);
     assert!(rows[fixed..].iter().all(|r| !r.fixed));
     let sketch = rows.iter().find(|r| r.action == "sketch").unwrap();
     assert_eq!(sketch.id, "sketch|model|S");
@@ -82,6 +82,35 @@ fn fundacad_1_entries_keep_their_modifiers() {
     let got: Vec<_> = rows.iter().take(2).map(|r| (r.action, r.combo.clone())).collect();
     assert_eq!(got, vec![("extrude", Some(combo("Ctrl+Shift+J"))), ("fillet", Some(combo("G")))]);
     assert_eq!(serde_json::to_string(&user("a|model|Q", "Ctrl+Q")).unwrap(), r#"{"id":"a|model|Q","key":"Ctrl+Q"}"#);
+}
+
+#[test]
+fn keys_the_app_holds_outside_the_table_are_refused() {
+    let held = ["Tab", "Ctrl+`", "Ctrl+=", "Ctrl++", "Ctrl+-", "Ctrl+0", "Ctrl+Shift+1", "Ctrl+Shift+2", "?"];
+    let keys: Vec<UserKey> = held.iter().map(|k| user("move|model|M", k)).collect();
+    let (rows, problems) = apply(table(), &keys);
+    let by: Vec<(String, &str)> = problems
+        .iter()
+        .map(|p| match p {
+            Problem::Reserved { key, by, .. } => (key.clone(), *by),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    let want = [
+        ("Tab", "Box select filter"),
+        ("Ctrl+`", "Console"),
+        ("Ctrl+=", "Interface size"),
+        ("Ctrl++", "Interface size"),
+        ("Ctrl+-", "Interface size"),
+        ("Ctrl+0", "Interface size"),
+        ("Ctrl+Shift+1", "Items"),
+        ("Ctrl+Shift+2", "History"),
+        ("?", "Shortcut help"),
+    ];
+    assert_eq!(by, want.iter().map(|(k, b)| (k.to_string(), *b)).collect::<Vec<_>>());
+    assert_eq!(rows, table(), "no refused key moved a row");
+    let (_, problems) = apply(table(), &[user("move|model|M", "Ctrl+9")]);
+    assert_eq!(problems, vec![]);
 }
 
 #[test]

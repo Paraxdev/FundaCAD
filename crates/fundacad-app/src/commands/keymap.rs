@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::keys::{Combo, Shortcut};
+use super::keys::{Combo, Shortcut, RESERVED};
 
 /// The settings key the list is stored under.
 pub const SETTING: &str = "keymap";
@@ -88,6 +88,10 @@ pub fn apply(table: Vec<Shortcut>, user: &[UserKey]) -> (Vec<Shortcut>, Vec<Prob
         if let Some(c) = &combo {
             if let Some(f) = rows.iter().find(|r| r.fixed && r.combo.as_ref() == Some(c)) {
                 problems.push(Problem::Reserved { id: u.id.clone(), key: c.to_string(), by: f.label });
+                continue;
+            }
+            if let Some(&(_, by)) = RESERVED.iter().find(|(k, _)| Combo::parse(k).as_ref() == Ok(c)) {
+                problems.push(Problem::Reserved { id: u.id.clone(), key: c.to_string(), by });
                 continue;
             }
         }
