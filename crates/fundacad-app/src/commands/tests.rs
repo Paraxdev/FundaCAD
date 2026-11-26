@@ -1,6 +1,6 @@
 use super::keymap::{apply, conflicts, resolve, Problem, UserKey};
 use super::keys::{table, Combo, Ctx};
-use super::predicate;
+use super::{predicate, summary};
 
 fn user(id: &str, key: &str) -> UserKey {
     UserKey { id: id.into(), key: key.into() }
@@ -17,8 +17,8 @@ fn combos_read_and_write_as_fundacad_1_shows_them() {
         ("home", Combo::new("home", false, false), "Home", "home"),
         ("Left", Combo::new("arrowleft", false, false), "Left", "left"),
         ("shift+F6", Combo::new("f6", true, false), "Shift+F6", "shift-f6"),
-        ("Ctrl++", Combo::new("+", false, true), "Ctrl++", "ctrl-shift-="),
-        ("?", Combo::new("?", false, false), "?", "shift-/"),
+        ("Ctrl++", Combo::new("+", false, true), "Ctrl++", "ctrl-+"),
+        ("?", Combo::new("?", false, false), "?", "?"),
         ("Esc", Combo::new("escape", false, false), "Escape", "escape"),
     ];
     for (text, parsed, shown, stroke) in cases {
@@ -116,4 +116,15 @@ fn bare_keys_wait_for_text_fields_and_every_key_for_overlays() {
     assert_eq!(of("line", Ctx::Sketch), "Sketch && !Input && !Modal");
     assert_eq!(of("save", Ctx::Global), "Workspace && !Modal");
     assert_eq!(of("escape", Ctx::Global), "Workspace && !Input && !Modal");
+}
+
+#[test]
+fn the_problems_summary_names_the_first_and_counts_the_rest() {
+    let unknown = |id: &str| Problem::Unknown { id: id.into() };
+    assert_eq!(summary(&[]), None);
+    assert_eq!(summary(&[unknown("a|model|Q")]), Some("No shortcut is called a|model|Q".into()));
+    assert_eq!(
+        summary(&[unknown("a|model|Q"), unknown("b|sketch|W"), unknown("c|global|E")]),
+        Some("No shortcut is called a|model|Q, and 2 more".into())
+    );
 }

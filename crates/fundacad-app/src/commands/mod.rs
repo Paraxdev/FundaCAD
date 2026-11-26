@@ -210,14 +210,26 @@ pub fn bind(cx: &mut App) {
     for p in &problems {
         log::warn!("shortcuts: {}", p.describe());
     }
-    if let Some(first) = problems.first() {
-        let more = problems.len() - 1;
-        let tail = if more > 0 { format!(", and {more} more") } else { String::new() };
-        crate::overlay::toast(cx, crate::overlay::Toast::warning(format!("{}{tail}", first.describe())));
-    }
     let r = registry(cx);
     r.rows = rows;
     r.problems = problems;
+}
+
+/// One line for the problems binding found, None when there were none.
+pub fn summary(problems: &[keymap::Problem]) -> Option<String> {
+    let first = problems.first()?.describe();
+    Some(match problems.len() - 1 {
+        0 => first,
+        more => format!("{first}, and {more} more"),
+    })
+}
+
+/// Toasts what binding found, once the overlay is up to show it.
+pub fn report_problems(cx: &mut App) {
+    let line = cx.try_global::<Registry>().and_then(|r| summary(&r.problems));
+    if let Some(line) = line {
+        crate::overlay::toast(cx, crate::overlay::Toast::warning(line));
+    }
 }
 
 /// The key that runs `id` now, as "Ctrl+S", for menus and the palette.

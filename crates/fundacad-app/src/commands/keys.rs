@@ -76,15 +76,11 @@ impl Combo {
         Ok(combo)
     }
 
-    /// The keystroke GPUI binds, as "ctrl-shift-h". "?" is Shift with the slash key, as on a US layout.
+    /// The keystroke GPUI binds, as "ctrl-shift-h". A typed character such as "?" goes as itself, so the keyboard
+    /// layout decides which key and shift make it.
     pub fn keystroke(&self) -> String {
-        let key = match self.key.as_str() {
-            "?" => "/",
-            "+" => "=",
-            k => k.strip_prefix("arrow").unwrap_or(k),
-        };
-        let shift = self.shift || self.key == "?" || self.key == "+";
-        format!("{}{}{key}", if self.ctrl { "ctrl-" } else { "" }, if shift { "shift-" } else { "" })
+        let key = self.key.strip_prefix("arrow").unwrap_or(&self.key);
+        format!("{}{}{key}", if self.ctrl { "ctrl-" } else { "" }, if self.shift { "shift-" } else { "" })
     }
 }
 
