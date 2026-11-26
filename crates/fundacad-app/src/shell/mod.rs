@@ -31,6 +31,8 @@ pub struct Shell {
     source: Option<Doc>,
     /// The transport moved the marker, so it is the shell's until the document says otherwise.
     marker_moved: bool,
+    /// The viewport's count of documents opened when `doc` was read, so a new one starts with the marker at its end.
+    opened: u64,
     fields: HashMap<String, Field>,
     inspector: inspector::Ui,
     items_tab: usize,
@@ -38,6 +40,7 @@ pub struct Shell {
     /// The History step whose values show under it.
     open: Option<usize>,
     focus: FocusHandle,
+    bench: crate::workbench::Bench,
     _system: Subscription,
 }
 
@@ -48,17 +51,22 @@ impl Shell {
             cx.notify();
         })
         .detach();
+        let bench = crate::workbench::Bench::new(&viewport, window, cx);
+        cx.observe(&bench.overlay, |_, _, cx| cx.notify()).detach();
+        cx.observe(&bench.files, |_, _, cx| cx.notify()).detach();
         let mut shell = Self {
             viewport,
             doc,
             source: None,
             marker_moved: false,
+            opened: 0,
             fields: HashMap::new(),
             inspector: Default::default(),
             items_tab: 0,
             items: items::ItemsState::new(cx),
             open: None,
             focus: cx.focus_handle(),
+            bench,
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -68,7 +76,14 @@ impl Shell {
     /// Reads the shown document again when the viewport's has changed.
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let viewport = self.viewport.read(cx);
-        let Some(doc) = viewport.doc() else { return };
+        if viewport.opened() != self.opened {
+            self.opened = viewport.opened();
+            self.marker_moved = false;
+            self.open = None;
+        }
+        // An STL has no steps, so History empties instead of keeping the last document's.
+        let empty = Doc::new();
+        let doc = viewport.doc().unwrap_or(&empty);
         if self.source.as_ref() == Some(doc) {
             return;
         }
@@ -202,19 +217,19 @@ impl Render for Shell {
         if window.focused(cx).is_none() {
             window.focus(&self.focus, cx);
         }
-        let viewport = self.viewport.clone();
-        let redo = self.viewport.clone();
+        let files = self.bench.files.read(cx);
+        (self.doc.name, self.doc.dirty) = (files.name(), files.dirty());
         div()
             .size_full()
             .track_focus(&self.focus)
-            .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
-            .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
+            .key_context(crate::commands::key_context(cx))
+            .on_action(crate::commands::on_run)
             .flex()
             .flex_col()
             .font_family(UI_FONT)
             .bg(t.bg)
             .text_color(t.text)
-            .child(self.titlebar(t))
+            .child(self.titlebar(t, cx))
             .child(
                 div()
                     .flex_1()
@@ -227,6 +242,7 @@ impl Render for Shell {
                     .child(status),
             )
             .child(frost_flush(self.viewport.clone()))
+            .child(self.bench.overlay.clone())
     }
 }
 

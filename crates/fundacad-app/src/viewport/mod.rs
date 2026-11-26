@@ -9,6 +9,9 @@ mod renderer;
 pub mod scene;
 mod undo;
 mod visible;
+mod views;
+
+pub use views::View;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -28,8 +31,6 @@ use undo::UndoStack;
 
 use crate::engine::{self, Opened, Session};
 use crate::plastic::{self, Grip};
-
-actions!(viewport, [Undo, Redo]);
 
 /// Index GPUI samples the main 3D view from.
 const MAIN_TEXTURE: u32 = gpui_wgpu::EXTERNAL_TEXTURE_BASE;
@@ -98,6 +99,9 @@ pub struct Viewport {
     hover: Option<(Hit, Result<Grip, String>)>,
     push: Option<Push>,
     mask_revision: u64,
+    /// Counts every change to the open document, and `opened` every document opened, so watchers skip a redraw.
+    changes: u64,
+    opened: u64,
     background: [u8; 3],
     frosted: Vec<Frost>,
     issues: Vec<FeatureIssue>,
@@ -142,6 +146,8 @@ impl Viewport {
             hover: None,
             push: None,
             mask_revision: 0,
+            changes: 0,
+            opened: 0,
             background: [23, 26, 31],
             frosted: Vec::new(),
             issues: Vec::new(),
@@ -155,15 +161,52 @@ impl Viewport {
         }
     }
 
-    pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) {
+    /// Shows the file at `path`, or says why it cannot and keeps what was shown.
+    pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) -> Result<(), String> {
+        self.load(|wake| engine::open(path, wake), cx)
+    }
+
+    /// Shows a document that is in no file, such as a new one.
+    pub fn open_doc(&mut self, doc: Doc, cx: &mut Context<Self>) -> Result<(), String> {
+        self.load(|wake| engine::start(doc, wake).map(Opened::Doc), cx)
+    }
+
+    fn load(
+        &mut self,
+        open: impl FnOnce(Box<dyn Fn() + Send + Sync>) -> Result<Opened, String>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let (tx, rx) = async_channel::bounded::<()>(1);
+        let opened = open(Box::new(move || {
+            let _ = tx.try_send(());
+        }));
+        let opened = match opened {
+            Ok(opened) => opened,
+            Err(e) => {
+                log::error!("{e}");
+                self.message = Some(e.clone());
+                cx.notify();
+                return Err(e);
+            }
+        };
+        self.changes += 1;
+        self.opened += 1;
         self.issues.clear();
         self.undo = UndoStack::default();
-        let (tx, rx) = async_channel::bounded::<()>(1);
-        match engine::open(path, move || {
-            let _ = tx.try_send(());
-        }) {
-            Ok(Opened::Stl(body)) => self.show(&[Arc::new(body)]),
-            Ok(Opened::Doc(session)) => {
+        self.push = None;
+        self.hover = None;
+        self.message = None;
+        self.rebuild_ms = None;
+        self.fitted = false;
+        self._wake = None;
+        self._demo = None;
+        self.show(&[]);
+        match opened {
+            Opened::Stl(body) => {
+                self.session = None;
+                self.show(&[Arc::new(body)]);
+            }
+            Opened::Doc(session) => {
                 self.session = Some(session);
                 self.message = Some("building".into());
                 self._wake = Some(cx.spawn(async move |this, cx| {
@@ -177,12 +220,22 @@ impl Viewport {
                     self._demo = Some(cx.spawn(async move |this, cx| demo::run(this, cx, travel).await));
                 }
             }
-            Err(e) => {
-                log::error!("{e}");
-                self.message = Some(e);
-            }
         }
         cx.notify();
+        Ok(())
+    }
+
+    /// The folder the open document's imported geometry is published to, which a save embeds from.
+    pub fn blob_dir(&self) -> Option<&Path> {
+        self.session.as_ref().map(|s| s.blob_dir.as_path())
+    }
+
+    pub fn changes(&self) -> u64 {
+        self.changes
+    }
+
+    pub fn opened(&self) -> u64 {
+        self.opened
     }
 
     /// The open document as the app sees it, edits included before the engine has built them.
@@ -209,6 +262,7 @@ impl Viewport {
         let before = session.doc.clone();
         let edited = session.edit(f)?;
         if edited.is_some() {
+            self.changes += 1;
             self.undo.record(before, None);
         }
         self.hover = None;
@@ -248,6 +302,7 @@ impl Viewport {
         }) {
             self.message = Some(e);
         }
+        self.changes += 1;
         self.push = None;
         self.hover = None;
         self.show_built();
@@ -508,7 +563,10 @@ impl Viewport {
         let grip = p.grip.clone();
         if let Some(session) = &mut self.session {
             match session.edit(move |d| grip.apply(d, value)) {
-                Ok(Some(revision)) => p.sent.push((revision, value)),
+                Ok(Some(revision)) => {
+                    p.sent.push((revision, value));
+                    self.changes += 1;
+                }
                 Ok(None) => {}
                 Err(e) => self.message = Some(e),
             }

@@ -1,4 +1,6 @@
-//! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits.
+//! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
+//! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
+//! `ask:<question>` or `key:<keystroke>` such as `key:ctrl-k`.
 
 use std::time::Duration;
 
@@ -8,7 +10,12 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
     let Some(path) = std::env::var_os("FUNDA_SHOT") else { return };
     let after = std::env::var("FUNDA_SHOT_AFTER_MS").ok().and_then(|ms| ms.parse().ok()).unwrap_or(3000);
     cx.spawn(async move |cx| {
-        cx.background_executor().timer(Duration::from_millis(after)).await;
+        cx.background_executor().timer(Duration::from_millis(after / 2)).await;
+        let steps = std::env::var("FUNDA_SHOT_RUN").unwrap_or_default();
+        for step in steps.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+            let _ = window.update(cx, |_, window, cx| run_step(step, window, cx));
+        }
+        cx.background_executor().timer(Duration::from_millis(after - after / 2)).await;
         let image = window.update(cx, |_, window, _| window.render_to_image());
         match image {
             Ok(Ok(image)) => match image.save(&path) {
@@ -21,4 +28,28 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
         let _ = cx.update(|cx| cx.quit());
     })
     .detach();
+}
+
+fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
+    if let Some(i) = step.strip_prefix("menu:").and_then(|i| i.parse().ok()) {
+        crate::overlay::open_bar(window, cx, i);
+    } else if let Some(text) = step.strip_prefix("toast:") {
+        let toast = crate::overlay::Toast::info(text.to_string()).with_action("Undo", |_, _| {});
+        crate::overlay::toast(cx, toast);
+    } else if let Some(key) = step.strip_prefix("key:") {
+        match gpui::Keystroke::parse_with_os(key, cx.platform_info().os) {
+            Ok(k) => drop(window.dispatch_keystroke(k, cx)),
+            Err(e) => log::error!("shot: {key}: {e:?}"),
+        }
+    } else if let Some(question) = step.strip_prefix("ask:") {
+        use crate::overlay::Choice;
+        let choices = vec![
+            Choice::primary("Save"),
+            Choice::danger("Don't save").hint("lose the changes"),
+            Choice::plain("Cancel"),
+        ];
+        drop(crate::overlay::confirm(window, cx, question.to_string(), choices));
+    } else {
+        crate::commands::run(step, window, cx);
+    }
 }

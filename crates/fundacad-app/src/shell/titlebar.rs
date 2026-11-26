@@ -2,28 +2,16 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use super::Shell;
-use crate::theme::{Mode, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_SM, S_1, S_2, S_3, S_4, W_BOLD, W_MEDIUM, W_SEMIBOLD};
+use crate::theme::{Mode, Theme, FS_MICRO, FS_SMALL, R_SM, S_1, S_2, S_3, S_4, W_BOLD, W_MEDIUM, W_SEMIBOLD};
 use crate::ui::{icon, icon_button, text};
 
 /// The lockup's viewBox is 640 by 124, shown 22 high as in the Vue title bar.
 const LOCKUP_W: f32 = 640. * 22. / 124.;
 
 impl Shell {
-    pub(super) fn titlebar(&self, t: &Theme) -> Div {
-        let menu = |label: &'static str| {
-            let hover = t.raised;
-            text(t, FS_BODY)
-                .id(label)
-                .h(px(20.))
-                .px(px(S_4))
-                .mx(px(1.))
-                .flex()
-                .items_center()
-                .rounded(px(4.))
-                .hover(move |s| s.bg(hover))
-                .child(label)
-        };
+    pub(super) fn titlebar(&self, t: &Theme, cx: &App) -> Div {
         let doc = &self.doc;
+        let (can_undo, can_redo) = (crate::commands::enabled(cx, "undo"), crate::commands::enabled(cx, "redo"));
 
         div()
             .h(px(36.))
@@ -46,9 +34,17 @@ impl Shell {
                 .flex_none(),
             )
             .child(icon_button(t, "home", "home", 24., 15., t.text_dim))
-            .child(div().flex().items_center().children(["File", "Edit", "View", "Help"].map(menu)))
-            .child(icon_button(t, "undo", "undo", 24., 15., t.text_dim))
-            .child(icon_button(t, "redo", "redo", 24., 15., t.text_dim).opacity(0.5))
+            .child(crate::overlay::menubar(t, cx))
+            .child(
+                icon_button(t, "undo", "undo", 24., 15., t.text_dim)
+                    .when(!can_undo, |d| d.opacity(0.5))
+                    .on_click(|_, window, cx| crate::commands::run("undo", window, cx)),
+            )
+            .child(
+                icon_button(t, "redo", "redo", 24., 15., t.text_dim)
+                    .when(!can_redo, |d| d.opacity(0.5))
+                    .on_click(|_, window, cx| crate::commands::run("redo", window, cx)),
+            )
             .child(
                 text(t, FS_MICRO)
                     .font_weight(W_BOLD)
@@ -62,8 +58,12 @@ impl Shell {
             )
             .child(
                 text(t, FS_SMALL)
+                    .id("doc-name")
                     .min_w_0()
                     .flex()
+                    .on_mouse_down(MouseButton::Right, |e, window, cx| {
+                        crate::overlay::open_menu(window, cx, e.position, doc_menu(cx));
+                    })
                     .font_weight(W_MEDIUM)
                     .text_color(if doc.dirty { t.text } else { t.text_mute })
                     .child(div().min_w_0().truncate().child(doc.name.clone()))
@@ -99,4 +99,22 @@ impl Shell {
             .child(segment("primitive", "Model", true))
             .child(segment("sync", "Render", false))
     }
+}
+
+/// The document name's right click menu.
+fn doc_menu(cx: &App) -> Vec<crate::overlay::MenuRow> {
+    use crate::overlay::{MenuItem, MenuRow};
+    let mut rows = vec![MenuRow::Item(MenuItem::command(cx, "save")), MenuRow::Item(MenuItem::command(cx, "save-as"))];
+    let path = crate::files::current(cx).and_then(|f| f.read(cx).path().map(std::path::Path::to_path_buf));
+    rows.push(MenuRow::Separator);
+    let missing = path.is_none();
+    rows.push(MenuRow::Item(
+        MenuItem::call("Show in Folder", move |_, cx| {
+            if let Some(p) = &path {
+                cx.reveal_path(p);
+            }
+        })
+        .disabled(missing),
+    ));
+    rows
 }
