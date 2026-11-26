@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "fundacad": {
-      "command": "node",
-      "args": ["scripts/mcp-rust.mjs"],
+      "command": "cargo",
+      "args": ["run", "--quiet", "--release", "-p", "fundacad-mcp", "--"],
       "env": {}
     }
   }

@@ -1048,7 +1048,7 @@ fn a_refined_thin_plate_bends_as_its_first_mesh_and_still_warns_about_thickness(
 
 /// The Home example's Wall bracket with its own study: fixed back plate, 30 N down on the arm's end, own weight.
 fn wall_bracket(refine: &str) -> Value {
-    let doc: Value = serde_json::from_str(include_str!("../../../src/templates/wall-bracket.funda")).unwrap();
+    let doc: Value = serde_json::from_str(include_str!("../../../examples/templates/wall-bracket.funda")).unwrap();
     let fp = |c: [f64; 3], n: [f64; 3], area: f64| {
         json!({"kind": "face", "by": "match", "body": "body1",
                "fp": {"centroid": c, "normal": n, "area": area, "surface": "plane"}})

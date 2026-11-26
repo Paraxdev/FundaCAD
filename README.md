@@ -34,35 +34,30 @@ change the day it lands. It is the bleeding edge and can be broken.
 
 ## Build from source
 
-The first build compiles the Open CASCADE kernel and takes about twenty minutes. The app
-lands in `src-tauri/target/release/` and the installers in `src-tauri/target/release/bundle/`.
-Details and troubleshooting are in [CONTRIBUTING.md](CONTRIBUTING.md#building-from-source).
+The desktop app is being rebuilt as FundaCAD 2, a native app (see [docs/dev/NATIVE-DIRECTION.md](docs/dev/NATIVE-DIRECTION.md)).
+Until it lands, this branch builds the engine, the CLI and the MCP server. The first build compiles the
+Open CASCADE kernel and takes about twenty minutes.
 
 ```
 # Windows (PowerShell), open a new terminal after the installs
-winget install OpenJS.NodeJS.LTS Kitware.CMake Rustlang.Rustup Git.Git
+winget install Kitware.CMake Rustlang.Rustup Git.Git
 winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 git clone https://github.com/Paraxdev/fundacad.git C:\src\fundacad
 cd C:\src\fundacad
-npm ci
-npm run tauri build
+cargo build --release -p fundacad-cli -p fundacad-mcp
 
 # macOS
 xcode-select --install
-brew install cmake node
+brew install cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"
 git clone https://github.com/Paraxdev/fundacad.git && cd fundacad
-npm ci
-npm run tauri build
+cargo build --release -p fundacad-cli -p fundacad-mcp
 
 # Linux (Debian, Ubuntu)
-sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev \
-  libayatana-appindicator3-dev librsvg2-dev libudev-dev patchelf libfuse2 cmake git
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs
+sudo apt-get install -y build-essential cmake git
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"
 git clone https://github.com/Paraxdev/fundacad.git && cd fundacad
-npm ci
-npm run tauri build
+cargo build --release -p fundacad-cli -p fundacad-mcp
 ```
 
 ## What you can do

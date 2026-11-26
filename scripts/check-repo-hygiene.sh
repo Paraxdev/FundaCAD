@@ -68,7 +68,7 @@ done
 # and third_party sample
 # models that ship with vendored code. The stress samples in examples/stress
 # are allowed too: small parts modelled from parameters so the Stress panel has
-# something to open, and Home's templates in src/templates, the same two
+# something to open, and Home's templates in examples/templates, the same two
 # parts plus a parametric plate, box and capsule holder. So is the generic printer STEP file
 # (tests/fixtures/printer_3000.stpz) written by
 # scripts/examples/gen_printer.py, and the hand written files in tests/fixtures/versions
@@ -77,7 +77,7 @@ done
 # synthetic or already public.
 echo "checking for tracked CAD models…"
 models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' '*.igs' '*.iges' '*.FCStd' '*.fcstd' '*.stpz' '*.gz' '*.xbf' '*.3dm' '*.ifc' '*.dxf' '*.fbx' '*.3ds' '*.svg' 2>/dev/null \
-  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/closed_room\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|tests/fixtures/heal_edge_off\.step$|tests/fixtures/sbsm_bad_vertex_ref\.step$|tests/fixtures/(two_parts_mode[01]|face_soup)\.igs$|tests/fixtures/(plate|bracket)\.FCStd$|tests/fixtures/asm_colors(\.stpz|_zip\.stpz|\.step\.gz)$|tests/fixtures/(two_parts(_m)?|shared_inch)\.xbf$|tests/fixtures/rhino_[a-z_]+\.3dm$|tests/fixtures/ifc_[a-z_]+\.ifc$|tests/fixtures/dxf_[a-z_0-9]+\.dxf$|tests/fixtures/fbx_[a-z_0-9]+\.fbx$|tests/fixtures/threeds_[a-z_0-9]+\.3ds$|tests/fixtures/svg_[a-z_0-9]+\.svg$|src/assets/|assets/brand/|examples/stress/[a-z0-9-]+\.funda$|src/templates/[a-z0-9-]+\.funda$|src/templates/[a-z0-9-]+\.stpz$|tests/fixtures/printer_[0-9]+\.stpz$|tests/fixtures/versions/(v[0-9]+|segmented)\.fundab?$|tests/fixtures/future/[a-z0-9_]+\.funda$|tests/fixtures/containers/[a-z0-9_]+\.funda$|third_party/)' || true)
+  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/closed_room\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|tests/fixtures/heal_edge_off\.step$|tests/fixtures/sbsm_bad_vertex_ref\.step$|tests/fixtures/(two_parts_mode[01]|face_soup)\.igs$|tests/fixtures/(plate|bracket)\.FCStd$|tests/fixtures/asm_colors(\.stpz|_zip\.stpz|\.step\.gz)$|tests/fixtures/(two_parts(_m)?|shared_inch)\.xbf$|tests/fixtures/rhino_[a-z_]+\.3dm$|tests/fixtures/ifc_[a-z_]+\.ifc$|tests/fixtures/dxf_[a-z_0-9]+\.dxf$|tests/fixtures/fbx_[a-z_0-9]+\.fbx$|tests/fixtures/threeds_[a-z_0-9]+\.3ds$|tests/fixtures/svg_[a-z_0-9]+\.svg$|src/assets/|assets/brand/|examples/stress/[a-z0-9-]+\.funda$|examples/templates/[a-z0-9-]+\.funda$|tests/fixtures/printer_[0-9]+\.stpz$|tests/fixtures/versions/(v[0-9]+|segmented)\.fundab?$|tests/fixtures/future/[a-z0-9_]+\.funda$|tests/fixtures/containers/[a-z0-9_]+\.funda$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'

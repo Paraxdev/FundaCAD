@@ -65,26 +65,6 @@ class KeyboardPage(unittest.TestCase):
             self.assertIn(fact, text)
         self.assertNotRegex(text.lower(), r"\b(best|most|fastest|easiest)\b")
 
-    def test_the_page_quotes_the_words_the_last_tab_stop_says(self):
-        page = PAGE.read_text(encoding="utf-8")
-        en = json.loads((ROOT / "src" / "i18n" / "locales" / "en.json").read_text(encoding="utf-8"))
-        coords = "20, " + fill(en["dim.negative"], amount="20")
-        end_of = re.search(r"\bend \{([^{}]*\{name\}[^{}]*)\}", en["sketch.speech.of"]).group(1)
-        no_snap = fill(en["sketch.speech.noSnap"], coords=coords)
-        walk_end = fill(
-            en["sketch.speech.snapped"],
-            at=fill(en["sketch.speech.walkEnd"], coords=coords),
-            target=fill(end_of, name="Line 2"),
-        )
-        self.assertIn(f'"{no_snap}"', page)
-        self.assertIn(f'"{walk_end}"', page)
-        speech = (ROOT / "src" / "sketch" / "sketchSpeech.ts").read_text(encoding="utf-8")
-        for key in ["sketch.speech.noSnap", "sketch.speech.walkEnd", "sketch.speech.snapped"]:
-            self.assertIn(f't("{key}"', speech)
-        self.assertIn("Tab walks the 16 candidates nearest the cursor", page)
-        limit = (ROOT / "src" / "sketch" / "keyCursor.ts").read_text(encoding="utf-8")
-        self.assertIn("const RING_LIMIT = 16;", limit)
-
     def test_every_link_on_these_pages_resolves(self):
         for name in LINKERS + ["sketch/keyboard.md"]:
             path = DOCS / name
