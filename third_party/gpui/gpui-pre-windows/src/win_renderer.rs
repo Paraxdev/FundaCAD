@@ -131,7 +131,7 @@ impl WinRenderer {
     ) -> Result<image::RgbaImage> {
         match self {
             Self::Dx(r) => r.render_to_image(scene, background_appearance),
-            Self::Wgpu { .. } => anyhow::bail!("render_to_image is not wired for the wgpu renderer"),
+            Self::Wgpu { renderer, .. } => renderer.render_to_image(scene),
         }
     }
 

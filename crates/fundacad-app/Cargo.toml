@@ -26,6 +26,11 @@ async-channel = "2"
 fundacad-client = { path = "../fundacad-client" }
 fundacad-format = { path = "../fundacad-format" }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+
+[features]
+# FUNDA_SHOT=<file.png> saves the window as GPUI rendered it, then quits.
+shot = ["dep:image", "gpui/test-support", "gpui_windows/test-support"]
 
 [target.'cfg(windows)'.dependencies]
 gpui_windows = { package = "gpui-pre-windows", version = "=0.3.14" }

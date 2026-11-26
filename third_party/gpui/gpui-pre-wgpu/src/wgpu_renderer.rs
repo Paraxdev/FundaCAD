@@ -1,4 +1,4 @@
-// Modified by FundaCAD: texture lookups fall back to the app's external textures.
+// Modified by FundaCAD: texture lookups fall back to the app's external textures, and mod readback.
 // Modified for gpui-pre (snapshot of zed@f126950): adapt device queues and sRGB detection to wgpu 30.0.1.
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};
 use anyhow::{Context as _, Result};
@@ -12,6 +12,9 @@ use log::warn;
 #[cfg(not(target_family = "wasm"))]
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use smallvec::SmallVec;
+
+#[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
+mod readback;
 use std::cell::RefCell;
 use std::num::NonZeroU64;
 use std::ops::Range;

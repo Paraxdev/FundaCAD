@@ -5,6 +5,8 @@
 mod engine;
 mod plastic;
 mod shell;
+#[cfg(feature = "shot")]
+mod shot;
 mod theme;
 mod viewport;
 
@@ -27,7 +29,7 @@ fn main() {
             titlebar: Some(TitlebarOptions { title: Some(title.clone()), ..Default::default() }),
             ..Default::default()
         };
-        gpui_kit::open_window(options, cx, move |_, cx| {
+        let _window = gpui_kit::open_window(options, cx, move |_, cx| {
             let viewport = cx.new(|cx| {
                 let mut viewport = viewport::Viewport::new();
                 if let Some(path) = &path {
@@ -38,6 +40,8 @@ fn main() {
             cx.new(|cx| shell::Shell::new(viewport, title, cx))
         })
         .expect("open the main window");
+        #[cfg(feature = "shot")]
+        shot::arm(_window.0, cx);
     });
 }
 
