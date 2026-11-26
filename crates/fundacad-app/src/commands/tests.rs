@@ -42,6 +42,8 @@ fn the_shipped_table_has_no_clash_and_fixed_rows_first() {
     assert_eq!(conflicts(&rows), Vec::<(usize, usize)>::new());
     let fixed = rows.iter().take_while(|r| r.fixed).count();
     assert_eq!(fixed, 15);
+    let redo: Vec<String> = rows.iter().filter(|r| r.action == "redo").map(|r| r.combo.clone().unwrap().to_string()).collect();
+    assert_eq!(redo, vec!["Ctrl+Y", "Ctrl+Shift+Z"], "the menu shows the first, Ctrl+Y as FundaCAD 1");
     assert!(rows[fixed..].iter().all(|r| !r.fixed));
     let sketch = rows.iter().find(|r| r.action == "sketch").unwrap();
     assert_eq!(sketch.id, "sketch|model|S");

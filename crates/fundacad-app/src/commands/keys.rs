@@ -125,8 +125,8 @@ type Row = (&'static str, &'static str, &'static str, Ctx, &'static str);
 
 const FIXED: &[Row] = &[
     ("z", "c", "undo", G, "Undo"),
-    ("z", "cs", "redo", G, "Redo"),
     ("y", "c", "redo", G, "Redo"),
+    ("z", "cs", "redo", G, "Redo"),
     ("n", "c", "new", G, "New"),
     ("o", "c", "open", G, "Open"),
     ("s", "c", "save", G, "Save"),
