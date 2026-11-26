@@ -1,8 +1,10 @@
 //! The workspace: a 36px title bar over the stage, where the 3D view runs full bleed and every panel floats over it.
 
 mod history;
+mod history_menu;
 mod items;
 mod rail;
+mod timeline;
 mod titlebar;
 
 use std::collections::HashMap;
@@ -27,12 +29,9 @@ pub struct Shell {
     doc: Document,
     /// The document `doc` was read from, to tell a real change from the viewport redrawing.
     source: Option<Doc>,
-    /// The transport moved the marker, so it is the shell's until the document says otherwise.
-    marker_moved: bool,
     fields: HashMap<String, Field>,
     items_tab: usize,
-    /// The History step whose values show under it.
-    open: Option<usize>,
+    timeline: timeline::Timeline,
     focus: FocusHandle,
     _system: Subscription,
 }
@@ -48,10 +47,9 @@ impl Shell {
             viewport,
             doc,
             source: None,
-            marker_moved: false,
             fields: HashMap::new(),
             items_tab: 0,
-            open: None,
+            timeline: timeline::Timeline::default(),
             focus: cx.focus_handle(),
             _system: theme::follow_system(window, cx),
         };
@@ -66,12 +64,9 @@ impl Shell {
         if self.source.as_ref() == Some(doc) {
             return;
         }
-        let mut next = Document::from_funda(self.doc.name.clone(), doc);
+        self.doc = Document::from_funda(self.doc.name.clone(), doc);
         self.source = Some(doc.clone());
-        if self.marker_moved {
-            next.set_marker(self.doc.marker);
-        }
-        self.doc = next;
+        self.timeline_synced(doc);
         let texts: HashMap<String, String> = self.texts();
         let stale: Vec<String> = self.fields.keys().filter(|k| !texts.contains_key(*k)).cloned().collect();
         for key in stale {
@@ -199,6 +194,7 @@ impl Render for Shell {
             .track_focus(&self.focus)
             .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
             .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.history_key(ev, window, cx)))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
@@ -216,6 +212,7 @@ impl Render for Shell {
                     .child(right)
                     .child(status),
             )
+            .children(self.history_menu(t, cx))
             .child(frost_flush(self.viewport.clone()))
     }
 }
@@ -243,6 +240,8 @@ mod tests {
             "sync",
             "visible",
             "hidden",
+            "pen",
+            "import",
             "more",
             "skipStart",
             "stepBack",
