@@ -68,11 +68,17 @@ impl Shell {
         let open = self.open_step();
         let mut list =
             div().id("history-steps").flex().flex_col().min_h_0().overflow_y_scroll().px(px(S_2)).pb(px(S_2));
+        let reveal = self.timeline.reveal.take();
+        let mut drawn = 0;
         for (i, f) in self.doc.features.iter().enumerate() {
             if i == m {
                 list = list.child(marker(t));
+                drawn += 1;
             }
             let Some(id) = ids.get(i).filter(|id| shown.contains(id)) else { continue };
+            if reveal.as_deref() == Some(id.as_str()) {
+                self.timeline.list.scroll_to_item(drawn);
+            }
             let row = Row {
                 i,
                 id,
@@ -83,16 +89,20 @@ impl Shell {
                 lit: self.timeline.related_off && related.as_ref().is_some_and(|r| r.contains(id)),
             };
             list = list.child(self.step(t, row, cx));
+            drawn += 1;
             if let Some(field) = self.timeline.field.as_ref().filter(|x| x.id == *id && x.kind == FieldKind::Note) {
                 list = list.child(row_field(t, &field.input, cx).ml(px(S_3 + 18.)).mb(px(S_1)));
+                drawn += 1;
             }
             if open == Some(i) && !f.params.is_empty() {
                 list = list.child(self.props(t, &f.params, window, cx));
+                drawn += 1;
             }
         }
         if m >= self.doc.features.len() {
             list = list.child(marker(t));
         }
+        let list = list.track_scroll(&self.timeline.list);
 
         // `#timeline { background: var(--panel) }` outranks `.float-card` in the Vue cascade, so History is opaque.
         crate::ui::solid_card(t)
@@ -347,7 +357,8 @@ impl Shell {
         }
         let id = failed[self.timeline.err_cycle % failed.len()].clone();
         self.timeline.err_cycle += 1;
-        self.timeline.rows = Rows { keys: vec![id.clone()], anchor: Some(id) };
+        self.timeline.rows = Rows { keys: vec![id.clone()], anchor: Some(id.clone()) };
+        self.timeline.reveal.set(Some(id));
         cx.notify();
     }
 }

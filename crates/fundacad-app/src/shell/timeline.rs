@@ -1,6 +1,7 @@
 //! What the History rows hold between frames: the picked rows, the right click menu, the rename or note field, the
 //! row being dragged over and the related filter. The edits themselves are in crate::timeline.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use fundacad_client::Doc;
@@ -20,6 +21,9 @@ pub(super) struct Timeline {
     pub related_off: bool,
     /// Which failed step the error chip picks next.
     pub err_cycle: usize,
+    pub list: ScrollHandle,
+    /// The row the list scrolls to on its next draw.
+    pub reveal: Cell<Option<String>>,
     /// The document the rows were drawn from, shared with the drag callbacks.
     pub doc: Rc<Doc>,
 }
