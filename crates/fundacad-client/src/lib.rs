@@ -3,6 +3,7 @@
 
 mod doc;
 mod mesh;
+pub mod transfer;
 mod worker;
 
 pub use doc::set_param;
@@ -14,6 +15,7 @@ use fundacad_protocol::{message_id, Message};
 use mesh::{Assembly, BodyCache, ReplyError, Step};
 use serde_json::{json, Map, Value};
 use std::any::Any;
+use std::collections::HashMap;
 use std::io::{self, ErrorKind, Write};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
@@ -35,11 +37,24 @@ pub type Doc = Map<String, Value>;
 pub enum Event {
     Mesh(Arc<Mesh>),
     /// A `building` frame: `phase` per `fundacad_protocol::build_phase`, -1 where a counter does not apply.
-    Progress { revision: u64, phase: i64, feature: i64, meshed: i64, mesh_total: i64 },
+    Progress {
+        revision: u64,
+        phase: i64,
+        feature: i64,
+        meshed: i64,
+        mesh_total: i64,
+    },
     /// A rebuild failed. The last mesh stays the current one.
-    Failed { revision: u64, message: String, feature_id: Option<String> },
+    Failed {
+        revision: u64,
+        message: String,
+        feature_id: Option<String>,
+    },
     /// The worker died and a new one is starting; any rebuild it was running is sent again.
-    WorkerRestarted { cause: String, stderr_tail: Vec<String> },
+    WorkerRestarted {
+        cause: String,
+        stderr_tail: Vec<String>,
+    },
     WorkerStartFailed(String),
 }
 
@@ -62,10 +77,25 @@ type EditFn = Box<dyn FnOnce(&mut Doc) -> Result<(), String> + Send>;
 /// What an edit did: the revision it took, None when the document did not change.
 pub type Edited = Result<Option<u64>, String>;
 
+/// Why a one-shot request gave no result. `cancelled` is a stop the user asked for, which the app does not report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refused {
+    pub message: String,
+    pub cancelled: bool,
+}
+
+/// A one-shot request's `result`, or why there is none.
+pub type Answer = Result<Map<String, Value>, Refused>;
+
+fn refused(message: impl Into<String>) -> Refused {
+    Refused { message: message.into(), cancelled: false }
+}
+
 enum Cmd {
     Load(Doc, Sender<u64>),
     Edit(EditFn, Sender<Edited>),
     Rebuild,
+    Request { op: String, fields: Map<String, Value>, with_doc: bool, reply: Sender<Answer> },
     KillWorker,
     Shutdown,
 }
@@ -130,6 +160,7 @@ impl Client {
             crashed_on: None,
             cache: BodyCache::default(),
             next_id: 0,
+            requests: HashMap::new(),
         };
         let driver = std::thread::Builder::new().name("engine-link".into()).spawn(move || d.run(rx));
         let driver = match driver {
@@ -179,6 +210,24 @@ impl Client {
     /// Builds the document again at the revision it is at, sent whole.
     pub fn rebuild(&self) {
         self.send(Cmd::Rebuild);
+    }
+
+    /// Any one-shot op (`import`, `blobRead`, `inspect` ...), answered while rebuilds go on beside it. The caller waits
+    /// for the reply, so it runs off the UI thread.
+    pub fn request(&self, op: &str, fields: Map<String, Value>) -> Answer {
+        self.ask(op, fields, false)
+    }
+
+    /// An `export` of the document as the worker builds it, cut at the rollback marker. `fields` carry the format,
+    /// the path and the options [`transfer::export`] builds.
+    pub fn export(&self, fields: Map<String, Value>) -> Answer {
+        self.ask("export", fields, true)
+    }
+
+    fn ask(&self, op: &str, fields: Map<String, Value>, with_doc: bool) -> Answer {
+        let (tx, rx) = mpsc::channel();
+        self.send(Cmd::Request { op: op.to_owned(), fields, with_doc, reply: tx });
+        rx.recv().unwrap_or_else(|_| Err(refused(STOPPED)))
     }
 
     /// Kills the worker as a crash would, for tests and the harness.
@@ -243,6 +292,7 @@ struct Driver {
     crashed_on: Option<u64>,
     cache: BodyCache,
     next_id: u64,
+    requests: HashMap<String, Sender<Answer>>,
 }
 
 impl Driver {
@@ -329,6 +379,7 @@ impl Driver {
                 self.held = None;
                 self.wanted();
             }
+            Cmd::Request { op, fields, with_doc, reply } => self.request(op, fields, with_doc, reply),
             Cmd::KillWorker => {
                 if let Some(w) = self.worker.as_mut() {
                     w.kill();
@@ -353,6 +404,64 @@ impl Driver {
         self.revision += 1;
         self.wanted();
         Ok(Some(self.revision))
+    }
+
+    fn request(&mut self, op: String, mut fields: Map<String, Value>, with_doc: bool, reply: Sender<Answer>) {
+        if with_doc {
+            let Some(d) = self.doc.as_ref() else {
+                let _ = reply.send(Err(refused("no document is open")));
+                return;
+            };
+            fields.insert("document".into(), Value::Object(doc::built(d).into_owned()));
+        }
+        let Some(worker) = self.worker.as_mut() else {
+            let _ = reply.send(Err(refused("the engine is restarting, try again in a moment")));
+            return;
+        };
+        self.next_id += 1;
+        let id = format!("rq{}", self.next_id);
+        fields.insert("op".into(), json!(op));
+        fields.insert("id".into(), json!(id));
+        let text = serde_json::to_string(&fields).expect("a JSON map serializes");
+        match worker.send(text) {
+            Ok(()) => {
+                self.requests.insert(id, reply);
+            }
+            Err(e) => {
+                let _ = reply.send(Err(refused(format!("the engine did not take the request: {e}"))));
+            }
+        }
+    }
+
+    /// A one-shot request's reply. Progress frames are skipped, the app shows its own busy state.
+    fn answer(&mut self, id: &str, m: Message) {
+        let Message::Text(t) = m else { return };
+        let v: Value = match serde_json::from_str(&t) {
+            Ok(v) => v,
+            Err(e) => {
+                if let Some(r) = self.requests.remove(id) {
+                    let _ = r.send(Err(refused(format!("unreadable reply: {e}"))));
+                }
+                return;
+            }
+        };
+        if v.get("status").is_some() {
+            return;
+        }
+        let Some(r) = self.requests.remove(id) else { return };
+        let answer = if v.get("ok").and_then(Value::as_bool) == Some(true) {
+            match v.get("result") {
+                Some(Value::Object(m)) => Ok(m.clone()),
+                _ => Ok(Map::new()),
+            }
+        } else {
+            let message = v.pointer("/error/message").and_then(Value::as_str).unwrap_or("the engine refused it");
+            Err(Refused {
+                message: message.to_owned(),
+                cancelled: v.get("cancelled").and_then(Value::as_bool) == Some(true),
+            })
+        };
+        let _ = r.send(answer);
     }
 
     /// Sends the next rebuild when the worker is free and the document moved.
@@ -431,6 +540,12 @@ impl Driver {
     }
 
     fn frame(&mut self, m: Message, n: usize) {
+        if let Some(id) = message_id(&m).as_ref().and_then(Value::as_str) {
+            if self.requests.contains_key(id) {
+                let id = id.to_owned();
+                return self.answer(&id, m);
+            }
+        }
         let Some(f) = self.flight.as_mut() else { return };
         if message_id(&m).as_ref().and_then(Value::as_str) != Some(f.id.as_str()) {
             return;
@@ -545,6 +660,9 @@ impl Driver {
         let (how, tail) = w.reap();
         let _ = writeln!(io::stderr(), "[client] worker ended: {how} ({why})");
         self.held = None;
+        for (_, r) in self.requests.drain() {
+            let _ = r.send(Err(refused("the geometry kernel stopped while working on this")));
+        }
         if let Some(f) = self.flight.take() {
             if self.crashed_on == Some(f.revision) {
                 self.emit(Event::Failed {

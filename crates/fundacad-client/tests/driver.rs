@@ -4,7 +4,7 @@
 
 use fundacad_client::{Client, Doc, Event, Mesh, Options, WorkerCommand};
 use fundacad_protocol::{read_message, write_message, Message};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
@@ -26,7 +26,11 @@ fn main() {
         ("a_reply_for_a_replaced_document_is_dropped", a_reply_for_a_replaced_document_is_dropped),
         ("a_corrupt_frame_fails_and_the_next_edit_goes_whole", a_corrupt_frame_fails_and_the_next_edit_goes_whole),
         ("an_engine_error_names_its_revision_and_feature", an_engine_error_names_its_revision_and_feature),
-        ("the_worker_builds_up_to_the_rollback_without_suppressed", the_worker_builds_up_to_the_rollback_without_suppressed),
+        (
+            "the_worker_builds_up_to_the_rollback_without_suppressed",
+            the_worker_builds_up_to_the_rollback_without_suppressed,
+        ),
+        ("one_shot_requests_answer_beside_rebuilds", one_shot_requests_answer_beside_rebuilds),
     ];
     let only = std::env::args().skip(1).find(|a| !a.starts_with('-'));
     let mut ran = 0;
@@ -47,6 +51,10 @@ fn fake_worker(script: &str, log: &PathBuf) {
     let mut stdout = std::io::stdout().lock();
     while let Ok(Some(Message::Text(t))) = read_message(&mut stdin) {
         let req: Value = serde_json::from_str(&t).unwrap();
+        if req["op"] != "rebuild" {
+            one_shot(&req, &mut stdout);
+            continue;
+        }
         let n = std::fs::read_to_string(log).map(|s| s.lines().count()).unwrap_or(0);
         let action = actions.get(n).copied().unwrap_or("ok");
         let doc = req.get("document");
@@ -81,11 +89,14 @@ fn fake_worker(script: &str, log: &PathBuf) {
                 ok
             }
             "resync" => json!({"id": id, "ok": true, "result": {"resync": true}}),
-            "stub" => json!({"id": id, "ok": true, "result": {"bodies": [{"id": "body1", "etag": "gone", "unchanged": true}]}}),
+            "stub" => {
+                json!({"id": id, "ok": true, "result": {"bodies": [{"id": "body1", "etag": "gone", "unchanged": true}]}})
+            }
             "cancel" => json!({"id": id, "ok": false, "cancelled": true, "error": {"message": "cancelled"}}),
             "fail" => json!({"id": id, "ok": false, "error": {"message": "boom", "feature_id": "f1"}}),
             "garbage" => {
-                let head = json!({"id": id, "ok": true, "result": {"$buffers": [{"len": u64::MAX / 2, "dtype": "f32"}]}});
+                let head =
+                    json!({"id": id, "ok": true, "result": {"$buffers": [{"len": u64::MAX / 2, "dtype": "f32"}]}});
                 let mut frame = Vec::new();
                 let h = head.to_string().into_bytes();
                 frame.extend_from_slice(&(h.len() as u32).to_le_bytes());
@@ -99,6 +110,29 @@ fn fake_worker(script: &str, log: &PathBuf) {
     }
 }
 
+/// Requests other than rebuilds, answered without touching the rebuild script.
+fn one_shot(req: &Value, out: &mut impl std::io::Write) {
+    let id = &req["id"];
+    fn say(out: &mut impl std::io::Write, v: Value) {
+        write_message(out, &Message::Text(v.to_string())).unwrap();
+    }
+    match req["op"].as_str().unwrap() {
+        "export" => say(
+            out,
+            json!({"id": id, "ok": true, "result": {
+                "path": req["path"], "features": req["document"]["features"].as_array().map(Vec::len),
+            }}),
+        ),
+        "import" => {
+            say(out, json!({"id": id, "status": "importing", "phase": "read", "label": "", "pct": 10}));
+            say(out, json!({"id": id, "ok": true, "result": {"name": req["path"], "geom": {}}}));
+        }
+        "refuse" => say(out, json!({"id": id, "ok": false, "error": {"message": "no such body"}})),
+        "stop" => say(out, json!({"id": id, "ok": false, "cancelled": true, "error": {"message": "cancelled"}})),
+        _ => std::process::exit(4),
+    }
+}
+
 struct Fake {
     client: Client,
     rx: Receiver<Event>,
@@ -108,9 +142,8 @@ struct Fake {
 fn fake(script: &str) -> Fake {
     let log = std::env::temp_dir().join(format!("fc-fake-{}-{}.log", std::process::id(), rand_tag()));
     let _ = std::fs::remove_file(&log);
-    let cmd = WorkerCommand::new(std::env::current_exe().unwrap())
-        .env("FC_FAKE_SCRIPT", script)
-        .env("FC_FAKE_LOG", &log);
+    let cmd =
+        WorkerCommand::new(std::env::current_exe().unwrap()).env("FC_FAKE_SCRIPT", script).env("FC_FAKE_LOG", &log);
     let (client, rx) = Client::spawn(cmd, Options::default()).unwrap();
     Fake { client, rx, log }
 }
@@ -320,7 +353,10 @@ fn an_engine_error_names_its_revision_and_feature() {
 fn the_worker_builds_up_to_the_rollback_without_suppressed() {
     let f = fake("");
     let mut d = doc("a");
-    d["features"].as_array_mut().unwrap().extend([json!({"id": "f2", "type": "box"}), json!({"id": "f3", "type": "box"})]);
+    d["features"]
+        .as_array_mut()
+        .unwrap()
+        .extend([json!({"id": "f2", "type": "box"}), json!({"id": "f3", "type": "box"})]);
     d.insert("rollback".into(), json!(2));
     f.client.load(d).unwrap();
     f.mesh();
@@ -331,4 +367,27 @@ fn the_worker_builds_up_to_the_rollback_without_suppressed() {
     assert_eq!(f.features_sent(), [2, 1, 2]);
     let kept = f.client.edit(|d| if d["features"].as_array().unwrap().len() == 3 { Ok(()) } else { Err("cut".into()) });
     assert_eq!(kept, Ok(None), "the client keeps every feature");
+}
+
+fn one_shot_requests_answer_beside_rebuilds() {
+    let f = fake("slow");
+    let missing = f.client.export(Map::new());
+    assert_eq!(missing.unwrap_err().message, "no document is open");
+    let mut d = doc("a");
+    d["features"].as_array_mut().unwrap().push(json!({"id": "f2", "type": "box"}));
+    d.insert("rollback".into(), json!(1));
+    f.client.load(d).unwrap();
+    let mut req = Map::new();
+    req.insert("path".into(), json!("C:/out/a.step"));
+    let out = f.client.export(req).unwrap();
+    assert_eq!(Value::Object(out), json!({"path": "C:/out/a.step", "features": 1}));
+    let mut imp = Map::new();
+    imp.insert("path".into(), json!("s.ply"));
+    assert_eq!(f.client.request("import", imp).unwrap()["name"], json!("s.ply"));
+    let no = f.client.request("refuse", Map::new()).unwrap_err();
+    assert_eq!((no.message.as_str(), no.cancelled), ("no such body", false));
+    assert!(f.client.request("stop", Map::new()).unwrap_err().cancelled);
+    f.mesh();
+    let died = f.client.request("die", Map::new()).unwrap_err();
+    assert!(died.message.contains("stopped"), "{died:?}");
 }
