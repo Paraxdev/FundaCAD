@@ -101,3 +101,110 @@ fn a_bad_recent_entry_is_skipped_and_the_rest_kept() {
     ];
     assert_eq!(readable(mixed), vec![r("D:/parts/lid.funda", 17), r("E:/box.fundab", 3)]);
 }
+
+#[test]
+fn dirty_is_a_change_from_what_was_read_or_written() {
+    use super::is_dirty;
+    let saved = new_document();
+    let mut edited = new_document();
+    edited.insert("parameters".into(), json!({"width": 42.5}));
+    assert!(!is_dirty(Some(&saved), Some(&new_document())));
+    assert!(is_dirty(Some(&edited), Some(&saved)));
+    assert!(is_dirty(Some(&saved), None), "a document nothing was read from is unsaved");
+    assert!(!is_dirty(None, Some(&saved)), "an STL is never dirty");
+    assert!(!is_dirty(None, None));
+}
+
+mod guard {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use gpui::{SharedString, TestAppContext, VisualTestContext};
+
+    use super::super::{ask_close, ask_discard, Close};
+    use crate::overlay::{self, asking, press, test_window};
+
+    fn discard(cx: &mut VisualTestContext, dirty: bool) -> Rc<RefCell<Option<bool>>> {
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        cx.update(|window, cx| {
+            window.spawn(cx, async move |cx| *g.borrow_mut() = Some(ask_discard(dirty, "Discard it?".into(), cx).await))
+        })
+        .detach();
+        cx.run_until_parked();
+        got
+    }
+
+    fn close(cx: &mut VisualTestContext) -> Rc<RefCell<Option<Close>>> {
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        cx.update(|window, cx| {
+            window.spawn(cx, async move |cx| *g.borrow_mut() = Some(ask_close("Save changes to Lid?".into(), cx).await))
+        })
+        .detach();
+        cx.run_until_parked();
+        got
+    }
+
+    fn answer(cx: &mut VisualTestContext, keys: &[&str]) {
+        for key in keys {
+            cx.update(|window, cx| press(window, cx, key));
+        }
+        cx.run_until_parked();
+    }
+
+    fn shown(cx: &mut VisualTestContext) -> Option<(SharedString, Vec<SharedString>)> {
+        cx.update(|_, cx| asking(cx))
+    }
+
+    #[test]
+    fn a_clean_document_goes_on_without_a_question() {
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        let got = discard(cx, false);
+        assert_eq!((*got.borrow(), shown(cx)), (Some(true), None));
+    }
+
+    #[test]
+    fn a_dirty_document_goes_on_only_on_discard() {
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        let question = Some(("Discard it?".into(), vec!["Discard".into(), "Cancel".into()]));
+        for (keys, want) in [(&["left", "enter"][..], true), (&["enter"][..], false), (&["escape"][..], false)] {
+            let got = discard(cx, true);
+            assert_eq!((*got.borrow(), shown(cx)), (None, question.clone()), "{keys:?} asked first");
+            answer(cx, keys);
+            assert_eq!((*got.borrow(), shown(cx)), (Some(want), None), "{keys:?}");
+        }
+    }
+
+    #[test]
+    fn closing_asks_save_dont_save_or_cancel() {
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        let labels: Vec<SharedString> = vec!["Save".into(), "Don't save".into(), "Cancel".into()];
+        let cases = [
+            (&["enter"][..], Close::Save),
+            (&["right", "enter"][..], Close::Discard),
+            (&["right", "right", "space"][..], Close::Stay),
+            (&["escape"][..], Close::Stay),
+        ];
+        for (keys, want) in cases {
+            let got = close(cx);
+            assert_eq!(shown(cx), Some(("Save changes to Lid?".into(), labels.clone())), "{keys:?}");
+            answer(cx, keys);
+            assert_eq!((*got.borrow(), shown(cx)), (Some(want), None), "{keys:?}");
+        }
+    }
+
+    #[test]
+    fn without_an_overlay_nothing_is_lost() {
+        let mut app = TestAppContext::single();
+        let cx = app.add_empty_window();
+        let got = discard(cx, true);
+        assert_eq!(*got.borrow(), Some(false));
+        let got = close(cx);
+        assert_eq!(*got.borrow(), Some(Close::Stay));
+        assert_eq!(cx.update(|_, cx| overlay::toasts(cx)), Vec::<SharedString>::new());
+    }
+}

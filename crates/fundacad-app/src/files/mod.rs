@@ -120,6 +120,23 @@ pub fn open_recent_path(path: PathBuf, window: &mut Window, cx: &mut App) {
     }
 }
 
+/// Whether what is shown differs from what was last read or written. An STL is never dirty, it cannot be saved.
+pub fn is_dirty(doc: Option<&Doc>, saved: Option<&Doc>) -> bool {
+    match (doc, saved) {
+        (Some(doc), Some(saved)) => doc != saved,
+        (Some(_), None) => true,
+        (None, _) => false,
+    }
+}
+
+/// What the close question's answer asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Close {
+    Save,
+    Discard,
+    Stay,
+}
+
 pub struct Files {
     viewport: Entity<Viewport>,
     path: Option<PathBuf>,
@@ -150,11 +167,7 @@ impl Files {
     }
 
     fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let dirty = match (self.viewport.read(cx).doc(), &self.saved) {
-            (Some(doc), Some(saved)) => doc != saved,
-            (Some(_), None) => true,
-            (None, _) => false,
-        };
+        let dirty = is_dirty(self.viewport.read(cx).doc(), self.saved.as_ref());
         let title = window_title(&self.name(), dirty);
         if dirty != self.dirty || title != self.title {
             self.dirty = dirty;
@@ -224,9 +237,13 @@ pub fn start(files: &Entity<Files>, window: &mut Window, cx: &mut App) {
     });
 }
 
-/// Asks before the changes are lost. True when the work may go.
 async fn may_discard(files: &Entity<Files>, question: String, cx: &mut AsyncWindowContext) -> bool {
     let dirty = cx.update(|_, cx| files.read(cx).dirty).unwrap_or(false);
+    ask_discard(dirty, question, cx).await
+}
+
+/// Asks before unsaved changes are lost. True when the work may go.
+pub(crate) async fn ask_discard(dirty: bool, question: String, cx: &mut AsyncWindowContext) -> bool {
     if !dirty {
         return true;
     }
@@ -324,6 +341,20 @@ pub fn save(files: Entity<Files>, as_new: bool, window: &mut Window, cx: &mut Ap
         .detach();
 }
 
+pub(crate) async fn ask_close(question: String, cx: &mut AsyncWindowContext) -> Close {
+    let choices = vec![
+        Choice::primary("Save"),
+        Choice::danger("Don't save").hint("close and lose the changes"),
+        Choice::plain("Cancel"),
+    ];
+    let Ok(answer) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else { return Close::Stay };
+    match answer.recv().await.ok().flatten() {
+        Some(0) => Close::Save,
+        Some(1) => Close::Discard,
+        _ => Close::Stay,
+    }
+}
+
 /// Asks to save before the window closes with unsaved changes. Returns whether it may close now.
 pub fn should_close(files: &Entity<Files>, window: &mut Window, cx: &mut App) -> bool {
     let f = files.read(cx);
@@ -334,16 +365,10 @@ pub fn should_close(files: &Entity<Files>, window: &mut Window, cx: &mut App) ->
     let files = files.clone();
     window
         .spawn(cx, async move |cx| {
-            let choices = vec![
-                Choice::primary("Save"),
-                Choice::danger("Don't save").hint("close and lose the changes"),
-                Choice::plain("Cancel"),
-            ];
-            let Ok(answer) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else { return };
-            let go = match answer.recv().await.ok().flatten() {
-                Some(0) => save_async(&files, false, cx).await,
-                Some(1) => true,
-                _ => false,
+            let go = match ask_close(question, cx).await {
+                Close::Save => save_async(&files, false, cx).await,
+                Close::Discard => true,
+                Close::Stay => false,
             };
             if go {
                 let _ = cx.update(|window, cx| {

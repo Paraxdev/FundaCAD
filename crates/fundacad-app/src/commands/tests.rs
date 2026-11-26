@@ -204,3 +204,65 @@ fn the_problems_summary_names_the_first_and_counts_the_rest() {
         Some("No shortcut is called a|model|Q, and 2 more".into())
     );
 }
+
+mod dispatch {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use gpui::{SharedString, TestAppContext};
+
+    use super::super::{available, enabled, register, run, set_enabled, Group};
+    use crate::overlay::{test_window, toasts};
+
+    #[test]
+    fn run_calls_the_handler_greys_a_disabled_one_and_toasts_a_missing_one() {
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        let calls = Rc::new(Cell::new(0));
+        let allowed = Rc::new(Cell::new(true));
+        let (c, a) = (calls.clone(), allowed.clone());
+        cx.update(|_, cx| {
+            register(cx, "fit", "Fit View", Group::View, move |_, _| c.set(c.get() + 1));
+            set_enabled(cx, "fit", move |_| a.get());
+        });
+
+        cx.update(|window, cx| run("fit", window, cx));
+        assert_eq!((calls.get(), cx.update(|_, cx| enabled(cx, "fit"))), (1, true));
+
+        allowed.set(false);
+        cx.update(|window, cx| run("fit", window, cx));
+        let ids = |cx: &mut gpui::VisualTestContext| cx.update(|_, cx| available(cx).iter().map(|c| c.id).collect::<Vec<_>>());
+        assert_eq!((calls.get(), cx.update(|_, cx| enabled(cx, "fit")), ids(cx)), (1, false, vec![]));
+
+        allowed.set(true);
+        assert_eq!(ids(cx), vec!["fit"]);
+        assert_eq!(cx.update(|_, cx| toasts(cx)), Vec::<SharedString>::new());
+
+        cx.update(|window, cx| run("chamfer", window, cx));
+        cx.update(|window, cx| run("no-such-id", window, cx));
+        assert_eq!(calls.get(), 1);
+        assert_eq!(
+            cx.update(|_, cx| toasts(cx)),
+            vec![SharedString::from("Chamfer (bevel) is not in FundaCAD 2 yet"), "no-such-id is not in FundaCAD 2 yet".into()]
+        );
+        assert!(cx.update(|_, cx| enabled(cx, "chamfer")), "a command this build lacks stays enabled");
+    }
+
+    #[test]
+    fn a_second_register_replaces_the_handler_and_set_enabled_on_a_missing_id_does_nothing() {
+        let mut app = TestAppContext::single();
+        let (cx, _overlay) = test_window(&mut app);
+        let hits = Rc::new(Cell::new((0, 0)));
+        let (h1, h2) = (hits.clone(), hits.clone());
+        cx.update(|_, cx| {
+            register(cx, "top", "Top", Group::View, move |_, _| h1.set((h1.get().0 + 1, h1.get().1)));
+            register(cx, "top", "Top View", Group::View, move |_, _| h2.set((h2.get().0, h2.get().1 + 1)));
+            set_enabled(cx, "ghost", |_| false);
+        });
+        cx.update(|window, cx| run("top", window, cx));
+        assert_eq!(hits.get(), (0, 1));
+        let listed = cx.update(|_, cx| available(cx).iter().map(|c| (c.id, c.label.clone())).collect::<Vec<_>>());
+        assert_eq!(listed, vec![("top", SharedString::from("Top View"))]);
+        assert!(cx.update(|_, cx| enabled(cx, "ghost")));
+    }
+}

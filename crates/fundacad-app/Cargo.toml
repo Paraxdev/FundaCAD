@@ -33,6 +33,9 @@ serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 rust-embed = "8.14"
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 
+[dev-dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.14", features = ["test-support"] }
+
 [features]
 # FUNDA_SHOT=<file.png> saves the window as GPUI rendered it, then quits.
 shot = ["dep:image", "gpui/test-support", "gpui_windows/test-support"]

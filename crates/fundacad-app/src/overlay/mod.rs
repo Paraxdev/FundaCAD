@@ -89,6 +89,36 @@ pub fn confirm(
     rx
 }
 
+/// A window with the overlay up, for tests that ask, toast or run commands. Keep the overlay alive while it is used.
+#[cfg(test)]
+pub fn test_window(app: &mut TestAppContext) -> (&mut VisualTestContext, Entity<Overlay>) {
+    let cx = app.add_empty_window();
+    let overlay = cx.update(|_, cx| new(cx));
+    (cx, overlay)
+}
+
+/// The question asked now and its choices, for tests.
+#[cfg(test)]
+pub fn asking(cx: &App) -> Option<(SharedString, Vec<SharedString>)> {
+    let o = handle(cx)?;
+    let c = o.read(cx).confirm.as_ref()?;
+    Some((c.question.clone(), c.choices.iter().map(|c| c.label.clone()).collect()))
+}
+
+/// The messages of the toasts shown now, oldest first, for tests.
+#[cfg(test)]
+pub fn toasts(cx: &App) -> Vec<SharedString> {
+    handle(cx).map_or_else(Vec::new, |o| o.read(cx).toasts.items.iter().map(|i| i.toast.message.clone()).collect())
+}
+
+/// Presses a key on the question asked now, as GPUI names it ("enter", "escape", "right"), for tests.
+#[cfg(test)]
+pub fn press(window: &mut Window, cx: &mut App, key: &str) {
+    if let Some(o) = handle(cx) {
+        o.update(cx, |o, cx| o.confirm_key(key, window, cx));
+    }
+}
+
 /// A right click menu at `position`, in window coordinates.
 pub fn open_menu(window: &mut Window, cx: &mut App, position: Point<Pixels>, rows: Vec<MenuRow>) {
     let Some(overlay) = handle(cx) else { return };
