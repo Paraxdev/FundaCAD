@@ -456,6 +456,7 @@ impl Viewport {
             self.message = None;
             self.hover = None;
             self.built = mesh.bodies.clone();
+            self.inspect.rebuilt();
             self.show_built();
             self.retarget(mesh.revision);
         }

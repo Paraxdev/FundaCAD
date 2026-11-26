@@ -60,6 +60,14 @@ pub struct Inspecting {
 }
 
 impl Inspecting {
+    /// Measure's picks and the engine checks' replies point at the mesh before, so a new one drops them, a check
+    /// still running included.
+    pub fn rebuilt(&mut self) {
+        self.probes.clear();
+        self.asked = None;
+        self.ticket += 1;
+    }
+
     /// A fresh view of a newly opened document, with the cut it was saved with.
     pub fn opened(doc: Option<&Map<String, Value>>) -> Self {
         Self { section: doc.and_then(section::read), ..Self::default() }
@@ -84,12 +92,17 @@ impl Viewport {
         if i.card == card {
             return;
         }
+        // As FundaCAD 1's measureTool, Measure starts and ends with nothing selected.
+        let measure = i.card == Some(Card::Measure) || card == Some(Card::Measure);
         i.card = card;
         i.probes.clear();
         i.marker = None;
         i.section_face = false;
         if i.asked.as_ref().is_some_and(|(c, _)| Some(*c) != card) {
             i.asked = None;
+        }
+        if measure {
+            self.clear_selection(cx);
         }
         cx.notify();
     }

@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use super::{add_probe, measure, Inspecting, Probe, Section, Shade};
+use super::{add_probe, measure, Asked, Card, Inspecting, Probe, Section, Shade};
 
 fn edge(x: f32) -> Probe {
     measure::edge_probe(vec![Vec3::new(x, -2.0, 5.0), Vec3::new(x, 5.0, 5.0)]).unwrap()
@@ -31,4 +31,18 @@ fn an_opened_document_starts_a_fresh_view_with_its_saved_cut() {
     assert_eq!((i.card, i.probes.len(), i.isolate.is_none()), (None, 0, true));
     assert_eq!(Inspecting::opened(Some(&serde_json::Map::new())).section, None);
     assert_eq!(Inspecting::opened(None).section, None);
+}
+
+#[test]
+fn a_rebuild_drops_the_picks_and_replies_but_keeps_the_card_and_cut() {
+    let cut = Section::along(2, Vec3::new(3.0, -2.0, 5.0));
+    let mut i = Inspecting { card: Some(Card::Interference), section: Some(cut), isolate: Some(vec!["b2".into()]), ..Inspecting::default() };
+    i.probes = vec![edge(3.0), edge(7.0)];
+    i.asked = Some((Card::Interference, Asked::Busy));
+    i.ticket = 4;
+    i.rebuilt();
+    assert_eq!((i.card, i.section, i.isolate.as_deref(), i.probes.len(), i.asked, i.ticket), (Some(Card::Interference), Some(cut), Some(&["b2".to_string()][..]), 0, None, 5));
+    let mut fresh = Inspecting::default();
+    fresh.rebuilt();
+    assert_eq!((fresh.probes.len(), fresh.asked, fresh.ticket), (0, None, 1));
 }
