@@ -42,6 +42,8 @@ describe("skipping rust-geom when no Rust input changed", () => {
       "docs/ENGINE.md",
       "e2e/x.spec.ts",
       "scripts/ui-strings-allow.json",
+      "crates/fundacad-app/src/main.rs",
+      "third_party/gpui/gpui-pre/src/window.rs",
     ]) {
       expect(out(path), path).toBe(true);
     }

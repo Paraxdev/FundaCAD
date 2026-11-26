@@ -1,0 +1,42 @@
+[package]
+name = "fundacad-app"
+version = "2.0.0-indev.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+authors = ["Paraxdev"]
+rust-version = "1.89"
+publish = false
+description = "FundaCAD 2, the native app on GPUI"
+
+# Its own workspace: see the root Cargo.toml.
+[workspace]
+
+[[bin]]
+name = "fundacad-app"
+path = "src/main.rs"
+
+[dependencies]
+gpui-kit = "=0.11.0"
+gpui = { package = "gpui-pre", version = "=0.3.14" }
+gpui_wgpu = { package = "gpui-pre-wgpu", version = "=0.3.14" }
+bytemuck = { version = "1", features = ["derive"] }
+glam = "0.30"
+log = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+gpui_windows = { package = "gpui-pre-windows", version = "=0.3.14" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[patch.crates-io]
+gpui-pre = { path = "../../third_party/gpui/gpui-pre" }
+gpui-pre-wgpu = { path = "../../third_party/gpui/gpui-pre-wgpu" }
+gpui-pre-windows = { path = "../../third_party/gpui/gpui-pre-windows" }

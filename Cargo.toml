@@ -9,6 +9,8 @@
 # bundle. It reaches the pivot crates by path and joins the workspace in Phase
 # 2, together with the CI path changes that move implies.
 # `third_party/opencascade-rs` is its own workspace (vendored bindings).
+# `crates/fundacad-app` (FundaCAD 2, docs/dev/NATIVE-DIRECTION.md) is its own workspace too, so the GPUI
+# fork in `third_party/gpui` and its system libraries stay out of the engine jobs.
 [workspace]
 resolver = "2"
 members = [
@@ -20,7 +22,7 @@ members = [
     "crates/fundacad-format",
     "crates/fundacad-protocol",
 ]
-exclude = ["src-tauri", "third_party/opencascade-rs"]
+exclude = ["src-tauri", "third_party/opencascade-rs", "crates/fundacad-app", "third_party/gpui"]
 
 [workspace.package]
 version = "0.2.0"
