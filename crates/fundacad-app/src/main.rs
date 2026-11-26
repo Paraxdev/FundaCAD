@@ -10,6 +10,7 @@ mod engine;
 mod files;
 mod home;
 mod i18n;
+mod inspect;
 mod inspector;
 mod items;
 mod overlay;

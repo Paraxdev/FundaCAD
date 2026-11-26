@@ -136,6 +136,8 @@ pub const MODEL: &[Group] = &[
                     t("interference", "Interference", "interference"),
                     t("stress", "Stress", "stress"),
                     t("draft-analysis", "Overhang", "draftAnalysis"),
+                    t("printability", "Printability", "check"),
+                    t("bed-fit", "Bed Fit Check", "printing/print"),
                     t("zebra", "Zebra", "zebra"),
                     t("curvature", "Curvature", "curvature"),
                     t("component-colors", "Body Colors", "componentColors"),

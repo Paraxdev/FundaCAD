@@ -219,6 +219,11 @@ impl Client {
         self.ask(op, fields, false)
     }
 
+    /// A one-shot op on the document as built, cut at the rollback marker, as `interference` and `printability` want.
+    pub fn request_built(&self, op: &str, fields: Map<String, Value>) -> Answer {
+        self.ask(op, fields, true)
+    }
+
     /// An `export` of the open document. `fields` carry the format, the path and the options [`transfer::export`]
     /// builds. Bodies come from the document cut at the rollback marker, a sketch or face goes whole as in FundaCAD 1,
     /// since the engine reads a flat source straight from the document and a suppressed sketch still exports.

@@ -18,6 +18,10 @@ struct Uniforms {
     view_proj: [[f32; 4]; 4],
     eye: [f32; 4],
     encode_srgb: [f32; 4],
+    /// xyz and w: the points p with xyz.p <= w are drawn. Off when xyz is zero.
+    clip: [f32; 4],
+    /// xyz: the build direction, w: the overhang threshold in degrees. Off when xyz is zero.
+    shade: [f32; 4],
 }
 
 #[repr(C)]
@@ -39,6 +43,8 @@ pub struct Overlay {
     pub mask_revision: u64,
     /// Bumped whenever what is selected changes.
     pub selection_revision: u64,
+    pub clip: Option<[f32; 4]>,
+    pub shade: Option<[f32; 4]>,
 }
 
 /// A selected body by scene index, with the faces of it selected, None for the whole body.
@@ -419,6 +425,8 @@ impl Renderer {
             view_proj: (camera.projection(aspect) * camera.view()).to_cols_array_2d(),
             eye: camera.eye().extend(1.0).into(),
             encode_srgb: [if self.format.is_srgb() { 0.0 } else { 1.0 }; 4],
+            clip: overlay.clip.unwrap_or_default(),
+            shade: overlay.shade.unwrap_or_default(),
         };
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
         if let Some((buffer, _, _)) = &self.body_uniforms {

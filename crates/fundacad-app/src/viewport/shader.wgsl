@@ -2,6 +2,8 @@ struct Uniforms {
   view_proj: mat4x4<f32>,
   eye: vec4<f32>,
   encode_srgb: vec4<f32>,
+  clip: vec4<f32>,
+  shade: vec4<f32>,
 }
 
 struct Body {
@@ -40,16 +42,37 @@ fn vs(
 
 @fragment
 fn fs(in: Varying) -> @location(0) vec4<f32> {
-  var n = normalize(in.normal);
+  let clipping = dot(u.clip.xyz, u.clip.xyz) > 0.0;
+  if (clipping && dot(u.clip.xyz, in.world) > u.clip.w) {
+    discard;
+  }
+  let raw = normalize(in.normal);
+  var n = raw;
   let view_dir = normalize(u.eye.xyz - in.world);
-  if (dot(n, view_dir) < 0.0) {
+  let inside = dot(n, view_dir) < 0.0;
+  if (inside) {
     n = -n;
   }
   let key = normalize(vec3<f32>(0.4, -0.5, 0.8));
   let fill = normalize(vec3<f32>(-0.6, 0.4, 0.2));
   var base = vec3<f32>(0.62, 0.66, 0.72);
+  if (dot(u.shade.xyz, u.shade.xyz) > 0.0) {
+    // overhang::classify, the same rule the card's areas use.
+    let c = dot(raw, u.shade.xyz);
+    if (c > 0.02) {
+      base = vec3<f32>(0.22, 0.62, 0.3);
+    } else if (c < -0.02 && degrees(acos(min(-c, 1.0))) < u.shade.w) {
+      base = vec3<f32>(0.8, 0.16, 0.1);
+    } else {
+      base = vec3<f32>(0.18, 0.44, 0.8);
+    }
+  }
   if (in.selected > 0.5) {
     base = vec3<f32>(0.36, 0.56, 0.98);
+  }
+  if (clipping && inside) {
+    // The inside of a cut body, seen through the cut.
+    base = vec3<f32>(0.85, 0.42, 0.2);
   }
   if (body.hover.x >= 0 && u32(body.hover.x) == in.face) {
     if (body.hover.y == 1) {

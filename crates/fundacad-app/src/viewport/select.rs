@@ -4,7 +4,6 @@ use glam::{Vec2, Vec3};
 use gpui::*;
 
 use super::edges;
-use super::pick;
 use super::renderer::Selected;
 use super::resolve::resolve;
 use super::scene::Scene;
@@ -102,7 +101,7 @@ impl Viewport {
         self.set_selection(Vec::new(), cx);
     }
 
-    fn screen(&self) -> impl Fn(Vec3) -> Option<Vec2> + '_ {
+    pub(super) fn screen(&self) -> impl Fn(Vec3) -> Option<Vec2> + '_ {
         let b = self.bounds;
         let (w, h) = (b.size.width.as_f32().max(1.0), b.size.height.as_f32().max(1.0));
         let m = self.camera.projection(w / h) * self.camera.view();
@@ -115,7 +114,7 @@ impl Viewport {
     /// The face and the edge under `position`, an edge hidden behind the face hit left out.
     pub(super) fn picks_at(&self, position: Point<Pixels>) -> (Option<Pick>, Option<(usize, usize, Pick)>) {
         let (origin, dir) = self.ray_at(position);
-        let hit = pick::pick(&self.scene, origin, dir);
+        let hit = self.pick_ray(origin, dir);
         let face = hit.map(|h| {
             let body = self.scene.bodies[h.body].source.id.clone();
             Pick::Face { body, face: h.face, point: h.point.to_array(), normal: h.normal.to_array() }
@@ -128,7 +127,7 @@ impl Viewport {
         let mut best: Option<(usize, edges::Near)> = None;
         for (bi, lines) in self.picking.lines.iter().enumerate() {
             let Some(n) = edges::nearest(lines, &project, cursor, EDGE_REACH) else { continue };
-            if limit.is_some_and(|l| n.point.distance(eye) > l) {
+            if limit.is_some_and(|l| n.point.distance(eye) > l) || self.clipped(n.point) {
                 continue;
             }
             if best.as_ref().is_none_or(|(_, b)| n.distance < b.distance) {
@@ -159,6 +158,9 @@ impl Viewport {
     /// A click that did not drag: a target pick while one is armed, else the selection.
     pub(super) fn click(&mut self, position: Point<Pixels>, mods: Mods, cx: &mut Context<Self>) {
         let (face, edge) = self.picks_at(position);
+        if self.inspect_takes_click() {
+            return self.inspect_click(face, edge, cx);
+        }
         let edge = edge.map(|(_, _, p)| p);
         if let Some(arm) = self.arm() {
             let body = face.as_ref().or(edge.as_ref()).and_then(|p| p.body()).map(|b| Pick::Body { body: b.into() });

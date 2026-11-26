@@ -5,6 +5,7 @@ mod demo;
 mod drag;
 mod edges;
 mod gizmo;
+pub mod inspecting;
 mod issues;
 pub mod mesh;
 mod pick;
@@ -132,6 +133,7 @@ pub struct Viewport {
     picking: select::Picking,
     tool: Option<ToolRun>,
     gizmo: gizmo::Gizmo,
+    inspect: inspecting::Inspecting,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -185,6 +187,7 @@ impl Viewport {
             picking: Default::default(),
             tool: None,
             gizmo: Default::default(),
+            inspect: Default::default(),
             _wake: None,
             _demo: None,
         }
@@ -231,6 +234,10 @@ impl Viewport {
         self.fitted = false;
         self._wake = None;
         self._demo = None;
+        self.inspect = inspecting::Inspecting::opened(match &opened {
+            Opened::Doc(session) => Some(&session.doc),
+            Opened::Stl(_) => None,
+        });
         self.show(&[]);
         match opened {
             Opened::Stl(body) => {
@@ -460,6 +467,7 @@ impl Viewport {
             self.hover = None;
             self.built = mesh.bodies.clone();
             self.datums.mesh = Some(mesh.clone());
+            self.inspect.rebuilt();
             self.show_built();
             self.retarget(mesh.revision);
         }
@@ -508,7 +516,14 @@ impl Viewport {
         };
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
-        Overlay { hover, stretch, mask_revision: self.mask_revision, selection_revision: self.picking.revision }
+        Overlay {
+            hover,
+            stretch,
+            mask_revision: self.mask_revision,
+            selection_revision: self.picking.revision,
+            clip: self.clip_plane(),
+            shade: self.shade_uniform(),
+        }
     }
 
     /// Makes or remakes the renderer whenever GPUI has a new device.
@@ -562,7 +577,7 @@ impl Viewport {
 
     fn hover_at(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
         let (origin, dir) = self.ray_at(position);
-        let hit = pick::pick(&self.scene, origin, dir);
+        let hit = self.pick_ray(origin, dir);
         let same = match (&self.hover, &hit) {
             (Some((a, _)), Some(b)) => a.body == b.body && a.face == b.face,
             (None, None) => true,
@@ -790,6 +805,7 @@ impl Render for Viewport {
                             }
                             this.paint_edges(bounds, picked, hover, window);
                             this.paint_gizmo(axes, hover, window);
+                            this.paint_inspect(bounds, hover, window);
                         });
                     },
                 )

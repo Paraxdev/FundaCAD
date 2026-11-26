@@ -3,6 +3,7 @@
 mod geometry;
 mod history;
 mod history_menu;
+mod inspect;
 mod inspector;
 #[cfg(test)]
 mod inspector_tests;
@@ -72,6 +73,7 @@ impl Shell {
             p.update(cx, |p, cx| p.toggle(cx))
         });
         tool_card::install(&viewport, cx);
+        inspect::install(&viewport, cx);
         let mut shell = Self {
             viewport,
             doc,
@@ -215,7 +217,11 @@ impl Render for Shell {
                 let e = cx.entity();
                 let on_family: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
                     std::rc::Rc::new(move |label, _, cx| e.update(cx, |s, cx| s.toggle_family(label, cx)));
-                div().relative().h_full().child(rail::rail(t, self.rail_open, on_family)).children(
+                let e = cx.entity();
+                let on_tool: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
+                    std::rc::Rc::new(move |label, window, cx| e.update(cx, |s, cx| s.rail_tool(label, window, cx)));
+                let foot = self.rail_foot(cx);
+                div().relative().h_full().child(rail::rail(t, self.rail_open, foot, on_family, on_tool)).children(
                     self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
                 )
             });
@@ -229,6 +235,7 @@ impl Render for Shell {
             .gap(gap)
             .child(self.view_controls(t))
             .children(self.tool_card(t, window, cx))
+            .children(self.inspect_card(t, cx))
             .child(self.history_card(t, window, cx));
         let status = self.viewport.read(cx).status();
         let status = div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(
