@@ -214,6 +214,7 @@ impl Driver {
                     Err(RecvTimeoutError::Timeout) => {
                         self.restart_at = None;
                         self.start_worker();
+                        self.pump();
                         continue;
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
