@@ -1,6 +1,7 @@
 //! Times a parameter edit to a fresh mesh on real documents.
-//!   cargo run -p fundacad-client --release --example roundtrip -- <doc.funda>[:param] ...
-//! Per document: the cold open, ten edits one at a time, then a 60 Hz drag of 60 edits that does not wait.
+//!   cargo run -p fundacad-client --release --example roundtrip -- <doc.funda>[:param | #feature.field] ...
+//! Per document: the cold open, ten edits one at a time, a 60 Hz drag of 60 edits that does not wait, and a killed
+//! worker. `FC_TOL` sets the tolerance, `FC_NO_DISK=1` turns the engine's disk cache off.
 
 use fundacad_client::{Client, Event, Mesh, Options, WorkerCommand};
 use serde_json::Value;
@@ -43,12 +44,39 @@ fn pick_param(doc: &serde_json::Map<String, Value>) -> Option<(String, f64)> {
     plain().find(|(n, _)| features.contains(&format!("\"{n}\""))).or_else(|| plain().next())
 }
 
+enum Target {
+    Param(String),
+    Field(usize, String),
+}
+
+impl Target {
+    fn set(&self, client: &Client, v: f64) {
+        let edited = match self {
+            Target::Param(n) => client.set_param(n, v),
+            Target::Field(i, f) => {
+                let (i, f) = (*i, f.clone());
+                client.edit(move |d| {
+                    let feature = d.get_mut("features").and_then(|fs| fs.get_mut(i)).ok_or("no such feature")?;
+                    feature[f.as_str()] = serde_json::json!(v);
+                    Ok(())
+                })
+            }
+        };
+        edited.expect("the edit applies");
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     for arg in args {
-        let (path, forced) = match arg.rsplit_once(':').filter(|(p, _)| p.len() > 2) {
-            Some((p, name)) => (p.to_owned(), Some(name.to_owned())),
-            None => (arg.clone(), None),
+        let (path, forced) = if let Some((p, t)) = arg.split_once('#') {
+            let (i, f) = t.split_once('.').expect("#index.field");
+            (p.to_owned(), Some(Target::Field(i.parse().expect("a feature index"), f.to_owned())))
+        } else {
+            match arg.rsplit_once(':').filter(|(p, _)| p.len() > 2) {
+                Some((p, name)) => (p.to_owned(), Some(Target::Param(name.to_owned()))),
+                None => (arg.clone(), None),
+            }
         };
         if let Err(e) = run(Path::new(&path), forced) {
             println!("{path}: {e}");
@@ -56,23 +84,35 @@ fn main() {
     }
 }
 
-fn run(path: &Path, forced: Option<String>) -> Result<(), String> {
-    let cmd = WorkerCommand::locate().map_err(|e| e.to_string())?;
-    let (client, rx) = Client::spawn(cmd, Options::default()).map_err(|e| e.to_string())?;
+fn run(path: &Path, forced: Option<Target>) -> Result<(), String> {
+    let mut cmd = WorkerCommand::locate().map_err(|e| e.to_string())?;
+    if std::env::var("FC_NO_DISK").is_ok_and(|v| v == "1") {
+        cmd = cmd.env("FUNDACAD_DISK_CACHE", "0");
+    }
+    let tolerance = std::env::var("FC_TOL").ok().and_then(|t| t.parse().ok()).unwrap_or(0.1);
+    let (client, rx) = Client::spawn(cmd, Options { tolerance, ..Options::default() }).map_err(|e| e.to_string())?;
     let text = fundacad_format::read_document(path, &std::env::temp_dir()).map_err(|e| e.to_string())?;
     let doc: serde_json::Map<String, Value> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let (param, base) = match forced {
-        Some(n) => {
+    let (target, label, base) = match forced {
+        Some(Target::Param(n)) => {
             let v = doc["paramDefs"][&n]["value"].as_f64().ok_or(format!("no parameter {n}"))?;
-            (n, v)
+            (Target::Param(n.clone()), n, v)
         }
-        None => pick_param(&doc).ok_or("no plain parameter to edit")?,
+        Some(Target::Field(i, f)) => {
+            let v = doc["features"][i][&f].as_f64().ok_or(format!("feature {i} has no number in {f}"))?;
+            let label = format!("{}.{f}", doc["features"][i]["id"].as_str().unwrap_or("?"));
+            (Target::Field(i, f), label, v)
+        }
+        None => {
+            let (n, v) = pick_param(&doc).ok_or("no plain parameter to edit")?;
+            (Target::Param(n.clone()), n, v)
+        }
     };
     let t = Instant::now();
-    client.load(doc);
+    client.load(doc)?;
     let cold = next_mesh(&rx)?;
     println!(
-        "{}: cold open {:.0} ms, {} bodies, {} tris; editing {param} from {base}",
+        "{}: cold open {:.0} ms, {} bodies, {} tris; editing {label} from {base}",
         path.display(),
         ms(t.elapsed()),
         cold.bodies.len(),
@@ -83,7 +123,7 @@ fn run(path: &Path, forced: Option<String>) -> Result<(), String> {
     let mut engine = Vec::new();
     let mut rev = cold.revision;
     for k in 1..=10 {
-        client.set_param(&param, base * (1.0 + 0.002 * k as f64));
+        target.set(&client, base * (1.0 + 0.002 * k as f64));
         let m = next_mesh(&rx)?;
         rev = m.revision;
         each.push(ms(m.timing.total));
@@ -99,7 +139,7 @@ fn run(path: &Path, forced: Option<String>) -> Result<(), String> {
     let start = Instant::now();
     let mut meshes = Vec::new();
     for k in 0..60 {
-        client.set_param(&param, base * (1.0 - 0.002 * (k % 10) as f64));
+        target.set(&client, base * (1.0 - 0.002 * (k % 10) as f64));
         let due = start + tick * (k + 1);
         while let Some(left) = due.checked_duration_since(Instant::now()) {
             match rx.recv_timeout(left) {
@@ -125,7 +165,7 @@ fn run(path: &Path, forced: Option<String>) -> Result<(), String> {
 
     let t = Instant::now();
     client.kill_worker();
-    client.set_param(&param, base);
+    target.set(&client, base);
     loop {
         match rx.recv_timeout(Duration::from_secs(120)).map_err(|e| e.to_string())? {
             Event::Mesh(m) => {

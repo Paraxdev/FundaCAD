@@ -15,3 +15,8 @@ fundacad-format = { path = "../fundacad-format" }
 fundacad-engine = { path = "../fundacad-engine" }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 indexmap = "2"
+
+# Runs itself as a scripted fake worker, so it has its own main.
+[[test]]
+name = "driver"
+harness = false

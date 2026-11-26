@@ -7,8 +7,9 @@ use std::ffi::OsString;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const STDERR_KEEP: usize = 40;
 
@@ -59,7 +60,9 @@ pub(crate) enum FromWorker {
 pub(crate) struct Worker {
     child: Child,
     stdin: BufWriter<ChildStdin>,
-    pub stderr_tail: Arc<Mutex<VecDeque<String>>>,
+    stderr_tail: Arc<Mutex<VecDeque<String>>>,
+    /// Closes when the stderr reader has read to the end.
+    stderr_done: Option<Receiver<()>>,
     #[cfg(windows)]
     _job: Option<fundacad_engine::sandbox::Job>,
 }
@@ -80,25 +83,87 @@ impl Worker {
             let _ = reduced;
             c.spawn()?
         };
-        let stdin = child.stdin.take().ok_or_else(|| io::Error::other("no worker stdin"))?;
-        let mut stdout = child.stdout.take().ok_or_else(|| io::Error::other("no worker stdout"))?;
-        let stderr_tail = Arc::new(Mutex::new(VecDeque::new()));
-        if let Some(stderr) = child.stderr.take() {
-            let tail = stderr_tail.clone();
-            std::thread::Builder::new().name("engine-stderr".into()).spawn(move || {
-                for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                    // Never eprintln: with nobody reading our stderr it panics, and a worker whose stderr is not
-                    // drained blocks on its next log line mid job.
-                    let _ = writeln!(io::stderr(), "[engine] {line}");
-                    let mut t = tail.lock().unwrap_or_else(|p| p.into_inner());
-                    if t.len() == STDERR_KEEP {
-                        t.pop_front();
-                    }
-                    t.push_back(line);
-                }
-            })?;
+        let threads = start_readers(&mut child, generation, to);
+        let (stdin, stderr_tail, stderr_done) = match threads {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(e);
+            }
+        };
+        Ok(Worker {
+            child,
+            stdin: BufWriter::new(stdin),
+            stderr_tail,
+            stderr_done,
+            #[cfg(windows)]
+            _job: job,
+        })
+    }
+
+    pub fn send(&mut self, text: String) -> io::Result<()> {
+        write_message(&mut self.stdin, &Message::Text(text))
+    }
+
+    /// Ends the process and says how it ended, with the last lines it wrote to stderr. Its output already closed,
+    /// so one still running is wedged.
+    pub fn reap(mut self) -> (String, Vec<String>) {
+        let _ = self.child.kill();
+        let how = match self.child.wait() {
+            Ok(s) => match s.code() {
+                Some(fundacad_engine::EXIT_BREACH) => "it ended itself over a stalled job".into(),
+                _ => s.to_string(),
+            },
+            Err(e) => e.to_string(),
+        };
+        // The panic message is usually the last thing it wrote, still in the pipe when stdout closed.
+        if let Some(done) = self.stderr_done.take() {
+            let _ = done.recv_timeout(Duration::from_millis(500));
         }
-        std::thread::Builder::new().name("engine-frames".into()).spawn(move || loop {
+        let tail = self.stderr_tail.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect();
+        (how, tail)
+    }
+
+    pub fn kill(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
+type Readers = (ChildStdin, Arc<Mutex<VecDeque<String>>>, Option<Receiver<()>>);
+
+fn start_readers(child: &mut Child, generation: u64, to: Sender<Input>) -> io::Result<Readers> {
+    let stdin = child.stdin.take().ok_or_else(|| io::Error::other("no worker stdin"))?;
+    let mut stdout = child.stdout.take().ok_or_else(|| io::Error::other("no worker stdout"))?;
+    let stderr_tail = Arc::new(Mutex::new(VecDeque::new()));
+    let mut stderr_done = None;
+    if let Some(stderr) = child.stderr.take() {
+        let tail = stderr_tail.clone();
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+        stderr_done = Some(done_rx);
+        std::thread::Builder::new().name("engine-stderr".into()).spawn(move || {
+            let _done = done_tx;
+            let mut r = BufReader::new(stderr);
+            let mut raw = Vec::new();
+            loop {
+                raw.clear();
+                match r.read_until(b'\n', &mut raw) {
+                    Ok(0) | Err(_) => return,
+                    Ok(_) => {}
+                }
+                let line = String::from_utf8_lossy(&raw).trim_end_matches(['\r', '\n']).to_owned();
+                // Never eprintln: with nobody reading our stderr it panics, and a worker whose stderr is not
+                // drained blocks on its next log line mid job.
+                let _ = writeln!(io::stderr(), "[engine] {line}");
+                let mut t = tail.lock().unwrap_or_else(|p| p.into_inner());
+                if t.len() == STDERR_KEEP {
+                    t.pop_front();
+                }
+                t.push_back(line);
+            }
+        })?;
+    }
+    std::thread::Builder::new().name("engine-frames".into()).spawn(move || loop {
             match read_message(&mut stdout) {
                 Ok(Some(m)) => {
                     let n = m.payload().len() + 5;
@@ -115,39 +180,8 @@ impl Worker {
                     return;
                 }
             }
-        })?;
-        Ok(Worker {
-            child,
-            stdin: BufWriter::new(stdin),
-            stderr_tail,
-            #[cfg(windows)]
-            _job: job,
-        })
-    }
-
-    pub fn send(&mut self, text: String) -> io::Result<()> {
-        write_message(&mut self.stdin, &Message::Text(text))
-    }
-
-    /// Ends the process and says how it ended. Its output already closed, so one still running is wedged.
-    pub fn reap(mut self) -> String {
-        let _ = self.child.kill();
-        match self.child.wait() {
-            Ok(s) => match s.code() {
-                Some(fundacad_engine::EXIT_BREACH) => "it ended itself over a stalled job".into(),
-                _ => s.to_string(),
-            },
-            Err(e) => e.to_string(),
-        }
-    }
-
-    pub fn tail(&self) -> Vec<String> {
-        self.stderr_tail.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect()
-    }
-
-    pub fn kill(&mut self) {
-        let _ = self.child.kill();
-    }
+    })?;
+    Ok((stdin, stderr_tail, stderr_done))
 }
 
 /// Each worker runs in its own job, part of its reduced rights: it ends with the app and starts no process.

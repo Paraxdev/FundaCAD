@@ -26,7 +26,7 @@ fn edits_rebuild_and_a_killed_worker_comes_back() {
     };
     let plate = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/templates/plate.funda");
     let (client, rx) = Client::spawn(cmd, Options::default()).unwrap();
-    client.open(&plate).unwrap();
+    assert_eq!(client.open(&plate).unwrap(), 1);
     let mut restarts = 0;
     let first = next_mesh(&rx, &mut restarts);
     assert!(first.timing.full_send);
@@ -40,14 +40,15 @@ fn edits_rebuild_and_a_killed_worker_comes_back() {
         let (n, d) = defs.iter().find(|(_, d)| d["expr"].as_str().is_some_and(|e| e.parse::<f64>().is_ok())).unwrap();
         (n.clone(), d["value"].as_f64().unwrap())
     };
-    client.set_param(&name, value * 1.1);
+    assert_eq!(client.set_param(&name, value * 1.1).unwrap(), Some(2));
     let edited = next_mesh(&rx, &mut restarts);
     assert!(!edited.timing.full_send, "a parameter edit goes as a delta");
-    assert!(edited.revision > first.revision);
+    assert_eq!(edited.revision, 2);
 
     client.kill_worker();
-    client.set_param(&name, value);
+    assert_eq!(client.set_param(&name, value).unwrap(), Some(3));
     let again = next_mesh(&rx, &mut restarts);
+    assert_eq!(again.revision, 3);
     assert_eq!(restarts, 1);
     assert!(again.timing.full_send, "a new worker holds nothing, so the document goes whole");
     assert_eq!(again.triangles(), first.triangles());
