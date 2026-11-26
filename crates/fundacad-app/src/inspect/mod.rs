@@ -4,6 +4,7 @@
 pub mod bedfit;
 pub mod clash;
 pub mod filament;
+pub mod isolate;
 pub mod measure;
 pub mod overhang;
 pub mod printcheck;
@@ -11,7 +12,7 @@ pub mod props;
 pub mod section;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// One readout line, a name and its value.
 pub type Row = (String, String);

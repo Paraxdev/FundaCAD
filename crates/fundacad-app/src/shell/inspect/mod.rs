@@ -11,7 +11,7 @@ use crate::commands::{register, Group};
 use crate::inspect::filament::Prefs as Filament;
 use crate::inspect::printcheck::Settings;
 use crate::inspect::section::Section;
-use crate::inspect::{bedfit, Row};
+use crate::inspect::{bedfit, isolate, Row};
 use crate::overlay::{self, Toast};
 use crate::theme::{Rgb, Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_SMALL, S_1, S_2, S_3, W_SEMIBOLD};
 use crate::ui::{chip, text};
@@ -75,11 +75,10 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     let v = viewport.clone();
     register(cx, "isolate", "Isolate", Group::Tools, move |_, cx| {
         let view = v.read(cx);
-        if view.inspecting().isolate.is_some() {
+        if view.isolated().is_some() {
             return v.update(cx, |v, cx| v.set_isolate(None, cx));
         }
-        let mut keep: Vec<String> = view.selection().picks.iter().filter_map(|p| p.body().map(str::to_string)).collect();
-        keep.dedup();
+        let keep = isolate::unique(view.selection().picks.iter().filter_map(|p| p.body().map(str::to_string)));
         if keep.is_empty() {
             return toast(cx, "Select a body, then Isolate");
         }
@@ -210,26 +209,41 @@ pub(super) fn frame(t: &Theme, title: &str, id: &'static str, cx: &mut Context<S
     chip(t).id(id).w(px(300.)).p(px(S_3)).flex().flex_col().gap(px(S_2)).occlude().child(head)
 }
 
+#[derive(Debug, PartialEq)]
+enum FootAct {
+    SectionOff,
+    Run(&'static str),
+}
+
+/// FundaCAD 1's rail toggles: Section View switches off when on, Isolate's own command turns it off, Measure opens its
+/// card.
+fn foot_act(label: &str, foot: super::rail::Foot) -> Option<FootAct> {
+    match label {
+        "Section View" if foot.section => Some(FootAct::SectionOff),
+        "Section View" => Some(FootAct::Run("section")),
+        "Isolate" => Some(FootAct::Run("isolate")),
+        "Measure" => Some(FootAct::Run("measure")),
+        _ => None,
+    }
+}
+
 impl Shell {
     /// The open Inspect card, or the chips of a Section or Isolate left on.
     pub(super) fn rail_foot(&self, cx: &App) -> super::rail::Foot {
-        let i = self.viewport.read(cx).inspecting();
-        super::rail::Foot { isolate: i.isolate.is_some(), section: i.section.is_some() }
+        let v = self.viewport.read(cx);
+        super::rail::Foot { isolate: v.isolated().is_some(), section: v.inspecting().section.is_some() }
     }
 
-    /// FundaCAD 1's rail toggles: Isolate and Section View switch off when on, Measure opens its card.
     pub(super) fn rail_tool(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
-        match label {
-            "Section View" if self.rail_foot(cx).section => self.viewport.update(cx, |v, cx| {
+        match foot_act(label, self.rail_foot(cx)) {
+            Some(FootAct::SectionOff) => self.viewport.update(cx, |v, cx| {
                 v.set_section(None, cx);
                 if v.inspecting().card == Some(Card::Section) {
                     v.open_card(None, cx);
                 }
             }),
-            "Section View" => crate::commands::run("section", window, cx),
-            "Isolate" => crate::commands::run("isolate", window, cx),
-            "Measure" => crate::commands::run("measure", window, cx),
-            _ => {}
+            Some(FootAct::Run(command)) => crate::commands::run(command, window, cx),
+            None => {}
         }
     }
 
@@ -238,14 +252,14 @@ impl Shell {
         let i = v.inspecting();
         match i.card {
             Some(card) => Some(self.card(t, card, cx)),
-            None if i.section.is_some() || i.isolate.is_some() => Some(self.view_chips(t, cx)),
+            None if i.section.is_some() || v.isolated().is_some() => Some(self.view_chips(t, cx)),
             None => None,
         }
     }
 
     fn view_chips(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
-        let i = self.viewport.read(cx).inspecting();
-        let (section, isolate) = (i.section.is_some(), i.isolate.as_ref().map(Vec::len));
+        let v = self.viewport.read(cx);
+        let (section, isolate) = (v.inspecting().section.is_some(), v.isolated());
         let bar = |label: String| div().flex().items_center().justify_between().gap(px(S_2)).child(text(t, FS_SMALL).child(label));
         chip(t)
             .id("inspect-chips")
@@ -284,3 +298,6 @@ impl Shell {
             })
     }
 }
+
+#[cfg(test)]
+mod tests;

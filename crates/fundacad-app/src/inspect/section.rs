@@ -1,7 +1,4 @@
-//! Section View and Isolate, FundaCAD 1's sectionMath.ts and isolate: a plane that keeps one side of the model, and
-//! the bodies a view keeps.
-
-use std::sync::Arc;
+//! Section View, FundaCAD 1's sectionMath.ts: a plane that keeps one side of the model.
 
 use glam::Vec3;
 use serde_json::{json, Map, Value};
@@ -111,15 +108,4 @@ pub fn step(radius: f32) -> f32 {
     let r = (radius / 10.0).max(1e-3);
     let p = 10f32.powf(r.log10().floor());
     [1.0, 2.0, 5.0, 10.0].into_iter().map(|m| m * p).find(|s| *s >= r * 0.75).unwrap_or(10.0 * p)
-}
-
-/// The bodies Isolate keeps. Every body when it keeps none of them, so a stale list never empties the view.
-pub fn isolated<B: AsRef<str>>(bodies: Vec<Arc<crate::viewport::scene::Body>>, keep: Option<&[B]>) -> Vec<Arc<crate::viewport::scene::Body>> {
-    let Some(keep) = keep else { return bodies };
-    let kept: Vec<_> = bodies.iter().filter(|b| keep.iter().any(|k| k.as_ref() == b.id)).cloned().collect();
-    if kept.is_empty() {
-        bodies
-    } else {
-        kept
-    }
 }

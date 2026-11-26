@@ -12,9 +12,7 @@ use crate::viewport::inspecting::{Asked, Card, Shade};
 use crate::viewport::Viewport;
 
 fn selected_bodies(v: &Viewport) -> Vec<String> {
-    let mut ids: Vec<String> = v.selection().picks.iter().filter_map(|p| p.body().map(str::to_string)).collect();
-    ids.dedup();
-    ids
+    crate::inspect::isolate::unique(v.selection().picks.iter().filter_map(|p| p.body().map(str::to_string)))
 }
 
 fn prefs(cx: &mut App, f: impl FnOnce(&mut Prefs)) {
@@ -127,24 +125,15 @@ impl Shell {
     }
 
     fn properties_card(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
-        let v = self.viewport.read(cx);
-        let picked = selected_bodies(v);
-        let shown = v.shown_bodies();
-        let bodies: Vec<_> = shown.iter().filter(|b| picked.is_empty() || picked.contains(&b.id)).cloned().collect();
-        let names: Vec<String> = bodies.iter().filter(|b| picked.contains(&b.id)).map(|b| b.name.clone()).collect();
-        let faults: Vec<String> =
-            bodies.iter().filter_map(|b| props::fault(b).map(|f| format!("{} is not a sound solid, {f}", b.name))).collect();
-        let found = props::of(bodies.iter().map(|b| &**b));
-        let solid = faults.is_empty();
-        let com = found.filter(|_| solid).map(|p| p.com.as_vec3());
-        self.viewport.update(cx, |v, cx| v.set_marker(com, cx));
+        let p = self.viewport.read(cx).properties();
+        let solid = p.faults.is_empty();
         let f = cx.global::<Prefs>().filament.clone();
-        let mut card = frame(t, &props::title(&names), "inspect-properties", cx);
-        let Some(p) = found else {
+        let mut card = frame(t, &props::title(&p.picked), "inspect-properties", cx);
+        let Some(found) = p.found else {
             return card.child(text(t, FS_SMALL).text_color(t.text_mute).child("Nothing to measure"));
         };
-        card = card.child(rows(t, &props::rows(&p, solid)));
-        card = card.children(faults.into_iter().map(|f| text(t, FS_SMALL).text_color(t.text_mute).child(f)));
+        card = card.child(rows(t, &props::rows(&found, solid)));
+        card = card.children(p.faults.into_iter().map(|f| text(t, FS_SMALL).text_color(t.text_mute).child(f)));
         if !solid {
             return card;
         }
@@ -168,13 +157,13 @@ impl Shell {
             .child(stepper(t, "wall", "Wall", format!("{} mm", spell(f.wall_mm)), |dir, cx| {
                 prefs(cx, |p| p.filament.wall_mm = (p.filament.wall_mm + 0.4 * dir).max(0.0))
             }))
-            .child(rows(t, &filament::rows(p.volume, p.area, &f)))
+            .child(rows(t, &filament::rows(found.volume, found.area, &f)))
     }
 
     fn overhang_card(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
         let v = self.viewport.read(cx);
         let shade = v.inspecting().shade;
-        let areas = overhang::areas(v.scene_bodies(), overhang::direction(overhang::DIRECTIONS[shade.up]), shade.threshold);
+        let areas = v.overhang_areas();
         let mut ups = div().flex().flex_wrap().gap(px(S_1));
         for (i, name) in overhang::DIRECTIONS.into_iter().enumerate() {
             ups = ups.child(choice(t, format!("up:{name}"), name, shade.up == i).on_click(cx.listener(move |this, _, _, cx| {

@@ -54,6 +54,17 @@ pub(super) struct Foot {
     pub section: bool,
 }
 
+impl Foot {
+    /// A toggle's state by its label, None for an entry that is not a toggle.
+    pub fn on(self, label: &str) -> Option<bool> {
+        match label {
+            "Isolate" => Some(self.isolate),
+            "Section View" => Some(self.section),
+            _ => None,
+        }
+    }
+}
+
 fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on: Option<bool>, on_click: Option<&OnFamily>) -> AnyElement {
     let corner = t.text_mute;
     let tile = tile(t, RAIL_TILE).relative().child(icon(e.glyph, 22., t.text)).when(e.family, |d| {
@@ -128,11 +139,7 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on: Option<bool>, on_cl
 pub(super) fn rail(t: &Theme, open: Option<&str>, foot: Foot, on_family: OnFamily, on_tool: OnFamily) -> Div {
     let section = |entries: &'static [Entry], is_foot: bool| {
         div().flex().flex_col().gap(px(GAP)).children(entries.iter().map(|e| {
-            let on = match e.label {
-                "Isolate" => Some(foot.isolate),
-                "Section View" => Some(foot.section),
-                _ => None,
-            };
+            let on = foot.on(e.label);
             let click = if is_foot { Some(&on_tool) } else { e.family.then_some(&on_family) };
             row(t, e, open, on, click)
         }))
@@ -150,3 +157,6 @@ pub(super) fn rail(t: &Theme, open: Option<&str>, foot: Foot, on_family: OnFamil
 pub(super) fn glyphs() -> impl Iterator<Item = &'static str> {
     TOP.iter().flat_map(|s| s.iter()).chain(FOOT).map(|e| e.glyph)
 }
+
+#[cfg(test)]
+mod tests;

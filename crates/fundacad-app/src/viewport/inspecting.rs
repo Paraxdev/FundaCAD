@@ -1,6 +1,6 @@
-//! What the Inspect family keeps in the view: the open card, Measure's picks, the Section plane, Isolate, the
-//! Overhang shading, the centre of mass marker and the engine checks' replies. All of it is a view, not the model,
-//! so none of it is an undo step.
+//! What the Inspect family keeps in the view: the open card, Measure's picks, the Section plane, what Isolate kept,
+//! the Overhang shading, the centre of mass marker and the engine checks' replies. Only Isolate's eyes are an undo
+//! step, the Section plane is saved with the document but is not one.
 
 use glam::Vec3;
 use gpui::*;
@@ -9,7 +9,8 @@ use serde_json::{Map, Value};
 use super::pick::{self, Hit};
 use super::Viewport;
 use crate::inspect::measure::{self, Probe};
-use crate::inspect::overhang;
+use crate::inspect::{isolate, overhang};
+use crate::items;
 use crate::inspect::section::{self, Section};
 use crate::selection::Pick;
 
@@ -51,9 +52,10 @@ pub struct Inspecting {
     pub section: Option<Section>,
     /// A click picks the face the Section plane lies on.
     pub section_face: bool,
+    /// What Isolate kept, on only while the eyes still match it, see `Viewport::isolated`.
     pub isolate: Option<Vec<String>>,
     pub shade: Shade,
-    pub marker: Option<Vec3>,
+    memo: sums::Memo,
     pub asked: Option<(Card, Asked)>,
     ticket: u64,
     _task: Option<Task<()>>,
@@ -96,7 +98,6 @@ impl Viewport {
         let measure = i.card == Some(Card::Measure) || card == Some(Card::Measure);
         i.card = card;
         i.probes.clear();
-        i.marker = None;
         i.section_face = false;
         if i.asked.as_ref().is_some_and(|(c, _)| Some(*c) != card) {
             i.asked = None;
@@ -110,13 +111,6 @@ impl Viewport {
     pub fn set_shade(&mut self, shade: Shade, cx: &mut Context<Self>) {
         self.inspect.shade = shade;
         cx.notify();
-    }
-
-    pub fn set_marker(&mut self, at: Option<Vec3>, cx: &mut Context<Self>) {
-        if self.inspect.marker != at {
-            self.inspect.marker = at;
-            cx.notify();
-        }
     }
 
     pub fn set_section(&mut self, section: Option<Section>, cx: &mut Context<Self>) {
@@ -145,14 +139,33 @@ impl Viewport {
         self.scene.bounds()
     }
 
-    pub fn set_isolate(&mut self, keep: Option<Vec<String>>, cx: &mut Context<Self>) {
-        self.inspect.isolate = keep;
-        self.show_built();
-        cx.notify();
+    fn body_eyes(&self) -> std::collections::BTreeMap<String, bool> {
+        let built: Vec<items::BodyRef> = self.built.iter().map(|b| items::BodyRef::of(b)).collect();
+        self.doc().map(|d| items::vis_rows(d, &built, items::Category::Bodies)).unwrap_or_default()
     }
 
-    pub fn scene_bodies(&self) -> &[super::scene::SceneBody] {
-        &self.scene.bodies
+    /// How many bodies Isolate shows, None while it is off.
+    pub fn isolated(&self) -> Option<usize> {
+        isolate::active(&self.body_eyes(), self.inspect.isolate.as_deref()?)
+    }
+
+    /// Isolate `keep`, or with None show every body, as one eye step in the document like the Items browser's.
+    pub fn set_isolate(&mut self, keep: Option<Vec<String>>, cx: &mut Context<Self>) {
+        let eyes = self.body_eyes();
+        let (changes, label) = match &keep {
+            Some(keep) => (items::show_only(&eyes, keep), "Isolate"),
+            None => (items::all(eyes.into_keys(), true), "Show All Bodies"),
+        };
+        self.inspect.isolate = keep;
+        let edited = self.edit_step(
+            None,
+            Some(label.into()),
+            move |d| items::set_visibility(d, items::Category::Bodies, &changes, &Default::default()),
+            cx,
+        );
+        if let Err(why) = edited {
+            log::info!("isolate was not applied: {why}");
+        }
     }
 
     /// The nearest hit along a ray that the Section plane keeps.
@@ -285,13 +298,16 @@ impl Viewport {
                 dot(pb, 3.0, window);
             }
         }
-        if let Some(c) = self.inspect.marker.and_then(at) {
+        let marker = (self.inspect.card == Some(Card::Properties)).then(|| self.properties().centre_of_mass()).flatten();
+        if let Some(c) = marker.and_then(at) {
             stroke(vec![point(c.x - px(8.), c.y), point(c.x + px(8.), c.y)], 2.0, window);
             stroke(vec![point(c.x, c.y - px(8.)), point(c.x, c.y + px(8.))], 2.0, window);
             dot(c, 3.0, window);
         }
     }
 }
+
+mod sums;
 
 #[cfg(test)]
 mod tests;

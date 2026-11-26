@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use glam::Vec3;
 
 use super::*;
-use crate::viewport::scene::tests::block;
 
 #[test]
 fn an_axis_cut_goes_through_the_centre_and_keeps_the_high_side_as_fundacad_1() {
@@ -45,26 +42,6 @@ fn steps_are_round_and_near_a_tenth_of_the_model() {
     assert_eq!(step(37.0), 5.0);
     assert_eq!(step(160.0), 20.0);
     assert_eq!(step(700.0), 100.0);
-}
-
-fn bodies(ids: &[&str]) -> Vec<Arc<crate::viewport::scene::Body>> {
-    ids.iter()
-        .map(|id| Arc::new(crate::viewport::scene::Body { id: id.to_string(), ..block(Vec3::new(3.0, -2.0, 5.0), Vec3::new(7.0, 5.0, 7.0), "ex1") }))
-        .collect()
-}
-
-fn ids(b: &[Arc<crate::viewport::scene::Body>]) -> Vec<String> {
-    b.iter().map(|b| b.id.clone()).collect()
-}
-
-#[test]
-fn isolate_keeps_the_named_bodies_or_all_when_none_match() {
-    let all = bodies(&["b1", "b2", "b3"]);
-    assert_eq!(ids(&isolated::<&str>(all.clone(), None)), ["b1", "b2", "b3"]);
-    assert_eq!(ids(&isolated(all.clone(), Some(&["b2"]))), ["b2"]);
-    assert_eq!(ids(&isolated(all.clone(), Some(&["b3", "b1"]))), ["b1", "b3"]);
-    assert_eq!(ids(&isolated(all.clone(), Some(&["gone"]))), ["b1", "b2", "b3"]);
-    assert_eq!(ids(&isolated::<&str>(all, Some(&[]))), ["b1", "b2", "b3"]);
 }
 
 fn doc_with(cut: serde_json::Value) -> serde_json::Map<String, serde_json::Value> {
