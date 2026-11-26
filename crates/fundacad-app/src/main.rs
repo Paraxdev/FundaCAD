@@ -11,6 +11,7 @@ mod inspector;
 mod items;
 mod overlay;
 mod plastic;
+mod recovery;
 mod settings;
 mod shell;
 #[cfg(feature = "shot")]

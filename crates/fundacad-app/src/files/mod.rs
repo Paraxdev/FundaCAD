@@ -210,6 +210,23 @@ impl Files {
         }
     }
 
+    /// Shows the document at `path` as untitled work that is not saved anywhere, as a recovered snapshot is.
+    pub fn open_unsaved(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        match self.viewport.update(cx, |v, cx| v.open(path, cx)) {
+            Ok(()) => {
+                self.saved = None;
+                self.path = None;
+                self.checked = None;
+                self.refresh(window, cx);
+                true
+            }
+            Err(e) => {
+                overlay::toast(cx, Toast::error(format!("Could not recover the unsaved work: {e}")));
+                false
+            }
+        }
+    }
+
     fn new_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.viewport.update(cx, |v, cx| v.open_doc(new_document(), cx)) {
             Ok(()) => self.mark_saved(None, window, cx),
@@ -374,6 +391,7 @@ pub(crate) async fn ask_close(question: String, cx: &mut AsyncWindowContext) -> 
 pub fn should_close(files: &Entity<Files>, window: &mut Window, cx: &mut App) -> bool {
     let f = files.read(cx);
     if f.closing || !f.dirty {
+        crate::recovery::give_up(cx);
         return true;
     }
     let question = format!("Save changes to {} before closing?", f.name());
@@ -387,6 +405,7 @@ pub fn should_close(files: &Entity<Files>, window: &mut Window, cx: &mut App) ->
             };
             if go {
                 let _ = cx.update(|window, cx| {
+                    crate::recovery::give_up(cx);
                     files.update(cx, |f, _| f.closing = true);
                     window.remove_window();
                 });

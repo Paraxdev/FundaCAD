@@ -23,6 +23,7 @@ impl Bench {
         window.on_window_should_close(cx, move |window, cx| files::should_close(&guard, window, cx));
         let start = files.clone();
         window.defer(cx, move |window, cx| files::start(&start, window, cx));
+        crate::recovery::install(viewport, &files, window, cx);
         Self { overlay, files }
     }
 }
