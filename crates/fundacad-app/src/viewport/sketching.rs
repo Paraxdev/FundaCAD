@@ -473,8 +473,9 @@ impl Viewport {
                 .text_color(rgb(if on { 0x15131c } else { 0xe8e6f0 }))
                 .when(on, |d| d.bg(rgb(ACCENT)))
                 .hover(|d| d.bg(rgb_a(ACCENT, 0.35)))
+                .child(label)
         };
-        let mut bar = div().flex().gap_1().p_1().rounded_md().bg(rgb_a(0x15131c, 0.9));
+        let mut bar = div().flex().flex_wrap().justify_center().max_w(px(560.)).gap_1().p_1().rounded_md().bg(rgb_a(0x15131c, 0.9));
         for (label, tool) in tools {
             bar = bar.child(button(label, e.tool == tool).on_mouse_down(
                 MouseButton::Left,
@@ -503,7 +504,7 @@ impl Viewport {
                 }),
             ));
         }
-        layer = layer.child(div().absolute().top(px(12.)).left_0().right_0().flex().justify_center().child(bar));
+        layer = layer.child(div().absolute().top(px(76.)).left_0().right_0().flex().justify_center().child(bar));
         Some(layer.into_any_element())
     }
 
