@@ -34,6 +34,7 @@ pub struct Shell {
     /// The History step whose values show under it.
     open: Option<usize>,
     focus: FocusHandle,
+    bench: crate::workbench::Bench,
     _system: Subscription,
 }
 
@@ -44,6 +45,9 @@ impl Shell {
             cx.notify();
         })
         .detach();
+        let bench = crate::workbench::Bench::new(&viewport, window, cx);
+        cx.observe(&bench.overlay, |_, _, cx| cx.notify()).detach();
+        cx.observe(&bench.files, |_, _, cx| cx.notify()).detach();
         let mut shell = Self {
             viewport,
             doc,
@@ -53,6 +57,7 @@ impl Shell {
             items_tab: 0,
             open: None,
             focus: cx.focus_handle(),
+            bench,
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -192,11 +197,15 @@ impl Render for Shell {
         if window.focused(cx).is_none() {
             window.focus(&self.focus, cx);
         }
+        let files = self.bench.files.read(cx);
+        (self.doc.name, self.doc.dirty) = (files.name(), files.dirty());
         let viewport = self.viewport.clone();
         let redo = self.viewport.clone();
         div()
             .size_full()
             .track_focus(&self.focus)
+            .key_context(crate::commands::key_context(cx))
+            .on_action(crate::commands::on_run)
             .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
             .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
             .flex()
@@ -204,7 +213,7 @@ impl Render for Shell {
             .font_family(UI_FONT)
             .bg(t.bg)
             .text_color(t.text)
-            .child(self.titlebar(t))
+            .child(self.titlebar(t, cx))
             .child(
                 div()
                     .flex_1()
@@ -217,6 +226,7 @@ impl Render for Shell {
                     .child(status),
             )
             .child(frost_flush(self.viewport.clone()))
+            .child(self.bench.overlay.clone())
     }
 }
 

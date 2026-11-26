@@ -1,5 +1,5 @@
 //! What the shell shows of a document: its history and its parameters. `Document::from_funda` reads it from the
-//! session's .funda document, `Document::sample` is the bracket the Vue workspace capture shows when no file is open.
+//! session's .funda document, `Document::sample` is the bracket of the Vue workspace capture, which the tests use.
 
 use gpui::SharedString;
 use serde_json::{Map, Value};
@@ -98,6 +98,7 @@ impl Document {
         self.marker = at.min(self.features.len());
     }
 
+    #[cfg(test)]
     pub fn sample() -> Self {
         let mm = |label: &str, value: f64| Param {
             label: label.to_string().into(),

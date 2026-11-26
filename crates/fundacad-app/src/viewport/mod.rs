@@ -8,6 +8,9 @@ mod pick;
 mod renderer;
 pub mod scene;
 mod undo;
+mod views;
+
+pub use views::View;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -149,15 +152,50 @@ impl Viewport {
         }
     }
 
-    pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) {
+    /// Shows the file at `path`, or says why it cannot and keeps what was shown.
+    pub fn open(&mut self, path: &Path, cx: &mut Context<Self>) -> Result<(), String> {
+        self.load(|wake| engine::open(path, wake), cx)
+    }
+
+    /// Shows a document that is in no file, such as a new one.
+    pub fn open_doc(&mut self, doc: Doc, cx: &mut Context<Self>) -> Result<(), String> {
+        self.load(|wake| engine::start(doc, wake).map(Opened::Doc), cx)
+    }
+
+    fn load(
+        &mut self,
+        open: impl FnOnce(Box<dyn Fn() + Send + Sync>) -> Result<Opened, String>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let (tx, rx) = async_channel::bounded::<()>(1);
+        let opened = open(Box::new(move || {
+            let _ = tx.try_send(());
+        }));
+        let opened = match opened {
+            Ok(opened) => opened,
+            Err(e) => {
+                log::error!("{e}");
+                self.message = Some(e.clone());
+                cx.notify();
+                return Err(e);
+            }
+        };
         self.issues.clear();
         self.undo = UndoStack::default();
-        let (tx, rx) = async_channel::bounded::<()>(1);
-        match engine::open(path, move || {
-            let _ = tx.try_send(());
-        }) {
-            Ok(Opened::Stl(body)) => self.show(&[Arc::new(body)]),
-            Ok(Opened::Doc(session)) => {
+        self.push = None;
+        self.hover = None;
+        self.message = None;
+        self.rebuild_ms = None;
+        self.fitted = false;
+        self._wake = None;
+        self._demo = None;
+        self.show(&[]);
+        match opened {
+            Opened::Stl(body) => {
+                self.session = None;
+                self.show(&[Arc::new(body)]);
+            }
+            Opened::Doc(session) => {
                 self.session = Some(session);
                 self.message = Some("building".into());
                 self._wake = Some(cx.spawn(async move |this, cx| {
@@ -171,12 +209,14 @@ impl Viewport {
                     self._demo = Some(cx.spawn(async move |this, cx| demo::run(this, cx, travel).await));
                 }
             }
-            Err(e) => {
-                log::error!("{e}");
-                self.message = Some(e);
-            }
         }
         cx.notify();
+        Ok(())
+    }
+
+    /// The folder the open document's imported geometry is published to, which a save embeds from.
+    pub fn blob_dir(&self) -> Option<&Path> {
+        self.session.as_ref().map(|s| s.blob_dir.as_path())
     }
 
     /// The open document as the app sees it, edits included before the engine has built them.

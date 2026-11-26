@@ -25,6 +25,10 @@ log = "0.4"
 async-channel = "2"
 fundacad-client = { path = "../fundacad-client" }
 fundacad-format = { path = "../fundacad-format" }
+fundacad-core = { path = "../fundacad-core" }
+serde = { version = "1", features = ["derive"] }
+dirs = "6"
+rfd = "0.17"
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 rust-embed = "8.14"
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }

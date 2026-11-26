@@ -3,30 +3,32 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod assets;
+mod commands;
 mod document;
 mod engine;
+mod files;
+mod overlay;
 mod plastic;
+mod settings;
 mod shell;
 #[cfg(feature = "shot")]
 mod shot;
 mod theme;
 mod ui;
 mod viewport;
+mod workbench;
 
 use gpui::*;
 
 fn main() {
     init_logger();
     let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
-    // The sample history stands in for the Vue capture until the engine link reads a file's own.
-    let doc = match path.as_ref().and_then(|p| p.file_stem()) {
-        Some(name) => document::Document::named(name.to_string_lossy().to_string().into()),
-        None => document::Document::sample(),
-    };
-    let title: SharedString = format!("{}, FundaCAD 2", doc.name).into();
+    let doc = document::Document::named(files::shown_name(path.as_deref()));
+    let title: SharedString = files::window_title(&doc.name, false).into();
 
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
+        settings::init(cx);
         let mut settings = theme::Settings::default();
         // FUNDA_THEME=<palette id> picks a palette until the settings store lands, for the light capture.
         if let Ok(id) = std::env::var("FUNDA_THEME") {
@@ -34,11 +36,9 @@ fn main() {
         }
         theme::init(settings, vec![], cx);
         theme::kit::bind(cx);
-        cx.bind_keys([
-            KeyBinding::new("ctrl-z", viewport::Undo, None),
-            KeyBinding::new("ctrl-y", viewport::Redo, None),
-            KeyBinding::new("ctrl-shift-z", viewport::Redo, None),
-        ]);
+        overlay::init(cx);
+        commands::bind(cx);
+        files::set_startup(cx, path);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
             // Below this the left and right float clusters overlap.
@@ -47,13 +47,7 @@ fn main() {
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
-            let viewport = cx.new(|cx| {
-                let mut viewport = viewport::Viewport::new();
-                if let Some(path) = &path {
-                    viewport.open(path, cx);
-                }
-                viewport
-            });
+            let viewport = cx.new(|_| viewport::Viewport::new());
             cx.new(|cx| shell::Shell::new(viewport, doc, window, cx))
         })
         .expect("open the main window");
