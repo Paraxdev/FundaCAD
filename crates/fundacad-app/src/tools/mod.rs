@@ -30,6 +30,22 @@ impl Start {
     }
 }
 
+/// The datum tools wait for the view to draw datums, a datum nobody can see cannot be checked.
+pub const HELD: &[&str] = &[
+    "offset-plane",
+    "datum-plane",
+    "midplane",
+    "plane-normal-edge",
+    "plane-two-edges",
+    "plane-angle",
+    "plane-points",
+    "datum-point",
+    "datum-axis",
+    "datum-axis-edge",
+    "axis-cylinder",
+    "axis-planes",
+];
+
 /// Whether a feature's field holds nothing.
 pub fn empty(feature: &Value, field: &str) -> bool {
     match feature.get(field) {

@@ -15,7 +15,7 @@ use crate::ui::{chip, text};
 use crate::viewport::Viewport;
 
 pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
-    for tool in tools::TOOLS {
+    for tool in tools::TOOLS.iter().filter(|t| !tools::HELD.contains(&t.id)) {
         let v = viewport.clone();
         register(cx, tool.id, tool.label, Group::Tools, move |_, cx| start(&v, tool, cx));
     }
