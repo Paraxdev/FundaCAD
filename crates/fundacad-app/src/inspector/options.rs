@@ -417,7 +417,7 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
     let datum = pattern_axis_datum(axis);
     let placed = present(f, "axisRef") || (axis.is_some_and(|a| !a.is_string()) && datum.is_none());
     if placed {
-        options.push(Choice::new(PLACED_AXIS, if present(f, "axisRef") { "Picked" } else { "Line" }));
+        options.push(Choice::new(PLACED_AXIS, placed_axis_label(f)));
         return (options, PLACED_AXIS.into());
     }
     let name = datum.or(axis.and_then(Value::as_str)).unwrap_or("Z").to_string();
@@ -425,6 +425,24 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
         options.push(Choice::new(name.clone(), name.clone()));
     }
     (options, name)
+}
+
+/// "Picked", or for the line C moves to the middle the world axis it runs along, "Z through the middle".
+fn placed_axis_label(f: &Map<String, Value>) -> String {
+    if present(f, "axisRef") {
+        return "Picked".into();
+    }
+    let dir: Vec<f64> = f
+        .get("axis")
+        .and_then(|a| a.get("dir"))
+        .and_then(Value::as_array)
+        .map(|d| d.iter().filter_map(Value::as_f64).collect())
+        .unwrap_or_default();
+    let world = [("X", [1.0, 0.0, 0.0]), ("Y", [0.0, 1.0, 0.0]), ("Z", [0.0, 0.0, 1.0])];
+    match world.iter().find(|(_, w)| dir.len() == 3 && dir.iter().zip(w).all(|(a, b)| (a.abs() - b).abs() < 1e-6)) {
+        Some((name, _)) => format!("{name} through the middle"),
+        None => "Line".into(),
+    }
 }
 
 /// A key to set, or with None to remove.

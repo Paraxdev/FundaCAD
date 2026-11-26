@@ -439,3 +439,20 @@ fn a_draft_angle_is_held_to_sixty_degrees_either_way() {
     set_number(&mut d, &field("angle"), 59.5).unwrap();
     assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(59.5)));
 }
+
+#[test]
+fn the_axis_c_moves_to_the_middle_names_the_world_axis_it_runs_along() {
+    let label = |f: Value| {
+        let f = obj(f);
+        let (options, current) = options::pattern_axis_choice(&f, &[&f]);
+        options.into_iter().find(|o| o.value == current).map(|o| o.label.to_string())
+    };
+    let mid = |dir: Value| json!({"id": "f2", "type": "patternCircular", "axis": {"origin": [4.5, -2, 7], "dir": dir}});
+    assert_eq!(label(mid(json!([0, 0, 1]))), Some("Z through the middle".into()));
+    assert_eq!(label(mid(json!([1.0, 0.0, 0.0]))), Some("X through the middle".into()));
+    assert_eq!(label(mid(json!([0, -1, 0]))), Some("Y through the middle".into()));
+    assert_eq!(label(mid(json!([0.6, 0, 0.8]))), Some("Line".into()));
+    let mut picked = mid(json!([0, 0, 1]));
+    picked["axisRef"] = json!({"kind": "edge"});
+    assert_eq!(label(picked), Some("Picked".into()));
+}
