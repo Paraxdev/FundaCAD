@@ -1103,6 +1103,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fundacad-client"
+version = "0.2.0"
+dependencies = [
+ "fundacad-core",
+ "fundacad-engine",
+ "fundacad-format",
+ "fundacad-protocol",
+ "indexmap",
+ "serde_json",
+]
+
+[[package]]
 name = "fundacad-core"
 version = "0.2.0"
 dependencies = [
