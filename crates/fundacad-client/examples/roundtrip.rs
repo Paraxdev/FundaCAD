@@ -51,7 +51,7 @@ enum Target {
 
 impl Target {
     fn set(&self, client: &Client, v: f64) {
-        match self {
+        let edited = match self {
             Target::Param(n) => client.set_param(n, v),
             Target::Field(i, f) => {
                 let (i, f) = (*i, f.clone());
@@ -59,9 +59,10 @@ impl Target {
                     let feature = d.get_mut("features").and_then(|fs| fs.get_mut(i)).ok_or("no such feature")?;
                     feature[f.as_str()] = serde_json::json!(v);
                     Ok(())
-                });
+                })
             }
-        }
+        };
+        edited.expect("the edit applies");
     }
 }
 
@@ -108,7 +109,7 @@ fn run(path: &Path, forced: Option<Target>) -> Result<(), String> {
         }
     };
     let t = Instant::now();
-    client.load(doc);
+    client.load(doc)?;
     let cold = next_mesh(&rx)?;
     println!(
         "{}: cold open {:.0} ms, {} bodies, {} tris; editing {label} from {base}",

@@ -360,7 +360,7 @@ pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
         bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).ok_or_else(|| "the frame ends early".to_string())
     };
     let hl = u32::from_le_bytes(word(0)?) as usize;
-    let head = bytes.get(4..4 + hl).ok_or("the frame header ends early")?;
+    let head = 4usize.checked_add(hl).and_then(|e| bytes.get(4..e)).ok_or("the frame header ends early")?;
     let mut env: Value = serde_json::from_slice(head).map_err(|e| e.to_string())?;
     let Some(result) = env.get_mut("result").and_then(Value::as_object_mut) else {
         return Ok((env, Vec::new()));
@@ -372,8 +372,9 @@ pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     let mut bufs = Vec::with_capacity(meta.len());
     for m in &meta {
         let len = m.get("len").and_then(Value::as_u64).unwrap_or(0) as usize;
-        let raw = bytes.get(at..at + len * 4).ok_or("the frame ends early")?;
-        at += len * 4;
+        let end = len.checked_mul(4).and_then(|n| n.checked_add(at)).ok_or("a buffer length overflows")?;
+        let raw = bytes.get(at..end).ok_or("the frame ends early")?;
+        at = end;
         let words = raw.chunks_exact(4).map(|w| [w[0], w[1], w[2], w[3]]);
         bufs.push(if m.get("dtype").and_then(Value::as_str) == Some(F32) {
             Buf::F32(words.map(f32::from_le_bytes).collect())
