@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -105,7 +105,7 @@ jobs:
       key: ${{ steps.key.outputs.key }}
       hit: ${{ steps.look.outputs.cache-hit }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -157,7 +157,7 @@ jobs:
       SELF_HOSTED: ${{ needs.rust-key.outputs.hit != 'true' && github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true' }}
       GREEN: ${{ needs.rust-key.outputs.hit == 'true' }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # A clean checkout would delete the warm target dir.
           clean: ${{ env.SELF_HOSTED != 'true' }}
