@@ -17,6 +17,7 @@ use serde_json::{Map, Value};
 
 use super::logic::{append_features, insert_error_text, link_path, refreshable, stale_count, stale_summary};
 use super::{picker, prefs, Shell, Stop};
+use crate::i18n::tr;
 use crate::overlay::{self, Choice, Toast};
 
 type Baked = (String, LinkStat, Map<String, Value>);
@@ -66,7 +67,7 @@ impl Shell {
                     .iter()
                     .enumerate()
                     .map(|(i, u)| if i == 0 { Choice::primary(*u) } else { Choice::plain(*u) })
-                    .chain([Choice::plain("Cancel")])
+                    .chain([Choice::plain(tr!("common.cancel"))])
                     .collect();
                 let Ok(asked) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else {
                     return;
@@ -89,7 +90,7 @@ impl Shell {
     ) {
         let Some(link) = self.transfer_link(cx) else { return };
         let label = match paths.as_slice() {
-            [one] => format!("Importing {}", base_name(one)),
+            [one] => tr!("import.busy", name = base_name(one)),
             many => format!("Importing {} files", many.len()),
         };
         let (token, stop) = self.set_busy(label, link.client.clone(), window, cx);
@@ -158,15 +159,15 @@ impl Shell {
             let Some(path) = pick.await.into_iter().next() else { return };
             if link.path.as_deref().is_some_and(|own| same_path(&path, &own.to_string_lossy())) {
                 let _ =
-                    cx.update(|_, cx| overlay::toast(cx, Toast::error("A document cannot be inserted into itself.")));
+                    cx.update(|_, cx| overlay::toast(cx, Toast::error(tr!("insert.intoItself"))));
                 return;
             }
             let question =
                 format!("How should {} come in? It becomes one body built from its own history.", base_name(&path));
             let choices = vec![
-                Choice::primary("Append").hint("Copies it once"),
-                Choice::plain("Link").hint("Refreshes when the file changes"),
-                Choice::plain("Cancel"),
+                Choice::primary(tr!("insert.append")).hint(tr!("insert.appendHint")),
+                Choice::plain(tr!("insert.link")).hint(tr!("insert.linkHint")),
+                Choice::plain(tr!("common.cancel")),
             ];
             let Ok(asked) = cx.update(|window, cx| overlay::confirm(window, cx, question, choices)) else { return };
             let mode = match asked.recv().await.ok().flatten() {
@@ -200,7 +201,10 @@ impl Shell {
                         .map_err(Some)
                 });
                 match added {
-                    Ok(_) => overlay::toast(cx, Toast::info(format!("Inserted {}.", base_name(&path)))),
+                    Ok(_) => {
+                        let key = if mode == InsertMode::Link { "insert.linked" } else { "insert.appended" };
+                        overlay::toast(cx, Toast::info(tr!(key, name = base_name(&path))));
+                    }
                     Err(Some(why)) => overlay::toast(cx, Toast::error(why)),
                     Err(None) => overlay::toast(cx, Toast::info("Insert cancelled.")),
                 }
@@ -227,8 +231,8 @@ impl Shell {
         if !refresh.is_empty() {
             choices.push(Choice::primary("Refresh").hint("Reads the changed files again"));
         }
-        choices.push(Choice::danger("Unlink").hint("Keeps the bodies, forgets the files"));
-        choices.push(Choice::plain("Later"));
+        choices.push(Choice::danger(tr!("history.menu.unlink")).hint("Keeps the bodies, forgets the files"));
+        choices.push(Choice::plain(tr!("updates.later")));
         let unlink_at = choices.len() - 2;
         let asked = overlay::confirm(window, cx, stale_summary(&stale), choices);
         cx.spawn_in(window, async move |this, cx| {

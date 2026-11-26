@@ -47,7 +47,7 @@ fn typed_key(n: &NumRow) -> Option<String> {
 }
 
 fn shown(n: &NumRow) -> String {
-    n.value.map(format_value).unwrap_or_default()
+    n.value.map(|v| crate::i18n::show_stored(&format_value(v), crate::i18n::decimal_mark())).unwrap_or_default()
 }
 
 impl Shell {

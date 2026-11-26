@@ -7,6 +7,7 @@ mod commands;
 mod document;
 mod engine;
 mod files;
+mod i18n;
 mod inspector;
 mod items;
 mod overlay;
@@ -32,6 +33,7 @@ fn main() {
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
         settings::init(cx);
+        i18n::init(cx);
         let mut settings = theme::Settings::default();
         // FUNDA_THEME=<palette id> picks a palette until the settings store lands, for the light capture.
         if let Ok(id) = std::env::var("FUNDA_THEME") {

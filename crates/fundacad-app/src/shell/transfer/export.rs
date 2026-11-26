@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use super::logic::{flat_sources, scope_choices, stamp_now, with_ext, written_summary};
 use super::modal::{button, choice, note, row};
 use super::{picker, prefs, Modal, Shell};
+use crate::i18n::{self, tr};
 use crate::overlay::{self, Toast};
 use crate::theme::{Theme, FS_SMALL};
 
@@ -33,11 +34,11 @@ pub(super) struct ExportDialog {
 }
 
 fn number(v: f64) -> String {
-    format!("{v}")
+    i18n::show_stored(&format!("{v}"), i18n::decimal_mark())
 }
 
 fn typed(input: &Entity<InputState>, cx: &App) -> Option<f64> {
-    input.read(cx).value().trim().parse::<f64>().ok()
+    i18n::read_typed(input.read(cx).value().trim(), i18n::decimal_mark()).ok()?.parse::<f64>().ok()
 }
 
 impl ExportDialog {
@@ -127,7 +128,7 @@ impl Shell {
             });
         let mut body = div().flex().flex_col().gap(px(8.)).child(row(
             t,
-            "Format",
+            tr!("export.format"),
             div().flex().flex_wrap().gap(px(4.)).children(formats),
         ));
         if !has_sources {
@@ -138,9 +139,9 @@ impl Shell {
                 choice(t, ("export-source", i), src.label().to_owned(), d.source == i, true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit_export(cx, |d| d.source = i)))
             });
-            body = body.child(row(t, "Sketch", div().flex().flex_wrap().gap(px(4.)).children(sources))).child(row(
+            body = body.child(row(t, tr!("tool.sketch"), div().flex().flex_wrap().gap(px(4.)).children(sources))).child(row(
                 t,
-                "Tolerance",
+                tr!("export.tolerance"),
                 field(t, &d.tolerance, "mm"),
             ));
         } else {
@@ -154,7 +155,7 @@ impl Shell {
                         },
                     ))
                 });
-            body = body.child(row(t, "Bodies", div().flex().flex_wrap().gap(px(4.)).children(scopes)));
+            body = body.child(row(t, tr!("export.bodies"), div().flex().flex_wrap().gap(px(4.)).children(scopes)));
         }
         if s.format.takes_unit() {
             let units = UNITS.iter().map(|u| {
@@ -163,10 +164,10 @@ impl Shell {
                     cx.listener(move |this, _: &ClickEvent, _, cx| this.edit_export(cx, |d| d.settings.unit = u)),
                 )
             });
-            body = body.child(row(t, "Unit", div().flex().gap(px(4.)).children(units)));
+            body = body.child(row(t, tr!("export.unit"), div().flex().gap(px(4.)).children(units)));
         }
         if s.format == ExportFormat::Stl {
-            let enc = [(true, "Binary"), (false, "ASCII")].map(|(binary, label)| {
+            let enc = [(true, tr!("export.binary")), (false, "ASCII".to_owned())].map(|(binary, label)| {
                 choice(t, ("export-binary", usize::from(binary)), label, s.binary == binary, true).on_click(
                     cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.edit_export(cx, |d| d.settings.binary = binary)
@@ -178,15 +179,15 @@ impl Shell {
         if s.format.is_mesh() {
             let presets = [Refinement::Low, Refinement::Medium, Refinement::High, Refinement::Custom].map(|r| {
                 let label = match r {
-                    Refinement::Low => "Low",
-                    Refinement::Medium => "Medium",
-                    Refinement::High => "High",
-                    Refinement::Custom => "Custom",
+                    Refinement::Low => tr!("export.refinement.low"),
+                    Refinement::Medium => tr!("export.refinement.medium"),
+                    Refinement::High => tr!("export.refinement.high"),
+                    Refinement::Custom => tr!("export.refinement.custom"),
                 };
                 choice(t, ("export-refine", r as usize), label, s.refinement == r, true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.pick_refinement(r, window, cx)))
             });
-            let advanced = choice(t, "export-advanced", "Advanced", s.show_advanced, true).on_click(cx.listener(
+            let advanced = choice(t, "export-advanced", tr!("export.advanced"), s.show_advanced, true).on_click(cx.listener(
                 |this, _: &ClickEvent, _, cx| {
                     if let Some(Modal::Export(d)) = &mut this.transfer.modal {
                         d.read_inputs(cx);
@@ -195,16 +196,16 @@ impl Shell {
                     }
                 },
             ));
-            body = body.child(row(t, "Refinement", div().flex().gap(px(4.)).children(presets).child(advanced)));
+            body = body.child(row(t, tr!("export.refinement.title"), div().flex().gap(px(4.)).children(presets).child(advanced)));
             if s.show_advanced {
                 body = body
-                    .child(row(t, "Deviation", field(t, &d.surface, "mm")))
-                    .child(row(t, "Angle", field(t, &d.normal, "deg")))
-                    .child(row(t, "Max edge", field(t, &d.edge, "mm, 0 is none")));
+                    .child(row(t, tr!("export.surfaceDeviation"), field(t, &d.surface, "mm")))
+                    .child(row(t, tr!("export.normalDeviation"), field(t, &d.normal, "deg")))
+                    .child(row(t, tr!("export.maxEdge"), field(t, &d.edge, "mm, 0 is none")));
             }
         }
         let ready = !s.format.is_flat() || d.flat().is_some();
-        let ok = button(t, "export-run", "Export...", true, ready)
+        let ok = button(t, "export-run", tr!("export.confirm"), true, ready)
             .when(ready, |b| b.on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.run_export(window, cx))));
         (body.into_any_element(), ok.into_any_element())
     }
@@ -222,6 +223,7 @@ impl Shell {
             .and_then(|doc| Some((doc.get("palette")?.clone(), doc.get("bodyColors").cloned().unwrap_or(json!({})))));
         let base = flat.as_ref().map_or(start.base.as_str(), FlatSource::label);
         let name = export_file_name(base, settings.format.ext(), stamp_now());
+        let base_name = name.clone();
         let dir = prefs()
             .export_dir
             .clone()
@@ -238,7 +240,7 @@ impl Shell {
             let colors = colors.as_ref().map(|(palette, body_colors)| Colors { palette, body_colors });
             let fields = export_fields(&settings, &scope, &start, flat.as_ref(), &path, colors);
             let client = link.client.clone();
-            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| s.set_busy("Exporting", link.client.clone(), w, cx))
+            let Ok((token, stop)) = this.update_in(cx, |s, w, cx| s.set_busy(tr!("export.busy", name = base_name.clone()), link.client.clone(), w, cx))
             else {
                 return;
             };
@@ -269,7 +271,7 @@ impl Shell {
                         }
                     }
                     Err(r) if r.cancelled => overlay::toast(cx, Toast::info("Export cancelled.")),
-                    Err(r) => overlay::toast(cx, Toast::error(format!("The export failed: {}", r.message))),
+                    Err(r) => overlay::toast(cx, Toast::error(tr!("export.failed", error = r.message))),
                 }
             });
         })

@@ -12,6 +12,7 @@ use std::rc::Rc;
 use gpui::*;
 
 pub use builtin::install;
+use crate::i18n::{tr, Label};
 use keys::{Ctx, Shortcut};
 
 /// Runs the command with this id.
@@ -49,15 +50,15 @@ pub enum Group {
 }
 
 impl Group {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> SharedString {
         match self {
-            Group::File => "File",
-            Group::Edit => "Edit",
-            Group::View => "View",
-            Group::Go => "Go",
-            Group::Help => "Help",
-            Group::Tools => "Tools",
-            Group::Sketch => "Sketch",
+            Group::File => tr!("menu.file").into(),
+            Group::Edit => tr!("menu.edit").into(),
+            Group::View => tr!("menu.view").into(),
+            Group::Go => "Go".into(),
+            Group::Help => tr!("menu.help").into(),
+            Group::Tools => "Tools".into(),
+            Group::Sketch => tr!("tool.sketch").into(),
         }
     }
 }
@@ -68,7 +69,9 @@ type Check = Rc<dyn Fn(&App) -> bool>;
 #[derive(Clone)]
 pub struct Command {
     pub id: &'static str,
+    /// The label in the language in use, filled from `source` each time the registry hands the command out.
     pub label: SharedString,
+    source: Label,
     pub group: Group,
     pub context: Ctx,
     run: Handler,
@@ -93,7 +96,7 @@ fn registry(cx: &mut App) -> &mut Registry {
 pub fn register(
     cx: &mut App,
     id: &'static str,
-    label: impl Into<SharedString>,
+    label: impl Into<Label>,
     group: Group,
     run: impl Fn(&mut Window, &mut App) + 'static,
 ) {
@@ -103,12 +106,13 @@ pub fn register(
 pub fn register_in(
     cx: &mut App,
     id: &'static str,
-    label: impl Into<SharedString>,
+    label: impl Into<Label>,
     group: Group,
     context: Ctx,
     run: impl Fn(&mut Window, &mut App) + 'static,
 ) {
-    let command = Command { id, label: label.into(), group, context, run: Rc::new(run), enabled: None };
+    let source = label.into();
+    let command = Command { id, label: source.text(), source, group, context, run: Rc::new(run), enabled: None };
     let commands = &mut registry(cx).commands;
     match commands.iter_mut().find(|c| c.id == id) {
         Some(c) => *c = command,
@@ -133,7 +137,7 @@ pub fn enabled(cx: &App, id: &str) -> bool {
 pub fn label(cx: &App, id: &str) -> SharedString {
     let r = cx.try_global::<Registry>();
     if let Some(c) = r.and_then(|r| r.commands.iter().find(|c| c.id == id)) {
-        return c.label.clone();
+        return c.source.text();
     }
     let table = r.map_or_else(keys::table, |r| if r.rows.is_empty() { keys::table() } else { r.rows.clone() });
     table.iter().find(|s| s.action == id).map_or_else(|| SharedString::from(id.to_string()), |s| s.label.into())
@@ -260,7 +264,11 @@ pub fn available(cx: &App) -> Vec<Command> {
         Mode::Model => Ctx::Model,
         Mode::Sketch => Ctx::Sketch,
     };
-    r.commands.iter().filter(|c| c.context.overlaps(ctx) && c.enabled.as_ref().is_none_or(|f| f(cx))).cloned().collect()
+    r.commands
+        .iter()
+        .filter(|c| c.context.overlaps(ctx) && c.enabled.as_ref().is_none_or(|f| f(cx)))
+        .map(|c| Command { label: c.source.text(), ..c.clone() })
+        .collect()
 }
 
 /// The table as bound and the problems binding it found, for the shortcuts sheet.

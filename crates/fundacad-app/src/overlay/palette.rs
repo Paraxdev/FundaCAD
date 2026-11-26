@@ -52,7 +52,7 @@ impl Palette {
 pub struct Hit {
     pub id: &'static str,
     pub label: SharedString,
-    pub group: &'static str,
+    pub group: SharedString,
 }
 
 /// The best `SHOWN` of `rows` for `query`, best first, the order given kept between equals.

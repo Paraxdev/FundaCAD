@@ -24,6 +24,7 @@ use gpui::*;
 use super::modal::{self, button, note};
 use super::Shell;
 use crate::commands::{register, Group};
+use crate::i18n::{tr, Label};
 use crate::engine::Link;
 use crate::overlay::{self, Toast};
 use crate::theme::Theme;
@@ -67,11 +68,11 @@ type Start = fn(&mut Shell, &mut Window, &mut Context<Shell>);
 
 /// The File commands that go through the shell.
 pub fn install(shell: WeakEntity<Shell>, cx: &mut App) {
-    let commands: [(&'static str, &'static str, Start); 4] = [
-        ("import", "Import", Shell::start_import),
-        ("insert-document", "Insert FundaCAD Document", Shell::start_insert),
-        ("export", "Export", Shell::open_export),
-        ("check-links", "Check Linked Files", |s, w, cx| s.check_links(false, w, cx)),
+    let commands: [(&'static str, Label, Start); 4] = [
+        ("import", Label::Key("feature.import"), Shell::start_import),
+        ("insert-document", Label::Key("tool.insertDocument"), Shell::start_insert),
+        ("export", Label::Command("command.export"), Shell::open_export),
+        ("check-links", "Check Linked Files".into(), |s, w, cx| s.check_links(false, w, cx)),
     ];
     for (id, label, start) in commands {
         let shell = shell.clone();
@@ -91,14 +92,14 @@ impl Shell {
             }
         };
         let cancel = |id: &'static str, cx: &mut Context<Self>| {
-            button(t, id, "Cancel", false, true)
+            button(t, id, tr!("common.cancel"), false, true)
                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.close_modal(window, cx)))
                 .into_any_element()
         };
         let (title, body, buttons): (SharedString, AnyElement, Vec<AnyElement>) = match self.transfer.modal.as_ref()? {
             Modal::Export(d) => {
                 let (body, ok) = self.export_view(d, t, cx);
-                ("Export".into(), body, vec![cancel("export-cancel", cx), ok])
+                (tr!("export.title").into(), body, vec![cancel("export-cancel", cx), ok])
             }
             Modal::Busy { label, cancelling, .. } => {
                 let body = note(t, if *cancelling { "Cancelling..." } else { "Working, this can take a while." });

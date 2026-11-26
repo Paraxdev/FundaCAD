@@ -1,0 +1,132 @@
+use super::*;
+
+fn line(code: &str, key: &str, args: &[(&str, Arg)]) -> String {
+    Catalog::new(code, None).text(key, args)
+}
+
+#[test]
+fn each_shipped_language_reads_its_own_lines() {
+    let cases = [
+        ("en", "New", "File", "Exported 3 files"),
+        ("de", "Neu", "Datei", "3 Dateien exportiert"),
+        ("es", "Nuevo", "Archivo", "3 archivos exportados"),
+        ("fr", "Nouveau", "Fichier", "3 fichiers exportés"),
+        ("ja", "新規", "ファイル", "3 個のファイルをエクスポートしました"),
+        ("zh-CN", "新建", "文件", "已导出 3 个文件"),
+    ];
+    for (code, new, file, done) in cases {
+        assert_eq!(line(code, "command.new", &[]), new, "{code}");
+        assert_eq!(line(code, "menu.file", &[]), file, "{code}");
+        assert_eq!(line(code, "export.done", &[("n", 3.into())]), done, "{code}");
+    }
+}
+
+#[test]
+fn plurals_and_selects_follow_the_language() {
+    assert_eq!(line("en", "export.done", &[("n", 1.into())]), "Exported 1 file");
+    assert_eq!(line("de", "export.done", &[("n", 1.into())]), "1 Datei exportiert");
+    assert_eq!(line("fr", "export.done", &[("n", 0.into())]), "0 fichier exporté");
+    assert_eq!(line("de", "view.command", &[("view", "top".into())]), "Draufsicht");
+    assert_eq!(line("ja", "view.command", &[("view", "iso".into())]), "等角図");
+    assert_eq!(line("en", "analysis.colors.toggled", &[("on", true.into())]), "Component colors on");
+}
+
+#[test]
+fn numbers_take_the_decimal_comma_of_the_language() {
+    let args = [("threshold", Arg::from(42.5)), ("dir", Arg::from("+Z"))];
+    assert!(line("en", "analysis.draft.on", &args).contains("below 42.5°"));
+    assert!(line("de", "analysis.draft.on", &args).contains("unter 42,5°"));
+    assert!(line("ja", "analysis.draft.on", &args).contains("42.5°"));
+    assert_eq!(Catalog::new("fr", None).decimal_mark(), ',');
+    assert_eq!(Catalog::new("zh-CN", None).decimal_mark(), '.');
+}
+
+#[test]
+fn a_missing_line_falls_back_to_english_then_to_the_key() {
+    let own = r#"{"command.new": "Nowy"}"#;
+    let pl = Catalog::new("pl", Some(own));
+    assert_eq!(pl.text("command.new", &[]), "Nowy");
+    assert_eq!(pl.text("command.save", &[]), "Save");
+    assert_eq!(pl.text("no.such.key", &[]), "no.such.key");
+    assert_eq!(pl.decimal_mark(), ',');
+}
+
+#[test]
+fn a_regional_own_file_falls_back_through_its_base() {
+    let at = Catalog::new("de-AT", Some(r#"{"command.new": "Neu anlegen"}"#));
+    assert_eq!(at.text("command.new", &[]), "Neu anlegen");
+    assert_eq!(at.text("command.save", &[]), "Speichern");
+}
+
+#[test]
+fn an_own_file_skips_lines_it_may_not_set() {
+    let own = r#"{
+        "command.new": "Nowy",
+        "command.save": "<b>Zapisz</b>",
+        "command.undo": 5,
+        "command.redo": "Ponów {who}",
+        "export.done": "{n, plural, on {x} other {y}}",
+        "prefs.language.yours": "hacked",
+        "nobody.knows": "x",
+        "command.fit": "   "
+    }"#;
+    let c = Catalog::new("pl", Some(own));
+    let status = c.status().unwrap();
+    assert_eq!(status.lines, 1);
+    let reasons: Vec<_> = status.skipped.iter().map(|(k, r)| (k.as_str(), *r)).collect();
+    assert_eq!(
+        reasons,
+        [
+            ("command.save", SkipReason::Markup),
+            ("command.undo", SkipReason::NotText),
+            ("command.redo", SkipReason::BadArgument),
+            ("export.done", SkipReason::Syntax),
+            ("prefs.language.yours", SkipReason::Locked),
+            ("nobody.knows", SkipReason::UnknownKey),
+            ("command.fit", SkipReason::Empty),
+        ]
+    );
+    assert_eq!(c.text("command.save", &[]), "Save");
+}
+
+#[test]
+fn an_own_file_that_is_not_flat_json_is_refused_whole() {
+    let broken = Catalog::new("pl", Some("{\n  \"command.new\": \n}"));
+    assert!(matches!(broken.status().unwrap().error, Some(FileError::NotJson { line: 3, .. })));
+    let nested = Catalog::new("pl", Some(r#"{"a": {"b": "c"}}"#));
+    assert_eq!(nested.status().unwrap().error, Some(FileError::NotFlat));
+    let bom = Catalog::new("pl", Some("\u{feff}{\"command.new\": \"Nowy\"}"));
+    assert_eq!(bom.text("command.new", &[]), "Nowy");
+}
+
+#[test]
+fn pseudo_stretches_english_between_brackets() {
+    assert_eq!(line(PSEUDO, "command.new", &[]), "[ÑÑééww]");
+    assert_eq!(line(PSEUDO, "menu.file", &[]), "[Fíílééé]");
+    assert_eq!(line(PSEUDO, "export.done", &[("n", 2.into())]), "[ÉÉxpöörtéédd 2 fíílééss]");
+    assert_eq!(pseudo::pseudo_text("Box"), "[Bööxx]");
+}
+
+#[test]
+fn every_shipped_line_parses() {
+    for (code, text) in LOCALES {
+        let table = parse_table(text);
+        assert_eq!(table.len(), english_table().len(), "{code} has the English keys");
+        for (key, src) in &table {
+            assert!(format::parse(src).is_ok(), "{code} {key}: {src}");
+        }
+    }
+}
+
+#[test]
+fn a_command_label_drops_its_ellipsis() {
+    assert_eq!(Label::Command("command.open").text(), "Open");
+    assert_eq!(Label::With("view.command", &[("view", "front")]).text(), "Front View");
+    assert_eq!(Label::from("Parameters").text(), "Parameters");
+}
+
+#[test]
+fn tr_fills_named_arguments() {
+    assert_eq!(tr!("export.done", n = 2), "Exported 2 files");
+    assert_eq!(tr!("menu.help.about", name = "FundaCAD 2"), "About FundaCAD 2");
+}

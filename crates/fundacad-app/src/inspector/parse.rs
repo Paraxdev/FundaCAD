@@ -98,7 +98,8 @@ fn dim_words(kind: Kind) -> &'static str {
 
 /// The value in millimetres or degrees, or why the text is no value of this kind.
 pub fn parse(kind: Kind, raw: &str) -> Result<f64, String> {
-    let t = raw.trim();
+    let typed = crate::i18n::read_typed(raw.trim(), crate::i18n::decimal_mark()).map_err(|e| e.to_string())?;
+    let t = typed.as_str();
     if t.is_empty() {
         return Err("empty value".into());
     }

@@ -8,10 +8,11 @@ use gpui::*;
 use super::menu::{At, OpenMenu};
 use super::{handle, MenuItem, MenuRow, Overlay};
 use crate::files;
+use crate::i18n::tr;
 use crate::theme::{Theme, FS_BODY, S_4};
 use crate::ui::text;
 
-const TITLES: [&str; 4] = ["File", "Edit", "View", "Help"];
+const TITLES: [&str; 4] = ["menu.file", "menu.edit", "menu.view", "menu.help"];
 const RECENT_SHOWN: usize = 15;
 
 thread_local! {
@@ -142,7 +143,7 @@ pub fn menubar(t: &Theme, cx: &App) -> Div {
                 .rounded(px(4.))
                 .hover(move |s| s.bg(hover))
                 .when(open == Some(i), move |d| d.bg(wash))
-                .child(label)
+                .child(tr!(label))
                 .child(
                     canvas(move |bounds, _, _| PLACED.with(|p| p.borrow_mut()[i] = bounds), |_, _, _, _| {})
                         .absolute()
