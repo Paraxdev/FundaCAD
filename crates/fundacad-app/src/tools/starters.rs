@@ -103,8 +103,9 @@ pub const TOOLS: &[Tool] = &[
         Ok(Start { feature: f, need: Vec::new() })
     }),
     t("datum-axis", "Datum Axis", |_, s| {
-        let on: Vec<&Pick> = s.picks.iter().filter(|p| p.selector().is_some()).take(2).collect();
-        let [a, b] = two(point_refs(&on), "Select two faces or edges to run the axis through, then Datum Axis")?;
+        // The engine takes a face's centre, not the spot clicked, as for Plane Through Points.
+        let on: Vec<&Pick> = s.of(PickKind::Edge).into_iter().take(2).collect();
+        let [a, b] = two(point_refs(&on), "Select two edges to run the axis through, then Datum Axis")?;
         let (pa, pb) = (spot(on[0]), spot(on[1]));
         let dir = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
         if dir.iter().all(|c| c.abs() < 1e-6) {

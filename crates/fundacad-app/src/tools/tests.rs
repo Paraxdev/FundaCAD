@@ -143,13 +143,22 @@ fn reference_datums_need_their_selection() {
     assert_eq!(s.feature["plane"]["origin"], json!([2.0, 0.0, 7.0]));
     assert_eq!(s.feature["through"]["kind"], json!("mid"));
     assert!(run("axis-cylinder", &d, vec![]).is_err());
-    let (_, s) = run("datum-axis", &d, vec![face("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 13.])]).unwrap();
-    assert_eq!((s.feature["origin"].clone(), s.feature["dir"].clone()), (json!([1.0, 2.0, 3.0]), json!([0.0, 0.0, 10.0])));
-    assert_eq!(s.feature["through"]["b"]["t"], json!(0.5));
-    let mixed = vec![Pick::Body { body: "b1".into() }, edge("b1", 4, [1., 2., 13.]), face("b1", 1, [4., 2., 13.])];
-    let (_, s) = run("datum-axis", &d, mixed).unwrap();
-    assert_eq!((s.feature["origin"].clone(), s.feature["dir"].clone()), (json!([1.0, 2.0, 13.0]), json!([3.0, 0.0, 0.0])));
-    let same = vec![face("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 3.])];
+    let axis_words = "Select two edges to run the axis through, then Datum Axis";
+    assert_eq!(run("datum-axis", &d, vec![]).unwrap_err(), axis_words);
+    assert_eq!(run("datum-axis", &d, vec![edge("b1", 4, [1., 2., 13.])]).unwrap_err(), axis_words);
+    let spots = vec![face("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 13.])];
+    assert_eq!(run("datum-axis", &d, spots).unwrap_err(), axis_words, "a face spot is not what the engine reads");
+    let picks = vec![Pick::Body { body: "b1".into() }, edge("b1", 4, [1., 2., 13.]), face("b1", 1, [8., 8., 8.]),
+        edge("b1", 6, [4., 2., 13.]), edge("b1", 7, [9., 9., 9.])];
+    let (_, s) = run("datum-axis", &d, picks).unwrap();
+    assert_eq!(
+        s.feature,
+        json!({"id": "f1", "type": "datumAxis", "origin": [1.0, 2.0, 13.0], "dir": [3.0, 0.0, 0.0], "name": "Axis",
+            "through": {"kind": "points",
+                "a": {"edge": {"kind": "edge", "by": "nearest", "point": [1.0, 2.0, 13.0], "body": "b1"}, "t": 0.5},
+                "b": {"edge": {"kind": "edge", "by": "nearest", "point": [4.0, 2.0, 13.0], "body": "b1"}, "t": 0.5}}})
+    );
+    let same = vec![edge("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 3.])];
     assert_eq!(run("datum-axis", &d, same).unwrap_err(), "Pick two different spots");
     let (_, s) = run("datum-point", &d, vec![]).unwrap();
     assert_eq!(s.feature, json!({"id": "f1", "type": "datumPoint", "point": [0.0, 0.0, 0.0], "name": "Point"}));
