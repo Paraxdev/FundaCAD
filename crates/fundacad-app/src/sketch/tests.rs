@@ -84,7 +84,7 @@ fn a_closed_line_loop_and_a_rectangle_are_regions() {
     e.click(p(70.0, 10.0), 10.0);
     let regions = e.regions();
     assert_eq!(regions.len(), 2);
-    assert!(regions::contains(&regions[1], regions::inside(&regions[1])));
+    assert!(regions::contains(&regions[1], regions::inside(&regions[1], &[]).unwrap()));
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn a_part_from_scratch_adds_an_extrude_of_the_sketch() {
     e.click(p(10.0, 0.0), 10.0);
     assert_eq!(e.regions().len(), 1);
     e.write(&mut d).unwrap();
-    let id = add_extrude(&mut d, "sketch1", 10.0).unwrap();
+    let id = add_extrude(&mut d, "sketch1", 10.0, &[]).unwrap();
     let f = feature(&d, &id).unwrap();
     assert_eq!((f["sketch"].as_str(), f["name"].as_str()), (Some("sketch1"), Some("Extrude 1")));
     assert_eq!(feature(&d, "sketch1").unwrap()["entities"][0]["sides"], 6);
@@ -181,4 +181,15 @@ fn a_dimension_edited_in_the_document_solves_the_sketch_again() {
     solve::resolve_feature(&mut d, "sketch1", Some("constraints.d1.value"));
     let l = &feature(&d, "sketch1").unwrap()["entities"][0];
     assert!((l["x2"].as_f64().unwrap() - l["x1"].as_f64().unwrap() - 25.0).abs() < 1e-6, "{l}");
+}
+
+#[test]
+fn a_circle_inside_a_rectangle_is_left_out_of_the_extrude() {
+    let rect = vec![p(0.0, 0.0), p(40.0, 0.0), p(40.0, 20.0), p(0.0, 20.0)];
+    let circle: Vec<DVec2> = (0..32).map(|k| p(20.0, 10.0) + DVec2::from_angle(k as f64 / 32.0 * std::f64::consts::TAU) * 5.0).collect();
+    let pts = regions::fill_points(&[rect.clone(), circle.clone()]);
+    assert_eq!(pts.len(), 1, "only the rectangle's area, the circle is its hole");
+    assert!(regions::contains(&rect, pts[0]) && !regions::contains(&circle, pts[0]));
+    let island: Vec<DVec2> = circle.iter().map(|q| p(20.0, 10.0) + (*q - p(20.0, 10.0)) * 0.4).collect();
+    assert_eq!(regions::fill_points(&[rect, circle, island]).len(), 2, "an island in the hole fills again");
 }

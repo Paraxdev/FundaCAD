@@ -100,15 +100,51 @@ pub fn regions(entities: &[Entity], construction: &[String]) -> Vec<Vec<DVec2>> 
     out
 }
 
-/// A point inside an outline, for an extrude's `regions`.
-pub fn inside(outline: &[DVec2]) -> DVec2 {
-    let centre = outline.iter().copied().sum::<DVec2>() / outline.len().max(1) as f64;
-    if contains(outline, centre) {
-        return centre;
+/// One point per area to fill, for an extrude's `regions`: an outline nested inside an odd number of others is a
+/// hole, so a circle inside a rectangle cuts through it.
+pub fn fill_points(outlines: &[Vec<DVec2>]) -> Vec<DVec2> {
+    let within = |a: &[DVec2], b: &[DVec2]| !std::ptr::eq(a, b) && a.iter().all(|p| contains(b, *p));
+    let mut out = Vec::new();
+    for o in outlines {
+        let depth = outlines.iter().filter(|b| within(o, b)).count();
+        if depth % 2 == 1 {
+            continue;
+        }
+        let kids: Vec<&Vec<DVec2>> = outlines.iter().filter(|k| within(k, o)).collect();
+        if let Some(p) = inside(o, &kids) {
+            out.push(p);
+        }
     }
-    // A concave outline: the middle of the first chord across it.
-    let (a, b) = (outline[0], outline[outline.len() / 2]);
-    (a + b) / 2.0
+    out
+}
+
+/// The point inside `outline` and outside every `holes` that sits farthest from all their edges.
+pub fn inside(outline: &[DVec2], holes: &[&Vec<DVec2>]) -> Option<DVec2> {
+    let (lo, hi) = outline.iter().fold((DVec2::MAX, DVec2::MIN), |(lo, hi), p| (lo.min(*p), hi.max(*p)));
+    let edge_gap = |ring: &[DVec2], p: DVec2| {
+        (0..ring.len())
+            .map(|i| {
+                let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+                let t = ((p - a).dot(b - a) / (b - a).length_squared().max(1e-12)).clamp(0.0, 1.0);
+                (a + (b - a) * t - p).length()
+            })
+            .fold(f64::MAX, f64::min)
+    };
+    let n = 40;
+    let mut best: Option<(f64, DVec2)> = None;
+    for i in 0..n {
+        for j in 0..n {
+            let p = lo + (hi - lo) * DVec2::new((i as f64 + 0.5) / n as f64, (j as f64 + 0.5) / n as f64);
+            if !contains(outline, p) || holes.iter().any(|h| contains(h, p)) {
+                continue;
+            }
+            let gap = holes.iter().map(|h| edge_gap(h, p)).fold(edge_gap(outline, p), f64::min);
+            if best.is_none_or(|(g, _)| gap > g) {
+                best = Some((gap, p));
+            }
+        }
+    }
+    best.map(|(_, p)| p)
 }
 
 pub fn contains(outline: &[DVec2], p: DVec2) -> bool {

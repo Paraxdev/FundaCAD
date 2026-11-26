@@ -381,6 +381,7 @@ impl Viewport {
             return;
         }
         let id = e.feature.clone();
+        let fill = e.fill_points();
         let axis = revolve.then(|| {
             let line = e.solved.entities.iter().find(|x| e.is_construction(x.id())).and_then(|x| x.as_line_seg());
             let (a, b) = line.map_or((DVec2::ZERO, DVec2::Y), |(a, b)| (DVec2::new(a.x, a.y), DVec2::new(b.x, b.y)));
@@ -395,7 +396,7 @@ impl Viewport {
             move |d| {
                 match &axis {
                     Some(axis) => sketch::add_revolve(d, &id, axis.clone()),
-                    None => sketch::add_extrude(d, &id, 10.0),
+                    None => sketch::add_extrude(d, &id, 10.0, &fill),
                 }
                 .map(drop)
             },

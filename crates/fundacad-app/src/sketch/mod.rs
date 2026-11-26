@@ -219,6 +219,11 @@ impl Editor {
         out
     }
 
+    /// A world point inside each area a whole sketch extrude fills, nested outlines left as holes.
+    pub fn fill_points(&self) -> Vec<[f64; 3]> {
+        regions::fill_points(&self.regions()).into_iter().map(|p| self.plane.to_3d(p).to_array()).collect()
+    }
+
     pub fn set_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.clicks.clear();
@@ -571,8 +576,13 @@ fn with_ids(mut cs: Vec<Value>) -> Vec<Value> {
 }
 
 /// A new extrude of the sketch, every closed area, `distance` mm. Its id.
-pub fn add_extrude(doc: &mut Map<String, Value>, sketch: &str, distance: f64) -> Result<String, String> {
-    add_feature(doc, "extrude", json!({"type": "extrude", "sketch": sketch, "distance": distance, "operation": "new"}))
+/// `regions` are world points, one inside each area to extrude, as FC1 wrote them.
+pub fn add_extrude(doc: &mut Map<String, Value>, sketch: &str, distance: f64, regions: &[[f64; 3]]) -> Result<String, String> {
+    let mut f = json!({"type": "extrude", "sketch": sketch, "distance": distance, "operation": "new"});
+    if !regions.is_empty() {
+        f["regions"] = json!(regions);
+    }
+    add_feature(doc, "extrude", f)
 }
 
 /// A new full revolve of the sketch about `axis` (an `{origin, dir}` line in world mm). Its id.
