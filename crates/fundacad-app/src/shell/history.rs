@@ -258,7 +258,7 @@ impl Shell {
             })
             .child(icon(f.glyph, 18., colour))
             .child(label)
-            .when(marks.note.is_some(), |d| d.child(icon("pen", 12., t.text_mute)))
+            .when(marks.note.is_some(), |d| d.child(icon("text", 12., t.text_mute)))
             .when(marks.file.is_some(), |d| d.child(icon("import", 12., t.text_mute)))
             .when(suppressed, |d| d.child(icon("hidden", 12., t.text_mute)))
             .children(flag)

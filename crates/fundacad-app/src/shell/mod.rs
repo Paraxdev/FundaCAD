@@ -241,6 +241,7 @@ mod tests {
             "visible",
             "hidden",
             "pen",
+            "text",
             "import",
             "more",
             "skipStart",
