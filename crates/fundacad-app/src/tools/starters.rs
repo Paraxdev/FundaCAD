@@ -5,6 +5,7 @@ mod modify;
 
 pub use modify::fit::{fit, sources_extent, Fitted};
 pub use modify::keys::{press, replace};
+pub use modify::place::{offer, place, places};
 
 use serde_json::{json, Value};
 

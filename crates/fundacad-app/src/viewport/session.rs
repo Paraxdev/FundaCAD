@@ -75,7 +75,42 @@ impl Viewport {
         self.run_edit(|r, d| r.set_arm(d, arm), cx);
     }
 
+    /// Arms a pick the tool can do without, see `Run::offer`.
+    pub fn offer_arm(&mut self, arm: Target, cx: &mut Context<Self>) {
+        self.run_edit(|r, d| r.offer(d, arm), cx);
+    }
+
+    pub(super) fn settle_tool(&mut self, cx: &mut Context<Self>) {
+        if self.tool.as_ref().is_some_and(|t| t.arm.is_some()) {
+            self.run_edit(|r, d| r.settle(d), cx);
+        }
+    }
+
+    /// A plane or axis click, which `tools::place` turns into the field's value.
+    fn place_target(&mut self, arm: Target, pick: Pick, cx: &mut Context<Self>) {
+        let line = match &pick {
+            Pick::Edge { body, edge, .. } => self
+                .scene
+                .body_index(body)
+                .and_then(|b| self.picking.lines().get(b)?.get(*edge as usize).cloned()),
+            _ => None,
+        };
+        let done = self.run_edit(
+            |r, d| {
+                let value = tools::place(d, &r.feature, arm.field, &pick, line.as_deref())?;
+                r.pick(d, value, None)
+            },
+            cx,
+        );
+        if let Some(Err(why)) = done {
+            self.say(why, cx);
+        }
+    }
+
     pub(super) fn pick_target(&mut self, pick: Pick, cx: &mut Context<Self>) {
+        if let Some(arm) = self.arm().filter(tools::places) {
+            return self.place_target(arm, pick, cx);
+        }
         let (Some(tool), Some(value)) = (self.tool.as_ref(), tools::entry(&pick)) else { return };
         let Some(arm) = tool.arm else { return };
         let had = self.doc().and_then(|d| {

@@ -139,6 +139,8 @@ fn mirror_names_its_plane_by_ref_once_it_names_bodies() {
     assert_eq!(s.feature, json!({"id": "f2", "type": "mirror", "plane": "XY"}));
     let s = run("mirror", vec![plane("YZ")]).unwrap();
     assert_eq!(s.feature, json!({"id": "f2", "type": "mirror", "plane": "YZ"}));
+    let s = run("mirror", vec![plane("p4")]).unwrap();
+    assert_eq!(s.feature, json!({"id": "f2", "type": "mirror", "plane": "p4"}));
     let s = run("mirror", vec![body("f1"), plane("p4"), body("f6")]).unwrap();
     assert_eq!(s.feature, json!({"id": "f2", "type": "mirror", "plane": {"name": "p4"}, "bodies": ["f1", "f6"]}));
     assert_eq!(s.need, vec![]);

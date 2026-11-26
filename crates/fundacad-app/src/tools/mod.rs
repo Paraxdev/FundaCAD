@@ -13,6 +13,7 @@ pub use starters::tool;
 pub use starters::TOOLS;
 pub use starters::{fit, sources_extent, Fitted};
 pub use starters::{press, replace};
+pub use starters::{offer, place, places};
 
 use crate::selection::{Pick, PickKind, Selection};
 

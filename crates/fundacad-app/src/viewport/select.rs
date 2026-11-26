@@ -162,10 +162,11 @@ impl Viewport {
         if let Some(arm) = self.arm() {
             let body = face.as_ref().or(edge.as_ref()).and_then(|p| p.body()).map(|b| Pick::Body { body: b.into() });
             let pick = match arm.kind {
+                PickKind::Edge if arm.field == "axisRef" => edge.or(face),
                 PickKind::Edge => edge,
-                PickKind::Face => face,
+                PickKind::Face | PickKind::Plane => face,
                 PickKind::Body => body,
-                PickKind::Sketch | PickKind::Plane => None,
+                PickKind::Sketch => None,
             };
             if let Some(pick) = pick {
                 self.pick_target(pick, cx);

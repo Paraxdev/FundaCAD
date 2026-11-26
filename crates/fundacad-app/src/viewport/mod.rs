@@ -309,6 +309,7 @@ impl Viewport {
             if self.tool.is_none() {
                 self.undo.record(before, key, label);
             }
+            self.settle_tool(cx);
         }
         self.hover = None;
         self.show_built();

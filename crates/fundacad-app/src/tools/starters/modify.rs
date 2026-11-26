@@ -2,6 +2,7 @@
 
 pub mod fit;
 pub mod keys;
+pub mod place;
 #[cfg(test)]
 mod tests;
 

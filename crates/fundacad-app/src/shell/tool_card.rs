@@ -75,6 +75,7 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     let _ = tools::insert(&mut shown, start.feature.clone());
     let label = format!("Add {}", crate::timeline::labels::name_of(&shown, &id));
     let feature = start.feature.clone();
+    let offered = tools::offer(tool.id, v.selection());
     let begun = viewport.update(cx, |v, cx| {
         let need = start.need.clone();
         v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| {
@@ -85,6 +86,10 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
         match start.arm() {
             // A boolean with its bodies picked is done at once, as in FundaCAD 1.
             None if boolean => v.finish(true, cx),
+            None => match offered {
+                Some(t) => v.offer_arm(t, cx),
+                None => v.set_arm(None, cx),
+            },
             arm => v.set_arm(arm, cx),
         }
         Ok::<(), String>(())
