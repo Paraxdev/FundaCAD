@@ -2,12 +2,18 @@
 
 mod history;
 mod items;
+mod modal;
 mod rail;
 mod titlebar;
+mod toast;
+#[cfg(test)]
+mod toast_tests;
+pub(crate) mod transfer;
 
 use std::collections::HashMap;
 
 use fundacad_client::Doc;
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{InputEvent, InputState};
 
@@ -34,6 +40,7 @@ pub struct Shell {
     /// The History step whose values show under it.
     open: Option<usize>,
     focus: FocusHandle,
+    transfer: transfer::Transfer,
     _system: Subscription,
 }
 
@@ -53,6 +60,7 @@ impl Shell {
             items_tab: 0,
             open: None,
             focus: cx.focus_handle(),
+            transfer: transfer::Transfer::new(cx),
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -66,6 +74,7 @@ impl Shell {
         if self.source.as_ref() == Some(doc) {
             return;
         }
+        let first = self.source.is_none();
         let mut next = Document::from_funda(self.doc.name.clone(), doc);
         self.source = Some(doc.clone());
         if self.marker_moved {
@@ -83,6 +92,9 @@ impl Shell {
             if !focused && field.input.read(cx).value() != text {
                 field.input.update(cx, |i, cx| i.set_value(text, window, cx));
             }
+        }
+        if first {
+            self.check_links(true, window, cx);
         }
     }
 
@@ -192,6 +204,7 @@ impl Render for Shell {
         if window.focused(cx).is_none() {
             window.focus(&self.focus, cx);
         }
+        let overlay = self.transfer_overlay(t, cx);
         let viewport = self.viewport.clone();
         let redo = self.viewport.clone();
         div()
@@ -199,6 +212,7 @@ impl Render for Shell {
             .track_focus(&self.focus)
             .on_action(move |_: &crate::viewport::Undo, _, cx| viewport.update(cx, |v, cx| v.undo(cx)))
             .on_action(move |_: &crate::viewport::Redo, _, cx| redo.update(cx, |v, cx| v.redo(cx)))
+            .map(|d| self.transfer_actions(d, cx))
             .flex()
             .flex_col()
             .font_family(UI_FONT)
@@ -216,6 +230,7 @@ impl Render for Shell {
                     .child(right)
                     .child(status),
             )
+            .child(overlay)
             .child(frost_flush(self.viewport.clone()))
     }
 }

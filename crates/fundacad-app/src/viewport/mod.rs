@@ -184,6 +184,11 @@ impl Viewport {
         self.session.as_ref().map(|s| &s.doc)
     }
 
+    /// The engine link and the file of the open document, for requests that run beside the view.
+    pub fn session_link(&self) -> Option<engine::Link> {
+        self.session.as_ref().map(Session::link)
+    }
+
     /// What the latest rebuild said of each feature it could not build whole, empty when all built.
     #[allow(dead_code, reason = "fc2/shell reads it for History")]
     pub fn feature_issues(&self) -> &[FeatureIssue] {

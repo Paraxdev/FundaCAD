@@ -38,6 +38,9 @@ fn main() {
             KeyBinding::new("ctrl-z", viewport::Undo, None),
             KeyBinding::new("ctrl-y", viewport::Redo, None),
             KeyBinding::new("ctrl-shift-z", viewport::Redo, None),
+            KeyBinding::new("ctrl-e", shell::transfer::Export, None),
+            KeyBinding::new("ctrl-i", shell::transfer::Import, None),
+            KeyBinding::new("ctrl-shift-i", shell::transfer::InsertDocument, None),
         ]);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),

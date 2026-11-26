@@ -8,6 +8,11 @@ use crate::ui::{icon, icon_button, text};
 /// The lockup's viewBox is 640 by 124, shown 22 high as in the Vue title bar.
 const LOCKUP_W: f32 = 640. * 22. / 124.;
 
+/// Where the File menu opens, under its title, from the widths laid out before it.
+pub(super) fn file_menu_left(t: &Theme) -> f32 {
+    S_4 + LOCKUP_W + S_4 + t.hit(24.) + S_4
+}
+
 impl Shell {
     pub(super) fn titlebar(&self, t: &Theme) -> Div {
         let menu = |label: &'static str| {
@@ -21,6 +26,9 @@ impl Shell {
                 .items_center()
                 .rounded(px(4.))
                 .hover(move |s| s.bg(hover))
+                .when(label == "File", |d| {
+                    d.on_click(|_, window, cx| window.dispatch_action(Box::new(super::transfer::FileMenu), cx))
+                })
                 .child(label)
         };
         let doc = &self.doc;

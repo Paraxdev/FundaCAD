@@ -17,10 +17,19 @@ pub enum Opened {
 
 /// The app's copy of the document beside the worker's. Every edit runs on both, so the two stay equal.
 pub struct Session {
-    pub client: Client,
+    pub client: Arc<Client>,
     pub events: Receiver<Event>,
     pub doc: Doc,
+    pub path: PathBuf,
     blob_dir: PathBuf,
+}
+
+/// What work beside the view needs of the open document: its engine link, its file and where its blobs unpack.
+#[derive(Clone)]
+pub struct Link {
+    pub client: Arc<Client>,
+    pub path: PathBuf,
+    pub blob_dir: PathBuf,
 }
 
 impl Drop for Session {
@@ -30,6 +39,10 @@ impl Drop for Session {
 }
 
 impl Session {
+    pub fn link(&self) -> Link {
+        Link { client: self.client.clone(), path: self.path.clone(), blob_dir: self.blob_dir.clone() }
+    }
+
     /// The revision the edit made, None when it left the document as it was.
     pub fn edit(
         &mut self,
@@ -63,5 +76,5 @@ pub fn open(path: &Path, wake: impl Fn() + Send + Sync + 'static) -> Result<Open
     };
     let (client, events) = Client::spawn(command, options).map_err(|e| format!("the engine did not start: {e}"))?;
     client.load(doc.clone())?;
-    Ok(Opened::Doc(Session { client, events, doc, blob_dir }))
+    Ok(Opened::Doc(Session { client: Arc::new(client), events, doc, blob_dir, path: path.to_path_buf() }))
 }
