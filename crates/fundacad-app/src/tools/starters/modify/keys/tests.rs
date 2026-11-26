@@ -76,3 +76,26 @@ fn replace_swaps_the_feature_with_that_id() {
     assert_eq!(Value::Object(doc.clone()), json!({"features": [{"id": "f1", "type": "box"}, linear(7)]}));
     assert_eq!(replace(&mut doc, "f9", linear(2)), Err("the document has no feature f9".into()));
 }
+
+#[test]
+fn plus_minus_and_the_up_and_down_arrows_change_the_count_too() {
+    for key in ["+", "=", "up"] {
+        assert_eq!(press(&linear(4), key, &shown()), Some(linear(5)), "{key}");
+        assert_eq!(press(&linear(100), key, &shown()), None, "{key}");
+    }
+    for key in ["-", "down"] {
+        assert_eq!(press(&linear(4), key, &shown()), Some(linear(3)), "{key}");
+        assert_eq!(press(&linear(1), key, &shown()), None, "{key}");
+    }
+    assert_eq!(press(&json!({"type": "draft", "axis": "Z"}), "up", &[]), None);
+}
+
+#[test]
+fn a_count_bound_to_a_parameter_is_left_alone() {
+    let bound = json!({"type": "patternLinear", "count": "copies", "spacing": 12.5, "axis": "X"});
+    assert_eq!(press(&bound, "]", &shown()), None);
+    assert_eq!(press(&bound, "[", &shown()), None);
+    let unset = json!({"type": "patternLinear", "spacing": 12.5, "axis": "X"});
+    let two = json!({"type": "patternLinear", "count": 2, "spacing": 12.5, "axis": "X"});
+    assert_eq!(press(&unset, "]", &shown()), Some(two));
+}

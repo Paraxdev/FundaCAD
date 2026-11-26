@@ -1,5 +1,5 @@
-//! The keys a running Modify tool answers before the key table, as FundaCAD 1's pattern and draft tools: [ and ]
-//! drop or add a copy, X turns a draft's pull axis to the next world axis, C moves a circular pattern's axis between
+//! The keys a running Modify tool answers before the key table, as FundaCAD 1's pattern and draft tools: [ ] - +
+//! and the up and down arrows drop or add a copy (a count bound to a parameter is left alone), X turns a draft's pull axis to the next world axis, C moves a circular pattern's axis between
 //! the origin and the middle of what it repeats.
 
 #[cfg(test)]
@@ -23,10 +23,14 @@ pub fn press(f: &Value, key: &str, shown: &[Arc<Body>]) -> Option<Value> {
     let kind = f.get("type").and_then(Value::as_str)?;
     let mut out = f.clone();
     match (kind, key) {
-        ("patternLinear" | "patternCircular" | "patternRect", "[" | "]") => {
+        ("patternLinear" | "patternCircular" | "patternRect", "[" | "]" | "-" | "+" | "=" | "down" | "up") => {
             let field = if kind == "patternRect" { "countX" } else { "count" };
-            let n = f.get(field).and_then(Value::as_f64).unwrap_or(1.0).round() as i64;
-            let next = (n + if key == "]" { 1 } else { -1 }).clamp(1, MAX_COUNT);
+            let n = match f.get(field) {
+                None | Some(Value::Null) => 1,
+                Some(v) => v.as_f64()?.round() as i64,
+            };
+            let more = matches!(key, "]" | "+" | "=" | "up");
+            let next = (n + if more { 1 } else { -1 }).clamp(1, MAX_COUNT);
             if next == n {
                 return None;
             }

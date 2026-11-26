@@ -27,10 +27,14 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     let v = viewport.clone();
     cx.intercept_keystrokes(move |e, window, cx| {
         let k = &e.keystroke;
-        if k.modifiers.modified() || window.context_stack().iter().any(|c| c.contains("Input")) {
+        let m = k.modifiers;
+        // Shift = types + on most layouts.
+        let key = if m.shift && (k.key == "=" || k.key_char.as_deref() == Some("+")) { "+" } else { k.key.as_str() };
+        let held = m.control || m.alt || m.platform || m.function || (m.shift && key != "+");
+        if held || window.context_stack().iter().any(|c| c.contains("Input")) {
             return;
         }
-        if v.update(cx, |v, cx| tool_key(v, &k.key, cx)) {
+        if v.update(cx, |v, cx| tool_key(v, key, cx)) {
             cx.stop_propagation();
         }
     })
@@ -44,7 +48,7 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     });
 }
 
-/// A key the running tool answers, kept from the key table: [ ] for a pattern's count, X for a draft's pull axis.
+/// A key the running tool answers, kept from the key table: [ ] - + and up and down for a pattern's count, X for a draft's pull axis.
 fn tool_key(v: &mut Viewport, key: &str, cx: &mut Context<Viewport>) -> bool {
     let Some(id) = v.running().map(|r| r.feature.clone()) else { return false };
     let Some(f) = v.doc().and_then(|d| tools::feature(d, &id)).cloned() else { return false };
