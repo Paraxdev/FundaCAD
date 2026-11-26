@@ -96,13 +96,20 @@ fn ids(vals: &[Value]) -> Vec<&str> {
     vals.iter().filter_map(|v| v.get("id").and_then(Value::as_str)).collect()
 }
 
-/// A new sketch feature on `plane` (a named plane or a plane def), appended to the document. Its id.
-pub fn add_sketch(doc: &mut Map<String, Value>, plane: Value) -> Result<String, String> {
+/// A new sketch feature on `plane` (a named plane or a plane def), appended to the document. Its id. A `face`
+/// selector and `at` point in a plane def move onto the feature, so the sketch follows that face as in FC1.
+pub fn add_sketch(doc: &mut Map<String, Value>, mut plane: Value) -> Result<String, String> {
+    let follow: Vec<(&str, Value)> =
+        ["face", "at"].into_iter().filter_map(|k| Some((k, plane.as_object_mut()?.remove(k)?))).collect();
     let fs = doc.entry("features").or_insert_with(|| json!([])).as_array_mut().ok_or("features is not a list")?;
     let taken: Vec<&str> = ids(fs);
     let id = fresh_id("sketch", &taken);
     let n = fs.iter().filter(|f| f.get("type").and_then(Value::as_str) == Some("sketch")).count() + 1;
-    fs.push(json!({"id": id, "type": "sketch", "name": format!("Sketch {n}"), "plane": plane, "entities": []}));
+    let mut f = json!({"id": id, "type": "sketch", "name": format!("Sketch {n}"), "plane": plane, "entities": []});
+    for (k, v) in follow {
+        f[k] = v;
+    }
+    fs.push(f);
     Ok(id)
 }
 

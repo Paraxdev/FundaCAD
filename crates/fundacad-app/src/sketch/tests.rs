@@ -193,3 +193,17 @@ fn a_circle_inside_a_rectangle_is_left_out_of_the_extrude() {
     let island: Vec<DVec2> = circle.iter().map(|q| p(20.0, 10.0) + (*q - p(20.0, 10.0)) * 0.4).collect();
     assert_eq!(regions::fill_points(&[rect, circle, island]).len(), 2, "an island in the hole fills again");
 }
+
+#[test]
+fn a_face_sketch_keeps_its_face_reference_beside_the_plane() {
+    let mut d = Map::new();
+    let face = json!({"kind": "face", "by": "nearest", "point": [0, 0, 5], "body": "b1"});
+    let mut spec = Plane::on_face(Vec3::new(0.0, 0.0, 5.0), Vec3::Z).spec();
+    spec["face"] = face.clone();
+    spec["at"] = json!([1, 2, 5]);
+    let id = add_sketch(&mut d, spec).unwrap();
+    let f = feature(&d, &id).unwrap();
+    assert_eq!((&f["face"], &f["at"]), (&face, &json!([1, 2, 5])));
+    assert!(f["plane"].get("face").is_none() && f["plane"].get("at").is_none());
+    assert!(Plane::from_spec(&f["plane"]).is_some());
+}

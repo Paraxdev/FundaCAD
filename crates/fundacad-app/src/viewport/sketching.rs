@@ -205,6 +205,7 @@ impl Viewport {
         let plane = Plane::on_face(hit.point, hit.normal);
         let mut spec = plane.spec();
         spec["at"] = json!([hit.point.x, hit.point.y, hit.point.z]);
+        spec["face"] = face_selector(body, hit.face);
         Some((plane, spec))
     }
 
@@ -212,19 +213,7 @@ impl Viewport {
     pub(super) fn sketch_press(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.sketch_ui.picking {
             if let Some((_, spec)) = self.face_plane_at(position).or_else(|| self.origin_plane_at(position)) {
-                let at = spec.get("at").cloned();
-                let plane = match spec.as_object() {
-                    Some(o) => Value::Object(o.iter().filter(|(k, _)| *k != "at").map(|(k, v)| (k.clone(), v.clone())).collect()),
-                    None => spec,
-                };
-                self.new_sketch(plane, cx);
-                if let (Some(at), Some(e)) = (at, &self.sketch) {
-                    let id = e.feature.clone();
-                    let _ = self.edit_step(Some(format!("at {id}")), None, move |d| {
-                        sketch::feature_mut(d, &id).ok_or("the sketch is gone")?.insert("at".into(), at.clone());
-                        Ok(())
-                    }, cx);
-                }
+                self.new_sketch(spec, cx);
             }
             return true;
         }
@@ -692,4 +681,21 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     commands::register(cx, "delete", "Delete", Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| v.sketch_do(cx, Editor::delete_selected));
     });
+}
+
+/// FC1's face reference: the face nearest its area centroid, on its body.
+fn face_selector(body: &super::scene::SceneBody, face: u32) -> Value {
+    let (mut sum, mut area) = (Vec3::ZERO, 0.0);
+    for t in body.indices.chunks_exact(3) {
+        let [a, b, c] = [0, 1, 2].map(|k| &body.vertices[t[k] as usize]);
+        if a.face != face {
+            continue;
+        }
+        let (a, b, c) = (a.position(), b.position(), c.position());
+        let w = (b - a).cross(c - a).length() / 2.0;
+        sum += (a + b + c) / 3.0 * w;
+        area += w;
+    }
+    let c = sum / area.max(1e-12);
+    json!({"kind": "face", "by": "nearest", "point": [c.x, c.y, c.z], "body": body.source.id})
 }
