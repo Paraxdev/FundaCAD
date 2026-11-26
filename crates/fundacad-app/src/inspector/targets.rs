@@ -23,7 +23,7 @@ pub struct TargetField {
     pub kind: TargetKind,
     /// A profile point, itself an array of numbers.
     pub region: bool,
-    /// Said instead of a count, since "0 faces" and "selectionTarget.empty.wholeBody" are opposite answers.
+    /// Said instead of a count, since "0 faces" and "the whole body" are opposite answers.
     pub when_empty: Option<&'static str>,
     /// The singular form some features grew beside the plural.
     pub also_reads: Option<&'static str>,

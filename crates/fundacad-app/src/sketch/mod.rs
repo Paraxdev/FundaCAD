@@ -547,7 +547,7 @@ impl Editor {
         self.solved = solved;
         Ok(tr!(
             "sketch.step.set",
-            what = self.dims(0.0).iter().find(|d| d.key == key).map_or(key.to_string(), |d| d.label.to_lowercase())
+            what = self.dims(0.0).iter().find(|d| d.key == key).map_or(key.to_string(), |d| d.label.clone())
         ))
     }
 

@@ -343,7 +343,7 @@ impl Shell {
             acts.push((show, edit(true)));
             acts.push((hide, edit(false)));
             let only: Vec<String> = picked.iter().flat_map(|e| flat_ids(e)).collect();
-            acts.push((tr!("items.vis.showOnly", n = only.len()), Act::ShowOnly(eye.category, only)));
+            acts.push((tr!("items.vis.showOnly", n = n), Act::ShowOnly(eye.category, only)));
             acts.push((eye.category.show_all_label().to_string(), Act::ShowAll(eye.category)));
         }
         if node.rename.is_some() {

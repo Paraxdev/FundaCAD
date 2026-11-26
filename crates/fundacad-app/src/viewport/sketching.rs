@@ -420,7 +420,7 @@ impl Viewport {
             let text = typing.clone().unwrap_or_else(|| {
                 let v = match () {
                     _ if d.angle => format!("{}°", fmt(d.value)),
-                    _ if d.label.starts_with(&i18n::t("sketch.dim.diameter")) => format!("⌀{}", fmt(d.value)),
+                    _ if d.diameter => format!("⌀{}", fmt(d.value)),
                     _ => fmt(d.value),
                 };
                 match (&d.expr, d.driven) {

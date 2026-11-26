@@ -2231,7 +2231,7 @@
   "sketch.name.between": "{label} zwischen {subjects}",
   "sketch.name.construction": "Konstruktion",
   "sketch.name.edge": "{name}, Kante {n}",
-  "sketch.name.entity": "{kind, select, line {Linie {n}} rectangle {Rechteck {n}} circle {Kreis {n}} arc {Bogen {n}} spline {Spline {n}} bspline {Spline mit Kontrollpunkten {n}} point {Punkt {n}} polygon {Polygon {n}} slot {Langloch {n}} text {Text {n}} projected {Referenz {n}} other {{kind} {n}}}",
+  "sketch.name.entity": "{kind, select, line {Linie {n}} rectangle {Rechteck {n}} circle {Kreis {n}} arc {Bogen {n}} spline {Spline {n}} bspline {Spline mit Kontrollpunkten {n}} point {Punkt {n}} polygon {Polygon {n}} slot {Langloch {n}} text {Text {n}} projected {Referenz {n}} other {{name} {n}}}",
   "sketch.name.of": "{label} von {subject}",
   "sketch.name.row": "{name}, Zeile {n}",
   "sketch.name.state": "{word, select, conflicting {widersprüchlich} redundant {redundant} reference {Referenz} other {abgeleitet}}",

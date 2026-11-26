@@ -110,14 +110,21 @@ fn pseudo_stretches_english_between_brackets() {
 #[test]
 fn every_shipped_line_parses() {
     // Note: FundaCAD 2 adds English lines ahead of their translations, a missing line falls back to English.
-    let translated = parse_table(LOCALES[1].1);
+    let translated: std::collections::BTreeSet<String> = parse_table(LOCALES[1].1).keys().cloned().collect();
     for (code, text) in LOCALES {
         let table = parse_table(text);
         for key in table.keys() {
             assert!(english_table().contains_key(key), "{code} {key} has an English line");
         }
         if code != "en" {
-            assert_eq!(table.len(), translated.len(), "{code} has the same keys as {}", LOCALES[1].0);
+            let keys: std::collections::BTreeSet<String> = table.keys().cloned().collect();
+            let missing: Vec<_> = translated.difference(&keys).collect();
+            let extra: Vec<_> = keys.difference(&translated).collect();
+            assert!(
+                missing.is_empty() && extra.is_empty(),
+                "{code} lacks {missing:?} and adds {extra:?} beside {}",
+                LOCALES[1].0
+            );
         }
         for (key, src) in &table {
             assert!(format::parse(src).is_ok(), "{code} {key}: {src}");
@@ -181,4 +188,57 @@ fn the_tool_and_viewport_lines_fill_their_arguments() {
     assert_eq!(tr!("sketch.status.dofLeft", n = 4), "4 degrees of freedom left");
     assert_eq!(tr!("viewport.status.triangles", n = 1200), "1200 triangles");
     assert_eq!(tr!("viewport.status.push", grip = "Top", mm = 2.5), "drag to push Top (2.5 mm)");
+}
+
+fn rust_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            rust_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+}
+
+fn literal_keys(src: &str) -> Vec<String> {
+    const CALLS: [&str; 6] = ["t(\"", "tr!(\"", "t_with(\"", "Label::Key(\"", "Label::With(\"", "Label::Command(\""];
+    let mut keys = Vec::new();
+    for call in CALLS {
+        for (at, _) in src.match_indices(call) {
+            let before = src[..at].chars().next_back();
+            if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                continue;
+            }
+            let rest = &src[at + call.len()..];
+            let Some(end) = rest.find('"') else { continue };
+            let key = &rest[..end];
+            // Note: the tool table's own `t("id", ...)` passes ids without a dot, they are not keys.
+            if key.contains('.') && key.chars().all(|c| c.is_alphanumeric() || "._-".contains(c)) {
+                keys.push(key.to_string());
+            }
+        }
+    }
+    keys
+}
+
+#[test]
+fn every_literal_key_in_the_source_has_an_english_line() {
+    let mut files = Vec::new();
+    rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
+    let mut missing: Vec<String> = Vec::new();
+    for file in &files {
+        let src = std::fs::read_to_string(file).unwrap();
+        for key in literal_keys(&src) {
+            if !english_table().contains_key(key.as_str()) {
+                missing.push(format!("{}: {key}", file.display()));
+            }
+        }
+    }
+    for tool in crate::tools::TOOLS {
+        if !english_table().contains_key(tool.label) {
+            missing.push(format!("tool {}: {}", tool.id, tool.label));
+        }
+    }
+    assert!(missing.is_empty(), "keys with no English line: {missing:#?}");
 }

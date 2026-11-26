@@ -15,6 +15,7 @@ pub struct Dim {
     pub label: String,
     pub value: f64,
     pub angle: bool,
+    pub diameter: bool,
     /// A parameter name the entity field holds, the engine resolves it.
     pub expr: Option<String>,
     /// The constraint's index, for conflict colours.
@@ -38,7 +39,9 @@ pub fn shape_name(entities: &[Value], id: &str) -> String {
     };
     let ty = ty_of(me);
     let n = entities.iter().take_while(|e| !std::ptr::eq(*e, me)).filter(|e| ty_of(e) == ty).count() + 1;
-    tr!("sketch.name.entity", kind = ty, n = n)
+    let mut kind = ty.chars();
+    let name: String = kind.next().map_or(String::new(), |c| c.to_uppercase().chain(kind).collect());
+    tr!("sketch.name.entity", kind = ty, name = name, n = n)
 }
 
 fn of(label: &str, subject: String) -> String {
@@ -126,7 +129,8 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
         if let Some((label, from, to, angle)) = found {
             let anchor = if angle { from + (to - from) * 0.3 } else { beside(from, to, gap) };
             let key = format!("constraints.{id}.value");
-            out.push(Dim { key, label, value, angle, expr: None, constraint: Some(i), driven, from, to, anchor });
+            let diameter = ty == "diameter";
+            out.push(Dim { key, label, value, angle, diameter, expr: None, constraint: Some(i), driven, from, to, anchor });
         }
     }
     for e in entities {
@@ -140,7 +144,8 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
             let expr = e.get(stored).and_then(Value::as_str).map(str::to_string);
             let key = format!("entities.{id}.{field}");
             let anchor = beside(from, to, gap);
-            out.push(Dim { key, label, value, angle: false, expr, constraint: None, driven: false, from, to, anchor });
+            let diameter = field == "diameter";
+            out.push(Dim { key, label, value, angle: false, diameter, expr, constraint: None, driven: false, from, to, anchor });
         };
         match r {
             Entity::Rectangle { x, y, width, height, angle, .. } => {
