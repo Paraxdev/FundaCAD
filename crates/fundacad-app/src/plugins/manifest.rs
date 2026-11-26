@@ -7,16 +7,21 @@ use serde::Deserialize;
 use serde_json::Value;
 
 pub const KINDS: [&str; 4] = ["builtin", "process", "panel", "compute"];
-pub const GRANTS: [&str; 8] = [
+pub const GRANTS: [&str; 12] = [
     "document.read",
     "document.write",
+    "document.history",
     "geometry.build",
     "files.read",
     "files.write",
     "network",
-    "devices.gamepad",
-    "devices.hid",
+    "network.local",
+    "device.input",
+    "input.remap",
+    "ui.panel",
+    "process.spawn",
 ];
+const MAX_TRANSLATIONS: usize = 64;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 pub struct Translation {
@@ -26,7 +31,7 @@ pub struct Translation {
     pub summary: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Manifest {
     pub id: String,
     pub name: String,
@@ -35,6 +40,8 @@ pub struct Manifest {
     pub summary: String,
     pub enabled_by_default: bool,
     pub grants: Vec<String>,
+    pub hosts: Vec<String>,
+    pub former_ids: Vec<String>,
     pub feature_types: Vec<String>,
     pub shape_generators: Vec<String>,
     pub exporters: Vec<String>,
@@ -70,6 +77,56 @@ fn strings(v: &Value, key: &str) -> Result<Vec<String>, String> {
     }
 }
 
+/// A list of distinct texts that are not empty.
+fn tokens(v: &Value, key: &str) -> Result<Vec<String>, String> {
+    let list = strings(v, key)?;
+    for (i, t) in list.iter().enumerate() {
+        if t.is_empty() {
+            return Err(format!("{key} holds an empty text"));
+        }
+        if list[..i].contains(t) {
+            return Err(format!("{key} names {t:?} twice"));
+        }
+    }
+    Ok(list)
+}
+
+fn host_ok(h: &str) -> bool {
+    let labels: Vec<&str> = h.strip_prefix('.').unwrap_or(h).split('.').collect();
+    labels.len() >= 2
+        && labels.iter().all(|l| {
+            let b = l.as_bytes();
+            !b.is_empty()
+                && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+                && b[0] != b'-'
+                && b[b.len() - 1] != b'-'
+        })
+}
+
+/// A bad entry is dropped, as FundaCAD 1 did, rather than refusing the plugin over its wording.
+fn translations(v: Option<&Value>) -> BTreeMap<String, Translation> {
+    let mut out = BTreeMap::new();
+    let Some(Value::Object(m)) = v else { return out };
+    for (code, entry) in m {
+        if out.len() >= MAX_TRANSLATIONS {
+            break;
+        }
+        let ok_code = !code.is_empty() && code.len() <= 16 && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        let line = |k: &str| {
+            entry
+                .get(k)
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty() && !s.contains(['\n', '\r']))
+                .map(str::to_owned)
+        };
+        let t = Translation { name: line("name"), summary: line("summary") };
+        if ok_code && (t.name.is_some() || t.summary.is_some()) {
+            out.insert(code.clone(), t);
+        }
+    }
+    out
+}
+
 fn text(v: &Value, key: &str) -> Result<String, String> {
     match v.get(key) {
         Some(Value::String(s)) if !s.trim().is_empty() => Ok(s.clone()),
@@ -92,7 +149,10 @@ impl Manifest {
         if !KINDS.contains(&kind.as_str()) {
             return Err(format!("{kind:?} is not a plugin kind"));
         }
-        let grants = strings(&v, "grants")?;
+        if !v.get("grants").is_some_and(Value::is_array) {
+            return Err("grants is not a list".into());
+        }
+        let grants = tokens(&v, "grants")?;
         if let Some(g) = grants.iter().find(|g| !GRANTS.contains(&g.as_str())) {
             return Err(format!("{g:?} is not a grant"));
         }
@@ -101,21 +161,34 @@ impl Manifest {
             Some(Value::Bool(b)) => *b,
             Some(_) => return Err("enabledByDefault is not true or false".into()),
         };
-        let translations = match v.get("translations") {
-            Some(t) => serde_json::from_value(t.clone()).map_err(|e| format!("translations: {e}"))?,
-            None => BTreeMap::new(),
-        };
+        let former_ids = tokens(&v, "formerIds")?;
+        if former_ids.contains(&id) {
+            return Err("formerIds names the plugin's own id".into());
+        }
+        let hosts = strings(&v, "hosts")?;
+        if let Some(h) = hosts.iter().find(|h| !host_ok(h)) {
+            return Err(format!("{h:?} is not a host name"));
+        }
+        let network = grants.iter().any(|g| g == "network");
+        if network && hosts.is_empty() {
+            return Err("it asks for network but names no hosts".into());
+        }
+        if !network && !hosts.is_empty() {
+            return Err("it names hosts but does not ask for network".into());
+        }
         Ok(Manifest {
             name: text(&v, "name")?,
             version: text(&v, "version")?,
             summary: v.get("summary").and_then(Value::as_str).unwrap_or_default().to_owned(),
             enabled_by_default,
             grants,
-            feature_types: strings(&v, "featureTypes")?,
+            hosts,
+            former_ids,
+            feature_types: tokens(&v, "featureTypes")?,
             shape_generators: strings(&v, "shapeGenerators")?,
             exporters: strings(&v, "exporters")?,
             geometry_wasm: v.get("geometryWasm").and_then(Value::as_str).map(str::to_owned),
-            translations,
+            translations: translations(v.get("translations")),
             kind,
             id,
         })

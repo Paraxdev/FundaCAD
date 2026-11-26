@@ -40,14 +40,26 @@ fn the_bundled_manifests_read() {
 
 #[test]
 fn a_manifest_is_refused_for_what_fundacad_1_refused() {
-    assert!(Manifest::parse(r#"{"id":"A.B","name":"x","version":"1","kind":"panel"}"#).is_ok());
+    assert!(Manifest::parse(r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":[]}"#).is_ok());
+    let printing = r#"{"id":"A.B","name":"x","version":"1","kind":"process",
+        "grants":["network.local","process.spawn","network"],"hosts":["example.com"],
+        "translations":{"de":{"name":"y"},"fr":{"name":3},"bad code":{"name":"z"}}}"#;
+    let m = Manifest::parse(printing).unwrap();
+    assert_eq!(m.translations.keys().collect::<Vec<_>>(), ["de"], "a bad translation is dropped, not fatal");
     for bad in [
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel"}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":["network"]}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":[],"hosts":["example.com"]}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":["network"],"hosts":["http://x.com"]}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":["files.read","files.read"]}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":[],"featureTypes":[""]}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":[],"formerIds":["A.B"]}"#,
         r#"{"id":"..","name":"x","version":"1","kind":"panel"}"#,
         r#"{"id":"A.B.C","name":"x","version":"1","kind":"panel"}"#,
         r#"{"id":"A.B","name":"x","version":"1","kind":"daemon"}"#,
         r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":["root"]}"#,
-        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","enabledByDefault":"yes"}"#,
-        r#"{"id":"A.B","version":"1","kind":"panel"}"#,
+        r#"{"id":"A.B","name":"x","version":"1","kind":"panel","grants":[],"enabledByDefault":"yes"}"#,
+        r#"{"id":"A.B","version":"1","kind":"panel","grants":[]}"#,
         "[]",
     ] {
         assert!(Manifest::parse(bad).is_err(), "{bad}");
@@ -82,7 +94,7 @@ fn discovery_needs_consent_in_a_recorded_root_and_the_first_id_wins() {
 
 #[test]
 fn off_by_default_switches_off_once_and_the_choice_then_holds() {
-    let mut quiet = Manifest::parse(r#"{"id":"A.Pad","name":"Pad","version":"1","kind":"panel"}"#).unwrap();
+    let mut quiet = Manifest::parse(r#"{"id":"A.Pad","name":"Pad","version":"1","kind":"panel","grants":[]}"#).unwrap();
     quiet.enabled_by_default = false;
     let found = vec![Found { manifest: quiet, dir: None, native: false, problem: None }];
     let (off, seen) = settle_disabled(&found, &[], &[]);

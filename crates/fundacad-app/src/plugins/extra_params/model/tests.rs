@@ -101,7 +101,8 @@ fn switching_kind_carries_the_range() {
 fn a_configuration_captures_applies_and_drifts() {
     let mut d = doc();
     let id = add_configuration(&mut d, "Classic");
-    assert_eq!(id, "cfg1");
+    assert_eq!(id, "c1");
+    assert_eq!(active_configuration(&d).as_deref(), Some("c1"));
     let cfg = &d["paramExtras"]["configurations"][0];
     assert_eq!(cfg["values"], json!({"wall": "2", "width": "wall * 20", "solid": "1"}));
     set_value(&mut d, "wall", 4.).unwrap();
@@ -109,7 +110,7 @@ fn a_configuration_captures_applies_and_drifts() {
     apply_configuration(&mut d, &id).unwrap();
     assert_eq!(d["paramDefs"]["wall"]["expr"], "2");
     assert_eq!(d["paramDefs"]["width"]["value"].as_f64(), Some(40.));
-    assert_eq!(active_configuration(&d).as_deref(), Some("cfg1"));
+    assert_eq!(active_configuration(&d).as_deref(), Some("c1"));
     assert!(configuration_drift(&d, &id).is_empty());
 }
 
@@ -132,5 +133,5 @@ fn removing_a_group_ungroups_its_parameters() {
     remove_extra(&mut d, "groups", "g1");
     assert!(d["paramDefs"]["width"].get("group").is_none());
     assert_eq!(add_group(&mut d, "Fit"), "g1");
-    assert_eq!(add_check(&mut d, "wall < 9", "ok", true), "c4");
+    assert_eq!(add_check(&mut d, "wall < 9", "ok", true), "k1");
 }

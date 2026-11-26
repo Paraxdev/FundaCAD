@@ -383,7 +383,7 @@ pub fn add_group(doc: &mut Doc, name: &str) -> String {
 }
 
 pub fn add_check(doc: &mut Doc, expr: &str, message: &str, error_level: bool) -> String {
-    let id = next_id("c", &ids(doc, "checks"));
+    let id = next_id("k", &ids(doc, "checks"));
     let level = if error_level { "error" } else { "warning" };
     extras_mut(doc, "checks").push(json!({"id": id, "expr": expr, "message": message, "level": level}));
     id
@@ -402,9 +402,12 @@ pub fn capture_configuration(doc: &Doc, id: &str, name: &str) -> Value {
 }
 
 pub fn add_configuration(doc: &mut Doc, name: &str) -> String {
-    let id = next_id("cfg", &ids(doc, "configurations"));
+    let id = next_id("c", &ids(doc, "configurations"));
     let cfg = capture_configuration(doc, &id, name);
     extras_mut(doc, "configurations").push(cfg);
+    if let Some(x) = doc.get_mut("paramExtras").and_then(Value::as_object_mut) {
+        x.insert("activeConfiguration".into(), json!(id));
+    }
     id
 }
 

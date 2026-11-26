@@ -87,13 +87,15 @@ fn checkout_root() -> PathBuf {
 pub fn roots() -> Vec<Root> {
     let mut out: Vec<Root> = Vec::new();
     let env = std::env::var_os(PLUGIN_DIR_ENV).filter(|d| !d.is_empty()).map(PathBuf::from);
+    let repo = checkout_root();
     for dir in env.into_iter().chain(user_root()) {
         if !out.iter().any(|r| same_dir(&r.dir, &dir)) {
-            out.push(Root { dir, records: true });
+            // The engine never reads the checkout's switches, its plugins/ holds only what FundaCAD ships.
+            let records = !same_dir(&dir, &repo);
+            out.push(Root { dir, records });
         }
     }
     if cfg!(debug_assertions) {
-        let repo = checkout_root();
         if !out.iter().any(|r| same_dir(&r.dir, &repo)) {
             out.push(Root { dir: repo, records: false });
         }
@@ -144,12 +146,8 @@ pub fn discover(roots: &[Root], natives: &[&str]) -> Vec<Found> {
             let manifest = match Manifest::parse(&text) {
                 Ok(m) => m,
                 Err(why) => {
-                    let mut m = Manifest::parse(&format!(
-                        r#"{{"id":"{}","name":"{folder}","version":"0","kind":"panel"}}"#,
-                        if manifest::id_ok(&folder) { folder.as_str() } else { "Unknown.Plugin" }
-                    ))
-                    .expect("a stand in manifest");
-                    m.name = folder.clone();
+                    let id = if manifest::id_ok(&folder) { folder.clone() } else { "Unknown.Plugin".to_owned() };
+                    let m = Manifest { id, name: folder.clone(), version: "0".into(), kind: "panel".into(), enabled_by_default: true, ..Default::default() };
                     out.push(Found { manifest: m, dir: Some(dir), native: false, problem: Some(why) });
                     continue;
                 }
@@ -315,8 +313,17 @@ pub fn worker(cmd: WorkerCommand) -> WorkerCommand {
     if std::env::var_os(PLUGIN_DIR_ENV).is_some_and(|d| !d.is_empty()) {
         return cmd;
     }
-    match user_root().filter(|d| d.is_dir()) {
-        Some(dir) => cmd.env(PLUGIN_DIR_ENV, dir),
-        None => cmd,
+    let Some(dir) = user_root() else { return cmd };
+    // The engine starts before `install` writes the switches, and a debug engine given no folder reads the checkout
+    // with nothing switched off, so the folder and its list are made here first.
+    if !dir.join(DISABLED_FILE).is_file() {
+        let off: BTreeSet<String> = crate::settings::Store::load(crate::settings::config_dir().as_deref())
+            .get(DISABLED_KEY)
+            .unwrap_or_default();
+        if let Err(e) = write_disabled(&dir, &off) {
+            log::warn!("the plugin switches did not reach the engine: {e}");
+            return cmd;
+        }
     }
+    cmd.env(PLUGIN_DIR_ENV, dir)
 }
