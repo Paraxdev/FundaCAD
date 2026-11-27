@@ -8,6 +8,7 @@ use gpui::*;
 
 use super::Shell;
 use crate::commands::{register, Group};
+use crate::i18n::{self, tr, Label};
 use crate::inspect::filament::Prefs as Filament;
 use crate::inspect::printcheck::Settings;
 use crate::inspect::section::Section;
@@ -48,19 +49,19 @@ fn toast(cx: &mut App, words: &str) {
 pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     cx.set_global(Prefs::default());
     let cards = [
-        ("measure", "Measure", Card::Measure),
-        ("properties", "Properties", Card::Properties),
-        ("draft-analysis", "Overhang", Card::Overhang),
-        ("interference", "Interference", Card::Interference),
-        ("printability", "Printability", Card::Printability),
-        ("bed-fit", "Bed Fit Check", Card::BedFit),
+        ("measure", "tool.measure", Card::Measure),
+        ("properties", "tool.properties", Card::Properties),
+        ("draft-analysis", "tool.overhang", Card::Overhang),
+        ("interference", "tool.interference", Card::Interference),
+        ("printability", "inspect.printability", Card::Printability),
+        ("bed-fit", "inspect.bedFit", Card::BedFit),
     ];
     for (id, label, card) in cards {
         let v = viewport.clone();
-        register(cx, id, label, Group::Tools, move |_, cx| open(&v, card, cx));
+        register(cx, id, Label::Key(label), Group::Tools, move |_, cx| open(&v, card, cx));
     }
     let v = viewport.clone();
-    register(cx, "section", "Section View", Group::Tools, move |_, cx| {
+    register(cx, "section", Label::Key("rail.sectionView"), Group::Tools, move |_, cx| {
         v.update(cx, |v, cx| {
             if v.doc().is_none() {
                 return;
@@ -73,14 +74,14 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
         })
     });
     let v = viewport.clone();
-    register(cx, "isolate", "Isolate", Group::Tools, move |_, cx| {
+    register(cx, "isolate", Label::Key("rail.isolate"), Group::Tools, move |_, cx| {
         let view = v.read(cx);
         if view.isolated().is_some() {
             return v.update(cx, |v, cx| v.set_isolate(None, cx));
         }
         let keep = isolate::unique(view.selection().picks.iter().filter_map(|p| p.body().map(str::to_string)));
         if keep.is_empty() {
-            return toast(cx, "Select a body, then Isolate");
+            return toast(cx, &i18n::t("rail.isolateHint"));
         }
         v.update(cx, |v, cx| v.set_isolate(Some(keep), cx));
     });
@@ -88,10 +89,10 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
 
 fn open(viewport: &Entity<Viewport>, card: Card, cx: &mut App) {
     if viewport.read(cx).doc().is_none() {
-        return toast(cx, "Open a document first");
+        return toast(cx, &i18n::t("tool.openDocumentFirst"));
     }
     if card == Card::Interference && viewport.read(cx).body_count() < 2 {
-        return toast(cx, "Interference needs two bodies");
+        return toast(cx, &i18n::t("interference.status.oneBody"));
     }
     viewport.update(cx, |v, cx| {
         let again = v.inspecting().card == Some(card);
@@ -203,7 +204,7 @@ pub(super) fn frame(t: &Theme, title: &str, id: &'static str, cx: &mut Context<S
         .items_center()
         .justify_between()
         .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).child(title.to_string()))
-        .child(button(t, "inspect:close", "Close", false).on_click(cx.listener(|this, _, _, cx| {
+        .child(button(t, "inspect:close", i18n::t("common.close"), false).on_click(cx.listener(|this, _, _, cx| {
             this.viewport.update(cx, |v, cx| v.open_card(None, cx));
         })));
     chip(t).id(id).w(px(300.)).p(px(S_3)).flex().flex_col().gap(px(S_2)).occlude().child(head)
@@ -271,28 +272,28 @@ impl Shell {
             .occlude()
             .when(section, |d| {
                 d.child(
-                    bar("Section on".into()).child(
+                    bar(i18n::t("shell.section.on")).child(
                         div()
                             .flex()
                             .gap(px(S_1))
-                            .child(button(t, "section:edit", "Edit", false).on_click(cx.listener(|this, _, _, cx| {
+                            .child(button(t, "section:edit", i18n::t("shell.section.edit"), false).on_click(cx.listener(|this, _, _, cx| {
                                 this.viewport.update(cx, |v, cx| v.open_card(Some(Card::Section), cx));
                             })))
-                            .child(button(t, "section:flip", "Flip", false).on_click(cx.listener(|this, _, _, cx| {
+                            .child(button(t, "section:flip", i18n::t("shell.section.flip"), false).on_click(cx.listener(|this, _, _, cx| {
                                 this.viewport.update(cx, |v, cx| {
                                     let s = v.inspecting().section.map(|s| Section { flip: !s.flip, ..s });
                                     v.set_section(s, cx);
                                 });
                             })))
-                            .child(button(t, "section:off", "Off", false).on_click(cx.listener(|this, _, _, cx| {
+                            .child(button(t, "section:off", i18n::t("shell.section.off"), false).on_click(cx.listener(|this, _, _, cx| {
                                 this.viewport.update(cx, |v, cx| v.set_section(None, cx));
                             }))),
                     ),
                 )
             })
             .when_some(isolate, |d, n| {
-                let label = if n == 1 { "Isolated, 1 body".to_string() } else { format!("Isolated, {n} bodies") };
-                d.child(bar(label).child(button(t, "isolate:off", "Off", false).on_click(cx.listener(|this, _, _, cx| {
+                let label = tr!("inspect.isolated", n = n);
+                d.child(bar(label).child(button(t, "isolate:off", i18n::t("shell.section.off"), false).on_click(cx.listener(|this, _, _, cx| {
                     this.viewport.update(cx, |v, cx| v.set_isolate(None, cx));
                 }))))
             })

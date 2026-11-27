@@ -12,6 +12,7 @@ use serde_json::{json, Map, Value};
 use super::extra_params::pill;
 use super::{MenuRow, Native};
 use crate::commands::Group;
+use crate::i18n::{self, tr};
 use crate::overlay::{self, Toast};
 use crate::theme::{ActiveTheme as _, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
@@ -48,7 +49,7 @@ fn install(viewport: &Entity<Viewport>, _window: &mut Window, cx: &mut App) -> A
         l
     });
     let v = view.clone();
-    super::command(cx, ID, "fasteners", "Fasteners", Group::Tools, move |_, cx| {
+    super::command(cx, ID, "fasteners", "screws.panel.title", Group::Tools, move |_, cx| {
         v.update(cx, |l, cx| {
             l.open = !l.open;
             l.document_spec = None;
@@ -60,7 +61,7 @@ fn install(viewport: &Entity<Viewport>, _window: &mut Window, cx: &mut App) -> A
         let Some(spec) = spec_of(doc, owners) else { return Vec::new() };
         let v = v.clone();
         vec![MenuRow {
-            label: "Fastener Specs\u{2026}".into(),
+            label: i18n::t("screws.context.fastenerSpecs").into(),
             run: std::rc::Rc::new(move |_, cx| {
                 let spec = spec.clone();
                 v.update(cx, |l, cx| {
@@ -127,7 +128,7 @@ impl Library {
             Err(e) => return overlay::toast(cx, Toast::error(e)),
         };
         let Some(link) = self.viewport.read(cx).session_link(None) else {
-            return overlay::toast(cx, Toast::error("Open a FundaCAD document first."));
+            return overlay::toast(cx, Toast::error(i18n::t("files.openDocumentFirst")));
         };
         self.busy = true;
         cx.notify();
@@ -146,17 +147,17 @@ impl Library {
                     Ok(r) => r,
                     Err(r) if r.cancelled => return,
                     Err(r) => {
-                        return overlay::toast(cx, Toast::error(format!("{name} could not be made: {}", r.message)))
+                        return overlay::toast(cx, Toast::error(tr!("screws.insert.couldNotWhy", name = &name, why = r.message)))
                     }
                 };
                 let added = l.viewport.update(cx, |v, cx| {
                     let id = v.doc().map(crate::tools::next_id).unwrap_or_else(|| "f1".into());
                     let f = feature(&id, &spec, &reply)?;
-                    v.edit_step(None, Some(format!("Insert {name}")), move |d| crate::tools::insert(d, f.clone()), cx)
+                    v.edit_step(None, Some(tr!("screws.insert.step", name = &name)), move |d| crate::tools::insert(d, f.clone()), cx)
                 });
                 match added {
-                    Ok(_) => overlay::toast(cx, Toast::info(format!("Inserted {name}."))),
-                    Err(e) => overlay::toast(cx, Toast::error(format!("{name} could not be inserted: {e}"))),
+                    Ok(_) => overlay::toast(cx, Toast::info(tr!("screws.insert.inserted", name = &name))),
+                    Err(e) => overlay::toast(cx, Toast::error(tr!("screws.insert.couldNotWhy", name = &name, why = e))),
                 }
             });
         })
@@ -189,16 +190,16 @@ impl Library {
         let u = spec.get("units").and_then(Value::as_str).unwrap_or("mm");
         let n = |v: &Value| v.as_f64().map(|x| format!("{} {u}", catalogue::js_number((x * 1e3).round() / 1e3)));
         let mut lines = vec![
-            ("Standard", spec.get("standard").and_then(Value::as_str).map(str::to_owned)),
-            ("Type", spec.get("kind").and_then(Value::as_str).map(str::to_owned)),
-            ("Thread", spec.pointer("/thread/designation").and_then(Value::as_str).map(str::to_owned)),
-            ("Pitch", spec.pointer("/thread/pitch").and_then(n)),
-            ("Length", spec.get("length").and_then(n)),
-            ("Thread length", spec.pointer("/thread/length").and_then(n)),
+            ("screws.field.standard", spec.get("standard").and_then(Value::as_str).map(str::to_owned)),
+            ("screws.field.type", spec.get("kind").and_then(Value::as_str).map(str::to_owned)),
+            ("screws.field.thread", spec.pointer("/thread/designation").and_then(Value::as_str).map(str::to_owned)),
+            ("screws.field.pitch", spec.pointer("/thread/pitch").and_then(n)),
+            ("screws.field.length", spec.get("length").and_then(n)),
+            ("screws.spec.threadLength", spec.pointer("/thread/length").and_then(n)),
         ];
         for part in ["head", "drive", "nut", "washer", "insert"] {
             if let Some(ty) = spec.pointer(&format!("/{part}/type")).and_then(Value::as_str) {
-                lines.push(("Part", Some(format!("{part} {ty}"))));
+                lines.push(("screws.field.part", Some(format!("{part} {ty}"))));
             }
         }
         div().flex().flex_col().gap(px(2.)).children(lines.into_iter().filter_map(|(k, v)| {
@@ -206,7 +207,7 @@ impl Library {
                 div()
                     .flex()
                     .gap(px(S_3))
-                    .child(text(t, FS_MICRO).w(px(96.)).text_color(t.text_mute).child(k))
+                    .child(text(t, FS_MICRO).w(px(96.)).text_color(t.text_mute).child(i18n::t(k)))
                     .child(text(t, FS_SMALL).child(v?)),
             )
         }))
@@ -225,7 +226,7 @@ impl Render for Library {
             .flex()
             .items_center()
             .justify_between()
-            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.accent_hot).child("Fasteners"))
+            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.accent_hot).child(i18n::t("screws.panel.title")))
             .child(icon_button(t, "fasteners-close", "close", 28., 14., t.text_mute).on_click(cx.listener(
                 |this, _, _, cx| {
                     this.open = false;
@@ -238,7 +239,7 @@ impl Render for Library {
             body = body
                 .child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child(name))
                 .child(Self::spec_lines(t, spec))
-                .child(pill(t, "fasteners-back", "Catalogue", false).on_click(cx.listener(|this, _, _, cx| {
+                .child(pill(t, "fasteners-back", &i18n::t("screws.panel.catalogue"), false).on_click(cx.listener(|this, _, _, cx| {
                     this.document_spec = None;
                     cx.notify();
                 })));
@@ -279,7 +280,7 @@ impl Render for Library {
                     })
                     .collect();
                 if !lengths.is_empty() {
-                    body = body.child(text(t, FS_MICRO).text_color(t.text_mute).child("Length")).child(self.chips(
+                    body = body.child(text(t, FS_MICRO).text_color(t.text_mute).child(i18n::t("screws.field.length"))).child(self.chips(
                         t,
                         "len",
                         lengths,
@@ -303,7 +304,7 @@ impl Render for Library {
                     let on = self.choice.pitch.or(pitches.first().copied()).map(f64::to_bits);
                     body = body.child(self.chips(t, "pitch", items, on, |l, p| l.choice.pitch = Some(f64::from_bits(p)), cx));
                 }
-                let thread = vec![("Plain".to_owned(), false), ("Modelled thread".to_owned(), true)];
+                let thread = vec![(i18n::t("screws.label.plain"), false), (i18n::t("screws.thread.modelled"), true)];
                 body = body.child(self.chips(t, "thread", thread, Some(self.choice.modelled), |l, m| l.choice.modelled = m, cx));
             }
             match catalogue::expand(&self.choice) {
@@ -325,7 +326,7 @@ impl Render for Library {
                                 .rounded(px(R_MD))
                                 .bg(if busy { t.raised } else { t.accent })
                                 .text_color(if busy { t.text_dim } else { t.on_accent })
-                                .child(if busy { "Inserting\u{2026}" } else { "Insert into the model" })
+                                .child(i18n::t(if busy { "screws.panel.insertBusy" } else { "screws.panel.insert" }))
                                 .when(!busy, |d| d.on_click(cx.listener(|this, _, w, cx| this.insert(w, cx)))),
                         );
                 }

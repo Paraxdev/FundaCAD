@@ -2231,7 +2231,7 @@
   "sketch.name.between": "{subjects}之间的{label}",
   "sketch.name.construction": "构造线",
   "sketch.name.edge": "{name} 的边 {n}",
-  "sketch.name.entity": "{kind, select, line {直线 {n}} rectangle {矩形 {n}} circle {圆 {n}} arc {圆弧 {n}} spline {样条曲线 {n}} bspline {控制点样条曲线 {n}} point {点 {n}} polygon {多边形 {n}} slot {槽 {n}} text {文字 {n}} projected {参照 {n}} other {{kind} {n}}}",
+  "sketch.name.entity": "{kind, select, line {直线 {n}} rectangle {矩形 {n}} circle {圆 {n}} arc {圆弧 {n}} spline {样条曲线 {n}} bspline {控制点样条曲线 {n}} point {点 {n}} polygon {多边形 {n}} slot {槽 {n}} text {文字 {n}} projected {参照 {n}} other {{name} {n}}}",
   "sketch.name.of": "{subject}的{label}",
   "sketch.name.row": "{name}，第 {n} 行",
   "sketch.name.state": "{word, select, conflicting {冲突} redundant {冗余} reference {参考} other {隐含}}",

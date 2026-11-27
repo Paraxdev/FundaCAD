@@ -8,10 +8,10 @@ use serde_json::{json, Map, Value};
 
 use super::{above, choice, of_type, owned, text, toggle, Choice, ChoiceField, Opt, Patch, ToggleField, PICKED_POINT, PLANES};
 
-const KEEP: &[Opt] = &[("both", "Both"), ("top", "Top"), ("bottom", "Bottom")];
+const KEEP: &[Opt] = &[("both", "tool.split.both"), ("top", "tool.split.top"), ("bottom", "tool.split.bottom")];
 
-pub const SPLIT: &[ChoiceField] = &[choice("keep", "Keep", KEEP, "both"), choice("plane", "Plane", PLANES, "XY")];
-pub const COPY: &[ToggleField] = &[toggle("copy", "Copy", false)];
+pub const SPLIT: &[ChoiceField] = &[choice("keep", "field.keep", KEEP, "both"), choice("plane", "field.plane", PLANES, "XY")];
+pub const COPY: &[ToggleField] = &[toggle("copy", "field.copy", false)];
 
 /// The world planes and the datum planes above the split, with its planeId over its plane, a picked face as such.
 pub fn split_plane_choice(f: &Map<String, Value>, features: &[&Map<String, Value>]) -> (Vec<Choice>, String) {
@@ -21,13 +21,13 @@ pub fn split_plane_choice(f: &Map<String, Value>, features: &[&Map<String, Value
         (Some(id), _) => id.to_string(),
         (None, Some(Value::String(name))) => name.clone(),
         (None, Some(Value::Object(_))) => {
-            options.push(Choice::new(PICKED_POINT, "Picked face"));
+            options.push(Choice::new(PICKED_POINT, crate::i18n::t("field.option.pickedFace")));
             return (options, PICKED_POINT.into());
         }
         _ => "XY".into(),
     };
     if !options.iter().any(|o| o.value == current) {
-        options.push(Choice::new(current.clone(), format!("{current} (missing)")));
+        options.push(Choice::new(current.clone(), crate::i18n::tr!("field.option.missing", name = &current)));
     }
     (options, current)
 }

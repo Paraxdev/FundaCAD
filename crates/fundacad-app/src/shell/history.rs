@@ -7,6 +7,7 @@ use super::history_menu::DragRow;
 use super::timeline::{self, FieldKind};
 use super::Shell;
 use crate::document::{Feature, Health};
+use crate::i18n::{self, tr};
 use crate::theme::{
     Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, MONO_FONT, R_MD, R_PILL, S_0, S_1, S_2, S_3,
     W_SEMIBOLD,
@@ -131,11 +132,7 @@ impl Shell {
                 .whitespace_nowrap()
         };
         let related = related.map(|n| {
-            let tip = if on {
-                "Showing what relates to the selection, click to show everything"
-            } else {
-                "Show only what relates to the selection"
-            };
+            let tip = i18n::t(if on { "history.related.on" } else { "history.related.off" });
             pill("history-related")
                 .map(|d| {
                     if on {
@@ -144,18 +141,18 @@ impl Shell {
                         d.bg(t.float_chip_bg).text_color(t.text_dim)
                     }
                 })
-                .tooltip(move |window, cx| Tooltip::new(tip).build(window, cx))
+                .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.timeline.related_off = !this.timeline.related_off;
                     cx.notify();
                 }))
-                .child(format!("Related to Selection · {n}"))
+                .child(tr!("history.related.chip", n = n))
         });
         let errors = (failed > 0).then(|| {
             pill("history-errors")
                 .bg(t.error_tint)
                 .text_color(t.error)
-                .tooltip(|window, cx| Tooltip::new("Go to the next failed step").build(window, cx))
+                .tooltip(|window, cx| Tooltip::new(i18n::t("history.errors.tip")).build(window, cx))
                 .on_click(cx.listener(|this, _, _, cx| this.next_failed(cx)))
                 .child(icon("warning", 11., t.error))
                 .child(failed.to_string())
@@ -168,7 +165,7 @@ impl Shell {
             .pr(px(10.))
             .pb(px(6.))
             .pl(px(14.))
-            .child(text(t, FS_BODY).flex_1().font_weight(W_SEMIBOLD).child("History"))
+            .child(text(t, FS_BODY).flex_1().font_weight(W_SEMIBOLD).child(i18n::t("history.title")))
             .children(related)
             .children(errors)
             .child(icon_button(t, "History-close", "close", 28., 14., t.text_mute))

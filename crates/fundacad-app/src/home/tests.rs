@@ -9,9 +9,9 @@ const DAY: u64 = 24 * 60 * MIN;
 fn opened_line_reads_in_words() {
     let now = 1_795_000_000_000;
     assert_eq!(opened_line(now, now - 5_000), "Opened just now");
-    assert_eq!(opened_line(now, now - MIN), "Opened 1 minute ago");
-    assert_eq!(opened_line(now, now - 42 * MIN), "Opened 42 minutes ago");
-    assert_eq!(opened_line(now, now - 3 * 60 * MIN), "Opened 3 hours ago");
+    assert_eq!(opened_line(now, now - MIN), "Opened 1 min ago");
+    assert_eq!(opened_line(now, now - 42 * MIN), "Opened 42 min ago");
+    assert_eq!(opened_line(now, now - 3 * 60 * MIN), "Opened 3 h ago");
     assert_eq!(opened_line(now, now - DAY - MIN), "Opened yesterday");
     assert_eq!(opened_line(now, now - 4 * DAY), "Opened 4 days ago");
     assert_eq!(opened_line(now, now + MIN), "Opened just now");
@@ -42,7 +42,7 @@ fn the_examples_follow_examples_json() {
     let ours: Vec<&str> = EXAMPLES.iter().filter(|e| e.text.is_some()).map(|e| e.id).collect();
     assert_eq!(ours, ids);
     for (ex, json) in EXAMPLES.iter().zip(&listed) {
-        assert_eq!(ex.name, json["name"].as_str().unwrap());
+        assert_eq!(ex.line("name"), json["name"].as_str().unwrap());
         assert_eq!(ex.icon, json["icon"].as_str().unwrap());
     }
 }

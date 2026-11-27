@@ -29,8 +29,8 @@ fn every_sketch_is_a_flat_source_named_by_its_name_or_id() {
 #[test]
 fn selected_scopes_need_a_selection() {
     let scopes = |s| scope_choices(s).into_iter().map(|(s, _)| s).collect::<Vec<_>>();
-    assert_eq!(scopes(false), [BodyScope::All, BodyScope::Separate]);
-    assert_eq!(scopes(true).len(), 4);
+    assert_eq!(scopes(0), [BodyScope::All, BodyScope::Separate]);
+    assert_eq!(scopes(2).len(), 4);
 }
 
 #[test]

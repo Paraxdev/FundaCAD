@@ -12,7 +12,10 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 
-use crate::theme::{ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
+use crate::i18n;
+use crate::theme::{
+    ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD,
+};
 use crate::ui::{icon_button, solid_card, text};
 use crate::viewport::Viewport;
 use rows::{value_text, Row, Rows};
@@ -20,9 +23,8 @@ use state::{Change, Col, Key, Notes};
 
 actions!(params, [OpenParameters]);
 
-const HINT: &str = "Expressions are in mm / degrees; suffixes mm cm in deg rad allowed \u{b7} a semicolon separates \
-                    arguments: max(a; b) \u{b7} Esc to close";
-const UNITS: [(&str, &str); 3] = [("mm", "mm"), ("deg", "deg"), ("count", "unitless")];
+const HINT: &str = "params.hint";
+const UNITS: [(&str, &str); 3] = [("mm", "mm"), ("deg", "deg"), ("count", "params.unitless")];
 const NAME_W: f32 = 110.;
 const VALUE_W: f32 = 90.;
 const DEL_W: f32 = 24.;
@@ -124,8 +126,7 @@ impl ParamsPanel {
             Key::NewExpr => "expression",
             _ => "",
         };
-        let input =
-            cx.new(|cx| InputState::new(window, cx).default_value(text.to_string()).placeholder(placeholder));
+        let input = cx.new(|cx| InputState::new(window, cx).default_value(text.to_string()).placeholder(placeholder));
         let owner = key.clone();
         let events = cx.subscribe_in(&input, window, move |this, _, event: &InputEvent, window, cx| match event {
             InputEvent::PressEnter { .. } => this.commit(&owner, window, cx),
@@ -196,10 +197,10 @@ fn head_row(t: &Theme) -> Div {
         .items_center()
         .gap(px(S_3))
         .mb(px(S_2))
-        .child(caption(t, "Name").w(px(NAME_W)).flex_none())
-        .child(caption(t, "Expression").flex_1().min_w_0())
-        .child(caption(t, "Value").w(px(VALUE_W)).flex_none())
-        .child(caption(t, "Comment").flex_1().min_w_0())
+        .child(caption(t, &i18n::t("params.column.name")).w(px(NAME_W)).flex_none())
+        .child(caption(t, &i18n::t("params.column.expression")).flex_1().min_w_0())
+        .child(caption(t, &i18n::t("params.column.value")).w(px(VALUE_W)).flex_none())
+        .child(caption(t, &i18n::t("params.column.comment")).flex_1().min_w_0())
         .child(div().w(px(DEL_W)).flex_none())
 }
 
@@ -334,7 +335,7 @@ impl ParamsPanel {
                         this.unit = unit;
                         cx.notify();
                     }))
-                    .child(label)
+                    .child(i18n::t(label))
             }),
         );
         let refused = self.notes.problems.contains_key(&Key::Add);
@@ -351,10 +352,12 @@ impl ParamsPanel {
             .text_color(ink)
             .hover(move |s| s.bg(hot))
             .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
-            .child("+ Add");
-        let preview = self.notes.preview.get(&Key::NewExpr).map(|v| {
-            text(t, FS_SMALL).flex_none().text_color(t.accent_hot).child(value_text(*v, self.unit))
-        });
+            .child(i18n::t("params.add"));
+        let preview = self
+            .notes
+            .preview
+            .get(&Key::NewExpr)
+            .map(|v| text(t, FS_SMALL).flex_none().text_color(t.accent_hot).child(value_text(*v, self.unit)));
         let note = self.notes.problems.get(&Key::Add).or_else(|| self.notes.problems.get(&Key::NewExpr));
         div()
             .flex()
@@ -391,7 +394,7 @@ impl Render for ParamsPanel {
             .flex()
             .items_center()
             .justify_between()
-            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.accent_hot).child("Parameters"))
+            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.accent_hot).child(i18n::t("tool.parameters")))
             .child(
                 icon_button(t, "params-close", "close", 28., 14., t.text_mute)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle(cx))),
@@ -402,19 +405,19 @@ impl Render for ParamsPanel {
             .flex_col()
             .min_h_0()
             .overflow_y_scroll()
-            .child(section(t, "User Parameters"))
+            .child(section(t, &i18n::t("params.user")))
             .child(head_row(t));
         for r in &self.rows.user {
             body = body.child(self.row(t, r, window, cx));
         }
         body = body.child(self.add_row(t, window, cx));
         if !self.rows.model.is_empty() {
-            body = body.child(section(t, "Model Parameters")).child(head_row(t));
+            body = body.child(section(t, &i18n::t("params.model"))).child(head_row(t));
             for r in &self.rows.model {
                 body = body.child(self.row(t, r, window, cx));
             }
         }
-        body = body.child(text(t, FS_MICRO).mt(px(S_3)).text_color(t.text_mute).child(HINT));
+        body = body.child(text(t, FS_MICRO).mt(px(S_3)).text_color(t.text_mute).child(i18n::t(HINT)));
         solid_card(t)
             .bg(t.float_bg_solid)
             .absolute()

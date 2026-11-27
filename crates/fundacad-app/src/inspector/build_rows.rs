@@ -43,7 +43,7 @@ pub fn revolve_axis_choice(doc: &Feature, f: &Feature, all: &[&Feature]) -> (Vec
     let mut options: Vec<Choice> = ["X", "Y", "Z"].iter().map(|a| choice(*a, *a)).collect();
     let sketch = text(f, "sketch").and_then(|k| crate::tools::build::sketch_axis(doc, k));
     if sketch.is_some() {
-        options.push(choice(SKETCH, "Sketch"));
+        options.push(choice(SKETCH, crate::i18n::t("tool.sketch")));
     }
     options.extend(datum_axes(all, f).map(|d| choice(text(d, "id").unwrap_or_default(), named(d))));
     let edge = f.get("axisEdge").is_some_and(|e| !e.is_null());
@@ -55,7 +55,7 @@ pub fn revolve_axis_choice(doc: &Feature, f: &Feature, all: &[&Feature]) -> (Vec
         Some(line) => datum_axes(all, f).find(|d| line_of(d) == *line).and_then(|d| text(d, "id")).map(str::to_string),
     };
     let current = current.unwrap_or_else(|| {
-        options.push(choice(PLACED, if edge { "Edge" } else { "Line" }));
+        options.push(choice(PLACED, crate::i18n::t(if edge { "field.option.edge" } else { "field.option.line" })));
         PLACED.into()
     });
     if !options.iter().any(|o| o.value == current) {
@@ -85,9 +85,9 @@ pub fn sweep_path_choice(f: &Feature, all: &[&Feature]) -> (Vec<Choice>, String)
         .collect();
     let current = text(f, "path").unwrap_or_default().to_string();
     if current.is_empty() {
-        options.insert(0, choice("", "None"));
+        options.insert(0, choice("", crate::i18n::t("field.option.none")));
     } else if !options.iter().any(|o| o.value == current) {
-        options.push(choice(current.clone(), format!("{current} (missing)")));
+        options.push(choice(current.clone(), crate::i18n::tr!("field.option.missing", name = &current)));
     }
     (options, current)
 }

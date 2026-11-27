@@ -2,6 +2,7 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use super::{button, choice, frame, line, rows, stepper, swatch, Prefs};
+use crate::i18n::{self, tr};
 use crate::inspect::section::{self, Section};
 use crate::inspect::{bedfit, clash, filament, measure, overhang, printcheck, props, spell};
 use crate::selection::Pick;
@@ -42,8 +43,8 @@ fn check_print(viewport: &Entity<Viewport>, cx: &mut App) {
 fn asked<'a>(v: &'a Viewport, card: Card) -> Result<Option<&'a serde_json::Map<String, serde_json::Value>>, String> {
     match v.inspecting().asked.as_ref().filter(|(c, _)| *c == card).map(|(_, a)| a) {
         None => Ok(None),
-        Some(Asked::Busy) => Err("Checking...".into()),
-        Some(Asked::Failed(why)) => Err(format!("The check failed, {why}")),
+        Some(Asked::Busy) => Err(i18n::t("inspect.checking")),
+        Some(Asked::Failed(why)) => Err(tr!("inspect.checkFailed", why = why.as_str())),
         Some(Asked::Done(m)) => Ok(Some(m)),
     }
 }
@@ -65,8 +66,8 @@ impl Shell {
         let probes = &self.viewport.read(cx).inspecting().probes;
         let shown = measure::rows(probes.first(), probes.get(1));
         let any = !probes.is_empty();
-        frame(t, "Measure", "inspect-measure", cx).child(rows(t, &shown)).when(any, |d| {
-            d.child(div().flex().justify_end().child(button(t, "measure:clear", "Clear", false).on_click(cx.listener(
+        frame(t, &i18n::t("tool.measure"), "inspect-measure", cx).child(rows(t, &shown)).when(any, |d| {
+            d.child(div().flex().justify_end().child(button(t, "measure:clear", i18n::t("tool.target.clear"), false).on_click(cx.listener(
                 |this, _, _, cx| {
                     this.viewport.update(cx, |v, cx| {
                         v.open_card(None, cx);
@@ -90,15 +91,15 @@ impl Shell {
                 move |this, _, _, cx| this.viewport.update(cx, |v, cx| v.set_section(Some(Section::along(i, centre)), cx)),
             )));
         }
-        axes = axes.child(choice(t, "section:face", "Face", picking || axis == Some("Face")).on_click(cx.listener(
+        axes = axes.child(choice(t, "section:face", i18n::t("field.option.face"), picking || axis == Some("Face")).on_click(cx.listener(
             move |this, _, _, cx| this.viewport.update(cx, |v, cx| v.pick_section_face(!picking, cx)),
         )));
         let vp = self.viewport.clone();
-        let offset = s.map_or("Off".into(), |s| format!("{} mm", spell(s.slide() as f64)));
-        frame(t, "Section View", "inspect-section", cx)
+        let offset = s.map_or(i18n::t("shell.section.off"), |s| format!("{} mm", spell(s.slide() as f64)));
+        frame(t, &i18n::t("rail.sectionView"), "inspect-section", cx)
             .child(axes)
-            .when(picking, |d| d.child(text(t, FS_SMALL).text_color(t.accent).child("Click the face to cut along")))
-            .child(stepper(t, "section:offset", "Offset", offset, move |dir, cx| {
+            .when(picking, |d| d.child(text(t, FS_SMALL).text_color(t.accent).child(i18n::t("inspect.section.pickFace"))))
+            .child(stepper(t, "section:offset", i18n::t("field.offset"), offset, move |dir, cx| {
                 vp.update(cx, |v, cx| {
                     let s = v.inspecting().section.map(|s| Section { offset: s.offset + step * dir as f32, ..s });
                     v.set_section(s, cx);
@@ -109,13 +110,13 @@ impl Shell {
                     .flex()
                     .justify_end()
                     .gap(px(S_2))
-                    .child(button(t, "section:flip2", "Flip", false).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button(t, "section:flip2", i18n::t("shell.section.flip"), false).on_click(cx.listener(|this, _, _, cx| {
                         this.viewport.update(cx, |v, cx| {
                             let s = v.inspecting().section.map(|s| Section { flip: !s.flip, ..s });
                             v.set_section(s, cx);
                         })
                     })))
-                    .child(button(t, "section:off2", "Off", false).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button(t, "section:off2", i18n::t("shell.section.off"), false).on_click(cx.listener(|this, _, _, cx| {
                         this.viewport.update(cx, |v, cx| {
                             v.set_section(None, cx);
                             v.open_card(None, cx);
@@ -130,7 +131,7 @@ impl Shell {
         let f = cx.global::<Prefs>().filament.clone();
         let mut card = frame(t, &props::title(&p.picked), "inspect-properties", cx);
         let Some(found) = p.found else {
-            return card.child(text(t, FS_SMALL).text_color(t.text_mute).child("Nothing to measure"));
+            return card.child(text(t, FS_SMALL).text_color(t.text_mute).child(i18n::t("inspect.nothingToMeasure")));
         };
         card = card.child(rows(t, &props::rows(&found, solid)));
         card = card.children(p.faults.into_iter().map(|f| text(t, FS_SMALL).text_color(t.text_mute).child(f)));
@@ -138,23 +139,23 @@ impl Shell {
             return card;
         }
         let mut materials = div().flex().flex_wrap().gap(px(S_1));
-        for m in filament::MATERIALS.iter().map(|m| (m.id, m.label)).chain([(filament::CUSTOM, "Custom")]) {
+        for m in filament::MATERIALS.iter().map(|m| (m.id, m.label.to_string())).chain([(filament::CUSTOM, i18n::t("field.option.custom"))]) {
             let id = m.0;
             materials = materials.child(choice(t, format!("material:{id}"), m.1, f.material == id).on_click(move |_, _, cx| {
                 prefs(cx, |p| p.filament.material = id.to_string())
             }));
         }
-        card.child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child("Print estimate"))
+        card.child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child(i18n::t("inspect.printEstimate")))
             .child(materials)
             .when(f.material == filament::CUSTOM, |d| {
-                d.child(stepper(t, "density", "Density", format!("{} g/cm³", spell(f.custom_density)), |dir, cx| {
+                d.child(stepper(t, "density", i18n::t("properties.density"), format!("{} g/cm³", spell(f.custom_density)), |dir, cx| {
                     prefs(cx, |p| p.filament.custom_density = (p.filament.custom_density + 0.01 * dir).max(0.01))
                 }))
             })
-            .child(stepper(t, "infill", "Infill", format!("{} %", spell(f.infill_pct)), |dir, cx| {
+            .child(stepper(t, "infill", i18n::t("properties.infill"), format!("{} %", spell(f.infill_pct)), |dir, cx| {
                 prefs(cx, |p| p.filament.infill_pct = (p.filament.infill_pct + 5.0 * dir).clamp(0.0, 100.0))
             }))
-            .child(stepper(t, "wall", "Wall", format!("{} mm", spell(f.wall_mm)), |dir, cx| {
+            .child(stepper(t, "wall", i18n::t("properties.wallThickness"), format!("{} mm", spell(f.wall_mm)), |dir, cx| {
                 prefs(cx, |p| p.filament.wall_mm = (p.filament.wall_mm + 0.4 * dir).max(0.0))
             }))
             .child(rows(t, &filament::rows(found.volume, found.area, &f)))
@@ -172,10 +173,10 @@ impl Shell {
         }
         let vp = self.viewport.clone();
         let tints = [overhang::Tint::Overhang, overhang::Tint::Wall, overhang::Tint::Top];
-        frame(t, "Overhang", "inspect-overhang", cx)
-            .child(line(t, "Build direction", ""))
+        frame(t, &i18n::t("tool.overhang"), "inspect-overhang", cx)
+            .child(line(t, i18n::t("overhang.buildDirection"), ""))
             .child(ups)
-            .child(stepper(t, "threshold", "Threshold", format!("{}°", spell(shade.threshold as f64)), move |dir, cx| {
+            .child(stepper(t, "threshold", i18n::t("overhang.threshold"), format!("{}°", spell(shade.threshold as f64)), move |dir, cx| {
                 vp.update(cx, |v, cx| {
                     let threshold = (shade.threshold + 5.0 * dir as f32).clamp(0.0, 90.0);
                     v.set_shade(Shade { threshold, ..shade }, cx)
@@ -187,7 +188,7 @@ impl Shell {
             .child(
                 text(t, FS_SMALL)
                     .text_color(t.text_mute)
-                    .child("Downward faces flatter than the threshold need support, Esc to close"),
+                    .child(i18n::t("inspect.overhang.hint")),
             )
     }
 
@@ -196,21 +197,21 @@ impl Shell {
         let gap = cx.global::<Prefs>().clearance;
         let state = asked(v, Card::Interference).map(|m| m.map(clash::read));
         let lit = selected_bodies(v);
-        let mut card = frame(t, "Interference", "inspect-interference", cx)
+        let mut card = frame(t, &i18n::t("tool.interference"), "inspect-interference", cx)
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(choice(t, "clearance", "Clearance mode", gap.is_some()).on_click(|_, _, cx| {
+                    .child(choice(t, "clearance", i18n::t("interference.clearanceMode"), gap.is_some()).on_click(|_, _, cx| {
                         prefs(cx, |p| p.clearance = if p.clearance.is_some() { None } else { Some(0.2) })
                     }))
-                    .child(button(t, "interference:check", "Check", true).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button(t, "interference:check", i18n::t("inspect.check"), true).on_click(cx.listener(|this, _, _, cx| {
                         check_interference(&this.viewport, cx)
                     }))),
             )
             .when_some(gap, |d, g| {
-                d.child(stepper(t, "gap", "Gap", format!("{} mm", spell(g)), |dir, cx| {
+                d.child(stepper(t, "gap", i18n::t("inspect.gap"), format!("{} mm", spell(g)), |dir, cx| {
                     prefs(cx, |p| p.clearance = p.clearance.map(|g| ((g + 0.05 * dir) * 100.0).round().max(5.0) / 100.0))
                 }))
             });
@@ -244,7 +245,7 @@ impl Shell {
             );
         }
         if !report.unchecked.is_empty() {
-            card = card.child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child("Not checked"));
+            card = card.child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child(i18n::t("inspect.notChecked")));
             card = card.children(report.unchecked.iter().map(|u| text(t, FS_SMALL).text_color(t.text_mute).child(u.clone())));
         }
         let footer = clash::footer(&report, gap);
@@ -260,16 +261,16 @@ impl Shell {
             v.bodies().iter().filter(|b| picked.contains(&b.id)).map(|b| b.name.clone()).collect();
         let state = asked(v, Card::Printability).map(|m| m.map(printcheck::read));
         let num = |id: &'static str, name: &'static str, value: f64, unit: &str, set: fn(&mut printcheck::Settings, f64)| {
-            stepper(t, id, name, format!("{} {unit}", spell(value)), move |dir, cx| prefs(cx, |p| set(&mut p.check, dir)))
+            stepper(t, id, i18n::t(name), format!("{} {unit}", spell(value)), move |dir, cx| prefs(cx, |p| set(&mut p.check, dir)))
         };
-        let mut card = frame(t, "Printability", "inspect-print", cx)
-            .child(line(t, "Bodies", if names.is_empty() { "All".to_string() } else { names.join(", ") }))
-            .child(num("nozzle", "Nozzle", s.nozzle, "mm", |c, d| c.nozzle = ((c.nozzle + 0.1 * d) * 10.0).round().max(1.0) / 10.0))
-            .child(num("layer", "Layer", s.layer, "mm", |c, d| c.layer = ((c.layer + 0.05 * d) * 100.0).round().max(5.0) / 100.0))
-            .child(num("overhang", "Overhang angle", s.overhang, "°", |c, d| c.overhang = (c.overhang + 5.0 * d).clamp(0.0, 90.0)))
-            .child(num("mingap", "Smallest gap", s.min_gap, "mm", |c, d| c.min_gap = ((c.min_gap + 0.05 * d) * 100.0).round().max(0.0) / 100.0))
-            .child(num("bridge", "Longest bridge", s.max_bridge, "mm", |c, d| c.max_bridge = (c.max_bridge + 1.0 * d).max(0.0)))
-            .child(div().flex().justify_end().child(button(t, "print:check", "Check", true).on_click(cx.listener(
+        let mut card = frame(t, &i18n::t("inspect.printability"), "inspect-print", cx)
+            .child(line(t, i18n::t("selectionTarget.bodies"), if names.is_empty() { i18n::t("properties.allBodies") } else { names.join(", ") }))
+            .child(num("nozzle", "inspect.print.nozzle", s.nozzle, "mm", |c, d| c.nozzle = ((c.nozzle + 0.1 * d) * 10.0).round().max(1.0) / 10.0))
+            .child(num("layer", "inspect.print.layer", s.layer, "mm", |c, d| c.layer = ((c.layer + 0.05 * d) * 100.0).round().max(5.0) / 100.0))
+            .child(num("overhang", "inspect.print.overhangAngle", s.overhang, "°", |c, d| c.overhang = (c.overhang + 5.0 * d).clamp(0.0, 90.0)))
+            .child(num("mingap", "inspect.print.smallestGap", s.min_gap, "mm", |c, d| c.min_gap = ((c.min_gap + 0.05 * d) * 100.0).round().max(0.0) / 100.0))
+            .child(num("bridge", "inspect.print.longestBridge", s.max_bridge, "mm", |c, d| c.max_bridge = (c.max_bridge + 1.0 * d).max(0.0)))
+            .child(div().flex().justify_end().child(button(t, "print:check", i18n::t("inspect.check"), true).on_click(cx.listener(
                 |this, _, _, cx| check_print(&this.viewport, cx),
             ))));
         let report = match state {
@@ -322,22 +323,22 @@ impl Shell {
         let (chosen, custom) = (p.bed, p.custom_bed);
         let bed = bedfit::PRESETS.iter().find(|b| b.id == chosen).map_or(custom, |b| b.size);
         let mut beds = div().flex().flex_wrap().gap(px(S_1));
-        for b in bedfit::PRESETS.iter().map(|b| (b.id, bedfit::label(b.size))).chain([("custom", "Custom".to_string())]) {
+        for b in bedfit::PRESETS.iter().map(|b| (b.id, bedfit::label(b.size))).chain([("custom", i18n::t("field.option.custom"))]) {
             let id = b.0;
             beds = beds.child(choice(t, format!("bed:{id}"), b.1, chosen == id).on_click(move |_, _, cx| prefs(cx, |p| p.bed = id)));
         }
-        let card = frame(t, "Bed Fit Check", "inspect-bed", cx).child(beds).when(chosen == "custom", |mut d| {
-            for (i, name) in ["Width", "Depth", "Height"].into_iter().enumerate() {
-                d = d.child(stepper(t, &format!("bed{i}"), name, format!("{} mm", spell(custom[i])), move |dir, cx| {
+        let card = frame(t, &i18n::t("inspect.bedFit"), "inspect-bed", cx).child(beds).when(chosen == "custom", |mut d| {
+            for (i, name) in ["field.width", "field.depth", "field.height"].into_iter().enumerate() {
+                d = d.child(stepper(t, &format!("bed{i}"), i18n::t(name), format!("{} mm", spell(custom[i])), move |dir, cx| {
                     prefs(cx, |p| p.custom_bed[i] = (p.custom_bed[i] + 10.0 * dir).max(10.0))
                 }));
             }
             d
         });
         match size {
-            None => card.child(text(t, FS_SMALL).text_color(t.text_mute).child("Nothing to fit")),
+            None => card.child(text(t, FS_SMALL).text_color(t.text_mute).child(i18n::t("inspect.nothingToFit"))),
             Some(size) => card
-                .child(line(t, "Model", format!("{} mm", bedfit::label(size))))
+                .child(line(t, i18n::t("inspect.model"), format!("{} mm", bedfit::label(size))))
                 .child(text(t, FS_SMALL).font_weight(W_SEMIBOLD).child(bedfit::verdict(size, bed))),
         }
     }

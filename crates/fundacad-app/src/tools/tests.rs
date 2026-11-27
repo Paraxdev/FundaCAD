@@ -168,7 +168,7 @@ fn reference_datums_need_their_selection() {
 #[test]
 fn plane_through_points_needs_three_off_a_line() {
     let d = doc(json!({}));
-    let words = "Select three edges to lay the plane through, then Plane Through Points";
+    let words = "Select three edges to lay the plane through, then Plane, 3 Pts";
     assert_eq!(run("plane-points", &d, vec![]).unwrap_err(), words);
     assert_eq!(run("plane-points", &d, vec![edge("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.])]).unwrap_err(), words);
     let faces = vec![face("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.]), face("b1", 3, [3., 6., 5.])];

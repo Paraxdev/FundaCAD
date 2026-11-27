@@ -9,6 +9,7 @@ use gpui::*;
 use gpui_kit::component::input::{InputEvent, InputState};
 
 use super::Shell;
+use crate::i18n::{t, tr};
 use crate::timeline::rows::Rows;
 use crate::timeline::{self as steps, deps, labels, ops};
 
@@ -90,32 +91,39 @@ pub(super) fn menu(doc: &Doc, targets: &[String]) -> Vec<Entry> {
         [id] => {
             let named = steps::features(doc).into_iter().find(|f| steps::id_of(f) == id).and_then(labels::own_name);
             let note = ops::note(doc, id);
-            let mut out =
-                vec![Entry::Item { act: Some(Act::Rename), label: "Rename".into(), keys: "F2", danger: false }];
+            let mut out = vec![Entry::Item {
+                act: Some(Act::Rename),
+                label: t("history.menu.rename"),
+                keys: "F2",
+                danger: false,
+            }];
             if named.is_some() {
-                out.push(item(Act::ResetName, "Reset name"));
+                out.push(item(Act::ResetName, t("history.menu.resetName")));
             }
             let on = suppressed(id);
-            out.push(item(Act::Suppress(!on), if on { "Unsuppress" } else { "Suppress" }));
-            out.push(item(Act::RollBefore, "Roll back before this"));
-            out.push(item(Act::RollHere, "Roll to here"));
-            out.push(item(Act::Note, if note.is_some() { "Edit note" } else { "Add note" }));
+            out.push(item(Act::Suppress(!on), t(if on { "history.menu.unsuppress" } else { "history.menu.suppress" })));
+            out.push(item(Act::RollBefore, t("history.menu.rollBefore")));
+            out.push(item(Act::RollHere, t("history.menu.rollHere")));
+            out.push(item(Act::Note, t(if note.is_some() { "history.menu.editNote" } else { "history.menu.addNote" })));
             if note.is_some() {
-                out.push(item(Act::RemoveNote, "Remove note"));
+                out.push(item(Act::RemoveNote, t("history.menu.removeNote")));
             }
             out.push(Entry::Separator);
-            out.push(delete("Delete".into()));
+            out.push(delete(t("history.menu.delete")));
             out
         }
         many => {
             let n = many.len();
             let all_off = many.iter().all(suppressed);
             vec![
-                off("Rename (select one feature)"),
-                item(Act::Suppress(!all_off), format!("{} these {n}", if all_off { "Unsuppress" } else { "Suppress" })),
-                off("Roll back before this (select one feature)"),
+                off(&t("history.menu.renameOne")),
+                item(
+                    Act::Suppress(!all_off),
+                    tr!("history.menu.suppressMany", off = if all_off { "yes" } else { "no" }, n = n),
+                ),
+                off(&t("history.menu.rollBeforeOne")),
                 Entry::Separator,
-                delete(format!("Delete these {n}")),
+                delete(tr!("history.menu.deleteMany", n = n)),
             ]
         }
     }
@@ -292,7 +300,7 @@ impl Shell {
             FieldKind::Rename => labels::name_of(&self.timeline.doc, &id),
             FieldKind::Note => ops::note(&self.timeline.doc, &id).unwrap_or_default(),
         };
-        let placeholder = if kind == FieldKind::Note { "Note" } else { "Name" };
+        let placeholder = t(if kind == FieldKind::Note { "history.field.note" } else { "history.field.name" });
         let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder).default_value(text));
         let events = cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| match event {
             InputEvent::PressEnter { .. } | InputEvent::Blur => this.close_field(true, window, cx),

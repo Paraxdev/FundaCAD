@@ -33,7 +33,7 @@ pub struct Palette {
 
 impl Palette {
     pub fn new(window: &mut Window, cx: &mut Context<Overlay>) -> Self {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search commands…"));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("palette.placeholder")));
         input.update(cx, |s, cx| s.focus(window, cx));
         let events = cx.subscribe_in(&input, window, |this, _, e: &InputEvent, _, cx| {
             if matches!(e, InputEvent::Change) {
@@ -101,7 +101,8 @@ impl Overlay {
         let active = p.active.min(hits.len().saturating_sub(1));
         let mut list = div().id("palette-list").flex().flex_col().max_h(px(360.)).overflow_y_scroll().p(px(S_1));
         if hits.is_empty() {
-            list = list.child(text(t, FS_SMALL).text_color(t.text_mute).p(px(S_3)).child("No matching command"));
+            list =
+                list.child(text(t, FS_SMALL).text_color(t.text_mute).p(px(S_3)).child(crate::i18n::t("palette.empty")));
         }
         for (i, hit) in hits.into_iter().enumerate() {
             let id = hit.id;

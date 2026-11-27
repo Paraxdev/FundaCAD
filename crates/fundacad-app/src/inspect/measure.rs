@@ -4,6 +4,7 @@
 use glam::Vec3;
 
 use super::{spell, Row};
+use crate::i18n::t;
 use crate::viewport::scene::SceneBody;
 
 #[cfg(test)]
@@ -210,22 +211,22 @@ fn mm(v: f32) -> String {
 /// The readout for the picks so far: a prompt, one probe's size and place, or what lies between two.
 pub fn rows(a: Option<&Probe>, b: Option<&Probe>) -> Vec<Row> {
     let row = |k: &str, v: String| (k.to_string(), v);
-    let Some(a) = a else { return vec![row("", "Click a face or edge".into())] };
+    let Some(a) = a else { return vec![row("", t("inspect.measure.prompt"))] };
     let Some(b) = b else {
         let size = match a {
-            Probe::Face { area, .. } => row("Area", format!("{} mm²", spell(*area as f64))),
-            Probe::Edge { length, .. } => row("Length", mm(*length)),
+            Probe::Face { area, .. } => row(&t("tool.measure.area"), format!("{} mm²", spell(*area as f64))),
+            Probe::Edge { length, .. } => row(&t("field.length"), mm(*length)),
         };
-        return vec![size, row("At", xyz(a.point()))];
+        return vec![size, row(&t("tool.measure.at"), xyz(a.point()))];
     };
     let near = closest(a, b);
     let mut out = vec![
-        row("Distance", mm(near.d)),
+        row(&t("field.distance"), mm(near.d)),
         row("ΔX ΔY ΔZ", xyz(near.pb - near.pa)),
-        row("Centers", mm(a.point().distance(b.point()))),
+        row(&t("tool.measure.centers"), mm(a.point().distance(b.point()))),
     ];
     if a.dir() != Vec3::ZERO && b.dir() != Vec3::ZERO {
-        out.push(row("Angle", format!("{}°", spell(a.dir().angle_between(b.dir()).to_degrees() as f64))));
+        out.push(row(&t("field.angle"), format!("{}°", spell(a.dir().angle_between(b.dir()).to_degrees() as f64))));
     }
     out
 }

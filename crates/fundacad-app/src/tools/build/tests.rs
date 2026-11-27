@@ -151,7 +151,7 @@ fn revolve_turns_about_the_construction_line_the_sketch_y_axis_or_a_straight_edg
     assert_eq!(s.feature["axis"], json!({"origin": [1.5, 2.0, -3.0], "dir": [0.0, 0.6, 0.8]}));
     assert_eq!(s.feature["axisEdge"], json!({"kind": "edge", "by": "nearest", "point": [1.5, 2.0, -3.0], "body": "b"}));
     let picks = vec![Pick::Sketch { feature: "s2".into() }, edge(None)];
-    assert_eq!(started(tool("revolve").unwrap(), &d, &sel(picks)).unwrap_err(), STRAIGHT);
+    assert_eq!(started(tool("revolve").unwrap(), &d, &sel(picks)).unwrap_err(), crate::i18n::t(STRAIGHT));
 
     let (mut r, mut now, s) = run_of(&d, "revolve", vec![]);
     assert_eq!(s.feature["axis"], "Z");
@@ -169,7 +169,7 @@ fn a_revolve_axis_edge_picked_in_the_card_must_be_straight_and_stays_with_anothe
     let id = r.feature.clone();
     r.set_arm(&mut now, Some(Target { field: "axisEdge", kind: PickKind::Edge, many: false }));
     let curved = Pick::Edge { body: "body1".into(), edge: 4, mid: [6.0, -2.5, 3.0], dir: None };
-    assert_eq!(fits(&now, &id, "axisEdge", &curved).unwrap_err(), STRAIGHT);
+    assert_eq!(fits(&now, &id, "axisEdge", &curved).unwrap_err(), crate::i18n::t(STRAIGHT));
     let straight = Pick::Edge { body: "body1".into(), edge: 5, mid: [6.0, -2.5, 3.0], dir: Some([0.0, 0.0, -1.0]) };
     assert_eq!(fits(&now, &id, "axisEdge", &straight), Ok(()));
     assert_eq!(fits(&now, &id, "regions", &curved), Ok(()), "only the axis edge is checked");

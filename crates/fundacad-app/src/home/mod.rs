@@ -10,6 +10,7 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use crate::files::recent::{self, Recent};
+use crate::i18n::{self, t, tr, Label};
 use crate::theme::{
     Mode, Theme, FLOAT_GAP, FLOAT_TILE_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_MD, R_PILL, S_0, S_1, S_2, S_3, S_4, S_5,
     W_SEMIBOLD,
@@ -25,9 +26,8 @@ const LOGO_W: f32 = 640. * LOGO_H / 124.;
 
 pub struct Example {
     pub id: &'static str,
-    pub name: &'static str,
-    pub caption: &'static str,
-    pub hint: &'static str,
+    /// Its lines are `home.example.{key}.name`, `.caption` and `.hint`.
+    pub key: &'static str,
     pub icon: &'static str,
     /// The document it starts, None while the example is only a placeholder.
     pub text: Option<&'static str>,
@@ -41,56 +41,20 @@ macro_rules! template {
 
 /// Home's cards in the order of examples/templates/examples.json, with the 3D printer after them.
 pub const EXAMPLES: &[Example] = &[
-    Example {
-        id: "wall-bracket",
-        name: "Wall bracket",
-        caption: "Find where it bends",
-        hint: "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
-        icon: "stress",
-        text: template!("wall-bracket"),
-    },
-    Example {
-        id: "box-with-lid",
-        name: "Box with a lid",
-        caption: "A lid that fits, ready to print",
-        hint: "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
-        icon: "shell",
-        text: template!("box-with-lid"),
-    },
-    Example {
-        id: "capsule-holder",
-        name: "Capsule holder",
-        caption: "A screw-on cap, ready to print",
-        hint: "A tube and a screw-on cap laid out for printing. Change innerDiameter in Parameters and both threads follow",
-        icon: "thread",
-        text: template!("capsule-holder"),
-    },
-    Example {
-        id: "plate",
-        name: "Plate",
-        caption: "Change a size, the holes follow",
-        hint: "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
-        icon: "box",
-        text: template!("plate"),
-    },
-    Example {
-        id: "pinned-lever",
-        name: "Pinned lever",
-        caption: "See the load on a pin",
-        hint: "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
-        icon: "rotate",
-        text: template!("pinned-lever"),
-    },
+    Example { id: "wall-bracket", key: "wallBracket", icon: "stress", text: template!("wall-bracket") },
+    Example { id: "box-with-lid", key: "boxWithLid", icon: "shell", text: template!("box-with-lid") },
+    Example { id: "capsule-holder", key: "capsuleHolder", icon: "thread", text: template!("capsule-holder") },
+    Example { id: "plate", key: "plate", icon: "box", text: template!("plate") },
+    Example { id: "pinned-lever", key: "pinnedLever", icon: "rotate", text: template!("pinned-lever") },
     // Placeholder: the person picked an open printer design whose license allows shipping it, the STEP is not in yet.
-    Example {
-        id: "printer",
-        name: "3D printer",
-        caption: "Open design, coming soon",
-        hint: "An open source 3D printer of many parts, to come with a later build",
-        icon: "assembly",
-        text: None,
-    },
+    Example { id: "printer", key: "printer", icon: "assembly", text: None },
 ];
+
+impl Example {
+    pub fn line(&self, part: &str) -> String {
+        t(&format!("home.example.{}.{part}", self.key))
+    }
+}
 
 pub fn example_doc(example: &Example) -> Option<Doc> {
     serde_json::from_str(example.text?).ok()
@@ -108,7 +72,9 @@ impl Global for State {}
 pub fn init(cx: &mut App, shown: bool) {
     let focus = cx.focus_handle();
     cx.set_global(State { shown, focus, claim: shown });
-    crate::commands::register(cx, "home", "Home", crate::commands::Group::View, |_, cx| set(cx, !is_shown(cx)));
+    crate::commands::register(cx, "home", Label::Key("home.title"), crate::commands::Group::View, |_, cx| {
+        set(cx, !is_shown(cx))
+    });
 }
 
 pub fn is_shown(cx: &App) -> bool {
@@ -137,20 +103,20 @@ pub fn opened_line(now: u64, at: u64) -> String {
     const HOUR: u64 = 60 * MIN;
     const DAY: u64 = 24 * HOUR;
     let ago = now.saturating_sub(at);
-    let plural = |n: u64, unit: &str| format!("Opened {n} {unit}{} ago", if n == 1 { "" } else { "s" });
+    let ago_line = |key: &str, n: u64| tr!("home.card.opened", kind = "ago", when = tr!(key, n = n));
     match ago {
-        a if a < MIN => "Opened just now".into(),
-        a if a < HOUR => plural(a / MIN, "minute"),
-        a if a < DAY => plural(a / HOUR, "hour"),
-        a if a < 2 * DAY => "Opened yesterday".into(),
-        a if a < 7 * DAY => plural(a / DAY, "day"),
-        _ => format!("Opened on {}", date(at)),
+        a if a < MIN => tr!("home.card.opened", kind = "ago", when = t("time.ago.now")),
+        a if a < HOUR => ago_line("time.ago.minutes", a / MIN),
+        a if a < DAY => ago_line("time.ago.hours", a / HOUR),
+        a if a < 2 * DAY => tr!("home.card.opened", kind = "ago", when = t("time.ago.yesterday")),
+        a if a < 7 * DAY => ago_line("time.ago.days", a / DAY),
+        _ => tr!("home.card.opened", kind = "date", when = date(at)),
     }
 }
 
 /// A UTC date as "12 Nov 2026".
 fn date(ms: u64) -> String {
-    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const MONTHS: [&str; 12] = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
     // Howard Hinnant's days to civil date.
     let z = (ms / 86_400_000) as i64 + 719_468;
     let era = z.div_euclid(146_097);
@@ -161,7 +127,7 @@ fn date(ms: u64) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{day} {} {year}", MONTHS[(month - 1) as usize])
+    tr!("date.short", day = day.to_string(), month = MONTHS[(month - 1) as usize], year = year.to_string())
 }
 
 fn now() -> u64 {
@@ -193,10 +159,10 @@ pub fn view(t: &Theme, window: &mut Window, cx: &mut App) -> Option<Stateful<Div
 
     let mut scroll = div().id("home-scroll").flex_1().min_h_0().overflow_y_scroll().flex().flex_col();
     if recents.is_empty() {
-        scroll = scroll.child(section(t, "Start here")).child(examples(t));
+        scroll = scroll.child(section(t, i18n::t("home.startHere"))).child(examples(t));
     } else {
         let cards = recents.iter().enumerate().map(|(i, r)| recent_card(t, i, r, now));
-        scroll = scroll.child(grid().children(cards)).child(section(t, "Examples")).child(examples(t));
+        scroll = scroll.child(grid().children(cards)).child(section(t, i18n::t("home.examples"))).child(examples(t));
     }
 
     let main = div()
@@ -251,7 +217,7 @@ fn side(t: &Theme) -> Div {
         .text_color(t.accent_hot)
         .font_weight(W_SEMIBOLD)
         .child(icon("history", 14., t.accent_hot))
-        .child("Recent");
+        .child(i18n::t("home.nav.recent"));
     solid_card(t)
         .bg(t.float_bg_solid)
         .w(px(SIDE_W))
@@ -274,13 +240,19 @@ fn side(t: &Theme) -> Div {
                 .flex()
                 .flex_col()
                 .gap(px(S_0))
-                .child(text(t, FS_MICRO).px(px(S_3)).pb(px(S_1)).text_color(t.text_mute).child("DOCUMENTS"))
+                .child(
+                    text(t, FS_MICRO)
+                        .px(px(S_3))
+                        .pb(px(S_1))
+                        .text_color(t.text_mute)
+                        .child(i18n::t("home.documents").to_uppercase()),
+                )
                 .child(recent_row),
         )
 }
 
 fn new_strip(t: &Theme) -> Div {
-    let tile = |id: &'static str, glyph: &'static str, name: &'static str, line: Option<&'static str>| {
+    let tile = |id: &'static str, glyph: &'static str, name: String, line: Option<String>| {
         card(t, id)
             .w(px(NEW_W))
             .child(
@@ -298,11 +270,14 @@ fn new_strip(t: &Theme) -> Div {
     div()
         .flex()
         .gap(px(S_3))
-        .child(tile("home-new", "plus", "Blank", None).on_click(run("new")))
-        .child(tile("home-open", "open", "Open...", Some("Documents and STL")).on_click(run("open")))
+        .child(tile("home-new", "plus", i18n::t("home.new.blank"), None).on_click(run("new")))
+        .child(
+            tile("home-open", "open", i18n::t("home.new.open"), Some(i18n::t("home.new.takesDocumentsStl")))
+                .on_click(run("open")),
+        )
 }
 
-fn section(t: &Theme, label: &'static str) -> Div {
+fn section(t: &Theme, label: String) -> Div {
     div().flex().px(px(S_5)).pt(px(S_2)).child(
         div()
             .rounded(px(R_PILL))
@@ -368,7 +343,11 @@ fn recent_card(t: &Theme, i: usize, r: &Recent, now: u64) -> Stateful<Div> {
         .child(picture(t, "body"))
         .child(card_line(t, FS_BODY).child(name))
         .child(card_line(t, FS_MICRO).child(folder))
-        .child(card_line(t, FS_MICRO).child(if missing { "Not found".into() } else { opened_line(now, r.opened_at) }))
+        .child(card_line(t, FS_MICRO).child(if missing {
+            i18n::t("home.card.missing")
+        } else {
+            opened_line(now, r.opened_at)
+        }))
         .on_click(move |_, window, cx| open_path(path.clone(), window, cx))
         .on_mouse_down(MouseButton::Right, move |e, window, cx| {
             crate::overlay::open_menu(window, cx, e.position, recent_menu(menu_path.clone()));
@@ -384,13 +363,13 @@ fn recent_menu(path: PathBuf) -> Vec<crate::overlay::MenuRow> {
     use crate::overlay::{MenuItem, MenuRow};
     let (open, gone, copied) = (path.clone(), path.clone(), path);
     vec![
-        MenuRow::Item(MenuItem::call("Open", move |window, cx| open_path(open.clone(), window, cx))),
-        MenuRow::Item(MenuItem::call("Remove from list", move |_, cx| {
+        MenuRow::Item(MenuItem::call(i18n::t("home.menu.open"), move |window, cx| open_path(open.clone(), window, cx))),
+        MenuRow::Item(MenuItem::call(i18n::t("home.menu.remove"), move |_, cx| {
             recent::forget(cx, &gone);
             cx.refresh_windows();
         })),
         MenuRow::Separator,
-        MenuRow::Item(MenuItem::call("Copy path", move |_, cx| {
+        MenuRow::Item(MenuItem::call(i18n::t("home.menu.copyPath"), move |_, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(copied.display().to_string()));
         })),
     ]
@@ -399,14 +378,14 @@ fn recent_menu(path: PathBuf) -> Vec<crate::overlay::MenuRow> {
 fn examples(t: &Theme) -> Div {
     grid().children(EXAMPLES.iter().enumerate().map(|(i, ex)| {
         let ready = ex.text.is_some();
-        let hint = ex.hint;
+        let hint = ex.line("hint");
         card(t, ex.id)
             .w(px(CARD_W))
             .when(!ready, |d| d.opacity(0.55).cursor_default())
-            .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(hint).build(window, cx))
+            .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(hint.clone()).build(window, cx))
             .child(picture(t, ex.icon))
-            .child(card_line(t, FS_BODY).child(ex.name))
-            .child(card_line(t, FS_MICRO).child(ex.caption))
+            .child(card_line(t, FS_BODY).child(ex.line("name")))
+            .child(card_line(t, FS_MICRO).child(ex.line("caption")))
             .when(ready, |d| {
                 d.on_click(move |_, window, cx| {
                     if let Some(doc) = example_doc(&EXAMPLES[i]) {

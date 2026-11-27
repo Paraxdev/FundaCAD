@@ -4,10 +4,11 @@
 use serde_json::{Map, Value};
 
 use super::hole::{self, HOLE_SIZES};
+use crate::i18n::{t, tr};
 
 pub mod modify;
 
-/// A value and the word a row shows for it.
+/// A value and the key of the word a row shows for it. A code such as XY or M3 is its own word, `t` returns it as is.
 pub type Opt = (&'static str, &'static str);
 
 #[derive(Clone, Debug, PartialEq)]
@@ -23,7 +24,7 @@ impl Choice {
 }
 
 fn owned(options: &[Opt]) -> Vec<Choice> {
-    options.iter().map(|&(v, l)| Choice::new(v, l)).collect()
+    options.iter().map(|&(v, l)| Choice::new(v, t(l))).collect()
 }
 
 pub struct ChoiceField {
@@ -53,21 +54,36 @@ const fn toggle(field: &'static str, label: &'static str, fallback: bool) -> Tog
     ToggleField { field, label, fallback }
 }
 
-const BOOLEAN_OPS: &[Opt] = &[("new", "New body"), ("join", "Join"), ("cut", "Cut"), ("intersect", "Intersect")];
-const BOOLEAN_KINDS: &[Opt] = &[("union", "Union"), ("subtract", "Subtract"), ("intersect", "Intersect")];
+const BOOLEAN_OPS: &[Opt] = &[
+    ("new", "field.option.newBody"),
+    ("join", "field.option.join"),
+    ("cut", "field.option.cut"),
+    ("intersect", "field.option.intersect"),
+];
+const BOOLEAN_KINDS: &[Opt] =
+    &[("union", "tool.union"), ("subtract", "tool.subtract"), ("intersect", "field.option.intersect")];
 const AXES: &[Opt] = &[("X", "X"), ("Y", "Y"), ("Z", "Z")];
 const PLANES: &[Opt] = &[("XY", "XY"), ("XZ", "XZ"), ("YZ", "YZ")];
-const EXTRUDE_STARTS: &[Opt] =
-    &[("sketch", "Sketch plane"), ("offset", "Offset"), ("face", "Face"), ("plane", "Plane"), ("point", "Point")];
-const EXTRUDE_ENDS: &[Opt] = &[
-    ("distance", "Distance"),
-    ("upToFace", "Up to face"),
-    ("upToPlane", "Up to plane"),
-    ("upToPoint", "Up to point"),
-    ("throughAll", "Through all"),
+const EXTRUDE_STARTS: &[Opt] = &[
+    ("sketch", "field.option.sketchPlane"),
+    ("offset", "field.option.offset"),
+    ("face", "field.option.face"),
+    ("plane", "field.option.plane"),
+    ("point", "field.option.point"),
 ];
-const THIN_SIDES: &[Opt] =
-    &[("center", "Centered"), ("inside", "Inside"), ("outside", "Outside"), ("twoSides", "Two sides")];
+const EXTRUDE_ENDS: &[Opt] = &[
+    ("distance", "field.option.distance"),
+    ("upToFace", "field.option.upToFace"),
+    ("upToPlane", "field.option.upToPlane"),
+    ("upToPoint", "field.option.upToPoint"),
+    ("throughAll", "field.option.throughAll"),
+];
+const THIN_SIDES: &[Opt] = &[
+    ("center", "field.option.centered"),
+    ("inside", "field.option.inside"),
+    ("outside", "field.option.outside"),
+    ("twoSides", "field.option.twoSides"),
+];
 const HOLE_SIZE_OPTIONS: &[Opt] = &{
     let mut out = [("", ""); HOLE_SIZES.len()];
     let mut i = 0;
@@ -89,85 +105,133 @@ pub const PLACED_AXIS: &str = "placed";
 /// silently discard it.
 pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
     match ty {
-        "boolean" => const { &[choice("operation", "Operation", BOOLEAN_KINDS, "union")] },
+        "boolean" => const { &[choice("operation", "field.operation", BOOLEAN_KINDS, "union")] },
         "extrude" => {
             const {
                 &[
-                    choice("operation", "Operation", BOOLEAN_OPS, "new"),
-                    choice("startType", "Start", EXTRUDE_STARTS, "sketch"),
-                    choice("startPlane", "Start plane", PLANES, "XY"),
-                    choice("startPoint", "Start point", &[], ""),
-                    choice("endType", "End", EXTRUDE_ENDS, "distance"),
-                    choice("upToPlane", "Up to plane", PLANES, "XY"),
-                    choice("upToPoint", "Up to point", &[], ""),
-                    choice("endType2", "End 2", EXTRUDE_ENDS, "distance"),
-                    choice("upToPlane2", "Up to plane 2", PLANES, "XY"),
-                    choice("upToPoint2", "Up to point 2", &[], ""),
-                    choice("side", "Wall side", THIN_SIDES, "center"),
+                    choice("operation", "field.operation", BOOLEAN_OPS, "new"),
+                    choice("startType", "field.start", EXTRUDE_STARTS, "sketch"),
+                    choice("startPlane", "field.startPlane", PLANES, "XY"),
+                    choice("startPoint", "field.startPoint", &[], ""),
+                    choice("endType", "field.end", EXTRUDE_ENDS, "distance"),
+                    choice("upToPlane", "field.upToPlane", PLANES, "XY"),
+                    choice("upToPoint", "field.upToPoint", &[], ""),
+                    choice("endType2", "field.end2", EXTRUDE_ENDS, "distance"),
+                    choice("upToPlane2", "field.upToPlane2", PLANES, "XY"),
+                    choice("upToPoint2", "field.upToPoint2", &[], ""),
+                    choice("side", "field.wallSide", THIN_SIDES, "center"),
                 ]
             }
         }
         "revolve" => {
-            const { &[choice("operation", "Operation", BOOLEAN_OPS, "new"), choice("axis", "Axis", AXES, "Z")] }
+            const { &[choice("operation", "field.operation", BOOLEAN_OPS, "new"), choice("axis", "field.axis", AXES, "Z")] }
         }
         "thread" => {
             const {
                 &[
-                    choice("hand", "Hand", &[("right", "Right"), ("left", "Left")], "right"),
-                    choice("operation", "Operation", &[("join", "Join"), ("cut", "Cut")], "cut"),
+                    choice(
+                        "hand",
+                        "field.hand",
+                        &[("right", "field.option.right"), ("left", "field.option.left")],
+                        "right",
+                    ),
+                    choice(
+                        "operation",
+                        "field.operation",
+                        &[("join", "field.option.join"), ("cut", "field.option.cut")],
+                        "cut",
+                    ),
                 ]
             }
         }
         "textOnFace" => {
             const {
                 &[
-                    choice("operation", "Operation", &[("join", "Emboss"), ("cut", "Engrave")], "join"),
-                    choice("align", "Align", &[("left", "Left"), ("center", "Centre"), ("right", "Right")], "center"),
+                    choice(
+                        "operation",
+                        "field.operation",
+                        &[("join", "field.option.emboss"), ("cut", "field.option.engrave")],
+                        "join",
+                    ),
+                    choice(
+                        "align",
+                        "field.align",
+                        &[
+                            ("left", "field.option.left"),
+                            ("center", "field.option.centre"),
+                            ("right", "field.option.right"),
+                        ],
+                        "center",
+                    ),
                 ]
             }
         }
-        "loft" => const { &[choice("operation", "Operation", BOOLEAN_OPS, "new")] },
+        "loft" => const { &[choice("operation", "field.operation", BOOLEAN_OPS, "new")] },
         // The builder has no sweep intersect.
         "sweep" => {
             const {
                 &[
-                    choice("operation", "Operation", &[("new", "New body"), ("join", "Join"), ("cut", "Cut")], "new"),
-                    choice("path", "Path", &[], ""),
+                    choice(
+                        "operation",
+                        "field.operation",
+                        &[("new", "field.option.newBody"), ("join", "field.option.join"), ("cut", "field.option.cut")],
+                        "new",
+                    ),
+                    choice("path", "field.path", &[], ""),
                 ]
             }
         }
-        "thicken" => const { &[choice("operation", "Operation", &[("new", "New body"), ("join", "Join")], "join")] },
-        "mirror" => const { &[choice("plane", "Plane", PLANES, "XY")] },
+        "thicken" => {
+            const {
+                &[choice(
+                    "operation",
+                    "field.operation",
+                    &[("new", "field.option.newBody"), ("join", "field.option.join")],
+                    "join",
+                )]
+            }
+        }
+        "mirror" => const { &[choice("plane", "field.plane", PLANES, "XY")] },
         "split" => modify::SPLIT,
-        "draft" => const { &[choice("axis", "Pull axis", AXES, "Z")] },
-        "patternLinear" => const { &[choice("axis", "Direction", AXES, "X")] },
-        "patternCircular" => const { &[choice("axis", "Axis", AXES, "Z")] },
-        "mechanism" => const { &[choice("drive", "Drive", &[(NO_DRIVE, "None")], NO_DRIVE)] },
+        "draft" => const { &[choice("axis", "field.pullAxis", AXES, "Z")] },
+        "patternLinear" => const { &[choice("axis", "field.direction", AXES, "X")] },
+        "patternCircular" => const { &[choice("axis", "field.axis", AXES, "Z")] },
+        "mechanism" => const { &[choice("drive", "field.drive", &[(NO_DRIVE, "field.option.none")], NO_DRIVE)] },
         // The builder reads press-pull's operation off the sign of `distance`, `mode` is the explicit choice.
         "press-pull" => {
             const {
                 &[
                     choice(
                         "mode",
-                        "Operation",
+                        "field.operation",
                         &[
-                            ("auto", "Auto"),
-                            ("new", "New body"),
-                            ("join", "Join"),
-                            ("cut", "Cut"),
-                            ("intersect", "Intersect"),
+                            ("auto", "field.option.auto"),
+                            ("new", "field.option.newBody"),
+                            ("join", "field.option.join"),
+                            ("cut", "field.option.cut"),
+                            ("intersect", "field.option.intersect"),
                         ],
                         "auto",
                     ),
-                    choice("direction", "Direction", &[("normal", "Along normal"), ("axis", "Along axis")], "normal"),
+                    choice(
+                        "direction",
+                        "field.direction",
+                        &[("normal", "field.option.alongNormal"), ("axis", "field.option.alongAxis")],
+                        "normal",
+                    ),
                 ]
             }
         }
         "fillet" => {
             const {
                 &[
-                    choice("sizeType", "Size Type", &[("radius", "Radius"), ("chord", "Chord Length")], "radius"),
-                    choice("continuity", "Continuity", &[("G1", "G1"), ("G2", "G2"), ("G3", "G3")], "G1"),
+                    choice(
+                        "sizeType",
+                        "field.sizeType",
+                        &[("radius", "field.option.radius"), ("chord", "field.option.chordLength")],
+                        "radius",
+                    ),
+                    choice("continuity", "field.continuity", &[("G1", "G1"), ("G2", "G2"), ("G3", "G3")], "G1"),
                 ]
             }
         }
@@ -175,8 +239,8 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
             const {
                 &[choice(
                     "chamferType",
-                    "Type",
-                    &[("equal", "Equal Distance"), ("twoDistance", "Two-Distance")],
+                    "field.type",
+                    &[("equal", "field.option.equalDistance"), ("twoDistance", "field.option.twoDistance")],
                     "equal",
                 )]
             }
@@ -186,24 +250,42 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
                 &[
                     choice(
                         "holeType",
-                        "Hole type",
+                        "field.holeType",
                         &[
-                            ("simple", "Simple"),
-                            ("counterbore", "Counterbore"),
-                            ("countersink", "Countersink"),
-                            ("insert", "Heat-set insert"),
+                            ("simple", "field.option.simple"),
+                            ("counterbore", "field.option.counterbore"),
+                            ("countersink", "field.option.countersink"),
+                            ("insert", "field.option.heatSetInsert"),
                         ],
                         "simple",
                     ),
                     choice(
                         "standard",
-                        "Standard",
-                        &[("clearance", "Clearance"), ("tap", "Tap drill"), ("custom", "Custom")],
+                        "field.standard",
+                        &[
+                            ("clearance", "field.option.clearance"),
+                            ("tap", "field.option.tapDrill"),
+                            ("custom", "field.option.custom"),
+                        ],
                         "clearance",
                     ),
-                    choice("size", "Size", HOLE_SIZE_OPTIONS, "M3"),
-                    choice("fit", "Fit", &[("close", "Close"), ("normal", "Normal"), ("loose", "Loose")], "normal"),
-                    choice("extent", "Extent", &[("blind", "Blind"), ("through", "Through all")], "blind"),
+                    choice("size", "field.size", HOLE_SIZE_OPTIONS, "M3"),
+                    choice(
+                        "fit",
+                        "field.fit",
+                        &[
+                            ("close", "field.option.close"),
+                            ("normal", "field.option.normal"),
+                            ("loose", "field.option.loose"),
+                        ],
+                        "normal",
+                    ),
+                    choice(
+                        "extent",
+                        "field.extent",
+                        &[("blind", "field.option.blind"), ("through", "field.option.throughAll")],
+                        "blind",
+                    ),
                 ]
             }
         }
@@ -214,26 +296,26 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
 /// `FEATURE_TOGGLE_FIELDS`.
 pub fn toggle_fields(ty: &str) -> &'static [ToggleField] {
     match ty {
-        "boolean" => const { &[toggle("keepOriginals", "Keep originals", false)] },
+        "boolean" => const { &[toggle("keepOriginals", "field.keepOriginals", false)] },
         "extrude" => {
             const {
                 &[
-                    toggle("symmetric", "Symmetric", false),
-                    toggle("twoSided", "Two sided", false),
-                    toggle("thin", "Thin", false),
+                    toggle("symmetric", "field.symmetric", false),
+                    toggle("twoSided", "field.twoSided", false),
+                    toggle("thin", "field.thin", false),
                 ]
             }
         }
-        "thicken" => const { &[toggle("symmetric", "Symmetric", false)] },
+        "thicken" => const { &[toggle("symmetric", "field.symmetric", false)] },
         "move" | "duplicate" => modify::COPY,
-        "fillet" | "chamfer" => const { &[toggle("tangentEdges", "Include Tangent Edges", true)] },
-        "press-pull" | "offsetFace" => const { &[toggle("followTangent", "Tangent faces follow", true)] },
+        "fillet" | "chamfer" => const { &[toggle("tangentEdges", "field.includeTangentEdges", true)] },
+        "press-pull" | "offsetFace" => const { &[toggle("followTangent", "field.tangentFacesFollow", true)] },
         "hole" => {
             const {
                 &[
-                    toggle("drillPoint", "Drill point", false),
-                    toggle("flip", "Flip direction", false),
-                    toggle("tapped", "Tapped", false),
+                    toggle("drillPoint", "field.drillPoint", false),
+                    toggle("flip", "field.flipDirection", false),
+                    toggle("tapped", "field.tapped", false),
                 ]
             }
         }
@@ -308,7 +390,7 @@ pub fn field_applies(ty: &str, field: &str, v: &Map<String, Value>) -> bool {
 
 /// The label of a row whose meaning changes with another field.
 pub fn field_label(ty: &str, field: &str, v: &Map<String, Value>) -> Option<&'static str> {
-    (ty == "fillet" && field == "radius" && text(v, "sizeType") == Some("chord")).then_some("Chord Length")
+    (ty == "fillet" && field == "radius" && text(v, "sizeType") == Some("chord")).then_some("field.chordLength")
 }
 
 /// A mirror naming bodies stores its plane as `{name}`, a bare one as the name itself.
@@ -383,17 +465,17 @@ pub fn datum_choice_row(
         if mirror { mirror_plane_name(f.get("plane")).map(|s| Value::String(s.into())) } else { f.get(field).cloned() };
     match v {
         Some(Value::Object(_) | Value::Array(_)) => {
-            options.push(Choice::new(PICKED_POINT, "Picked point"));
+            options.push(Choice::new(PICKED_POINT, t("field.option.pickedPoint")));
             Some((options, PICKED_POINT.into()))
         }
         Some(Value::String(v)) if !v.is_empty() => {
             if !options.iter().any(|o| o.value == v) {
-                options.push(Choice::new(v.clone(), format!("{v} (missing)")));
+                options.push(Choice::new(v.clone(), tr!("field.option.missing", name = &v)));
             }
             Some((options, v))
         }
         _ => {
-            options.insert(0, Choice::new("", "Choose one"));
+            options.insert(0, Choice::new("", t("field.option.chooseOne")));
             Some((options, String::new()))
         }
     }
@@ -435,7 +517,7 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
 /// "Picked", or for the line C moves to the middle the world axis it runs along, "Z through the middle".
 fn placed_axis_label(f: &Map<String, Value>) -> String {
     if present(f, "axisRef") {
-        return "Picked".into();
+        return t("field.option.picked");
     }
     let dir: Vec<f64> = f
         .get("axis")
@@ -445,8 +527,8 @@ fn placed_axis_label(f: &Map<String, Value>) -> String {
         .unwrap_or_default();
     let world = [("X", [1.0, 0.0, 0.0]), ("Y", [0.0, 1.0, 0.0]), ("Z", [0.0, 0.0, 1.0])];
     match world.iter().find(|(_, w)| dir.len() == 3 && dir.iter().zip(w).all(|(a, b)| (a.abs() - b).abs() < 1e-6)) {
-        Some((name, _)) => format!("{name} through the middle"),
-        None => "Line".into(),
+        Some((name, _)) => tr!("field.option.throughMiddle", axis = *name),
+        None => t("field.option.line"),
     }
 }
 
@@ -488,11 +570,11 @@ pub fn drive_field(v: &Map<String, Value>) -> Option<&'static str> {
 
 /// The joints a drive can move, plus whatever the drive names when it cannot move it, so the row never lies.
 pub fn mechanism_drive_choice(v: &Map<String, Value>) -> (Vec<Choice>, String) {
-    let mut options = vec![Choice::new(NO_DRIVE, "None")];
+    let mut options = vec![Choice::new(NO_DRIVE, t("field.option.none"))];
     for j in joints(v) {
         if let Some(mode @ ("revolute" | "slider")) = text(j, "mode") {
             let id = text(j, "id").unwrap_or_default();
-            options.push(Choice::new(id, format!("{id} ({mode})")));
+            options.push(Choice::new(id, tr!("field.option.driveJoint", joint = id, mode = mode)));
         }
     }
     let drive = text(v, "drive").unwrap_or(NO_DRIVE).to_string();

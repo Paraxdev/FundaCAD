@@ -6,6 +6,8 @@ use fundacad_sketch::Entity;
 use glam::DVec2;
 use serde_json::{Map, Value};
 
+use crate::i18n::{t, tr};
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dim {
     /// `entities.<id>.width` or `constraints.<id>.value`, relative to the feature.
@@ -13,6 +15,7 @@ pub struct Dim {
     pub label: String,
     pub value: f64,
     pub angle: bool,
+    pub diameter: bool,
     /// A parameter name the entity field holds, the engine resolves it.
     pub expr: Option<String>,
     /// The constraint's index, for conflict colours.
@@ -36,11 +39,13 @@ pub fn shape_name(entities: &[Value], id: &str) -> String {
     };
     let ty = ty_of(me);
     let n = entities.iter().take_while(|e| !std::ptr::eq(*e, me)).filter(|e| ty_of(e) == ty).count() + 1;
-    let mut word = ty.clone();
-    if let Some(f) = word.get_mut(0..1) {
-        f.make_ascii_uppercase();
-    }
-    format!("{word} {n}")
+    let mut kind = ty.chars();
+    let name: String = kind.next().map_or(String::new(), |c| c.to_uppercase().chain(kind).collect());
+    tr!("sketch.name.entity", kind = ty, name = name, n = n)
+}
+
+fn of(label: &str, subject: String) -> String {
+    tr!("sketch.name.of", label = t(label), subject = subject)
 }
 
 /// The base of a rectangle edge id, `r1~0` is edge 0 of `r1`.
@@ -69,7 +74,7 @@ fn beside(a: DVec2, b: DVec2, gap: f64) -> DVec2 {
 
 fn line_name(entities: &[Value], line: &str) -> String {
     match edge(line) {
-        Some((r, k)) => format!("{} side {}", shape_name(entities, r), k + 1),
+        Some((r, k)) => tr!("sketch.name.edge", name = shape_name(entities, r), n = k + 1),
         None => shape_name(entities, line),
     }
 }
@@ -91,20 +96,32 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
                 if let Some((r, k)) = edge(&line) {
                     covered.push(format!("{r}.{}", if k % 2 == 0 { "width" } else { "height" }));
                 }
-                span_of(solved, &line).map(|(a, b)| (format!("Length of {}", line_name(entities, &line)), a, b, false))
+                span_of(solved, &line).map(|(a, b)| (of("sketch.dim.length", line_name(entities, &line)), a, b, false))
             }
             "diameter" | "radius" => {
                 let e = if ty == "diameter" { s(c, "circle") } else { s(c, "e") };
                 covered.push(format!("{e}.diameter"));
-                let word = if ty == "diameter" { "Diameter" } else { "Radius" };
-                solved.iter().find(|x| x.id() == e).and_then(Entity::as_round).map(|(c, r)| {
-                    (format!("{word} of {}", shape_name(entities, &e)), d2(c.x, c.y), d2(c.x + r, c.y), false)
-                })
+                let word = if ty == "diameter" { "sketch.dim.diameter" } else { "sketch.dim.radius" };
+                solved
+                    .iter()
+                    .find(|x| x.id() == e)
+                    .and_then(Entity::as_round)
+                    .map(|(c, r)| (of(word, shape_name(entities, &e)), d2(c.x, c.y), d2(c.x + r, c.y), false))
             }
             "angle" => {
                 let (l1, l2) = (s(c, "l1"), s(c, "l2"));
                 span_of(solved, &l1).zip(span_of(solved, &l2)).map(|((a, _), (b, _))| {
-                    (format!("Angle of {} and {}", line_name(entities, &l1), line_name(entities, &l2)), a, b, true)
+                    (
+                        tr!(
+                            "sketch.name.between",
+                            label = t("sketch.dim.angle"),
+                            subjects =
+                                tr!("interference.pair", a = line_name(entities, &l1), b = line_name(entities, &l2))
+                        ),
+                        a,
+                        b,
+                        true,
+                    )
                 })
             }
             _ => None,
@@ -112,7 +129,8 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
         if let Some((label, from, to, angle)) = found {
             let anchor = if angle { from + (to - from) * 0.3 } else { beside(from, to, gap) };
             let key = format!("constraints.{id}.value");
-            out.push(Dim { key, label, value, angle, expr: None, constraint: Some(i), driven, from, to, anchor });
+            let diameter = ty == "diameter";
+            out.push(Dim { key, label, value, angle, diameter, expr: None, constraint: Some(i), driven, from, to, anchor });
         }
     }
     for e in entities {
@@ -126,18 +144,19 @@ pub fn dims(entities: &[Value], constraints: &[Value], solved: &[Entity], gap: f
             let expr = e.get(stored).and_then(Value::as_str).map(str::to_string);
             let key = format!("entities.{id}.{field}");
             let anchor = beside(from, to, gap);
-            out.push(Dim { key, label, value, angle: false, expr, constraint: None, driven: false, from, to, anchor });
+            let diameter = field == "diameter";
+            out.push(Dim { key, label, value, angle: false, diameter, expr, constraint: None, driven: false, from, to, anchor });
         };
         match r {
             Entity::Rectangle { x, y, width, height, angle, .. } => {
                 let c = rect_corners(*x, *y, *width, *height, *angle);
                 let name = shape_name(entities, id);
-                push("width", format!("Width of {name}"), *width, d2(c[1].x, c[1].y), d2(c[0].x, c[0].y));
-                push("height", format!("Height of {name}"), *height, d2(c[1].x, c[1].y), d2(c[2].x, c[2].y));
+                push("width", of("sketch.dim.width", name.clone()), *width, d2(c[1].x, c[1].y), d2(c[0].x, c[0].y));
+                push("height", of("sketch.dim.height", name), *height, d2(c[1].x, c[1].y), d2(c[2].x, c[2].y));
             }
             Entity::Circle { x, y, radius, .. } => {
                 let (a, b) = (d2(x - radius, *y), d2(x + radius, *y));
-                push("diameter", format!("Diameter of {}", shape_name(entities, id)), radius * 2.0, a, b);
+                push("diameter", of("sketch.dim.diameter", shape_name(entities, id)), radius * 2.0, a, b);
             }
             _ => {}
         }

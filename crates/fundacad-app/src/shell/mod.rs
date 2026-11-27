@@ -14,8 +14,8 @@ mod rail;
 mod rail_menu;
 mod timeline;
 mod titlebar;
-mod transfer;
 mod tool_card;
+mod transfer;
 
 use std::collections::HashMap;
 
@@ -69,9 +69,13 @@ impl Shell {
         let params = cx.new(|cx| params::ParamsPanel::new(viewport.clone(), window, cx));
         transfer::install(cx.weak_entity(), cx);
         let p = params.clone();
-        crate::commands::register(cx, "parameters", "Parameters", crate::commands::Group::Tools, move |_, cx| {
-            p.update(cx, |p, cx| p.toggle(cx))
-        });
+        crate::commands::register(
+            cx,
+            "parameters",
+            crate::i18n::Label::Key("tool.parameters"),
+            crate::commands::Group::Tools,
+            move |_, cx| p.update(cx, |p, cx| p.toggle(cx)),
+        );
         tool_card::install(&viewport, cx);
         inspect::install(&viewport, cx);
         crate::plugins::install(&viewport, window, cx);

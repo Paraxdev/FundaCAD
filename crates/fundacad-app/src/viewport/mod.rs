@@ -14,12 +14,12 @@ mod profiles;
 mod renderer;
 mod resolve;
 pub mod scene;
-mod sketching;
 mod select;
 mod session;
+mod sketching;
 mod undo;
-mod visible;
 mod views;
+mod visible;
 
 pub use sketching::install as install_sketch;
 pub use views::View;
@@ -39,11 +39,12 @@ pub use issues::FeatureIssue;
 use pick::Hit;
 use renderer::{Overlay, Renderer};
 use scene::Scene;
-use undo::UndoStack;
 #[allow(unused_imports, reason = "the shell and the tools read it")]
 pub use session::ToolRun;
+use undo::UndoStack;
 
 use crate::engine::{self, Opened, Session};
+use crate::i18n::{self, tr};
 use crate::plastic::{self, Grip};
 
 /// Index GPUI samples the main 3D view from.
@@ -317,13 +318,13 @@ impl Viewport {
     ) -> Result<Option<u64>, String> {
         self.said = None;
         if self.push.as_ref().is_some_and(|p| !p.released) {
-            return Err("a face is being pushed".into());
+            return Err(i18n::t("viewport.pushing"));
         }
         self.blend_settle();
         if self.blend.is_some() {
             return Err("an edge is being dragged".into());
         }
-        let session = self.session.as_mut().ok_or("no document is open")?;
+        let session = self.session.as_mut().ok_or_else(|| i18n::t("files.openDocumentFirst"))?;
         let before = session.doc.clone();
         let edited = session.edit(f)?;
         if edited.is_some() {
@@ -404,17 +405,19 @@ impl Viewport {
 
     /// One line for the status bar.
     pub fn status(&self) -> String {
-        let mut parts = vec![format!("{} triangles", self.scene.triangles())];
+        let mut parts = vec![tr!("viewport.status.triangles", n = self.scene.triangles())];
         if let Some(b) = &self.backend {
             parts.push(b.clone());
         }
         if let Some(ms) = self.rebuild_ms {
-            parts.push(format!("rebuild {ms:.0} ms"));
+            parts.push(tr!("viewport.status.rebuild", ms = ms.round()));
         }
         match (&self.push, &self.hover) {
             (Some(p), _) => parts.push(format!("{} {:.1} mm", p.grip.label(), p.value)),
-            (None, Some((_, Ok(g)))) if g.adds() && self.tool.is_none() => parts.push("drag to press pull this face".into()),
-            (None, Some((_, Ok(g)))) => parts.push(format!("drag to push {} ({} mm)", g.label(), g.start)),
+            (None, Some((_, Ok(g)))) if g.adds() && self.tool.is_none() => {
+                parts.push(i18n::t("viewport.status.pressPull"))
+            }
+            (None, Some((_, Ok(g)))) => parts.push(tr!("viewport.status.push", grip = g.label(), mm = g.start)),
             (None, Some((_, Err(why)))) => parts.push(why.clone()),
             (None, None) => {}
         }
@@ -427,7 +430,7 @@ impl Viewport {
             parts.push(s.clone());
         }
         if let Some(s) = self.picking.selection.describe().filter(|_| self.tool.is_none()) {
-            parts.push(format!("{s} selected"));
+            parts.push(tr!("viewport.status.selected", what = s));
         }
         parts.join(", ")
     }
@@ -465,8 +468,10 @@ impl Viewport {
                         self.push = None;
                     }
                 }
-                Event::WorkerRestarted { cause, .. } => self.message = Some(format!("the engine restarted: {cause}")),
-                Event::WorkerStartFailed(e) => self.message = Some(format!("the engine did not start: {e}")),
+                Event::WorkerRestarted { cause, .. } => {
+                    self.message = Some(tr!("viewport.engineRestarted", cause = cause))
+                }
+                Event::WorkerStartFailed(e) => self.message = Some(tr!("viewport.engineFailed", error = e.to_string())),
                 Event::Progress { .. } => {}
             }
         }
@@ -605,7 +610,7 @@ impl Viewport {
     }
 
     fn grip_at(&self, hit: &Hit) -> Result<Grip, String> {
-        let Some(s) = &self.session else { return Err("open a FundaCAD document to push faces".into()) };
+        let Some(s) = &self.session else { return Err(i18n::t("viewport.pushNeedsDocument")) };
         let body = &self.scene.bodies[hit.body];
         let flat = drag::flat(body, hit.face, hit.normal);
         plastic::pick(&s.doc, body.owner(hit.face), &body.source.id, hit.normal, hit.point, flat)

@@ -15,6 +15,8 @@ use fundacad_sketch::Entity;
 use glam::DVec2;
 use serde_json::{json, Map, Value};
 
+use crate::i18n::{t, tr};
+
 pub use plane::Plane;
 use snap::{point_relation, Snap};
 use solve::{How, Solved};
@@ -31,16 +33,16 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub fn label(self) -> &'static str {
-        match self {
-            Tool::Select => "Select",
-            Tool::Line => "Line",
-            Tool::Rectangle => "Rectangle",
-            Tool::Circle => "Circle",
-            Tool::Arc => "Arc",
-            Tool::Polygon => "Polygon",
-            Tool::Dimension => "Dimension",
-        }
+    pub fn label(self) -> String {
+        crate::i18n::t(match self {
+            Tool::Select => "viewControls.select",
+            Tool::Line => "tool.line",
+            Tool::Rectangle => "tool.rectangle",
+            Tool::Circle => "tool.circle",
+            Tool::Arc => "tool.arc",
+            Tool::Polygon => "tool.polygon",
+            Tool::Dimension => "tool.dimension",
+        })
     }
 }
 
@@ -73,7 +75,11 @@ pub struct Editor {
 pub type Feature = Map<String, Value>;
 
 pub fn feature<'a>(doc: &'a Map<String, Value>, id: &str) -> Option<&'a Feature> {
-    doc.get("features")?.as_array()?.iter().filter_map(Value::as_object).find(|f| f.get("id").and_then(Value::as_str) == Some(id))
+    doc.get("features")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_object)
+        .find(|f| f.get("id").and_then(Value::as_str) == Some(id))
 }
 
 pub fn feature_mut<'a>(doc: &'a mut Map<String, Value>, id: &str) -> Option<&'a mut Feature> {
@@ -136,7 +142,10 @@ fn polygon_points(e: &Value, params: &HashMap<String, f64>) -> Option<Vec<DVec2>
     let k = (sides.round() as usize).max(3);
     Some(
         (0..k)
-            .map(|i| DVec2::new(x, y) + DVec2::from_angle(angle.to_radians() + i as f64 / k as f64 * std::f64::consts::TAU) * r)
+            .map(|i| {
+                DVec2::new(x, y)
+                    + DVec2::from_angle(angle.to_radians() + i as f64 / k as f64 * std::f64::consts::TAU) * r
+            })
             .collect(),
     )
 }
@@ -205,9 +214,10 @@ impl Editor {
     }
 
     pub fn is_construction(&self, id: &str) -> bool {
-        self.entities
-            .iter()
-            .any(|e| e.get("id").and_then(Value::as_str) == Some(id) && e.get("construction").and_then(Value::as_bool) == Some(true))
+        self.entities.iter().any(|e| {
+            e.get("id").and_then(Value::as_str) == Some(id)
+                && e.get("construction").and_then(Value::as_bool) == Some(true)
+        })
     }
 
     pub fn construction_ids(&self) -> Vec<String> {
@@ -337,7 +347,10 @@ impl Editor {
                     return None;
                 }
                 let r = |v: f64| r3(v);
-                let id = self.add_entity("line", json!({"type": "line", "x1": r(a.p.x), "y1": r(a.p.y), "x2": r(b.x), "y2": r(b.y)}));
+                let id = self.add_entity(
+                    "line",
+                    json!({"type": "line", "x1": r(a.p.x), "y1": r(a.p.y), "x2": r(b.x), "y2": r(b.y)}),
+                );
                 self.relate(&id, 0, &a);
                 if at.r.is_some() && axis.is_none_or(|_| at.p == b) {
                     self.relate(&id, 1, &at);
@@ -346,7 +359,16 @@ impl Editor {
                     self.constraints.push(json!({"type": k, "line": id}));
                 }
                 let closes = at.r.is_some();
-                self.clicks = if closes { Vec::new() } else { vec![Snap { p: b, kind: snap::Kind::Endpoint, r: Some(snap::Ref::Point { entity: id.clone(), at: 1 }), guides: Vec::new() }] };
+                self.clicks = if closes {
+                    Vec::new()
+                } else {
+                    vec![Snap {
+                        p: b,
+                        kind: snap::Kind::Endpoint,
+                        r: Some(snap::Ref::Point { entity: id.clone(), at: 1 }),
+                        guides: Vec::new(),
+                    }]
+                };
                 self.finish(&id)
             }
             Tool::Rectangle => {
@@ -355,7 +377,10 @@ impl Editor {
                 if s.x < 1e-6 || s.y < 1e-6 {
                     return None;
                 }
-                let id = self.add_entity("rect", json!({"type": "rectangle", "x": r3(c.x), "y": r3(c.y), "width": r3(s.x), "height": r3(s.y)}));
+                let id = self.add_entity(
+                    "rect",
+                    json!({"type": "rectangle", "x": r3(c.x), "y": r3(c.y), "width": r3(s.x), "height": r3(s.y)}),
+                );
                 let corner = |p: DVec2| -> i64 {
                     match (p.x > c.x, p.y > c.y) {
                         (false, false) => 0,
@@ -375,7 +400,10 @@ impl Editor {
                     return None;
                 }
                 let id = if self.tool == Tool::Circle {
-                    let id = self.add_entity("circle", json!({"type": "circle", "x": r3(a.p.x), "y": r3(a.p.y), "radius": r3(rad)}));
+                    let id = self.add_entity(
+                        "circle",
+                        json!({"type": "circle", "x": r3(a.p.x), "y": r3(a.p.y), "radius": r3(rad)}),
+                    );
                     self.relate(&id, 0, &a);
                     id
                 } else {
@@ -406,7 +434,7 @@ impl Editor {
 
     fn finish(&mut self, id: &str) -> Option<String> {
         self.resolve(true);
-        Some(format!("Add {}", dims::shape_name(&self.entities, id)))
+        Some(tr!("step.label.add", step = dims::shape_name(&self.entities, id)))
     }
 
     /// The shape under `p` within `tol` mm, a rectangle side named `<rect>~<k>`.
@@ -425,7 +453,10 @@ impl Editor {
             let (id, d) = match e {
                 Entity::Rectangle { id, .. } => {
                     let pts = regions::outline(e).unwrap_or_default();
-                    let (k, d) = (0..4).map(|k| (k, seg(pts[k], pts[(k + 1) % 4]))).min_by(|a, b| a.1.total_cmp(&b.1)).unwrap_or((0, f64::INFINITY));
+                    let (k, d) = (0..4)
+                        .map(|k| (k, seg(pts[k], pts[(k + 1) % 4])))
+                        .min_by(|a, b| a.1.total_cmp(&b.1))
+                        .unwrap_or((0, f64::INFINITY));
                     (format!("{id}~{k}"), d)
                 }
                 Entity::Circle { id, x, y, radius } => (id.clone(), (DVec2::new(*x, *y).distance(p) - radius).abs()),
@@ -453,7 +484,9 @@ impl Editor {
         let e = self.solved.entities.iter().find(|e| e.id() == base)?.clone();
         let dim_id = fresh_id("d", &self.taken());
         let c = match &e {
-            Entity::Circle { radius, .. } => json!({"type": "diameter", "id": dim_id, "circle": id, "value": r3(radius * 2.0)}),
+            Entity::Circle { radius, .. } => {
+                json!({"type": "diameter", "id": dim_id, "circle": id, "value": r3(radius * 2.0)})
+            }
             Entity::Arc { .. } => json!({"type": "radius", "id": dim_id, "e": id, "value": r3(e.as_round()?.1)}),
             Entity::Rectangle { width, height, .. } => {
                 let k: usize = id.split('~').nth(1)?.parse().ok()?;
@@ -466,12 +499,16 @@ impl Editor {
         };
         let key = c.get("line").or(c.get("circle")).or(c.get("e")).cloned();
         let ty = c["type"].clone();
-        if self.constraints.iter().any(|o| o["type"] == ty && (o.get("line").or(o.get("circle")).or(o.get("e")).cloned() == key)) {
+        if self
+            .constraints
+            .iter()
+            .any(|o| o["type"] == ty && (o.get("line").or(o.get("circle")).or(o.get("e")).cloned() == key))
+        {
             return None;
         }
         self.constraints.push(c);
         self.resolve(true);
-        Some(format!("Dimension {}", dims::shape_name(&self.entities, base)))
+        Some(tr!("sketch.step.dimension", name = dims::shape_name(&self.entities, base)))
     }
 
     pub fn dims(&self, gap: f64) -> Vec<dims::Dim> {
@@ -481,7 +518,7 @@ impl Editor {
     /// Sets the number at `key` (a `Dim::key`) and solves with drawn axes held. Refused when the sketch cannot take it.
     pub fn set_dim(&mut self, key: &str, value: f64) -> Result<String, String> {
         if !value.is_finite() || value <= 0.0 {
-            return Err(format!("{value} is not a size"));
+            return Err(tr!("sketch.problem.notSize", value = value));
         }
         let mut parts = key.splitn(3, '.');
         let (Some(list), Some(id), Some(field)) = (parts.next(), parts.next(), parts.next()) else {
@@ -489,10 +526,13 @@ impl Editor {
         };
         let (mut es, mut cs) = (self.entities.clone(), self.constraints.clone());
         let target = if list == "entities" { &mut es } else { &mut cs };
-        let item = target.iter_mut().find(|e| e.get("id").and_then(Value::as_str) == Some(id)).ok_or_else(|| format!("no {id}"))?;
+        let item = target
+            .iter_mut()
+            .find(|e| e.get("id").and_then(Value::as_str) == Some(id))
+            .ok_or_else(|| format!("no {id}"))?;
         let stored = if field == "diameter" && list == "entities" { "radius" } else { field };
         if let Some(name) = item.get(stored).and_then(Value::as_str) {
-            return Err(format!("this number is the parameter {name}, change it in the parameters table"));
+            return Err(tr!("sketch.problem.boundParameter", name = name));
         }
         match field {
             "diameter" if list == "entities" => item["radius"] = json!(value / 2.0),
@@ -501,12 +541,15 @@ impl Editor {
         let anchor = self.dims(0.0).into_iter().find(|d| d.key == key).map(|d| d.from);
         let (out, solved) = solve::solve(&es, &cs, &self.params, How::Typed(anchor), true);
         if !solved.ok || !solved.conflicts.is_empty() {
-            return Err("the sketch cannot take that number, it conflicts with another constraint".into());
+            return Err(t("sketch.problem.conflicts"));
         }
         self.entities = out;
         self.constraints = cs;
         self.solved = solved;
-        Ok(format!("Set {}", self.dims(0.0).iter().find(|d| d.key == key).map_or(key.to_string(), |d| d.label.to_lowercase())))
+        Ok(tr!(
+            "sketch.step.set",
+            what = self.dims(0.0).iter().find(|d| d.key == key).map_or(key.to_string(), |d| d.label.clone())
+        ))
     }
 
     /// Construction on the selected shape, else for the next shapes drawn.
@@ -523,7 +566,11 @@ impl Editor {
         } else if let Some(o) = e.as_object_mut() {
             o.remove("construction");
         }
-        Some(format!("{} {}", if on { "Construction" } else { "Normal" }, dims::shape_name(&self.entities, &base)))
+        Some(tr!(
+            "sketch.step.construction",
+            on = if on { "yes" } else { "no" },
+            name = dims::shape_name(&self.entities, &base)
+        ))
     }
 
     /// Horizontal or vertical on the selected line.
@@ -534,7 +581,7 @@ impl Editor {
         }
         self.constraints.push(json!({"type": kind, "line": line}));
         self.resolve(true);
-        Some(format!("{} {}", if kind == "horizontal" { "Horizontal" } else { "Vertical" }, dims::shape_name(&self.entities, &line)))
+        Some(tr!("sketch.step.align", kind = kind, name = dims::shape_name(&self.entities, &line)))
     }
 
     /// Deletes the selected shape and every constraint naming it.
@@ -545,12 +592,14 @@ impl Editor {
         self.entities.retain(|e| e.get("id").and_then(Value::as_str) != Some(base.as_str()));
         let names = |c: &Value| {
             c.as_object().is_some_and(|o| {
-                o.iter().filter(|(k, _)| *k != "id" && *k != "type").any(|(_, v)| v.as_str().is_some_and(|s| s.split('~').next() == Some(base.as_str())))
+                o.iter()
+                    .filter(|(k, _)| *k != "id" && *k != "type")
+                    .any(|(_, v)| v.as_str().is_some_and(|s| s.split('~').next() == Some(base.as_str())))
             })
         };
         self.constraints.retain(|c| !names(c));
         self.resolve(false);
-        Some(format!("Delete {name}"))
+        Some(tr!("step.label.delete", n = 1, step = name))
     }
 
     /// Grabs the point nearest `p` within `tol` mm for a drag.
@@ -583,13 +632,14 @@ impl Editor {
     pub fn drag_end(&mut self) -> Option<String> {
         let d = self.drag.take()?;
         self.resolve(false);
-        (d.moved && d.entities != self.entities).then(|| "Drag sketch point".to_string())
+        (d.moved && d.entities != self.entities).then(|| t("sketch.step.drag"))
     }
 }
 
 /// Dimensions without an id get one, so the inspector and the labels can name them.
 fn with_ids(mut cs: Vec<Value>) -> Vec<Value> {
-    let mut taken: Vec<String> = cs.iter().filter_map(|c| c.get("id").and_then(Value::as_str).map(String::from)).collect();
+    let mut taken: Vec<String> =
+        cs.iter().filter_map(|c| c.get("id").and_then(Value::as_str).map(String::from)).collect();
     for c in cs.iter_mut().filter(|c| c.get("value").is_some() && c.get("id").is_none()) {
         let refs: Vec<&str> = taken.iter().map(String::as_str).collect();
         let id = fresh_id("d", &refs);
@@ -601,7 +651,12 @@ fn with_ids(mut cs: Vec<Value>) -> Vec<Value> {
 
 /// A new extrude of the sketch, every closed area, `distance` mm. Its id.
 /// `regions` are world points, one inside each area to extrude, as FC1 wrote them.
-pub fn add_extrude(doc: &mut Map<String, Value>, sketch: &str, distance: f64, regions: &[[f64; 3]]) -> Result<String, String> {
+pub fn add_extrude(
+    doc: &mut Map<String, Value>,
+    sketch: &str,
+    distance: f64,
+    regions: &[[f64; 3]],
+) -> Result<String, String> {
     let mut f = json!({"type": "extrude", "sketch": sketch, "distance": distance, "operation": "new"});
     if !regions.is_empty() {
         f["regions"] = json!(regions);
@@ -610,7 +665,12 @@ pub fn add_extrude(doc: &mut Map<String, Value>, sketch: &str, distance: f64, re
 }
 
 /// A new full revolve of the sketch about `axis` (an `{origin, dir}` line in world mm). Its id.
-pub fn add_revolve(doc: &mut Map<String, Value>, sketch: &str, axis: Value, regions: &[[f64; 3]]) -> Result<String, String> {
+pub fn add_revolve(
+    doc: &mut Map<String, Value>,
+    sketch: &str,
+    axis: Value,
+    regions: &[[f64; 3]],
+) -> Result<String, String> {
     let mut f = json!({"type": "revolve", "sketch": sketch, "axis": axis, "angle": 360, "operation": "new"});
     if !regions.is_empty() {
         f["regions"] = json!(regions);

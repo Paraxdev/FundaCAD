@@ -1,6 +1,7 @@
 use serde_json::{Map, Value};
 
 use super::{features, id_of, Feature};
+use crate::i18n::{t, tr};
 
 /// A step's own name, else its type name and its place among the steps of that type, as "Fillet 2".
 pub fn numbered(f: &Feature, all: &[&Feature]) -> String {
@@ -12,7 +13,7 @@ pub fn numbered(f: &Feature, all: &[&Feature]) -> String {
     match at {
         Some(at) => {
             let place = all[..=at].iter().filter(|g| type_label(g) == kind).count();
-            format!("{kind} {place}")
+            tr!("feature.numbered", name = kind, n = place)
         }
         None => kind,
     }
@@ -32,10 +33,6 @@ pub fn name_of(doc: &Map<String, Value>, id: &str) -> String {
     all.iter().find(|f| id_of(f) == id).map_or_else(|| id.to_owned(), |f| numbered(f, &all))
 }
 
-fn plural(n: usize, verb: &str) -> String {
-    format!("{verb} {n} {}", if n == 1 { "step" } else { "steps" })
-}
-
 fn listed(doc: &Map<String, Value>, key: &str) -> Vec<String> {
     doc.get(key).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect()
 }
@@ -48,10 +45,10 @@ fn moved(was: &[&Feature], now: &[&Feature]) -> String {
     for id in [id_of(was[at]), id_of(now[at])] {
         if without(was, id) == without(now, id) {
             let f = was.iter().find(|f| id_of(f) == id).expect("the id came from the list");
-            return format!("Move {}", numbered(f, was));
+            return tr!("step.label.move", step = numbered(f, was));
         }
     }
-    plural(was.iter().zip(now).filter(|(a, b)| id_of(a) != id_of(b)).count(), "Move")
+    tr!("step.label.moveMany", n = was.iter().zip(now).filter(|(a, b)| id_of(a) != id_of(b)).count())
 }
 
 fn without_name(f: &Feature) -> Feature {
@@ -66,31 +63,31 @@ pub fn step_label(before: &Map<String, Value>, after: &Map<String, Value>) -> St
     let now = features(after);
     let removed: Vec<&&Feature> = was.iter().filter(|f| !now.iter().any(|g| id_of(g) == id_of(f))).collect();
     if let [one] = removed[..] {
-        return format!("Delete {}", numbered(one, &was));
+        return tr!("step.label.delete", n = 1, step = numbered(one, &was));
     }
     if !removed.is_empty() {
-        return plural(removed.len(), "Delete");
+        return tr!("step.label.delete", n = removed.len(), step = "");
     }
     let added: Vec<&&Feature> = now.iter().filter(|f| !was.iter().any(|g| id_of(g) == id_of(f))).collect();
     if let [one] = added[..] {
         return numbered(one, &now);
     }
     if !added.is_empty() {
-        return plural(added.len(), "Add");
+        return tr!("step.label.added", n = added.len());
     }
     if was.iter().zip(&now).any(|(a, b)| id_of(a) != id_of(b)) {
         return moved(&was, &now);
     }
     let edited: Vec<usize> = (0..now.len()).filter(|&i| was[i] != now[i]).collect();
     if edited.len() > 1 {
-        return plural(edited.len(), "Edit");
+        return tr!("step.label.editMany", n = edited.len());
     }
     if let [at] = edited[..] {
         if without_name(was[at]) == without_name(now[at]) {
-            return format!("Rename {}", numbered(was[at], &was));
+            return tr!("step.label.rename", step = numbered(was[at], &was));
         }
         // Lower case: it only follows Undo, Redo, Undid or Redid.
-        return format!("edit of {}", numbered(now[at], &now));
+        return tr!("step.label.editOf", step = numbered(now[at], &now));
     }
     if let Some(label) = suppress_label(before, after) {
         return label;
@@ -98,8 +95,8 @@ pub fn step_label(before: &Map<String, Value>, after: &Map<String, Value>) -> St
     if before.get("rollback") != after.get("rollback") {
         let at = after.get("rollback").and_then(Value::as_u64).map(|r| r as usize);
         return match at.and_then(|k| now.get(k)) {
-            Some(f) => format!("Roll back before {}", numbered(f, &now)),
-            None => "Roll to the end".into(),
+            Some(f) => tr!("step.label.rollBefore", step = numbered(f, &now)),
+            None => t("step.label.rollEnd"),
         };
     }
     if before.get(super::ops::NOTES) != after.get(super::ops::NOTES) {
@@ -107,26 +104,27 @@ pub fn step_label(before: &Map<String, Value>, after: &Map<String, Value>) -> St
         let (a, b) = (notes(before).unwrap_or_default(), notes(after).unwrap_or_default());
         let changed: Vec<&String> = a.keys().chain(b.keys()).filter(|k| a.get(*k) != b.get(*k)).collect();
         return match changed.first() {
-            Some(id) if changed.iter().all(|k| k == id) => format!("Note on {}", name_of(after, id)),
-            _ => "Notes".into(),
+            Some(id) if changed.iter().all(|k| k == id) => tr!("step.label.noteOn", step = name_of(after, id)),
+            _ => t("step.label.notes"),
         };
     }
-    param_label(before, after).unwrap_or_else(|| "Edit".into())
+    param_label(before, after).unwrap_or_else(|| t("step.label.edit"))
 }
 
 fn suppress_label(before: &Map<String, Value>, after: &Map<String, Value>) -> Option<String> {
     let (was, now) = (listed(before, "suppressed"), listed(after, "suppressed"));
     let on: Vec<&String> = now.iter().filter(|id| !was.contains(id)).collect();
     let off: Vec<&String> = was.iter().filter(|id| !now.contains(id)).collect();
-    let (verb, ids, doc) = match (on.is_empty(), off.is_empty()) {
+    let (state, ids) = match (on.is_empty(), off.is_empty()) {
         (true, true) => return None,
-        (false, _) => ("Suppress", on, after),
-        (true, false) => ("Unsuppress", off, after),
+        (false, _) => ("on", on),
+        (true, false) => ("off", off),
     };
-    Some(match ids[..] {
-        [one] => format!("{verb} {}", name_of(doc, one)),
-        _ => plural(ids.len(), verb),
-    })
+    let step = match ids[..] {
+        [one] => name_of(after, one),
+        _ => String::new(),
+    };
+    Some(tr!("step.label.suppress", state = state, n = ids.len(), step = step))
 }
 
 fn param_label(before: &Map<String, Value>, after: &Map<String, Value>) -> Option<String> {
@@ -142,41 +140,42 @@ fn param_label(before: &Map<String, Value>, after: &Map<String, Value>) -> Optio
     let changed: Vec<&&String> = names.iter().filter(|k| read(before, k) != read(after, k)).collect();
     match changed[..] {
         [] => None,
-        [one] => Some(format!("Parameter {one}")),
-        _ => Some("Parameters".into()),
+        [one] => Some(tr!("step.label.parameter", name = one.as_str())),
+        _ => Some(t("step.label.parameters")),
     }
 }
 
 /// "Undo Fillet 2" for a tooltip, the bare verb when there is no step, a long name clipped as in canStep.ts.
 pub fn menu_text(undo: bool, step: Option<&str>) -> String {
     const MAX: usize = 32;
-    let verb = if undo { "Undo" } else { "Redo" };
+    let named = |s: String| tr!(if undo { "step.undoNamed" } else { "step.redoNamed" }, step = s);
     match step {
-        None => verb.into(),
-        Some(s) if s.chars().count() > MAX => format!("{verb} {}…", s.chars().take(MAX).collect::<String>().trim_end()),
-        Some(s) => format!("{verb} {s}"),
+        None => t(if undo { "step.undo" } else { "step.redo" }),
+        Some(s) if s.chars().count() > MAX => named(format!("{}…", s.chars().take(MAX).collect::<String>().trim_end())),
+        Some(s) => named(s.to_owned()),
     }
 }
 
 /// What the status says after a delete, read off the document before it: the steps gone, and those left that used
 /// them, since they will fail or change.
 pub fn deleted_line(before: &Map<String, Value>, gone: &[String], users: &[String]) -> String {
-    let head = match gone {
-        [one] => format!("Deleted {}", name_of(before, one)),
-        _ => format!("Deleted {} steps", gone.len()),
+    let step = match gone {
+        [one] => name_of(before, one),
+        _ => String::new(),
     };
+    let head = tr!("feature.deleted", n = gone.len(), step = step);
     let names: Vec<String> = users.iter().map(|u| name_of(before, u)).collect();
-    let it = if gone.len() == 1 { "it" } else { "them" };
-    match &names[..] {
-        [] => head,
-        [one] => format!("{head}, {one} used {it}"),
-        [rest @ .., last] => format!("{head}, {} and {last} used {it}", rest.join(", ")),
-    }
+    let users = match &names[..] {
+        [] => return head,
+        [one] => one.clone(),
+        [rest @ .., last] => tr!("pick.list.last", before = rest.join(", "), last = last.as_str()),
+    };
+    tr!("feature.deletedUsers", head = head, users = users, n = gone.len())
 }
 
 /// The line the status shows after an undo or a redo.
 pub fn stepped(undo: bool, label: &str) -> String {
-    format!("{} {label}", if undo { "Undid" } else { "Redid" })
+    tr!("history.stepped", way = if undo { "undo" } else { "redo" }, label = label)
 }
 
 #[cfg(test)]

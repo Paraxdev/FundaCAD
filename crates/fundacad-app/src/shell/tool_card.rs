@@ -6,6 +6,7 @@ use gpui::*;
 
 use super::Shell;
 use crate::commands::{register, Group};
+use crate::i18n::{self, tr, Label};
 use crate::inspector as model;
 use crate::overlay::{self, Toast};
 use crate::selection::{Filter, Pick, PickKind};
@@ -17,9 +18,10 @@ use crate::viewport::Viewport;
 pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     for tool in tools::TOOLS.iter().filter(|t| !tools::HELD.contains(&t.id)) {
         let v = viewport.clone();
-        register(cx, tool.id, tool.label, Group::Tools, move |_, cx| start(&v, tool, cx));
+        register(cx, tool.id, Label::Key(tool.label), Group::Tools, move |_, cx| start(&v, tool, cx));
     }
-    let filters = [("selmode-faces", Filter::Faces), ("selmode-bodies", Filter::Bodies), ("selmode-auto", Filter::Auto)];
+    let filters =
+        [("selmode-faces", Filter::Faces), ("selmode-bodies", Filter::Bodies), ("selmode-auto", Filter::Auto)];
     for (id, filter) in filters {
         let v = viewport.clone();
         register(cx, id, filter.label(), Group::Edit, move |_, cx| v.update(cx, |v, cx| v.set_filter(filter, cx)));
@@ -40,7 +42,7 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     })
     .detach();
     let v = viewport.clone();
-    register(cx, "escape", "Cancel", Group::Edit, move |_, cx| {
+    register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| match v.running().is_some() {
             true => v.finish(false, cx),
             false if v.inspecting().card.is_some() => v.open_card(None, cx),
@@ -73,10 +75,10 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
         }
     }
     let v = viewport.read(cx);
-    let Some(doc) = v.doc() else { return toast(cx, "Open a document first".into()) };
+    let Some(doc) = v.doc() else { return toast(cx, i18n::t("tool.openDocumentFirst")) };
     let boolean = tool.id.starts_with("boolean-");
     if boolean && v.body_count() < 2 {
-        return toast(cx, format!("{} needs two bodies", tool.label));
+        return toast(cx, tr!("tool.boolean.needTwo", tool = i18n::t(tool.label)));
     }
     let (id, start) = match tools::started(tool, doc, v.selection()) {
         Ok(s) => s,
@@ -85,12 +87,12 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     let tools::Fitted { start, before } = tools::fit(tool.id, start, doc, v.selection(), &v.shown_bodies());
     let mut shown = doc.clone();
     let _ = tools::insert(&mut shown, start.feature.clone());
-    let label = format!("Add {}", crate::timeline::labels::name_of(&shown, &id));
+    let label = tr!("step.label.add", step = crate::timeline::labels::name_of(&shown, &id));
     let feature = start.feature.clone();
     let offered = tools::offer(tool.id, v.selection());
     let begun = viewport.update(cx, |v, cx| {
         let need = start.need.clone();
-        v.begin_tool(tool.label.into(), label, id.clone(), need, move |d| {
+        v.begin_tool(i18n::t(tool.label), label, id.clone(), need, move |d| {
             before.iter().try_for_each(|b| tools::insert(d, b.clone()))?;
             tools::insert(d, feature.clone())
         }, cx)?;
@@ -127,11 +129,7 @@ fn target_of(field: &'static str, kind: model::TargetKind) -> Target {
 }
 
 pub(super) fn prompt(arm: &Target) -> String {
-    let what = tools::run::noun(arm.kind, arm.many);
-    match arm.many {
-        true => format!("Click {what} to add or drop them"),
-        false => format!("Click the {what} to use"),
-    }
+    tr!("tool.target.click", many = if arm.many { "yes" } else { "no" }, kind = tools::run::noun(arm.kind, false))
 }
 
 impl Shell {
@@ -148,12 +146,12 @@ impl Shell {
         let id = id.to_string();
         self.viewport.update(cx, |v, cx| {
             if v.running().is_some_and(|s| s.feature != id) {
-                return v.say("Finish the tool that is running first".into(), cx);
+                return v.say(i18n::t("geometry.browser.finishTool"), cx);
             }
             let armed = v.running().and_then(|s| s.arm).is_some_and(|a| a.field == field);
             if v.running().is_none() {
-                let words = format!("{} of {name}", label.to_lowercase());
-                let title = format!("{label} of {name}");
+                let title = tr!("sketch.name.of", label = i18n::t(label), subject = name);
+                let words = title.clone();
                 if let Err(why) = v.begin_tool(title, words, id.clone(), Vec::new(), |_| Ok(()), cx) {
                     return v.say(why, cx);
                 }
@@ -195,7 +193,14 @@ impl Shell {
     }
 
     /// A Target row, which a click arms for picking, lit while armed.
-    pub(super) fn target_row(&self, t: &Theme, id: &str, label: &'static str, line: Div, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn target_row(
+        &self,
+        t: &Theme,
+        id: &str,
+        label: &'static str,
+        line: Div,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let v = self.viewport.read(cx);
         let armed = v.running().filter(|s| s.feature == id).and_then(|s| s.arm).map(|a| a.field);
         let on = armed.is_some_and(|field| {
@@ -238,14 +243,14 @@ impl Shell {
                     true => d.bg(t.accent).text_color(t.on_accent),
                     false => d.bg(t.field_bg).border_1().border_color(t.control_edge).text_color(t.text),
                 })
-                .child(label)
+                .child(i18n::t(label))
         };
         let head = div()
             .flex()
             .items_center()
             .justify_between()
             .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).child(title))
-            .child(text(t, FS_SMALL).text_color(t.text_mute).child("Esc to cancel"));
+            .child(text(t, FS_SMALL).text_color(t.text_mute).child(i18n::t("mirror.escCancel")));
         let picking = arm.as_ref().map(|a| {
             div()
                 .flex()
@@ -258,11 +263,11 @@ impl Shell {
                         .flex_none()
                         .flex()
                         .gap(px(S_1))
-                        .child(button("Clear", false).on_click(cx.listener(|this, _, _, cx| {
+                        .child(button("tool.target.clear", false).on_click(cx.listener(|this, _, _, cx| {
                             this.viewport.update(cx, |v, cx| v.clear_target(cx));
                         })))
                         .when(a.many, |d| {
-                            d.child(button("Done", false).on_click(cx.listener(|this, _, _, cx| {
+                            d.child(button("common.done", false).on_click(cx.listener(|this, _, _, cx| {
                                 this.viewport.update(cx, |v, cx| v.set_arm(None, cx));
                             })))
                         }),
@@ -272,10 +277,10 @@ impl Shell {
             .flex()
             .justify_end()
             .gap(px(S_2))
-            .child(button("Cancel", false).on_click(cx.listener(|this, _, _, cx| {
+            .child(button("common.cancel", false).on_click(cx.listener(|this, _, _, cx| {
                 this.viewport.update(cx, |v, cx| v.finish(false, cx));
             })))
-            .child(button("OK", true).when(missing.is_some(), |d| d.opacity(0.5)).on_click(cx.listener(
+            .child(button("common.ok", true).when(missing.is_some(), |d| d.opacity(0.5)).on_click(cx.listener(
                 |this, _, _, cx| {
                     this.viewport.update(cx, |v, cx| v.finish(true, cx));
                 },

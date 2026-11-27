@@ -7,6 +7,7 @@ mod tests;
 use serde_json::{json, Value};
 
 use super::{entries, feature, Doc, Start, Target};
+use crate::i18n::t;
 use crate::selection::{Pick, PickKind, Selection};
 
 const REGIONS: Target = Target { field: "regions", kind: PickKind::Area, many: true };
@@ -87,14 +88,14 @@ pub fn extrude(doc: &Doc, s: &Selection) -> Result<Start, String> {
         f["regions"] = json!(regions);
     } else if let Some(sketch) = picked_sketch(s) {
         if crate::sketch::Editor::open(doc, sketch).is_some_and(|e| e.regions().is_empty()) {
-            let wall = thin_wall(doc, sketch).ok_or("The sketch has no curve to extrude")?;
+            let wall = thin_wall(doc, sketch).ok_or_else(|| t("tool.build.noCurve"))?;
             return Ok(Start { feature: wall, need: Vec::new() });
         }
         f["sketch"] = json!(sketch);
         f.as_object_mut().expect("an object").remove("regions");
         return Ok(Start { feature: f, need: Vec::new() });
     } else if crate::sketch::areas::shown(doc, true, None).iter().all(|k| k.areas.is_empty()) {
-        return Err("Extrude needs a profile, draw a closed sketch first".into());
+        return Err(t("tool.build.needProfile"));
     }
     Ok(Start { feature: f, need: vec![REGIONS] })
 }
@@ -137,13 +138,13 @@ pub fn revolve(doc: &Doc, s: &Selection) -> Result<Start, String> {
         f["axis"] = axis;
     }
     if let Some(p) = s.of(PickKind::Edge).first().copied() {
-        f["axis"] = edge_axis(p).ok_or(STRAIGHT)?;
+        f["axis"] = edge_axis(p).ok_or_else(|| t(STRAIGHT))?;
         f["axisEdge"] = p.selector().unwrap_or_default();
     }
     Ok(Start { feature: f, need })
 }
 
-pub const STRAIGHT: &str = "Pick a straight edge for the axis";
+pub const STRAIGHT: &str = "tool.build.straightAxis";
 
 /// A straight edge as an `{origin, dir}` line, which the engine keeps as the axis an `axisEdge` caches.
 pub fn edge_axis(p: &Pick) -> Option<Value> {
@@ -244,7 +245,7 @@ pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<V
         return Ok(plane_placed(doc, id, value));
     }
     match target.kind {
-        PickKind::Point => return value.get("point").cloned().ok_or_else(|| "Click on a face".to_string()),
+        PickKind::Point => return value.get("point").cloned().ok_or_else(|| t("tool.build.clickFace")),
         PickKind::Area => {}
         _ => {
             if ty(doc, id) == "hole" && target.field == "face" && entries(doc, id, "points").is_empty() {
@@ -255,12 +256,12 @@ pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<V
             return Ok(value);
         }
     }
-    let sketch = value.get("sketch").and_then(Value::as_str).ok_or("Click inside a closed sketch area")?.to_string();
+    let sketch = value.get("sketch").and_then(Value::as_str).ok_or_else(|| t("tool.build.clickArea"))?.to_string();
     let point = value.get("point").cloned().unwrap_or_default();
     match ty(doc, id).to_string().as_str() {
         "loft" => {
             if entries(doc, id, "profiles").iter().any(|p| p["sketch"] == json!(sketch)) {
-                return Err("Pick one profile of each sketch".into());
+                return Err(t("tool.build.oneProfileEach"));
             }
             Ok(json!({"sketch": sketch, "region": point}))
         }
@@ -277,7 +278,7 @@ pub fn placed(doc: &mut Doc, id: &str, target: Target, value: Value) -> Result<V
         kind => {
             let had = feature(doc, id).and_then(|f| f.get("sketch")).and_then(Value::as_str).map(str::to_string);
             if had.as_deref().is_some_and(|h| h != sketch) && !entries(doc, id, target.field).is_empty() {
-                return Err("Pick areas of one sketch".into());
+                return Err(t("tool.build.oneSketch"));
             }
             if had.as_deref() != Some(sketch.as_str()) {
                 set(doc, id, "sketch", json!(sketch));
@@ -322,7 +323,7 @@ fn plane_placed(doc: &mut Doc, id: &str, value: Value) -> Value {
 /// Why `pick` cannot go in `field` before anything is written: a revolve axis edge must be straight.
 pub fn fits(doc: &Doc, id: &str, field: &str, pick: &Pick) -> Result<(), String> {
     match (ty(doc, id), field) {
-        ("revolve", "axisEdge") if edge_axis(pick).is_none() => Err(STRAIGHT.into()),
+        ("revolve", "axisEdge") if edge_axis(pick).is_none() => Err(t(STRAIGHT)),
         _ => Ok(()),
     }
 }
@@ -353,8 +354,8 @@ pub fn then(doc: &Doc, id: &str, field: &str) -> Option<&'static str> {
 /// What OK waits for beyond the needed fields.
 pub fn short(doc: &Doc, id: &str) -> Option<String> {
     match ty(doc, id) {
-        "loft" if entries(doc, id, "profiles").len() < 2 => Some("Pick two profiles first".into()),
-        "sweep" if super::empty(feature(doc, id)?, "path") => Some("Draw a path sketch first".into()),
+        "loft" if entries(doc, id, "profiles").len() < 2 => Some(t("tool.build.twoProfiles")),
+        "sweep" if super::empty(feature(doc, id)?, "path") => Some(t("tool.build.needPath")),
         _ => None,
     }
 }

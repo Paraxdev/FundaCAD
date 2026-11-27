@@ -34,9 +34,9 @@ pub fn verdict(size: [f64; 3], bed: [f64; 3]) -> String {
     let (fits, scale) = fit(size, bed);
     let bed = label(bed);
     if fits {
-        format!("Fits the {bed} mm bed")
+        crate::i18n::tr!("inspect.bed.fits", bed = bed)
     } else {
         let pct = (scale * 100.0 + 1e-9).floor().max(0.0);
-        format!("Too big for the {bed} mm bed, scale it to {} %", super::spell(pct))
+        crate::i18n::tr!("inspect.bed.tooBig", bed = bed, pct = super::spell(pct))
     }
 }

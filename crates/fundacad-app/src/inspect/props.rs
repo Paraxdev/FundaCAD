@@ -4,6 +4,7 @@
 use glam::DVec3;
 
 use super::{spell, spell_xyz, Row};
+use crate::i18n::{t, tr};
 use crate::viewport::scene::Body;
 
 #[cfg(test)]
@@ -65,22 +66,22 @@ pub fn rows(p: &Props, solid: bool) -> Vec<Row> {
     let row = |k: &str, v: String| (k.to_string(), v);
     let mut out = Vec::new();
     if solid {
-        out.push(row("Volume", format!("{} mm³", spell(p.volume))));
+        out.push(row(&t("properties.volume"), format!("{} mm³", spell(p.volume))));
     }
-    out.push(row("Surface area", format!("{} mm²", spell(p.area))));
+    out.push(row(&t("properties.area"), format!("{} mm²", spell(p.area))));
     if solid {
-        out.push(row("Center of mass", spell_xyz(p.com.to_array())));
+        out.push(row(&t("properties.centerOfMass"), spell_xyz(p.com.to_array())));
     }
     let [w, d, h] = p.size().map(spell);
-    out.push(row("Bounding box", format!("{w} × {d} × {h} mm")));
+    out.push(row(&t("properties.boundingBox"), format!("{w} × {d} × {h} mm")));
     out
 }
 
 /// The card's title: the one body's name, how many are selected, or all of them.
 pub fn title(selected: &[String]) -> String {
     match selected {
-        [] => "All bodies".into(),
+        [] => t("properties.allBodies"),
         [one] => one.clone(),
-        many => format!("{} bodies", many.len()),
+        many => tr!("properties.bodies", n = many.len()),
     }
 }

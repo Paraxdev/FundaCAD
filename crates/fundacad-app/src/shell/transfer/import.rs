@@ -62,7 +62,7 @@ impl Shell {
                 None
             } else {
                 let units = unit_choices(prefs().import_unit);
-                let question = format!("Which unit is {} in? The file does not say reliably.", asking.join(", "));
+                let question = tr!("import.unit.which", names = asking.join(", "));
                 let choices = units
                     .iter()
                     .enumerate()
@@ -91,7 +91,7 @@ impl Shell {
         let Some(link) = self.transfer_link(cx) else { return };
         let label = match paths.as_slice() {
             [one] => tr!("import.busy", name = base_name(one)),
-            many => format!("Importing {} files", many.len()),
+            many => tr!("import.busyMany", n = many.len()),
         };
         let (token, stop) = self.set_busy(label, link.client.clone(), window, cx);
         cx.spawn_in(window, async move |this, cx| {
@@ -109,26 +109,26 @@ impl Shell {
                     Ok(reply) => reply,
                     Err(r) if r.cancelled => break,
                     Err(r) => {
-                        failed.push(format!("{}: {}", base_name(&path), r.message));
+                        failed.push(tr!("import.failed", name = base_name(&path), error = r.message));
                         continue;
                     }
                 };
                 match this.update(cx, |s, cx| s.add_imported(&reply, format, &path, cx)) {
                     Ok(Ok(_)) => added += 1,
-                    Ok(Err(e)) => failed.push(format!("{}: {e}", base_name(&path))),
+                    Ok(Err(e)) => failed.push(tr!("import.failed", name = base_name(&path), error = e)),
                     Err(_) => return,
                 }
             }
             let _ = this.update_in(cx, |s, w, cx| {
                 s.end_busy(token, w, cx);
                 if added > 0 {
-                    overlay::toast(cx, Toast::info(format!("Imported {added} file(s).")));
+                    overlay::toast(cx, Toast::info(tr!("import.doneFiles", n = added)));
                 }
                 if stop.is_set() {
-                    overlay::toast(cx, Toast::info("Import cancelled."));
+                    overlay::toast(cx, Toast::info(tr!("import.stopped")));
                 }
                 for f in failed {
-                    overlay::toast(cx, Toast::error(format!("The import failed, {f}")));
+                    overlay::toast(cx, Toast::error(f));
                 }
             });
         })
@@ -143,11 +143,11 @@ impl Shell {
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let features = {
-            let doc = self.viewport.read(cx).doc().ok_or("no document is open")?;
+            let doc = self.viewport.read(cx).doc().ok_or_else(|| tr!("field.problem.noDocument"))?;
             import_features(reply, format, path, &feature_ids(doc))
         };
         if features.is_empty() {
-            return Err("the file has no geometry".into());
+            return Err(tr!("import.noGeometry"));
         }
         self.viewport.update(cx, |v, cx| v.edit(move |d| append_features(d, &features), cx)).map(|_| ())
     }
@@ -158,12 +158,10 @@ impl Shell {
         cx.spawn_in(window, async move |this, cx| {
             let Some(path) = pick.await.into_iter().next() else { return };
             if link.path.as_deref().is_some_and(|own| same_path(&path, &own.to_string_lossy())) {
-                let _ =
-                    cx.update(|_, cx| overlay::toast(cx, Toast::error(tr!("insert.intoItself"))));
+                let _ = cx.update(|_, cx| overlay::toast(cx, Toast::error(tr!("insert.intoItself"))));
                 return;
             }
-            let question =
-                format!("How should {} come in? It becomes one body built from its own history.", base_name(&path));
+            let question = tr!("insert.ask", name = base_name(&path));
             let choices = vec![
                 Choice::primary(tr!("insert.append")).hint(tr!("insert.appendHint")),
                 Choice::plain(tr!("insert.link")).hint(tr!("insert.linkHint")),
@@ -182,7 +180,8 @@ impl Shell {
 
     fn run_insert(&mut self, path: String, mode: InsertMode, window: &mut Window, cx: &mut Context<Self>) {
         let Some(link) = self.transfer_link(cx) else { return };
-        let (token, stop) = self.set_busy(format!("Inserting {}", base_name(&path)), link.client.clone(), window, cx);
+        let (token, stop) =
+            self.set_busy(tr!("insert.busy.inserting", name = base_name(&path)), link.client.clone(), window, cx);
         cx.spawn_in(window, async move |this, cx| {
             let (client, blob_dir, read, task) =
                 (link.client.clone(), link.blob_dir.clone(), path.clone(), stop.clone());
@@ -192,7 +191,7 @@ impl Shell {
                 let baked = baked.and_then(|b| if stop.is_set() { Err(stopped()) } else { Ok(b) });
                 let added = baked.map_err(|e| insert_error_text(&e)).and_then(|(text, stat, baked)| {
                     let feature = {
-                        let doc = s.viewport.read(cx).doc().ok_or(Some("no document is open".to_owned()))?;
+                        let doc = s.viewport.read(cx).doc().ok_or_else(|| Some(tr!("field.problem.noDocument")))?;
                         let id = free_ids(feature_ids(doc), 1).remove(0);
                         insert_feature(&id, &Source { path: &path, text: &text, stat }, mode, &baked)
                     };
@@ -206,7 +205,7 @@ impl Shell {
                         overlay::toast(cx, Toast::info(tr!(key, name = base_name(&path))));
                     }
                     Err(Some(why)) => overlay::toast(cx, Toast::error(why)),
-                    Err(None) => overlay::toast(cx, Toast::info("Insert cancelled.")),
+                    Err(None) => overlay::toast(cx, Toast::info(tr!("insert.cancelled"))),
                 }
             });
         })
@@ -229,9 +228,9 @@ impl Shell {
         let refresh = refreshable(&stale);
         let mut choices = Vec::new();
         if !refresh.is_empty() {
-            choices.push(Choice::primary("Refresh").hint("Reads the changed files again"));
+            choices.push(Choice::primary(tr!("insert.refresh")).hint(tr!("insert.refreshHint")));
         }
-        choices.push(Choice::danger(tr!("history.menu.unlink")).hint("Keeps the bodies, forgets the files"));
+        choices.push(Choice::danger(tr!("history.menu.unlink")).hint(tr!("insert.unlinkHint")));
         choices.push(Choice::plain(tr!("updates.later")));
         let unlink_at = choices.len() - 2;
         let asked = overlay::confirm(window, cx, stale_summary(&stale), choices);
@@ -267,7 +266,7 @@ impl Shell {
         let Some(doc) = self.viewport.read(cx).doc() else { return };
         let targets: Vec<(String, String)> =
             ids.into_iter().filter_map(|id| Some((link_path(doc, &id)?, id))).collect();
-        let (token, stop) = self.set_busy("Refreshing linked files", link.client.clone(), window, cx);
+        let (token, stop) = self.set_busy(tr!("insert.busy.refreshing"), link.client.clone(), window, cx);
         cx.spawn_in(window, async move |this, cx| {
             let (mut done, mut failed) = (0, Vec::new());
             for (path, id) in targets {
@@ -296,13 +295,10 @@ impl Shell {
             let _ = this.update_in(cx, |s, w, cx| {
                 s.end_busy(token, w, cx);
                 if stop.is_set() {
-                    overlay::toast(cx, Toast::info("Refresh cancelled."));
+                    overlay::toast(cx, Toast::info(tr!("insert.refreshCancelled")));
                 }
                 if done > 0 {
-                    overlay::toast(
-                        cx,
-                        Toast::info(format!("Refreshed {done} linked bod{}.", if done == 1 { "y" } else { "ies" })),
-                    );
+                    overlay::toast(cx, Toast::info(tr!("insert.refreshed", n = done)));
                 }
                 for f in failed {
                     overlay::toast(cx, Toast::error(f));

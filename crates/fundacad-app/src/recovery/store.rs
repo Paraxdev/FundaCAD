@@ -190,7 +190,7 @@ pub fn question(envelope: &Envelope, now_ms: u64) -> String {
         .source
         .as_deref()
         .and_then(Path::file_name)
-        .map_or_else(|| "an unsaved document".to_owned(), |n| n.to_string_lossy().into_owned());
+        .map_or_else(|| crate::i18n::t("recovery.unsavedDocument"), |n| n.to_string_lossy().into_owned());
     let age = (now_ms.saturating_sub(envelope.saved_at) as f64 / 60_000.0).round().max(1.0) as u64;
-    format!("Recover unsaved work? ({from}, ~{age} min old)")
+    crate::i18n::tr!("recovery.ask", from = from, age = age)
 }

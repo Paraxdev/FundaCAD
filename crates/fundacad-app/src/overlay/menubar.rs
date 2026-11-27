@@ -8,7 +8,7 @@ use gpui::*;
 use super::menu::{At, OpenMenu};
 use super::{handle, MenuItem, MenuRow, Overlay};
 use crate::files;
-use crate::i18n::tr;
+use crate::i18n::{t, tr};
 use crate::theme::{Theme, FS_BODY, S_4};
 use crate::ui::text;
 
@@ -36,7 +36,7 @@ fn item(cx: &App, id: &str) -> MenuRow {
 fn recent_rows(cx: &App) -> Vec<MenuRow> {
     let list = files::recent::list(cx);
     if list.is_empty() {
-        return vec![MenuRow::Item(MenuItem::call("No recent files", |_, _| {}).disabled(true))];
+        return vec![MenuRow::Item(MenuItem::call(t("menu.file.noRecent"), |_, _| {}).disabled(true))];
     }
     let mut rows: Vec<MenuRow> = list
         .into_iter()
@@ -48,7 +48,7 @@ fn recent_rows(cx: &App) -> Vec<MenuRow> {
         })
         .collect();
     rows.push(MenuRow::Separator);
-    rows.push(MenuRow::Item(MenuItem::call("Clear Recent", |_, cx| files::recent::clear(cx))));
+    rows.push(MenuRow::Item(MenuItem::call(t("menu.file.clearRecent"), |_, cx| files::recent::clear(cx))));
     rows
 }
 
@@ -59,7 +59,7 @@ pub fn menus(cx: &App) -> [Vec<MenuRow>; 4] {
         vec![
             item(cx, "new"),
             item(cx, "open").label_more(),
-            MenuRow::Submenu { label: "Open Recent".into(), rows: recent_rows(cx) },
+            MenuRow::Submenu { label: t("menu.file.openRecent").into(), rows: recent_rows(cx) },
             MenuRow::Separator,
             item(cx, "save"),
             item(cx, "save-as").label_more(),

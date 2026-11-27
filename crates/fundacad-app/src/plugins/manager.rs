@@ -4,6 +4,7 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use crate::commands::Group;
+use crate::i18n::{self, tr, Label};
 use crate::theme::{ActiveTheme as _, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
 
@@ -16,7 +17,7 @@ pub fn install(_window: &mut Window, cx: &mut App) -> AnyView {
     let open = std::env::var("FUNDA_PANEL").is_ok_and(|p| p == "plugins");
     let view = cx.new(|_| Manager { open });
     let v = view.clone();
-    crate::commands::register(cx, "plugins", "Plugins", Group::Tools, move |_, cx| {
+    crate::commands::register(cx, "plugins", Label::Key("plugins.command"), Group::Tools, move |_, cx| {
         v.update(cx, |m, cx| {
             m.open = !m.open;
             cx.notify();
@@ -48,12 +49,12 @@ impl Manager {
         let on = super::enabled(cx, &m.id);
         let id = m.id.clone();
         let origin = match (f.native, &f.dir) {
-            (true, _) => "Bundled",
-            (false, _) => "Installed",
+            (true, _) => i18n::t("plugins.origin.bundled"),
+            (false, _) => i18n::t("plugins.origin.installed"),
         };
         let mut info = vec![format!("{origin} \u{b7} {} \u{b7} v{}", m.kind, m.version)];
         if !m.grants.is_empty() {
-            info.push(format!("May use {}", m.grants.join(", ")));
+            info.push(tr!("plugins.mayUse", grants = m.grants.join(", ")));
         }
         info.extend(f.engine_part());
         div()
@@ -97,16 +98,14 @@ impl Render for Manager {
             .flex()
             .items_center()
             .justify_between()
-            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.accent_hot).child("Plugins"))
+            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).text_color(t.accent_hot).child(i18n::t("plugins.title")))
             .child(icon_button(t, "plugins-close", "close", 28., 14., t.text_mute).on_click(cx.listener(
                 |this, _, _, cx| {
                     this.open = false;
                     cx.notify();
                 },
             )));
-        let note = text(t, FS_MICRO).text_color(t.text_dim).mt(px(S_1)).child(
-            "A plugin switched off keeps its data in the document, a design that uses it still builds.",
-        );
+        let note = text(t, FS_MICRO).text_color(t.text_dim).mt(px(S_1)).child(i18n::t("plugins.offKeepsData"));
         div()
             .absolute()
             .size_full()

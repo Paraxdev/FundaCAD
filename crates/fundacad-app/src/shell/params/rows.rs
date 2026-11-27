@@ -5,6 +5,7 @@ use serde_json::{Map, Value};
 
 use super::super::history::format_value;
 use crate::document::meta;
+use crate::i18n::tr;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Row {
@@ -53,9 +54,9 @@ pub fn drives(features: &[Value], target: &Value) -> String {
     let s = |k: &str| target.get(k).and_then(Value::as_str).unwrap_or_default();
     match s("kind") {
         "feature" => format!("{} \u{b7} {}", feature_name(features, s("feature")), s("field")),
-        "constraint" => format!("dimension in {}", feature_name(features, s("sketch"))),
-        "entity" => format!("{} in {}", s("field"), feature_name(features, s("sketch"))),
-        "pattern" => format!("pattern {} in {}", s("field"), feature_name(features, s("sketch"))),
+        "constraint" => tr!("params.drives.dimension", feature = feature_name(features, s("sketch"))),
+        "entity" => tr!("params.drives.field", field = s("field"), feature = feature_name(features, s("sketch"))),
+        "pattern" => tr!("params.drives.pattern", field = s("field"), feature = feature_name(features, s("sketch"))),
         other => other.to_owned(),
     }
 }
@@ -79,9 +80,10 @@ pub fn rows(doc: &Map<String, Value>) -> Rows {
             unit: s("unit"),
             comment: s("comment"),
             drives: target.map(|t| drives(features, t)),
-            issue: issues.get(name).cloned().or_else(|| {
-                target.filter(|t| !target_resolves(features, t)).map(|_| edit::TARGET_GONE.to_owned())
-            }),
+            issue: issues
+                .get(name)
+                .cloned()
+                .or_else(|| target.filter(|t| !target_resolves(features, t)).map(|_| edit::TARGET_GONE.to_owned())),
         };
         if target.is_some() {
             out.model.push(row);

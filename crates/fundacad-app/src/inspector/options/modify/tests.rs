@@ -16,17 +16,17 @@ fn c(value: &str, label: &str) -> Choice {
 
 fn keep(current: &str) -> Row {
     let options = vec![c("both", "Both"), c("top", "Top"), c("bottom", "Bottom")];
-    Row::Choice(ChoiceRow { field: "keep", label: "Keep", options, current: current.into() })
+    Row::Choice(ChoiceRow { field: "keep", label: "field.keep", options, current: current.into() })
 }
 
 fn plane(mut extra: Vec<Choice>, current: &str) -> Row {
     let mut options = vec![c("XY", "XY"), c("XZ", "XZ"), c("YZ", "YZ")];
     options.append(&mut extra);
-    Row::Choice(ChoiceRow { field: "plane", label: "Plane", options, current: current.into() })
+    Row::Choice(ChoiceRow { field: "plane", label: "field.plane", options, current: current.into() })
 }
 
 fn bodies(text: &str, empty: bool) -> Row {
-    Row::Target { label: "Bodies", text: text.into(), empty }
+    Row::Target { label: "selectionTarget.bodies", text: text.into(), empty }
 }
 
 fn split_doc(split: Value) -> Map<String, Value> {
@@ -71,7 +71,7 @@ fn choosing_a_split_plane_swaps_plane_and_plane_id() {
 #[test]
 fn copy_turns_a_move_into_a_duplicate_and_back() {
     let mut d = doc(json!([{"id": "f2", "type": "move", "dx": 12.5, "rz": -30, "bodies": ["f1"]}]));
-    let toggle = |on| Row::Toggle { field: "copy", label: "Copy", on };
+    let toggle = |on| Row::Toggle { field: "copy", label: "field.copy", on };
     assert_eq!(plain(&d, "f2"), vec![bodies("1 body", false), toggle(false)]);
     set_option(&mut d, "f2", "copy", &json!(true)).unwrap();
     assert_eq!(d["features"][0], json!({"id": "f2", "type": "duplicate", "dx": 12.5, "rz": -30, "bodies": ["f1"]}));

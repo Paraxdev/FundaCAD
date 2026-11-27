@@ -38,13 +38,13 @@ use gpui::*;
 fn main() {
     diag::start();
     let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
-    let doc = document::Document::named(files::shown_name(path.as_deref()));
-    let title: SharedString = files::window_title(&doc.name, false).into();
 
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
         settings::init(cx);
         i18n::init(cx);
+        let doc = document::Document::named(files::shown_name(path.as_deref()));
+        let title: SharedString = files::window_title(&doc.name, false).into();
         let mut settings = prefs::theme_settings();
         // FUNDA_THEME=<palette id> overrides the stored theme, for the light capture.
         if let Ok(id) = std::env::var("FUNDA_THEME") {

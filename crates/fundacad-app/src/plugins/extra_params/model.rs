@@ -9,6 +9,8 @@ use fundacad_client::Doc;
 use fundacad_core::params::edit::{check_expr, defs_of, set_param_expr};
 use serde_json::{json, Map, Value};
 
+use crate::i18n::{t, tr};
+
 pub const KINDS: [&str; 4] = ["number", "slider", "toggle", "choice"];
 
 #[derive(Clone, Debug, PartialEq)]
@@ -157,14 +159,14 @@ pub fn control_problem(def: &Value) -> Option<String> {
         return None;
     }
     Some(match &c {
-        Control::Toggle => "a toggle is 0 or 1".into(),
-        Control::Choice(_) => "not one of the listed choices".into(),
+        Control::Toggle => t("extraParams.problem.toggle"),
+        Control::Choice(_) => t("extraParams.problem.choice"),
         _ => {
             let (min, max, step) = c.range();
             match (min, max) {
-                (Some(m), _) if value < m => format!("below the minimum of {}", spell(m)),
-                (_, Some(m)) if value > m => format!("above the maximum of {}", spell(m)),
-                _ => format!("not on a step of {}", step.map(spell).unwrap_or_default()),
+                (Some(m), _) if value < m => tr!("extraParams.problem.belowMin", min = spell(m)),
+                (_, Some(m)) if value > m => tr!("extraParams.problem.aboveMax", max = spell(m)),
+                _ => tr!("extraParams.problem.offStep", step = step.map(spell).unwrap_or_default()),
             }
         }
     })
@@ -197,7 +199,7 @@ pub fn check_results(doc: &Doc) -> Vec<CheckResult> {
     extras(doc, "checks")
         .map(|c| {
             let (ok, error) = match check_expr(doc, None, s(c, "expr")) {
-                Ok(v) if v.is_nan() => (false, Some("does not evaluate to a number".to_owned())),
+                Ok(v) if v.is_nan() => (false, Some(t("extraParams.problem.notNumber"))),
                 Ok(v) => (v != 0.0, None),
                 Err(e) => (false, Some(e)),
             };
@@ -444,7 +446,7 @@ pub fn apply_configuration(doc: &mut Doc, id: &str) -> Result<(), String> {
     for (param, expr) in cfg.get("values").and_then(Value::as_object).into_iter().flatten() {
         let expr = expr.as_str().unwrap_or_default();
         if defs_of(&draft).is_none_or(|d| !d.contains_key(param)) {
-            return Err(format!("{name}: there is no parameter \"{param}\" any more"));
+            return Err(tr!("extraParams.config.paramGone", name = &name, param = param));
         }
         check_expr(&draft, Some(param), expr).map_err(|e| format!("{name}: {param} = {expr}: {e}"))?;
         set_param_expr(&mut draft, param, expr).map_err(|e| format!("{name}: {param} = {expr}: {e}"))?;

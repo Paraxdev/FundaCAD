@@ -4,6 +4,7 @@
 use serde_json::{json, Map, Value};
 
 use super::spell;
+use crate::i18n::{t, tr};
 
 #[cfg(test)]
 mod tests;
@@ -52,14 +53,14 @@ pub struct Report {
 
 /// The kinds a check can find, with the words and the tint the legend gives them.
 pub const KINDS: &[(&str, &str, u32)] = &[
-    ("overhang", "Overhang", 0xe24a3b),
-    ("wall", "Thin wall", 0xe2963b),
-    ("floor", "Thin floor", 0xe2c23b),
-    ("gap", "Narrow gap", 0xa45ee2),
-    ("fused", "Gap fuses", 0xd25ec4),
-    ("bridge", "Long bridge", 0x3bb6e2),
-    ("meshHole", "Open shell", 0x8a8f98),
-    ("flatTriangle", "Flat triangle", 0x8a8f98),
+    ("overhang", "tool.overhang", 0xe24a3b),
+    ("wall", "inspect.finding.wall", 0xe2963b),
+    ("floor", "inspect.finding.floor", 0xe2c23b),
+    ("gap", "inspect.finding.gap", 0xa45ee2),
+    ("fused", "inspect.finding.fused", 0xd25ec4),
+    ("bridge", "inspect.finding.bridge", 0x3bb6e2),
+    ("meshHole", "inspect.finding.meshHole", 0x8a8f98),
+    ("flatTriangle", "inspect.finding.flatTriangle", 0x8a8f98),
 ];
 
 fn num(v: &Value, k: &str) -> f64 {
@@ -72,7 +73,7 @@ fn text<'a>(v: &'a Value, k: &str) -> &'a str {
 
 fn finding(f: &Value, bed: f64, name_of: &dyn Fn(&str) -> String) -> Finding {
     let kind = text(f, "kind");
-    let (label, rgb) = KINDS.iter().find(|k| k.0 == kind).map_or((kind, 0x8a8f98), |k| (k.1, k.2));
+    let (label, rgb) = KINDS.iter().find(|k| k.0 == kind).map_or((kind.to_string(), 0x8a8f98), |k| (t(k.1), k.2));
     let size = match kind {
         "overhang" => Some(format!("{}°, {} mm²", spell(num(f, "value")), spell(num(f, "area")))),
         "wall" | "floor" | "gap" | "fused" | "bridge" => Some(format!("{} mm", spell(num(f, "value")))),
@@ -80,18 +81,18 @@ fn finding(f: &Value, bed: f64, name_of: &dyn Fn(&str) -> String) -> Finding {
     };
     let title = match size {
         Some(s) => format!("{label}, {s}"),
-        None => label.to_string(),
+        None => label,
     };
     let face = num(f, "face") as u32;
     let other = f.get("other").filter(|o| o.is_object());
     let faces = match (other.and_then(|o| o.get("face")).and_then(Value::as_u64), other.map(|o| text(o, "body"))) {
-        (Some(o), Some(b)) if !b.is_empty() && b != text(f, "body") => format!("Face {face}, and face {o} on {}", name_of(b)),
-        (Some(o), _) => format!("Faces {face} and {o}"),
-        (None, _) => format!("Face {face}"),
+        (Some(o), Some(b)) if !b.is_empty() && b != text(f, "body") => tr!("inspect.finding.facesOn", face = face.to_string(), other = o.to_string(), body = name_of(b)),
+        (Some(o), _) => tr!("inspect.finding.faces", face = face.to_string(), other = o.to_string()),
+        (None, _) => tr!("inspect.finding.face", face = face.to_string()),
     };
     let z = f.get("at").and_then(Value::as_array).and_then(|a| a.get(2)).and_then(Value::as_f64).unwrap_or(bed);
     let height = if kind == "overhang" { num(f, "low") } else { z - bed };
-    let mut place = format!("{faces}, {} mm above the bed", spell(height));
+    let mut place = tr!("inspect.finding.place", faces = faces, height = spell(height));
     if !text(f, "note").is_empty() {
         place = format!("{place}. {}", text(f, "note"));
     }
@@ -124,9 +125,5 @@ pub fn read(reply: &Map<String, Value>) -> Report {
 
 pub fn summary(r: &Report) -> String {
     let n: usize = r.bodies.iter().map(|(_, f)| f.len()).sum::<usize>() + r.faults.len();
-    match n {
-        0 => "Nothing to look at".into(),
-        1 => "1 thing to look at".into(),
-        n => format!("{n} things to look at"),
-    }
+    tr!("inspect.print.summary", n = n)
 }

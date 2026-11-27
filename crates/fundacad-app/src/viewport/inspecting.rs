@@ -153,13 +153,13 @@ impl Viewport {
     pub fn set_isolate(&mut self, keep: Option<Vec<String>>, cx: &mut Context<Self>) {
         let eyes = self.body_eyes();
         let (changes, label) = match &keep {
-            Some(keep) => (items::show_only(&eyes, keep), "Isolate"),
-            None => (items::all(eyes.into_keys(), true), "Show All Bodies"),
+            Some(keep) => (items::show_only(&eyes, keep), "rail.isolate"),
+            None => (items::all(eyes.into_keys(), true), "command.showAllBodies"),
         };
         self.inspect.isolate = keep;
         let edited = self.edit_step(
             None,
-            Some(label.into()),
+            Some(crate::i18n::t(label)),
             move |d| items::set_visibility(d, items::Category::Bodies, &changes, &Default::default()),
             cx,
         );
@@ -222,7 +222,7 @@ impl Viewport {
     /// Runs an engine check for `card` off the UI thread, a later one replacing it.
     pub fn ask(&mut self, card: Card, op: &'static str, fields: Map<String, Value>, cx: &mut Context<Self>) {
         let Some(client) = self.session.as_ref().map(|s| s.client.clone()) else {
-            self.inspect.asked = Some((card, Asked::Failed("Open a document first".into())));
+            self.inspect.asked = Some((card, Asked::Failed(crate::i18n::t("tool.openDocumentFirst"))));
             return cx.notify();
         };
         self.inspect.ticket += 1;

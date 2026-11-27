@@ -2231,7 +2231,7 @@
   "sketch.name.between": "{subjects}の間の{label}",
   "sketch.name.construction": "補助線",
   "sketch.name.edge": "{name} の辺 {n}",
-  "sketch.name.entity": "{kind, select, line {線 {n}} rectangle {長方形 {n}} circle {円 {n}} arc {円弧 {n}} spline {スプライン {n}} bspline {制御点スプライン {n}} point {点 {n}} polygon {多角形 {n}} slot {長穴 {n}} text {テキスト {n}} projected {参照 {n}} other {{kind} {n}}}",
+  "sketch.name.entity": "{kind, select, line {線 {n}} rectangle {長方形 {n}} circle {円 {n}} arc {円弧 {n}} spline {スプライン {n}} bspline {制御点スプライン {n}} point {点 {n}} polygon {多角形 {n}} slot {長穴 {n}} text {テキスト {n}} projected {参照 {n}} other {{name} {n}}}",
   "sketch.name.of": "{subject}の{label}",
   "sketch.name.row": "{name}、{n} 行目",
   "sketch.name.state": "{word, select, conflicting {競合} redundant {冗長} reference {参照} other {暗黙}}",

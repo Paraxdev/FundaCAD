@@ -315,14 +315,23 @@ fn target_text(f: Value, label: &str) -> String {
 
 #[test]
 fn targets_are_counted_or_worded() {
-    assert_eq!(target_text(json!({ "id": "f", "type": "fillet", "edges": [{ "by": "all" }] }), "Edges"), "every edge");
+    assert_eq!(
+        target_text(json!({ "id": "f", "type": "fillet", "edges": [{ "by": "all" }] }), "selectionTarget.edges"),
+        "every edge"
+    );
     let edges = json!([{ "e": 1 }, { "e": 2 }, { "by": "tangentChain" }]);
     assert_eq!(
-        target_text(json!({ "id": "f", "type": "fillet", "edges": edges }), "Edges"),
+        target_text(json!({ "id": "f", "type": "fillet", "edges": edges }), "selectionTarget.edges"),
         "2 edges, 1 tangent chain"
     );
-    assert_eq!(target_text(json!({ "id": "b", "type": "boolean", "target": "body1" }), "Body kept"), "1 body");
-    assert_eq!(target_text(json!({ "id": "s", "type": "shell", "faces": [] }), "Faces to open"), "sealed hollow");
+    assert_eq!(
+        target_text(json!({ "id": "b", "type": "boolean", "target": "body1" }), "selectionTarget.bodyKept"),
+        "1 body"
+    );
+    assert_eq!(
+        target_text(json!({ "id": "s", "type": "shell", "faces": [] }), "selectionTarget.facesToOpen"),
+        "sealed hollow"
+    );
 }
 
 #[test]
@@ -374,8 +383,12 @@ fn the_box_with_lid_cavity_shows_its_choices_switches_and_numbers() {
     let file: Value = serde_json::from_str(include_str!("../../../../examples/templates/box-with-lid.funda")).unwrap();
     let d = obj(file);
     let r = rows(&d, "cavity", &[]);
-    assert!(r.contains(&Row::Target { label: "Profile", text: "the whole sketch".into(), empty: true }));
-    assert!(r.contains(&Row::Target { label: "Bodies acted on", text: "1 body".into(), empty: false }));
+    assert!(r.contains(&Row::Target {
+        label: "selectionTarget.profile",
+        text: "the whole sketch".into(),
+        empty: true
+    }));
+    assert!(r.contains(&Row::Target { label: "selectionTarget.actsOn", text: "1 body".into(), empty: false }));
     assert_eq!(choice(&r, "operation").current, "cut");
     assert_eq!(choice(&r, "startType").current, "offset");
     assert_eq!(choice(&r, "endType").current, "throughAll");

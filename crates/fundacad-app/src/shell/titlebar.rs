@@ -58,7 +58,7 @@ impl Shell {
                     .rounded(px(R_SM))
                     .bg(t.panel_2)
                     .text_color(t.text_dim)
-                    .child("SOLID"),
+                    .child(crate::i18n::t("shell.context.solid")),
             )
             .child(
                 text(t, FS_SMALL)
@@ -90,7 +90,7 @@ impl Shell {
                 .text_color(if on { t.accent_hot } else { t.text_dim })
                 .when(on, |d| d.bg(t.accent_wash))
                 .child(icon(glyph, 12., if on { t.accent_hot } else { t.text_dim }))
-                .child(label)
+                .child(crate::i18n::t(label))
         };
         div()
             .flex()
@@ -100,8 +100,8 @@ impl Shell {
             .bg(t.field_bg)
             .border_1()
             .border_color(t.control_edge)
-            .child(segment("primitive", "Model", true))
-            .child(segment("sync", "Render", false))
+            .child(segment("primitive", "shell.main", true))
+            .child(segment("sync", "render.dock.label", false))
     }
 }
 
@@ -113,7 +113,7 @@ fn doc_menu(cx: &App) -> Vec<crate::overlay::MenuRow> {
     rows.push(MenuRow::Separator);
     let missing = path.is_none();
     rows.push(MenuRow::Item(
-        MenuItem::call("Show in Folder", move |_, cx| {
+        MenuItem::call(crate::i18n::t("files.showInFolder"), move |_, cx| {
             if let Some(p) = &path {
                 cx.reveal_path(p);
             }

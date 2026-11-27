@@ -4,6 +4,7 @@ use serde_json::{Map, Value};
 
 use super::labels::type_label;
 use super::{features, id_of, ops};
+use crate::i18n::{t, tr};
 use crate::viewport::FeatureIssue;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -52,27 +53,27 @@ fn file_of(f: &Map<String, Value>) -> Option<String> {
 }
 
 /// FundaCAD 1's hintPlain, until a double click opens the inspector and hintEdit applies.
-pub const HINT: &str = "click to select · right-click for more";
+pub const HINT: &str = "history.chip.hintPlain";
 
 /// The tooltip of row `i`: its place and type, then each mark as a line, then the hint.
 pub fn tooltip(f: &Map<String, Value>, i: usize, m: &Marks) -> String {
     let mut lines = vec![format!("{} · {}", i + 1, type_label(f))];
     if let Some(file) = &m.file {
-        lines.push(format!("File: {file}"));
+        lines.push(tr!("history.chip.file", name = file));
     }
     match (&m.failed, &m.warning) {
-        (Some(why), _) => lines.push(format!("Failed: {why}")),
-        (None, Some(why)) if m.advisory => lines.push(format!("Note: {why}")),
-        (None, Some(why)) => lines.push(format!("Warning: {why}")),
+        (Some(why), _) => lines.push(tr!("history.chip.failed", message = why)),
+        (None, Some(why)) if m.advisory => lines.push(tr!("history.chip.note", message = why)),
+        (None, Some(why)) => lines.push(tr!("history.chip.warning", message = why)),
         (None, None) => {}
     }
     if m.suppressed {
-        lines.push("Suppressed".into());
+        lines.push(t("history.chip.suppressed"));
     }
     if let Some(note) = &m.note {
-        lines.push(format!("Your note: {note}"));
+        lines.push(tr!("history.chip.yourNote", note = note));
     }
-    lines.push(HINT.into());
+    lines.push(t(HINT));
     lines.join("\n")
 }
 

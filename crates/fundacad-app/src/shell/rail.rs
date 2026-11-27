@@ -7,6 +7,27 @@ use crate::ui::{chip, icon, text, tile};
 const GAP: f32 = 6.;
 const SEP: f32 = 4.;
 
+/// The labels stay English, the family callback matches on them.
+fn spoken(label: &str) -> String {
+    let key = match label {
+        "Search" => "rail.search",
+        "Sketch" => "tool.sketch",
+        "Create" => "tool.group.create",
+        "Modify" => "tool.group.modify",
+        "Construct" => "tool.group.construct",
+        "Inspect" => "tool.group.inspect",
+        "Insert" => "tool.group.insert",
+        "Print" => "rail.print",
+        "Isolate" => "rail.isolate",
+        "Section View" => "rail.sectionView",
+        "Measure" => "tool.measure",
+        "Off" => "rail.off",
+        "On" => "rail.on",
+        other => return other.to_owned(),
+    };
+    crate::i18n::t(key)
+}
+
 struct Entry {
     glyph: &'static str,
     label: &'static str,
@@ -114,12 +135,12 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on: Option<bool>, on_cl
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).line_height(px(16.)).child(e.label))
+                .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).line_height(px(16.)).child(spoken(e.label)))
                 .when(!e.keys.is_empty(), |d| d.child(div().flex().gap(px(3.)).children(e.keys.iter().map(key)))),
         )
         .when_some(e.sub, |d, sub| {
             let sub = if on == Some(true) { "On" } else { sub };
-            d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(if on == Some(true) { t.accent } else { t.text_mute }).child(sub))
+            d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(if on == Some(true) { t.accent } else { t.text_mute }).child(spoken(sub)))
         });
     let lit = open == Some(e.label) || on == Some(true);
     let row = div().flex().items_center().gap(px(6.)).child(tile.when(lit, |d| d.bg(t.accent_wash))).child(pill);
