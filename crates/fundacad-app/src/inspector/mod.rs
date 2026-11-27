@@ -270,7 +270,8 @@ pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> 
     }
     let left_out = fields::absent_value(&ty, key) == Some(v);
     let next = (!left_out).then(|| crate::document::number(v));
-    if fields::read_field(f, key) == next.as_ref() {
+    let was = fields::read_field(f, key).cloned();
+    if was == next {
         return Ok(());
     }
     if !fields::write_field(f, key, next) {

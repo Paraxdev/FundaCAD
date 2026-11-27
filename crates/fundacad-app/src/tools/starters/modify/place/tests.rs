@@ -46,7 +46,7 @@ fn a_tool_offers_its_plane_or_axis_pick_only_when_the_selection_gave_none() {
 
 #[test]
 fn a_split_cuts_by_the_clicked_face_and_drops_its_datum() {
-    let mut d = doc(json!([{"id": "f1", "type": "box"}, {"id": "f2", "type": "split", "planeId": "f9", "keep": "both"}]));
+    let mut d = doc(json!([{"id": "f1", "type": "box"}, {"id": "f2", "type": "split", "planeId": "f9", "offset": 4, "keep": "both"}]));
     let v = place(&mut d, "f2", "plane", &face([3.0, -2.0, 12.5], [0.0, 0.0, 1.0]), None).unwrap();
     assert_eq!(v, json!({"origin": [3.0, -2.0, 12.5], "normal": [0.0, 0.0, 1.0], "xdir": [1.0, 0.0, 0.0]}));
     assert_eq!(features(&d)[1], json!({"id": "f2", "type": "split", "keep": "both"}));
@@ -99,7 +99,10 @@ fn the_fallback_line_runs_along_a_straight_edge_and_through_the_middle_of_a_roun
         .collect();
     let (mid, dir) = axis_line(&pick, Some(&ring));
     assert!(Vec3::from(mid).distance(Vec3::new(10.0, -4.0, 6.0)) < 1e-4, "{mid:?}");
-    assert!(Vec3::from(dir).distance(Vec3::new(0.0, -1.0, 0.0)) < 1e-4, "{dir:?}");
+    assert!(Vec3::from(dir).distance(Vec3::new(0.0, 1.0, 0.0)) < 1e-4, "{dir:?}");
+    let back: Vec<Vec3> = ring.iter().rev().copied().collect();
+    assert_eq!(axis_line(&pick, Some(&back)).1, dir);
+    assert_eq!(axis_line(&pick, Some(&[slant[1], slant[0]])).1, [0.6, 0.0, 0.8]);
     assert_eq!(axis_line(&pick, None), ([4.0, -1.0, 2.0], [0.0, 0.0, 1.0]));
     assert_eq!(axis_line(&pick, Some(&slant[..1])), ([4.0, -1.0, 2.0], [0.0, 0.0, 1.0]));
     let bump = face([0.5, 0.5, 9.0], [0.0, 1.0, 0.0]);

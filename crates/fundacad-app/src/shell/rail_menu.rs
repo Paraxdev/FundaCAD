@@ -31,7 +31,7 @@ impl Shell {
             .cursor_pointer()
             .hover(move |s| s.bg(hover))
             .child(icon(item.glyph, 16., color).flex_none())
-            .child(text(t, FS_SMALL).flex_1().text_color(color).child(item.label))
+            .child(text(t, FS_SMALL).flex_1().text_color(color).child(crate::i18n::t(item.label)))
             .when_some(key, |d, k| {
                 d.child(
                     div()
@@ -67,7 +67,7 @@ impl Shell {
                             .pt(px(S_2))
                             .font_weight(W_SEMIBOLD)
                             .text_color(t.text_mute)
-                            .child(label.to_uppercase())
+                            .child(crate::i18n::t(label).to_uppercase())
                             .into_any_element(),
                     );
                     rows.extend(children.iter().map(|c| self.tool_row(t, *c, cx)));
@@ -86,7 +86,7 @@ impl Shell {
                 .gap(px(S_0))
                 .occlude()
                 .child(
-                    text(t, FS_SMALL).px(px(S_2)).py(px(S_1)).font_weight(W_SEMIBOLD).child(group.label.to_uppercase()),
+                    text(t, FS_SMALL).px(px(S_2)).py(px(S_1)).font_weight(W_SEMIBOLD).child(crate::i18n::t(group.heading).to_uppercase()),
                 )
                 .children(rows),
         )

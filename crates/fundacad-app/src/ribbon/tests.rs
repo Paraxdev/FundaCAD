@@ -30,3 +30,29 @@ fn every_glyph_is_in_the_icon_pack() {
         .collect();
     assert!(missing.is_empty(), "missing icons: {missing:?}");
 }
+
+#[test]
+fn every_label_is_a_catalog_line_and_a_tool_reads_as_its_table_entry() {
+    let english = |key: &str| crate::i18n::english(key, &[]);
+    let mut keys: Vec<&str> = MODEL.iter().map(|g| g.heading).collect();
+    for g in MODEL {
+        for i in g.items {
+            if let Item::Split { label, .. } = i {
+                keys.push(label);
+            }
+        }
+        keys.extend(leaves(g).iter().map(|t| t.label));
+    }
+    let missing: Vec<&&str> = keys.iter().filter(|k| english(k) == **k).collect();
+    assert!(missing.is_empty(), "no English line: {missing:?}");
+    for item in MODEL.iter().flat_map(leaves) {
+        if let Some(tool) = crate::tools::TOOLS.iter().find(|t| t.id == item.action) {
+            assert_eq!(item.label, tool.label, "{}", item.action);
+        }
+    }
+    let construct = leaves(group("Construct").unwrap());
+    let named = |action: &str| english(construct.iter().find(|t| t.action == action).unwrap().label);
+    assert_eq!(named("plane-points"), "Plane, 3 Pts");
+    assert_eq!(named("plane-two-edges"), "Plane, 2 Edges");
+    assert_eq!(named("axis-planes"), "Axis, 2 Planes");
+}

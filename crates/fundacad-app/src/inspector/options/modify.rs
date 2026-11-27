@@ -36,9 +36,16 @@ pub fn split_plane_choice(f: &Map<String, Value>, features: &[&Map<String, Value
 pub fn split_plane_patch(value: &str) -> Option<Patch> {
     match value {
         "" | PICKED_POINT => None,
-        v if PLANES.iter().any(|(p, _)| *p == v) => Some(vec![("plane".into(), Some(json!(v))), ("planeId".into(), None)]),
-        v => Some(vec![("planeId".into(), Some(json!(v))), ("plane".into(), None)]),
+        v if PLANES.iter().any(|(p, _)| *p == v) => {
+            Some(vec![("plane".into(), Some(json!(v))), ("planeId".into(), None), ("offset".into(), None)])
+        }
+        v => Some(vec![("planeId".into(), Some(json!(v))), ("plane".into(), None), ("offset".into(), None)]),
     }
+}
+
+/// A split's offset follows its datum plane's own, so only a world plane or a picked face takes one.
+pub fn split_takes_offset(f: &Map<String, Value>) -> bool {
+    text(f, "planeId").is_none_or(str::is_empty)
 }
 
 pub fn is_copy(f: &Map<String, Value>) -> bool {

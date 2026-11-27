@@ -131,6 +131,17 @@ fn a_circular_pattern_turns_about_z_or_the_picked_edge_or_face() {
     assert_eq!(s.feature["axis"], json!({"origin": [2.5, 3.0, 7.0], "dir": [0.0, 1.0, 0.0]}));
     assert_eq!(s.feature["axisRef"], sel("face", [2.5, 3.0, 7.0], "f1"));
     assert_eq!(s.feature["bodies"], json!(["f8", "f9"]));
+    let straight = Pick::Edge { body: "f1".into(), edge: 3, mid: [0.0, 6.0, 7.0], dir: Some([-2.0, 0.0, 0.0]) };
+    let s = run("pattern-circular", vec![straight]).unwrap();
+    assert_eq!(s.feature["axis"], json!({"origin": [0.0, 6.0, 7.0], "dir": [1.0, 0.0, 0.0]}));
+}
+
+#[test]
+fn a_canonical_direction_points_its_largest_component_positive() {
+    use super::canonical_dir;
+    assert_eq!(canonical_dir([0.0, -3.0, 4.0]), [0.0, -0.6, 0.8]);
+    assert_eq!(canonical_dir([0.0, -4.0, 3.0]), [0.0, 0.8, -0.6]);
+    assert_eq!(canonical_dir([0.0, 0.0, 0.0]), [0.0, 0.0, 1.0]);
 }
 
 #[test]

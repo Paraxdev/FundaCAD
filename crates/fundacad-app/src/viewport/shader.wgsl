@@ -80,12 +80,18 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
     }
   }
   base = mix(base, vec3<f32>(0.36, 0.56, 0.98), clamp(in.selected, 0.0, 1.0));
-  if (clipping && inside) {
-    // The inside of a cut body, seen through the cut.
-    base = vec3<f32>(0.85, 0.42, 0.2);
-  }
   base = hovered(base, body.hover.xy, body.fade.x, in.face);
   base = hovered(base, body.hover.zw, body.fade.y, in.face);
+  if (clipping && inside) {
+    // FundaCAD 1's section cap, unlit 45 degree stripes at a fixed pixel pitch. The back faces seen through the cut
+    // stand in for the cap the stencil drew there.
+    let t = abs((in.clip.x + in.clip.y) % 9.0 - 4.5);
+    var cap = mix(base * 0.42, mix(base, vec3<f32>(1.0), 0.25), 1.0 - smoothstep(0.2, 1.8, t));
+    if (u.encode_srgb.x > 0.5) {
+      cap = pow(clamp(cap, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+    }
+    return vec4<f32>(cap, 1.0);
+  }
   let hemi = mix(vec3<f32>(0.18, 0.17, 0.16), vec3<f32>(0.32, 0.36, 0.42), n.z * 0.5 + 0.5);
   let diffuse = max(dot(n, key), 0.0) * 0.75 + max(dot(n, fill), 0.0) * 0.25;
   let half_dir = normalize(key + view_dir);

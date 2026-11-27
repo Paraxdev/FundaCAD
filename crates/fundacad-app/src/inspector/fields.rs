@@ -93,6 +93,7 @@ fn table(ty: &str) -> Option<Fields> {
             ("csAngle", "field.countersinkAngle", A),
             ("leadIn", "field.leadIn", L),
         ],
+        "split" => &[("offset", "field.offset", L)],
         "patternRect" => &[
             ("countX", "field.countX", C),
             ("countY", "field.countY", C),
@@ -148,6 +149,9 @@ pub fn num_fields(ty: &str, values: &Map<String, Value>) -> Vec<NumField> {
         Some(own) => own.iter().map(spoken).collect(),
         None => raw_num_fields(values),
     };
+    if ty == "split" && !super::options::modify::split_takes_offset(values) {
+        out.retain(|n| n.key != "offset");
+    }
     if ty == "datumPlane" {
         out.extend(DATUM_REF_FIELDS.iter().filter(|(k, ..)| values.contains_key(*k)).map(spoken));
     }
@@ -246,7 +250,7 @@ pub fn write_field(root: &mut Map<String, Value>, path: &str, value: Option<Valu
 /// The value a field means while it is left out: a fillet's profile is the plain Round, 0, and the Fillet tool leaves
 /// it out.
 pub fn absent_value(ty: &str, field: &str) -> Option<f64> {
-    (ty == "fillet" && field == "profile").then_some(0.)
+    ((ty == "fillet" && field == "profile") || (ty == "split" && field == "offset")).then_some(0.)
 }
 
 /// `INT_FIELDS`: whole-number fields and their minimum.
