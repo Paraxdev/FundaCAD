@@ -2,6 +2,9 @@
 //! other a chamfer, with no feature at the origin. The engine's rebuild of each value is the live preview, as the face
 //! push's, and letting go records one undo step. Dragging a fillet or chamfer face resizes that feature.
 
+#[cfg(test)]
+mod tests;
+
 use glam::{Vec2, Vec3};
 use gpui::*;
 use serde_json::{json, Map, Value};
@@ -9,6 +12,8 @@ use serde_json::{json, Map, Value};
 use super::pick;
 use super::Viewport;
 use crate::edgedrag::{self as ed, BlendRange, Commit, Gate, Outcomes, Reply, Treatment, Verdict};
+use crate::i18n::tr;
+use crate::overlay::{self, Choice};
 use crate::selection::{Filter, Pick};
 use crate::tools::{self, Doc};
 
@@ -25,6 +30,12 @@ pub(super) struct Target {
     edges: Vec<Value>,
     anchor: Vec3,
     tangent: Option<Vec3>,
+}
+
+/// A question a press left for the mouse up, which has the window to ask it in.
+pub(super) enum Ask {
+    Many(Target),
+    TooMany(usize),
 }
 
 pub(super) struct Blend {
@@ -47,6 +58,8 @@ pub(super) struct Blend {
     open: bool,
     /// Let go and committed unverified, waiting for the reply to the last value sent.
     released: bool,
+    /// Enter on this typed text waits for the engine's verdict, a refusal keeps the box open with it.
+    awaiting: Option<String>,
     range: BlendRange,
     outcomes: Outcomes,
     /// Each preview sent, with the document revision it made, None for the bare model.
@@ -121,6 +134,13 @@ impl Blend {
     fn shown_value(&self) -> Option<f64> {
         let f = self.outcomes.shown.as_ref()?;
         (Treatment::of(f.get("type")?.as_str()?) == Some(self.kind)).then(|| f.get(self.kind.field())?.as_f64())?
+    }
+
+    /// An edit to the text Enter waits on takes it back into the box.
+    fn resume_typing(&mut self) {
+        if let Some(t) = self.awaiting.take() {
+            self.typing = Some(t);
+        }
     }
 
     fn live(&self) -> bool {
@@ -245,7 +265,7 @@ impl Viewport {
             return false;
         }
         if self.blend.as_ref().is_some_and(|b| b.open) {
-            self.blend_commit(false, cx);
+            self.blend_away(cx);
         }
         self.blend_settle();
         if self.blend.is_some() {
@@ -276,35 +296,17 @@ impl Viewport {
             Some(t) => {
                 match ed::edge_gate(t.edges.len()) {
                     Gate::Refuse => {
-                        let body = tr_many("tool.fillet.tooManyBody", t.edges.len());
-                        self.say(body, cx);
+                        self.say(tr_many("tool.fillet.tooManyBody", t.edges.len()), cx);
+                        self.blend_ask = Some(Ask::TooMany(t.edges.len()));
                         return true;
                     }
-                    Gate::Warn => self.say(tr_many("tool.fillet.manyBody", t.edges.len()), cx),
+                    Gate::Warn => {
+                        self.blend_ask = Some(Ask::Many(t));
+                        return true;
+                    }
                     Gate::Go => {}
                 }
-                let axis = self.handle_axis(t.anchor, t.tangent);
-                Blend {
-                    id: tools::next_id(&before),
-                    edges: t.edges,
-                    original: None,
-                    anchor: t.anchor,
-                    tangent: t.tangent,
-                    axis,
-                    positive: Treatment::Fillet,
-                    kind: Treatment::Fillet,
-                    signed: 0.0,
-                    grab: None,
-                    moved: false,
-                    typing: None,
-                    open: false,
-                    released: false,
-                    range: BlendRange::default(),
-                    outcomes: Outcomes::default(),
-                    sent: Vec::new(),
-                    replied: 0,
-                    before,
-                }
+                self.new_blend(t, before)
             }
             None => {
                 let Some((at, f, point, normal)) = self.blend_face_at(position) else { return false };
@@ -334,6 +336,7 @@ impl Viewport {
                     typing: None,
                     open: false,
                     released: false,
+                    awaiting: None,
                     range: BlendRange::default().note(value, true),
                     outcomes,
                     sent: Vec::new(),
@@ -347,6 +350,74 @@ impl Viewport {
         self.hover = None;
         cx.notify();
         true
+    }
+
+    fn new_blend(&self, t: Target, before: Doc) -> Blend {
+        let axis = self.handle_axis(t.anchor, t.tangent);
+        Blend {
+            id: tools::next_id(&before),
+            edges: t.edges,
+            original: None,
+            anchor: t.anchor,
+            tangent: t.tangent,
+            axis,
+            positive: Treatment::Fillet,
+            kind: Treatment::Fillet,
+            signed: 0.0,
+            grab: None,
+            moved: false,
+            typing: None,
+            open: false,
+            released: false,
+            awaiting: None,
+            range: BlendRange::default(),
+            outcomes: Outcomes::default(),
+            sent: Vec::new(),
+            replied: 0,
+            before,
+        }
+    }
+
+    /// Opens the question a press on too many edges left, as FundaCAD 1's confirmEdgeCount. A yes starts the blend
+    /// with its value box open, since the drag that asked has been let go by then.
+    pub(super) fn blend_ask(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ask) = self.blend_ask.take() else { return };
+        let (question, choices, target) = match ask {
+            Ask::TooMany(n) => {
+                let ok = Choice::primary(tr!("tool.fillet.ok")).hint(tr_many("tool.fillet.tooManyBody", n));
+                (tr_many("tool.fillet.tooMany", n), vec![ok], None)
+            }
+            Ask::Many(t) => {
+                let n = t.edges.len();
+                let go = Choice::primary(tr_many("tool.fillet.manyAction", n)).hint(tr_many("tool.fillet.manyBody", n));
+                (tr_many("tool.fillet.manyTitle", n), vec![Choice::plain(tr!("common.cancel")), go], Some(t))
+            }
+        };
+        let answer = overlay::confirm(window, cx, question, choices);
+        let Some(target) = target else { return };
+        cx.spawn_in(window, async move |this, cx| {
+            if answer.recv().await.ok().flatten() != Some(1) {
+                return;
+            }
+            let _ = this.update_in(cx, |v, w, cx| {
+                if v.blend_begin(target, cx) {
+                    let focus = v.sketch_focus(cx);
+                    w.focus(&focus, cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Starts a blend on `t` with its value box open. False when something else took the view meanwhile.
+    fn blend_begin(&mut self, t: Target, cx: &mut Context<Self>) -> bool {
+        if self.tool.is_some() || self.sketch.is_some() || self.push.is_some() || self.blend.is_some() {
+            return false;
+        }
+        let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
+        self.blend = Some(Blend { grab: Some((0.0, 0.0)), ..self.new_blend(t, before) });
+        self.blend_release(cx);
+        self.blend_open()
     }
 
     /// How far the cursor has swiped across the dragged edge, in mm.
@@ -428,9 +499,33 @@ impl Viewport {
     /// The engine's answer for `revision`: what built, what was refused and why. A late refusal of a committed value
     /// puts back the one that built.
     pub(super) fn blend_reply(&mut self, revision: u64, result: Option<&Map<String, Value>>, cx: &mut Context<Self>) {
+        // Edge indices are the old mesh's, the cursor's next move finds the hovered edge again.
+        self.blend_hover = None;
         let Some(b) = self.blend.as_mut() else { return };
         b.replied = b.replied.max(revision);
         let Some(sent) = b.sent_at(revision).cloned() else { return };
+        // A late answer for the treatment the drag crossed away from says nothing of this one.
+        let other = sent.as_ref().and_then(|f| Treatment::of(f.get("type")?.as_str()?)).is_some_and(|k| k != b.kind);
+        let refused = !other && self.blend_note(revision, sent, result, cx);
+        let Some(b) = self.blend.as_mut() else { return };
+        if b.awaiting.is_some() && !ed::enter_waits(b.verdict(), b.sent.last().map(|(r, _)| *r), b.replied) {
+            let text = b.awaiting.take();
+            self.blend_commit(text, cx);
+        }
+        let Some(b) = self.blend.as_ref() else { return };
+        if b.released && b.sent.last().is_none_or(|(r, _)| *r <= revision) {
+            if let Some(why) = b.outcomes.refusal.clone().filter(|_| refused) {
+                self.say(why, cx);
+            }
+            self.blend_record();
+            self.blend = None;
+        }
+        cx.notify();
+    }
+
+    /// Notes the reply in the blend's outcomes and holds what last built when it refused. True when it refused.
+    fn blend_note(&mut self, revision: u64, sent: Option<Value>, result: Option<&Map<String, Value>>, cx: &mut Context<Self>) -> bool {
+        let Some(b) = self.blend.as_mut() else { return false };
         let reply = match (&sent, result) {
             (_, None) => Reply::Failed,
             (None, Some(_)) => Reply::Built,
@@ -470,15 +565,7 @@ impl Viewport {
                 self.blend_send(doc, shown, cx);
             }
         }
-        let Some(b) = self.blend.as_ref() else { return };
-        if b.released && b.sent.last().is_none_or(|(r, _)| *r <= revision) {
-            if let Some(why) = b.outcomes.refusal.clone().filter(|_| refused) {
-                self.say(why, cx);
-            }
-            self.blend_record();
-            self.blend = None;
-        }
-        cx.notify();
+        refused
     }
 
     fn blend_record(&mut self) {
@@ -522,16 +609,59 @@ impl Viewport {
             self.blend_preview(cx);
             return;
         }
-        self.blend_commit(false, cx);
+        self.blend_commit(None, cx);
     }
 
-    /// Lets go of the value on the handle, `typed` when it came from the box.
-    pub(super) fn blend_commit(&mut self, typed: bool, cx: &mut Context<Self>) {
+    /// A click away from the open box, which takes typed text as Enter would, as FundaCAD 1's commit read the box.
+    pub(super) fn blend_away(&mut self, cx: &mut Context<Self>) {
+        let Some(b) = self.blend.as_ref().filter(|b| b.open) else { return };
+        if b.awaiting.is_some() || b.typing.as_deref().is_some_and(|t| !t.trim().is_empty()) {
+            self.blend_enter(cx);
+        } else {
+            self.blend_commit(None, cx);
+        }
+    }
+
+    /// Enter on the box: a typed value nobody has answered yet waits for the engine before it commits.
+    fn blend_enter(&mut self, cx: &mut Context<Self>) {
         let Some(b) = self.blend.as_mut() else { return };
-        let decision = ed::commit_decision(b.value(), b.verdict(), b.current().is_some_and(|f| b.outcomes.settled(&ed::feature_key(&f))), b.shown_value(), typed);
+        if b.awaiting.is_some() {
+            return;
+        }
+        let text = b.typing.take().unwrap_or_default();
+        if !text.trim().is_empty() {
+            match crate::inspector::parse(crate::inspector::Kind::Length, &text) {
+                Ok(v) => {
+                    b.signed = v.max(ed::MIN_EDGE_VALUE) * if b.kind == b.positive { 1.0 } else { -1.0 };
+                    b.moved = true;
+                }
+                Err(e) => {
+                    b.typing = Some(text);
+                    return self.say(e, cx);
+                }
+            }
+        }
+        if b.grab.is_some() {
+            return cx.notify();
+        }
+        self.blend_preview(cx);
+        let Some(b) = self.blend.as_mut() else { return };
+        if ed::enter_waits(b.verdict(), b.sent.last().map(|(r, _)| *r), b.replied) {
+            b.awaiting = Some(text);
+            return cx.notify();
+        }
+        self.blend_commit(Some(text), cx);
+    }
+
+    /// Lets go of the value on the handle, `typed` holding the box's text when it came from the keyboard.
+    pub(super) fn blend_commit(&mut self, typed: Option<String>, cx: &mut Context<Self>) {
+        let Some(b) = self.blend.as_mut() else { return };
+        let settled = b.current().is_some_and(|f| b.outcomes.settled(&ed::feature_key(&f)));
+        let decision = ed::commit_decision(b.value(), b.verdict(), settled, b.shown_value(), typed.is_some());
         match decision {
             Commit::Stay => {
-                b.typing = Some(String::new());
+                b.awaiting = None;
+                b.typing = typed;
                 return cx.notify();
             }
             Commit::Cancel => {
@@ -580,27 +710,9 @@ impl Viewport {
         let Some(b) = self.blend.as_mut().filter(|b| b.live()) else { return false };
         let bounds = ed::value_bounds(Some(self.radius as f64 * 2.0));
         match event.keystroke.key.as_str() {
-            "enter" => {
-                let text = b.typing.take().unwrap_or_default();
-                if !text.trim().is_empty() {
-                    match crate::inspector::parse(crate::inspector::Kind::Length, &text) {
-                        Ok(v) => {
-                            b.signed = v.max(ed::MIN_EDGE_VALUE) * if b.kind == b.positive { 1.0 } else { -1.0 };
-                            b.moved = true;
-                        }
-                        Err(e) => {
-                            b.typing = Some(text);
-                            self.say(e, cx);
-                            return true;
-                        }
-                    }
-                }
-                if b.grab.is_none() {
-                    self.blend_preview(cx);
-                    self.blend_commit(true, cx);
-                }
-            }
+            "enter" => self.blend_enter(cx),
             "tab" => {
+                b.awaiting = None;
                 let (kind, value) = ed::switch_treatment(b.kind, if b.neutral() { ed::seed_value(b.kind.other(), bounds) } else { b.value() }, bounds);
                 b.kind = kind;
                 b.positive = kind;
@@ -620,10 +732,14 @@ impl Viewport {
                 self.blend_send(before, None, cx);
                 self.blend = None;
             }
-            "backspace" => drop(b.typing.get_or_insert_with(String::new).pop()),
+            "backspace" => {
+                b.resume_typing();
+                b.typing.get_or_insert_with(String::new).pop();
+            }
             _ => {
                 let Some(ch) = event.keystroke.key_char.as_deref() else { return true };
                 if ch.chars().all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '+' | '-' | '*' | '/' | ' ')) {
+                    b.resume_typing();
                     b.typing.get_or_insert_with(String::new).push_str(ch);
                 }
             }
@@ -635,6 +751,7 @@ impl Viewport {
     /// Forgets a blend when the document is replaced under it.
     pub(super) fn blend_drop(&mut self) {
         self.blend = None;
+        self.blend_ask = None;
         self.blend_hover = None;
     }
 
@@ -713,5 +830,5 @@ impl Viewport {
 
 fn tr_many(key: &str, count: usize) -> String {
     let cap = ed::EDGE_CAP;
-    crate::i18n::tr!(key, count = count, cap = cap, kind = "fillet", label = Treatment::Fillet.label())
+    tr!(key, count = count, cap = cap, kind = "fillet", label = Treatment::Fillet.label())
 }
