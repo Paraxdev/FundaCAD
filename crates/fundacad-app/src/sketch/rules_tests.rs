@@ -80,10 +80,24 @@ fn esc_in_the_editor_peels_drag_then_shape_then_selection_then_tool() {
 
 #[test]
 fn every_tool_has_fundacad_1_prompt() {
-    let tools = [Tool::Select, Tool::Line, Tool::Rectangle, Tool::Circle, Tool::Arc, Tool::Polygon, Tool::Dimension];
+    let tools = [
+        Tool::Select,
+        Tool::Line,
+        Tool::Rectangle,
+        Tool::Circle,
+        Tool::Arc,
+        Tool::Polygon,
+        Tool::Dimension,
+        Tool::Trim,
+        Tool::Offset,
+        Tool::Extend,
+        Tool::Fillet,
+        Tool::Mirror,
+        Tool::Move,
+    ];
     let rules = super::ONE_LINE.iter().chain(super::TWO_LINES).map(|k| Tool::Constrain(k));
     for t in tools.into_iter().chain(rules) {
-        let key = format!("sketch.hint.{}", t.action().unwrap_or("select"));
+        let key = format!("sketch.hint.{}", t.hint());
         assert_ne!(t.prompt(), key, "{key} is missing from en.json");
     }
     assert_eq!(Tool::Line.prompt(), "Click points · length Tab angle · Enter · Esc");

@@ -23,6 +23,8 @@ const FILL: u32 = 0x3a7bd5;
 const PREVIEW: u32 = 0xffffff;
 const ACCENT: u32 = 0x9a9ff0;
 const OVER: u32 = 0xf5a524;
+/// FundaCAD 1's red for the shape a modify tool would act on.
+const HOT: u32 = 0xff5555;
 /// `.sketch-glyph`'s badge, a 12px icon in 3px padding and a 1px border, 16px tall, centred on its point.
 const GLYPH: (f32, f32) = (20., 16.);
 
@@ -258,11 +260,19 @@ impl Viewport {
             cx.notify();
             return true;
         }
-        if let Some(label) = e.click(p, ppm) {
+        let label = e.click(p, ppm);
+        self.sketch_notice(cx);
+        if let Some(label) = label {
             self.commit_sketch(label, cx);
         }
         cx.notify();
         true
+    }
+
+    fn sketch_notice(&mut self, cx: &mut Context<Self>) {
+        if let Some(n) = self.sketch.as_mut().and_then(|e| e.notice.take()) {
+            self.say(n, cx);
+        }
     }
 
     pub(super) fn sketch_release(&mut self, cx: &mut Context<Self>) {
@@ -307,6 +317,24 @@ impl Viewport {
 
     /// Typing a dimension, digits and Enter.
     pub(super) fn sketch_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+        if self.sketch_ui.typing.is_none() {
+            let Some(e) = self.sketch.as_mut() else { return };
+            let k = event.keystroke.key.as_str();
+            let label = if e.entry.is_some() {
+                e.entry_key(k, event.keystroke.key_char.as_deref())
+            } else if e.tool == Tool::Mirror && matches!(k, "enter" | "tab") {
+                e.mirror_key(k)
+            } else {
+                return;
+            };
+            self.sketch_notice(cx);
+            if let Some(label) = label {
+                self.commit_sketch(label, cx);
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         let Some((key, text)) = &mut self.sketch_ui.typing else { return };
         match event.keystroke.key.as_str() {
             "enter" => {
@@ -396,7 +424,7 @@ impl Viewport {
         };
         let construction =
             if e.construction { format!(", {}", i18n::t("sketch.name.construction")) } else { String::new() };
-        Some(format!("{}: {}, {}{}, {}", e.name, e.tool.label(), state, construction, e.tool.prompt()))
+        Some(format!("{}: {}, {}{}, {}", e.name, e.tool.label(), state, construction, e.prompt()))
     }
 
     /// Esc's carried part and sketch layers, true when one took the press. The shell's escape command asks this first.
@@ -420,7 +448,9 @@ impl Viewport {
 
     fn sketch_do(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut Editor) -> Option<String>) {
         let Some(e) = &mut self.sketch else { return };
-        if let Some(label) = f(e) {
+        let label = f(e);
+        self.sketch_notice(cx);
+        if let Some(label) = label {
             self.commit_sketch(label, cx);
         }
         cx.notify();
@@ -570,7 +600,7 @@ impl Viewport {
     }
 
     pub(super) fn sketch_typing(&self) -> bool {
-        self.sketch_ui.typing.is_some()
+        self.sketch_ui.typing.is_some() || self.sketch.as_ref().is_some_and(|e| e.entry.is_some())
     }
 
     /// The labels and the toolbar over the view, positioned in the view's own coordinates.
@@ -615,6 +645,25 @@ impl Viewport {
                     .text_color(rgb(color))
                     .child(text),
             );
+        }
+        if let (Some(text), Some(c)) = (&e.entry, &e.cursor) {
+            if let Some(s) = self.to_screen(e.plane.to_3d(c.p).as_vec3()) {
+                let what = if e.offset.is_some() { i18n::t("tool.offset") } else { "R".to_string() };
+                layer = layer.child(
+                    div()
+                        .absolute()
+                        .left(s.x - origin.x + px(14.))
+                        .top(s.y - origin.y + px(10.))
+                        .px_1()
+                        .rounded_sm()
+                        .bg(rgb_a(0x15131c, 0.85))
+                        .border_1()
+                        .border_color(rgb(ACCENT))
+                        .text_size(px(12.))
+                        .text_color(rgb(ACCENT))
+                        .child(format!("{what} {text}|")),
+                );
+            }
         }
         let t = crate::theme::ActiveTheme::theme(&**cx).clone();
         let (accent, hot, error, warn, text, bg) = (t.accent, t.accent_hot, t.error, t.warn, t.text, t.float_bg);
@@ -723,9 +772,13 @@ impl Viewport {
             .flat_map(|c| ["line", "circle", "e", "e1", "e2", "l1", "l2"].map(|k| c.get(k).and_then(Value::as_str).map(|s| s.split('~').next().unwrap_or(s).to_string())))
             .flatten()
             .collect();
+        let picked = e.picked();
         let color_of = |id: &str| {
-            let sel = [&e.selected, &e.first].into_iter().flatten().any(|s| s.split('~').next() == Some(id));
-            if sel || self.sketch_ui.lit.iter().any(|l| l == id) {
+            let sel = [&e.selected, &e.first].into_iter().flatten().any(|s| s.split('~').next() == Some(id))
+                || picked.iter().any(|p| p == id);
+            if e.hot.as_deref().is_some_and(|h| h.split('~').next() == Some(id)) && !sel {
+                HOT
+            } else if sel || self.sketch_ui.lit.iter().any(|l| l == id) {
                 ACCENT
             } else if conflicted.iter().any(|c| c == id) {
                 CONFLICT
@@ -753,6 +806,11 @@ impl Viewport {
             }
         }
         if let Some(pv) = e.preview() {
+            if let Some(pts) = preview_points(pv, &e.params) {
+                line(&pts, &plane, 1.5, rgb_a(PREVIEW, 0.8), true, window);
+            }
+        }
+        for pv in e.modify_preview() {
             if let Some(pts) = preview_points(pv, &e.params) {
                 line(&pts, &plane, 1.5, rgb_a(PREVIEW, 0.8), true, window);
             }
@@ -811,6 +869,12 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
         ("arc", "tool.arc", Tool::Arc),
         ("polygon", "tool.polygon", Tool::Polygon),
         ("dimension", "tool.dimension", Tool::Dimension),
+        ("trim", "tool.trim", Tool::Trim),
+        ("offset", "tool.offset", Tool::Offset),
+        ("extend", "tool.extend", Tool::Extend),
+        ("fillet-sketch", "tool.fillet", Tool::Fillet),
+        ("mirror-sketch", "tool.mirror", Tool::Mirror),
+        ("move-sketch", "tool.moveRotate", Tool::Move),
     ];
     for (id, label, tool) in tools {
         let v = viewport.clone();
@@ -820,7 +884,7 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
                     v.new_sketch(json!("XY"), cx);
                 }
                 v.sketch_do(cx, |e| {
-                    e.set_tool(tool);
+                    e.arm(tool);
                     None
                 });
             })
