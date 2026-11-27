@@ -270,8 +270,15 @@ pub fn set_number(doc: &mut Map<String, Value>, target: &Target, value: f64) -> 
     }
     let left_out = fields::absent_value(&ty, key) == Some(v);
     let next = (!left_out).then(|| crate::document::number(v));
-    if fields::read_field(f, key) == next.as_ref() {
+    let was = fields::read_field(f, key).cloned();
+    if was == next {
         return Ok(());
+    }
+    if ty == "split" && key == "offset" {
+        let from = was.as_ref().and_then(Value::as_f64).unwrap_or(0.);
+        if !options::modify::shift_split_plane(f, v - from) {
+            return Err(format!("the plane of {feature} cannot be offset"));
+        }
     }
     if !fields::write_field(f, key, next) {
         return Err(format!("the document has no {key} on {feature}"));
