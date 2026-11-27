@@ -106,8 +106,7 @@ impl Shell {
         }
         rows.push(command_on(cx, &v, "offset-plane", i18n::t("ctx.plane.offset"), Some(pick)));
         rows.push(MenuRow::Separator);
-        let category = if world { Category::Planes } else { Category::Datums };
-        rows.push(act(&shell, i18n::t("ctx.plane.hide"), hide(category, id)));
+        rows.push(act(&shell, i18n::t("ctx.plane.hide"), hide(Category::Planes, id)));
         if !world {
             let id = id.to_string();
             rows.push(MenuRow::Item(MenuItem::call(i18n::t("ctx.plane.delete"), move |_, cx| {
@@ -203,13 +202,14 @@ impl Shell {
         rows.push(act(&shell, i18n::t("ctx.isolateBody"), Act::ShowOnly(Category::Bodies, vec![body.to_string()])));
         rows.push(command(cx, "show-all-bodies", None));
         rows.push(MenuRow::Separator);
-        let key = format!("b:{body}");
+        let id = body.to_string();
         let renamer = shell.clone();
         rows.push(MenuRow::Item(MenuItem::call(i18n::t("ctx.body.rename"), move |w, cx| {
-            let key = key.clone();
+            let id = id.clone();
             let _ = renamer.update(cx, |s, cx| {
                 s.items_tab = 0;
-                s.act(Act::Rename(key), w, cx)
+                s.reveal_body(&id, cx);
+                s.act(Act::Rename(format!("b:{id}")), w, cx)
             });
         })));
         if let Some(doc) = self.source.clone() {

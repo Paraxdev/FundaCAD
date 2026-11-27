@@ -382,6 +382,28 @@ impl Shell {
         cx.notify();
     }
 
+    /// Clears a filter hiding bodies and opens every folder above `body`, so its row is drawn and can be renamed.
+    pub(super) fn reveal_body(&mut self, body: &str, cx: &App) {
+        if !self.items.filter.shows(items::Section::Bodies) {
+            self.items.filter = Filter::All;
+        }
+        let key = format!("b:{body}");
+        loop {
+            let nodes = self.item_nodes(cx);
+            if nodes.iter().any(|n| n.k == key) {
+                return;
+            }
+            let shut = nodes.iter().find(|n| match &n.kind {
+                Kind::Folder { collapsed: true, members, .. } => n.k == "f:Bodies" || members.iter().any(|m| m == body),
+                _ => false,
+            });
+            match shut.map(|n| n.k.clone()) {
+                Some(k) => self.items.collapse.toggle(&k),
+                None => return,
+            }
+        }
+    }
+
     fn start_rename(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         let nodes = self.item_nodes(cx);
         let Some(node) = nodes.iter().find(|n| n.k == key) else { return };
