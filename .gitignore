@@ -110,3 +110,4 @@ packaging/flatpak/source-check/*-sources*.json
 
 # Zensical output of the user manual
 manual/site/
+manual/home-site/

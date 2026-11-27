@@ -1,0 +1,120 @@
+/* Shared by the manual and the home pages (manual/tools/build_home.py copies it), so the header and the colours
+   match across fundacad.dev. Values from docs/DESIGN.md, FundaCAD Noir and FundaCAD Light. */
+[data-md-color-scheme=slate] {
+  --md-hue: 255;
+  --fc-bg: hsl(255 15% 5%);
+  --fc-panel: #1b1826;
+  --fc-raised: #272233;
+  --fc-line: #322c42;
+  --fc-text: #ece9f2;
+  --fc-text-dim: #c4bcd0;
+  --fc-text-mute: #a9a2ba;
+  --fc-accent: #9a9ff0;
+  --fc-accent-hot: #bcc0f7;
+  --fc-on-accent: #0c0d26;
+  --fc-glass: color-mix(in srgb, var(--fc-bg) 72%, transparent);
+  --fc-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 40px -18px rgb(0 0 0 / 0.7);
+}
+
+[data-md-color-scheme=default] {
+  --fc-bg: #ffffff;
+  --fc-panel: #f5f3f9;
+  --fc-raised: #ebe8f2;
+  --fc-line: #e3dfec;
+  --fc-text: #1b1826;
+  --fc-text-dim: #3f3a4d;
+  --fc-text-mute: #5d5770;
+  --fc-accent: #4a4fb5;
+  --fc-accent-hot: #2f338a;
+  --fc-on-accent: #ffffff;
+  --fc-glass: color-mix(in srgb, var(--fc-bg) 78%, transparent);
+  --fc-shadow: 0 1px 2px rgb(27 24 38 / 0.06), 0 14px 32px -24px rgb(27 24 38 / 0.4);
+}
+
+:root {
+  --fc-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --fc-ease: cubic-bezier(0.2, 0, 0.15, 1);
+  --fc-t-fast: 110ms;
+  --fc-t-med: 160ms;
+  --fc-radius: 16px;
+  --fc-radius-chip: 10px;
+}
+
+@supports (corner-shape: squircle) {
+  :root {
+    --fc-radius: 26px;
+    --fc-radius-chip: 15px;
+  }
+}
+
+[data-md-color-scheme][data-md-color-primary] {
+  --md-primary-fg-color: var(--fc-accent);
+  --md-primary-bg-color: var(--fc-on-accent);
+  --md-accent-fg-color: var(--fc-accent-hot);
+  --md-accent-fg-color--transparent: color-mix(in srgb, var(--fc-accent) 14%, transparent);
+  --md-accent-bg-color: var(--fc-on-accent);
+  --md-typeset-a-color: var(--fc-accent);
+}
+
+/* Moving between the home pages and the manual cross fades, the header stays put. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+.md-header,
+.fc-header {
+  view-transition-name: fc-header;
+}
+
+.md-header__topic:first-child,
+.md-typeset h1 {
+  font-family: var(--fc-display);
+  letter-spacing: -0.01em;
+}
+
+.fc-mark {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+.fc-site-nav {
+  display: flex;
+  gap: 4px;
+  margin: 0 8px;
+}
+
+.fc-site-nav a {
+  padding: 6px 12px;
+  border-radius: var(--fc-radius-chip);
+  corner-shape: squircle;
+  color: var(--fc-text-dim);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--fc-t-fast) var(--fc-ease), color var(--fc-t-fast) var(--fc-ease);
+}
+
+.fc-site-nav a:hover {
+  color: var(--fc-text);
+  background: color-mix(in srgb, var(--fc-text) 8%, transparent);
+}
+
+.fc-site-nav a[aria-current] {
+  color: var(--fc-accent-hot);
+  background: color-mix(in srgb, var(--fc-accent) 16%, transparent);
+}
+
+.fc-site-nav a:focus-visible {
+  outline: 2px solid var(--fc-accent);
+  outline-offset: 2px;
+}
+
+/* In the manual the drawer and search need the room on a phone, the logo still leads home. */
+@media (max-width: 760px) {
+  .md-header .fc-site-nav {
+    display: none;
+  }
+}

@@ -1,0 +1,496 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--fc-bg);
+  color: var(--fc-text);
+  font: 400 17px/1.6 "Inter", system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  overflow-x: hidden;
+}
+
+/* Only after the first paint, so a light choice does not fade in from the dark default. */
+body.fc-ready {
+  transition: background var(--fc-t-med) var(--fc-ease), color var(--fc-t-med) var(--fc-ease);
+}
+
+a {
+  color: var(--fc-accent);
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  color: var(--fc-accent-hot);
+}
+
+a:focus-visible,
+.fc-btn:focus-visible,
+.fc-icon-btn:focus-visible {
+  outline: 2px solid var(--fc-accent);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--fc-display);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.4em;
+}
+
+h1 {
+  font-size: clamp(34px, 6vw, 56px);
+}
+
+h2 {
+  font-size: 26px;
+}
+
+h3 {
+  font-size: 20px;
+}
+
+.fc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fc-skip {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 10;
+  padding: 8px 14px;
+  border-radius: var(--fc-radius-chip);
+  background: var(--fc-accent);
+  color: var(--fc-on-accent);
+}
+
+.fc-skip:focus {
+  top: 8px;
+}
+
+.fc-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--fc-glass);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  backdrop-filter: blur(12px) saturate(1.08);
+  border-bottom: 1px solid var(--fc-line);
+}
+
+.fc-header-inner,
+.fc-main,
+.fc-footer {
+  width: 100%;
+  max-width: 1220px;
+  margin: 0 auto;
+  padding-inline: 24px;
+}
+
+/* Lined up with the manual's header: 48px high on a 1220px grid. */
+.fc-header-inner {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  max-width: 1220px;
+  padding-inline: 12px;
+}
+
+.fc-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-right: auto;
+  color: var(--fc-text);
+  font: 700 18px var(--fc-display);
+  text-decoration: none;
+}
+
+.fc-brand:hover {
+  color: var(--fc-text);
+}
+
+.fc-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.fc-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--fc-radius-chip);
+  corner-shape: squircle;
+  color: var(--fc-text-dim);
+  cursor: pointer;
+  transition: background var(--fc-t-fast) var(--fc-ease), color var(--fc-t-fast) var(--fc-ease);
+}
+
+.fc-icon-btn:hover {
+  color: var(--fc-text);
+  background: color-mix(in srgb, var(--fc-text) 8%, transparent);
+}
+
+.fc-icon-btn[hidden] {
+  display: none;
+}
+
+.fc-palette {
+  display: flex;
+}
+
+.fc-option {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fc-palette:has(.fc-option:focus-visible) .fc-icon-btn:not([hidden]) {
+  outline: 2px solid var(--fc-accent);
+}
+
+.fc-main {
+  flex: 1;
+  padding-block: 56px 72px;
+}
+
+.fc-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 48px;
+  align-items: center;
+}
+
+.fc-eyebrow {
+  margin: 0 0 12px;
+  color: var(--fc-accent);
+  font: 700 13px var(--fc-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fc-lead {
+  margin: 0 0 28px;
+  color: var(--fc-text-dim);
+  font-size: 19px;
+  max-width: 34em;
+}
+
+.fc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+}
+
+.fc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  border-radius: var(--fc-radius-chip);
+  corner-shape: squircle;
+  background: var(--fc-raised);
+  color: var(--fc-text);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--fc-t-fast) var(--fc-ease), color var(--fc-t-fast) var(--fc-ease),
+    transform var(--fc-t-fast) var(--fc-ease);
+}
+
+.fc-btn:hover {
+  color: var(--fc-text);
+  background: color-mix(in srgb, var(--fc-text) 14%, var(--fc-raised));
+  transform: translateY(-1px);
+}
+
+.fc-btn-primary,
+.fc-btn-primary:hover {
+  background: var(--fc-accent);
+  color: var(--fc-on-accent);
+}
+
+.fc-btn-primary:hover {
+  background: var(--fc-accent-hot);
+}
+
+.fc-btn-big {
+  padding: 16px 28px;
+  font-size: 18px;
+}
+
+.fc-shot {
+  margin: 0;
+  border-radius: var(--fc-radius);
+  corner-shape: squircle;
+  overflow: hidden;
+  box-shadow: var(--fc-shadow), 0 0 0 1px var(--fc-line);
+}
+
+.fc-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fc-section {
+  margin-top: 72px;
+}
+
+.fc-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.fc-grid,
+.fc-posts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.fc-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fc-card {
+  padding: 24px;
+  border-radius: var(--fc-radius);
+  corner-shape: squircle;
+  background: var(--fc-panel);
+  box-shadow: var(--fc-shadow);
+  transition: background var(--fc-t-med) var(--fc-ease), transform var(--fc-t-med) var(--fc-ease);
+}
+
+.fc-card p {
+  margin: 0;
+  color: var(--fc-text-dim);
+}
+
+.fc-card h2 a,
+.fc-card h3 a {
+  color: var(--fc-text);
+  text-decoration: none;
+}
+
+.fc-grid .fc-card:hover,
+.fc-posts .fc-card:hover {
+  background: color-mix(in srgb, var(--fc-accent) 7%, var(--fc-panel));
+  transform: translateY(-2px);
+}
+
+/* The whole card is the link, the heading's link stretches over it. */
+.fc-grid .fc-card,
+.fc-posts .fc-card {
+  position: relative;
+}
+
+.fc-card h2 a::after,
+.fc-card h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.fc-card h2 a:focus-visible,
+.fc-card h3 a:focus-visible {
+  outline: none;
+}
+
+.fc-card:has(a:focus-visible) {
+  outline: 2px solid var(--fc-accent);
+  outline-offset: 2px;
+}
+
+.fc-posts time,
+.fc-post time {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--fc-text-mute);
+  font-size: 14px;
+}
+
+.fc-page {
+  max-width: 760px;
+}
+
+.fc-post .fc-prose {
+  font-size: 18px;
+}
+
+.fc-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--fc-radius);
+}
+
+.fc-back {
+  margin: 0 0 24px;
+}
+
+.fc-release {
+  margin-bottom: 20px;
+}
+
+.fc-release h2 {
+  margin-bottom: 4px;
+}
+
+.fc-release-meta {
+  margin: 0 0 20px;
+  color: var(--fc-text-mute);
+}
+
+.fc-release .fc-btn-big {
+  margin-bottom: 8px;
+}
+
+.fc-file {
+  color: var(--fc-text-mute);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.fc-others {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--fc-line);
+}
+
+.fc-others h3 {
+  margin-top: 16px;
+  font-size: 16px;
+}
+
+.fc-others ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fc-others li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.fc-others li span {
+  color: var(--fc-text-mute);
+  white-space: nowrap;
+}
+
+.fc-more,
+.fc-footer p:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.fc-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 32px;
+  padding-block: 24px 32px;
+  border-top: 1px solid var(--fc-line);
+  color: var(--fc-text-mute);
+  font-size: 15px;
+}
+
+.fc-footer p {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fc-rise {
+    animation: fc-rise 420ms var(--fc-ease) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+}
+
+@keyframes fc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+
+@media (max-width: 860px) {
+  .fc-hero,
+  .fc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fc-hero {
+    gap: 32px;
+  }
+}
+
+@media (max-width: 560px) {
+  body {
+    font-size: 16px;
+  }
+
+  .fc-header-inner,
+  .fc-main,
+  .fc-footer {
+    padding-inline: 16px;
+  }
+
+  .fc-main {
+    padding-block: 32px 48px;
+  }
+
+  .fc-brand span,
+  .fc-github {
+    display: none;
+  }
+
+  .fc-site-nav {
+    margin: 0 4px;
+    gap: 0;
+  }
+
+  .fc-site-nav a {
+    padding: 6px 10px;
+  }
+
+  .fc-lead {
+    font-size: 17px;
+  }
+
+  .fc-card {
+    padding: 20px;
+  }
+
+  .fc-section {
+    margin-top: 48px;
+  }
+}

@@ -6,6 +6,7 @@ Each version is a manual folder (a checkout of one branch) built into <out>/<nam
 versions.json for the switch, a redirect stub at the old path of every default version page, a 404 page
 that sends other old paths to the default version, robots.txt and a sitemap index. A version other than the
 default that fails to build is left out with a warning, and its paths open the same page of the default.
+With --home the root holds the home pages (build_home.py) in place of the stub to the default home.
 """
 import argparse
 import html
@@ -22,6 +23,7 @@ from urllib.parse import urlparse
 PATCHED = "zensical.versioned.toml"
 STATUS = re.compile(r"^(Build started|No issues found|Build finished)")
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+HOME_FOLDERS = ("download", "news", "static")
 
 
 class BuildFailed(Exception):
@@ -76,12 +78,13 @@ def robots_txt(site: str, names: list[str], default: str) -> str:
     return f"User-agent: *\nAllow: /\n{hidden}\nSitemap: {version_url(site, default)}sitemap.xml\n"
 
 
-def sitemap_index(site: str, default: str) -> str:
+def sitemap_index(site: str, default: str, extra: tuple[str, ...] = ()) -> str:
+    locs = [f"{version_url(site, default)}sitemap.xml", *(site + e for e in extra)]
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"  <sitemap><loc>{html.escape(version_url(site, default))}sitemap.xml</loc></sitemap>\n"
-        "</sitemapindex>\n"
+        + "".join(f"  <sitemap><loc>{html.escape(loc)}</loc></sitemap>\n" for loc in locs)
+        + "</sitemapindex>\n"
     )
 
 
@@ -112,10 +115,11 @@ def page_paths(tree: Path, url: str) -> list[str]:
     return paths
 
 
-def write_root(out: Path, site: str, names: list[str], default: str, gone: list[str] = ()) -> None:
+def write_root(out: Path, site: str, names: list[str], default: str, gone: list[str] = (), home=None) -> None:
+    """home, when given, writes the home pages into out and returns their paths, as build_home.build does."""
     for path in page_paths(out / default, version_url(site, default)):
-        if path.split("/")[0] in [*names, *gone]:
-            raise ValueError(f"the old path of {path} is a version folder")
+        if path.split("/")[0] in [*names, *gone, *HOME_FOLDERS]:
+            raise ValueError(f"the old path of {path} is a version or home folder")
         stub = out / path / "index.html"
         stub.parent.mkdir(parents=True, exist_ok=True)
         stub.write_text(stub_html(path, site, default), encoding="utf-8")
@@ -123,7 +127,13 @@ def write_root(out: Path, site: str, names: list[str], default: str, gone: list[
     page = (out / default / "404.html").read_text(encoding="utf-8")
     (out / "404.html").write_text(redirect_404(page, site, names, default, gone), encoding="utf-8")
     (out / "robots.txt").write_text(robots_txt(site, names, default), encoding="utf-8")
-    (out / "sitemap.xml").write_text(sitemap_index(site, default), encoding="utf-8")
+    extra = ()
+    if home:
+        paths = home(out)
+        if any(p.split("/")[0] in [*names, *gone] for p in paths):
+            raise ValueError("a home page path is a version folder")
+        extra = ("sitemap-home.xml",)
+    (out / "sitemap.xml").write_text(sitemap_index(site, default, extra), encoding="utf-8")
 
 
 def build(name: str, manual: Path, site: str, default: str, zensical: str, out: Path) -> list[str]:
@@ -169,6 +179,7 @@ def main() -> None:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--zensical", default="zensical", help="the zensical command")
     parser.add_argument("--site", help="the site root URL, by default the site_url of the default version")
+    parser.add_argument("--home", action="store_true", help="put the home pages (build_home.py) at the root")
     args = parser.parse_args()
 
     versions = {}
@@ -193,7 +204,13 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     warnings, failed = build_all(names, args.default, lambda name: build(name, versions[name], site, args.default, args.zensical, out))
-    write_root(out, site, list(warnings), args.default, failed)
+    home = None
+    if args.home:
+        import build_home
+
+        def home(folder: Path) -> list[str]:
+            return build_home.build(folder, site)
+    write_root(out, site, list(warnings), args.default, failed, home)
     for name, lines in warnings.items():
         print(f"{name}: {len(lines)} warning lines")
 

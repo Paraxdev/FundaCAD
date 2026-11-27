@@ -1,5 +1,6 @@
 # The user manual (manual/, built with Zensical) on GitHub Pages, in two versions: beta built from main and
 # dev built from dev, at /beta/ and /dev/ of one site with a version switch (manual/tools/build_versions.py).
+# The root holds the home pages, Download and News (manual/tools/build_home.py, sources in manual/home).
 # One-time repo setting: Settings, Pages, Source = GitHub Actions.
 name: manual
 
@@ -10,6 +11,7 @@ on:
       - "manual/**"
       - ".github/workflows/manual.yml"
       - "tests/manual/test_versions.py"
+      - "tests/manual/test_home.py"
       - "tools/harness/src/fundacad_harness/a11y.py"
       - "tools/harness/src/fundacad_harness/vendor/**"
   workflow_dispatch:
@@ -49,6 +51,10 @@ jobs:
       - run: zensical build
         working-directory: manual
       - run: python manual/tools/axe_site.py manual/site --chrome /usr/bin/google-chrome
+      - run: python manual/tools/build_home.py --out manual/home-site
+      - run: >-
+          python manual/tools/axe_site.py manual/home-site --chrome /usr/bin/google-chrome
+          --baseline manual/tools/axe-home-baseline.json
 
   deploy:
     if: github.ref_name == 'main'
@@ -81,10 +87,11 @@ jobs:
           python-version: "3.13"
       - run: pip install "zensical==0.0.69"
       - run: python tests/manual/test_versions.py
+      - run: python tests/manual/test_home.py
       - run: >-
           python manual/tools/build_versions.py
           --version beta=manual --version dev=versions/dev/manual
-          --default beta --out pages
+          --default beta --home --out pages
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: pages
