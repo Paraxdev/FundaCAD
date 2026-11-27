@@ -396,7 +396,7 @@ impl Viewport {
         };
         let construction =
             if e.construction { format!(", {}", i18n::t("sketch.name.construction")) } else { String::new() };
-        Some(format!("{}: {}, {}{}", e.name, e.tool.label(), state, construction))
+        Some(format!("{}: {}, {}{}, {}", e.name, e.tool.label(), state, construction, e.tool.prompt()))
     }
 
     pub(super) fn sketch_escape(&mut self, cx: &mut Context<Self>) -> bool {
@@ -720,7 +720,7 @@ impl Viewport {
             .flatten()
             .collect();
         let color_of = |id: &str| {
-            let sel = e.selected.as_ref().is_some_and(|s| s.split('~').next() == Some(id));
+            let sel = [&e.selected, &e.first].into_iter().flatten().any(|s| s.split('~').next() == Some(id));
             if sel || self.sketch_ui.lit.iter().any(|l| l == id) {
                 ACCENT
             } else if conflicted.iter().any(|c| c == id) {
@@ -828,8 +828,12 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
         |v, cx| v.sketch_do(cx, Editor::toggle_construction),
         cx,
     );
-    on("horizontal", Label::Key("tool.horizontal"), |v, cx| v.sketch_do(cx, |e| e.constrain("horizontal")), cx);
-    on("vertical", Label::Key("tool.vertical"), |v, cx| v.sketch_do(cx, |e| e.constrain("vertical")), cx);
+    for &kind in crate::sketch::rules::ONE_LINE.iter().chain(crate::sketch::rules::TWO_LINES) {
+        let v = viewport.clone();
+        commands::register(cx, kind, Label::Key(crate::sketch::rules::label(kind)), Group::Sketch, move |_, cx| {
+            v.update(cx, |v, cx| v.sketch_do(cx, |e| e.rule_key(kind)))
+        });
+    }
     let v = viewport.clone();
     commands::register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| v.carry_cancel(cx) || v.sketch_escape(cx));
