@@ -588,6 +588,21 @@ impl WindowsWindow {
             let mut placement = placement;
             if !params.focus {
                 placement.showCmd = SW_SHOWNOACTIVATE.0 as u32;
+                // A new window is created at the top of the z-order, so an unfocused one would cover the active window.
+                if params.kind == WindowKind::Normal {
+                    unsafe {
+                        SetWindowPos(
+                            hwnd,
+                            Some(HWND_BOTTOM),
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                        )
+                        .log_err()
+                    };
+                }
             }
             unsafe { SetWindowPlacement(hwnd, &placement)? };
         } else {
