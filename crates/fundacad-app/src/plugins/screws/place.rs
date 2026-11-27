@@ -115,7 +115,10 @@ pub fn add_mover(viewport: &Entity<Viewport>, cx: &mut App) {
         let (id, spec) = fastener_of(doc, owners)?;
         let viewport = viewport.clone();
         let land: Land = Rc::new(move |at: Option<Placement>, _: &mut Window, cx: &mut App| {
-            let (Some(at), Some(v)) = (at, viewport.upgrade()) else { return };
+            let Some(v) = viewport.upgrade() else { return };
+            let Some(at) = at else {
+                return overlay::toast(cx, Toast::info("Drop the fastener on a face or into a hole."));
+            };
             make(&v, spec.clone(), Some(at), Target::Moved(id.clone()), |_| {}, cx);
         });
         Some(land)
