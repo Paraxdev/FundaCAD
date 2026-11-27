@@ -20,6 +20,7 @@ pulls them in through `[patch.crates-io]`. The `examples` folder and its `[[exam
 | gpui-pre-windows | Cargo.toml | depends on gpui-pre-wgpu; `test-support` turns on its readback |
 | gpui-pre-windows | src/win_renderer.rs | new: windows draw through gpui-pre-wgpu, `FUNDA_GPUI_RENDERER=dx` keeps DirectX 11 |
 | gpui-pre-windows | src/window.rs | uses `WinRenderer`; no `WS_EX_NOREDIRECTIONBITMAP` with wgpu, since Vulkan and GL cannot present without it |
+| gpui-pre-windows | src/window.rs | a normal window opened with `focus: false` goes to the bottom of the z-order before it is shown, so it never covers the active window |
 | gpui-pre-windows | src/gpui_windows.rs | wires `win_renderer` in |
 | gpui-pre-windows | src/shaders.hlsl | drop shadows are clipped to outside the casting element, as in CSS |
 
