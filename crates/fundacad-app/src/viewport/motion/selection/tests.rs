@@ -29,3 +29,12 @@ fn a_snap_lands_at_once() {
     b.retarget(&[(0, None)], 1.0, true);
     assert_eq!(b.pair(0, 0), [1.0, 1.0]);
 }
+
+#[test]
+fn settled_faces_do_not_pile_up() {
+    let mut b = Blend::default();
+    for f in 0..50 {
+        b.retarget(&[(0, Some(vec![f]))], 1.0, false);
+    }
+    assert!(b.from.bodies[&0].1.len() <= 2);
+}

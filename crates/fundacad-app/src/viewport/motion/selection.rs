@@ -37,13 +37,16 @@ impl Levels {
                 continue;
             }
             let all = |l: &Levels| l.bodies.get(&b).map_or(0.0, |(a, _)| *a);
+            let level = lerp(all(self), all(to));
             let mut faces = HashMap::new();
             for l in [self, to] {
                 for &f in l.bodies.get(&b).into_iter().flat_map(|(_, fs)| fs.keys()) {
                     faces.insert(f, lerp(self.at(b, f), to.at(b, f)));
                 }
             }
-            bodies.insert(b, (lerp(all(self), all(to)), faces));
+            // Dropping what matches its body keeps `from` from gathering every face ever selected.
+            faces.retain(|_, v| *v != level);
+            bodies.insert(b, (level, faces));
         }
         Levels { bodies }
     }

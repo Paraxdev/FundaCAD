@@ -323,6 +323,10 @@ impl Renderer {
             let shown = self.drawn.as_ref().map_or(1.0, |d| d.overlay.selection_fade);
             // A rebuild that is not mid fade shows the selection at once, its face ids may have moved.
             self.selection.retarget(selected, shown, self.selected_stale && shown >= 1.0);
+        } else if self.selection.to != super::motion::selection::Levels::of(selected) {
+            // A rebuild can move a picked body to another scene index, or resolve a tool's armed picks, with no new
+            // selection revision.
+            self.selection.retarget(selected, 1.0, true);
         }
         self.selected_revision = revision;
         self.selected_stale = false;
