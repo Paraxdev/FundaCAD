@@ -6,6 +6,7 @@ pub mod areas;
 pub mod dims;
 pub mod escape;
 pub mod glyphs;
+pub mod modify;
 pub mod palette;
 pub mod plane;
 pub mod regions;
@@ -13,6 +14,7 @@ pub mod relations;
 pub mod rules;
 pub mod snap;
 pub mod solve;
+pub mod tools;
 
 use std::collections::HashMap;
 
@@ -37,6 +39,12 @@ pub enum Tool {
     Dimension,
     /// A constraint pick tool, by its .funda type.
     Constrain(&'static str),
+    Trim,
+    Offset,
+    Extend,
+    Fillet,
+    Mirror,
+    Move,
 }
 
 impl Tool {
@@ -51,12 +59,33 @@ impl Tool {
             Tool::Polygon => "polygon",
             Tool::Dimension => "dimension",
             Tool::Constrain(kind) => kind,
+            Tool::Trim => "trim",
+            Tool::Offset => "offset",
+            Tool::Extend => "extend",
+            Tool::Fillet => "fillet-sketch",
+            Tool::Mirror => "mirror-sketch",
+            Tool::Move => "move-sketch",
         })
+    }
+
+    /// Its sketch.hint key.
+    pub fn hint(self) -> &'static str {
+        match self {
+            Tool::Fillet => "fillet",
+            Tool::Mirror => "mirror",
+            Tool::Move => "move",
+            _ => self.action().unwrap_or("select"),
+        }
+    }
+
+    /// The modify tools, which pick whole shapes.
+    pub fn modifies(self) -> bool {
+        matches!(self, Tool::Trim | Tool::Offset | Tool::Extend | Tool::Fillet | Tool::Mirror | Tool::Move)
     }
 
     /// FundaCAD 1's prompt for what the tool wants next, actionTables.ts SKETCH_PROMPTS.
     pub fn prompt(self) -> String {
-        crate::i18n::t(&format!("sketch.hint.{}", self.action().unwrap_or("select")))
+        crate::i18n::t(&format!("sketch.hint.{}", self.hint()))
     }
 
     pub fn label(self) -> String {
@@ -69,6 +98,12 @@ impl Tool {
             Tool::Polygon => "tool.polygon",
             Tool::Dimension => "tool.dimension",
             Tool::Constrain(kind) => return crate::i18n::t(&format!("tool.{kind}")),
+            Tool::Trim => "tool.trim",
+            Tool::Offset => "tool.offset",
+            Tool::Extend => "tool.extend",
+            Tool::Fillet => "tool.fillet",
+            Tool::Mirror => "tool.mirror",
+            Tool::Move => "tool.moveRotate",
         })
     }
 }
@@ -101,8 +136,18 @@ pub struct Editor {
     pub snap_grid: bool,
     /// New dimensions measure instead of drive.
     pub reference: bool,
-    /// A constraint tool's first pick.
+    /// A constraint tool's or Fillet's first pick.
     pub first: Option<String>,
+    /// The number a modify tool is waiting for, as typed so far.
+    pub entry: Option<String>,
+    pub offset: Option<tools::OffsetPick>,
+    /// Fillet's two lines, waiting for the radius.
+    pub fillet: Option<(String, String)>,
+    pub mirror: Option<tools::Mirror>,
+    /// The shape a modify tool would act on under the cursor.
+    pub hot: Option<String>,
+    /// A line for the status bar the viewport says once.
+    pub notice: Option<String>,
 }
 
 pub type Feature = Map<String, Value>;
@@ -213,6 +258,12 @@ impl Editor {
             snap_grid: true,
             reference: false,
             first: None,
+            entry: None,
+            offset: None,
+            fillet: None,
+            mirror: None,
+            hot: None,
+            notice: None,
         };
         e.resolve(false);
         Some(e)
@@ -290,12 +341,18 @@ impl Editor {
         self.clicks.clear();
         self.first = None;
         self.selected = None;
+        self.hot = None;
+        self.cancel_modify();
+        self.mirror = (tool == Tool::Mirror).then(tools::Mirror::default);
     }
 
     pub fn escape_state(&self) -> escape::State {
         escape::State {
             dragging: self.drag.is_some(),
-            pending: !self.clicks.is_empty() || self.first.is_some(),
+            pending: !self.clicks.is_empty()
+                || self.first.is_some()
+                || self.entry.is_some()
+                || self.mirror.as_ref().is_some_and(|m| !m.objects.is_empty() || m.line.is_some()),
             selection: self.selected.is_some(),
             armed: self.tool != Tool::Select,
         }
@@ -313,6 +370,7 @@ impl Editor {
             escape::Action::CancelPending => {
                 self.clicks.clear();
                 self.first = None;
+                self.cancel_modify();
             }
             escape::Action::ClearSelection => self.selected = None,
             escape::Action::ArmSelect => self.set_tool(Tool::Select),
@@ -322,11 +380,15 @@ impl Editor {
     }
 
     pub fn hover(&mut self, raw: DVec2, px_per_mm: f64) {
-        self.cursor = Some(if matches!(self.tool, Tool::Select | Tool::Dimension | Tool::Constrain(_)) {
+        self.cursor = Some(if matches!(self.tool, Tool::Select | Tool::Dimension | Tool::Constrain(_)) || (self.tool.modifies() && self.tool != Tool::Move) {
             Snap::free(raw)
         } else {
             snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, self.snap_grid)
         });
+        if self.tool.modifies() {
+            self.hot = (self.offset.is_none() && self.tool != Tool::Move).then(|| self.nearest(raw, snap::PIXEL_TOL / px_per_mm)).flatten();
+            self.offset_follow(raw);
+        }
     }
 
     fn taken(&self) -> Vec<&str> {
@@ -392,6 +454,11 @@ impl Editor {
             Tool::Constrain(kind) => {
                 let id = self.nearest(raw, snap::PIXEL_TOL / px_per_mm)?;
                 self.rule_pick(kind, id)
+            }
+            Tool::Trim | Tool::Offset | Tool::Extend | Tool::Fillet | Tool::Mirror | Tool::Move => {
+                let tol = snap::PIXEL_TOL / px_per_mm;
+                let hit = self.nearest(raw, tol);
+                self.modify_click(raw, hit, tol)
             }
             _ if self.clicks.is_empty() => {
                 self.clicks.push(at);
@@ -665,16 +732,24 @@ impl Editor {
         let base = sel.split('~').next().unwrap_or(&sel).to_string();
         let name = dims::shape_name(&self.entities, &base);
         self.entities.retain(|e| e.get("id").and_then(Value::as_str) != Some(base.as_str()));
+        self.drop_constraints_on(&base);
+        self.resolve(false);
+        Some(tr!("step.label.delete", n = 1, step = name))
+    }
+
+    /// Drops every constraint naming the shape `base` or one of its sides.
+    fn drop_constraints_on(&mut self, base: &str) {
         let names = |c: &Value| {
             c.as_object().is_some_and(|o| {
                 o.iter()
                     .filter(|(k, _)| *k != "id" && *k != "type")
-                    .any(|(_, v)| v.as_str().is_some_and(|s| s.split('~').next() == Some(base.as_str())))
+                    .any(|(_, v)| v.as_str().is_some_and(|s| s.split('~').next() == Some(base)))
+                    || o.get("pairs").and_then(Value::as_array).is_some_and(|ps| {
+                        ps.iter().flat_map(|p| [&p["src"], &p["cpy"]]).any(|s| s.as_str().is_some_and(|s| s.split('~').next() == Some(base)))
+                    })
             })
         };
         self.constraints.retain(|c| !names(c));
-        self.resolve(false);
-        Some(tr!("step.label.delete", n = 1, step = name))
     }
 
     /// Grabs the point nearest `p` within `tol` mm for a drag.

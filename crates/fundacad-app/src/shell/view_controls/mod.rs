@@ -183,7 +183,7 @@ impl Shell {
         });
         let sketching = self.viewport.read(cx).sketching();
         let history_on = !self.view_ctl.history_hidden;
-        let history_tip = if sketching { "Sketch options (Ctrl+Alt+H)" } else { "History (Ctrl+Alt+H)" };
+        let history_tip = if sketching { "Sketch options" } else { "History" };
         div()
             .flex()
             .flex_col()
