@@ -11,6 +11,7 @@ mod inspector_tests;
 mod items;
 pub mod modal;
 mod params;
+pub(crate) mod radial;
 mod rail;
 mod rail_menu;
 mod sketch;
@@ -89,6 +90,7 @@ impl Shell {
         tool_card::install(&viewport, cx);
         view_controls::install(&viewport, cx);
         canvas_menu::install(&viewport, window, cx);
+        radial::install(&viewport, window, cx);
         inspect::install(&viewport, cx);
         crate::plugins::install(&viewport, window, cx);
         let mut shell = Self {

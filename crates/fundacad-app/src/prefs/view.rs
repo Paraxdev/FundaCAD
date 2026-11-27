@@ -129,7 +129,9 @@ impl PrefsWindow {
                 .on_click(move |_, _, cx| super::set_background(b, cx))
                 .into_any_element()
         });
-        vec![card(t_, t("prefs.background.title"), None, row(chips))]
+        let mut cards = vec![card(t_, t("prefs.background.title"), None, row(chips))];
+        cards.extend(radial_cards(t_));
+        cards
     }
 
     fn access(&self, t_: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -248,6 +250,29 @@ impl Render for PrefsWindow {
                 ),
         )
     }
+}
+
+/// FundaCAD 1's Navigation settings for the ring: the switch, and its mouse trigger while it is on.
+fn radial_cards(t_: &Theme) -> Vec<AnyElement> {
+    use super::radial::{self, Drag};
+    let on = radial::on();
+    let mut cards = vec![card(
+        t_,
+        None::<String>,
+        Some(radial::HINT.to_string()),
+        checkbox(t_, "radial", "Radial menu", on).on_click(move |_, _, cx| radial::set_on(!on, cx)).into_any_element(),
+    )];
+    if on {
+        let now = radial::drag();
+        let chips = Drag::ALL.into_iter().map(|d| {
+            chip(t_, ("radial-drag", d as usize), d.label(), d == now)
+                .on_click(move |_, _, cx| radial::set_drag(d, cx))
+                .into_any_element()
+        });
+        let problem = radial::mouse_trigger(true, now).err();
+        cards.push(card(t_, Some("Mouse trigger".to_string()), problem, row(chips)));
+    }
+    cards
 }
 
 fn row(items: impl IntoIterator<Item = AnyElement>) -> AnyElement {

@@ -6,6 +6,7 @@ mod confirm;
 mod menu;
 mod menubar;
 mod palette;
+pub mod radial;
 mod score;
 #[cfg(test)]
 mod tests;
@@ -27,6 +28,7 @@ use crate::theme::ActiveTheme as _;
 /// was, and keep the table's keys waiting through the `Modal` key context.
 pub struct Overlay {
     menu: Option<menu::OpenMenu>,
+    radial: Option<radial::Ring>,
     palette: Option<palette::Palette>,
     confirm: Option<confirm::Confirm>,
     toasts: toast::Stack,
@@ -49,6 +51,7 @@ pub fn init(cx: &mut App) {
 pub fn new(cx: &mut App) -> Entity<Overlay> {
     let overlay = cx.new(|cx| Overlay {
         menu: None,
+        radial: None,
         palette: None,
         confirm: None,
         toasts: toast::Stack::default(),
@@ -150,7 +153,7 @@ pub fn toggle_palette(window: &mut Window, cx: &mut App) {
 
 impl Overlay {
     fn modal(&self) -> bool {
-        self.menu.is_some() || self.palette.is_some() || self.confirm.is_some()
+        self.menu.is_some() || self.radial.is_some() || self.palette.is_some() || self.confirm.is_some()
     }
 
     fn take_keyboard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -196,6 +199,8 @@ impl Overlay {
             self.confirm_key(key, window, cx);
         } else if self.menu.is_some() {
             self.menu_key(key, window, cx);
+        } else if self.radial.is_some() {
+            self.radial_key(key, window, cx);
         }
     }
 }
@@ -214,9 +219,11 @@ impl Render for Overlay {
                 d.track_focus(&self.focus)
                     .key_context(context)
                     .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.on_key(e, window, cx)))
+                    .on_key_up(cx.listener(|this, e: &KeyUpEvent, window, cx| this.radial_key_up(e, window, cx)))
             })
             .child(self.render_toasts(t, window, cx))
             .when_some(self.render_point_menu(t, window, cx), |d, m| d.child(m))
+            .when_some(self.render_radial(t, cx), |d, r| d.child(r))
             .when_some(self.render_palette(t, window, cx), |d, p| d.child(p))
             .when_some(self.render_confirm(t, cx), |d, c| d.child(c))
     }

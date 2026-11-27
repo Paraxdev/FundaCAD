@@ -131,6 +131,10 @@ pub fn set_enabled(cx: &mut App, id: &str, check: impl Fn(&App) -> bool + 'stati
     }
 }
 
+pub fn registered(cx: &App, id: &str) -> bool {
+    cx.try_global::<Registry>().is_some_and(|r| r.commands.iter().any(|c| c.id == id))
+}
+
 /// A command this build does not have stays enabled, running it says so.
 pub fn enabled(cx: &App, id: &str) -> bool {
     let Some(r) = cx.try_global::<Registry>() else { return true };

@@ -235,6 +235,7 @@ const TABLE: &[Row] = &[
     ("z", "", "viewmode-cycle", G, "Next View Mode"),
     ("z", "s", "viewmode-cycle-back", G, "Previous view mode"),
     ("v", "s", "clean-view", G, "Clean view (hide every overlay, again to bring them back)"),
+    ("w", "", "navigation.radial", G, "Radial menu"),
 ];
 
 /// Every row as shipped, the fixed ones first.

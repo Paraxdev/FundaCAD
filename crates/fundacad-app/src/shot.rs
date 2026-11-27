@@ -112,11 +112,19 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
 /// A command id, `menu:<index>`, `toast:<text>`, `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`,
 /// `click:<x>,<y>` (`,ctrl` or `,shift` to add, `,double` for a double click), `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:`
 /// and `up:` for a held left button, `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down),
-/// `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep with the right button over `ms`, `rclick:<x>,<y>` for a right click, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
+/// `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep with the right button over `ms`, `rclick:<x>,<y>` for a right click, `radial:<x>,<y>[,<hot>]` opens the radial menu there without moving the pointer, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
 /// The timed ones (click, sweeps, wait) run in the shot loop, the rest here.
 fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     if let Some(i) = step.strip_prefix("menu:").and_then(|i| i.parse().ok()) {
         crate::overlay::open_bar(window, cx, i);
+    } else if let Some(at) = step.strip_prefix("radial:") {
+        let n: Vec<f32> = at.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+        let (x, y, hot) = match n[..] {
+            [x, y] => (x, y, None),
+            [x, y, h] => (x, y, Some(h as usize)),
+            _ => return log::error!("shot: radial:{at} wants x,y or x,y,hot"),
+        };
+        crate::shell::radial::open_at(gpui::point(gpui::px(x), gpui::px(y)), hot, window, cx);
     } else if let Some(text) = step.strip_prefix("toast:") {
         let toast = crate::overlay::Toast::info(text.to_string()).with_action("Undo", |_, _| {});
         crate::overlay::toast(cx, toast);

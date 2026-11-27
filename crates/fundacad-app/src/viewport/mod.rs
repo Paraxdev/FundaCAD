@@ -2,6 +2,7 @@ mod blend;
 mod blur;
 mod camera;
 mod context;
+mod gesture;
 mod datums;
 mod demo;
 mod display;
@@ -39,6 +40,7 @@ use gpui::*;
 pub use blur::Frost;
 pub use camera::Camera;
 pub use context::{CanvasClick, CanvasTarget};
+pub use gesture::CanvasGesture;
 pub use display::{Display, Matcap, OverlayKind, Projection, ViewMode};
 #[allow(unused_imports, reason = "fc2/shell reads it for History")]
 pub use issues::FeatureIssue;
@@ -881,9 +883,10 @@ impl Render for Viewport {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, e: &MouseDownEvent, _, _| {
-                    let kind = if e.modifiers.shift { Nav::Pan } else { Nav::Orbit };
-                    this.nav = Some((kind, e.position));
-                    this.right.down(e.position);
+                    if !this.right_down(e) {
+                        let kind = if e.modifiers.shift { Nav::Pan } else { Nav::Orbit };
+                        this.nav = Some((kind, e.position));
+                    }
                 }),
             )
             .on_mouse_down(
@@ -894,11 +897,16 @@ impl Render for Viewport {
                 MouseButton::Right,
                 cx.listener(|this, e: &MouseUpEvent, _, cx| {
                     this.nav = None;
-                    this.right_up(e.position, cx);
+                    if !this.gesture_up(e.position, cx) {
+                        this.right_up(e.position, cx);
+                    }
                 }),
             )
             .on_mouse_up(MouseButton::Middle, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
+                if this.gesture_move(e, cx) {
+                    return;
+                }
                 if this.nav.is_some() || !(this.sketch_move(e, cx) || this.gizmo_move(e, cx) || this.carry_move(e, cx)) {
                     this.mouse_move(e, cx)
                 }
