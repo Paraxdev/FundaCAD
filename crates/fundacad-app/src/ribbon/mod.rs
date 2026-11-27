@@ -7,6 +7,7 @@ mod tests;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ToolItem {
     pub action: &'static str,
+    /// A catalog key, the tool table's own where the tool has one.
     pub label: &'static str,
     pub glyph: &'static str,
 }
@@ -14,146 +15,154 @@ pub struct ToolItem {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Item {
     Tool(ToolItem),
+    /// `label` is a catalog key.
     Split { label: &'static str, children: &'static [ToolItem] },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Group {
+    /// The rail family's id, `heading` the catalog key it shows.
     pub label: &'static str,
+    pub heading: &'static str,
     pub items: &'static [Item],
 }
 
-const fn t(action: &'static str, label: &'static str, glyph: &'static str) -> ToolItem {
+const fn tool(action: &'static str, label: &'static str, glyph: &'static str) -> ToolItem {
     ToolItem { action, label, glyph }
 }
 
 const fn one(action: &'static str, label: &'static str, glyph: &'static str) -> Item {
-    Item::Tool(t(action, label, glyph))
+    Item::Tool(tool(action, label, glyph))
 }
 
 pub const MODEL: &[Group] = &[
     Group {
         label: "Create",
+        heading: "tool.group.create",
         items: &[
-            one("sketch", "Sketch", "sketch"),
-            one("extrude", "Extrude", "extrude"),
+            one("sketch", "tool.sketch", "sketch"),
+            one("extrude", "tool.extrude", "extrude"),
             Item::Split {
-                label: "Primitive",
+                label: "tool.primitive",
                 children: &[
-                    t("primitive-box", "Box", "box"),
-                    t("primitive-cylinder", "Cylinder", "cylinder"),
-                    t("primitive-sphere", "Sphere", "sphere"),
-                    t("primitive-cone", "Cone", "cone"),
-                    t("primitive-torus", "Torus", "torus"),
+                    tool("primitive-box", "feature.box", "box"),
+                    tool("primitive-cylinder", "feature.cylinder", "cylinder"),
+                    tool("primitive-sphere", "feature.sphere", "sphere"),
+                    tool("primitive-cone", "feature.cone", "cone"),
+                    tool("primitive-torus", "feature.torus", "torus"),
                 ],
             },
             Item::Split {
-                label: "Revolve",
-                children: &[t("revolve", "Revolve", "revolve"), t("loft", "Loft", "loft"), t("sweep", "Sweep", "sweep")],
+                label: "tool.revolve",
+                children: &[tool("revolve", "tool.revolve", "revolve"), tool("loft", "tool.loft", "loft"), tool("sweep", "tool.sweep", "sweep")],
             },
         ],
     },
     Group {
         label: "Modify",
+        heading: "tool.group.modify",
         items: &[
-            one("presspull", "Press Pull", "presspull"),
-            one("fillet", "Fillet", "fillet"),
-            one("chamfer", "Chamfer", "chamfer"),
-            one("hole", "Hole", "hole"),
+            one("presspull", "tool.pressPull", "presspull"),
+            one("fillet", "tool.fillet", "fillet"),
+            one("chamfer", "tool.chamfer", "chamfer"),
+            one("hole", "tool.hole", "hole"),
             Item::Split {
-                label: "Move",
+                label: "tool.move",
                 children: &[
-                    t("move", "Move", "move"),
-                    t("scale", "Scale", "scale"),
-                    t("mirror", "Mirror", "mirror"),
-                    t("joint", "Joint", "assembly"),
-                    t("mechanism", "Mechanism", "mechanism"),
-                    t("pattern-linear", "Linear Pattern", "patternLinear"),
-                    t("pattern-circular", "Circular Pattern", "patternCircular"),
-                    t("pattern-rect", "Rectangular Pattern", "patternRect"),
+                    tool("move", "tool.move", "move"),
+                    tool("scale", "tool.scale", "scale"),
+                    tool("mirror", "tool.mirror", "mirror"),
+                    tool("joint", "tool.joint", "assembly"),
+                    tool("mechanism", "tool.mechanism", "mechanism"),
+                    tool("pattern-linear", "tool.linearPattern", "patternLinear"),
+                    tool("pattern-circular", "tool.circularPattern", "patternCircular"),
+                    tool("pattern-rect", "tool.rectPattern", "patternRect"),
                 ],
             },
             Item::Split {
-                label: "Boolean",
+                label: "tool.family.boolean",
                 children: &[
-                    t("boolean-union", "Union", "booleanUnion"),
-                    t("boolean-subtract", "Subtract", "booleanSubtract"),
-                    t("boolean-intersect", "Intersect", "booleanIntersect"),
+                    tool("boolean-union", "tool.union", "booleanUnion"),
+                    tool("boolean-subtract", "tool.subtract", "booleanSubtract"),
+                    tool("boolean-intersect", "tool.intersect", "booleanIntersect"),
                 ],
             },
-            one("split", "Split Body", "split"),
-            one("separate", "Separate", "split"),
+            one("split", "tool.splitBody", "split"),
+            one("separate", "tool.separate", "split"),
             Item::Split {
-                label: "Shell",
+                label: "tool.shell",
                 children: &[
-                    t("shell", "Shell", "shell"),
-                    t("draft", "Draft", "draft"),
-                    t("thread", "Thread", "thread"),
-                    t("text-on-face", "Text on Face", "text"),
-                    t("offset-face", "Offset Face", "offsetFace"),
-                    t("thicken", "Thicken", "thicken"),
+                    tool("shell", "tool.shell", "shell"),
+                    tool("draft", "tool.draft", "draft"),
+                    tool("thread", "tool.thread", "thread"),
+                    tool("text-on-face", "tool.textOnFace", "text"),
+                    tool("offset-face", "tool.offsetFace", "offsetFace"),
+                    tool("thicken", "tool.thicken", "thicken"),
                 ],
             },
-            one("parameters", "Parameters", "parameters"),
+            one("parameters", "tool.parameters", "parameters"),
         ],
     },
     Group {
         label: "Construct",
+        heading: "tool.group.construct",
         items: &[
-            one("offset-plane", "Offset Plane", "offsetPlane"),
+            one("offset-plane", "tool.offsetPlane", "offsetPlane"),
             Item::Split {
-                label: "Plane",
+                label: "tool.family.plane",
                 children: &[
-                    t("datum-plane", "Datum Plane", "datumPlane"),
-                    t("midplane", "Midplane", "midplane"),
-                    t("plane-points", "Plane Through Points", "planePoints"),
-                    t("plane-normal-edge", "Normal to Edge", "datumPlane"),
-                    t("plane-two-edges", "Plane Through Two Edges", "datumPlane"),
-                    t("plane-angle", "Plane at Angle", "datumPlane"),
+                    tool("datum-plane", "tool.datumPlane", "datumPlane"),
+                    tool("midplane", "tool.midplane", "midplane"),
+                    tool("plane-points", "tool.planePoints", "planePoints"),
+                    tool("plane-normal-edge", "tool.normalToEdge", "datumPlane"),
+                    tool("plane-two-edges", "tool.planeTwoEdges", "datumPlane"),
+                    tool("plane-angle", "tool.planeAtAngle", "datumPlane"),
                 ],
             },
             Item::Split {
-                label: "Datum",
+                label: "tool.family.datum",
                 children: &[
-                    t("datum-point", "Datum Point", "datumPoint"),
-                    t("datum-axis", "Datum Axis", "datumAxis"),
-                    t("datum-axis-edge", "Axis on Edge", "datumAxis"),
-                    t("axis-cylinder", "Axis of Cylinder", "datumAxis"),
-                    t("axis-planes", "Axis of Two Planes", "datumAxis"),
+                    tool("datum-point", "tool.datumPoint", "datumPoint"),
+                    tool("datum-axis", "tool.datumAxis", "datumAxis"),
+                    tool("datum-axis-edge", "tool.axisOnEdge", "datumAxis"),
+                    tool("axis-cylinder", "tool.axisOfCylinder", "datumAxis"),
+                    tool("axis-planes", "tool.axisTwoPlanes", "datumAxis"),
                 ],
             },
         ],
     },
     Group {
         label: "Inspect",
+        heading: "tool.group.inspect",
         items: &[
-            one("measure", "Measure", "measure"),
-            one("section", "Section", "section"),
+            one("measure", "tool.measure", "measure"),
+            one("section", "tool.section", "section"),
             Item::Split {
-                label: "Analyze",
+                label: "tool.family.analyze",
                 children: &[
-                    t("properties", "Properties", "properties"),
-                    t("interference", "Interference", "interference"),
-                    t("stress", "Stress", "stress"),
-                    t("draft-analysis", "Overhang", "draftAnalysis"),
-                    t("printability", "Printability", "check"),
-                    t("bed-fit", "Bed Fit Check", "printing/print"),
-                    t("zebra", "Zebra", "zebra"),
-                    t("curvature", "Curvature", "curvature"),
-                    t("component-colors", "Body Colors", "componentColors"),
+                    tool("properties", "tool.properties", "properties"),
+                    tool("interference", "tool.interference", "interference"),
+                    tool("stress", "tool.stress", "stress"),
+                    tool("draft-analysis", "tool.overhang", "draftAnalysis"),
+                    tool("printability", "inspect.printability", "check"),
+                    tool("bed-fit", "inspect.bedFit", "printing/print"),
+                    tool("zebra", "tool.zebra", "zebra"),
+                    tool("curvature", "tool.curvature", "curvature"),
+                    tool("component-colors", "tool.bodyColors", "componentColors"),
                 ],
             },
-            one("materials", "Materials", "material"),
+            one("materials", "tool.materials", "material"),
         ],
     },
     Group {
         label: "Insert",
+        heading: "tool.group.insert",
         items: &[
-            one("import", "Import Mesh", "import"),
-            one("insert-document", "Insert Document", "insertDocument"),
-            one("simplify-mesh", "Simplify Mesh", "simplifyMesh"),
-            one("clean-up", "Clean Up", "cleanUp"),
-            one("compute-all", "Compute All", "computeAll"),
+            one("import", "tool.importMesh", "import"),
+            one("insert-document", "tool.insertDocument", "insertDocument"),
+            one("simplify-mesh", "tool.simplifyMesh", "simplifyMesh"),
+            one("clean-up", "tool.cleanUp", "cleanUp"),
+            one("compute-all", "tool.computeAll", "computeAll"),
         ],
     },
 ];
