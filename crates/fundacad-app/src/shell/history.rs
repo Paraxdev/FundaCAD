@@ -8,15 +8,12 @@ use super::timeline::{self, FieldKind};
 use super::Shell;
 use crate::document::{Feature, Health};
 use crate::i18n::{self, tr};
-use crate::theme::{
-    Rgb, Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, MONO_FONT, R_MD, R_PILL, S_0, S_1, S_2, S_3,
-    W_SEMIBOLD,
-};
-use crate::motion::{self, mix, row_bg};
+use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_MICRO, R_MD, R_PILL, S_0, S_1, S_2, S_3, W_SEMIBOLD};
+use crate::motion::row_bg;
 use crate::timeline::chips::{self, Marks};
 use crate::timeline::rows::Rows;
 use crate::timeline::{self as steps, deps, labels};
-use crate::ui::{float_group, icon, icon_button, text};
+use crate::ui::{icon, icon_button, text};
 
 pub(super) const WIDTH: f32 = 288.;
 const ROW: f32 = 34.;
@@ -261,57 +258,6 @@ impl Shell {
             .children(flag)
             .child(icon(if open { "caretDown" } else { "caretRight" }, 12., t.text_mute));
         row_bg(("step-bg", i), el, picked, hover, selected)
-    }
-
-    pub(super) fn view_controls(&self, t: &Theme) -> Div {
-        let button = |name: &'static str, on: bool| {
-            let (hover, text_hover, dim, hot) = (t.raised, t.text, t.text_dim, t.accent_hot);
-            let el = div().id(name).size(px(40.)).flex().items_center().justify_center().rounded(px(FLOAT_RADIUS - 4.));
-            let wash = t.accent_wash;
-            motion::hover(SharedString::from(format!("view-bg-{name}")), el, move |d, m| {
-                let lift = m.hover * (1. - m.on);
-                d.bg(mix(mix(Rgb::TRANSPARENT, hover, lift), wash, m.on))
-                    .child(icon(name, 18., mix(mix(dim, text_hover, lift), hot, m.on)))
-            })
-            .on(on)
-        };
-        let grid = div()
-            .h(px(32.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .font_family(MONO_FONT)
-            .text_size(px(FS_MICRO))
-            .font_weight(W_SEMIBOLD)
-            .text_color(t.text_dim)
-            .child("10mm");
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(FLOAT_GAP))
-            .child(
-                float_group(t)
-                    .child(button("magnet", false))
-                    .child(grid)
-                    .child(button("views", false))
-                    .child(button("view-reset", false)),
-            )
-            .child(
-                float_group(t)
-                    .child(button("view-matcap", false))
-                    .child(button("view-realtime", true))
-                    .child(button("view-pathtraced", false)),
-            )
-            .child(
-                float_group(t)
-                    .child(button("shaded", false))
-                    .child(button("camera", false))
-                    .child(button("versions", false))
-                    .child(button("history", true)),
-            )
-            .child(float_group(t).child(
-                button("bug", false).on_click(|_, window, cx| crate::commands::run("report-problem", window, cx)),
-            ))
     }
 }
 

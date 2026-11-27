@@ -266,7 +266,9 @@ impl Viewport {
         }
         let Some(p) = self.sketch_point(event.position) else { return self.sketch.is_some() };
         let ppm = self.px_per_mm();
+        let snap_grid = self.display.sketch.snap;
         let Some(e) = self.sketch.as_mut() else { return false };
+        e.snap_grid = snap_grid;
         if e.drag.is_some() {
             if event.pressed_button == Some(MouseButton::Left) {
                 e.drag_to(p);
@@ -419,7 +421,7 @@ impl Viewport {
         let origin = self.bounds.origin;
         let gap = 14.0 / self.px_per_mm();
         let mut layer = div().absolute().top_0().left_0().size_full();
-        for d in e.dims(gap) {
+        for d in e.dims(gap).into_iter().filter(|_| self.display.sketch.dimensions) {
             let Some(s) = self.to_screen(e.plane.to_3d(d.anchor).as_vec3()) else { continue };
             let typing = self.sketch_ui.typing.as_ref().filter(|(k, _)| *k == d.key).map(|(_, t)| format!("{t}|"));
             let conflict = d.constraint.is_some_and(|i| e.solved.conflicts.contains(&i));
@@ -605,7 +607,7 @@ impl Viewport {
             pts.push(pts[0]);
             line(&pts, &plane, 2.0, rgb(color_of(&id)).into(), e.is_construction(&id), window);
         }
-        for d in e.dims(14.0 / self.px_per_mm()) {
+        for d in e.dims(14.0 / self.px_per_mm()).into_iter().filter(|_| self.display.sketch.dimensions) {
             if !d.angle {
                 line(&[d.from, d.to], &plane, 1.0, rgb_a(AID, 0.6), true, window);
             }

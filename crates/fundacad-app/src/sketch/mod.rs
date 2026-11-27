@@ -70,6 +70,8 @@ pub struct Editor {
     pub selected: Option<String>,
     pub drag: Option<Drag>,
     pub polygon_sides: u32,
+    /// The Snapping popover's Grid switch.
+    pub snap_grid: bool,
 }
 
 pub type Feature = Map<String, Value>;
@@ -177,6 +179,7 @@ impl Editor {
             selected: None,
             drag: None,
             polygon_sides: 6,
+            snap_grid: true,
         };
         e.resolve(false);
         Some(e)
@@ -272,7 +275,7 @@ impl Editor {
         self.cursor = Some(if self.tool == Tool::Select || self.tool == Tool::Dimension {
             Snap::free(raw)
         } else {
-            snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, true)
+            snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, self.snap_grid)
         });
     }
 
