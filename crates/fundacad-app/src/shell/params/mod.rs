@@ -393,8 +393,9 @@ impl Render for ParamsPanel {
         let size = window.viewport_size();
         let window_w = size.width / px(1.);
         let card = if super::inspect::shown(self.viewport.read(cx)) { place::card_w(window_w) } else { 0. };
-        let (left, top, width) = place::place(window_w, card, place::card_h());
-        let room = size.height - px(super::titlebar::HEIGHT + top + FLOAT_GAP) - super::status::reach();
+        let stage_h = (size.height - px(super::titlebar::HEIGHT) - super::status::reach()) / px(1.);
+        let (left, top, width) = place::place(window_w, stage_h, card, place::card_h());
+        let room = px((stage_h - top - FLOAT_GAP).max(0.));
         let t = cx.theme().clone();
         let t = &t;
         let head = div()

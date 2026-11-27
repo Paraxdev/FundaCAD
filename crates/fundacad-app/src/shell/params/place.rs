@@ -17,6 +17,8 @@ const LEAST_W: f32 = 200.;
 const CARD_W: f32 = 300.;
 /// FundaCAD 1's .measure-panel min-width.
 const CARD_LEAST: f32 = 180.;
+/// The least height the shelf under the card must leave, enough for the head and a row or two of the body.
+const SHELF_LEAST_H: f32 = 160.;
 
 thread_local! {
     static CARD_H: Cell<Option<f32>> = const { Cell::new(None) };
@@ -37,12 +39,15 @@ pub(in crate::shell) fn card_h() -> Option<f32> {
 }
 
 /// The panel's left edge, top and width in a window `window_w` wide, with an inspect card `card` px wide and
-/// `card_h` tall (once painted) left of the view controls.
-pub fn place(window_w: f32, card: f32, card_h: Option<f32>) -> (f32, f32, f32) {
+/// `card_h` tall (once painted) left of the view controls, over a stage `stage_h` tall down to the status line.
+pub fn place(window_w: f32, stage_h: f32, card: f32, card_h: Option<f32>) -> (f32, f32, f32) {
     let beside = RIGHT_CLEAR + if card > 0. { card + FLOAT_GAP } else { 0. };
     let mut spans = vec![(FLOAT_GAP, window_w - LEFT_CLEAR - beside)];
     if let (true, Some(h)) = (card > 0., card_h) {
-        spans.push((2. * FLOAT_GAP + h, window_w - LEFT_CLEAR - RIGHT_CLEAR));
+        let top = 2. * FLOAT_GAP + h;
+        if stage_h - top - FLOAT_GAP >= SHELF_LEAST_H {
+            spans.push((top, window_w - LEFT_CLEAR - RIGHT_CLEAR));
+        }
     }
     let widest = spans.iter().copied().fold(spans[0], |w, s| if s.1 > w.1 { s } else { w });
     let (top, free) = spans.into_iter().find(|s| s.1 >= MIN_W).unwrap_or(widest);
