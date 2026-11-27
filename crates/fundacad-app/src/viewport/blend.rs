@@ -68,6 +68,73 @@ pub(super) struct Blend {
     /// The latest revision the engine answered.
     replied: u64,
     before: Doc,
+    edit: Option<Edit>,
+}
+
+/// A fillet or chamfer opened from History, FundaCAD 1's startEdit: while it is live the model stops just after it,
+/// over the sharp edges it rounds drawn as a ghost.
+pub(super) struct Edit {
+    /// The revision of the build rolled back to just before the feature, until it lands.
+    rollback: Option<u64>,
+    ghost: Vec<Vec<Vec3>>,
+    label: String,
+    /// The parameter the size is bound to, written in place of the feature, as FundaCAD 1's bareParamRef.
+    param: Option<String>,
+}
+
+/// `doc` built up to the edited feature at `at`, up to just before it when it is not `shown`.
+fn rolled_back(mut doc: Doc, at: usize, shown: bool) -> Doc {
+    crate::timeline::ops::set_rollback(&mut doc, at + usize::from(shown));
+    doc
+}
+
+fn edges_of(f: &Value) -> Vec<Value> {
+    match &f["edges"] {
+        Value::Array(a) => a.clone(),
+        Value::Null => Vec::new(),
+        e => vec![e.clone()],
+    }
+}
+
+/// Where a stored edge is: its `point`, or the middle a match selector keeps.
+fn point_of(selector: &Value) -> Option<Vec3> {
+    let p = selector.get("point").or_else(|| selector.get("fp")?.get("mid"))?;
+    let p: Vec<f32> = p.as_array()?.iter().filter_map(Value::as_f64).map(|c| c as f32).collect();
+    Some(Vec3::from_slice(p.get(..3)?))
+}
+
+const EXPRESSION: &str = "This size is an expression, change it in History";
+
+/// The parameter a drag of `field` on feature `id` writes: the one bound to it, or the one its binding names alone.
+/// Ok(None) when the field is unbound, Err when it follows an expression a drag cannot write.
+fn bound_param(doc: &Doc, id: &str, field: &str) -> Result<Option<String>, &'static str> {
+    let Some(defs) = doc.get("paramDefs").and_then(Value::as_object) else { return Ok(None) };
+    let bound = defs.iter().find(|(_, d)| {
+        let t = |k: &str| d.get("target").and_then(|t| t.get(k)).and_then(Value::as_str);
+        t("kind") == Some("feature") && t("feature") == Some(id) && t("field") == Some(field)
+    });
+    let Some((name, d)) = bound else { return Ok(None) };
+    let expr = d.get("expr").and_then(Value::as_str).unwrap_or_default().trim();
+    if expr.parse::<f64>().is_ok_and(f64::is_finite) {
+        return Ok(Some(name.clone()));
+    }
+    let named = |n: &str| defs.contains_key(n) || doc.get("parameters").and_then(|p| p.get(n)).is_some();
+    let bare = expr.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+        && expr.chars().all(|c| c.is_alphanumeric() || c == '_');
+    if bare && expr != name && named(expr) { Ok(Some(expr.to_string())) } else { Err(EXPRESSION) }
+}
+
+/// Why the step cannot be opened for a drag, None when it can.
+fn edit_refusal(f: &Value) -> Option<&'static str> {
+    let kind = Treatment::of(f.get("type")?.as_str()?)?;
+    if !f.get(kind.field()).is_some_and(Value::is_number) {
+        return Some(EXPRESSION);
+    }
+    let edges = edges_of(f);
+    if edges.is_empty() || !edges.iter().all(|e| point_of(e).is_some()) {
+        return Some("These edges have no point to drag from, change the size in History");
+    }
+    None
 }
 
 impl Blend {
@@ -104,7 +171,11 @@ impl Blend {
     /// `before` with `feature` in place of the dragged one.
     fn doc_with(&self, feature: Option<&Value>) -> Result<Doc, String> {
         let mut doc = self.before.clone();
+        let param = self.edit.as_ref().and_then(|e| e.param.as_deref()).filter(|_| self.same_kind());
         match (&self.original, feature) {
+            (Some(_), Some(_)) if param.is_some() => {
+                fundacad_client::set_param(&mut doc, param.expect("checked"), self.value())?;
+            }
             (Some((at, _)), f) => {
                 let list = doc.get_mut("features").and_then(Value::as_array_mut).ok_or("the document has no features")?;
                 match f {
@@ -115,7 +186,27 @@ impl Blend {
             (None, Some(f)) => tools::insert(&mut doc, f.clone())?,
             (None, None) => {}
         }
-        Ok(doc)
+        match (&self.edit, &self.original) {
+            (Some(_), Some((at, _))) if self.live() => Ok(rolled_back(doc, *at, feature.is_some())),
+            _ => Ok(doc),
+        }
+    }
+
+    fn same_kind(&self) -> bool {
+        self.original.as_ref().is_some_and(|(_, o)| Treatment::of(o["type"].as_str().unwrap_or_default()) == Some(self.kind))
+    }
+
+    /// The edited feature's size is back where it was, so letting go changes nothing.
+    fn unchanged(&self) -> bool {
+        let Some((_, o)) = self.original.as_ref().filter(|_| self.edit.is_some() && self.same_kind()) else { return false };
+        o.get(self.kind.field()).and_then(Value::as_f64) == Some(self.value())
+    }
+
+    /// Why letting go cannot write what the handle shows: a bound size turned into the other treatment would leave
+    /// its parameter bound to a field the feature no longer has.
+    fn refusal(&self) -> Option<String> {
+        let p = self.edit.as_ref()?.param.as_ref().filter(|_| !self.same_kind() && !self.neutral())?;
+        Some(format!("The size follows the parameter {p}, so it stays a {}", self.kind.other().label().to_lowercase()))
     }
 
     fn sent_at(&self, revision: u64) -> Option<&Option<Value>> {
@@ -265,6 +356,9 @@ impl Viewport {
         if self.tool.is_some() || self.sketch.is_some() || self.push.is_some() {
             return false;
         }
+        if self.blend_grab_edit(position, cx) {
+            return true;
+        }
         if self.blend.as_ref().is_some_and(|b| b.open) {
             self.blend_away(cx);
         }
@@ -316,10 +410,7 @@ impl Viewport {
                     self.say("This size is an expression, change it in History".into(), cx);
                     return true;
                 };
-                let edges = match &f["edges"] {
-                    Value::Array(a) => a.clone(),
-                    e => vec![e.clone()],
-                };
+                let edges = edges_of(&f);
                 let mut outcomes = Outcomes::default();
                 outcomes.note(Some(&f), Reply::Built);
                 Blend {
@@ -343,6 +434,7 @@ impl Viewport {
                     sent: Vec::new(),
                     replied: 0,
                     before,
+                    edit: None,
                 }
             }
         };
@@ -350,6 +442,130 @@ impl Viewport {
         self.blend = Some(Blend { grab: Some((blend.signed, proj)), ..blend });
         self.hover = None;
         cx.notify();
+        true
+    }
+
+    /// Opens the fillet or chamfer `id` from History for a drag, as FundaCAD 1's startEdit: the model rolls back to
+    /// just before it to show the sharp edges, then the blend goes back on top with its value box open. True when it
+    /// opened, a refusal is said in the status and the History rows stay the way to change it.
+    pub fn open_blend_step(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.tool.is_some() || self.sketch.is_some() || self.push.is_some() {
+            return false;
+        }
+        self.blend_settle();
+        if self.blend.is_some() {
+            return false;
+        }
+        let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
+        let Some(at) = tools::index_of(&before, id) else { return false };
+        let Some(f) = tools::feature(&before, id).cloned() else { return false };
+        let Some(kind) = f.get("type").and_then(Value::as_str).and_then(Treatment::of) else { return false };
+        let param = match edit_refusal(&f).map_or_else(|| bound_param(&before, id, kind.field()), Err) {
+            Ok(p) => p,
+            Err(why) => {
+                self.say(why.into(), cx);
+                return false;
+            }
+        };
+        let value = f[kind.field()].as_f64().unwrap_or_default();
+        let edges = edges_of(&f);
+        let anchor = point_of(&edges[0]).unwrap_or_default();
+        let mut outcomes = Outcomes::default();
+        outcomes.note(Some(&f), Reply::Built);
+        let label = format!("Edit {}", crate::timeline::labels::name_of(&before, id));
+        let rollback = rolled_back(before.clone(), at, false);
+        self.blend = Some(Blend {
+            id: id.to_string(),
+            edges,
+            original: Some((at, f)),
+            anchor,
+            tangent: None,
+            axis: self.handle_axis(anchor, None),
+            positive: kind,
+            kind,
+            signed: value,
+            grab: None,
+            moved: false,
+            typing: Some(String::new()),
+            open: true,
+            released: false,
+            awaiting: None,
+            range: BlendRange::default().note(value, true),
+            outcomes,
+            sent: Vec::new(),
+            replied: 0,
+            before,
+            edit: Some(Edit { rollback: None, ghost: Vec::new(), label, param }),
+        });
+        self.picking.selection.picks.clear();
+        self.blend_hover = None;
+        self.blend_send(rollback, None, cx);
+        let b = self.blend.as_mut().expect("just set");
+        match b.sent.last() {
+            Some((r, _)) => b.edit.as_mut().expect("just set").rollback = Some(*r),
+            None => self.blend_preview(cx),
+        }
+        let focus = self.sketch_focus(cx);
+        window.focus(&focus, cx);
+        cx.notify();
+        true
+    }
+
+    /// A press on the knob of a blend opened from History takes the handle again, the box stays open.
+    fn blend_grab_edit(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) -> bool {
+        let Some(b) = self.blend.as_ref().filter(|b| b.open && b.grab.is_none()) else { return false };
+        if b.edit.as_ref().is_none_or(|e| e.rollback.is_some()) {
+            return false;
+        }
+        let at = self.local(position);
+        if !self.handle_px(b.anchor, b.axis).is_some_and(|(_, k)| k.distance(at) <= GRAB_PX) {
+            return false;
+        }
+        let proj = self.swipe(b, position);
+        let b = self.blend.as_mut().expect("checked above");
+        b.grab = Some((b.signed, proj));
+        b.moved = false;
+        b.typing = None;
+        b.awaiting = None;
+        cx.notify();
+        true
+    }
+
+    /// The rolled back build of a blend opened from History has landed: its sharp edges become the ghost and the
+    /// handle runs across the first of them. True when `revision` was that build.
+    fn blend_rolled_back(&mut self, revision: u64, cx: &mut Context<Self>) -> bool {
+        let Some(b) = self.blend.as_ref() else { return false };
+        if !b.edit.as_ref().and_then(|e| e.rollback).is_some_and(|r| revision >= r) {
+            return false;
+        }
+        let lines = self.picking.lines();
+        let ghost: Vec<Vec<Vec3>> = b
+            .edges
+            .iter()
+            .filter_map(|sel| {
+                let mut sel = sel.clone();
+                sel["point"] = json!(point_of(&sel)?.to_array());
+                Some(sel)
+            })
+            .filter_map(|sel| match super::resolve::resolve(&self.scene, lines, &sel)? {
+                Pick::Edge { body, edge, .. } => lines.get(self.scene.body_index(&body)?)?.get(edge as usize).cloned(),
+                _ => None,
+            })
+            .collect();
+        let first = ghost.first().and_then(|l| mid_and_tangent(l));
+        let single = b.edges.len() == 1;
+        let (anchor, tangent) = match first {
+            Some((mid, t)) => (mid, t.filter(|_| single)),
+            None => (b.anchor, None),
+        };
+        let axis = self.handle_axis(anchor, tangent);
+        let b = self.blend.as_mut().expect("checked above");
+        b.replied = b.replied.max(revision);
+        (b.anchor, b.tangent, b.axis) = (anchor, tangent, axis);
+        let e = b.edit.as_mut().expect("checked above");
+        e.rollback = None;
+        e.ghost = ghost;
+        self.blend_preview(cx);
         true
     }
 
@@ -376,6 +592,7 @@ impl Viewport {
             sent: Vec::new(),
             replied: 0,
             before,
+            edit: None,
         }
     }
 
@@ -467,6 +684,9 @@ impl Viewport {
     /// Sends what the handle says unless it is a size already refused, which leaves the last one that built on screen.
     fn blend_preview(&mut self, cx: &mut Context<Self>) {
         let Some(b) = self.blend.as_mut() else { return };
+        if b.edit.as_ref().is_some_and(|e| e.rollback.is_some()) {
+            return cx.notify();
+        }
         let current = b.current();
         let key = current.as_ref().map(ed::feature_key);
         b.outcomes.refresh(key.as_deref());
@@ -505,6 +725,9 @@ impl Viewport {
     pub(super) fn blend_reply(&mut self, revision: u64, result: Option<&Map<String, Value>>, cx: &mut Context<Self>) {
         // Edge indices are the old mesh's, the cursor's next move finds the hovered edge again.
         self.blend_hover = None;
+        if self.blend_rolled_back(revision, cx) {
+            return;
+        }
         let Some(b) = self.blend.as_mut() else { return };
         b.replied = b.replied.max(revision);
         let Some(sent) = b.sent_at(revision).cloned() else { return };
@@ -575,7 +798,7 @@ impl Viewport {
     fn blend_record(&mut self) {
         let (Some(b), Some(session)) = (self.blend.as_ref(), self.session.as_ref()) else { return };
         if session.doc != b.before {
-            self.undo.record(b.before.clone(), None, None);
+            self.undo.record(b.before.clone(), None, b.edit.as_ref().map(|e| e.label.clone()));
         }
         self.blend_hover = None;
     }
@@ -601,6 +824,10 @@ impl Viewport {
     pub(super) fn blend_release(&mut self, cx: &mut Context<Self>) {
         let Some(b) = self.blend.as_mut().filter(|b| b.grab.is_some()) else { return };
         b.grab = None;
+        if !b.moved && b.edit.is_some() {
+            b.typing = Some(String::new());
+            return cx.notify();
+        }
         if !b.moved && b.original.is_some() {
             self.blend = None;
             return cx.notify();
@@ -674,14 +901,21 @@ impl Viewport {
                 self.blend = None;
             }
             Commit::Commit { value, unverified } => {
-                if b.neutral() && b.original.is_some() {
-                    // Let go on the origin of a resize keeps the feature as it was.
+                let origin = b.neutral() && b.original.is_some();
+                b.signed = value;
+                if let Some(why) = b.refusal() {
+                    let before = b.before.clone();
+                    self.blend_send(before, None, cx);
+                    self.blend = None;
+                    return self.say(why, cx);
+                }
+                if origin || b.unchanged() {
+                    // Let go on the origin of a resize, or on the size an edit opened with, keeps the feature as it was.
                     let before = b.before.clone();
                     self.blend_send(before, None, cx);
                     self.blend = None;
                     return cx.notify();
                 }
-                b.signed = value;
                 b.open = false;
                 b.typing = None;
                 let current = b.current();
@@ -761,6 +995,9 @@ impl Viewport {
 
     pub(super) fn blend_status(&self) -> Option<String> {
         if let Some(b) = &self.blend {
+            if b.edit.as_ref().is_some_and(|e| e.rollback.is_some()) {
+                return Some(format!("rolling back to before the {}", b.kind.label().to_lowercase()));
+            }
             if let Some(why) = &b.outcomes.refusal {
                 return Some(why.clone());
             }
@@ -779,6 +1016,9 @@ impl Viewport {
             (None, Some(t)) => (t.anchor, self.handle_axis(t.anchor, t.tangent), false),
             (None, None) => return,
         };
+        if let Some(e) = self.blend.as_ref().and_then(|b| b.edit.as_ref()) {
+            self.paint_ghost(&e.ghost, bounds, color.opacity(0.55), window);
+        }
         let Some((a, k)) = self.handle_px(anchor, axis) else { return };
         let color = if refused { hsla(0.0, 0.75, 0.55, 1.0) } else { color };
         let at = |v: Vec2| point(bounds.origin.x + px(v.x), bounds.origin.y + px(v.y));
@@ -799,11 +1039,34 @@ impl Viewport {
         }
     }
 
+    /// The sharp edges a blend opened from History rounds, as FundaCAD 1's BlendEditGhost guide.
+    fn paint_ghost(&self, lines: &[Vec<Vec3>], bounds: Bounds<Pixels>, color: Hsla, window: &mut Window) {
+        let at = |v: Vec2| point(bounds.origin.x + px(v.x), bounds.origin.y + px(v.y));
+        for line in lines {
+            let mut path = PathBuilder::stroke(px(1.6));
+            let mut started = false;
+            for p in line {
+                match (self.project(*p), started) {
+                    (Some(s), true) => path.line_to(at(s)),
+                    (Some(s), false) => {
+                        path.move_to(at(s));
+                        started = true;
+                    }
+                    (None, _) => started = false,
+                }
+            }
+            if let Ok(p) = path.build() {
+                window.paint_path(p, color);
+            }
+        }
+    }
+
     /// The heads-up R or D box beside the knob while a blend is dragged or open.
     pub(super) fn blend_layer(&self) -> Option<AnyElement> {
         let b = self.blend.as_ref()?;
         let (_, k) = self.handle_px(b.anchor, b.axis)?;
         let value = match &b.typing {
+            Some(t) if t.is_empty() && b.edit.is_some() => format!("{}|", ed::fmt_length(b.value())),
             Some(t) if !t.is_empty() || b.open => format!("{t}|"),
             _ if b.neutral() => "0".into(),
             _ => ed::fmt_length(b.value()),

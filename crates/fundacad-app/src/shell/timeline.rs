@@ -217,7 +217,10 @@ impl Shell {
         window.focus(&self.focus, cx);
         if ev.click_count() >= 2 {
             let id = id.to_string();
-            self.viewport.update(cx, |v, cx| v.open_sketch_step(&id, cx));
+            self.viewport.update(cx, |v, cx| {
+                v.open_sketch_step(&id, cx);
+                v.open_blend_step(&id, window, cx);
+            });
         }
         cx.notify();
     }

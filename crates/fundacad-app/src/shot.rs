@@ -93,7 +93,7 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
 }
 
 /// A command id, `menu:<index>`, `toast:<text>`, `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`,
-/// `click:<x>,<y>` (`,ctrl` or `,shift` to add), `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:`
+/// `click:<x>,<y>` (`,ctrl` or `,shift` to add, `,double` for a double click), `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:`
 /// and `up:` for a held left button, `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down),
 /// `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep with the right button over `ms`, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
 /// The timed ones (click, sweeps, wait) run in the shot loop, the rest here.
@@ -152,6 +152,7 @@ fn mouse(at: &str, press: Option<bool>, window: &mut gpui::Window, cx: &mut App)
         _ => Modifiers::default(),
     };
     let held = at.ends_with(",held").then_some(MouseButton::Left);
+    let click_count = if at.ends_with(",double") { 2 } else { 1 };
     let position = point(px(x), px(y));
     let button = MouseButton::Left;
     let event = match press {
@@ -161,9 +162,9 @@ fn mouse(at: &str, press: Option<bool>, window: &mut gpui::Window, cx: &mut App)
                 PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }),
                 cx,
             );
-            PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count: 1, first_mouse: false })
+            PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count, first_mouse: false })
         }
-        Some(false) => PlatformInput::MouseUp(MouseUpEvent { button, position, modifiers, click_count: 1 }),
+        Some(false) => PlatformInput::MouseUp(MouseUpEvent { button, position, modifiers, click_count }),
     };
     window.dispatch_event(event, cx);
 }
