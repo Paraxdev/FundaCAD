@@ -305,18 +305,18 @@ fn fmt(v: f64) -> String {
     s.strip_suffix(".0").map(str::to_owned).unwrap_or(s)
 }
 
-pub fn pill(t: &Theme, id: impl Into<ElementId>, label: &str, on: bool) -> Stateful<Div> {
-    let hover = t.raised_2;
-    text(t, FS_MICRO)
-        .id(id)
+pub fn pill(t: &Theme, id: impl Into<ElementId>, label: &str, on: bool) -> crate::motion::Transition<Stateful<Div>> {
+    let id = id.into();
+    let el = text(t, FS_MICRO)
+        .id(id.clone())
         .px(px(S_2))
         .h(px(20.))
         .flex()
         .items_center()
         .rounded(px(R_MD))
-        .map(|d| if on { d.bg(t.accent).text_color(t.on_accent) } else { d.bg(t.raised).text_color(t.text) })
-        .hover(move |s| s.bg(hover))
-        .child(label.to_string())
+        .text_color(if on { t.on_accent } else { t.text })
+        .child(label.to_string());
+    crate::motion::hover_bg(id, el, if on { t.accent } else { t.raised }, t.raised_2)
 }
 
 fn section(t: &Theme, label: impl Into<SharedString>) -> Div {

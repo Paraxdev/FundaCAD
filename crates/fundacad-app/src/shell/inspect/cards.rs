@@ -285,15 +285,15 @@ impl Shell {
             for (k, f) in findings.iter().enumerate() {
                 let at = (f.body.clone(), f.face);
                 let leave = at.clone();
+                let row = div()
+                    .id(ElementId::Name(format!("finding:{bi}:{k}").into()))
+                    .flex()
+                    .gap(px(S_2))
+                    .px(px(S_1))
+                    .rounded(px(6.))
+                    .cursor_pointer();
                 card = card.child(
-                    div()
-                        .id(ElementId::Name(format!("finding:{bi}:{k}").into()))
-                        .flex()
-                        .gap(px(S_2))
-                        .px(px(S_1))
-                        .rounded(px(6.))
-                        .hover(|d| d.bg(t.hover_wash))
-                        .cursor_pointer()
+                    crate::motion::hover_bg(ElementId::Name(format!("finding-bg:{bi}:{k}").into()), row, crate::theme::Rgb::TRANSPARENT, t.hover_wash)
                         .child(div().pt(px(4.)).child(swatch(f.rgb)))
                         .child(
                             div()

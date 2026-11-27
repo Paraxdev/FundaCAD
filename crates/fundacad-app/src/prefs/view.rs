@@ -307,8 +307,7 @@ impl PrefsWindow {
             key.opacity(0.6).into_any_element()
         } else {
             let id = r.id.clone();
-            key.cursor_pointer()
-                .hover(|s| s.bg(t_.raised_2))
+            hover_bg(("key-bg", i), key.cursor_pointer(), Rgb::TRANSPARENT, t_.raised_2)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     (this.recording, this.ask, this.note) = (Some(id.clone()), None, None);
                     cx.notify();
@@ -351,7 +350,7 @@ impl Render for PrefsWindow {
         };
         let nav = Tab::ALL.into_iter().enumerate().map(|(i, tab)| {
             let on = tab == self.tab;
-            text(t_, FS_BODY)
+            let el = text(t_, FS_BODY)
                 .id(("tab", i))
                 .px(px(S_3))
                 .h(px(t_.hit(30.)))
@@ -360,10 +359,9 @@ impl Render for PrefsWindow {
                 .rounded(px(R_MD))
                 .font_weight(if on { W_SEMIBOLD } else { W_MEDIUM })
                 .text_color(if on { t_.text } else { t_.text_dim })
-                .when(on, |d| d.bg(t_.accent_wash))
-                .when(!on, |d| d.cursor_pointer().hover(|s| s.bg(t_.hover_wash)))
-                .child(tab.label())
-                .on_click(cx.listener(move |this, _, _, cx| {
+                .when(!on, |d| d.cursor_pointer())
+                .child(tab.label());
+            motion::row_bg(("tab-bg", i), el, on, t_.hover_wash, t_.accent_wash).on_click(cx.listener(move |this, _, _, cx| {
                     (this.tab, this.recording, this.ask, this.note) = (tab, None, None, None);
                     cx.notify();
                 }))
