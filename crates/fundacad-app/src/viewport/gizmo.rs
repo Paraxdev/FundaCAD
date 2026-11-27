@@ -1,5 +1,6 @@
 //! Drag handles over the view for a running Move or pattern: arrows slide a move or set a pattern's spacing, Move's
-//! rings turn it, a circular pattern's arrows choose the axis and sweep its angle.
+//! rings turn it, a circular pattern's arrows choose the axis and sweep its angle. Split, Draft and Offset Face get
+//! one arrow along their plane or face normal for the offset, the angle and the distance.
 
 #[cfg(test)]
 mod tests;
@@ -28,7 +29,22 @@ pub enum Kind {
     Linear,
     Rect,
     Circular,
+    /// One arrow along a plane or face normal: a split's offset, a draft's angle, a face offset's distance.
+    Split,
+    Draft,
+    OffsetFace,
 }
+
+impl Kind {
+    pub fn along_normal(self) -> bool {
+        matches!(self, Kind::Split | Kind::Draft | Kind::OffsetFace)
+    }
+}
+
+/// FundaCAD 1's draftTool limit, past it the faces fold over.
+const MAX_DRAFT: f64 = 60.0;
+/// Degrees a draft drag snaps to, Shift makes it a tenth.
+const DRAFT_STEP: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Handle {
@@ -42,6 +58,11 @@ pub struct Gizmo {
     pivot: Vec3,
     hover: Option<Handle>,
     drag: Option<Drag>,
+    /// For the kinds along a normal: the normal, and a draft's height above its neutral plane.
+    normal: Vec3,
+    lever: f32,
+    /// The draft axis `lever` was taken for.
+    lever_axis: Option<String>,
 }
 
 struct Drag {
@@ -59,6 +80,10 @@ pub fn kind(f: &Value) -> Option<Kind> {
         "patternLinear" => (Kind::Linear, &["spacing"]),
         "patternRect" => (Kind::Rect, &["spacingX", "spacingY"]),
         "patternCircular" => (Kind::Circular, &["angle"]),
+        // A split on a datum plane goes where the datum goes, the inspector shows it no offset either.
+        "split" if f.get("planeId").and_then(Value::as_str).is_none_or(str::is_empty) => (Kind::Split, &["offset"]),
+        "draft" => (Kind::Draft, &["angle"]),
+        "offsetFace" => (Kind::OffsetFace, &["distance"]),
         _ => return None,
     };
     let bound = keys.iter().any(|k| f.get(*k).is_some_and(|v| !v.is_null() && !v.is_number()));
@@ -284,12 +309,145 @@ pub fn wrap(d: f64) -> f64 {
     d
 }
 
+fn vec3(v: Option<&Value>) -> Option<Vec3> {
+    let a: Vec<f32> = v?.as_array()?.iter().filter_map(|x| x.as_f64().map(|x| x as f32)).collect();
+    (a.len() == 3).then(|| Vec3::new(a[0], a[1], a[2]))
+}
+
+/// A split's plane before its offset, as a point on it and its unit normal, the frames the builder names.
+pub fn split_plane(f: &Value) -> Option<(Vec3, Vec3)> {
+    match f.get("plane") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(n)) => match n.as_str() {
+            "XY" => Some((Vec3::ZERO, Vec3::Z)),
+            "XZ" => Some((Vec3::ZERO, Vec3::NEG_Y)),
+            "YZ" => Some((Vec3::ZERO, Vec3::X)),
+            _ => None,
+        },
+        Some(p) => Some((vec3(p.get("origin"))?, vec3(p.get("normal"))?.try_normalize()?)),
+    }
+}
+
+/// The builder's neutral plane sits at the body's low end along the pull axis, so this is how far the face point
+/// stands above it.
+pub fn draft_lever(point: Vec3, low: Vec3, axis: &str) -> f32 {
+    let k = NAMES.iter().position(|n| *n == axis).unwrap_or(2);
+    (point[k] - low[k]).abs()
+}
+
+/// draftMath: a face swung by `angle` degrees about a neutral line `lever` away moves this far along its normal.
+pub fn draft_delta(angle: f64, lever: f32) -> f64 {
+    if lever <= 1e-3 {
+        return 0.0;
+    }
+    angle.clamp(-MAX_DRAFT, MAX_DRAFT).to_radians().tan() * lever as f64
+}
+
+pub fn draft_angle(delta: f64, lever: f32) -> f64 {
+    if lever <= 1e-3 || !delta.is_finite() {
+        return 0.0;
+    }
+    delta.atan2(lever as f64).to_degrees().clamp(-MAX_DRAFT, MAX_DRAFT)
+}
+
+/// How far along the normal the arrow stands for the feature's value.
+pub fn along(kind: Kind, f: &Value, lever: f32) -> f64 {
+    match kind {
+        Kind::Split => num(f, "offset"),
+        Kind::OffsetFace => num(f, "distance"),
+        Kind::Draft => draft_delta(num(f, "angle"), lever),
+        _ => 0.0,
+    }
+}
+
+/// The feature after a drag of `travel` along the normal from `start`.
+pub fn pushed(kind: Kind, start: &Value, lever: f32, travel: f64, step: f64, fine: bool) -> Value {
+    let mut f = start.clone();
+    match kind {
+        Kind::Split => {
+            let v = snap(num(start, "offset") + travel, step);
+            match f.as_object_mut() {
+                Some(o) if v == 0.0 => {
+                    o.remove("offset");
+                }
+                _ => f["offset"] = json!(v),
+            }
+        }
+        Kind::OffsetFace => f["distance"] = json!(snap(num(start, "distance") + travel, step)),
+        Kind::Draft if lever > 1e-3 => {
+            let raw = draft_angle(draft_delta(num(start, "angle"), lever) + travel, lever);
+            let by = if fine { DRAFT_STEP / 10.0 } else { DRAFT_STEP };
+            f["angle"] = json!(snap(raw, by).clamp(-MAX_DRAFT, MAX_DRAFT));
+        }
+        _ => {}
+    }
+    f
+}
+
+/// What a normal arrow's frame is taken from: a split's plane and bodies, a face tool's first face alone, so an edit
+/// of the value or of the other faces leaves the arrow where it was.
+pub fn frame_key(kind: Kind, f: &Value) -> String {
+    let get = |k: &str| f.get(k).unwrap_or(&Value::Null).to_string();
+    match kind {
+        Kind::Split => format!("{} {} {}", get("plane"), get("bodies"), get("body")),
+        _ => first_face(f).map_or_else(String::new, Value::to_string),
+    }
+}
+
+fn first_face(f: &Value) -> Option<&Value> {
+    let faces = f.get("faces")?;
+    faces.as_array().map_or(Some(faces), |a| a.first())
+}
+
+/// The bodies a split cuts, in the engine's order: `bodies`, then `body`, then the last body.
+pub fn split_sources(f: &Value) -> Value {
+    if let Some(a) = f.get("bodies").and_then(Value::as_array).filter(|a| !a.is_empty()) {
+        return json!({"bodies": a});
+    }
+    match f.get("body").and_then(Value::as_str).filter(|b| !b.is_empty()) {
+        Some(b) => json!({"bodies": [b]}),
+        None => json!({}),
+    }
+}
+
+/// Where a normal arrow stands, none for a draft whose face lies on its neutral plane.
+pub fn arrow_at(kind: Kind, f: &Value, base: Vec3, normal: Vec3, lever: f32) -> Option<Vec3> {
+    if kind == Kind::Draft && lever <= 1e-3 {
+        return None;
+    }
+    Some(base + normal * along(kind, f, lever) as f32)
+}
+
+/// The one arrow along `normal`, coloured as the world axis it leans on most.
+pub fn outline_along(at: Vec3, normal: Vec3, world_per_px: f32) -> Vec<(Handle, Vec<Vec3>)> {
+    let a = normal.abs();
+    let k = if a.x >= a.y && a.x >= a.z { 0 } else if a.y >= a.z { 1 } else { 2 };
+    vec![(Handle::Arrow(k), vec![at, at + normal * ARROW * world_per_px])]
+}
+
 impl Viewport {
     /// The running tool's feature when it has handles, with its kind and where they sit.
     fn gizmo_target(&mut self) -> Option<(Kind, Value, Vec3)> {
         let tool = self.tool.as_ref().filter(|t| t.arm.is_none())?;
         let f = tools::feature(self.doc()?, &tool.feature)?.clone();
         let kind = kind(&f)?;
+        if kind.along_normal() {
+            let key = format!("{} {}", tool.feature, frame_key(kind, &f));
+            let axis = f.get("axis").and_then(Value::as_str).unwrap_or("Z").to_string();
+            if self.gizmo.drag.is_none() {
+                if key != self.gizmo.key {
+                    (self.gizmo.pivot, self.gizmo.normal) = self.normal_frame(kind, &f)?;
+                    self.gizmo.key = key;
+                    self.gizmo.lever_axis = None;
+                }
+                if kind == Kind::Draft && self.gizmo.lever_axis.as_deref() != Some(&axis) {
+                    self.gizmo.lever = self.draft_lever_of(&f, &axis).unwrap_or(0.0);
+                    self.gizmo.lever_axis = Some(axis);
+                }
+            }
+            let at = arrow_at(kind, &f, self.gizmo.pivot, self.gizmo.normal, self.gizmo.lever)?;
+            return Some((kind, f, at));
+        }
         let key = format!(
             "{} {} {}",
             tool.feature,
@@ -305,6 +463,29 @@ impl Viewport {
         }
         let at = anchor(kind, &f, self.gizmo.pivot);
         Some((kind, f, at))
+    }
+
+    /// Where a normal arrow starts at the value 0 and which way it points.
+    fn normal_frame(&self, kind: Kind, f: &Value) -> Option<(Vec3, Vec3)> {
+        if kind == Kind::Split {
+            let (o, n) = split_plane(f)?;
+            let (lo, hi) = tools::sources_extent(&split_sources(f), &self.shown_bodies())?;
+            let centre = (Vec3::from(lo) + Vec3::from(hi)) * 0.5;
+            return Some((centre - n * n.dot(centre - o), n));
+        }
+        let first = first_face(f)?;
+        let point = vec3(first.get("point"))?;
+        let Some(crate::selection::Pick::Face { normal, .. }) = super::resolve::resolve(&self.scene, &[], first) else {
+            return None;
+        };
+        Some((point, Vec3::from(normal).try_normalize()?))
+    }
+
+    /// A draft face's height above the low side of its body along `axis`.
+    fn draft_lever_of(&self, f: &Value, axis: &str) -> Option<f32> {
+        let body = first_face(f)?.get("body")?.as_str()?;
+        let (lo, _) = tools::sources_extent(&json!({"bodies": [body]}), &self.shown_bodies())?;
+        Some(draft_lever(self.gizmo.pivot, Vec3::from(lo), axis))
     }
 
     /// Drops the cached pivot and takes it again from the bodies as they stand, before the tool's feature builds.
@@ -323,7 +504,11 @@ impl Viewport {
     fn gizmo_shapes(&self, kind: Kind, at: Vec3) -> Option<Vec<(Handle, Vec<Vec2>)>> {
         let wpp = self.world_per_px(at)?;
         let screen = |w: &Vec3| self.to_screen(*w).map(|p| Vec2::new(p.x.as_f32(), p.y.as_f32()));
-        outline(kind, at, wpp)
+        let lines = match kind.along_normal() {
+            true => outline_along(at, self.gizmo.normal, wpp),
+            false => outline(kind, at, wpp),
+        };
+        lines
             .iter()
             .map(|(h, line)| line.iter().map(screen).collect::<Option<Vec<_>>>().map(|l| (*h, l)))
             .collect()
@@ -333,6 +518,7 @@ impl Viewport {
     fn gizmo_reading(&self, kind: Kind, handle: Handle, at: Vec3, position: Point<Pixels>) -> Option<f64> {
         let (o, d) = self.ray_at(position);
         let (axis, angular) = match handle {
+            _ if kind.along_normal() => (self.gizmo.normal, false),
             Handle::Arrow(k) => (AXES[k], kind == Kind::Circular),
             Handle::Ring(k) => (AXES[k], true),
         };
@@ -392,7 +578,10 @@ impl Viewport {
         let angular = matches!(handle, Handle::Ring(_)) || kind == Kind::Circular;
         drag.travel = if angular { drag.travel + wrap(reading - drag.last) } else { drag.travel + reading - drag.last };
         drag.last = reading;
-        let next = dragged(kind, &drag.start, self.gizmo.pivot, handle, drag.travel, step, e.modifiers.shift);
+        let next = match kind.along_normal() {
+            true => pushed(kind, &drag.start, self.gizmo.lever, drag.travel, step, e.modifiers.shift),
+            false => dragged(kind, &drag.start, self.gizmo.pivot, handle, drag.travel, step, e.modifiers.shift),
+        };
         self.gizmo_apply(&next, cx);
         true
     }

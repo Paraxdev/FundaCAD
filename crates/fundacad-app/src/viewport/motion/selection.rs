@@ -23,6 +23,10 @@ impl Levels {
         Self { bodies }
     }
 
+    pub fn all(&self, body: usize) -> f32 {
+        self.bodies.get(&body).map_or(0.0, |(all, _)| *all)
+    }
+
     pub fn at(&self, body: usize, face: u32) -> f32 {
         self.bodies.get(&body).map_or(0.0, |(all, faces)| faces.get(&face).copied().unwrap_or(*all))
     }
@@ -70,6 +74,11 @@ impl Blend {
 
     pub fn pair(&self, body: usize, face: u32) -> [f32; 2] {
         [self.from.at(body, face), self.to.at(body, face)]
+    }
+
+    /// How selected the body as a whole shows, before and now, for its section cap.
+    pub fn whole(&self, body: usize) -> [f32; 2] {
+        [self.from.all(body), self.to.all(body)]
     }
 }
 

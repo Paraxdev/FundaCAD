@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+#[cfg(test)]
+#[path = "renderer_tests.rs"]
+mod tests;
+
 use glam::Vec3;
 use gpui::{DevicePixels, Size};
 use gpui_wgpu::{wgpu, WgpuContext};
@@ -10,7 +14,7 @@ use super::camera::Camera;
 use super::scene::{Body, Scene, Vertex};
 
 const SAMPLES: u32 = 4;
-const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth24PlusStencil8;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -22,6 +26,49 @@ struct Uniforms {
     clip: [f32; 4],
     /// xyz: the build direction, w: the overhang threshold in degrees. Off when xyz is zero.
     shade: [f32; 4],
+    /// x: the hatch pitch, y: the stripe width, both in device pixels.
+    hatch: [f32; 4],
+}
+
+/// The cap quad on the plane `clip` over the box `min` to `max`, as its middle and half side.
+pub(crate) fn cap_quad(clip: [f32; 4], min: Vec3, max: Vec3) -> [f32; 4] {
+    let n = Vec3::new(clip[0], clip[1], clip[2]);
+    if n.length_squared() == 0.0 || min.cmpgt(max).any() {
+        return [0.0; 4];
+    }
+    let centre = (min + max) * 0.5;
+    let on = centre - n * (n.dot(centre) - clip[3]) / n.length_squared();
+    let half = (max - min).length() * 0.525 + 0.5 + (on - centre).length();
+    [on.x, on.y, on.z, half]
+}
+
+/// Whether the plane `clip` runs through the box `min` to `max` or touches it.
+pub(crate) fn straddles(clip: [f32; 4], min: Vec3, max: Vec3) -> bool {
+    let n = Vec3::new(clip[0], clip[1], clip[2]);
+    if n.length_squared() == 0.0 || min.cmpgt(max).any() {
+        return false;
+    }
+    let reach = n.abs().dot((max - min) * 0.5);
+    (n.dot((min + max) * 0.5) - clip[3]).abs() <= reach + 1e-4 * n.length() * clip[3].abs().max(1.0)
+}
+
+/// A body's box widened by the stretch that moves some of its vertices by `offset`.
+pub(crate) fn stretched(bounds: (Vec3, Vec3), offset: Vec3) -> (Vec3, Vec3) {
+    (bounds.0.min(bounds.0 + offset), bounds.1.max(bounds.1 + offset))
+}
+
+/// The cap of one body, off when the plane misses it.
+pub(crate) fn body_cap(clip: Option<[f32; 4]>, bounds: (Vec3, Vec3)) -> [f32; 4] {
+    match clip {
+        Some(clip) if straddles(clip, bounds.0, bounds.1) => cap_quad(clip, bounds.0, bounds.1),
+        _ => [0.0; 4],
+    }
+}
+
+/// FundaCAD 1's hatch, a 9 px pitch and 2 px stripes at the given scale.
+pub(crate) fn hatch(scale: f32) -> [f32; 4] {
+    let scale = if scale > 0.0 { scale } else { 1.0 };
+    [9.0 * scale, 2.0 * scale, 0.0, 0.0]
 }
 
 #[repr(C)]
@@ -34,6 +81,10 @@ struct BodyUniforms {
     /// x: how far the hover has faded in, y: how much is left of the one fading out, z: how far the selection has
     /// gone from what was selected before to what is now.
     fade: [f32; 4],
+    /// xyz: the middle of this body's section cap on the plane, w: half its side. Off when w is zero.
+    cap: [f32; 4],
+    /// x and y: whether the whole body was selected before and is now, 1 or 0.
+    selected: [f32; 4],
 }
 
 /// What one frame shows beyond the scene.
@@ -69,6 +120,9 @@ struct GpuBody {
     mask: wgpu::Buffer,
     /// Per vertex, how selected it showed when the fade began and how selected it is now.
     selected: wgpu::Buffer,
+    /// What `selected` holds as now.
+    whole: [f32; 2],
+    bounds: (Vec3, Vec3),
     vertex_count: usize,
     indices: wgpu::Buffer,
     index_count: u32,
@@ -92,6 +146,8 @@ pub struct Renderer {
     queue: Arc<wgpu::Queue>,
     format: wgpu::TextureFormat,
     pipeline: wgpu::RenderPipeline,
+    count_pipeline: wgpu::RenderPipeline,
+    cap_pipeline: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     body_layout: wgpu::BindGroupLayout,
@@ -157,49 +213,84 @@ impl Renderer {
             bind_group_layouts: &[Some(&layout), Some(&body_layout)],
             immediate_size: 0,
         });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("viewport"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs"),
-                compilation_options: Default::default(),
-                buffers: &[
-                    Some(wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<Vertex>() as u64,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32],
-                    }),
-                    Some(wgpu::VertexBufferLayout {
-                        array_stride: 4,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![3 => Float32],
-                    }),
-                    Some(wgpu::VertexBufferLayout {
-                        array_stride: 8,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![4 => Float32x2],
-                    }),
-                ],
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: Default::default(),
-                bias: Default::default(),
+        let buffers = [
+            Some(wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<Vertex>() as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32],
             }),
-            multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs"),
-                compilation_options: Default::default(),
-                targets: &[Some(format.into())],
+            Some(wgpu::VertexBufferLayout {
+                array_stride: 4,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![3 => Float32],
             }),
-            multiview_mask: None,
-            cache: None,
-        });
+            Some(wgpu::VertexBufferLayout {
+                array_stride: 8,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![4 => Float32x2],
+            }),
+        ];
+        let make = |label, vs, fs, buffers: &[Option<wgpu::VertexBufferLayout>], depth, write_mask| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some(vs),
+                    compilation_options: Default::default(),
+                    buffers,
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(depth),
+                multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(fs),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let depth = |write, compare, stencil| wgpu::DepthStencilState {
+            format: DEPTH,
+            depth_write_enabled: Some(write),
+            depth_compare: Some(compare),
+            stencil,
+            bias: Default::default(),
+        };
+        let parity = |compare, op| {
+            let face = wgpu::StencilFaceState { compare, fail_op: wgpu::StencilOperation::Keep, depth_fail_op: op, pass_op: op };
+            wgpu::StencilState { front: face, back: face, read_mask: 1, write_mask: 1 }
+        };
+        let pipeline = make(
+            "viewport",
+            "vs",
+            "fs",
+            &buffers,
+            depth(true, wgpu::CompareFunction::Less, Default::default()),
+            wgpu::ColorWrites::ALL,
+        );
+        // Each clipped triangle over a sample flips its low bit, so the bit ends set where the plane runs inside the
+        // body, however many shells it has.
+        let count_pipeline = make(
+            "viewport section count",
+            "vs",
+            "fs_count",
+            &buffers,
+            depth(false, wgpu::CompareFunction::Always, parity(wgpu::CompareFunction::Always, wgpu::StencilOperation::Invert)),
+            wgpu::ColorWrites::empty(),
+        );
+        // The cap clears the bit it reads, so the next body counts from zero.
+        let cap_pipeline = make(
+            "viewport section cap",
+            "vs_cap",
+            "fs_cap",
+            &[],
+            depth(true, wgpu::CompareFunction::Less, parity(wgpu::CompareFunction::Equal, wgpu::StencilOperation::Zero)),
+            wgpu::ColorWrites::ALL,
+        );
         let align = device.limits().min_uniform_buffer_offset_alignment as u64;
         let body_stride = (std::mem::size_of::<BodyUniforms>() as u64).div_ceil(align) * align;
         Self {
@@ -207,6 +298,8 @@ impl Renderer {
             queue: context.queue.clone(),
             format,
             pipeline,
+            count_pipeline,
+            cap_pipeline,
             uniforms,
             bind_group,
             body_layout,
@@ -244,13 +337,17 @@ impl Renderer {
         let mut old: Vec<Option<GpuBody>> = std::mem::take(&mut self.bodies).into_iter().map(Some).collect();
         for body in &scene.bodies {
             let kept = old.iter_mut().find(|o| o.as_ref().is_some_and(|o| Arc::ptr_eq(&o.source, &body.source)));
-            let gpu = match kept.and_then(Option::take) {
+            let mut gpu = match kept.and_then(Option::take) {
                 Some(gpu) => {
                     self.queue.write_buffer(&gpu.mask, 0, bytemuck::cast_slice(&vec![0f32; gpu.vertex_count]));
                     gpu
                 }
                 None => self.upload(body),
             };
+            gpu.bounds = body.vertices.iter().fold((Vec3::INFINITY, Vec3::NEG_INFINITY), |(lo, hi), v| {
+                let p = Vec3::from(v.position);
+                (lo.min(p), hi.max(p))
+            });
             self.bodies.push(gpu);
         }
         if self.body_uniforms.as_ref().is_none_or(|(_, _, n)| *n < self.bodies.len()) {
@@ -294,6 +391,8 @@ impl Renderer {
                 bytemuck::cast_slice(&vec![0f32; body.vertices.len().max(1) * 2]),
                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             ),
+            whole: [0.0; 2],
+            bounds: (Vec3::INFINITY, Vec3::NEG_INFINITY),
             vertex_count: body.vertices.len().max(1),
             indices: init("body indices", bytemuck::cast_slice(&body.indices), wgpu::BufferUsages::INDEX),
             index_count: body.indices.len() as u32,
@@ -335,6 +434,7 @@ impl Renderer {
             let mut pairs: Vec<[f32; 2]> = body.vertices.iter().map(|v| self.selection.pair(i, v.face)).collect();
             pairs.resize(gpu.vertex_count, [0.0; 2]);
             self.queue.write_buffer(&gpu.selected, 0, bytemuck::cast_slice(&pairs));
+            gpu.whole = self.selection.whole(i);
         }
     }
 
@@ -440,21 +540,26 @@ impl Renderer {
             encode_srgb: [if self.format.is_srgb() { 0.0 } else { 1.0 }; 4],
             clip: overlay.clip.unwrap_or_default(),
             shade: overlay.shade.unwrap_or_default(),
+            hatch: hatch(self.scale),
         };
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
+        let mut capped = vec![false; self.bodies.len()];
         if let Some((buffer, _, _)) = &self.body_uniforms {
-            for i in 0..self.bodies.len() {
+            for (i, gpu) in self.bodies.iter().enumerate() {
                 let (mut hover, mut fade) = ([-1, 0, -1, 0], [0.0, 0.0, overlay.selection_fade, 0.0]);
                 for (slot, h) in overlay.hover.iter().enumerate() {
                     if let Some((_, face, pushable, a)) = h.filter(|h| h.0 == i) {
                         (hover[slot * 2], hover[slot * 2 + 1], fade[slot]) = (face as i32, pushable as i32, a);
                     }
                 }
-                let offset = match overlay.stretch {
-                    Some((b, offset)) if b == i => offset.extend(0.0).into(),
-                    _ => [0.0; 4],
+                let moved = match overlay.stretch {
+                    Some((b, offset)) if b == i => offset,
+                    _ => Vec3::ZERO,
                 };
-                let u = BodyUniforms { offset, hover, fade };
+                let cap = body_cap(overlay.clip, stretched(gpu.bounds, moved));
+                capped[i] = cap[3] > 0.0;
+                let selected = [gpu.whole[0], gpu.whole[1], 0.0, 0.0];
+                let u = BodyUniforms { offset: moved.extend(0.0).into(), hover, fade, cap, selected };
                 self.queue.write_buffer(buffer, self.body_stride * i as u64, bytemuck::bytes_of(&u));
             }
         }
@@ -474,7 +579,7 @@ impl Renderer {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &targets.depth,
                     depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
-                    stencil_ops: None,
+                    stencil_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(0), store: wgpu::StoreOp::Discard }),
                 }),
                 ..Default::default()
             });
@@ -488,6 +593,20 @@ impl Renderer {
                     pass.set_vertex_buffer(2, body.selected.slice(..));
                     pass.set_index_buffer(body.indices.slice(..), wgpu::IndexFormat::Uint32);
                     pass.draw_indexed(0..body.index_count, 0, 0..1);
+                }
+                if capped.contains(&true) {
+                    pass.set_stencil_reference(1);
+                    for (i, body) in self.bodies.iter().enumerate().filter(|(i, b)| capped[*i] && b.index_count > 0) {
+                        pass.set_pipeline(&self.count_pipeline);
+                        pass.set_bind_group(1, group, &[(self.body_stride * i as u64) as u32]);
+                        pass.set_vertex_buffer(0, body.vertices.slice(..));
+                        pass.set_vertex_buffer(1, body.mask.slice(..));
+                        pass.set_vertex_buffer(2, body.selected.slice(..));
+                        pass.set_index_buffer(body.indices.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..body.index_count, 0, 0..1);
+                        pass.set_pipeline(&self.cap_pipeline);
+                        pass.draw(0..6, 0..1);
+                    }
                 }
             }
         }
