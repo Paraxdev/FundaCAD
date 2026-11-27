@@ -241,6 +241,7 @@ impl Viewport {
         self.hover = None;
         self.tool = None;
         self.picking = Default::default();
+        self.carry = Default::default();
         self.message = None;
         self.rebuild_ms = None;
         self.fitted = false;
@@ -463,6 +464,7 @@ impl Viewport {
                     latest = Some(mesh);
                 }
                 Event::Failed { message, feature_id, revision } => {
+                    self.carry.landing = None;
                     self.blend_reply(revision, None, cx);
                     log::warn!("{message}");
                     if let Some(id) = &feature_id {
@@ -489,6 +491,7 @@ impl Viewport {
             self.message = None;
             self.hover = None;
             self.built = mesh.bodies.clone();
+            self.carry.landing = None;
             self.datums.mesh = Some(mesh.clone());
             self.inspect.rebuilt();
             self.show_built();

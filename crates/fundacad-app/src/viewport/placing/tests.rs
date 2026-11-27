@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{circle, hole, moved, nearest, placement, rim, snaps, Hit, Placement, SceneBody, Snap};
+use super::{circle, hold_landing, hole, moved, nearest, placement, rim, snaps, Hit, Placement, SceneBody, Snap};
 use crate::viewport::scene::tests::block;
 use crate::viewport::scene::Body;
 use glam::{Vec2, Vec3};
@@ -154,4 +154,21 @@ fn the_ghost_stands_where_the_drag_would_land() {
     let top = at(m.normals.as_ref().unwrap())[5 * 4];
     assert!(close(top, Vec3::X), "the +Z face now faces +X, {top}");
     assert_eq!(moved(&b, from, from), b);
+}
+
+#[test]
+fn a_landing_keeps_its_moved_copy_in_place_of_the_built_body() {
+    let built = Arc::new(block(Vec3::ZERO, Vec3::ONE, "ex1"));
+    let other = Arc::new(block(Vec3::ONE, Vec3::splat(2.0), "ex2"));
+    let from = Placement { origin: Vec3::ZERO, z: Vec3::Z };
+    let ghost = Arc::new(moved(&built, from, Placement { origin: Vec3::X, z: Vec3::Z }));
+    let mut bodies = vec![other.clone(), built.clone()];
+    hold_landing(&mut bodies, None);
+    assert!(Arc::ptr_eq(&bodies[1], &built));
+    let landing = (built.clone(), ghost.clone());
+    hold_landing(&mut bodies, Some(&landing));
+    assert!(Arc::ptr_eq(&bodies[0], &other) && Arc::ptr_eq(&bodies[1], &ghost));
+    let mut remade = vec![Arc::new(block(Vec3::X, Vec3::splat(2.0), "ex1"))];
+    hold_landing(&mut remade, Some(&landing));
+    assert!(!Arc::ptr_eq(&remade[0], &ghost), "a remade body is shown as the engine made it");
 }

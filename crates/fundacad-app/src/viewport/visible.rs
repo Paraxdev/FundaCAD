@@ -26,7 +26,8 @@ impl Viewport {
     }
 
     pub(super) fn show_built(&mut self) {
-        let bodies = shown(self.doc(), &self.built);
+        let mut bodies = shown(self.doc(), &self.built);
+        super::placing::hold_landing(&mut bodies, self.carry.landing.as_ref());
         if bodies.len() != self.scene.bodies.len()
             || bodies.iter().zip(&self.scene.bodies).any(|(a, b)| !Arc::ptr_eq(a, &b.source))
         {

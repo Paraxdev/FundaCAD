@@ -68,6 +68,15 @@ pub fn add_mover(cx: &mut App, f: impl Fn(&Doc, &[String], &mut App) -> Option<(
 pub struct Carry {
     held: Option<Held>,
     shown: Option<(Placement, Option<Snap>)>,
+    /// A let go drag's built body and the moved copy kept in its place, since the edit that takes the move shows the
+    /// built model again before the engine has remade it. Dropped with the next mesh.
+    pub(super) landing: Option<(Arc<Body>, Arc<Body>)>,
+}
+
+/// `bodies` with a landing's built body swapped for its moved copy.
+pub fn hold_landing(bodies: &mut [Arc<Body>], landing: Option<&(Arc<Body>, Arc<Body>)>) {
+    let Some((original, ghost)) = landing else { return };
+    bodies.iter_mut().filter(|b| Arc::ptr_eq(b, original)).for_each(|b| *b = ghost.clone());
 }
 
 struct Held {
@@ -289,6 +298,7 @@ impl Viewport {
 
     /// Puts the built model back in place of a ghost a failed move left showing.
     pub fn settle(&mut self, cx: &mut Context<Self>) {
+        self.carry.landing = None;
         self.show_built();
         cx.notify();
     }
@@ -364,9 +374,10 @@ impl Viewport {
 
     /// Ends a drag of a placed part where the cursor is. True when one was on.
     pub(super) fn carry_release(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let Some(Held { body, at, land, .. }) = self.carry.held.take() else { return false };
+        let Some(Held { body, at, land, original, ghost, .. }) = self.carry.held.take() else { return false };
         self.carry.shown = None;
         let to = self.placement_at(at, Some(body)).map(|s| s.0);
+        self.carry.landing = to.and(original.zip(ghost)).filter(|(o, g)| !Arc::ptr_eq(o, g));
         window.defer(cx, move |w, cx| land(to, w, cx));
         true
     }

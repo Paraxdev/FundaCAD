@@ -81,6 +81,7 @@ pub fn make(
     let name = spec.get("name").and_then(Value::as_str).unwrap_or("Fastener").to_owned();
     let Some(link) = viewport.read(cx).session_link(None) else {
         done(cx);
+        viewport.update(cx, |v, cx| v.settle(cx));
         return overlay::toast(cx, Toast::error(i18n::t("files.openDocumentFirst")));
     };
     let fields = request(&spec, placement);
