@@ -12,6 +12,7 @@ pub mod modal;
 mod params;
 mod rail;
 mod rail_menu;
+mod sketch;
 pub(crate) mod status;
 mod timeline;
 mod titlebar;
@@ -54,6 +55,7 @@ pub struct Shell {
     transfer: transfer::Transfer,
     /// The rail family whose tools are listed.
     rail_open: Option<&'static str>,
+    sketch_rail: sketch::SketchRailUi,
     _system: Subscription,
 }
 
@@ -95,6 +97,7 @@ impl Shell {
             params,
             transfer: transfer::Transfer::new(cx),
             rail_open: None,
+            sketch_rail: Default::default(),
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -235,11 +238,17 @@ impl Render for Shell {
                 let on_tool: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
                     std::rc::Rc::new(move |label, window, cx| e.update(cx, |s, cx| s.rail_tool(label, window, cx)));
                 let foot = self.rail_foot(cx);
-                div().relative().h_full().child(rail::rail(t, self.rail_open, foot, on_family, on_tool)).children(
-                    self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
-                )
+                match self.sketch_rail_state(cx) {
+                    Some(s) => {
+                        let on = self.on_sketch(cx);
+                        div().relative().h_full().child(rail::sketch_rail(t, &s, on.clone())).children(rail::sketch_flyout(t, &s, on))
+                    }
+                    None => div().relative().h_full().child(rail::rail(t, self.rail_open, foot, on_family, on_tool)).children(
+                        self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
+                    ),
+                }
             });
-        let card = self.inspect_card(t, cx);
+        let card = self.sketch_palette(t, cx).or_else(|| self.inspect_card(t, cx));
         if card.is_none() {
             params::place::set_card_h(None);
         }

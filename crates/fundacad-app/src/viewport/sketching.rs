@@ -9,6 +9,8 @@ use serde_json::{json, Value};
 use super::{drag, pick, Viewport};
 use crate::commands::{self, Group, Mode};
 use crate::i18n::{self, tr, Label};
+use crate::sketch::palette::{Palette, Toggle};
+use crate::sketch::relations::{self, Row};
 use crate::sketch::{self, Editor, Plane, Tool};
 
 const FREE: u32 = 0x5b9bff;
@@ -31,6 +33,9 @@ pub(super) struct Ui {
     typing: Option<(String, String)>,
     focus: Option<FocusHandle>,
     left_down: bool,
+    palette: Palette,
+    /// The shapes a hovered Relations row acts on.
+    lit: Vec<String>,
 }
 
 fn rgb_a(hex: u32, a: f32) -> Hsla {
@@ -89,6 +94,9 @@ impl Viewport {
         };
         self.blend_before_step(cx);
         self.look_at_plane(&editor.plane, cx.reduce_motion());
+        let mut editor = editor;
+        let p = self.sketch_ui.palette;
+        (editor.snap, editor.grid, editor.reference) = (p.snap, p.grid, p.reference);
         self.sketch = Some(editor);
         self.sketch_ui.picking = false;
         self.hover = None;
@@ -118,7 +126,7 @@ impl Viewport {
 
     pub fn finish_sketch(&mut self, cx: &mut Context<Self>) {
         self.sketch = None;
-        self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), ..Default::default() };
+        self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), palette: self.sketch_ui.palette, ..Default::default() };
         commands::set_mode(cx, Mode::Model);
         cx.notify();
     }
@@ -346,7 +354,7 @@ impl Viewport {
 
     pub(super) fn sketch_escape(&mut self, cx: &mut Context<Self>) -> bool {
         if self.sketch_ui.picking {
-            self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), ..Default::default() };
+            self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), palette: self.sketch_ui.palette, ..Default::default() };
             cx.notify();
             return true;
         }
@@ -404,6 +412,75 @@ impl Viewport {
         self.sketch.is_some()
     }
 
+    pub fn sketch_palette(&self) -> Palette {
+        self.sketch_ui.palette
+    }
+
+    pub(super) fn sketch_locked(&self) -> bool {
+        self.sketch.is_some() && self.sketch_ui.palette.lock_view
+    }
+
+    /// The sketch's name, its armed tool's command and whether new shapes are construction, None while not sketching.
+    pub fn sketch_rail(&self) -> Option<(String, Option<&'static str>, bool)> {
+        let e = self.sketch.as_ref()?;
+        let selected = e.selected.as_ref().is_some_and(|s| e.is_construction(s.split('~').next().unwrap_or(s)));
+        Some((e.name.clone(), e.tool.action(), e.construction || selected))
+    }
+
+    pub fn set_sketch_toggle(&mut self, t: Toggle, on: bool, cx: &mut Context<Self>) {
+        if t == Toggle::Construction {
+            self.sketch_do(cx, Editor::toggle_construction);
+            return;
+        }
+        self.sketch_ui.palette.set(t, on);
+        let p = self.sketch_ui.palette;
+        if let Some(e) = &mut self.sketch {
+            (e.snap, e.grid, e.reference) = (p.snap, p.grid, p.reference);
+        }
+        cx.notify();
+    }
+
+    pub fn sketch_look_at(&mut self, cx: &mut Context<Self>) {
+        let Some(plane) = self.sketch.as_ref().map(|e| e.plane) else { return };
+        self.look_at_plane(&plane, cx.reduce_motion());
+        cx.notify();
+    }
+
+    /// The Relations summary, whether it is a conflict, and the rows: what was recorded, then what the geometry implies.
+    pub fn sketch_relations(&self) -> Option<(String, bool, Vec<Row>)> {
+        let e = self.sketch.as_ref()?;
+        let conflict = !e.solved.conflicts.is_empty();
+        let dof = if e.constraints.is_empty() { -1 } else { e.solved.dof };
+        let mut rows = relations::constraint_rows(&e.entities, &e.constraints, &e.solved.conflicts, &e.solved.over);
+        let construction = |id: &str| e.is_construction(id);
+        rows.extend(relations::implied_joins(&e.entities, &e.solved.entities, &construction, &e.constraints));
+        Some((relations::summary(dof, conflict), conflict, rows))
+    }
+
+    /// Lights the shapes a hovered Relations row acts on, and unlights them as the pointer leaves that row.
+    pub fn light_sketch_shapes(&mut self, ids: Vec<String>, on: bool, cx: &mut Context<Self>) {
+        if on && self.sketch_ui.lit != ids {
+            self.sketch_ui.lit = ids;
+        } else if !on && self.sketch_ui.lit == ids {
+            self.sketch_ui.lit.clear();
+        } else {
+            return;
+        }
+        cx.notify();
+    }
+
+    pub fn select_sketch_shape(&mut self, id: Option<String>, cx: &mut Context<Self>) {
+        self.sketch_do(cx, |e| {
+            e.selected = id;
+            None
+        });
+    }
+
+    pub fn delete_sketch_constraint(&mut self, i: usize, cx: &mut Context<Self>) {
+        self.sketch_ui.lit.clear();
+        self.sketch_do(cx, |e| e.delete_constraint(i));
+    }
+
     pub(super) fn sketch_focus(&mut self, cx: &mut Context<Self>) -> FocusHandle {
         self.sketch_ui.focus.get_or_insert_with(|| cx.focus_handle()).clone()
     }
@@ -419,7 +496,8 @@ impl Viewport {
         let origin = self.bounds.origin;
         let gap = 14.0 / self.px_per_mm();
         let mut layer = div().absolute().top_0().left_0().size_full();
-        for d in e.dims(gap) {
+        let dims = if self.sketch_ui.palette.dimensions { e.dims(gap) } else { Vec::new() };
+        for d in dims {
             let Some(s) = self.to_screen(e.plane.to_3d(d.anchor).as_vec3()) else { continue };
             let typing = self.sketch_ui.typing.as_ref().filter(|(k, _)| *k == d.key).map(|(_, t)| format!("{t}|"));
             let conflict = d.constraint.is_some_and(|i| e.solved.conflicts.contains(&i));
@@ -455,60 +533,6 @@ impl Viewport {
                     .child(text),
             );
         }
-        let tools = [
-            ("viewControls.select", Tool::Select),
-            ("tool.line", Tool::Line),
-            ("tool.rectangle", Tool::Rectangle),
-            ("tool.circle", Tool::Circle),
-            ("tool.arc", Tool::Arc),
-            ("tool.polygon", Tool::Polygon),
-            ("tool.dimension", Tool::Dimension),
-        ];
-        let button = |label: &'static str, on: bool| {
-            div()
-                .id(label)
-                .px_2()
-                .py_1()
-                .rounded_sm()
-                .text_size(px(12.))
-                .cursor_pointer()
-                .text_color(rgb(if on { 0x15131c } else { 0xe8e6f0 }))
-                .when(on, |d| d.bg(rgb(ACCENT)))
-                .hover(|d| d.bg(rgb_a(ACCENT, 0.35)))
-                .child(i18n::t(label))
-        };
-        let mut bar = div().flex().flex_wrap().justify_center().max_w(px(560.)).gap_1().p_1().rounded_md().bg(rgb_a(0x15131c, 0.9));
-        for (label, tool) in tools {
-            bar = bar.child(button(label, e.tool == tool).on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.sketch_do(cx, |e| {
-                        e.set_tool(tool);
-                        None
-                    });
-                }),
-            ));
-        }
-        let selected = e.selected.as_ref().is_some_and(|s| e.is_construction(s.split('~').next().unwrap_or(s)));
-        let actions: [(&'static str, bool, fn(&mut Viewport, &mut Context<Viewport>)); 4] = [
-            ("sketchPalette.toggle.construction", e.construction || selected, |v, cx| {
-                v.sketch_do(cx, Editor::toggle_construction)
-            }),
-            ("tool.extrude", false, |v, cx| v.sketch_extrude(false, cx)),
-            ("tool.revolve", false, |v, cx| v.sketch_extrude(true, cx)),
-            ("sketch.finish", false, |v, cx| v.finish_sketch(cx)),
-        ];
-        for (label, on, run) in actions {
-            bar = bar.child(button(label, on).on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    run(this, cx);
-                }),
-            ));
-        }
-        layer = layer.child(div().absolute().top(px(76.)).left_0().right_0().flex().justify_center().child(bar));
         Some(layer.into_any_element())
     }
 
@@ -567,8 +591,10 @@ impl Viewport {
         }
         let Some(e) = &self.sketch else { return };
         let plane = e.plane;
-        for r in e.regions() {
-            fill(&r, &plane, rgb_a(FILL, 0.18), window);
+        if self.sketch_ui.palette.profile {
+            for r in e.regions() {
+                fill(&r, &plane, rgb_a(FILL, 0.18), window);
+            }
         }
         let axis = self.plane_size() * 0.5;
         line(&[DVec2::new(-axis, 0.0), DVec2::new(axis, 0.0)], &plane, 1.0, rgb_a(0xe5484d, 0.5), true, window);
@@ -583,7 +609,7 @@ impl Viewport {
             .collect();
         let color_of = |id: &str| {
             let sel = e.selected.as_ref().is_some_and(|s| s.split('~').next() == Some(id));
-            if sel {
+            if sel || self.sketch_ui.lit.iter().any(|l| l == id) {
                 ACCENT
             } else if conflicted.iter().any(|c| c == id) {
                 CONFLICT
@@ -605,7 +631,8 @@ impl Viewport {
             pts.push(pts[0]);
             line(&pts, &plane, 2.0, rgb(color_of(&id)).into(), e.is_construction(&id), window);
         }
-        for d in e.dims(14.0 / self.px_per_mm()) {
+        let dims = if self.sketch_ui.palette.dimensions { e.dims(14.0 / self.px_per_mm()) } else { Vec::new() };
+        for d in dims {
             if !d.angle {
                 line(&[d.from, d.to], &plane, 1.0, rgb_a(AID, 0.6), true, window);
             }

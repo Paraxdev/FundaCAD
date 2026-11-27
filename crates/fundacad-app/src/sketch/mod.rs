@@ -4,8 +4,10 @@
 
 pub mod areas;
 pub mod dims;
+pub mod palette;
 pub mod plane;
 pub mod regions;
+pub mod relations;
 pub mod snap;
 pub mod solve;
 
@@ -33,6 +35,19 @@ pub enum Tool {
 }
 
 impl Tool {
+    /// The command that arms it, None for the resting Select.
+    pub fn action(self) -> Option<&'static str> {
+        Some(match self {
+            Tool::Select => return None,
+            Tool::Line => "line",
+            Tool::Rectangle => "rectangle",
+            Tool::Circle => "circle",
+            Tool::Arc => "arc",
+            Tool::Polygon => "polygon",
+            Tool::Dimension => "dimension",
+        })
+    }
+
     pub fn label(self) -> String {
         crate::i18n::t(match self {
             Tool::Select => "viewControls.select",
@@ -70,6 +85,10 @@ pub struct Editor {
     pub selected: Option<String>,
     pub drag: Option<Drag>,
     pub polygon_sides: u32,
+    pub snap: bool,
+    pub grid: bool,
+    /// New dimensions measure instead of drive.
+    pub reference: bool,
 }
 
 pub type Feature = Map<String, Value>;
@@ -177,6 +196,9 @@ impl Editor {
             selected: None,
             drag: None,
             polygon_sides: 6,
+            snap: true,
+            grid: true,
+            reference: false,
         };
         e.resolve(false);
         Some(e)
@@ -269,10 +291,10 @@ impl Editor {
     }
 
     pub fn hover(&mut self, raw: DVec2, px_per_mm: f64) {
-        self.cursor = Some(if self.tool == Tool::Select || self.tool == Tool::Dimension {
+        self.cursor = Some(if self.tool == Tool::Select || self.tool == Tool::Dimension || !self.snap {
             Snap::free(raw)
         } else {
-            snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, true)
+            snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, self.grid)
         });
     }
 
@@ -483,7 +505,7 @@ impl Editor {
         let base = id.split('~').next().unwrap_or(id);
         let e = self.solved.entities.iter().find(|e| e.id() == base)?.clone();
         let dim_id = fresh_id("d", &self.taken());
-        let c = match &e {
+        let mut c = match &e {
             Entity::Circle { radius, .. } => {
                 json!({"type": "diameter", "id": dim_id, "circle": id, "value": r3(radius * 2.0)})
             }
@@ -505,6 +527,9 @@ impl Editor {
             .any(|o| o["type"] == ty && (o.get("line").or(o.get("circle")).or(o.get("e")).cloned() == key))
         {
             return None;
+        }
+        if self.reference {
+            c["driven"] = json!(true);
         }
         self.constraints.push(c);
         self.resolve(true);
@@ -582,6 +607,17 @@ impl Editor {
         self.constraints.push(json!({"type": kind, "line": line}));
         self.resolve(true);
         Some(tr!("sketch.step.align", kind = kind, name = dims::shape_name(&self.entities, &line)))
+    }
+
+    /// Deletes one constraint, as the palette's Relations list does.
+    pub fn delete_constraint(&mut self, i: usize) -> Option<String> {
+        if i >= self.constraints.len() {
+            return None;
+        }
+        let rows = relations::constraint_rows(&self.entities, &self.constraints[i..=i], &Default::default(), &Default::default());
+        self.constraints.remove(i);
+        self.resolve(false);
+        Some(tr!("step.label.delete", n = 1, step = rows[0].name.clone()))
     }
 
     /// Deletes the selected shape and every constraint naming it.
@@ -692,3 +728,7 @@ fn add_feature(doc: &mut Map<String, Value>, ty: &str, mut f: Value) -> Result<S
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod palette_tests;
+#[cfg(test)]
+mod relations_tests;

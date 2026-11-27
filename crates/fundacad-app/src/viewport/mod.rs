@@ -775,6 +775,7 @@ impl Viewport {
             let height = self.bounds.size.height.as_f32();
             let goal = self.motion.goal(&self.camera);
             match kind {
+                Nav::Orbit if self.sketch_locked() => {}
                 Nav::Orbit if !event.modifiers.shift => goal.orbit(delta),
                 _ => goal.pan(delta, height),
             }
