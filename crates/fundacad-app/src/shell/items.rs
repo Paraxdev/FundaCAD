@@ -33,10 +33,10 @@ pub(super) fn card_head(t: &Theme, id: &'static str, title: String) -> Div {
 }
 
 /// A visibility change for one category, `groups` holding the bodies behind each `g:` folder key.
-type VisEdit = (Category, Vec<(String, bool)>, HashMap<String, Vec<String>>);
+pub(super) type VisEdit = (Category, Vec<(String, bool)>, HashMap<String, Vec<String>>);
 
 #[derive(Clone)]
-enum Act {
+pub(super) enum Act {
     Vis(Vec<VisEdit>),
     ShowOnly(Category, Vec<String>),
     ShowAll(Category),
@@ -242,7 +242,7 @@ impl Shell {
         items::vis_rows(self.source.as_ref().unwrap_or(&empty), &self.built(cx), category)
     }
 
-    fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
         self.items.menu = None;
         match act {
             Act::Vis(edits) => {
@@ -380,6 +380,28 @@ impl Shell {
         }
         self.items.menu = (!acts.is_empty()).then_some(Menu::Row(pos, acts));
         cx.notify();
+    }
+
+    /// Clears a filter hiding bodies and opens every folder above `body`, so its row is drawn and can be renamed.
+    pub(super) fn reveal_body(&mut self, body: &str, cx: &App) {
+        if !self.items.filter.shows(items::Section::Bodies) {
+            self.items.filter = Filter::All;
+        }
+        let key = format!("b:{body}");
+        loop {
+            let nodes = self.item_nodes(cx);
+            if nodes.iter().any(|n| n.k == key) {
+                return;
+            }
+            let shut = nodes.iter().find(|n| match &n.kind {
+                Kind::Folder { collapsed: true, members, .. } => n.k == "f:Bodies" || members.iter().any(|m| m == body),
+                _ => false,
+            });
+            match shut.map(|n| n.k.clone()) {
+                Some(k) => self.items.collapse.toggle(&k),
+                None => return,
+            }
+        }
     }
 
     fn start_rename(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {

@@ -1,6 +1,7 @@
 mod blend;
 mod blur;
 mod camera;
+mod context;
 mod datums;
 mod demo;
 mod display;
@@ -37,6 +38,7 @@ use gpui::*;
 
 pub use blur::Frost;
 pub use camera::Camera;
+pub use context::{CanvasClick, CanvasTarget};
 pub use display::{Display, Matcap, OverlayKind, Projection, ViewMode};
 #[allow(unused_imports, reason = "fc2/shell reads it for History")]
 pub use issues::FeatureIssue;
@@ -148,6 +150,7 @@ pub struct Viewport {
     blend_hover: Option<(usize, usize)>,
     blend_ask: Option<blend::Ask>,
     carry: placing::Carry,
+    right: context::RightPress,
     display: Display,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
@@ -210,6 +213,7 @@ impl Viewport {
             blend_hover: None,
             blend_ask: None,
             carry: Default::default(),
+            right: Default::default(),
             display: Self::load_display(),
             _wake: None,
             _demo: None,
@@ -776,6 +780,7 @@ impl Viewport {
                 self.nav = None;
                 return;
             }
+            self.right.moved(event.position);
             let delta = event.position - last;
             let delta = Vec2::new(delta.x.as_f32(), delta.y.as_f32());
             self.nav = Some((kind, event.position));
@@ -878,13 +883,20 @@ impl Render for Viewport {
                 cx.listener(|this, e: &MouseDownEvent, _, _| {
                     let kind = if e.modifiers.shift { Nav::Pan } else { Nav::Orbit };
                     this.nav = Some((kind, e.position));
+                    this.right.down(e.position);
                 }),
             )
             .on_mouse_down(
                 MouseButton::Middle,
                 cx.listener(|this, e: &MouseDownEvent, _, _| this.nav = Some((Nav::Pan, e.position))),
             )
-            .on_mouse_up(MouseButton::Right, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
+            .on_mouse_up(
+                MouseButton::Right,
+                cx.listener(|this, e: &MouseUpEvent, _, cx| {
+                    this.nav = None;
+                    this.right_up(e.position, cx);
+                }),
+            )
             .on_mouse_up(MouseButton::Middle, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
                 if this.nav.is_some() || !(this.sketch_move(e, cx) || this.gizmo_move(e, cx) || this.carry_move(e, cx)) {

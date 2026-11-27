@@ -31,6 +31,18 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
                 let _ = window.update(cx, |_, window, cx| mouse(at, Some(false), window, cx));
                 continue;
             }
+            if let Some(at) = step.strip_prefix("rclick:") {
+                let n: Vec<f32> = at.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+                let [x, y] = n[..] else {
+                    log::error!("shot: rclick:{at} wants x,y");
+                    continue;
+                };
+                let p = gpui::point(gpui::px(x), gpui::px(y));
+                let _ = window.update(cx, |_, window, cx| right(p, Some(true), window, cx));
+                cx.background_executor().timer(Duration::from_millis(100)).await;
+                let _ = window.update(cx, |_, window, cx| right(p, Some(false), window, cx));
+                continue;
+            }
             if let Some(at) = step.strip_prefix("drag:") {
                 let hold = at.ends_with(",hold");
                 let n: Vec<f32> = at.split(',').filter_map(|v| v.trim().parse().ok()).collect();
@@ -95,7 +107,7 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
 /// A command id, `menu:<index>`, `toast:<text>`, `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`,
 /// `click:<x>,<y>` (`,ctrl` or `,shift` to add, `,double` for a double click), `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:`
 /// and `up:` for a held left button, `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down),
-/// `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep with the right button over `ms`, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
+/// `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep with the right button over `ms`, `rclick:<x>,<y>` for a right click, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
 /// The timed ones (click, sweeps, wait) run in the shot loop, the rest here.
 fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     if let Some(i) = step.strip_prefix("menu:").and_then(|i| i.parse().ok()) {

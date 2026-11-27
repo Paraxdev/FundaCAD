@@ -26,7 +26,7 @@ const OVER: u32 = 0xf5a524;
 #[derive(Default)]
 pub(super) struct Ui {
     /// Waiting for a click on a plane or a flat face to sketch on.
-    picking: bool,
+    pub(super) picking: bool,
     plane_hover: Option<(Plane, Value)>,
     /// The dimension being typed, its key and the text so far.
     typing: Option<(String, String)>,

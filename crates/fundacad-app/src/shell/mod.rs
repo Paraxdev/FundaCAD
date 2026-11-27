@@ -1,5 +1,6 @@
 //! The workspace: a 36px title bar over the stage, where the 3D view runs full bleed and every panel floats over it.
 
+mod canvas_menu;
 mod geometry;
 mod history;
 mod history_menu;
@@ -87,6 +88,7 @@ impl Shell {
         );
         tool_card::install(&viewport, cx);
         view_controls::install(&viewport, cx);
+        canvas_menu::install(&viewport, window, cx);
         inspect::install(&viewport, cx);
         crate::plugins::install(&viewport, window, cx);
         let mut shell = Self {
