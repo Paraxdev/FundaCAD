@@ -106,3 +106,17 @@ fn a_bound_size_writes_its_parameter_and_an_expression_refuses() {
     assert_eq!(super::bound_param(&doc, "c", "radius"), Ok(Some("d4".into())));
     assert_eq!(super::bound_param(&doc, "z", "radius"), Ok(None));
 }
+
+#[test]
+fn a_size_naming_a_parameter_that_is_an_expression_refuses() {
+    let doc: crate::tools::Doc = serde_json::from_value(json!({
+        "parameters": {"w": 4, "r": 8, "d": 8},
+        "paramDefs": {
+            "w": {"expr": "4", "value": 4},
+            "r": {"expr": "w * 2", "value": 8},
+            "d": {"expr": "r", "value": 8, "target": {"kind": "feature", "feature": "a", "field": "radius"}}
+        }
+    }))
+    .unwrap();
+    assert!(super::bound_param(&doc, "a", "radius").is_err());
+}

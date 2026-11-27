@@ -87,6 +87,7 @@ impl Viewport {
             self.say(format!("{id} is no sketch"), cx);
             return;
         };
+        self.blend_before_step(cx);
         self.look_at_plane(&editor.plane, cx.reduce_motion());
         self.sketch = Some(editor);
         self.sketch_ui.picking = false;

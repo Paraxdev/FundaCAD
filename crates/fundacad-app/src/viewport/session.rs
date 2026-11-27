@@ -48,6 +48,7 @@ impl Viewport {
         if self.sketching() {
             return Err(i18n::t("geometry.browser.finishSketch"));
         }
+        self.blend_before_step(cx);
         let session = self.session.as_mut().ok_or_else(|| i18n::t("files.openDocumentFirst"))?;
         let before = session.doc.clone();
         session.edit(f)?;

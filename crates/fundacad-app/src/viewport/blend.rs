@@ -118,7 +118,11 @@ fn bound_param(doc: &Doc, id: &str, field: &str) -> Result<Option<String>, &'sta
     if expr.parse::<f64>().is_ok_and(f64::is_finite) {
         return Ok(Some(name.clone()));
     }
-    let named = |n: &str| defs.contains_key(n) || doc.get("parameters").and_then(|p| p.get(n)).is_some();
+    // Writing a parameter that is itself an expression would overwrite that expression with a number.
+    let named = |n: &str| match defs.get(n) {
+        Some(d) => d.get("expr").and_then(Value::as_str).is_some_and(|e| e.trim().parse::<f64>().is_ok_and(f64::is_finite)),
+        None => doc.get("parameters").and_then(|p| p.get(n)).is_some(),
+    };
     let bare = expr.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
         && expr.chars().all(|c| c.is_alphanumeric() || c == '_');
     if bare && expr != name && named(expr) { Ok(Some(expr.to_string())) } else { Err(EXPRESSION) }
@@ -171,10 +175,14 @@ impl Blend {
     /// `before` with `feature` in place of the dragged one.
     fn doc_with(&self, feature: Option<&Value>) -> Result<Doc, String> {
         let mut doc = self.before.clone();
-        let param = self.edit.as_ref().and_then(|e| e.param.as_deref()).filter(|_| self.same_kind());
+        let original = self.original.as_ref().and_then(|(_, o)| Treatment::of(o["type"].as_str()?));
+        let bound = self.edit.as_ref().and_then(|e| e.param.as_deref()).zip(original).zip(feature).and_then(|((p, k), f)| {
+            (Treatment::of(f["type"].as_str()?) == Some(k)).then(|| Some((p, f.get(k.field())?.as_f64()?)))?
+        });
         match (&self.original, feature) {
-            (Some(_), Some(_)) if param.is_some() => {
-                fundacad_client::set_param(&mut doc, param.expect("checked"), self.value())?;
+            (Some(_), Some(_)) if bound.is_some() => {
+                let (param, value) = bound.expect("checked");
+                fundacad_client::set_param(&mut doc, param, value)?;
             }
             (Some((at, _)), f) => {
                 let list = doc.get_mut("features").and_then(Value::as_array_mut).ok_or("the document has no features")?;
@@ -984,6 +992,12 @@ impl Viewport {
         }
         cx.notify();
         true
+    }
+
+    /// The document a save writes: the one an edit opened from History started on while it is still open, since
+    /// the open edit holds the rollback marker moved.
+    pub(super) fn blend_unedited(&self) -> Option<&Doc> {
+        self.blend.as_ref().filter(|b| b.edit.is_some() && !b.released).map(|b| &b.before)
     }
 
     /// Forgets a blend when the document is replaced under it.
