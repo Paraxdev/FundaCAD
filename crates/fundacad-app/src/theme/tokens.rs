@@ -81,11 +81,6 @@ pub const RAIL_TILE: f32 = 40.;
 pub const HIT_MIN: f32 = 24.;
 pub const HIT_MIN_LARGE: f32 = 32.;
 
-#[allow(dead_code)]
-pub const T_FAST: Duration = Duration::from_millis(110);
-#[allow(dead_code)]
-pub const T_MED: Duration = Duration::from_millis(160);
-
 /// `backdrop-filter: blur(r) saturate(s)`, for the viewport pass that blurs what lies under a panel.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(dead_code)]
@@ -103,9 +98,22 @@ pub const FLOAT_BLUR: BackdropBlur = BackdropBlur { radius: 24., saturate: 1.08 
 pub const SCRIM_BLUR: BackdropBlur = BackdropBlur { radius: 6., saturate: 1.05 };
 
 /// --ease, `cubic-bezier(0.2, 0, 0.15, 1)`, for `with_animation`.
-#[allow(dead_code)]
 pub fn ease(t: f32) -> f32 {
     cubic_bezier(0.2, 0., 0.15, 1.)(t)
+}
+
+/// --t-fast: hovers, presses, switches, menus and toasts coming in.
+pub const T_FAST: Duration = Duration::from_millis(110);
+/// --t-med: glass popovers, flyouts and the tool prompt coming in.
+pub const T_MED: Duration = Duration::from_millis(160);
+/// `.toast-out`, a toast fading away.
+pub const T_TOAST_OUT: Duration = Duration::from_millis(180);
+/// `.rail-flyout-grid > .rail-btn`, each tile of a flyout a step behind the one before.
+pub const T_STAGGER: Duration = Duration::from_millis(16);
+
+/// A one shot animation of `d` on --ease. GPUI snaps it to its end while reduce motion is set.
+pub fn eased(d: Duration) -> gpui::Animation {
+    gpui::Animation::new(d).with_easing(ease)
 }
 
 /// CSS `cubic-bezier(x1, y1, x2, y2)` as an easing function of 0 to 1.

@@ -13,9 +13,8 @@ use gpui::*;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 
 use crate::i18n;
-use crate::theme::{
-    ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD,
-};
+use crate::motion::{glass_in, hover_bg, row_bg, Leave};
+use crate::theme::{ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, T_FAST, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
 use crate::viewport::Viewport;
 use rows::{value_text, Row, Rows};
@@ -38,6 +37,7 @@ struct Field {
 pub struct ParamsPanel {
     viewport: Entity<Viewport>,
     open: bool,
+    leave: Leave,
     /// The document `rows` were read from.
     source: Option<Doc>,
     rows: Rows,
@@ -70,6 +70,7 @@ impl ParamsPanel {
             viewport,
             // FUNDA_PANEL=params opens it at start, for captures.
             open: std::env::var("FUNDA_PANEL").is_ok_and(|p| p == "params"),
+            leave: Leave::default(),
             source: None,
             rows: Rows::default(),
             fields: HashMap::new(),
@@ -82,6 +83,11 @@ impl ParamsPanel {
 
     pub fn toggle(&mut self, cx: &mut Context<Self>) {
         self.open = !self.open;
+        if self.open {
+            self.leave.cancel();
+        } else {
+            self.leave.start(cx);
+        }
         cx.notify();
     }
 
@@ -321,43 +327,39 @@ impl ParamsPanel {
         let units = div().flex().flex_none().gap(px(2.)).p(px(2.)).rounded(px(R_MD)).bg(t.field_bg).children(
             UNITS.map(|(unit, label)| {
                 let on = self.unit == unit;
-                let hover = t.hover_wash;
-                text(t, FS_MICRO)
+                let el = text(t, FS_MICRO)
                     .id(unit)
                     .px(px(S_2))
                     .h(px(FIELD_H - 6.))
                     .flex()
                     .items_center()
                     .rounded(px(R_MD - 1.))
-                    .map(|d| if on { d.bg(t.raised).text_color(t.text) } else { d.text_color(t.text_dim) })
-                    .hover(move |s| s.bg(hover))
+                    .text_color(if on { t.text } else { t.text_dim })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.unit = unit;
                         cx.notify();
                     }))
-                    .child(i18n::t(label))
+                    .child(i18n::t(label));
+                row_bg(SharedString::from(format!("unit-bg-{unit}")), el, on, t.hover_wash, t.raised)
             }),
         );
         let refused = self.notes.problems.contains_key(&Key::Add);
         let (fill, hot, ink) = if refused { (t.error, t.error, t.on_accent) } else { (t.raised, t.raised_2, t.text) };
         let add = text(t, FS_SMALL)
-            .id("params-add")
+            .id("params-add-el")
             .h(px(FIELD_H))
             .px(px(S_3))
             .flex()
             .flex_none()
             .items_center()
             .rounded(px(R_MD))
-            .bg(fill)
             .text_color(ink)
-            .hover(move |s| s.bg(hot))
             .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
             .child(i18n::t("params.add"));
-        let preview = self
-            .notes
-            .preview
-            .get(&Key::NewExpr)
-            .map(|v| text(t, FS_SMALL).flex_none().text_color(t.accent_hot).child(value_text(*v, self.unit)));
+        let add = hover_bg("params-add", add, fill, hot);
+        let preview = self.notes.preview.get(&Key::NewExpr).map(|v| {
+            text(t, FS_SMALL).flex_none().text_color(t.accent_hot).child(value_text(*v, self.unit))
+        });
         let note = self.notes.problems.get(&Key::Add).or_else(|| self.notes.problems.get(&Key::NewExpr));
         div()
             .flex()
@@ -382,9 +384,8 @@ impl ParamsPanel {
 
 impl Render for ParamsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.open {
-            return div().into_any_element();
-        }
+        let fade = if self.open { Some(1.) } else { self.leave.opacity(T_FAST, window, cx) };
+        let Some(fade) = fade else { return div().into_any_element() };
         self.refresh(window, cx);
         self.ensure_fields(window, cx);
         let (left, width) = place::place(window.viewport_size().width / px(1.));
@@ -418,16 +419,20 @@ impl Render for ParamsPanel {
             }
         }
         body = body.child(text(t, FS_MICRO).mt(px(S_3)).text_color(t.text_mute).child(i18n::t(HINT)));
-        solid_card(t)
+        let card = solid_card(t)
             .bg(t.float_bg_solid)
-            .absolute()
-            .top(px(FLOAT_GAP))
-            .left(px(left))
             .w(px(width))
             .max_h(window.viewport_size().height * 0.7)
             .p(px(S_4))
             .child(head)
-            .child(body)
+            .child(body);
+        div()
+            .absolute()
+            .top(px(FLOAT_GAP))
+            .left(px(left))
+            .opacity(fade)
+            .child(glass_in("params-in", card))
+            .when(!self.open, |d| d.child(div().absolute().inset_0().occlude()))
             .into_any_element()
     }
 }

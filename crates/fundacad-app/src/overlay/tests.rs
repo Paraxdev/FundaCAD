@@ -59,8 +59,8 @@ fn the_same_toast_again_starts_its_time_again() {
     let first = s.push(Toast::info("saved"));
     let again = s.push(Toast::info("saved"));
     assert_eq!((first, again, s.items.len()), ((1, 0), (1, 1), 1));
-    assert!(!s.expire(1, 0));
-    assert!(s.expire(1, 1));
+    assert!(!s.expire(1, 0, None));
+    assert!(s.expire(1, 1, None));
     assert!(s.items.is_empty());
     assert!(!s.dismiss(1));
 }

@@ -1,7 +1,8 @@
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
-use crate::theme::{Theme, FS_BODY, FS_MICRO, MONO_FONT, RAIL_TILE, W_SEMIBOLD};
+use crate::motion::{self, mix};
+use crate::theme::{Rgb, Theme, FS_BODY, FS_MICRO, MONO_FONT, RAIL_TILE, W_SEMIBOLD};
 use crate::ui::{chip, icon, text, tile};
 
 const GAP: f32 = 6.;
@@ -143,7 +144,7 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on: Option<bool>, on_cl
             d.child(text(t, FS_MICRO).line_height(px(13.)).text_color(if on == Some(true) { t.accent } else { t.text_mute }).child(spoken(sub)))
         });
     let lit = open == Some(e.label) || on == Some(true);
-    let row = div().flex().items_center().gap(px(6.)).child(tile.when(lit, |d| d.bg(t.accent_wash))).child(pill);
+    let row = div().flex().items_center().gap(px(6.)).child(rail_tile(t, e.label, lit, tile)).child(pill);
     let Some(f) = on_click.cloned() else { return row.into_any_element() };
     let label = e.label;
     // The tile and the pill occlude the view, which would hide the row's own hitbox, so a cover on top takes the click.
@@ -154,6 +155,23 @@ fn row(t: &Theme, e: &'static Entry, open: Option<&str>, on: Option<bool>, on_cl
         .cursor_pointer()
         .on_click(move |_, window, cx| f(label, window, cx));
     row.relative().child(cover).into_any_element()
+}
+
+/// `.rail-tile`'s transition: the hover wash and a 1px lift, the press shrinks it to 0.94, and the accent wash of an
+/// open family or a toggle that is on.
+fn rail_tile(t: &Theme, label: &'static str, lit: bool, tile: Div) -> impl IntoElement {
+    let (rest, accent, wash) = (t.float_tile_bg, t.accent_wash, t.hover_wash);
+    let id = ElementId::Name(format!("rail-tile:{label}").into());
+    motion::hover(id, tile, move |d, m| {
+        let base = Rgb::from(mix(rest, accent, m.on));
+        let size = RAIL_TILE * (1. - 0.06 * m.press);
+        d.bg(mix(base, motion::layer(wash, base), m.hover))
+            .size(px(size))
+            .m(px((RAIL_TILE - size) / 2.))
+            .top(px(-m.hover * (1. - m.press)))
+    })
+    .on(lit)
+    .press()
 }
 
 /// `on_family` gets a family's label, `on_tool` a foot entry's label.

@@ -430,6 +430,9 @@ fn sync_window_chrome(cx: &mut App) {
         Mode::Light => WindowAppearance::Light,
     });
     cx.set_window_appearance(forced);
+    // Animations off in Preferences is GPUI's reduce motion, which snaps every animation to its end.
+    let still = !st.theme.motion;
+    cx.set_reduce_motion(still);
 }
 
 #[cfg(test)]

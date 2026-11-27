@@ -1,10 +1,10 @@
 //! Tools, Plugins: every plugin found, what it adds and a switch for each, as FundaCAD 1's Preferences, Plugins.
 
-use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use crate::commands::Group;
 use crate::i18n::{self, tr, Label};
+use crate::motion::{self, mix, Transition};
 use crate::theme::{ActiveTheme as _, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
 
@@ -27,20 +27,15 @@ pub fn install(_window: &mut Window, cx: &mut App) -> AnyView {
 }
 
 /// A pill switch, on to the right.
-pub fn switch(t: &Theme, id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
-    let (track, knob) = if on { (t.accent, t.on_accent) } else { (t.raised_2, t.text_dim) };
-    div()
-        .id(id)
-        .w(px(30.))
-        .h(px(16.))
-        .flex_none()
-        .flex()
-        .items_center()
-        .px(px(2.))
-        .rounded(px(8.))
-        .bg(track)
-        .when(on, |d| d.justify_end())
-        .child(div().size(px(12.)).rounded(px(6.)).bg(knob))
+pub fn switch(t: &Theme, id: impl Into<ElementId>, on: bool) -> Transition<Stateful<Div>> {
+    let (track_off, track_on, knob_off, knob_on) = (t.raised_2, t.accent, t.text_dim, t.on_accent);
+    let id = id.into();
+    let el = div().id(id.clone()).w(px(30.)).h(px(16.)).flex_none().flex().items_center().px(px(2.)).rounded(px(8.));
+    // `.ui-switch-knob`: a 14px slide on --t-fast, the track and knob colours with it.
+    motion::toggle(id, on, el, move |d, m| {
+        d.bg(mix(track_off, track_on, m.on))
+            .child(div().size(px(12.)).rounded(px(6.)).left(px(14. * m.on)).bg(mix(knob_off, knob_on, m.on)))
+    })
 }
 
 impl Manager {

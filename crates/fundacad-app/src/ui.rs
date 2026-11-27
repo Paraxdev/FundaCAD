@@ -5,6 +5,7 @@ use std::cell::RefCell;
 
 use gpui::*;
 
+use crate::motion::{self, mix, Transition};
 use crate::theme::{line_normal, Theme, FLOAT_CHIP_RADIUS, FLOAT_RADIUS, FLOAT_TILE_RADIUS};
 use crate::viewport::{Frost, Viewport};
 
@@ -56,8 +57,6 @@ pub fn icon_path(name: &str) -> String {
 pub fn icon(name: &str, size: f32, color: impl Into<Hsla>) -> Svg {
     svg().path(SharedString::from(icon_path(name))).size(px(size)).flex_none().text_color(color)
 }
-
-const ICON_BUTTON: &str = "icon-button";
 
 /// `.float-card`: a glass card over the 3D view.
 pub fn float_card(t: &Theme) -> Div {
@@ -120,7 +119,7 @@ pub fn chip(t: &Theme) -> Div {
         .child(frost(FLOAT_CHIP_RADIUS, 0.))
 }
 
-/// A square icon button, `IconButton` in the Vue app.
+/// A square icon button, `IconButton` in the Vue app, its wash and icon colour eased over --t-fast.
 pub fn icon_button(
     t: &Theme,
     id: impl Into<ElementId>,
@@ -128,18 +127,13 @@ pub fn icon_button(
     box_size: f32,
     icon_size: f32,
     color: impl Into<Hsla>,
-) -> Stateful<Div> {
-    let hover = t.raised;
-    let hover_text = t.text;
-    div()
-        .id(id)
-        .size(px(t.hit(box_size)))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(4.))
-        .group(ICON_BUTTON)
-        .hover(move |s| s.bg(hover))
-        .child(icon(name, icon_size, color).group_hover(ICON_BUTTON, move |s| s.text_color(hover_text)))
+) -> Transition<Stateful<Div>> {
+    let (hover, hover_text, color) = (t.raised, t.text, color.into());
+    let id = id.into();
+    let name = SharedString::from(name.to_string());
+    let el = div().id(id.clone()).size(px(t.hit(box_size))).flex_none().flex().items_center().justify_center().rounded(px(4.));
+    motion::hover(id, el, move |mut d, m| {
+        let base = motion::base_bg(&mut d);
+        d.bg(mix(base, hover, m.hover)).child(icon(&name, icon_size, mix(color, hover_text, m.hover)))
+    })
 }

@@ -14,6 +14,7 @@ mod i18n;
 mod inspect;
 mod inspector;
 mod items;
+mod motion;
 mod overlay;
 mod plastic;
 mod prefs;

@@ -7,7 +7,8 @@ use gpui::*;
 
 use super::Overlay;
 use crate::commands;
-use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FLOAT_TILE_RADIUS, FS_BODY, FS_MICRO, S_1, S_2, S_3, S_4};
+use crate::motion::{self, mix};
+use crate::theme::{Rgb, Theme, FLOAT_CHIP_RADIUS, FLOAT_TILE_RADIUS, FS_BODY, FS_MICRO, S_1, S_2, S_3, S_4};
 use crate::ui::{icon, text};
 
 #[derive(Clone)]
@@ -191,7 +192,11 @@ impl Overlay {
             At::Point(p) => p,
             At::Bar(i) => super::menubar::anchor(i),
         };
-        let popup = self.popup(t, cx);
+        let key: SharedString = match m.at {
+            At::Point(p) => format!("menu-pop:{}:{}", f32::from(p.x) as i32, f32::from(p.y) as i32).into(),
+            At::Bar(i) => format!("menu-pop:bar{i}").into(),
+        };
+        let popup = motion::pop_in(key, div().child(self.popup(t, cx)));
         Some(deferred(anchored().position(position).snap_to_window_with_margin(px(4.)).child(popup)).into_any_element())
     }
 
@@ -211,14 +216,14 @@ impl Overlay {
                 MenuRow::Separator => separator(t).into_any_element(),
                 MenuRow::Item(item) => {
                     let item2 = item.clone();
-                    row_element(t, ("row", i), &item.label, item.hint.clone(), item.checked, item.disabled, active)
+                    let el = row_element(t, ("row", i), &item.label, item.hint.clone(), item.checked, item.disabled)
                         .on_mouse_move(cx.listener(move |this, _: &MouseMoveEvent, _, cx| this.hover_row(i, None, cx)))
-                        .on_click(cx.listener(move |this, _, window, cx| this.pick(item2.clone(), window, cx)))
-                        .into_any_element()
+                        .on_click(cx.listener(move |this, _, window, cx| this.pick(item2.clone(), window, cx)));
+                    lit(t, ("row-lit", i), active && !item.disabled, el).into_any_element()
                 }
                 MenuRow::Submenu { label, rows } => {
                     let open = sub.is_some_and(|(r, _)| r == i);
-                    let mut el = row_element(t, ("row", i), label, None, None, !row.usable(), active || open)
+                    let mut el = row_element(t, ("row", i), label, None, None, !row.usable())
                         .relative()
                         .child(icon("caretRight", 12., t.text_dim))
                         .on_mouse_move(
@@ -230,11 +235,11 @@ impl Overlay {
                             div().absolute().top(px(-5.)).left_full().child(
                                 anchored()
                                     .snap_to_window_with_margin(px(4.))
-                                    .child(self.sub_card(t, i, rows, active_sub, cx)),
+                                    .child(motion::pop_in(("sub-pop", i), self.sub_card(t, i, rows, active_sub, cx))),
                             ),
                         );
                     }
-                    el.into_any_element()
+                    lit(t, ("row-lit", i), (active || open) && row.usable(), el).into_any_element()
                 }
             });
         }
@@ -254,20 +259,12 @@ impl Overlay {
             card = card.child(match row {
                 MenuRow::Item(item) => {
                     let item2 = item.clone();
-                    row_element(
-                        t,
-                        ("sub", j),
-                        &item.label,
-                        item.hint.clone(),
-                        item.checked,
-                        item.disabled,
-                        active == Some(j),
-                    )
-                    .on_mouse_move(
-                        cx.listener(move |this, _: &MouseMoveEvent, _, cx| this.hover_row(parent, Some(Some(j)), cx)),
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| this.pick(item2.clone(), window, cx)))
-                    .into_any_element()
+                    let el = row_element(t, ("sub", j), &item.label, item.hint.clone(), item.checked, item.disabled)
+                        .on_mouse_move(
+                            cx.listener(move |this, _: &MouseMoveEvent, _, cx| this.hover_row(parent, Some(Some(j)), cx)),
+                        )
+                        .on_click(cx.listener(move |this, _, window, cx| this.pick(item2.clone(), window, cx)));
+                    lit(t, ("sub-lit", j), active == Some(j) && !item.disabled, el).into_any_element()
                 }
                 _ => separator(t).into_any_element(),
             });
@@ -318,10 +315,7 @@ fn row_element(
     hint: Option<SharedString>,
     checked: Option<bool>,
     disabled: bool,
-    active: bool,
 ) -> Stateful<Div> {
-    let wash = t.accent_wash;
-    let hot = t.accent_hot;
     text(t, FS_BODY)
         .id(id)
         .flex()
@@ -332,10 +326,15 @@ fn row_element(
         .rounded(px(FLOAT_CHIP_RADIUS))
         .whitespace_nowrap()
         .when(disabled, |d| d.opacity(0.45))
-        .when(active && !disabled, move |d| d.bg(wash).text_color(hot))
         .when_some(checked, |d, on| {
             d.child(div().w(px(12.)).flex_none().when(on, |d| d.child(icon("check", 12., t.text))))
         })
         .child(div().flex_1().child(label.clone()))
         .when_some(hint, |d, h| d.child(text(t, FS_MICRO).flex_none().pl(px(S_4)).text_color(t.text_dim).child(h)))
+}
+
+/// The hovered or keyboard active row, its wash and accent eased in over --t-fast.
+fn lit(t: &Theme, id: impl Into<ElementId>, on: bool, row: Stateful<Div>) -> impl IntoElement {
+    let (wash, hot, ink) = (t.accent_wash, t.accent_hot, t.text);
+    motion::toggle(id, on, row, move |d, m| d.bg(mix(Rgb::TRANSPARENT, wash, m.on)).text_color(mix(ink, hot, m.on)))
 }

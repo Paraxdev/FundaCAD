@@ -5,8 +5,9 @@ use gpui::*;
 
 use super::timeline::Entry;
 use super::Shell;
+use crate::motion::{hover, mix, pop_in};
 use crate::theme::{
-    ActiveTheme as _, Theme, FLOAT_CHIP_RADIUS, FLOAT_TILE_RADIUS, FS_BODY, FS_MICRO, S_1, S_2, S_3, S_4,
+    ActiveTheme as _, Rgb, Theme, FLOAT_CHIP_RADIUS, FLOAT_TILE_RADIUS, FS_BODY, FS_MICRO, S_1, S_2, S_3, S_4,
 };
 use crate::ui::{icon, text};
 
@@ -14,6 +15,7 @@ impl Shell {
     pub(super) fn history_menu(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.timeline.menu.as_ref()?;
         let entries = super::timeline::menu(&self.timeline.doc, &menu.targets);
+        let key = SharedString::from(format!("history-menu-in:{}:{}", f32::from(menu.at.x) as i32, f32::from(menu.at.y) as i32));
         let mut list = div()
             .id("history-menu")
             .min_w(px(168.))
@@ -54,17 +56,18 @@ impl Shell {
                             d.child(div().pl(px(S_4)).text_size(px(FS_MICRO)).text_color(t.text_dim).child(keys))
                         })
                         .map(|d| match act {
-                            Some(act) => d.hover(move |s| s.bg(wash).text_color(hot)).on_click(
-                                cx.listener(move |this, _, window, cx| this.run(act, targets.clone(), window, cx)),
-                            ),
-                            None => d.opacity(0.45),
+                            Some(act) => hover(("history-menu-lit", i), d, move |d, m| {
+                                d.bg(mix(Rgb::TRANSPARENT, wash, m.hover)).text_color(mix(colour, hot, m.hover))
+                            })
+                            .on_click(cx.listener(move |this, _, window, cx| this.run(act, targets.clone(), window, cx)))
+                            .into_any_element(),
+                            None => d.opacity(0.45).into_any_element(),
                         })
-                        .into_any_element()
                 }
             });
         }
         Some(
-            deferred(anchored().position(menu.at).snap_to_window_with_margin(px(4.)).child(list))
+            deferred(anchored().position(menu.at).snap_to_window_with_margin(px(4.)).child(pop_in(key, list)))
                 .with_priority(1)
                 .into_any_element(),
         )

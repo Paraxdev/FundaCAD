@@ -10,6 +10,7 @@ use crate::i18n::{self, tr, Label};
 use crate::inspector as model;
 use crate::overlay::{self, Toast};
 use crate::selection::{Filter, Pick, PickKind};
+use crate::motion::{glass_in, hover_bg, prompt_in};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_SMALL, S_1, S_2, S_3, W_SEMIBOLD};
 use crate::tools::{self, Target};
 use crate::ui::{chip, text};
@@ -222,7 +223,7 @@ impl Shell {
             .into_any_element()
     }
 
-    pub(super) fn tool_card(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+    pub(super) fn tool_card(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let v = self.viewport.read(cx);
         let s = v.running()?;
         let (title, feature, arm) = (s.title.clone(), s.feature.clone(), s.arm);
@@ -230,7 +231,11 @@ impl Shell {
         let rows = self.source.as_ref().map(|d| model::rows(d, &feature, v.feature_issues())).unwrap_or_default();
         let rows: Vec<AnyElement> = rows.iter().map(|r| self.row(t, &feature, r, window, cx)).collect();
         let button = |label: &'static str, primary: bool| {
-            text(t, FS_SMALL)
+            let (rest, lit) = match primary {
+                true => (t.accent, t.accent_hot),
+                false => (t.field_bg, crate::motion::layer(t.hover_wash, t.field_bg)),
+            };
+            let el = text(t, FS_SMALL)
                 .id(ElementId::Name(format!("tool:{label}").into()))
                 .h(px(28.))
                 .px(px(S_3))
@@ -240,24 +245,27 @@ impl Shell {
                 .font_weight(W_SEMIBOLD)
                 .cursor_pointer()
                 .map(|d| match primary {
-                    true => d.bg(t.accent).text_color(t.on_accent),
-                    false => d.bg(t.field_bg).border_1().border_color(t.control_edge).text_color(t.text),
+                    true => d.text_color(t.on_accent),
+                    false => d.border_1().border_color(t.control_edge).text_color(t.text),
                 })
-                .child(i18n::t(label))
+                .child(i18n::t(label));
+            hover_bg(ElementId::Name(format!("tool-bg:{label}").into()), el, rest, lit)
         };
         let head = div()
             .flex()
             .items_center()
             .justify_between()
-            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).child(title))
+            .child(text(t, FS_BODY).font_weight(W_SEMIBOLD).child(title.clone()))
             .child(text(t, FS_SMALL).text_color(t.text_mute).child(i18n::t("mirror.escCancel")));
         let picking = arm.as_ref().map(|a| {
-            div()
+            let line = prompt(a);
+            let key = SharedString::from(format!("tool-prompt:{line}"));
+            let el = div()
                 .flex()
                 .items_center()
                 .justify_between()
                 .gap(px(S_2))
-                .child(text(t, FS_SMALL).flex_1().min_w_0().text_color(t.accent).child(prompt(a)))
+                .child(text(t, FS_SMALL).flex_1().min_w_0().text_color(t.accent).child(line))
                 .child(
                     div()
                         .flex_none()
@@ -271,7 +279,8 @@ impl Shell {
                                 this.viewport.update(cx, |v, cx| v.set_arm(None, cx));
                             })))
                         }),
-                )
+                );
+            prompt_in(key, el)
         });
         let foot = div()
             .flex()
@@ -285,8 +294,7 @@ impl Shell {
                     this.viewport.update(cx, |v, cx| v.finish(true, cx));
                 },
             )));
-        Some(
-            chip(t)
+        let card = chip(t)
                 .id("tool-card")
                 .w(px(300.))
                 .p(px(S_3))
@@ -297,7 +305,7 @@ impl Shell {
                 .child(head)
                 .children(picking)
                 .children(rows)
-                .child(foot),
-        )
+                .child(foot);
+        Some(glass_in(SharedString::from(format!("tool-card-in:{title}")), card).into_any_element())
     }
 }

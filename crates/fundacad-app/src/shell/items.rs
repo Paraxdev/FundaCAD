@@ -10,7 +10,8 @@ use super::geometry::GeoState;
 use super::Shell;
 use crate::i18n::{self, tr};
 use crate::items::{self, BodyRef, Category, Eye, Filter, Inputs, Kind, Mods, Node, Rename, Selection};
-use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_PILL, S_1, S_2, W_SEMIBOLD};
+use crate::motion::{hover_bg, pop_in, row_bg, Transition};
+use crate::theme::{Rgb, Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_PILL, S_1, S_2, W_SEMIBOLD};
 use crate::ui::{float_card, icon, icon_button, solid_card, text};
 
 pub(super) const WIDTH: f32 = 264.;
@@ -136,16 +137,29 @@ pub(super) fn popup(
 ) -> impl IntoElement {
     deferred(
         anchored().position(pos).snap_to_window_with_margin(px(8.)).child(
-            solid_card(t).bg(t.float_bg_solid).min_w(px(180.)).p(px(S_1)).on_mouse_down_out(close).children(rows),
+            pop_in(
+                SharedString::from(format!("popup:{}:{}", f32::from(pos.x) as i32, f32::from(pos.y) as i32)),
+                solid_card(t)
+                    .bg(t.float_bg_solid)
+                    .min_w(px(180.))
+                    .p(px(S_1))
+                    .on_mouse_down_out(close)
+                    .children(rows),
+            ),
         ),
     )
     .with_priority(1)
 }
 
-pub(super) fn menu_row(t: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>, on: bool) -> Stateful<Div> {
-    let hover = t.hover_wash;
-    text(t, FS_SMALL)
-        .id(id)
+pub(super) fn menu_row(
+    t: &Theme,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    on: bool,
+) -> Transition<Stateful<Div>> {
+    let id = id.into();
+    let row = text(t, FS_SMALL)
+        .id(id.clone())
         .h(px(28.))
         .px(px(10.))
         .flex()
@@ -153,9 +167,9 @@ pub(super) fn menu_row(t: &Theme, id: impl Into<ElementId>, label: impl Into<Sha
         .justify_between()
         .gap(px(S_2))
         .rounded(px(FLOAT_CHIP_RADIUS))
-        .hover(move |s| s.bg(hover))
         .child(label.into())
-        .when(on, |d| d.child(icon("check", 12., t.accent)))
+        .when(on, |d| d.child(icon("check", 12., t.accent)));
+    hover_bg(id, row, Rgb::TRANSPARENT, t.hover_wash)
 }
 
 /// A field-like chip that opens a dropdown, used by the filter and the Geometry pickers.
@@ -530,7 +544,7 @@ impl Shell {
         let raised = t.raised;
         let eye = node.eye.clone().map(|eye| {
             let visible = eye.visible;
-            div()
+            let eye = div()
                 .id(SharedString::from(format!("eye-{}", node.k)))
                 .size(px(20.))
                 .flex_none()
@@ -538,7 +552,6 @@ impl Shell {
                 .items_center()
                 .justify_center()
                 .rounded(px(FLOAT_CHIP_RADIUS))
-                .hover(move |s| s.bg(raised))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
@@ -546,12 +559,12 @@ impl Shell {
                         this.eye_down(&eye, ev.modifiers.alt, cx);
                     }),
                 )
-                .child(icon(if visible { "visible" } else { "hidden" }, 14., t.text_mute))
+                .child(icon(if visible { "visible" } else { "hidden" }, 14., t.text_mute));
+            hover_bg(SharedString::from(format!("eye-bg-{}", node.k)), eye, Rgb::TRANSPARENT, raised)
         });
         let (click, menu) = (node.clone(), node.clone());
         let (click_nodes, menu_nodes) = (nodes.clone(), nodes.clone());
-        let hover = t.hover_wash;
-        div()
+        let row = div()
             .id(SharedString::from(format!("row-{}", node.k)))
             .flex_none()
             .h(px(ROW))
@@ -561,8 +574,6 @@ impl Shell {
             .pr(px(6.))
             .gap(px(8.))
             .rounded(px(FLOAT_CHIP_RADIUS))
-            .when(selected, |d| d.bg(t.accent_wash))
-            .when(!selected, |d| d.hover(move |s| s.bg(hover)))
             .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
                 this.row_click(&click, ev, &click_nodes, window, cx);
             }))
@@ -577,8 +588,9 @@ impl Shell {
             .child(icon(node.icon, 14., if node.error { t.error.into() } else { Hsla::from(t.text_dim) }))
             .child(label)
             .children(badge)
-            .children(eye)
-            .into_any_element()
+            .children(eye);
+        let id = SharedString::from(format!("row-bg-{}", node.k));
+        row_bg(id, row, selected, t.hover_wash, t.accent_wash).into_any_element()
     }
 
     fn items_menu(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {

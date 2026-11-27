@@ -181,7 +181,7 @@ impl Overlay {
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(hold).await;
             let _ = this.update(cx, |o, cx| {
-                if o.toasts.expire(id, generation) {
+                if o.toasts.expire(id, generation, Some(&**cx)) {
                     cx.notify();
                 }
             });
@@ -215,7 +215,7 @@ impl Render for Overlay {
                     .key_context(context)
                     .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.on_key(e, window, cx)))
             })
-            .child(self.render_toasts(t, cx))
+            .child(self.render_toasts(t, window, cx))
             .when_some(self.render_point_menu(t, window, cx), |d, m| d.child(m))
             .when_some(self.render_palette(t, window, cx), |d, p| d.child(p))
             .when_some(self.render_confirm(t, cx), |d, c| d.child(c))

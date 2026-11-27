@@ -13,6 +13,7 @@ use super::Shell;
 use crate::document::Param;
 use crate::i18n::{self, tr};
 use crate::inspector::{self as model, ChoiceRow, Kind, NumRow, Row, Rule};
+use crate::motion::{self, mix, Transition};
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_SMALL, R_MD, R_PILL, S_0, S_1, S_2, S_3, W_SEMIBOLD};
 use crate::ui::{icon, text};
 
@@ -217,7 +218,7 @@ impl Shell {
             Row::Choice(c) => self.choice(t, id, c, cx).into_any_element(),
             Row::Toggle { field, label, on } => {
                 let (id, field, on) = (id.to_string(), *field, *on);
-                let switch = switch(t, on).id(ElementId::Name(format!("toggle:{id}:{field}").into())).on_click(
+                let switch = switch(t, ElementId::Name(format!("toggle:{id}:{field}").into()), on).on_click(
                     cx.listener(move |this, _, _, cx| {
                         this.apply_option(id.clone(), field, Value::Bool(!on), cx);
                     }),
@@ -363,23 +364,18 @@ fn value(t: &Theme, words: &str, empty: bool) -> Div {
 }
 
 /// A 36 by 20 switch, the knob at the end it is set to.
-fn switch(t: &Theme, on: bool) -> Div {
-    div()
-        .w(px(36.))
-        .h(px(20.))
-        .flex_none()
-        .relative()
-        .rounded(px(R_PILL))
-        .bg(if on { t.accent } else { t.raised_2 })
-        .border_1()
-        .border_color(if on { t.accent } else { t.control_edge })
-        .child(
+fn switch(t: &Theme, id: ElementId, on: bool) -> Transition<Stateful<Div>> {
+    let (accent, off, edge, knob_on, knob_off) = (t.accent, t.raised_2, t.control_edge, t.on_accent, t.text);
+    let el = div().id(id.clone()).w(px(36.)).h(px(20.)).flex_none().relative().rounded(px(R_PILL)).border_1();
+    motion::toggle(id, on, el, move |d, m| {
+        d.bg(mix(off, accent, m.on)).border_color(mix(edge, accent, m.on)).child(
             div()
                 .absolute()
                 .top(px(2.))
-                .left(px(if on { 18. } else { 2. }))
+                .left(px(2. + 16. * m.on))
                 .size(px(14.))
                 .rounded(px(R_PILL))
-                .bg(if on { t.on_accent } else { t.text }),
+                .bg(mix(knob_off, knob_on, m.on)),
         )
+    })
 }
