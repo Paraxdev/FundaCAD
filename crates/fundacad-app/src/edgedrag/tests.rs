@@ -206,3 +206,18 @@ fn it_is_settled_once_that_very_preview_is_on_screen() {
     o.forget();
     assert!(!o.settled(&feature_key(&blend(1.0, "f9"))));
 }
+
+#[test]
+fn enter_waits_only_for_an_unanswered_unknown_value() {
+    assert!(enter_waits(Verdict::Unknown, Some(5), 4));
+    assert!(!enter_waits(Verdict::Unknown, Some(5), 5));
+    assert!(!enter_waits(Verdict::Unknown, None, 0));
+    assert!(!enter_waits(Verdict::Refused, Some(5), 4));
+    assert!(!enter_waits(Verdict::Builds, Some(5), 4));
+}
+
+#[test]
+fn a_typed_refusal_stays_open_and_a_dragged_one_falls_back() {
+    assert_eq!(commit_decision(9.0, Verdict::Refused, false, Some(2.0), true), Commit::Stay);
+    assert_eq!(commit_decision(9.0, Verdict::Refused, false, Some(2.0), false), Commit::Commit { value: 2.0, unverified: false });
+}

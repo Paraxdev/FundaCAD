@@ -144,6 +144,7 @@ pub struct Viewport {
     inspect: inspecting::Inspecting,
     blend: Option<blend::Blend>,
     blend_hover: Option<(usize, usize)>,
+    blend_ask: Option<blend::Ask>,
     carry: placing::Carry,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
@@ -204,6 +205,7 @@ impl Viewport {
             inspect: Default::default(),
             blend: None,
             blend_hover: None,
+            blend_ask: None,
             carry: Default::default(),
             _wake: None,
             _demo: None,
@@ -247,6 +249,7 @@ impl Viewport {
         self.hover = None;
         self.tool = None;
         self.picking = Default::default();
+        self.carry = Default::default();
         self.message = None;
         self.rebuild_ms = None;
         self.fitted = false;
@@ -469,6 +472,7 @@ impl Viewport {
                     latest = Some(mesh);
                 }
                 Event::Failed { message, feature_id, revision } => {
+                    self.carry.landing = None;
                     self.blend_reply(revision, None, cx);
                     log::warn!("{message}");
                     if let Some(id) = &feature_id {
@@ -495,6 +499,7 @@ impl Viewport {
             self.message = None;
             self.hover = None;
             self.built = mesh.bodies.clone();
+            self.carry.landing = None;
             self.datums.mesh = Some(mesh.clone());
             self.inspect.rebuilt();
             self.show_built();
@@ -732,7 +737,7 @@ impl Viewport {
     fn release(&mut self, cx: &mut Context<Self>) {
         if let Some((at, mods)) = self.picking.pressed.take() {
             if self.blend_open() {
-                self.blend_commit(false, cx);
+                self.blend_away(cx);
             } else if self.blend_on_knob(at) {
                 self.blend_press(at, cx);
             } else {
@@ -843,6 +848,7 @@ impl Render for Viewport {
                     this.sketch_release(cx);
                     this.gizmo_release(cx);
                     this.release(cx);
+                    this.blend_ask(w, cx);
                     if this.blend_open() {
                         let focus = this.sketch_focus(cx);
                         w.focus(&focus, cx);

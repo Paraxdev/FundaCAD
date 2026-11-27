@@ -169,6 +169,11 @@ pub fn commit_decision(value: f64, verdict: Verdict, settled: bool, shown: Optio
     Commit::Commit { value, unverified: !(settled || verdict == Verdict::Builds) }
 }
 
+/// Enter on a typed value waits while the engine has not answered the value sent last and nothing is known of it.
+pub fn enter_waits(verdict: Verdict, last_sent: Option<u64>, replied: u64) -> bool {
+    verdict == Verdict::Unknown && last_sent.is_some_and(|r| r > replied)
+}
+
 /// The first number in `s`, with what follows it.
 fn number(s: &str) -> Option<(f64, &str)> {
     let end = s.find(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | 'e' | 'E' | '+' | '-'))).unwrap_or(s.len());
