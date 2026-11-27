@@ -240,7 +240,7 @@ impl Display {
         Self {
             view_mode: settings::read(VIEW_MODE_KEY).unwrap_or_default(),
             matcap: settings::read(MATCAP_KEY).unwrap_or_default(),
-            matcap_tint: settings::read(TINT_KEY).unwrap_or(false),
+            matcap_tint: settings::read(TINT_KEY).unwrap_or(true),
             overlays: settings::read(OVERLAYS_KEY).unwrap_or_default(),
             xray: false,
             wireframe: false,

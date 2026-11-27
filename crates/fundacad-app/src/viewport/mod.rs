@@ -11,6 +11,7 @@ mod edges;
 mod gizmo;
 pub mod inspecting;
 mod issues;
+mod look;
 pub mod mesh;
 mod motion;
 mod pick;
@@ -25,6 +26,7 @@ mod sketching;
 mod undo;
 mod views;
 mod visible;
+mod wire;
 
 pub use sketching::install as install_sketch;
 pub use views::View;
@@ -570,6 +572,7 @@ impl Viewport {
             shade: self.shade_uniform(),
             datums,
             datums_on_top,
+            look: look::Look::of(&self.display),
         }
     }
 
