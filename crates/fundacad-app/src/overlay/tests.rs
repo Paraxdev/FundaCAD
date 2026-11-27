@@ -96,3 +96,16 @@ fn enter_answers_the_primary_choice_else_the_last() {
     assert_eq!(first_active(&[Choice::danger("Discard"), Choice::plain("Cancel")]), 1);
     assert_eq!(first_active(&[]), 0);
 }
+
+#[test]
+fn a_toast_pushed_out_by_the_limit_fades_instead_of_vanishing() {
+    let mut s = Stack::default();
+    let now = std::time::Instant::now();
+    for m in ["a", "b", "c"] {
+        s.push_at(Toast::info(m), Some(now));
+    }
+    assert!(s.leaving().is_empty());
+    s.push_at(Toast::info("d"), Some(now));
+    assert_eq!(s.leaving(), vec![1]);
+    assert_eq!(s.items.len(), MAX);
+}

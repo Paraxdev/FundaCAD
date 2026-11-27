@@ -2,7 +2,7 @@
 //! without a button, so a pending Undo is the last to go.
 
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui::{App, SharedString, Window};
 
@@ -85,9 +85,19 @@ pub struct Stack {
     next: u64,
 }
 
+fn clock(cx: &App) -> Instant {
+    cx.background_executor().now()
+}
+
 impl Stack {
-    /// The id and generation the timer expires it by. The same toast showing already starts its time again.
+    #[cfg(test)]
     pub fn push(&mut self, toast: Toast) -> (u64, u64) {
+        self.push_at(toast, None)
+    }
+
+    /// The id and generation the timer expires it by. The same toast showing already starts its time again.
+    /// One pushed out by [`MAX`] fades from `now`, without a clock it just goes.
+    pub fn push_at(&mut self, toast: Toast, now: Option<Instant>) -> (u64, u64) {
         if let Some(same) = self.items.iter_mut().find(|i| i.toast.same(&toast)) {
             same.toast = toast;
             same.generation += 1;
@@ -95,7 +105,7 @@ impl Stack {
         }
         while self.items.len() >= MAX {
             let gone = self.items.iter().position(|i| i.toast.action.is_none()).unwrap_or(0);
-            self.leave(gone, None);
+            self.leave(gone, now);
         }
         self.next += 1;
         self.items.push(Item { id: self.next, toast, generation: 0 });
@@ -111,27 +121,30 @@ impl Stack {
     pub fn dismiss_fading(&mut self, id: u64, cx: Option<&App>) -> bool {
         match self.items.iter().position(|i| i.id == id) {
             Some(at) => {
-                self.leave(at, cx);
+                self.leave(at, cx.map(clock));
                 true
             }
             None => false,
         }
     }
 
-    fn leave(&mut self, at: usize, cx: Option<&App>) {
+    fn leave(&mut self, at: usize, now: Option<Instant>) {
         let item = self.items.remove(at);
-        if let Some(cx) = cx {
-            let mut leave = Leave::default();
-            leave.start(cx);
-            self.leaving.push((at, item, leave));
+        if let Some(now) = now {
+            self.leaving.push((at, item, Leave::since(now)));
         }
+    }
+
+    #[cfg(test)]
+    pub fn leaving(&self) -> Vec<u64> {
+        self.leaving.iter().map(|(_, i, _)| i.id).collect()
     }
 
     /// Removes the toast if no later push of it started its time again.
     pub fn expire(&mut self, id: u64, generation: u64, cx: Option<&App>) -> bool {
         match self.items.iter().position(|i| i.id == id && i.generation == generation) {
             Some(at) => {
-                self.leave(at, cx);
+                self.leave(at, cx.map(clock));
                 true
             }
             None => false,
