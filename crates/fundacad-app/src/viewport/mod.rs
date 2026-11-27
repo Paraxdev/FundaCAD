@@ -546,6 +546,7 @@ impl Viewport {
     fn overlay(&self) -> Overlay {
         let f = &self.hover_fade;
         let hover = [f.on.clone(), f.off.clone()].map(|h| h.map(|((b, face, ok), a)| (b, face, ok, ease(a))));
+        let (datums, datums_on_top) = self.datum_triangles();
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
         Overlay {
@@ -556,6 +557,8 @@ impl Viewport {
             selection_fade: ease(self.select_fade.t),
             clip: self.clip_plane(),
             shade: self.shade_uniform(),
+            datums,
+            datums_on_top,
         }
     }
 
@@ -611,7 +614,6 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
-        self.paint_datums(window);
         self.paint_profiles(window);
         self.paint_sketch(window);
         had_backend != self.backend

@@ -144,3 +144,23 @@ fn fs_cap(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
   let stripe = 1.0 - smoothstep(half_width - 0.8, half_width + 0.8, t);
   return vec4<f32>(encode(mix(colour * 0.42, mix(colour, vec3<f32>(1.0), 0.25), stripe)), 1.0);
 }
+
+struct Datum {
+  @builtin(position) clip: vec4<f32>,
+  @location(0) color: vec4<f32>,
+}
+
+@vertex
+fn vs_datum(@location(0) position: vec3<f32>, @location(1) color: vec4<f32>) -> Datum {
+  var out: Datum;
+  let clip = u.view_proj * vec4<f32>(position, 1.0);
+  // A hair toward the eye, so a datum lying on a face shows on it rather than fighting it.
+  out.clip = vec4<f32>(clip.xy, clip.z - 2e-5 * clip.w, clip.w);
+  out.color = color;
+  return out;
+}
+
+@fragment
+fn fs_datum(in: Datum) -> @location(0) vec4<f32> {
+  return vec4<f32>(encode(in.color.rgb), in.color.a);
+}

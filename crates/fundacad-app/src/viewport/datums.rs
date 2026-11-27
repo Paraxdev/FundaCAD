@@ -1,17 +1,18 @@
-//! Datum planes, axes and points drawn over the model, the Origin planes once their eye is on, and a click on a plane
-//! square taking it. The running datum feature and the selected planes are lit.
+//! Datum planes, axes and points drawn in the model's depth, the Origin planes once their eye is on, and a click on a
+//! plane square taking it. The running datum feature and the selected planes are lit.
 
+pub mod draw;
 pub mod geom;
 
 use std::sync::Arc;
 
 use fundacad_client::Mesh as EngineMesh;
-use glam::DVec3;
 use gpui::*;
 use serde_json::Map;
 
 use super::Viewport;
-use crate::selection::Pick;
+use super::renderer::DatumVertex;
+use crate::selection::{Pick, PickKind};
 use geom::Mark;
 
 const PLANE: u32 = 0x7fb2ff;
@@ -22,12 +23,6 @@ const LIT: u32 = 0x9a9ff0;
 #[derive(Default)]
 pub struct Datums {
     pub mesh: Option<Arc<EngineMesh>>,
-}
-
-fn rgb_a(hex: u32, a: f32) -> Hsla {
-    let mut c: Hsla = rgb(hex).into();
-    c.a = a;
-    c
 }
 
 impl Viewport {
@@ -71,65 +66,40 @@ impl Viewport {
             .collect()
     }
 
-    pub(super) fn paint_datums(&self, window: &mut Window) {
+    /// The datum marks as triangles, and whether they go over the model: FundaCAD 1 tests them against it except
+    /// while a plane is being picked.
+    pub(super) fn datum_triangles(&self) -> (Vec<DatumVertex>, bool) {
+        let mut out = Vec::new();
         let marks = self.datum_marks();
+        let on_top = self.tool.as_ref().and_then(|t| t.arm).is_some_and(|a| a.kind == PickKind::Plane);
         if marks.is_empty() {
-            return;
+            return (out, on_top);
         }
         let half = self.datum_half();
-        let screen = |p: DVec3| self.to_screen(p.as_vec3());
+        let view = draw::View::new(&self.camera, self.bounds.size.height.as_f32());
         for m in &marks {
             let lit = self.lit_datum(m.id());
             match m {
                 Mark::Plane { plane, .. } => {
-                    let corners: Option<Vec<Point<Pixels>>> =
-                        geom::square(half).iter().map(|q| screen(plane.to_3d(*q))).collect();
-                    let Some(c) = corners else { continue };
-                    let mut fill = PathBuilder::fill();
-                    let mut edge = PathBuilder::stroke(px(if lit { 2.0 } else { 1.0 }));
-                    fill.move_to(c[0]);
-                    edge.move_to(c[0]);
-                    for p in &c[1..] {
-                        fill.line_to(*p);
-                        edge.line_to(*p);
-                    }
-                    fill.close();
-                    edge.line_to(c[0]);
+                    let c = geom::square(half).map(|q| plane.to_3d(q).as_vec3());
                     let color = if lit { LIT } else { PLANE };
-                    if let Ok(p) = fill.build() {
-                        window.paint_path(p, rgb_a(color, if lit { 0.22 } else { 0.1 }));
-                    }
-                    if let Ok(p) = edge.build() {
-                        window.paint_path(p, rgb_a(color, 0.8));
+                    draw::quad(&mut out, c, draw::linear(color, if lit { 0.22 } else { 0.1 }));
+                    let (width, edge) = (if lit { 2.0 } else { 1.0 }, draw::linear(color, 0.8));
+                    for i in 0..4 {
+                        draw::line(&mut out, &view, c[i], c[(i + 1) % 4], width, edge);
                     }
                 }
                 Mark::Axis { origin, dir, .. } => {
-                    let (Some(a), Some(b)) = (screen(*origin - *dir * half), screen(*origin + *dir * half)) else { continue };
-                    let mut line = PathBuilder::stroke(px(if lit { 2.5 } else { 1.5 })).dash_array(&[px(8.), px(4.)]);
-                    line.move_to(a);
-                    line.line_to(b);
-                    if let Ok(p) = line.build() {
-                        window.paint_path(p, rgb_a(if lit { LIT } else { AXIS }, 0.9));
-                    }
+                    let (a, b) = ((*origin - *dir * half).as_vec3(), (*origin + *dir * half).as_vec3());
+                    let color = draw::linear(if lit { LIT } else { AXIS }, 0.9);
+                    draw::dashed(&mut out, &view, a, b, if lit { 2.5 } else { 1.5 }, 8.0, 4.0, color);
                 }
                 Mark::Point { at, .. } => {
-                    let Some(c) = screen(*at) else { continue };
-                    let r = if lit { 5.0 } else { 3.5 };
-                    let mut dot = PathBuilder::fill();
-                    for i in 0..12 {
-                        let a = i as f32 / 12.0 * std::f32::consts::TAU;
-                        let p = point(c.x + px(r * a.cos()), c.y + px(r * a.sin()));
-                        match i {
-                            0 => dot.move_to(p),
-                            _ => dot.line_to(p),
-                        }
-                    }
-                    dot.close();
-                    if let Ok(p) = dot.build() {
-                        window.paint_path(p, rgb_a(if lit { LIT } else { POINT }, 0.95));
-                    }
+                    let color = draw::linear(if lit { LIT } else { POINT }, 0.95);
+                    draw::disc(&mut out, &view, at.as_vec3(), if lit { 5.0 } else { 3.5 }, color);
                 }
             }
         }
+        (out, on_top)
     }
 }

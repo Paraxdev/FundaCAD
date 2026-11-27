@@ -101,6 +101,16 @@ pub struct Overlay {
     pub selection_fade: f32,
     pub clip: Option<[f32; 4]>,
     pub shade: Option<[f32; 4]>,
+    pub datums: Vec<DatumVertex>,
+    pub datums_on_top: bool,
+}
+
+/// A corner of a datum triangle, in world space with a linear colour.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct DatumVertex {
+    pub position: [f32; 3],
+    pub color: [f32; 4],
 }
 
 /// A selected body by scene index, with the faces of it selected, None for the whole body.
@@ -148,6 +158,8 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     count_pipeline: wgpu::RenderPipeline,
     cap_pipeline: wgpu::RenderPipeline,
+    /// Datums tested against the model's depth, and over it.
+    datum_pipelines: [wgpu::RenderPipeline; 2],
     uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     body_layout: wgpu::BindGroupLayout,
@@ -291,6 +303,42 @@ impl Renderer {
             depth(true, wgpu::CompareFunction::Less, parity(wgpu::CompareFunction::Equal, wgpu::StencilOperation::Zero)),
             wgpu::ColorWrites::ALL,
         );
+        let datum_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("viewport datums"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
+        let datum_pipelines = [wgpu::CompareFunction::Less, wgpu::CompareFunction::Always].map(|compare| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("viewport datums"),
+                layout: Some(&datum_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_datum"),
+                    compilation_options: Default::default(),
+                    buffers: &[Some(wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<DatumVertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
+                    })],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(depth(false, compare, Default::default())),
+                multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_datum"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        });
         let align = device.limits().min_uniform_buffer_offset_alignment as u64;
         let body_stride = (std::mem::size_of::<BodyUniforms>() as u64).div_ceil(align) * align;
         Self {
@@ -300,6 +348,7 @@ impl Renderer {
             pipeline,
             count_pipeline,
             cap_pipeline,
+            datum_pipelines,
             uniforms,
             bind_group,
             body_layout,
@@ -564,6 +613,13 @@ impl Renderer {
             }
         }
 
+        let datums = (!overlay.datums.is_empty()).then(|| {
+            self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("viewport datums"),
+                contents: bytemuck::cast_slice(&overlay.datums),
+                usage: wgpu::BufferUsages::VERTEX,
+            })
+        });
         let targets = self.targets.as_ref().expect("targets were just ensured");
         let clear = self.clear();
         let mut encoder = self.device.create_command_encoder(&Default::default());
@@ -608,6 +664,12 @@ impl Renderer {
                         pass.draw(0..6, 0..1);
                     }
                 }
+            }
+            if let Some(buffer) = &datums {
+                pass.set_pipeline(&self.datum_pipelines[usize::from(overlay.datums_on_top)]);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..overlay.datums.len() as u32, 0..1);
             }
         }
         self.blur.run(&mut encoder, &targets.blur, &targets.resolve, size, &self.frost, self.scale);
