@@ -36,7 +36,9 @@ fn the_grid_recentres_in_whole_major_cells() {
     let [at, cells] = g.uniform(-4.0);
     assert_eq!(at[2], -4.0);
     assert_eq!(cells[..2], [10.0, 50.0]);
-    assert!(g.major[2] > look::linear(GRID_MAJOR, 1.0)[2], "majors lean toward the accent");
+    let quiet = look::linear(GRID_MAJOR, 1.0);
+    assert!(g.major[2] > shown_raw(quiet)[2], "majors lean toward the accent");
+    assert!(g.minor[0] < look::linear(GRID_MINOR, 1.0)[0], "the grid shows as dark as FundaCAD 1's raw shader");
 }
 
 #[test]

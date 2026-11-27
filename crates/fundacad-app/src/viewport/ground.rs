@@ -93,8 +93,8 @@ impl Grid {
             centre: [snap(target.x), snap(target.y)],
             half: cell * ground_cells(per_px, diagonal_px, cell) * 0.5,
             cell,
-            minor: minor_c,
-            major: major_c,
+            minor: shown_raw(minor_c),
+            major: shown_raw(major_c),
         }
     }
 
@@ -102,6 +102,14 @@ impl Grid {
     pub fn uniform(&self, floor: f32) -> [[f32; 4]; 2] {
         [[self.centre[0], self.centre[1], floor, self.half], [self.cell, self.cell * GRID_MAJOR_EVERY, 0.0, 0.0]]
     }
+}
+
+/// Note: scene.ts's grid is a raw ShaderMaterial, so three.js never encodes its output and the linear colours reach
+/// the screen as if they were sRGB, far darker than their hex. This decodes them once more so the shader's encode
+/// lands on those same values.
+fn shown_raw(c: [f32; 4]) -> [f32; 4] {
+    let d = |v: f32| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
+    [d(c[0]), d(c[1]), d(c[2]), c[3]]
 }
 
 /// `hex` pulled `amount` of the way to the grey of its own luminance.
