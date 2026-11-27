@@ -216,7 +216,7 @@ fn split_draft_and_face_offset_get_one_normal_arrow_unless_bound() {
 #[test]
 fn a_split_plane_is_the_frame_the_builder_names() {
     assert_eq!(split_plane(&json!({"plane": "XZ"})), Some((Vec3::ZERO, Vec3::NEG_Y)));
-    assert_eq!(split_plane(&json!({})), Some((Vec3::ZERO, Vec3::Z)));
+    assert_eq!(split_plane(&json!({})), None);
     let face = json!({"plane": {"origin": [1, 2, 3], "normal": [0, 0, 2], "xdir": [1, 0, 0]}});
     assert_eq!(split_plane(&face), Some((Vec3::new(1.0, 2.0, 3.0), Vec3::Z)));
 }
@@ -243,4 +243,33 @@ fn a_draft_drag_reads_as_the_angle_about_its_neutral_line() {
     let d = draft_delta(30.0, 10.0);
     assert!((draft_angle(d, 10.0) - 30.0).abs() < 1e-9);
     assert!((along(Kind::Draft, &json!({"angle": 45}), 4.0) - 4.0).abs() < 1e-6);
+}
+
+#[test]
+fn a_face_arrow_is_framed_by_the_first_face_alone() {
+    let face = |x: f64| json!({"kind": "face", "point": [x, 0, 0], "body": "b"});
+    let f = json!({"type": "offsetFace", "faces": [face(1.0), face(2.0)], "distance": 1});
+    let mut g = f.clone();
+    g["distance"] = json!(5);
+    g["axis"] = json!("X");
+    g["faces"][1] = face(3.0);
+    assert_eq!(frame_key(Kind::OffsetFace, &f), frame_key(Kind::OffsetFace, &g));
+    g["faces"][0] = face(4.0);
+    assert_ne!(frame_key(Kind::OffsetFace, &f), frame_key(Kind::OffsetFace, &g));
+    assert_eq!(frame_key(Kind::Draft, &json!({"faces": face(1.0)})), face(1.0).to_string());
+}
+
+#[test]
+fn a_draft_on_its_neutral_plane_has_no_arrow() {
+    let f = json!({"type": "draft", "angle": 45});
+    assert_eq!(arrow_at(Kind::Draft, &f, Vec3::ZERO, Vec3::X, 0.0), None);
+    assert_eq!(arrow_at(Kind::Draft, &f, Vec3::ZERO, Vec3::X, 2.0).map(|v| (v.x * 1e4).round()), Some(2e4));
+    assert_eq!(arrow_at(Kind::OffsetFace, &json!({"distance": 3}), Vec3::Z, Vec3::X, 0.0), Some(Vec3::new(3.0, 0.0, 1.0)));
+}
+
+#[test]
+fn a_split_arrow_sits_on_the_bodies_the_engine_cuts() {
+    assert_eq!(split_sources(&json!({"bodies": ["a"], "body": "b"})), json!({"bodies": ["a"]}));
+    assert_eq!(split_sources(&json!({"bodies": [], "body": "b"})), json!({"bodies": ["b"]}));
+    assert_eq!(split_sources(&json!({"body": ""})), json!({}));
 }

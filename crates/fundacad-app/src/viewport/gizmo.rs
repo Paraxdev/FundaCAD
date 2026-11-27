@@ -61,6 +61,8 @@ pub struct Gizmo {
     /// For the kinds along a normal: the normal, and a draft's height above its neutral plane.
     normal: Vec3,
     lever: f32,
+    /// The draft axis `lever` was taken for.
+    lever_axis: Option<String>,
 }
 
 struct Drag {
@@ -315,7 +317,7 @@ fn vec3(v: Option<&Value>) -> Option<Vec3> {
 /// A split's plane before its offset, as a point on it and its unit normal, the frames the builder names.
 pub fn split_plane(f: &Value) -> Option<(Vec3, Vec3)> {
     match f.get("plane") {
-        None | Some(Value::Null) => Some((Vec3::ZERO, Vec3::Z)),
+        None | Some(Value::Null) => None,
         Some(Value::String(n)) => match n.as_str() {
             "XY" => Some((Vec3::ZERO, Vec3::Z)),
             "XZ" => Some((Vec3::ZERO, Vec3::NEG_Y)),
@@ -382,6 +384,40 @@ pub fn pushed(kind: Kind, start: &Value, lever: f32, travel: f64, step: f64, fin
     f
 }
 
+/// What a normal arrow's frame is taken from: a split's plane and bodies, a face tool's first face alone, so an edit
+/// of the value or of the other faces leaves the arrow where it was.
+pub fn frame_key(kind: Kind, f: &Value) -> String {
+    let get = |k: &str| f.get(k).unwrap_or(&Value::Null).to_string();
+    match kind {
+        Kind::Split => format!("{} {} {}", get("plane"), get("bodies"), get("body")),
+        _ => first_face(f).map_or_else(String::new, Value::to_string),
+    }
+}
+
+fn first_face(f: &Value) -> Option<&Value> {
+    let faces = f.get("faces")?;
+    faces.as_array().map_or(Some(faces), |a| a.first())
+}
+
+/// The bodies a split cuts, in the engine's order: `bodies`, then `body`, then the last body.
+pub fn split_sources(f: &Value) -> Value {
+    if let Some(a) = f.get("bodies").and_then(Value::as_array).filter(|a| !a.is_empty()) {
+        return json!({"bodies": a});
+    }
+    match f.get("body").and_then(Value::as_str).filter(|b| !b.is_empty()) {
+        Some(b) => json!({"bodies": [b]}),
+        None => json!({}),
+    }
+}
+
+/// Where a normal arrow stands, none for a draft whose face lies on its neutral plane.
+pub fn arrow_at(kind: Kind, f: &Value, base: Vec3, normal: Vec3, lever: f32) -> Option<Vec3> {
+    if kind == Kind::Draft && lever <= 1e-3 {
+        return None;
+    }
+    Some(base + normal * along(kind, f, lever) as f32)
+}
+
 /// The one arrow along `normal`, coloured as the world axis it leans on most.
 pub fn outline_along(at: Vec3, normal: Vec3, world_per_px: f32) -> Vec<(Handle, Vec<Vec3>)> {
     let a = normal.abs();
@@ -395,65 +431,61 @@ impl Viewport {
         let tool = self.tool.as_ref().filter(|t| t.arm.is_none())?;
         let f = tools::feature(self.doc()?, &tool.feature)?.clone();
         let kind = kind(&f)?;
-        let mut key = format!(
+        if kind.along_normal() {
+            let key = format!("{} {}", tool.feature, frame_key(kind, &f));
+            let axis = f.get("axis").and_then(Value::as_str).unwrap_or("Z").to_string();
+            if self.gizmo.drag.is_none() {
+                if key != self.gizmo.key {
+                    (self.gizmo.pivot, self.gizmo.normal) = self.normal_frame(kind, &f)?;
+                    self.gizmo.key = key;
+                    self.gizmo.lever_axis = None;
+                }
+                if kind == Kind::Draft && self.gizmo.lever_axis.as_deref() != Some(&axis) {
+                    self.gizmo.lever = self.draft_lever_of(&f, &axis).unwrap_or(0.0);
+                    self.gizmo.lever_axis = Some(axis);
+                }
+            }
+            let at = arrow_at(kind, &f, self.gizmo.pivot, self.gizmo.normal, self.gizmo.lever)?;
+            return Some((kind, f, at));
+        }
+        let key = format!(
             "{} {} {}",
             tool.feature,
             f.get("bodies").unwrap_or(&Value::Null),
             f.get("features").unwrap_or(&Value::Null)
         );
-        if kind.along_normal() {
-            for k in ["body", "plane", "faces", "axis"] {
-                key += &format!(" {}", f.get(k).unwrap_or(&Value::Null));
-            }
-        }
-        if key != self.gizmo.key && self.gizmo.drag.is_none() && kind.along_normal() {
-            let (base, normal, lever) = self.normal_frame(kind, &f)?;
-            (self.gizmo.pivot, self.gizmo.normal, self.gizmo.lever) = (base, normal, lever);
-            self.gizmo.key = key;
-        } else if key != self.gizmo.key && self.gizmo.drag.is_none() {
+        if key != self.gizmo.key && self.gizmo.drag.is_none() {
             let shown = self.shown_bodies();
             let (lo, hi) = tools::sources_extent(&f, &shown)?;
             let centre = (Vec3::from(lo) + Vec3::from(hi)) * 0.5;
             self.gizmo.pivot = pivot_of(kind, &f, centre);
             self.gizmo.key = key;
         }
-        if kind.along_normal() {
-            let at = self.gizmo.pivot + self.gizmo.normal * along(kind, &f, self.gizmo.lever) as f32;
-            return Some((kind, f, at));
-        }
         let at = anchor(kind, &f, self.gizmo.pivot);
         Some((kind, f, at))
     }
 
-    /// Where a normal arrow starts at the value 0, which way it points, and a draft's lever.
-    fn normal_frame(&self, kind: Kind, f: &Value) -> Option<(Vec3, Vec3, f32)> {
-        let shown = self.shown_bodies();
+    /// Where a normal arrow starts at the value 0 and which way it points.
+    fn normal_frame(&self, kind: Kind, f: &Value) -> Option<(Vec3, Vec3)> {
         if kind == Kind::Split {
             let (o, n) = split_plane(f)?;
-            let named = match f.get("body") {
-                Some(Value::String(b)) => json!({"bodies": [b]}),
-                _ => f.clone(),
-            };
-            let (lo, hi) = tools::sources_extent(&named, &shown).or_else(|| tools::sources_extent(&json!({}), &shown))?;
+            let (lo, hi) = tools::sources_extent(&split_sources(f), &self.shown_bodies())?;
             let centre = (Vec3::from(lo) + Vec3::from(hi)) * 0.5;
-            return Some((centre - n * n.dot(centre - o), n, 0.0));
+            return Some((centre - n * n.dot(centre - o), n));
         }
-        let faces = f.get("faces")?;
-        let first = faces.as_array().map_or(Some(faces), |a| a.first())?;
+        let first = first_face(f)?;
         let point = vec3(first.get("point"))?;
-        let body = first.get("body")?.as_str()?;
         let Some(crate::selection::Pick::Face { normal, .. }) = super::resolve::resolve(&self.scene, &[], first) else {
             return None;
         };
-        let normal = Vec3::from(normal).try_normalize()?;
-        let lever = match kind {
-            Kind::Draft => {
-                let (lo, _) = tools::sources_extent(&json!({"bodies": [body]}), &shown)?;
-                draft_lever(point, Vec3::from(lo), f.get("axis").and_then(Value::as_str).unwrap_or("Z"))
-            }
-            _ => 0.0,
-        };
-        Some((point, normal, lever))
+        Some((point, Vec3::from(normal).try_normalize()?))
+    }
+
+    /// A draft face's height above the low side of its body along `axis`.
+    fn draft_lever_of(&self, f: &Value, axis: &str) -> Option<f32> {
+        let body = first_face(f)?.get("body")?.as_str()?;
+        let (lo, _) = tools::sources_extent(&json!({"bodies": [body]}), &self.shown_bodies())?;
+        Some(draft_lever(self.gizmo.pivot, Vec3::from(lo), axis))
     }
 
     /// Drops the cached pivot and takes it again from the bodies as they stand, before the tool's feature builds.

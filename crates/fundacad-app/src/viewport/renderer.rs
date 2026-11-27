@@ -26,8 +26,6 @@ struct Uniforms {
     clip: [f32; 4],
     /// xyz: the build direction, w: the overhang threshold in degrees. Off when xyz is zero.
     shade: [f32; 4],
-    /// xyz: the middle of the section cap quad on the plane, w: half its side. Off when w is zero.
-    cap: [f32; 4],
     /// x: the hatch pitch, y: the stripe width, both in device pixels.
     hatch: [f32; 4],
 }
@@ -42,6 +40,29 @@ pub(crate) fn cap_quad(clip: [f32; 4], min: Vec3, max: Vec3) -> [f32; 4] {
     let on = centre - n * (n.dot(centre) - clip[3]) / n.length_squared();
     let half = (max - min).length() * 0.525 + 0.5 + (on - centre).length();
     [on.x, on.y, on.z, half]
+}
+
+/// Whether the plane `clip` runs through the box `min` to `max` or touches it.
+pub(crate) fn straddles(clip: [f32; 4], min: Vec3, max: Vec3) -> bool {
+    let n = Vec3::new(clip[0], clip[1], clip[2]);
+    if n.length_squared() == 0.0 || min.cmpgt(max).any() {
+        return false;
+    }
+    let reach = n.abs().dot((max - min) * 0.5);
+    (n.dot((min + max) * 0.5) - clip[3]).abs() <= reach + 1e-4 * n.length() * clip[3].abs().max(1.0)
+}
+
+/// A body's box widened by the stretch that moves some of its vertices by `offset`.
+pub(crate) fn stretched(bounds: (Vec3, Vec3), offset: Vec3) -> (Vec3, Vec3) {
+    (bounds.0.min(bounds.0 + offset), bounds.1.max(bounds.1 + offset))
+}
+
+/// The cap of one body, off when the plane misses it.
+pub(crate) fn body_cap(clip: Option<[f32; 4]>, bounds: (Vec3, Vec3)) -> [f32; 4] {
+    match clip {
+        Some(clip) if straddles(clip, bounds.0, bounds.1) => cap_quad(clip, bounds.0, bounds.1),
+        _ => [0.0; 4],
+    }
 }
 
 /// FundaCAD 1's hatch, a 9 px pitch and 2 px stripes at the given scale.
@@ -60,6 +81,10 @@ struct BodyUniforms {
     /// x: how far the hover has faded in, y: how much is left of the one fading out, z: how far the selection has
     /// gone from what was selected before to what is now.
     fade: [f32; 4],
+    /// xyz: the middle of this body's section cap on the plane, w: half its side. Off when w is zero.
+    cap: [f32; 4],
+    /// x and y: whether the whole body was selected before and is now, 1 or 0.
+    selected: [f32; 4],
 }
 
 /// What one frame shows beyond the scene.
@@ -97,6 +122,8 @@ struct GpuBody {
     selected: wgpu::Buffer,
     /// What `selected` holds as now.
     flags: Vec<f32>,
+    whole: [f32; 2],
+    bounds: (Vec3, Vec3),
     vertex_count: usize,
     indices: wgpu::Buffer,
     index_count: u32,
@@ -122,7 +149,6 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     count_pipeline: wgpu::RenderPipeline,
     cap_pipeline: wgpu::RenderPipeline,
-    bounds: (Vec3, Vec3),
     uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     body_layout: wgpu::BindGroupLayout,
@@ -272,7 +298,6 @@ impl Renderer {
             pipeline,
             count_pipeline,
             cap_pipeline,
-            bounds: (Vec3::INFINITY, Vec3::NEG_INFINITY),
             uniforms,
             bind_group,
             body_layout,
@@ -305,23 +330,20 @@ impl Renderer {
         self.scene_revision = scene.revision;
         self.masked = None;
         self.selected_revision = u64::MAX;
-        self.bounds = scene.bodies.iter().flat_map(|b| &b.vertices).fold(
-            (Vec3::INFINITY, Vec3::NEG_INFINITY),
-            |(lo, hi), v| {
-                let p = Vec3::from(v.position);
-                (lo.min(p), hi.max(p))
-            },
-        );
         let mut old: Vec<Option<GpuBody>> = std::mem::take(&mut self.bodies).into_iter().map(Some).collect();
         for body in &scene.bodies {
             let kept = old.iter_mut().find(|o| o.as_ref().is_some_and(|o| Arc::ptr_eq(&o.source, &body.source)));
-            let gpu = match kept.and_then(Option::take) {
+            let mut gpu = match kept.and_then(Option::take) {
                 Some(gpu) => {
                     self.queue.write_buffer(&gpu.mask, 0, bytemuck::cast_slice(&vec![0f32; gpu.vertex_count]));
                     gpu
                 }
                 None => self.upload(body),
             };
+            gpu.bounds = body.vertices.iter().fold((Vec3::INFINITY, Vec3::NEG_INFINITY), |(lo, hi), v| {
+                let p = Vec3::from(v.position);
+                (lo.min(p), hi.max(p))
+            });
             self.bodies.push(gpu);
         }
         if self.body_uniforms.as_ref().is_none_or(|(_, _, n)| *n < self.bodies.len()) {
@@ -366,6 +388,8 @@ impl Renderer {
                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             ),
             flags: Vec::new(),
+            whole: [0.0; 2],
+            bounds: (Vec3::INFINITY, Vec3::NEG_INFINITY),
             vertex_count: body.vertices.len().max(1),
             indices: init("body indices", bytemuck::cast_slice(&body.indices), wgpu::BufferUsages::INDEX),
             index_count: body.indices.len() as u32,
@@ -410,6 +434,8 @@ impl Renderer {
             let pairs: Vec<[f32; 2]> = before.iter().zip(&flags).map(|(&a, &b)| [a, b]).collect();
             self.queue.write_buffer(&gpu.selected, 0, bytemuck::cast_slice(&pairs));
             gpu.flags = flags;
+            let whole = matches!(entry, Some((_, None))) as u8 as f32;
+            gpu.whole = [if rebuilt { whole } else { gpu.whole[1] }, whole];
         }
     }
 
@@ -515,26 +541,26 @@ impl Renderer {
             encode_srgb: [if self.format.is_srgb() { 0.0 } else { 1.0 }; 4],
             clip: overlay.clip.unwrap_or_default(),
             shade: overlay.shade.unwrap_or_default(),
-            cap: overlay.clip.map_or([0.0; 4], |clip| {
-                let reach = overlay.stretch.map_or(Vec3::ZERO, |(_, o)| o.abs());
-                cap_quad(clip, self.bounds.0 - reach, self.bounds.1 + reach)
-            }),
             hatch: hatch(self.scale),
         };
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
+        let mut capped = vec![false; self.bodies.len()];
         if let Some((buffer, _, _)) = &self.body_uniforms {
-            for i in 0..self.bodies.len() {
+            for (i, gpu) in self.bodies.iter().enumerate() {
                 let (mut hover, mut fade) = ([-1, 0, -1, 0], [0.0, 0.0, overlay.selection_fade, 0.0]);
                 for (slot, h) in overlay.hover.iter().enumerate() {
                     if let Some((_, face, pushable, a)) = h.filter(|h| h.0 == i) {
                         (hover[slot * 2], hover[slot * 2 + 1], fade[slot]) = (face as i32, pushable as i32, a);
                     }
                 }
-                let offset = match overlay.stretch {
-                    Some((b, offset)) if b == i => offset.extend(0.0).into(),
-                    _ => [0.0; 4],
+                let moved = match overlay.stretch {
+                    Some((b, offset)) if b == i => offset,
+                    _ => Vec3::ZERO,
                 };
-                let u = BodyUniforms { offset, hover, fade };
+                let cap = body_cap(overlay.clip, stretched(gpu.bounds, moved));
+                capped[i] = cap[3] > 0.0;
+                let selected = [gpu.whole[0], gpu.whole[1], 0.0, 0.0];
+                let u = BodyUniforms { offset: moved.extend(0.0).into(), hover, fade, cap, selected };
                 self.queue.write_buffer(buffer, self.body_stride * i as u64, bytemuck::bytes_of(&u));
             }
         }
@@ -569,9 +595,9 @@ impl Renderer {
                     pass.set_index_buffer(body.indices.slice(..), wgpu::IndexFormat::Uint32);
                     pass.draw_indexed(0..body.index_count, 0, 0..1);
                 }
-                if uniforms.cap[3] > 0.0 {
+                if capped.contains(&true) {
                     pass.set_stencil_reference(1);
-                    for (i, body) in self.bodies.iter().enumerate().filter(|(_, b)| b.index_count > 0) {
+                    for (i, body) in self.bodies.iter().enumerate().filter(|(i, b)| capped[*i] && b.index_count > 0) {
                         pass.set_pipeline(&self.count_pipeline);
                         pass.set_bind_group(1, group, &[(self.body_stride * i as u64) as u32]);
                         pass.set_vertex_buffer(0, body.vertices.slice(..));

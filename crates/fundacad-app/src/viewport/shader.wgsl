@@ -4,7 +4,6 @@ struct Uniforms {
   encode_srgb: vec4<f32>,
   clip: vec4<f32>,
   shade: vec4<f32>,
-  cap: vec4<f32>,
   hatch: vec4<f32>,
 }
 
@@ -12,6 +11,8 @@ struct Body {
   offset: vec4<f32>,
   hover: vec4<i32>,
   fade: vec4<f32>,
+  cap: vec4<f32>,
+  selected: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -61,21 +62,14 @@ fn hovered(base: vec3<f32>, hover: vec2<i32>, amount: f32, face: u32) -> vec3<f3
   return mix(base, tint, amount);
 }
 
-@fragment
-fn fs(in: Varying) -> @location(0) vec4<f32> {
-  let clipping = dot(u.clip.xyz, u.clip.xyz) > 0.0;
-  if (clipping && dot(u.clip.xyz, in.world) > u.clip.w) {
-    discard;
-  }
-  let raw = normalize(in.normal);
-  var n = raw;
-  let view_dir = normalize(u.eye.xyz - in.world);
-  let inside = dot(n, view_dir) < 0.0;
-  if (inside) {
-    n = -n;
-  }
-  let key = normalize(vec3<f32>(0.4, -0.5, 0.8));
-  let fill = normalize(vec3<f32>(-0.6, 0.4, 0.2));
+// A face lying on the plane counts as cut, else it would flip the count on some samples and not others and fight
+// the cap for depth.
+fn cut(world: vec3<f32>) -> bool {
+  let side = (dot(u.clip.xyz, world) - u.clip.w) / length(u.clip.xyz);
+  return side > -1e-4 * max(1.0, abs(u.clip.w));
+}
+
+fn tone(raw: vec3<f32>, selected: f32) -> vec3<f32> {
   var base = vec3<f32>(0.62, 0.66, 0.72);
   if (dot(u.shade.xyz, u.shade.xyz) > 0.0) {
     // overhang::classify, the same rule the card's areas use.
@@ -88,7 +82,24 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
       base = vec3<f32>(0.18, 0.44, 0.8);
     }
   }
-  base = mix(base, vec3<f32>(0.36, 0.56, 0.98), clamp(in.selected, 0.0, 1.0));
+  return mix(base, vec3<f32>(0.36, 0.56, 0.98), clamp(selected, 0.0, 1.0));
+}
+
+@fragment
+fn fs(in: Varying) -> @location(0) vec4<f32> {
+  if (dot(u.clip.xyz, u.clip.xyz) > 0.0 && cut(in.world)) {
+    discard;
+  }
+  let raw = normalize(in.normal);
+  var n = raw;
+  let view_dir = normalize(u.eye.xyz - in.world);
+  let inside = dot(n, view_dir) < 0.0;
+  if (inside) {
+    n = -n;
+  }
+  let key = normalize(vec3<f32>(0.4, -0.5, 0.8));
+  let fill = normalize(vec3<f32>(-0.6, 0.4, 0.2));
+  var base = tone(raw, in.selected);
   base = hovered(base, body.hover.xy, body.fade.x, in.face);
   base = hovered(base, body.hover.zw, body.fade.y, in.face);
   let hemi = mix(vec3<f32>(0.18, 0.17, 0.16), vec3<f32>(0.32, 0.36, 0.42), n.z * 0.5 + 0.5);
@@ -101,7 +112,7 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_count(in: Varying) {
-  if (dot(u.clip.xyz, in.world) > u.clip.w) {
+  if (cut(in.world)) {
     discard;
   }
 }
@@ -113,20 +124,20 @@ fn vs_cap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
   if (abs(n.x) > 0.9) {
     a = vec3<f32>(0.0, 1.0, 0.0);
   }
-  let s = normalize(cross(n, a)) * u.cap.w;
-  let t = normalize(cross(n, s)) * u.cap.w;
+  let s = normalize(cross(n, a)) * body.cap.w;
+  let t = normalize(cross(n, s)) * body.cap.w;
   let corners = array<vec2<f32>, 6>(
     vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0),
     vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0),
   );
   let c = corners[i];
-  return u.view_proj * vec4<f32>(u.cap.xyz + s * c.x + t * c.y, 1.0);
+  return u.view_proj * vec4<f32>(body.cap.xyz + s * c.x + t * c.y, 1.0);
 }
 
 // FundaCAD 1's section cap, unlit 45 degree stripes at a fixed pixel pitch.
 @fragment
 fn fs_cap(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
-  let colour = vec3<f32>(0.62, 0.66, 0.72);
+  let colour = tone(normalize(u.clip.xyz), mix(body.selected.x, body.selected.y, body.fade.z));
   let pitch = u.hatch.x;
   let half_width = u.hatch.y * 0.5;
   let t = abs((frag.x + frag.y) % pitch - pitch * 0.5);
