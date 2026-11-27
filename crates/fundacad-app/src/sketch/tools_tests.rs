@@ -178,3 +178,38 @@ fn projected_geometry_is_refused() {
     assert_eq!(e.notice.as_deref(), Some("Projected geometry is fixed, Break Link to edit it"));
     assert_eq!(e.entities.len(), 2);
 }
+
+#[test]
+fn fillet_drops_the_snap_join_at_its_corner_and_keeps_an_untouched_one() {
+    let mut e = editor(json!([
+        {"id": "a", "type": "line", "x1": 0, "y1": 0, "x2": 20, "y2": 0},
+        {"id": "b", "type": "line", "x1": 20, "y1": 0, "x2": 20, "y2": 20},
+        {"id": "c", "type": "line", "x1": 0, "y1": 0, "x2": -10, "y2": -10}
+    ]));
+    e.constraints.push(json!({"type": "coincident", "e1": "b", "p1": 0, "e2": "a", "p2": 1, "snap": true}));
+    e.constraints.push(json!({"type": "coincident", "e1": "c", "p1": 0, "e2": "a", "p2": 0, "snap": true}));
+    e.resolve(false);
+    e.arm(Tool::Fillet);
+    e.click(p(10.0, 0.0), PPM);
+    e.click(p(20.0, 10.0), PPM);
+    e.entry_key("2", Some("2"));
+    assert!(e.entry_key("enter", None).is_some());
+    let kinds: Vec<&Value> = e.constraints.iter().map(|c| &c["type"]).collect();
+    assert_eq!(kinds, ["coincident", "tangent2", "tangent2"]);
+    assert_eq!(e.constraints[0]["e1"], "c");
+    assert!((e.entities[0]["x2"].as_f64().unwrap() - 18.0).abs() < 1e-6, "the corner is not pulled back together");
+    assert!((e.entities[1]["y1"].as_f64().unwrap() - 2.0).abs() < 1e-6);
+}
+
+#[test]
+fn move_keeps_a_size_held_by_a_parameter() {
+    let mut e = editor(json!([{"id": "c1", "type": "circle", "x": 0, "y": 0, "radius": "r"}]));
+    e.params.insert("r".into(), 2.0);
+    e.resolve(false);
+    e.selected = Some("c1".into());
+    e.arm(Tool::Move);
+    e.click(p(0.0, 0.0), PPM);
+    assert!(e.click(p(4.0, 0.0), PPM).is_some());
+    assert_eq!(e.entities[0]["radius"], "r");
+    assert_eq!(e.entities[0]["x"].as_f64(), Some(4.0));
+}

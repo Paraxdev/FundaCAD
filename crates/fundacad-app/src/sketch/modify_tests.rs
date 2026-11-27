@@ -132,3 +132,15 @@ fn reflect_and_translate_move_every_point_and_turn_angles() {
     let s = translate(&json!({"type": "spline", "points": [{"x": 0, "y": 0}, {"x": 1, "y": 1}]}), p(2.0, 3.0));
     assert_eq!(s["points"][1], json!({"x": 3.0, "y": 4.0}));
 }
+
+#[test]
+fn extend_keeps_a_clockwise_stored_arc_s_end_order() {
+    let h = 50f64.sqrt();
+    let arc = Entity::Arc { id: "a".into(), x1: 0.0, y1: 10.0, x2: 10.0, y2: 0.0, mx: h, my: h };
+    let ents = [arc, line("l", -5.0, 0.0, -5.0, 20.0)];
+    let grown = extend(&ents[0], &cutters(&ents, &[], "a"), p(1.0, 10.0)).unwrap();
+    close(&grown, "x1", -5.0);
+    close(&grown, "y1", 75f64.sqrt());
+    close(&grown, "x2", 10.0);
+    close(&grown, "y2", 0.0);
+}

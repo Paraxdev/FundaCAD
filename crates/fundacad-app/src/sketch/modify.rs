@@ -269,7 +269,15 @@ pub fn extend(e: &Entity, cut: &[Cutter], click: DVec2) -> Option<Value> {
                 .filter(|gap| *gap > 1e-4 && *gap < TAU - g.delta - 1e-4)
                 .min_by(f64::total_cmp)?;
             let start = if near_end { g.start } else { g.start - best };
-            Some(arc_json(g.c, g.r, start, g.delta + best))
+            let mut out = arc_json(g.c, g.r, start, g.delta + best);
+            let s0 = polar(g.c, g.r, g.start);
+            if d2(*x1, *y1).distance(s0) > d2(*x2, *y2).distance(s0) {
+                for (a, b) in [("x1", "x2"), ("y1", "y2")] {
+                    let t = out[a].take();
+                    out[a] = std::mem::replace(&mut out[b], t);
+                }
+            }
+            Some(out)
         }
         _ => None,
     }

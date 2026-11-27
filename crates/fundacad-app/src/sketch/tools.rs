@@ -27,6 +27,9 @@ pub struct Mirror {
 }
 
 const FILLET_RADIUS: f64 = 2.0;
+const APART: f64 = 1e-4;
+/// The keys a move rewrites, so a size held by a parameter keeps it.
+const POINT_KEYS: [&str; 10] = ["x1", "y1", "x2", "y2", "mx", "my", "x", "y", "points", "poles"];
 
 fn base(id: &str) -> &str {
     id.split('~').next().unwrap_or(id)
@@ -171,6 +174,30 @@ impl Editor {
         }
     }
 
+    /// Snap joins the edit of `changed` pulled apart, dropped rather than snapped back, FundaCAD 1's
+    /// dropSeparatedJoins. A coincident the user applied stays.
+    fn drop_separated_joins(&mut self, changed: &[&str]) {
+        let now = super::solve::resolve(&self.entities, &self.params);
+        let after: Vec<Entity> = self
+            .solved
+            .entities
+            .iter()
+            .map(|e| if changed.contains(&e.id()) { now.iter().find(|n| n.id() == e.id()).unwrap_or(e).clone() } else { e.clone() })
+            .collect();
+        let at = |es: &[Entity], e: &Value, p: &Value| {
+            let q = es.iter().find(|x| Some(x.id()) == e.as_str())?.ref_point(p.as_f64().unwrap_or(0.0) as i64)?;
+            Some(DVec2::new(q.x, q.y))
+        };
+        let gap = |es: &[Entity], c: &Value| Some(at(es, &c["e1"], &c["p1"])?.distance(at(es, &c["e2"], &c["p2"])?));
+        let before = &self.solved.entities;
+        self.constraints.retain(|c| {
+            if c["type"] != "coincident" || c["snap"] != true {
+                return true;
+            }
+            !matches!((gap(before, c), gap(&after, c)), (Some(g0), Some(g1)) if g0 <= APART && g1 > APART)
+        });
+    }
+
     fn cutters(&self, skip: &str) -> Vec<Cutter> {
         modify::cutters(&self.solved.entities, &self.polygons(), skip)
     }
@@ -200,6 +227,7 @@ impl Editor {
                 }
                 let grown = modify::extend(self.solved_of(&id)?, &self.cutters(&id), at)?;
                 self.set_shape(&id, &grown);
+                self.drop_separated_joins(&[&id]);
                 self.done()
             }
             Tool::Fillet => {
@@ -254,7 +282,10 @@ impl Editor {
                     return None;
                 }
                 let moved = modify::translate(&self.shape(&id)?, p - from);
-                self.set_shape(&id, &moved);
+                let moved: serde_json::Map<String, Value> =
+                    moved.as_object()?.iter().filter(|(k, _)| POINT_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+                self.set_shape(&id, &Value::Object(moved));
+                self.drop_separated_joins(&[&id]);
                 self.done()
             }
             _ => None,
@@ -330,6 +361,7 @@ impl Editor {
         let line = |(p, q): (DVec2, DVec2)| json!({"x1": p.x, "y1": p.y, "x2": q.x, "y2": q.y});
         self.set_shape(&a, &line(f.a));
         self.set_shape(&b, &line(f.b));
+        self.drop_separated_joins(&[&a, &b]);
         let arc = self.push_shape(f.arc, false);
         self.constraints.push(json!({"type": "tangent2", "a": a, "b": arc}));
         self.constraints.push(json!({"type": "tangent2", "a": b, "b": arc}));

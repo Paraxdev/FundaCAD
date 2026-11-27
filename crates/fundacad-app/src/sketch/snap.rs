@@ -129,7 +129,7 @@ pub fn snap(raw: DVec2, cands: &[Cand], px_per_mm: f64, grid: bool) -> Snap {
 /// The relation a new shape's point `p` keeps with what it snapped to, FundaCAD 1's pointRelation.
 pub fn point_relation(id: &str, p: i64, r: &Option<Ref>) -> Option<Value> {
     match r.as_ref()? {
-        Ref::Point { entity, at } => Some(json!({"type": "coincident", "e1": id, "p1": p, "e2": entity, "p2": at})),
+        Ref::Point { entity, at } => Some(json!({"type": "coincident", "e1": id, "p1": p, "e2": entity, "p2": at, "snap": true})),
         Ref::Mid { line } => Some(json!({"type": "midpoint", "e": id, "p": p, "line": line})),
     }
 }
