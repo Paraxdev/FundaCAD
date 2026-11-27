@@ -1,16 +1,14 @@
 //! The Preferences window, FundaCAD 1's PreferencesDialog: categories down the left, the open one's cards on the
-//! right. It holds the keyboard while open, and a shortcut being changed takes the next key pressed.
+//! right. It holds the keyboard while open.
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use super::{Background, SIZES};
-use crate::commands::keymap::{self, Clash};
-use crate::commands::keys::{Combo, Ctx, Shortcut};
 use crate::commands::{self, MODAL};
 use crate::i18n::{self, t, tr};
 use crate::theme::{
-    self, ActiveTheme as _, Contrast, Theme, FS_BODY, FS_SMALL, FS_TITLE, R_MD, R_SM, S_0, S_1, S_2, S_3, S_4,
+    self, ActiveTheme as _, Contrast, Theme, FS_BODY, FS_SMALL, FS_TITLE, R_MD, R_SM, S_1, S_2, S_3, S_4,
 };
 use crate::theme::{W_MEDIUM, W_SEMIBOLD};
 use crate::motion::{self, hover_bg, mix, Transition};
@@ -22,38 +20,24 @@ enum Tab {
     Appearance,
     Viewport,
     Access,
-    Shortcuts,
 }
 
 impl Tab {
-    const ALL: [Tab; 4] = [Tab::Appearance, Tab::Viewport, Tab::Access, Tab::Shortcuts];
+    const ALL: [Tab; 3] = [Tab::Appearance, Tab::Viewport, Tab::Access];
 
     fn label(self) -> String {
         t(match self {
             Tab::Appearance => "prefs.tab.appearance",
             Tab::Viewport => "prefs.tab.viewport",
             Tab::Access => "prefs.tab.access",
-            Tab::Shortcuts => "shortcuts.title",
         })
     }
-}
-
-/// A key another row has, waiting on Replace or Cancel.
-struct Ask {
-    id: String,
-    combo: Combo,
-    other: String,
-    by: &'static str,
 }
 
 pub struct PrefsWindow {
     tab: Tab,
     focus: FocusHandle,
     restore: Option<FocusHandle>,
-    /// The row whose new key the next press sets.
-    recording: Option<String>,
-    ask: Option<Ask>,
-    note: Option<String>,
 }
 
 #[derive(Default)]
@@ -76,9 +60,6 @@ pub fn open(window: &mut Window, cx: &mut App) {
         tab: Tab::Appearance,
         focus: cx.focus_handle(),
         restore,
-        recording: None,
-        ask: None,
-        note: None,
     });
     let focus = entity.read(cx).focus.clone();
     cx.set_global(Open(Some(entity)));
@@ -99,57 +80,10 @@ impl PrefsWindow {
     fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let k = &e.keystroke;
         let m = k.modifiers;
-        let bare = !(m.control || m.platform || m.shift || m.alt);
-        if let Some(id) = self.recording.clone() {
+        if k.key == "escape" && !(m.control || m.platform || m.shift || m.alt) {
             cx.stop_propagation();
-            if k.key == "escape" && bare {
-                self.recording = None;
-            } else {
-                match keymap::combo_of(&k.key, k.key_char.as_deref(), m.control || m.platform, m.shift, m.alt) {
-                    Ok(None) => return,
-                    Ok(Some(combo)) => self.offer(id, combo, cx),
-                    Err(_) => {
-                        self.recording = None;
-                        self.note = Some(t("shortcuts.problem.alt"));
-                    }
-                }
-            }
-            cx.notify();
-        } else if k.key == "escape" && bare {
-            cx.stop_propagation();
-            if self.ask.take().is_none() {
-                close(window, cx);
-            }
-            cx.notify();
+            close(window, cx);
         }
-    }
-
-    fn offer(&mut self, id: String, combo: Combo, cx: &mut Context<Self>) {
-        self.recording = None;
-        let (rows, _) = commands::rows(cx);
-        match keymap::clash(&rows, &id, &combo) {
-            None => self.commit(&id, Some(&combo), None, cx),
-            Some(Clash::Taken { by }) => {
-                self.note = Some(tr!("shortcuts.problem.taken", keys = combo.to_string(), action = by));
-            }
-            Some(Clash::Used { by, id: other }) => self.ask = Some(Ask { id, combo, other, by }),
-        }
-    }
-
-    fn commit(&mut self, id: &str, combo: Option<&Combo>, replaced: Option<&str>, cx: &mut Context<Self>) {
-        let user = keymap::rebind(&commands::user_keys(cx), id, combo, replaced);
-        commands::set_user_keys(cx, &user);
-        (self.ask, self.note) = (None, None);
-        cx.notify();
-    }
-
-    fn reset(&mut self, id: Option<&str>, cx: &mut Context<Self>) {
-        let user = id.map_or_else(Vec::new, |id| keymap::reset(&commands::user_keys(cx), id));
-        commands::set_user_keys(cx, &user);
-        if id.is_none() {
-            self.note = Some(t("shortcuts.resetPage.done"));
-        }
-        cx.notify();
     }
 
     fn appearance(&self, t_: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -233,107 +167,6 @@ impl PrefsWindow {
             ),
         ]
     }
-
-    fn shortcuts(&self, t_: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let (rows, problems) = commands::rows(cx);
-        let user = commands::user_keys(cx);
-        let mut out = Vec::new();
-        if let Some(ask) = &self.ask {
-            let line = tr!("shortcuts.problem.used", keys = ask.combo.to_string(), action = ask.by);
-            let buttons = div()
-                .flex()
-                .gap(px(S_2))
-                .child(button(t_, "replace", t("shortcuts.replace"), true).on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(a) = this.ask.take() {
-                        this.commit(&a.id, Some(&a.combo), Some(&a.other), cx);
-                    }
-                })))
-                .child(button(t_, "cancel", t("shortcuts.cancel"), false).on_click(cx.listener(|this, _, _, cx| {
-                    this.ask = None;
-                    cx.notify();
-                })));
-            out.push(card(t_, line, None, buttons.into_any_element()));
-        } else if let Some(note) = &self.note {
-            out.push(text(t_, FS_SMALL).text_color(t_.warn).child(note.clone()).into_any_element());
-        }
-        let clashes = problems.iter().filter(|p| matches!(p, keymap::Problem::Conflict { .. }));
-        out.extend(clashes.map(|p| {
-            let keymap::Problem::Conflict { first, second, .. } = p else { unreachable!() };
-            let line = tr!("shortcuts.conflict", first = *first, second = *second);
-            text(t_, FS_SMALL).text_color(t_.warn).child(line).into_any_element()
-        }));
-        out.push(
-            div()
-                .flex()
-                .justify_end()
-                .child(
-                    button(t_, "reset-all", t("shortcuts.resetAll"), false)
-                        .on_click(cx.listener(|this, _, _, cx| this.reset(None, cx))),
-                )
-                .into_any_element(),
-        );
-        let lines = rows.iter().enumerate().map(|(i, r)| {
-            let changed = user.iter().any(|u| u.id == r.id);
-            self.shortcut_row(t_, i, r, changed, cx)
-        });
-        out.push(div().flex().flex_col().children(lines).into_any_element());
-        out
-    }
-
-    fn shortcut_row(&self, t_: &Theme, i: usize, r: &Shortcut, changed: bool, cx: &mut Context<Self>) -> AnyElement {
-        let recording = self.recording.as_deref() == Some(r.id.as_str());
-        let shown =
-            if recording { "…".to_string() } else { r.combo.as_ref().map(Combo::to_string).unwrap_or_default() };
-        let place = t(match r.context {
-            Ctx::Model => "shortcuts.group.model",
-            Ctx::Sketch => "tool.sketch",
-            Ctx::Global => "shortcuts.group.global",
-        });
-        let tag = if r.fixed { Some(t("shortcuts.fixed")) } else { changed.then(|| t("shortcuts.changed")) };
-        let key = text(t_, FS_SMALL)
-            .id(("key", i))
-            .w(px(120.))
-            .h(px(t_.hit(24.)))
-            .px(px(S_2))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(R_SM))
-            .border_1()
-            .border_color(if recording { t_.accent } else { t_.control_edge })
-            .font_weight(W_MEDIUM)
-            .child(shown);
-        let key = if r.fixed {
-            key.opacity(0.6).into_any_element()
-        } else {
-            let id = r.id.clone();
-            hover_bg(("key-bg", i), key.cursor_pointer(), Rgb::TRANSPARENT, t_.raised_2)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    (this.recording, this.ask, this.note) = (Some(id.clone()), None, None);
-                    cx.notify();
-                }))
-                .into_any_element()
-        };
-        let id = r.id.clone();
-        div()
-            .flex()
-            .items_center()
-            .gap(px(S_2))
-            .py(px(S_0))
-            .border_b_1()
-            .border_color(t_.line)
-            .child(text(t_, FS_BODY).flex_1().min_w_0().truncate().child(r.label))
-            .child(text(t_, FS_SMALL).w(px(64.)).text_color(t_.text_mute).child(place))
-            .child(text(t_, FS_SMALL).w(px(56.)).text_color(t_.text_dim).children(tag))
-            .child(key)
-            .child(div().w(px(56.)).when(changed && !r.fixed, |d| {
-                d.child(
-                    button(t_, ("reset", i), t("shortcuts.reset"), false)
-                        .on_click(cx.listener(move |this, _, _, cx| this.reset(Some(&id), cx))),
-                )
-            }))
-            .into_any_element()
-    }
 }
 
 impl Render for PrefsWindow {
@@ -346,7 +179,6 @@ impl Render for PrefsWindow {
             Tab::Appearance => self.appearance(t_, cx),
             Tab::Viewport => self.viewport(t_),
             Tab::Access => self.access(t_, cx),
-            Tab::Shortcuts => self.shortcuts(t_, cx),
         };
         let nav = Tab::ALL.into_iter().enumerate().map(|(i, tab)| {
             let on = tab == self.tab;
@@ -362,7 +194,7 @@ impl Render for PrefsWindow {
                 .when(!on, |d| d.cursor_pointer())
                 .child(tab.label());
             motion::row_bg(("tab-bg", i), el, on, t_.hover_wash, t_.accent_wash).on_click(cx.listener(move |this, _, _, cx| {
-                    (this.tab, this.recording, this.ask, this.note) = (tab, None, None, None);
+                    this.tab = tab;
                     cx.notify();
                 }))
         });
@@ -483,7 +315,7 @@ fn checkbox(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>
         .child(label.into())
 }
 
-fn button(
+pub(super) fn button(
     t_: &Theme,
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,

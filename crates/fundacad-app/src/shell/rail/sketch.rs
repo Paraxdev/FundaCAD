@@ -99,29 +99,13 @@ pub const SLOTS: &[Slot] = &[
     one("tie-loose-ends", "tool.tieLooseEnds", "coincident"),
 ];
 
-/// The variant a family's face runs: the one last picked, else the first.
-pub fn face_of(items: &'static [Tool], chosen: Option<&str>) -> Tool {
-    chosen.and_then(|c| items.iter().find(|t| t.action == c)).copied().unwrap_or(items[0])
-}
-
-/// The family a tool belongs to, so arming it from a key puts it on the face.
-pub fn family_of(action: &str) -> Option<&'static str> {
-    SLOTS.iter().find_map(|s| match s {
-        Slot::Family { id, items, .. } if items.iter().any(|t| t.action == action) => Some(*id),
-        _ => None,
-    })
-}
-
-pub fn family(id: &str) -> Option<(&'static str, &'static [Tool])> {
-    SLOTS.iter().find_map(|s| match s {
-        Slot::Family { id: f, label, items } if *f == id => Some((*label, *items)),
-        _ => None,
-    })
-}
-
+#[cfg(test)]
 pub fn tools() -> impl Iterator<Item = Tool> {
-    SLOTS.iter().flat_map(|s| match s {
-        Slot::Tool(t) => std::slice::from_ref(t),
-        Slot::Family { items, .. } => items,
-    }).copied()
+    SLOTS
+        .iter()
+        .flat_map(|s| match s {
+            Slot::Tool(t) => std::slice::from_ref(t),
+            Slot::Family { items, .. } => items,
+        })
+        .copied()
 }

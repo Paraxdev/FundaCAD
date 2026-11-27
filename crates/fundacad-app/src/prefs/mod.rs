@@ -3,6 +3,7 @@
 
 #[cfg(test)]
 mod tests;
+pub mod shortcuts;
 mod view;
 
 use gpui::*;
@@ -144,6 +145,7 @@ pub fn set_theme(cx: &mut App, f: impl FnOnce(&mut theme::Settings)) {
 /// The Preferences command and the interface size keys, which FundaCAD 1 held outside the key table.
 pub fn install(cx: &mut App) {
     register(cx, "preferences", Label::Command("command.preferences"), Group::Edit, view::open);
+    register(cx, "shortcut-help", Label::Command("command.shortcutHelp"), Group::Help, shortcuts::toggle);
     type To = fn(u32) -> u32;
     let sizes: [(&'static str, &'static str, To); 3] = [
         ("interface-larger", "Interface size larger", |s| step(s, true)),

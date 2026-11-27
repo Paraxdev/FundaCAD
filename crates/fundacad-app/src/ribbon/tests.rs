@@ -37,7 +37,7 @@ fn every_label_is_a_catalog_line_and_a_tool_reads_as_its_table_entry() {
     let mut keys: Vec<&str> = MODEL.iter().map(|g| g.heading).collect();
     for g in MODEL {
         for i in g.items {
-            if let Item::Split { label, .. } = i {
+            if let Item::Split { label, .. } | Item::Family { label, .. } = i {
                 keys.push(label);
             }
         }

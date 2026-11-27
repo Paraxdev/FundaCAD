@@ -3,6 +3,7 @@ mod blur;
 mod camera;
 mod datums;
 mod demo;
+mod display;
 mod drag;
 mod edges;
 mod gizmo;
@@ -36,6 +37,7 @@ use gpui::*;
 
 pub use blur::Frost;
 pub use camera::Camera;
+pub use display::{Display, Matcap, OverlayKind, Projection, ViewMode};
 #[allow(unused_imports, reason = "fc2/shell reads it for History")]
 pub use issues::FeatureIssue;
 use pick::Hit;
@@ -146,6 +148,7 @@ pub struct Viewport {
     blend_hover: Option<(usize, usize)>,
     blend_ask: Option<blend::Ask>,
     carry: placing::Carry,
+    display: Display,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -207,6 +210,7 @@ impl Viewport {
             blend_hover: None,
             blend_ask: None,
             carry: Default::default(),
+            display: Self::load_display(),
             _wake: None,
             _demo: None,
         }
@@ -546,7 +550,8 @@ impl Viewport {
     fn overlay(&self) -> Overlay {
         let f = &self.hover_fade;
         let hover = [f.on.clone(), f.off.clone()].map(|h| h.map(|((b, face, ok), a)| (b, face, ok, ease(a))));
-        let (datums, datums_on_top) = self.datum_triangles();
+        let (datums, datums_on_top) =
+            if self.display.shows(OverlayKind::Origin) { self.datum_triangles() } else { Default::default() };
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
         Overlay {
@@ -614,7 +619,9 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
-        self.paint_profiles(window);
+        if self.display.shows(OverlayKind::Sketches) {
+            self.paint_profiles(window);
+        }
         self.paint_sketch(window);
         had_backend != self.backend
     }
@@ -906,7 +913,9 @@ impl Render for Viewport {
                             if this.paint(bounds, window) {
                                 cx.notify();
                             }
-                            this.paint_edges(bounds, picked, hover, window);
+                            if this.display.shows(OverlayKind::Edges) {
+                                this.paint_edges(bounds, picked, hover, window);
+                            }
                             this.paint_gizmo(axes, hover, window);
                             this.paint_inspect(bounds, hover, window);
                             this.paint_blend(bounds, picked, window);

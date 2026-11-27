@@ -32,7 +32,6 @@ pub(super) struct Ui {
     typing: Option<(String, String)>,
     focus: Option<FocusHandle>,
     left_down: bool,
-    palette: Palette,
     /// The shapes a hovered Relations row acts on.
     lit: Vec<String>,
 }
@@ -93,10 +92,8 @@ impl Viewport {
         };
         self.blend_before_step(cx);
         self.look_at_plane(&editor.plane, cx.reduce_motion());
-        let mut editor = editor;
-        let p = self.sketch_ui.palette;
-        (editor.snap, editor.grid, editor.reference) = (p.snap, p.grid, p.reference);
         self.sketch = Some(editor);
+        self.apply_sketch_switches();
         self.sketch_ui.picking = false;
         self.hover = None;
         commands::set_mode(cx, Mode::Sketch);
@@ -125,7 +122,7 @@ impl Viewport {
 
     pub fn finish_sketch(&mut self, cx: &mut Context<Self>) {
         self.sketch = None;
-        self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), palette: self.sketch_ui.palette, ..Default::default() };
+        self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), ..Default::default() };
         commands::set_mode(cx, Mode::Model);
         cx.notify();
     }
@@ -353,7 +350,7 @@ impl Viewport {
 
     pub(super) fn sketch_escape(&mut self, cx: &mut Context<Self>) -> bool {
         if self.sketch_ui.picking {
-            self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), palette: self.sketch_ui.palette, ..Default::default() };
+            self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), ..Default::default() };
             cx.notify();
             return true;
         }
@@ -412,11 +409,19 @@ impl Viewport {
     }
 
     pub fn sketch_palette(&self) -> Palette {
-        self.sketch_ui.palette
+        self.display.sketch
     }
 
     pub(super) fn sketch_locked(&self) -> bool {
-        self.sketch.is_some() && self.sketch_ui.palette.lock_view
+        self.sketch.is_some() && self.display.sketch.lock_view
+    }
+
+    /// Carries the palette's switches the editor reads into the open sketch.
+    pub(super) fn apply_sketch_switches(&mut self) {
+        let p = self.display.sketch;
+        if let Some(e) = &mut self.sketch {
+            (e.snap_grid, e.reference) = (p.snap, p.reference);
+        }
     }
 
     /// The sketch's name, its armed tool's command and whether new shapes are construction, None while not sketching.
@@ -431,12 +436,9 @@ impl Viewport {
             self.sketch_do(cx, Editor::toggle_construction);
             return;
         }
-        self.sketch_ui.palette.set(t, on);
-        let p = self.sketch_ui.palette;
-        if let Some(e) = &mut self.sketch {
-            (e.snap, e.grid, e.reference) = (p.snap, p.grid, p.reference);
-        }
-        cx.notify();
+        let mut d = self.display.clone();
+        d.sketch.set(t, on);
+        self.set_display(d, cx);
     }
 
     pub fn sketch_look_at(&mut self, cx: &mut Context<Self>) {
@@ -480,6 +482,33 @@ impl Viewport {
         self.sketch_do(cx, |e| e.delete_constraint(i));
     }
 
+    /// The plane of the one selected face when it is flat, as a click on it would start a sketch.
+    fn selected_face_plane(&self) -> Option<Value> {
+        let [crate::selection::Pick::Face { body, face, point, normal }] = self.selection().picks.as_slice() else {
+            return None;
+        };
+        let (point, normal) = (Vec3::from(*point), Vec3::from(*normal));
+        let scene = self.scene.bodies.iter().find(|b| b.source.id == *body)?;
+        if !drag::flat(scene, *face, normal) {
+            return None;
+        }
+        let mut spec = Plane::on_face(point, normal).spec();
+        spec["at"] = json!([point.x, point.y, point.z]);
+        spec["face"] = json!({"kind": "face", "by": "nearest", "point": [point.x, point.y, point.z], "body": body});
+        Some(spec)
+    }
+
+    pub fn can_sketch_on_selection(&self) -> bool {
+        self.sketch.is_none() && self.selected_face_plane().is_some()
+    }
+
+    pub fn sketch_on_selection(&mut self, cx: &mut Context<Self>) {
+        match self.selected_face_plane() {
+            Some(spec) => self.new_sketch(spec, cx),
+            None => self.begin_sketch(cx),
+        }
+    }
+
     pub(super) fn sketch_focus(&mut self, cx: &mut Context<Self>) -> FocusHandle {
         self.sketch_ui.focus.get_or_insert_with(|| cx.focus_handle()).clone()
     }
@@ -495,8 +524,7 @@ impl Viewport {
         let origin = self.bounds.origin;
         let gap = 14.0 / self.px_per_mm();
         let mut layer = div().absolute().top_0().left_0().size_full();
-        let dims = if self.sketch_ui.palette.dimensions { e.dims(gap) } else { Vec::new() };
-        for d in dims {
+        for d in e.dims(gap).into_iter().filter(|_| self.display.sketch.dimensions) {
             let Some(s) = self.to_screen(e.plane.to_3d(d.anchor).as_vec3()) else { continue };
             let typing = self.sketch_ui.typing.as_ref().filter(|(k, _)| *k == d.key).map(|(_, t)| format!("{t}|"));
             let conflict = d.constraint.is_some_and(|i| e.solved.conflicts.contains(&i));
@@ -590,7 +618,7 @@ impl Viewport {
         }
         let Some(e) = &self.sketch else { return };
         let plane = e.plane;
-        if self.sketch_ui.palette.profile {
+        if self.display.sketch.profile {
             for r in e.regions() {
                 fill(&r, &plane, rgb_a(FILL, 0.18), window);
             }
@@ -630,8 +658,7 @@ impl Viewport {
             pts.push(pts[0]);
             line(&pts, &plane, 2.0, rgb(color_of(&id)).into(), e.is_construction(&id), window);
         }
-        let dims = if self.sketch_ui.palette.dimensions { e.dims(14.0 / self.px_per_mm()) } else { Vec::new() };
-        for d in dims {
+        for d in e.dims(14.0 / self.px_per_mm()).into_iter().filter(|_| self.display.sketch.dimensions) {
             if !d.angle {
                 line(&[d.from, d.to], &plane, 1.0, rgb_a(AID, 0.6), true, window);
             }

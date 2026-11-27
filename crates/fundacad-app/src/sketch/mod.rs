@@ -85,8 +85,8 @@ pub struct Editor {
     pub selected: Option<String>,
     pub drag: Option<Drag>,
     pub polygon_sides: u32,
-    pub snap: bool,
-    pub grid: bool,
+    /// The palette's Snap switch, which FundaCAD 1 aims at the grid lattice only.
+    pub snap_grid: bool,
     /// New dimensions measure instead of drive.
     pub reference: bool,
 }
@@ -196,8 +196,7 @@ impl Editor {
             selected: None,
             drag: None,
             polygon_sides: 6,
-            snap: true,
-            grid: true,
+            snap_grid: true,
             reference: false,
         };
         e.resolve(false);
@@ -291,10 +290,10 @@ impl Editor {
     }
 
     pub fn hover(&mut self, raw: DVec2, px_per_mm: f64) {
-        self.cursor = Some(if self.tool == Tool::Select || self.tool == Tool::Dimension || !self.snap {
+        self.cursor = Some(if self.tool == Tool::Select || self.tool == Tool::Dimension {
             Snap::free(raw)
         } else {
-            snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, self.grid)
+            snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, self.snap_grid)
         });
     }
 

@@ -1,5 +1,8 @@
 //! The Sketch Palette's switches, FundaCAD 1's stores/sketchPalette.ts. They live outside the editor so they carry from
-//! one sketch to the next. Construction is the editor's own, the palette only shows and flips it.
+//! one sketch to the next, and the view controls' Snapping popover flips the same ones. Construction is the editor's
+//! own, the palette only shows and flips it.
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Toggle {
@@ -24,7 +27,8 @@ pub const TOGGLES: [(Toggle, &str); 8] = [
     (Toggle::Constraints, "sketchPalette.toggle.constraints"),
 ];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Palette {
     pub lock_view: bool,
     pub reference: bool,

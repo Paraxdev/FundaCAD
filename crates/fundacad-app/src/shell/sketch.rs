@@ -1,126 +1,18 @@
-//! The shell while sketching: the rail's sketch tools and their flyouts, and FundaCAD 1's Sketch Palette
-//! (components/shell/SketchPalette.vue) with its Options switches and the Relations list.
-
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
-use std::time::Duration;
+//! FundaCAD 1's Sketch Palette (components/shell/SketchPalette.vue) with its Options switches and the Relations list.
+//! The rail's sketch mode lives in rail_menu.
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
-use super::rail::{self, SketchAct, SketchState};
 use super::Shell;
 use crate::i18n::tr;
 use crate::motion::{self, hover_bg, mix};
-use crate::sketch::palette::{Toggle, TOGGLES};
+use crate::sketch::palette::TOGGLES;
 use crate::sketch::relations::{Row, State};
 use crate::theme::{Rgb, Theme, FS_SMALL, R_LG, R_MD, R_SM, S_2, S_3, S_4, W_SEMIBOLD};
 use crate::ui::{icon, text};
 
-/// FundaCAD 1's holdGesture.ts HOLD_MS.
-const HOLD: Duration = Duration::from_millis(300);
-
-#[derive(Default)]
-pub(super) struct SketchRailUi {
-    /// Each family's face, the variant last used.
-    chosen: HashMap<&'static str, &'static str>,
-    /// The family held down, and whether the hold has opened its flyout.
-    hold: Option<(&'static str, bool, Task<()>)>,
-    anchors: Rc<std::cell::RefCell<HashMap<&'static str, Bounds<Pixels>>>>,
-    /// Whether the last frame drew the sketch rail, so a mode swap closes a flyout hanging off nothing.
-    was: bool,
-}
-
 impl Shell {
-    /// The sketch rail's state, None while not sketching.
-    pub(super) fn sketch_rail_state(&mut self, cx: &mut Context<Self>) -> Option<SketchState> {
-        let state = self.viewport.read(cx).sketch_rail();
-        if state.is_some() != self.sketch_rail.was {
-            self.sketch_rail.was = state.is_some();
-            self.rail_open = None;
-        }
-        let (name, active, construction) = state?;
-        if let Some(a) = active {
-            if let Some(f) = rail::family_of(a) {
-                self.sketch_rail.chosen.insert(f, a);
-            }
-        }
-        let built: HashSet<&'static str> = {
-            let ids: HashSet<String> = crate::commands::available(cx).into_iter().map(|c| c.id.to_string()).collect();
-            rail::sketch_actions().filter(|a| ids.contains(*a)).collect()
-        };
-        let keys = rail::sketch_actions()
-            .filter_map(|a| {
-                let hint = crate::commands::hint(cx, a)?;
-                Some((a, hint.split('+').map(|k| SharedString::from(k.to_string())).collect()))
-            })
-            .collect();
-        Some(SketchState {
-            name,
-            active,
-            construction,
-            open: self.rail_open,
-            chosen: self.sketch_rail.chosen.clone(),
-            keys,
-            built,
-            anchors: self.sketch_rail.anchors.clone(),
-        })
-    }
-
-    pub(super) fn sketch_act(&mut self, a: SketchAct, window: &mut Window, cx: &mut Context<Self>) {
-        match a {
-            SketchAct::Exit => crate::commands::run("finish-sketch", window, cx),
-            SketchAct::Run(action) => {
-                self.rail_open = None;
-                crate::commands::run(action, window, cx);
-            }
-            SketchAct::Press(family) => {
-                let task = cx.spawn_in(window, async move |this, cx| {
-                    cx.background_executor().timer(HOLD).await;
-                    let _ = this.update(cx, |s, cx| {
-                        if let Some((f, opened, _)) = &mut s.sketch_rail.hold {
-                            if *f == family {
-                                *opened = true;
-                                s.rail_open = Some(family);
-                                cx.notify();
-                            }
-                        }
-                    });
-                });
-                self.sketch_rail.hold = Some((family, false, task));
-            }
-            SketchAct::Face(family) => {
-                let held = self.sketch_rail.hold.take().is_some_and(|(f, opened, _)| f == family && opened);
-                if held {
-                    return;
-                }
-                let Some((_, items)) = rail::sketch_family(family) else { return };
-                let face = rail::face_of(items, self.sketch_rail.chosen.get(family).copied());
-                self.rail_open = None;
-                crate::commands::run(face.action, window, cx);
-            }
-            SketchAct::Menu(family) => {
-                self.sketch_rail.hold = None;
-                self.rail_open = if self.rail_open == Some(family) { None } else { Some(family) };
-                cx.notify();
-            }
-            SketchAct::Pick(family, action) => {
-                self.sketch_rail.chosen.insert(family, action);
-                self.rail_open = None;
-                cx.notify();
-                crate::commands::run(action, window, cx);
-            }
-            SketchAct::Construction => {
-                self.viewport.update(cx, |v, cx| v.set_sketch_toggle(Toggle::Construction, true, cx));
-            }
-        }
-    }
-
-    pub(super) fn on_sketch(&self, cx: &mut Context<Self>) -> rail::OnSketch {
-        let e = cx.entity();
-        Rc::new(move |a, window, cx| e.update(cx, |s, cx| s.sketch_act(a, window, cx)))
-    }
-
     /// The Sketch Palette, None while not sketching.
     pub(super) fn sketch_palette(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let v = self.viewport.read(cx);
