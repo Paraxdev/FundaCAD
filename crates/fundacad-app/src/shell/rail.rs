@@ -58,6 +58,8 @@ pub(super) struct Button {
     pub menu: bool,
     /// No handler in this build yet.
     pub muted: bool,
+    /// Keeps its sub label on compact tiles, as the head's sketch name and selection count.
+    pub keep_sub: bool,
 }
 
 pub(super) fn key_chips(t: &Theme, keys: &str) -> Div {
@@ -133,7 +135,7 @@ pub(super) fn button(t: &Theme, b: Button, compact: bool) -> Div {
                 )
                 .when_some(b.keys, |d, k| d.child(key_chips(t, &k))),
         )
-        .when_some(b.sub.filter(|_| !compact), |d, sub| {
+        .when_some(b.sub.filter(|_| !compact || b.keep_sub), |d, sub| {
             d.child(text(t, FS_MICRO).line_height(px(13.)).whitespace_nowrap().text_color(t.text_mute).child(sub))
         });
     div().flex().items_center().gap(px(6.)).child(rail_tile(t, b.id, b.lit, size, tile)).child(pill)

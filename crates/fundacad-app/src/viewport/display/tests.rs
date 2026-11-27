@@ -72,3 +72,13 @@ fn an_orthographic_camera_keeps_the_target_scale() {
     let (a, b) = (p.project_point3(at), o.project_point3(at));
     assert!((a.y - b.y).abs() < 1e-3, "{a} vs {b}");
 }
+
+#[test]
+fn an_open_sketch_draws_flat_whatever_the_pick() {
+    publish(Projection::Persp);
+    set_sketch_flat(true);
+    assert_eq!(projection(), Projection::Ortho);
+    set_sketch_flat(false);
+    assert_eq!(projection(), Projection::Persp);
+    assert_eq!(Projection::default(), Projection::Auto, "FundaCAD 1's rig starts on auto");
+}

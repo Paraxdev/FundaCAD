@@ -29,7 +29,7 @@ const GLYPH: f32 = 16.;
 #[derive(Default)]
 pub(super) struct Ui {
     /// Waiting for a click on a plane or a flat face to sketch on.
-    picking: bool,
+    pub(super) picking: bool,
     plane_hover: Option<(Plane, Value)>,
     /// The dimension being typed, its key and the text so far.
     typing: Option<(String, String)>,
@@ -98,6 +98,7 @@ impl Viewport {
         self.blend_before_step(cx);
         self.look_at_plane(&editor.plane, cx.reduce_motion());
         self.sketch = Some(editor);
+        super::display::set_sketch_flat(true);
         self.apply_sketch_switches();
         self.sketch_ui.picking = false;
         self.hover = None;
@@ -127,6 +128,7 @@ impl Viewport {
 
     pub fn finish_sketch(&mut self, cx: &mut Context<Self>) {
         self.sketch = None;
+        super::display::set_sketch_flat(false);
         self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), ..Default::default() };
         commands::set_mode(cx, Mode::Model);
         cx.notify();
