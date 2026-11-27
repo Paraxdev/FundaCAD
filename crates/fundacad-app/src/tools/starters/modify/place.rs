@@ -75,6 +75,7 @@ pub fn axis_line(pick: &Pick, line: Option<&[Vec3]>) -> ([f32; 3], [f32; 3]) {
     let at = spot(pick);
     let fallback = match pick {
         Pick::Face { normal, .. } => *normal,
+        Pick::Edge { dir: Some(dir), .. } => super::canonical_dir(*dir),
         _ => [0.0, 0.0, 1.0],
     };
     let Some(pts) = line.filter(|l| l.len() >= 2) else { return (at, fallback) };

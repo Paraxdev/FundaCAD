@@ -78,7 +78,7 @@ pub fn pattern_linear(_: &Doc, s: &Selection) -> Result<Start, String> {
 }
 
 /// About Z through the origin, or about the first edge or face picked, which `axisRef` follows with the picked spot
-/// as the line it falls back on.
+/// as the line it falls back on. A straight edge lends its own direction, a curved one Z.
 pub fn pattern_circular(_: &Doc, s: &Selection) -> Result<Start, String> {
     let mut f = json!({"type": "patternCircular", "count": 4, "angle": 360, "axis": "Z"});
     let about = s.picks.iter().find(|p| matches!(p, Pick::Face { .. } | Pick::Edge { .. }));
@@ -86,12 +86,21 @@ pub fn pattern_circular(_: &Doc, s: &Selection) -> Result<Start, String> {
     if let Some(p) = about {
         let dir = match p {
             Pick::Face { normal, .. } => *normal,
+            Pick::Edge { dir: Some(dir), .. } => canonical_dir(*dir),
             _ => [0.0, 0.0, 1.0],
         };
         f["axis"] = json!({"origin": round(spot(p)), "dir": round(dir)});
         f["axisRef"] = p.selector().unwrap_or_default();
     }
     start(with_bodies(f, picked), Vec::new())
+}
+
+/// The engine's `canonical` rule, largest component positive, so either way along an edge gives the same axis.
+pub fn canonical_dir(d: [f32; 3]) -> [f32; 3] {
+    let u = glam::Vec3::from(d).normalize_or_zero();
+    let a = u.abs();
+    let k = if a.x >= a.y && a.x >= a.z { 0 } else if a.y >= a.z { 1 } else { 2 };
+    (if u[k] < 0.0 { -u } else { u }).to_array().map(|c| c + 0.0)
 }
 
 pub fn pattern_rect(_: &Doc, s: &Selection) -> Result<Start, String> {
