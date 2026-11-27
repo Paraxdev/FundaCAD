@@ -671,7 +671,7 @@ impl Shell {
                 .child(i18n::t(label))
         };
         let tabs = div().flex().pl(px(5.)).child(tab(0, "items.tab.items", cx)).child(tab(1, "items.tab.geometry", cx));
-        let card = float_card(t).w(px(WIDTH)).h_full().child(card_head(t, "Items", i18n::t("items.title"))).child(tabs);
+        let card = float_card(t).w(px(WIDTH)).flex_1().min_h_0().child(card_head(t, "Items", i18n::t("items.title"))).child(tabs);
         if self.items_tab == 1 {
             return card.child(self.geometry_tab(t, window, cx));
         }

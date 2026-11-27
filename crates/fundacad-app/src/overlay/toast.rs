@@ -153,7 +153,8 @@ impl Stack {
 }
 
 impl super::Overlay {
-    /// `.toast-stack`: bottom centre, newest last. A toast pops in, `.toast`, and fades out where it stood.
+    /// `.toast-stack`: bottom centre of the stretch the cards leave free, newest last. A toast pops in, `.toast`,
+    /// and fades out where it stood.
     pub(super) fn render_toasts(
         &mut self,
         t: &crate::theme::Theme,
@@ -162,8 +163,11 @@ impl super::Overlay {
     ) -> gpui::AnyElement {
         use crate::theme::{S_2, T_TOAST_OUT};
         use gpui::*;
+        // Over the status line and in the same free stretch of the row, so neither runs into the other or the rail.
+        let (left, right) = crate::shell::status::span(window.viewport_size().width / px(1.));
+        let bottom = px(64.).max(crate::shell::status::reach());
         let mut stack =
-            div().absolute().bottom(px(64.)).left_0().right_0().flex().flex_col().items_center().gap(px(S_2));
+            div().absolute().bottom(bottom).left(px(left)).right(px(right)).flex().flex_col().items_center().gap(px(S_2));
         let mut leaving: Vec<(usize, AnyElement)> = Vec::new();
         self.toasts.leaving.retain_mut(|(at, item, leave)| match leave.opacity(T_TOAST_OUT, window, cx) {
             Some(o) => {

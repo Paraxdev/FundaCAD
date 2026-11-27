@@ -12,6 +12,7 @@ pub mod modal;
 mod params;
 mod rail;
 mod rail_menu;
+pub(crate) mod status;
 mod timeline;
 mod titlebar;
 mod tool_card;
@@ -24,8 +25,8 @@ use gpui::*;
 use gpui_kit::component::input::{InputEvent, InputState};
 
 use crate::document::{self, Document, Target};
-use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, FS_SMALL, S_1, S_3, UI_FONT};
-use crate::ui::{chip, frost_flush, text};
+use crate::theme::{self, ActiveTheme as _, FLOAT_GAP, UI_FONT};
+use crate::ui::frost_flush;
 use crate::viewport::Viewport;
 pub use params::OpenParameters;
 
@@ -217,7 +218,15 @@ impl Render for Shell {
             .left(gap)
             .flex()
             .gap(gap)
-            .child(self.items_card(t, window, cx))
+            .child(
+                div()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .gap(gap)
+                    .child(self.items_card(t, window, cx))
+                    .children(self.tool_card(t, window, cx)),
+            )
             .child({
                 let e = cx.entity();
                 let on_family: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
@@ -238,18 +247,12 @@ impl Render for Shell {
             .flex()
             .items_start()
             .gap(gap)
-            .child(self.view_controls(t))
-            .children(self.tool_card(t, window, cx))
-            .children(self.inspect_card(t, cx))
+            // FundaCAD 1's narrow stage rule: a card opens to the left of the view controls, which keep their place.
+            .child(div().relative().child(self.view_controls(t)).children(
+                self.inspect_card(t, cx).map(|c| div().absolute().top_0().right(relative(1.)).pr(gap).child(c)),
+            ))
             .child(self.history_card(t, window, cx));
-        let status = self.viewport.read(cx).status();
-        let status = div().absolute().left_0().right_0().bottom(gap).flex().justify_center().child(
-            chip(t)
-                .max_w(px(560.))
-                .px(px(S_3))
-                .py(px(S_1))
-                .child(text(t, FS_SMALL).min_w_0().truncate().text_color(t.text_dim).child(status)),
-        );
+        let status = status::status(t, self.viewport.read(cx).status(), window);
 
         // Actions go only to the window root while nothing has focus, so the shell takes it.
         if window.focused(cx).is_none() {

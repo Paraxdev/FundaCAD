@@ -294,9 +294,25 @@ impl Shell {
                     this.viewport.update(cx, |v, cx| v.finish(true, cx));
                 },
             )));
+        // FundaCAD 1's .tgt-panel: parked under Items, not beside the view controls, its height capped so the
+        // rows scroll and Items gives way rather than the card.
+        let cap = (window.viewport_size().height * 0.46).min(px(360.));
+        // The padding keeps the target rows' outset borders inside the scroll clip, the margin cancels it.
+        let rows = div()
+            .id("tool-rows")
+            .flex()
+            .flex_col()
+            .gap(px(S_2))
+            .min_h_0()
+            .overflow_y_scroll()
+            .mx(px(-S_2))
+            .px(px(S_2))
+            .children(rows);
         let card = chip(t)
                 .id("tool-card")
-                .w(px(300.))
+                .w(px(super::items::WIDTH))
+                .flex_none()
+                .max_h(cap)
                 .p(px(S_3))
                 .flex()
                 .flex_col()
@@ -304,7 +320,7 @@ impl Shell {
                 .occlude()
                 .child(head)
                 .children(picking)
-                .children(rows)
+                .child(rows)
                 .child(foot);
         Some(glass_in(SharedString::from(format!("tool-card-in:{title}")), card).into_any_element())
     }
