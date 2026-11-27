@@ -86,13 +86,32 @@ pub fn hole(body: &SceneBody, face: u32, view: Vec3) -> Option<Placement> {
         return None;
     }
     let centre = u * c.x + w * c.y;
-    let inward = verts.iter().map(|v| v.normal().dot(centre - (v.position() - axis * v.position().dot(axis)))).sum::<f32>();
+    let inward =
+        verts.iter().map(|v| v.normal().dot(centre - (v.position() - axis * v.position().dot(axis)))).sum::<f32>();
     if inward <= 0.0 {
         return None;
     }
     let z = if axis.dot(-view) >= 0.0 { axis } else { -axis };
     let top = verts.iter().map(|v| v.position().dot(z)).fold(f32::MIN, f32::max);
     Some(Placement { origin: centre + z * top, z })
+}
+
+/// On a round edge, like a hole's rim, at its centre along its axis toward the viewer. None for a straight edge, one
+/// off a plane, or an arc that turns less than half way round.
+pub fn rim(line: &[Vec3], view: Vec3) -> Option<Placement> {
+    let mean = line.iter().copied().sum::<Vec3>() / line.len().max(1) as f32;
+    let turn: Vec3 = line.windows(2).map(|w| (w[0] - mean).cross(w[1] - mean)).sum();
+    let axis = turn.try_normalize()?;
+    let u = axis.any_orthonormal_vector();
+    let w = axis.cross(u);
+    let flat: Vec<Vec2> = line.iter().map(|p| Vec2::new((*p - mean).dot(u), (*p - mean).dot(w))).collect();
+    let (c, r) = circle(&flat)?;
+    let off = |p: &Vec3| (*p - mean).dot(axis).abs() > r * ROUND;
+    if line.iter().any(off) || flat.iter().any(|p| (p.distance(c) - r).abs() > r * ROUND) || !half_round(&flat, c) {
+        return None;
+    }
+    let z = if axis.dot(-view) >= 0.0 { axis } else { -axis };
+    Some(Placement { origin: mean + u * c.x + w * c.y, z })
 }
 
 /// The least squares circle through `points`, as a centre and a radius.
@@ -134,14 +153,32 @@ impl Viewport {
         Some(placement(&self.scene.bodies[hit.body], &hit, dir))
     }
 
-    /// Where a part inserted now lands: on the one selected face where it was clicked, None for any other selection.
+    /// Where a part inserted now lands: on the one selected face where it was clicked, or in the one selected round
+    /// edge, None for any other selection.
     pub fn selected_placement(&self) -> Option<Placement> {
-        let [crate::selection::Pick::Face { body, face, point, normal }] = self.picking.selection.picks.as_slice() else {
-            return None;
-        };
-        let b = &self.scene.bodies[self.scene.body_index(body)?];
-        let (point, normal) = (Vec3::from(*point), Vec3::from(*normal));
-        Some(placement(b, &Hit { body: 0, face: *face, point, normal }, -normal))
+        use crate::selection::Pick;
+        let view = self.camera.target - self.camera.eye();
+        match self.picking.selection.picks.as_slice() {
+            [Pick::Face { body, face, point, normal }] => {
+                let b = &self.scene.bodies[self.scene.body_index(body)?];
+                let (point, normal) = (Vec3::from(*point), Vec3::from(*normal));
+                Some(placement(b, &Hit { body: 0, face: *face, point, normal }, view))
+            }
+            [Pick::Edge { body, edge, .. }] => {
+                let b = &self.scene.bodies[self.scene.body_index(body)?];
+                rim(super::edges::polylines(&b.source).get(*edge as usize)?, view)
+            }
+            _ => None,
+        }
+    }
+
+    pub(super) fn carry_cancel(&mut self, cx: &mut Context<Self>) -> bool {
+        let on = self.carry.held.take().is_some();
+        if on {
+            self.carry.shown = None;
+            cx.notify();
+        }
+        on
     }
 
     pub(super) fn land(&mut self, carried: &Carried, window: &mut Window, cx: &mut Context<Self>) {
@@ -153,6 +190,9 @@ impl Viewport {
 
     /// Starts dragging a placed part once a press on it moves far enough. True while a drag is on.
     pub(super) fn carry_move(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) -> bool {
+        if self.carry.held.is_some() && e.pressed_button != Some(MouseButton::Left) {
+            return self.carry_cancel(cx);
+        }
         if let Some((body, at, _)) = self.carry.held.as_mut() {
             *at = e.position;
             let (body, at) = (*body, *at);

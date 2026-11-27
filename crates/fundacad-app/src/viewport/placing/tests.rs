@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use super::{circle, hole, placement, Hit, Placement, SceneBody};
-use glam::{Vec2, Vec3};
-use serde_json::json;
+use super::{circle, hole, placement, rim, Hit, Placement, SceneBody};
 use crate::viewport::scene::tests::block;
 use crate::viewport::scene::Body;
+use glam::{Vec2, Vec3};
+use serde_json::json;
 
 /// A round wall about `centre` along `axis` from 0 to `depth`, `turn` of a full circle of it, as face 0, its normals
 /// toward the axis when `hole`.
@@ -84,4 +84,15 @@ fn the_circle_fit_is_exact_on_a_circle() {
     let pts: Vec<Vec2> = (0..7).map(|i| Vec2::new(3.0, -1.0) + Vec2::from_angle(i as f32 * 0.4) * 2.0).collect();
     let (c, r) = circle(&pts).unwrap();
     assert!(c.distance(Vec2::new(3.0, -1.0)) < 1e-4 && (r - 2.0).abs() < 1e-4, "{c} {r}");
+}
+
+#[test]
+fn a_round_edge_seats_at_its_centre_toward_the_viewer() {
+    let ring: Vec<Vec3> =
+        (0..=24).map(|i| Vec3::new(5.0, 5.0, 10.0) + (Vec2::from_angle(i as f32 * 0.2618) * 2.5).extend(0.0)).collect();
+    let p = rim(&ring, -Vec3::Z).unwrap();
+    assert!(close(p.origin, Vec3::new(5.0, 5.0, 10.0)) && close(p.z, Vec3::Z), "{p:?}");
+    assert!(close(rim(&ring, Vec3::Z).unwrap().z, -Vec3::Z));
+    assert!(rim(&ring[..5], -Vec3::Z).is_none());
+    assert!(rim(&[Vec3::ZERO, Vec3::X, Vec3::X * 2.0], -Vec3::Z).is_none());
 }
