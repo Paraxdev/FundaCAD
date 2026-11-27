@@ -13,7 +13,9 @@
   --fc-accent-hot: #bcc0f7;
   --fc-on-accent: #0c0d26;
   --fc-glass: color-mix(in srgb, var(--fc-bg) 72%, transparent);
-  --fc-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 40px -18px rgb(0 0 0 / 0.7);
+  --fc-shadow: 0 2px 5px rgb(0 0 0 / 0.32), 0 16px 34px -14px rgb(0 0 0 / 0.62);
+  --fc-rim: inset 0 0 0 1px rgb(255 255 255 / 0.07), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --fc-live: #17c99a;
 }
 
 [data-md-color-scheme=default] {
@@ -28,12 +30,16 @@
   --fc-accent-hot: #2f338a;
   --fc-on-accent: #ffffff;
   --fc-glass: color-mix(in srgb, var(--fc-bg) 78%, transparent);
-  --fc-shadow: 0 1px 2px rgb(27 24 38 / 0.06), 0 14px 32px -24px rgb(27 24 38 / 0.4);
+  --fc-shadow: 0 1px 3px rgb(27 24 38 / 0.1), 0 12px 28px -10px rgb(27 24 38 / 0.28);
+  --fc-rim: inset 0 0 0 1px rgb(27 24 38 / 0.08);
+  --fc-live: #0b8a68;
 }
 
 :root {
   --fc-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --fc-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --fc-ease: cubic-bezier(0.2, 0, 0.15, 1);
+  --fc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --fc-t-fast: 110ms;
   --fc-t-med: 160ms;
   --fc-radius: 16px;
