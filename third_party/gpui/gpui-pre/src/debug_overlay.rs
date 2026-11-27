@@ -1,9 +1,10 @@
+// Modified by FundaCAD: quads carry a CornerShape.
 //! A developer overlay that paints frame-time statistics directly into the
 //! scene, bypassing layout, text, and view invalidation entirely (to avoid
 //! infinitely triggering new frames).
 
 use crate::{
-    BorderStyle, Bounds, ContentMask, Corners, Edges, Hsla, Pixels, Quad, ScaledPixels, Scene,
+    BorderStyle, Bounds, ContentMask, CornerShape, Corners, Edges, Hsla, Pixels, Quad, ScaledPixels, Scene,
     Size, point, rgba, size, transparent_black,
 };
 use std::{collections::VecDeque, time::Duration};
@@ -219,6 +220,8 @@ fn solid_quad(
     Quad {
         order: 0,
         border_style: BorderStyle::Solid,
+        corner_shape: CornerShape::Auto,
+        pad: 0,
         bounds,
         content_mask: *content_mask,
         background: color.into(),

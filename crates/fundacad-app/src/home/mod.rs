@@ -282,6 +282,7 @@ fn section(t: &Theme, label: String) -> Div {
     div().flex().px(px(S_5)).pt(px(S_2)).child(
         div()
             .rounded(px(R_PILL))
+            .squircle()
             .bg(t.float_bg_solid)
             .px(px(S_3))
             .py(px(S_1))

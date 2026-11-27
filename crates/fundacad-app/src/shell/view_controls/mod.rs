@@ -138,6 +138,7 @@ impl Shell {
             .items_center()
             .justify_center()
             .rounded(px(FLOAT_RADIUS - 4.))
+            .squircle()
             .font_family(MONO_FONT)
             .text_size(px(FS_MICRO))
             .font_weight(W_SEMIBOLD)
@@ -378,7 +379,8 @@ impl Shell {
 /// A 40px button of the column, `IconButton` in the Vue app, washed with the accent while `on`.
 fn column_button(t: &Theme, glyph: &'static str, tip: &'static str, on: bool) -> Stateful<Div> {
     let (hover, text_hover, dim, hot, wash) = (t.raised, t.text, t.text_dim, t.accent_hot, t.accent_wash);
-    let el = div().id(glyph).size(px(40.)).flex().items_center().justify_center().rounded(px(FLOAT_RADIUS - 4.));
+    let el =
+        div().id(glyph).size(px(40.)).flex().items_center().justify_center().rounded(px(FLOAT_RADIUS - 4.)).squircle();
     let el = motion::hover(SharedString::from(format!("view-bg-{glyph}")), el, move |d, m| {
         let lift = m.hover * (1. - m.on);
         d.bg(mix(mix(Rgb::TRANSPARENT, hover, lift), wash, m.on))

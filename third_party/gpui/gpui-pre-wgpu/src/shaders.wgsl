@@ -1,5 +1,5 @@
 // Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS, and rounded corners are
-// squircles unless the radius makes a pill or a circle.
+// squircles unless the radius makes a pill or a circle, or the quad's corner shape asks for squircles at any radius.
 /* Functions useful for debugging:
 
 // A heat map color for debugging (blue -> cyan -> green -> yellow -> red).
@@ -358,20 +358,23 @@ fn pick_corner_radius(center_to_point: vec2<f32>, radii: Corners) -> f32 {
 //
 // See comments on similar code using `quad_sdf_impl` in `fs_quad` for
 // explanation.
-fn quad_sdf(point: vec2<f32>, bounds: Bounds, corner_radii: Corners) -> f32 {
+fn quad_sdf(point: vec2<f32>, bounds: Bounds, corner_radii: Corners, corner_shape: u32) -> f32 {
     let half_size = bounds.size / 2.0;
     let center = bounds.origin + half_size;
     let center_to_point = point - center;
     let corner_radius = pick_corner_radius(center_to_point, corner_radii);
     let corner_to_point = abs(center_to_point) - half_size;
     let corner_center_to_point = corner_to_point + corner_radius;
-    return quad_sdf_impl(corner_center_to_point, corner_radius, squareness(corner_radius, half_size));
+    return quad_sdf_impl(corner_center_to_point, corner_radius, squareness(corner_radius, half_size, corner_shape));
 }
 
 // 0 for a pill or a circle, which stay round, 1 for a squircle. GPUI clamps radii to half the short side in logical
 // pixels before the bounds are snapped, so the device half can be up to a pixel or two larger, and a blend over
-// 1.5 px keeps a pill from turning into a squircle at fractional scales.
-fn squareness(corner_radius: f32, half_size: vec2<f32>) -> f32 {
+// 1.5 px keeps a pill from turning into a squircle at fractional scales. Corner shape 1 is a squircle at any radius.
+fn squareness(corner_radius: f32, half_size: vec2<f32>, corner_shape: u32) -> f32 {
+    if (corner_shape == 1u) {
+        return 1.0;
+    }
     return saturate((min(half_size.x, half_size.y) - corner_radius - 2.0) / 1.5);
 }
 
@@ -556,6 +559,15 @@ struct Quad {
     border_widths: Edges,
 }
 
+// The border style word holds the border style in its low byte and the corner shape in the next.
+fn quad_border_style(quad: Quad) -> u32 {
+    return quad.border_style & 0xffu;
+}
+
+fn quad_corner_shape(quad: Quad) -> u32 {
+    return (quad.border_style >> 8u) & 0xffu;
+}
+
 fn has_rounded_corners(corner_radii: Corners) -> bool {
     return corner_radii.top_left != 0.0
         || corner_radii.top_right != 0.0
@@ -703,7 +715,7 @@ fn fs_quad(input: QuadVarying) -> @location(0) vec4<f32> {
 
     // Signed distance of the point to the outside edge of the quad's border. It
     // is positive outside this edge, and negative inside.
-    let corner_squareness = squareness(corner_radius, half_size);
+    let corner_squareness = squareness(corner_radius, half_size, quad_corner_shape(quad));
     let outer_sdf = quad_sdf_impl(corner_center_to_point, corner_radius, corner_squareness);
 
     // Approximate signed distance of the point to the inside edge of the quad's
@@ -741,7 +753,7 @@ fn fs_quad(input: QuadVarying) -> @location(0) vec4<f32> {
         var border_color = input.border_color;
 
         // Dashed border logic when border_style == 1
-        if (quad.border_style == 1) {
+        if (quad_border_style(quad) == 1u) {
             // Position along the perimeter in "dash space", where each dash
             // period has length 1
             var t = 0.0;
@@ -1045,7 +1057,8 @@ struct Shadow {
     caster_bounds: Bounds,
     // 0 = drop shadow, 1 = inset shadow.
     inset: u32,
-    pad: u32, // align to 8 bytes
+    // The corner shape in the low byte.
+    corner_shape: u32,
 }
 
 struct ShadowVarying {
@@ -1147,7 +1160,8 @@ fn fs_shadow(input: ShadowVarying) -> @location(0) vec4<f32> {
 
     var alpha: f32;
     if (shadow.blur_radius == 0.0) {
-        let distance = quad_sdf(input.position.xy, shadow.shape_bounds, shadow.shape_corner_radii);
+        let distance = quad_sdf(input.position.xy, shadow.shape_bounds, shadow.shape_corner_radii,
+                                 shadow.corner_shape & 0xffu);
         alpha = saturate(0.5 - distance);
     } else {
         let center = shadow.shape_bounds.origin + shadow.shape_bounds.size / 2.0;
@@ -1158,13 +1172,15 @@ fn fs_shadow(input: ShadowVarying) -> @location(0) vec4<f32> {
 
     if (shadow.inset == 0u) {
         // CSS paints a drop shadow only outside the element's border box.
-        let caster_distance = quad_sdf(input.position.xy, shadow.caster_bounds, shadow.corner_radii);
+        let caster_distance = quad_sdf(input.position.xy, shadow.caster_bounds, shadow.corner_radii,
+                                       shadow.corner_shape & 0xffu);
         alpha *= saturate(0.5 + caster_distance);
     } else {
         // The inset shadow is the complement of the (blurred) hole rect, clipped to the element.
         // `saturate(0.5 - d)` gives a 1-pixel antialiased edge: d <= -0.5 -> 1, d >= 0.5 -> 0.
         alpha = 1.0 - alpha;
-        let element_distance = quad_sdf(input.position.xy, shadow.bounds, shadow.corner_radii);
+        let element_distance = quad_sdf(input.position.xy, shadow.bounds, shadow.corner_radii,
+                                        shadow.corner_shape & 0xffu);
         alpha *= saturate(0.5 - element_distance);
     }
 
@@ -1496,7 +1512,7 @@ fn fs_poly_sprite(input: PolySpriteVarying) -> @location(0) vec4<f32> {
     if (sprite.grayscale != 0u) {
         color = vec4<f32>(vec3<f32>(dot(color.rgb, GRAYSCALE_FACTORS)), color.a);
     }
-    let distance = quad_sdf(input.position.xy, sprite.bounds, sprite.corner_radii);
+    let distance = quad_sdf(input.position.xy, sprite.bounds, sprite.corner_radii, 0u);
     return blend_color(color, input.opacity * saturate(0.5 - distance));
 }
 
