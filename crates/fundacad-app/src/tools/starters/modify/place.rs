@@ -44,6 +44,7 @@ pub fn place(doc: &mut Doc, id: &str, field: &str, pick: &Pick, line: Option<&[V
     match (ty.as_str(), field, pick) {
         ("split", "plane", Pick::Face { point, normal, .. }) => {
             f.remove("planeId");
+            f.remove("offset");
             Ok(plane_def(*point, *normal))
         }
         ("mirror", "plane", Pick::Face { point, normal, .. }) => {
@@ -82,7 +83,7 @@ pub fn axis_line(pick: &Pick, line: Option<&[Vec3]>) -> ([f32; 3], [f32; 3]) {
     let (first, last) = (pts[0], pts[pts.len() - 1]);
     let span = pts.iter().fold(0.0f32, |m, p| m.max(p.distance(first)));
     if last.distance(first) > span * 1e-3 {
-        return (at, (last - first).normalize().to_array());
+        return (at, super::canonical_dir((last - first).to_array()));
     }
     let ring = if first.distance(last) < 1e-6 { &pts[..pts.len() - 1] } else { pts };
     let mid = ring.iter().copied().sum::<Vec3>() / ring.len() as f32;
@@ -92,7 +93,7 @@ pub fn axis_line(pick: &Pick, line: Option<&[Vec3]>) -> ([f32; 3], [f32; 3]) {
         n += (*a - mid).cross(b - mid);
     }
     match n.length() > 1e-9 {
-        true => (mid.to_array(), n.normalize().to_array()),
+        true => (mid.to_array(), super::canonical_dir(n.to_array())),
         false => (at, fallback),
     }
 }

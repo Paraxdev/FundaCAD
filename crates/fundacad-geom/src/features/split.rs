@@ -138,7 +138,8 @@ pub fn split(ctx: &mut Ctx, f: &Split) -> FResult {
     for &t in &targets {
         ctx.editable(t, "Split")?;
     }
-    let (origin, normal, xdir) = (v(plane.origin), v(plane.z), v(plane.x));
+    let normal = v(plane.z).normalize_or_zero();
+    let (origin, xdir) = (v(plane.origin) + normal * ctx.val_or(f.offset.as_ref(), 0.0)?, v(plane.x));
     let single = targets.len() == 1;
     for target in targets {
         let (tops, bottoms) = split_by_plane(ctx.bodies[target].shape(), origin, normal, xdir)?;

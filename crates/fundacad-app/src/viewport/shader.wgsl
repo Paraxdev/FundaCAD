@@ -70,6 +70,13 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
   if (in.selected > 0.5) {
     base = vec3<f32>(0.36, 0.56, 0.98);
   }
+  if (body.hover.x >= 0 && u32(body.hover.x) == in.face) {
+    if (body.hover.y == 1) {
+      base = vec3<f32>(0.6, 0.62, 0.94);
+    } else {
+      base = vec3<f32>(0.7, 0.72, 0.78);
+    }
+  }
   if (clipping && inside) {
     // FundaCAD 1's section cap, unlit 45 degree stripes at a fixed pixel pitch. The back faces seen through the cut
     // stand in for the cap the stencil drew there.
@@ -79,13 +86,6 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
       cap = pow(clamp(cap, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
     }
     return vec4<f32>(cap, 1.0);
-  }
-  if (body.hover.x >= 0 && u32(body.hover.x) == in.face) {
-    if (body.hover.y == 1) {
-      base = vec3<f32>(0.6, 0.62, 0.94);
-    } else {
-      base = vec3<f32>(0.7, 0.72, 0.78);
-    }
   }
   let hemi = mix(vec3<f32>(0.18, 0.17, 0.16), vec3<f32>(0.32, 0.36, 0.42), n.z * 0.5 + 0.5);
   let diffuse = max(dot(n, key), 0.0) * 0.75 + max(dot(n, fill), 0.0) * 0.25;

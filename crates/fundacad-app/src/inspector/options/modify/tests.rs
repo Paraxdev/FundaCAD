@@ -69,32 +69,26 @@ fn choosing_a_split_plane_swaps_plane_and_plane_id() {
     assert_eq!(d["features"][2], json!({"id": "f3", "type": "split", "plane": "XZ", "keep": "bottom"}));
 }
 
-fn origin(d: &Map<String, Value>) -> Vec<f64> {
-    d["features"][2]["plane"]["origin"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect()
-}
-
 fn offsets(d: &Map<String, Value>) -> bool {
     rows(d, "f3", &[]).iter().any(|r| matches!(r, Row::Number(n) if n.field == "offset"))
 }
 
 #[test]
-fn a_split_offset_moves_its_plane_along_the_normal() {
+fn a_split_offset_is_a_plain_number_beside_its_plane() {
     let mut d = split_doc(json!({"id": "f3", "type": "split", "plane": "XZ", "keep": "both"}));
     assert!(offsets(&d));
-    let at = |_: ()| Target::Field { feature: "f3".into(), key: "offset".into() };
-    set_number(&mut d, &at(()), 5.0).unwrap();
-    assert_eq!(origin(&d), vec![0.0, -5.0, 0.0]);
-    assert_eq!(d["features"][2]["offset"], json!(5));
-    set_number(&mut d, &at(()), 2.0).unwrap();
-    assert_eq!(origin(&d), vec![0.0, -2.0, 0.0]);
-    set_number(&mut d, &at(()), 0.0).unwrap();
-    assert_eq!(origin(&d), vec![0.0, 0.0, 0.0]);
-    assert!(d["features"][2].get("offset").is_none());
+    let at = Target::Field { feature: "f3".into(), key: "offset".into() };
+    set_number(&mut d, &at, 5.0).unwrap();
+    assert_eq!(d["features"][2], json!({"id": "f3", "type": "split", "plane": "XZ", "offset": 5, "keep": "both"}));
+    assert_eq!(super::split_plane_choice(d["features"][2].as_object().unwrap(), &[]).1, "XZ");
+    set_number(&mut d, &at, 0.0).unwrap();
+    assert_eq!(d["features"][2], json!({"id": "f3", "type": "split", "plane": "XZ", "keep": "both"}));
 
     let face = json!({"origin": [4.5, -2, 7], "normal": [0, 0, 2], "xdir": [1, 0, 0]});
     let mut d = split_doc(json!({"id": "f3", "type": "split", "plane": face, "keep": "both"}));
-    set_number(&mut d, &at(()), -1.5).unwrap();
-    assert_eq!(origin(&d), vec![4.5, -2.0, 5.5]);
+    set_number(&mut d, &at, -1.5).unwrap();
+    assert_eq!(d["features"][2]["plane"], face);
+    assert_eq!(d["features"][2]["offset"], json!(-1.5));
     set_option(&mut d, "f3", "plane", &json!("YZ")).unwrap();
     assert_eq!(d["features"][2], json!({"id": "f3", "type": "split", "plane": "YZ", "keep": "both"}));
 

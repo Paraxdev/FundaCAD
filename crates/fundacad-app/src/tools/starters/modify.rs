@@ -98,6 +98,9 @@ pub fn pattern_circular(_: &Doc, s: &Selection) -> Result<Start, String> {
 /// The engine's `canonical` rule, largest component positive, so either way along an edge gives the same axis.
 pub fn canonical_dir(d: [f32; 3]) -> [f32; 3] {
     let u = glam::Vec3::from(d).normalize_or_zero();
+    if u == glam::Vec3::ZERO {
+        return [0.0, 0.0, 1.0];
+    }
     let a = u.abs();
     let k = if a.x >= a.y && a.x >= a.z { 0 } else if a.y >= a.z { 1 } else { 2 };
     (if u[k] < 0.0 { -u } else { u }).to_array().map(|c| c + 0.0)

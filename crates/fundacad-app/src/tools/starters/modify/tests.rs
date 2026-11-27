@@ -141,7 +141,7 @@ fn a_canonical_direction_points_its_largest_component_positive() {
     use super::canonical_dir;
     assert_eq!(canonical_dir([0.0, -3.0, 4.0]), [0.0, -0.6, 0.8]);
     assert_eq!(canonical_dir([0.0, -4.0, 3.0]), [0.0, 0.8, -0.6]);
-    assert_eq!(canonical_dir([0.0, 0.0, 0.0]), [0.0, 0.0, 0.0]);
+    assert_eq!(canonical_dir([0.0, 0.0, 0.0]), [0.0, 0.0, 1.0]);
 }
 
 #[test]

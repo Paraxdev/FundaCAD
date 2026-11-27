@@ -450,6 +450,8 @@ feature_struct!(
 feature_struct!(Split {
     #[serde(default, skip_serializing_if = "Option::is_none")] plane: Option<PlaneSpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")] plane_id: Option<String>,
+    /// Moves the plane along its normal, absent is 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
     keep: SplitKeep,
     #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
