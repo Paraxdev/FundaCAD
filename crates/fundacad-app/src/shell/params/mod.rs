@@ -28,6 +28,8 @@ const NAME_W: f32 = 110.;
 const VALUE_W: f32 = 90.;
 const DEL_W: f32 = 24.;
 const FIELD_H: f32 = 28.;
+/// The rows' fixed columns, their gaps and some of each field, the body scrolls sideways in a narrower panel.
+const ROW_MIN: f32 = NAME_W + VALUE_W + DEL_W + 4. * S_3 + 2. * 48.;
 
 struct Field {
     input: Entity<InputState>,
@@ -204,9 +206,9 @@ fn head_row(t: &Theme) -> Div {
         .gap(px(S_3))
         .mb(px(S_2))
         .child(caption(t, &i18n::t("params.column.name")).w(px(NAME_W)).flex_none())
-        .child(caption(t, &i18n::t("params.column.expression")).flex_1().min_w_0())
+        .child(caption(t, &i18n::t("params.column.expression")).flex_1().min_w_0().truncate())
         .child(caption(t, &i18n::t("params.column.value")).w(px(VALUE_W)).flex_none())
-        .child(caption(t, &i18n::t("params.column.comment")).flex_1().min_w_0())
+        .child(caption(t, &i18n::t("params.column.comment")).flex_1().min_w_0().truncate())
         .child(div().w(px(DEL_W)).flex_none())
 }
 
@@ -388,8 +390,11 @@ impl Render for ParamsPanel {
         let Some(fade) = fade else { return div().into_any_element() };
         self.refresh(window, cx);
         self.ensure_fields(window, cx);
-        let card = if super::inspect::shown(self.viewport.read(cx)) { super::inspect::CARD_W } else { 0. };
-        let (left, width) = place::place(window.viewport_size().width / px(1.), card);
+        let size = window.viewport_size();
+        let window_w = size.width / px(1.);
+        let card = if super::inspect::shown(self.viewport.read(cx)) { place::card_w(window_w) } else { 0. };
+        let (left, top, width) = place::place(window_w, card, place::card_h());
+        let room = size.height - px(super::titlebar::HEIGHT + top + FLOAT_GAP) - super::status::reach();
         let t = cx.theme().clone();
         let t = &t;
         let head = div()
@@ -402,11 +407,10 @@ impl Render for ParamsPanel {
                     .on_click(cx.listener(|this, _, _, cx| this.toggle(cx))),
             );
         let mut body = div()
-            .id("params-body")
             .flex()
             .flex_col()
-            .min_h_0()
-            .overflow_y_scroll()
+            .flex_none()
+            .min_w(px(ROW_MIN))
             .child(section(t, &i18n::t("params.user")))
             .child(head_row(t));
         for r in &self.rows.user {
@@ -423,13 +427,13 @@ impl Render for ParamsPanel {
         let card = solid_card(t)
             .bg(t.float_bg_solid)
             .w(px(width))
-            .max_h(window.viewport_size().height * 0.7)
+            .max_h((size.height * 0.7).min(room))
             .p(px(S_4))
             .child(head)
-            .child(body);
+            .child(div().id("params-body").flex().flex_col().min_h_0().overflow_scroll().child(body));
         div()
             .absolute()
-            .top(px(FLOAT_GAP))
+            .top(px(top))
             .left(px(left))
             .opacity(fade)
             .child(glass_in("params-in", card))
