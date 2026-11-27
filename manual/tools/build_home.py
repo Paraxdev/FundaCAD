@@ -144,7 +144,7 @@ def layout(*, root: str, title: str, description: str, current: str, body: str, 
 <link rel="icon" href="{root}static/mark.png">
 <link rel="alternate" type="application/atom+xml" title="FundaCAD news" href="{root}news/feed.xml">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;family=Space+Grotesk:wght@500;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Space+Grotesk:wght@500;700&amp;display=swap">
 <link rel="stylesheet" href="{root}static/site.css">
 <link rel="stylesheet" href="{root}static/home.css">
 <script src="{root}static/home.js" defer></script>
@@ -164,17 +164,43 @@ def layout(*, root: str, title: str, description: str, current: str, body: str, 
 {body}
 </main>
 <footer class="fc-footer">
+<div class="fc-footer-brand">
+<p class="fc-footer-name">{MARK}<span>FundaCAD</span></p>
 <p>FundaCAD is free software under the <a href="{REPO_URL}/blob/main/LICENSE">AGPL 3.0</a>.</p>
-<p><a href="{REPO_URL}">GitHub</a> <a href="{root}news/feed.xml">News feed</a> <a href="{root}{DOCS}">Docs</a></p>
+<p class="fc-footer-links"><a href="{REPO_URL}">GitHub</a> <a href="{root}news/feed.xml">News feed</a> <a href="{root}{DOCS}">Docs</a></p>
+</div>
+{whoami()}
 </footer>
 </body>
 </html>
 """
 
 
+FACTS = (
+    ("price", "free"),
+    ("source", f'open, <a href="{REPO_URL}">on GitHub</a>'),
+    ("licence", "AGPL 3.0"),
+    ("account", "none needed"),
+    ("ads", "none"),
+    ("runs on", "Windows, macOS, Linux"),
+)
+
+
+def whoami() -> str:
+    rows = "".join(f"<div><dt>{key}</dt><dd>{value}</dd></div>" for key, value in FACTS)
+    return (f'<section class="fc-whoami fc-glass" aria-label="FundaCAD at a glance">'
+            f'<p class="fc-whoami-cmd" aria-hidden="true">$ whoami</p><dl>{rows}</dl></section>')
+
+
+def path_heading(tag: str, name: str, ident: str = "", cls: str = "fc-path-h") -> str:
+    """A heading written like a folder path, the ~/ is decoration so a screen reader reads only the name."""
+    attr = f' id="{ident}"' if ident else ""
+    return f'<{tag}{attr} class="{cls}"><span class="fc-path" aria-hidden="true">~/</span>{name}</{tag}>'
+
+
 def post_list(posts: list[Post], root: str, heading: str = "h2") -> str:
     items = "".join(
-        f'<li class="fc-card fc-rise" style="--i:{i}"><time datetime="{p.date.isoformat()}">{nice_date(p.date)}</time>'
+        f'<li class="fc-card fc-glass fc-rise" style="--i:{i}"><time datetime="{p.date.isoformat()}">{nice_date(p.date)}</time>'
         f'<{heading}><a href="{root}news/{p.slug}/">{html.escape(p.title)}</a></{heading}>'
         f"<p>{html.escape(p.summary)}</p></li>"
         for i, p in enumerate(posts)
@@ -182,32 +208,50 @@ def post_list(posts: list[Post], root: str, heading: str = "h2") -> str:
     return f'<ul class="fc-posts" role="list">{items}</ul>'
 
 
+STEPS = (
+    ("Sketch", "Draw a flat shape, then pin it down with constraints and exact sizes.", "sketch/start/",
+     "sketch-constraints.png", 860, 730, "A 40 by 20 mm rectangle in a sketch, fully defined, beside the sketch palette"),
+    ("Model", "Extrude, fillet, shell and pattern. Change a number later and the part rebuilds.", "model/extrude/",
+     "fillet-edge.png", 860, 640, "A box with one edge being rounded by a 6 mm fillet"),
+    ("Print", "See overhangs and bed fit before you slice, then export STL or 3MF.", "inspect/overhang/",
+     "overhang-red.png", 850, 440, "A T shaped part with its overhangs painted red by the overhang analysis"),
+)
+SHOTS = [s[3] for s in STEPS]
+
+
 def landing(posts: list[Post]) -> str:
-    cards = [
-        ("Sketch", "Draw a flat shape, then pin it down with constraints and exact sizes.", "sketch/start/"),
-        ("Model", "Extrude, fillet, shell and pattern. Change a number later and the part rebuilds.", "model/extrude/"),
-        ("Print", "See overhangs and bed fit before you slice, then export STL or 3MF.", "inspect/overhang/"),
-    ]
-    tiles = "".join(
-        f'<li class="fc-card fc-rise" style="--i:{i + 3}"><h3><a href="{DOCS}{href}">{name}</a></h3><p>{text}</p></li>'
-        for i, (name, text, href) in enumerate(cards)
+    steps = "".join(
+        f'<li class="fc-step fc-card fc-glass fc-rise" style="--i:{i}">'
+        f'<img src="static/{img}" width="{w}" height="{h}" alt="{alt}" loading="lazy" decoding="async">'
+        f'<div class="fc-step-text"><h3><a href="{DOCS}{href}">{name}</a></h3><p>{text}</p></div></li>'
+        for i, (name, text, href, img, w, h, alt) in enumerate(STEPS)
     )
     news = ""
     if posts:
-        news = (f'<section class="fc-section" aria-labelledby="news-h"><div class="fc-section-head"><h2 id="news-h">News</h2>'
-                f'<a href="news/">All news</a></div>{post_list(posts[:3], "", "h3")}</section>')
+        news = (f'<section class="fc-section" aria-labelledby="news-h"><div class="fc-section-head">'
+                f'{path_heading("h2", "news", "news-h")}<a class="fc-more-link" href="news/">All news</a></div>'
+                f'{post_list(posts[:3], "", "h3")}</section>')
     return f"""<section class="fc-hero">
 <div class="fc-hero-text">
-<p class="fc-eyebrow fc-rise" style="--i:0">Free and open source</p>
-<h1 class="fc-rise" style="--i:1">CAD for the parts you 3D print.</h1>
-<p class="fc-lead fc-rise" style="--i:2">Sketch a shape, give it exact sizes, turn it into a solid and export it for your slicer. Every step stays editable. Windows, macOS and Linux.</p>
-<p class="fc-actions fc-rise" style="--i:3"><a class="fc-btn fc-btn-primary" href="download/">Download</a><a class="fc-btn" href="{DOCS}">Read the docs</a></p>
+<p class="fc-prompt fc-rise" style="--i:0"><span class="fc-path" aria-hidden="true">~/</span>free and open source<span class="fc-caret" aria-hidden="true"></span></p>
+<h1 class="fc-hero-title fc-rise" style="--i:1">CAD for the parts you <em>3D print.</em></h1>
+<p class="fc-lead fc-rise" style="--i:2">Sketch a shape, give it exact sizes, turn it into a solid and export it for your slicer. Every step stays editable.</p>
+<p class="fc-actions fc-rise" style="--i:3"><a class="fc-btn fc-btn-primary" href="download/">Download</a><a class="fc-btn fc-btn-ghost" href="{DOCS}">Read the docs</a></p>
 </div>
-<figure class="fc-shot fc-rise" style="--i:2"><img src="static/hero.jpg" width="1200" height="630" alt="The FundaCAD window with an exploded planetary gearbox"></figure>
+<figure class="fc-shot fc-glass fc-rise" style="--i:2">
+<div class="fc-shot-bar" aria-hidden="true"><span>gearbox.fcad</span><span>FundaCAD 1 beta</span></div>
+<img src="static/hero.jpg" width="1200" height="630" alt="The FundaCAD window with an exploded planetary gearbox">
+</figure>
+<ul class="fc-status fc-rise" style="--i:4" role="list" aria-label="Release status" data-fc-repo="Paraxdev/fundacad">
+<li><span class="fc-dot" aria-hidden="true"></span>latest <span class="fc-status-value" data-fc-latest>FundaCAD 1 beta</span></li>
+<li>runs on <span class="fc-status-value">Windows, macOS, Linux</span></li>
+<li>licence <span class="fc-status-value">AGPL 3.0</span></li>
+<li>price <span class="fc-status-value">free</span></li>
+</ul>
 </section>
-<section class="fc-section" aria-labelledby="what-h">
-<h2 id="what-h" class="fc-visually-hidden">What FundaCAD does</h2>
-<ul class="fc-grid" role="list">{tiles}</ul>
+<section class="fc-section" aria-labelledby="how-h">
+<div class="fc-section-head">{path_heading("h2", "how-it-works", "how-h")}<p class="fc-section-lede">Three steps from an idea to a file your slicer opens.</p></div>
+<ol class="fc-steps" role="list">{steps}</ol>
 </section>
 {news}"""
 
@@ -215,9 +259,10 @@ def landing(posts: list[Post]) -> str:
 def download_page() -> str:
     releases = f"{REPO_URL}/releases"
     return f"""<section class="fc-page fc-download" data-fc-repo="Paraxdev/fundacad">
+<p class="fc-prompt fc-rise" style="--i:0"><span class="fc-path" aria-hidden="true">~/</span>download<span class="fc-caret" aria-hidden="true"></span></p>
 <h1 class="fc-rise" style="--i:0">Download FundaCAD</h1>
 <p class="fc-lead fc-rise" style="--i:1">The FundaCAD 1 beta, free for Windows, macOS and Linux. No account needed.</p>
-<div class="fc-release fc-card fc-rise" style="--i:2" aria-live="polite">
+<div class="fc-release fc-card fc-glass fc-rise" style="--i:2" aria-live="polite">
 <p class="fc-release-status">The files are on the <a href="{releases}">GitHub releases page</a>.</p>
 </div>
 <p class="fc-more fc-rise" style="--i:3"><a href="{DOCS}start/install/">How to install</a><a href="{releases}">All releases</a></p>
@@ -227,7 +272,8 @@ def download_page() -> str:
 def news_page(posts: list[Post]) -> str:
     listing = post_list(posts, "../") if posts else "<p>No news yet.</p>"
     return f"""<section class="fc-page">
-<div class="fc-section-head"><h1 class="fc-rise" style="--i:0">News</h1><a href="feed.xml">Atom feed</a></div>
+<p class="fc-prompt fc-rise" style="--i:0"><span class="fc-path" aria-hidden="true">~/</span>news<span class="fc-caret" aria-hidden="true"></span></p>
+<div class="fc-section-head"><h1 class="fc-rise" style="--i:0">News</h1><a class="fc-more-link" href="feed.xml">Atom feed</a></div>
 {listing}
 </section>"""
 
@@ -298,6 +344,8 @@ def build(out: Path, site: str) -> list[str]:
     shutil.copyfile(HOME / "home.js", static / "home.js")
     shutil.copyfile(HOME / "mark.png", static / "mark.png")
     shutil.copyfile(MANUAL / "docs" / "img" / "social-card.jpg", static / "hero.jpg")
+    for name in SHOTS:
+        shutil.copyfile(MANUAL / "docs" / "img" / name, static / name)
     return list(pages)
 
 

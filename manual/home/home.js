@@ -117,7 +117,23 @@
       });
   }
 
+  // The hero's status strip keeps its built-in text when GitHub does not answer.
+  function status() {
+    const strip = document.querySelector(".fc-status");
+    const latest = strip && strip.querySelector("[data-fc-latest]");
+    if (!latest) return;
+    fetch(`https://api.github.com/repos/${strip.dataset.fcRepo}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((release) => {
+        if (!release) return;
+        const when = new Date(release.published_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+        latest.textContent = `${release.name || release.tag_name}, ${when}`;
+      })
+      .catch(() => {});
+  }
+
   palette();
   download();
+  status();
   requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("fc-ready")));
 })();
