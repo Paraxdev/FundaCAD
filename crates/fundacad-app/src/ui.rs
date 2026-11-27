@@ -15,7 +15,7 @@ thread_local! {
 }
 
 /// Reports the bounds of the surface it sits in, to be blurred behind in the viewport. `outset` reaches the border box.
-fn frost(radius: f32, outset: f32) -> Canvas<()> {
+pub fn frost(radius: f32, outset: f32) -> Canvas<()> {
     canvas(
         move |bounds, _, _| {
             FROSTS.with_borrow_mut(|f| f.push(Frost { bounds, radius }));

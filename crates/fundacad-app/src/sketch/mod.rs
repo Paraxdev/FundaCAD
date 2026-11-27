@@ -4,6 +4,7 @@
 
 pub mod areas;
 pub mod dims;
+pub mod glyphs;
 pub mod palette;
 pub mod plane;
 pub mod regions;
@@ -727,6 +728,8 @@ fn add_feature(doc: &mut Map<String, Value>, ty: &str, mut f: Value) -> Result<S
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod glyphs_tests;
 #[cfg(test)]
 mod palette_tests;
 #[cfg(test)]

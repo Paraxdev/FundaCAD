@@ -10,6 +10,7 @@ use crate::commands::{self, Group, Mode};
 use crate::i18n::{self, tr, Label};
 use crate::sketch::palette::{Palette, Toggle};
 use crate::sketch::relations::{self, Row};
+use crate::sketch::glyphs::{self, Glyph};
 use crate::sketch::{self, Editor, Plane, Tool};
 
 const FREE: u32 = 0x5b9bff;
@@ -22,6 +23,8 @@ const FILL: u32 = 0x3a7bd5;
 const PREVIEW: u32 = 0xffffff;
 const ACCENT: u32 = 0x9a9ff0;
 const OVER: u32 = 0xf5a524;
+/// `.sketch-glyph`'s 16px badge.
+const GLYPH: f32 = 16.;
 
 #[derive(Default)]
 pub(super) struct Ui {
@@ -34,6 +37,8 @@ pub(super) struct Ui {
     left_down: bool,
     /// The shapes a hovered Relations row acts on.
     lit: Vec<String>,
+    /// The constraint whose glyph is under the pointer.
+    glyph_hover: Option<usize>,
 }
 
 fn rgb_a(hex: u32, a: f32) -> Hsla {
@@ -234,6 +239,11 @@ impl Viewport {
         }
         let Some(p) = self.sketch_point(position) else { return true };
         let ppm = self.px_per_mm();
+        if let Some(i) = self.glyph_at(position) {
+            self.sketch_ui.glyph_hover = None;
+            self.delete_sketch_constraint(i, cx);
+            return true;
+        }
         if let Some(key) = self.dim_at(position) {
             let value = self.sketch.as_ref().and_then(|e| e.dims(0.0).into_iter().find(|d| d.key == key)).map(|d| fmt(d.value));
             self.sketch_ui.typing = Some((key, value.unwrap_or_default()));
@@ -268,6 +278,7 @@ impl Viewport {
             cx.notify();
             return true;
         }
+        self.hover_glyph(event.position, cx);
         let Some(p) = self.sketch_point(event.position) else { return self.sketch.is_some() };
         let ppm = self.px_per_mm();
         let Some(e) = self.sketch.as_mut() else { return false };
@@ -318,6 +329,44 @@ impl Viewport {
             }
         }
         cx.stop_propagation();
+        cx.notify();
+    }
+
+    /// The constraint glyphs the palette shows, each with its place in the window.
+    fn glyphs_on_screen(&self) -> Vec<(Glyph, Point<Pixels>)> {
+        let Some(e) = self.sketch.as_ref().filter(|_| self.display.sketch.constraints) else { return Vec::new() };
+        glyphs::constraint_glyphs(&e.solved.entities, &e.constraints, &e.solved.conflicts, &e.solved.over)
+            .into_iter()
+            .filter_map(|g| self.to_screen(e.plane.to_3d(g.pos).as_vec3()).map(|s| (g, s)))
+            .collect()
+    }
+
+    /// The glyph a click would delete. The Dimension tool takes clicks on shapes under a glyph, as FundaCAD 1's
+    /// passive glyphs there.
+    fn glyph_at(&self, position: Point<Pixels>) -> Option<usize> {
+        if self.sketch.as_ref().is_none_or(|e| e.tool == Tool::Dimension) {
+            return None;
+        }
+        let screen: Vec<_> = self.glyphs_on_screen().iter().map(|(g, s)| (g.index, f32::from(s.x), f32::from(s.y))).collect();
+        glyphs::hit(&screen, f32::from(position.x), f32::from(position.y), GLYPH / 2.)
+    }
+
+    /// Lights what the hovered glyph's constraint acts on, as a hovered Relations row does.
+    fn hover_glyph(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let now = self.glyph_at(position);
+        if now == self.sketch_ui.glyph_hover {
+            return;
+        }
+        let shapes = |i: Option<usize>| {
+            i.and_then(|i| self.sketch.as_ref()?.constraints.get(i)).map(glyphs::shapes_of).unwrap_or_default()
+        };
+        let (before, after) = (shapes(self.sketch_ui.glyph_hover), shapes(now));
+        self.sketch_ui.glyph_hover = now;
+        if self.sketch_ui.glyph_hover.is_some() {
+            self.light_sketch_shapes(after, true, cx);
+        } else {
+            self.light_sketch_shapes(before, false, cx);
+        }
         cx.notify();
     }
 
@@ -558,6 +607,40 @@ impl Viewport {
                     .text_size(px(12.))
                     .text_color(rgb(color))
                     .child(text),
+            );
+        }
+        let t = crate::theme::ActiveTheme::theme(&**cx).clone();
+        let (accent, hot, error, warn, text, bg) = (t.accent, t.accent_hot, t.error, t.warn, t.text, t.float_bg);
+        let shadow = t.float_shadow.clone();
+        for (g, s) in self.glyphs_on_screen() {
+            let hovered = self.sketch_ui.glyph_hover == Some(g.index);
+            let (line, ink) = match g.state {
+                Some(relations::State::Conflict) => (error, error.mix(0.6, text)),
+                Some(relations::State::Over) => (warn, warn.mix(0.6, text)),
+                None => (if hovered { hot } else { accent }, hot),
+            };
+            let tip = SharedString::from(glyphs::title(g.state));
+            layer = layer.child(
+                div()
+                    .id(("sketch-glyph", g.index))
+                    .absolute()
+                    .left(s.x - origin.x - px(GLYPH / 2.))
+                    .top(s.y - origin.y - px(GLYPH / 2.))
+                    .min_w(px(GLYPH))
+                    .h(px(GLYPH))
+                    .px(px(3.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(crate::theme::FLOAT_CHIP_RADIUS))
+                    .bg(bg)
+                    .border_1()
+                    .border_color(line)
+                    .shadow(shadow.clone())
+                    .cursor_pointer()
+                    .child(crate::ui::frost(crate::theme::FLOAT_CHIP_RADIUS, 1.))
+                    .child(crate::ui::icon(g.icon, 12., ink))
+                    .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)),
             );
         }
         Some(layer.into_any_element())
