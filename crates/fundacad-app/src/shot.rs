@@ -13,6 +13,11 @@ pub fn window_size() -> Option<gpui::Size<gpui::Pixels>> {
     Some(gpui::size(gpui::px(side(w)?), gpui::px(side(h)?)))
 }
 
+/// A shot run opens its window unfocused and behind the others, so it never takes input from the user's work.
+pub fn active() -> bool {
+    std::env::var_os("FUNDA_SHOT").is_some()
+}
+
 pub fn arm(window: AnyWindowHandle, cx: &mut App) {
     let Some(path) = std::env::var_os("FUNDA_SHOT") else { return };
     let after = std::env::var("FUNDA_SHOT_AFTER_MS").ok().and_then(|ms| ms.parse().ok()).unwrap_or(3000);

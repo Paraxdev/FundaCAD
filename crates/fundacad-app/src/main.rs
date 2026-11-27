@@ -68,6 +68,8 @@ fn main() {
             // Below this the left and right float clusters overlap.
             window_min_size: Some(size(px(1000.), px(640.))),
             titlebar: Some(TitlebarOptions { title: Some(title.clone()), ..Default::default() }),
+            #[cfg(feature = "shot")]
+            focus: !shot::active(),
             ..Default::default()
         };
         let (_window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
