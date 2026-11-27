@@ -12,6 +12,7 @@ pub mod modal;
 mod params;
 mod rail;
 mod rail_menu;
+mod sketch;
 pub(crate) mod status;
 mod timeline;
 mod titlebar;
@@ -231,7 +232,7 @@ impl Render for Shell {
                     .children(self.tool_card(t, window, cx)),
             )
             .child(self.tool_rail(t, window, cx));
-        let card = self.inspect_card(t, cx);
+        let card = self.sketch_palette(t, cx).or_else(|| self.inspect_card(t, cx));
         if card.is_none() {
             params::place::set_card_h(None);
         }

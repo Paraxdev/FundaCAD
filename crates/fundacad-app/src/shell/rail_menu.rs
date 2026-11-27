@@ -3,7 +3,7 @@
 //! right click.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::*;
@@ -27,6 +27,10 @@ pub(super) struct RailState {
     timer: Option<Task<()>>,
     /// Each variants family's face, the variant last picked.
     chosen: HashMap<SharedString, SharedString>,
+    /// The sketch tool armed now, lit on the rail.
+    armed: Option<SharedString>,
+    /// The sketch tools this build runs, the rest drawn muted. Empty outside a sketch.
+    built: HashSet<SharedString>,
     mode: Option<Mode>,
     rail: Spot,
     flyout: Spot,
@@ -136,12 +140,13 @@ impl Shell {
             keys: keys.map(|k| SharedString::from(k.to_owned())),
             lit,
             menu: false,
+            muted: false,
         };
         match mode {
             Mode::Model => None,
             Mode::Sketch => {
                 let name =
-                    v.sketch_rail().map(|(n, _)| n).filter(|n| !n.is_empty()).unwrap_or_else(|| t("rail.newSketch"));
+                    v.sketch_rail().map(|(n, _, _)| n).filter(|n| !n.is_empty()).unwrap_or_else(|| t("rail.newSketch"));
                 let b = button("finish", "close", t("rail.exitSketching"), Some(name), None, false);
                 Some(Head { button: b, act: Act::ExitSketch })
             }
@@ -174,6 +179,14 @@ impl Shell {
             Act::CancelTool => self.viewport.update(cx, |v, cx| v.finish(false, cx)),
             Act::Foot(label) => self.rail_tool(label, window, cx),
         }
+    }
+
+    fn armed(&self, action: &str) -> bool {
+        self.rail.armed.as_deref() == Some(action)
+    }
+
+    fn muted(&self, action: &str) -> bool {
+        !self.rail.built.is_empty() && !self.rail.built.contains(action)
     }
 
     fn close_flyout(&mut self, cx: &mut Context<Self>) {
@@ -290,8 +303,9 @@ impl Shell {
             label: f.label.clone(),
             sub: face.filter(|t| t.label != f.label).map(|t| t.label.clone()),
             keys: face.and_then(|t| t.keys.clone()),
-            lit: open == Some(&f.id) || holding || nested_open,
+            lit: open == Some(&f.id) || holding || nested_open || face.is_some_and(|t| self.armed(&t.action)),
             menu: true,
+            muted: face.is_some_and(|t| self.muted(&t.action)),
         };
         let cover = div().id(ElementId::Name(format!("rail-family:{}", f.id).into())).absolute().inset_0().cursor_pointer();
         let cover = match f.style {
@@ -328,7 +342,10 @@ impl Shell {
 
     fn entry(&self, t: &Theme, e: &Entry, compact: bool, cx: &mut Context<Self>) -> AnyElement {
         match e {
-            Entry::Tool(tool) => self.rail_button(t, tool_button(tool), Act::Run(tool.action.clone()), compact, cx),
+            Entry::Tool(tool) => {
+                let b = Button { lit: self.armed(&tool.action), muted: self.muted(&tool.action), ..tool_button(tool) };
+                self.rail_button(t, b, Act::Run(tool.action.clone()), compact, cx)
+            }
             Entry::Family(f) => self.family_button(t, f, compact, false, cx),
         }
     }
@@ -341,10 +358,21 @@ impl Shell {
             self.rail.tiles.borrow_mut().clear();
         }
         let entries = self.rail_entries(mode, cx);
+        self.rail.armed = self.viewport.read(cx).sketch_rail().and_then(|(_, a, _)| a).map(SharedString::from);
+        self.rail.built = match mode {
+            Mode::Sketch => crate::commands::available(cx).into_iter().map(|c| SharedString::from(c.id)).collect(),
+            _ => HashSet::new(),
+        };
+        if let Some(a) = &self.rail.armed {
+            // A tool armed from its key becomes its family's face, as FundaCAD 1's rail did.
+            if let Some(f) = model::family_of(&entries, a) {
+                self.rail.chosen.insert(f.id.clone(), a.clone());
+            }
+        }
         let head = self.rail_head(mode, cx);
         let foot: Vec<(Button, Act)> = match mode {
             Mode::Sketch => {
-                let on = self.viewport.read(cx).sketch_rail().is_some_and(|(_, c)| c);
+                let on = self.viewport.read(cx).sketch_rail().is_some_and(|(_, _, c)| c);
                 vec![(foot_button("construction", "offset", "Construction", Some(on)), Act::Run("construction".into()))]
             }
             _ => {
@@ -372,6 +400,7 @@ impl Shell {
             keys: crate::commands::hint(cx, "find"),
             lit: false,
             menu: false,
+            muted: false,
         };
         let mut list: Vec<AnyElement> = vec![self.rail_button(t, search, Act::Run("find".into()), compact, cx)];
         list.extend(head.map(|h| self.rail_button(t, h.button, h.act, compact, cx)));
@@ -471,7 +500,7 @@ impl Shell {
                             this.rail_act(Act::Run(action.clone()), window, cx);
                         },
                     ));
-                    rail::button(t, tool_button(tool), compact)
+                    rail::button(t, Button { muted: self.muted(&tool.action), ..tool_button(tool) }, compact)
                         .relative()
                         .child(cover)
                         .child(measure(self.rail.picks.clone(), tool.action.clone()))
@@ -511,6 +540,7 @@ fn tool_button(tool: &Tool) -> Button {
         keys: tool.keys.clone(),
         lit: false,
         menu: false,
+        muted: false,
     }
 }
 
@@ -523,6 +553,7 @@ fn foot_button(id: &str, glyph: &str, label: &'static str, on: Option<bool>) -> 
         keys: None,
         lit: on == Some(true),
         menu: false,
+        muted: false,
     }
 }
 

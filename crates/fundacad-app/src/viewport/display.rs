@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use super::camera::{Camera, PITCH_LIMIT};
 use super::Viewport;
 use crate::selection::Filter;
+use crate::sketch::palette::Palette;
 use crate::settings;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -214,22 +215,6 @@ impl Overlays {
     }
 }
 
-/// The sketch palette's switches the Snapping popover shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SketchShow {
-    pub snap: bool,
-    pub grid: bool,
-    pub constraints: bool,
-    pub dimensions: bool,
-}
-
-impl Default for SketchShow {
-    fn default() -> Self {
-        Self { snap: true, grid: true, constraints: true, dimensions: true }
-    }
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Display {
     pub view_mode: ViewMode,
@@ -239,7 +224,8 @@ pub struct Display {
     pub xray: bool,
     pub wireframe: bool,
     pub projection: Projection,
-    pub sketch: SketchShow,
+    /// The Sketch Palette's switches, which the Snapping popover shows too.
+    pub sketch: Palette,
 }
 
 const VIEW_MODE_KEY: &str = "viewMode";
@@ -309,6 +295,7 @@ impl Viewport {
         d.save();
         publish(d.projection);
         self.display = d;
+        self.apply_sketch_switches();
         cx.notify();
     }
 

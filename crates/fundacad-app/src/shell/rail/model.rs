@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use gpui::SharedString;
 
+use super::sketch::Slot;
 use crate::ribbon::{self, Item, ToolItem};
 use crate::selection::{PickKind, Selection};
 
@@ -117,10 +118,27 @@ pub fn model_rail(hint: Hint) -> Vec<Entry> {
     out
 }
 
-/// The drawing tools inside a sketch. The sketch lane fills this, the rail already switches to it, keeps each
-/// family's chosen variant and answers holds on it.
-pub fn sketch_rail(_hint: Hint) -> Vec<Entry> {
-    Vec::new()
+/// The drawing tools inside a sketch, FundaCAD 1's sketchRail: each family one variants tile.
+pub fn sketch_rail(hint: Hint) -> Vec<Entry> {
+    let tool = |t: &super::sketch::Tool| Tool {
+        action: t.action.into(),
+        label: crate::i18n::t(t.label).into(),
+        glyph: t.glyph.into(),
+        keys: hint(t.action),
+    };
+    super::sketch::SLOTS
+        .iter()
+        .map(|s| match s {
+            Slot::Tool(t) => Entry::Tool(tool(t)),
+            Slot::Family { id, label, items } => Entry::Family(Family {
+                id: format!("sketch:{id}").into(),
+                label: crate::i18n::t(label).into(),
+                glyph: items[0].glyph.into(),
+                style: Style::Variants,
+                items: items.iter().map(|t| Entry::Tool(tool(t))).collect(),
+            }),
+        })
+        .collect()
 }
 
 /// The variant a family's face runs: the one last picked, else the first.

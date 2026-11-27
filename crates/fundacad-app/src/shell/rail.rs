@@ -6,6 +6,7 @@ use crate::theme::{Rgb, Theme, FS_BODY, FS_MICRO, MONO_FONT, RAIL_TILE, W_SEMIBO
 use crate::ui::{chip, icon, text, tile};
 
 pub(super) mod model;
+mod sketch;
 
 pub(super) const GAP: f32 = 6.;
 pub(super) const SEP: f32 = 4.;
@@ -55,6 +56,8 @@ pub(super) struct Button {
     pub lit: bool,
     /// Has a flyout, marked by a corner triangle.
     pub menu: bool,
+    /// No handler in this build yet.
+    pub muted: bool,
 }
 
 pub(super) fn key_chips(t: &Theme, keys: &str) -> Div {
@@ -80,7 +83,12 @@ pub(super) fn key_chips(t: &Theme, keys: &str) -> Div {
 pub(super) fn button(t: &Theme, b: Button, compact: bool) -> Div {
     let size = if compact { COMPACT_TILE } else { RAIL_TILE };
     let corner = t.text_mute;
-    let tile = tile(t, size).relative().child(icon(&b.glyph, 22., if b.lit { t.accent_hot } else { t.text })).when(b.menu, |d| {
+    let ink = match (b.lit, b.muted) {
+        (true, _) => t.accent_hot,
+        (false, true) => t.text_mute,
+        _ => t.text,
+    };
+    let tile = tile(t, size).relative().child(icon(&b.glyph, 22., ink)).when(b.menu, |d| {
         d.child(
             canvas(
                 |_, _, _| {},
@@ -102,7 +110,7 @@ pub(super) fn button(t: &Theme, b: Button, compact: bool) -> Div {
             .size(px(5.)),
         )
     });
-    let label_color = if b.lit { t.accent_hot } else { t.text };
+    let label_color = ink;
     let pill = chip(t)
         .min_h(px(if compact { 24. } else { 28. }))
         .px(px(if compact { 7. } else { 9. }))
@@ -149,6 +157,8 @@ fn rail_tile(t: &Theme, key: SharedString, lit: bool, full: f32, tile: Div) -> i
 }
 
 #[cfg(test)]
+mod sketch_tests;
+#[cfg(test)]
 mod tests;
 
 #[cfg(test)]
@@ -156,4 +166,5 @@ pub(super) fn glyphs() -> impl Iterator<Item = &'static str> {
     ["search", "close", "select-all", "offset", "isolate", "section", "measure", "printing/print", "sketch"]
         .into_iter()
         .chain(crate::ribbon::MODEL.iter().map(|g| g.glyph))
+        .chain(sketch::tools().map(|t| t.glyph))
 }
