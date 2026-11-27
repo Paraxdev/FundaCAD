@@ -182,6 +182,20 @@ pub fn radial_release(window: &mut Window, cx: &mut App, button: MouseButton, at
     o.update(cx, |o, cx| o.radial_up(Trigger::Button(button), at, window, cx));
 }
 
+/// Closes the ring without running anything whenever the window loses focus, as FundaCAD 1's window blur does,
+/// since the held key or button can come up where the window never hears it.
+pub fn close_on_blur(window: &mut Window, cx: &mut App) -> Option<Subscription> {
+    let o = overlay(cx)?;
+    Some(o.update(cx, |_, cx| {
+        cx.observe_window_activation(window, |o, window, cx| {
+            if !window.is_window_active() && o.radial.is_some() {
+                o.close_radial(window, cx);
+                cx.notify();
+            }
+        })
+    }))
+}
+
 pub fn radial_open(cx: &App) -> bool {
     overlay(cx).is_some_and(|o| o.read(cx).radial.is_some())
 }

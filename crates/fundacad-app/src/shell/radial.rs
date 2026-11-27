@@ -103,6 +103,9 @@ pub(super) fn install(viewport: &Entity<Viewport>, window: &mut Window, cx: &mut
         cx.defer(|_| TYPED.set(None));
     })
     .detach();
+    if let Some(s) = radial::close_on_blur(window, cx) {
+        s.detach();
+    }
     #[cfg(feature = "shot")]
     VIEWPORT.set(Some(viewport.downgrade()));
     let v = viewport.clone();
