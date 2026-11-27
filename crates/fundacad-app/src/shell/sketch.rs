@@ -9,8 +9,8 @@ use crate::i18n::tr;
 use crate::motion::{self, hover_bg, mix};
 use crate::sketch::palette::TOGGLES;
 use crate::sketch::relations::{Row, State};
-use crate::theme::{Rgb, Theme, FS_SMALL, R_LG, R_MD, R_SM, S_2, S_3, S_4, W_SEMIBOLD};
-use crate::ui::{icon, text};
+use crate::theme::{Rgb, Theme, FS_SMALL, R_MD, R_SM, S_2, S_3, S_4, W_SEMIBOLD};
+use crate::ui::{float_card, icon, text};
 
 impl Shell {
     /// The Sketch Palette, which takes History's place while sketching. None while not sketching.
@@ -82,18 +82,12 @@ impl Shell {
                 .on_click(move |_, _, cx| v.update(cx, |v, cx| v.set_sketch_toggle(toggle, !on, cx)));
             hover_bg((id, "bg"), row, Rgb::TRANSPARENT, t.raised)
         });
-        let mut card = div()
+        // `.float-right .palette`: in History's place it takes the floating cards' look, 240 wide.
+        let mut card = float_card(t)
             .id("sketch-palette")
-            .w(px(204.))
-            .flex()
-            .flex_col()
+            .w(px(240.))
+            .max_h_full()
             .p(px(S_4))
-            .bg(t.panel)
-            .border_1()
-            .border_color(t.line_strong)
-            .rounded(px(R_LG))
-            .shadow(t.shadow_3.clone())
-            .occlude()
             .child(title)
             .child(section("sketchPalette.options", false))
             .child(look)
