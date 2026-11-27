@@ -34,6 +34,10 @@ impl View {
         }
     }
 
+    pub fn eye(&self) -> Vec3 {
+        self.eye
+    }
+
     pub fn px(&self, p: Vec3) -> f32 {
         self.per_px * (p - self.eye).dot(self.forward).max(1e-6)
     }

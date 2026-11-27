@@ -12,6 +12,9 @@ pub const XRAY_OPACITY: f32 = 0.35;
 /// viewport.ts EDGE_WIRE, the wire colour as sRGB: dark idle edges would vanish with no faces behind them.
 pub const EDGE_WIRE: u32 = 0xc4ced9;
 
+/// edgeLines.ts EDGE_IDLE_COLOR, the outline every model edge draws in.
+pub const EDGE_IDLE: u32 = 0x1b1f24;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Shading {
     #[default]

@@ -62,3 +62,12 @@ fn a_stretch_widens_the_box_the_way_it_moves() {
     let b = stretched((Vec3::ZERO, Vec3::ONE), Vec3::new(-2.0, 0.0, 0.0));
     assert_eq!(b, (Vec3::new(-2.0, 0.0, 0.0), Vec3::ONE));
 }
+
+#[test]
+fn the_viewport_shader_validates() {
+    use gpui_wgpu::wgpu::naga;
+    let module = naga::front::wgsl::parse_str(include_str!("shader.wgsl")).expect("shader.wgsl parses");
+    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
+        .validate(&module)
+        .expect("shader.wgsl validates");
+}

@@ -8,6 +8,10 @@ struct Uniforms {
   view_up: vec4<f32>,
   look: vec4<f32>,
   edge: vec4<f32>,
+  grid: vec4<f32>,
+  grid_cell: vec4<f32>,
+  grid_minor: vec4<f32>,
+  grid_major: vec4<f32>,
 }
 
 struct Body {
@@ -279,4 +283,39 @@ fn fs_line(in: Line) -> @location(0) vec4<f32> {
     discard;
   }
   return vec4<f32>(encode(u.edge.rgb), u.edge.a);
+}
+
+struct Ground {
+  @builtin(position) clip: vec4<f32>,
+  @location(0) world: vec2<f32>,
+}
+
+@vertex
+fn vs_grid(@builtin(vertex_index) i: u32) -> Ground {
+  let corners = array<vec2<f32>, 6>(
+    vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0),
+    vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0),
+  );
+  let world = u.grid.xy + corners[i] * u.grid.w;
+  return Ground(u.view_proj * vec4<f32>(world, u.grid.z, 1.0), world);
+}
+
+// scene.ts AdaptiveGrid: coverage of the nearest line, 1 on it and 0 a pixel off it, in the fragment's own units.
+fn grid_line(p: vec2<f32>, cell: f32) -> f32 {
+  let c = p / cell;
+  let g = abs(fract(c - 0.5) - 0.5) / fwidth(c);
+  return 1.0 - clamp(min(g.x, g.y), 0.0, 1.0);
+}
+
+@fragment
+fn fs_grid(in: Ground) -> @location(0) vec4<f32> {
+  let minor = grid_line(in.world, u.grid_cell.x);
+  let major = grid_line(in.world, u.grid_cell.y);
+  let colour = mix(u.grid_minor.rgb, u.grid_major.rgb, major);
+  let d = length(in.world - u.grid.xy);
+  let a = max(minor, major) * (1.0 - smoothstep(u.grid.w * 0.6, u.grid.w * 0.98, d));
+  if (a <= 0.002) {
+    discard;
+  }
+  return vec4<f32>(encode(colour), a);
 }

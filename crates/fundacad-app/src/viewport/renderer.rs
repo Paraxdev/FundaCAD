@@ -35,6 +35,10 @@ struct Uniforms {
     look: [f32; 4],
     /// The colour of the line list being drawn, linear.
     edge: [f32; 4],
+    /// ground::Grid::uniform, then its minor and major line colours, linear.
+    grid: [[f32; 4]; 2],
+    grid_minor: [f32; 4],
+    grid_major: [f32; 4],
 }
 
 /// The cap quad on the plane `clip` over the box `min` to `max`, as its middle and half side.
@@ -111,6 +115,11 @@ pub struct Overlay {
     pub datums: Vec<DatumVertex>,
     pub datums_on_top: bool,
     pub look: Look,
+    /// The idle edge outlines.
+    pub edges: bool,
+    pub grid: Option<super::ground::Grid>,
+    /// The origin triad's ghost, drawn over the model, and its solid part, tested against it.
+    pub triad: [Vec<DatumVertex>; 2],
 }
 
 /// A corner of a datum triangle, in world space with a linear colour.
@@ -170,6 +179,7 @@ pub struct Renderer {
     /// The bodies blended over what is behind them with no depth written, for x-ray and wireframe.
     see_through_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
+    grid_pipeline: wgpu::RenderPipeline,
     count_pipeline: wgpu::RenderPipeline,
     cap_pipeline: wgpu::RenderPipeline,
     /// Datums tested against the model's depth, and over it.
@@ -373,6 +383,31 @@ impl Renderer {
             depth(false, wgpu::CompareFunction::LessEqual, Default::default()),
             SAMPLES,
         );
+        let grid_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("viewport grid"),
+            layout: Some(&datum_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_grid"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: Some(depth(false, wgpu::CompareFunction::LessEqual, Default::default())),
+            multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_grid"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
         let align = device.limits().min_uniform_buffer_offset_alignment as u64;
         let body_stride = (std::mem::size_of::<BodyUniforms>() as u64).div_ceil(align) * align;
         Self {
@@ -382,6 +417,7 @@ impl Renderer {
             pipeline,
             see_through_pipeline,
             line_pipeline,
+            grid_pipeline,
             count_pipeline,
             cap_pipeline,
             datum_pipelines,
@@ -596,6 +632,12 @@ impl Renderer {
         wgpu::Color { r: c(r), g: c(g), b: c(b), a: 1.0 }
     }
 
+    /// scene.ts targetGridZ: the grid sits on the model's floor, or on the XY plane with no model.
+    fn floor(&self) -> f32 {
+        let z = self.bodies.iter().filter(|b| b.vertex_count > 0).map(|b| b.bounds.0.z).fold(f32::INFINITY, f32::min);
+        if z.is_finite() { z } else { 0.0 }
+    }
+
     pub fn render(
         &mut self,
         scene: &Scene,
@@ -633,7 +675,10 @@ impl Renderer {
             hatch: hatch(self.scale),
             view_up: camera.view().inverse().y_axis.truncate().extend(0.0).into(),
             look: overlay.look.uniform(),
-            edge: look::linear(look::EDGE_WIRE, 1.0),
+            edge: look::linear(if overlay.look.wire() { look::EDGE_WIRE } else { look::EDGE_IDLE }, 1.0),
+            grid: overlay.grid.map_or([[0.0; 4]; 2], |g| g.uniform(self.floor())),
+            grid_minor: overlay.grid.map_or([0.0; 4], |g| g.minor),
+            grid_major: overlay.grid.map_or([0.0; 4], |g| g.major),
         };
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
         let mut capped = vec![false; self.bodies.len()];
@@ -657,13 +702,19 @@ impl Renderer {
             }
         }
 
-        let datums = (!overlay.datums.is_empty()).then(|| {
-            self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("viewport datums"),
-                contents: bytemuck::cast_slice(&overlay.datums),
-                usage: wgpu::BufferUsages::VERTEX,
+        let triangles = |v: &[DatumVertex]| {
+            (!v.is_empty()).then(|| {
+                self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("viewport datums"),
+                    contents: bytemuck::cast_slice(v),
+                    usage: wgpu::BufferUsages::VERTEX,
+                })
             })
-        });
+        };
+        let datums = triangles(&overlay.datums);
+        let triad = overlay.triad.each_ref().map(|v| triangles(v));
+        // scene.ts draws the grid in the transparent list ahead of see through bodies and behind solid ones' depth.
+        let grid_first = overlay.look.blended();
         let targets = self.targets.as_ref().expect("targets were just ensured");
         let clear = self.clear();
         let mut encoder = self.device.create_command_encoder(&Default::default());
@@ -683,6 +734,11 @@ impl Renderer {
                 }),
                 ..Default::default()
             });
+            if overlay.grid.is_some() && grid_first {
+                pass.set_pipeline(&self.grid_pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.draw(0..6, 0..1);
+            }
             if let Some((_, group, _)) = &self.body_uniforms {
                 pass.set_pipeline(if overlay.look.blended() { &self.see_through_pipeline } else { &self.pipeline });
                 pass.set_bind_group(0, &self.bind_group, &[]);
@@ -709,7 +765,12 @@ impl Renderer {
                     }
                 }
             }
-            if overlay.look.wire() {
+            if overlay.grid.is_some() && !grid_first {
+                pass.set_pipeline(&self.grid_pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.draw(0..6, 0..1);
+            }
+            if overlay.look.wire() || overlay.edges {
                 pass.set_pipeline(&self.line_pipeline);
                 pass.set_bind_group(0, &self.bind_group, &[]);
                 for body in self.bodies.iter().filter(|b| b.edge_count > 0) {
@@ -722,6 +783,13 @@ impl Renderer {
                 pass.set_bind_group(0, &self.bind_group, &[]);
                 pass.set_vertex_buffer(0, buffer.slice(..));
                 pass.draw(0..overlay.datums.len() as u32, 0..1);
+            }
+            for (i, buffer) in triad.iter().enumerate() {
+                let Some(buffer) = buffer else { continue };
+                pass.set_pipeline(&self.datum_pipelines[1 - i]);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..overlay.triad[i].len() as u32, 0..1);
             }
         }
         self.blur.run(&mut encoder, &targets.blur, &targets.resolve, size, &self.frost, self.scale);
