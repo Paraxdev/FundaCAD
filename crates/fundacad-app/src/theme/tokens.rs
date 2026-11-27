@@ -110,8 +110,6 @@ pub const T_MED: Duration = Duration::from_millis(160);
 pub const T_TOAST_OUT: Duration = Duration::from_millis(180);
 /// `.rail-flyout-grid > .rail-btn`, each tile of a flyout a step behind the one before.
 pub const T_STAGGER: Duration = Duration::from_millis(16);
-/// The bar of a running step, `transition: width 0.4s`.
-pub const T_BAR: Duration = Duration::from_millis(400);
 
 /// A one shot animation of `d` on --ease. GPUI snaps it to its end while reduce motion is set.
 pub fn eased(d: Duration) -> gpui::Animation {

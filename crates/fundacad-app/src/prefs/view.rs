@@ -13,6 +13,8 @@ use crate::theme::{
     self, ActiveTheme as _, Contrast, Theme, FS_BODY, FS_SMALL, FS_TITLE, R_MD, R_SM, S_0, S_1, S_2, S_3, S_4,
 };
 use crate::theme::{W_MEDIUM, W_SEMIBOLD};
+use crate::motion::{self, hover_bg, mix, Transition};
+use crate::theme::Rgb;
 use crate::ui::{icon, solid_card, text};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -436,36 +438,41 @@ fn card(t_: &Theme, title: impl Into<Option<String>>, hint: Option<String>, cont
         .into_any_element()
 }
 
-fn chip(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>, on: bool) -> Stateful<Div> {
-    let hover = t_.hover_wash;
-    text(t_, FS_SMALL)
-        .id(id)
+fn chip(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>, on: bool) -> Transition<Stateful<Div>> {
+    let (hover, edge, accent, wash, hot, dim) =
+        (t_.hover_wash, t_.control_edge, t_.accent, t_.accent_wash, t_.accent_hot, t_.text_dim);
+    let id = id.into();
+    let el = text(t_, FS_SMALL)
+        .id(id.clone())
         .h(px(t_.hit(26.)))
         .px(px(S_3))
         .flex()
         .items_center()
         .rounded(px(R_SM))
         .border_1()
-        .border_color(if on { t_.accent } else { t_.control_edge })
         .font_weight(if on { W_SEMIBOLD } else { W_MEDIUM })
-        .text_color(if on { t_.accent_hot } else { t_.text_dim })
-        .when(on, |d| d.bg(t_.accent_wash))
-        .when(!on, |d| d.cursor_pointer().hover(move |s| s.bg(hover)))
-        .child(label.into())
+        .when(!on, |d| d.cursor_pointer())
+        .child(label.into());
+    // `.ui-segment`: background and colour on --t-fast, the hover wash only while not selected.
+    motion::hover(id, el, move |d, m| {
+        d.bg(mix(mix(Rgb::TRANSPARENT, hover, m.hover * (1. - m.on)), wash, m.on))
+            .border_color(mix(edge, accent, m.on))
+            .text_color(mix(dim, hot, m.on))
+    })
+    .on(on)
 }
 
 /// A themed checkbox with its label, the whole row toggling it.
 fn checkbox(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>, on: bool) -> Stateful<Div> {
-    let mark = div()
-        .size(px(16.))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(R_SM))
-        .border_1()
-        .border_color(if on { t_.accent } else { t_.control_edge })
-        .when(on, |d| d.bg(t_.accent).child(icon("check", 12., t_.on_accent)));
+    let id = id.into();
+    let (edge, accent, ink) = (t_.control_edge, t_.accent, t_.on_accent);
+    let mark = div().size(px(16.)).flex_none().flex().items_center().justify_center().rounded(px(R_SM)).border_1();
+    // `.ui-checkbox-mark`: the fill on --t-fast, the tick fading in from 0.6 of its size.
+    let mark = motion::toggle((id.clone(), "mark"), on, mark, move |d, m| {
+        d.bg(mix(Rgb::TRANSPARENT, accent, m.on))
+            .border_color(mix(edge, accent, m.on))
+            .when(m.on > 0., |d| d.child(icon("check", 12. * (0.6 + 0.4 * m.on), ink).opacity(m.on)))
+    });
     text(t_, FS_BODY)
         .id(id)
         .flex()
@@ -478,10 +485,16 @@ fn checkbox(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>
         .child(label.into())
 }
 
-fn button(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>, primary: bool) -> Stateful<Div> {
-    let hover = if primary { t_.accent_hot } else { t_.raised_2 };
-    text(t_, FS_BODY)
-        .id(id)
+fn button(
+    t_: &Theme,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    primary: bool,
+) -> Transition<Stateful<Div>> {
+    let (rest, hover) = if primary { (t_.accent, t_.accent_hot) } else { (t_.raised_2, t_.raised_2) };
+    let id = id.into();
+    let el = text(t_, FS_BODY)
+        .id(id.clone())
         .h(px(t_.hit(28.)))
         .px(px(S_4))
         .flex()
@@ -489,7 +502,7 @@ fn button(t_: &Theme, id: impl Into<ElementId>, label: impl Into<SharedString>, 
         .rounded(px(R_MD))
         .font_weight(W_MEDIUM)
         .cursor_pointer()
-        .map(|d| if primary { d.bg(t_.accent).text_color(t_.on_accent) } else { d.bg(t_.raised_2) })
-        .hover(move |s| s.bg(hover))
-        .child(label.into())
+        .when(primary, |d| d.text_color(t_.on_accent))
+        .child(label.into());
+    hover_bg(id, el, rest, hover)
 }

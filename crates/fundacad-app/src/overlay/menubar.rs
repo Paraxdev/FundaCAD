@@ -2,14 +2,14 @@
 
 use std::cell::RefCell;
 
-use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use super::menu::{At, OpenMenu};
 use super::{handle, MenuItem, MenuRow, Overlay};
 use crate::files;
 use crate::i18n::tr;
-use crate::theme::{Theme, FS_BODY, S_4};
+use crate::motion::{self, mix};
+use crate::theme::{Rgb, Theme, FS_BODY, S_4};
 use crate::ui::text;
 
 const TITLES: [&str; 4] = ["menu.file", "menu.edit", "menu.view", "menu.help"];
@@ -134,8 +134,7 @@ pub fn menubar(t: &Theme, cx: &App) -> Div {
     for (i, label) in TITLES.into_iter().enumerate() {
         let hover = t.raised;
         let wash = t.accent_wash;
-        bar = bar.child(
-            text(t, FS_BODY)
+        let el = text(t, FS_BODY)
                 .id(label)
                 .relative()
                 .h(px(20.))
@@ -144,8 +143,6 @@ pub fn menubar(t: &Theme, cx: &App) -> Div {
                 .flex()
                 .items_center()
                 .rounded(px(4.))
-                .hover(move |s| s.bg(hover))
-                .when(open == Some(i), move |d| d.bg(wash))
                 .child(tr!(label))
                 .child(
                     canvas(move |bounds, _, _| PLACED.with(|p| p.borrow_mut()[i] = bounds), |_, _, _, _| {})
@@ -172,8 +169,11 @@ pub fn menubar(t: &Theme, cx: &App) -> Div {
                             o.open_bar(i, window, cx);
                         }
                     });
-                }),
-        );
+                });
+        let el = motion::hover(("bar-lit", i), el, move |d, m| {
+            d.bg(mix(mix(Rgb::TRANSPARENT, hover, m.hover * (1. - m.on)), wash, m.on))
+        });
+        bar = bar.child(el.on(open == Some(i)));
     }
     bar
 }

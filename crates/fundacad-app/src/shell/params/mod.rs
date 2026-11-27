@@ -12,7 +12,7 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 
-use crate::motion::{glass_in, Leave};
+use crate::motion::{glass_in, hover_bg, row_bg, Leave};
 use crate::theme::{ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, T_FAST, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
 use crate::viewport::Viewport;
@@ -328,38 +328,36 @@ impl ParamsPanel {
         let units = div().flex().flex_none().gap(px(2.)).p(px(2.)).rounded(px(R_MD)).bg(t.field_bg).children(
             UNITS.map(|(unit, label)| {
                 let on = self.unit == unit;
-                let hover = t.hover_wash;
-                text(t, FS_MICRO)
+                let el = text(t, FS_MICRO)
                     .id(unit)
                     .px(px(S_2))
                     .h(px(FIELD_H - 6.))
                     .flex()
                     .items_center()
                     .rounded(px(R_MD - 1.))
-                    .map(|d| if on { d.bg(t.raised).text_color(t.text) } else { d.text_color(t.text_dim) })
-                    .hover(move |s| s.bg(hover))
+                    .text_color(if on { t.text } else { t.text_dim })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.unit = unit;
                         cx.notify();
                     }))
-                    .child(label)
+                    .child(label);
+                row_bg(SharedString::from(format!("unit-bg-{unit}")), el, on, t.hover_wash, t.raised)
             }),
         );
         let refused = self.notes.problems.contains_key(&Key::Add);
         let (fill, hot, ink) = if refused { (t.error, t.error, t.on_accent) } else { (t.raised, t.raised_2, t.text) };
         let add = text(t, FS_SMALL)
-            .id("params-add")
+            .id("params-add-el")
             .h(px(FIELD_H))
             .px(px(S_3))
             .flex()
             .flex_none()
             .items_center()
             .rounded(px(R_MD))
-            .bg(fill)
             .text_color(ink)
-            .hover(move |s| s.bg(hot))
             .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
             .child("+ Add");
+        let add = hover_bg("params-add", add, fill, hot);
         let preview = self.notes.preview.get(&Key::NewExpr).map(|v| {
             text(t, FS_SMALL).flex_none().text_color(t.accent_hot).child(value_text(*v, self.unit))
         });

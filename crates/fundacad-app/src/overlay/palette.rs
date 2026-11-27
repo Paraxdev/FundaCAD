@@ -160,7 +160,10 @@ impl Overlay {
                 .items_center()
                 .occlude()
                 .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| this.close_palette(window, cx)))
-                .child(card.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()))
+                .child(crate::motion::pop_in(
+                    "palette-in",
+                    card.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                ))
                 .into_any_element(),
         )
     }

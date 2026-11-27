@@ -4,7 +4,8 @@
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
-use crate::theme::{Theme, FS_BODY, FS_SMALL, FS_TITLE, R_MD, S_1, S_2, S_3, S_4, W_MEDIUM, W_SEMIBOLD};
+use crate::motion::{hover_bg, row_bg, Transition};
+use crate::theme::{Rgb, Theme, FS_BODY, FS_SMALL, FS_TITLE, R_MD, S_1, S_2, S_3, S_4, W_MEDIUM, W_SEMIBOLD};
 use crate::ui::{solid_card, text};
 
 pub fn modal(
@@ -55,20 +56,22 @@ pub fn button(
     label: impl Into<SharedString>,
     primary: bool,
     enabled: bool,
-) -> Stateful<Div> {
-    let hover = if primary { t.accent_hot } else { t.raised_2 };
-    text(t, FS_BODY)
-        .id(id)
+) -> Transition<Stateful<Div>> {
+    let (rest, hover) = if primary { (t.accent, t.accent_hot) } else { (t.raised, t.raised_2) };
+    let id = id.into();
+    let el = text(t, FS_BODY)
+        .id(id.clone())
         .h(px(t.hit(28.)))
         .px(px(S_4))
         .flex()
         .items_center()
         .rounded(px(R_MD))
         .font_weight(W_MEDIUM)
-        .map(|d| if primary { d.bg(t.accent).text_color(t.on_accent) } else { d.bg(t.raised) })
-        .when(enabled, |d| d.cursor_pointer().hover(move |s| s.bg(hover)))
+        .when(primary, |d| d.text_color(t.on_accent))
+        .when(enabled, |d| d.cursor_pointer())
         .when(!enabled, |d| d.opacity(0.4))
-        .child(label.into())
+        .child(label.into());
+    hover_bg(id, el, rest, if enabled { hover } else { rest })
 }
 
 /// One option of a segmented choice.
@@ -78,10 +81,11 @@ pub fn choice(
     label: impl Into<SharedString>,
     on: bool,
     enabled: bool,
-) -> Stateful<Div> {
-    let hover = t.hover_wash;
-    text(t, FS_SMALL)
-        .id(id)
+) -> Transition<Stateful<Div>> {
+    let (wash, picked) = (if enabled { t.hover_wash } else { Rgb::TRANSPARENT }, t.accent_wash);
+    let id = id.into();
+    let el = text(t, FS_SMALL)
+        .id(id.clone())
         .h(px(t.hit(22.)))
         .px(px(S_2))
         .flex()
@@ -91,10 +95,10 @@ pub fn choice(
         .border_color(if on { t.accent } else { t.control_edge })
         .font_weight(if on { W_SEMIBOLD } else { W_MEDIUM })
         .text_color(if on { t.accent_hot } else { t.text_dim })
-        .when(on, |d| d.bg(t.accent_wash))
-        .when(enabled && !on, |d| d.cursor_pointer().hover(move |s| s.bg(hover)))
+        .when(enabled && !on, |d| d.cursor_pointer())
         .when(!enabled, |d| d.opacity(0.4))
-        .child(label.into())
+        .child(label.into());
+    row_bg(id, el, on, wash, picked)
 }
 
 pub fn note(t: &Theme, s: impl Into<SharedString>) -> Div {

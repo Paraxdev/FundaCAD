@@ -5,6 +5,7 @@ use gpui::*;
 
 use super::Overlay;
 use crate::theme::{Theme, FLOAT_RADIUS, FS_BODY, FS_MICRO, FS_TITLE, R_MD, S_1, S_2, S_3, S_5, W_MEDIUM};
+use crate::motion::{hover_bg, Transition};
 use crate::ui::text;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,14 +121,15 @@ impl Overlay {
 }
 
 /// `.btn` with `.ui-confirm-primary` or `.ui-confirm-danger`, its hint under the label.
-fn button(t: &Theme, i: usize, choice: &Choice, active: bool) -> Stateful<Div> {
-    let (bg, fg, hover): (Hsla, Hsla, Hsla) = match choice.kind {
-        ChoiceKind::Primary => (t.accent.into(), t.bg.into(), t.accent_hot.into()),
-        ChoiceKind::Danger => (t.error_tint.into(), t.error.into(), t.error_tint.into()),
-        ChoiceKind::Plain => (t.raised.into(), t.text.into(), t.hover_wash.into()),
+fn button(t: &Theme, i: usize, choice: &Choice, active: bool) -> Transition<Stateful<Div>> {
+    let (bg, fg, hover) = match choice.kind {
+        ChoiceKind::Primary => (t.accent, t.bg, t.accent_hot),
+        ChoiceKind::Danger => (t.error_tint, t.error, t.error_tint),
+        ChoiceKind::Plain => (t.raised, t.text, t.hover_wash),
     };
+    let fg: Hsla = fg.into();
     let ring: Hsla = t.accent.into();
-    text(t, FS_BODY)
+    let el = text(t, FS_BODY)
         .id(("choice", i))
         .flex_1()
         .flex()
@@ -138,13 +140,12 @@ fn button(t: &Theme, i: usize, choice: &Choice, active: bool) -> Stateful<Div> {
         .py(px(S_2))
         .px(px(S_3))
         .rounded(px(R_MD))
-        .bg(bg)
         .text_color(fg)
         .font_weight(W_MEDIUM)
         .border_1()
         .border_color(if active { ring } else { transparent_black() })
         .cursor_pointer()
-        .hover(move |s| s.bg(hover))
         .child(choice.label.clone())
-        .when_some(choice.hint.clone(), |d, h| d.child(text(t, FS_MICRO).text_color(fg.opacity(0.8)).child(h)))
+        .when_some(choice.hint.clone(), |d, h| d.child(text(t, FS_MICRO).text_color(fg.opacity(0.8)).child(h)));
+    hover_bg(("choice-bg", i), el, bg, hover)
 }

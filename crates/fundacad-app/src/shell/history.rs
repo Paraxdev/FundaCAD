@@ -8,9 +8,10 @@ use super::timeline::{self, FieldKind};
 use super::Shell;
 use crate::document::{Feature, Health};
 use crate::theme::{
-    Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, MONO_FONT, R_MD, R_PILL, S_0, S_1, S_2, S_3,
+    Rgb, Theme, FLOAT_CHIP_RADIUS, FLOAT_GAP, FLOAT_RADIUS, FS_BODY, FS_MICRO, MONO_FONT, R_MD, R_PILL, S_0, S_1, S_2, S_3,
     W_SEMIBOLD,
 };
+use crate::motion::{self, mix, row_bg};
 use crate::timeline::chips::{self, Marks};
 use crate::timeline::rows::Rows;
 use crate::timeline::{self as steps, deps, labels};
@@ -213,7 +214,7 @@ impl Shell {
             (None, Some(_), _) | (None, None, Health::Warning) => Some(icon("warning", 14., t.warn)),
             (None, None, Health::Ok) => None,
         };
-        div()
+        let el = div()
             .id(("step", i))
             .relative()
             .h(px(ROW))
@@ -225,7 +226,6 @@ impl Shell {
             .rounded(px(FLOAT_CHIP_RADIUS))
             .text_color(colour)
             .when(fade < 1., |d| d.opacity(fade))
-            .map(|d| if picked { d.bg(selected) } else { d.hover(move |s| s.bg(hover)) })
             .when_some(bar, |d, bar| {
                 d.child(div().absolute().left_0().top(px(8.)).bottom(px(8.)).w(px(3.)).rounded(px(R_PILL)).bg(bar))
             })
@@ -262,24 +262,21 @@ impl Shell {
             .when(marks.file.is_some(), |d| d.child(icon("import", 12., t.text_mute)))
             .when(suppressed, |d| d.child(icon("hidden", 12., t.text_mute)))
             .children(flag)
-            .child(icon(if open { "caretDown" } else { "caretRight" }, 12., t.text_mute))
+            .child(icon(if open { "caretDown" } else { "caretRight" }, 12., t.text_mute));
+        row_bg(("step-bg", i), el, picked, hover, selected)
     }
 
     pub(super) fn view_controls(&self, t: &Theme) -> Div {
         let button = |name: &'static str, on: bool| {
-            let hover = t.raised;
-            let text_hover = t.text;
-            let glyph = icon(name, 18., if on { t.accent_hot } else { t.text_dim });
-            div()
-                .id(name)
-                .size(px(40.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(FLOAT_RADIUS - 4.))
-                .group(name)
-                .map(|d| if on { d.bg(t.accent_wash) } else { d.hover(move |s| s.bg(hover)) })
-                .child(if on { glyph } else { glyph.group_hover(name, move |s| s.text_color(text_hover)) })
+            let (hover, text_hover, dim, hot) = (t.raised, t.text, t.text_dim, t.accent_hot);
+            let el = div().id(name).size(px(40.)).flex().items_center().justify_center().rounded(px(FLOAT_RADIUS - 4.));
+            let wash = t.accent_wash;
+            motion::hover(SharedString::from(format!("view-bg-{name}")), el, move |d, m| {
+                let lift = m.hover * (1. - m.on);
+                d.bg(mix(mix(Rgb::TRANSPARENT, hover, lift), wash, m.on))
+                    .child(icon(name, 18., mix(mix(dim, text_hover, lift), hot, m.on)))
+            })
+            .on(on)
         };
         let grid = div()
             .h(px(32.))

@@ -11,6 +11,7 @@ use super::items::{menu_row, picker, popup};
 use super::Shell;
 use crate::items::geometry::{self as geo, Facing, Filters, GeomKind, GeomRow, RowType, PAGE_SIZE};
 use crate::items::{self, features, str_of};
+use crate::motion::row_bg;
 use crate::theme::{Theme, FLOAT_CHIP_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_PILL, S_1, S_2, W_SEMIBOLD};
 use crate::ui::text;
 
@@ -142,7 +143,7 @@ impl Shell {
         let segment = div().mx(px(14.)).mt(px(S_2)).p(px(2.)).flex().gap(px(2.)).rounded(px(FLOAT_CHIP_RADIUS)).bg(t.field_bg).children(
             geo::KINDS.iter().copied().map(|k| {
                 let on = k == kind;
-                text(t, FS_SMALL)
+                let el = text(t, FS_SMALL)
                     .id(k.label())
                     .flex_1()
                     .h(px(26.))
@@ -152,8 +153,6 @@ impl Shell {
                     .rounded(px(FLOAT_CHIP_RADIUS))
                     .font_weight(W_SEMIBOLD)
                     .text_color(if on { t.text } else { t.text_dim })
-                    .when(on, |d| d.bg(raised))
-                    .when(!on, |d| d.hover(move |s| s.bg(raised)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         let g = &mut this.items.geo;
                         if g.kind != k {
@@ -161,7 +160,8 @@ impl Shell {
                         }
                         cx.notify();
                     }))
-                    .child(k.label())
+                    .child(k.label());
+                row_bg(SharedString::from(format!("geo-seg-{}", k.label())), el, on, raised, raised)
             }),
         );
 
@@ -241,7 +241,7 @@ impl Shell {
             let face = (r.kind == GeomKind::Faces).then(|| body_id.clone()).flatten().map(|id| (id, r.index as u32));
             let viewport = self.viewport.clone();
             let key = r.key.clone();
-            div()
+            let row = div()
                 .id(SharedString::from(format!("geo-{}", r.key)))
                 .flex_none()
                 .px(px(10.))
@@ -249,8 +249,6 @@ impl Shell {
                 .flex()
                 .flex_col()
                 .rounded(px(FLOAT_CHIP_RADIUS))
-                .when(selected, |d| d.bg(t.accent_wash))
-                .when(!selected, |d| d.hover(move |s| s.bg(hover)))
                 .when_some(face, |d, face| {
                     d.on_hover(move |on, _, cx| {
                         let face = face.clone();
@@ -268,7 +266,8 @@ impl Shell {
                     cx.notify();
                 }))
                 .child(text(t, FS_BODY).text_color(t.text).truncate().child(r.label.clone()))
-                .child(text(t, FS_MICRO).text_color(t.text_mute).truncate().child(r.hint.clone()))
+                .child(text(t, FS_MICRO).text_color(t.text_mute).truncate().child(r.hint.clone()));
+            row_bg(SharedString::from(format!("geo-bg-{}", r.key)), row, selected, hover, t.accent_wash)
         });
         let list: Vec<AnyElement> = list.map(IntoElement::into_any_element).collect();
         let menu = self.geo_menu(t, &labels, cx);
