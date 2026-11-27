@@ -90,3 +90,27 @@ fn every_tool_has_fundacad_1_prompt() {
     assert_eq!(Tool::Constrain("parallel").prompt(), "Click two lines · Esc");
     assert_eq!(Tool::Select.prompt(), "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)");
 }
+
+#[test]
+fn a_projected_line_pairs_but_takes_no_horizontal() {
+    let mut e = editor();
+    let source = json!({"kind": "edge", "body": "b1", "sel": {"kind": "edge", "by": "nearest", "point": [0, 30, 0]}});
+    e.entities.push(json!({"id": "p1", "type": "projected", "source": source,
+        "curve": {"kind": "line", "x1": 0, "y1": 30, "x2": 20, "y2": 30}}));
+    e.resolve(false);
+    e.rule_key("horizontal");
+    assert_eq!(e.click(p(10.0, 30.0), 10.0), None, "a projected line is fixed already");
+    e.rule_key("parallel");
+    e.click(p(10.0, 1.5), 10.0);
+    assert!(e.click(p(10.0, 30.0), 10.0).is_some());
+    assert_eq!(e.constraints.last().unwrap(), &json!({"type": "parallel", "l1": "l1", "l2": "p1"}));
+}
+
+#[test]
+fn a_rule_key_applies_to_the_selection_only_from_select() {
+    let mut e = editor();
+    e.set_tool(Tool::Line);
+    e.selected = Some("l1".into());
+    assert_eq!(e.rule_key("horizontal"), None);
+    assert_eq!((e.tool, e.constraints.len()), (Tool::Constrain("horizontal"), 0));
+}

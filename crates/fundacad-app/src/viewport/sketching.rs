@@ -23,8 +23,8 @@ const FILL: u32 = 0x3a7bd5;
 const PREVIEW: u32 = 0xffffff;
 const ACCENT: u32 = 0x9a9ff0;
 const OVER: u32 = 0xf5a524;
-/// `.sketch-glyph`'s 16px badge.
-const GLYPH: f32 = 16.;
+/// `.sketch-glyph`'s badge, a 12px icon in 3px padding and a 1px border, 16px tall, centred on its point.
+const GLYPH: (f32, f32) = (20., 16.);
 
 #[derive(Default)]
 pub(super) struct Ui {
@@ -350,7 +350,7 @@ impl Viewport {
             return None;
         }
         let screen: Vec<_> = self.glyphs_on_screen().iter().map(|(g, s)| (g.index, f32::from(s.x), f32::from(s.y))).collect();
-        glyphs::hit(&screen, f32::from(position.x), f32::from(position.y), GLYPH / 2.)
+        glyphs::hit(&screen, f32::from(position.x), f32::from(position.y), (GLYPH.0 / 2., GLYPH.1 / 2.))
     }
 
     /// Lights what the hovered glyph's constraint acts on, as a hovered Relations row does.
@@ -399,7 +399,12 @@ impl Viewport {
         Some(format!("{}: {}, {}{}, {}", e.name, e.tool.label(), state, construction, e.tool.prompt()))
     }
 
-    pub(super) fn sketch_escape(&mut self, cx: &mut Context<Self>) -> bool {
+    /// Esc's carried part and sketch layers, true when one took the press. The shell's escape command asks this first.
+    pub fn escape_local(&mut self, cx: &mut Context<Self>) -> bool {
+        self.carry_cancel(cx) || self.sketch_escape(cx)
+    }
+
+    fn sketch_escape(&mut self, cx: &mut Context<Self>) -> bool {
         if self.sketch_ui.picking {
             self.sketch_ui = Ui { focus: self.sketch_ui.focus.take(), ..Default::default() };
             cx.notify();
@@ -626,11 +631,10 @@ impl Viewport {
                 div()
                     .id(("sketch-glyph", g.index))
                     .absolute()
-                    .left(s.x - origin.x - px(GLYPH / 2.))
-                    .top(s.y - origin.y - px(GLYPH / 2.))
-                    .min_w(px(GLYPH))
-                    .h(px(GLYPH))
-                    .px(px(3.))
+                    .left(s.x - origin.x - px(GLYPH.0 / 2.))
+                    .top(s.y - origin.y - px(GLYPH.1 / 2.))
+                    .w(px(GLYPH.0))
+                    .h(px(GLYPH.1))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -834,10 +838,6 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
             v.update(cx, |v, cx| v.sketch_do(cx, |e| e.rule_key(kind)))
         });
     }
-    let v = viewport.clone();
-    commands::register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
-        v.update(cx, |v, cx| v.carry_cancel(cx) || v.sketch_escape(cx));
-    });
     let v = viewport.clone();
     commands::register(cx, "delete", Label::Key("menu.edit.delete"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| v.sketch_do(cx, Editor::delete_selected));

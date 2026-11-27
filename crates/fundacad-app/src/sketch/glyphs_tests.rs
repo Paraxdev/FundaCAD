@@ -75,7 +75,15 @@ fn a_conflict_outranks_redundant_and_titles_follow() {
 #[test]
 fn a_click_takes_the_top_glyph_within_its_badge() {
     let screen = [(0, 100.0, 100.0), (3, 104.0, 100.0)];
-    assert_eq!(hit(&screen, 102.0, 101.0, 8.0), Some(3));
-    assert_eq!(hit(&screen, 93.0, 100.0, 8.0), Some(0));
-    assert_eq!(hit(&screen, 100.0, 120.0, 8.0), None);
+    assert_eq!(hit(&screen, 102.0, 101.0, (8.0, 8.0)), Some(3));
+    assert_eq!(hit(&screen, 93.0, 100.0, (8.0, 8.0)), Some(0));
+    assert_eq!(hit(&screen, 100.0, 120.0, (8.0, 8.0)), None);
+}
+
+#[test]
+fn the_badge_is_wider_than_tall_and_centred_on_its_point() {
+    let screen = [(0, 100.0, 100.0)];
+    assert_eq!(hit(&screen, 109.0, 100.0, (10.0, 8.0)), Some(0));
+    assert_eq!(hit(&screen, 91.0, 100.0, (10.0, 8.0)), Some(0));
+    assert_eq!(hit(&screen, 100.0, 109.0, (10.0, 8.0)), None);
 }

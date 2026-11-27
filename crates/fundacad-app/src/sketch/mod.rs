@@ -517,6 +517,10 @@ impl Editor {
                     (format!("{id}~{k}"), d)
                 }
                 Entity::Circle { id, x, y, radius } => (id.clone(), (DVec2::new(*x, *y).distance(p) - radius).abs()),
+                Entity::Projected { id, .. } => match e.as_line_seg() {
+                    Some((a, b)) => (id.clone(), seg(DVec2::new(a.x, a.y), DVec2::new(b.x, b.y))),
+                    None => continue,
+                },
                 _ => match regions::path(e) {
                     Some(pts) => (e.id().to_string(), poly(&pts, false)),
                     None => continue,

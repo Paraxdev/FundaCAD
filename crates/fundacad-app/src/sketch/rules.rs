@@ -26,12 +26,9 @@ impl Editor {
         matches!(self.solved.entities.iter().find(|e| e.id() == id), Some(Entity::Line { .. }))
     }
 
-    /// A line or a rectangle side, which FundaCAD 1 takes as a line operand.
+    /// A line, a projected line or a rectangle side, what FundaCAD 1's lineOperand takes.
     fn line_operand(&self, id: &str) -> bool {
-        self.plain_line(id)
-            || id.split_once('~').is_some_and(|(base, _)| {
-                matches!(self.solved.entities.iter().find(|e| e.id() == base), Some(Entity::Rectangle { .. }))
-            })
+        dims::span_of(&self.solved.entities, id).is_some()
     }
 
     /// A click on `id` with the `kind` tool armed, the undo label when it added a constraint.
@@ -52,11 +49,11 @@ impl Editor {
         }
     }
 
-    /// The shortcut or rail button for `kind`: applied to the selected line when it fits, else the tool armed with
-    /// a selected line as its first pick.
+    /// The shortcut or rail button for `kind`: applied to the selected line when it fits and Select is the tool, as
+    /// FundaCAD 1's applySelectedConstraint, else the tool armed with a selected line as its first pick.
     pub fn rule_key(&mut self, kind: &'static str) -> Option<String> {
         let sel = self.selected.clone();
-        if ONE_LINE.contains(&kind) && sel.as_deref().is_some_and(|s| self.plain_line(s)) {
+        if self.tool == Tool::Select && ONE_LINE.contains(&kind) && sel.as_deref().is_some_and(|s| self.plain_line(s)) {
             return self.constrain(kind);
         }
         self.set_tool(Tool::Constrain(kind));

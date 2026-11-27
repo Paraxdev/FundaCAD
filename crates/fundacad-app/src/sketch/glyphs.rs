@@ -98,9 +98,10 @@ pub fn title(state: Option<State>) -> String {
     })
 }
 
-/// The glyph under a point, the last drawn one when they overlap, given each glyph's screen position.
-pub fn hit(screen: &[(usize, f32, f32)], x: f32, y: f32, half: f32) -> Option<usize> {
-    screen.iter().rev().find(|(_, gx, gy)| (gx - x).abs() <= half && (gy - y).abs() <= half).map(|(i, _, _)| *i)
+/// The glyph under a point, the last drawn one when they overlap, given each glyph's screen centre and the badge's
+/// half width and half height.
+pub fn hit(screen: &[(usize, f32, f32)], x: f32, y: f32, half: (f32, f32)) -> Option<usize> {
+    screen.iter().rev().find(|(_, gx, gy)| (gx - x).abs() <= half.0 && (gy - y).abs() <= half.1).map(|(i, _, _)| *i)
 }
 
 /// The shapes a constraint acts on, a rectangle edge as its rectangle, lit while its glyph is hovered.
