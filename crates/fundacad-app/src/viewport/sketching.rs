@@ -86,7 +86,7 @@ impl Viewport {
             self.say(format!("{id} is no sketch"), cx);
             return;
         };
-        self.look_at_plane(&editor.plane);
+        self.look_at_plane(&editor.plane, cx.reduce_motion());
         self.sketch = Some(editor);
         self.sketch_ui.picking = false;
         self.hover = None;
@@ -121,16 +121,17 @@ impl Viewport {
         cx.notify();
     }
 
-    fn look_at_plane(&mut self, plane: &Plane) {
+    fn look_at_plane(&mut self, plane: &Plane, reduce: bool) {
         let n = plane.n.as_vec3();
-        self.camera.pitch = n.z.asin().clamp(-1.55, 1.55);
-        self.camera.yaw = if n.z.abs() > 0.99 { -std::f32::consts::FRAC_PI_2 } else { n.y.atan2(n.x) };
+        let mut to = self.camera.clone();
+        to.pitch = n.z.asin().clamp(-1.55, 1.55);
+        to.yaw = if n.z.abs() > 0.99 { -std::f32::consts::FRAC_PI_2 } else { n.y.atan2(n.x) };
         let centre = self.scene.bounds().map_or(Vec3::ZERO, |(c, _)| c);
-        let on = plane.to_3d(plane.to_2d(centre.as_dvec3())).as_vec3();
-        self.camera.target = on;
+        to.target = plane.to_3d(plane.to_2d(centre.as_dvec3())).as_vec3();
         if self.scene.bounds().is_none() {
-            self.camera.distance = 200.0;
+            to.distance = 200.0;
         }
+        self.motion.fly(&mut self.camera, to, reduce);
     }
 
     fn commit_sketch(&mut self, label: String, cx: &mut Context<Self>) {

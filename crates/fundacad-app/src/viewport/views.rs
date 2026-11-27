@@ -35,23 +35,35 @@ impl View {
 }
 
 impl Viewport {
+    fn fly_to(&mut self, to: Camera, cx: &mut Context<Self>) {
+        let reduce = cx.reduce_motion();
+        self.motion.fly(&mut self.camera, to, reduce);
+        cx.notify();
+    }
+
+    /// `cam` framing everything shown, keeping the direction it looks from.
+    fn framed(&self, mut cam: Camera) -> Camera {
+        if let Some((centre, radius)) = self.scene.bounds() {
+            cam.fit(centre, radius);
+        }
+        cam
+    }
+
     /// Frames everything shown, keeping the direction the camera looks from.
     pub fn fit_view(&mut self, cx: &mut Context<Self>) {
-        if let Some((centre, radius)) = self.scene.bounds() {
-            self.camera.fit(centre, radius);
-            cx.notify();
-        }
+        let to = self.framed(self.camera.clone());
+        self.fly_to(to, cx);
     }
 
     pub fn reset_camera(&mut self, cx: &mut Context<Self>) {
-        self.camera = Camera::default();
-        self.fit_view(cx);
-        cx.notify();
+        let to = self.framed(Camera::default());
+        self.fly_to(to, cx);
     }
 
     pub fn look_from(&mut self, view: View, cx: &mut Context<Self>) {
-        (self.camera.yaw, self.camera.pitch) = view.angles();
-        self.fit_view(cx);
-        cx.notify();
+        let mut to = self.camera.clone();
+        (to.yaw, to.pitch) = view.angles();
+        let to = self.framed(to);
+        self.fly_to(to, cx);
     }
 }

@@ -9,6 +9,7 @@ struct Uniforms {
 struct Body {
   offset: vec4<f32>,
   hover: vec4<i32>,
+  fade: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -28,7 +29,7 @@ fn vs(
   @location(1) normal: vec3<f32>,
   @location(2) face: u32,
   @location(3) mask: f32,
-  @location(4) selected: f32,
+  @location(4) selected: vec2<f32>,
 ) -> Varying {
   var out: Varying;
   let world = position + body.offset.xyz * mask;
@@ -36,8 +37,19 @@ fn vs(
   out.world = world;
   out.normal = normal;
   out.face = face;
-  out.selected = selected;
+  out.selected = mix(selected.x, selected.y, body.fade.z);
   return out;
+}
+
+fn hovered(base: vec3<f32>, hover: vec2<i32>, amount: f32, face: u32) -> vec3<f32> {
+  if (hover.x < 0 || u32(hover.x) != face) {
+    return base;
+  }
+  var tint = vec3<f32>(0.7, 0.72, 0.78);
+  if (hover.y == 1) {
+    tint = vec3<f32>(0.6, 0.62, 0.94);
+  }
+  return mix(base, tint, amount);
 }
 
 @fragment
@@ -67,20 +79,13 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
       base = vec3<f32>(0.18, 0.44, 0.8);
     }
   }
-  if (in.selected > 0.5) {
-    base = vec3<f32>(0.36, 0.56, 0.98);
-  }
+  base = mix(base, vec3<f32>(0.36, 0.56, 0.98), clamp(in.selected, 0.0, 1.0));
   if (clipping && inside) {
     // The inside of a cut body, seen through the cut.
     base = vec3<f32>(0.85, 0.42, 0.2);
   }
-  if (body.hover.x >= 0 && u32(body.hover.x) == in.face) {
-    if (body.hover.y == 1) {
-      base = vec3<f32>(0.6, 0.62, 0.94);
-    } else {
-      base = vec3<f32>(0.7, 0.72, 0.78);
-    }
-  }
+  base = hovered(base, body.hover.xy, body.fade.x, in.face);
+  base = hovered(base, body.hover.zw, body.fade.y, in.face);
   let hemi = mix(vec3<f32>(0.18, 0.17, 0.16), vec3<f32>(0.32, 0.36, 0.42), n.z * 0.5 + 0.5);
   let diffuse = max(dot(n, key), 0.0) * 0.75 + max(dot(n, fill), 0.0) * 0.25;
   let half_dir = normalize(key + view_dir);
