@@ -433,6 +433,7 @@ impl Render for ParamsPanel {
             .left(px(left))
             .opacity(fade)
             .child(glass_in("params-in", card))
+            .when(!self.open, |d| d.child(div().absolute().inset_0().occlude()))
             .into_any_element()
     }
 }

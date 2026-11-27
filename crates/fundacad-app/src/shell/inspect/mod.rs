@@ -252,7 +252,7 @@ impl Shell {
         let v = self.viewport.read(cx);
         let i = v.inspecting();
         match i.card {
-            Some(card) => Some(glass_in("inspect-card-in", self.card(t, card, cx)).into_any_element()),
+            Some(card) => Some(glass_in(SharedString::from(format!("inspect-card-in:{card:?}")), self.card(t, card, cx)).into_any_element()),
             None if i.section.is_some() || v.isolated().is_some() => {
                 Some(pop_in("view-chips-in", self.view_chips(t, cx)).into_any_element())
             }

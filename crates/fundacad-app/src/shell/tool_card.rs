@@ -228,7 +228,7 @@ impl Shell {
         let button = |label: &'static str, primary: bool| {
             let (rest, lit) = match primary {
                 true => (t.accent, t.accent_hot),
-                false => (t.field_bg, t.hover_wash.over(t.field_bg)),
+                false => (t.field_bg, crate::motion::layer(t.hover_wash, t.field_bg)),
             };
             let el = text(t, FS_SMALL)
                 .id(ElementId::Name(format!("tool:{label}").into()))

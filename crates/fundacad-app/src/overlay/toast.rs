@@ -169,7 +169,8 @@ impl super::Overlay {
                 crate::motion::pop_in(("toast-in", item.id), el).into_any_element()
             })
             .collect();
-        for (at, el) in leaving {
+        // Reversed, so each removal is undone in turn and two that left one after another keep their order.
+        for (at, el) in leaving.into_iter().rev() {
             shown.insert(at.min(shown.len()), el);
         }
         stack = stack.children(shown);

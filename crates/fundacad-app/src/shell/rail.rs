@@ -142,9 +142,9 @@ fn rail_tile(t: &Theme, label: &'static str, lit: bool, tile: Div) -> impl IntoE
     let (rest, accent, wash) = (t.float_tile_bg, t.accent_wash, t.hover_wash);
     let id = ElementId::Name(format!("rail-tile:{label}").into());
     motion::hover(id, tile, move |d, m| {
-        let base = Rgb::from(mix(rest, accent.over(rest), m.on));
+        let base = Rgb::from(mix(rest, accent, m.on));
         let size = RAIL_TILE * (1. - 0.06 * m.press);
-        d.bg(mix(base, wash.over(base), m.hover))
+        d.bg(mix(base, motion::layer(wash, base), m.hover))
             .size(px(size))
             .m(px((RAIL_TILE - size) / 2.))
             .top(px(-m.hover * (1. - m.press)))

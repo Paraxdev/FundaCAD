@@ -49,6 +49,16 @@ pub fn mix(from: impl Into<Rgb>, to: impl Into<Rgb>, p: f32) -> Hsla {
     }
 }
 
+/// `top` painted over `base`, keeping the alpha of a translucent base where `Rgb::over` makes it opaque.
+pub fn layer(top: Rgb, base: Rgb) -> Rgb {
+    let a = top.a + base.a * (1. - top.a);
+    if a <= 0. {
+        return Rgb::TRANSPARENT;
+    }
+    let ch = |t: f32, b: f32| (t * top.a + b * base.a * (1. - top.a)) / a;
+    Rgb { r: ch(top.r, base.r), g: ch(top.g, base.g), b: ch(top.b, base.b), a }
+}
+
 /// Where each eased state of a [`Transition`] is, 0 at rest and 1 fully on.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Motion {
@@ -238,7 +248,7 @@ impl<E: IntoElement + 'static> Element for Transition<E> {
         if track_hover {
             let hitbox = hitbox.clone();
             window.on_mouse_event(move |_: &MouseMoveEvent, phase, window, _| {
-                if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) != hovered {
+                if phase == DispatchPhase::Capture && hitbox.is_hovered(window) != hovered {
                     window.refresh();
                 }
             });
