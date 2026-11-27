@@ -1,5 +1,5 @@
 //! The model tools by group, ui/ribbonDefs.ts's MODEL, which the rail's family tiles open. A split family is listed
-//! under its own heading. Primitive was one button with a shape picker, here each shape is its own row.
+//! is flattened into its group's flyout. Primitive stays one family, its face the shape last picked.
 
 #[cfg(test)]
 mod tests;
@@ -17,6 +17,8 @@ pub enum Item {
     Tool(ToolItem),
     /// `label` is a catalog key.
     Split { label: &'static str, children: &'static [ToolItem] },
+    /// One tile in the flyout that runs its last picked child, a hold shows the rest.
+    Family { id: &'static str, label: &'static str, glyph: &'static str, children: &'static [ToolItem] },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -24,6 +26,8 @@ pub struct Group {
     /// The rail family's id, `heading` the catalog key it shows.
     pub label: &'static str,
     pub heading: &'static str,
+    /// The category tile's icon.
+    pub glyph: &'static str,
     pub items: &'static [Item],
 }
 
@@ -39,11 +43,14 @@ pub const MODEL: &[Group] = &[
     Group {
         label: "Create",
         heading: "tool.group.create",
+        glyph: "primitive",
         items: &[
             one("sketch", "tool.sketch", "sketch"),
             one("extrude", "tool.extrude", "extrude"),
-            Item::Split {
+            Item::Family {
+                id: "primitive",
                 label: "tool.primitive",
+                glyph: "primitive",
                 children: &[
                     tool("primitive-box", "feature.box", "box"),
                     tool("primitive-cylinder", "feature.cylinder", "cylinder"),
@@ -61,6 +68,7 @@ pub const MODEL: &[Group] = &[
     Group {
         label: "Modify",
         heading: "tool.group.modify",
+        glyph: "presspull",
         items: &[
             one("presspull", "tool.pressPull", "presspull"),
             one("fillet", "tool.fillet", "fillet"),
@@ -106,6 +114,7 @@ pub const MODEL: &[Group] = &[
     Group {
         label: "Construct",
         heading: "tool.group.construct",
+        glyph: "datumPlane",
         items: &[
             one("offset-plane", "tool.offsetPlane", "offsetPlane"),
             Item::Split {
@@ -134,6 +143,7 @@ pub const MODEL: &[Group] = &[
     Group {
         label: "Inspect",
         heading: "tool.group.inspect",
+        glyph: "measure",
         items: &[
             one("measure", "tool.measure", "measure"),
             one("section", "tool.section", "section"),
@@ -157,6 +167,7 @@ pub const MODEL: &[Group] = &[
     Group {
         label: "Insert",
         heading: "tool.group.insert",
+        glyph: "import",
         items: &[
             one("import", "tool.importMesh", "import"),
             one("insert-document", "tool.insertDocument", "insertDocument"),
@@ -171,14 +182,13 @@ pub fn group(label: &str) -> Option<&'static Group> {
     MODEL.iter().find(|g| g.label == label)
 }
 
-/// Every tool of a group, split families flattened.
-#[cfg(test)]
+/// Every tool of a group, families flattened.
 pub fn leaves(g: &Group) -> Vec<ToolItem> {
     g.items
         .iter()
         .flat_map(|i| match i {
             Item::Tool(t) => vec![*t],
-            Item::Split { children, .. } => children.to_vec(),
+            Item::Split { children, .. } | Item::Family { children, .. } => children.to_vec(),
         })
         .collect()
 }

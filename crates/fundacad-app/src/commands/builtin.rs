@@ -30,6 +30,7 @@ pub fn install(viewport: &Entity<Viewport>, files: &Entity<Files>, cx: &mut App)
     let v = viewport.clone();
     set_enabled(cx, "redo", move |cx| v.read(cx).can_redo());
     register(cx, "palette", Label::Key("palette.title"), Group::Edit, overlay::toggle_palette);
+    register(cx, "find", Label::Command("command.find"), Group::Edit, overlay::toggle_palette);
     // Escape closes whatever is open before it reaches here, a bare one has nothing to cancel yet.
     register(cx, "escape", Label::Key("common.cancel"), Group::Edit, |_, _| {});
 

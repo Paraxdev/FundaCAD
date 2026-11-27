@@ -404,6 +404,38 @@ impl Viewport {
         self.sketch.is_some()
     }
 
+    /// The open sketch's name and whether new shapes are construction.
+    pub fn sketch_rail(&self) -> Option<(String, bool)> {
+        self.sketch.as_ref().map(|e| (e.name.clone(), e.construction))
+    }
+
+    /// The plane of the one selected face when it is flat, as a click on it would start a sketch.
+    fn selected_face_plane(&self) -> Option<Value> {
+        let [crate::selection::Pick::Face { body, face, point, normal }] = self.selection().picks.as_slice() else {
+            return None;
+        };
+        let (point, normal) = (Vec3::from(*point), Vec3::from(*normal));
+        let scene = self.scene.bodies.iter().find(|b| b.source.id == *body)?;
+        if !drag::flat(scene, *face, normal) {
+            return None;
+        }
+        let mut spec = Plane::on_face(point, normal).spec();
+        spec["at"] = json!([point.x, point.y, point.z]);
+        spec["face"] = json!({"kind": "face", "by": "nearest", "point": [point.x, point.y, point.z], "body": body});
+        Some(spec)
+    }
+
+    pub fn can_sketch_on_selection(&self) -> bool {
+        self.sketch.is_none() && self.selected_face_plane().is_some()
+    }
+
+    pub fn sketch_on_selection(&mut self, cx: &mut Context<Self>) {
+        match self.selected_face_plane() {
+            Some(spec) => self.new_sketch(spec, cx),
+            None => self.begin_sketch(cx),
+        }
+    }
+
     pub(super) fn sketch_focus(&mut self, cx: &mut Context<Self>) -> FocusHandle {
         self.sketch_ui.focus.get_or_insert_with(|| cx.focus_handle()).clone()
     }
