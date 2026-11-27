@@ -18,8 +18,19 @@ pub fn pick(scene: &Scene, origin: Vec3, dir: Vec3) -> Option<Hit> {
 
 /// The nearest hit at a point `keep` allows, so a click goes through what a Section cuts away.
 pub fn pick_kept(scene: &Scene, origin: Vec3, dir: Vec3, keep: impl Fn(Vec3) -> bool) -> Option<Hit> {
+    pick_where(scene, origin, dir, |_| true, keep)
+}
+
+/// `pick_kept` over the bodies `allow` takes.
+pub fn pick_where(
+    scene: &Scene,
+    origin: Vec3,
+    dir: Vec3,
+    allow: impl Fn(usize) -> bool,
+    keep: impl Fn(Vec3) -> bool,
+) -> Option<Hit> {
     let mut best: Option<(f32, Hit)> = None;
-    for (bi, body) in scene.bodies.iter().enumerate() {
+    for (bi, body) in scene.bodies.iter().enumerate().filter(|(i, _)| allow(*i)) {
         for tri in body.indices.chunks_exact(3) {
             let [a, b, c] = [tri[0], tri[1], tri[2]].map(|i| &body.vertices[i as usize]);
             let Some((t, u, v)) = intersect(origin, dir, a.position(), b.position(), c.position()) else {

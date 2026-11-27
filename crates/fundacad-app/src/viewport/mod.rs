@@ -9,6 +9,7 @@ pub mod inspecting;
 mod issues;
 pub mod mesh;
 mod pick;
+pub mod placing;
 mod profiles;
 mod renderer;
 mod resolve;
@@ -134,6 +135,7 @@ pub struct Viewport {
     tool: Option<ToolRun>,
     gizmo: gizmo::Gizmo,
     inspect: inspecting::Inspecting,
+    carry: placing::Carry,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -188,6 +190,7 @@ impl Viewport {
             tool: None,
             gizmo: Default::default(),
             inspect: Default::default(),
+            carry: Default::default(),
             _wake: None,
             _demo: None,
         }
@@ -767,7 +770,10 @@ impl Render for Viewport {
             )
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                cx.listener(|this, _: &MouseUpEvent, w, cx| {
+                    if this.carry_release(w, cx) {
+                        return;
+                    }
                     this.sketch_release(cx);
                     this.gizmo_release(cx);
                     this.release(cx)
@@ -787,11 +793,13 @@ impl Render for Viewport {
             .on_mouse_up(MouseButton::Right, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_up(MouseButton::Middle, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
-                if this.nav.is_some() || !(this.sketch_move(e, cx) || this.gizmo_move(e, cx)) {
+                if this.nav.is_some() || !(this.sketch_move(e, cx) || this.gizmo_move(e, cx) || this.carry_move(e, cx)) {
                     this.mouse_move(e, cx)
                 }
             }))
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| this.zoom(e, cx)))
+            .on_drop(cx.listener(|this, c: &placing::Carried, w, cx| this.land(c, w, cx)))
+            .on_drag_move(cx.listener(|this, e: &DragMoveEvent<placing::Carried>, _, cx| this.drag_over(e.event.position, cx)))
             .child(
                 canvas(
                     |_, _, _| {},
@@ -799,6 +807,7 @@ impl Render for Viewport {
                         let t = crate::theme::ActiveTheme::theme(cx);
                         let (picked, hover) = (Hsla::from(t.accent), Hsla::from(t.accent_hot));
                         let axes = [t.axis_x, t.axis_y, t.axis_z].map(Hsla::from);
+                        let dragging = cx.has_active_drag();
                         entity.update(cx, |this, cx| {
                             if this.paint(bounds, window) {
                                 cx.notify();
@@ -806,6 +815,7 @@ impl Render for Viewport {
                             this.paint_edges(bounds, picked, hover, window);
                             this.paint_gizmo(axes, hover, window);
                             this.paint_inspect(bounds, hover, window);
+                            this.paint_carry(bounds, dragging, hover, window);
                         });
                     },
                 )
