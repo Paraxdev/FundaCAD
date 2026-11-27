@@ -4,6 +4,8 @@ struct Uniforms {
   encode_srgb: vec4<f32>,
   clip: vec4<f32>,
   shade: vec4<f32>,
+  cap: vec4<f32>,
+  hatch: vec4<f32>,
 }
 
 struct Body {
@@ -39,6 +41,13 @@ fn vs(
   out.face = face;
   out.selected = mix(selected.x, selected.y, body.fade.z);
   return out;
+}
+
+fn encode(c: vec3<f32>) -> vec3<f32> {
+  if (u.encode_srgb.x > 0.5) {
+    return pow(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+  }
+  return c;
 }
 
 fn hovered(base: vec3<f32>, hover: vec2<i32>, amount: f32, face: u32) -> vec3<f32> {
@@ -82,24 +91,45 @@ fn fs(in: Varying) -> @location(0) vec4<f32> {
   base = mix(base, vec3<f32>(0.36, 0.56, 0.98), clamp(in.selected, 0.0, 1.0));
   base = hovered(base, body.hover.xy, body.fade.x, in.face);
   base = hovered(base, body.hover.zw, body.fade.y, in.face);
-  if (clipping && inside) {
-    // FundaCAD 1's section cap, unlit 45 degree stripes at a fixed pixel pitch. The back faces seen through the cut
-    // stand in for the cap the stencil drew there.
-    let t = abs((in.clip.x + in.clip.y) % 9.0 - 4.5);
-    var cap = mix(base * 0.42, mix(base, vec3<f32>(1.0), 0.25), 1.0 - smoothstep(0.2, 1.8, t));
-    if (u.encode_srgb.x > 0.5) {
-      cap = pow(clamp(cap, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
-    }
-    return vec4<f32>(cap, 1.0);
-  }
   let hemi = mix(vec3<f32>(0.18, 0.17, 0.16), vec3<f32>(0.32, 0.36, 0.42), n.z * 0.5 + 0.5);
   let diffuse = max(dot(n, key), 0.0) * 0.75 + max(dot(n, fill), 0.0) * 0.25;
   let half_dir = normalize(key + view_dir);
   let spec = pow(max(dot(n, half_dir), 0.0), 48.0) * 0.35;
   let rim = pow(1.0 - max(dot(n, view_dir), 0.0), 3.0) * 0.15;
-  var color = base * (hemi + diffuse) + vec3<f32>(spec + rim);
-  if (u.encode_srgb.x > 0.5) {
-    color = pow(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+  return vec4<f32>(encode(base * (hemi + diffuse) + vec3<f32>(spec + rim)), 1.0);
+}
+
+@fragment
+fn fs_count(in: Varying) {
+  if (dot(u.clip.xyz, in.world) > u.clip.w) {
+    discard;
   }
-  return vec4<f32>(color, 1.0);
+}
+
+@vertex
+fn vs_cap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+  let n = normalize(u.clip.xyz);
+  var a = vec3<f32>(1.0, 0.0, 0.0);
+  if (abs(n.x) > 0.9) {
+    a = vec3<f32>(0.0, 1.0, 0.0);
+  }
+  let s = normalize(cross(n, a)) * u.cap.w;
+  let t = normalize(cross(n, s)) * u.cap.w;
+  let corners = array<vec2<f32>, 6>(
+    vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0),
+    vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0),
+  );
+  let c = corners[i];
+  return u.view_proj * vec4<f32>(u.cap.xyz + s * c.x + t * c.y, 1.0);
+}
+
+// FundaCAD 1's section cap, unlit 45 degree stripes at a fixed pixel pitch.
+@fragment
+fn fs_cap(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
+  let colour = vec3<f32>(0.62, 0.66, 0.72);
+  let pitch = u.hatch.x;
+  let half_width = u.hatch.y * 0.5;
+  let t = abs((frag.x + frag.y) % pitch - pitch * 0.5);
+  let stripe = 1.0 - smoothstep(half_width - 0.8, half_width + 0.8, t);
+  return vec4<f32>(encode(mix(colour * 0.42, mix(colour, vec3<f32>(1.0), 0.25), stripe)), 1.0);
 }
