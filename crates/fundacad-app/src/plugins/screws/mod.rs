@@ -3,6 +3,7 @@
 //! with fasteners builds where this plugin was never installed.
 
 mod catalogue;
+mod place;
 
 use fundacad_client::Doc;
 use gpui::prelude::FluentBuilder as _;
@@ -12,10 +13,11 @@ use serde_json::{json, Map, Value};
 use super::extra_params::pill;
 use super::{MenuRow, Native};
 use crate::commands::Group;
-use crate::i18n::{self, tr};
+use crate::i18n;
 use crate::overlay::{self, Toast};
 use crate::theme::{ActiveTheme as _, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
+use crate::viewport::placing::{Carried, Land, Placement};
 use crate::viewport::Viewport;
 use catalogue::ItemChoice;
 
@@ -71,17 +73,23 @@ fn install(viewport: &Entity<Viewport>, _window: &mut Window, cx: &mut App) -> A
             }),
         }]
     });
+    place::add_mover(viewport, cx);
     view.into()
+}
+
+/// What a fastener dragged from the panel looks like on its way to the view.
+struct Ghost(SharedString);
+
+impl Render for Ghost {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = cx.theme();
+        pill(t, "fastener-ghost", &self.0, true)
+    }
 }
 
 /// The spec a body was generated from by this plugin, by the features that own its faces.
 pub fn spec_of(doc: &Doc, owners: &[String]) -> Option<Value> {
-    let features = doc.get("features")?.as_array()?;
-    owners.iter().find_map(|o| {
-        let f = features.iter().find(|f| f.get("id").and_then(Value::as_str) == Some(o.as_str()))?;
-        let by = f.get("generatedBy").filter(|_| f.get("type").and_then(Value::as_str) == Some("import"))?;
-        (by.get("plugin").and_then(Value::as_str) == Some(ID)).then(|| by.get("spec").cloned()).flatten()
-    })
+    place::fastener_of(doc, owners).map(|(_, spec)| spec)
 }
 
 /// The `import` feature a generated shape becomes, as FundaCAD 1's insertFastener added it.
@@ -122,46 +130,36 @@ impl Library {
         self.choice.length = keep.or_else(|| ls.get(ls.len() / 3).copied());
     }
 
-    fn insert(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn insert(&mut self, cx: &mut Context<Self>) {
         let spec = match catalogue::expand(&self.choice) {
             Ok(s) => s,
             Err(e) => return overlay::toast(cx, Toast::error(e)),
         };
-        let Some(link) = self.viewport.read(cx).session_link(None) else {
-            return overlay::toast(cx, Toast::error(i18n::t("files.openDocumentFirst")));
-        };
         self.busy = true;
         cx.notify();
-        let name = spec.get("name").and_then(Value::as_str).unwrap_or("Fastener").to_owned();
-        let mut fields = Map::new();
-        fields.insert("generator".into(), json!(GENERATOR));
-        fields.insert("params".into(), spec.clone());
-        fields.insert("output".into(), json!("store"));
-        cx.spawn_in(window, async move |this, cx| {
-            let client = link.client.clone();
-            let answer = cx.background_spawn(async move { client.request("generateShape", fields) }).await;
-            let _ = this.update(cx, |l, cx| {
+        let at = self.viewport.read(cx).selected_placement();
+        let me = cx.entity().downgrade();
+        let done = move |cx: &mut App| {
+            let _ = me.update(cx, |l, cx| {
                 l.busy = false;
                 cx.notify();
-                let reply = match answer {
-                    Ok(r) => r,
-                    Err(r) if r.cancelled => return,
-                    Err(r) => {
-                        return overlay::toast(cx, Toast::error(tr!("screws.insert.couldNotWhy", name = &name, why = r.message)))
-                    }
-                };
-                let added = l.viewport.update(cx, |v, cx| {
-                    let id = v.doc().map(crate::tools::next_id).unwrap_or_else(|| "f1".into());
-                    let f = feature(&id, &spec, &reply)?;
-                    v.edit_step(None, Some(tr!("screws.insert.step", name = &name)), move |d| crate::tools::insert(d, f.clone()), cx)
-                });
-                match added {
-                    Ok(_) => overlay::toast(cx, Toast::info(tr!("screws.insert.inserted", name = &name))),
-                    Err(e) => overlay::toast(cx, Toast::error(tr!("screws.insert.couldNotWhy", name = &name, why = e))),
-                }
             });
-        })
-        .detach();
+        };
+        place::make(&self.viewport, spec, at, place::Target::New, done, cx);
+    }
+
+    /// A drag of the chosen fastener, inserted where it is dropped on the view.
+    fn carried(&self, spec: Value) -> Carried {
+        let viewport = self.viewport.downgrade();
+        let label = spec.get("name").and_then(Value::as_str).unwrap_or("Fastener").to_owned().into();
+        let land: Land = std::rc::Rc::new(move |at: Option<Placement>, _: &mut Window, cx: &mut App| {
+            let Some(v) = viewport.upgrade() else { return };
+            if at.is_none() {
+                return overlay::toast(cx, Toast::info(i18n::t("screws.place.dropHint")));
+            }
+            place::make(&v, spec.clone(), at, place::Target::New, |_| {}, cx);
+        });
+        Carried { label, land }
     }
 
     fn chips<T: Clone + PartialEq + 'static>(
@@ -327,7 +325,10 @@ impl Render for Library {
                                 .bg(if busy { t.raised } else { t.accent })
                                 .text_color(if busy { t.text_dim } else { t.on_accent })
                                 .child(i18n::t(if busy { "screws.panel.insertBusy" } else { "screws.panel.insert" }))
-                                .when(!busy, |d| d.on_click(cx.listener(|this, _, w, cx| this.insert(w, cx)))),
+                                .when(!busy, |d| {
+                                    d.on_click(cx.listener(|this, _, _, cx| this.insert(cx)))
+                                        .on_drag(self.carried(spec.clone()), |c, _, _, cx| cx.new(|_| Ghost(c.label.clone())))
+                                }),
                         );
                 }
                 Err(e) => body = body.child(text(t, FS_SMALL).text_color(t.error).child(e)),

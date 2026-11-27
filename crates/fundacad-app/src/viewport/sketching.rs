@@ -692,7 +692,7 @@ pub fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     on("vertical", Label::Key("tool.vertical"), |v, cx| v.sketch_do(cx, |e| e.constrain("vertical")), cx);
     let v = viewport.clone();
     commands::register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
-        v.update(cx, |v, cx| v.sketch_escape(cx));
+        v.update(cx, |v, cx| v.carry_cancel(cx) || v.sketch_escape(cx));
     });
     let v = viewport.clone();
     commands::register(cx, "delete", Label::Key("menu.edit.delete"), Group::Edit, move |_, cx| {
