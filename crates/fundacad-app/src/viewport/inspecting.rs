@@ -126,7 +126,7 @@ impl Viewport {
 
     /// The document as a save writes it, with the cut shown now.
     pub fn doc_for_save(&self) -> Option<std::borrow::Cow<'_, Map<String, Value>>> {
-        Some(section::for_save(self.doc()?, self.inspect.section.as_ref()))
+        Some(section::for_save(self.blend_unedited().or(self.doc())?, self.inspect.section.as_ref()))
     }
 
     pub fn pick_section_face(&mut self, on: bool, cx: &mut Context<Self>) {

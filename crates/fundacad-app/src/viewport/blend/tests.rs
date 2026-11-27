@@ -67,3 +67,56 @@ fn a_click_away_without_a_blend_does_nothing() {
     cx.update(|_, cx| v.update(cx, |v, cx| v.blend_away(cx)));
     assert!(cx.update(|_, cx| v.read(cx).blend.is_none()));
 }
+
+#[test]
+fn an_edit_builds_up_to_the_blend_or_just_before_it() {
+    let doc: crate::tools::Doc = serde_json::from_value(json!({"features": [{"id": "a"}, {"id": "b"}, {"id": "c"}]})).unwrap();
+    assert_eq!(super::rolled_back(doc.clone(), 1, false)["rollback"], json!(1));
+    assert_eq!(super::rolled_back(doc.clone(), 1, true)["rollback"], json!(2));
+    assert!(super::rolled_back(doc, 2, true).get("rollback").is_none());
+}
+
+#[test]
+fn only_a_plain_size_on_pointed_edges_opens_for_a_drag() {
+    let edge = json!({"kind": "edge", "body": "b1", "point": [0.0, 1.0, 2.0]});
+    assert_eq!(super::edit_refusal(&json!({"type": "fillet", "radius": 2.0, "edges": [edge.clone()]})), None);
+    assert_eq!(super::edit_refusal(&json!({"type": "chamfer", "distance": 1, "edges": edge.clone()})), None);
+    assert!(super::edit_refusal(&json!({"type": "fillet", "radius": "r * 2", "edges": [edge]})).is_some());
+    assert!(super::edit_refusal(&json!({"type": "fillet", "radius": 2.0, "edges": [{"kind": "edge", "index": 3}]})).is_some());
+    assert!(super::edit_refusal(&json!({"type": "fillet", "radius": 2.0})).is_some());
+    let matched = json!({"kind": "edge", "by": "match", "fp": {"mid": [5, 0, 55]}, "body": "body1"});
+    assert_eq!(super::edit_refusal(&json!({"type": "fillet", "radius": 4, "edges": matched})), None);
+}
+
+#[test]
+fn a_bound_size_writes_its_parameter_and_an_expression_refuses() {
+    let target = |f: &str| json!({"kind": "feature", "feature": f, "field": "radius"});
+    let doc: crate::tools::Doc = serde_json::from_value(json!({
+        "parameters": {"r": 4, "d2": 4, "d3": 8, "d4": 3},
+        "paramDefs": {
+            "r": {"expr": "4", "value": 4},
+            "d2": {"expr": "r", "value": 4, "target": target("a")},
+            "d3": {"expr": "r * 2", "value": 8, "target": target("b")},
+            "d4": {"expr": "3", "value": 3, "target": target("c")}
+        }
+    }))
+    .unwrap();
+    assert_eq!(super::bound_param(&doc, "a", "radius"), Ok(Some("r".into())));
+    assert!(super::bound_param(&doc, "b", "radius").is_err());
+    assert_eq!(super::bound_param(&doc, "c", "radius"), Ok(Some("d4".into())));
+    assert_eq!(super::bound_param(&doc, "z", "radius"), Ok(None));
+}
+
+#[test]
+fn a_size_naming_a_parameter_that_is_an_expression_refuses() {
+    let doc: crate::tools::Doc = serde_json::from_value(json!({
+        "parameters": {"w": 4, "r": 8, "d": 8},
+        "paramDefs": {
+            "w": {"expr": "4", "value": 4},
+            "r": {"expr": "w * 2", "value": 8},
+            "d": {"expr": "r", "value": 8, "target": {"kind": "feature", "feature": "a", "field": "radius"}}
+        }
+    }))
+    .unwrap();
+    assert!(super::bound_param(&doc, "a", "radius").is_err());
+}
