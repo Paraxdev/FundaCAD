@@ -1,3 +1,4 @@
+mod blend;
 mod blur;
 mod camera;
 mod datums;
@@ -134,6 +135,8 @@ pub struct Viewport {
     tool: Option<ToolRun>,
     gizmo: gizmo::Gizmo,
     inspect: inspecting::Inspecting,
+    blend: Option<blend::Blend>,
+    blend_hover: Option<(usize, usize)>,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -188,6 +191,8 @@ impl Viewport {
             tool: None,
             gizmo: Default::default(),
             inspect: Default::default(),
+            blend: None,
+            blend_hover: None,
             _wake: None,
             _demo: None,
         }
@@ -226,6 +231,7 @@ impl Viewport {
         self.issues.clear();
         self.undo = UndoStack::default();
         self.push = None;
+        self.blend_drop();
         self.hover = None;
         self.tool = None;
         self.picking = Default::default();
@@ -313,6 +319,10 @@ impl Viewport {
         if self.push.as_ref().is_some_and(|p| !p.released) {
             return Err("a face is being pushed".into());
         }
+        self.blend_settle();
+        if self.blend.is_some() {
+            return Err("an edge is being dragged".into());
+        }
         let session = self.session.as_mut().ok_or("no document is open")?;
         let before = session.doc.clone();
         let edited = session.edit(f)?;
@@ -363,9 +373,10 @@ impl Viewport {
     }
 
     fn step(&mut self, undo: bool, cx: &mut Context<Self>) {
-        if self.push.as_ref().is_some_and(|p| !p.released) {
+        if self.push.as_ref().is_some_and(|p| !p.released) || self.blend_held() {
             return;
         }
+        self.blend_before_step(cx);
         // Undo during a tool cancels it, redo has nothing to bring back yet.
         if self.tool.is_some() {
             if undo {
@@ -407,6 +418,7 @@ impl Viewport {
             (None, Some((_, Err(why)))) => parts.push(why.clone()),
             (None, None) => {}
         }
+        parts.extend(self.blend_status());
         parts.extend(self.sketch_status());
         if let Some(m) = &self.message {
             parts.push(m.clone());
@@ -442,7 +454,8 @@ impl Viewport {
                     self.issues = issues::of_result(&mesh.result);
                     latest = Some(mesh);
                 }
-                Event::Failed { message, feature_id, .. } => {
+                Event::Failed { message, feature_id, revision } => {
+                    self.blend_reply(revision, None, cx);
                     log::warn!("{message}");
                     if let Some(id) = &feature_id {
                         issues::failed(&mut self.issues, id, &message);
@@ -470,6 +483,7 @@ impl Viewport {
             self.inspect.rebuilt();
             self.show_built();
             self.retarget(mesh.revision);
+            self.blend_reply(mesh.revision, Some(&mesh.result), cx);
         }
         cx.notify();
     }
@@ -606,6 +620,9 @@ impl Viewport {
         if self.push.is_some() {
             return;
         }
+        if self.blend_press(position, cx) || self.blend.is_some() {
+            return;
+        }
         self.hover = None;
         self.hover_at(position, cx);
         let Some((hit, Ok(grip))) = self.hover.clone() else {
@@ -683,8 +700,15 @@ impl Viewport {
 
     fn release(&mut self, cx: &mut Context<Self>) {
         if let Some((at, mods)) = self.picking.pressed.take() {
-            self.click(at, mods, cx);
+            if self.blend_open() {
+                self.blend_commit(false, cx);
+            } else if self.blend_on_knob(at) {
+                self.blend_press(at, cx);
+            } else {
+                self.click(at, mods, cx);
+            }
         }
+        self.blend_release(cx);
         if let Some(p) = self.push.as_mut().filter(|p| !p.released) {
             p.released = true;
             if self.session.as_ref().is_some_and(|s| s.doc != p.before) {
@@ -720,6 +744,13 @@ impl Viewport {
                 self.picking.pressed = None;
                 self.press(at, cx);
                 self.push_to(event.position, cx);
+                self.blend_to(event.position, event.modifiers.shift, cx);
+            }
+        } else if self.blend_held() {
+            if event.pressed_button == Some(MouseButton::Left) {
+                self.blend_to(event.position, event.modifiers.shift, cx);
+            } else {
+                self.release(cx);
             }
         } else if self.push.as_ref().is_some_and(|p| !p.released) {
             if event.pressed_button == Some(MouseButton::Left) {
@@ -732,6 +763,7 @@ impl Viewport {
             self.hover_at(event.position, cx);
             self.hover_edge_at(event.position, cx);
             self.hover_area_at(event.position, cx);
+            self.blend_hover_at(event.position, cx);
         }
     }
 
@@ -755,8 +787,12 @@ impl Render for Viewport {
             .id("viewport")
             .size_full()
             .track_focus(&focus)
-            .when(self.sketch_typing(), |d| d.key_context("Input"))
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.sketch_key(e, cx)))
+            .when(self.sketch_typing() || self.blend_typing(), |d| d.key_context("Input"))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                if !this.blend_key(e, cx) {
+                    this.sketch_key(e, cx)
+                }
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, w, cx| {
@@ -767,10 +803,14 @@ impl Render for Viewport {
             )
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                cx.listener(|this, _: &MouseUpEvent, w, cx| {
                     this.sketch_release(cx);
                     this.gizmo_release(cx);
-                    this.release(cx)
+                    this.release(cx);
+                    if this.blend_open() {
+                        let focus = this.sketch_focus(cx);
+                        w.focus(&focus, cx);
+                    }
                 }),
             )
             .on_mouse_down(
@@ -806,11 +846,13 @@ impl Render for Viewport {
                             this.paint_edges(bounds, picked, hover, window);
                             this.paint_gizmo(axes, hover, window);
                             this.paint_inspect(bounds, hover, window);
+                            this.paint_blend(bounds, picked, window);
                         });
                     },
                 )
                 .size_full(),
             )
             .children(layer)
+            .children(self.blend_layer())
     }
 }
