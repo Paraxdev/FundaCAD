@@ -178,6 +178,7 @@ pub const MODEL: &[Group] = &[
     },
 ];
 
+#[cfg(test)]
 pub fn group(label: &str) -> Option<&'static Group> {
     MODEL.iter().find(|g| g.label == label)
 }
