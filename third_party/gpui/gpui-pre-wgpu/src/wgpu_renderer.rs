@@ -1,5 +1,6 @@
 // Modified by FundaCAD: texture lookups fall back to the app's external textures, and mod readback.
 // Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
+// Modified by FundaCAD: the quad tests carry a CornerShape.
 // Modified for gpui-pre (snapshot of zed@f126950): adapt device queues and sRGB detection to wgpu 30.0.1.
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};
 use anyhow::{Context as _, Result};
@@ -2583,7 +2584,7 @@ impl RenderingParameters {
 mod tests {
     use super::*;
     use gpui::{
-        BorderStyle, ColorSpace, ContentMask, Corners, Edges, Hsla, MonochromeSprite, PathCurve,
+        BorderStyle, ColorSpace, ContentMask, CornerShape, Corners, Edges, Hsla, MonochromeSprite, PathCurve,
         PathPaint, PathTile, Point, PolychromeSprite, Quad, Shadow, Size, SubpixelSprite,
         Underline, linear_color_stop, linear_gradient,
     };
@@ -2613,6 +2614,8 @@ mod tests {
         Quad {
             order: 0,
             border_style: BorderStyle::Solid,
+            corner_shape: CornerShape::Auto,
+            pad: 0,
             bounds,
             content_mask: ContentMask { bounds },
             background: color.into(),
@@ -2784,6 +2787,8 @@ mod tests {
         let quad = Quad {
             order: 41,
             border_style: BorderStyle::Dashed,
+            corner_shape: CornerShape::Squircle,
+            pad: 0,
             bounds: Bounds {
                 origin: Point {
                     x: 1.0.into(),
@@ -2854,7 +2859,7 @@ mod tests {
             words,
             &[
                 41,
-                1,
+                0x0101,
                 1.0_f32.to_bits(),
                 2.0_f32.to_bits(),
                 3.0_f32.to_bits(),

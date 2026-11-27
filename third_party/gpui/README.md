@@ -9,20 +9,22 @@ pulls them in through `[patch.crates-io]`. The `examples` folder and its `[[exam
 | gpui-pre | src/window.rs | `Window::paint_external_texture` paints an app rendered texture as a polychrome sprite, with clip, corner radii and opacity; drop shadows pass the casting element's bounds and corner radii so the shader paints them only outside it |
 | gpui-pre | src/window.rs | `Window::set_ui_zoom` scales the UI as a browser's page zoom: the scale factor is multiplied and the viewport, mouse position, mouse, scroll, pinch and file drop events and the IME position are divided or multiplied to match; touch gestures are not scaled |
 | gpui-pre | src/scene.rs | `Shadow` carries `caster_bounds`, the element that casts the shadow |
+| gpui-pre | src/scene.rs, src/window.rs, src/style.rs, src/styled.rs | `CornerShape` (`Auto`, `Squircle`): `Style::corner_shape`, set by `Styled::squircle()`, goes through `Window::paint_shaped_quad` (`PaintQuad` is unchanged, gpui-base builds it) to `Quad` in the second byte of the border style word (`BorderStyle` is a byte now, `Quad` keeps its size) and to `Shadow` in its last word; `paint_drop_shadows` and `paint_inset_shadows` take it |
+| gpui-pre | src/debug_overlay.rs | its quads carry `CornerShape::Auto` |
 | gpui-pre-wgpu | Cargo.toml | the wgpu backends (Vulkan, GL, Metal) are enabled on Windows too |
 | gpui-pre-wgpu | src/gpui_wgpu.rs | `register_external_texture`, `shared_context` and `shared_context_generation`: the app draws on GPUI's device into textures GPUI composites |
 | gpui-pre-wgpu | src/wgpu_context.rs | each native context is published for `shared_context`; OpenGL 3.3 and GLES 3.0 adapters without storage buffers take the WebGL2 limits and the texture based instance data |
 | gpui-pre-wgpu | src/wgpu_atlas.rs | `WgpuTextureInfo` is `Clone` |
-| gpui-pre-wgpu | src/wgpu_renderer.rs | texture lookups fall back to the external textures; `mod readback`; the record size test counts the larger `Shadow` |
+| gpui-pre-wgpu | src/wgpu_renderer.rs | texture lookups fall back to the external textures; `mod readback`; the record size test counts the larger `Shadow`; the quad tests set a `CornerShape` |
 | gpui-pre-wgpu | src/wgpu_renderer/readback.rs | new: `WgpuRenderer::render_to_image` draws a scene offscreen and reads it back, behind `test-support` |
-| gpui-pre-wgpu | src/shaders.wgsl | drop shadows are clipped to outside the casting element, as in CSS; rounded corners are squircles (CSS `corner-shape: squircle`) unless the radius makes a pill or a circle; blurred and inset shadows and dashed border spacing still model circular corners, close enough at UI sizes; the DirectX path keeps circles |
+| gpui-pre-wgpu | src/shaders.wgsl | drop shadows are clipped to outside the casting element, as in CSS; rounded corners are squircles (CSS `corner-shape: squircle`) unless the radius makes a pill or a circle, or always with `CornerShape::Squircle`, which quads read from the border style word's second byte and shadows from their last word; blurred and inset shadows and dashed border spacing still model circular corners, close enough at UI sizes; the DirectX path keeps circles |
 | gpui-pre-wgpu | src/shaders_webgl.wgsl | the `Shadow` record read is 32 words, with `caster_bounds` |
 | gpui-pre-windows | Cargo.toml | depends on gpui-pre-wgpu; `test-support` turns on its readback |
 | gpui-pre-windows | src/win_renderer.rs | new: windows draw through gpui-pre-wgpu, `FUNDA_GPUI_RENDERER=dx` keeps DirectX 11 |
 | gpui-pre-windows | src/window.rs | uses `WinRenderer`; no `WS_EX_NOREDIRECTIONBITMAP` with wgpu, since Vulkan and GL cannot present without it |
 | gpui-pre-windows | src/window.rs | a normal window opened with `focus: false` goes to the bottom of the z-order before it is shown, so it never covers the active window |
 | gpui-pre-windows | src/gpui_windows.rs | wires `win_renderer` in |
-| gpui-pre-windows | src/shaders.hlsl | drop shadows are clipped to outside the casting element, as in CSS |
+| gpui-pre-windows | src/shaders.hlsl | drop shadows are clipped to outside the casting element, as in CSS; the dashed border check reads only the border style word's low byte |
 
 Each changed file says so on its first line (`Modified by FundaCAD:`), as Apache 2.0 section 4(b) asks.
 

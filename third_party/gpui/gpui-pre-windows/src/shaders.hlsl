@@ -1,4 +1,5 @@
-// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS, and the border style word
+// carries the corner shape in its second byte.
 #include "alpha_correction.hlsl"
 
 cbuffer GlobalParams: register(b0) {
@@ -660,7 +661,8 @@ float4 quad_fragment(QuadFragmentInput input): SV_Target {
     if (border_sdf < antialias_threshold) {
         float4 border_color = input.border_color;
         // Dashed border logic when border_style == 1
-        if (quad.border_style == 1) {
+        // The low byte is the border style, the corner shape above it is not drawn here.
+        if ((quad.border_style & 0xff) == 1) {
             // Position along the perimeter in "dash space", where each dash
             // period has length 1
             float t = 0.0;
