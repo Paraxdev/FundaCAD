@@ -309,3 +309,31 @@ pub fn row_bg<E: Styled + IntoElement + 'static>(
 pub fn base_bg(d: &mut impl Styled) -> Rgb {
     d.style().background.as_ref().and_then(|f| f.color()).and_then(|b| b.as_solid()).map_or(Rgb::TRANSPARENT, Rgb::from)
 }
+
+/// An exit: the element stays drawn, fading, until `d` has passed since `start`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Leave {
+    since: Option<Instant>,
+}
+
+impl Leave {
+    pub fn start(&mut self, cx: &App) {
+        self.since = Some(cx.background_executor().now());
+    }
+
+    pub fn cancel(&mut self) {
+        self.since = None;
+    }
+
+    /// The opacity left, None once the exit is over or none was started.
+    pub fn opacity(&mut self, d: Duration, window: &Window, cx: &App) -> Option<f32> {
+        let since = self.since?;
+        let t = cx.background_executor().now().saturating_duration_since(since).as_secs_f32() / d.as_secs_f32();
+        if t >= 1. || cx.reduce_motion() {
+            self.since = None;
+            return None;
+        }
+        window.request_animation_frame();
+        Some(1. - ease(t))
+    }
+}

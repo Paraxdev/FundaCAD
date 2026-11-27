@@ -7,6 +7,7 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use super::Shell;
+use crate::motion::{glass_in, pop_in};
 use crate::commands::{register, Group};
 use crate::inspect::filament::Prefs as Filament;
 use crate::inspect::printcheck::Settings;
@@ -247,12 +248,14 @@ impl Shell {
         }
     }
 
-    pub(super) fn inspect_card(&self, t: &Theme, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+    pub(super) fn inspect_card(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let v = self.viewport.read(cx);
         let i = v.inspecting();
         match i.card {
-            Some(card) => Some(self.card(t, card, cx)),
-            None if i.section.is_some() || v.isolated().is_some() => Some(self.view_chips(t, cx)),
+            Some(card) => Some(glass_in("inspect-card-in", self.card(t, card, cx)).into_any_element()),
+            None if i.section.is_some() || v.isolated().is_some() => {
+                Some(pop_in("view-chips-in", self.view_chips(t, cx)).into_any_element())
+            }
             None => None,
         }
     }

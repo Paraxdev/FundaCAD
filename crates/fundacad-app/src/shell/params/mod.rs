@@ -12,7 +12,8 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 
-use crate::theme::{ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
+use crate::motion::{glass_in, Leave};
+use crate::theme::{ActiveTheme as _, Theme, FLOAT_GAP, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, T_FAST, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
 use crate::viewport::Viewport;
 use rows::{value_text, Row, Rows};
@@ -36,6 +37,7 @@ struct Field {
 pub struct ParamsPanel {
     viewport: Entity<Viewport>,
     open: bool,
+    leave: Leave,
     /// The document `rows` were read from.
     source: Option<Doc>,
     rows: Rows,
@@ -68,6 +70,7 @@ impl ParamsPanel {
             viewport,
             // FUNDA_PANEL=params opens it at start, for captures.
             open: std::env::var("FUNDA_PANEL").is_ok_and(|p| p == "params"),
+            leave: Leave::default(),
             source: None,
             rows: Rows::default(),
             fields: HashMap::new(),
@@ -80,6 +83,11 @@ impl ParamsPanel {
 
     pub fn toggle(&mut self, cx: &mut Context<Self>) {
         self.open = !self.open;
+        if self.open {
+            self.leave.cancel();
+        } else {
+            self.leave.start(cx);
+        }
         cx.notify();
     }
 
@@ -379,9 +387,8 @@ impl ParamsPanel {
 
 impl Render for ParamsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.open {
-            return div().into_any_element();
-        }
+        let fade = if self.open { Some(1.) } else { self.leave.opacity(T_FAST, window, cx) };
+        let Some(fade) = fade else { return div().into_any_element() };
         self.refresh(window, cx);
         self.ensure_fields(window, cx);
         let (left, width) = place::place(window.viewport_size().width / px(1.));
@@ -415,16 +422,19 @@ impl Render for ParamsPanel {
             }
         }
         body = body.child(text(t, FS_MICRO).mt(px(S_3)).text_color(t.text_mute).child(HINT));
-        solid_card(t)
+        let card = solid_card(t)
             .bg(t.float_bg_solid)
-            .absolute()
-            .top(px(FLOAT_GAP))
-            .left(px(left))
             .w(px(width))
             .max_h(window.viewport_size().height * 0.7)
             .p(px(S_4))
             .child(head)
-            .child(body)
+            .child(body);
+        div()
+            .absolute()
+            .top(px(FLOAT_GAP))
+            .left(px(left))
+            .opacity(fade)
+            .child(glass_in("params-in", card))
             .into_any_element()
     }
 }
