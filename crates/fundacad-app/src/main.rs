@@ -60,8 +60,11 @@ fn main() {
         home::init(cx, path.is_none());
         files::set_startup(cx, path);
         cx.bind_keys([KeyBinding::new("ctrl-alt-p", shell::OpenParameters, Some(commands::workspace_predicate()))]);
+        let start_size = size(px(1440.), px(900.));
+        #[cfg(feature = "shot")]
+        let start_size = shot::window_size().unwrap_or(start_size);
         let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1440.), px(900.)), cx))),
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, start_size, cx))),
             // Below this the left and right float clusters overlap.
             window_min_size: Some(size(px(1000.), px(640.))),
             titlebar: Some(TitlebarOptions { title: Some(title.clone()), ..Default::default() }),

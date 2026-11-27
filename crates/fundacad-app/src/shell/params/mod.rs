@@ -1,7 +1,7 @@
 //! The Parameters panel, ParamsDialog.vue: user and model parameters with their expressions, values and what they
 //! drive. Every change is one edit of the viewport's document, so one undo step, and the model rebuilds.
 
-mod place;
+pub(super) mod place;
 mod rows;
 mod state;
 
@@ -388,7 +388,8 @@ impl Render for ParamsPanel {
         let Some(fade) = fade else { return div().into_any_element() };
         self.refresh(window, cx);
         self.ensure_fields(window, cx);
-        let (left, width) = place::place(window.viewport_size().width / px(1.));
+        let card = if super::inspect::shown(self.viewport.read(cx)) { super::inspect::CARD_W } else { 0. };
+        let (left, width) = place::place(window.viewport_size().width / px(1.), card);
         let t = cx.theme().clone();
         let t = &t;
         let head = div()

@@ -208,7 +208,7 @@ pub(super) fn frame(t: &Theme, title: &str, id: &'static str, cx: &mut Context<S
         .child(button(t, "inspect:close", i18n::t("common.close"), false).on_click(cx.listener(|this, _, _, cx| {
             this.viewport.update(cx, |v, cx| v.open_card(None, cx));
         })));
-    chip(t).id(id).w(px(300.)).p(px(S_3)).flex().flex_col().gap(px(S_2)).occlude().child(head)
+    chip(t).id(id).w(px(CARD_W)).p(px(S_3)).flex().flex_col().gap(px(S_2)).occlude().child(head)
 }
 
 #[derive(Debug, PartialEq)]
@@ -254,7 +254,7 @@ impl Shell {
         let i = v.inspecting();
         match i.card {
             Some(card) => Some(glass_in(SharedString::from(format!("inspect-card-in:{card:?}")), self.card(t, card, cx)).into_any_element()),
-            None if i.section.is_some() || v.isolated().is_some() => {
+            None if shown(v) => {
                 Some(pop_in("view-chips-in", self.view_chips(t, cx)).into_any_element())
             }
             None => None,
@@ -267,7 +267,7 @@ impl Shell {
         let bar = |label: String| div().flex().items_center().justify_between().gap(px(S_2)).child(text(t, FS_SMALL).child(label));
         chip(t)
             .id("inspect-chips")
-            .w(px(300.))
+            .w(px(CARD_W))
             .p(px(S_2))
             .flex()
             .flex_col()
@@ -302,6 +302,14 @@ impl Shell {
             })
     }
 }
+
+/// Whether the right column holds an inspect card or the view chips, `CARD_W` wide, beside History.
+pub(in crate::shell) fn shown(v: &Viewport) -> bool {
+    let i = v.inspecting();
+    i.card.is_some() || i.section.is_some() || v.isolated().is_some()
+}
+
+pub(in crate::shell) const CARD_W: f32 = 300.;
 
 #[cfg(test)]
 mod tests;

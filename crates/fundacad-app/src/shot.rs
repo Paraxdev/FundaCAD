@@ -1,9 +1,17 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
-//! runs steps halfway there, split by `;`, see `run_step` for the step forms.
+//! runs steps halfway there, split by `;`, see `run_step` for the step forms. FUNDA_SHOT_SIZE sets the window size.
 
 use std::time::Duration;
 
 use gpui::{AnyWindowHandle, App};
+
+/// FUNDA_SHOT_SIZE=<w>x<h> opens the window at that size instead of 1440x900.
+pub fn window_size() -> Option<gpui::Size<gpui::Pixels>> {
+    let v = std::env::var("FUNDA_SHOT_SIZE").ok()?;
+    let (w, h) = v.split_once('x')?;
+    let side = |s: &str| s.trim().parse::<f32>().ok().filter(|n| n.is_finite() && *n > 0.);
+    Some(gpui::size(gpui::px(side(w)?), gpui::px(side(h)?)))
+}
 
 pub fn arm(window: AnyWindowHandle, cx: &mut App) {
     let Some(path) = std::env::var_os("FUNDA_SHOT") else { return };
