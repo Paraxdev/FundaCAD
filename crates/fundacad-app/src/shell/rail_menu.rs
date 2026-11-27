@@ -367,7 +367,7 @@ impl Shell {
         let search = Button {
             id: "search".into(),
             glyph: "search".into(),
-            label: t("rail.search").into(),
+            label: crate::i18n::t("rail.search").into(),
             sub: None,
             keys: crate::commands::hint(cx, "find"),
             lit: false,
@@ -416,7 +416,7 @@ impl Shell {
                     .child(
                         div()
                             .id("rail-list")
-                            .flex_shrink()
+                            .flex_shrink_1()
                             .min_h_0()
                             .overflow_y_scroll()
                             .flex()

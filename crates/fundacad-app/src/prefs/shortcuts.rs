@@ -13,7 +13,7 @@ use crate::commands::{self, MODAL};
 use crate::i18n::{t, tr};
 use crate::motion::{self, hover_bg, mix};
 use crate::theme::{
-    ActiveTheme as _, Rgb, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_LG, R_SM, S_0, S_1, S_2, S_3, S_4, S_5, W_MEDIUM,
+    ActiveTheme as _, Rgb, Theme, FS_MICRO, FS_SMALL, R_LG, R_SM, S_0, S_1, S_2, S_3, S_4, S_5, W_MEDIUM,
     W_SEMIBOLD,
 };
 use crate::ui::{icon, solid_card, text};
@@ -421,7 +421,7 @@ impl Render for ShortcutsWindow {
                 .bg(t_.panel_2)
                 .child(div().min_h(px(30.)).flex().items_center().child(text(t_, 14.).font_weight(W_SEMIBOLD).child(t(g.name))))
                 .children(rows)
-        });
+        }).collect::<Vec<_>>();
         let head = div()
             .flex()
             .items_baseline()
