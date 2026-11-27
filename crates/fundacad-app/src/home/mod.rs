@@ -11,6 +11,7 @@ use gpui::*;
 
 use crate::files::recent::{self, Recent};
 use crate::i18n::{self, t, tr, Label};
+use crate::motion::{hover_bg, Transition};
 use crate::theme::{
     Mode, Theme, FLOAT_GAP, FLOAT_TILE_RADIUS, FS_BODY, FS_MICRO, FS_SMALL, R_MD, R_PILL, S_0, S_1, S_2, S_3, S_4, S_5,
     W_SEMIBOLD,
@@ -293,10 +294,10 @@ fn grid() -> Div {
 }
 
 /// A tile of glass that does not blur, Home scrolls and a blurred patch would not follow the clip.
-fn card(t: &Theme, id: impl Into<ElementId>) -> Stateful<Div> {
-    let hover = t.raised;
-    div()
-        .id(id)
+fn card(t: &Theme, id: impl Into<ElementId>) -> Transition<Stateful<Div>> {
+    let id = id.into();
+    let el = div()
+        .id(id.clone())
         .flex()
         .flex_col()
         .flex_none()
@@ -304,10 +305,9 @@ fn card(t: &Theme, id: impl Into<ElementId>) -> Stateful<Div> {
         .gap(px(S_0))
         .overflow_hidden()
         .rounded(px(FLOAT_TILE_RADIUS))
-        .bg(t.float_bg_solid)
         .shadow(t.float_shadow.clone())
-        .cursor_pointer()
-        .hover(move |s| s.bg(hover))
+        .cursor_pointer();
+    hover_bg(id, el, t.float_bg_solid, t.raised)
 }
 
 fn picture(t: &Theme, glyph: &str) -> Div {
@@ -330,7 +330,7 @@ fn card_line(t: &Theme, fs: f32) -> Div {
     }
 }
 
-fn recent_card(t: &Theme, i: usize, r: &Recent, now: u64) -> Stateful<Div> {
+fn recent_card(t: &Theme, i: usize, r: &Recent, now: u64) -> Transition<Stateful<Div>> {
     let (name, folder) = card_names(&r.path);
     let missing = !r.path.exists();
     let path = r.path.clone();

@@ -177,7 +177,7 @@ impl Overlay {
 
     fn push_toast(&mut self, toast: Toast, cx: &mut Context<Self>) {
         let hold = toast.hold();
-        let (id, generation) = self.toasts.push(toast);
+        let (id, generation) = self.toasts.push_at(toast, Some(cx.background_executor().now()));
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(hold).await;
             let _ = this.update(cx, |o, cx| {

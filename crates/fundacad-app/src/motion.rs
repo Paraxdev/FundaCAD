@@ -327,6 +327,10 @@ pub struct Leave {
 }
 
 impl Leave {
+    pub fn since(now: Instant) -> Self {
+        Self { since: Some(now) }
+    }
+
     pub fn start(&mut self, cx: &App) {
         self.since = Some(cx.background_executor().now());
     }

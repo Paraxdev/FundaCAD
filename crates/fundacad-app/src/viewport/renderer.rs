@@ -67,10 +67,8 @@ struct GpuBody {
     source: Arc<Body>,
     vertices: wgpu::Buffer,
     mask: wgpu::Buffer,
-    /// Per vertex, selected before and now, 1 or 0.
+    /// Per vertex, how selected it showed when the fade began and how selected it is now.
     selected: wgpu::Buffer,
-    /// What `selected` holds as now.
-    flags: Vec<f32>,
     vertex_count: usize,
     indices: wgpu::Buffer,
     index_count: u32,
@@ -103,6 +101,9 @@ pub struct Renderer {
     scene_revision: u64,
     masked: Option<(usize, u64)>,
     selected_revision: u64,
+    /// Set by a rebuild, the new buffers need the selection written again.
+    selected_stale: bool,
+    selection: super::motion::selection::Blend,
     targets: Option<Targets>,
     texture_generation: u64,
     drawn: Option<Drawn>,
@@ -215,6 +216,8 @@ impl Renderer {
             scene_revision: u64::MAX,
             masked: None,
             selected_revision: u64::MAX,
+            selected_stale: true,
+            selection: Default::default(),
             targets: None,
             texture_generation: 0,
             drawn: None,
@@ -237,7 +240,7 @@ impl Renderer {
         }
         self.scene_revision = scene.revision;
         self.masked = None;
-        self.selected_revision = u64::MAX;
+        self.selected_stale = true;
         let mut old: Vec<Option<GpuBody>> = std::mem::take(&mut self.bodies).into_iter().map(Some).collect();
         for body in &scene.bodies {
             let kept = old.iter_mut().find(|o| o.as_ref().is_some_and(|o| Arc::ptr_eq(&o.source, &body.source)));
@@ -291,7 +294,6 @@ impl Renderer {
                 bytemuck::cast_slice(&vec![0f32; body.vertices.len().max(1) * 2]),
                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             ),
-            flags: Vec::new(),
             vertex_count: body.vertices.len().max(1),
             indices: init("body indices", bytemuck::cast_slice(&body.indices), wgpu::BufferUsages::INDEX),
             index_count: body.indices.len() as u32,
@@ -313,29 +315,26 @@ impl Renderer {
     }
 
     fn set_selected(&mut self, scene: &Scene, selected: &[Selected], revision: u64) {
-        if self.selected_revision == revision {
+        let changed = self.selected_revision != revision;
+        if !changed && !self.selected_stale {
             return;
         }
-        // After a rebuild the same selection is set again, it shows at once rather than fading in over the new mesh.
-        let rebuilt = self.selected_revision == u64::MAX;
+        if changed {
+            let shown = self.drawn.as_ref().map_or(1.0, |d| d.overlay.selection_fade);
+            // A rebuild that is not mid fade shows the selection at once, its face ids may have moved.
+            self.selection.retarget(selected, shown, self.selected_stale && shown >= 1.0);
+        } else if self.selection.to != super::motion::selection::Levels::of(selected) {
+            // A rebuild can move a picked body to another scene index, or resolve a tool's armed picks, with no new
+            // selection revision.
+            self.selection.retarget(selected, 1.0, true);
+        }
         self.selected_revision = revision;
+        self.selected_stale = false;
         for (i, gpu) in self.bodies.iter_mut().enumerate() {
             let Some(body) = scene.bodies.get(i) else { continue };
-            let entry = selected.iter().find(|(b, _)| *b == i);
-            let mut flags: Vec<f32> = body
-                .vertices
-                .iter()
-                .map(|v| match entry {
-                    Some((_, None)) => 1.0,
-                    Some((_, Some(faces))) if faces.contains(&v.face) => 1.0,
-                    _ => 0.0,
-                })
-                .collect();
-            flags.resize(gpu.vertex_count, 0.0);
-            let before = if rebuilt || gpu.flags.len() != flags.len() { &flags } else { &gpu.flags };
-            let pairs: Vec<[f32; 2]> = before.iter().zip(&flags).map(|(&a, &b)| [a, b]).collect();
+            let mut pairs: Vec<[f32; 2]> = body.vertices.iter().map(|v| self.selection.pair(i, v.face)).collect();
+            pairs.resize(gpu.vertex_count, [0.0; 2]);
             self.queue.write_buffer(&gpu.selected, 0, bytemuck::cast_slice(&pairs));
-            gpu.flags = flags;
         }
     }
 

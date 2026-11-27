@@ -260,17 +260,17 @@ impl Shell {
             return row;
         }
         // Stands in for the popup menu fc2/commands brings, listed under the row until then.
-        let hover = t.hover_wash;
         let options = c.options.iter().enumerate().map(|(n, o)| {
             let (id, field, value) = (id.to_string(), c.field, o.value.clone());
-            text(t, FS_SMALL)
+            let el = text(t, FS_SMALL)
                 .id(ElementId::Name(format!("option:{key}:{n}").into()))
                 .px(px(S_2))
                 .py(px(S_1))
                 .rounded(px(R_MD))
                 .text_color(t.text)
-                .map(|d| if o.value == c.current { d.bg(t.accent_wash) } else { d.hover(move |s| s.bg(hover)) })
-                .child(o.label.clone())
+                .child(o.label.clone());
+            let bg = ElementId::Name(format!("option-bg:{key}:{n}").into());
+            motion::row_bg(bg, el, o.value == c.current, t.hover_wash, t.accent_wash)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.inspector.open_choice = None;
                     this.apply_option(id.clone(), field, Value::String(value.clone()), cx);

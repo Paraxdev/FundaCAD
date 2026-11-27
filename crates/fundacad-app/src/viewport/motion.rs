@@ -8,6 +8,8 @@ use glam::Vec3;
 
 use super::camera::Camera;
 
+pub mod selection;
+
 /// The smooth time of eased gestures, seconds, FundaCAD 1's default.
 pub const SMOOTH_TIME: f32 = 0.125;
 /// Below this a move reads as a cut rather than a motion.
