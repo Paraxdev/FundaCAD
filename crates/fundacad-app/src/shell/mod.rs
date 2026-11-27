@@ -67,6 +67,12 @@ impl Shell {
             cx.notify();
         })
         .detach();
+        cx.observe_window_activation(window, |this, window, cx| {
+            if !window.is_window_active() {
+                this.rail_cancel(cx);
+            }
+        })
+        .detach();
         let bench = crate::workbench::Bench::new(&viewport, window, cx);
         cx.observe(&bench.overlay, |_, _, cx| cx.notify()).detach();
         cx.observe(&bench.files, |_, _, cx| cx.notify()).detach();
@@ -234,7 +240,8 @@ impl Render for Shell {
                     .children(self.tool_card(t, window, cx)),
             )
             .child(self.tool_rail(t, window, cx));
-        let card = self.sketch_palette(t, cx).or_else(|| self.inspect_card(t, cx));
+        let palette = self.sketch_palette(t, cx);
+        let card = if palette.is_some() { None } else { self.inspect_card(t, cx) };
         if card.is_none() {
             params::place::set_card_h(None);
         }
@@ -262,7 +269,10 @@ impl Render for Shell {
                     .size_full(),
                 )
             })))
-            .children((!self.view_ctl.history_hidden).then(|| self.history_card(t, window, cx)));
+            .children(match palette {
+                Some(p) => Some(p),
+                None => (!self.view_ctl.history_hidden).then(|| self.history_card(t, window, cx).into_any_element()),
+            });
         let status = status::status(t, self.viewport.read(cx).status(), window);
 
         // Actions go only to the window root while nothing has focus, so the shell takes it.

@@ -6,7 +6,7 @@ mod tests;
 
 use std::collections::BTreeMap;
 use std::f32::consts::FRAC_PI_2;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::cell::Cell;
 
 use gpui::Context;
 use serde::{Deserialize, Serialize};
@@ -89,9 +89,9 @@ impl Matcap {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Projection {
-    #[default]
     Persp,
     Ortho,
+    #[default]
     Auto,
 }
 
@@ -265,16 +265,27 @@ impl Display {
 }
 
 // Note: motion.rs builds a Camera field by field and must not change here, so the mode the camera's projection
-// reads lives beside it instead of on it. There is one viewport per process.
-static PROJECTION: AtomicU8 = AtomicU8::new(0);
+// reads lives beside it instead of on it, per thread so tests running side by side keep their own.
+thread_local! {
+    static PROJECTION: Cell<Projection> = const { Cell::new(Projection::Persp) };
+    static SKETCH_FLAT: Cell<bool> = const { Cell::new(false) };
+}
 
+/// The mode the camera draws with: the one picked, orthographic while a sketch is open, as FundaCAD 1's setSketchFlat.
 pub(super) fn projection() -> Projection {
-    Projection::ALL.get(PROJECTION.load(Ordering::Relaxed) as usize).copied().unwrap_or_default()
+    if SKETCH_FLAT.get() {
+        Projection::Ortho
+    } else {
+        PROJECTION.get()
+    }
 }
 
 fn publish(p: Projection) {
-    let at = Projection::ALL.iter().position(|q| *q == p).unwrap_or(0);
-    PROJECTION.store(at as u8, Ordering::Relaxed);
+    PROJECTION.set(p);
+}
+
+pub(super) fn set_sketch_flat(on: bool) {
+    SKETCH_FLAT.set(on);
 }
 
 impl Viewport {
