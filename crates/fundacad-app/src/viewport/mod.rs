@@ -9,8 +9,10 @@ mod display;
 mod drag;
 mod edges;
 mod gizmo;
+mod ground;
 pub mod inspecting;
 mod issues;
+mod look;
 pub mod mesh;
 mod motion;
 mod pick;
@@ -25,6 +27,7 @@ mod sketching;
 mod undo;
 mod views;
 mod visible;
+mod wire;
 
 pub use sketching::install as install_sketch;
 pub use views::View;
@@ -553,23 +556,30 @@ impl Viewport {
         self.mask_revision += 1;
     }
 
-    fn overlay(&self) -> Overlay {
+    fn overlay(&self, accent: u32) -> Overlay {
         let f = &self.hover_fade;
-        let hover = [f.on.clone(), f.off.clone()].map(|h| h.map(|((b, face, ok), a)| (b, face, ok, ease(a))));
+        let highlight = self.display.shows(OverlayKind::Highlight);
+        let hover = [f.on.clone(), f.off.clone()]
+            .map(|h| h.filter(|_| highlight).map(|((b, face, ok), a)| (b, face, ok, ease(a))));
         let (datums, datums_on_top) =
             if self.display.shows(OverlayKind::Origin) { self.datum_triangles() } else { Default::default() };
+        let (grid, triad) = self.ground(accent);
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
         Overlay {
             hover,
             stretch,
             mask_revision: self.mask_revision,
-            selection_revision: self.picking.revision,
+            selection_revision: self.picking.revision.wrapping_mul(2) | u64::from(!highlight),
             selection_fade: ease(self.select_fade.t),
             clip: self.clip_plane(),
             shade: self.shade_uniform(),
             datums,
             datums_on_top,
+            look: look::Look::of(&self.display),
+            edges: self.display.shows(OverlayKind::Edges),
+            grid,
+            triad,
         }
     }
 
@@ -605,7 +615,7 @@ impl Viewport {
     }
 
     /// Returns true when a new renderer was made, so views showing the backend can update.
-    fn paint(&mut self, bounds: Bounds<Pixels>, window: &mut Window) -> bool {
+    fn paint(&mut self, bounds: Bounds<Pixels>, accent: u32, window: &mut Window) -> bool {
         self.bounds = bounds;
         let had_backend = self.backend.clone();
         let scale = window.scale_factor();
@@ -613,12 +623,12 @@ impl Viewport {
             DevicePixels((bounds.size.width.as_f32() * scale).round() as i32),
             DevicePixels((bounds.size.height.as_f32() * scale).round() as i32),
         );
-        let overlay = self.overlay();
+        let overlay = self.overlay(accent);
         if self.renderer().is_none() {
             return false;
         }
         let mask = self.push.as_ref().filter(|p| !p.lost).map(|p| p.mask.as_slice());
-        let tint = self.tint();
+        let tint = if self.display.shows(OverlayKind::Highlight) { self.tint() } else { Vec::new() };
         let renderer = self.renderer.as_mut().expect("made above");
         renderer.set_background(self.background);
         let panels = self.frosted.iter().map(|f| blur::Panel::new(f, bounds.origin, scale)).collect();
@@ -922,6 +932,7 @@ impl Render for Viewport {
                         let t = crate::theme::ActiveTheme::theme(cx);
                         let (picked, hover) = (Hsla::from(t.accent), Hsla::from(t.accent_hot));
                         let axes = [t.axis_x, t.axis_y, t.axis_z].map(Hsla::from);
+                        let accent = t.accent.bytes().into_iter().fold(0, |c, b| c << 8 | u32::from(b));
                         let dragging = cx.has_active_drag();
                         let reduce = cx.reduce_motion();
                         entity.update(cx, |this, cx| {
@@ -930,7 +941,7 @@ impl Render for Viewport {
                                 let id = cx.entity_id();
                                 window.on_next_frame(move |_, cx| cx.notify(id));
                             }
-                            if this.paint(bounds, window) {
+                            if this.paint(bounds, accent, window) {
                                 cx.notify();
                             }
                             if this.display.shows(OverlayKind::Edges) {

@@ -240,7 +240,7 @@ impl Display {
         Self {
             view_mode: settings::read(VIEW_MODE_KEY).unwrap_or_default(),
             matcap: settings::read(MATCAP_KEY).unwrap_or_default(),
-            matcap_tint: settings::read(TINT_KEY).unwrap_or(false),
+            matcap_tint: settings::read(TINT_KEY).unwrap_or(true),
             overlays: settings::read(OVERLAYS_KEY).unwrap_or_default(),
             xray: false,
             wireframe: false,
@@ -314,9 +314,8 @@ impl Viewport {
         self.picking.filter
     }
 
-    /// One square of the grid at the orbit target in millimetres, the step the sketch snap lattice takes.
+    /// One square of the ground grid at the orbit target in millimetres, as FundaCAD 1's readout shows it.
     pub fn grid_step_mm(&self) -> f64 {
-        let per_pixel = self.camera.per_pixel(self.bounds.size.height.as_f32()) as f64;
-        crate::sketch::snap::grid_step(1.0 / per_pixel.max(1e-9))
+        super::ground::cell(self.camera.per_pixel(self.bounds.size.height.as_f32())) as f64
     }
 }

@@ -11,6 +11,7 @@ use wgpu::util::DeviceExt;
 
 use super::blur::{Blur, Chain, Panel};
 use super::camera::Camera;
+use super::look::{self, Look};
 use super::scene::{Body, Scene, Vertex};
 
 const SAMPLES: u32 = 4;
@@ -28,6 +29,16 @@ struct Uniforms {
     shade: [f32; 4],
     /// x: the hatch pitch, y: the stripe width, both in device pixels.
     hatch: [f32; 4],
+    /// The camera's up in world space, which the matcap frame turns about.
+    view_up: [f32; 4],
+    /// Look::uniform.
+    look: [f32; 4],
+    /// The colour of the line list being drawn, linear.
+    edge: [f32; 4],
+    /// ground::Grid::uniform, then its minor and major line colours, linear.
+    grid: [[f32; 4]; 2],
+    grid_minor: [f32; 4],
+    grid_major: [f32; 4],
 }
 
 /// The cap quad on the plane `clip` over the box `min` to `max`, as its middle and half side.
@@ -103,6 +114,12 @@ pub struct Overlay {
     pub shade: Option<[f32; 4]>,
     pub datums: Vec<DatumVertex>,
     pub datums_on_top: bool,
+    pub look: Look,
+    /// The idle edge outlines.
+    pub edges: bool,
+    pub grid: Option<super::ground::Grid>,
+    /// The origin triad's ghost, drawn over the model, and its solid part, tested against it.
+    pub triad: [Vec<DatumVertex>; 2],
 }
 
 /// A corner of a datum triangle, in world space with a linear colour.
@@ -136,6 +153,9 @@ struct GpuBody {
     vertex_count: usize,
     indices: wgpu::Buffer,
     index_count: u32,
+    /// The body's edges as a line list, for the wireframe.
+    edges: wgpu::Buffer,
+    edge_count: u32,
 }
 
 /// What the last frame was drawn from, to skip frames where nothing changed.
@@ -156,6 +176,10 @@ pub struct Renderer {
     queue: Arc<wgpu::Queue>,
     format: wgpu::TextureFormat,
     pipeline: wgpu::RenderPipeline,
+    /// The bodies blended over what is behind them with no depth written, for x-ray and wireframe.
+    see_through_pipeline: wgpu::RenderPipeline,
+    line_pipeline: wgpu::RenderPipeline,
+    grid_pipeline: wgpu::RenderPipeline,
     count_pipeline: wgpu::RenderPipeline,
     cap_pipeline: wgpu::RenderPipeline,
     /// Datums tested against the model's depth, and over it.
@@ -242,7 +266,7 @@ impl Renderer {
                 attributes: &wgpu::vertex_attr_array![4 => Float32x2],
             }),
         ];
-        let make = |label, vs, fs, buffers: &[Option<wgpu::VertexBufferLayout>], depth, write_mask| {
+        let make = |label, vs, fs, buffers: &[Option<wgpu::VertexBufferLayout>], depth, write_mask, blend| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -259,7 +283,7 @@ impl Renderer {
                     module: &shader,
                     entry_point: Some(fs),
                     compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask })],
+                    targets: &[Some(wgpu::ColorTargetState { format, blend, write_mask })],
                 }),
                 multiview_mask: None,
                 cache: None,
@@ -283,6 +307,16 @@ impl Renderer {
             &buffers,
             depth(true, wgpu::CompareFunction::Less, Default::default()),
             wgpu::ColorWrites::ALL,
+            None,
+        );
+        let see_through_pipeline = make(
+            "viewport see through",
+            "vs",
+            "fs",
+            &buffers,
+            depth(false, wgpu::CompareFunction::Less, Default::default()),
+            wgpu::ColorWrites::ALL,
+            Some(wgpu::BlendState::ALPHA_BLENDING),
         );
         // Each clipped triangle over a sample flips its low bit, so the bit ends set where the plane runs inside the
         // body, however many shells it has.
@@ -293,6 +327,7 @@ impl Renderer {
             &buffers,
             depth(false, wgpu::CompareFunction::Always, parity(wgpu::CompareFunction::Always, wgpu::StencilOperation::Invert)),
             wgpu::ColorWrites::empty(),
+            None,
         );
         // The cap clears the bit it reads, so the next body counts from zero.
         let cap_pipeline = make(
@@ -302,6 +337,7 @@ impl Renderer {
             &[],
             depth(true, wgpu::CompareFunction::Less, parity(wgpu::CompareFunction::Equal, wgpu::StencilOperation::Zero)),
             wgpu::ColorWrites::ALL,
+            None,
         );
         let datum_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("viewport datums"),
@@ -339,6 +375,39 @@ impl Renderer {
                 cache: None,
             })
         });
+        let line_pipeline = super::wire::pipeline(
+            &device,
+            &datum_layout,
+            &shader,
+            format,
+            depth(false, wgpu::CompareFunction::LessEqual, Default::default()),
+            SAMPLES,
+        );
+        let grid_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("viewport grid"),
+            layout: Some(&datum_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_grid"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: Some(depth(false, wgpu::CompareFunction::LessEqual, Default::default())),
+            multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_grid"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
         let align = device.limits().min_uniform_buffer_offset_alignment as u64;
         let body_stride = (std::mem::size_of::<BodyUniforms>() as u64).div_ceil(align) * align;
         Self {
@@ -346,6 +415,9 @@ impl Renderer {
             queue: context.queue.clone(),
             format,
             pipeline,
+            see_through_pipeline,
+            line_pipeline,
+            grid_pipeline,
             count_pipeline,
             cap_pipeline,
             datum_pipelines,
@@ -427,6 +499,9 @@ impl Renderer {
         let init = |label, contents: &[u8], usage| {
             self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some(label), contents, usage })
         };
+        let mut edges = super::wire::segments(&body.source);
+        let edge_count = edges.len();
+        edges.resize(edge_count.max(2), [0.0; 3]);
         GpuBody {
             source: body.source.clone(),
             vertices: init("body vertices", bytemuck::cast_slice(&body.vertices), wgpu::BufferUsages::VERTEX),
@@ -445,6 +520,8 @@ impl Renderer {
             vertex_count: body.vertices.len().max(1),
             indices: init("body indices", bytemuck::cast_slice(&body.indices), wgpu::BufferUsages::INDEX),
             index_count: body.indices.len() as u32,
+            edges: init("body edges", bytemuck::cast_slice(&edges), wgpu::BufferUsages::VERTEX),
+            edge_count: edge_count as u32,
         }
     }
 
@@ -555,6 +632,12 @@ impl Renderer {
         wgpu::Color { r: c(r), g: c(g), b: c(b), a: 1.0 }
     }
 
+    /// scene.ts targetGridZ: the grid sits on the model's floor, or on the XY plane with no model.
+    fn floor(&self) -> f32 {
+        let z = self.bodies.iter().filter(|b| b.vertex_count > 0).map(|b| b.bounds.0.z).fold(f32::INFINITY, f32::min);
+        if z.is_finite() { z } else { 0.0 }
+    }
+
     pub fn render(
         &mut self,
         scene: &Scene,
@@ -590,6 +673,12 @@ impl Renderer {
             clip: overlay.clip.unwrap_or_default(),
             shade: overlay.shade.unwrap_or_default(),
             hatch: hatch(self.scale),
+            view_up: camera.view().inverse().y_axis.truncate().extend(0.0).into(),
+            look: overlay.look.uniform(),
+            edge: look::linear(if overlay.look.wire() { look::EDGE_WIRE } else { look::EDGE_IDLE }, 1.0),
+            grid: overlay.grid.map_or([[0.0; 4]; 2], |g| g.uniform(self.floor())),
+            grid_minor: overlay.grid.map_or([0.0; 4], |g| g.minor),
+            grid_major: overlay.grid.map_or([0.0; 4], |g| g.major),
         };
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
         let mut capped = vec![false; self.bodies.len()];
@@ -613,13 +702,19 @@ impl Renderer {
             }
         }
 
-        let datums = (!overlay.datums.is_empty()).then(|| {
-            self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("viewport datums"),
-                contents: bytemuck::cast_slice(&overlay.datums),
-                usage: wgpu::BufferUsages::VERTEX,
+        let triangles = |v: &[DatumVertex]| {
+            (!v.is_empty()).then(|| {
+                self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("viewport datums"),
+                    contents: bytemuck::cast_slice(v),
+                    usage: wgpu::BufferUsages::VERTEX,
+                })
             })
-        });
+        };
+        let datums = triangles(&overlay.datums);
+        let triad = overlay.triad.each_ref().map(|v| triangles(v));
+        // scene.ts draws the grid in the transparent list ahead of see through bodies and behind solid ones' depth.
+        let grid_first = overlay.look.blended();
         let targets = self.targets.as_ref().expect("targets were just ensured");
         let clear = self.clear();
         let mut encoder = self.device.create_command_encoder(&Default::default());
@@ -639,8 +734,13 @@ impl Renderer {
                 }),
                 ..Default::default()
             });
+            if overlay.grid.is_some() && grid_first {
+                pass.set_pipeline(&self.grid_pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.draw(0..6, 0..1);
+            }
             if let Some((_, group, _)) = &self.body_uniforms {
-                pass.set_pipeline(&self.pipeline);
+                pass.set_pipeline(if overlay.look.blended() { &self.see_through_pipeline } else { &self.pipeline });
                 pass.set_bind_group(0, &self.bind_group, &[]);
                 for (i, body) in self.bodies.iter().enumerate().filter(|(_, b)| b.index_count > 0) {
                     pass.set_bind_group(1, group, &[(self.body_stride * i as u64) as u32]);
@@ -665,11 +765,31 @@ impl Renderer {
                     }
                 }
             }
+            if overlay.grid.is_some() && !grid_first {
+                pass.set_pipeline(&self.grid_pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.draw(0..6, 0..1);
+            }
+            if overlay.look.wire() || overlay.edges {
+                pass.set_pipeline(&self.line_pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                for body in self.bodies.iter().filter(|b| b.edge_count > 0) {
+                    pass.set_vertex_buffer(0, body.edges.slice(..));
+                    pass.draw(0..body.edge_count, 0..1);
+                }
+            }
             if let Some(buffer) = &datums {
                 pass.set_pipeline(&self.datum_pipelines[usize::from(overlay.datums_on_top)]);
                 pass.set_bind_group(0, &self.bind_group, &[]);
                 pass.set_vertex_buffer(0, buffer.slice(..));
                 pass.draw(0..overlay.datums.len() as u32, 0..1);
+            }
+            for (i, buffer) in triad.iter().enumerate() {
+                let Some(buffer) = buffer else { continue };
+                pass.set_pipeline(&self.datum_pipelines[1 - i]);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..overlay.triad[i].len() as u32, 0..1);
             }
         }
         self.blur.run(&mut encoder, &targets.blur, &targets.resolve, size, &self.frost, self.scale);

@@ -142,3 +142,29 @@ fn only_the_trigger_that_opened_it_releases_it() {
     assert!(!r.held_by(&Trigger::Key("q".into())));
     assert!(!r.held_by(&Trigger::Button(MouseButton::Right)));
 }
+
+#[test]
+fn losing_the_window_focus_closes_the_ring_and_runs_nothing() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use gpui::TestAppContext;
+
+    let mut app = TestAppContext::single();
+    let (cx, _overlay) = crate::overlay::test_window(&mut app);
+    let ran = Rc::new(Cell::new(false));
+    let r = ran.clone();
+    let _blur = cx.update(|window, cx| {
+        window.activate_window();
+        super::close_on_blur(window, cx)
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        let pick = RadialItem::new(MenuItem::call("pick".to_string(), move |_, _| r.set(true)), None);
+        super::open_radial(window, cx, centre(), vec![pick], Some(Trigger::Key("w".into())));
+    });
+    assert!(cx.update(|_, cx| super::radial_open(cx)));
+    cx.deactivate_window();
+    assert!(!cx.update(|_, cx| super::radial_open(cx)));
+    assert!(!ran.get());
+}
