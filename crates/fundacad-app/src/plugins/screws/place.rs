@@ -32,11 +32,23 @@ pub fn request(spec: &Value, placement: Option<Placement>) -> Map<String, Value>
     fields
 }
 
-/// The document with the fastener `target` names made from `reply`: a new feature, or a moved one's new solid.
-pub fn apply(doc: &mut Doc, target: &Target, spec: &Value, reply: &Map<String, Value>) -> Result<(), String> {
+/// Where a fastener made without a placement stands, at the origin along +Z.
+const HOME: Placement = Placement { origin: glam::Vec3::ZERO, z: glam::Vec3::Z };
+
+/// The document with the fastener `target` names made from `reply` at `placement`: a new feature, or a moved one's
+/// new solid. The placement is kept beside the spec so a drag can show the solid moving before the engine remakes it.
+pub fn apply(
+    doc: &mut Doc,
+    target: &Target,
+    spec: &Value,
+    placement: Option<Placement>,
+    reply: &Map<String, Value>,
+) -> Result<(), String> {
+    let at = placement.unwrap_or(HOME).json();
     match target {
         Target::New => {
-            let f = feature(&crate::tools::next_id(doc), spec, reply)?;
+            let mut f = feature(&crate::tools::next_id(doc), spec, reply)?;
+            f["generatedBy"]["placement"] = at;
             crate::tools::insert(doc, f)
         }
         Target::Moved(id) => {
@@ -49,6 +61,9 @@ pub fn apply(doc: &mut Doc, target: &Target, spec: &Value, reply: &Map<String, V
                 .ok_or_else(|| format!("{id} is no longer in the document"))?;
             f.insert("geom".into(), geom.clone());
             f.insert("solid".into(), reply.get("solid").cloned().unwrap_or(json!(true)));
+            if let Some(by) = f.get_mut("generatedBy").and_then(Value::as_object_mut) {
+                by.insert("placement".into(), at);
+            }
             Ok(())
         }
     }
@@ -77,23 +92,39 @@ pub fn make(
             done(cx);
             let reply = match answer {
                 Ok(r) => r,
-                Err(r) if r.cancelled => return,
-                Err(r) => return overlay::toast(cx, Toast::error(tr!("screws.insert.couldNotWhy", name = &name, why = r.message))),
+                Err(r) => {
+                    let _ = viewport.update(cx, |v, cx| v.settle(cx));
+                    if r.cancelled {
+                        return;
+                    }
+                    let why = tr!("screws.insert.couldNotWhy", name = &name, why = r.message);
+                    return overlay::toast(cx, Toast::error(why));
+                }
             };
             let (label, said) = match &target {
                 Target::New => (tr!("screws.insert.step", name = &name), tr!("screws.insert.inserted", name = &name)),
                 Target::Moved(_) => (tr!("screws.move.step", name = &name), tr!("screws.move.moved", name = &name)),
             };
             let edited = viewport.update(cx, |v, cx| {
-                v.edit_step(None, Some(label), move |d| apply(d, &target, &spec, &reply), cx)
+                v.edit_step(None, Some(label), move |d| apply(d, &target, &spec, placement, &reply), cx)
             });
             match edited {
                 Ok(_) => overlay::toast(cx, Toast::info(said)),
-                Err(e) => overlay::toast(cx, Toast::error(tr!("screws.place.couldNotWhy", name = &name, why = e))),
+                Err(e) => {
+                    let _ = viewport.update(cx, |v, cx| v.settle(cx));
+                    overlay::toast(cx, Toast::error(tr!("screws.place.couldNotWhy", name = &name, why = e)))
+                }
             }
         });
     })
     .detach();
+}
+
+/// Where the fastener feature `id` stands, None for one made before its placement was kept.
+pub fn placed(doc: &Doc, id: &str) -> Option<Placement> {
+    let features = doc.get("features")?.as_array()?;
+    let f = features.iter().find(|f| f.get("id").and_then(Value::as_str) == Some(id))?;
+    Placement::from_json(f.get("generatedBy")?.get("placement")?)
 }
 
 /// The fastener feature a body was generated as, by the features that own its faces, with its spec.
@@ -114,6 +145,7 @@ pub fn add_mover(viewport: &Entity<Viewport>, cx: &mut App) {
             return None;
         }
         let (id, spec) = fastener_of(doc, owners)?;
+        let from = placed(doc, &id);
         let viewport = viewport.clone();
         let land: Land = Rc::new(move |at: Option<Placement>, _: &mut Window, cx: &mut App| {
             let Some(v) = viewport.upgrade() else { return };
@@ -122,7 +154,7 @@ pub fn add_mover(viewport: &Entity<Viewport>, cx: &mut App) {
             };
             make(&v, spec.clone(), Some(at), Target::Moved(id.clone()), |_| {}, cx);
         });
-        Some(land)
+        Some((land, from))
     });
 }
 

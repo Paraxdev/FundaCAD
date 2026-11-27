@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{circle, hole, placement, rim, Hit, Placement, SceneBody};
+use super::{circle, hole, moved, nearest, placement, rim, snaps, Hit, Placement, SceneBody, Snap};
 use crate::viewport::scene::tests::block;
 use crate::viewport::scene::Body;
 use glam::{Vec2, Vec3};
@@ -95,4 +95,63 @@ fn a_round_edge_seats_at_its_centre_toward_the_viewer() {
     assert!(close(rim(&ring, Vec3::Z).unwrap().z, -Vec3::Z));
     assert!(rim(&ring[..5], -Vec3::Z).is_none());
     assert!(rim(&[Vec3::ZERO, Vec3::X, Vec3::X * 2.0], -Vec3::Z).is_none());
+}
+
+/// A 10 by 10 by 5 block with the four edges round its top and one up its side.
+fn edged() -> SceneBody {
+    let mut b = block(Vec3::ZERO, Vec3::new(10.0, 10.0, 5.0), "ex1");
+    let top = [[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0], [0.0, 0.0, 5.0]];
+    for w in top.windows(2) {
+        b.edges.points.extend(w[0].iter().chain(&w[1]));
+        b.edges.counts.push(2);
+    }
+    b.edges.points.extend([0.0, 0.0, 0.0, 0.0, 0.0, 5.0]);
+    b.edges.counts.push(2);
+    SceneBody::new(Arc::new(b))
+}
+
+#[test]
+fn a_flat_face_snaps_to_its_corners_edge_middles_and_centre() {
+    let s = snaps(&edged(), 5);
+    let has = |p: Vec3, k: Snap| s.iter().any(|&(q, j)| j == k && close(p, q));
+    assert!(has(Vec3::new(5.0, 5.0, 5.0), Snap::Centre));
+    assert!(has(Vec3::new(10.0, 10.0, 5.0), Snap::Corner));
+    assert!(has(Vec3::new(5.0, 0.0, 5.0), Snap::Middle));
+    assert!(!has(Vec3::new(0.0, 0.0, 2.5), Snap::Middle), "the side edge's middle is off the top's plane");
+    assert_eq!(s.len(), 1 + 4 * 3 + 1, "the side edge's top end is a corner of the top");
+}
+
+#[test]
+fn a_round_face_offers_no_snaps() {
+    assert!(snaps(&wall(Vec3::ZERO, Vec3::Z, 3.0, 5.0, 1.0, true), 0).is_empty());
+}
+
+#[test]
+fn the_strongest_snap_in_reach_wins_then_the_nearest() {
+    let flat = |p: Vec3| Some(Vec2::new(p.x, p.y));
+    let points = [
+        (Vec3::new(0.0, 0.0, 0.0), Snap::Centre),
+        (Vec3::new(8.0, 0.0, 0.0), Snap::Corner),
+        (Vec3::new(3.0, 0.0, 0.0), Snap::Middle),
+        (Vec3::new(-4.0, 0.0, 0.0), Snap::Middle),
+    ];
+    assert_eq!(nearest(&points, flat, Vec2::ZERO, 10.0).map(|s| s.1), Some(Snap::Corner));
+    assert_eq!(nearest(&points, flat, Vec2::ZERO, 5.0).map(|s| s.0), Some(Vec3::new(3.0, 0.0, 0.0)));
+    assert_eq!(nearest(&points, flat, Vec2::new(30.0, 0.0), 10.0), None);
+    assert_eq!(nearest(&points, |_| None, Vec2::ZERO, 10.0), None);
+}
+
+#[test]
+fn the_ghost_stands_where_the_drag_would_land() {
+    let b = block(Vec3::ZERO, Vec3::ONE, "ex1");
+    let from = Placement { origin: Vec3::ZERO, z: Vec3::Z };
+    let to = Placement { origin: Vec3::new(5.0, 0.0, 0.0), z: Vec3::X };
+    let m = moved(&b, from, to);
+    let at = |v: &[f32]| (0..v.len() / 3).map(|i| Vec3::from_slice(&v[i * 3..])).collect::<Vec<_>>();
+    for (p, q) in at(&b.positions).into_iter().zip(at(&m.positions)) {
+        assert!(close(q, Vec3::new(5.0 + p.z, p.y, -p.x)), "{p} went to {q}");
+    }
+    let top = at(m.normals.as_ref().unwrap())[5 * 4];
+    assert!(close(top, Vec3::X), "the +Z face now faces +X, {top}");
+    assert_eq!(moved(&b, from, from), b);
 }
