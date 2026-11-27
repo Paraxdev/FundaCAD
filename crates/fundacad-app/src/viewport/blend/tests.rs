@@ -36,7 +36,7 @@ fn past_the_cap_the_question_only_says_why() {
 fn between_warn_and_cap_it_asks_and_cancel_starts_nothing() {
     let mut app = TestAppContext::single();
     let (cx, _overlay) = test_window(&mut app);
-    let v = ask(cx, Ask::Many(target(4000)));
+    let v = ask(cx, Ask::Many(target(4000), Default::default()));
     let (question, choices) = cx.update(|_, cx| asking(cx)).expect("asked");
     assert!(question.contains("4") && question.ends_with('?'), "{question}");
     assert_eq!(choices.len(), 2);
@@ -51,7 +51,7 @@ fn between_warn_and_cap_it_asks_and_cancel_starts_nothing() {
 fn a_yes_without_a_document_starts_nothing() {
     let mut app = TestAppContext::single();
     let (cx, _overlay) = test_window(&mut app);
-    let v = ask(cx, Ask::Many(target(3500)));
+    let v = ask(cx, Ask::Many(target(3500), Default::default()));
     cx.update(|w, cx| press(w, cx, "right"));
     cx.update(|w, cx| press(w, cx, "enter"));
     cx.run_until_parked();

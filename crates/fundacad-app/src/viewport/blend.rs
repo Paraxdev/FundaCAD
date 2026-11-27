@@ -34,7 +34,8 @@ pub(super) struct Target {
 
 /// A question a press left for the mouse up, which has the window to ask it in.
 pub(super) enum Ask {
-    Many(Target),
+    /// The edges, and the document they were picked on, since a yes on a document changed meanwhile starts nothing.
+    Many(Target, Doc),
     TooMany(usize),
 }
 
@@ -301,7 +302,7 @@ impl Viewport {
                         return true;
                     }
                     Gate::Warn => {
-                        self.blend_ask = Some(Ask::Many(t));
+                        self.blend_ask = Some(Ask::Many(t, before));
                         return true;
                     }
                     Gate::Go => {}
@@ -387,20 +388,20 @@ impl Viewport {
                 let ok = Choice::primary(tr!("tool.fillet.ok")).hint(tr_many("tool.fillet.tooManyBody", n));
                 (tr_many("tool.fillet.tooMany", n), vec![ok], None)
             }
-            Ask::Many(t) => {
+            Ask::Many(t, before) => {
                 let n = t.edges.len();
                 let go = Choice::primary(tr_many("tool.fillet.manyAction", n)).hint(tr_many("tool.fillet.manyBody", n));
-                (tr_many("tool.fillet.manyTitle", n), vec![Choice::plain(tr!("common.cancel")), go], Some(t))
+                (tr_many("tool.fillet.manyTitle", n), vec![Choice::plain(tr!("common.cancel")), go], Some((t, before)))
             }
         };
         let answer = overlay::confirm(window, cx, question, choices);
-        let Some(target) = target else { return };
+        let Some((target, picked_on)) = target else { return };
         cx.spawn_in(window, async move |this, cx| {
             if answer.recv().await.ok().flatten() != Some(1) {
                 return;
             }
             let _ = this.update_in(cx, |v, w, cx| {
-                if v.blend_begin(target, cx) {
+                if v.blend_begin(target, &picked_on, cx) {
                     let focus = v.sketch_focus(cx);
                     w.focus(&focus, cx);
                 }
@@ -409,12 +410,15 @@ impl Viewport {
         .detach();
     }
 
-    /// Starts a blend on `t` with its value box open. False when something else took the view meanwhile.
-    fn blend_begin(&mut self, t: Target, cx: &mut Context<Self>) -> bool {
+    /// Starts a blend on `t` with its value box open. False when something else took the view meanwhile, or the
+    /// document is no longer the `picked_on` one its edges name.
+    fn blend_begin(&mut self, t: Target, picked_on: &Doc, cx: &mut Context<Self>) -> bool {
         if self.tool.is_some() || self.sketch.is_some() || self.push.is_some() || self.blend.is_some() {
             return false;
         }
-        let Some(before) = self.session.as_ref().map(|s| s.doc.clone()) else { return false };
+        let Some(before) = self.session.as_ref().map(|s| s.doc.clone()).filter(|d| d == picked_on) else {
+            return false;
+        };
         self.blend = Some(Blend { grab: Some((0.0, 0.0)), ..self.new_blend(t, before) });
         self.blend_release(cx);
         self.blend_open()
