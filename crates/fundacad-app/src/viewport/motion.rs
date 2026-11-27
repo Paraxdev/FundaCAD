@@ -174,9 +174,16 @@ impl Motion {
         self.shown = Some(cam.clone());
     }
 
-    /// Advances one frame, true while there is more to show.
-    pub fn step(&mut self, cam: &mut Camera, now: Instant) -> bool {
+    /// Advances one frame, true while there is more to show. Reduced motion takes a gesture's goal at once.
+    pub fn step(&mut self, cam: &mut Camera, now: Instant, reduce: bool) -> bool {
         self.adopt(cam);
+        if reduce && self.flight.is_none() {
+            if let Some(goal) = self.goal.take() {
+                *cam = goal;
+                self.springs = Default::default();
+                self.shown = Some(cam.clone());
+            }
+        }
         if !self.moving() {
             self.finish();
             return false;
@@ -332,7 +339,7 @@ mod tests {
     fn run(m: &mut Motion, cam: &mut Camera, frames: usize) -> usize {
         let t0 = Instant::now();
         for i in 0..frames {
-            if !m.step(cam, t0 + Duration::from_micros(16_667 * i as u64)) {
+            if !m.step(cam, t0 + Duration::from_micros(16_667 * i as u64), false) {
                 return i;
             }
         }
@@ -389,7 +396,7 @@ mod tests {
         m.goal(&cam).orbit(glam::Vec2::new(100.0, 0.0));
         let want = cam.yaw - 0.8;
         let t0 = Instant::now();
-        m.step(&mut cam, t0);
+        m.step(&mut cam, t0, false);
         assert!(cam.yaw > want + 0.1, "the first frame is part way");
         let frames = run(&mut m, &mut cam, 600);
         assert!(frames < 120, "{frames}");
@@ -402,10 +409,20 @@ mod tests {
         let mut cam = Camera::default();
         let mut m = Motion::default();
         m.goal(&cam).yaw += 1.0;
-        m.step(&mut cam, Instant::now());
+        m.step(&mut cam, Instant::now(), false);
         cam = Camera { yaw: 5.0, ..Default::default() };
-        assert!(!m.step(&mut cam, Instant::now()));
+        assert!(!m.step(&mut cam, Instant::now(), false));
         assert_eq!(cam.yaw, 5.0);
+    }
+
+    #[test]
+    fn reduced_motion_takes_a_gesture_at_once() {
+        let mut cam = Camera::default();
+        let mut m = Motion::default();
+        m.goal(&cam).yaw += 1.0;
+        let want = cam.yaw + 1.0;
+        assert!(!m.step(&mut cam, Instant::now(), true));
+        assert_eq!(cam.yaw, want);
     }
 
     #[test]

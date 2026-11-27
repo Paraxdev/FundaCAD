@@ -557,7 +557,7 @@ impl Viewport {
     /// Advances the camera and the fades by one frame, true while any of them has more to show.
     fn tick(&mut self, reduce: bool) -> bool {
         let now = std::time::Instant::now();
-        let moving = self.motion.step(&mut self.camera, now);
+        let moving = self.motion.step(&mut self.camera, now, reduce);
         self.hover_fade.set(self.hover_key(), reduce);
         let selecting = self.select_fade.step(self.picking.revision, reduce, now);
         self.hover_fade.step(now) | moving | selecting
