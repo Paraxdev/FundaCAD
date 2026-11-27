@@ -808,13 +808,15 @@ impl Viewport {
     }
 
     fn zoom(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
-        let pinch = event.modifiers.control && matches!(event.delta, ScrollDelta::Pixels(_));
-        let log = motion::zoom_log(event.delta.pixel_delta(px(20.)).y.as_f32(), pinch);
+        self.zoom_by(motion::zoom_log(event.delta.pixel_delta(px(20.)).y.as_f32()), event.position, cx);
+    }
+
+    fn zoom_by(&mut self, log: f32, position: Point<Pixels>, cx: &mut Context<Self>) {
         let b = self.bounds;
         let (w, h) = (b.size.width.as_f32().max(1.0), b.size.height.as_f32().max(1.0));
-        let local = event.position - b.origin;
+        let local = position - b.origin;
         let ndc = Vec2::new(local.x.as_f32() / w * 2.0 - 1.0, 1.0 - local.y.as_f32() / h * 2.0);
-        let (o, d) = self.ray_at(event.position);
+        let (o, d) = self.ray_at(position);
         match self.pick_ray(o, d) {
             Some(hit) => motion::zoom_about(self.motion.goal(&self.camera), hit.point, log),
             None => self.motion.goal(&self.camera).zoom_at(log / -(0.88f32.ln()), ndc, w / h),
@@ -881,6 +883,7 @@ impl Render for Viewport {
                 }
             }))
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| this.zoom(e, cx)))
+            .on_pinch(cx.listener(|this, e: &PinchEvent, _, cx| this.zoom_by(motion::pinch_log(e.delta), e.position, cx)))
             .on_drop(cx.listener(|this, c: &placing::Carried, w, cx| this.land(c, w, cx)))
             .on_drag_move(cx.listener(|this, e: &DragMoveEvent<placing::Carried>, _, cx| this.drag_over(e.event.position, cx)))
             .child(

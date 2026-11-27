@@ -1,13 +1,21 @@
 use glam::Vec3;
 
-use super::{zoom_about, zoom_log};
+use super::{pinch_log, zoom_about, zoom_log};
 use crate::viewport::camera::Camera;
 
 #[test]
-fn a_pinch_zooms_faster_than_a_wheel_and_a_sweep_is_held() {
-    assert!(zoom_log(10.0, true) > zoom_log(10.0, false));
-    assert_eq!(zoom_log(1000.0, false), zoom_log(240.0, false));
-    assert!(zoom_log(-20.0, false) < 0.0);
+fn a_wheel_sweep_is_held_and_a_bad_one_does_nothing() {
+    assert_eq!(zoom_log(1000.0), zoom_log(240.0));
+    assert!(zoom_log(-20.0) < 0.0);
+    assert_eq!(zoom_log(f32::NAN), 0.0);
+}
+
+#[test]
+fn a_pinch_zooms_by_its_own_scale() {
+    assert!((pinch_log(0.1) - 1.1f32.ln()).abs() < 1e-6);
+    assert!(pinch_log(-0.1) < 0.0);
+    assert!(pinch_log(-5.0).is_finite());
+    assert_eq!(pinch_log(f32::NAN), 0.0);
 }
 
 #[test]
