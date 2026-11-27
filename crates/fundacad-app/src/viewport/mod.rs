@@ -9,6 +9,7 @@ mod gizmo;
 pub mod inspecting;
 mod issues;
 pub mod mesh;
+mod motion;
 mod pick;
 pub mod placing;
 mod profiles;
@@ -38,6 +39,7 @@ pub use camera::Camera;
 #[allow(unused_imports, reason = "fc2/shell reads it for History")]
 pub use issues::FeatureIssue;
 use pick::Hit;
+use motion::ease;
 use renderer::{Overlay, Renderer};
 use scene::Scene;
 #[allow(unused_imports, reason = "the shell and the tools read it")]
@@ -104,6 +106,9 @@ impl Push {
 
 pub struct Viewport {
     camera: Camera,
+    motion: motion::Motion,
+    hover_fade: motion::Fade<(usize, u32, bool)>,
+    select_fade: motion::Ramp,
     scene: Scene,
     radius: f32,
     fitted: bool,
@@ -164,6 +169,9 @@ impl Viewport {
     pub fn new() -> Self {
         Self {
             camera: Camera::default(),
+            motion: Default::default(),
+            hover_fade: Default::default(),
+            select_fade: Default::default(),
             scene: Scene::default(),
             radius: 1.0,
             fitted: false,
@@ -531,11 +539,8 @@ impl Viewport {
     }
 
     fn overlay(&self) -> Overlay {
-        let hover = match (&self.push, &self.hover) {
-            (Some(_), _) => None,
-            (None, Some((hit, grip))) => Some((hit.body, hit.face, grip.is_ok())),
-            (None, None) => self.highlighted(),
-        };
+        let f = &self.hover_fade;
+        let hover = [f.on.clone(), f.off.clone()].map(|h| h.map(|((b, face, ok), a)| (b, face, ok, ease(a))));
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
         Overlay {
@@ -543,9 +548,27 @@ impl Viewport {
             stretch,
             mask_revision: self.mask_revision,
             selection_revision: self.picking.revision,
+            selection_fade: ease(self.select_fade.t),
             clip: self.clip_plane(),
             shade: self.shade_uniform(),
         }
+    }
+
+    fn hover_key(&self) -> Option<(usize, u32, bool)> {
+        match (&self.push, &self.hover) {
+            (Some(_), _) => None,
+            (None, Some((hit, grip))) => Some((hit.body, hit.face, grip.is_ok())),
+            (None, None) => self.highlighted(),
+        }
+    }
+
+    /// Advances the camera and the fades by one frame, true while any of them has more to show.
+    fn tick(&mut self, reduce: bool) -> bool {
+        let now = std::time::Instant::now();
+        let moving = self.motion.step(&mut self.camera, now, reduce);
+        self.hover_fade.set(self.hover_key(), reduce);
+        let selecting = self.select_fade.step(self.picking.revision, reduce, now);
+        self.hover_fade.step(now) | moving | selecting
     }
 
     /// Makes or remakes the renderer whenever GPUI has a new device.
@@ -742,9 +765,11 @@ impl Viewport {
             let delta = event.position - last;
             let delta = Vec2::new(delta.x.as_f32(), delta.y.as_f32());
             self.nav = Some((kind, event.position));
+            let height = self.bounds.size.height.as_f32();
+            let goal = self.motion.goal(&self.camera);
             match kind {
-                Nav::Orbit if !event.modifiers.shift => self.camera.orbit(delta),
-                _ => self.camera.pan(delta, self.bounds.size.height.as_f32()),
+                Nav::Orbit if !event.modifiers.shift => goal.orbit(delta),
+                _ => goal.pan(delta, height),
             }
             cx.notify();
         } else if let Some((at, _)) = self.picking.pressed.filter(|_| event.pressed_button == Some(MouseButton::Left)) {
@@ -781,7 +806,7 @@ impl Viewport {
         let (w, h) = (b.size.width.as_f32().max(1.0), b.size.height.as_f32().max(1.0));
         let local = event.position - b.origin;
         let ndc = Vec2::new(local.x.as_f32() / w * 2.0 - 1.0, 1.0 - local.y.as_f32() / h * 2.0);
-        self.camera.zoom_at(steps, ndc, w / h);
+        self.motion.goal(&self.camera).zoom_at(steps, ndc, w / h);
         cx.notify();
     }
 }
@@ -853,7 +878,13 @@ impl Render for Viewport {
                         let (picked, hover) = (Hsla::from(t.accent), Hsla::from(t.accent_hot));
                         let axes = [t.axis_x, t.axis_y, t.axis_z].map(Hsla::from);
                         let dragging = cx.has_active_drag();
+                        let reduce = cx.reduce_motion();
                         entity.update(cx, |this, cx| {
+                            let began = std::time::Instant::now();
+                            if this.tick(reduce) {
+                                let id = cx.entity_id();
+                                window.on_next_frame(move |_, cx| cx.notify(id));
+                            }
                             if this.paint(bounds, window) {
                                 cx.notify();
                             }
@@ -862,6 +893,7 @@ impl Render for Viewport {
                             this.paint_inspect(bounds, hover, window);
                             this.paint_blend(bounds, picked, window);
                             this.paint_carry(bounds, dragging, hover, window);
+                            this.motion.painted(began.elapsed());
                         });
                     },
                 )

@@ -29,20 +29,25 @@ struct Uniforms {
 struct BodyUniforms {
     /// xyz: how far the masked vertices move.
     offset: [f32; 4],
-    /// x: the hovered face or -1, y: 1 when that face can be pushed.
+    /// x: the hovered face or -1, y: 1 when that face can be pushed, z and w: the same for the face it fades out of.
     hover: [i32; 4],
+    /// x: how far the hover has faded in, y: how much is left of the one fading out, z: how far the selection has
+    /// gone from what was selected before to what is now.
+    fade: [f32; 4],
 }
 
 /// What one frame shows beyond the scene.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Overlay {
-    pub hover: Option<(usize, u32, bool)>,
+    /// The hovered face and the one it left, by body, face, whether it can be pushed and how strongly it shows.
+    pub hover: [Option<(usize, u32, bool, f32)>; 2],
     /// The body whose masked vertices move, and by how much.
     pub stretch: Option<(usize, Vec3)>,
     /// Bumped whenever the mask changes.
     pub mask_revision: u64,
     /// Bumped whenever what is selected changes.
     pub selection_revision: u64,
+    pub selection_fade: f32,
     pub clip: Option<[f32; 4]>,
     pub shade: Option<[f32; 4]>,
 }
@@ -62,7 +67,10 @@ struct GpuBody {
     source: Arc<Body>,
     vertices: wgpu::Buffer,
     mask: wgpu::Buffer,
+    /// Per vertex, selected before and now, 1 or 0.
     selected: wgpu::Buffer,
+    /// What `selected` holds as now.
+    flags: Vec<f32>,
     vertex_count: usize,
     indices: wgpu::Buffer,
     index_count: u32,
@@ -167,9 +175,9 @@ impl Renderer {
                         attributes: &wgpu::vertex_attr_array![3 => Float32],
                     }),
                     Some(wgpu::VertexBufferLayout {
-                        array_stride: 4,
+                        array_stride: 8,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![4 => Float32],
+                        attributes: &wgpu::vertex_attr_array![4 => Float32x2],
                     }),
                 ],
             },
@@ -280,9 +288,10 @@ impl Renderer {
             ),
             selected: init(
                 "body selection",
-                bytemuck::cast_slice(&vec![0f32; body.vertices.len().max(1)]),
+                bytemuck::cast_slice(&vec![0f32; body.vertices.len().max(1) * 2]),
                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             ),
+            flags: Vec::new(),
             vertex_count: body.vertices.len().max(1),
             indices: init("body indices", bytemuck::cast_slice(&body.indices), wgpu::BufferUsages::INDEX),
             index_count: body.indices.len() as u32,
@@ -307,8 +316,10 @@ impl Renderer {
         if self.selected_revision == revision {
             return;
         }
+        // After a rebuild the same selection is set again, it shows at once rather than fading in over the new mesh.
+        let rebuilt = self.selected_revision == u64::MAX;
         self.selected_revision = revision;
-        for (i, gpu) in self.bodies.iter().enumerate() {
+        for (i, gpu) in self.bodies.iter_mut().enumerate() {
             let Some(body) = scene.bodies.get(i) else { continue };
             let entry = selected.iter().find(|(b, _)| *b == i);
             let mut flags: Vec<f32> = body
@@ -321,7 +332,10 @@ impl Renderer {
                 })
                 .collect();
             flags.resize(gpu.vertex_count, 0.0);
-            self.queue.write_buffer(&gpu.selected, 0, bytemuck::cast_slice(&flags));
+            let before = if rebuilt || gpu.flags.len() != flags.len() { &flags } else { &gpu.flags };
+            let pairs: Vec<[f32; 2]> = before.iter().zip(&flags).map(|(&a, &b)| [a, b]).collect();
+            self.queue.write_buffer(&gpu.selected, 0, bytemuck::cast_slice(&pairs));
+            gpu.flags = flags;
         }
     }
 
@@ -431,15 +445,17 @@ impl Renderer {
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
         if let Some((buffer, _, _)) = &self.body_uniforms {
             for i in 0..self.bodies.len() {
-                let hover = match overlay.hover {
-                    Some((b, face, pushable)) if b == i => [face as i32, pushable as i32, 0, 0],
-                    _ => [-1, 0, 0, 0],
-                };
+                let (mut hover, mut fade) = ([-1, 0, -1, 0], [0.0, 0.0, overlay.selection_fade, 0.0]);
+                for (slot, h) in overlay.hover.iter().enumerate() {
+                    if let Some((_, face, pushable, a)) = h.filter(|h| h.0 == i) {
+                        (hover[slot * 2], hover[slot * 2 + 1], fade[slot]) = (face as i32, pushable as i32, a);
+                    }
+                }
                 let offset = match overlay.stretch {
                     Some((b, offset)) if b == i => offset.extend(0.0).into(),
                     _ => [0.0; 4],
                 };
-                let u = BodyUniforms { offset, hover };
+                let u = BodyUniforms { offset, hover, fade };
                 self.queue.write_buffer(buffer, self.body_stride * i as u64, bytemuck::bytes_of(&u));
             }
         }

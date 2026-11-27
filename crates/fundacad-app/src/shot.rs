@@ -2,7 +2,8 @@
 //! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
 //! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` (`,ctrl` or `,shift` to add),
 //! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:` and `up:` for a held left button,
-//! `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down), or `wait:<ms>`.
+//! `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down), `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep
+//! with the right button over `ms`, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
 
 use std::time::Duration;
 
@@ -53,6 +54,23 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
                 }
                 continue;
             }
+            if let Some(at) = step.strip_prefix("orbit:") {
+                let n: Vec<f32> = at.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+                let [x, y, x2, y2, ms] = n[..] else {
+                    log::error!("shot: orbit:{at} wants x,y,x2,y2,ms");
+                    continue;
+                };
+                let frames = (ms / 8.0).max(1.0) as usize;
+                let at = |t: f32| gpui::point(gpui::px(x + (x2 - x) * t), gpui::px(y + (y2 - y) * t));
+                let _ = window.update(cx, |_, window, cx| right(at(0.0), Some(true), window, cx));
+                for i in 1..=frames {
+                    cx.background_executor().timer(Duration::from_millis(8)).await;
+                    let p = at(i as f32 / frames as f32);
+                    let _ = window.update(cx, |_, window, cx| right(p, None, window, cx));
+                }
+                let _ = window.update(cx, |_, window, cx| right(at(1.0), Some(false), window, cx));
+                continue;
+            }
             let _ = window.update(cx, |_, window, cx| run_step(step, window, cx));
         }
         cx.background_executor().timer(Duration::from_millis(after - after / 2)).await;
@@ -91,6 +109,15 @@ fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
         }
     } else if let Some(at) = step.strip_prefix("hover:") {
         mouse(at, None, window, cx);
+    } else if let Some(at) = step.strip_prefix("wheel:") {
+        let n: Vec<f32> = at.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+        let [x, y, dy] = n[..] else { return log::error!("shot: wheel:{at} wants x,y,pixels") };
+        let event = gpui::ScrollEvent {
+            position: gpui::point(gpui::px(x), gpui::px(y)),
+            delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(dy))),
+            ..Default::default()
+        };
+        window.dispatch_event(gpui::PlatformInput::Scroll(event), cx);
     } else if let Some(question) = step.strip_prefix("ask:") {
         use crate::overlay::Choice;
         let choices = vec![
@@ -121,7 +148,23 @@ fn mouse(at: &str, press: Option<bool>, window: &mut gpui::Window, cx: &mut App)
     let event = match press {
         None => PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: held }),
         Some(true) => {
-            window.dispatch_event(PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }), cx);
+            window.dispatch_event(
+                PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: None }),
+                cx,
+            );
+            PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count: 1, first_mouse: false })
+        }
+        Some(false) => PlatformInput::MouseUp(MouseUpEvent { button, position, modifiers, click_count: 1 }),
+    };
+    window.dispatch_event(event, cx);
+}
+
+fn right(position: gpui::Point<gpui::Pixels>, press: Option<bool>, window: &mut gpui::Window, cx: &mut App) {
+    use gpui::{MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput};
+    let (button, modifiers) = (MouseButton::Right, Default::default());
+    let event = match press {
+        None => PlatformInput::MouseMove(MouseMoveEvent { position, modifiers, pressed_button: Some(button) }),
+        Some(true) => {
             PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers, click_count: 1, first_mouse: false })
         }
         Some(false) => PlatformInput::MouseUp(MouseUpEvent { button, position, modifiers, click_count: 1 }),
