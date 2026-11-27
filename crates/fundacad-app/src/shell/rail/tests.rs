@@ -40,6 +40,14 @@ mod model {
     }
 
     #[test]
+    fn a_cancel_drops_a_press_quietly_and_closes_an_open_flyout() {
+        let (pressing, _) = hold_step(&Hold::Idle, press("p", true));
+        assert_eq!(hold_step(&pressing, HoldEvent::Cancel), (Hold::Idle, Effect::None));
+        let (open, _) = hold_step(&pressing, HoldEvent::Hold);
+        assert_eq!(hold_step(&open, HoldEvent::Cancel), (Hold::Idle, Effect::Close));
+    }
+
+    #[test]
     fn a_category_never_opens_from_a_hold_and_a_press_on_the_open_one_closes() {
         let (s, _) = hold_step(&Hold::Idle, press("c", false));
         assert_eq!(hold_step(&s, HoldEvent::Hold).1, Effect::None);

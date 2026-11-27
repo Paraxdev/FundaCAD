@@ -180,7 +180,9 @@ impl Shell {
             column_button(t, m.icon(), m.label(), mode == m)
                 .on_click(cx.listener(move |this, _, _, cx| this.display(cx, |d| d.view_mode = m)))
         });
+        let sketching = self.viewport.read(cx).sketching();
         let history_on = !self.view_ctl.history_hidden;
+        let history_tip = if sketching { "Sketch options (Ctrl+Alt+H)" } else { "History (Ctrl+Alt+H)" };
         div()
             .flex()
             .flex_col()
@@ -193,7 +195,7 @@ impl Shell {
                     // Screenshot and Versions wait on an image export and the versions panel.
                     .child(column_button(t, "camera", "Screenshot", false).opacity(0.4))
                     .child(column_button(t, "versions", "Versions", false).opacity(0.4))
-                    .child(column_button(t, "history", "History (Ctrl+Alt+H)", history_on).on_click(cx.listener(
+                    .child(column_button(t, "history", history_tip, history_on).on_click(cx.listener(
                         |this, _, _, cx| {
                             this.view_ctl.history_hidden = !this.view_ctl.history_hidden;
                             cx.notify();

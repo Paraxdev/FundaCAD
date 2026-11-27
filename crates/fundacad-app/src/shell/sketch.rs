@@ -13,7 +13,7 @@ use crate::theme::{Rgb, Theme, FS_SMALL, R_LG, R_MD, R_SM, S_2, S_3, S_4, W_SEMI
 use crate::ui::{icon, text};
 
 impl Shell {
-    /// The Sketch Palette, None while not sketching.
+    /// The Sketch Palette, which takes History's place while sketching. None while not sketching.
     pub(super) fn sketch_palette(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let v = self.viewport.read(cx);
         let (_, _, construction) = v.sketch_rail()?;
@@ -123,7 +123,7 @@ impl Shell {
             };
         }
         let card = motion::glass_in("sketch-palette-in", card);
-        Some(div().w_full().flex().justify_end().child(card).into_any_element())
+        Some(div().flex_none().child(card).into_any_element())
     }
 }
 

@@ -141,6 +141,7 @@ impl Shell {
             lit,
             menu: false,
             muted: false,
+            keep_sub: true,
         };
         match mode {
             Mode::Model => None,
@@ -268,15 +269,22 @@ impl Shell {
     fn rail_press_outside(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
         let inside = |c: &Spot| c.get().is_some_and(|b| b.contains(&at));
         if self.rail.open.is_some() && !inside(&self.rail.rail) && !inside(&self.rail.flyout) {
-            self.close_flyout(cx);
+            self.rail_cancel(cx);
         }
     }
 
     /// Esc closes an open flyout before anything else hears it.
     pub(super) fn rail_escape(&mut self, cx: &mut Context<Self>) -> bool {
         let open = self.rail.open.is_some();
-        self.close_flyout(cx);
+        self.rail_cancel(cx);
         open
+    }
+
+    /// Escape, a press outside, or the window going to the back: a press in flight never turns into a hold.
+    pub(super) fn rail_cancel(&mut self, cx: &mut Context<Self>) {
+        let (next, _) = model::hold_step(&self.rail.hold, HoldEvent::Cancel);
+        self.close_flyout(cx);
+        self.rail.hold = next;
     }
 
     fn rail_button(&self, t: &Theme, b: Button, act: Act, compact: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -306,6 +314,7 @@ impl Shell {
             lit: open == Some(&f.id) || holding || nested_open || face.is_some_and(|t| self.armed(&t.action)),
             menu: true,
             muted: face.is_some_and(|t| self.muted(&t.action)),
+            keep_sub: false,
         };
         let cover = div().id(ElementId::Name(format!("rail-family:{}", f.id).into())).absolute().inset_0().cursor_pointer();
         let cover = match f.style {
@@ -401,6 +410,7 @@ impl Shell {
             lit: false,
             menu: false,
             muted: false,
+            keep_sub: false,
         };
         let mut list: Vec<AnyElement> = vec![self.rail_button(t, search, Act::Run("find".into()), compact, cx)];
         list.extend(head.map(|h| self.rail_button(t, h.button, h.act, compact, cx)));
@@ -500,7 +510,8 @@ impl Shell {
                             this.rail_act(Act::Run(action.clone()), window, cx);
                         },
                     ));
-                    rail::button(t, Button { muted: self.muted(&tool.action), ..tool_button(tool) }, compact)
+                    let b = Button { lit: self.armed(&tool.action), muted: self.muted(&tool.action), ..tool_button(tool) };
+                    rail::button(t, b, compact)
                         .relative()
                         .child(cover)
                         .child(measure(self.rail.picks.clone(), tool.action.clone()))
@@ -541,6 +552,7 @@ fn tool_button(tool: &Tool) -> Button {
         lit: false,
         menu: false,
         muted: false,
+        keep_sub: false,
     }
 }
 
@@ -554,6 +566,7 @@ fn foot_button(id: &str, glyph: &str, label: &'static str, on: Option<bool>) -> 
         lit: on == Some(true),
         menu: false,
         muted: false,
+        keep_sub: false,
     }
 }
 
