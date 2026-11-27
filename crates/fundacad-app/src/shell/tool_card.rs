@@ -27,12 +27,39 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
         register(cx, id, filter.label(), Group::Edit, move |_, cx| v.update(cx, |v, cx| v.set_filter(filter, cx)));
     }
     let v = viewport.clone();
+    cx.intercept_keystrokes(move |e, window, cx| {
+        let k = &e.keystroke;
+        let m = k.modifiers;
+        // Shift = types + on most layouts.
+        let key = if m.shift && (k.key == "=" || k.key_char.as_deref() == Some("+")) { "+" } else { k.key.as_str() };
+        let held = m.control || m.alt || m.platform || m.function || (m.shift && key != "+");
+        if held || window.context_stack().iter().any(|c| c.contains("Input")) {
+            return;
+        }
+        if v.update(cx, |v, cx| tool_key(v, key, cx)) {
+            cx.stop_propagation();
+        }
+    })
+    .detach();
+    let v = viewport.clone();
     register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| match v.running().is_some() {
             true => v.finish(false, cx),
+            false if v.inspecting().card.is_some() => v.open_card(None, cx),
             false => v.clear_selection(cx),
         })
     });
+}
+
+/// A key the running tool answers, kept from the key table: [ ] - + and up and down for a pattern's count, X for a draft's pull axis.
+fn tool_key(v: &mut Viewport, key: &str, cx: &mut Context<Viewport>) -> bool {
+    let Some(id) = v.running().map(|r| r.feature.clone()) else { return false };
+    let Some(f) = v.doc().and_then(|d| tools::feature(d, &id)).cloned() else { return false };
+    let Some(new) = tools::press(&f, key, &v.shown_bodies()) else { return false };
+    if let Err(why) = v.edit(move |d| tools::replace(d, &id, new.clone()), cx) {
+        cx.defer(move |cx| toast(cx, why));
+    }
+    true
 }
 
 fn toast(cx: &mut App, words: String) {
@@ -40,6 +67,13 @@ fn toast(cx: &mut App, words: String) {
 }
 
 fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) {
+    if viewport.read(cx).sketching() {
+        match tool.id {
+            "extrude" => return viewport.update(cx, |v, cx| v.sketch_extrude(false, cx)),
+            "presspull" => viewport.update(cx, |v, cx| v.finish_sketch(cx)),
+            _ => return toast(cx, "Finish the sketch first".into()),
+        }
+    }
     let v = viewport.read(cx);
     let Some(doc) = v.doc() else { return toast(cx, i18n::t("tool.openDocumentFirst")) };
     let boolean = tool.id.starts_with("boolean-");
@@ -50,17 +84,26 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
         Ok(s) => s,
         Err(why) => return toast(cx, why),
     };
+    let tools::Fitted { start, before } = tools::fit(tool.id, start, doc, v.selection(), &v.shown_bodies());
     let mut shown = doc.clone();
     let _ = tools::insert(&mut shown, start.feature.clone());
     let label = tr!("step.label.add", step = crate::timeline::labels::name_of(&shown, &id));
     let feature = start.feature.clone();
+    let offered = tools::offer(tool.id, v.selection());
     let begun = viewport.update(cx, |v, cx| {
         let need = start.need.clone();
-        v.begin_tool(i18n::t(tool.label), label, id.clone(), need, move |d| tools::insert(d, feature.clone()), cx)?;
+        v.begin_tool(i18n::t(tool.label), label, id.clone(), need, move |d| {
+            before.iter().try_for_each(|b| tools::insert(d, b.clone()))?;
+            tools::insert(d, feature.clone())
+        }, cx)?;
         v.clear_selection(cx);
         match start.arm() {
             // A boolean with its bodies picked is done at once, as in FundaCAD 1.
             None if boolean => v.finish(true, cx),
+            None => match offered {
+                Some(t) => v.offer_arm(t, cx),
+                None => v.set_arm(None, cx),
+            },
             arm => v.set_arm(arm, cx),
         }
         Ok::<(), String>(())
@@ -70,16 +113,19 @@ fn start(viewport: &Entity<Viewport>, tool: &'static tools::Tool, cx: &mut App) 
     }
 }
 
-/// The pick a target row takes, None for a sketch area the sketch tools pick.
-fn target_of(field: &'static str, kind: model::TargetKind) -> Option<Target> {
+/// The pick a target row takes.
+fn target_of(field: &'static str, kind: model::TargetKind) -> Target {
     let kind = match kind {
         model::TargetKind::Edge => PickKind::Edge,
         model::TargetKind::Face => PickKind::Face,
         model::TargetKind::Body => PickKind::Body,
-        model::TargetKind::Area => return None,
+        model::TargetKind::Area => PickKind::Area,
     };
-    let single = matches!(field, "face" | "upTo" | "target" | "ground" | "startFace" | "upToFace" | "upToFace2");
-    Some(Target { field, kind, many: !single })
+    let single = matches!(
+        field,
+        "face" | "profile" | "upTo" | "target" | "ground" | "startFace" | "upToFace" | "upToFace2" | "axisEdge"
+    );
+    Target { field, kind, many: !single }
 }
 
 pub(super) fn prompt(arm: &Target) -> String {
@@ -95,9 +141,7 @@ impl Shell {
     pub(super) fn target_click(&mut self, id: &str, label: &str, cx: &mut Context<Self>) {
         let Some(doc) = self.source.as_ref() else { return };
         let Some((field, kind)) = model::target_field(doc, id, label) else { return };
-        let Some(target) = target_of(field, kind) else {
-            return toast(cx, i18n::t("tool.areasInSketch"));
-        };
+        let target = target_of(field, kind);
         let name = crate::timeline::labels::name_of(doc, id);
         let id = id.to_string();
         self.viewport.update(cx, |v, cx| {

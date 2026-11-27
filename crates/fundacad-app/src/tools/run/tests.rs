@@ -162,3 +162,39 @@ fn nouns_follow_the_count_a_field_takes() {
     assert_eq!(noun(PickKind::Face, false), "face");
     assert_eq!(noun(PickKind::Edge, true), "edges");
 }
+
+const PLANE: Target = Target { field: "plane", kind: PickKind::Plane, many: false };
+
+fn split_run() -> (Run, Doc) {
+    let before = doc(json!({"features": [{"id": "f1"}]}));
+    let mut now = before.clone();
+    crate::tools::insert(&mut now, json!({"id": "f2", "type": "split", "plane": "XY"})).unwrap();
+    (Run::new(before, "Split Body".into(), "Add Split 1".into(), "f2".into(), Vec::new()), now)
+}
+
+#[test]
+fn an_offered_pick_rolls_back_and_ends_when_the_feature_changes_another_way() {
+    let (mut r, mut d) = split_run();
+    r.offer(&mut d, PLANE);
+    assert_eq!((r.arm, d.get("rollback")), (Some(PLANE), Some(&json!(1))));
+    r.settle(&mut d);
+    assert_eq!(r.arm, Some(PLANE));
+    crate::tools::replace(&mut d, "f2", json!({"id": "f2", "type": "split", "plane": "XZ"})).unwrap();
+    r.settle(&mut d);
+    assert_eq!((r.arm, d.get("rollback")), (None, None));
+    assert_eq!(r.missing(&d), None);
+    assert_eq!(r.finish(&mut d, true).unwrap().map(|(_, l)| l), Some("Add Split 1".into()));
+}
+
+#[test]
+fn an_offered_pick_ends_on_a_click_and_a_plain_arm_does_not_settle() {
+    let (mut r, mut d) = split_run();
+    r.offer(&mut d, PLANE);
+    r.pick(&mut d, json!({"origin": [0, 0, 4]}), None).unwrap();
+    assert_eq!((r.arm, d.get("rollback")), (None, None));
+    assert_eq!(d["features"][1], json!({"id": "f2", "type": "split", "plane": {"origin": [0, 0, 4]}}));
+    r.set_arm(&mut d, Some(PLANE));
+    crate::tools::replace(&mut d, "f2", json!({"id": "f2", "type": "split", "plane": "YZ"})).unwrap();
+    r.settle(&mut d);
+    assert_eq!(r.arm, Some(PLANE));
+}

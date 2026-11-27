@@ -230,8 +230,9 @@ pub fn sketch_visible(doc: &Map<String, Value>, id: &str) -> bool {
     flag(doc, "sketchVisibility", id, false)
 }
 
+/// The Origin planes start hidden, datums shown.
 pub fn plane_visible(doc: &Map<String, Value>, id: &str) -> bool {
-    flag(doc, "planeVisibility", id, true)
+    flag(doc, "planeVisibility", id, !matches!(id, "XY" | "XZ" | "YZ"))
 }
 
 /// The rebuild's bodies, or before any build the document's own body ids, so the list is not empty while it builds.
@@ -593,9 +594,11 @@ pub fn nodes(i: &Inputs) -> Vec<Node> {
     if show(Section::Origin) {
         let rows = ["XY", "XZ", "YZ"]
             .into_iter()
-            .map(|p| Node {
-                dim: true,
-                ..Node::row(format!("o:{p}"), 1, tr!("items.origin.plane", plane = p), "plane")
+            .map(|p| {
+                let on = plane_visible(doc, p);
+                let mut row = Node { dim: !on, ..Node::row(format!("o:{p}"), 1, tr!("items.origin.plane", plane = p), "plane") };
+                row.eye = Some(eye(Category::Planes, p, on));
+                row
             })
             .collect();
         folder(&mut out, "Origin", &t("items.folder.origin"), "origin", rows, "");

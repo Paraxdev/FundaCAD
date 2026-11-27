@@ -52,3 +52,14 @@ fn takes_the_nearest_edge_within_reach() {
     assert_eq!(nearest(&lines, project, Vec2::new(17., 30.), 6.), None);
     assert_eq!(nearest(&[], project, Vec2::new(17., 13.), 6.), None);
 }
+
+#[test]
+fn a_straight_edge_gives_its_direction_and_a_bent_one_none() {
+    let v = |x: f32, y: f32, z: f32| Vec3::new(x, y, z);
+    assert_eq!(straight(&[v(2.0, -1.0, 5.0), v(2.0, 3.0, 8.0)]), Some(v(0.0, 0.8, 0.6)));
+    assert_eq!(straight(&[v(3.0, 1.0, -2.0), v(5.0, 1.0, -2.0), v(9.0, 1.0, -2.0)]), Some(v(1.0, 0.0, 0.0)));
+    assert_eq!(straight(&[v(3.0, 1.0, -2.0), v(5.0, 1.5, -2.0), v(9.0, 1.0, -2.0)]), None);
+    assert_eq!(straight(&[v(3.0, 1.0, -2.0), v(3.0, 1.0, -2.0)]), None);
+    assert_eq!(straight(&[v(3.0, 1.0, -2.0)]), None);
+    assert_eq!(straight(&[]), None);
+}

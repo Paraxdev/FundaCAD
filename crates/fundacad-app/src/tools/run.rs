@@ -23,6 +23,8 @@ pub struct Run {
     pub arm: Option<Target>,
     /// The rollback marker arming found, put back when it disarms.
     held: Option<Option<Value>>,
+    /// The feature as it stood when `offer` armed a pick it does not need, any other edit to it ends the pick.
+    offered: Option<Value>,
 }
 
 /// "edge" or "edges", the word a prompt uses for what a field takes.
@@ -38,18 +40,23 @@ pub fn noun(kind: PickKind, many: bool) -> &'static str {
         (PickKind::Sketch, true) => "sketches",
         (PickKind::Plane, false) => "plane",
         (PickKind::Plane, true) => "planes",
+        (PickKind::Area, false) => "profile",
+        (PickKind::Area, true) => "profiles",
+        (PickKind::Point, false) => "point",
+        (PickKind::Point, true) => "points",
     }
 }
 
 impl Run {
     pub fn new(before: Doc, title: String, label: String, feature: String, need: Vec<Target>) -> Self {
-        Run { before, title, label, feature, need, arm: None, held: None }
+        Run { before, title, label, feature, need, arm: None, held: None, offered: None }
     }
 
     pub fn set_arm(&mut self, doc: &mut Doc, arm: Option<Target>) {
         if self.arm == arm {
             return;
         }
+        self.offered = None;
         self.arm = arm;
         match (arm.is_some(), self.held.is_some()) {
             (true, false) => {
@@ -69,6 +76,21 @@ impl Run {
                 }
             },
             _ => {}
+        }
+    }
+
+    /// Arms `arm` though OK does not wait for it, until a pick fills it or the feature is edited another way.
+    pub fn offer(&mut self, doc: &mut Doc, arm: Target) {
+        self.set_arm(doc, Some(arm));
+        self.offered = feature(doc, &self.feature).cloned();
+    }
+
+    /// Ends an offered pick once the feature changed some other way, as a row or a key setting the plane.
+    pub fn settle(&mut self, doc: &mut Doc) {
+        let Some(was) = &self.offered else { return };
+        if feature(doc, &self.feature) != Some(was) {
+            let next = self.next_empty(doc);
+            self.set_arm(doc, next);
         }
     }
 
@@ -101,12 +123,14 @@ impl Run {
         match had {
             Some(old) => set_target(doc, &id, arm.field, old, arm.many, true)?,
             None => {
+                let value = super::build::placed(doc, &id, arm, value)?;
                 if let Some(why) = self.refuse(doc, arm.field, &value) {
                     return Err(why);
                 }
                 set_target(doc, &id, arm.field, value, arm.many, false)?;
                 if !arm.many {
-                    let next = self.next_empty(doc);
+                    let then = super::build::then(doc, &id, arm.field);
+                    let next = self.next_empty(doc).or_else(|| self.need.iter().copied().find(|t| Some(t.field) == then));
                     self.set_arm(doc, next);
                 }
             }
@@ -126,7 +150,7 @@ impl Run {
     /// What OK still waits for, as the words to show.
     pub fn missing(&self, doc: &Doc) -> Option<String> {
         let f = feature(doc, &self.feature)?;
-        let t = self.need.iter().find(|t| empty(f, t.field))?;
+        let Some(t) = self.need.iter().find(|t| empty(f, t.field)) else { return super::build::short(doc, &self.feature) };
         Some(i18n::t_with(
             "tool.target.pickFirst",
             &[("many", if t.many { "yes" } else { "no" }.into()), ("kind", noun(t.kind, false).into())],

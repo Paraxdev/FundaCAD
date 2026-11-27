@@ -11,7 +11,7 @@ fn face(body: &str, face: u32, point: [f32; 3]) -> Pick {
 }
 
 fn edge(body: &str, edge: u32, mid: [f32; 3]) -> Pick {
-    Pick::Edge { body: body.into(), edge, mid }
+    Pick::Edge { body: body.into(), edge, mid, dir: None }
 }
 
 fn run(id: &str, d: &Doc, picks: Vec<Pick>) -> Result<(String, Start), String> {
@@ -129,7 +129,8 @@ fn an_offset_plane_follows_a_face_a_plane_or_waits_for_one() {
     let (_, s) = run("datum-plane", &d, vec![Pick::Plane { id: "f4".into() }]).unwrap();
     assert_eq!((s.feature["plane"].clone(), s.feature["planeId"].clone()), (json!("XY"), json!("f4")));
     let (_, s) = run("offset-plane", &d, vec![]).unwrap();
-    assert_eq!(s.arm(), Some(Target { field: "face", kind: PickKind::Face, many: false }));
+    assert_eq!(s.feature, json!({"id": "f1", "type": "datumPlane", "offset": 10.0, "name": "Offset plane"}));
+    assert_eq!(s.arm(), Some(Target { field: "plane", kind: PickKind::Face, many: false }));
 }
 
 #[test]
@@ -143,9 +144,23 @@ fn reference_datums_need_their_selection() {
     assert_eq!(s.feature["plane"]["origin"], json!([2.0, 0.0, 7.0]));
     assert_eq!(s.feature["through"]["kind"], json!("mid"));
     assert!(run("axis-cylinder", &d, vec![]).is_err());
-    let (_, s) = run("datum-axis", &d, vec![face("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 13.])]).unwrap();
-    assert_eq!((s.feature["origin"].clone(), s.feature["dir"].clone()), (json!([1.0, 2.0, 3.0]), json!([0.0, 0.0, 10.0])));
-    assert_eq!(s.feature["through"]["b"]["t"], json!(0.5));
+    let axis_words = "Select two edges to run the axis through, then Datum Axis";
+    assert_eq!(run("datum-axis", &d, vec![]).unwrap_err(), axis_words);
+    assert_eq!(run("datum-axis", &d, vec![edge("b1", 4, [1., 2., 13.])]).unwrap_err(), axis_words);
+    let spots = vec![face("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 13.])];
+    assert_eq!(run("datum-axis", &d, spots).unwrap_err(), axis_words, "a face spot is not what the engine reads");
+    let picks = vec![Pick::Body { body: "b1".into() }, edge("b1", 4, [1., 2., 13.]), face("b1", 1, [8., 8., 8.]),
+        edge("b1", 6, [4., 2., 13.]), edge("b1", 7, [9., 9., 9.])];
+    let (_, s) = run("datum-axis", &d, picks).unwrap();
+    assert_eq!(
+        s.feature,
+        json!({"id": "f1", "type": "datumAxis", "origin": [1.0, 2.0, 13.0], "dir": [3.0, 0.0, 0.0], "name": "Axis",
+            "through": {"kind": "points",
+                "a": {"edge": {"kind": "edge", "by": "nearest", "point": [1.0, 2.0, 13.0], "body": "b1"}, "t": 0.5},
+                "b": {"edge": {"kind": "edge", "by": "nearest", "point": [4.0, 2.0, 13.0], "body": "b1"}, "t": 0.5}}})
+    );
+    let same = vec![edge("b1", 1, [1., 2., 3.]), edge("b1", 4, [1., 2., 3.])];
+    assert_eq!(run("datum-axis", &d, same).unwrap_err(), "Pick two different spots");
     let (_, s) = run("datum-point", &d, vec![]).unwrap();
     assert_eq!(s.feature, json!({"id": "f1", "type": "datumPoint", "point": [0.0, 0.0, 0.0], "name": "Point"}));
 }
@@ -153,17 +168,20 @@ fn reference_datums_need_their_selection() {
 #[test]
 fn plane_through_points_needs_three_off_a_line() {
     let d = doc(json!({}));
-    let words = "Select three faces or edges to lay the plane through, then Plane, 3 Pts";
+    let words = "Select three edges to lay the plane through, then Plane, 3 Pts";
     assert_eq!(run("plane-points", &d, vec![]).unwrap_err(), words);
-    assert_eq!(run("plane-points", &d, vec![face("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.])]).unwrap_err(), words);
-    let in_line = vec![face("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.]), face("b1", 3, [11., 1., 5.])];
+    assert_eq!(run("plane-points", &d, vec![edge("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.])]).unwrap_err(), words);
+    let faces = vec![face("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.]), face("b1", 3, [3., 6., 5.])];
+    assert_eq!(run("plane-points", &d, faces).unwrap_err(), words, "a face's spot is not the point the engine takes");
+    let in_line = vec![edge("b1", 1, [3., 1., 5.]), edge("b1", 2, [7., 1., 5.]), edge("b1", 3, [11., 1., 5.])];
     assert_eq!(run("plane-points", &d, in_line).unwrap_err(), "The three points are in a line, pick one off it");
     let picks = vec![
-        face("b1", 1, [3., 1., 5.]),
+        edge("b1", 1, [3., 1., 5.]),
         Pick::Body { body: "b2".into() },
-        edge("b1", 2, [7., 1., 5.]),
-        face("b1", 3, [3., 6., 5.]),
         face("b1", 4, [9., 9., 9.]),
+        edge("b1", 2, [7., 1., 5.]),
+        edge("b1", 3, [3., 6., 5.]),
+        edge("b1", 5, [9., 9., 9.]),
     ];
     let (_, s) = run("plane-points", &d, picks).unwrap();
     assert_eq!(
@@ -171,9 +189,9 @@ fn plane_through_points_needs_three_off_a_line() {
         json!({"id": "f1", "type": "datumPlane", "name": "Plane",
             "plane": {"origin": [0.0, 0.0, 5.0], "normal": [0.0, 0.0, 1.0], "xdir": [1.0, 0.0, 0.0]},
             "through": {"kind": "points", "points": [
-                {"face": {"kind": "face", "by": "nearest", "point": [3.0, 1.0, 5.0], "body": "b1"}},
+                {"edge": {"kind": "edge", "by": "nearest", "point": [3.0, 1.0, 5.0], "body": "b1"}, "t": 0.5},
                 {"edge": {"kind": "edge", "by": "nearest", "point": [7.0, 1.0, 5.0], "body": "b1"}, "t": 0.5},
-                {"face": {"kind": "face", "by": "nearest", "point": [3.0, 6.0, 5.0], "body": "b1"}}]}})
+                {"edge": {"kind": "edge", "by": "nearest", "point": [3.0, 6.0, 5.0], "body": "b1"}, "t": 0.5}]}})
     );
 }
 
@@ -183,4 +201,19 @@ fn every_tool_id_is_its_own() {
     ids.sort();
     ids.dedup();
     assert_eq!(ids.len(), TOOLS.len());
+}
+
+#[test]
+fn an_axis_on_edge_follows_a_straight_edge_and_refuses_a_curved_one() {
+    let d = doc(json!({}));
+    let words = "Select a straight edge, then Axis on Edge";
+    assert_eq!(run("datum-axis-edge", &d, vec![]).unwrap_err(), words);
+    assert_eq!(run("datum-axis-edge", &d, vec![edge("b1", 2, [3., -1., 6.])]).unwrap_err(), words);
+    let tilted = Pick::Edge { body: "b1".into(), edge: 2, mid: [3., -1., 6.], dir: Some([0.6, 0.0, -0.8]) };
+    let (_, s) = run("datum-axis-edge", &d, vec![tilted]).unwrap();
+    assert_eq!(
+        s.feature,
+        json!({"id": "f1", "type": "datumAxis", "origin": [3.0, -1.0, 6.0], "dir": [0.6, 0.0, -0.8], "name": "Axis",
+            "axisEdge": {"kind": "edge", "by": "nearest", "point": [3.0, -1.0, 6.0], "body": "b1"}})
+    );
 }

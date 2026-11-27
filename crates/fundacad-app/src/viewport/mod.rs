@@ -1,11 +1,15 @@
 mod blur;
 mod camera;
+mod datums;
 mod demo;
 mod drag;
 mod edges;
+mod gizmo;
+pub mod inspecting;
 mod issues;
 pub mod mesh;
 mod pick;
+mod profiles;
 mod renderer;
 mod resolve;
 pub mod scene;
@@ -125,8 +129,12 @@ pub struct Viewport {
     highlight: Option<(String, u32)>,
     sketch: Option<crate::sketch::Editor>,
     sketch_ui: sketching::Ui,
+    profiles: profiles::Profiles,
+    datums: datums::Datums,
     picking: select::Picking,
     tool: Option<ToolRun>,
+    gizmo: gizmo::Gizmo,
+    inspect: inspecting::Inspecting,
     _wake: Option<Task<()>>,
     _demo: Option<Task<()>>,
 }
@@ -175,8 +183,12 @@ impl Viewport {
             highlight: None,
             sketch: None,
             sketch_ui: Default::default(),
+            profiles: Default::default(),
+            datums: Default::default(),
             picking: Default::default(),
             tool: None,
+            gizmo: Default::default(),
+            inspect: Default::default(),
             _wake: None,
             _demo: None,
         }
@@ -223,6 +235,10 @@ impl Viewport {
         self.fitted = false;
         self._wake = None;
         self._demo = None;
+        self.inspect = inspecting::Inspecting::opened(match &opened {
+            Opened::Doc(session) => Some(&session.doc),
+            Opened::Stl(_) => None,
+        });
         self.show(&[]);
         match opened {
             Opened::Stl(body) => {
@@ -307,6 +323,7 @@ impl Viewport {
             if self.tool.is_none() {
                 self.undo.record(before, key, label);
             }
+            self.settle_tool(cx);
         }
         self.hover = None;
         self.show_built();
@@ -454,6 +471,8 @@ impl Viewport {
             self.message = None;
             self.hover = None;
             self.built = mesh.bodies.clone();
+            self.datums.mesh = Some(mesh.clone());
+            self.inspect.rebuilt();
             self.show_built();
             self.retarget(mesh.revision);
         }
@@ -502,7 +521,14 @@ impl Viewport {
         };
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
-        Overlay { hover, stretch, mask_revision: self.mask_revision, selection_revision: self.picking.revision }
+        Overlay {
+            hover,
+            stretch,
+            mask_revision: self.mask_revision,
+            selection_revision: self.picking.revision,
+            clip: self.clip_plane(),
+            shade: self.shade_uniform(),
+        }
     }
 
     /// Makes or remakes the renderer whenever GPUI has a new device.
@@ -540,6 +566,8 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
+        self.paint_datums(window);
+        self.paint_profiles(window);
         self.paint_sketch(window);
         had_backend != self.backend
     }
@@ -554,7 +582,7 @@ impl Viewport {
 
     fn hover_at(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
         let (origin, dir) = self.ray_at(position);
-        let hit = pick::pick(&self.scene, origin, dir);
+        let hit = self.pick_ray(origin, dir);
         let same = match (&self.hover, &hit) {
             (Some((a, _)), Some(b)) => a.body == b.body && a.face == b.face,
             (None, None) => true,
@@ -708,6 +736,7 @@ impl Viewport {
             self.picking.pressed = None;
             self.hover_at(event.position, cx);
             self.hover_edge_at(event.position, cx);
+            self.hover_area_at(event.position, cx);
         }
     }
 
@@ -736,7 +765,7 @@ impl Render for Viewport {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, w, cx| {
-                    if !this.sketch_press(e.position, w, cx) {
+                    if !this.sketch_press(e.position, w, cx) && !this.gizmo_press(e.position, cx) {
                         this.picking.pressed = Some((e.position, select::mods(&e.modifiers)));
                     }
                 }),
@@ -745,6 +774,7 @@ impl Render for Viewport {
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
                     this.sketch_release(cx);
+                    this.gizmo_release(cx);
                     this.release(cx)
                 }),
             )
@@ -762,7 +792,7 @@ impl Render for Viewport {
             .on_mouse_up(MouseButton::Right, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_up(MouseButton::Middle, cx.listener(|this, _: &MouseUpEvent, _, _| this.nav = None))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
-                if this.nav.is_some() || !this.sketch_move(e, cx) {
+                if this.nav.is_some() || !(this.sketch_move(e, cx) || this.gizmo_move(e, cx)) {
                     this.mouse_move(e, cx)
                 }
             }))
@@ -773,11 +803,14 @@ impl Render for Viewport {
                     move |bounds, _, window, cx| {
                         let t = crate::theme::ActiveTheme::theme(cx);
                         let (picked, hover) = (Hsla::from(t.accent), Hsla::from(t.accent_hot));
+                        let axes = [t.axis_x, t.axis_y, t.axis_z].map(Hsla::from);
                         entity.update(cx, |this, cx| {
                             if this.paint(bounds, window) {
                                 cx.notify();
                             }
                             this.paint_edges(bounds, picked, hover, window);
+                            this.paint_gizmo(axes, hover, window);
+                            this.paint_inspect(bounds, hover, window);
                         });
                     },
                 )

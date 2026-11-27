@@ -440,3 +440,32 @@ fn a_circle_diameter_held_by_a_parameter_reads_its_name_and_stays_read_only() {
         .expect("a diameter row");
     assert_eq!((dia.value, dia.expr.as_deref(), dia.target), (Some(12.0), Some("r"), None));
 }
+
+#[test]
+fn a_draft_angle_is_held_to_sixty_degrees_either_way() {
+    let field = |key: &str| Target::Field { feature: "f2".into(), key: key.into() };
+    let mut d = doc(json!([{"id": "f1", "type": "box"}, {"id": "f2", "type": "draft", "faces": [], "angle": 3, "axis": "Z"}]));
+    set_number(&mut d, &field("angle"), 75.0).unwrap();
+    assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(60)));
+    set_number(&mut d, &field("angle"), -61.5).unwrap();
+    assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(-60)));
+    set_number(&mut d, &field("angle"), 59.5).unwrap();
+    assert_eq!(feature(&d, "f2").get("angle"), Some(&json!(59.5)));
+}
+
+#[test]
+fn the_axis_c_moves_to_the_middle_names_the_world_axis_it_runs_along() {
+    let label = |f: Value| {
+        let f = obj(f);
+        let (options, current) = options::pattern_axis_choice(&f, &[&f]);
+        options.into_iter().find(|o| o.value == current).map(|o| o.label.to_string())
+    };
+    let mid = |dir: Value| json!({"id": "f2", "type": "patternCircular", "axis": {"origin": [4.5, -2, 7], "dir": dir}});
+    assert_eq!(label(mid(json!([0, 0, 1]))), Some("Z through the middle".into()));
+    assert_eq!(label(mid(json!([1.0, 0.0, 0.0]))), Some("X through the middle".into()));
+    assert_eq!(label(mid(json!([0, -1, 0]))), Some("Y through the middle".into()));
+    assert_eq!(label(mid(json!([0.6, 0, 0.8]))), Some("Line".into()));
+    let mut picked = mid(json!([0, 0, 1]));
+    picked["axisRef"] = json!({"kind": "edge"});
+    assert_eq!(label(picked), Some("Picked".into()));
+}

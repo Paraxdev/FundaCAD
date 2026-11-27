@@ -6,6 +6,8 @@ use serde_json::{Map, Value};
 use super::hole::{self, HOLE_SIZES};
 use crate::i18n::{t, tr};
 
+pub mod modify;
+
 /// A value and the key of the word a row shows for it. A code such as XY or M3 is its own word, `t` returns it as is.
 pub type Opt = (&'static str, &'static str);
 
@@ -168,12 +170,15 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
         // The builder has no sweep intersect.
         "sweep" => {
             const {
-                &[choice(
-                    "operation",
-                    "field.operation",
-                    &[("new", "field.option.newBody"), ("join", "field.option.join"), ("cut", "field.option.cut")],
-                    "new",
-                )]
+                &[
+                    choice(
+                        "operation",
+                        "field.operation",
+                        &[("new", "field.option.newBody"), ("join", "field.option.join"), ("cut", "field.option.cut")],
+                        "new",
+                    ),
+                    choice("path", "field.path", &[], ""),
+                ]
             }
         }
         "thicken" => {
@@ -187,6 +192,7 @@ pub fn choice_fields(ty: &str) -> &'static [ChoiceField] {
             }
         }
         "mirror" => const { &[choice("plane", "field.plane", PLANES, "XY")] },
+        "split" => modify::SPLIT,
         "draft" => const { &[choice("axis", "field.pullAxis", AXES, "Z")] },
         "patternLinear" => const { &[choice("axis", "field.direction", AXES, "X")] },
         "patternCircular" => const { &[choice("axis", "field.axis", AXES, "Z")] },
@@ -301,6 +307,7 @@ pub fn toggle_fields(ty: &str) -> &'static [ToggleField] {
             }
         }
         "thicken" => const { &[toggle("symmetric", "field.symmetric", false)] },
+        "move" | "duplicate" => modify::COPY,
         "fillet" | "chamfer" => const { &[toggle("tangentEdges", "field.includeTangentEdges", true)] },
         "press-pull" | "offsetFace" => const { &[toggle("followTangent", "field.tangentFacesFollow", true)] },
         "hole" => {
@@ -404,6 +411,9 @@ pub fn choice_value(ty: &str, f: &Map<String, Value>, c: &ChoiceField) -> String
 }
 
 pub fn toggle_value(f: &Map<String, Value>, t: &ToggleField) -> bool {
+    if t.field == "copy" {
+        return modify::is_copy(f);
+    }
     f.get(t.field).and_then(Value::as_bool).unwrap_or(t.fallback)
 }
 
@@ -494,10 +504,7 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
     let datum = pattern_axis_datum(axis);
     let placed = present(f, "axisRef") || (axis.is_some_and(|a| !a.is_string()) && datum.is_none());
     if placed {
-        options.push(Choice::new(
-            PLACED_AXIS,
-            t(if present(f, "axisRef") { "field.option.picked" } else { "field.option.line" }),
-        ));
+        options.push(Choice::new(PLACED_AXIS, placed_axis_label(f)));
         return (options, PLACED_AXIS.into());
     }
     let name = datum.or(axis.and_then(Value::as_str)).unwrap_or("Z").to_string();
@@ -505,6 +512,24 @@ pub fn pattern_axis_choice(f: &Map<String, Value>, features: &[&Map<String, Valu
         options.push(Choice::new(name.clone(), name.clone()));
     }
     (options, name)
+}
+
+/// "Picked", or for the line C moves to the middle the world axis it runs along, "Z through the middle".
+fn placed_axis_label(f: &Map<String, Value>) -> String {
+    if present(f, "axisRef") {
+        return t("field.option.picked");
+    }
+    let dir: Vec<f64> = f
+        .get("axis")
+        .and_then(|a| a.get("dir"))
+        .and_then(Value::as_array)
+        .map(|d| d.iter().filter_map(Value::as_f64).collect())
+        .unwrap_or_default();
+    let world = [("X", [1.0, 0.0, 0.0]), ("Y", [0.0, 1.0, 0.0]), ("Z", [0.0, 0.0, 1.0])];
+    match world.iter().find(|(_, w)| dir.len() == 3 && dir.iter().zip(w).all(|(a, b)| (a.abs() - b).abs() < 1e-6)) {
+        Some((name, _)) => tr!("field.option.throughMiddle", axis = *name),
+        None => t("field.option.line"),
+    }
 }
 
 /// A key to set, or with None to remove.

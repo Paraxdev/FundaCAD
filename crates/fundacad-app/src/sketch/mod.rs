@@ -2,6 +2,7 @@
 //! click writes, in FundaCAD 1's .funda sketch format. The viewport draws it and feeds it the cursor
 //! (viewport/sketching.rs).
 
+pub mod areas;
 pub mod dims;
 pub mod plane;
 pub mod regions;

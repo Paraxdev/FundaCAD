@@ -80,7 +80,7 @@ fn targets_of(ty: &str) -> &'static [TargetField] {
                 ]
             }
         }
-        "move" | "mirror" | "patternRect" | "patternLinear" | "patternCircular" => const { &[BODIES_OR_ACTIVE] },
+        "move" | "duplicate" | "mirror" | "patternRect" | "patternLinear" | "patternCircular" => const { &[BODIES_OR_ACTIVE] },
         "removeBody" => const { &[BODIES] },
         "mechanism" => const { &[row("ground", "selectionTarget.ground", TargetKind::Body)] },
         "split" | "separate" => const { &[SPLIT_BODIES] },
@@ -95,7 +95,7 @@ fn targets_of(ty: &str) -> &'static [TargetField] {
                 ]
             }
         }
-        "revolve" => const { &[PROFILE, ACTS_ON] },
+        "revolve" => const { &[PROFILE, empty(row("axisEdge", "Axis edge", TargetKind::Edge), "none"), ACTS_ON] },
         "sweep" | "loft" => const { &[ACTS_ON] },
         _ => const { &[] },
     }

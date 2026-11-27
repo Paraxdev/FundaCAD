@@ -1,9 +1,15 @@
 //! What each tool makes, featureStarters.ts with FundaCAD 1's defaults. A tool whose references are several kinds at
 //! once (a midplane's two planes, an angled plane's edge and face) reads them from the selection.
 
+mod modify;
+
+pub use modify::fit::{fit, sources_extent, Fitted};
+pub use modify::keys::{press, replace};
+pub use modify::place::{offer, place, places};
+
 use serde_json::{json, Value};
 
-use super::{bodies, Doc, Start, Target, Tool};
+use super::{bodies, build, Doc, Start, Target, Tool};
 use crate::i18n;
 use crate::selection::{Pick, PickKind, Selection};
 
@@ -30,6 +36,22 @@ pub const TOOLS: &[Tool] = &[
         let need = vec![Target { field: "faces", kind: PickKind::Face, many: true }];
         Ok(Start { feature: json!({"type": "shell", "thickness": 2, "faces": faces}), need })
     }),
+    t("draft", "tool.draft", modify::draft),
+    t("offset-face", "tool.offsetFace", modify::offset_face),
+    t("split", "tool.splitBody", modify::split),
+    t("separate", "tool.separate", modify::separate),
+    t("pattern-linear", "tool.linearPattern", modify::pattern_linear),
+    t("pattern-circular", "tool.circularPattern", modify::pattern_circular),
+    t("pattern-rect", "tool.rectPattern", modify::pattern_rect),
+    t("mirror", "tool.mirror", modify::mirror),
+    t("move", "tool.move", modify::move_bodies),
+    t("scale", "tool.scale", modify::scale),
+    t("extrude", "tool.extrude", build::extrude),
+    t("presspull", "tool.pressPull", build::press_pull),
+    t("revolve", "tool.revolve", build::revolve),
+    t("loft", "tool.loft", build::loft),
+    t("sweep", "tool.sweep", build::sweep),
+    t("hole", "tool.hole", build::hole),
     t("offset-plane", "tool.offsetPlane", |_, s| datum_plane(s, 10.0, "Offset plane")),
     t("datum-plane", "tool.datumPlane", |_, s| datum_plane(s, 0.0, "Plane")),
     t("midplane", "tool.midplane", |_, s| {
@@ -66,14 +88,14 @@ pub const TOOLS: &[Tool] = &[
         })
     }),
     t("plane-points", "tool.planePoints", |_, s| {
-        let words = &i18n::t("tool.datum.need.points");
-        let mut points = point_refs(s);
-        if points.len() < 3 {
+        // The engine takes a face's centre, not the spot clicked, so only edge middles can be checked for a line.
+        let words = &i18n::t("tool.datum.need.pointEdges");
+        let edges: Vec<&Pick> = s.of(PickKind::Edge).into_iter().take(3).collect();
+        if edges.len() < 3 {
             return Err(words.into());
         }
-        points.truncate(3);
-        let spots: Vec<glam::Vec3> =
-            s.picks.iter().filter(|p| p.selector().is_some()).take(3).map(|p| spot(p).into()).collect();
+        let points = point_refs(&edges);
+        let spots: Vec<glam::Vec3> = edges.iter().map(|p| spot(p).into()).collect();
         let n = (spots[1] - spots[0]).cross(spots[2] - spots[0]);
         if n.length() < 1e-6 {
             return Err(i18n::t("tool.datum.need.pointsInLine"));
@@ -98,10 +120,14 @@ pub const TOOLS: &[Tool] = &[
         Ok(Start { feature: f, need: Vec::new() })
     }),
     t("datum-axis", "tool.datumAxis", |_, s| {
-        let points = point_refs(s);
-        let [a, b] = two(points, &i18n::t("tool.datum.need.axis"))?;
-        let (pa, pb) = (spot(&s.picks[0]), spot(&s.picks[1]));
+        // The engine takes a face's centre, not the spot clicked, as for Plane Through Points.
+        let on: Vec<&Pick> = s.of(PickKind::Edge).into_iter().take(2).collect();
+        let [a, b] = two(point_refs(&on), &i18n::t("tool.datum.need.axisEdges"))?;
+        let (pa, pb) = (spot(on[0]), spot(on[1]));
         let dir = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
+        if dir.iter().all(|c| c.abs() < 1e-6) {
+            return Err("Pick two different spots".into());
+        }
         Ok(Start {
             feature: json!({"type": "datumAxis", "origin": round(pa), "dir": round(dir), "name": "Axis",
                 "through": {"kind": "points", "a": a, "b": b}}),
@@ -109,10 +135,11 @@ pub const TOOLS: &[Tool] = &[
         })
     }),
     t("datum-axis-edge", "tool.axisOnEdge", |_, s| {
-        let [edge] = one(selectors(s, PickKind::Edge), &i18n::t("tool.datum.need.axisEdge"))?;
-        let mid = s.of(PickKind::Edge).first().map_or([0.0; 3], |p| spot(p));
+        let words = &i18n::t("tool.datum.need.axisEdge");
+        let [edge] = one(selectors(s, PickKind::Edge), words)?;
+        let line = s.of(PickKind::Edge).first().and_then(|p| build::edge_axis(p)).ok_or(words)?;
         Ok(Start {
-            feature: json!({"type": "datumAxis", "origin": round(mid), "dir": [0, 0, 1], "axisEdge": edge, "name": "Axis"}),
+            feature: json!({"type": "datumAxis", "origin": line["origin"], "dir": line["dir"], "axisEdge": edge, "name": "Axis"}),
             need: Vec::new(),
         })
     }),
@@ -172,9 +199,10 @@ fn plane_refs(s: &Selection) -> Vec<Value> {
         .collect()
 }
 
-fn point_refs(s: &Selection) -> Vec<Value> {
-    s.picks
+fn point_refs(picks: &[&Pick]) -> Vec<Value> {
+    picks
         .iter()
+        .copied()
         .filter_map(|p| match p {
             Pick::Face { .. } => Some(json!({"face": p.selector()})),
             Pick::Edge { .. } => Some(json!({"edge": p.selector(), "t": 0.5})),
@@ -212,7 +240,7 @@ fn face_plane(p: &Pick) -> Option<([f32; 3], [f32; 3])> {
 }
 
 /// `{origin, normal, xdir}` with an x direction square to the normal.
-fn plane_def(origin: [f32; 3], normal: [f32; 3]) -> Value {
+pub(super) fn plane_def(origin: [f32; 3], normal: [f32; 3]) -> Value {
     let n = glam::Vec3::from(normal).normalize_or(glam::Vec3::Z);
     let x = if n.z.abs() < 0.9 { glam::Vec3::Z.cross(n) } else { glam::Vec3::X - n * n.x }.normalize();
     json!({"origin": round(origin), "normal": round(n.to_array()), "xdir": round(x.to_array())})
@@ -229,7 +257,8 @@ fn datum_plane(s: &Selection, offset: f64, name: &str) -> Result<Start, String> 
         Some(Pick::Plane { id }) if ["XY", "XZ", "YZ"].contains(&id.as_str()) => f["plane"] = json!(id),
         Some(Pick::Plane { id }) => f["planeId"] = json!(id),
         _ => {
-            return Ok(Start { feature: f, need: vec![Target { field: "face", kind: PickKind::Face, many: false }] });
+            f.as_object_mut().expect("an object").remove("plane");
+            return Ok(Start { feature: f, need: vec![build::PLANE] });
         }
     }
     Ok(Start { feature: f, need: Vec::new() })

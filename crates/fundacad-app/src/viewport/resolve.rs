@@ -23,7 +23,8 @@ pub fn resolve(scene: &Scene, lines: &[Vec<Vec<Vec3>>], entry: &Value) -> Option
         "edge" => {
             let (edge, _) = lines.get(bi)?.iter().enumerate().map(|(i, l)| (i, line_distance(l, at))).min_by(|a, b| a.1.total_cmp(&b.1))?;
             let mid = edges::midpoint(&lines[bi][edge])?;
-            Some(Pick::Edge { body: body.into(), edge: edge as u32, mid: mid.to_array() })
+            let dir = edges::straight(&lines[bi][edge]).map(|d| d.to_array());
+            Some(Pick::Edge { body: body.into(), edge: edge as u32, mid: mid.to_array(), dir })
         }
         "face" => {
             let b = &scene.bodies[bi];
