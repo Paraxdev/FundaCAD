@@ -96,8 +96,13 @@ pub(super) fn install(viewport: &Entity<Viewport>, window: &mut Window, cx: &mut
         CanvasGesture::Release(at) => radial::radial_release(window, cx, MouseButton::Right, at),
     })
     .detach();
-    cx.intercept_keystrokes(|e, _, _| TYPED.set(Some(e.keystroke.key.to_lowercase()))).detach();
-    cx.observe_keystrokes(|_, _, _, _| TYPED.set(None)).detach();
+    // Note: GPUI skips keystroke observers when a key handler stops propagation (a field, the shortcut capture), so
+    // the clear is deferred to the end of this dispatch instead, else a stale W makes a menu click open a held ring.
+    cx.intercept_keystrokes(|e, _, cx| {
+        TYPED.set(Some(e.keystroke.key.to_lowercase()));
+        cx.defer(|_| TYPED.set(None));
+    })
+    .detach();
     #[cfg(feature = "shot")]
     VIEWPORT.set(Some(viewport.downgrade()));
     let v = viewport.clone();
