@@ -33,10 +33,10 @@ pub(super) fn card_head(t: &Theme, id: &'static str, title: String) -> Div {
 }
 
 /// A visibility change for one category, `groups` holding the bodies behind each `g:` folder key.
-type VisEdit = (Category, Vec<(String, bool)>, HashMap<String, Vec<String>>);
+pub(super) type VisEdit = (Category, Vec<(String, bool)>, HashMap<String, Vec<String>>);
 
 #[derive(Clone)]
-enum Act {
+pub(super) enum Act {
     Vis(Vec<VisEdit>),
     ShowOnly(Category, Vec<String>),
     ShowAll(Category),
@@ -242,7 +242,7 @@ impl Shell {
         items::vis_rows(self.source.as_ref().unwrap_or(&empty), &self.built(cx), category)
     }
 
-    fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
         self.items.menu = None;
         match act {
             Act::Vis(edits) => {
