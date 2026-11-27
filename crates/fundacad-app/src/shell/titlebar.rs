@@ -7,6 +7,7 @@ use crate::ui::{icon, icon_button, text};
 
 /// The lockup's viewBox is 640 by 124, shown 22 high as in the Vue title bar.
 const LOCKUP_W: f32 = 640. * 22. / 124.;
+pub(super) const HEIGHT: f32 = 36.;
 
 impl Shell {
     pub(super) fn titlebar(&self, t: &Theme, cx: &App) -> Div {
@@ -15,7 +16,7 @@ impl Shell {
         let (can_undo, can_redo) = (crate::commands::enabled(cx, "undo"), crate::commands::enabled(cx, "redo"));
 
         div()
-            .h(px(36.))
+            .h(px(HEIGHT))
             .flex_none()
             .flex()
             .items_center()

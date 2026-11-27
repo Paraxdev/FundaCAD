@@ -239,6 +239,10 @@ impl Render for Shell {
                     self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
                 )
             });
+        let card = self.inspect_card(t, cx);
+        if card.is_none() {
+            params::place::set_card_h(None);
+        }
         let right = div()
             .absolute()
             .top(gap)
@@ -248,9 +252,21 @@ impl Render for Shell {
             .items_start()
             .gap(gap)
             // FundaCAD 1's narrow stage rule: a card opens to the left of the view controls, which keep their place.
-            .child(div().relative().child(self.view_controls(t)).children(
-                self.inspect_card(t, cx).map(|c| div().absolute().top_0().right(relative(1.)).pr(gap).child(c)),
-            ))
+            .child(div().relative().child(self.view_controls(t)).children(card.map(|c| {
+                let w = params::place::card_w(window.viewport_size().width / px(1.));
+                div().absolute().top_0().right(relative(1.)).w(px(w + FLOAT_GAP)).pr(gap).child(c).child(
+                    canvas(
+                        |bounds, window, _| {
+                            if params::place::set_card_h(Some(bounds.size.height / px(1.))) {
+                                window.refresh();
+                            }
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .size_full(),
+                )
+            })))
             .child(self.history_card(t, window, cx));
         let status = status::status(t, self.viewport.read(cx).status(), window);
 
