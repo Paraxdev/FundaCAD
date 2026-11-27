@@ -97,20 +97,10 @@
   border-radius: var(--fc-radius-chip);
   corner-shape: squircle;
   color: var(--fc-text-dim);
-  font: 500 14px/1.4 var(--fc-mono);
+  font-size: 15px;
+  font-weight: 500;
   text-decoration: none;
   transition: background var(--fc-t-fast) var(--fc-ease), color var(--fc-t-fast) var(--fc-ease);
-}
-
-.fc-site-nav a::before {
-  content: "./" / "";
-  color: transparent;
-  transition: color var(--fc-t-fast) var(--fc-ease);
-}
-
-.fc-site-nav a:hover::before,
-.fc-site-nav a[aria-current]::before {
-  color: var(--fc-accent);
 }
 
 .fc-site-nav a:hover {
