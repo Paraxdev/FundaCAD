@@ -417,6 +417,8 @@ impl Viewport {
         let e = self.sketch.as_ref()?;
         let state = if !e.solved.conflicts.is_empty() {
             i18n::t("sketch.relations.conflicting")
+        } else if e.constraints.is_empty() {
+            i18n::t("sketch.relations.notConstrained")
         } else if e.solved.dof == 0 {
             i18n::t("sketch.relations.fullyDefined")
         } else {
