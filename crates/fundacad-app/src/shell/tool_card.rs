@@ -298,16 +298,18 @@ impl Shell {
         // rows scroll and Items gives way rather than the card.
         let cap = (window.viewport_size().height * 0.46).min(px(360.));
         // The padding keeps the target rows' outset borders inside the scroll clip, the margin cancels it.
-        let rows = div()
-            .id("tool-rows")
-            .flex()
-            .flex_col()
-            .gap(px(S_2))
-            .min_h_0()
-            .overflow_y_scroll()
-            .mx(px(-S_2))
-            .px(px(S_2))
-            .children(rows);
+        let rows = (!rows.is_empty()).then(|| {
+            div()
+                .id("tool-rows")
+                .flex()
+                .flex_col()
+                .gap(px(S_2))
+                .min_h_0()
+                .overflow_y_scroll()
+                .mx(px(-S_2))
+                .px(px(S_2))
+                .children(rows)
+        });
         let card = chip(t)
                 .id("tool-card")
                 .w(px(super::items::WIDTH))
@@ -320,7 +322,7 @@ impl Shell {
                 .occlude()
                 .child(head)
                 .children(picking)
-                .child(rows)
+                .children(rows)
                 .child(foot);
         Some(glass_in(SharedString::from(format!("tool-card-in:{title}")), card).into_any_element())
     }

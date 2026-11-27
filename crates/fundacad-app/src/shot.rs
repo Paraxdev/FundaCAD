@@ -9,7 +9,8 @@ use gpui::{AnyWindowHandle, App};
 pub fn window_size() -> Option<gpui::Size<gpui::Pixels>> {
     let v = std::env::var("FUNDA_SHOT_SIZE").ok()?;
     let (w, h) = v.split_once('x')?;
-    Some(gpui::size(gpui::px(w.trim().parse().ok()?), gpui::px(h.trim().parse().ok()?)))
+    let side = |s: &str| s.trim().parse::<f32>().ok().filter(|n| n.is_finite() && *n > 0.);
+    Some(gpui::size(gpui::px(side(w)?), gpui::px(side(h)?)))
 }
 
 pub fn arm(window: AnyWindowHandle, cx: &mut App) {
