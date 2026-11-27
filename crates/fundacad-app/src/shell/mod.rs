@@ -53,8 +53,7 @@ pub struct Shell {
     bench: crate::workbench::Bench,
     params: Entity<params::ParamsPanel>,
     transfer: transfer::Transfer,
-    /// The rail family whose tools are listed.
-    rail_open: Option<&'static str>,
+    rail: rail_menu::RailState,
     view_ctl: view_controls::State,
     _system: Subscription,
 }
@@ -97,7 +96,7 @@ impl Shell {
             bench,
             params,
             transfer: transfer::Transfer::new(cx),
-            rail_open: None,
+            rail: Default::default(),
             view_ctl: Default::default(),
             _system: theme::follow_system(window, cx),
         };
@@ -231,18 +230,7 @@ impl Render for Shell {
                     .child(self.items_card(t, window, cx))
                     .children(self.tool_card(t, window, cx)),
             )
-            .child({
-                let e = cx.entity();
-                let on_family: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
-                    std::rc::Rc::new(move |label, _, cx| e.update(cx, |s, cx| s.toggle_family(label, cx)));
-                let e = cx.entity();
-                let on_tool: std::rc::Rc<dyn Fn(&'static str, &mut Window, &mut App)> =
-                    std::rc::Rc::new(move |label, window, cx| e.update(cx, |s, cx| s.rail_tool(label, window, cx)));
-                let foot = self.rail_foot(cx);
-                div().relative().h_full().child(rail::rail(t, self.rail_open, foot, on_family, on_tool)).children(
-                    self.rail_menu(t, cx).map(|m| div().absolute().top_0().left_full().ml(px(FLOAT_GAP)).child(m)),
-                )
-            });
+            .child(self.tool_rail(t, window, cx));
         let card = self.inspect_card(t, cx);
         if card.is_none() {
             params::place::set_card_h(None);
@@ -287,6 +275,11 @@ impl Render for Shell {
             .key_context(crate::commands::key_context(cx))
             .on_action(crate::commands::on_run)
             .on_action(move |_: &OpenParameters, _, cx| params.update(cx, |p, cx| p.toggle(cx)))
+            .capture_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                if ev.keystroke.key == "escape" && this.rail_escape(cx) {
+                    cx.stop_propagation();
+                }
+            }))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.history_key(ev, window, cx)))
             .flex()
             .flex_col()
@@ -311,6 +304,7 @@ impl Render for Shell {
             .children(self.history_menu(t, cx))
             .children(self.transfer_modal(t, cx))
             .children(crate::prefs::view(cx))
+            .children(crate::prefs::shortcuts::view(cx))
             .child(frost_flush(self.viewport.clone()))
             .child(crate::files::drop::hint(t))
             .children(crate::diag::view(cx))
