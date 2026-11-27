@@ -1,4 +1,5 @@
-// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
+// Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS, and quads and shadows carry
+// a CornerShape.
 // todo("windows"): remove
 #![cfg_attr(windows, allow(dead_code))]
 
@@ -867,6 +868,9 @@ impl PrimitiveBatch {
 pub struct Quad {
     pub order: DrawOrder,
     pub border_style: BorderStyle,
+    // Shares the shader's border style word, in its second byte.
+    pub corner_shape: CornerShape,
+    pub pad: u16,
     pub bounds: Bounds<ScaledPixels>,
     pub content_mask: ContentMask<ScaledPixels>,
     pub background: Background,
@@ -914,7 +918,8 @@ pub struct Shadow {
     pub shape_corner_radii: Corners<ScaledPixels>,
     pub caster_bounds: Bounds<ScaledPixels>,
     pub inset: PaddedBool32,
-    pub pad: u32, // align to 8 bytes
+    pub corner_shape: CornerShape,
+    pub pad: [u8; 3], // align to 8 bytes
 }
 
 impl From<Shadow> for Primitive {
@@ -925,13 +930,25 @@ impl From<Shadow> for Primitive {
 
 /// The style of a border.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
-#[repr(C)]
+#[repr(u8)]
 pub enum BorderStyle {
     /// A solid border.
     #[default]
     Solid = 0,
     /// A dashed border.
     Dashed = 1,
+}
+
+/// The shape of rounded corners.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[repr(u8)]
+pub enum CornerShape {
+    /// Squircle corners, except that a radius of half the short side gives a pill or a circle.
+    #[default]
+    Auto = 0,
+    /// Squircle corners at any radius, as CSS `corner-shape: squircle`, so a full radius gives a rounded square or a
+    /// stadium with squircle ends.
+    Squircle = 1,
 }
 
 /// A data type representing a 2 dimensional transformation that can be applied to an element.

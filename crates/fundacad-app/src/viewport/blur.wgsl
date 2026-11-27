@@ -78,15 +78,15 @@ fn fs_panel(in: Panel) -> @location(0) vec4<f32> {
   let half_size = in.rect.zw * 0.5;
   let r = min(in.radius, min(half_size.x, half_size.y));
   let q = abs(in.clip.xy - (in.rect.xy + half_size)) - half_size + r;
-  var d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
-  // The same squircle corner as GPUI's quads (squircle_corner_sdf in the fork's shaders.wgsl), so the frost fits its card.
+  var d = max(q.x, q.y) - r;
+  // Every frosted surface is a `.squircle()` element, so this is the corner of GPUI's quads at corner shape 1
+  // (squircle_corner_sdf in the fork's shaders.wgsl), squircle at any radius, and the frost fits its card.
   let o = max(q, vec2<f32>(0.0));
   let o2 = o * o;
   let n4 = o2.x * o2.x + o2.y * o2.y;
-  let squareness = saturate((min(half_size.x, half_size.y) - in.radius - 2.0) / 1.5);
-  if (squareness > 0.0 && n4 >= 1e-12) {
+  if (n4 >= 1e-12) {
     let n = sqrt(sqrt(n4));
-    d = mix(d, (n - r) / (sqrt(o2.x * o2.x * o2.x + o2.y * o2.y * o2.y) / (n * n * n)), squareness);
+    d = (n - r) / (sqrt(o2.x * o2.x * o2.x + o2.y * o2.y * o2.y) / (n * n * n)) + min(max(q.x, q.y), 0.0);
   }
   let coverage = clamp(0.5 - d, 0.0, 1.0);
   let c = textureSampleLevel(src, samp, in.clip.xy / p.area.xy, 0.0).rgb;
