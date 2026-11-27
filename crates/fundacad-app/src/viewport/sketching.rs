@@ -2,7 +2,6 @@
 //! tools, the shapes, dimensions and regions drawn over the model, and each finished shape one undo step.
 
 use glam::{DVec2, Vec2, Vec3};
-use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use serde_json::{json, Value};
 

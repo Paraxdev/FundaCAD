@@ -10,7 +10,7 @@ use gpui::*;
 
 use super::rail::{self, SketchAct, SketchState};
 use super::Shell;
-use crate::i18n::{t, tr};
+use crate::i18n::tr;
 use crate::motion::{self, hover_bg, mix};
 use crate::sketch::palette::{Toggle, TOGGLES};
 use crate::sketch::relations::{Row, State};
@@ -94,7 +94,7 @@ impl Shell {
                 if held {
                     return;
                 }
-                let Some((_, items)) = rail::family(family) else { return };
+                let Some((_, items)) = rail::sketch_family(family) else { return };
                 let face = rail::face_of(items, self.sketch_rail.chosen.get(family).copied());
                 self.rail_open = None;
                 crate::commands::run(face.action, window, cx);
@@ -166,7 +166,7 @@ impl Shell {
             .text_size(px(FS_SMALL))
             .font_weight(FontWeight(550.))
             .text_color(t.text)
-            .child(t("sketchPalette.lookAt"))
+            .child(crate::i18n::t("sketchPalette.lookAt"))
             .on_click(move |_, _, cx| v2.update(cx, |v, cx| v.sketch_look_at(cx)));
         let look = hover_bg("palette-look-at-bg", look, t.raised_2, t.raised);
         let toggles = TOGGLES.iter().map(|(toggle, key)| {
@@ -185,7 +185,7 @@ impl Shell {
                 .cursor_pointer()
                 .text_size(px(12.5))
                 .text_color(t.text)
-                .child(t(key))
+                .child(crate::i18n::t(key))
                 .child(check(t, (id.clone(), "mark"), on))
                 .on_click(move |_, _, cx| v.update(cx, |v, cx| v.set_sketch_toggle(toggle, !on, cx)));
             hover_bg((id, "bg"), row, Rgb::TRANSPARENT, t.raised)
@@ -216,7 +216,7 @@ impl Shell {
                     .child(summary),
             );
             card = if rows.is_empty() {
-                card.child(text(t, 11.).line_height(rems(1.45)).text_color(t.text_mute).child(t("sketchPalette.rel.empty")))
+                card.child(text(t, 11.).line_height(rems(1.45)).text_color(t.text_mute).child(crate::i18n::t("sketchPalette.rel.empty")))
             } else {
                 card.child(
                     div()
@@ -236,7 +236,7 @@ impl Shell {
 }
 
 fn t_upper(key: &str) -> String {
-    t(key).to_uppercase()
+    crate::i18n::t(key).to_uppercase()
 }
 
 /// `.palette-switch`: a 15px checkbox in the accent.
@@ -261,7 +261,7 @@ fn relation(t: &Theme, i: usize, r: Row, viewport: &Entity<crate::viewport::View
     let glyph = match r.state {
         Some(State::Conflict) => mix(t.error, t.text, 0.4),
         Some(State::Over) => mix(t.warn, t.text, 0.4),
-        None => ring,
+        None => ring.into(),
     };
     let sym = div()
         .size(px(16.))

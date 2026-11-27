@@ -397,7 +397,7 @@ pub(super) fn glyphs() -> impl Iterator<Item = &'static str> {
 }
 
 mod sketch;
-pub(super) use sketch::{face_of, family, family_of};
+pub(super) use sketch::{face_of, family as sketch_family, family_of};
 
 pub(super) fn sketch_actions() -> impl Iterator<Item = &'static str> {
     sketch::tools().map(|t| t.action)

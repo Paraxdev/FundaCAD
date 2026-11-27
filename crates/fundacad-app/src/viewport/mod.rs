@@ -773,9 +773,10 @@ impl Viewport {
             let delta = Vec2::new(delta.x.as_f32(), delta.y.as_f32());
             self.nav = Some((kind, event.position));
             let height = self.bounds.size.height.as_f32();
+            let locked = self.sketch_locked();
             let goal = self.motion.goal(&self.camera);
             match kind {
-                Nav::Orbit if self.sketch_locked() => {}
+                Nav::Orbit if locked => {}
                 Nav::Orbit if !event.modifiers.shift => goal.orbit(delta),
                 _ => goal.pan(delta, height),
             }
