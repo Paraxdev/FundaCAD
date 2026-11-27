@@ -34,11 +34,37 @@ impl EventEmitter<CanvasClick> for Viewport {}
 pub(super) struct RightPress {
     from: Option<Point<Pixels>>,
     moved: bool,
+    /// The radial menu's mouse trigger: travel opens the ring instead of orbiting, a click is still the menu.
+    gesture: bool,
 }
 
 impl RightPress {
     pub(super) fn down(&mut self, at: Point<Pixels>) {
-        *self = Self { from: Some(at), moved: false };
+        *self = Self { from: Some(at), moved: false, gesture: false };
+    }
+
+    pub(super) fn down_gesture(&mut self, at: Point<Pixels>) {
+        *self = Self { from: Some(at), moved: false, gesture: true };
+    }
+
+    pub(super) fn gesture_held(&self) -> bool {
+        self.gesture && self.from.is_some()
+    }
+
+    /// The press point, once, when a gesture press first travels: the ring opens there.
+    pub(super) fn gesture_start(&mut self, at: Point<Pixels>) -> Option<Point<Pixels>> {
+        let from = self.from.filter(|_| self.gesture && !self.moved)?;
+        self.moved = Viewport::dragged(from, at);
+        self.moved.then_some(from)
+    }
+
+    /// Whether this release ends a gesture that opened the ring, which then picks.
+    pub(super) fn gesture_up(&mut self) -> bool {
+        let ended = self.gesture_held() && self.moved;
+        if ended {
+            self.from = None;
+        }
+        ended
     }
 
     /// Once it has travelled it is a drag for good, even when it comes back to where it started.

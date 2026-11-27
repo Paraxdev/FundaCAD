@@ -41,3 +41,31 @@ fn the_target_follows_the_pick() {
     assert_eq!(target_of(None, Some(face())), CanvasTarget::Face(face()));
     assert_eq!(target_of(None, None), CanvasTarget::Empty);
 }
+
+#[test]
+fn a_gesture_press_starts_once_at_the_press_point() {
+    let mut r = RightPress::default();
+    r.down_gesture(point(px(10.), px(10.)));
+    assert!(r.gesture_held());
+    assert_eq!(r.gesture_start(point(px(11.), px(10.))), None);
+    assert_eq!(r.gesture_start(point(px(60.), px(10.))), Some(point(px(10.), px(10.))));
+    assert_eq!(r.gesture_start(point(px(90.), px(10.))), None);
+    assert!(r.gesture_up());
+    assert!(!r.gesture_held());
+}
+
+#[test]
+fn a_still_gesture_press_is_still_the_menu_click() {
+    let mut r = RightPress::default();
+    r.down_gesture(point(px(10.), px(10.)));
+    assert!(!r.gesture_up());
+    assert_eq!(r.up(point(px(10.), px(10.))), Some(point(px(10.), px(10.))));
+}
+
+#[test]
+fn a_plain_press_is_no_gesture() {
+    let mut r = RightPress::default();
+    r.down(point(px(10.), px(10.)));
+    assert!(!r.gesture_held());
+    assert_eq!(r.gesture_start(point(px(60.), px(10.))), None);
+}

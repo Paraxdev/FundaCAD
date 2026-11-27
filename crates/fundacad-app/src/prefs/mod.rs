@@ -3,6 +3,7 @@
 
 #[cfg(test)]
 mod tests;
+pub mod radial;
 pub mod shortcuts;
 mod view;
 

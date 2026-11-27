@@ -113,6 +113,7 @@ pub fn step(rows: &[MenuRow], from: Option<usize>, step: isize) -> Option<usize>
 
 impl Overlay {
     pub(super) fn open_menu(&mut self, menu: OpenMenu, window: &mut Window, cx: &mut Context<Self>) {
+        self.radial = None;
         self.take_keyboard(window, cx);
         self.menu = Some(menu);
         cx.notify();
