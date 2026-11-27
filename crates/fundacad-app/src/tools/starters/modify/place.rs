@@ -62,10 +62,10 @@ pub fn place(doc: &mut Doc, id: &str, field: &str, pick: &Pick, line: Option<&[V
         ("patternCircular", "axisRef", Pick::Face { .. } | Pick::Edge { .. }) => {
             let (origin, dir) = axis_line(pick, line);
             f.insert("axis".into(), json!({"origin": round(origin), "dir": round(dir)}));
-            pick.selector().ok_or_else(|| "That cannot be picked".to_string())
+            pick.selector().ok_or_else(|| crate::i18n::t("tool.place.cannotPick"))
         }
-        (_, "plane", _) => Err("Click a flat face".into()),
-        _ => Err("Click an edge or a face".into()),
+        (_, "plane", _) => Err(crate::i18n::t("tool.place.flatFace")),
+        _ => Err(crate::i18n::t("tool.place.edgeOrFace")),
     }
 }
 

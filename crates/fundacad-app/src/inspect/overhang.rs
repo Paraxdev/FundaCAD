@@ -23,9 +23,9 @@ impl Tint {
 
     pub fn label(self) -> &'static str {
         match self {
-            Tint::Overhang => "Needs support",
-            Tint::Wall => "Prints as is",
-            Tint::Top => "Faces up",
+            Tint::Overhang => "inspect.overhang.needsSupport",
+            Tint::Wall => "inspect.overhang.printsAsIs",
+            Tint::Top => "overhang.legend.top",
         }
     }
 }
@@ -76,5 +76,5 @@ pub fn areas<'a>(bodies: impl IntoIterator<Item = &'a crate::viewport::scene::Sc
 }
 
 pub fn rows(areas: [f64; 3]) -> Vec<super::Row> {
-    [Tint::Overhang, Tint::Wall, Tint::Top].iter().zip(areas).map(|(t, a)| (t.label().into(), format!("{} mm²", super::spell(a)))).collect()
+    [Tint::Overhang, Tint::Wall, Tint::Top].iter().zip(areas).map(|(t, a)| (crate::i18n::t(t.label()), format!("{} mm²", super::spell(a)))).collect()
 }

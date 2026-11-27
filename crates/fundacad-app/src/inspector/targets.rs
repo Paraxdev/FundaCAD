@@ -95,7 +95,7 @@ fn targets_of(ty: &str) -> &'static [TargetField] {
                 ]
             }
         }
-        "revolve" => const { &[PROFILE, empty(row("axisEdge", "Axis edge", TargetKind::Edge), "none"), ACTS_ON] },
+        "revolve" => const { &[PROFILE, empty(row("axisEdge", "selectionTarget.axisEdge", TargetKind::Edge), "selectionTarget.empty.none"), ACTS_ON] },
         "sweep" | "loft" => const { &[ACTS_ON] },
         _ => const { &[] },
     }

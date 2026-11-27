@@ -61,13 +61,13 @@ impl Found {
         let m = &self.manifest;
         let mut parts = Vec::new();
         if !m.feature_types.is_empty() {
-            parts.push(format!("features {}", m.feature_types.join(", ")));
+            parts.push(crate::i18n::tr!("plugins.engine.features", list = m.feature_types.join(", ")));
         }
         if !m.shape_generators.is_empty() {
-            parts.push(format!("shapes {}", m.shape_generators.join(", ")));
+            parts.push(crate::i18n::tr!("plugins.engine.shapes", list = m.shape_generators.join(", ")));
         }
         if !m.exporters.is_empty() {
-            parts.push(format!("exports {}", m.exporters.join(", ")));
+            parts.push(crate::i18n::tr!("plugins.engine.exports", list = m.exporters.join(", ")));
         }
         (!parts.is_empty()).then(|| parts.join(" \u{b7} "))
     }
@@ -168,7 +168,7 @@ pub fn discover(roots: &[Root], natives: &[&str]) -> Vec<Found> {
                     let problem = manifest
                         .geometry_wasm
                         .is_none()
-                        .then(|| "its window side runs in FundaCAD 1 only, FundaCAD 2 loads plugin geometry".to_owned());
+                        .then(|| crate::i18n::t("plugins.engine.fc1Only"));
                     out.push(Found { manifest, dir: Some(dir), native: false, problem });
                 }
             }
@@ -262,7 +262,7 @@ pub fn command(
     group: Group,
     run: impl Fn(&mut Window, &mut App) + 'static,
 ) {
-    crate::commands::register(cx, id, label, group, move |window, cx| {
+    crate::commands::register(cx, id, crate::i18n::Label::Command(label), group, move |window, cx| {
         if enabled(cx, plugin) {
             run(window, cx)
         }

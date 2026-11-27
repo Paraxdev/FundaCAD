@@ -4,6 +4,7 @@
 use serde_json::{Map, Value};
 
 use super::spell;
+use crate::i18n::{t, tr};
 
 #[cfg(test)]
 mod tests;
@@ -36,7 +37,7 @@ fn row(v: &Value, detail: String, close: bool) -> Clash {
     Clash {
         a: s(v, "a").into(),
         b: s(v, "b").into(),
-        pair: format!("{} and {}", name("aName", "a"), name("bName", "b")),
+        pair: tr!("interference.pair", a = name("aName", "a"), b = name("bName", "b")),
         detail,
         close,
     }
@@ -46,8 +47,8 @@ pub fn read(reply: &Map<String, Value>) -> Report {
     let list = |k: &str| reply.get(k).and_then(Value::as_array).cloned().unwrap_or_default();
     let num = |v: &Value, k: &str| v.get(k).and_then(Value::as_f64).unwrap_or(0.0);
     let mut rows: Vec<Clash> =
-        list("pairs").iter().map(|p| row(p, format!("{} mm³ overlap", spell(num(p, "volume"))), false)).collect();
-    rows.extend(list("clearances").iter().map(|p| row(p, format!("{} mm apart", spell(num(p, "distance"))), true)));
+        list("pairs").iter().map(|p| row(p, tr!("interference.overlap", volume = format!("{} mm³", spell(num(p, "volume")))), false)).collect();
+    rows.extend(list("clearances").iter().map(|p| row(p, tr!("interference.apart", distance = format!("{} mm", spell(num(p, "distance")))), true)));
     let unchecked = list("unchecked")
         .iter()
         .map(|u| {
@@ -59,23 +60,16 @@ pub fn read(reply: &Map<String, Value>) -> Report {
     Report { rows, unchecked, note }
 }
 
-fn count(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
-}
-
 /// The line under the title: "No clashes", or the counts.
 pub fn summary(r: &Report) -> String {
     let clashes = r.rows.iter().filter(|c| !c.close).count();
     let close = r.rows.len() - clashes;
-    let mut parts = vec![match clashes {
-        0 => "No clashes".to_string(),
-        n => count(n, "clash", "clashes"),
-    }];
+    let mut parts = vec![tr!("inspect.clash.count", n = clashes)];
     if close > 0 {
-        parts.push(count(close, "close pair", "close pairs"));
+        parts.push(tr!("inspect.clash.close", n = close));
     }
     if !r.unchecked.is_empty() {
-        parts.push(format!("{} not checked", r.unchecked.len()));
+        parts.push(tr!("inspect.clash.unchecked", n = r.unchecked.len()));
     }
     parts.join(", ")
 }
@@ -84,8 +78,8 @@ pub fn summary(r: &Report) -> String {
 pub fn footer(r: &Report, gap: Option<f64>) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(g) = gap.filter(|_| !r.rows.iter().any(|c| c.close)) {
-        out.push(format!("No pairs closer than {} mm", crate::inspect::spell(g)));
+        out.push(tr!("interference.noneCloser", amount = crate::inspect::spell(g)));
     }
-    out.push(if r.rows.is_empty() { "Esc to close" } else { "Click a row to select the pair, Esc to close" }.into());
+    out.push(t(if r.rows.is_empty() { "interference.hintClose" } else { "inspect.clash.hintRows" }));
     out
 }

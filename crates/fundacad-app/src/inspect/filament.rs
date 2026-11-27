@@ -75,8 +75,8 @@ pub fn rows(volume: f64, area: f64, p: &Prefs) -> Vec<super::Row> {
     let (mass, metres) = estimate(volume, area, p);
     let s = super::spell;
     vec![
-        ("Mass, estimate".into(), format!("{} g", s(mass))),
-        ("Filament 1.75 mm".into(), format!("{} m", s(metres[0]))),
-        ("Filament 2.85 mm".into(), format!("{} m", s(metres[1]))),
+        (crate::i18n::t("properties.mass"), format!("{} g", s(mass))),
+        (crate::i18n::tr!("inspect.filament", diameter = "1.75"), format!("{} m", s(metres[0]))),
+        (crate::i18n::tr!("inspect.filament", diameter = "2.85"), format!("{} m", s(metres[1]))),
     ]
 }

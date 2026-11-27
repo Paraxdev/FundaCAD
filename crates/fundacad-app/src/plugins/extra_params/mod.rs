@@ -14,6 +14,7 @@ use gpui_kit::component::input::{Input, InputState};
 use super::manager::switch;
 use super::Native;
 use crate::commands::Group as CmdGroup;
+use crate::i18n::{self, tr};
 use crate::theme::{ActiveTheme as _, Theme, FS_BODY, FS_MICRO, FS_SMALL, R_MD, S_1, S_2, S_3, S_4, W_SEMIBOLD};
 use crate::ui::{icon_button, solid_card, text};
 use crate::viewport::Viewport;
@@ -49,20 +50,20 @@ fn install(viewport: &Entity<Viewport>, window: &mut Window, cx: &mut App) -> An
             setup: false,
             drag: None,
             tracks: Rc::default(),
-            check_expr: cx.new(|cx| InputState::new(window, cx).placeholder("rule, as wall > 1")),
-            check_message: cx.new(|cx| InputState::new(window, cx).placeholder("message when it fails")),
+            check_expr: cx.new(|cx| InputState::new(window, cx).placeholder(i18n::t("extraParams.check.rulePlaceholder"))),
+            check_message: cx.new(|cx| InputState::new(window, cx).placeholder(i18n::t("extraParams.check.messagePlaceholder"))),
             refused: None,
             _observe: observe,
         }
     });
     let (a, b) = (view.clone(), view.clone());
-    super::command(cx, ID, "tune-parameters", "Tune Parameters", CmdGroup::Tools, move |_, cx| {
+    super::command(cx, ID, "tune-parameters", "extraParams.command.tune", CmdGroup::Tools, move |_, cx| {
         a.update(cx, |t, cx| {
             t.open = !t.open;
             cx.notify();
         })
     });
-    super::command(cx, ID, "parameter-setup", "Parameter Setup\u{2026}", CmdGroup::Edit, move |_, cx| {
+    super::command(cx, ID, "parameter-setup", "extraParams.command.setup", CmdGroup::Edit, move |_, cx| {
         b.update(cx, |t, cx| {
             (t.open, t.setup) = (true, true);
             cx.notify();
@@ -85,7 +86,7 @@ impl Tune {
 
     fn set_value(&mut self, name: String, value: f64, cx: &mut Context<Self>) {
         let n = name.clone();
-        self.edit(format!("Set {name}"), move |d| model::set_value(d, &n, value), cx);
+        self.edit(tr!("extraParams.step.set", name = &name), move |d| model::set_value(d, &n, value), cx);
     }
 
     fn slider_value(&self, name: &str, x: Pixels, min: f64, max: f64) -> Option<f64> {
@@ -100,7 +101,7 @@ impl Tune {
     fn control(&self, t: &Theme, r: &Row, cx: &mut Context<Self>) -> AnyElement {
         let name = r.name.clone();
         if !r.editable {
-            return text(t, FS_SMALL).text_color(t.text_dim).child("expression").into_any_element();
+            return text(t, FS_SMALL).text_color(t.text_dim).child(i18n::t("extraParams.expression")).into_any_element();
         }
         match &r.control {
             Control::Toggle => {
@@ -225,7 +226,7 @@ impl Tune {
         let group_label = current
             .as_ref()
             .and_then(|g| groups.iter().find(|(i, _)| i == g).map(|(_, n)| n.clone()))
-            .unwrap_or_else(|| "No group".into());
+            .unwrap_or_else(|| i18n::t("extraParams.noGroup"));
         let next_group: Option<String> = match current.as_ref().and_then(|g| groups.iter().position(|(i, _)| i == g)) {
             None => groups.first().map(|(i, _)| i.clone()),
             Some(i) => groups.get(i + 1).map(|(i, _)| i.clone()),
@@ -241,10 +242,10 @@ impl Tune {
         let mut chips = div().flex().flex_wrap().gap(px(S_1));
         for k in kinds {
             let (name, from, value) = (r.name.clone(), r.control.clone(), r.value);
-            chips = chips.child(pill(t, SharedString::from(format!("kind-{}-{k}", r.name)), k, k == on_kind).on_click(
+            chips = chips.child(pill(t, SharedString::from(format!("kind-{}-{k}", r.name)), &i18n::t(&format!("extraParams.kind.{k}")), k == on_kind).on_click(
                 cx.listener(move |this, _, _, cx| {
                     let (n, c) = (name.clone(), model::convert_control(Some(&from), k, value));
-                    this.edit(format!("Control of {name}"), move |d| model::set_control(d, &n, c.as_ref()), cx);
+                    this.edit(tr!("extraParams.step.control", name = &name), move |d| model::set_control(d, &n, c.as_ref()), cx);
                 }),
             ));
         }
@@ -253,13 +254,13 @@ impl Tune {
             .child(pill(t, SharedString::from(format!("group-{}", r.name)), &group_label, false).on_click(cx.listener(
                 move |this, _, _, cx| {
                     let (n, g) = (gname.clone(), next_group.clone());
-                    this.edit(format!("Group of {gname}"), move |d| model::set_group(d, &n, g.as_deref()), cx);
+                    this.edit(tr!("extraParams.step.group", name = &gname), move |d| model::set_group(d, &n, g.as_deref()), cx);
                 },
             )))
-            .child(pill(t, SharedString::from(format!("hide-{}", r.name)), "Hide", false).on_click(cx.listener(
+            .child(pill(t, SharedString::from(format!("hide-{}", r.name)), &i18n::t("extraParams.hide"), false).on_click(cx.listener(
                 move |this, _, _, cx| {
                     let n = hname.clone();
-                    this.edit(format!("Hide {hname}"), move |d| model::set_hidden(d, &n, true), cx);
+                    this.edit(tr!("extraParams.step.hide", name = &hname), move |d| model::set_hidden(d, &n, true), cx);
                 },
             )));
         div()
@@ -275,7 +276,7 @@ impl Tune {
         let expr = self.check_expr.read(cx).value().trim().to_string();
         let message = self.check_message.read(cx).value().trim().to_string();
         if expr.is_empty() {
-            self.refused = Some("A check needs a rule.".into());
+            self.refused = Some(i18n::t("extraParams.check.needsRule"));
             cx.notify();
             return;
         }
@@ -286,12 +287,12 @@ impl Tune {
                 return;
             }
         }
-        let message = if message.is_empty() { format!("{expr} does not hold") } else { message };
+        let message = if message.is_empty() { tr!("extraParams.check.fails", expr = &expr) } else { message };
         let add = move |d: &mut Doc| {
             model::add_check(d, &expr, &message, false);
             Ok(())
         };
-        self.edit("Add check".into(), add, cx);
+        self.edit(i18n::t("extraParams.step.addCheck"), add, cx);
         for i in [self.check_expr.clone(), self.check_message.clone()] {
             i.update(cx, |i, cx| i.set_value("", window, cx));
         }
@@ -340,9 +341,9 @@ impl Render for Tune {
                     .flex_1()
                     .font_weight(W_SEMIBOLD)
                     .text_color(t.accent_hot)
-                    .child(if setup { "Parameter Setup" } else { "Parameters" }),
+                    .child(i18n::t(if setup { "extraParams.title.setup" } else { "extraParams.title.tune" })),
             )
-            .child(pill(t, "tune-setup", "Setup", setup).on_click(cx.listener(|this, _, _, cx| {
+            .child(pill(t, "tune-setup", &i18n::t("extraParams.setup"), setup).on_click(cx.listener(|this, _, _, cx| {
                 this.setup = !this.setup;
                 cx.notify();
             })))
@@ -360,13 +361,13 @@ impl Render for Tune {
             let mut row = div().flex().flex_wrap().gap(px(S_1));
             for (id, name) in &configs {
                 let drift = active.as_deref() == Some(id) && !model::configuration_drift(&doc, id).is_empty();
-                let label = if drift { format!("{name} (changed)") } else { name.clone() };
+                let label = if drift { tr!("extraParams.config.changed", name = name) } else { name.clone() };
                 let apply = id.clone();
                 row = row.child(
                     pill(t, SharedString::from(format!("cfg-{id}")), &label, active.as_deref() == Some(id)).on_click(
                         cx.listener(move |this, _, _, cx| {
                             let id = apply.clone();
-                            this.edit("Apply configuration".into(), move |d| model::apply_configuration(d, &id), cx);
+                            this.edit(i18n::t("extraParams.step.applyConfig"), move |d| model::apply_configuration(d, &id), cx);
                         }),
                     ),
                 );
@@ -376,7 +377,7 @@ impl Render for Tune {
                         cx.listener(move |this, _, _, cx| {
                             let id = gone.clone();
                             this.edit(
-                                "Delete configuration".into(),
+                                i18n::t("extraParams.step.deleteConfig"),
                                 move |d| {
                                     model::remove_extra(d, "configurations", &id);
                                     Ok(())
@@ -389,24 +390,24 @@ impl Render for Tune {
             }
             if setup {
                 let n = configs.len() + 1;
-                row = row.child(pill(t, "cfg-add", "+ Save current", false).on_click(cx.listener(move |this, _, _, cx| {
+                row = row.child(pill(t, "cfg-add", &i18n::t("extraParams.config.save"), false).on_click(cx.listener(move |this, _, _, cx| {
                     this.edit(
-                        "Save configuration".into(),
+                        i18n::t("extraParams.step.saveConfig"),
                         move |d| {
-                            model::add_configuration(d, &format!("Configuration {n}"));
+                            model::add_configuration(d, &tr!("extraParams.config.name", n = n));
                             Ok(())
                         },
                         cx,
                     );
                 })));
             }
-            body = body.child(section(t, "Configurations")).child(row);
+            body = body.child(section(t, i18n::t("extraParams.configurations"))).child(row);
         }
 
         let checks = model::check_results(&doc);
         let failing: Vec<_> = checks.iter().filter(|c| !c.ok).collect();
         if !failing.is_empty() || setup {
-            body = body.child(section(t, "Checks"));
+            body = body.child(section(t, i18n::t("extraParams.checks")));
             for c in if setup { checks.iter().collect::<Vec<_>>() } else { failing } {
                 let colour = if c.ok { t.text_dim } else if c.error_level { t.error } else { t.warn };
                 let line = match &c.error {
@@ -425,7 +426,7 @@ impl Render for Tune {
                                 cx.listener(move |this, _, _, cx| {
                                     let id = gone.clone();
                                     this.edit(
-                                        "Delete check".into(),
+                                        i18n::t("extraParams.step.deleteCheck"),
                                         move |d| {
                                             model::remove_extra(d, "checks", &id);
                                             Ok(())
@@ -445,19 +446,17 @@ impl Render for Tune {
                         .mt(px(S_1))
                         .child(Input::new(&self.check_expr).text_size(px(FS_SMALL)).flex_1())
                         .child(Input::new(&self.check_message).text_size(px(FS_SMALL)).flex_1())
-                        .child(pill(t, "check-add", "+ Add", false).on_click(cx.listener(|this, _, w, cx| this.add_check(w, cx)))),
+                        .child(pill(t, "check-add", &i18n::t("extraParams.check.add"), false).on_click(cx.listener(|this, _, w, cx| this.add_check(w, cx)))),
                 );
             }
         }
 
         let groups = model::tune_groups(&doc);
         if groups.is_empty() {
-            body = body.child(text(t, FS_SMALL).text_color(t.text_dim).mt(px(S_3)).child(
-                "No user parameters yet. Add one in Tools, Parameters, then give it a slider, toggle or choice here.",
-            ));
+            body = body.child(text(t, FS_SMALL).text_color(t.text_dim).mt(px(S_3)).child(i18n::t("extraParams.empty")));
         }
         for g in &groups {
-            body = body.child(section(t, if g.name.is_empty() { "Parameters".to_owned() } else { g.name.clone() }));
+            body = body.child(section(t, if g.name.is_empty() { i18n::t("extraParams.title.tune") } else { g.name.clone() }));
             for r in &g.rows {
                 body = body.child(if setup {
                     self.setup_row(t, r, &doc, cx)
@@ -480,12 +479,12 @@ impl Render for Tune {
         }
         if setup {
             let n = model::groups(&doc).len() + 1;
-            body = body.child(div().mt(px(S_2)).child(pill(t, "group-add", "+ Group", false).on_click(cx.listener(
+            body = body.child(div().mt(px(S_2)).child(pill(t, "group-add", &i18n::t("extraParams.group.add"), false).on_click(cx.listener(
                 move |this, _, _, cx| {
                     this.edit(
-                        "Add group".into(),
+                        i18n::t("extraParams.step.addGroup"),
                         move |d| {
-                            model::add_group(d, &format!("Group {n}"));
+                            model::add_group(d, &tr!("extraParams.group.name", n = n));
                             Ok(())
                         },
                         cx,
