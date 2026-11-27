@@ -262,13 +262,21 @@ fn fs_datum(in: Datum) -> @location(0) vec4<f32> {
   return vec4<f32>(encode(in.color.rgb), in.color.a);
 }
 
+struct Line {
+  @builtin(position) clip: vec4<f32>,
+  @location(0) world: vec3<f32>,
+}
+
 @vertex
-fn vs_line(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
+fn vs_line(@location(0) position: vec3<f32>) -> Line {
   let clip = u.view_proj * vec4<f32>(position, 1.0);
-  return vec4<f32>(clip.xy, clip.z - 2e-5 * clip.w, clip.w);
+  return Line(vec4<f32>(clip.xy, clip.z - 2e-5 * clip.w, clip.w), position);
 }
 
 @fragment
-fn fs_line() -> @location(0) vec4<f32> {
+fn fs_line(in: Line) -> @location(0) vec4<f32> {
+  if (dot(u.clip.xyz, u.clip.xyz) > 0.0 && cut(in.world)) {
+    discard;
+  }
   return vec4<f32>(encode(u.edge.rgb), u.edge.a);
 }
