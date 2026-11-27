@@ -1,9 +1,5 @@
 //! FUNDA_SHOT=<file.png> saves the window after FUNDA_SHOT_AFTER_MS (3000 by default), then quits. FUNDA_SHOT_RUN
-//! runs steps halfway there, split by `;`: a command id, `menu:<index>`, `toast:<text>`,
-//! `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`, `click:<x>,<y>` (`,ctrl` or `,shift` to add),
-//! `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:` and `up:` for a held left button,
-//! `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down), `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep
-//! with the right button over `ms`, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
+//! runs steps halfway there, split by `;`, see `run_step` for the step forms.
 
 use std::time::Duration;
 
@@ -88,6 +84,11 @@ pub fn arm(window: AnyWindowHandle, cx: &mut App) {
     .detach();
 }
 
+/// A command id, `menu:<index>`, `toast:<text>`, `ask:<question>`, `key:<keystroke>` such as `key:ctrl-k`,
+/// `click:<x>,<y>` (`,ctrl` or `,shift` to add), `move:<x>,<y>` or `hover:<x>,<y>` in window pixels, `down:`, `drag:`
+/// and `up:` for a held left button, `drag:<x>,<y>,<x2>,<y2>` to sweep with it held (`,hold` keeps it down),
+/// `orbit:<x>,<y>,<x2>,<y2>,<ms>` to sweep with the right button over `ms`, `wheel:<x>,<y>,<pixels>`, or `wait:<ms>`.
+/// The timed ones (click, sweeps, wait) run in the shot loop, the rest here.
 fn run_step(step: &str, window: &mut gpui::Window, cx: &mut App) {
     if let Some(i) = step.strip_prefix("menu:").and_then(|i| i.parse().ok()) {
         crate::overlay::open_bar(window, cx, i);
