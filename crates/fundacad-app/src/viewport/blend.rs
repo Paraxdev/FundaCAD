@@ -254,7 +254,7 @@ impl Viewport {
         let at = self.local(position);
         let on_knob = self.blend_target().filter(|t| self.knob_at(t).is_some_and(|k| k.distance(at) <= GRAB_PX));
         let target = on_knob.or_else(|| {
-            if matches!(self.picking.filter, Filter::Bodies | Filter::Faces) {
+            if self.picking.filter == Filter::Bodies {
                 return None;
             }
             let (_, _, pick) = self.picks_at(position).1?;
