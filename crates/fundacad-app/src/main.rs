@@ -42,6 +42,8 @@ fn main() {
 
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
+        // FC1 draws grayscale text in WebView2, ClearType subpixel text leaves red and blue fringes on the dark UI.
+        cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
         settings::init(cx);
         i18n::init(cx);
         let doc = document::Document::named(files::shown_name(path.as_deref()));
