@@ -189,7 +189,7 @@ impl Motion {
             return false;
         }
         let dt = self.last.map_or(1.0 / 60.0, |l| now.saturating_duration_since(l).as_secs_f32());
-        if self.last.is_some() {
+        if self.last.is_some() && self.frames.len() < 100_000 {
             self.frames.push(dt);
         }
         self.last = Some(now);
@@ -206,6 +206,8 @@ impl Motion {
             let d = goal.distance.max(1e-6);
             let mut settled = true;
             let mut settle = |spring: &mut Spring, x: &mut f32, to: f32, eps: f32| {
+                // Far from the origin f32 rounds the last step back to a few ulps short of the goal for good.
+                let eps = eps.max(to.abs() * 8.0 * f32::EPSILON);
                 *x = spring.step(*x, to, SMOOTH_TIME, dt);
                 if (*x - to).abs() < eps && spring.v.abs() < eps * 100.0 {
                     *x = to;
@@ -217,6 +219,8 @@ impl Motion {
             settle(&mut s[0], &mut cam.yaw, goal.yaw, SETTLE_ANGLE);
             settle(&mut s[1], &mut cam.pitch, goal.pitch, SETTLE_ANGLE);
             settle(&mut s[2], &mut cam.distance, goal.distance, d * SETTLE_SHARE);
+            // A fast zoom stopped hard at the clamp can carry the spring past it.
+            cam.distance = cam.distance.max(1e-3);
             settle(&mut s[3], &mut cam.target.x, goal.target.x, d * SETTLE_SHARE);
             settle(&mut s[4], &mut cam.target.y, goal.target.y, d * SETTLE_SHARE);
             settle(&mut s[5], &mut cam.target.z, goal.target.z, d * SETTLE_SHARE);
@@ -231,7 +235,7 @@ impl Motion {
 
     /// Notes how long the view took to paint a frame of this motion.
     pub fn painted(&mut self, took: Duration) {
-        if self.moving() {
+        if self.moving() && self.costs.len() < 100_000 {
             self.costs.push(took.as_secs_f32());
         }
     }
@@ -413,6 +417,18 @@ mod tests {
         cam = Camera { yaw: 5.0, ..Default::default() };
         assert!(!m.step(&mut cam, Instant::now(), false));
         assert_eq!(cam.yaw, 5.0);
+    }
+
+    #[test]
+    fn a_gesture_far_from_the_origin_settles() {
+        let mut cam =
+            Camera { target: Vec3::new(20_000.0, 5_000.0, 1_000.0), yaw: 200.0, distance: 10.0, ..Default::default() };
+        let mut m = Motion::default();
+        let goal = m.goal(&cam);
+        goal.orbit(glam::Vec2::new(37.0, 11.0));
+        goal.pan(glam::Vec2::new(13.0, -7.0), 700.0);
+        assert!(run(&mut m, &mut cam, 2000) < 300);
+        assert!(!m.moving());
     }
 
     #[test]
