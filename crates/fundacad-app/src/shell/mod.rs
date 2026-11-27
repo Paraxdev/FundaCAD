@@ -17,6 +17,7 @@ mod timeline;
 mod titlebar;
 mod tool_card;
 mod transfer;
+mod view_controls;
 
 use std::collections::HashMap;
 
@@ -54,6 +55,7 @@ pub struct Shell {
     transfer: transfer::Transfer,
     /// The rail family whose tools are listed.
     rail_open: Option<&'static str>,
+    view_ctl: view_controls::State,
     _system: Subscription,
 }
 
@@ -78,6 +80,7 @@ impl Shell {
             move |_, cx| p.update(cx, |p, cx| p.toggle(cx)),
         );
         tool_card::install(&viewport, cx);
+        view_controls::install(&viewport, cx);
         inspect::install(&viewport, cx);
         crate::plugins::install(&viewport, window, cx);
         let mut shell = Self {
@@ -95,6 +98,7 @@ impl Shell {
             params,
             transfer: transfer::Transfer::new(cx),
             rail_open: None,
+            view_ctl: Default::default(),
             _system: theme::follow_system(window, cx),
         };
         shell.sync(window, cx);
@@ -252,7 +256,7 @@ impl Render for Shell {
             .items_start()
             .gap(gap)
             // FundaCAD 1's narrow stage rule: a card opens to the left of the view controls, which keep their place.
-            .child(div().relative().child(self.view_controls(t)).children(card.map(|c| {
+            .child(div().relative().child(self.view_controls(t, cx)).children(card.map(|c| {
                 let w = params::place::card_w(window.viewport_size().width / px(1.));
                 div().absolute().top_0().right(relative(1.)).w(px(w + FLOAT_GAP)).pr(gap).child(c).child(
                     canvas(
@@ -267,7 +271,7 @@ impl Render for Shell {
                     .size_full(),
                 )
             })))
-            .child(self.history_card(t, window, cx));
+            .children((!self.view_ctl.history_hidden).then(|| self.history_card(t, window, cx)));
         let status = status::status(t, self.viewport.read(cx).status(), window);
 
         // Actions go only to the window root while nothing has focus, so the shell takes it.

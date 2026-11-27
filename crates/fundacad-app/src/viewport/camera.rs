@@ -1,6 +1,6 @@
 use glam::{Mat4, Vec2, Vec3};
 
-const PITCH_LIMIT: f32 = 1.55;
+pub(super) const PITCH_LIMIT: f32 = 1.55;
 const FOV_Y: f32 = 0.7;
 
 /// An orbit camera around `target`, Z up like the engine.
@@ -29,8 +29,19 @@ impl Camera {
     }
 
     pub fn projection(&self, aspect: f32) -> Mat4 {
+        if super::display::projection().ortho_for(self) {
+            return self.ortho(aspect);
+        }
         let near = (self.distance * 0.01).max(1e-4);
         Mat4::perspective_rh(FOV_Y, aspect, near, self.distance * 100.0)
+    }
+
+    /// Orthographic, sized so the orbit target keeps the scale perspective gives it, and deep enough both ways
+    /// that nothing behind the eye is cut off.
+    pub fn ortho(&self, aspect: f32) -> Mat4 {
+        let half_h = self.distance * (FOV_Y * 0.5).tan();
+        let half_w = half_h * aspect;
+        Mat4::orthographic_rh(-half_w, half_w, -half_h, half_h, -self.distance * 100.0, self.distance * 100.0)
     }
 
     /// The world ray through `ndc` (-1..1, y up): origin on the near plane and unit direction.
