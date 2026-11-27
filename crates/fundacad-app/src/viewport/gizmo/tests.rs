@@ -186,7 +186,8 @@ fn a_value_bound_to_a_parameter_leaves_the_handles_off() {
     assert_eq!(kind(&json!({"type": "patternRect", "spacingX": 3, "spacingY": "row"})), None);
     assert_eq!(kind(&json!({"type": "patternCircular", "angle": "sweep"})), None);
     assert_eq!(kind(&json!({"type": "patternCircular", "angle": null})), Some(Kind::Circular));
-    assert_eq!(kind(&json!({"type": "draft"})), None);
+    assert_eq!(kind(&json!({"type": "draft", "angle": "lean"})), None);
+    assert_eq!(kind(&json!({"type": "fillet"})), None);
 }
 
 #[test]
@@ -199,4 +200,47 @@ fn a_linear_arrow_for_another_axis_spaces_the_copies_one_body_length_along_it() 
     assert_eq!(linear_axis(&f, 2, None), json!({"type": "patternLinear", "count": 4, "spacing": 20.0, "axis": "Z"}));
     let flat = Some(([0.0, 1.0, 4.0], [10.0, 1.0, 6.0]));
     assert_eq!(linear_axis(&f, 1, flat)["spacing"], json!(20.0));
+}
+
+#[test]
+fn split_draft_and_face_offset_get_one_normal_arrow_unless_bound() {
+    assert_eq!(kind(&json!({"type": "split", "plane": "XY"})), Some(Kind::Split));
+    assert_eq!(kind(&json!({"type": "split", "planeId": "dp", "offset": 2})), None);
+    assert_eq!(kind(&json!({"type": "draft", "angle": 3})), Some(Kind::Draft));
+    assert_eq!(kind(&json!({"type": "offsetFace", "distance": "t"})), None);
+    assert!(Kind::OffsetFace.along_normal() && !Kind::Move.along_normal());
+    let arrow = outline_along(Vec3::ZERO, Vec3::NEG_Y, 0.5);
+    assert_eq!(arrow, vec![(Handle::Arrow(1), vec![Vec3::ZERO, Vec3::new(0.0, -34.0, 0.0)])]);
+}
+
+#[test]
+fn a_split_plane_is_the_frame_the_builder_names() {
+    assert_eq!(split_plane(&json!({"plane": "XZ"})), Some((Vec3::ZERO, Vec3::NEG_Y)));
+    assert_eq!(split_plane(&json!({})), Some((Vec3::ZERO, Vec3::Z)));
+    let face = json!({"plane": {"origin": [1, 2, 3], "normal": [0, 0, 2], "xdir": [1, 0, 0]}});
+    assert_eq!(split_plane(&face), Some((Vec3::new(1.0, 2.0, 3.0), Vec3::Z)));
+}
+
+#[test]
+fn dragging_a_split_or_a_face_offset_adds_the_snapped_travel() {
+    let f = json!({"type": "split", "plane": "XY", "offset": 2});
+    assert_eq!(pushed(Kind::Split, &f, 0.0, 3.4, 1.0, false)["offset"], json!(5.0));
+    assert_eq!(pushed(Kind::Split, &f, 0.0, -2.2, 1.0, false).get("offset"), None);
+    let o = json!({"type": "offsetFace", "distance": 1});
+    assert_eq!(pushed(Kind::OffsetFace, &o, 0.0, -0.26, 0.1, true)["distance"], json!(0.7));
+    assert_eq!(along(Kind::OffsetFace, &o, 0.0), 1.0);
+}
+
+#[test]
+fn a_draft_drag_reads_as_the_angle_about_its_neutral_line() {
+    assert_eq!(draft_lever(Vec3::new(5.0, 0.0, 12.0), Vec3::new(0.0, 0.0, 2.0), "Z"), 10.0);
+    assert_eq!(draft_lever(Vec3::new(5.0, 0.0, 12.0), Vec3::ZERO, "X"), 5.0);
+    let f = json!({"type": "draft", "angle": 0});
+    assert_eq!(pushed(Kind::Draft, &f, 10.0, 10.0, 1.0, false)["angle"], json!(45.0));
+    assert_eq!(pushed(Kind::Draft, &f, 10.0, 1000.0, 1.0, false)["angle"], json!(60.0));
+    assert_eq!(pushed(Kind::Draft, &f, 10.0, 0.5, 1.0, true)["angle"], json!(2.9));
+    assert_eq!(pushed(Kind::Draft, &f, 0.0, 5.0, 1.0, false), f);
+    let d = draft_delta(30.0, 10.0);
+    assert!((draft_angle(d, 10.0) - 30.0).abs() < 1e-9);
+    assert!((along(Kind::Draft, &json!({"angle": 45}), 4.0) - 4.0).abs() < 1e-6);
 }
