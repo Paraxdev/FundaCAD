@@ -546,6 +546,7 @@ impl Viewport {
     fn overlay(&self) -> Overlay {
         let f = &self.hover_fade;
         let hover = [f.on.clone(), f.off.clone()].map(|h| h.map(|((b, face, ok), a)| (b, face, ok, ease(a))));
+        let (datums, datums_on_top) = self.datum_triangles();
         let stretch =
             self.push.as_ref().filter(|p| !p.lost).map(|p| (p.mask_body, p.axis * (p.target_plane() - p.mesh_plane)));
         Overlay {
@@ -556,6 +557,8 @@ impl Viewport {
             selection_fade: ease(self.select_fade.t),
             clip: self.clip_plane(),
             shade: self.shade_uniform(),
+            datums,
+            datums_on_top,
         }
     }
 
@@ -611,7 +614,6 @@ impl Viewport {
         renderer.set_frost(panels, scale);
         let index = renderer.render(&self.scene, &self.camera, &overlay, mask, &tint, size);
         window.paint_external_texture(bounds, Corners::all(px(10.)), index, size);
-        self.paint_datums(window);
         self.paint_profiles(window);
         self.paint_sketch(window);
         had_backend != self.backend
@@ -806,12 +808,19 @@ impl Viewport {
     }
 
     fn zoom(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
-        let steps = event.delta.pixel_delta(px(20.)).y.as_f32() / 20.0;
+        self.zoom_by(motion::zoom_log(event.delta.pixel_delta(px(20.)).y.as_f32()), event.position, cx);
+    }
+
+    fn zoom_by(&mut self, log: f32, position: Point<Pixels>, cx: &mut Context<Self>) {
         let b = self.bounds;
         let (w, h) = (b.size.width.as_f32().max(1.0), b.size.height.as_f32().max(1.0));
-        let local = event.position - b.origin;
+        let local = position - b.origin;
         let ndc = Vec2::new(local.x.as_f32() / w * 2.0 - 1.0, 1.0 - local.y.as_f32() / h * 2.0);
-        self.motion.goal(&self.camera).zoom_at(steps, ndc, w / h);
+        let (o, d) = self.ray_at(position);
+        match self.pick_ray(o, d) {
+            Some(hit) => motion::zoom_about(self.motion.goal(&self.camera), hit.point, log),
+            None => self.motion.goal(&self.camera).zoom_at(log / -(0.88f32.ln()), ndc, w / h),
+        }
         cx.notify();
     }
 }
@@ -874,6 +883,7 @@ impl Render for Viewport {
                 }
             }))
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| this.zoom(e, cx)))
+            .on_pinch(cx.listener(|this, e: &PinchEvent, _, cx| this.zoom_by(motion::pinch_log(e.delta), e.position, cx)))
             .on_drop(cx.listener(|this, c: &placing::Carried, w, cx| this.land(c, w, cx)))
             .on_drag_move(cx.listener(|this, e: &DragMoveEvent<placing::Carried>, _, cx| this.drag_over(e.event.position, cx)))
             .child(

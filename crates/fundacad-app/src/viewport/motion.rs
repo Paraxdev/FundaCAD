@@ -9,6 +9,37 @@ use glam::Vec3;
 use super::camera::Camera;
 
 pub mod selection;
+#[cfg(test)]
+mod zoom_tests;
+
+/// A wheel pixel of zoom in log scale units, 0.88 a 20 pixel line.
+const WHEEL_LOG_PER_PX: f32 = 0.006_392;
+/// FundaCAD 1 holds one wheel event to this many pixels, so a flung wheel does not leap.
+const MAX_SWEEP_PX: f32 = 240.0;
+const MIN_DISTANCE: f32 = 1e-3;
+
+/// The log zoom of a wheel sweep of `px` pixels, positive is in.
+pub fn zoom_log(px: f32) -> f32 {
+    let log = px.clamp(-MAX_SWEEP_PX, MAX_SWEEP_PX) * WHEEL_LOG_PER_PX;
+    if log.is_finite() { log } else { 0.0 }
+}
+
+/// The log zoom of a pinch scaling the view by 1 + `delta`. A browser hands FundaCAD 1 a pinch as a Ctrl wheel of
+/// 100 pixels to e, gpui hands it over as its own event, so this is the same rate.
+pub fn pinch_log(delta: f32) -> f32 {
+    if delta.is_finite() { (1.0 + delta).max(1e-3).ln() } else { 0.0 }
+}
+
+/// Scales the view about `anchor` by e^-log, as FundaCAD 1's zoom channel: the anchor stays under the cursor, and as
+/// it is the surface there each step covers a share of what is left to it, so the zoom slows on the way in.
+pub fn zoom_about(cam: &mut Camera, anchor: Vec3, log: f32) {
+    let reach = cam.eye().distance(anchor).max(MIN_DISTANCE);
+    let low = (MIN_DISTANCE / reach).max(MIN_DISTANCE / cam.distance).ln();
+    let high = (1e5 / cam.distance).ln();
+    let f = (-log).clamp(low.min(0.0), high.max(0.0)).exp();
+    cam.target = anchor + (cam.target - anchor) * f;
+    cam.distance *= f;
+}
 
 /// The smooth time of eased gestures, seconds, FundaCAD 1's default.
 pub const SMOOTH_TIME: f32 = 0.125;
