@@ -4,10 +4,13 @@
 
 pub mod areas;
 pub mod dims;
+pub mod escape;
+pub mod glyphs;
 pub mod palette;
 pub mod plane;
 pub mod regions;
 pub mod relations;
+pub mod rules;
 pub mod snap;
 pub mod solve;
 
@@ -32,6 +35,8 @@ pub enum Tool {
     Arc,
     Polygon,
     Dimension,
+    /// A constraint pick tool, by its .funda type.
+    Constrain(&'static str),
 }
 
 impl Tool {
@@ -45,7 +50,13 @@ impl Tool {
             Tool::Arc => "arc",
             Tool::Polygon => "polygon",
             Tool::Dimension => "dimension",
+            Tool::Constrain(kind) => kind,
         })
+    }
+
+    /// FundaCAD 1's prompt for what the tool wants next, actionTables.ts SKETCH_PROMPTS.
+    pub fn prompt(self) -> String {
+        crate::i18n::t(&format!("sketch.hint.{}", self.action().unwrap_or("select")))
     }
 
     pub fn label(self) -> String {
@@ -57,6 +68,7 @@ impl Tool {
             Tool::Arc => "tool.arc",
             Tool::Polygon => "tool.polygon",
             Tool::Dimension => "tool.dimension",
+            Tool::Constrain(kind) => return crate::i18n::t(&format!("tool.{kind}")),
         })
     }
 }
@@ -89,6 +101,8 @@ pub struct Editor {
     pub snap_grid: bool,
     /// New dimensions measure instead of drive.
     pub reference: bool,
+    /// A constraint tool's first pick.
+    pub first: Option<String>,
 }
 
 pub type Feature = Map<String, Value>;
@@ -198,6 +212,7 @@ impl Editor {
             polygon_sides: 6,
             snap_grid: true,
             reference: false,
+            first: None,
         };
         e.resolve(false);
         Some(e)
@@ -273,24 +288,41 @@ impl Editor {
     pub fn set_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.clicks.clear();
+        self.first = None;
         self.selected = None;
     }
 
-    /// Esc: drops the shape being drawn, else the tool, else nothing (false, the caller finishes the sketch).
+    pub fn escape_state(&self) -> escape::State {
+        escape::State {
+            dragging: self.drag.is_some(),
+            pending: !self.clicks.is_empty() || self.first.is_some(),
+            selection: self.selected.is_some(),
+            armed: self.tool != Tool::Select,
+        }
+    }
+
+    /// Esc: peels one layer, false when none is left and the caller finishes the sketch.
     pub fn escape(&mut self) -> bool {
-        if !self.clicks.is_empty() {
-            self.clicks.clear();
-            return true;
+        match escape::action(self.escape_state()) {
+            escape::Action::CancelDrag => {
+                if let Some(d) = self.drag.take() {
+                    self.entities = d.entities;
+                    self.resolve(false);
+                }
+            }
+            escape::Action::CancelPending => {
+                self.clicks.clear();
+                self.first = None;
+            }
+            escape::Action::ClearSelection => self.selected = None,
+            escape::Action::ArmSelect => self.set_tool(Tool::Select),
+            escape::Action::Close => return false,
         }
-        if self.tool != Tool::Select || self.selected.is_some() {
-            self.set_tool(Tool::Select);
-            return true;
-        }
-        false
+        true
     }
 
     pub fn hover(&mut self, raw: DVec2, px_per_mm: f64) {
-        self.cursor = Some(if self.tool == Tool::Select || self.tool == Tool::Dimension {
+        self.cursor = Some(if matches!(self.tool, Tool::Select | Tool::Dimension | Tool::Constrain(_)) {
             Snap::free(raw)
         } else {
             snap::snap(raw, &snap::candidates(&self.solved.entities), px_per_mm, self.snap_grid)
@@ -356,6 +388,10 @@ impl Editor {
             Tool::Dimension => {
                 let id = self.nearest(raw, snap::PIXEL_TOL / px_per_mm)?;
                 self.dimension(&id)
+            }
+            Tool::Constrain(kind) => {
+                let id = self.nearest(raw, snap::PIXEL_TOL / px_per_mm)?;
+                self.rule_pick(kind, id)
             }
             _ if self.clicks.is_empty() => {
                 self.clicks.push(at);
@@ -481,6 +517,10 @@ impl Editor {
                     (format!("{id}~{k}"), d)
                 }
                 Entity::Circle { id, x, y, radius } => (id.clone(), (DVec2::new(*x, *y).distance(p) - radius).abs()),
+                Entity::Projected { id, .. } => match e.as_line_seg() {
+                    Some((a, b)) => (id.clone(), seg(DVec2::new(a.x, a.y), DVec2::new(b.x, b.y))),
+                    None => continue,
+                },
                 _ => match regions::path(e) {
                     Some(pts) => (e.id().to_string(), poly(&pts, false)),
                     None => continue,
@@ -727,6 +767,8 @@ fn add_feature(doc: &mut Map<String, Value>, ty: &str, mut f: Value) -> Result<S
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod glyphs_tests;
 #[cfg(test)]
 mod palette_tests;
 #[cfg(test)]

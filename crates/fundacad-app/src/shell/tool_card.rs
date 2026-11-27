@@ -45,6 +45,7 @@ pub(super) fn install(viewport: &Entity<Viewport>, cx: &mut App) {
     let v = viewport.clone();
     register(cx, "escape", Label::Key("common.cancel"), Group::Edit, move |_, cx| {
         v.update(cx, |v, cx| match v.running().is_some() {
+            _ if v.escape_local(cx) => {}
             true => v.finish(false, cx),
             false if v.inspecting().card.is_some() => v.open_card(None, cx),
             false => v.clear_selection(cx),

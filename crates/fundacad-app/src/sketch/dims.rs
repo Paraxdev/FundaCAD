@@ -54,7 +54,7 @@ fn edge(id: &str) -> Option<(&str, usize)> {
     Some((r, k.parse().ok()?))
 }
 
-fn span_of(solved: &[Entity], line: &str) -> Option<(DVec2, DVec2)> {
+pub(super) fn span_of(solved: &[Entity], line: &str) -> Option<(DVec2, DVec2)> {
     if let Some((r, k)) = edge(line) {
         let Entity::Rectangle { x, y, width, height, angle, .. } = solved.iter().find(|e| e.id() == r)? else {
             return None;
