@@ -336,18 +336,19 @@ pub fn draft_lever(point: Vec3, low: Vec3, axis: &str) -> f32 {
 }
 
 /// draftMath: a face swung by `angle` degrees about a neutral line `lever` away moves this far along its normal.
+/// The kernel tapers a positive angle inward along the pull axis, so the face moves against its normal.
 pub fn draft_delta(angle: f64, lever: f32) -> f64 {
     if lever <= 1e-3 {
         return 0.0;
     }
-    angle.clamp(-MAX_DRAFT, MAX_DRAFT).to_radians().tan() * lever as f64
+    -angle.clamp(-MAX_DRAFT, MAX_DRAFT).to_radians().tan() * lever as f64
 }
 
 pub fn draft_angle(delta: f64, lever: f32) -> f64 {
     if lever <= 1e-3 || !delta.is_finite() {
         return 0.0;
     }
-    delta.atan2(lever as f64).to_degrees().clamp(-MAX_DRAFT, MAX_DRAFT)
+    (-delta).atan2(lever as f64).to_degrees().clamp(-MAX_DRAFT, MAX_DRAFT)
 }
 
 /// How far along the normal the arrow stands for the feature's value.

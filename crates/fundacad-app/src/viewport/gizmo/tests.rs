@@ -236,13 +236,13 @@ fn a_draft_drag_reads_as_the_angle_about_its_neutral_line() {
     assert_eq!(draft_lever(Vec3::new(5.0, 0.0, 12.0), Vec3::new(0.0, 0.0, 2.0), "Z"), 10.0);
     assert_eq!(draft_lever(Vec3::new(5.0, 0.0, 12.0), Vec3::ZERO, "X"), 5.0);
     let f = json!({"type": "draft", "angle": 0});
-    assert_eq!(pushed(Kind::Draft, &f, 10.0, 10.0, 1.0, false)["angle"], json!(45.0));
-    assert_eq!(pushed(Kind::Draft, &f, 10.0, 1000.0, 1.0, false)["angle"], json!(60.0));
-    assert_eq!(pushed(Kind::Draft, &f, 10.0, 0.5, 1.0, true)["angle"], json!(2.9));
+    assert_eq!(pushed(Kind::Draft, &f, 10.0, 10.0, 1.0, false)["angle"], json!(-45.0));
+    assert_eq!(pushed(Kind::Draft, &f, 10.0, -1000.0, 1.0, false)["angle"], json!(60.0));
+    assert_eq!(pushed(Kind::Draft, &f, 10.0, -0.5, 1.0, true)["angle"], json!(2.9));
     assert_eq!(pushed(Kind::Draft, &f, 0.0, 5.0, 1.0, false), f);
     let d = draft_delta(30.0, 10.0);
     assert!((draft_angle(d, 10.0) - 30.0).abs() < 1e-9);
-    assert!((along(Kind::Draft, &json!({"angle": 45}), 4.0) - 4.0).abs() < 1e-6);
+    assert!((along(Kind::Draft, &json!({"angle": 45}), 4.0) + 4.0).abs() < 1e-6);
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn a_face_arrow_is_framed_by_the_first_face_alone() {
 fn a_draft_on_its_neutral_plane_has_no_arrow() {
     let f = json!({"type": "draft", "angle": 45});
     assert_eq!(arrow_at(Kind::Draft, &f, Vec3::ZERO, Vec3::X, 0.0), None);
-    assert_eq!(arrow_at(Kind::Draft, &f, Vec3::ZERO, Vec3::X, 2.0).map(|v| (v.x * 1e4).round()), Some(2e4));
+    assert_eq!(arrow_at(Kind::Draft, &f, Vec3::ZERO, Vec3::X, 2.0).map(|v| (v.x * 1e4).round()), Some(-2e4));
     assert_eq!(arrow_at(Kind::OffsetFace, &json!({"distance": 3}), Vec3::Z, Vec3::X, 0.0), Some(Vec3::new(3.0, 0.0, 1.0)));
 }
 
