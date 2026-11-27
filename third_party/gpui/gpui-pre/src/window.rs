@@ -1,6 +1,7 @@
 // Modified by FundaCAD: Window::paint_external_texture paints a texture the app renders itself.
 // Modified by FundaCAD: box shadows are clipped to outside the casting element, as in CSS.
 // Modified by FundaCAD: Window::set_ui_zoom scales the whole UI, as a browser's page zoom.
+// Modified by FundaCAD: Window::paint_shaped_quad and the shadow painters take a CornerShape.
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -11,7 +12,7 @@ use crate::subscription::SingleSubscriberSet;
 use crate::taffy::TaffyLayoutEngine;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
-    AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
+    AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow, CornerShape,
     Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DevicePixels,
     DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, Edges, Effect, Entity,
     EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs,
@@ -5006,6 +5007,7 @@ impl Window {
         &mut self,
         bounds: Bounds<Pixels>,
         corner_radii: Corners<Pixels>,
+        corner_shape: CornerShape,
         shadows: &[BoxShadow],
     ) {
         self.invalidator.debug_assert_paint();
@@ -5037,7 +5039,8 @@ impl Window {
                 shape_corner_radii: caster_corner_radii,
                 caster_bounds,
                 inset: false.into(),
-                pad: 0,
+                corner_shape,
+                pad: [0; 3],
             });
         }
     }
@@ -5049,6 +5052,7 @@ impl Window {
         &mut self,
         bounds: Bounds<Pixels>,
         corner_radii: Corners<Pixels>,
+        corner_shape: CornerShape,
         shadows: &[BoxShadow],
     ) {
         self.invalidator.debug_assert_paint();
@@ -5083,7 +5087,8 @@ impl Window {
                 shape_corner_radii: hole_corner_radii.scale(scale_factor),
                 caster_bounds: element_bounds,
                 inset: true.into(),
-                pad: 0,
+                corner_shape,
+                pad: [0; 3],
             });
         }
     }
@@ -5140,6 +5145,11 @@ impl Window {
     /// where the circular arcs meet. This will not display well when combined with dashed borders.
     /// Use `Corners::clamp_radii_for_quad_size` if the radii should fit within the bounds.
     pub fn paint_quad(&mut self, quad: PaintQuad) {
+        self.paint_shaped_quad(quad, CornerShape::Auto);
+    }
+
+    /// [`Self::paint_quad`] with the given shape of rounded corners.
+    pub fn paint_shaped_quad(&mut self, quad: PaintQuad, corner_shape: CornerShape) {
         self.invalidator.debug_assert_paint();
 
         let opacity = self.element_opacity();
@@ -5154,6 +5164,8 @@ impl Window {
             corner_radii: quad.corner_radii.scale(self.scale_factor()),
             border_widths: snapped_border_widths,
             border_style: quad.border_style,
+            corner_shape,
+            pad: 0,
         };
         self.insert_quad(quad);
     }
@@ -10602,6 +10614,7 @@ mod tests {
                     window.paint_drop_shadows(
                         bounds,
                         Default::default(),
+                        CornerShape::Auto,
                         std::slice::from_ref(&shadow),
                     );
                     assert_eq!(
@@ -10618,11 +10631,11 @@ mod tests {
             let shape_bounds =
                 (bounds + collapsed_shadow.offset).dilate(collapsed_shadow.spread_radius);
             let count = window.next_frame.scene.len();
-            window.paint_drop_shadows(bounds, Default::default(), &[collapsed_shadow]);
+            window.paint_drop_shadows(bounds, Default::default(), CornerShape::Auto, &[collapsed_shadow]);
             assert_eq!(window.next_frame.scene.len(), count);
             assert!(window.cover_bounds(shape_bounds).is_empty());
 
-            window.paint_drop_shadows(bounds, Default::default(), &[shadow]);
+            window.paint_drop_shadows(bounds, Default::default(), CornerShape::Auto, &[shadow]);
             assert_eq!(window.next_frame.scene.len(), count + 1);
         });
     }
@@ -10640,7 +10653,7 @@ mod tests {
                         .spread_radius(spread_radius)
                         .inset();
                     window.next_frame.scene.clear();
-                    window.paint_inset_shadows(bounds, Default::default(), &[shadow]);
+                    window.paint_inset_shadows(bounds, Default::default(), CornerShape::Auto, &[shadow]);
                     let shadows = &window.next_frame.scene.shadows;
                     assert_eq!(shadows.len(), 1);
                     let hole = shadows[0].shape_bounds;

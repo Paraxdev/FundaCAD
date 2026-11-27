@@ -17,6 +17,17 @@ pub enum State {
     Over,
 }
 
+/// A conflict outranks a redundant record, for the rows and the canvas glyphs alike.
+pub fn state_of(i: usize, conflicts: &HashSet<usize>, over: &HashSet<usize>) -> Option<State> {
+    if conflicts.contains(&i) {
+        Some(State::Conflict)
+    } else if over.contains(&i) {
+        Some(State::Over)
+    } else {
+        None
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Row {
     /// None for an implied join, which has no record to delete.
@@ -39,7 +50,7 @@ impl Row {
 }
 
 /// The glyph, the name's key and the fields naming the operands, as glyphs.ts's constraintFace.
-fn face(kind: &str) -> (&'static str, &'static str, &'static [&'static str]) {
+pub(super) fn face(kind: &str) -> (&'static str, &'static str, &'static [&'static str]) {
     match kind {
         "horizontal" => ("horizontal", "sketch.constraint.horizontal", &["line"]),
         "vertical" => ("vertical", "sketch.constraint.vertical", &["line"]),
@@ -119,13 +130,7 @@ pub fn constraint_rows(
             let (icon, key, fields) = face(kind);
             let operands: Vec<&str> = fields.iter().filter_map(|f| c.get(*f).and_then(Value::as_str)).collect();
             let driven = c.get("driven").and_then(Value::as_bool) == Some(true);
-            let state = if conflicts.contains(&i) {
-                Some(State::Conflict)
-            } else if over.contains(&i) {
-                Some(State::Over)
-            } else {
-                None
-            };
+            let state = state_of(i, conflicts, over);
             Row {
                 index: Some(i),
                 icon,

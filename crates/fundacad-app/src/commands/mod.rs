@@ -7,6 +7,8 @@ pub mod keys;
 #[cfg(test)]
 mod rebind_tests;
 #[cfg(test)]
+mod sketch_keys_tests;
+#[cfg(test)]
 mod tests;
 
 use std::rc::Rc;

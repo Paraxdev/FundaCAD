@@ -15,7 +15,7 @@ thread_local! {
 }
 
 /// Reports the bounds of the surface it sits in, to be blurred behind in the viewport. `outset` reaches the border box.
-fn frost(radius: f32, outset: f32) -> Canvas<()> {
+pub fn frost(radius: f32, outset: f32) -> Canvas<()> {
     canvas(
         move |bounds, _, _| {
             FROSTS.with_borrow_mut(|f| f.push(Frost { bounds, radius }));
@@ -70,6 +70,7 @@ pub fn solid_card(t: &Theme) -> Div {
         .flex_col()
         .overflow_hidden()
         .rounded(px(FLOAT_RADIUS))
+        .squircle()
         .bg(t.float_bg)
         .border_1()
         .border_color(transparent_black())
@@ -85,6 +86,7 @@ pub fn float_group(t: &Theme) -> Div {
         .gap(px(2.))
         .p(px(3.))
         .rounded(px(FLOAT_RADIUS))
+        .squircle()
         .bg(t.float_bg)
         .border_1()
         .border_color(transparent_black())
@@ -102,6 +104,7 @@ pub fn tile(t: &Theme, size: f32) -> Div {
         .items_center()
         .justify_center()
         .rounded(px(FLOAT_TILE_RADIUS))
+        .squircle()
         .bg(t.float_tile_bg)
         .shadow(t.float_shadow.clone())
         .text_color(t.text)
@@ -113,6 +116,7 @@ pub fn tile(t: &Theme, size: f32) -> Div {
 pub fn chip(t: &Theme) -> Div {
     div()
         .rounded(px(FLOAT_CHIP_RADIUS))
+        .squircle()
         .bg(t.float_chip_bg)
         .shadow(t.float_shadow.clone())
         .occlude()
@@ -131,7 +135,7 @@ pub fn icon_button(
     let (hover, hover_text, color) = (t.raised, t.text, color.into());
     let id = id.into();
     let name = SharedString::from(name.to_string());
-    let el = div().id(id.clone()).size(px(t.hit(box_size))).flex_none().flex().items_center().justify_center().rounded(px(4.));
+    let el = div().id(id.clone()).size(px(t.hit(box_size))).flex_none().flex().items_center().justify_center().rounded(px(4.)).squircle();
     motion::hover(id, el, move |mut d, m| {
         let base = motion::base_bg(&mut d);
         d.bg(mix(base, hover, m.hover)).child(icon(&name, icon_size, mix(color, hover_text, m.hover)))
