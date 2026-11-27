@@ -357,6 +357,7 @@ impl Viewport {
         let movers = cx.try_global::<Movers>().map(|m| m.0.clone()).unwrap_or_default();
         let Some((land, from)) = movers.iter().find_map(|m| m(&doc, &owners, cx)) else { return false };
         self.picking.pressed = None;
+        (self.hover, self.picking.hover_edge, self.blend_hover) = (None, None, None);
         self.carry.held = Some(Held { body: hit.body, at: e.position, land, from, original: None, ghost: None });
         true
     }
